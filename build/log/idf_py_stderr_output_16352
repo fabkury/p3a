@@ -1,0 +1,5 @@
+Command: ninja all
+CMake Warning at components/net/CMakeLists.txt:31 (message):
+  net: Could not find injected headers directory
+
+

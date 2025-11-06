@@ -1,0 +1,14 @@
+Command: ninja all
+CMake Error at C:/Users/Fab/esp/v5.5.1/esp-idf/tools/cmake/build.cmake:328 (message):
+  Failed to resolve component 'esp_log' required by component 'player':
+  unknown name.
+Call Stack (most recent call first):
+  C:/Users/Fab/esp/v5.5.1/esp-idf/tools/cmake/build.cmake:371 (__build_resolve_and_add_req)
+  C:/Users/Fab/esp/v5.5.1/esp-idf/tools/cmake/build.cmake:372 (__build_expand_requirements)
+  C:/Users/Fab/esp/v5.5.1/esp-idf/tools/cmake/build.cmake:372 (__build_expand_requirements)
+  C:/Users/Fab/esp/v5.5.1/esp-idf/tools/cmake/build.cmake:685 (__build_expand_requirements)
+  C:/Users/Fab/esp/v5.5.1/esp-idf/tools/cmake/project.cmake:740 (idf_build_process)
+  CMakeLists.txt:6 (project)
+
+
+ninja: error: rebuilding 'build.ninja': subcommand failed

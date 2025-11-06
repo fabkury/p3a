@@ -1,0 +1,14 @@
+# Target labels
+ libwebp_upstream-populate
+# Source files and their labels
+D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/_deps/libwebp_upstream-subbuild/CMakeFiles/libwebp_upstream-populate
+D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/_deps/libwebp_upstream-subbuild/CMakeFiles/libwebp_upstream-populate.rule
+D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/_deps/libwebp_upstream-subbuild/CMakeFiles/libwebp_upstream-populate-complete.rule
+D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-build.rule
+D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-configure.rule
+D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-download.rule
+D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-install.rule
+D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-mkdir.rule
+D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-patch.rule
+D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-test.rule
+D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-update.rule

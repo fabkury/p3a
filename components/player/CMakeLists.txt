@@ -1,0 +1,19 @@
+idf_component_register(
+    SRCS
+        "src/player.c"
+        "src/player_decoder.c"
+        "src/player_renderer.c"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        freertos
+        esp_lcd
+        sd_ring
+        scaler_nn
+        graphics_handoff
+        animatedgif
+        libwebp_decoder
+        esp_system
+        esp_mm
+)
+

@@ -1,0 +1,5 @@
+Command: cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Scripts\python.exe -DESP_PLATFORM=1 -DCCACHE_ENABLE=1 D:\Dropbox\PC\F\Estudo\Tecnologia\ESP32\project\mark-5\firmware
+CMake Warning at components/net/CMakeLists.txt:31 (message):
+  net: Could not find injected headers directory
+
+

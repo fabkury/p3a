@@ -1,0 +1,183 @@
+Command: C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Scripts\python.exe C:\Users\Fab\esp\v5.5.1\esp-idf\tools/idf_monitor.py -p COM5 -b 115200 --toolchain-prefix riscv32-esp-elf- --target esp32p4 --revision 1 --decode-panic backtrace D:\Dropbox\PC\F\Estudo\Tecnologia\ESP32\project\mark-5\firmware\build\p3a.elf D:\Dropbox\PC\F\Estudo\Tecnologia\ESP32\project\mark-5\firmware\build\bootloader\bootloader.elf --force-color -m 'C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Scripts\python.exe' 'C:\Users\Fab\esp\v5.5.1\esp-idf\tools\idf.py' '-p' 'COM5'
+[0;33m--- Warning: GDB cannot open serial ports accessed as COMx[0m
+[0;33m--- Using \\.\COM5 instead...[0m
+[0;33m--- esp-idf-monitor 1.8.0 on \\.\COM5 115200[0m
+[0;33m--- Quit: Ctrl+] | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H[0m
+[0m--- 0x4ff29ed0: [0;33mesp_bootloader_get_description[0m[0m at [0;32mC:/Users/Fab/esp/v5.5.1/esp-idf/components/esp_bootloader_format/esp_bootloader_desc.c[0m[0m:[1;31m39[0m
+[0m--- 0x4ff2cbd0: [0;33mesp_flash_encryption_enabled[0m[0m at [0;32mC:/Users/Fab/esp/v5.5.1/esp-idf/components/bootloader_support/src/flash_encrypt.c[0m[0m:[1;31m89[0m
+[0m--- 0x4ff29eda: [0;33mcall_start_cpu0[0m[0m at [0;32mC:/Users/Fab/esp/v5.5.1/esp-idf/components/bootloader/subproject/main/bootloader_start.c[0m[0m:[1;31m25[0m
+[0m--- 0x4000a274: [0;33mtransport_drv_sta_tx[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/managed_components/espressif__esp_hosted/host/drivers/transport/transport_drv.c[0m[0m:[1;31m254[0m
+[0m--- 0x40019728: [0;33mesp_wifi_remote_channel_rx[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/managed_components/espressif__esp_wifi_remote/esp_wifi_remote_net.c[0m[0m:[1;31m21[0m
+[0m--- 0x4000a206: [0;33mtransport_drv_ap_tx[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/managed_components/espressif__esp_hosted/host/drivers/transport/transport_drv.c[0m[0m:[1;31m284[0m
+[0m--- 0x40019728: [0;33mesp_wifi_remote_channel_rx[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/managed_components/espressif__esp_wifi_remote/esp_wifi_remote_net.c[0m[0m:[1;31m21[0m
+[0;33m--- Stack dump detected[0m
+[0m--- 0x4002db0e: [0;33mVP8LConvertBGRAToRGBA_C[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4002684a: [0;33mProcessRows[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x40035cec: [0;33mVP8LBuildHuffmanTable[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x40035cda: [0;33mVP8LBuildHuffmanTable[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d9b4: [0;33mBlendPixelRowNonPremult[0m[0m at [0;32manim_decode.c[0m[0m:[1;31m?[0m
+[0m--- 0x4001dfd0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mBlendPixelRowNonPremult[0m[0m at [0;32manim_decode.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001dec0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mBlendPixelRowNonPremult[0m[0m at [0;32manim_decode.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x40027374: [0;33mDecodeImageData[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x40027542: [0;33mDecodeImageData[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d0e6: [0;33mdecode_webp_frame[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m85[0m
+[0m--- (inlined by) [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m135[0m
+[0m--- 0x4001d064: [0;33mdecode_webp_frame[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m67[0m
+[0m--- (inlined by) [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m135[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d9b4: [0;33mBlendPixelRowNonPremult[0m[0m at [0;32manim_decode.c[0m[0m:[1;31m?[0m
+[0m--- 0x4001dfd0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mBlendPixelRowNonPremult[0m[0m at [0;32manim_decode.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d0d6: [0;33mdecode_webp_frame[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m85[0m
+[0m--- (inlined by) [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m135[0m
+[0m--- 0x4001d064: [0;33mdecode_webp_frame[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m67[0m
+[0m--- (inlined by) [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m135[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4002d9b4: [0;33mMapARGB_C[0m[0m at [0;32mlossless.c[0m[0m:[1;31m?[0m
+[0m--- 0x400267bc: [0;33mProcessRows[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x400274f0: [0;33mDecodeImageData[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d0ca: [0;33mdecode_webp_frame[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m90[0m
+[0m--- (inlined by) [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m135[0m
+[0m--- 0x4001d064: [0;33mdecode_webp_frame[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m67[0m
+[0m--- (inlined by) [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m135[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4002db0e: [0;33mVP8LConvertBGRAToRGBA_C[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4002684a: [0;33mProcessRows[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001df28: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mBlendPixelRowNonPremult[0m[0m at [0;32manim_decode.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001dec0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mBlendPixelRowNonPremult[0m[0m at [0;32manim_decode.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d0c6: [0;33mdecode_webp_frame[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m87[0m
+[0m--- (inlined by) [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m135[0m
+[0m--- 0x4001d07e: [0;33mdecode_webp_frame[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m70[0m
+[0m--- (inlined by) [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m135[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x400274f2: [0;33mDecodeImageData[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x400274f0: [0;33mDecodeImageData[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d0e0: [0;33mdecode_webp_frame[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m89[0m
+[0m--- (inlined by) [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m135[0m
+[0m--- 0x4001d064: [0;33mdecode_webp_frame[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m67[0m
+[0m--- (inlined by) [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m135[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d9b0: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m187[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4001dfd0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m156[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001dec0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m156[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d9cc: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m161[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4001dfd0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m156[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x40035a98: [0;33mBuildHuffmanTable[0m[0m at [0;32mhuffman_utils.c[0m[0m:[1;31m?[0m
+[0m--- 0x400358ba: [0;33mVP8LDoFillBitWindow[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4002db00: [0;33mVP8LTransformColorInverse_C[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4002684a: [0;33mReadHuffmanCode[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d0ca: [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m191[0m
+[0m--- 0x4001d064: [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m167[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d9b4: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m187[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4001dfd0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m156[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001dec0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m156[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001df28: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m156[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d9b4: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m187[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4001dfd0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m156[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001dec0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m156[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d9b0: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m187[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4001dfd0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m156[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d9b0: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m187[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4001dfd0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m156[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001f52e: [0;33mWebPDemuxNextFrame[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x400206a4: [0;33mWebPDecodeYUV[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d9b8: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m152[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4001dfd0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m156[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d0d6: [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m191[0m
+[0m--- 0x4001d064: [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m167[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x40026d4a: [0;33mExtractAlphaRows[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x400274f0: [0;33mDecodeImageData[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x4002673e: [0;33mReadHuffmanCode[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001dec0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m156[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x40027c82: [0;33mDecodeImageStream[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x40027c1c: [0;33mDecodeImageStream[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d0d6: [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m191[0m
+[0m--- 0x4001d064: [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m167[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x40026e68: [0;33mDecodeImageData[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x400274f0: [0;33mDecodeImageData[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x4002673e: [0;33mReadHuffmanCode[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d9b0: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m187[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4001dfd0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m156[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d0e6: [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m192[0m
+[0m--- 0x4001d064: [0;33mdecoder_task[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_decoder.c[0m[0m:[1;31m167[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001dec0: [0;33mWebPAnimDecoderGetNext[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001d998: [0;33mstart_renderer[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m156[0m
+[0m--- (inlined by) [0;33mplayer_renderer_start[0m[0m at [0;32mD:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/components/player/src/player_renderer.c[0m[0m:[1;31m211[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4002d9ae: [0;33mPredictorAdd9_C[0m[0m at [0;32mlossless.c[0m[0m:[1;31m?[0m
+[0m--- 0x400267bc: [0;33mReadHuffmanCode[0m[0m at [0;32mvp8l_dec.c[0m[0m:[1;31m?[0m
+[0m--- 0x4ff00003: [0;33m_vector_table[0m[0m at [0;32m??[0m[0m:[1;31m?[0m
+[0m--- 0x4001df28: [0;33mWebPAnim

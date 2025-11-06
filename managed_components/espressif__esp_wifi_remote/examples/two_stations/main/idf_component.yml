@@ -1,0 +1,7 @@
+dependencies:
+  esp_wifi_remote:
+    version: '*'
+  espressif/console_cmd_ping: '*'
+  espressif/iperf-cmd: ^0.1.1
+  wifi_remote_over_eppp:
+    version: '*'

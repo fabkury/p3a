@@ -1,0 +1,64 @@
+Command: ninja app-flash
+[1/2] C:\WINDOWS\system32\cmd.exe /C "cd /D D:\Dropbox\PC\F\Estudo\Tecnologia\ESP32\project\mark-5\firmware\build\esp-idf\esptool_py && C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Scripts\python.exe C:/Users/Fab/esp/v5.5.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/partition_table/partition-table.bin D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/p3a.bin"
+p3a.bin binary size 0x10dc30 bytes. Smallest app partition is 0x600000 bytes. 0x4f23d0 bytes (82%) free.
+[1/2] C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\Fab\esp\v5.5.1\esp-idf\components\esptool_py && C:\Users\Fab\.espressif\tools\cmake\3.30.2\bin\cmake.exe -D IDF_PATH=C:/Users/Fab/esp/v5.5.1/esp-idf -D SERIAL_TOOL=C:/Users/Fab/.espressif/python_env/idf5.5_py3.13_env/Scripts/python.exe;;C:/Users/Fab/esp/v5.5.1/esp-idf/components/esptool_py/esptool/esptool.py;--chip;esp32p4 -D SERIAL_TOOL_ARGS=--before=default_reset;--after=hard_reset;write_flash;@app-flash_args -D WORKING_DIRECTORY=D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build -P C:/Users/Fab/esp/v5.5.1/esp-idf/components/esptool_py/run_serial_tool.cmake"
+esptool.py --chip esp32p4 -p COM5 -b 460800 --before=default_reset --after=hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB 0x20000 p3a.bin
+esptool.py v4.10.0
+Serial port COM5
+Connecting....
+Chip is ESP32-P4 (revision v1.0)
+Features: High-Performance MCU
+Crystal is 40MHz
+MAC: 30:ed:a0:e2:08:69
+Uploading stub...
+Running stub...
+Stub running...
+Changing baud rate to 460800
+Changed.
+Configuring flash size...
+Flash will be erased from 0x00020000 to 0x0012dfff...
+Compressed 1104944 bytes to 636329...
+Writing at 0x00020000... (2 %)
+Writing at 0x0002ec30... (5 %)
+Writing at 0x0003c68d... (7 %)
+Writing at 0x0004cc00... (10 %)
+Writing at 0x00054470... (12 %)
+Writing at 0x0005ac51... (15 %)
+Writing at 0x00060dfa... (17 %)
+Writing at 0x00066f93... (20 %)
+Writing at 0x0006e7ca... (23 %)
+Writing at 0x0007726b... (25 %)
+Writing at 0x0007df7f... (28 %)
+Writing at 0x000839c9... (30 %)
+Writing at 0x000890d0... (33 %)
+Writing at 0x0008eccf... (35 %)
+Writing at 0x00095794... (38 %)
+Writing at 0x0009b5e9... (41 %)
+Writing at 0x000a0b62... (43 %)
+Writing at 0x000a6c29... (46 %)
+Writing at 0x000aced7... (48 %)
+Writing at 0x000b2923... (51 %)
+Writing at 0x000b8204... (53 %)
+Writing at 0x000bde4a... (56 %)
+Writing at 0x000c4015... (58 %)
+Writing at 0x000c996b... (61 %)
+Writing at 0x000cf1b2... (64 %)
+Writing at 0x000d4624... (66 %)
+Writing at 0x000db15c... (69 %)
+Writing at 0x000e210d... (71 %)
+Writing at 0x000e884d... (74 %)
+Writing at 0x000ee0f3... (76 %)
+Writing at 0x000f3f21... (79 %)
+Writing at 0x000f9bf3... (82 %)
+Writing at 0x000ffaa5... (84 %)
+Writing at 0x0010633a... (87 %)
+Writing at 0x0010c919... (89 %)
+Writing at 0x00113202... (92 %)
+Writing at 0x00119bdd... (94 %)
+Writing at 0x00120b82... (97 %)
+Writing at 0x00126f95... (100 %)
+Wrote 1104944 bytes (636329 compressed) at 0x00020000 in 15.1 seconds (effective 584.9 kbit/s)...
+Hash of data verified.
+
+Leaving...
+Hard resetting via RTS pin...

@@ -1,0 +1,19 @@
+Command: ninja all
+[1/10] Performing build step for 'bootloader'
+[1/1] C:\WINDOWS\system32\cmd.exe /C "cd /D D:\Dropbox\PC\F\Estudo\Tecnologia\ESP32\project\mark-5\firmware\build\bootloader\esp-idf\esptool_py && C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Scripts\python.exe C:/Users/Fab/esp/v5.5.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x2000 D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/bootloader/bootloader.bin"
+Bootloader binary size 0x5810 bytes. 0x7f0 bytes (8%) free.
+[2/10] No install step for 'bootloader'
+[3/10] Completed 'bootloader'
+[4/10] Building C object esp-idf/graphics_handoff/CMakeFiles/__idf_graphics_handoff.dir/src/graphics_handoff.c.obj
+[5/10] Linking C static library esp-idf\graphics_handoff\libgraphics_handoff.a
+[6/10] Linking C static library esp-idf\player\libplayer.a
+[7/10] Generating esp-idf/esp_system/ld/sections.ld
+[8/10] Linking CXX executable p3a.elf
+[9/10] Generating binary image from built executable
+esptool.py v4.10.0
+Creating esp32p4 image...
+Merged 3 ELF sections
+Successfully created esp32p4 image.
+Generated D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/p3a.bin
+[10/10] C:\WINDOWS\system32\cmd.exe /C "cd /D D:\Dropbox\PC\F\Estudo\Tecnologia\ESP32\project\mark-5\firmware\build\esp-idf\esptool_py && C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Scripts\python.exe C:/Users/Fab/esp/v5.5.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/partition_table/partition-table.bin D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/mark-5/firmware/build/p3a.bin"
+p3a.bin binary size 0x10fea0 bytes. Smallest app partition is 0x600000 bytes. 0x4f0160 bytes (82%) free.

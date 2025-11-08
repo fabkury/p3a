@@ -1,0 +1,26 @@
+Command: cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Scripts\python.exe -DESP_PLATFORM=1 -DCCACHE_ENABLE=1 D:\Dropbox\PC\F\Estudo\Tecnologia\ESP32\project\firmware
+-- IDF_TARGET is not set, guessed 'esp32p4' from sdkconfig 'D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/sdkconfig'
+-- Found Git: C:/Program Files/Git/cmd/git.exe (found version "2.36.1.windows.1")
+-- Component directory D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/components/bsp_extra does not contain a CMakeLists.txt file. No component will be added
+-- Minimal build - OFF
+-- ccache will be used for faster recompilation
+-- The C compiler identification is GNU 14.2.0
+-- The CXX compiler identification is GNU 14.2.0
+-- The ASM compiler identification is GNU
+-- Found assembler: C:/Users/Fab/.espressif/tools/riscv32-esp-elf/esp-14.2.0_20241119/riscv32-esp-elf/bin/riscv32-esp-elf-gcc.exe
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: C:/Users/Fab/.espressif/tools/riscv32-esp-elf/esp-14.2.0_20241119/riscv32-esp-elf/bin/riscv32-esp-elf-gcc.exe - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: C:/Users/Fab/.espressif/tools/riscv32-esp-elf/esp-14.2.0_20241119/riscv32-esp-elf/bin/riscv32-esp-elf-g++.exe - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Building ESP-IDF components for target esp32p4
+NOTICE: Manifest files have changed, solving dependencies.
+NOTICE: Updating lock file at D:\Dropbox\PC\F\Estudo\Tecnologia\ESP32\project\firmware\dependencies.lock
+NOTICE: Processing 1 dependencies:
+NOTICE: [1/1] idf (5.5.1)
+-- Configuring incomplete, errors occurred!

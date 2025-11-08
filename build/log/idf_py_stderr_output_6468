@@ -1,0 +1,5 @@
+Command: ninja flash
+warning: the choice symbol BSP_LCD_COLOR_FORMAT_RGB565 (defined at D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/managed_components/waveshare__esp32_p4_wifi6_touch_lcd_4b/Kconfig:118) is selected by the following symbols, but select/imply has no effect on choice symbols
+ - LCD_PIXEL_FORMAT_RGB565 (defined at D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/main/Kconfig.projbuild:58)
+warning: the choice symbol BSP_LCD_COLOR_FORMAT_RGB888 (defined at D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/managed_components/waveshare__esp32_p4_wifi6_touch_lcd_4b/Kconfig:120) is selected by the following symbols, but select/imply has no effect on choice symbols
+ - LCD_PIXEL_FORMAT_RGB888 (defined at D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/main/Kconfig.projbuild:62)

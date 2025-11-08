@@ -1,0 +1,11 @@
+prefix=C:/Program Files (x86)/p3a
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libwebpdecoder
+Description: Library for the WebP graphics format (decode only)
+Version: 1.4.0
+Cflags: -I${includedir}
+Libs: -L${libdir} -lwebpdecoder
+Libs.private: -lm  

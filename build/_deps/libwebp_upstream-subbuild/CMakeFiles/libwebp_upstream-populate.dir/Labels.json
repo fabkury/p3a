@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/_deps/libwebp_upstream-subbuild/CMakeFiles/libwebp_upstream-populate"
+		},
+		{
+			"file" : "D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/_deps/libwebp_upstream-subbuild/CMakeFiles/libwebp_upstream-populate.rule"
+		},
+		{
+			"file" : "D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/_deps/libwebp_upstream-subbuild/CMakeFiles/libwebp_upstream-populate-complete.rule"
+		},
+		{
+			"file" : "D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-build.rule"
+		},
+		{
+			"file" : "D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-configure.rule"
+		},
+		{
+			"file" : "D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-download.rule"
+		},
+		{
+			"file" : "D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-install.rule"
+		},
+		{
+			"file" : "D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-mkdir.rule"
+		},
+		{
+			"file" : "D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-patch.rule"
+		},
+		{
+			"file" : "D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-test.rule"
+		},
+		{
+			"file" : "D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/_deps/libwebp_upstream-subbuild/libwebp_upstream-populate-prefix/src/libwebp_upstream-populate-stamp/libwebp_upstream-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"libwebp_upstream-populate"
+		],
+		"name" : "libwebp_upstream-populate"
+	}
+}

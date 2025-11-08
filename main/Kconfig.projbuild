@@ -1,0 +1,67 @@
+menu "Physical Player of Pixel Art (P3A)"
+
+    menu "Display"
+        config P3A_LCD_ENABLE_CACHE_FLUSH
+            bool "Flush LCD frame buffer via esp_cache_msync"
+            default n
+            help
+                Enable cache flushes before handing the framebuffer to the panel driver.
+                Disable to evaluate DMA coherency without the extra msync cost.
+    endmenu
+
+    menu "Animation"
+        config P3A_SD_ANIMATIONS_DIR
+            string "SD card animations directory"
+            default "/sdcard/animations"
+            help
+                Directory path on SD card containing WebP animation files.
+                Files will be loaded alphabetically.
+
+        config P3A_MAX_SPEED_PLAYBACK
+            bool "Ignore WebP frame delays and play at maximum speed"
+            default y
+            help
+                When enabled, the animation task disregards per-frame timing metadata and
+                schedules the next frame as soon as it is ready. Disable to respect the
+                original WebP delays.
+
+        config P3A_RENDER_TASK_PRIORITY
+            int "Animation task priority"
+            default 5
+            range 1 15
+            help
+                FreeRTOS priority assigned to the animation render task.
+    endmenu
+
+    menu "Touch"
+        config P3A_TOUCH_TASK_PRIORITY
+            int "Touch task priority"
+            default 5
+            range 1 15
+            help
+                FreeRTOS priority assigned to the touch controller polling task.
+
+        config P3A_TOUCH_POLL_INTERVAL_MS
+            int "Touch poll interval (ms)"
+            default 20
+            range 5 100
+            help
+                Delay between successive reads of the touch controller.
+    endmenu
+
+    choice
+        prompt "LCD color format"
+        default LCD_PIXEL_FORMAT_RGB888
+        help
+            Select the framebuffer color encoding used by the panel driver.
+
+        config LCD_PIXEL_FORMAT_RGB565
+            bool "RGB565"
+            select BSP_LCD_COLOR_FORMAT_RGB565
+
+        config LCD_PIXEL_FORMAT_RGB888
+            bool "RGB888"
+            depends on IDF_TARGET_ESP32P4
+            select BSP_LCD_COLOR_FORMAT_RGB888
+    endchoice
+endmenu

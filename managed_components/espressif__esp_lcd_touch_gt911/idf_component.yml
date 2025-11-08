@@ -1,0 +1,12 @@
+dependencies:
+  esp_lcd_touch:
+    public: true
+    version: ^1.1.0
+  idf: '>=4.4.2'
+description: ESP LCD Touch GT911 - touch controller GT911
+repository: git://github.com/espressif/esp-bsp.git
+repository_info:
+  commit_sha: 08b53c32b53d2b4c3c4ecbf2cb6f1fc91a0441fd
+  path: components/lcd_touch/esp_lcd_touch_gt911
+url: https://github.com/espressif/esp-bsp/tree/master/components/lcd_touch/esp_lcd_touch_gt911
+version: 1.1.3

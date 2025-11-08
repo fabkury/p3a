@@ -1,4 +1,0 @@
-menu "Board Support Package"
-    # BSP_I2S_NUM is defined by the Waveshare ESP32-P4 board component
-    # No need to redefine it here
-endmenu

@@ -1,6 +1,0 @@
-CLIENT_*
-SERVER_*
-*.crt
-*.key
-*.srl
-*.csr

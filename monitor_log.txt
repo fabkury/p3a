@@ -1,1 +1,0 @@
-could not open port '\\\\.\\COM5': PermissionError(13, 'Access is denied.', None, 5)

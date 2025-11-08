@@ -1,7 +1,0 @@
-targets:
-  - esp32p4
-dependencies:
-  espressif/esp_wifi_remote: "^1.2.0"
-  espressif/esp_hosted: "^2.6.4"
-  idf:
-    version: ">=5.5"

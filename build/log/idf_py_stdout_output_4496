@@ -1,13 +1,0 @@
-Command: ninja all
-[1/6] Performing build step for 'bootloader'
-[1/1] C:\WINDOWS\system32\cmd.exe /C "cd /D D:\Dropbox\PC\F\Estudo\Tecnologia\ESP32\project\firmware\build\bootloader\esp-idf\esptool_py && C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Scripts\python.exe C:/Users/Fab/esp/v5.5.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x2000 D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/bootloader/bootloader.bin"
-Bootloader binary size 0x5c20 bytes. 0x3e0 bytes (4%) free.
-[2/6] No install step for 'bootloader'
-[3/6] Completed 'bootloader'
-[4/6] Linking CXX executable p3a.elf
-FAILED: p3a.elf 
-C:\WINDOWS\system32\cmd.exe /C "cd . && C:\Users\Fab\.espressif\tools\riscv32-esp-elf\esp-14.2.0_20241119\riscv32-esp-elf\bin\riscv32-esp-elf-g++.exe -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f  -O3 -DNDEBUG -nostartfiles -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f     -Wl,--cref -Wl,--defsym=IDF_TARGET_ESP32P4=0 -Wl,--Map=D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/p3a.map -Wl,--no-warn-rwx-segments -fno-rtti -fno-lto -Wl,--gc-sections -Wl,--warn-common -T rom.api.ld -T esp32p4.peripherals.ld -T esp32p4.rom.ld -T esp32p4.rom.api.ld -T esp32p4.rom.rvfp.ld -T esp32p4.rom.wdt.ld -T esp32p4.rom.systimer.ld -T esp32p4.rom.version.ld -T esp32p4.rom.libc.ld -T esp32p4.rom.libc-suboptimal_for_misaligned_mem.ld -T esp32p4.rom.newlib.ld -T memory.ld -T sections.ld -Wl,--enable-non-contiguous-regions @CMakeFiles\p3a.elf.rsp -o p3a.elf && cd ."
-C:/Users/Fab/.espressif/tools/riscv32-esp-elf/esp-14.2.0_20241119/riscv32-esp-elf/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/ld.exe: esp-idf/main/libmain.a(webp_animation_decoder.c.obj): in function `animation_decoder_get_frame_delay':
-D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/main/webp_animation_decoder.c:241:(.text.animation_decoder_get_frame_delay+0x34): undefined reference to `gif_decoder_get_frame_delay'
-collect2.exe: error: ld returned 1 exit status
-ninja: build stopped: subcommand failed.

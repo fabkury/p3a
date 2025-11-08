@@ -1,9 +1,0 @@
-Command: C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Scripts\python.exe C:\Users\Fab\esp\v5.5.1\esp-idf\tools/idf_monitor.py -p COM5 -b 115200 --toolchain-prefix riscv32-esp-elf- --target esp32p4 --revision 1 --decode-panic backtrace D:\Dropbox\PC\F\Estudo\Tecnologia\ESP32\project\firmware\build\p3a.elf D:\Dropbox\PC\F\Estudo\Tecnologia\ESP32\project\firmware\build\bootloader\bootloader.elf --force-color -m 'C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Scripts\python.exe' 'C:\Users\Fab\esp\v5.5.1\esp-idf\tools\idf.py'
-[0;33m--- Warning: GDB cannot open serial ports accessed as COMx[0m
-[0;33m--- Using \\.\COM5 instead...[0m
-[0;33m--- esp-idf-monitor 1.8.0 on \\.\COM5 115200[0m
-[0;33m--- Quit: Ctrl+] | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H[0m
-[0m--- 0x4ff29ed0: [0;33mesp_bootloader_get_description[0m[0m at [0;32mC:/Users/Fab/esp/v5.5.1/esp-idf/components/esp_bootloader_format/esp_bootloader_desc.c[0m[0m:[1;31m39[0m
-[0m--- 0x4ff2cbd0: [0;33mesp_flash_encryption_enabled[0m[0m at [0;32mC:/Users/Fab/esp/v5.5.1/esp-idf/components/bootloader_support/src/flash_encrypt.c[0m[0m:[1;31m89[0m
-[0m--- 0x4ff29eda: [0;33mcall_start_cpu0[0m[0m at [0;32mC:/Users/Fab/esp/v5.5.1/esp-idf/components/bootloader/subproject/main/bootloader_start.c[0m[0m:[1;31m25[0m
-[0m

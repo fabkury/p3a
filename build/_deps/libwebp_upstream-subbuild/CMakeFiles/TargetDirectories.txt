@@ -1,3 +1,0 @@
-D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/_deps/libwebp_upstream-subbuild/CMakeFiles/libwebp_upstream-populate.dir
-D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/_deps/libwebp_upstream-subbuild/CMakeFiles/edit_cache.dir
-D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/project/firmware/build/_deps/libwebp_upstream-subbuild/CMakeFiles/rebuild_cache.dir

@@ -73,6 +73,8 @@ bool app_lcd_is_animation_paused(void);
 
 void app_lcd_cycle_animation(void);
 
+void app_lcd_cycle_animation_backward(void);
+
 #ifdef __cplusplus
 }
 #endif

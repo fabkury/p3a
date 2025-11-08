@@ -12,6 +12,7 @@
 #include "esp_lcd_touch.h"
 #include "app_lcd.h"
 #include "app_touch.h"
+#include "bsp/display.h"
 
 static const char *TAG = "app_touch";
 
@@ -34,7 +35,16 @@ static void app_touch_task(void *arg)
         if (pressed && touch_count > 0) {
             if (!touch_active) {
                 ESP_LOGD(TAG, "touch press @(%u,%u) strength %u", x[0], y[0], strength[0]);
-                app_lcd_cycle_animation();
+                // Check if touch is on left or right half of screen
+                // Screen width is BSP_LCD_H_RES (720 pixels), so midpoint is 360
+                const uint16_t screen_midpoint = BSP_LCD_H_RES / 2;
+                if (x[0] < screen_midpoint) {
+                    // Left half: cycle backward
+                    app_lcd_cycle_animation_backward();
+                } else {
+                    // Right half: cycle forward
+                    app_lcd_cycle_animation();
+                }
             }
             touch_active = true;
         } else if (touch_active) {

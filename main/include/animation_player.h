@@ -60,9 +60,11 @@ void animation_player_toggle_pause(void);
 bool animation_player_is_paused(void);
 
 /**
- * @brief Cycle to next animation in list
+ * @brief Cycle to next or previous animation in list
+ *
+ * @param forward True to cycle forward (next), false to cycle backward (previous)
  */
-void animation_player_cycle_animation(void);
+void animation_player_cycle_animation(bool forward);
 
 /**
  * @brief Start animation player task

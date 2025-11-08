@@ -1159,6 +1159,15 @@ static size_t get_next_asset_index(size_t current_index)
     return (current_index + 1) % s_sd_file_list.count;
 }
 
+// Calculate previous animation index in play order
+static size_t get_previous_asset_index(size_t current_index)
+{
+    if (s_sd_file_list.count == 0) {
+        return 0;
+    }
+    return (current_index == 0) ? (s_sd_file_list.count - 1) : (current_index - 1);
+}
+
 // Atomically swap front and back buffers
 static void swap_buffers(void)
 {
@@ -1680,7 +1689,7 @@ bool animation_player_is_paused(void)
     return paused;
 }
 
-void animation_player_cycle_animation(void)
+void animation_player_cycle_animation(bool forward)
 {
     if (s_sd_file_list.count == 0) {
         ESP_LOGW(TAG, "No animations available to cycle");
@@ -1695,23 +1704,23 @@ void animation_player_cycle_animation(void)
             return;
         }
         
-        // Compute next animation index on demand
+        // Compute next or previous animation index on demand
         size_t current_index = s_front_buffer.ready ? s_front_buffer.asset_index : 0;
-        size_t next_index = get_next_asset_index(current_index);
+        size_t target_index = forward ? get_next_asset_index(current_index) : get_previous_asset_index(current_index);
         
-        // Set swap requested and queue loader with next index
-        s_next_asset_index = next_index;
+        // Set swap requested and queue loader with target index
+        s_next_asset_index = target_index;
         s_swap_requested = true;
         
         xSemaphoreGive(s_buffer_mutex);
         
-        // Trigger loader task to load next animation
+        // Trigger loader task to load target animation
         if (s_loader_sem) {
             xSemaphoreGive(s_loader_sem);
         }
         
         ESP_LOGI(TAG, "Queued animation load to '%s' (index %zu)", 
-                 s_sd_file_list.filenames[next_index], next_index);
+                 s_sd_file_list.filenames[target_index], target_index);
     }
 }
 

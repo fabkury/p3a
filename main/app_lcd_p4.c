@@ -116,5 +116,10 @@ bool app_lcd_is_animation_paused(void)
 
 void app_lcd_cycle_animation(void)
 {
-    animation_player_cycle_animation();
+    animation_player_cycle_animation(true);
+}
+
+void app_lcd_cycle_animation_backward(void)
+{
+    animation_player_cycle_animation(false);
 }

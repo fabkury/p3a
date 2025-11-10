@@ -572,6 +572,39 @@ static esp_err_t load_animation_into_buffer(size_t asset_index, animation_buffer
 static void unload_animation_buffer(animation_buffer_t *buf);
 static esp_err_t prefetch_first_frame(animation_buffer_t *buf);
 static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int target_w, int target_h, bool use_prefetched);
+static void discard_failed_swap_request(size_t failed_asset_index, esp_err_t error);
+
+// Discard a failed swap request and restore system to responsive state
+static void discard_failed_swap_request(size_t failed_asset_index, esp_err_t error)
+{
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        // Clear swap request flag - this swap attempt failed
+        bool had_swap_request = s_swap_requested;
+        s_swap_requested = false;
+        
+        // Reset loader busy flag - loader is done with this attempt
+        s_loader_busy = false;
+        
+        // Ensure back buffer is in a clean state (unload any partial state)
+        if (s_back_buffer.decoder || s_back_buffer.file_data) {
+            unload_animation_buffer(&s_back_buffer);
+        }
+        
+        // Advance to next asset index for future attempts
+        s_next_asset_index = get_next_asset_index(failed_asset_index);
+        
+        xSemaphoreGive(s_buffer_mutex);
+        
+        // Log the discard event
+        if (had_swap_request) {
+            ESP_LOGW(TAG, "Discarded swap request for animation index %zu (error: %s). System remains responsive.", 
+                     failed_asset_index, esp_err_to_name(error));
+        } else {
+            ESP_LOGW(TAG, "Failed to load animation index %zu (error: %s). System remains responsive.", 
+                     failed_asset_index, esp_err_to_name(error));
+        }
+    }
+}
 
 // Background loader task - loads animations into back buffer and prefetches first frame
 static void animation_loader_task(void *arg)
@@ -602,13 +635,8 @@ static void animation_loader_task(void *arg)
         // Load animation into back buffer
         esp_err_t err = load_animation_into_buffer(asset_index_to_load, &s_back_buffer);
         if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Loader task: Failed to load animation index %zu: %s", asset_index_to_load, esp_err_to_name(err));
-            // Try next animation
-            if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-                s_next_asset_index = get_next_asset_index(asset_index_to_load);
-                s_loader_busy = false;  // Mark loader as not busy
-                xSemaphoreGive(s_buffer_mutex);
-            }
+            // Discard the failed swap request and restore system to responsive state
+            discard_failed_swap_request(asset_index_to_load, err);
             continue;
         }
         
@@ -958,6 +986,74 @@ static int compare_strings(const void *a, const void *b)
     return strcmp(*(const char **)a, *(const char **)b);
 }
 
+// Temporary test helper: limit the enumerated animation list to a small set of indices
+static void limit_animation_file_list_for_testing(void)
+{
+    static const size_t kAllowedIndices[] = {93, 59, 51, 523, 95};
+    const size_t kAllowedCount = sizeof(kAllowedIndices) / sizeof(kAllowedIndices[0]);
+
+    if (s_sd_file_list.count == 0) {
+        return;
+    }
+
+    char **filtered_filenames = (char **)malloc(kAllowedCount * sizeof(char *));
+    asset_type_t *filtered_types = (asset_type_t *)malloc(kAllowedCount * sizeof(asset_type_t));
+    if (!filtered_filenames || !filtered_types) {
+        ESP_LOGE(TAG, "Failed to allocate filtered file list for testing");
+        free(filtered_filenames);
+        free(filtered_types);
+        return;
+    }
+
+    size_t filtered_count = 0;
+    for (size_t i = 0; i < kAllowedCount; ++i) {
+        size_t idx = kAllowedIndices[i];
+        if (idx >= s_sd_file_list.count) {
+            ESP_LOGW(TAG, "Requested test index %zu outside list range (%zu)", idx, s_sd_file_list.count);
+            continue;
+        }
+        filtered_filenames[filtered_count] = s_sd_file_list.filenames[idx];
+        filtered_types[filtered_count] = s_sd_file_list.types[idx];
+        s_sd_file_list.filenames[idx] = NULL;
+        filtered_count++;
+    }
+
+    if (filtered_count == 0) {
+        ESP_LOGW(TAG, "No test files found in enumerated list; keeping full list");
+        free(filtered_filenames);
+        free(filtered_types);
+        return;
+    }
+
+    for (size_t i = 0; i < s_sd_file_list.count; ++i) {
+        if (s_sd_file_list.filenames[i]) {
+            free(s_sd_file_list.filenames[i]);
+        }
+    }
+    free(s_sd_file_list.filenames);
+    free(s_sd_file_list.types);
+
+    char **resized_filenames = (char **)realloc(filtered_filenames, filtered_count * sizeof(char *));
+    if (resized_filenames) {
+        filtered_filenames = resized_filenames;
+    }
+    asset_type_t *resized_types = (asset_type_t *)realloc(filtered_types, filtered_count * sizeof(asset_type_t));
+    if (resized_types) {
+        filtered_types = resized_types;
+    }
+
+    s_sd_file_list.filenames = filtered_filenames;
+    s_sd_file_list.types = filtered_types;
+    s_sd_file_list.count = filtered_count;
+    s_sd_file_list.current_index = 0;
+
+    if (s_next_asset_index >= s_sd_file_list.count) {
+        s_next_asset_index = 0;
+    }
+
+    ESP_LOGI(TAG, "Test filter applied: retained %zu animations", filtered_count);
+}
+
 static esp_err_t enumerate_animation_files(const char *dir_path)
 {
     free_sd_file_list();
@@ -1092,10 +1188,10 @@ static esp_err_t enumerate_animation_files(const char *dir_path)
     }
 
     ESP_LOGI(TAG, "Found %zu animation files in %s", s_sd_file_list.count, dir_path);
-    for (size_t i = 0; i < s_sd_file_list.count; i++) {
-        ESP_LOGI(TAG, "  [%zu] %s (%s)", i, s_sd_file_list.filenames[i],
-                 s_sd_file_list.types[i] == ASSET_TYPE_WEBP ? "WebP" : "GIF");
-    }
+    // for (size_t i = 0; i < s_sd_file_list.count; i++) {
+    //     ESP_LOGI(TAG, "  [%zu] %s (%s)", i, s_sd_file_list.filenames[i],
+    //              s_sd_file_list.types[i] == ASSET_TYPE_WEBP ? "WebP" : "GIF");
+    // }
 
     s_sd_file_list.current_index = 0;
     return ESP_OK;
@@ -1550,6 +1646,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         s_sd_mounted = false;
         return enum_err;
     }
+
+    // limit_animation_file_list_for_testing();
 
     if (s_sd_file_list.count == 0) {
         ESP_LOGE(TAG, "No animation files found");

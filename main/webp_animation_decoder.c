@@ -14,6 +14,7 @@
 #include <string.h>
 
 #define TAG "webp_decoder"
+#define WEBP_STATIC_FRAME_DELAY_MS 100U
 
 // Forward declarations for GIF decoder
 extern esp_err_t gif_decoder_init(animation_decoder_t **decoder, const uint8_t *data, size_t size);
@@ -29,6 +30,10 @@ typedef struct {
     WebPAnimInfo info;
     int last_timestamp_ms;      // Previous frame timestamp for delay calculation
     uint32_t current_frame_delay_ms;  // Delay of the last decoded frame
+    bool is_animation;
+    uint8_t *still_rgba;
+    size_t still_frame_size;
+    bool still_has_alpha;
 } webp_decoder_data_t;
 
 esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decoder_type_t type, const uint8_t *data, size_t size)
@@ -55,71 +60,95 @@ esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decode
         dec->impl.webp.data = data;
         dec->impl.webp.data_size = size;
 
-        WebPAnimDecoderOptions dec_opts;
-        if (!WebPAnimDecoderOptionsInit(&dec_opts)) {
-            ESP_LOGE(TAG, "Failed to initialize WebP decoder options");
-            free(webp_data);
-            free(dec);
-            return ESP_FAIL;
-        }
-        dec_opts.color_mode = MODE_RGBA;
-        dec_opts.use_threads = 0;
-
-        // First check if this is an animated WebP using WebPDemux
-        WebPData webp_check_data = {
-            .bytes = data,
-            .size = size,
-        };
-        WebPDemuxer *demux_ptr = WebPDemux(&webp_check_data);
-        if (!demux_ptr) {
-            ESP_LOGE(TAG, "Failed to create WebP demuxer - file may be invalid or not animated");
-            free(webp_data);
-            free(dec);
-            return ESP_FAIL;
-        }
-        
-        uint32_t flags = WebPDemuxGetI(demux_ptr, WEBP_FF_FORMAT_FLAGS);
-        WebPDemuxDelete(demux_ptr);
-        
-        if (!(flags & ANIMATION_FLAG)) {
-            ESP_LOGE(TAG, "WebP file is not animated (flags=0x%08x)", (unsigned)flags);
-            free(webp_data);
-            free(dec);
-            return ESP_ERR_NOT_SUPPORTED;
-        }
-
-        WebPData webp_data_wrapped = {
-            .bytes = data,
-            .size = size,
-        };
-
-        webp_data->decoder = WebPAnimDecoderNew(&webp_data_wrapped, &dec_opts);
-        if (!webp_data->decoder) {
-            ESP_LOGE(TAG, "Failed to create WebP animation decoder (file size: %zu bytes)", size);
+        WebPBitstreamFeatures features;
+        VP8StatusCode feature_status = WebPGetFeatures(data, size, &features);
+        if (feature_status != VP8_STATUS_OK) {
+            ESP_LOGE(TAG, "Failed to parse WebP features (status=%d)", feature_status);
             free(webp_data);
             free(dec);
             return ESP_FAIL;
         }
 
-        if (!WebPAnimDecoderGetInfo(webp_data->decoder, &webp_data->info)) {
-            ESP_LOGE(TAG, "Failed to query WebP animation info");
-            WebPAnimDecoderDelete(webp_data->decoder);
-            free(webp_data);
-            free(dec);
-            return ESP_FAIL;
-        }
-
-        if (webp_data->info.frame_count == 0 || webp_data->info.canvas_width == 0 || webp_data->info.canvas_height == 0) {
-            ESP_LOGE(TAG, "Invalid WebP animation metadata");
-            WebPAnimDecoderDelete(webp_data->decoder);
+        if (features.width <= 0 || features.height <= 0) {
+            ESP_LOGE(TAG, "Invalid WebP dimensions: %d x %d", features.width, features.height);
             free(webp_data);
             free(dec);
             return ESP_ERR_INVALID_SIZE;
         }
 
-        // Initialize timing state
-        webp_data->last_timestamp_ms = 0;
-        webp_data->current_frame_delay_ms = 1;  // Default minimum delay
+        webp_data->is_animation = (features.has_animation != 0);
+
+        if (webp_data->is_animation) {
+            WebPAnimDecoderOptions dec_opts;
+            if (!WebPAnimDecoderOptionsInit(&dec_opts)) {
+                ESP_LOGE(TAG, "Failed to initialize WebP decoder options");
+                free(webp_data);
+                free(dec);
+                return ESP_FAIL;
+            }
+            dec_opts.color_mode = MODE_RGBA;
+            dec_opts.use_threads = 0;
+
+            WebPData webp_data_wrapped = {
+                .bytes = data,
+                .size = size,
+            };
+
+            webp_data->decoder = WebPAnimDecoderNew(&webp_data_wrapped, &dec_opts);
+            if (!webp_data->decoder) {
+                ESP_LOGE(TAG, "Failed to create WebP animation decoder (file size: %zu bytes)", size);
+                free(webp_data);
+                free(dec);
+                return ESP_FAIL;
+            }
+
+            if (!WebPAnimDecoderGetInfo(webp_data->decoder, &webp_data->info)) {
+                ESP_LOGE(TAG, "Failed to query WebP animation info");
+                WebPAnimDecoderDelete(webp_data->decoder);
+                free(webp_data);
+                free(dec);
+                return ESP_FAIL;
+            }
+
+            if (webp_data->info.frame_count == 0 || webp_data->info.canvas_width == 0 || webp_data->info.canvas_height == 0) {
+                ESP_LOGE(TAG, "Invalid WebP animation metadata");
+                WebPAnimDecoderDelete(webp_data->decoder);
+                free(webp_data);
+                free(dec);
+                return ESP_ERR_INVALID_SIZE;
+            }
+
+            webp_data->last_timestamp_ms = 0;
+            webp_data->current_frame_delay_ms = 1;  // Default minimum delay
+        } else {
+            const size_t frame_size = (size_t)features.width * features.height * 4;
+            webp_data->still_rgba = (uint8_t *)malloc(frame_size);
+            if (!webp_data->still_rgba) {
+                ESP_LOGE(TAG, "Failed to allocate buffer for still WebP frame (%zu bytes)", frame_size);
+                free(webp_data);
+                free(dec);
+                return ESP_ERR_NO_MEM;
+            }
+
+            const int stride = features.width * 4;
+            if (!WebPDecodeRGBAInto(data, size, webp_data->still_rgba, frame_size, stride)) {
+                ESP_LOGE(TAG, "Failed to decode still WebP image");
+                free(webp_data->still_rgba);
+                free(webp_data);
+                free(dec);
+                return ESP_FAIL;
+            }
+
+            webp_data->info.canvas_width = (uint32_t)features.width;
+            webp_data->info.canvas_height = (uint32_t)features.height;
+            webp_data->info.frame_count = 1;
+            webp_data->info.loop_count = 0;
+            webp_data->info.bgcolor = features.has_alpha ? 0x00000000 : 0xFF000000;
+            webp_data->still_has_alpha = (features.has_alpha != 0);
+            webp_data->still_frame_size = frame_size;
+            webp_data->current_frame_delay_ms = WEBP_STATIC_FRAME_DELAY_MS;
+            webp_data->last_timestamp_ms = 0;
+        }
 
         dec->impl.webp.decoder = webp_data;
         dec->impl.webp.initialized = true;
@@ -149,7 +178,11 @@ esp_err_t animation_decoder_get_info(animation_decoder_t *decoder, animation_dec
         info->canvas_width = webp_data->info.canvas_width;
         info->canvas_height = webp_data->info.canvas_height;
         info->frame_count = webp_data->info.frame_count;
-        info->has_transparency = (webp_data->info.bgcolor & 0xff000000) == 0;
+        if (webp_data->is_animation) {
+            info->has_transparency = (webp_data->info.bgcolor & 0xff000000) == 0;
+        } else {
+            info->has_transparency = webp_data->still_has_alpha;
+        }
 
         return ESP_OK;
     } else if (decoder->type == ANIMATION_DECODER_TYPE_GIF) {
@@ -171,27 +204,35 @@ esp_err_t animation_decoder_decode_next(animation_decoder_t *decoder, uint8_t *r
         }
 
         webp_decoder_data_t *webp_data = (webp_decoder_data_t *)decoder->impl.webp.decoder;
-        uint8_t *frame_rgba = NULL;
-        int timestamp_ms = 0;
+        if (webp_data->is_animation) {
+            uint8_t *frame_rgba = NULL;
+            int timestamp_ms = 0;
 
-        if (!WebPAnimDecoderGetNext(webp_data->decoder, &frame_rgba, &timestamp_ms)) {
-            return ESP_ERR_INVALID_STATE;
+            if (!WebPAnimDecoderGetNext(webp_data->decoder, &frame_rgba, &timestamp_ms)) {
+                return ESP_ERR_INVALID_STATE;
+            }
+
+            if (!frame_rgba) {
+                return ESP_FAIL;
+            }
+
+            // Calculate frame delay: WebP timestamps are cumulative, so delay = current - previous
+            int frame_delay = timestamp_ms - webp_data->last_timestamp_ms;
+            if (frame_delay < 1) {
+                frame_delay = 1;  // Clamp to minimum 1 ms
+            }
+            webp_data->current_frame_delay_ms = (uint32_t)frame_delay;
+            webp_data->last_timestamp_ms = timestamp_ms;
+
+            const size_t frame_size = (size_t)webp_data->info.canvas_width * webp_data->info.canvas_height * 4;
+            memcpy(rgba_buffer, frame_rgba, frame_size);
+        } else {
+            if (!webp_data->still_rgba || webp_data->still_frame_size == 0) {
+                return ESP_ERR_INVALID_STATE;
+            }
+            memcpy(rgba_buffer, webp_data->still_rgba, webp_data->still_frame_size);
+            webp_data->current_frame_delay_ms = WEBP_STATIC_FRAME_DELAY_MS;
         }
-
-        if (!frame_rgba) {
-            return ESP_FAIL;
-        }
-
-        // Calculate frame delay: WebP timestamps are cumulative, so delay = current - previous
-        int frame_delay = timestamp_ms - webp_data->last_timestamp_ms;
-        if (frame_delay < 1) {
-            frame_delay = 1;  // Clamp to minimum 1 ms
-        }
-        webp_data->current_frame_delay_ms = (uint32_t)frame_delay;
-        webp_data->last_timestamp_ms = timestamp_ms;
-
-        const size_t frame_size = (size_t)webp_data->info.canvas_width * webp_data->info.canvas_height * 4;
-        memcpy(rgba_buffer, frame_rgba, frame_size);
 
         return ESP_OK;
     } else if (decoder->type == ANIMATION_DECODER_TYPE_GIF) {
@@ -212,10 +253,16 @@ esp_err_t animation_decoder_reset(animation_decoder_t *decoder)
             return ESP_ERR_INVALID_STATE;
         }
         webp_decoder_data_t *webp_data = (webp_decoder_data_t *)decoder->impl.webp.decoder;
-        WebPAnimDecoderReset(webp_data->decoder);
-        // Reset timing state
-        webp_data->last_timestamp_ms = 0;
-        webp_data->current_frame_delay_ms = 1;
+        if (webp_data->is_animation) {
+            if (webp_data->decoder) {
+                WebPAnimDecoderReset(webp_data->decoder);
+            }
+            webp_data->last_timestamp_ms = 0;
+            webp_data->current_frame_delay_ms = 1;
+        } else {
+            // Static images simply reuse the pre-decoded frame
+            webp_data->current_frame_delay_ms = WEBP_STATIC_FRAME_DELAY_MS;
+        }
         return ESP_OK;
     } else if (decoder->type == ANIMATION_DECODER_TYPE_GIF) {
         return gif_decoder_reset(decoder);
@@ -257,6 +304,10 @@ void animation_decoder_unload(animation_decoder_t **decoder)
             webp_decoder_data_t *webp_data = (webp_decoder_data_t *)dec->impl.webp.decoder;
             if (webp_data->decoder) {
                 WebPAnimDecoderDelete(webp_data->decoder);
+            }
+            if (webp_data->still_rgba) {
+                free(webp_data->still_rgba);
+                webp_data->still_rgba = NULL;
             }
             free(webp_data);
             dec->impl.webp.decoder = NULL;

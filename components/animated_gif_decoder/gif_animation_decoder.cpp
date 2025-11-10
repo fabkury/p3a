@@ -170,44 +170,10 @@ esp_err_t gif_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
     }
     memset(impl->previous_frame, 0, rgba_size);
 
-    // Count frames by playing through the animation (ensure single-frame GIFs are detected)
-    impl->frame_count = 0;
-    impl->gif->reset();
-    int delay_ms = 0;
-    bool count_error = false;
-    while (true) {
-        int play_result = impl->gif->playFrame(false, &delay_ms, impl);
-        int last_error = impl->gif->getLastError();
-
-        if (play_result < 0) {
-            ESP_LOGE(TAG, "Error parsing GIF frames while counting (result=%d, error=%d)", play_result, last_error);
-            count_error = true;
-            break;
-        }
-
-        if (last_error == GIF_SUCCESS) {
-            impl->frame_count++;
-        } else if (last_error == GIF_EMPTY_FRAME) {
-            // Skip empty frames without counting them
-        } else {
-            ESP_LOGE(TAG, "GIF frame parse error while counting: %d", last_error);
-            count_error = true;
-            break;
-        }
-
-        if (play_result != 1) {
-            break; // Last frame processed (either single-frame or final frame of animation)
-        }
-
-        // Yield every 10 valid frames to prevent blocking during initialization
-        if ((impl->frame_count % 10) == 0 && impl->frame_count != 0) {
-            taskYIELD();
-        }
-    }
-    impl->gif->reset();
-
-    if (count_error || impl->frame_count == 0) {
-        ESP_LOGE(TAG, "GIF has no decodable frames");
+    GIFINFO gif_info = {0};
+    int info_result = impl->gif->getInfo(&gif_info);
+    if (info_result != 1) {
+        ESP_LOGE(TAG, "Failed to read GIF metadata via getInfo()");
         free(impl->rgba_buffer);
         free(impl->previous_frame);
         impl->gif->close();
@@ -215,6 +181,19 @@ esp_err_t gif_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
         free(impl);
         return ESP_ERR_INVALID_SIZE;
     }
+
+    if (gif_info.iFrameCount <= 0) {
+        ESP_LOGE(TAG, "GIF metadata reported zero frames");
+        free(impl->rgba_buffer);
+        free(impl->previous_frame);
+        impl->gif->close();
+        delete impl->gif;
+        free(impl);
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    impl->frame_count = (size_t)gif_info.iFrameCount;
+    impl->gif->reset();
 
     // Ensure decode buffers start cleared before first frame decode
     memset(impl->rgba_buffer, 0, rgba_size);

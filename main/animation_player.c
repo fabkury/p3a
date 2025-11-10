@@ -572,6 +572,7 @@ static esp_err_t load_animation_into_buffer(size_t asset_index, animation_buffer
 static void unload_animation_buffer(animation_buffer_t *buf);
 static esp_err_t prefetch_first_frame(animation_buffer_t *buf);
 static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int target_w, int target_h, bool use_prefetched);
+static void filter_animation_list_to_gif_only(void);
 static void discard_failed_swap_request(size_t failed_asset_index, esp_err_t error);
 
 // Discard a failed swap request and restore system to responsive state
@@ -807,7 +808,17 @@ static void lcd_animation_task(void *arg)
             }
             // If processing_time_us >= target_delay_us, we've already exceeded target, skip wait
         }
-        
+        const bool blank_display = (app_lcd_get_brightness() == 0);
+        if (blank_display) {
+            memset(frame, 0, s_frame_buffer_bytes);
+#if APP_LCD_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
+            esp_err_t blank_msync_err = esp_cache_msync(frame, s_frame_buffer_bytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+            if (blank_msync_err != ESP_OK) {
+                ESP_LOGW(TAG, "Cache sync failed (blank frame): %s", esp_err_to_name(blank_msync_err));
+            }
+#endif
+        }
+
         esp_err_t draw_err = esp_lcd_panel_draw_bitmap(s_display_handle, 0, 0,
                                                        EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, frame);
         
@@ -1052,6 +1063,70 @@ static void limit_animation_file_list_for_testing(void)
     }
 
     ESP_LOGI(TAG, "Test filter applied: retained %zu animations", filtered_count);
+}
+
+static void filter_animation_list_to_gif_only(void)
+{
+    if (s_sd_file_list.count == 0 || !s_sd_file_list.filenames || !s_sd_file_list.types) {
+        return;
+    }
+
+    size_t write_idx = 0;
+    const size_t original_count = s_sd_file_list.count;
+
+    for (size_t i = 0; i < original_count; ++i) {
+        asset_type_t type = s_sd_file_list.types[i];
+        if (type == ASSET_TYPE_GIF) {
+            if (write_idx != i) {
+                s_sd_file_list.filenames[write_idx] = s_sd_file_list.filenames[i];
+                s_sd_file_list.types[write_idx] = type;
+                s_sd_file_list.filenames[i] = NULL;
+            }
+            write_idx++;
+        } else {
+            if (s_sd_file_list.filenames[i]) {
+                free(s_sd_file_list.filenames[i]);
+                s_sd_file_list.filenames[i] = NULL;
+            }
+        }
+    }
+
+    if (write_idx == original_count) {
+        ESP_LOGI(TAG, "Temporary GIF-only filter retained all %zu animations", original_count);
+        return;
+    }
+
+    if (write_idx == 0) {
+        free(s_sd_file_list.filenames);
+        free(s_sd_file_list.types);
+        s_sd_file_list.filenames = NULL;
+        s_sd_file_list.types = NULL;
+        s_sd_file_list.count = 0;
+        s_sd_file_list.current_index = 0;
+        s_next_asset_index = 0;
+        ESP_LOGW(TAG, "Temporary GIF-only filter removed all animations");
+        return;
+    }
+
+    char **resized_filenames = (char **)realloc(s_sd_file_list.filenames, write_idx * sizeof(char *));
+    if (resized_filenames) {
+        s_sd_file_list.filenames = resized_filenames;
+    }
+
+    asset_type_t *resized_types = (asset_type_t *)realloc(s_sd_file_list.types, write_idx * sizeof(asset_type_t));
+    if (resized_types) {
+        s_sd_file_list.types = resized_types;
+    }
+
+    s_sd_file_list.count = write_idx;
+    if (s_sd_file_list.current_index >= write_idx) {
+        s_sd_file_list.current_index = 0;
+    }
+    if (s_next_asset_index >= write_idx) {
+        s_next_asset_index = 0;
+    }
+
+    ESP_LOGW(TAG, "Temporary GIF-only filter active: %zu of %zu animations retained", write_idx, original_count);
 }
 
 static esp_err_t enumerate_animation_files(const char *dir_path)
@@ -1647,6 +1722,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         return enum_err;
     }
 
+    // filter_animation_list_to_gif_only();
     // limit_animation_file_list_for_testing();
 
     if (s_sd_file_list.count == 0) {

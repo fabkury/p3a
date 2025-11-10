@@ -77,6 +77,33 @@ void app_lcd_cycle_animation_backward(void);
 
 void app_lcd_cycle_to_random(void);
 
+/**
+ * @brief Get current display brightness
+ *
+ * @return Current brightness percentage (0-100)
+ */
+int app_lcd_get_brightness(void);
+
+/**
+ * @brief Set display brightness
+ *
+ * @param brightness_percent Brightness percentage (0-100), will be clamped
+ * @return
+ *    - ESP_OK: Success
+ *    - Else: Error setting brightness
+ */
+esp_err_t app_lcd_set_brightness(int brightness_percent);
+
+/**
+ * @brief Adjust brightness by a delta amount
+ *
+ * @param delta_percent Change in brightness percentage points (can be negative)
+ * @return
+ *    - ESP_OK: Success
+ *    - Else: Error setting brightness
+ */
+esp_err_t app_lcd_adjust_brightness(int delta_percent);
+
 #ifdef __cplusplus
 }
 #endif

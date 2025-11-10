@@ -145,17 +145,10 @@ esp_err_t gif_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
     }
     memset(impl->previous_frame, 0, rgba_size);
 
-    // Count frames by playing through the animation
-    impl->frame_count = 0;
-    impl->gif->reset();
-    int delay_ms = 0;
-    while (impl->gif->playFrame(false, &delay_ms, impl) == 1) {
-        impl->frame_count++;
-    }
-    impl->gif->reset();
-
-    if (impl->frame_count == 0) {
-        ESP_LOGE(TAG, "GIF has no frames");
+    GIFINFO gif_info = {0};
+    int info_result = impl->gif->getInfo(&gif_info);
+    if (info_result != 1) {
+        ESP_LOGE(TAG, "Failed to read GIF metadata via getInfo()");
         free(impl->rgba_buffer);
         free(impl->previous_frame);
         impl->gif->close();
@@ -163,6 +156,19 @@ esp_err_t gif_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
         free(impl);
         return ESP_ERR_INVALID_SIZE;
     }
+
+    if (gif_info.iFrameCount <= 0) {
+        ESP_LOGE(TAG, "GIF metadata reported zero frames");
+        free(impl->rgba_buffer);
+        free(impl->previous_frame);
+        impl->gif->close();
+        delete impl->gif;
+        free(impl);
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    impl->frame_count = (size_t)gif_info.iFrameCount;
+    impl->gif->reset();
 
     impl->current_frame = 0;
     impl->initialized = true;

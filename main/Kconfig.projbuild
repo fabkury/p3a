@@ -47,6 +47,22 @@ menu "Physical Player of Pixel Art (P3A)"
             range 5 100
             help
                 Delay between successive reads of the touch controller.
+
+        config P3A_TOUCH_SWIPE_MIN_HEIGHT_PERCENT
+            int "Minimum swipe height percentage"
+            default 10
+            range 5 50
+            help
+                Minimum vertical swipe distance (as percentage of screen height) required
+                to trigger brightness control gesture. Smaller values make gestures more sensitive.
+
+        config P3A_TOUCH_BRIGHTNESS_MAX_DELTA_PERCENT
+            int "Maximum brightness change per full swipe"
+            default 75
+            range 10 100
+            help
+                Maximum brightness change (in percentage points) when performing a full
+                vertical swipe from one edge to the opposite edge of the screen.
     endmenu
 
     choice

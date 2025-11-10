@@ -123,3 +123,8 @@ void app_lcd_cycle_animation_backward(void)
 {
     animation_player_cycle_animation(false);
 }
+
+void app_lcd_cycle_to_random(void)
+{
+    animation_player_cycle_to_random();
+}

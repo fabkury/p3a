@@ -12,6 +12,7 @@
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
 #include "esp_task_wdt.h"
+#include "esp_random.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -34,6 +35,17 @@
 #endif
 
 #include "bsp/esp-bsp.h"
+
+// For memory barriers to ensure cache coherency between cores
+#if defined(__XTENSA__)
+#include "xtensa/hal.h"
+#define MEMORY_BARRIER() xthal_dcache_sync()
+#elif defined(__riscv)
+#include "riscv/rv_utils.h"
+#define MEMORY_BARRIER() __asm__ __volatile__ ("fence" ::: "memory")
+#else
+#define MEMORY_BARRIER() __asm__ __volatile__ ("" ::: "memory")
+#endif
 
 #define TAG "anim_player"
 
@@ -378,7 +390,12 @@ static void upscale_worker_top_task(void *arg)
     const uint32_t notification_bit = (1UL << 0);
     
     while (true) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        // Wait for notification using bit-based API to match sender
+        uint32_t notification_value = 0;
+        xTaskNotifyWait(0, UINT32_MAX, &notification_value, portMAX_DELAY);
+        
+        // Memory barrier to ensure we see all shared variables set by main task
+        MEMORY_BARRIER();
         
         if (s_upscale_src_buffer && s_upscale_dst_buffer && 
             s_upscale_row_start_top < s_upscale_row_end_top) {
@@ -389,6 +406,9 @@ static void upscale_worker_top_task(void *arg)
                                 s_upscale_row_start_top, s_upscale_row_end_top,
                                 s_upscale_lookup_x, s_upscale_lookup_y);
         }
+        
+        // Memory barrier to ensure all writes to dst_buffer are visible to other cores/DMA
+        MEMORY_BARRIER();
         
         s_upscale_worker_top_done = true;
         if (s_upscale_main_task) {
@@ -403,7 +423,12 @@ static void upscale_worker_bottom_task(void *arg)
     const uint32_t notification_bit = (1UL << 1);
     
     while (true) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        // Wait for notification using bit-based API to match sender
+        uint32_t notification_value = 0;
+        xTaskNotifyWait(0, UINT32_MAX, &notification_value, portMAX_DELAY);
+        
+        // Memory barrier to ensure we see all shared variables set by main task
+        MEMORY_BARRIER();
         
         if (s_upscale_src_buffer && s_upscale_dst_buffer && 
             s_upscale_row_start_bottom < s_upscale_row_end_bottom) {
@@ -414,6 +439,9 @@ static void upscale_worker_bottom_task(void *arg)
                                 s_upscale_row_start_bottom, s_upscale_row_end_bottom,
                                 s_upscale_lookup_x, s_upscale_lookup_y);
         }
+        
+        // Memory barrier to ensure all writes to dst_buffer are visible to other cores/DMA
+        MEMORY_BARRIER();
         
         s_upscale_worker_bottom_done = true;
         if (s_upscale_main_task) {
@@ -470,6 +498,7 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
     
     const uint8_t *src_for_upscale = decode_buffer;
     
+    // Set up shared parameters for workers
     s_upscale_src_buffer = src_for_upscale;
     s_upscale_dst_buffer = dest_buffer;
     s_upscale_lookup_x = buf->upscale_lookup_x;
@@ -489,29 +518,37 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
     s_upscale_row_start_bottom = mid_row;
     s_upscale_row_end_bottom = dst_h;
     
-    if (s_upscale_worker_top) {
+    // Memory barrier to ensure all shared variables are visible to worker cores
+    MEMORY_BARRIER();
+    
+    // Notify BOTH workers simultaneously (back-to-back) to minimize timing skew
+    // Critical: we want both workers to start as close together as possible
+    // to reduce the chance of DMA catching the buffer in a partially-updated state
+    if (s_upscale_worker_top && s_upscale_worker_bottom) {
         xTaskNotify(s_upscale_worker_top, 1, eSetBits);
-    }
-    if (s_upscale_worker_bottom) {
         xTaskNotify(s_upscale_worker_bottom, 1, eSetBits);
     }
     
+    // Wait for both workers to complete using proper notification API
     const uint32_t all_bits = (1UL << 0) | (1UL << 1);
     uint32_t notification_value = 0;
     
     while ((notification_value & all_bits) != all_bits) {
-        uint32_t received = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(50));
-        if (received == 0) {
+        uint32_t received_bits = 0;
+        if (xTaskNotifyWait(0, UINT32_MAX, &received_bits, pdMS_TO_TICKS(50)) == pdTRUE) {
+            notification_value |= received_bits;
+        } else {
             // Timeout - yield to allow idle task to reset watchdog
             taskYIELD();
-            continue;
         }
-        notification_value |= received;
     }
     
     if (!s_upscale_worker_top_done || !s_upscale_worker_bottom_done) {
         ESP_LOGW(TAG, "Upscale workers may not have completed properly");
     }
+    
+    // Memory barrier to ensure all worker writes are visible before DMA
+    MEMORY_BARRIER();
 
     return (int)buf->current_frame_delay_ms;
 }
@@ -682,7 +719,7 @@ static void lcd_animation_task(void *arg)
                 }
                 s_target_frame_delay_ms = (uint32_t)frame_delay_ms;
                 s_latest_frame_duration_ms = frame_delay_ms;
-
+#if defined(CONFIG_P3A_LCD_DISPLAY_FRAME_DURATIONS)
                 const int text_scale = 3;
                 const int margin = text_scale * 2;
 
@@ -692,6 +729,7 @@ static void lcd_animation_task(void *arg)
                 }
 
                 draw_text_top_right(frame, s_frame_duration_text, margin, margin, text_scale, color_text);
+#endif
 
 #if APP_LCD_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
                 esp_err_t msync_err = esp_cache_msync(frame, s_frame_buffer_bytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
@@ -1404,6 +1442,10 @@ static esp_err_t prefetch_first_frame(animation_buffer_t *buf)
         return ESP_ERR_INVALID_STATE;
     }
     
+    // Memory barrier to ensure all shared variables are visible to worker cores
+    MEMORY_BARRIER();
+    
+    // Notify workers to start processing
     if (s_upscale_worker_top) {
         xTaskNotify(s_upscale_worker_top, 1, eSetBits);
     }
@@ -1411,23 +1453,27 @@ static esp_err_t prefetch_first_frame(animation_buffer_t *buf)
         xTaskNotify(s_upscale_worker_bottom, 1, eSetBits);
     }
     
+    // Wait for both workers to complete using proper notification API
     const uint32_t all_bits = (1UL << 0) | (1UL << 1);
     uint32_t notification_value = 0;
     
     while ((notification_value & all_bits) != all_bits) {
-        uint32_t received = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(50));
-        if (received == 0) {
+        uint32_t received_bits = 0;
+        if (xTaskNotifyWait(0, UINT32_MAX, &received_bits, pdMS_TO_TICKS(50)) == pdTRUE) {
+            notification_value |= received_bits;
+        } else {
             // Timeout - yield to allow idle task to reset watchdog
             taskYIELD();
-            continue;
         }
-        notification_value |= received;
     }
     
     if (!s_upscale_worker_top_done || !s_upscale_worker_bottom_done) {
         ESP_LOGW(TAG, "Upscale workers may not have completed properly during prefetch");
         return ESP_FAIL;
     }
+    
+    // Memory barrier to ensure all worker writes are visible
+    MEMORY_BARRIER();
     
     // Mark first frame as ready
     buf->first_frame_ready = true;
@@ -1535,11 +1581,16 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     memset(&s_front_buffer, 0, sizeof(s_front_buffer));
     memset(&s_back_buffer, 0, sizeof(s_back_buffer));
 
-    // Load first animation into front buffer synchronously
-    esp_err_t load_err = load_animation_into_buffer(0, &s_front_buffer);
+    // Load a random animation into front buffer synchronously
+    size_t start_index = (s_sd_file_list.count > 0) ? (esp_random() % s_sd_file_list.count) : 0;
+    esp_err_t load_err = load_animation_into_buffer(start_index, &s_front_buffer);
     if (load_err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to load first animation (index 0), trying others...");
-        for (size_t i = 1; i < s_sd_file_list.count; i++) {
+        ESP_LOGW(TAG, "Failed to load random animation (index %zu), trying others...", start_index);
+        // Try all animations sequentially as fallback
+        for (size_t i = 0; i < s_sd_file_list.count; i++) {
+            if (i == start_index) {
+                continue;  // Skip the one we already tried
+            }
             load_err = load_animation_into_buffer(i, &s_front_buffer);
             if (load_err == ESP_OK) {
                 ESP_LOGI(TAG, "Successfully loaded animation at index %zu", i);
@@ -1556,6 +1607,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
             s_sd_mounted = false;
             return load_err;
         }
+    } else {
+        ESP_LOGI(TAG, "Loaded random animation at index %zu to start playback", start_index);
     }
     
     // Create upscale workers BEFORE prefetch (prefetch needs them)
@@ -1720,6 +1773,52 @@ void animation_player_cycle_animation(bool forward)
         }
         
         ESP_LOGI(TAG, "Queued animation load to '%s' (index %zu)", 
+                 s_sd_file_list.filenames[target_index], target_index);
+    }
+}
+
+void animation_player_cycle_to_random(void)
+{
+    if (s_sd_file_list.count == 0) {
+        ESP_LOGW(TAG, "No animations available to cycle");
+        return;
+    }
+
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        // If swap is already in progress (swap requested, loader busy, or prefetch pending), ignore
+        if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
+            ESP_LOGD(TAG, "Animation change request ignored: swap already in progress");
+            xSemaphoreGive(s_buffer_mutex);
+            return;
+        }
+        
+        // Get current animation index
+        size_t current_index = s_front_buffer.ready ? s_front_buffer.asset_index : 0;
+        
+        // Select a random index, avoiding the current one if there are multiple animations
+        size_t target_index;
+        if (s_sd_file_list.count <= 1) {
+            // Only one animation available, use it
+            target_index = 0;
+        } else {
+            // Pick a random index different from the current one
+            do {
+                target_index = esp_random() % s_sd_file_list.count;
+            } while (target_index == current_index);
+        }
+        
+        // Set swap requested and queue loader with target index
+        s_next_asset_index = target_index;
+        s_swap_requested = true;
+        
+        xSemaphoreGive(s_buffer_mutex);
+        
+        // Trigger loader task to load target animation
+        if (s_loader_sem) {
+            xSemaphoreGive(s_loader_sem);
+        }
+        
+        ESP_LOGI(TAG, "Queued random animation load to '%s' (index %zu)", 
                  s_sd_file_list.filenames[target_index], target_index);
     }
 }

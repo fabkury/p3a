@@ -75,6 +75,8 @@ void app_lcd_cycle_animation(void);
 
 void app_lcd_cycle_animation_backward(void);
 
+void app_lcd_cycle_to_random(void);
+
 #ifdef __cplusplus
 }
 #endif

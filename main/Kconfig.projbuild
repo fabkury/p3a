@@ -3,7 +3,7 @@ menu "Physical Player of Pixel Art (P3A)"
     menu "Display"
         config P3A_LCD_ENABLE_CACHE_FLUSH
             bool "Flush LCD frame buffer via esp_cache_msync"
-            default n
+            default y
             help
                 Enable cache flushes before handing the framebuffer to the panel driver.
                 Disable to evaluate DMA coherency without the extra msync cost.

@@ -1,2 +1,3 @@
-build/
+build/*
 .vscode/
+!build/p3a.bin

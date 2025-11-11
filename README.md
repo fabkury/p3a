@@ -73,7 +73,6 @@ See `ROADMAP.md` for the detailed phase-by-phase breakdown.
 - `managed_components/` — ESP-IDF Component Registry dependencies (Waveshare BSP, esp_lcd_touch, libpng, etc.).
 - `def/` — sdkconfig defaults for the esp32p4 target.
 - `ROADMAP.md` — execution plan for each firmware milestone.
-- `makapix_full_project_spec.md` — end-to-end Makapix backend/product specification.
 
 ## Makapix integration primer
 Makapix is a pixel-art social network that hosts artworks and offers metadata, moderation, reactions, and MQTT notifications. P3A’s planned role is:

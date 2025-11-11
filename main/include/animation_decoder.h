@@ -23,6 +23,8 @@ typedef struct animation_decoder_s animation_decoder_t;
 typedef enum {
     ANIMATION_DECODER_TYPE_WEBP,
     ANIMATION_DECODER_TYPE_GIF,
+    ANIMATION_DECODER_TYPE_PNG,
+    ANIMATION_DECODER_TYPE_JPEG,
 } animation_decoder_type_t;
 
 // Decoder information structure

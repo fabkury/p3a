@@ -27,6 +27,12 @@ struct animation_decoder_s {
         struct {
             void *gif_decoder; // Opaque GIF decoder pointer
         } gif;
+        struct {
+            void *png_decoder; // Opaque PNG decoder pointer
+        } png;
+        struct {
+            void *jpeg_decoder; // Opaque JPEG decoder pointer
+        } jpeg;
     } impl;
 };
 

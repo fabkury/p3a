@@ -24,6 +24,22 @@ extern esp_err_t gif_decoder_get_frame_delay(animation_decoder_t *decoder, uint3
 extern esp_err_t gif_decoder_reset(animation_decoder_t *decoder);
 extern void gif_decoder_unload(animation_decoder_t **decoder);
 
+// Forward declarations for PNG decoder
+extern esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, size_t size);
+extern esp_err_t png_decoder_get_info(animation_decoder_t *decoder, animation_decoder_info_t *info);
+extern esp_err_t png_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_buffer);
+extern esp_err_t png_decoder_get_frame_delay(animation_decoder_t *decoder, uint32_t *delay_ms);
+extern esp_err_t png_decoder_reset(animation_decoder_t *decoder);
+extern void png_decoder_unload(animation_decoder_t **decoder);
+
+// Forward declarations for JPEG decoder
+extern esp_err_t jpeg_decoder_init(animation_decoder_t **decoder, const uint8_t *data, size_t size);
+extern esp_err_t jpeg_decoder_get_info_wrapper(animation_decoder_t *decoder, animation_decoder_info_t *info);
+extern esp_err_t jpeg_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_buffer);
+extern esp_err_t jpeg_decoder_get_frame_delay(animation_decoder_t *decoder, uint32_t *delay_ms);
+extern esp_err_t jpeg_decoder_reset(animation_decoder_t *decoder);
+extern void jpeg_decoder_unload(animation_decoder_t **decoder);
+
 // WebP-specific structure to hold WebP types
 typedef struct {
     WebPAnimDecoder *decoder;
@@ -157,6 +173,10 @@ esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decode
         return ESP_OK;
     } else if (type == ANIMATION_DECODER_TYPE_GIF) {
         return gif_decoder_init(decoder, data, size);
+    } else if (type == ANIMATION_DECODER_TYPE_PNG) {
+        return png_decoder_init(decoder, data, size);
+    } else if (type == ANIMATION_DECODER_TYPE_JPEG) {
+        return jpeg_decoder_init(decoder, data, size);
     } else {
         ESP_LOGE(TAG, "Unknown decoder type: %d", type);
         return ESP_ERR_INVALID_ARG;
@@ -187,6 +207,10 @@ esp_err_t animation_decoder_get_info(animation_decoder_t *decoder, animation_dec
         return ESP_OK;
     } else if (decoder->type == ANIMATION_DECODER_TYPE_GIF) {
         return gif_decoder_get_info(decoder, info);
+    } else if (decoder->type == ANIMATION_DECODER_TYPE_PNG) {
+        return png_decoder_get_info(decoder, info);
+    } else if (decoder->type == ANIMATION_DECODER_TYPE_JPEG) {
+        return jpeg_decoder_get_info_wrapper(decoder, info);
     } else {
         return ESP_ERR_INVALID_ARG;
     }
@@ -237,6 +261,10 @@ esp_err_t animation_decoder_decode_next(animation_decoder_t *decoder, uint8_t *r
         return ESP_OK;
     } else if (decoder->type == ANIMATION_DECODER_TYPE_GIF) {
         return gif_decoder_decode_next(decoder, rgba_buffer);
+    } else if (decoder->type == ANIMATION_DECODER_TYPE_PNG) {
+        return png_decoder_decode_next(decoder, rgba_buffer);
+    } else if (decoder->type == ANIMATION_DECODER_TYPE_JPEG) {
+        return jpeg_decoder_decode_next(decoder, rgba_buffer);
     } else {
         return ESP_ERR_INVALID_ARG;
     }
@@ -266,6 +294,10 @@ esp_err_t animation_decoder_reset(animation_decoder_t *decoder)
         return ESP_OK;
     } else if (decoder->type == ANIMATION_DECODER_TYPE_GIF) {
         return gif_decoder_reset(decoder);
+    } else if (decoder->type == ANIMATION_DECODER_TYPE_PNG) {
+        return png_decoder_reset(decoder);
+    } else if (decoder->type == ANIMATION_DECODER_TYPE_JPEG) {
+        return jpeg_decoder_reset(decoder);
     } else {
         return ESP_ERR_INVALID_ARG;
     }
@@ -286,6 +318,10 @@ esp_err_t animation_decoder_get_frame_delay(animation_decoder_t *decoder, uint32
         return ESP_OK;
     } else if (decoder->type == ANIMATION_DECODER_TYPE_GIF) {
         return gif_decoder_get_frame_delay(decoder, delay_ms);
+    } else if (decoder->type == ANIMATION_DECODER_TYPE_PNG) {
+        return png_decoder_get_frame_delay(decoder, delay_ms);
+    } else if (decoder->type == ANIMATION_DECODER_TYPE_JPEG) {
+        return jpeg_decoder_get_frame_delay(decoder, delay_ms);
     } else {
         return ESP_ERR_INVALID_ARG;
     }
@@ -315,6 +351,10 @@ void animation_decoder_unload(animation_decoder_t **decoder)
         free(dec);
     } else if (dec->type == ANIMATION_DECODER_TYPE_GIF) {
         gif_decoder_unload(decoder);
+    } else if (dec->type == ANIMATION_DECODER_TYPE_PNG) {
+        png_decoder_unload(decoder);
+    } else if (dec->type == ANIMATION_DECODER_TYPE_JPEG) {
+        jpeg_decoder_unload(decoder);
     } else {
         free(dec);
     }

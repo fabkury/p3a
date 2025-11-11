@@ -59,6 +59,8 @@
 typedef enum {
     ASSET_TYPE_WEBP,
     ASSET_TYPE_GIF,
+    ASSET_TYPE_PNG,
+    ASSET_TYPE_JPEG,
 } asset_type_t;
 
 // SD card animation file list
@@ -573,6 +575,7 @@ static void unload_animation_buffer(animation_buffer_t *buf);
 static esp_err_t prefetch_first_frame(animation_buffer_t *buf);
 static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int target_w, int target_h, bool use_prefetched);
 static void filter_animation_list_to_gif_only(void);
+static void filter_animation_list_to_png_only(void);
 static void discard_failed_swap_request(size_t failed_asset_index, esp_err_t error);
 
 // Discard a failed swap request and restore system to responsive state
@@ -895,6 +898,15 @@ static asset_type_t get_asset_type(const char *filename)
     if (len >= 4 && strcasecmp(filename + len - 4, ".gif") == 0) {
         return ASSET_TYPE_GIF;
     }
+    if (len >= 4 && strcasecmp(filename + len - 4, ".png") == 0) {
+        return ASSET_TYPE_PNG;
+    }
+    if (len >= 4 && strcasecmp(filename + len - 4, ".jpg") == 0) {
+        return ASSET_TYPE_JPEG;
+    }
+    if (len >= 5 && strcasecmp(filename + len - 5, ".jpeg") == 0) {
+        return ASSET_TYPE_JPEG;
+    }
     return ASSET_TYPE_WEBP; // Default
 }
 
@@ -928,7 +940,10 @@ static bool directory_has_animation_files(const char *dir_path)
             const char *name = entry->d_name;
             size_t len = strlen(name);
             if ((len >= 5 && strcasecmp(name + len - 5, ".webp") == 0) ||
-                (len >= 4 && strcasecmp(name + len - 4, ".gif") == 0)) {
+                (len >= 4 && strcasecmp(name + len - 4, ".gif") == 0) ||
+                (len >= 4 && strcasecmp(name + len - 4, ".png") == 0) ||
+                (len >= 4 && strcasecmp(name + len - 4, ".jpg") == 0) ||
+                (len >= 5 && strcasecmp(name + len - 5, ".jpeg") == 0)) {
                 has_anim = true;
                 break;
             }
@@ -1129,6 +1144,134 @@ static void filter_animation_list_to_gif_only(void)
     ESP_LOGW(TAG, "Temporary GIF-only filter active: %zu of %zu animations retained", write_idx, original_count);
 }
 
+static void filter_animation_list_to_png_only(void)
+{
+    if (s_sd_file_list.count == 0 || !s_sd_file_list.filenames || !s_sd_file_list.types) {
+        return;
+    }
+
+    size_t write_idx = 0;
+    const size_t original_count = s_sd_file_list.count;
+
+    for (size_t i = 0; i < original_count; ++i) {
+        asset_type_t type = s_sd_file_list.types[i];
+        if (type == ASSET_TYPE_PNG) {
+            if (write_idx != i) {
+                s_sd_file_list.filenames[write_idx] = s_sd_file_list.filenames[i];
+                s_sd_file_list.types[write_idx] = type;
+                s_sd_file_list.filenames[i] = NULL;
+            }
+            write_idx++;
+        } else {
+            if (s_sd_file_list.filenames[i]) {
+                free(s_sd_file_list.filenames[i]);
+                s_sd_file_list.filenames[i] = NULL;
+            }
+        }
+    }
+
+    if (write_idx == original_count) {
+        ESP_LOGI(TAG, "Temporary PNG-only filter retained all %zu animations", original_count);
+        return;
+    }
+
+    if (write_idx == 0) {
+        free(s_sd_file_list.filenames);
+        free(s_sd_file_list.types);
+        s_sd_file_list.filenames = NULL;
+        s_sd_file_list.types = NULL;
+        s_sd_file_list.count = 0;
+        s_sd_file_list.current_index = 0;
+        s_next_asset_index = 0;
+        ESP_LOGW(TAG, "Temporary PNG-only filter removed all animations");
+        return;
+    }
+
+    char **resized_filenames = (char **)realloc(s_sd_file_list.filenames, write_idx * sizeof(char *));
+    if (resized_filenames) {
+        s_sd_file_list.filenames = resized_filenames;
+    }
+
+    asset_type_t *resized_types = (asset_type_t *)realloc(s_sd_file_list.types, write_idx * sizeof(asset_type_t));
+    if (resized_types) {
+        s_sd_file_list.types = resized_types;
+    }
+
+    s_sd_file_list.count = write_idx;
+    if (s_sd_file_list.current_index >= write_idx) {
+        s_sd_file_list.current_index = 0;
+    }
+    if (s_next_asset_index >= write_idx) {
+        s_next_asset_index = 0;
+    }
+
+    ESP_LOGW(TAG, "Temporary PNG-only filter active: %zu of %zu animations retained", write_idx, original_count);
+}
+
+static void filter_animation_list_to_jpeg_only(void)
+{
+    if (s_sd_file_list.count == 0 || !s_sd_file_list.filenames || !s_sd_file_list.types) {
+        return;
+    }
+
+    size_t write_idx = 0;
+    const size_t original_count = s_sd_file_list.count;
+
+    for (size_t i = 0; i < original_count; ++i) {
+        asset_type_t type = s_sd_file_list.types[i];
+        if (type == ASSET_TYPE_JPEG) {
+            if (write_idx != i) {
+                s_sd_file_list.filenames[write_idx] = s_sd_file_list.filenames[i];
+                s_sd_file_list.types[write_idx] = type;
+                s_sd_file_list.filenames[i] = NULL;
+            }
+            write_idx++;
+        } else {
+            if (s_sd_file_list.filenames[i]) {
+                free(s_sd_file_list.filenames[i]);
+                s_sd_file_list.filenames[i] = NULL;
+            }
+        }
+    }
+
+    if (write_idx == original_count) {
+        ESP_LOGI(TAG, "Temporary JPEG-only filter retained all %zu animations", original_count);
+        return;
+    }
+
+    if (write_idx == 0) {
+        free(s_sd_file_list.filenames);
+        free(s_sd_file_list.types);
+        s_sd_file_list.filenames = NULL;
+        s_sd_file_list.types = NULL;
+        s_sd_file_list.count = 0;
+        s_sd_file_list.current_index = 0;
+        s_next_asset_index = 0;
+        ESP_LOGW(TAG, "Temporary JPEG-only filter removed all animations");
+        return;
+    }
+
+    char **resized_filenames = (char **)realloc(s_sd_file_list.filenames, write_idx * sizeof(char *));
+    if (resized_filenames) {
+        s_sd_file_list.filenames = resized_filenames;
+    }
+
+    asset_type_t *resized_types = (asset_type_t *)realloc(s_sd_file_list.types, write_idx * sizeof(asset_type_t));
+    if (resized_types) {
+        s_sd_file_list.types = resized_types;
+    }
+
+    s_sd_file_list.count = write_idx;
+    if (s_sd_file_list.current_index >= write_idx) {
+        s_sd_file_list.current_index = 0;
+    }
+    if (s_next_asset_index >= write_idx) {
+        s_next_asset_index = 0;
+    }
+
+    ESP_LOGW(TAG, "Temporary JPEG-only filter active: %zu of %zu animations retained", write_idx, original_count);
+}
+
 static esp_err_t enumerate_animation_files(const char *dir_path)
 {
     free_sd_file_list();
@@ -1161,7 +1304,10 @@ static esp_err_t enumerate_animation_files(const char *dir_path)
             const char *name = entry->d_name;
             size_t len = strlen(name);
             if ((len >= 5 && strcasecmp(name + len - 5, ".webp") == 0) ||
-                (len >= 4 && strcasecmp(name + len - 4, ".gif") == 0)) {
+                (len >= 4 && strcasecmp(name + len - 4, ".gif") == 0) ||
+                (len >= 4 && strcasecmp(name + len - 4, ".png") == 0) ||
+                (len >= 4 && strcasecmp(name + len - 4, ".jpg") == 0) ||
+                (len >= 5 && strcasecmp(name + len - 5, ".jpeg") == 0)) {
                 anim_count++;
             }
         }
@@ -1227,6 +1373,12 @@ static esp_err_t enumerate_animation_files(const char *dir_path)
             if (len >= 5 && strcasecmp(name + len - 5, ".webp") == 0) {
                 is_anim = true;
             } else if (len >= 4 && strcasecmp(name + len - 4, ".gif") == 0) {
+                is_anim = true;
+            } else if (len >= 4 && strcasecmp(name + len - 4, ".png") == 0) {
+                is_anim = true;
+            } else if (len >= 4 && strcasecmp(name + len - 4, ".jpg") == 0) {
+                is_anim = true;
+            } else if (len >= 5 && strcasecmp(name + len - 5, ".jpeg") == 0) {
                 is_anim = true;
             }
             
@@ -1404,8 +1556,18 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf, asse
         return ESP_ERR_INVALID_ARG;
     }
     
-    animation_decoder_type_t decoder_type = (type == ASSET_TYPE_WEBP) ? 
-        ANIMATION_DECODER_TYPE_WEBP : ANIMATION_DECODER_TYPE_GIF;
+    animation_decoder_type_t decoder_type;
+    if (type == ASSET_TYPE_WEBP) {
+        decoder_type = ANIMATION_DECODER_TYPE_WEBP;
+    } else if (type == ASSET_TYPE_GIF) {
+        decoder_type = ANIMATION_DECODER_TYPE_GIF;
+    } else if (type == ASSET_TYPE_PNG) {
+        decoder_type = ANIMATION_DECODER_TYPE_PNG;
+    } else if (type == ASSET_TYPE_JPEG) {
+        decoder_type = ANIMATION_DECODER_TYPE_JPEG;
+    } else {
+        return ESP_ERR_INVALID_ARG;
+    }
     
     esp_err_t err = animation_decoder_init(&buf->decoder, decoder_type, data, size);
     if (err != ESP_OK) {
@@ -1724,6 +1886,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
 
     // filter_animation_list_to_gif_only();
     // limit_animation_file_list_for_testing();
+    // filter_animation_list_to_png_only();
+    // filter_animation_list_to_jpeg_only();
 
     if (s_sd_file_list.count == 0) {
         ESP_LOGE(TAG, "No animation files found");

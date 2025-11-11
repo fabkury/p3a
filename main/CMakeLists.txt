@@ -4,10 +4,12 @@ set(srcs
     "p3a_main.c"
     "animation_player.c"
     "webp_animation_decoder.c"
+    "png_animation_decoder.c"
+    "jpeg_animation_decoder.c"
 )
 
 idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS "include"
-    REQUIRES libwebp_decoder waveshare__esp32_p4_wifi6_touch_lcd_4b espressif__esp_lcd_touch animated_gif_decoder
+    REQUIRES libwebp_decoder waveshare__esp32_p4_wifi6_touch_lcd_4b espressif__esp_lcd_touch animated_gif_decoder espressif__libpng esp_driver_jpeg
 )

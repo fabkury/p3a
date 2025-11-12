@@ -16,7 +16,6 @@ Set P3A on your shelf and it becomes a quiet pixel-art gallery that keeps moving
 - **Display**: 4" square 720×720 IPS panel over 2-lane MIPI-DSI with PWM-dimmable backlight.
 - **Touch**: GT911 capacitive touch controller (I²C) with multi-point reporting.
 - **Storage**: microSD slot exposed through ESP-IDF VFS and used for artwork caching.
-- **Audio**: ES8311 codec wired to a class-D amplifier (future playlist audio cues / voice prompts).
 - **I/O**: GPIO expansion, USB-C power/debug, onboard LEDs, and provision for speakers/mics per BSP.
 
 ## Current firmware capabilities

@@ -29,15 +29,26 @@ P3A ("Pixel Pea") is a physical pixel art player inside the Makapix Club ecosyst
   - Polls GT911 at 20 ms, maintains a gesture state machine, and differentiates taps (left half = previous animation, right half = next) from vertical swipes used to change brightness.
   - Brightness gesture sensitivity (`CONFIG_P3A_TOUCH_SWIPE_MIN_HEIGHT_PERCENT`) and maximum step per swipe (`CONFIG_P3A_TOUCH_BRIGHTNESS_MAX_DELTA_PERCENT`) are configurable via `menuconfig`.
 - **Auto-swap UX (main/p3a_main.c)**
-  - At boot the firmware launches an auto-swap task that cycles to a random animation every 30 seconds. Manual interaction resets the timer.
+  - At boot the firmware launches an auto-swap task that cycles to a random animation every 30 seconds. Manual interaction (touch or REST API) resets the timer.
+- **Wi-Fi & REST API (main/app_wifi.c, components/http_api)**
+  - Wi-Fi Station mode with captive portal fallback: attempts to connect using saved credentials; if connection fails or no credentials exist, starts a Soft AP with captive portal for configuration.
+  - REST API server accessible at `http://p3a.local/` (mDNS) or the device's IP address. Endpoints:
+    - `GET /status` — device status (state, uptime, heap, RSSI, firmware info, queue depth)
+    - `GET /config` — current configuration as JSON
+    - `PUT /config` — save configuration (max 32 KB JSON)
+    - `POST /action/reboot` — reboot device
+    - `POST /action/swap_next` — advance to next animation
+    - `POST /action/swap_back` — go back to previous animation
+  - All swap actions (touch or REST) use the same code path and reset the auto-swap timer.
 - **Configuration surface (main/Kconfig.projbuild)**
-  - Project-level toggles for SD asset location, animation scheduling (e.g., `CONFIG_P3A_MAX_SPEED_PLAYBACK`), render/touch task priorities, and RGB565 vs RGB888 framebuffer formats.
+  - Project-level toggles for SD asset location, animation scheduling (e.g., `CONFIG_P3A_MAX_SPEED_PLAYBACK`), render/touch task priorities, Wi-Fi credentials, and RGB565 vs RGB888 framebuffer formats.
 
 ## Planned functionality (see ROADMAP.md)
-P3A is still in the **display prototype** stage. The roadmap tracks the remaining milestones, grouped below:
+P3A is currently in the **display prototype with Wi-Fi** stage. The roadmap tracks the remaining milestones, grouped below:
 
 - **Connectivity & backend**
-  - Bring up ESP32-C6 Wi-Fi 6 path, provisioning (captive portal or BLE), TLS MQTT client, and Makapix REST helpers for asset metadata.
+  - ~~Bring up ESP32-C6 Wi-Fi 6 path, provisioning (captive portal)~~ ✅ **DONE**
+  - TLS MQTT client and Makapix REST helpers for asset metadata.
   - Subscribe to `posts/new` style topics, download verified artwork bundles, cache them, and expose "send like / read likes / read comments" shortcuts mandated in the Makapix physical-player spec.
 - **Playback intelligence**
   - Validate SHA hashes before display, fall back to on-device cache/offline playlists, honor playlist metadata from Makapix, enforce canvas constraints.
@@ -65,11 +76,37 @@ See `ROADMAP.md` for the detailed phase-by-phase breakdown.
 - **Tap right half**: advance to the next animation.
 - **Tap left half**: go back to the previous animation.
 - **Vertical swipe**: adjust brightness proportionally to the swipe distance; swiping up brightens, swiping down dims.
-- **Idle auto-swap**: every 30 s the unit picks a random animation unless the user has interacted recently.
+- **Idle auto-swap**: every 30 s the unit picks a random animation unless the user has interacted recently (via touch or REST API).
+
+### Wi-Fi setup
+On first boot or if saved credentials fail, the device starts a captive portal:
+1. Connect to the Wi-Fi network `ESP32-Setup` (or the SSID configured via `CONFIG_ESP_AP_SSID`).
+2. Open `http://192.168.4.1` in your browser.
+3. Enter your Wi-Fi SSID and password, then click "Save & Connect".
+4. The device will reboot and connect to your network.
+
+Once connected, the REST API is available at `http://p3a.local/` (via mDNS) or the device's IP address.
+
+### REST API usage
+All endpoints return JSON responses. Example using `curl`:
+
+```bash
+# Get device status
+curl http://p3a.local/status
+
+# Advance to next animation
+curl -X POST http://p3a.local/action/swap_next
+
+# Go back to previous animation
+curl -X POST http://p3a.local/action/swap_back
+
+# Reboot device
+curl -X POST http://p3a.local/action/reboot
+```
 
 ## Repository layout
-- `main/` — application entry point, LCD/touch wrappers, animation player, and format decoders.
-- `components/` — vendored decoders (animated GIF, libwebp support glue).
+- `main/` — application entry point, LCD/touch wrappers, animation player, format decoders, and Wi-Fi manager.
+- `components/` — vendored decoders (animated GIF, libwebp support glue), app state management, config store, and HTTP API.
 - `managed_components/` — ESP-IDF Component Registry dependencies (Waveshare BSP, esp_lcd_touch, libpng, etc.).
 - `def/` — sdkconfig defaults for the esp32p4 target.
 - `ROADMAP.md` — execution plan for each firmware milestone.

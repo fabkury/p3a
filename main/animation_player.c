@@ -1012,6 +1012,31 @@ static int compare_strings(const void *a, const void *b)
     return strcmp(*(const char **)a, *(const char **)b);
 }
 
+// Shuffle the animation file list using Fisher-Yates algorithm
+static void shuffle_animation_file_list(void)
+{
+    if (s_sd_file_list.count <= 1) {
+        return;  // Nothing to shuffle
+    }
+    
+    // Fisher-Yates shuffle
+    for (size_t i = s_sd_file_list.count - 1; i > 0; i--) {
+        size_t j = esp_random() % (i + 1);
+        
+        // Swap filenames
+        char *temp_filename = s_sd_file_list.filenames[i];
+        s_sd_file_list.filenames[i] = s_sd_file_list.filenames[j];
+        s_sd_file_list.filenames[j] = temp_filename;
+        
+        // Swap types to keep them in sync
+        asset_type_t temp_type = s_sd_file_list.types[i];
+        s_sd_file_list.types[i] = s_sd_file_list.types[j];
+        s_sd_file_list.types[j] = temp_type;
+    }
+    
+    ESP_LOGI(TAG, "Randomized animation file list order");
+}
+
 // Temporary test helper: limit the enumerated animation list to a small set of indices
 static void limit_animation_file_list_for_testing(void)
 {
@@ -1419,6 +1444,9 @@ static esp_err_t enumerate_animation_files(const char *dir_path)
     //     ESP_LOGI(TAG, "  [%zu] %s (%s)", i, s_sd_file_list.filenames[i],
     //              s_sd_file_list.types[i] == ASSET_TYPE_WEBP ? "WebP" : "GIF");
     // }
+
+    // Randomize the file list order after enumeration
+    shuffle_animation_file_list();
 
     s_sd_file_list.current_index = 0;
     return ESP_OK;
@@ -1919,16 +1947,13 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     memset(&s_front_buffer, 0, sizeof(s_front_buffer));
     memset(&s_back_buffer, 0, sizeof(s_back_buffer));
 
-    // Load a random animation into front buffer synchronously
-    size_t start_index = (s_sd_file_list.count > 0) ? (esp_random() % s_sd_file_list.count) : 0;
+    // Load the first animation from the randomized list into front buffer synchronously
+    size_t start_index = 0;
     esp_err_t load_err = load_animation_into_buffer(start_index, &s_front_buffer);
     if (load_err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to load random animation (index %zu), trying others...", start_index);
+        ESP_LOGW(TAG, "Failed to load animation at index %zu, trying others...", start_index);
         // Try all animations sequentially as fallback
-        for (size_t i = 0; i < s_sd_file_list.count; i++) {
-            if (i == start_index) {
-                continue;  // Skip the one we already tried
-            }
+        for (size_t i = 1; i < s_sd_file_list.count; i++) {
             load_err = load_animation_into_buffer(i, &s_front_buffer);
             if (load_err == ESP_OK) {
                 ESP_LOGI(TAG, "Successfully loaded animation at index %zu", i);
@@ -1946,7 +1971,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
             return load_err;
         }
     } else {
-        ESP_LOGI(TAG, "Loaded random animation at index %zu to start playback", start_index);
+        ESP_LOGI(TAG, "Loaded animation at index %zu to start playback", start_index);
     }
     
     // Create upscale workers BEFORE prefetch (prefetch needs them)
@@ -2111,52 +2136,6 @@ void animation_player_cycle_animation(bool forward)
         }
         
         ESP_LOGI(TAG, "Queued animation load to '%s' (index %zu)", 
-                 s_sd_file_list.filenames[target_index], target_index);
-    }
-}
-
-void animation_player_cycle_to_random(void)
-{
-    if (s_sd_file_list.count == 0) {
-        ESP_LOGW(TAG, "No animations available to cycle");
-        return;
-    }
-
-    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-        // If swap is already in progress (swap requested, loader busy, or prefetch pending), ignore
-        if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
-            ESP_LOGD(TAG, "Animation change request ignored: swap already in progress");
-            xSemaphoreGive(s_buffer_mutex);
-            return;
-        }
-        
-        // Get current animation index
-        size_t current_index = s_front_buffer.ready ? s_front_buffer.asset_index : 0;
-        
-        // Select a random index, avoiding the current one if there are multiple animations
-        size_t target_index;
-        if (s_sd_file_list.count <= 1) {
-            // Only one animation available, use it
-            target_index = 0;
-        } else {
-            // Pick a random index different from the current one
-            do {
-                target_index = esp_random() % s_sd_file_list.count;
-            } while (target_index == current_index);
-        }
-        
-        // Set swap requested and queue loader with target index
-        s_next_asset_index = target_index;
-        s_swap_requested = true;
-        
-        xSemaphoreGive(s_buffer_mutex);
-        
-        // Trigger loader task to load target animation
-        if (s_loader_sem) {
-            xSemaphoreGive(s_loader_sem);
-        }
-        
-        ESP_LOGI(TAG, "Queued random animation load to '%s' (index %zu)", 
                  s_sd_file_list.filenames[target_index], target_index);
     }
 }

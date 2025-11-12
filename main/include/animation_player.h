@@ -67,11 +67,6 @@ bool animation_player_is_paused(void);
 void animation_player_cycle_animation(bool forward);
 
 /**
- * @brief Cycle to a randomly chosen animation in the list
- */
-void animation_player_cycle_to_random(void);
-
-/**
  * @brief Start animation player task
  *
  * @return ESP_OK on success

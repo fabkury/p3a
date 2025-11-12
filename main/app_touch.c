@@ -17,8 +17,6 @@
 
 static const char *TAG = "app_touch";
 
-// Forward declaration for timer reset function
-extern void auto_swap_reset_timer(void);
 
 static esp_lcd_touch_handle_t tp = NULL;
 
@@ -132,8 +130,6 @@ static void app_touch_task(void *arg)
                 if (gesture_state == GESTURE_STATE_TAP) {
                     // It was a tap, perform swap gesture
                     const uint16_t screen_midpoint = BSP_LCD_H_RES / 2;
-                    // Reset auto-swap timer when user manually changes animation
-                    auto_swap_reset_timer();
                     if (touch_start_x < screen_midpoint) {
                         // Left half: cycle backward
                         app_lcd_cycle_animation_backward();

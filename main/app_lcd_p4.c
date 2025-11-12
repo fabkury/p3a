@@ -24,6 +24,9 @@
 #include "bsp/esp32_p4_wifi6_touch_lcd_4b.h"
 #include "animation_player.h"
 
+// Forward declaration for auto-swap timer reset
+extern void auto_swap_reset_timer(void);
+
 #define TAG "app_lcd"
 
 static esp_lcd_panel_handle_t display_handle = NULL;
@@ -130,16 +133,13 @@ bool app_lcd_is_animation_paused(void)
 void app_lcd_cycle_animation(void)
 {
     animation_player_cycle_animation(true);
+    auto_swap_reset_timer();  // Reset auto-swap timer on any swap
 }
 
 void app_lcd_cycle_animation_backward(void)
 {
     animation_player_cycle_animation(false);
-}
-
-void app_lcd_cycle_to_random(void)
-{
-    animation_player_cycle_to_random();
+    auto_swap_reset_timer();  // Reset auto-swap timer on any swap
 }
 
 int app_lcd_get_brightness(void)

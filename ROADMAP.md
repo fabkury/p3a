@@ -24,7 +24,7 @@ This roadmap is written to be executed line-by-line by an AI agent. Each task ha
 
 **Threat model highlights**
 
-* Device provisioning over TLS; certificate-pinned MQTT; content hashing to detect swapped assets (see §7).
+* Device provisioning over TLS; certificate-pinned MQTT; backend-enforced content authenticity (no on-device hashing).
 
 ---
 
@@ -106,7 +106,7 @@ This roadmap is written to be executed line-by-line by an AI agent. Each task ha
 **4.2 Cache policy**
 **Steps**
 
-1. LRU cache on SD: key = SHA256(url) → `{meta, image.bin}`.
+1. LRU cache on SD: key by feed asset ID/URL → `{meta, image.bin}`.
 2. Cap by size (e.g., 256 MB) and count; purge oldest on low space.
 
 **AC**: Cached image hits avoid network; purge works under stress.
@@ -167,14 +167,14 @@ This roadmap is written to be executed line-by-line by an AI agent. Each task ha
 1. Streaming GET with timeouts; limit content-size (e.g., 1.5 MB per asset).
 2. Support gzip if present.
 
-**7.2 Integrity checks**
+**7.2 Content validation**
 **Steps**
 
-1. Compute SHA256 during stream; verify equals payload’s `sha256` (and length).
-2. MIME sniffer (magic bytes). Reject SVG; allow PNG/JPEG/GIF only.
+1. Enforce download size/time limits and MIME sniffing (magic bytes). Reject SVG and any unsupported format.
+2. Log and skip assets that fail validation; rely on feed-side signing/curation for authenticity.
 
 **Deliverables**: `net/http_fetch.c`, `renderer/decoder_*`.
-**AC**: Corrupt or wrong-hash assets are rejected; message logged.
+**AC**: Oversized or unsupported assets are rejected; message logged.
 
 ---
 
@@ -242,7 +242,7 @@ This roadmap is written to be executed line-by-line by an AI agent. Each task ha
 * Store credentials in NVS **with encryption**.
 * Validate all payloads against JSON schema; reject unknown fields.
 * Limit URL hosts (allowlist `*.github.io`, `raw.githubusercontent.com`, etc., to avoid SSRF).
-* Cache by hash; expire by `expires_at`.
+* Cache by asset ID; expire by `expires_at`.
 * No SVG; strict PNG/JPEG/GIF sniffing.
 * Rate-limit commands from `device/{id}/cmd`.
 
@@ -285,7 +285,7 @@ This roadmap is written to be executed line-by-line by an AI agent. Each task ha
 
 **Security tests**
 
-* Invalid certs, host allowlist violations, huge payloads, wrong hashes, SVG injection.
+* Invalid certs, host allowlist violations, huge payloads, MIME spoofing, SVG injection.
 
 **Benchmarks**
 
@@ -325,7 +325,7 @@ This roadmap is written to be executed line-by-line by an AI agent. Each task ha
 **Phase C — Playback (1–2 weeks)**
 
 * Tasks: §7–§8; minimal UI (§9.2).
-* Exit: receives post → downloads → verifies hash → displays.
+* Exit: receives post → downloads → validates payload → displays.
 
 **Phase D — Polish & Resilience (1–2 weeks)**
 
@@ -365,8 +365,8 @@ firmware/
 
 ## 19) Acceptance tests (high-level)
 
-* **AT-01**: Given Wi-Fi & MQTT creds, when a `posts/new` message arrives with a 128×128 PNG URL + sha256, device downloads, verifies, centers, and displays within **<2 s**.
-* **AT-02**: If sha mismatch, device refuses to display, logs error, and waits for next post.
+* **AT-01**: Given Wi-Fi & MQTT creds, when a `posts/new` message arrives with a 128×128 PNG URL, device downloads, centers, and displays within **<2 s**.
+* **AT-02**: If payload size or MIME is invalid, device refuses to display, logs error, and waits for next post.
 * **AT-03**: Power loss during OTA → on next boot device rolls back to previous version automatically.
 * **AT-04**: With no network, cached last N artworks rotate locally.
 * **AT-05**: Touch opens Settings; brightness persists across reboots.

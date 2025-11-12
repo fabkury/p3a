@@ -6,6 +6,7 @@
 
 #include "animation_decoder.h"
 #include "animation_decoder_internal.h"
+#include "static_image_decoder_common.h"
 #include "webp/demux.h"
 #include "webp/decode.h"
 #include "esp_log.h"
@@ -14,31 +15,6 @@
 #include <string.h>
 
 #define TAG "webp_decoder"
-#define WEBP_STATIC_FRAME_DELAY_MS 100U
-
-// Forward declarations for GIF decoder
-extern esp_err_t gif_decoder_init(animation_decoder_t **decoder, const uint8_t *data, size_t size);
-extern esp_err_t gif_decoder_get_info(animation_decoder_t *decoder, animation_decoder_info_t *info);
-extern esp_err_t gif_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_buffer);
-extern esp_err_t gif_decoder_get_frame_delay(animation_decoder_t *decoder, uint32_t *delay_ms);
-extern esp_err_t gif_decoder_reset(animation_decoder_t *decoder);
-extern void gif_decoder_unload(animation_decoder_t **decoder);
-
-// Forward declarations for PNG decoder
-extern esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, size_t size);
-extern esp_err_t png_decoder_get_info(animation_decoder_t *decoder, animation_decoder_info_t *info);
-extern esp_err_t png_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_buffer);
-extern esp_err_t png_decoder_get_frame_delay(animation_decoder_t *decoder, uint32_t *delay_ms);
-extern esp_err_t png_decoder_reset(animation_decoder_t *decoder);
-extern void png_decoder_unload(animation_decoder_t **decoder);
-
-// Forward declarations for JPEG decoder
-extern esp_err_t jpeg_decoder_init(animation_decoder_t **decoder, const uint8_t *data, size_t size);
-extern esp_err_t jpeg_decoder_get_info_wrapper(animation_decoder_t *decoder, animation_decoder_info_t *info);
-extern esp_err_t jpeg_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_buffer);
-extern esp_err_t jpeg_decoder_get_frame_delay(animation_decoder_t *decoder, uint32_t *delay_ms);
-extern esp_err_t jpeg_decoder_reset(animation_decoder_t *decoder);
-extern void jpeg_decoder_unload(animation_decoder_t **decoder);
 
 // WebP-specific structure to hold WebP types
 typedef struct {
@@ -162,7 +138,7 @@ esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decode
             webp_data->info.bgcolor = features.has_alpha ? 0x00000000 : 0xFF000000;
             webp_data->still_has_alpha = (features.has_alpha != 0);
             webp_data->still_frame_size = frame_size;
-            webp_data->current_frame_delay_ms = WEBP_STATIC_FRAME_DELAY_MS;
+            webp_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
             webp_data->last_timestamp_ms = 0;
         }
 
@@ -255,7 +231,7 @@ esp_err_t animation_decoder_decode_next(animation_decoder_t *decoder, uint8_t *r
                 return ESP_ERR_INVALID_STATE;
             }
             memcpy(rgba_buffer, webp_data->still_rgba, webp_data->still_frame_size);
-            webp_data->current_frame_delay_ms = WEBP_STATIC_FRAME_DELAY_MS;
+            webp_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
         }
 
         return ESP_OK;
@@ -289,7 +265,7 @@ esp_err_t animation_decoder_reset(animation_decoder_t *decoder)
             webp_data->current_frame_delay_ms = 1;
         } else {
             // Static images simply reuse the pre-decoded frame
-            webp_data->current_frame_delay_ms = WEBP_STATIC_FRAME_DELAY_MS;
+            webp_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
         }
         return ESP_OK;
     } else if (decoder->type == ANIMATION_DECODER_TYPE_GIF) {

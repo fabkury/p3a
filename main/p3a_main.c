@@ -19,7 +19,7 @@
 
 static const char *TAG = "p3a";
 
-#define AUTO_SWAP_INTERVAL_SECONDS 30
+#define AUTO_SWAP_INTERVAL_SECONDS CONFIG_P3A_AUTO_SWAP_INTERVAL_SECONDS
 
 static TaskHandle_t s_auto_swap_task_handle = NULL;
 

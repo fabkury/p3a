@@ -200,13 +200,20 @@ static char* recv_body_json(httpd_req_t *req, size_t *out_len, int *out_err_stat
     return buf;
 }
 
+static void register_uri_handler_or_log(httpd_handle_t server, httpd_uri_t *uri) {
+    esp_err_t err = httpd_register_uri_handler(server, uri);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register URI %s: %s", uri->uri, esp_err_to_name(err));
+    }
+}
+
 // ---------- HTTP Handlers ----------
 
 /**
- * GET /
+ * GET /config/network
  * Returns HTML status page with connection information and erase button
  */
-static esp_err_t h_get_root(httpd_req_t *req) {
+static esp_err_t h_get_network_config(httpd_req_t *req) {
     esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     if (!sta_netif) {
         sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_RMT");
@@ -403,6 +410,196 @@ static esp_err_t h_post_erase(httpd_req_t *req) {
     vTaskDelay(pdMS_TO_TICKS(1000));
     esp_restart();
     
+    return ESP_OK;
+}
+
+/**
+ * GET /
+ * Returns Remote Control HTML page with swap buttons and navigation to network config
+ */
+static esp_err_t h_get_root(httpd_req_t *req) {
+    static const char html[] =
+        "<!DOCTYPE html>"
+        "<html lang=\"en\">"
+        "<head>"
+        "<meta charset=\"UTF-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+        "<title>P3A Remote Control</title>"
+        "<style>"
+        "body {"
+        "    margin: 0;"
+        "    padding: 0;"
+        "    font-family: Arial, sans-serif;"
+        "    background-color: #f0f0f0;"
+        "    min-height: 100vh;"
+        "    display: flex;"
+        "    flex-direction: column;"
+        "}"
+        ".banner {"
+        "    background-color: #333;"
+        "    color: white;"
+        "    text-align: center;"
+        "    padding: 20px;"
+        "    font-size: 2em;"
+        "    font-weight: bold;"
+        "}"
+        ".control-area {"
+        "    flex: 1;"
+        "    display: flex;"
+        "    align-items: center;"
+        "    justify-content: center;"
+        "    padding: 20px;"
+        "}"
+        ".arrow-container {"
+        "    display: flex;"
+        "    align-items: center;"
+        "    gap: 40px;"
+        "}"
+        ".arrow-btn {"
+        "    background-color: #4CAF50;"
+        "    border: none;"
+        "    border-radius: 50%;"
+        "    width: 120px;"
+        "    height: 120px;"
+        "    display: flex;"
+        "    align-items: center;"
+        "    justify-content: center;"
+        "    cursor: pointer;"
+        "    font-size: 3em;"
+        "    color: white;"
+        "    box-shadow: 0 4px 8px rgba(0,0,0,0.3);"
+        "    transition: all 0.2s;"
+        "}"
+        ".arrow-btn:hover {"
+        "    background-color: #45a049;"
+        "    transform: scale(1.05);"
+        "}"
+        ".arrow-btn:active {"
+        "    transform: scale(0.95);"
+        "}"
+        ".arrow-btn:disabled {"
+        "    background-color: #cccccc;"
+        "    cursor: not-allowed;"
+        "}"
+        ".arrow-label {"
+        "    text-align: center;"
+        "    margin-top: 10px;"
+        "    font-size: 1.2em;"
+        "    color: #333;"
+        "}"
+        ".config-btn {"
+        "    position: fixed;"
+        "    bottom: 20px;"
+        "    right: 20px;"
+        "    background-color: #2196F3;"
+        "    color: white;"
+        "    border: none;"
+        "    border-radius: 50%;"
+        "    width: 60px;"
+        "    height: 60px;"
+        "    font-size: 1.5em;"
+        "    cursor: pointer;"
+        "    box-shadow: 0 2px 4px rgba(0,0,0,0.3);"
+        "}"
+        ".config-btn:hover {"
+        "    background-color: #1976D2;"
+        "}"
+        ".status {"
+        "    position: fixed;"
+        "    bottom: 20px;"
+        "    left: 50%;"
+        "    transform: translateX(-50%);"
+        "    text-align: center;"
+        "    max-width: 400px;"
+        "    padding: 10px;"
+        "    border-radius: 5px;"
+        "    font-weight: bold;"
+        "    display: none;"
+        "    z-index: 1000;"
+        "}"
+        ".status.success {"
+        "    background-color: #4CAF50;"
+        "    color: white;"
+        "}"
+        ".status.error {"
+        "    background-color: #f44336;"
+        "    color: white;"
+        "}"
+        "@media (max-width: 768px) {"
+        "    .arrow-container {"
+        "        gap: 20px;"
+        "    }"
+        "    .arrow-btn {"
+        "        width: 100px;"
+        "        height: 100px;"
+        "        font-size: 2.5em;"
+        "    }"
+        "    .banner {"
+        "        font-size: 1.5em;"
+        "        padding: 15px;"
+        "    }"
+        "}"
+        "</style>"
+        "</head>"
+        "<body>"
+        "<div class=\"banner\">P3A</div>"
+        "<div class=\"control-area\">"
+        "    <div class=\"arrow-container\">"
+        "        <div>"
+        "            <button class=\"arrow-btn\" id=\"back-btn\" onclick=\"sendCommand('swap_back')\">◄</button>"
+        "            <div class=\"arrow-label\">Back</div>"
+        "        </div>"
+        "        <div>"
+        "            <button class=\"arrow-btn\" id=\"next-btn\" onclick=\"sendCommand('swap_next')\">►</button>"
+        "            <div class=\"arrow-label\">Next</div>"
+        "        </div>"
+        "    </div>"
+        "</div>"
+        "<div class=\"status\" id=\"status\"></div>"
+        "<button class=\"config-btn\" onclick=\"window.location.href='/config/network'\">⚙</button>"
+        "<script>"
+        "function sendCommand(action) {"
+        "    console.log('Sending command:', action);"
+        "    var status = document.getElementById('status');"
+        "    var backBtn = document.getElementById('back-btn');"
+        "    var nextBtn = document.getElementById('next-btn');"
+        "    backBtn.disabled = true;"
+        "    nextBtn.disabled = true;"
+        "    var xhr = new XMLHttpRequest();"
+        "    xhr.open('POST', '/action/' + action, true);"
+        "    xhr.setRequestHeader('Content-Type', 'application/json');"
+        "    xhr.onreadystatechange = function() {"
+        "        if (xhr.readyState === 4) {"
+        "            console.log('XHR status:', xhr.status);"
+        "            console.log('XHR response:', xhr.responseText);"
+        "                        try {"
+                "                var result = JSON.parse(xhr.responseText);"
+                "                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {"
+                "                    status.textContent = 'Command sent successfully';"
+                "                    status.className = 'status success';"
+                "                } else {"
+                "                    status.textContent = 'Command failed: ' + (result.error || 'HTTP ' + xhr.status);"
+                "                    status.className = 'status error';"
+                "                }"
+                "            } catch (e) {"
+                "                status.textContent = 'Parse error: ' + e.message;"
+                "                status.className = 'status error';"
+                "            }"
+        "            status.style.display = 'block';"
+        "            setTimeout(function() { status.style.display = 'none'; }, 3000);"
+        "            backBtn.disabled = false;"
+        "            nextBtn.disabled = false;"
+        "        }"
+        "    };"
+        "    xhr.send('{}');"
+        "}"
+        "</script>"
+        "</body>"
+        "</html>";
+
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
+    ESP_LOGI(TAG, "Remote control page sent");
     return ESP_OK;
 }
 
@@ -681,6 +878,7 @@ esp_err_t http_api_start(void) {
     cfg.stack_size = 8192;
     cfg.server_port = 80;
     cfg.lru_purge_enable = true;
+    cfg.max_uri_handlers = 12;
 
     if (httpd_start(&s_server, &cfg) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start HTTP server");
@@ -694,49 +892,55 @@ esp_err_t http_api_start(void) {
     u.method = HTTP_GET;
     u.handler = h_get_root;
     u.user_ctx = NULL;
-    httpd_register_uri_handler(s_server, &u);
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/config/network";
+    u.method = HTTP_GET;
+    u.handler = h_get_network_config;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
 
     u.uri = "/erase";
     u.method = HTTP_POST;
     u.handler = h_post_erase;
     u.user_ctx = NULL;
-    httpd_register_uri_handler(s_server, &u);
+    register_uri_handler_or_log(s_server, &u);
 
     u.uri = "/status";
     u.method = HTTP_GET;
     u.handler = h_get_status;
     u.user_ctx = NULL;
-    httpd_register_uri_handler(s_server, &u);
+    register_uri_handler_or_log(s_server, &u);
 
     u.uri = "/config";
     u.method = HTTP_GET;
     u.handler = h_get_config;
     u.user_ctx = NULL;
-    httpd_register_uri_handler(s_server, &u);
+    register_uri_handler_or_log(s_server, &u);
 
     u.uri = "/config";
     u.method = HTTP_PUT;
     u.handler = h_put_config;
     u.user_ctx = NULL;
-    httpd_register_uri_handler(s_server, &u);
+    register_uri_handler_or_log(s_server, &u);
 
     u.uri = "/action/reboot";
     u.method = HTTP_POST;
     u.handler = h_post_reboot;
     u.user_ctx = NULL;
-    httpd_register_uri_handler(s_server, &u);
+    register_uri_handler_or_log(s_server, &u);
 
     u.uri = "/action/swap_next";
     u.method = HTTP_POST;
     u.handler = h_post_swap_next;
     u.user_ctx = NULL;
-    httpd_register_uri_handler(s_server, &u);
+    register_uri_handler_or_log(s_server, &u);
 
     u.uri = "/action/swap_back";
     u.method = HTTP_POST;
     u.handler = h_post_swap_back;
     u.user_ctx = NULL;
-    httpd_register_uri_handler(s_server, &u);
+    register_uri_handler_or_log(s_server, &u);
 
     ESP_LOGI(TAG, "HTTP API server started on port 80");
     return ESP_OK;

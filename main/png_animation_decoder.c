@@ -6,6 +6,7 @@
 
 #include "animation_decoder.h"
 #include "animation_decoder_internal.h"
+#include "static_image_decoder_common.h"
 #include "png.h"
 #include "esp_log.h"
 #include "esp_err.h"
@@ -13,15 +14,6 @@
 #include <string.h>
 
 #define TAG "png_decoder"
-#define PNG_STATIC_FRAME_DELAY_MS 100U
-
-// Forward declarations for other decoders
-extern esp_err_t gif_decoder_init(animation_decoder_t **decoder, const uint8_t *data, size_t size);
-extern esp_err_t gif_decoder_get_info(animation_decoder_t *decoder, animation_decoder_info_t *info);
-extern esp_err_t gif_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_buffer);
-extern esp_err_t gif_decoder_get_frame_delay(animation_decoder_t *decoder, uint32_t *delay_ms);
-extern esp_err_t gif_decoder_reset(animation_decoder_t *decoder);
-extern void gif_decoder_unload(animation_decoder_t **decoder);
 
 // PNG decoder implementation structure
 typedef struct {
@@ -76,7 +68,7 @@ esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
     png_data->file_data = data;
     png_data->file_size = size;
     png_data->read_offset = 0;
-    png_data->current_frame_delay_ms = PNG_STATIC_FRAME_DELAY_MS;
+    png_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
 
     // Create PNG read structure
     png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
@@ -114,6 +106,7 @@ esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
     png_uint_32 height = png_get_image_height(png_ptr, info_ptr);
     png_byte color_type = png_get_color_type(png_ptr, info_ptr);
     png_byte bit_depth = png_get_bit_depth(png_ptr, info_ptr);
+    int number_of_passes = 1;
 
     if (width == 0 || height == 0) {
         ESP_LOGE(TAG, "Invalid PNG dimensions: %u x %u", (unsigned)width, (unsigned)height);
@@ -146,6 +139,11 @@ esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
         png_set_add_alpha(png_ptr, 0xFF, PNG_FILLER_AFTER);
     }
 
+    number_of_passes = png_set_interlace_handling(png_ptr);
+    if (number_of_passes <= 0) {
+        number_of_passes = 1;
+    }
+
     // Update info after transformations
     png_read_update_info(png_ptr, info_ptr);
 
@@ -174,8 +172,17 @@ esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
         row_pointers[y] = png_data->rgba_buffer + (size_t)y * width * 4;
     }
 
-    // Read image data
-    png_read_image(png_ptr, row_pointers);
+    // Read image data (handle interlaced images if needed)
+    if (number_of_passes > 1) {
+        for (int pass = 0; pass < number_of_passes; pass++) {
+            for (png_uint_32 y = 0; y < height; y++) {
+                png_bytep row = row_pointers[y];
+                png_read_row(png_ptr, row, NULL);
+            }
+        }
+    } else {
+        png_read_image(png_ptr, row_pointers);
+    }
     png_read_end(png_ptr, NULL);
 
     // Clean up libpng structures
@@ -238,7 +245,7 @@ esp_err_t png_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_bu
 
     // Copy pre-decoded frame
     memcpy(rgba_buffer, png_data->rgba_buffer, png_data->rgba_buffer_size);
-    png_data->current_frame_delay_ms = PNG_STATIC_FRAME_DELAY_MS;
+    png_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
 
     return ESP_OK;
 }
@@ -255,7 +262,7 @@ esp_err_t png_decoder_reset(animation_decoder_t *decoder)
     }
 
     // PNG is static, so reset just restores the delay
-    png_data->current_frame_delay_ms = PNG_STATIC_FRAME_DELAY_MS;
+    png_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
 
     return ESP_OK;
 }

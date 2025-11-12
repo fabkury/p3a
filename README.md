@@ -41,7 +41,7 @@ P3A ("Pixel Pea") is a physical pixel art player inside the Makapix Club ecosyst
     - `POST /action/swap_back` — go back to previous animation
   - All swap actions (touch or REST) use the same code path and reset the auto-swap timer.
 - **Configuration surface (main/Kconfig.projbuild)**
-  - Project-level toggles for SD asset location, animation scheduling (e.g., `CONFIG_P3A_MAX_SPEED_PLAYBACK`), render/touch task priorities, Wi-Fi credentials, and RGB565 vs RGB888 framebuffer formats.
+  - Project-level toggles for SD asset location, animation scheduling (e.g., `CONFIG_P3A_MAX_SPEED_PLAYBACK`, `CONFIG_P3A_AUTO_SWAP_INTERVAL_SECONDS`), static image frame delays (`CONFIG_P3A_STATIC_FRAME_DELAY_MS`), render/touch task priorities, brightness gesture sensitivity, Wi-Fi credentials, and RGB565 vs RGB888 framebuffer formats.
 
 ## Planned functionality (see ROADMAP.md)
 P3A is currently in the **display prototype with Wi-Fi** stage. The roadmap tracks the remaining milestones, grouped below:
@@ -76,7 +76,7 @@ See `ROADMAP.md` for the detailed phase-by-phase breakdown.
 - **Tap right half**: advance to the next animation.
 - **Tap left half**: go back to the previous animation.
 - **Vertical swipe**: adjust brightness proportionally to the swipe distance; swiping up brightens, swiping down dims.
-- **Idle auto-swap**: every 30 s the unit picks a random animation unless the user has interacted recently (via touch or REST API).
+- **Idle auto-swap**: every N seconds (configurable via `CONFIG_P3A_AUTO_SWAP_INTERVAL_SECONDS`, default 30s) the unit picks a random animation unless the user has interacted recently (via touch or REST API).
 
 ### Wi-Fi setup
 On first boot or if saved credentials fail, the device starts a captive portal:

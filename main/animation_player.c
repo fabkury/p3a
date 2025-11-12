@@ -67,6 +67,7 @@ typedef enum {
 typedef struct {
     char **filenames;
     asset_type_t *types;
+    bool *health_flags;  // true = file is ok, false = file has issues
     size_t count;
     size_t current_index;
     char *animations_dir;
@@ -574,8 +575,6 @@ static esp_err_t load_animation_into_buffer(size_t asset_index, animation_buffer
 static void unload_animation_buffer(animation_buffer_t *buf);
 static esp_err_t prefetch_first_frame(animation_buffer_t *buf);
 static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int target_w, int target_h, bool use_prefetched);
-static void filter_animation_list_to_gif_only(void);
-static void filter_animation_list_to_png_only(void);
 static void discard_failed_swap_request(size_t failed_asset_index, esp_err_t error);
 
 // Discard a failed swap request and restore system to responsive state
@@ -595,7 +594,23 @@ static void discard_failed_swap_request(size_t failed_asset_index, esp_err_t err
         }
         
         // Advance to next asset index for future attempts
-        s_next_asset_index = get_next_asset_index(failed_asset_index);
+        size_t next_index = get_next_asset_index(failed_asset_index);
+        s_next_asset_index = next_index;
+        
+        // Check if no healthy files are available
+        if (next_index == failed_asset_index && s_sd_file_list.health_flags) {
+            // Check if there are any healthy files at all
+            bool any_healthy = false;
+            for (size_t i = 0; i < s_sd_file_list.count; i++) {
+                if (s_sd_file_list.health_flags[i]) {
+                    any_healthy = true;
+                    break;
+                }
+            }
+            if (!any_healthy) {
+                ESP_LOGW(TAG, "No healthy animation files available. System remains responsive but will not auto-swap.");
+            }
+        }
         
         xSemaphoreGive(s_buffer_mutex);
         
@@ -634,7 +649,7 @@ static void animation_loader_task(void *arg)
             continue;
         }
         
-        ESP_LOGI(TAG, "Loader task: Loading animation index %zu into back buffer", asset_index_to_load);
+        ESP_LOGD(TAG, "Loader task: Loading animation index %zu into back buffer", asset_index_to_load);
         
         // Load animation into back buffer
         esp_err_t err = load_animation_into_buffer(asset_index_to_load, &s_back_buffer);
@@ -651,13 +666,13 @@ static void animation_loader_task(void *arg)
             // If swap was requested, keep the flag set so render loop performs swap after prefetch
             if (swap_was_requested) {
                 s_swap_requested = true;
-                ESP_LOGI(TAG, "Loader task: Swap was requested, will swap after prefetch");
+                ESP_LOGD(TAG, "Loader task: Swap was requested, will swap after prefetch");
             }
             s_loader_busy = false;  // Mark loader as not busy (prefetch will be handled by render task)
             xSemaphoreGive(s_buffer_mutex);
         }
         
-        ESP_LOGI(TAG, "Loader task: Successfully loaded animation index %zu (prefetch_pending=true)", asset_index_to_load);
+        ESP_LOGD(TAG, "Loader task: Successfully loaded animation index %zu (prefetch_pending=true)", asset_index_to_load);
     }
 }
 
@@ -700,7 +715,7 @@ static void lcd_animation_task(void *arg)
                     s_back_buffer.ready = true;
                     // If swap was requested, it's now ready to swap
                     if (s_swap_requested) {
-                        ESP_LOGI(TAG, "Render task: Prefetch complete, swap ready");
+                        ESP_LOGD(TAG, "Render task: Prefetch complete, swap ready");
                     }
                     xSemaphoreGive(s_buffer_mutex);
                 }
@@ -718,7 +733,7 @@ static void lcd_animation_task(void *arg)
                 swap_requested = s_swap_requested;
                 back_buffer_ready = s_back_buffer.ready;
                 xSemaphoreGive(s_buffer_mutex);
-                ESP_LOGI(TAG, "Render task: Prefetch completed, buffer ready");
+                ESP_LOGD(TAG, "Render task: Prefetch completed, buffer ready");
             }
         }
 
@@ -727,8 +742,6 @@ static void lcd_animation_task(void *arg)
             swap_buffers();
             use_prefetched = true;  // Use prefetched frame on first render after swap
             // Note: Next animation will be loaded on-demand when next swap gesture occurs
-        } else if (swap_requested) {
-            ESP_LOGD(TAG, "Swap requested but back buffer not ready (swap_req=%d, back_ready=%d)", swap_requested, back_buffer_ready);
         }
 
         uint8_t *frame = NULL;
@@ -881,6 +894,10 @@ static void free_sd_file_list(void)
         free(s_sd_file_list.types);
         s_sd_file_list.types = NULL;
     }
+    if (s_sd_file_list.health_flags) {
+        free(s_sd_file_list.health_flags);
+        s_sd_file_list.health_flags = NULL;
+    }
     s_sd_file_list.count = 0;
     s_sd_file_list.current_index = 0;
     if (s_sd_file_list.animations_dir) {
@@ -1032,270 +1049,18 @@ static void shuffle_animation_file_list(void)
         asset_type_t temp_type = s_sd_file_list.types[i];
         s_sd_file_list.types[i] = s_sd_file_list.types[j];
         s_sd_file_list.types[j] = temp_type;
+        
+        // Swap health flags to keep them in sync
+        if (s_sd_file_list.health_flags) {
+            bool temp_health = s_sd_file_list.health_flags[i];
+            s_sd_file_list.health_flags[i] = s_sd_file_list.health_flags[j];
+            s_sd_file_list.health_flags[j] = temp_health;
+        }
     }
     
     ESP_LOGI(TAG, "Randomized animation file list order");
 }
 
-// Temporary test helper: limit the enumerated animation list to a small set of indices
-static void limit_animation_file_list_for_testing(void)
-{
-    static const size_t kAllowedIndices[] = {93, 59, 51, 523, 95};
-    const size_t kAllowedCount = sizeof(kAllowedIndices) / sizeof(kAllowedIndices[0]);
-
-    if (s_sd_file_list.count == 0) {
-        return;
-    }
-
-    char **filtered_filenames = (char **)malloc(kAllowedCount * sizeof(char *));
-    asset_type_t *filtered_types = (asset_type_t *)malloc(kAllowedCount * sizeof(asset_type_t));
-    if (!filtered_filenames || !filtered_types) {
-        ESP_LOGE(TAG, "Failed to allocate filtered file list for testing");
-        free(filtered_filenames);
-        free(filtered_types);
-        return;
-    }
-
-    size_t filtered_count = 0;
-    for (size_t i = 0; i < kAllowedCount; ++i) {
-        size_t idx = kAllowedIndices[i];
-        if (idx >= s_sd_file_list.count) {
-            ESP_LOGW(TAG, "Requested test index %zu outside list range (%zu)", idx, s_sd_file_list.count);
-            continue;
-        }
-        filtered_filenames[filtered_count] = s_sd_file_list.filenames[idx];
-        filtered_types[filtered_count] = s_sd_file_list.types[idx];
-        s_sd_file_list.filenames[idx] = NULL;
-        filtered_count++;
-    }
-
-    if (filtered_count == 0) {
-        ESP_LOGW(TAG, "No test files found in enumerated list; keeping full list");
-        free(filtered_filenames);
-        free(filtered_types);
-        return;
-    }
-
-    for (size_t i = 0; i < s_sd_file_list.count; ++i) {
-        if (s_sd_file_list.filenames[i]) {
-            free(s_sd_file_list.filenames[i]);
-        }
-    }
-    free(s_sd_file_list.filenames);
-    free(s_sd_file_list.types);
-
-    char **resized_filenames = (char **)realloc(filtered_filenames, filtered_count * sizeof(char *));
-    if (resized_filenames) {
-        filtered_filenames = resized_filenames;
-    }
-    asset_type_t *resized_types = (asset_type_t *)realloc(filtered_types, filtered_count * sizeof(asset_type_t));
-    if (resized_types) {
-        filtered_types = resized_types;
-    }
-
-    s_sd_file_list.filenames = filtered_filenames;
-    s_sd_file_list.types = filtered_types;
-    s_sd_file_list.count = filtered_count;
-    s_sd_file_list.current_index = 0;
-
-    if (s_next_asset_index >= s_sd_file_list.count) {
-        s_next_asset_index = 0;
-    }
-
-    ESP_LOGI(TAG, "Test filter applied: retained %zu animations", filtered_count);
-}
-
-static void filter_animation_list_to_gif_only(void)
-{
-    if (s_sd_file_list.count == 0 || !s_sd_file_list.filenames || !s_sd_file_list.types) {
-        return;
-    }
-
-    size_t write_idx = 0;
-    const size_t original_count = s_sd_file_list.count;
-
-    for (size_t i = 0; i < original_count; ++i) {
-        asset_type_t type = s_sd_file_list.types[i];
-        if (type == ASSET_TYPE_GIF) {
-            if (write_idx != i) {
-                s_sd_file_list.filenames[write_idx] = s_sd_file_list.filenames[i];
-                s_sd_file_list.types[write_idx] = type;
-                s_sd_file_list.filenames[i] = NULL;
-            }
-            write_idx++;
-        } else {
-            if (s_sd_file_list.filenames[i]) {
-                free(s_sd_file_list.filenames[i]);
-                s_sd_file_list.filenames[i] = NULL;
-            }
-        }
-    }
-
-    if (write_idx == original_count) {
-        ESP_LOGI(TAG, "Temporary GIF-only filter retained all %zu animations", original_count);
-        return;
-    }
-
-    if (write_idx == 0) {
-        free(s_sd_file_list.filenames);
-        free(s_sd_file_list.types);
-        s_sd_file_list.filenames = NULL;
-        s_sd_file_list.types = NULL;
-        s_sd_file_list.count = 0;
-        s_sd_file_list.current_index = 0;
-        s_next_asset_index = 0;
-        ESP_LOGW(TAG, "Temporary GIF-only filter removed all animations");
-        return;
-    }
-
-    char **resized_filenames = (char **)realloc(s_sd_file_list.filenames, write_idx * sizeof(char *));
-    if (resized_filenames) {
-        s_sd_file_list.filenames = resized_filenames;
-    }
-
-    asset_type_t *resized_types = (asset_type_t *)realloc(s_sd_file_list.types, write_idx * sizeof(asset_type_t));
-    if (resized_types) {
-        s_sd_file_list.types = resized_types;
-    }
-
-    s_sd_file_list.count = write_idx;
-    if (s_sd_file_list.current_index >= write_idx) {
-        s_sd_file_list.current_index = 0;
-    }
-    if (s_next_asset_index >= write_idx) {
-        s_next_asset_index = 0;
-    }
-
-    ESP_LOGW(TAG, "Temporary GIF-only filter active: %zu of %zu animations retained", write_idx, original_count);
-}
-
-static void filter_animation_list_to_png_only(void)
-{
-    if (s_sd_file_list.count == 0 || !s_sd_file_list.filenames || !s_sd_file_list.types) {
-        return;
-    }
-
-    size_t write_idx = 0;
-    const size_t original_count = s_sd_file_list.count;
-
-    for (size_t i = 0; i < original_count; ++i) {
-        asset_type_t type = s_sd_file_list.types[i];
-        if (type == ASSET_TYPE_PNG) {
-            if (write_idx != i) {
-                s_sd_file_list.filenames[write_idx] = s_sd_file_list.filenames[i];
-                s_sd_file_list.types[write_idx] = type;
-                s_sd_file_list.filenames[i] = NULL;
-            }
-            write_idx++;
-        } else {
-            if (s_sd_file_list.filenames[i]) {
-                free(s_sd_file_list.filenames[i]);
-                s_sd_file_list.filenames[i] = NULL;
-            }
-        }
-    }
-
-    if (write_idx == original_count) {
-        ESP_LOGI(TAG, "Temporary PNG-only filter retained all %zu animations", original_count);
-        return;
-    }
-
-    if (write_idx == 0) {
-        free(s_sd_file_list.filenames);
-        free(s_sd_file_list.types);
-        s_sd_file_list.filenames = NULL;
-        s_sd_file_list.types = NULL;
-        s_sd_file_list.count = 0;
-        s_sd_file_list.current_index = 0;
-        s_next_asset_index = 0;
-        ESP_LOGW(TAG, "Temporary PNG-only filter removed all animations");
-        return;
-    }
-
-    char **resized_filenames = (char **)realloc(s_sd_file_list.filenames, write_idx * sizeof(char *));
-    if (resized_filenames) {
-        s_sd_file_list.filenames = resized_filenames;
-    }
-
-    asset_type_t *resized_types = (asset_type_t *)realloc(s_sd_file_list.types, write_idx * sizeof(asset_type_t));
-    if (resized_types) {
-        s_sd_file_list.types = resized_types;
-    }
-
-    s_sd_file_list.count = write_idx;
-    if (s_sd_file_list.current_index >= write_idx) {
-        s_sd_file_list.current_index = 0;
-    }
-    if (s_next_asset_index >= write_idx) {
-        s_next_asset_index = 0;
-    }
-
-    ESP_LOGW(TAG, "Temporary PNG-only filter active: %zu of %zu animations retained", write_idx, original_count);
-}
-
-static void filter_animation_list_to_jpeg_only(void)
-{
-    if (s_sd_file_list.count == 0 || !s_sd_file_list.filenames || !s_sd_file_list.types) {
-        return;
-    }
-
-    size_t write_idx = 0;
-    const size_t original_count = s_sd_file_list.count;
-
-    for (size_t i = 0; i < original_count; ++i) {
-        asset_type_t type = s_sd_file_list.types[i];
-        if (type == ASSET_TYPE_JPEG) {
-            if (write_idx != i) {
-                s_sd_file_list.filenames[write_idx] = s_sd_file_list.filenames[i];
-                s_sd_file_list.types[write_idx] = type;
-                s_sd_file_list.filenames[i] = NULL;
-            }
-            write_idx++;
-        } else {
-            if (s_sd_file_list.filenames[i]) {
-                free(s_sd_file_list.filenames[i]);
-                s_sd_file_list.filenames[i] = NULL;
-            }
-        }
-    }
-
-    if (write_idx == original_count) {
-        ESP_LOGI(TAG, "Temporary JPEG-only filter retained all %zu animations", original_count);
-        return;
-    }
-
-    if (write_idx == 0) {
-        free(s_sd_file_list.filenames);
-        free(s_sd_file_list.types);
-        s_sd_file_list.filenames = NULL;
-        s_sd_file_list.types = NULL;
-        s_sd_file_list.count = 0;
-        s_sd_file_list.current_index = 0;
-        s_next_asset_index = 0;
-        ESP_LOGW(TAG, "Temporary JPEG-only filter removed all animations");
-        return;
-    }
-
-    char **resized_filenames = (char **)realloc(s_sd_file_list.filenames, write_idx * sizeof(char *));
-    if (resized_filenames) {
-        s_sd_file_list.filenames = resized_filenames;
-    }
-
-    asset_type_t *resized_types = (asset_type_t *)realloc(s_sd_file_list.types, write_idx * sizeof(asset_type_t));
-    if (resized_types) {
-        s_sd_file_list.types = resized_types;
-    }
-
-    s_sd_file_list.count = write_idx;
-    if (s_sd_file_list.current_index >= write_idx) {
-        s_sd_file_list.current_index = 0;
-    }
-    if (s_next_asset_index >= write_idx) {
-        s_next_asset_index = 0;
-    }
-
-    ESP_LOGW(TAG, "Temporary JPEG-only filter active: %zu of %zu animations retained", write_idx, original_count);
-}
 
 static esp_err_t enumerate_animation_files(const char *dir_path)
 {
@@ -1374,6 +1139,24 @@ static esp_err_t enumerate_animation_files(const char *dir_path)
         return ESP_ERR_NO_MEM;
     }
 
+    s_sd_file_list.health_flags = (bool *)malloc(anim_count * sizeof(bool));
+    if (!s_sd_file_list.health_flags) {
+        ESP_LOGE(TAG, "Failed to allocate health flags array");
+        free(s_sd_file_list.filenames);
+        free(s_sd_file_list.types);
+        free(s_sd_file_list.animations_dir);
+        s_sd_file_list.filenames = NULL;
+        s_sd_file_list.types = NULL;
+        s_sd_file_list.animations_dir = NULL;
+        closedir(dir);
+        return ESP_ERR_NO_MEM;
+    }
+    
+    // Initialize all files as healthy (file is ok)
+    for (size_t i = 0; i < anim_count; i++) {
+        s_sd_file_list.health_flags[i] = true;
+    }
+
     size_t idx = 0;
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
@@ -1416,9 +1199,11 @@ static esp_err_t enumerate_animation_files(const char *dir_path)
                     }
                     free(s_sd_file_list.filenames);
                     free(s_sd_file_list.types);
+                    free(s_sd_file_list.health_flags);
                     free(s_sd_file_list.animations_dir);
                     s_sd_file_list.filenames = NULL;
                     s_sd_file_list.types = NULL;
+                    s_sd_file_list.health_flags = NULL;
                     s_sd_file_list.animations_dir = NULL;
                     closedir(dir);
                     return ESP_ERR_NO_MEM;
@@ -1435,6 +1220,7 @@ static esp_err_t enumerate_animation_files(const char *dir_path)
 
     qsort(s_sd_file_list.filenames, s_sd_file_list.count, sizeof(char *), compare_strings);
     // Re-sort types array to match sorted filenames
+    // Note: health_flags don't need re-sorting since they're all initialized to true
     for (size_t i = 0; i < s_sd_file_list.count; i++) {
         s_sd_file_list.types[i] = get_asset_type(s_sd_file_list.filenames[i]);
     }
@@ -1451,6 +1237,157 @@ static esp_err_t enumerate_animation_files(const char *dir_path)
     s_sd_file_list.current_index = 0;
     return ESP_OK;
 }
+
+// ============================================================================
+// TEMPORARY DEBUG FUNCTION - REMOVE AFTER TESTING
+// ============================================================================
+// This function filters the file list to only keep specific files for testing:
+// - smb2-jump-cat-64p-L32.jpg
+// - 1 gif file
+// - 1 png file
+// - 1 webp file
+// - 5 other random files
+// ============================================================================
+static void filter_file_list_for_debug(void)
+{
+    if (s_sd_file_list.count == 0 || !s_sd_file_list.filenames || 
+        !s_sd_file_list.types || !s_sd_file_list.health_flags) {
+        return;
+    }
+
+    // Arrays to store indices of files to keep
+    size_t keep_indices[9];  // 1 jpg + 1 gif + 1 png + 1 webp + 5 random = 9 max
+    size_t keep_count = 0;
+    bool found_jpg = false;
+    bool found_gif = false;
+    bool found_png = false;
+    bool found_webp = false;
+    size_t random_count = 0;
+
+    // First pass: find specific files
+    for (size_t i = 0; i < s_sd_file_list.count && keep_count < 9; i++) {
+        const char *filename = s_sd_file_list.filenames[i];
+        asset_type_t type = s_sd_file_list.types[i];
+
+        // Look for the specific jpg file
+        if (!found_jpg && strcmp(filename, "smb2-jump-cat-64p-L32.jpg") == 0) {
+            keep_indices[keep_count++] = i;
+            found_jpg = true;
+            continue;
+        }
+
+        // Look for one of each type
+        if (!found_gif && type == ASSET_TYPE_GIF) {
+            keep_indices[keep_count++] = i;
+            found_gif = true;
+            continue;
+        }
+
+        if (!found_png && type == ASSET_TYPE_PNG) {
+            keep_indices[keep_count++] = i;
+            found_png = true;
+            continue;
+        }
+
+        if (!found_webp && type == ASSET_TYPE_WEBP) {
+            keep_indices[keep_count++] = i;
+            found_webp = true;
+            continue;
+        }
+    }
+
+    // Second pass: add 5 random files (excluding already selected ones)
+    // Build list of available indices
+    size_t available_indices[s_sd_file_list.count];
+    size_t available_count = 0;
+    
+    for (size_t i = 0; i < s_sd_file_list.count; i++) {
+        // Check if this file is already selected
+        bool already_selected = false;
+        for (size_t j = 0; j < keep_count; j++) {
+            if (keep_indices[j] == i) {
+                already_selected = true;
+                break;
+            }
+        }
+        if (!already_selected) {
+            available_indices[available_count++] = i;
+        }
+    }
+    
+    // Randomly select 5 files from available ones
+    while (random_count < 5 && keep_count < 9 && available_count > 0) {
+        size_t random_idx = esp_random() % available_count;
+        size_t selected_idx = available_indices[random_idx];
+        
+        keep_indices[keep_count++] = selected_idx;
+        random_count++;
+        
+        // Remove selected index from available list by swapping with last and decrementing
+        available_indices[random_idx] = available_indices[available_count - 1];
+        available_count--;
+    }
+
+    if (keep_count == 0) {
+        ESP_LOGW(TAG, "DEBUG: No files matched filter criteria, keeping original list");
+        return;
+    }
+
+    // Create new arrays with only the selected files
+    char **new_filenames = (char **)malloc(keep_count * sizeof(char *));
+    asset_type_t *new_types = (asset_type_t *)malloc(keep_count * sizeof(asset_type_t));
+    bool *new_health_flags = (bool *)malloc(keep_count * sizeof(bool));
+
+    if (!new_filenames || !new_types || !new_health_flags) {
+        ESP_LOGE(TAG, "DEBUG: Failed to allocate filtered file list arrays");
+        free(new_filenames);
+        free(new_types);
+        free(new_health_flags);
+        return;
+    }
+
+    // Copy selected files to new arrays
+    for (size_t i = 0; i < keep_count; i++) {
+        size_t src_idx = keep_indices[i];
+        size_t name_len = strlen(s_sd_file_list.filenames[src_idx]);
+        new_filenames[i] = (char *)malloc(name_len + 1);
+        if (!new_filenames[i]) {
+            // Cleanup on failure
+            for (size_t j = 0; j < i; j++) {
+                free(new_filenames[j]);
+            }
+            free(new_filenames);
+            free(new_types);
+            free(new_health_flags);
+            ESP_LOGE(TAG, "DEBUG: Failed to allocate filename in filtered list");
+            return;
+        }
+        strcpy(new_filenames[i], s_sd_file_list.filenames[src_idx]);
+        new_types[i] = s_sd_file_list.types[src_idx];
+        new_health_flags[i] = s_sd_file_list.health_flags[src_idx];
+    }
+
+    // Free old arrays
+    for (size_t i = 0; i < s_sd_file_list.count; i++) {
+        free(s_sd_file_list.filenames[i]);
+    }
+    free(s_sd_file_list.filenames);
+    free(s_sd_file_list.types);
+    free(s_sd_file_list.health_flags);
+
+    // Replace with filtered arrays
+    s_sd_file_list.filenames = new_filenames;
+    s_sd_file_list.types = new_types;
+    s_sd_file_list.health_flags = new_health_flags;
+    s_sd_file_list.count = keep_count;
+    s_sd_file_list.current_index = 0;
+
+    ESP_LOGI(TAG, "DEBUG: Filtered file list to %zu files (1 jpg, 1 gif, 1 png, 1 webp, %zu random)", 
+             keep_count, random_count);
+}
+// ============================================================================
+// END TEMPORARY DEBUG FUNCTION
+// ============================================================================
 
 static esp_err_t load_animation_file_from_sd(const char *filepath, uint8_t **data_out, size_t *size_out)
 {
@@ -1539,22 +1476,62 @@ static void unload_animation_buffer(animation_buffer_t *buf)
     buf->asset_index = 0;
 }
 
-// Calculate next animation index in play order
+// Calculate next animation index in play order, skipping unhealthy files
+// Returns current_index if no healthy files are found (to avoid infinite loops)
 static size_t get_next_asset_index(size_t current_index)
 {
     if (s_sd_file_list.count == 0) {
         return 0;
     }
-    return (current_index + 1) % s_sd_file_list.count;
+    
+    // If health flags aren't available, fall back to simple increment
+    if (!s_sd_file_list.health_flags) {
+        return (current_index + 1) % s_sd_file_list.count;
+    }
+    
+    // Search for next healthy file, wrapping around if necessary
+    size_t start_index = (current_index + 1) % s_sd_file_list.count;
+    size_t checked = 0;
+    
+    while (checked < s_sd_file_list.count) {
+        if (s_sd_file_list.health_flags[start_index]) {
+            return start_index;  // Found a healthy file
+        }
+        start_index = (start_index + 1) % s_sd_file_list.count;
+        checked++;
+    }
+    
+    // No healthy files found, return current_index to avoid infinite loops
+    return current_index;
 }
 
-// Calculate previous animation index in play order
+// Calculate previous animation index in play order, skipping unhealthy files
+// Returns current_index if no healthy files are found (to avoid infinite loops)
 static size_t get_previous_asset_index(size_t current_index)
 {
     if (s_sd_file_list.count == 0) {
         return 0;
     }
-    return (current_index == 0) ? (s_sd_file_list.count - 1) : (current_index - 1);
+    
+    // If health flags aren't available, fall back to simple decrement
+    if (!s_sd_file_list.health_flags) {
+        return (current_index == 0) ? (s_sd_file_list.count - 1) : (current_index - 1);
+    }
+    
+    // Search for previous healthy file, wrapping around if necessary
+    size_t start_index = (current_index == 0) ? (s_sd_file_list.count - 1) : (current_index - 1);
+    size_t checked = 0;
+    
+    while (checked < s_sd_file_list.count) {
+        if (s_sd_file_list.health_flags[start_index]) {
+            return start_index;  // Found a healthy file
+        }
+        start_index = (start_index == 0) ? (s_sd_file_list.count - 1) : (start_index - 1);
+        checked++;
+    }
+    
+    // No healthy files found, return current_index to avoid infinite loops
+    return current_index;
 }
 
 // Atomically swap front and back buffers
@@ -1717,6 +1694,11 @@ static esp_err_t load_animation_into_buffer(size_t asset_index, animation_buffer
     esp_err_t err = load_animation_file_from_sd(filepath, &file_data, &file_size);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to load file from SD: %s", esp_err_to_name(err));
+        // Mark file as unhealthy (file has issues)
+        if (s_sd_file_list.health_flags && asset_index < s_sd_file_list.count) {
+            s_sd_file_list.health_flags[asset_index] = false;
+            ESP_LOGW(TAG, "Marked file '%s' (index %zu) as unhealthy due to load failure", filename, asset_index);
+        }
         return err;
     }
 
@@ -1728,10 +1710,20 @@ static esp_err_t load_animation_into_buffer(size_t asset_index, animation_buffer
     err = init_animation_decoder_for_buffer(buf, type, file_data, file_size);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize animation decoder '%s': %s", filename, esp_err_to_name(err));
+        // Mark file as unhealthy (file has issues)
+        if (s_sd_file_list.health_flags && asset_index < s_sd_file_list.count) {
+            s_sd_file_list.health_flags[asset_index] = false;
+            ESP_LOGW(TAG, "Marked file '%s' (index %zu) as unhealthy due to decoder initialization failure", filename, asset_index);
+        }
         free(file_data);
         buf->file_data = NULL;
         buf->file_size = 0;
         return err;
+    }
+    
+    // Mark file as healthy (file is ok) since loading succeeded
+    if (s_sd_file_list.health_flags && asset_index < s_sd_file_list.count) {
+        s_sd_file_list.health_flags[asset_index] = true;
     }
 
     // Allocate prefetched frame buffer (LCD-sized)
@@ -1855,6 +1847,10 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
                                  size_t buffer_bytes,
                                  size_t row_stride_bytes)
 {
+    if (!display_handle || !lcd_buffers || buffer_count == 0 || buffer_bytes == 0 || row_stride_bytes == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
     s_display_handle = display_handle;
     s_lcd_buffers = lcd_buffers;
     s_buffer_count = buffer_count;
@@ -1912,10 +1908,12 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         return enum_err;
     }
 
-    // filter_animation_list_to_gif_only();
-    // limit_animation_file_list_for_testing();
-    // filter_animation_list_to_png_only();
-    // filter_animation_list_to_jpeg_only();
+    // ============================================================================
+    // TEMPORARY DEBUG: Filter file list for testing
+    // TODO: REMOVE THIS CALL AFTER DEBUGGING IS COMPLETE
+    // ============================================================================
+    filter_file_list_for_debug();
+    // ============================================================================
 
     if (s_sd_file_list.count == 0) {
         ESP_LOGE(TAG, "No animation files found");
@@ -1947,21 +1945,52 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     memset(&s_front_buffer, 0, sizeof(s_front_buffer));
     memset(&s_back_buffer, 0, sizeof(s_back_buffer));
 
-    // Load the first animation from the randomized list into front buffer synchronously
+    // Load the first healthy animation from the randomized list into front buffer synchronously
     size_t start_index = 0;
-    esp_err_t load_err = load_animation_into_buffer(start_index, &s_front_buffer);
-    if (load_err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to load animation at index %zu, trying others...", start_index);
-        // Try all animations sequentially as fallback
-        for (size_t i = 1; i < s_sd_file_list.count; i++) {
-            load_err = load_animation_into_buffer(i, &s_front_buffer);
-            if (load_err == ESP_OK) {
-                ESP_LOGI(TAG, "Successfully loaded animation at index %zu", i);
+    // Find first healthy file
+    if (s_sd_file_list.health_flags) {
+        bool found_healthy = false;
+        for (size_t i = 0; i < s_sd_file_list.count; i++) {
+            if (s_sd_file_list.health_flags[i]) {
+                start_index = i;
+                found_healthy = true;
                 break;
             }
         }
-        if (load_err != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to load any animation file");
+        if (!found_healthy) {
+            ESP_LOGE(TAG, "No healthy animation files available at startup");
+            vSemaphoreDelete(s_loader_sem);
+            s_loader_sem = NULL;
+            vSemaphoreDelete(s_buffer_mutex);
+            s_buffer_mutex = NULL;
+            bsp_sdcard_unmount();
+            s_sd_mounted = false;
+            return ESP_ERR_NOT_FOUND;
+        }
+    }
+    
+    esp_err_t load_err = load_animation_into_buffer(start_index, &s_front_buffer);
+    if (load_err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to load animation at index %zu, trying other healthy files...", start_index);
+        // Try other healthy animations sequentially as fallback
+        bool found_any = false;
+        for (size_t i = 0; i < s_sd_file_list.count; i++) {
+            // Skip if not healthy (if health flags available)
+            if (s_sd_file_list.health_flags && !s_sd_file_list.health_flags[i]) {
+                continue;
+            }
+            if (i == start_index) {
+                continue;  // Already tried this one
+            }
+            load_err = load_animation_into_buffer(i, &s_front_buffer);
+            if (load_err == ESP_OK) {
+                ESP_LOGI(TAG, "Successfully loaded animation at index %zu", i);
+                found_any = true;
+                break;
+            }
+        }
+        if (!found_any || load_err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to load any healthy animation file");
             vSemaphoreDelete(s_loader_sem);
             s_loader_sem = NULL;
             vSemaphoreDelete(s_buffer_mutex);
@@ -2115,7 +2144,7 @@ void animation_player_cycle_animation(bool forward)
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
         // If swap is already in progress (swap requested, loader busy, or prefetch pending), ignore
         if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
-            ESP_LOGD(TAG, "Animation change request ignored: swap already in progress");
+            ESP_LOGW(TAG, "Animation change request ignored: swap already in progress");
             xSemaphoreGive(s_buffer_mutex);
             return;
         }
@@ -2123,6 +2152,25 @@ void animation_player_cycle_animation(bool forward)
         // Compute next or previous animation index on demand
         size_t current_index = s_front_buffer.ready ? s_front_buffer.asset_index : 0;
         size_t target_index = forward ? get_next_asset_index(current_index) : get_previous_asset_index(current_index);
+        
+        // Check if no healthy files are available (target_index == current_index means no healthy file found)
+        if (target_index == current_index && s_sd_file_list.health_flags) {
+            // Check if there are any healthy files at all
+            bool any_healthy = false;
+            for (size_t i = 0; i < s_sd_file_list.count; i++) {
+                if (s_sd_file_list.health_flags[i]) {
+                    any_healthy = true;
+                    break;
+                }
+            }
+            if (!any_healthy) {
+                ESP_LOGW(TAG, "No healthy animation files available. Cannot cycle animation.");
+                xSemaphoreGive(s_buffer_mutex);
+                return;
+            }
+            // If we have healthy files but target_index == current_index, it means current is the only healthy one
+            // This is fine, we can still try to swap (though it will likely fail if current is already loaded)
+        }
         
         // Set swap requested and queue loader with target index
         s_next_asset_index = target_index;

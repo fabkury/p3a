@@ -1,5 +1,23 @@
 menu "Physical Player of Pixel Art (P3A)"
 
+    menu "General"
+        config P3A_AUTO_SWAP_INTERVAL_SECONDS
+            int "Auto-swap interval (seconds)"
+            default 30
+            range 5 300
+            help
+                Number of seconds of inactivity before automatically cycling to the next animation.
+                Set to 0 to disable auto-swap entirely.
+
+        config P3A_STATIC_FRAME_DELAY_MS
+            int "Static image frame delay (ms)"
+            default 100
+            range 10 1000
+            help
+                Frame delay used for static images (PNG, JPEG) when played as animations.
+                This simulates animation timing for single-frame images.
+    endmenu
+
     menu "Display"
         config P3A_LCD_ENABLE_CACHE_FLUSH
             bool "Flush LCD frame buffer via esp_cache_msync"

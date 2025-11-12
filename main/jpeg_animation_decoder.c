@@ -6,6 +6,7 @@
 
 #include "animation_decoder.h"
 #include "animation_decoder_internal.h"
+#include "static_image_decoder_common.h"
 #include "driver/jpeg_types.h"
 #include "driver/jpeg_decode.h"
 #include "esp_log.h"
@@ -14,22 +15,6 @@
 #include <string.h>
 
 #define TAG "jpeg_decoder"
-#define JPEG_STATIC_FRAME_DELAY_MS 100U
-
-// Forward declarations for other decoders
-extern esp_err_t gif_decoder_init(animation_decoder_t **decoder, const uint8_t *data, size_t size);
-extern esp_err_t gif_decoder_get_info(animation_decoder_t *decoder, animation_decoder_info_t *info);
-extern esp_err_t gif_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_buffer);
-extern esp_err_t gif_decoder_get_frame_delay(animation_decoder_t *decoder, uint32_t *delay_ms);
-extern esp_err_t gif_decoder_reset(animation_decoder_t *decoder);
-extern void gif_decoder_unload(animation_decoder_t **decoder);
-
-extern esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, size_t size);
-extern esp_err_t png_decoder_get_info(animation_decoder_t *decoder, animation_decoder_info_t *info);
-extern esp_err_t png_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_buffer);
-extern esp_err_t png_decoder_get_frame_delay(animation_decoder_t *decoder, uint32_t *delay_ms);
-extern esp_err_t png_decoder_reset(animation_decoder_t *decoder);
-extern void png_decoder_unload(animation_decoder_t **decoder);
 
 // JPEG decoder implementation structure
 typedef struct {
@@ -67,7 +52,7 @@ esp_err_t jpeg_decoder_init(animation_decoder_t **decoder, const uint8_t *data, 
 
     jpeg_data->file_data = data;
     jpeg_data->file_size = size;
-    jpeg_data->current_frame_delay_ms = JPEG_STATIC_FRAME_DELAY_MS;
+    jpeg_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
 
     // Configure decoder engine
     jpeg_decode_engine_cfg_t decode_eng_cfg = {
@@ -250,7 +235,7 @@ esp_err_t jpeg_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_b
 
     // Copy pre-decoded RGBA frame
     memcpy(rgba_buffer, jpeg_data->rgba_buffer, jpeg_data->rgba_buffer_size);
-    jpeg_data->current_frame_delay_ms = JPEG_STATIC_FRAME_DELAY_MS;
+    jpeg_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
 
     return ESP_OK;
 }
@@ -267,7 +252,7 @@ esp_err_t jpeg_decoder_reset(animation_decoder_t *decoder)
     }
 
     // JPEG is static, so reset just restores the delay
-    jpeg_data->current_frame_delay_ms = JPEG_STATIC_FRAME_DELAY_MS;
+    jpeg_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
 
     return ESP_OK;
 }

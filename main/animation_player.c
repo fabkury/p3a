@@ -1912,7 +1912,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     // TEMPORARY DEBUG: Filter file list for testing
     // TODO: REMOVE THIS CALL AFTER DEBUGGING IS COMPLETE
     // ============================================================================
-    filter_file_list_for_debug();
+    // filter_file_list_for_debug();
     // ============================================================================
 
     if (s_sd_file_list.count == 0) {

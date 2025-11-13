@@ -1,6 +1,6 @@
-# P3A (Pixel Pea) — Makapix Physical Player
+# p3a (Pixel Pea) — Makapix Physical Player
 
-P3A ("Pixel Pea") is a physical pixel art player inside the Makapix Club ecosystem. It is an ESP32-P4-powered Wi-Fi art frame that subscribes to Makapix feeds, displays pixel artworks, and lets viewers react (likes) or skim comments without leaving the hardware experience. The firmware also serves a browser interface at [http://p3a.local/](http://p3a.local/) for quick status checks and manual control.
+p3a ("Pixel Pea") is a physical pixel art player inside the Makapix Club ecosystem. It is an ESP32-P4-powered Wi-Fi art frame that subscribes to Makapix feeds, displays pixel artworks, and lets viewers react (send likes) and read comments without leaving the hardware experience. The device has touchscreen controls, and the firmware also serves a browser interface and REST API at [http://p3a.local/](http://p3a.local/) for control using a phone, laptop, or code.
 
 ## Hardware photos
 <p>
@@ -9,9 +9,10 @@ P3A ("Pixel Pea") is a physical pixel art player inside the Makapix Club ecosyst
 </p>
 
 ## How it feels like to use it
-Set P3A on your shelf and it becomes a quiet pixel-art gallery that keeps moving on its own. Tap the screen to jump to the next or previous artwork, swipe up or down to change brightness, long-tap to send a like to the current artwork, or open `http://p3a.local/` on your phone to control the device.
+Set P3A on your shelf and it becomes a quiet pixel art gallery that keeps moving on its own. Tap the screen to jump to the next or previous artwork, swipe up or down to adjust brightness, long-tap to send a like to the current artwork, or open `http://p3a.local/` on your phone to control the device.
 
 ## Hardware platform & specs
+The entire platform consists of one device: ESP32-P4-WIFI6-Touch-LCD-4B
 - **Board**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) — dual-core ESP32-P4 host MCU plus onboard ESP32-C6 for Wi-Fi 6/BLE, external PSRAM, and ample flash as provided by the module.
 - **Display**: 4" square 720×720 IPS panel over 2-lane MIPI-DSI with PWM-dimmable backlight.
 - **Touch**: GT911 capacitive touch controller (I²C) with multi-point reporting.
@@ -20,19 +21,19 @@ Set P3A on your shelf and it becomes a quiet pixel-art gallery that keeps moving
 
 ## Current firmware capabilities
 - **Display pipeline**: Initializes the Waveshare LCD, manages multi-buffer swaps, and exposes brightness control through PWM.
-- **Animation playback**: Scans the SD card for WebP/GIF/PNG/JPEG loops, decodes them on background tasks, and keeps playback smooth with prefetching.
+- **Animation playback**: Scans the SD card for WebP/GIF/PNG/JPEG files, decodes them on background tasks, and keeps playback smooth with prefetching.
 - **Touch input**: GT911 gestures — tap left/right to swap animations, vertical swipes adjust brightness.
-- **Auto rotation & remote control**: Auto-randomizes when idle and accepts touch, REST, and the web UI at `http://p3a.local/` for status, configuration, and manual swaps.
+- **Auto rotation & remote control**: Auto-randomizes artworks when idle and accepts touch, REST, and the web UI at `http://p3a.local/` for status, configuration, and manual swaps.
 - **Wi-Fi provisioning**: Station mode with captive portal fallback; credentials persist across reboots.
 - **Config knobs**: `menuconfig` toggles for asset paths, playback timing, render formats, task priorities, and gesture tuning.
 
 ## Planned functionality (see ROADMAP.md)
-P3A is in the **display prototype with Wi-Fi** stage. Upcoming milestones focus on:
+p3a is in the **display prototype with Wi-Fi** stage. Upcoming milestones focus on:
 
 - **Connectivity**: TLS MQTT client, Makapix feed ingestion, quick reactions from the hardware.
-- **Playback & UI**: Playlist-aware scheduling, richer gestures, and lightweight HUD overlays.
+- **Playlists & UI**: Playlist-aware scheduling, richer gestures, and lightweight HUD overlays.
 - **Reliability**: OTA with rollback, watchdog coverage, diagnostics, and provisioning workflows.
-- **Manufacturing & docs**: Factory flashing tools, release automation, and installer playbooks.
+- **Manufacturing & docs**: Flashing tools, release automation, and installer tutorials.
 
 See `ROADMAP.md` for a detailed phase-by-phase breakdown.
 
@@ -59,7 +60,7 @@ Use `--port` and `--baud` if esptool cannot auto-detect the serial port. The off
 
 ### Preparing artwork media
 - The firmware requires a microSD card inserted into the SDMMC slot.
-- Format a microSD card (FAT32) and copy your pixel art loops into any folder in the card.
+- Format a microSD card (FAT32) and copy your pixel art files into any folder in the card.
 - Supported containers today: animated/non-animated **WebP, GIF, PNG, JPEG**. Source canvases are upscaled to 720×720 so keep square canvases.
 
 ### On-device controls
@@ -102,8 +103,8 @@ curl -X POST http://p3a.local/action/reboot
 - `def/` — sdkconfig defaults for the esp32p4 target.
 - `ROADMAP.md` — execution plan for each firmware milestone.
 
-## Makapix integration primer
-Makapix is a pixel-art social network that hosts artworks and offers metadata, moderation, reactions, and MQTT notifications. P3A’s planned role is:
+## Makapix Club integration primer
+Makapix Club is a pixel-art social network that hosts artworks and offers metadata, moderation, reactions, and MQTT notifications. P3A’s planned role is:
 - Subscribe to Makapix MQTT to fetch the URLs for new artworks/playlists.
 - Download media over HTTPS, and display or cache it locally for offline rotation.
 - Allow viewers to send a like and to fetch the likes and comments for the focused post.

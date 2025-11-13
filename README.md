@@ -104,7 +104,7 @@ curl -X POST http://p3a.local/action/reboot
 - `ROADMAP.md` — execution plan for each firmware milestone.
 
 ## Makapix Club integration primer
-Makapix Club is a pixel-art social network that hosts artworks and offers metadata, moderation, reactions, and MQTT notifications. P3A’s planned role is:
+Makapix Club (https://makapix.club/) is a pixel-art social network that hosts artworks and offers metadata, moderation, reactions, and MQTT notifications. P3A’s planned role is:
 - Subscribe to Makapix MQTT to fetch the URLs for new artworks/playlists.
 - Download media over HTTPS, and display or cache it locally for offline rotation.
 - Allow viewers to send a like and to fetch the likes and comments for the focused post.

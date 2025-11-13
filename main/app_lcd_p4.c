@@ -160,7 +160,23 @@ esp_err_t app_lcd_set_brightness(int brightness_percent)
         brightness_percent = 100;
     }
     
-    esp_err_t err = bsp_display_brightness_set(brightness_percent);
+    // Apply cubic easing (ease-in): slow near 0%, faster near 100%
+    // - We interpret brightness_percent as the logical/UX value
+    // - Map it through an ease-in cubic curve: eased = (linear/100)^3 * 100
+    //   This makes small changes near 0% have very little effect (slow),
+    //   and the same change near 100% result in a larger visual step (fast).
+    float normalized = (float)brightness_percent / 100.0f;
+    float eased = normalized * normalized * normalized;   // ease-in cubic: x^3
+    int eased_brightness = (int)(eased * 100.0f + 0.5f);  // Round to nearest integer
+
+    // Clamp the eased value to valid range
+    if (eased_brightness < 0) {
+        eased_brightness = 0;
+    } else if (eased_brightness > 100) {
+        eased_brightness = 100;
+    }
+
+    esp_err_t err = bsp_display_brightness_set(eased_brightness);
     if (err == ESP_OK) {
         s_current_brightness = brightness_percent;
     }

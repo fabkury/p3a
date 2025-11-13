@@ -813,6 +813,165 @@ static esp_err_t h_post_swap_back(httpd_req_t *req) {
     return ESP_OK;
 }
 
+/**
+ * POST /upload/image
+ * Uploads an image file to SD card and displays it immediately
+ * Accepts multipart/form-data or raw binary (image/png, image/jpeg, image/webp)
+ */
+static esp_err_t h_post_upload_image(httpd_req_t *req) {
+    #define MAX_UPLOAD_SIZE (5 * 1024 * 1024)  // 5MB max
+    #define UPLOAD_BUFFER_SIZE (4096)
+
+    ESP_LOGI(TAG, "Image upload request received, content_length=%d", (int)req->content_len);
+
+    // Check content length
+    if (req->content_len == 0) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Empty request\",\"code\":\"EMPTY_REQUEST\"}");
+        return ESP_OK;
+    }
+
+    if (req->content_len > MAX_UPLOAD_SIZE) {
+        send_json(req, 413, "{\"ok\":false,\"error\":\"File too large (max 5MB)\",\"code\":\"FILE_TOO_LARGE\"}");
+        return ESP_OK;
+    }
+
+    // Get content type
+    char content_type[128] = {0};
+    esp_err_t err = httpd_req_get_hdr_value_str(req, "Content-Type", content_type, sizeof(content_type));
+    if (err != ESP_OK) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing Content-Type header\",\"code\":\"MISSING_CONTENT_TYPE\"}");
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "Content-Type: %s", content_type);
+
+    // Determine file extension from content type
+    const char *file_ext = NULL;
+    if (strstr(content_type, "image/png") || strstr(content_type, "png")) {
+        file_ext = "png";
+    } else if (strstr(content_type, "image/jpeg") || strstr(content_type, "jpeg") || strstr(content_type, "image/jpg")) {
+        file_ext = "jpg";
+    } else if (strstr(content_type, "image/webp") || strstr(content_type, "webp")) {
+        file_ext = "webp";
+    } else if (strstr(content_type, "image/gif") || strstr(content_type, "gif")) {
+        file_ext = "gif";
+    } else if (strstr(content_type, "multipart/form-data")) {
+        // Default to PNG for multipart (we'll detect from data if needed)
+        file_ext = "png";
+    } else {
+        ESP_LOGW(TAG, "Unknown content type: %s, defaulting to png", content_type);
+        file_ext = "png";
+    }
+
+    // Build save path
+    char save_path[128];
+    snprintf(save_path, sizeof(save_path), "/sdcard/animations/td_live.%s", file_ext);
+
+    ESP_LOGI(TAG, "Saving upload to: %s", save_path);
+
+    // Open temp file for atomic write
+    char temp_path[128];
+    snprintf(temp_path, sizeof(temp_path), "%s.tmp", save_path);
+
+    FILE *f = fopen(temp_path, "wb");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open temp file: %s", temp_path);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to open file for writing\",\"code\":\"FILE_WRITE_ERROR\"}");
+        return ESP_OK;
+    }
+
+    // Allocate receive buffer
+    char *buffer = malloc(UPLOAD_BUFFER_SIZE);
+    if (!buffer) {
+        fclose(f);
+        remove(temp_path);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Out of memory\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    // Receive and write data in chunks
+    size_t total_received = 0;
+    size_t remaining = req->content_len;
+    bool write_error = false;
+
+    while (remaining > 0 && !write_error) {
+        size_t chunk_size = (remaining > UPLOAD_BUFFER_SIZE) ? UPLOAD_BUFFER_SIZE : remaining;
+
+        int received = httpd_req_recv(req, buffer, chunk_size);
+        if (received <= 0) {
+            if (received == HTTPD_SOCK_ERR_TIMEOUT) {
+                ESP_LOGW(TAG, "Socket timeout during upload");
+            }
+            ESP_LOGE(TAG, "Failed to receive data: %d", received);
+            write_error = true;
+            break;
+        }
+
+        // Write chunk to file
+        size_t written = fwrite(buffer, 1, received, f);
+        if (written != (size_t)received) {
+            ESP_LOGE(TAG, "Failed to write data to file (wrote %zu of %d bytes)", written, received);
+            write_error = true;
+            break;
+        }
+
+        total_received += received;
+        remaining -= received;
+
+        // Log progress for large files
+        if (total_received % (100 * 1024) == 0 || remaining == 0) {
+            ESP_LOGI(TAG, "Upload progress: %zu / %d bytes (%.1f%%)",
+                     total_received, (int)req->content_len,
+                     (100.0 * total_received) / req->content_len);
+        }
+    }
+
+    // Clean up
+    free(buffer);
+    fclose(f);
+
+    if (write_error || total_received != req->content_len) {
+        ESP_LOGE(TAG, "Upload failed: received %zu of %d bytes", total_received, (int)req->content_len);
+        remove(temp_path);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Upload incomplete\",\"code\":\"UPLOAD_INCOMPLETE\"}");
+        return ESP_OK;
+    }
+
+    // Atomic rename: replace old file with new one
+    remove(save_path);  // Remove old file if exists
+    if (rename(temp_path, save_path) != 0) {
+        ESP_LOGE(TAG, "Failed to rename temp file to %s", save_path);
+        remove(temp_path);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to save file\",\"code\":\"FILE_RENAME_ERROR\"}");
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "Upload successful: %zu bytes saved to %s", total_received, save_path);
+
+    // Load and display the uploaded image
+    // Note: We call this directly rather than enqueuing to provide immediate feedback
+    // animation_player_load_asset() is called from main context, should be safe
+    extern esp_err_t animation_player_load_asset(const char *filepath);
+    esp_err_t load_err = animation_player_load_asset(save_path);
+
+    if (load_err != ESP_OK) {
+        ESP_LOGW(TAG, "Uploaded file saved but failed to load as animation: %s", esp_err_to_name(load_err));
+        // Still report success since file was saved
+    }
+
+    // Build success response JSON
+    char response[512];
+    snprintf(response, sizeof(response),
+             "{\"ok\":true,\"data\":{\"saved_path\":\"%s\",\"file_size\":%zu,\"format\":\"%s\",\"display_updated\":%s}}",
+             save_path, total_received, file_ext, (load_err == ESP_OK) ? "true" : "false");
+
+    send_json(req, 200, response);
+    return ESP_OK;
+
+    #undef MAX_UPLOAD_SIZE
+    #undef UPLOAD_BUFFER_SIZE
+}
+
 // ---------- mDNS Setup ----------
 
 static esp_err_t start_mdns(void) {
@@ -939,6 +1098,12 @@ esp_err_t http_api_start(void) {
     u.uri = "/action/swap_back";
     u.method = HTTP_POST;
     u.handler = h_post_swap_back;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/upload/image";
+    u.method = HTTP_POST;
+    u.handler = h_post_upload_image;
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
 

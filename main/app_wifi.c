@@ -281,7 +281,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             if (s_rest_start_callback) {
                 s_rest_start_callback();
             }
-            app_state_enter_playing();
+            app_state_enter_ready();
             ESP_LOGI(TAG, "REST API started at http://p3a.local/");
         }
     }

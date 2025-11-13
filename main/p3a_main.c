@@ -40,7 +40,12 @@ static void auto_swap_task(void *arg)
             ESP_LOGD(TAG, "Auto-swap timer reset by user interaction");
             continue;  // Timer was reset, start waiting again
         }
-        // Timeout occurred, perform auto-swap
+        // Timeout occurred, check if paused before performing auto-swap
+        if (app_lcd_is_animation_paused()) {
+            ESP_LOGD(TAG, "Auto-swap skipped: animation is paused");
+            continue;  // Skip auto-swap while paused
+        }
+        // Perform auto-swap
         ESP_LOGD(TAG, "Auto-swap: cycling forward");
         app_lcd_cycle_animation();
     }

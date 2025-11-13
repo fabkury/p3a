@@ -17,6 +17,10 @@
 #include "animation_player.h"
 #include "app_lcd.h"
 #include "favicon_data.h"
+
+// LCD dimensions from project configuration
+#define LCD_MAX_WIDTH   EXAMPLE_LCD_H_RES
+#define LCD_MAX_HEIGHT  EXAMPLE_LCD_V_RES
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -795,11 +799,71 @@ static esp_err_t h_get_root(httpd_req_t *req) {
         "var uploadProgress = document.getElementById('upload-progress');"
         "var progressFill = document.getElementById('progress-fill');"
         "var statusDiv = document.getElementById('status');"
+        "function isJpegFile(file) {"
+        "    var name = file.name.toLowerCase();"
+        "    return name.endsWith('.jpg') || name.endsWith('.jpeg') || file.type === 'image/jpeg';"
+        "}"
+        "function getImageDimensions(file) {"
+        "    return new Promise(function(resolve, reject) {"
+        "        var reader = new FileReader();"
+        "        reader.onerror = function() { reject(new Error('Failed to read file.')); };"
+        "        reader.onload = function() {"
+        "            var img = new Image();"
+        "            img.onload = function() {"
+        "                resolve({ width: img.width, height: img.height });"
+        "            };"
+        "            img.onerror = function() { reject(new Error('Failed to load image.')); };"
+        "            img.src = reader.result;"
+        "        };"
+        "        reader.readAsDataURL(file);"
+        "    });"
+        "}"
+        "function resizeAndConvertToPng(file, maxW, maxH) {"
+        "    return new Promise(function(resolve, reject) {"
+        "        if (!file.type.startsWith('image/')) {"
+        "            reject(new Error('Selected file is not an image.'));"
+        "            return;"
+        "        }"
+        "        var reader = new FileReader();"
+        "        reader.onerror = function() { reject(new Error('Failed to read file.')); };"
+        "        reader.onload = function() {"
+        "            var img = new Image();"
+        "            img.onload = function() {"
+        "                try {"
+        "                    var width = img.width;"
+        "                    var height = img.height;"
+        "                    var scale = Math.min(maxW / width, maxH / height, 1);"
+        "                    var newW = Math.round(width * scale);"
+        "                    var newH = Math.round(height * scale);"
+        "                    var canvas = document.createElement('canvas');"
+        "                    canvas.width = newW;"
+        "                    canvas.height = newH;"
+        "                    var ctx = canvas.getContext('2d');"
+        "                    ctx.drawImage(img, 0, 0, newW, newH);"
+        "                    canvas.toBlob(function(blob) {"
+        "                        if (!blob) {"
+        "                            reject(new Error('Canvas conversion to PNG failed.'));"
+        "                        } else {"
+        "                            resolve(blob);"
+        "                        }"
+        "                    }, 'image/png', 1.0);"
+        "                } catch (e) {"
+        "                    reject(e);"
+        "                }"
+        "            };"
+        "            img.onerror = function() { reject(new Error('Failed to load image.')); };"
+        "            img.src = reader.result;"
+        "        };"
+        "        reader.readAsDataURL(file);"
+        "    });"
+        "}"
         "fileInput.addEventListener('change', function(e) {"
         "    var file = e.target.files[0];"
         "    if (file) {"
-        "        if (file.size > 5 * 1024 * 1024) {"
-        "            fileName.textContent = 'File too large! Maximum size is 5MB.';"
+        "        var maxSize = isJpegFile(file) ? 25 * 1024 * 1024 : 5 * 1024 * 1024;"
+        "        var maxSizeMB = isJpegFile(file) ? '25MB' : '5MB';"
+        "        if (file.size > maxSize) {"
+        "            fileName.textContent = 'File too large! Maximum size is ' + maxSizeMB + '.';"
         "            fileName.style.color = '#f44336';"
         "            uploadBtn.disabled = true;"
         "            fileInput.value = '';"
@@ -823,58 +887,159 @@ static esp_err_t h_get_root(httpd_req_t *req) {
         "        setTimeout(function() { statusDiv.style.display = 'none'; }, 3000);"
         "        return;"
         "    }"
-        "    if (file.size > 5 * 1024 * 1024) {"
-        "        statusDiv.textContent = 'File too large! Maximum size is 5MB.';"
+        "    var maxSize = isJpegFile(file) ? 25 * 1024 * 1024 : 5 * 1024 * 1024;"
+        "    var maxSizeMB = isJpegFile(file) ? '25MB' : '5MB';"
+        "    if (file.size > maxSize) {"
+        "        statusDiv.textContent = 'File too large! Maximum size is ' + maxSizeMB + '.';"
         "        statusDiv.className = 'status error';"
         "        statusDiv.style.display = 'block';"
         "        setTimeout(function() { statusDiv.style.display = 'none'; }, 3000);"
         "        return;"
         "    }"
-        "    var formData = new FormData();"
-        "    formData.append('file', file);"
         "    uploadBtn.disabled = true;"
-        "    uploadProgress.classList.add('active');"
-        "    progressFill.style.width = '0%';"
-        "    var xhr = new XMLHttpRequest();"
-        "    xhr.open('POST', '/upload', true);"
-        "    xhr.upload.onprogress = function(e) {"
-        "        if (e.lengthComputable) {"
-        "            var percentComplete = (e.loaded / e.total) * 100;"
-        "            progressFill.style.width = percentComplete + '%';"
-        "        }"
-        "    };"
-        "    xhr.onreadystatechange = function() {"
-        "        if (xhr.readyState === 4) {"
-        "            uploadBtn.disabled = false;"
-        "            uploadProgress.classList.remove('active');"
-        "            progressFill.style.width = '0%';"
-        "            try {"
-        "                var result = JSON.parse(xhr.responseText);"
-        "                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {"
-        "                    statusDiv.textContent = 'Upload successful!';"
-        "                    statusDiv.className = 'status success';"
-        "                    fileInput.value = '';"
-        "                    fileName.textContent = '';"
-        "                } else {"
-        "                    statusDiv.textContent = 'Upload failed: ' + (result.error || 'HTTP ' + xhr.status);"
+        "    statusDiv.textContent = 'Processing...';"
+        "    statusDiv.className = 'status';"
+        "    statusDiv.style.display = 'block';"
+        "    var processAndUpload = function(fileToUpload, filename) {"
+        "        var formData = new FormData();"
+        "        formData.append('file', fileToUpload, filename);"
+        "        uploadProgress.classList.add('active');"
+        "        progressFill.style.width = '0%';"
+        "        statusDiv.textContent = 'Uploading...';"
+        "        var xhr = new XMLHttpRequest();"
+        "        xhr.open('POST', '/upload', true);"
+        "        xhr.upload.onprogress = function(e) {"
+        "            if (e.lengthComputable) {"
+        "                var percentComplete = (e.loaded / e.total) * 100;"
+        "                progressFill.style.width = percentComplete + '%';"
+        "            }"
+        "        };"
+        "        xhr.onreadystatechange = function() {"
+        "            if (xhr.readyState === 4) {"
+        "                uploadBtn.disabled = false;"
+        "                uploadProgress.classList.remove('active');"
+        "                progressFill.style.width = '0%';"
+        "                try {"
+        "                    var result = JSON.parse(xhr.responseText);"
+        "                    if (xhr.status >= 200 && xhr.status < 300 && result.ok) {"
+        "                        statusDiv.textContent = 'Upload successful!';"
+        "                        statusDiv.className = 'status success';"
+        "                        fileInput.value = '';"
+        "                        fileName.textContent = '';"
+        "                    } else {"
+        "                        statusDiv.textContent = 'Upload failed: ' + (result.error || 'HTTP ' + xhr.status);"
+        "                        statusDiv.className = 'status error';"
+        "                    }"
+        "                } catch (e) {"
+        "                    statusDiv.textContent = 'Upload failed: ' + xhr.statusText;"
         "                    statusDiv.className = 'status error';"
         "                }"
-        "            } catch (e) {"
-        "                statusDiv.textContent = 'Upload failed: ' + xhr.statusText;"
-        "                statusDiv.className = 'status error';"
+        "                statusDiv.style.display = 'block';"
+        "                setTimeout(function() { statusDiv.style.display = 'none'; }, 5000);"
         "            }"
+        "        };"
+        "        xhr.send(formData);"
+        "    };"
+        "    if (isJpegFile(file)) {"
+        "        getImageDimensions(file).then(function(dims) {"
+        "            if (dims.width > LCD_MAX_WIDTH || dims.height > LCD_MAX_HEIGHT) {"
+        "                return resizeAndConvertToPng(file, LCD_MAX_WIDTH, LCD_MAX_HEIGHT).then(function(pngBlob) {"
+        "                    processAndUpload(pngBlob, 'image.png');"
+        "                });"
+        "            } else {"
+        "                processAndUpload(file, file.name);"
+        "            }"
+        "        }).catch(function(err) {"
+        "            uploadBtn.disabled = false;"
+        "            statusDiv.textContent = 'Error processing image: ' + err.message;"
+        "            statusDiv.className = 'status error';"
         "            statusDiv.style.display = 'block';"
         "            setTimeout(function() { statusDiv.style.display = 'none'; }, 5000);"
-        "        }"
-        "    };"
-        "    xhr.send(formData);"
+        "        });"
+        "    } else {"
+        "        processAndUpload(file, file.name);"
+        "    }"
         "});"
         "</script>"
         "</body>"
         "</html>";
 
+    // Build HTML with LCD dimensions injected
+    // First, calculate the exact size needed for the injection
+    int injection_len = snprintf(NULL, 0,
+                                 "var LCD_MAX_WIDTH = %d;\n"
+                                 "        var LCD_MAX_HEIGHT = %d;\n"
+                                 "        ",
+                                 LCD_MAX_WIDTH, LCD_MAX_HEIGHT);
+    if (injection_len < 0) {
+        ESP_LOGE(TAG, "Failed to calculate injection size");
+        return ESP_FAIL;
+    }
+    
+    // Calculate total buffer size needed
+    size_t html_len = strlen(html);
+    size_t html_buf_size = html_len + (size_t)injection_len + 1; // +1 for null terminator
+    char *html_buf = malloc(html_buf_size);
+    if (!html_buf) {
+        ESP_LOGE(TAG, "Failed to allocate HTML buffer");
+        return ESP_ERR_NO_MEM;
+    }
+
+    // Find the position where we need to inject LCD dimensions
+    // Look for the script tag and inject variables right after it
+    const char *script_start = strstr(html, "<script>");
+    if (!script_start) {
+        ESP_LOGE(TAG, "Could not find script tag in HTML");
+        free(html_buf);
+        return ESP_FAIL;
+    }
+
+    size_t before_script = script_start - html;
+    size_t after_script = strlen("<script>");
+    
+    // Copy everything before script tag
+    memcpy(html_buf, html, before_script);
+    
+    // Copy script tag
+    memcpy(html_buf + before_script, script_start, after_script);
+    
+    // Inject LCD dimension variables right after <script>
+    // Inject actual JavaScript code (not string literal format)
+    size_t inject_pos = before_script + after_script;
+    size_t available = html_buf_size - inject_pos;
+    int injected = snprintf(html_buf + inject_pos, 
+                           available,
+                           "var LCD_MAX_WIDTH = %d;\n"
+                           "        var LCD_MAX_HEIGHT = %d;\n"
+                           "        ",
+                           LCD_MAX_WIDTH, LCD_MAX_HEIGHT);
+    
+    if (injected < 0 || (size_t)injected >= available) {
+        ESP_LOGE(TAG, "Failed to inject LCD dimensions (injected=%d, available=%zu)", 
+                 injected, available);
+        free(html_buf);
+        return ESP_FAIL;
+    }
+    
+    // Copy the rest of the HTML (skip the original script tag since we already copied it)
+    const char *rest_start = script_start + after_script;
+    size_t rest_len = strlen(rest_start);
+    size_t current_pos = inject_pos + injected;
+    size_t total_needed = current_pos + rest_len + 1; // +1 for null terminator
+    
+    if (total_needed > html_buf_size) {
+        ESP_LOGE(TAG, "HTML buffer too small (needed=%zu, available=%zu)", 
+                 total_needed, html_buf_size);
+        free(html_buf);
+        return ESP_FAIL;
+    }
+    
+    memcpy(html_buf + current_pos, rest_start, rest_len);
+    html_buf[current_pos + rest_len] = '\0';
+
     httpd_resp_set_type(req, "text/html");
-    httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send(req, html_buf, strlen(html_buf));
+    free(html_buf);
     ESP_LOGI(TAG, "Remote control page sent");
     return ESP_OK;
 }

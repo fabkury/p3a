@@ -16,6 +16,7 @@
 #include "bsp/esp-bsp.h"
 #include "animation_player.h"
 #include "app_lcd.h"
+#include "favicon_data.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -266,6 +267,7 @@ static esp_err_t h_get_network_config(httpd_req_t *req) {
         "<html>"
         "<head>"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        "<link rel=\"icon\" type=\"image/png\" href=\"/favicon.ico\">"
         "<title>p3a Status</title>"
         "<style>"
         "body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }"
@@ -443,6 +445,16 @@ static esp_err_t h_post_erase(httpd_req_t *req) {
 }
 
 /**
+ * GET /favicon.ico
+ * Returns the favicon PNG image
+ */
+static esp_err_t h_get_favicon(httpd_req_t *req) {
+    httpd_resp_set_type(req, "image/png");
+    httpd_resp_send(req, (const char *)favicon_data, FAVICON_SIZE);
+    return ESP_OK;
+}
+
+/**
  * GET /
  * Returns Remote Control HTML page with swap buttons and navigation to network config
  */
@@ -453,6 +465,7 @@ static esp_err_t h_get_root(httpd_req_t *req) {
         "<head>"
         "<meta charset=\"UTF-8\">"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">"
+        "<link rel=\"icon\" type=\"image/png\" href=\"/favicon.ico\">"
         "<title>p3a</title>"
         "<style>"
         "* { box-sizing: border-box; }"
@@ -1593,6 +1606,12 @@ esp_err_t http_api_start(void) {
 
     // Register URI handlers
     httpd_uri_t u;
+
+    u.uri = "/favicon.ico";
+    u.method = HTTP_GET;
+    u.handler = h_get_favicon;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
 
     u.uri = "/";
     u.method = HTTP_GET;

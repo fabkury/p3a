@@ -78,6 +78,32 @@ esp_err_t animation_player_start(void);
  */
 void animation_player_deinit(void);
 
+/**
+ * @brief Get the current playing animation index
+ *
+ * @return Current animation index, or 0 if no animation is playing
+ */
+size_t animation_player_get_current_index(void);
+
+/**
+ * @brief Add a file to the animation list at a specific location
+ *
+ * @param filename Filename (without path) to add
+ * @param animations_dir Directory path where the file is located
+ * @param insert_after_index Insert the file immediately after this index (use SIZE_MAX to insert at end, or 0 if list is empty)
+ * @param out_index Optional pointer to receive the index where file was inserted (can be NULL)
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t animation_player_add_file(const char *filename, const char *animations_dir, size_t insert_after_index, size_t *out_index);
+
+/**
+ * @brief Swap to a specific animation index
+ *
+ * @param index Index of the animation to swap to
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t animation_player_swap_to_index(size_t index);
+
 #ifdef __cplusplus
 }
 #endif

@@ -13,8 +13,14 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "bsp/esp-bsp.h"
+#include "animation_player.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <errno.h>
 
 static const char *TAG = "HTTP";
 
@@ -525,6 +531,92 @@ static esp_err_t h_get_root(httpd_req_t *req) {
         "    background-color: #f44336;"
         "    color: white;"
         "}"
+        ".upload-section {"
+        "    margin-top: 40px;"
+        "    padding: 20px;"
+        "    background-color: white;"
+        "    border-radius: 10px;"
+        "    box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
+        "    max-width: 500px;"
+        "    width: 100%;"
+        "}"
+        ".upload-section h2 {"
+        "    margin-top: 0;"
+        "    margin-bottom: 15px;"
+        "    color: #333;"
+        "    font-size: 1.3em;"
+        "}"
+        ".upload-form {"
+        "    display: flex;"
+        "    flex-direction: column;"
+        "    gap: 15px;"
+        "}"
+        ".file-input-wrapper {"
+        "    position: relative;"
+        "    overflow: hidden;"
+        "    display: inline-block;"
+        "}"
+        ".file-input-wrapper input[type=file] {"
+        "    position: absolute;"
+        "    left: -9999px;"
+        "}"
+        ".file-input-label {"
+        "    display: inline-block;"
+        "    padding: 10px 20px;"
+        "    background-color: #2196F3;"
+        "    color: white;"
+        "    border-radius: 5px;"
+        "    cursor: pointer;"
+        "    transition: background-color 0.2s;"
+        "    text-align: center;"
+        "}"
+        ".file-input-label:hover {"
+        "    background-color: #1976D2;"
+        "}"
+        ".file-name {"
+        "    margin-top: 10px;"
+        "    color: #666;"
+        "    font-size: 0.9em;"
+        "    word-break: break-all;"
+        "}"
+        ".upload-btn {"
+        "    background-color: #4CAF50;"
+        "    color: white;"
+        "    border: none;"
+        "    padding: 12px 24px;"
+        "    border-radius: 5px;"
+        "    cursor: pointer;"
+        "    font-size: 16px;"
+        "    font-weight: bold;"
+        "    transition: background-color 0.2s;"
+        "}"
+        ".upload-btn:hover:not(:disabled) {"
+        "    background-color: #45a049;"
+        "}"
+        ".upload-btn:disabled {"
+        "    background-color: #cccccc;"
+        "    cursor: not-allowed;"
+        "}"
+        ".upload-progress {"
+        "    margin-top: 10px;"
+        "    display: none;"
+        "}"
+        ".upload-progress.active {"
+        "    display: block;"
+        "}"
+        ".progress-bar {"
+        "    width: 100%;"
+        "    height: 20px;"
+        "    background-color: #e0e0e0;"
+        "    border-radius: 10px;"
+        "    overflow: hidden;"
+        "}"
+        ".progress-fill {"
+        "    height: 100%;"
+        "    background-color: #4CAF50;"
+        "    transition: width 0.3s;"
+        "    width: 0%;"
+        "}"
         "@media (max-width: 768px) {"
         "    .arrow-container {"
         "        gap: 20px;"
@@ -554,6 +646,22 @@ static esp_err_t h_get_root(httpd_req_t *req) {
         "            <div class=\"arrow-label\">Next</div>"
         "        </div>"
         "    </div>"
+        "</div>"
+        "<div class=\"upload-section\">"
+        "    <h2>Upload Animation</h2>"
+        "    <form class=\"upload-form\" id=\"upload-form\" enctype=\"multipart/form-data\">"
+        "        <div class=\"file-input-wrapper\">"
+        "            <label for=\"file-input\" class=\"file-input-label\">Choose File (WebP/GIF/JPG/JPEG/PNG, max 5MB)</label>"
+        "            <input type=\"file\" id=\"file-input\" name=\"file\" accept=\".webp,.gif,.jpg,.jpeg,.png,image/webp,image/gif,image/jpeg,image/png\" required>"
+        "        </div>"
+        "        <div class=\"file-name\" id=\"file-name\"></div>"
+        "        <button type=\"submit\" class=\"upload-btn\" id=\"upload-btn\">Upload</button>"
+        "        <div class=\"upload-progress\" id=\"upload-progress\">"
+        "            <div class=\"progress-bar\">"
+        "                <div class=\"progress-fill\" id=\"progress-fill\"></div>"
+        "            </div>"
+        "        </div>"
+        "    </form>"
         "</div>"
         "<div class=\"status\" id=\"status\"></div>"
         "<button class=\"config-btn\" onclick=\"window.location.href='/config/network'\">⚙</button>"
@@ -593,6 +701,87 @@ static esp_err_t h_get_root(httpd_req_t *req) {
         "    };"
         "    xhr.send('{}');"
         "}"
+        "var fileInput = document.getElementById('file-input');"
+        "var fileName = document.getElementById('file-name');"
+        "var uploadForm = document.getElementById('upload-form');"
+        "var uploadBtn = document.getElementById('upload-btn');"
+        "var uploadProgress = document.getElementById('upload-progress');"
+        "var progressFill = document.getElementById('progress-fill');"
+        "var statusDiv = document.getElementById('status');"
+        "fileInput.addEventListener('change', function(e) {"
+        "    var file = e.target.files[0];"
+        "    if (file) {"
+        "        if (file.size > 5 * 1024 * 1024) {"
+        "            fileName.textContent = 'File too large! Maximum size is 5MB.';"
+        "            fileName.style.color = '#f44336';"
+        "            uploadBtn.disabled = true;"
+        "            fileInput.value = '';"
+        "        } else {"
+        "            fileName.textContent = 'Selected: ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';"
+        "            fileName.style.color = '#666';"
+        "            uploadBtn.disabled = false;"
+        "        }"
+        "    } else {"
+        "        fileName.textContent = '';"
+        "        uploadBtn.disabled = false;"
+        "    }"
+        "});"
+        "uploadForm.addEventListener('submit', function(e) {"
+        "    e.preventDefault();"
+        "    var file = fileInput.files[0];"
+        "    if (!file) {"
+        "        statusDiv.textContent = 'Please select a file';"
+        "        statusDiv.className = 'status error';"
+        "        statusDiv.style.display = 'block';"
+        "        setTimeout(function() { statusDiv.style.display = 'none'; }, 3000);"
+        "        return;"
+        "    }"
+        "    if (file.size > 5 * 1024 * 1024) {"
+        "        statusDiv.textContent = 'File too large! Maximum size is 5MB.';"
+        "        statusDiv.className = 'status error';"
+        "        statusDiv.style.display = 'block';"
+        "        setTimeout(function() { statusDiv.style.display = 'none'; }, 3000);"
+        "        return;"
+        "    }"
+        "    var formData = new FormData();"
+        "    formData.append('file', file);"
+        "    uploadBtn.disabled = true;"
+        "    uploadProgress.classList.add('active');"
+        "    progressFill.style.width = '0%';"
+        "    var xhr = new XMLHttpRequest();"
+        "    xhr.open('POST', '/upload', true);"
+        "    xhr.upload.onprogress = function(e) {"
+        "        if (e.lengthComputable) {"
+        "            var percentComplete = (e.loaded / e.total) * 100;"
+        "            progressFill.style.width = percentComplete + '%';"
+        "        }"
+        "    };"
+        "    xhr.onreadystatechange = function() {"
+        "        if (xhr.readyState === 4) {"
+        "            uploadBtn.disabled = false;"
+        "            uploadProgress.classList.remove('active');"
+        "            progressFill.style.width = '0%';"
+        "            try {"
+        "                var result = JSON.parse(xhr.responseText);"
+        "                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {"
+        "                    statusDiv.textContent = 'Upload successful!';"
+        "                    statusDiv.className = 'status success';"
+        "                    fileInput.value = '';"
+        "                    fileName.textContent = '';"
+        "                } else {"
+        "                    statusDiv.textContent = 'Upload failed: ' + (result.error || 'HTTP ' + xhr.status);"
+        "                    statusDiv.className = 'status error';"
+        "                }"
+        "            } catch (e) {"
+        "                statusDiv.textContent = 'Upload failed: ' + xhr.statusText;"
+        "                statusDiv.className = 'status error';"
+        "            }"
+        "            statusDiv.style.display = 'block';"
+        "            setTimeout(function() { statusDiv.style.display = 'none'; }, 5000);"
+        "        }"
+        "    };"
+        "    xhr.send(formData);"
+        "});"
         "</script>"
         "</body>"
         "</html>";
@@ -813,6 +1002,411 @@ static esp_err_t h_post_swap_back(httpd_req_t *req) {
     return ESP_OK;
 }
 
+/**
+ * POST /upload
+ * Handles multipart/form-data file upload, saves to /sdcard/downloads, then moves to /sdcard/animations
+ * Maximum file size: 5 MB
+ * Supported formats: WebP, GIF, JPG, JPEG, PNG
+ */
+static esp_err_t h_post_upload(httpd_req_t *req) {
+    const size_t MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+    const char *DOWNLOADS_DIR = "/sdcard/downloads";
+    const char *ANIMATIONS_DIR = "/sdcard/animations";
+    
+    // Check Content-Type
+    char content_type[128] = {0};
+    if (httpd_req_get_hdr_value_str(req, "Content-Type", content_type, sizeof(content_type)) != ESP_OK) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing Content-Type\",\"code\":\"MISSING_CONTENT_TYPE\"}");
+        return ESP_OK;
+    }
+    
+    // Check if multipart/form-data
+    if (strstr(content_type, "multipart/form-data") == NULL) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"Unsupported Content-Type\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+    
+    // Extract boundary from Content-Type
+    const char *boundary_str = strstr(content_type, "boundary=");
+    if (!boundary_str) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing boundary\",\"code\":\"MISSING_BOUNDARY\"}");
+        return ESP_OK;
+    }
+    boundary_str += 9; // Skip "boundary="
+    
+    char boundary[128];
+    size_t boundary_len = 0;
+    while (boundary_str[boundary_len] != '\0' && boundary_str[boundary_len] != ';' && boundary_str[boundary_len] != ' ' && boundary_len < sizeof(boundary) - 1) {
+        boundary[boundary_len] = boundary_str[boundary_len];
+        boundary_len++;
+    }
+    boundary[boundary_len] = '\0';
+    
+    // Check Content-Length
+    size_t content_len = req->content_len;
+    if (content_len == 0 || content_len > MAX_FILE_SIZE) {
+        send_json(req, 413, "{\"ok\":false,\"error\":\"File size exceeds 5MB limit\",\"code\":\"FILE_TOO_LARGE\"}");
+        return ESP_OK;
+    }
+    
+    // Ensure downloads directory exists
+    struct stat st;
+    if (stat(DOWNLOADS_DIR, &st) != 0) {
+        ESP_LOGI(TAG, "Creating downloads directory: %s", DOWNLOADS_DIR);
+        if (mkdir(DOWNLOADS_DIR, 0755) != 0) {
+            ESP_LOGE(TAG, "Failed to create downloads directory: %s", strerror(errno));
+            send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to create downloads directory\",\"code\":\"DIR_CREATE_FAIL\"}");
+            return ESP_OK;
+        }
+    }
+    
+    // Ensure animations directory exists
+    if (stat(ANIMATIONS_DIR, &st) != 0) {
+        ESP_LOGI(TAG, "Creating animations directory: %s", ANIMATIONS_DIR);
+        if (mkdir(ANIMATIONS_DIR, 0755) != 0) {
+            ESP_LOGE(TAG, "Failed to create animations directory: %s", strerror(errno));
+            send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to create animations directory\",\"code\":\"DIR_CREATE_FAIL\"}");
+            return ESP_OK;
+        }
+    }
+    
+    // Temporary file path in downloads directory
+    char temp_path[512];
+    snprintf(temp_path, sizeof(temp_path), "%s/upload_%llu.tmp", DOWNLOADS_DIR, (unsigned long long)(esp_timer_get_time() / 1000));
+    
+    FILE *fp = fopen(temp_path, "wb");
+    if (!fp) {
+        ESP_LOGE(TAG, "Failed to open temp file for writing: %s", strerror(errno));
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to open file\",\"code\":\"FILE_OPEN_FAIL\"}");
+        return ESP_OK;
+    }
+    
+    // Build boundary strings (without leading \r\n for initial boundary detection)
+    // boundary is max 128 bytes, so we need 2 + 128 = 130 bytes for "--" + boundary
+    char boundary_marker[130];
+    snprintf(boundary_marker, sizeof(boundary_marker), "--%s", boundary);
+    size_t boundary_marker_len = strlen(boundary_marker);
+    
+    // boundary_line needs 4 + 128 = 132 bytes for "\r\n--" + boundary
+    char boundary_line[132];
+    snprintf(boundary_line, sizeof(boundary_line), "\r\n--%s", boundary);
+    size_t boundary_line_len = strlen(boundary_line);
+    
+    // boundary_end needs 6 + 128 = 134 bytes for "\r\n--" + boundary + "--"
+    char boundary_end[134];
+    snprintf(boundary_end, sizeof(boundary_end), "\r\n--%s--", boundary);
+    size_t boundary_end_len = strlen(boundary_end);
+    
+    // Buffer for reading - need extra space for boundary matching across chunks
+    const size_t BUF_SIZE = RECV_CHUNK + boundary_line_len + 16; // Extra space for overlap
+    char *recv_buf = malloc(BUF_SIZE);
+    if (!recv_buf) {
+        fclose(fp);
+        unlink(temp_path);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Out of memory\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+    
+    size_t total_received = 0;
+    bool found_filename = false;
+    char filename[256] = {0};
+    
+    // State machine for multipart parsing
+    enum {
+        STATE_FIND_INITIAL_BOUNDARY,
+        STATE_READ_HEADERS,
+        STATE_STREAM_FILE_DATA,
+        STATE_DONE
+    } state = STATE_FIND_INITIAL_BOUNDARY;
+    
+    size_t buf_len = 0;  // Total valid data in recv_buf
+    bool boundary_found = false;
+    
+    while ((total_received < content_len || buf_len > 0) && state != STATE_DONE) {
+        // Read more data if buffer has space and we haven't received all content
+        if (buf_len < BUF_SIZE - 1 && total_received < content_len) {
+            int recv_len = httpd_req_recv(req, recv_buf + buf_len, BUF_SIZE - buf_len - 1);
+            if (recv_len <= 0) {
+                if (recv_len < 0) {
+                    ESP_LOGE(TAG, "Error receiving data: %d", recv_len);
+                    break;
+                }
+                // recv_len == 0 means connection closed, but continue processing buffer
+            } else {
+                total_received += recv_len;
+                buf_len += recv_len;
+            }
+        }
+        
+        if (state == STATE_FIND_INITIAL_BOUNDARY) {
+            // Look for initial boundary: "--boundary\r\n" (no leading \r\n)
+            // Must be at the start of the buffer
+            if (buf_len >= boundary_marker_len + 2) {
+                if (memcmp(recv_buf, boundary_marker, boundary_marker_len) == 0) {
+                    // Found boundary marker, check for \r\n after it
+                    if (recv_buf[boundary_marker_len] == '\r' && 
+                        recv_buf[boundary_marker_len + 1] == '\n') {
+                        // Skip boundary line: "--boundary\r\n"
+                        size_t skip = boundary_marker_len + 2;
+                        memmove(recv_buf, recv_buf + skip, buf_len - skip);
+                        buf_len -= skip;
+                        state = STATE_READ_HEADERS;
+                        ESP_LOGD(TAG, "Found initial boundary");
+                    }
+                } else {
+                    // Not a valid boundary, skip one byte and try again
+                    memmove(recv_buf, recv_buf + 1, buf_len - 1);
+                    buf_len--;
+                }
+            } else {
+                // Not enough data yet, wait for more
+                if (buf_len >= BUF_SIZE - 1) {
+                    ESP_LOGE(TAG, "Boundary not found, buffer full");
+                    break;
+                }
+            }
+        } else if (state == STATE_READ_HEADERS) {
+            // Look for end of headers: \r\n\r\n
+            // Headers are text, so we can use strstr safely here
+            char *header_end = NULL;
+            for (size_t i = 0; i + 3 < buf_len; i++) {
+                if (recv_buf[i] == '\r' && recv_buf[i+1] == '\n' && 
+                    recv_buf[i+2] == '\r' && recv_buf[i+3] == '\n') {
+                    header_end = recv_buf + i;
+                    break;
+                }
+            }
+            
+            if (header_end) {
+                size_t header_end_pos = header_end - recv_buf;
+                
+                // Extract filename from headers (headers are text, safe to null-terminate temporarily)
+                char save_char = recv_buf[header_end_pos];
+                recv_buf[header_end_pos] = '\0';
+                
+                char *cd = strstr(recv_buf, "Content-Disposition:");
+                if (cd) {
+                    char *fn_start = strstr(cd, "filename=\"");
+                    if (fn_start) {
+                        fn_start += 10; // Skip "filename=\""
+                        char *fn_end = strchr(fn_start, '"');
+                        if (fn_end) {
+                            size_t fn_len = fn_end - fn_start;
+                            if (fn_len < sizeof(filename)) {
+                                memcpy(filename, fn_start, fn_len);
+                                filename[fn_len] = '\0';
+                                found_filename = true;
+                            }
+                        }
+                    }
+                }
+                
+                recv_buf[header_end_pos] = save_char; // Restore
+                
+                // Skip headers: header_end points to \r\n\r\n, skip all 4 bytes
+                size_t skip = header_end_pos + 4;
+                memmove(recv_buf, recv_buf + skip, buf_len - skip);
+                buf_len -= skip;
+                state = STATE_STREAM_FILE_DATA;
+                ESP_LOGD(TAG, "Headers parsed, starting file data");
+            } else {
+                // Headers not complete yet
+                if (buf_len >= 2048) {
+                    ESP_LOGE(TAG, "Headers too long or malformed");
+                    break;
+                }
+            }
+        } else if (state == STATE_STREAM_FILE_DATA) {
+            // Stream file data until we find a boundary
+            // Boundaries are: \r\n--boundary or \r\n--boundary--
+            // We need to check for boundaries that might be split across chunks
+            // The overlap buffer ensures boundaries split across recv() calls are detected
+            
+            size_t write_end = buf_len;
+            bool found_boundary = false;
+            
+            // Look for boundary_end first (more specific)
+            if (buf_len >= boundary_end_len) {
+                for (size_t i = 0; i <= buf_len - boundary_end_len; i++) {
+                    if (memcmp(recv_buf + i, boundary_end, boundary_end_len) == 0) {
+                        // Found end boundary: \r\n--boundary--
+                        // File data ends before the \r\n
+                        write_end = i;
+                        found_boundary = true;
+                        boundary_found = true;
+                        ESP_LOGD(TAG, "Found end boundary at position %zu", i);
+                        break;
+                    }
+                }
+            }
+            
+            // If not found, look for regular boundary
+            if (!found_boundary && buf_len >= boundary_line_len) {
+                for (size_t i = 0; i <= buf_len - boundary_line_len; i++) {
+                    if (memcmp(recv_buf + i, boundary_line, boundary_line_len) == 0) {
+                        // Found boundary: \r\n--boundary
+                        // File data ends before the \r\n
+                        write_end = i;
+                        found_boundary = true;
+                        boundary_found = true;
+                        ESP_LOGD(TAG, "Found boundary at position %zu", i);
+                        break;
+                    }
+                }
+            }
+            
+            if (found_boundary) {
+                // Write file data up to (but not including) the boundary
+                if (write_end > 0) {
+                    size_t written = fwrite(recv_buf, 1, write_end, fp);
+                    if (written != write_end) {
+                        ESP_LOGE(TAG, "Failed to write file data");
+                        break;
+                    }
+                }
+                state = STATE_DONE;
+            } else {
+                // No boundary found in current buffer
+                // Check if we've received all content - if so, boundary must be here or missing
+                if (total_received >= content_len) {
+                    // We've read all content but haven't found boundary
+                    // This shouldn't happen, but try to write remaining data as file content
+                    ESP_LOGW(TAG, "End of content reached but boundary not found, buf_len=%zu", buf_len);
+                    if (buf_len > 0) {
+                        // Write remaining data - might be incomplete
+                        size_t written = fwrite(recv_buf, 1, buf_len, fp);
+                        if (written != buf_len) {
+                            ESP_LOGE(TAG, "Failed to write file data");
+                        }
+                        buf_len = 0;
+                    }
+                    // Mark as found to avoid error, but file might be incomplete
+                    boundary_found = true;
+                    state = STATE_DONE;
+                } else {
+                    // Write data but keep enough for boundary detection overlap
+                    size_t safe_write_len = 0;
+                    if (buf_len > boundary_line_len) {
+                        safe_write_len = buf_len - boundary_line_len;
+                        size_t written = fwrite(recv_buf, 1, safe_write_len, fp);
+                        if (written != safe_write_len) {
+                            ESP_LOGE(TAG, "Failed to write file data");
+                            break;
+                        }
+                        // Move remaining data to start of buffer
+                        memmove(recv_buf, recv_buf + safe_write_len, buf_len - safe_write_len);
+                        buf_len -= safe_write_len;
+                    } else if (buf_len == BUF_SIZE - 1 && total_received < content_len) {
+                        // Buffer is full but we haven't read all content - this is an error
+                        ESP_LOGE(TAG, "Buffer full but boundary not found, cannot continue");
+                        break;
+                    }
+                    // If buf_len <= boundary_line_len and we haven't read all content, 
+                    // loop will continue to read more data
+                }
+            }
+        }
+    }
+    
+    fclose(fp);
+    free(recv_buf);
+    
+    // Validate that we found the boundary and filename
+    if (!boundary_found) {
+        unlink(temp_path);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Boundary not found or incomplete upload\",\"code\":\"MALFORMED_DATA\"}");
+        return ESP_OK;
+    }
+    
+    if (!found_filename || strlen(filename) == 0) {
+        unlink(temp_path);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"No filename in upload\",\"code\":\"NO_FILENAME\"}");
+        return ESP_OK;
+    }
+    
+    // Validate file extension
+    const char *ext = strrchr(filename, '.');
+    if (!ext) {
+        unlink(temp_path);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"File must have an extension\",\"code\":\"INVALID_EXTENSION\"}");
+        return ESP_OK;
+    }
+    ext++; // Skip the dot
+    
+    bool valid_ext = false;
+    if (strcasecmp(ext, "webp") == 0 || strcasecmp(ext, "gif") == 0 ||
+        strcasecmp(ext, "jpg") == 0 || strcasecmp(ext, "jpeg") == 0 ||
+        strcasecmp(ext, "png") == 0) {
+        valid_ext = true;
+    }
+    
+    if (!valid_ext) {
+        unlink(temp_path);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Unsupported file type. Use WebP, GIF, JPG, JPEG, or PNG\",\"code\":\"UNSUPPORTED_TYPE\"}");
+        return ESP_OK;
+    }
+    
+    // Final destination path in animations directory
+    char final_path[512];
+    snprintf(final_path, sizeof(final_path), "%s/%s", ANIMATIONS_DIR, filename);
+    
+    // Check if file already exists, delete it if it does
+    if (stat(final_path, &st) == 0) {
+        ESP_LOGI(TAG, "File %s already exists, deleting old version", filename);
+        if (unlink(final_path) != 0) {
+            ESP_LOGW(TAG, "Failed to delete existing file %s: %s", final_path, strerror(errno));
+            // Continue anyway - try to overwrite with rename
+        }
+    }
+    
+    // Move file from temp location to final location
+    if (rename(temp_path, final_path) != 0) {
+        ESP_LOGE(TAG, "Failed to move file: %s", strerror(errno));
+        unlink(temp_path);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to save file\",\"code\":\"FILE_SAVE_FAIL\"}");
+        return ESP_OK;
+    }
+    
+    // Use the original filename (no suffix needed)
+    const char *final_filename = filename;
+    
+    ESP_LOGI(TAG, "File uploaded successfully: %s", final_filename);
+    
+    // Get current playing index to insert after it
+    // Returns SIZE_MAX if nothing is playing, which will cause insertion at index 0
+    size_t current_index = animation_player_get_current_index();
+    
+    // Add file to animation list immediately after currently playing artwork
+    // If nothing is playing (current_index == SIZE_MAX), insert at index 0
+    size_t new_index = 0;
+    esp_err_t add_err = animation_player_add_file(final_filename, ANIMATIONS_DIR, current_index, &new_index);
+    if (add_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to add file to animation list: %s", esp_err_to_name(add_err));
+        // File is saved, but couldn't add to list - still return success
+        char json_resp[512];
+        snprintf(json_resp, sizeof(json_resp), "{\"ok\":true,\"data\":{\"filename\":\"%s\",\"warning\":\"File saved but not added to list\"}}", final_filename);
+        send_json(req, 200, json_resp);
+        return ESP_OK;
+    }
+    
+    // Swap to the newly added file
+    esp_err_t swap_err = animation_player_swap_to_index(new_index);
+    if (swap_err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to swap to new file (index %zu): %s", new_index, esp_err_to_name(swap_err));
+        // File is added but couldn't swap - still return success
+        char json_resp[512];
+        snprintf(json_resp, sizeof(json_resp), "{\"ok\":true,\"data\":{\"filename\":\"%s\",\"index\":%zu,\"message\":\"File uploaded and added to animation list\"}}", final_filename, new_index);
+        send_json(req, 200, json_resp);
+        return ESP_OK;
+    }
+    
+    ESP_LOGI(TAG, "Successfully uploaded, added, and swapped to file %s at index %zu", final_filename, new_index);
+    char json_resp[512];
+    snprintf(json_resp, sizeof(json_resp), "{\"ok\":true,\"data\":{\"filename\":\"%s\",\"index\":%zu,\"message\":\"File uploaded, added to list, and displayed\"}}", final_filename, new_index);
+    send_json(req, 200, json_resp);
+    return ESP_OK;
+}
+
 // ---------- mDNS Setup ----------
 
 static esp_err_t start_mdns(void) {
@@ -878,7 +1472,7 @@ esp_err_t http_api_start(void) {
     cfg.stack_size = 8192;
     cfg.server_port = 80;
     cfg.lru_purge_enable = true;
-    cfg.max_uri_handlers = 12;
+    cfg.max_uri_handlers = 13;
 
     if (httpd_start(&s_server, &cfg) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start HTTP server");
@@ -939,6 +1533,12 @@ esp_err_t http_api_start(void) {
     u.uri = "/action/swap_back";
     u.method = HTTP_POST;
     u.handler = h_post_swap_back;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/upload";
+    u.method = HTTP_POST;
+    u.handler = h_post_upload;
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
 

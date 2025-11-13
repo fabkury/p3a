@@ -19,6 +19,7 @@
 #include "esp_lcd_panel_ops.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <errno.h>
@@ -2230,5 +2231,231 @@ void animation_player_deinit(void)
         bsp_sdcard_unmount();
         s_sd_mounted = false;
     }
+}
+
+size_t animation_player_get_current_index(void)
+{
+    size_t current_index = SIZE_MAX; // Use SIZE_MAX to indicate "no animation playing"
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        if (s_front_buffer.ready) {
+            current_index = s_front_buffer.asset_index;
+        }
+        xSemaphoreGive(s_buffer_mutex);
+    }
+    return current_index;
+}
+
+esp_err_t animation_player_add_file(const char *filename, const char *animations_dir, size_t insert_after_index, size_t *out_index)
+{
+    if (!filename || !animations_dir) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    // Validate file extension
+    const char *ext = strrchr(filename, '.');
+    if (!ext) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    ext++;
+    bool valid_ext = false;
+    if (strcasecmp(ext, "webp") == 0 || strcasecmp(ext, "gif") == 0 ||
+        strcasecmp(ext, "jpg") == 0 || strcasecmp(ext, "jpeg") == 0 ||
+        strcasecmp(ext, "png") == 0) {
+        valid_ext = true;
+    }
+    if (!valid_ext) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    // Check if animations_dir matches current directory
+    if (s_sd_file_list.animations_dir && strcmp(s_sd_file_list.animations_dir, animations_dir) != 0) {
+        ESP_LOGW(TAG, "Adding file from different directory, updating animations_dir");
+        free(s_sd_file_list.animations_dir);
+        size_t dir_len = strlen(animations_dir);
+        s_sd_file_list.animations_dir = (char *)malloc(dir_len + 1);
+        if (!s_sd_file_list.animations_dir) {
+            return ESP_ERR_NO_MEM;
+        }
+        strcpy(s_sd_file_list.animations_dir, animations_dir);
+    } else if (!s_sd_file_list.animations_dir) {
+        size_t dir_len = strlen(animations_dir);
+        s_sd_file_list.animations_dir = (char *)malloc(dir_len + 1);
+        if (!s_sd_file_list.animations_dir) {
+            return ESP_ERR_NO_MEM;
+        }
+        strcpy(s_sd_file_list.animations_dir, animations_dir);
+    }
+    
+    // Check if file already exists in list
+    for (size_t i = 0; i < s_sd_file_list.count; i++) {
+        if (s_sd_file_list.filenames[i] && strcmp(s_sd_file_list.filenames[i], filename) == 0) {
+            ESP_LOGW(TAG, "File %s already in list at index %zu", filename, i);
+            if (out_index) {
+                *out_index = i;
+            }
+            return ESP_OK; // Already exists, return success
+        }
+    }
+    
+    // Allocate new arrays with one more entry
+    size_t new_count = s_sd_file_list.count + 1;
+    char **new_filenames = (char **)realloc(s_sd_file_list.filenames, new_count * sizeof(char *));
+    if (!new_filenames) {
+        return ESP_ERR_NO_MEM;
+    }
+    
+    asset_type_t *new_types = (asset_type_t *)realloc(s_sd_file_list.types, new_count * sizeof(asset_type_t));
+    if (!new_types) {
+        free(new_filenames);
+        return ESP_ERR_NO_MEM;
+    }
+    
+    bool *new_health_flags = NULL;
+    if (s_sd_file_list.health_flags) {
+        new_health_flags = (bool *)realloc(s_sd_file_list.health_flags, new_count * sizeof(bool));
+        if (!new_health_flags) {
+            free(new_filenames);
+            free(new_types);
+            return ESP_ERR_NO_MEM;
+        }
+    } else {
+        new_health_flags = (bool *)malloc(new_count * sizeof(bool));
+        if (!new_health_flags) {
+            free(new_filenames);
+            free(new_types);
+            return ESP_ERR_NO_MEM;
+        }
+        // Initialize all existing entries as healthy
+        for (size_t i = 0; i < s_sd_file_list.count; i++) {
+            new_health_flags[i] = true;
+        }
+    }
+    
+    // Allocate filename string
+    size_t filename_len = strlen(filename);
+    new_filenames[s_sd_file_list.count] = (char *)malloc(filename_len + 1);
+    if (!new_filenames[s_sd_file_list.count]) {
+        free(new_filenames);
+        free(new_types);
+        free(new_health_flags);
+        return ESP_ERR_NO_MEM;
+    }
+    strcpy(new_filenames[s_sd_file_list.count], filename);
+    new_types[s_sd_file_list.count] = get_asset_type(filename);
+    new_health_flags[s_sd_file_list.count] = true; // New file is healthy
+    
+    // Update list
+    s_sd_file_list.filenames = new_filenames;
+    s_sd_file_list.types = new_types;
+    s_sd_file_list.health_flags = new_health_flags;
+    s_sd_file_list.count = new_count;
+    
+    // Determine insertion index
+    size_t insert_index;
+    if (s_sd_file_list.count == 1) {
+        // First file, insert at index 0
+        insert_index = 0;
+    } else {
+        // Insert immediately after insert_after_index
+        // If insert_after_index is SIZE_MAX (nothing playing), insert at index 0
+        if (insert_after_index == SIZE_MAX) {
+            insert_index = 0;
+            // Shift all existing elements one position to the right
+            for (size_t i = s_sd_file_list.count - 1; i > 0; i--) {
+                // Swap with previous element
+                char *temp_filename = s_sd_file_list.filenames[i];
+                s_sd_file_list.filenames[i] = s_sd_file_list.filenames[i - 1];
+                s_sd_file_list.filenames[i - 1] = temp_filename;
+                
+                asset_type_t temp_type = s_sd_file_list.types[i];
+                s_sd_file_list.types[i] = s_sd_file_list.types[i - 1];
+                s_sd_file_list.types[i - 1] = temp_type;
+                
+                if (s_sd_file_list.health_flags) {
+                    bool temp_health = s_sd_file_list.health_flags[i];
+                    s_sd_file_list.health_flags[i] = s_sd_file_list.health_flags[i - 1];
+                    s_sd_file_list.health_flags[i - 1] = temp_health;
+                }
+            }
+        } else if (insert_after_index >= s_sd_file_list.count - 1) {
+            // Insert at end (already there, no need to move)
+            insert_index = s_sd_file_list.count - 1;
+        } else {
+            // Insert after insert_after_index, so new index is insert_after_index + 1
+            insert_index = insert_after_index + 1;
+            
+            // Shift elements from insert_index to end-1 one position to the right
+            // The new file is currently at count-1, we need to move it to insert_index
+            for (size_t i = s_sd_file_list.count - 1; i > insert_index; i--) {
+                // Swap with previous element
+                char *temp_filename = s_sd_file_list.filenames[i];
+                s_sd_file_list.filenames[i] = s_sd_file_list.filenames[i - 1];
+                s_sd_file_list.filenames[i - 1] = temp_filename;
+                
+                asset_type_t temp_type = s_sd_file_list.types[i];
+                s_sd_file_list.types[i] = s_sd_file_list.types[i - 1];
+                s_sd_file_list.types[i - 1] = temp_type;
+                
+                if (s_sd_file_list.health_flags) {
+                    bool temp_health = s_sd_file_list.health_flags[i];
+                    s_sd_file_list.health_flags[i] = s_sd_file_list.health_flags[i - 1];
+                    s_sd_file_list.health_flags[i - 1] = temp_health;
+                }
+            }
+        }
+    }
+    
+    if (out_index) {
+        *out_index = insert_index;
+    }
+    
+    ESP_LOGI(TAG, "Added file %s to animation list at index %zu (inserted after index %zu, total: %zu)", 
+             filename, insert_index, insert_after_index, s_sd_file_list.count);
+    return ESP_OK;
+}
+
+esp_err_t animation_player_swap_to_index(size_t index)
+{
+    if (s_sd_file_list.count == 0) {
+        ESP_LOGW(TAG, "No animations available to swap");
+        return ESP_ERR_NOT_FOUND;
+    }
+    
+    if (index >= s_sd_file_list.count) {
+        ESP_LOGE(TAG, "Invalid index: %zu (max: %zu)", index, s_sd_file_list.count - 1);
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    // Check if file is healthy
+    if (s_sd_file_list.health_flags && !s_sd_file_list.health_flags[index]) {
+        ESP_LOGW(TAG, "File at index %zu is marked as unhealthy", index);
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        // If swap is already in progress, ignore
+        if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
+            ESP_LOGW(TAG, "Animation change request ignored: swap already in progress");
+            xSemaphoreGive(s_buffer_mutex);
+            return ESP_ERR_INVALID_STATE;
+        }
+        
+        // Set swap requested and queue loader with target index
+        s_next_asset_index = index;
+        s_swap_requested = true;
+        
+        xSemaphoreGive(s_buffer_mutex);
+        
+        // Trigger loader task to load target animation
+        if (s_loader_sem) {
+            xSemaphoreGive(s_loader_sem);
+        }
+        
+        ESP_LOGI(TAG, "Queued animation load to '%s' (index %zu)", 
+                 s_sd_file_list.filenames[index], index);
+        return ESP_OK;
+    }
+    
+    return ESP_FAIL;
 }
 

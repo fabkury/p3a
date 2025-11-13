@@ -6,6 +6,117 @@ This document outlines three architectural approaches for sending images from To
 
 ---
 
+## TouchDesigner Architecture & Capabilities
+
+### Understanding TouchDesigner's Texture System
+
+TouchDesigner uses **TOPs (Texture Operators)** for all image/video processing:
+- **TOP Class**: Represents texture/image operators
+- **numpyArray()**: Method to export TOP pixel data as NumPy arrays
+- **Resolution**: TOPs can be any resolution, require resizing to 720×720 for P3A
+- **Color Space**: TouchDesigner uses normalized floats (0.0-1.0 RGB), need conversion to uint8
+
+### Key TouchDesigner Components for Network I/O
+
+#### 1. Web Client DAT (HTTP Requests)
+- **Purpose**: Send HTTP requests (GET, POST, PUT, DELETE)
+- **File Upload Support**: Can send multipart/form-data or raw binary
+- **Callbacks**: `onDone`, `onError` for async response handling
+- **Documentation**: https://derivative.ca/UserGuide/Web_Client_DAT
+
+**Advantages**:
+- Native TouchDesigner component (no external libraries)
+- Visual wiring in network
+- Built-in error handling callbacks
+
+**Limitations**:
+- Stateless (one request at a time)
+- No persistent connection
+- Callback-based (requires DAT callbacks)
+
+#### 2. WebSocket DAT (Real-Time Streaming)
+- **Purpose**: Bi-directional WebSocket communication
+- **Binary Support**: Can send/receive binary frames
+- **Persistent Connection**: Maintains open connection for streaming
+- **Documentation**: https://derivative.ca/UserGuide/WebSocket_DAT
+
+**Advantages**:
+- Low latency for continuous streaming
+- Bi-directional (P3A can send status back)
+- Event-driven with callbacks
+
+**Limitations**:
+- More complex setup than HTTP
+- Requires connection management
+- Binary protocol needs manual framing
+
+#### 3. Python Script DAT (Custom Code)
+- **Purpose**: Execute Python code with external libraries
+- **Libraries**: Can use `requests`, `websockets`, `PIL/Pillow`
+- **Execution**: Run via textport or callbacks
+
+**CRITICAL LIMITATION - Textport Execution**:
+- TouchDesigner textport **CANNOT** execute multi-line indented code
+- Must save scripts to files and execute via: `exec(open(r'scripts/filename.py').read())`
+- Do NOT provide inline code blocks with loops, functions, or if statements
+
+### Modern TouchDesigner Python Features (v2023+)
+
+#### TDI Library (TouchDesigner Interface Library)
+- **Purpose**: Modern Python interface with better type hints
+- **Documentation**: https://docs.derivative.ca/TDI_Library
+- **Use Case**: Improved IDE autocomplete and type checking
+- **When to Use**: For complex Python scripts with better tooling support
+
+#### Thread Manager
+- **Purpose**: Simplified multi-threading for non-blocking operations
+- **Documentation**: https://docs.derivative.ca/Thread_Manager
+- **Use Case**: Perfect for network uploads without blocking TouchDesigner UI
+- **Key Benefit**: Handles thread lifecycle, callbacks, and synchronization
+
+**Example Use Case for P3A Integration**:
+```python
+# Use Thread Manager for async HTTP uploads
+# Prevents blocking TouchDesigner's main thread during image upload
+# Allows continuous rendering while network transfer happens in background
+```
+
+#### Python Environment Manager (tdPyEnvManager)
+- **Purpose**: Manage external Python packages
+- **Documentation**: https://docs.derivative.ca/Palette:tdPyEnvManager
+- **Use Case**: Install `requests`, `pillow`, `numpy` dependencies
+- **Installation**: Via Palette browser (drag-and-drop component)
+
+### TouchDesigner Parameter Access Patterns
+
+```python
+# Accessing operator parameters (verified syntax):
+op('web_client1').par.url.val           # Get parameter value
+op('web_client1').par.url = 'http://...' # Set parameter value
+op('web_client1').par.request.pulse()    # Trigger pulse parameter
+
+# Common operators for P3A integration:
+op('render_out')        # TOP operator with rendered output
+op('web_client1')       # Web Client DAT for HTTP uploads
+op('websocket1')        # WebSocket DAT for streaming
+op('upload_script')     # Script DAT for Python upload logic
+```
+
+### TouchDesigner Execution Model
+
+**Frame-Based Execution**:
+- TouchDesigner runs at specific frame rate (e.g., 60 fps)
+- All operators update once per frame (unless cooked on-demand)
+- Network operations should NOT block frame updates
+
+**Best Practice for P3A Integration**:
+1. Use **Timer CHOP** to trigger uploads at specific intervals (e.g., 1 fps, 5 fps)
+2. Use **Thread Manager** or async callbacks to avoid blocking
+3. Monitor upload success/failure via callback DATs
+4. Cache the last successful upload to retry on failure
+
+---
+
 ## Current P3A Architecture Analysis
 
 ### Display Specifications
@@ -124,58 +235,199 @@ Response:
 
 #### TouchDesigner Side
 
-**Web Client DAT Configuration**
+**Method A: Python Script with External Libraries (Recommended for Flexibility)**
+
+Save this script as `scripts/p3a_upload_http.py`:
+
 ```python
-# Python script in TouchDesigner
+"""
+P3A HTTP Upload Script for TouchDesigner
+Sends TOP render output to P3A display via HTTP POST multipart upload
+
+Dependencies: requests, pillow, numpy (install via tdPyEnvManager)
+Usage: exec(open(r'scripts/p3a_upload_http.py').read())
+"""
 import requests
 import numpy as np
 from PIL import Image
 import io
 
-def send_image_to_p3a(top_operator, ip_address='p3a.local'):
+def upload_to_p3a(top_path='render_out', ip_address='p3a.local', format='PNG', quality=85):
     """
-    Send rendered TOP output to P3A display via HTTP POST
+    Upload current frame from TOP to P3A display
 
     Args:
-        top_operator: TouchDesigner TOP operator (e.g., op('out1'))
-        ip_address: P3A device IP or hostname
+        top_path: Path to TOP operator (relative or absolute)
+        ip_address: P3A device IP or hostname (default: 'p3a.local')
+        format: Image format - 'PNG', 'JPEG', or 'WEBP' (default: 'PNG')
+        quality: JPEG/WebP quality 0-100 (default: 85)
+
+    Returns:
+        bool: True if upload successful, False otherwise
     """
-    # Get image data from TOP
-    img_array = top_operator.numpyArray(delayed=False)
-
-    # Convert to PIL Image (flip vertically as TD uses bottom-left origin)
-    img_array = np.flipud(img_array)
-    img = Image.fromarray((img_array * 255).astype(np.uint8))
-
-    # Resize to 720x720 if needed
-    if img.size != (720, 720):
-        img = img.resize((720, 720), Image.LANCZOS)
-
-    # Encode to format (PNG for lossless, JPEG for speed)
-    buffer = io.BytesIO()
-    img.save(buffer, format='PNG', compress_level=6)  # or 'JPEG', quality=85
-    buffer.seek(0)
-
-    # HTTP POST upload
-    url = f'http://{ip_address}/upload/image'
-    files = {'image': ('td_frame.png', buffer, 'image/png')}
-
     try:
+        # Get TOP operator
+        top_op = op(top_path)
+        if top_op is None:
+            print(f"ERROR: TOP '{top_path}' not found")
+            return False
+
+        # Get image data from TOP (returns normalized float array)
+        img_array = top_op.numpyArray(delayed=False)
+
+        # Check if array is valid
+        if img_array is None or img_array.size == 0:
+            print(f"ERROR: TOP '{top_path}' has no image data")
+            return False
+
+        # Convert from float (0.0-1.0) to uint8 (0-255)
+        # TouchDesigner uses bottom-left origin, flip vertically for standard image
+        img_array = np.flipud(img_array)
+        img_uint8 = (img_array * 255).astype(np.uint8)
+
+        # Handle different channel counts (RGB vs RGBA)
+        if img_uint8.shape[2] == 4:
+            # RGBA - convert to RGB (P3A doesn't support transparency in upload)
+            img = Image.fromarray(img_uint8[:, :, :3], mode='RGB')
+        else:
+            img = Image.fromarray(img_uint8, mode='RGB')
+
+        # Resize to 720x720 if not already (P3A native resolution)
+        if img.size != (720, 720):
+            img = img.resize((720, 720), Image.LANCZOS)
+            print(f"Resized from {top_op.width}x{top_op.height} to 720x720")
+
+        # Encode to desired format
+        buffer = io.BytesIO()
+        if format.upper() == 'PNG':
+            img.save(buffer, format='PNG', compress_level=6)
+            content_type = 'image/png'
+            filename = 'td_frame.png'
+        elif format.upper() == 'JPEG':
+            img.save(buffer, format='JPEG', quality=quality, optimize=True)
+            content_type = 'image/jpeg'
+            filename = 'td_frame.jpg'
+        elif format.upper() == 'WEBP':
+            img.save(buffer, format='WEBP', quality=quality)
+            content_type = 'image/webp'
+            filename = 'td_frame.webp'
+        else:
+            print(f"ERROR: Unsupported format '{format}'. Use PNG, JPEG, or WEBP")
+            return False
+
+        file_size = buffer.tell()
+        buffer.seek(0)
+
+        # HTTP POST upload (multipart/form-data)
+        url = f'http://{ip_address}/upload/image'
+        files = {'image': (filename, buffer, content_type)}
+
+        print(f"Uploading {file_size} bytes to {url}...")
         response = requests.post(url, files=files, timeout=5)
-        print(f"Upload status: {response.status_code}")
-        print(f"Response: {response.json()}")
-        return response.ok
+
+        if response.ok:
+            result = response.json()
+            print(f"✓ Upload successful: {result}")
+            return True
+        else:
+            print(f"✗ Upload failed: HTTP {response.status_code}")
+            print(f"  Response: {response.text}")
+            return False
+
     except Exception as e:
-        print(f"Upload failed: {e}")
+        print(f"✗ Upload error: {type(e).__name__}: {e}")
         return False
 
-# Usage in Execute DAT (triggered by timer or frame pulse)
-# send_image_to_p3a(op('render_out'))
+# Run upload (modify these parameters as needed)
+upload_to_p3a(
+    top_path='render_out',      # Your render TOP name
+    ip_address='p3a.local',      # P3A IP or hostname
+    format='JPEG',               # PNG, JPEG, or WEBP
+    quality=85                   # For JPEG/WebP only
+)
 ```
 
-**Alternative: Web Client CHOP**
-- Use built-in Web Client CHOP/DAT for POST requests
-- Encode image as base64 in JSON payload (less efficient but no multipart parsing)
+**Setup in TouchDesigner**:
+
+1. **Install Dependencies** (one-time setup):
+   - Open Palette (drag-and-drop `tdPyEnvManager` component)
+   - Install packages: `requests`, `pillow`, `numpy`
+
+2. **Create Timer CHOP** for periodic uploads:
+   - Add Timer CHOP to network
+   - Set `Rate`: 2 (for 2 fps uploads, adjust as needed)
+   - Set `Length`: 1000000 (long duration)
+   - Set `Mode`: Timer
+
+3. **Create Execute DAT** for callbacks:
+   - Add Execute DAT
+   - Set `Trigger`: Timer CHOP from step 2
+   - In `onValueChange` or `onPulse` callback:
+     ```python
+     def onValueChange(channel, sampleIndex, val, prev):
+         # Trigger upload on timer pulse
+         exec(open(r'scripts/p3a_upload_http.py').read())
+     ```
+
+4. **Test Upload** (run in textport):
+   ```python
+   exec(open(r'scripts/p3a_upload_http.py').read())
+   ```
+
+**Method B: Native Web Client DAT (No External Dependencies)**
+
+For users who cannot install Python packages, use TouchDesigner's built-in Web Client DAT:
+
+1. **Create TOP to PNG DAT**:
+   - Add `TOP to PNG` DAT
+   - Set `TOP`: Your render output
+   - Set `Resolution`: 720 720
+   - This converts TOP to base64-encoded PNG
+
+2. **Create Web Client DAT**:
+   - Add Web Client DAT
+   - Set `URL`: `http://p3a.local/upload/image`
+   - Set `Method`: POST
+   - Set `Headers`: `Content-Type: multipart/form-data`
+   - Set `Data`: Reference the TOP to PNG DAT output
+   - Set `Request` parameter to pulse for upload
+
+3. **Create Execute DAT** for callbacks:
+   ```python
+   def onDone(dat):
+       print(f"Upload complete: {dat.result}")
+
+   def onError(dat, errorMessage):
+       print(f"Upload failed: {errorMessage}")
+   ```
+
+**Method C: Thread Manager (Non-Blocking, Advanced)**
+
+For continuous streaming without blocking TouchDesigner's main thread:
+
+```python
+# Save as scripts/p3a_upload_threaded.py
+# Uses TouchDesigner Thread Manager for async uploads
+
+def threaded_upload(top_path, ip_address='p3a.local'):
+    """Upload in background thread using Thread Manager"""
+    # Import inside function (thread-safe)
+    import requests
+    import numpy as np
+    from PIL import Image
+    import io
+
+    top_op = op(top_path)
+    img_array = top_op.numpyArray(delayed=False)
+    # ... (same encoding logic as Method A)
+
+    # Upload happens in background thread
+    response = requests.post(url, files=files, timeout=5)
+    return response.ok
+
+# Use Thread Manager to run upload asynchronously
+run_async(threaded_upload, 'render_out', 'p3a.local')
+```
 
 ### Performance Characteristics
 
@@ -814,6 +1066,224 @@ config P3A_STREAM_JPEG_ONLY
 
 endmenu
 ```
+
+---
+
+## TouchDesigner Quick Start Guide
+
+This section provides a complete walkthrough for TouchDesigner users to get started with P3A display integration.
+
+### Prerequisites
+
+1. **TouchDesigner Installation**
+   - TouchDesigner 2023 or later recommended
+   - Free version (Non-Commercial) works fine
+
+2. **P3A Display**
+   - Device powered on and connected to same WiFi network
+   - Note device IP address or use hostname `p3a.local`
+   - Verify HTTP server is running (browse to `http://p3a.local/`)
+
+3. **Python Dependencies** (for Method A - Python Script approach)
+   - Install via tdPyEnvManager: `requests`, `pillow`, `numpy`
+
+### Quick Start: Option 1 Implementation (HTTP POST)
+
+**Step 1: Create Project Structure**
+
+```
+your_project.toe
+├── scripts/
+│   └── p3a_upload_http.py  (save the Python script from Method A above)
+```
+
+**Step 2: Setup TouchDesigner Network**
+
+Create the following operators in your TouchDesigner network:
+
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│ Render TOP  │────►│ Timer CHOP   │────►│ Execute DAT │
+│ (your work) │     │ (upload rate)│     │ (trigger)   │
+└─────────────┘     └──────────────┘     └─────────────┘
+```
+
+**Step 3: Configure Timer CHOP**
+
+- **Name**: `upload_timer`
+- **Rate**: `2` (uploads 2 times per second - adjust as needed)
+- **Length**: `1000000`
+- **Mode**: `Timer`
+- **Clock Chop**: (leave empty)
+
+**Step 4: Configure Execute DAT**
+
+- **Name**: `upload_execute`
+- **Trigger Parameters**:
+  - **CHOPs**: `upload_timer`
+  - **Value Change**: ON
+  - **Off to On**: ON
+
+**Execute DAT Code**:
+```python
+def onValueChange(channel, sampleIndex, val, prev):
+    """Triggered when timer CHOP pulses"""
+    if val > 0:  # On pulse
+        exec(open(r'scripts/p3a_upload_http.py').read())
+```
+
+**Step 5: Edit Upload Script**
+
+Modify `scripts/p3a_upload_http.py` to point to your render TOP:
+
+```python
+# At the bottom of p3a_upload_http.py, change:
+upload_to_p3a(
+    top_path='your_render_top_name',  # ← Change this to your TOP's name
+    ip_address='p3a.local',            # Or use IP like '192.168.1.100'
+    format='JPEG',                     # PNG for quality, JPEG for speed
+    quality=75                         # Lower = smaller files = faster
+)
+```
+
+**Step 6: Test Upload**
+
+In TouchDesigner textport, run:
+```python
+exec(open(r'scripts/p3a_upload_http.py').read())
+```
+
+You should see:
+```
+Uploading 85432 bytes to http://p3a.local/upload/image...
+✓ Upload successful: {'ok': True, 'saved_path': '/sdcard/animations/td_live.jpg', ...}
+```
+
+**Step 7: Start Continuous Upload**
+
+- Enable the Timer CHOP (set `Active` parameter to ON)
+- Your renders will now upload to P3A at the specified rate
+- Monitor textport for upload status messages
+
+### Troubleshooting Common Issues
+
+#### Issue: "TOP 'render_out' not found"
+**Solution**: Check the exact name of your TOP operator in TouchDesigner. Names are case-sensitive.
+```python
+# Find your TOP name:
+print([op for op in ops() if op.type == 'TOP'])
+```
+
+#### Issue: "No module named 'requests'"
+**Solution**: Install Python packages via tdPyEnvManager:
+1. Open Palette (Alt+L)
+2. Search for "tdPyEnvManager"
+3. Drag to network, open component
+4. Install: `requests`, `pillow`, `numpy`
+
+#### Issue: "Connection refused" or "Timeout"
+**Solution**: Verify P3A network connectivity:
+- Ping device: `ping p3a.local` or `ping <ip_address>`
+- Check device is on same WiFi network
+- Try using IP address instead of hostname
+- Verify HTTP server running on P3A (browse to web UI)
+
+#### Issue: Upload too slow / frame rate low
+**Solution**: Optimize image format and size:
+- Use JPEG instead of PNG (10× smaller files)
+- Lower JPEG quality: `quality=60` or `quality=50`
+- Reduce resolution before upload: Resize TOP to 512×512 or 360×360
+- Increase Timer CHOP interval (reduce upload rate)
+
+#### Issue: "Upload error: SSLError"
+**Solution**: P3A uses HTTP (not HTTPS). Verify URL:
+```python
+# Wrong:
+url = 'https://p3a.local/upload/image'
+
+# Correct:
+url = 'http://p3a.local/upload/image'
+```
+
+#### Issue: Textport shows "IndentationError"
+**Solution**: DO NOT run multi-line code directly in textport. Always save to file and use:
+```python
+exec(open(r'scripts/your_script.py').read())
+```
+
+### Performance Tuning Tips
+
+#### For Maximum Quality (Static/Slow Updates)
+```python
+upload_to_p3a(
+    top_path='your_top',
+    format='PNG',              # Lossless compression
+    # No quality parameter needed for PNG
+)
+# Timer CHOP rate: 0.5 (once every 2 seconds)
+```
+
+#### For Maximum Speed (Real-Time Updates)
+```python
+upload_to_p3a(
+    top_path='your_top',
+    format='JPEG',
+    quality=60                 # Lower quality = smaller files
+)
+# Timer CHOP rate: 5 (5 times per second)
+# Resize TOP to 512×512 before upload for even faster performance
+```
+
+#### For Balanced Performance
+```python
+upload_to_p3a(
+    top_path='your_top',
+    format='JPEG',
+    quality=85                 # Good quality, reasonable size
+)
+# Timer CHOP rate: 2 (2 times per second)
+```
+
+### Advanced: Non-Blocking Uploads with Thread Manager
+
+For continuous rendering without blocking TouchDesigner's UI thread, use TouchDesigner's Thread Manager:
+
+**Setup**:
+1. Research Thread Manager documentation: https://docs.derivative.ca/Thread_Manager
+2. Modify upload script to run in background thread
+3. Handle callbacks for upload completion/failure
+4. Maintain upload queue to avoid overwhelming P3A device
+
+**Benefits**:
+- TouchDesigner UI remains responsive during upload
+- Can achieve higher upload rates without stuttering
+- Better error handling and retry logic
+
+### Example .toe File Structure
+
+```
+project1/
+├── render/               # Your generative art network
+│   ├── noise1 (TOP)
+│   ├── feedback1 (TOP)
+│   └── composite1 (TOP)  # Final render output
+│
+├── p3a_integration/      # P3A upload system
+│   ├── upload_timer (CHOP)
+│   ├── upload_execute (DAT)
+│   └── upload_status (TEXT DAT)
+│
+└── scripts/
+    └── p3a_upload_http.py
+```
+
+### Next Steps
+
+Once Option 1 is working:
+- **Option 2**: Implement if you need faster updates (10-20 fps)
+- **Option 3**: Implement WebSocket streaming for true real-time (30+ fps)
+- **Bi-directional**: Have P3A send touch events back to TouchDesigner
+- **Multi-Display**: Send to multiple P3A devices simultaneously
 
 ---
 

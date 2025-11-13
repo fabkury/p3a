@@ -749,7 +749,27 @@ static void lcd_animation_task(void *arg)
         int frame_delay_ms = 1;
         uint32_t prev_frame_delay_ms = s_target_frame_delay_ms;  // Track delay of frame currently on screen
 
-        if (!paused_local && s_front_buffer.ready) {
+        // If paused but a swap just happened, render the prefetched first frame once
+        if (paused_local && use_prefetched && s_front_buffer.ready) {
+            frame = s_lcd_buffers[s_render_buffer_index];
+            if (frame) {
+                frame_delay_ms = render_next_frame(&s_front_buffer, frame, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, true);
+                use_prefetched = false;  // Only use prefetched frame once
+                if (frame_delay_ms < 0) {
+                    frame_delay_ms = 100;  // Default delay when paused
+                }
+                s_target_frame_delay_ms = 100;  // Use 100ms delay when paused
+                s_last_display_buffer = s_render_buffer_index;
+                s_render_buffer_index = (s_render_buffer_index + 1) % buffer_count;
+
+#if APP_LCD_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
+                esp_err_t msync_err = esp_cache_msync(frame, s_frame_buffer_bytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+                if (msync_err != ESP_OK) {
+                    ESP_LOGW(TAG, "Cache sync failed: %s", esp_err_to_name(msync_err));
+                }
+#endif
+            }
+        } else if (!paused_local && s_front_buffer.ready) {
             // Record when frame processing starts
             s_frame_processing_start_us = esp_timer_get_time();
             
@@ -787,13 +807,14 @@ static void lcd_animation_task(void *arg)
                 s_render_buffer_index = (s_render_buffer_index + 1) % buffer_count;
             }
         } else {
+            // Paused and no swap, or buffer not ready - reuse last frame
             uint8_t reuse_index = s_last_display_buffer;
             if (reuse_index >= buffer_count) {
                 reuse_index = 0;
             }
             frame = s_lcd_buffers[reuse_index];
-            frame_delay_ms = 50;
-            s_target_frame_delay_ms = 50;
+            frame_delay_ms = 100;  // Use 100ms delay when paused
+            s_target_frame_delay_ms = 100;
             s_last_frame_present_us = 0;
             s_frame_processing_start_us = 0;
         }
@@ -867,7 +888,8 @@ static void lcd_animation_task(void *arg)
 
         TickType_t delay_ticks;
         if (paused_local) {
-            delay_ticks = pdMS_TO_TICKS(frame_delay_ms);
+            // When paused, present the still frame every 100ms without blocking other tasks
+            delay_ticks = pdMS_TO_TICKS(100);
         } else if (APP_LCD_MAX_SPEED_PLAYBACK_ENABLED) {
             delay_ticks = 1;
         } else {

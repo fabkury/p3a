@@ -117,8 +117,13 @@ esp_err_t app_lcd_init(void)
 
 void app_lcd_set_animation_paused(bool paused)
 {
+    bool was_paused = animation_player_is_paused();
     animation_player_set_paused(paused);
+    // Reset auto-swap timer when resuming playback
+    if (was_paused && !paused) {
+        auto_swap_reset_timer();
     }
+}
 
 void app_lcd_toggle_animation_pause(void)
 {

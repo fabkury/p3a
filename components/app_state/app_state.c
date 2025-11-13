@@ -3,14 +3,14 @@
 
 static const char *TAG = "STATE";
 
-static app_state_t g_state = STATE_PLAYING;
+static app_state_t g_state = STATE_READY;
 static SemaphoreHandle_t g_mutex;
 
 void app_state_init(void) {
     g_mutex = xSemaphoreCreateMutex();
     configASSERT(g_mutex);
-    g_state = STATE_PLAYING;
-    ESP_LOGI(TAG, "Initialized, state=PLAYING");
+    g_state = STATE_READY;
+    ESP_LOGI(TAG, "Initialized, state=READY");
 }
 
 static void set_state(app_state_t s) {
@@ -32,15 +32,15 @@ app_state_t app_state_get(void) {
 
 const char* app_state_str(app_state_t s) {
     switch(s) {
-        case STATE_PLAYING:    return "PLAYING";
+        case STATE_READY:      return "READY";
         case STATE_PROCESSING: return "PROCESSING";
         case STATE_ERROR:      return "ERROR";
         default:               return "UNKNOWN";
     }
 }
 
-void app_state_enter_playing(void) {
-    set_state(STATE_PLAYING);
+void app_state_enter_ready(void) {
+    set_state(STATE_READY);
 }
 
 void app_state_enter_processing(void) {

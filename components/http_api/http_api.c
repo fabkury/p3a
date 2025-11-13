@@ -15,6 +15,7 @@
 #include "freertos/queue.h"
 #include "bsp/esp-bsp.h"
 #include "animation_player.h"
+#include "app_lcd.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -31,7 +32,9 @@ static const char *TAG = "HTTP";
 typedef enum {
     CMD_REBOOT,
     CMD_SWAP_NEXT,
-    CMD_SWAP_BACK
+    CMD_SWAP_BACK,
+    CMD_PAUSE,
+    CMD_RESUME
 } command_type_t;
 
 typedef struct {
@@ -75,7 +78,7 @@ static void api_worker_task(void *arg) {
                     if (s_swap_next_callback) {
                         ESP_LOGI(TAG, "Executing swap_next");
                         s_swap_next_callback();
-                        app_state_enter_playing();
+                        app_state_enter_ready();
                     } else {
                         ESP_LOGW(TAG, "swap_next callback not set");
                         app_state_enter_error();
@@ -86,11 +89,23 @@ static void api_worker_task(void *arg) {
                     if (s_swap_back_callback) {
                         ESP_LOGI(TAG, "Executing swap_back");
                         s_swap_back_callback();
-                        app_state_enter_playing();
+                        app_state_enter_ready();
                     } else {
                         ESP_LOGW(TAG, "swap_back callback not set");
                         app_state_enter_error();
                     }
+                    break;
+
+                case CMD_PAUSE:
+                    ESP_LOGI(TAG, "Executing pause");
+                    app_lcd_set_animation_paused(true);
+                    app_state_enter_ready();
+                    break;
+
+                case CMD_RESUME:
+                    ESP_LOGI(TAG, "Executing resume");
+                    app_lcd_set_animation_paused(false);
+                    app_state_enter_ready();
                     break;
 
                 default:
@@ -128,6 +143,14 @@ bool api_enqueue_swap_next(void) {
 
 bool api_enqueue_swap_back(void) {
     return enqueue_cmd(CMD_SWAP_BACK);
+}
+
+bool api_enqueue_pause(void) {
+    return enqueue_cmd(CMD_PAUSE);
+}
+
+bool api_enqueue_resume(void) {
+    return enqueue_cmd(CMD_RESUME);
 }
 
 // ---------- Callback Registration ----------
@@ -429,229 +452,244 @@ static esp_err_t h_get_root(httpd_req_t *req) {
         "<html lang=\"en\">"
         "<head>"
         "<meta charset=\"UTF-8\">"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
-        "<title>p3a Remote Control</title>"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">"
+        "<title>p3a</title>"
         "<style>"
+        "* { box-sizing: border-box; }"
         "body {"
         "    margin: 0;"
         "    padding: 0;"
-        "    font-family: Arial, sans-serif;"
-        "    background-color: #f0f0f0;"
+        "    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;"
+        "    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"
         "    min-height: 100vh;"
         "    display: flex;"
         "    flex-direction: column;"
+        "    overflow-x: hidden;"
         "}"
-        ".banner {"
-        "    background-color: #333;"
-        "    color: white;"
+        ".header {"
         "    text-align: center;"
-        "    padding: 20px;"
-        "    font-size: 2em;"
-        "    font-weight: bold;"
+        "    padding: 16px 12px 12px;"
+        "    color: white;"
         "}"
-        ".control-area {"
+        ".header h1 {"
+        "    margin: 0;"
+        "    font-size: 2.5rem;"
+        "    font-weight: 300;"
+        "    letter-spacing: 0.1em;"
+        "    text-transform: lowercase;"
+        "}"
+        ".controls {"
         "    flex: 1;"
         "    display: flex;"
+        "    flex-direction: column;"
         "    align-items: center;"
         "    justify-content: center;"
-        "    padding: 20px;"
+        "    padding: 12px;"
+        "    gap: 20px;"
         "}"
-        ".arrow-container {"
+        ".arrow-row {"
         "    display: flex;"
+        "    gap: 24px;"
         "    align-items: center;"
-        "    gap: 40px;"
         "}"
         ".arrow-btn {"
-        "    background-color: #4CAF50;"
+        "    background: rgba(255,255,255,0.95);"
         "    border: none;"
         "    border-radius: 50%;"
-        "    width: 120px;"
-        "    height: 120px;"
+        "    width: 80px;"
+        "    height: 80px;"
         "    display: flex;"
         "    align-items: center;"
         "    justify-content: center;"
         "    cursor: pointer;"
-        "    font-size: 3em;"
-        "    color: white;"
-        "    box-shadow: 0 4px 8px rgba(0,0,0,0.3);"
-        "    transition: all 0.2s;"
-        "}"
-        ".arrow-btn:hover {"
-        "    background-color: #45a049;"
-        "    transform: scale(1.05);"
+        "    font-size: 2rem;"
+        "    color: #667eea;"
+        "    box-shadow: 0 4px 12px rgba(0,0,0,0.15);"
+        "    transition: all 0.2s ease;"
+        "    -webkit-tap-highlight-color: transparent;"
         "}"
         ".arrow-btn:active {"
-        "    transform: scale(0.95);"
+        "    transform: scale(0.92);"
+        "    box-shadow: 0 2px 6px rgba(0,0,0,0.2);"
         "}"
         ".arrow-btn:disabled {"
-        "    background-color: #cccccc;"
+        "    opacity: 0.5;"
         "    cursor: not-allowed;"
         "}"
-        ".arrow-label {"
-        "    text-align: center;"
-        "    margin-top: 10px;"
-        "    font-size: 1.2em;"
-        "    color: #333;"
-        "}"
-        ".config-btn {"
-        "    position: fixed;"
-        "    bottom: 20px;"
-        "    right: 20px;"
-        "    background-color: #2196F3;"
-        "    color: white;"
+        ".pause-btn {"
+        "    background: rgba(255,255,255,0.95);"
         "    border: none;"
-        "    border-radius: 50%;"
-        "    width: 60px;"
-        "    height: 60px;"
-        "    font-size: 1.5em;"
+        "    border-radius: 12px;"
+        "    padding: 12px 32px;"
+        "    font-size: 1rem;"
+        "    font-weight: 500;"
+        "    color: #667eea;"
         "    cursor: pointer;"
-        "    box-shadow: 0 2px 4px rgba(0,0,0,0.3);"
+        "    box-shadow: 0 4px 12px rgba(0,0,0,0.15);"
+        "    transition: all 0.2s ease;"
+        "    -webkit-tap-highlight-color: transparent;"
+        "    min-width: 120px;"
         "}"
-        ".config-btn:hover {"
-        "    background-color: #1976D2;"
+        ".pause-btn:active {"
+        "    transform: scale(0.95);"
+        "}"
+        ".footer {"
+        "    padding: 12px;"
+        "    display: flex;"
+        "    justify-content: center;"
+        "    gap: 12px;"
+        "    flex-wrap: wrap;"
+        "}"
+        ".footer-btn {"
+        "    background: rgba(255,255,255,0.2);"
+        "    border: 1px solid rgba(255,255,255,0.3);"
+        "    border-radius: 8px;"
+        "    padding: 8px 16px;"
+        "    font-size: 0.875rem;"
+        "    color: white;"
+        "    cursor: pointer;"
+        "    transition: all 0.2s ease;"
+        "    -webkit-tap-highlight-color: transparent;"
+        "}"
+        ".footer-btn:active {"
+        "    background: rgba(255,255,255,0.3);"
         "}"
         ".status {"
         "    position: fixed;"
-        "    bottom: 20px;"
+        "    top: 80px;"
         "    left: 50%;"
         "    transform: translateX(-50%);"
-        "    text-align: center;"
-        "    max-width: 400px;"
-        "    padding: 10px;"
-        "    border-radius: 5px;"
-        "    font-weight: bold;"
+        "    padding: 10px 20px;"
+        "    border-radius: 8px;"
+        "    font-size: 0.875rem;"
+        "    font-weight: 500;"
         "    display: none;"
         "    z-index: 1000;"
+        "    box-shadow: 0 4px 12px rgba(0,0,0,0.2);"
         "}"
         ".status.success {"
-        "    background-color: #4CAF50;"
+        "    background: #4CAF50;"
         "    color: white;"
         "}"
         ".status.error {"
-        "    background-color: #f44336;"
+        "    background: #f44336;"
         "    color: white;"
         "}"
         ".upload-section {"
-        "    margin-top: 40px;"
-        "    padding: 20px;"
-        "    background-color: white;"
-        "    border-radius: 10px;"
-        "    box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
-        "    max-width: 500px;"
-        "    width: 100%;"
+        "    background: rgba(255,255,255,0.95);"
+        "    border-radius: 12px;"
+        "    padding: 16px;"
+        "    margin: 0 12px 12px;"
+        "    box-shadow: 0 4px 12px rgba(0,0,0,0.15);"
         "}"
-        ".upload-section h2 {"
-        "    margin-top: 0;"
-        "    margin-bottom: 15px;"
+        ".upload-section h3 {"
+        "    margin: 0 0 12px;"
+        "    font-size: 0.875rem;"
+        "    font-weight: 500;"
         "    color: #333;"
-        "    font-size: 1.3em;"
+        "    text-transform: uppercase;"
+        "    letter-spacing: 0.05em;"
         "}"
         ".upload-form {"
         "    display: flex;"
         "    flex-direction: column;"
-        "    gap: 15px;"
+        "    gap: 10px;"
         "}"
         ".file-input-wrapper {"
         "    position: relative;"
         "    overflow: hidden;"
-        "    display: inline-block;"
         "}"
         ".file-input-wrapper input[type=file] {"
         "    position: absolute;"
         "    left: -9999px;"
         "}"
         ".file-input-label {"
-        "    display: inline-block;"
-        "    padding: 10px 20px;"
-        "    background-color: #2196F3;"
+        "    display: block;"
+        "    padding: 10px;"
+        "    background: #667eea;"
         "    color: white;"
-        "    border-radius: 5px;"
-        "    cursor: pointer;"
-        "    transition: background-color 0.2s;"
+        "    border-radius: 8px;"
         "    text-align: center;"
+        "    font-size: 0.875rem;"
+        "    cursor: pointer;"
+        "    transition: background 0.2s;"
         "}"
-        ".file-input-label:hover {"
-        "    background-color: #1976D2;"
+        ".file-input-label:active {"
+        "    background: #5568d3;"
         "}"
         ".file-name {"
-        "    margin-top: 10px;"
+        "    font-size: 0.75rem;"
         "    color: #666;"
-        "    font-size: 0.9em;"
         "    word-break: break-all;"
+        "    padding: 0 4px;"
         "}"
         ".upload-btn {"
-        "    background-color: #4CAF50;"
+        "    background: #4CAF50;"
         "    color: white;"
         "    border: none;"
-        "    padding: 12px 24px;"
-        "    border-radius: 5px;"
+        "    padding: 10px;"
+        "    border-radius: 8px;"
+        "    font-size: 0.875rem;"
+        "    font-weight: 500;"
         "    cursor: pointer;"
-        "    font-size: 16px;"
-        "    font-weight: bold;"
-        "    transition: background-color 0.2s;"
+        "    transition: background 0.2s;"
         "}"
-        ".upload-btn:hover:not(:disabled) {"
-        "    background-color: #45a049;"
+        ".upload-btn:active:not(:disabled) {"
+        "    background: #45a049;"
         "}"
         ".upload-btn:disabled {"
-        "    background-color: #cccccc;"
+        "    background: #ccc;"
         "    cursor: not-allowed;"
         "}"
         ".upload-progress {"
-        "    margin-top: 10px;"
         "    display: none;"
+        "    margin-top: 8px;"
         "}"
         ".upload-progress.active {"
         "    display: block;"
         "}"
         ".progress-bar {"
         "    width: 100%;"
-        "    height: 20px;"
-        "    background-color: #e0e0e0;"
-        "    border-radius: 10px;"
+        "    height: 6px;"
+        "    background: #e0e0e0;"
+        "    border-radius: 3px;"
         "    overflow: hidden;"
         "}"
         ".progress-fill {"
         "    height: 100%;"
-        "    background-color: #4CAF50;"
+        "    background: #4CAF50;"
         "    transition: width 0.3s;"
         "    width: 0%;"
         "}"
-        "@media (max-width: 768px) {"
-        "    .arrow-container {"
-        "        gap: 20px;"
-        "    }"
-        "    .arrow-btn {"
-        "        width: 100px;"
-        "        height: 100px;"
-        "        font-size: 2.5em;"
-        "    }"
-        "    .banner {"
-        "        font-size: 1.5em;"
-        "        padding: 15px;"
-        "    }"
+        "@media (max-width: 480px) {"
+        "    .header h1 { font-size: 2rem; }"
+        "    .arrow-btn { width: 70px; height: 70px; font-size: 1.75rem; }"
+        "    .arrow-row { gap: 20px; }"
+        "    .pause-btn { padding: 10px 24px; font-size: 0.9rem; }"
+        "}"
+        "@media (min-width: 481px) {"
+        "    .arrow-btn:hover { transform: scale(1.05); }"
+        "    .pause-btn:hover { transform: scale(1.02); }"
+        "    .footer-btn:hover { background: rgba(255,255,255,0.3); }"
         "}"
         "</style>"
         "</head>"
         "<body>"
-        "<div class=\"banner\">p3a</div>"
-        "<div class=\"control-area\">"
-        "    <div class=\"arrow-container\">"
-        "        <div>"
-        "            <button class=\"arrow-btn\" id=\"back-btn\" onclick=\"sendCommand('swap_back')\">◄</button>"
-        "            <div class=\"arrow-label\">Back</div>"
-        "        </div>"
-        "        <div>"
-        "            <button class=\"arrow-btn\" id=\"next-btn\" onclick=\"sendCommand('swap_next')\">►</button>"
-        "            <div class=\"arrow-label\">Next</div>"
-        "        </div>"
+        "<div class=\"header\">"
+        "    <h1>p3a</h1>"
+        "</div>"
+        "<div class=\"controls\">"
+        "    <div class=\"arrow-row\">"
+        "        <button class=\"arrow-btn\" id=\"back-btn\" onclick=\"sendCommand('swap_back')\">◄</button>"
+        "        <button class=\"arrow-btn\" id=\"next-btn\" onclick=\"sendCommand('swap_next')\">►</button>"
         "    </div>"
+        "    <button class=\"pause-btn\" id=\"pause-btn\" onclick=\"togglePause()\">Pause</button>"
         "</div>"
         "<div class=\"upload-section\">"
-        "    <h2>Upload Animation</h2>"
+        "    <h3>Upload</h3>"
         "    <form class=\"upload-form\" id=\"upload-form\" enctype=\"multipart/form-data\">"
         "        <div class=\"file-input-wrapper\">"
-        "            <label for=\"file-input\" class=\"file-input-label\">Choose File (WebP/GIF/JPG/JPEG/PNG, max 5MB)</label>"
+        "            <label for=\"file-input\" class=\"file-input-label\">Choose File</label>"
         "            <input type=\"file\" id=\"file-input\" name=\"file\" accept=\".webp,.gif,.jpg,.jpeg,.png,image/webp,image/gif,image/jpeg,image/png\" required>"
         "        </div>"
         "        <div class=\"file-name\" id=\"file-name\"></div>"
@@ -663,9 +701,45 @@ static esp_err_t h_get_root(httpd_req_t *req) {
         "        </div>"
         "    </form>"
         "</div>"
+        "<div class=\"footer\">"
+        "    <button class=\"footer-btn\" onclick=\"window.location.href='/config/network'\">Network</button>"
+        "</div>"
         "<div class=\"status\" id=\"status\"></div>"
-        "<button class=\"config-btn\" onclick=\"window.location.href='/config/network'\">⚙</button>"
         "<script>"
+        "var isPaused = false;"
+        "function togglePause() {"
+        "    var action = isPaused ? 'resume' : 'pause';"
+        "    var status = document.getElementById('status');"
+        "    var pauseBtn = document.getElementById('pause-btn');"
+        "    pauseBtn.disabled = true;"
+        "    var xhr = new XMLHttpRequest();"
+        "    xhr.open('POST', '/action/' + action, true);"
+        "    xhr.setRequestHeader('Content-Type', 'application/json');"
+        "    xhr.onreadystatechange = function() {"
+        "        if (xhr.readyState === 4) {"
+        "            var pauseBtn = document.getElementById('pause-btn');"
+        "            try {"
+        "                var result = JSON.parse(xhr.responseText);"
+        "                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {"
+        "                    isPaused = !isPaused;"
+        "                    pauseBtn.textContent = isPaused ? 'Resume' : 'Pause';"
+        "                    status.textContent = isPaused ? 'Paused' : 'Resumed';"
+        "                    status.className = 'status success';"
+        "                } else {"
+        "                    status.textContent = 'Command failed: ' + (result.error || 'HTTP ' + xhr.status);"
+        "                    status.className = 'status error';"
+        "                }"
+        "            } catch (e) {"
+        "                status.textContent = 'Parse error: ' + e.message;"
+        "                status.className = 'status error';"
+        "            }"
+        "            status.style.display = 'block';"
+        "            setTimeout(function() { status.style.display = 'none'; }, 2000);"
+        "            pauseBtn.disabled = false;"
+        "        }"
+        "    };"
+        "    xhr.send('{}');"
+        "}"
         "function sendCommand(action) {"
         "    console.log('Sending command:', action);"
         "    var status = document.getElementById('status');"
@@ -680,21 +754,21 @@ static esp_err_t h_get_root(httpd_req_t *req) {
         "        if (xhr.readyState === 4) {"
         "            console.log('XHR status:', xhr.status);"
         "            console.log('XHR response:', xhr.responseText);"
-        "                        try {"
-                "                var result = JSON.parse(xhr.responseText);"
-                "                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {"
-                "                    status.textContent = 'Command sent successfully';"
-                "                    status.className = 'status success';"
-                "                } else {"
-                "                    status.textContent = 'Command failed: ' + (result.error || 'HTTP ' + xhr.status);"
-                "                    status.className = 'status error';"
-                "                }"
-                "            } catch (e) {"
-                "                status.textContent = 'Parse error: ' + e.message;"
-                "                status.className = 'status error';"
-                "            }"
+        "            try {"
+        "                var result = JSON.parse(xhr.responseText);"
+        "                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {"
+        "                    status.textContent = 'Command sent successfully';"
+        "                    status.className = 'status success';"
+        "                } else {"
+        "                    status.textContent = 'Command failed: ' + (result.error || 'HTTP ' + xhr.status);"
+        "                    status.className = 'status error';"
+        "                }"
+        "            } catch (e) {"
+        "                status.textContent = 'Parse error: ' + e.message;"
+        "                status.className = 'status error';"
+        "            }"
         "            status.style.display = 'block';"
-        "            setTimeout(function() { status.style.display = 'none'; }, 3000);"
+        "            setTimeout(function() { status.style.display = 'none'; }, 2000);"
         "            backBtn.disabled = false;"
         "            nextBtn.disabled = false;"
         "        }"
@@ -999,6 +1073,44 @@ static esp_err_t h_post_swap_back(httpd_req_t *req) {
     }
 
     send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"swap_back\"}}");
+    return ESP_OK;
+}
+
+/**
+ * POST /action/pause
+ * Enqueues pause command, returns 202 Accepted
+ */
+static esp_err_t h_post_pause(httpd_req_t *req) {
+    if (req->content_len > 0 && !ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+
+    if (!api_enqueue_pause()) {
+        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"pause\"}}");
+    return ESP_OK;
+}
+
+/**
+ * POST /action/resume
+ * Enqueues resume command, returns 202 Accepted
+ */
+static esp_err_t h_post_resume(httpd_req_t *req) {
+    if (req->content_len > 0 && !ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+
+    if (!api_enqueue_resume()) {
+        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"resume\"}}");
     return ESP_OK;
 }
 
@@ -1472,7 +1584,7 @@ esp_err_t http_api_start(void) {
     cfg.stack_size = 8192;
     cfg.server_port = 80;
     cfg.lru_purge_enable = true;
-    cfg.max_uri_handlers = 13;
+    cfg.max_uri_handlers = 15;
 
     if (httpd_start(&s_server, &cfg) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start HTTP server");
@@ -1533,6 +1645,18 @@ esp_err_t http_api_start(void) {
     u.uri = "/action/swap_back";
     u.method = HTTP_POST;
     u.handler = h_post_swap_back;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/action/pause";
+    u.method = HTTP_POST;
+    u.handler = h_post_pause;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/action/resume";
+    u.method = HTTP_POST;
+    u.handler = h_post_resume;
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
 

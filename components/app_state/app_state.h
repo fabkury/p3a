@@ -9,7 +9,7 @@
  * @brief Application state enumeration
  */
 typedef enum {
-    STATE_PLAYING = 0,    ///< Normal operation/idle state
+    STATE_READY = 0,      ///< Normal operation/idle state
     STATE_PROCESSING,     ///< Executing a command
     STATE_ERROR           ///< Unrecoverable error state
 } app_state_t;
@@ -17,7 +17,7 @@ typedef enum {
 /**
  * @brief Initialize the application state module
  * 
- * Creates the mutex and sets initial state to PLAYING.
+ * Creates the mutex and sets initial state to READY.
  * Must be called before any other app_state functions.
  */
 void app_state_init(void);
@@ -33,16 +33,16 @@ app_state_t app_state_get(void);
  * @brief Get string representation of state
  * 
  * @param s State enum value
- * @return String representation ("PLAYING", "PROCESSING", "ERROR", or "UNKNOWN")
+ * @return String representation ("READY", "PROCESSING", "ERROR", or "UNKNOWN")
  */
 const char* app_state_str(app_state_t s);
 
 /**
- * @brief Transition to PLAYING state
+ * @brief Transition to READY state
  * 
  * Use this after successful command completion.
  */
-void app_state_enter_playing(void);
+void app_state_enter_ready(void);
 
 /**
  * @brief Transition to PROCESSING state

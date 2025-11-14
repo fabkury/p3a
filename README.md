@@ -9,7 +9,7 @@ p3a ("Pixel Pea") is a physical pixel art player inside the Makapix Club ecosyst
 </p>
 
 ## How it feels like to use it
-Set P3A on your shelf and it becomes a quiet pixel art gallery that keeps moving on its own. Tap the screen to jump to the next or previous artwork, swipe up or down to adjust brightness, long-tap to send a like to the current artwork, or open `http://p3a.local/` on your phone to control the device.
+Set p3a on your shelf and it becomes a quiet pixel art gallery that keeps moving on its own. Tap the screen to jump to the next or previous artwork, swipe up or down to adjust brightness, long-tap to send a like to the current artwork, or open `http://p3a.local/` on your phone to control the device.
 
 ## Hardware platform & specs
 The entire platform consists of one device: ESP32-P4-WIFI6-Touch-LCD-4B

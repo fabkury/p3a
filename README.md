@@ -12,9 +12,13 @@ p3a ("Pixel Pea") is a physical pixel art player inside the Makapix Club ecosyst
 Set p3a on your shelf and it becomes a quiet pixel art gallery that keeps moving on its own. Tap the screen to jump to the next or previous artwork, swipe up or down to adjust brightness, long-tap to send a like to the current artwork, or open `http://p3a.local/` on your phone to control the device.
 
 ## Hardware platform & specs
-The entire platform consists of one device: [ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416)
-- **Board**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) — dual-core ESP32-P4 host MCU plus onboard ESP32-C6 for Wi-Fi 6/BLE, 32MB external PSRAM, 32MB NOR flash, GPIO expansion, onboard red LED, and provision for speakers/mics per BSP.
-- **Display**: 4" square 720×720 IPS panel with dimmable backlight.
+The entire platform consists of one device: [ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416). The device comes finished out of the box, there is no assembly involved.
+- **Board**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416)
+  - dual-core ESP32-P4 host MCU
+  - onboard ESP32-C6 for Wi-Fi 6/BLE
+  - 32MB external PSRAM, 32MB NOR flash
+  - GPIO expansion, onboard red LED, provision for speakers/mics per BSP.
+- **Display**: 4" square 720×720 IPS panel with dimmable backlight, 24-bit color, 400 cd/m² max brightness
 - **Touch**: 5-point capacitive touchscreen.
 - **Storage**: microSD slot (internal, requires unscreweing the back plate).
 - **Power source**: USB-C cable (no battery).

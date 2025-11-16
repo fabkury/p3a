@@ -32,6 +32,10 @@ The entire platform consists of one device: [ESP32-P4-WIFI6-Touch-LCD-4B](https:
 - **Wi-Fi provisioning**: Station mode with captive portal fallback; credentials persist across reboots.
 - **Config knobs**: `menuconfig` toggles for asset paths, playback timing, render formats, task priorities, and gesture tuning.
 
+<p align="center">
+  <img src="images/p3a_10fps.gif" alt="p3a video">
+</p>
+
 ## Planned functionality (see ROADMAP.md)
 p3a is in the **display prototype with Wi-Fi** stage. Upcoming milestones focus on:
 

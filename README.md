@@ -1,4 +1,4 @@
-# p3a (Pixel Pea) — Makapix Physical Player
+# p3a (Pixel Pea) — Physical Pixel Art Player
 
 p3a ("Pixel Pea") is a physical pixel art player inside the Makapix Club ecosystem. It is an ESP32-P4-powered Wi-Fi art frame that subscribes to online feeds, downloads and displays pixel artworks, and lets viewers react (send likes) and read comments without leaving the hardware experience. The device has touchscreen controls, and the firmware also serves a browser interface and REST API at [http://p3a.local/](http://p3a.local/) for control using a phone, laptop, or code.
 
@@ -21,7 +21,7 @@ The entire platform consists of one device: [ESP32-P4-WIFI6-Touch-LCD-4B](https:
   - onboard ESP32-C6 for Wi-Fi 6/BLE
   - 32MB external PSRAM, 32MB NOR flash
   - GPIO expansion, onboard red LED, provision for speakers/mics per BSP.
-- **Display**: 4" square 720×720 IPS panel with dimmable backlight, 24-bit color, 400 cd/m² max brightness
+- **Display**: 4" square 720×720 pixels IPS panel with dimmable backlight, 24-bit color, 400 cd/m² max brightness
 - **Touch**: 5-point capacitive touchscreen.
 - **Storage**: microSD slot (internal, requires unscreweing the back plate).
 - **Power source**: USB-C cable (no battery).

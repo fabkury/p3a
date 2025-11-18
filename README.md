@@ -23,7 +23,7 @@ The entire hardware platform consists of one device, [ESP32-P4-WIFI6-Touch-LCD-4
   - GPIO expansion, onboard red LED, provision for speakers/mics per BSP
 - **Display**: 4" square 720×720 pixels IPS panel with dimmable backlight, 24-bit color, 400 cd/m² max brightness
 - **Touch**: 5-point capacitive touchscreen
-- **Storage**: microSD slot (not included)
+- **Storage**: microSD card (not included)
 - **Power source**: USB-C cable (not included) (no battery)
 
 <p align="center">

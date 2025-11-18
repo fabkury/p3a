@@ -15,7 +15,7 @@ Set p3a on your shelf and it becomes a quiet pixel art gallery that keeps moving
 Flashing the prebuilt firmware is straightforward using the steps below, but I know that can still feel intimidating if you are not into programming or microcontrollers. I am working on a browser-based flasher. That means you’ll be able to visit one website, plug in your device to your computer (or phone) using a regular USB-C cable and click a button. No command lines required, no need to create an user account to flash. Bookmark this page and check back later for that update.
 
 ## Hardware platform & specs
-The entire hardware platform consists of one device: [ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416). The device comes finished out of the box, there is no physical assembly beyond inserting a microSD card in its slot. After that, the device is ready to connect via USB-C and flash (install) the p3a firmware from this repository.
+The entire hardware platform consists of one device, [ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416), plus one microSD card. The device comes finished out of the box, there is no physical assembly beyond inserting a microSD card in its slot. After that, the device is ready to connect via USB-C and flash (install) the p3a firmware from this repository.
 - **Board**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416)
   - dual-core ESP32-P4 host MCU
   - onboard ESP32-C6 for Wi-Fi 6/BLE
@@ -23,8 +23,8 @@ The entire hardware platform consists of one device: [ESP32-P4-WIFI6-Touch-LCD-4
   - GPIO expansion, onboard red LED, provision for speakers/mics per BSP
 - **Display**: 4" square 720×720 pixels IPS panel with dimmable backlight, 24-bit color, 400 cd/m² max brightness
 - **Touch**: 5-point capacitive touchscreen
-- **Storage**: microSD slot (internal, requires unscreweing the back plate) (not included)
-- **Power source**: USB-C cable (no battery)
+- **Storage**: microSD slot (not included)
+- **Power source**: USB-C cable (not included) (no battery)
 
 <p align="center">
   <img src="images/ESP32-P4-WIFI6-Touch-LCD-4B-details-size.jpg" alt="p3a size" width="100%">

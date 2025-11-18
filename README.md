@@ -1,6 +1,6 @@
 # p3a (Pixel Pea) — Makapix Physical Player
 
-p3a ("Pixel Pea") is a physical pixel art player inside the Makapix Club ecosystem. It is an ESP32-P4-powered Wi-Fi art frame that subscribes to Makapix feeds, displays pixel artworks, and lets viewers react (send likes) and read comments without leaving the hardware experience. The device has touchscreen controls, and the firmware also serves a browser interface and REST API at [http://p3a.local/](http://p3a.local/) for control using a phone, laptop, or code.
+p3a ("Pixel Pea") is a physical pixel art player inside the Makapix Club ecosystem. It is an ESP32-P4-powered Wi-Fi art frame that subscribes to online feeds, downloads and displays pixel artworks, and lets viewers react (send likes) and read comments without leaving the hardware experience. The device has touchscreen controls, and the firmware also serves a browser interface and REST API at [http://p3a.local/](http://p3a.local/) for control using a phone, laptop, or code.
 
 ## Hardware photos
 <p>
@@ -10,6 +10,9 @@ p3a ("Pixel Pea") is a physical pixel art player inside the Makapix Club ecosyst
 
 ## How it feels like to use it
 Set p3a on your shelf and it becomes a quiet pixel art gallery that keeps moving on its own. Tap the screen to jump to the next or previous artwork, swipe up or down to adjust brightness, long-tap to send a like to the current artwork, or open `http://p3a.local/` on your phone to control the device.
+
+## *What if I don't know about coding or firmwares?*
+Flashing the prebuilt firmware is straightforward using the steps below, but I know that can still feel intimidating if you are not into programming or microcontrollers. I am working on a browser-based flasher. That means you’ll be able to visit one website, plug in your device to your computer (or phone) using a regular USB-C cable and click a button. No command lines required, no need to create an user account to flash. Bookmark this page and check back later for that update.
 
 ## Hardware platform & specs
 The entire platform consists of one device: [ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416). The device comes finished out of the box, there is no assembly involved.

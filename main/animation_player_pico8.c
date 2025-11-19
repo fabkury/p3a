@@ -1,4 +1,46 @@
 #include "animation_player_priv.h"
+#include "pico8_stream.h"
+#include "pico8_logo_data.h"
+#include "sdkconfig.h"
+
+#if CONFIG_LCD_PIXEL_FORMAT_RGB565
+static inline uint16_t logo_rgb565(uint8_t r, uint8_t g, uint8_t b)
+{
+    return (uint16_t)(((uint16_t)(r & 0xF8) << 8) |
+                      ((uint16_t)(g & 0xFC) << 3) |
+                      ((uint16_t)b >> 3));
+}
+
+static inline void logo_store_pixel(uint8_t *buffer, int x, int y, uint8_t r, uint8_t g, uint8_t b)
+{
+    if (!buffer || x < 0 || x >= EXAMPLE_LCD_H_RES || y < 0 || y >= EXAMPLE_LCD_V_RES) {
+        return;
+    }
+    uint16_t *row = (uint16_t *)(buffer + (size_t)y * s_frame_row_stride_bytes);
+    const size_t row_pixels = s_frame_row_stride_bytes / sizeof(uint16_t);
+    if ((size_t)x >= row_pixels) {
+        return;
+    }
+    row[x] = logo_rgb565(r, g, b);
+}
+#elif CONFIG_LCD_PIXEL_FORMAT_RGB888
+static inline void logo_store_pixel(uint8_t *buffer, int x, int y, uint8_t r, uint8_t g, uint8_t b)
+{
+    if (!buffer || x < 0 || x >= EXAMPLE_LCD_H_RES || y < 0 || y >= EXAMPLE_LCD_V_RES) {
+        return;
+    }
+    uint8_t *row = buffer + (size_t)y * s_frame_row_stride_bytes;
+    const size_t idx = (size_t)x * 3U;
+    if ((idx + 2) >= s_frame_row_stride_bytes) {
+        return;
+    }
+    row[idx + 0] = b;
+    row[idx + 1] = g;
+    row[idx + 2] = r;
+}
+#else
+#error "Unsupported LCD pixel format"
+#endif
 
 static uint8_t *s_pico8_frame_buffers[2] = { NULL, NULL };
 static uint8_t s_pico8_decode_index = 0;
@@ -96,6 +138,11 @@ void release_pico8_resources(void)
 
 bool pico8_stream_should_render(void)
 {
+    // Return true if PICO-8 mode is active (even if no frames ready yet)
+    if (pico8_stream_is_active()) {
+        return true;
+    }
+
     if (!s_pico8_override_active || !s_pico8_frame_ready) {
         return false;
     }
@@ -122,10 +169,78 @@ bool pico8_stream_should_render(void)
     return active;
 }
 
+static int render_pico8_logo(uint8_t *dest_buffer)
+{
+    if (!dest_buffer) {
+        return -1;
+    }
+
+    // Clear to black (respect LCD stride)
+    size_t total_bytes = s_frame_row_stride_bytes * EXAMPLE_LCD_V_RES;
+    memset(dest_buffer, 0, total_bytes);
+
+    // Logo dimensions (6x upscale)
+    const int logo_src_w = PICO8_LOGO_WIDTH;
+    const int logo_src_h = PICO8_LOGO_HEIGHT;
+    const int logo_dst_w = logo_src_w * 6;
+    const int logo_dst_h = logo_src_h * 6;
+
+    // Center position
+    const int logo_x = (EXAMPLE_LCD_H_RES - logo_dst_w) / 2;
+    const int logo_y = (EXAMPLE_LCD_V_RES - logo_dst_h) / 2;
+
+    // Render logo with 6x nearest neighbor upscale
+    for (int dst_y = 0; dst_y < logo_dst_h; dst_y++) {
+        int src_y = dst_y / 6;
+        if (src_y >= logo_src_h) {
+            src_y = logo_src_h - 1;
+        }
+
+        for (int dst_x = 0; dst_x < logo_dst_w; dst_x++) {
+            int src_x = dst_x / 6;
+            if (src_x >= logo_src_w) {
+                src_x = logo_src_w - 1;
+            }
+
+            // Calculate source pixel index
+            int src_idx = (src_y * logo_src_w + src_x) * 4;
+            if (src_idx >= PICO8_LOGO_SIZE) {
+                continue;
+            }
+
+                uint8_t r = pico8_logo_data[src_idx + 0];
+                uint8_t g = pico8_logo_data[src_idx + 1];
+                uint8_t b = pico8_logo_data[src_idx + 2];
+
+                int final_x = logo_x + dst_x;
+                int final_y = logo_y + dst_y;
+
+                logo_store_pixel(dest_buffer, final_x, final_y, r, g, b);
+        }
+    }
+
+    return 16; // Return frame delay
+}
+
 int render_pico8_frame(uint8_t *dest_buffer)
 {
     if (!dest_buffer) {
         return -1;
+    }
+
+    // If PICO-8 mode is active but no frames are ready, show logo
+    bool frame_ready = false;
+    if (pico8_stream_is_active()) {
+        if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+            frame_ready = s_pico8_frame_ready;
+            xSemaphoreGive(s_buffer_mutex);
+        } else {
+            frame_ready = s_pico8_frame_ready;
+        }
+        
+        if (!frame_ready) {
+            return render_pico8_logo(dest_buffer);
+        }
     }
 
     if (ensure_pico8_resources() != ESP_OK) {
@@ -141,6 +256,10 @@ int render_pico8_frame(uint8_t *dest_buffer)
     }
 
     if (!src) {
+        // If no frame buffer but mode is active, show logo
+        if (pico8_stream_is_active()) {
+            return render_pico8_logo(dest_buffer);
+        }
         return -1;
     }
 

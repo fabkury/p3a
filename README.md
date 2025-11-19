@@ -101,6 +101,10 @@ Transform p3a into a dedicated PICO-8 monitor! Stream your favorite PICO-8 games
 
 The device automatically enters PICO-8 mode when you connect, and falls back to normal playback after 30 seconds of inactivity or when you close the browser.
 
+<p align="center">
+  <img src="images/pico-8-gameplay.webp" alt="PICO-8 gameplay video">
+</p>
+
 ### On-device controls
 - **Tap right half**: advance to the next animation.
 - **Tap left half**: go back to the previous animation.

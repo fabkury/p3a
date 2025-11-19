@@ -137,12 +137,20 @@ bool app_lcd_is_animation_paused(void)
 
 void app_lcd_cycle_animation(void)
 {
+    if (animation_player_is_sd_export_locked()) {
+        ESP_LOGW(TAG, "Swap ignored while SD is exported over USB");
+        return;
+    }
     animation_player_cycle_animation(true);
     auto_swap_reset_timer();  // Reset auto-swap timer on any swap
 }
 
 void app_lcd_cycle_animation_backward(void)
 {
+    if (animation_player_is_sd_export_locked()) {
+        ESP_LOGW(TAG, "Swap ignored while SD is exported over USB");
+        return;
+    }
     animation_player_cycle_animation(false);
     auto_swap_reset_timer();  // Reset auto-swap timer on any swap
 }

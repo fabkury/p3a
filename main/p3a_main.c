@@ -14,6 +14,7 @@
 
 #include "app_lcd.h"
 #include "app_touch.h"
+#include "app_usb.h"
 #include "app_wifi.h"
 #include "http_api.h"
 
@@ -87,6 +88,8 @@ void app_main(void)
     // Initialize LCD and touch
     ESP_ERROR_CHECK(app_lcd_init());
     ESP_ERROR_CHECK(app_touch_init());
+
+    ESP_ERROR_CHECK(app_usb_init());
 
     // Create auto-swap task
     const BaseType_t created = xTaskCreate(auto_swap_task, "auto_swap", 2048, NULL, 

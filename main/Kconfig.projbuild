@@ -177,4 +177,14 @@ menu "Physical Player of Pixel Art (P3A)"
             depends on IDF_TARGET_ESP32P4
             select BSP_LCD_COLOR_FORMAT_RGB888
     endchoice
+
+    menu "USB"
+        config P3A_PICO8_USB_STREAM_ENABLE
+            bool "Enable USB composite + PICO-8 streaming"
+            default y
+            help
+                Enable the TinyUSB composite device that exposes CDC, MSC and a
+                vendor-specific streaming interface for the PICO-8 monitor mode.
+                Disable to build firmware without the USB composite stack.
+    endmenu
 endmenu

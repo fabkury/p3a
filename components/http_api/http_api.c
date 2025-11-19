@@ -1316,7 +1316,23 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
         send_json(req, 415, "{\"ok\":false,\"error\":\"Unsupported Content-Type\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
         return ESP_OK;
     }
-    
+
+    bool sd_locked = animation_player_is_sd_export_locked();
+    if (sd_locked) {
+        // Drain request body to keep the HTTP connection consistent, then report busy
+        size_t remaining = req->content_len;
+        char drain_buf[128];
+        while (remaining > 0) {
+            size_t chunk = (remaining > sizeof(drain_buf)) ? sizeof(drain_buf) : remaining;
+            int ret = httpd_req_recv(req, drain_buf, chunk);
+            if (ret <= 0) {
+                break;
+            }
+            remaining -= ret;
+        }
+        send_json(req, 423, "{\"ok\":false,\"error\":\"SD card shared over USB\",\"code\":\"SD_LOCKED\"}");
+        return ESP_OK;
+    }
     // Extract boundary from Content-Type
     const char *boundary_str = strstr(content_type, "boundary=");
     if (!boundary_str) {
@@ -1340,8 +1356,8 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
         return ESP_OK;
     }
     
-    // Ensure downloads directory exists
     struct stat st;
+    // Ensure downloads directory exists
     if (stat(DOWNLOADS_DIR, &st) != 0) {
         ESP_LOGI(TAG, "Creating downloads directory: %s", DOWNLOADS_DIR);
         if (mkdir(DOWNLOADS_DIR, 0755) != 0) {
@@ -1350,7 +1366,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
             return ESP_OK;
         }
     }
-    
+
     // Ensure animations directory exists
     if (stat(ANIMATIONS_DIR, &st) != 0) {
         ESP_LOGI(TAG, "Creating animations directory: %s", ANIMATIONS_DIR);
@@ -1365,35 +1381,40 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     char temp_path[512];
     snprintf(temp_path, sizeof(temp_path), "%s/upload_%llu.tmp", DOWNLOADS_DIR, (unsigned long long)(esp_timer_get_time() / 1000));
     
-    FILE *fp = fopen(temp_path, "wb");
+FILE *fp = NULL;
+if (!sd_locked) {
+    fp = fopen(temp_path, "wb");
     if (!fp) {
         ESP_LOGE(TAG, "Failed to open temp file for writing: %s", strerror(errno));
         send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to open file\",\"code\":\"FILE_OPEN_FAIL\"}");
         return ESP_OK;
     }
-    
-    // Build boundary strings (without leading \r\n for initial boundary detection)
-    // boundary is max 128 bytes, so we need 2 + 128 = 130 bytes for "--" + boundary
-    char boundary_marker[130];
-    snprintf(boundary_marker, sizeof(boundary_marker), "--%s", boundary);
-    size_t boundary_marker_len = strlen(boundary_marker);
-    
-    // boundary_line needs 4 + 128 = 132 bytes for "\r\n--" + boundary
-    char boundary_line[132];
-    snprintf(boundary_line, sizeof(boundary_line), "\r\n--%s", boundary);
-    size_t boundary_line_len = strlen(boundary_line);
-    
-    // boundary_end needs 6 + 128 = 134 bytes for "\r\n--" + boundary + "--"
-    char boundary_end[134];
-    snprintf(boundary_end, sizeof(boundary_end), "\r\n--%s--", boundary);
-    size_t boundary_end_len = strlen(boundary_end);
+}
+
+// Build boundary strings (without leading \r\n for initial boundary detection)
+// boundary is max 128 bytes, so we need 2 + 128 = 130 bytes for "--" + boundary
+char boundary_marker[130];
+snprintf(boundary_marker, sizeof(boundary_marker), "--%s", boundary);
+size_t boundary_marker_len = strlen(boundary_marker);
+
+// boundary_line needs 4 + 128 = 132 bytes for "\r\n--" + boundary
+char boundary_line[132];
+snprintf(boundary_line, sizeof(boundary_line), "\r\n--%s", boundary);
+size_t boundary_line_len = strlen(boundary_line);
+
+// boundary_end needs 6 + 128 = 134 bytes for "\r\n--" + boundary + "--"
+char boundary_end[134];
+snprintf(boundary_end, sizeof(boundary_end), "\r\n--%s--", boundary);
+size_t boundary_end_len = strlen(boundary_end);
     
     // Buffer for reading - need extra space for boundary matching across chunks
     const size_t BUF_SIZE = RECV_CHUNK + boundary_line_len + 16; // Extra space for overlap
     char *recv_buf = malloc(BUF_SIZE);
     if (!recv_buf) {
-        fclose(fp);
-        unlink(temp_path);
+        if (fp) {
+            fclose(fp);
+            unlink(temp_path);
+        }
         send_json(req, 500, "{\"ok\":false,\"error\":\"Out of memory\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
@@ -1610,7 +1631,9 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     }
     
     if (!found_filename || strlen(filename) == 0) {
-        unlink(temp_path);
+        if (fp) {
+            unlink(temp_path);
+        }
         send_json(req, 400, "{\"ok\":false,\"error\":\"No filename in upload\",\"code\":\"NO_FILENAME\"}");
         return ESP_OK;
     }
@@ -1632,7 +1655,9 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     }
     
     if (!valid_ext) {
-        unlink(temp_path);
+        if (fp) {
+            unlink(temp_path);
+        }
         send_json(req, 400, "{\"ok\":false,\"error\":\"Unsupported file type. Use WebP, GIF, JPG, JPEG, or PNG\",\"code\":\"UNSUPPORTED_TYPE\"}");
         return ESP_OK;
     }

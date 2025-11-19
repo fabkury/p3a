@@ -11,9 +11,14 @@
 #include "bsp/touch.h"
 #include "esp_lcd_touch.h"
 #include "app_lcd.h"
+#include "app_usb.h"
 #include "app_touch.h"
 #include "bsp/display.h"
 #include "sdkconfig.h"
+
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
 
 static const char *TAG = "app_touch";
 
@@ -52,6 +57,19 @@ typedef enum {
  * - Brightness updates continuously as finger moves during swipe
  * - Auto-swap timer is reset when brightness gesture starts
  */
+static uint16_t scale_to_pico8(uint16_t value, uint16_t max_src, uint16_t max_dst)
+{
+    if (max_src == 0) {
+        return 0;
+    }
+    const uint32_t denom = (max_src > 1) ? (uint32_t)(max_src - 1) : 1U;
+    uint32_t scaled = ((uint32_t)value * (uint32_t)max_dst) / denom;
+    if (scaled > max_dst) {
+        scaled = max_dst;
+    }
+    return (uint16_t)scaled;
+}
+
 static void app_touch_task(void *arg)
 {
     const TickType_t poll_delay = pdMS_TO_TICKS(CONFIG_P3A_TOUCH_POLL_INTERVAL_MS);
@@ -68,12 +86,20 @@ static void app_touch_task(void *arg)
     const uint16_t min_swipe_height = (screen_height * CONFIG_P3A_TOUCH_SWIPE_MIN_HEIGHT_PERCENT) / 100;
     const int max_brightness_delta = CONFIG_P3A_TOUCH_BRIGHTNESS_MAX_DELTA_PERCENT;
 
+    bool last_touch_valid = false;
+    uint16_t last_scaled_x = 0;
+    uint16_t last_scaled_y = 0;
+
     while (true) {
         esp_lcd_touch_read_data(tp);
         bool pressed = esp_lcd_touch_get_coordinates(tp, x, y, strength, &touch_count,
                                                      CONFIG_ESP_LCD_TOUCH_MAX_POINTS);
 
         if (pressed && touch_count > 0) {
+            uint16_t scaled_x = scale_to_pico8(x[0], BSP_LCD_H_RES, 127);
+            uint16_t scaled_y = scale_to_pico8(y[0], BSP_LCD_V_RES, 127);
+            bool coords_changed = (!last_touch_valid) || (scaled_x != last_scaled_x) || (scaled_y != last_scaled_y);
+
             if (gesture_state == GESTURE_STATE_IDLE) {
                 // Touch just started
                 touch_start_x = x[0];
@@ -122,7 +148,33 @@ static void app_touch_task(void *arg)
                         ESP_LOGD(TAG, "brightness: %d%% (delta_y=%d)", target_brightness, delta_y);
                     }
                 }
-                // If still in TAP state, don't do anything yet - wait for release
+            }
+
+            if (!last_touch_valid) {
+                pico8_touch_report_t report = {
+                    .report_id = 1,
+                    .flags = 0x01,
+                    .x = scaled_x,
+                    .y = scaled_y,
+                    .pressure = (uint8_t)MIN(strength[0], 255),
+                    .reserved = 0,
+                };
+                app_usb_report_touch(&report);
+                last_touch_valid = true;
+                last_scaled_x = scaled_x;
+                last_scaled_y = scaled_y;
+            } else if (coords_changed) {
+                pico8_touch_report_t report = {
+                    .report_id = 1,
+                    .flags = 0x02,
+                    .x = scaled_x,
+                    .y = scaled_y,
+                    .pressure = (uint8_t)MIN(strength[0], 255),
+                    .reserved = 0,
+                };
+                app_usb_report_touch(&report);
+                last_scaled_x = scaled_x;
+                last_scaled_y = scaled_y;
             }
         } else {
             // Touch released
@@ -143,6 +195,18 @@ static void app_touch_task(void *arg)
                     ESP_LOGD(TAG, "brightness gesture ended");
                 }
                 gesture_state = GESTURE_STATE_IDLE;
+            }
+            if (last_touch_valid) {
+                pico8_touch_report_t report = {
+                    .report_id = 1,
+                    .flags = 0x04,
+                    .x = last_scaled_x,
+                    .y = last_scaled_y,
+                    .pressure = 0,
+                    .reserved = 0,
+                };
+                app_usb_report_touch(&report);
+                last_touch_valid = false;
             }
         }
 

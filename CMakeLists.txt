@@ -6,3 +6,6 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 add_compile_options(-Wno-ignored-qualifiers)
 project(p3a)
 
+# Create SPIFFS image from webui directory
+spiffs_create_partition_image(storage webui FLASH_IN_PROJECT)
+

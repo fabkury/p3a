@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PICO-8 Monitor - p3a</title>
+    <link rel="stylesheet" href="/static/pico8.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>PICO-8 Monitor</h1>
+            <nav>
+                <a href="/" class="nav-link">← Remote Control</a>
+            </nav>
+        </header>
+
+        <div class="main-content">
+            <div class="controls-panel">
+                <div class="load-section">
+                    <h2>Load Cart</h2>
+                    <div class="file-input-wrapper">
+                        <label for="file-input" class="file-input-label">Choose .p8 or .p8.png file</label>
+                        <input type="file" id="file-input" accept=".p8,.p8.png" />
+                    </div>
+                    <div class="url-input-wrapper">
+                        <input type="text" id="url-input" placeholder="Or enter URL to cart file" />
+                        <button id="load-url-btn" class="btn">Load from URL</button>
+                    </div>
+                    <div id="file-name" class="file-name"></div>
+                </div>
+
+                <div class="status-section">
+                    <div id="status" class="status"></div>
+                    <div id="fps" class="fps">FPS: --</div>
+                </div>
+            </div>
+
+            <div class="canvas-wrapper">
+                <canvas id="pico-canvas" width="128" height="128"></canvas>
+                <div class="canvas-overlay">
+                    <div id="error-message" class="error-message"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/fake08.js"></script>
+    <script src="/static/pico8.js"></script>
+</body>
+</html>
+

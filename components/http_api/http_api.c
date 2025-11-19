@@ -13,10 +13,16 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "bsp/esp-bsp.h"
 #include "animation_player.h"
 #include "app_lcd.h"
 #include "favicon_data.h"
+#include "pico8_stream.h"
+#include "fs_init.h"
+#include <sys/stat.h>
+#include <dirent.h>
+#include <unistd.h>
 
 // LCD dimensions from project configuration
 #define LCD_MAX_WIDTH   EXAMPLE_LCD_H_RES
@@ -28,11 +34,17 @@
 #include <unistd.h>
 #include <errno.h>
 
+#ifndef CONFIG_HTTPD_WS_SUPPORT
+#error "CONFIG_HTTPD_WS_SUPPORT must be enabled (Component config -> HTTP Server -> Enable WebSocket support)"
+#endif
+
 static const char *TAG = "HTTP";
 
 #define MAX_JSON (32 * 1024)
 #define RECV_CHUNK 4096
 #define QUEUE_LEN 10
+#define MAX_FILE_PATH 256
+#define WS_MAX_FRAME_SIZE (8192 + 48 + 6) // framebuffer + palette + magic+len+flags header
 
 typedef enum {
     CMD_REBOOT,
@@ -56,6 +68,7 @@ static QueueHandle_t s_cmdq = NULL;
 static httpd_handle_t s_server = NULL;
 static TaskHandle_t s_worker = NULL;
 static uint32_t s_cmd_id = 0;
+static bool s_ws_client_connected = false;
 
 // ---------- Worker Task ----------
 
@@ -459,6 +472,286 @@ static esp_err_t h_get_favicon(httpd_req_t *req) {
 }
 
 /**
+ * Get MIME type from file extension
+ */
+static const char* get_mime_type(const char* path) {
+    const char* ext = strrchr(path, '.');
+    if (!ext) {
+        return "application/octet-stream";
+    }
+    ext++; // Skip the dot
+    
+    if (strcasecmp(ext, "html") == 0) return "text/html";
+    if (strcasecmp(ext, "css") == 0) return "text/css";
+    if (strcasecmp(ext, "js") == 0) return "application/javascript";
+    if (strcasecmp(ext, "wasm") == 0) return "application/wasm";
+    if (strcasecmp(ext, "png") == 0) return "image/png";
+    if (strcasecmp(ext, "jpg") == 0 || strcasecmp(ext, "jpeg") == 0) return "image/jpeg";
+    if (strcasecmp(ext, "gif") == 0) return "image/gif";
+    if (strcasecmp(ext, "ico") == 0) return "image/x-icon";
+    
+    return "application/octet-stream";
+}
+
+/**
+ * GET /pico8
+ * Serves the PICO-8 monitor HTML page
+ */
+static esp_err_t h_get_pico8(httpd_req_t *req) {
+    const char* filepath = "/spiffs/pico8/index.html";
+    
+    FILE* f = fopen(filepath, "r");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open %s", filepath);
+        httpd_resp_set_status(req, "404 Not Found");
+        httpd_resp_send(req, "PICO-8 page not found", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+    
+    // Get file size
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    
+    if (size <= 0 || size > 1024 * 1024) { // Max 1MB
+        fclose(f);
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "Invalid file size", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+    
+    char* buf = malloc(size);
+    if (!buf) {
+        fclose(f);
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "Out of memory", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+    
+    size_t read = fread(buf, 1, size, f);
+    fclose(f);
+    
+    if (read != (size_t)size) {
+        free(buf);
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "Read error", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+    
+    // Enter PICO-8 mode when page is visited
+    pico8_stream_enter_mode();
+    
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(req, buf, size);
+    free(buf);
+    
+    return ESP_OK;
+}
+
+/**
+ * GET /static/<path>
+ * Serves static files from SPIFFS
+ */
+static esp_err_t h_get_static(httpd_req_t *req) {
+    const char* uri = req->uri;
+    
+    // Map /static/* to /spiffs/static/*
+    char filepath[MAX_FILE_PATH];
+    static const char *prefix = "/spiffs";
+    size_t prefix_len = strlen(prefix);
+    size_t uri_len = strlen(uri);
+    if (prefix_len + uri_len >= sizeof(filepath)) {
+        ESP_LOGW(TAG, "Static path too long: %s", uri);
+        httpd_resp_set_status(req, "414 Request-URI Too Long");
+        httpd_resp_send(req, "Path too long", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+    snprintf(filepath, sizeof(filepath), "%s%s", prefix, uri);
+    
+    FILE* f = fopen(filepath, "r");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open %s", filepath);
+        httpd_resp_set_status(req, "404 Not Found");
+        httpd_resp_send(req, "File not found", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+    
+    // Get file size
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    
+    if (size <= 0 || size > 10 * 1024 * 1024) { // Max 10MB
+        fclose(f);
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "Invalid file size", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+    
+    // Set MIME type
+    httpd_resp_set_type(req, get_mime_type(filepath));
+    
+    // Set cache headers for static assets
+    if (strstr(filepath, ".js") || strstr(filepath, ".wasm") || strstr(filepath, ".css")) {
+        httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=3600");
+    }
+    
+    // Stream file in chunks
+    char chunk[RECV_CHUNK];
+    long remaining = size;
+    
+    while (remaining > 0) {
+        size_t to_read = (remaining < RECV_CHUNK) ? remaining : RECV_CHUNK;
+        size_t read = fread(chunk, 1, to_read, f);
+        
+        if (read == 0) {
+            break;
+        }
+        
+        esp_err_t ret = httpd_resp_send_chunk(req, chunk, read);
+        if (ret != ESP_OK) {
+            fclose(f);
+            return ret;
+        }
+        
+        remaining -= read;
+    }
+    
+    fclose(f);
+    httpd_resp_send_chunk(req, NULL, 0); // End response
+    
+    return ESP_OK;
+}
+
+/**
+ * WebSocket handler for /pico_stream
+ */
+static esp_err_t h_ws_pico_stream(httpd_req_t *req) {
+    if (req->method == HTTP_GET) {
+        ESP_LOGI(TAG, "WebSocket connection request");
+        pico8_stream_enter_mode();
+        s_ws_client_connected = true;
+        return ESP_OK;
+    }
+
+    uint8_t stack_buf[WS_MAX_FRAME_SIZE] = {0};
+
+    httpd_ws_frame_t frame = {
+        .type = HTTPD_WS_TYPE_BINARY,
+        .payload = NULL,
+        .len = 0
+    };
+
+    // Step 1: read frame metadata
+    esp_err_t ret = httpd_ws_recv_frame(req, &frame, 0);
+    if (ret != ESP_OK) {
+        if (ret != ESP_ERR_NOT_FOUND) {
+            ESP_LOGE(TAG, "Failed to read WebSocket header: %s", esp_err_to_name(ret));
+            if (s_ws_client_connected) {
+                pico8_stream_exit_mode();
+                s_ws_client_connected = false;
+            }
+        }
+        return ret;
+    }
+
+    size_t payload_len = frame.len;
+    uint8_t *payload_buf = NULL;
+    bool payload_allocated = false;
+
+    if (payload_len > 0) {
+        if (payload_len <= sizeof(stack_buf)) {
+            payload_buf = stack_buf;
+        } else if (payload_len <= WS_MAX_FRAME_SIZE) {
+            payload_buf = (uint8_t *)malloc(payload_len);
+            if (!payload_buf) {
+                ESP_LOGE(TAG, "Unable to allocate %zu bytes for WS payload", payload_len);
+                return ESP_ERR_NO_MEM;
+            }
+            payload_allocated = true;
+        } else {
+            ESP_LOGW(TAG, "WebSocket frame too large (%zu bytes)", payload_len);
+            return ESP_ERR_INVALID_SIZE;
+        }
+
+        frame.payload = payload_buf;
+        ret = httpd_ws_recv_frame(req, &frame, payload_len);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to read WebSocket payload: %s", esp_err_to_name(ret));
+            if (payload_allocated) {
+                free(payload_buf);
+            }
+            if (s_ws_client_connected) {
+                pico8_stream_exit_mode();
+                s_ws_client_connected = false;
+            }
+            return ret;
+        }
+    } else {
+        frame.payload = NULL;
+    }
+
+    if (frame.type == HTTPD_WS_TYPE_CLOSE) {
+        ESP_LOGI(TAG, "WebSocket close frame");
+        s_ws_client_connected = false;
+        pico8_stream_exit_mode();
+        if (payload_allocated) {
+            free(payload_buf);
+        }
+        return ESP_OK;
+    }
+
+    if (frame.type == HTTPD_WS_TYPE_PING) {
+        httpd_ws_frame_t pong = {
+            .type = HTTPD_WS_TYPE_PONG,
+            .payload = frame.payload,
+            .len = frame.len
+        };
+        httpd_ws_send_frame(req, &pong);
+        if (payload_allocated) {
+            free(payload_buf);
+        }
+        return ESP_OK;
+    }
+
+    if (frame.type != HTTPD_WS_TYPE_BINARY) {
+        ESP_LOGW(TAG, "Ignoring non-binary WebSocket frame (type=%d, len=%zu)", frame.type, frame.len);
+        if (payload_allocated) {
+            free(payload_buf);
+        }
+        return ESP_OK;
+    }
+
+    if (!frame.payload || frame.len < 6) {
+        if (payload_allocated) {
+            free(payload_buf);
+        }
+        return ESP_OK;
+    }
+
+    if (frame.payload[0] != 0x70 || frame.payload[1] != 0x38 || frame.payload[2] != 0x46) {
+        if (payload_allocated) {
+            free(payload_buf);
+        }
+        return ESP_OK;
+    }
+
+    s_ws_client_connected = true;
+
+    esp_err_t feed_ret = pico8_stream_feed_packet(frame.payload, frame.len);
+    if (feed_ret != ESP_OK) {
+        ESP_LOGW(TAG, "pico8_stream_feed_packet failed: %s (len=%zu)",
+                 esp_err_to_name(feed_ret), frame.len);
+    }
+
+    if (payload_allocated) {
+        free(payload_buf);
+    }
+
+    return ESP_OK;
+}
+
+/**
  * GET /
  * Returns Remote Control HTML page with swap buttons and navigation to network config
  */
@@ -750,6 +1043,7 @@ static esp_err_t h_get_root(httpd_req_t *req) {
         "</div>"
         "<div class=\"footer\">"
         "    <button class=\"footer-btn\" onclick=\"window.location.href='/config/network'\">Network</button>"
+        "    <button class=\"footer-btn\" onclick=\"window.location.href='/pico8'\">PICO-8</button>"
         "</div>"
         "<div class=\"status\" id=\"status\"></div>"
         "<script>"
@@ -1813,12 +2107,19 @@ esp_err_t http_api_start(void) {
         ESP_LOGW(TAG, "mDNS start failed (continuing anyway): %s", esp_err_to_name(e));
     }
 
+    // Initialize PICO-8 stream parser (always, not just for USB)
+    esp_err_t stream_init_ret = pico8_stream_init();
+    if (stream_init_ret != ESP_OK) {
+        ESP_LOGW(TAG, "PICO-8 stream init failed: %s (continuing anyway)", esp_err_to_name(stream_init_ret));
+    }
+
     // Start HTTP server
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
-    cfg.stack_size = 8192;
+    cfg.stack_size = 16384;  // Increased to prevent stack overflow in WebSocket handlers
     cfg.server_port = 80;
     cfg.lru_purge_enable = true;
-    cfg.max_uri_handlers = 15;
+    cfg.max_uri_handlers = 20;
+    cfg.uri_match_fn = httpd_uri_match_wildcard;
 
     if (httpd_start(&s_server, &cfg) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start HTTP server");
@@ -1826,7 +2127,7 @@ esp_err_t http_api_start(void) {
     }
 
     // Register URI handlers
-    httpd_uri_t u;
+    httpd_uri_t u = {0};
 
     u.uri = "/favicon.ico";
     u.method = HTTP_GET;
@@ -1905,6 +2206,28 @@ esp_err_t http_api_start(void) {
     u.handler = h_post_upload;
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/pico8";
+    u.method = HTTP_GET;
+    u.handler = h_get_pico8;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/static/*";
+    u.method = HTTP_GET;
+    u.handler = h_get_static;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    // WebSocket endpoint for PICO-8 streaming
+    httpd_uri_t ws_uri = {
+        .uri = "/pico_stream",
+        .method = HTTP_GET,
+        .handler = h_ws_pico_stream,
+        .user_ctx = NULL,
+        .is_websocket = true
+    };
+    register_uri_handler_or_log(s_server, &ws_uri);
 
     ESP_LOGI(TAG, "HTTP API server started on port 80");
     return ESP_OK;

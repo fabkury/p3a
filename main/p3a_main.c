@@ -17,6 +17,7 @@
 #include "app_usb.h"
 #include "app_wifi.h"
 #include "http_api.h"
+#include "fs_init.h"
 
 static const char *TAG = "p3a";
 
@@ -71,7 +72,7 @@ static void register_rest_action_handlers(void)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Starting Physical Player of Pixel Art (P3A)");
+    ESP_LOGI(TAG, "Starting p3a");
 
     // Initialize NVS
     esp_err_t ret = nvs_flash_init();
@@ -84,6 +85,12 @@ void app_main(void)
     // Initialize network interface and event loop
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+    // Initialize SPIFFS filesystem
+    esp_err_t fs_ret = fs_init();
+    if (fs_ret != ESP_OK) {
+        ESP_LOGW(TAG, "SPIFFS initialization failed: %s (continuing anyway)", esp_err_to_name(fs_ret));
+    }
 
     // Initialize LCD and touch
     ESP_ERROR_CHECK(app_lcd_init());
@@ -101,5 +108,5 @@ void app_main(void)
     // Initialize Wi-Fi (will start captive portal if needed, or connect to saved network)
     ESP_ERROR_CHECK(app_wifi_init(register_rest_action_handlers));
 
-    ESP_LOGI(TAG, "P3A ready: tap the display to cycle animations (auto-swap forward every %d seconds)", AUTO_SWAP_INTERVAL_SECONDS);
+    ESP_LOGI(TAG, "p3a ready: tap the display to cycle animations (auto-swap forward every %d seconds)", AUTO_SWAP_INTERVAL_SECONDS);
 }

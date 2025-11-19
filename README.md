@@ -1,6 +1,6 @@
 # p3a (Pixel Pea) — Physical Pixel Art Player
 
-p3a ("Pixel Pea") is a physical pixel art player inside the Makapix Club ecosystem. It is an ESP32-P4-powered Wi-Fi art frame that subscribes to online feeds, downloads and displays pixel artworks, and lets viewers react (send likes) and read comments without leaving the hardware experience. The device has touchscreen controls, and the firmware also serves a browser interface and REST API at [http://p3a.local/](http://p3a.local/) for control using a phone, laptop, or code.
+p3a ("Pixel Pea") is a physical pixel art player inside the Makapix Club ecosystem. It is an ESP32-P4-powered Wi-Fi art frame that subscribes to online feeds, downloads and displays pixel artworks, and lets viewers react (send likes) and read comments without leaving the hardware experience. The device has touchscreen controls, and the firmware also serves a browser interface and REST API at [http://p3a.local/](http://p3a.local/) for control using a phone, laptop, or code. Plus, it also doubles as a little PICO-8 game monitor.
 
 ## Hardware photos
 <p>
@@ -15,13 +15,14 @@ Set p3a on your shelf and it becomes a quiet pixel art gallery that keeps moving
 - Long-tap to send a like to the current artwork.
 - Open `http://p3a.local/` on your phone to control the device.
 - Connect a USB-C cable to a computer or smartphone to access all files in the device's microSD card.
+- 🎮 Plus: use p3a as a PICO-8 game monitor.
 
 ## *What if I don't know about coding or firmwares?*
 Flashing the prebuilt firmware is straightforward using the steps below, but I know that can still feel intimidating if you are not into programming or microcontrollers. I am working on a browser-based flasher. That means you’ll be able to visit one website, plug in your device to your computer (or phone) using a regular USB-C cable and click a button. No command lines required, no need to create an user account to flash. Bookmark this page and check back later for that update.
 
 ## Hardware platform & specs
-The entire hardware platform consists of one device, [ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416), plus one microSD card. The device comes finished out of the box, there is no physical assembly beyond inserting a microSD card in its slot. After that, the unit is ready to connect via USB-C cable and flash (install) the p3a firmware from this repository.
-- **Board**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416)
+The entire hardware platform consists of one device, [ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) ("EP44B"), plus one microSD card. EP44B comes finished out of the box, there is no physical assembly beyond inserting a microSD card in its slot. After that, the unit is ready to connect via USB-C cable and flash (install) the p3a firmware from this repository.
+- **Board**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) ("EP44B")
   - dual-core ESP32-P4 host MCU
   - onboard ESP32-C6 for Wi-Fi 6/BLE
   - 32MB external PSRAM, 32MB NOR flash
@@ -56,11 +57,14 @@ p3a is in the **display prototype with Wi-Fi** stage. Upcoming milestones focus 
 - **Playlists & UI**: Playlist-aware scheduling, richer gestures, and lightweight HUD overlays.
 - **Reliability**: OTA with rollback, watchdog coverage, diagnostics, and provisioning workflows.
 - **Manufacturing & docs**: Flashing tools, release automation, and installer tutorials.
-- **Extra**: Pico-8 dedicated display and matching web interface.
+- **Extra**: ✅ **PICO-8 Monitor** — Stream games wirelessly from your browser! (See PICO-8 Monitor section)
 
 See `ROADMAP.md` for a detailed phase-by-phase breakdown.
 
 ## Build & flash
+> **💡 Coming up: Web Flasher!**  
+> You'll be able to flash p3a to your device directly from your browser—no downloads, terminals, or drivers required. Stay tuned for updates.
+
 1. Install **ESP-IDF v5.5.x** with the `esp32p4` target (IDF Component Registry dependencies are auto-synced via `idf.py`).
 2. In this repo, set the target once: `idf.py set-target esp32p4`.
 3. Optionally tweak project options via `idf.py menuconfig` (display format, gesture thresholds, animation path, task priorities).
@@ -87,25 +91,16 @@ Use `--port` and `--baud` if esptool cannot auto-detect the serial port. The off
 - Supported containers today: animated/non-animated **WebP, GIF, PNG, JPEG**. Source canvases are upscaled to 720×720 so keep square canvases.
 - Drop artworks preferably into `/sdcard/animations`; if that folder is empty the firmware automatically searches the rest of the microSD card for a folder containing at least one animation file.
 
-### USB high-speed monitor
+### Accessing the microSD card with a USB-C cable
 p3a has two USB-C ports, but only one works as a USB storage device when connected to a laptop/desktop/smartphone. Moreover, while p3a is acting as a storage device, the microSD card becomes unavailable for the rest of the system, so animations cannot be changed but the currently playing one continues. Normal behaviors resume after disconnecting the storage device.
 
-### Pico-8 Streaming
-- Pico-8 Host streaming format:
-  - Every frame starts with a little-endian header: `uint16_t payload_bytes` (expected 8192) + `uint8_t flags`. Bit 0 of `flags` toggles whether a 16×RGB888 palette (48 bytes) precedes the frame payload.
-  - Pixel data packs two 4-bpp indices per byte, **lower nibble first**. The firmware converts the latest palette to RGBA and upscales asynchronously through the existing GIF/WebP pipeline.
-- Touch feedback travels back over the vendor IN endpoint using the packed structure below (all little-endian):
+### 🎮 PICO-8 Monitor — Turn Your Device Into a Retro Game Display
+Transform p3a into a dedicated PICO-8 monitor! Stream your favorite PICO-8 games directly from your browser to the device's display in real-time.
 
-```
-typedef struct __attribute__((packed)) {
-    uint8_t  report_id;   // always 1
-    uint8_t  flags;       // bit0=down, bit1=move, bit2=up
-    uint16_t x;           // 0-127
-    uint16_t y;           // 0-127
-    uint8_t  pressure;    // 0-255 (raw GT911 strength)
-    uint8_t  reserved;
-} pico8_touch_report_t;
-```
+**How it works**: Open `http://p3a.local/` in your browser, click the "PICO-8" button. Load any `.p8` or `.p8.png` cart file, and watch as the game streams wirelessly to your device. The browser runs a WebAssembly PICO-8 emulator (fake-08) and sends each frame over WebSocket to p3a, which renders it on the 720×720 display with crisp nearest-neighbor upscaling.
+
+The device automatically enters PICO-8 mode when you connect, and falls back to normal playback after 30 seconds of inactivity or when you close the browser.
+
 ### On-device controls
 - **Tap right half**: advance to the next animation.
 - **Tap left half**: go back to the previous animation.

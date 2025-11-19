@@ -10,11 +10,13 @@
     "flash_files" : {
         "0x2000" : "bootloader/bootloader.bin",
         "0x10000" : "p3a.bin",
-        "0x8000" : "partition_table/partition-table.bin"
+        "0x8000" : "partition_table/partition-table.bin",
+        "0x810000" : "storage.bin"
     },
     "bootloader" : { "offset" : "0x2000", "file" : "bootloader/bootloader.bin", "encrypted" : "false" },
     "app" : { "offset" : "0x10000", "file" : "p3a.bin", "encrypted" : "false" },
     "partition-table" : { "offset" : "0x8000", "file" : "partition_table/partition-table.bin", "encrypted" : "false" },
+    "storage" : { "offset" : "0x810000", "file" : "storage.bin", "encrypted" : "false" },
     "extra_esptool_args" : {
         "after"  : "hard_reset",
         "before" : "default_reset",

@@ -909,4 +909,4 @@ Planned enhancements from ROADMAP.md:
 
 ---
 
-*This document was generated for p3a firmware. Last updated: 2025-11-23*
+*This document was generated for p3a firmware. Last updated: November 2025*

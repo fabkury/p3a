@@ -438,10 +438,12 @@ esp_err_t enumerate_animation_files(const char *dir_path)
     shuffle_animation_file_list();
 
     s_sd_file_list.current_index = 0;
+#if CONFIG_P3A_PICO8_ENABLE
     esp_err_t pico_err = ensure_pico8_resources();
     if (pico_err != ESP_OK) {
         ESP_LOGW(TAG, "PICO-8 buffer init failed: %s", esp_err_to_name(pico_err));
     }
+#endif
 
     return ESP_OK;
 }

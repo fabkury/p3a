@@ -6,13 +6,22 @@ set(srcs
     "animation_player.c"
     "animation_player_render.c"
     "animation_player_loader.c"
-    "animation_player_pico8.c"
     "webp_animation_decoder.c"
     "png_animation_decoder.c"
     "jpeg_animation_decoder.c"
     "fs_init.c"
-    "pico8_stream.c"
 )
+
+if(CONFIG_P3A_PICO8_ENABLE)
+    list(APPEND srcs
+        "pico8_stream.c"
+        "animation_player_pico8.c"
+    )
+else()
+    list(APPEND srcs
+        "pico8_stream_stubs.c"
+    )
+endif()
 
 if(CONFIG_P3A_PICO8_USB_STREAM_ENABLE)
     list(APPEND srcs

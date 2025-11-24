@@ -467,7 +467,9 @@ esp_err_t animation_player_start(void)
 
 void animation_player_deinit(void)
 {
+#if CONFIG_P3A_PICO8_ENABLE
     release_pico8_resources();
+#endif
     s_sd_export_active = false;
 
     if (s_anim_task) {

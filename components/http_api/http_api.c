@@ -18,8 +18,10 @@
 #include "animation_player.h"
 #include "app_lcd.h"
 #include "favicon_data.h"
-#include "pico8_stream.h"
 #include "fs_init.h"
+#if CONFIG_P3A_PICO8_ENABLE
+#include "pico8_stream.h"
+#endif
 #include <sys/stat.h>
 #include <dirent.h>
 #include <unistd.h>
@@ -44,7 +46,9 @@ static const char *TAG = "HTTP";
 #define RECV_CHUNK 4096
 #define QUEUE_LEN 10
 #define MAX_FILE_PATH 256
+#if CONFIG_P3A_PICO8_ENABLE
 #define WS_MAX_FRAME_SIZE (8192 + 48 + 6) // framebuffer + palette + magic+len+flags header
+#endif
 
 typedef enum {
     CMD_REBOOT,
@@ -68,7 +72,9 @@ static QueueHandle_t s_cmdq = NULL;
 static httpd_handle_t s_server = NULL;
 static TaskHandle_t s_worker = NULL;
 static uint32_t s_cmd_id = 0;
+#if CONFIG_P3A_PICO8_ENABLE
 static bool s_ws_client_connected = false;
+#endif
 
 // ---------- Worker Task ----------
 
@@ -493,6 +499,7 @@ static const char* get_mime_type(const char* path) {
     return "application/octet-stream";
 }
 
+#if CONFIG_P3A_PICO8_ENABLE
 /**
  * GET /pico8
  * Serves the PICO-8 monitor HTML page
@@ -547,6 +554,7 @@ static esp_err_t h_get_pico8(httpd_req_t *req) {
     
     return ESP_OK;
 }
+#endif // CONFIG_P3A_PICO8_ENABLE
 
 /**
  * GET /static/<path>
@@ -623,6 +631,7 @@ static esp_err_t h_get_static(httpd_req_t *req) {
     return ESP_OK;
 }
 
+#if CONFIG_P3A_PICO8_ENABLE
 /**
  * WebSocket handler for /pico_stream
  */
@@ -750,6 +759,7 @@ static esp_err_t h_ws_pico_stream(httpd_req_t *req) {
 
     return ESP_OK;
 }
+#endif // CONFIG_P3A_PICO8_ENABLE
 
 /**
  * GET /
@@ -1043,7 +1053,9 @@ static esp_err_t h_get_root(httpd_req_t *req) {
         "</div>"
         "<div class=\"footer\">"
         "    <button class=\"footer-btn\" onclick=\"window.location.href='/config/network'\">Network</button>"
+#if CONFIG_P3A_PICO8_ENABLE
         "    <button class=\"footer-btn\" onclick=\"window.location.href='/pico8'\">PICO-8</button>"
+#endif
         "</div>"
         "<div class=\"status\" id=\"status\"></div>"
         "<script>"
@@ -2107,11 +2119,13 @@ esp_err_t http_api_start(void) {
         ESP_LOGW(TAG, "mDNS start failed (continuing anyway): %s", esp_err_to_name(e));
     }
 
+#if CONFIG_P3A_PICO8_ENABLE
     // Initialize PICO-8 stream parser (always, not just for USB)
     esp_err_t stream_init_ret = pico8_stream_init();
     if (stream_init_ret != ESP_OK) {
         ESP_LOGW(TAG, "PICO-8 stream init failed: %s (continuing anyway)", esp_err_to_name(stream_init_ret));
     }
+#endif
 
     // Start HTTP server
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
@@ -2207,11 +2221,13 @@ esp_err_t http_api_start(void) {
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
 
+#if CONFIG_P3A_PICO8_ENABLE
     u.uri = "/pico8";
     u.method = HTTP_GET;
     u.handler = h_get_pico8;
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
+#endif
 
     u.uri = "/static/*";
     u.method = HTTP_GET;
@@ -2219,6 +2235,7 @@ esp_err_t http_api_start(void) {
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
 
+#if CONFIG_P3A_PICO8_ENABLE
     // WebSocket endpoint for PICO-8 streaming
     httpd_uri_t ws_uri = {
         .uri = "/pico_stream",
@@ -2228,6 +2245,7 @@ esp_err_t http_api_start(void) {
         .is_websocket = true
     };
     register_uri_handler_or_log(s_server, &ws_uri);
+#endif
 
     ESP_LOGI(TAG, "HTTP API server started on port 80");
     return ESP_OK;

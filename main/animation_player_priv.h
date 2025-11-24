@@ -49,20 +49,24 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
+#if CONFIG_P3A_PICO8_ENABLE
 #define PICO8_FRAME_WIDTH        128
 #define PICO8_FRAME_HEIGHT       128
 #define PICO8_PALETTE_COLORS     16
 #define PICO8_FRAME_BYTES        (PICO8_FRAME_WIDTH * PICO8_FRAME_HEIGHT / 2)
 #define PICO8_STREAM_TIMEOUT_US  (250 * 1000)
+#endif // CONFIG_P3A_PICO8_ENABLE
 
 #define ANIMATIONS_PREFERRED_DIR "/sdcard/animations"
 #define ANIMATION_SD_REFRESH_STACK (16384)
 
+#if CONFIG_P3A_PICO8_ENABLE
 typedef struct {
     uint8_t r;
     uint8_t g;
     uint8_t b;
 } pico8_color_t;
+#endif // CONFIG_P3A_PICO8_ENABLE
 
 typedef enum {
     ASSET_TYPE_WEBP,
@@ -168,10 +172,12 @@ esp_err_t refresh_animation_file_list(void);
 size_t get_next_asset_index(size_t current_index);
 size_t get_previous_asset_index(size_t current_index);
 
+#if CONFIG_P3A_PICO8_ENABLE
 esp_err_t ensure_pico8_resources(void);
 void release_pico8_resources(void);
 bool pico8_stream_should_render(void);
 int render_pico8_frame(uint8_t *dest_buffer);
+#endif // CONFIG_P3A_PICO8_ENABLE
 
 bool lcd_panel_refresh_done_cb(esp_lcd_panel_handle_t panel, esp_lcd_dpi_panel_event_data_t *edata, void *user_ctx);
 void lcd_animation_task(void *arg);

@@ -814,10 +814,10 @@ CONFIG_ESP_WIFI_AUTH_WPA2_PSK=y
 CONFIG_LCD_PIXEL_FORMAT_RGB888=y
 
 #
-# USB
+# PICO-8 Monitor
 #
-CONFIG_P3A_PICO8_USB_STREAM_ENABLE=y
-# end of USB
+# CONFIG_P3A_PICO8_ENABLE is not set
+# end of PICO-8 Monitor
 # end of Physical Player of Pixel Art (P3A)
 
 #

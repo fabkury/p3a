@@ -39,16 +39,16 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/p3a/repo_cursor/build/bootloader/esp-idf/esp_hw_support/port/esp32p4/cmake_install.cmake")
+  include("D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/p3a/repo/build/bootloader/esp-idf/esp_hw_support/port/esp32p4/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/p3a/repo_cursor/build/bootloader/esp-idf/esp_hw_support/mspi_timing_tuning/port/esp32p4/cmake_install.cmake")
+  include("D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/p3a/repo/build/bootloader/esp-idf/esp_hw_support/mspi_timing_tuning/port/esp32p4/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/p3a/repo_cursor/build/bootloader/esp-idf/esp_hw_support/lowpower/cmake_install.cmake")
+  include("D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/p3a/repo/build/bootloader/esp-idf/esp_hw_support/lowpower/cmake_install.cmake")
 endif()
 

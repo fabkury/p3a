@@ -17,4 +17,4 @@ set confirm off
 set confirm on
 
 # Load application symbols
-file D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/p3a/repo_cursor/build/bootloader/bootloader.elf
+file D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/p3a/repo/build/bootloader/bootloader.elf

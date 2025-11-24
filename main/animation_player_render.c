@@ -561,6 +561,7 @@ void lcd_animation_task(void *arg)
         int frame_delay_ms = 1;
         uint32_t prev_frame_delay_ms = s_target_frame_delay_ms;
 
+#if CONFIG_P3A_PICO8_ENABLE
         bool pico8_active = pico8_stream_should_render();
 
         if (pico8_active) {
@@ -580,7 +581,9 @@ void lcd_animation_task(void *arg)
                 }
 #endif
             }
-        } else if (paused_local && use_prefetched && s_front_buffer.ready) {
+        } else
+#endif // CONFIG_P3A_PICO8_ENABLE
+        if (paused_local && use_prefetched && s_front_buffer.ready) {
             frame = s_lcd_buffers[s_render_buffer_index];
             if (frame) {
                 frame_delay_ms = render_next_frame(&s_front_buffer, frame, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, true);

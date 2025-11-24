@@ -43,8 +43,9 @@ The entire hardware platform consists of one device, [ESP32-P4-WIFI6-Touch-LCD-4
 - **Touch input**: GT911 gestures — tap left/right to swap animations, vertical swipes adjust brightness.
 - **Auto rotation & remote control**: Auto-randomizes artworks when idle and accepts touch, REST, and the web UI at `http://p3a.local/` for status, configuration, and manual swaps.
 - **Wi-Fi provisioning**: Station mode with captive portal fallback; credentials persist across reboots.
-- **Config knobs**: `menuconfig` toggles for asset paths, playback timing, render formats, task priorities, and gesture tuning.
-- **USB composite (HS port)**: Presents CDC-ACM, SD Mass Storage, and a vendor bulk pipe for 128×128 PICO-8 streaming at high speed while keeping the ROM bootloader (FS port) unchanged for flashing.
+- **Config knobs**: `menuconfig` toggles for asset paths, playback timing, render formats, task priorities, gesture tuning, and optional features like PICO-8 monitor.
+- **USB composite (HS port)**: Presents CDC-ACM, SD Mass Storage, and a vendor bulk pipe for 128×128 PICO-8 streaming at high speed while keeping the ROM bootloader (FS port) unchanged for flashing. (Requires PICO-8 feature enabled)
+- **PICO-8 Monitor (optional)**: Stream PICO-8 games wirelessly from your browser to the display. This feature is enabled by default but can be disabled at compile time to reduce binary size.
 
 <p align="center">
   <img src="images/p3a_10fps.gif" alt="p3a video">
@@ -57,7 +58,7 @@ p3a is in the **display prototype with Wi-Fi** stage. Upcoming milestones focus 
 - **Playlists & UI**: Playlist-aware scheduling, richer gestures, and lightweight HUD overlays.
 - **Reliability**: OTA with rollback, watchdog coverage, diagnostics, and provisioning workflows.
 - **Manufacturing & docs**: Flashing tools, release automation, and installer tutorials.
-- **Extra**: ✅ **PICO-8 Monitor** — Stream games wirelessly from your browser! (See PICO-8 Monitor section)
+- **Extra**: ✅ **PICO-8 Monitor** — Stream games wirelessly from your browser! (Optional, enabled by default — see PICO-8 Monitor section)
 
 See `ROADMAP.md` for a detailed phase-by-phase breakdown.
 
@@ -94,8 +95,10 @@ Use `--port` and `--baud` if esptool cannot auto-detect the serial port. The off
 ### Accessing the microSD card with a USB-C cable
 p3a has two USB-C ports, but only one works as a USB storage device when connected to a laptop/desktop/smartphone. Moreover, while p3a is acting as a storage device, the microSD card becomes unavailable for the rest of the system, so animations cannot be changed but the currently playing one continues. Normal behaviors resume after disconnecting the storage device.
 
-### 🎮 PICO-8 Monitor — Turn Your Device Into a Retro Game Display
+### 🎮 PICO-8 Monitor (Optional) — Turn Your Device Into a Retro Game Display
 Transform p3a into a dedicated PICO-8 monitor! Stream your favorite PICO-8 games directly from your browser to the device's display in real-time.
+
+> **Note**: The PICO-8 monitor feature is **enabled by default** but can be disabled at compile time via `idf.py menuconfig` → "Physical Player of Pixel Art (P3A)" → "PICO-8 Monitor" → disable "Enable PICO-8 monitor feature". Disabling removes all PICO-8 code and assets from the firmware, reducing binary size. When disabled, the "PICO-8" button will not appear in the web interface.
 
 **How it works**: Open `http://p3a.local/` in your browser, click the "PICO-8" button. Load any `.p8` or `.p8.png` cart file, and watch as the game streams wirelessly to your device. The browser runs a WebAssembly PICO-8 emulator (fake-08) and sends each frame over WebSocket to p3a, which renders it on the 720×720 display with crisp nearest-neighbor upscaling.
 

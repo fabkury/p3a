@@ -178,10 +178,20 @@ menu "Physical Player of Pixel Art (P3A)"
             select BSP_LCD_COLOR_FORMAT_RGB888
     endchoice
 
-    menu "USB"
+    menu "PICO-8 Monitor"
+        config P3A_PICO8_ENABLE
+            bool "Enable PICO-8 monitor feature"
+            default y
+            help
+                Enable the PICO-8 monitor feature which allows streaming PICO-8
+                gameplay to the display via WebSocket or USB.
+                Disabling this option removes all PICO-8 related code and assets
+                from the firmware binary.
+
         config P3A_PICO8_USB_STREAM_ENABLE
             bool "Enable USB composite + PICO-8 streaming"
             default y
+            depends on P3A_PICO8_ENABLE
             help
                 Enable the TinyUSB composite device that exposes CDC, MSC and a
                 vendor-specific streaming interface for the PICO-8 monitor mode.

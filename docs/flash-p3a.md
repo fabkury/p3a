@@ -2,7 +2,10 @@
 
 This page is written for people who just want their Pixel Pea device to work—no firmware knowledge needed.
 
-- **Hardware**: Waveshare ESP32-P4-WIFI6-Touch-LCD-4B, USB-C cable that supports data, and (optionally) a microSD card with animations.
+- **Required hardware**:
+  - Waveshare ESP32-P4-WIFI6-Touch-LCD-4B,
+  - USB-C cable that supports data,
+  - and a microSD card.
 - **Computer**: Windows, macOS, Linux, or Chromebook with the latest Chrome or Microsoft Edge. (Android Chrome works in most cases; iOS/Safari does **not** expose Web Serial yet.)
 
 ---

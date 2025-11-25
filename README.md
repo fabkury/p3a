@@ -63,8 +63,12 @@ p3a is in the **display prototype with Wi-Fi** stage. Upcoming milestones focus 
 See `ROADMAP.md` for a detailed phase-by-phase breakdown.
 
 ## Build & flash
-> **💡 Coming up: Web Flasher!**  
-> You'll be able to flash p3a to your device directly from your browser—no downloads, terminals, or drivers required. Stay tuned for updates.
+> **💡 Flash from your browser today!**  
+> The [Web Flasher guide](docs/flash-p3a.md) walks through the Espressif Web Flasher flow (Chrome/Edge) in plain language. Open it to find the “Open Web Flasher” button plus troubleshooting tips.
+
+1. Connect the board with a data-capable USB-C cable and keep Chrome/Edge open.
+2. Visit the guide above, click the button, pick your device from the browser dialog, and start flashing.
+3. Wait for the progress bar to finish (bootloader → partition table → app → storage) and reboot the device. That’s it.
 
 1. Install **ESP-IDF v5.5.x** with the `esp32p4` target (IDF Component Registry dependencies are auto-synced via `idf.py`).
 2. In this repo, set the target once: `idf.py set-target esp32p4`.

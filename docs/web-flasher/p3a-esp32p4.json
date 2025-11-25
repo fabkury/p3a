@@ -1,0 +1,51 @@
+{
+    "name": "p3a (Pixel Pea) — ESP32-P4 build",
+    "description": "Manifest consumed by the Espressif Web Flasher to install the Pixel Pea firmware onto the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B devkit.",
+    "default_baud": 460800,
+    "write_flash_args": [
+        "--flash_mode",
+        "dio",
+        "--flash_size",
+        "32MB",
+        "--flash_freq",
+        "80m"
+    ],
+    "flash_settings": {
+        "flash_mode": "dio",
+        "flash_size": "32MB",
+        "flash_freq": "80m"
+    },
+    "flash_files": {
+        "0x2000": "https://raw.githubusercontent.com/fabkury/p3a/main/build/bootloader/bootloader.bin",
+        "0x8000": "https://raw.githubusercontent.com/fabkury/p3a/main/build/partition_table/partition-table.bin",
+        "0x10000": "https://raw.githubusercontent.com/fabkury/p3a/main/build/p3a.bin",
+        "0x810000": "https://raw.githubusercontent.com/fabkury/p3a/main/build/storage.bin"
+    },
+    "bootloader": {
+        "offset": "0x2000",
+        "file": "https://raw.githubusercontent.com/fabkury/p3a/main/build/bootloader/bootloader.bin",
+        "encrypted": "false"
+    },
+    "app": {
+        "offset": "0x10000",
+        "file": "https://raw.githubusercontent.com/fabkury/p3a/main/build/p3a.bin",
+        "encrypted": "false"
+    },
+    "partition-table": {
+        "offset": "0x8000",
+        "file": "https://raw.githubusercontent.com/fabkury/p3a/main/build/partition_table/partition-table.bin",
+        "encrypted": "false"
+    },
+    "storage": {
+        "offset": "0x810000",
+        "file": "https://raw.githubusercontent.com/fabkury/p3a/main/build/storage.bin",
+        "encrypted": "false"
+    },
+    "extra_esptool_args": {
+        "after": "hard_reset",
+        "before": "default_reset",
+        "stub": true,
+        "chip": "esp32p4"
+    }
+}
+

@@ -20,7 +20,7 @@ This page is written for people who just want their Pixel Pea device to work—n
 Click the button below. It opens a hosted copy of the Pixel Pea Web Flasher that bundles Espressif’s `esptool-js` with the offsets baked into one page.
 
 <p align="center">
-  <a href="https://htmlpreview.github.io/?https://github.com/fabkury/p3a/blob/main/docs/web-flasher/index.html" target="_blank" rel="noopener">
+  <a href="https://rawcdn.githack.com/fabkury/p3a/main/docs/web-flasher/index.html" target="_blank" rel="noopener">
     <img src="https://img.shields.io/badge/Open%20Pixel%20Pea%20Web%20Flasher-USB%20via%20Chrome-blue?style=for-the-badge" alt="Open Web Flasher">
   </a>
 </p>

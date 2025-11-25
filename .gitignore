@@ -6,5 +6,7 @@ build/*
 !build/partition_table/partition-table.bin
 !build/flash_args
 !build/flasher_args.json
+node_modules/
+docs/web-flasher/node_modules/
 .vscode/
 managed_components/

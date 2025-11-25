@@ -14,11 +14,11 @@ This page is written for people who just want their Pixel Pea device to work—n
 
 ## 2. Open the Web Flasher
 
-Click the button below. It opens Espressif's official Web Flasher, already preloaded with the correct p3a images.
+Click the button below. It opens a hosted copy of the Pixel Pea Web Flasher that bundles Espressif’s `esptool-js` with the offsets baked into one page.
 
 <p align="center">
-  <a href="https://espressif.github.io/web-tools/flash?flash_config_url=https://raw.githubusercontent.com/fabkury/p3a/main/docs/web-flasher/p3a-esp32p4.json" target="_blank" rel="noopener">
-    <img src="https://img.shields.io/badge/Open%20Web%20Flasher-ESP32--P4-blue?style=for-the-badge" alt="Open Web Flasher">
+  <a href="https://htmlpreview.github.io/?https://github.com/fabkury/p3a/blob/main/docs/web-flasher/index.html" target="_blank" rel="noopener">
+    <img src="https://img.shields.io/badge/Open%20Pixel%20Pea%20Web%20Flasher-USB%20via%20Chrome-blue?style=for-the-badge" alt="Open Web Flasher">
   </a>
 </p>
 
@@ -26,11 +26,10 @@ Keep this guide open—we will refer back to it in the next steps.
 
 ## 3. Let the browser do the work
 
-1. In the Web Flasher tab, click **Connect**.
-2. A popup will list every serial/USB device currently attached. Pick the entry that mentions `USB Serial` (on Windows it is usually `COMx`, on macOS/Linux it starts with `/dev/tty.usbmodem` or `/dev/ttyACM`).
-3. After granting access, click **Install Pixel Pea Firmware** (or the button named similarly in the UI).
-4. Wait while the progress bar goes through four files: bootloader, partition table, firmware, and storage image. The whole process typically finishes in under two minutes.
-5. When it says **Done**, disconnect the USB cable and power-cycle the device. The screen should now show the Pixel Pea boot logo followed by animation playback.
+1. In the Web Flasher tab, click **Connect & install Pixel Pea**.
+2. Your browser asks for USB permission. Pick the entry that mentions `USB Serial` (on Windows it is usually `COMx`, on macOS/Linux it starts with `/dev/tty.usbmodem` or `/dev/ttyACM`).
+3. The flasher then downloads the four binary files (bootloader, partition table, firmware image, storage image) and pushes them to the ESP32-P4 automatically. You can watch progress in the log console.
+4. When the status reads **Success!**, unplug the cable, wait a second, and reconnect power. The Pixel Pea boot animation should appear and slide into artwork playback within a few seconds.
 
 ### MicroSD reminder
 

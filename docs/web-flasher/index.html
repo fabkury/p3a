@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pixel Pea Web Flasher</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      rel="preconnect"
+      href="https://fonts.googleapis.com"
+    />
+    <link
+      rel="preconnect"
+      href="https://fonts.gstatic.com"
+      crossorigin
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://app.unpkg.com/web-serial-polyfill@1.0.15/files/dist/serial.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js"></script>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      * {
+        box-sizing: border-box;
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        background: #0f172a;
+        color: #e2e8f0;
+        min-height: 100vh;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 3rem 1.5rem 4rem;
+      }
+      h1 {
+        font-size: clamp(2rem, 4vw, 2.6rem);
+        margin-bottom: 0.25rem;
+      }
+      .lede {
+        margin-bottom: 1.5rem;
+        color: #94a3b8;
+        line-height: 1.5;
+      }
+      button {
+        background: #38bdf8;
+        border: none;
+        color: #0f172a;
+        font-weight: 600;
+        font-size: 1.1rem;
+        padding: 0.85rem 1.5rem;
+        border-radius: 0.75rem;
+        cursor: pointer;
+        transition: background 0.2s ease, transform 0.2s ease;
+      }
+      button:hover:not([disabled]) {
+        background: #7dd3fc;
+        transform: translateY(-1px);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .card {
+        border-radius: 1rem;
+        padding: 1.5rem;
+        background: #1e293b;
+        margin-top: 1.5rem;
+        box-shadow: 0 20px 60px rgba(15, 23, 42, 0.55);
+      }
+      .status {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+      }
+      progress {
+        width: 100%;
+        height: 0.75rem;
+        border-radius: 999px;
+        overflow: hidden;
+        appearance: none;
+      }
+      progress::-webkit-progress-bar {
+        background: #0f172a;
+      }
+      progress::-webkit-progress-value {
+        background: #38bdf8;
+      }
+      .log {
+        background: #020617;
+        border-radius: 0.75rem;
+        padding: 1rem;
+        height: 260px;
+        overflow-y: auto;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 0.85rem;
+        line-height: 1.4;
+        margin-top: 1rem;
+        border: 1px solid rgba(148, 163, 184, 0.15);
+      }
+      .requirements {
+        margin-top: 2rem;
+        color: #cbd5f5;
+        padding-left: 1.25rem;
+      }
+      .requirements li {
+        margin-bottom: 0.4rem;
+      }
+      .muted {
+        color: #94a3b8;
+      }
+      a {
+        color: #38bdf8;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Pixel Pea Web Flasher</h1>
+      <p class="lede">
+        Flash the latest Pixel Pea firmware straight from your browser. Use Chrome or
+        Edge on desktop, plug in the ESP32-P4 board with a USB-C cable, and click the
+        button below.
+      </p>
+      <button id="flashBtn">Connect &amp; install Pixel Pea</button>
+
+      <section class="card">
+        <div id="status" class="status">Waiting to connect…</div>
+        <progress id="overallProgress" value="0" max="100" hidden></progress>
+        <div id="progressLabel" class="muted" hidden>Preparing files…</div>
+        <div class="log" id="log"></div>
+      </section>
+
+      <ul class="requirements">
+        <li>Google Chrome 89+ or Microsoft Edge 89+ on Windows, macOS, Linux, or ChromeOS.</li>
+        <li>USB-C data cable (charging-only cables will not work).</li>
+        <li>Insert a microSD card with artwork before flashing for best results.</li>
+        <li>
+          Mobile browsers on iOS are unsupported because Apple does not expose the Web
+          Serial API.
+        </li>
+      </ul>
+    </main>
+
+    <script type="module">
+      import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.5.7/lib/index.js";
+
+      const CONFIG_URL =
+        "https://raw.githubusercontent.com/fabkury/p3a/main/docs/web-flasher/p3a-esp32p4.json";
+      const flashBtn = document.getElementById("flashBtn");
+      const statusEl = document.getElementById("status");
+      const progressEl = document.getElementById("overallProgress");
+      const progressLabel = document.getElementById("progressLabel");
+      const logEl = document.getElementById("log");
+
+      const serialLib = navigator.serial || window.serial;
+
+      const log = (msg) => {
+        const time = new Date().toLocaleTimeString();
+        logEl.textContent += `[${time}] ${msg}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+      };
+
+      const setStatus = (msg) => {
+        statusEl.textContent = msg;
+      };
+
+      const toggleProgress = (show, label = "") => {
+        progressEl.hidden = !show;
+        progressLabel.hidden = !show;
+        progressLabel.textContent = label;
+      };
+
+      const bufferToBinaryString = (buffer) => {
+        const bytes = new Uint8Array(buffer);
+        const chunk = 0x8000;
+        let binary = "";
+        for (let i = 0; i < bytes.length; i += chunk) {
+          const slice = bytes.subarray(i, i + chunk);
+          binary += String.fromCharCode(...slice);
+        }
+        return binary;
+      };
+
+      const downloadBinary = async (url, onProgress) => {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          throw new Error(`Download failed (${resp.status}) for ${url}`);
+        }
+        if (!resp.body) {
+          const buffer = await resp.arrayBuffer();
+          onProgress?.(buffer.byteLength, buffer.byteLength);
+          return bufferToBinaryString(buffer);
+        }
+
+        const reader = resp.body.getReader();
+        const total = Number(resp.headers.get("content-length")) || 0;
+        let received = 0;
+        const chunks = [];
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
+          onProgress?.(received, total);
+        }
+
+        const buffer = new Uint8Array(received);
+        let offset = 0;
+        for (const chunk of chunks) {
+          buffer.set(chunk, offset);
+          offset += chunk.length;
+        }
+        return bufferToBinaryString(buffer.buffer);
+      };
+
+      const ensureSupport = () => {
+        if (!serialLib) {
+          throw new Error(
+            "This browser does not expose the Web Serial API. Use Chrome or Edge on desktop."
+          );
+        }
+      };
+
+      flashBtn.addEventListener("click", async () => {
+        ensureSupport();
+        flashBtn.disabled = true;
+        logEl.textContent = "";
+        toggleProgress(true, "Preparing…");
+        progressEl.value = 5;
+
+        let transport;
+        try {
+          setStatus("Downloading flash recipe…");
+          const config = await fetch(CONFIG_URL).then((resp) => {
+            if (!resp.ok) throw new Error("Could not fetch flashing manifest.");
+            return resp.json();
+          });
+
+          const entries = Object.entries(config.flash_files).map(([offset, url]) => ({
+            address: parseInt(offset, 16),
+            url,
+          }));
+
+          const fileArray = [];
+          for (let i = 0; i < entries.length; i++) {
+            const part = entries[i];
+            setStatus(`Downloading image ${i + 1} of ${entries.length}…`);
+            progressLabel.textContent = `Fetching ${part.url}`;
+            const data = await downloadBinary(part.url, (done, total) => {
+              const pct = total ? Math.round((done / total) * 20) : 0;
+              progressEl.value = 10 + pct;
+            });
+            fileArray.push({ data, address: part.address });
+            log(`Fetched ${part.url}`);
+          }
+
+          setStatus("Select the Pixel Pea board to begin flashing…");
+          progressLabel.textContent = "Waiting for device selection";
+          progressEl.value = 40;
+          const port = await serialLib.requestPort({});
+          transport = new Transport(port, true);
+
+          const loaderOptions = {
+            transport,
+            baudrate: parseInt(config.default_baud || "460800", 10),
+            terminal: {
+              clean: () => (logEl.textContent = ""),
+              writeLine: log,
+              write: log,
+            },
+            debugLogging: false,
+          };
+
+          const esploader = new ESPLoader(loaderOptions);
+          setStatus("Connecting to chip…");
+          const chip = await esploader.main();
+          log(`Connected to ${chip}`);
+          setStatus("Flashing firmware (do not unplug) …");
+
+          toggleProgress(true, "Writing to flash…");
+          progressEl.value = 55;
+
+          await esploader.writeFlash({
+            fileArray,
+            eraseAll: false,
+            compress: true,
+            reportProgress: (fileIndex, written, total) => {
+              const partPct = total ? written / total : 0;
+              const overallPct = 55 + (fileIndex + partPct) * (40 / fileArray.length);
+              progressEl.value = Math.min(95, overallPct);
+              progressLabel.textContent = `Chunk ${fileIndex + 1}/${fileArray.length} – ${Math.round(
+                partPct * 100
+              )}%`;
+            },
+            calculateMD5Hash: (image) => CryptoJS.MD5(CryptoJS.enc.Latin1.parse(image)),
+          });
+
+          await esploader.after();
+          await transport.disconnect();
+          transport = null;
+
+          toggleProgress(true, "All done!");
+          progressEl.value = 100;
+          setStatus("Success! Disconnect the cable and reboot the Pixel Pea.");
+          log("Flash complete.");
+        } catch (err) {
+          console.error(err);
+          toggleProgress(false);
+          setStatus(`Error: ${err.message || err}`);
+          log(err.stack || err.toString());
+          if (transport) {
+            await transport.disconnect().catch(() => {});
+          }
+        } finally {
+          flashBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
+

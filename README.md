@@ -58,7 +58,6 @@ p3a is in the **display prototype with Wi-Fi** stage. Upcoming milestones focus 
 - **Playlists & UI**: Playlist-aware scheduling, richer gestures, and lightweight HUD overlays.
 - **Reliability**: OTA with rollback, watchdog coverage, diagnostics, and provisioning workflows.
 - **Manufacturing & docs**: Flashing tools, release automation, and installer tutorials.
-- **Extra**: ✅ **PICO-8 Monitor** — Stream games wirelessly from your browser! (Optional, enabled by default — see PICO-8 Monitor section)
 
 See `ROADMAP.md` for a detailed phase-by-phase breakdown.
 

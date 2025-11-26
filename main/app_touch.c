@@ -57,6 +57,7 @@ typedef enum {
  * - Brightness updates continuously as finger moves during swipe
  * - Auto-swap timer is reset when brightness gesture starts
  */
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
 static uint16_t scale_to_pico8(uint16_t value, uint16_t max_src, uint16_t max_dst)
 {
     if (max_src == 0) {
@@ -69,6 +70,7 @@ static uint16_t scale_to_pico8(uint16_t value, uint16_t max_src, uint16_t max_ds
     }
     return (uint16_t)scaled;
 }
+#endif
 
 static void app_touch_task(void *arg)
 {
@@ -86,9 +88,11 @@ static void app_touch_task(void *arg)
     const uint16_t min_swipe_height = (screen_height * CONFIG_P3A_TOUCH_SWIPE_MIN_HEIGHT_PERCENT) / 100;
     const int max_brightness_delta = CONFIG_P3A_TOUCH_BRIGHTNESS_MAX_DELTA_PERCENT;
 
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     bool last_touch_valid = false;
     uint16_t last_scaled_x = 0;
     uint16_t last_scaled_y = 0;
+#endif
 
     while (true) {
         esp_lcd_touch_read_data(tp);
@@ -96,9 +100,11 @@ static void app_touch_task(void *arg)
                                                      CONFIG_ESP_LCD_TOUCH_MAX_POINTS);
 
         if (pressed && touch_count > 0) {
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
             uint16_t scaled_x = scale_to_pico8(x[0], BSP_LCD_H_RES, 127);
             uint16_t scaled_y = scale_to_pico8(y[0], BSP_LCD_V_RES, 127);
             bool coords_changed = (!last_touch_valid) || (scaled_x != last_scaled_x) || (scaled_y != last_scaled_y);
+#endif
 
             if (gesture_state == GESTURE_STATE_IDLE) {
                 // Touch just started
@@ -150,6 +156,7 @@ static void app_touch_task(void *arg)
                 }
             }
 
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
             if (!last_touch_valid) {
                 pico8_touch_report_t report = {
                     .report_id = 1,
@@ -176,6 +183,7 @@ static void app_touch_task(void *arg)
                 last_scaled_x = scaled_x;
                 last_scaled_y = scaled_y;
             }
+#endif
         } else {
             // Touch released
             if (gesture_state != GESTURE_STATE_IDLE) {
@@ -196,6 +204,7 @@ static void app_touch_task(void *arg)
                 }
                 gesture_state = GESTURE_STATE_IDLE;
             }
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
             if (last_touch_valid) {
                 pico8_touch_report_t report = {
                     .report_id = 1,
@@ -208,6 +217,7 @@ static void app_touch_task(void *arg)
                 app_usb_report_touch(&report);
                 last_touch_valid = false;
             }
+#endif
         }
 
         vTaskDelay(poll_delay);

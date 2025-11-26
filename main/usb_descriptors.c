@@ -8,7 +8,11 @@
 #define P3A_USB_PID 0x80A8
 #define P3A_USB_BCD 0x0200
 
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
 #define P3A_CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + TUD_MSC_DESC_LEN + TUD_VENDOR_DESC_LEN)
+#else
+#define P3A_CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + TUD_MSC_DESC_LEN)
+#endif
 
 static tusb_desc_device_t const s_device_descriptor = {
     .bLength = sizeof(tusb_desc_device_t),
@@ -37,8 +41,10 @@ static uint8_t const s_full_speed_configuration[] = {
     TUD_CDC_DESCRIPTOR(P3A_ITF_NUM_CDC_COMM, P3A_STRID_CDC_INTERFACE, P3A_USB_EP_CDC_NOTIF, 8,
                        P3A_USB_EP_CDC_OUT, P3A_USB_EP_CDC_IN, 64),
     TUD_MSC_DESCRIPTOR(P3A_ITF_NUM_MSC, P3A_STRID_MSC_INTERFACE, P3A_USB_EP_MSC_OUT, P3A_USB_EP_MSC_IN, 64),
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     TUD_VENDOR_DESCRIPTOR(P3A_ITF_NUM_VENDOR, P3A_STRID_VENDOR_INTERFACE,
                           P3A_USB_EP_VENDOR_OUT, P3A_USB_EP_VENDOR_IN, 64),
+#endif
 };
 
 #if TUD_OPT_HIGH_SPEED
@@ -47,8 +53,10 @@ static uint8_t const s_high_speed_configuration[] = {
     TUD_CDC_DESCRIPTOR(P3A_ITF_NUM_CDC_COMM, P3A_STRID_CDC_INTERFACE, P3A_USB_EP_CDC_NOTIF, 8,
                        P3A_USB_EP_CDC_OUT, P3A_USB_EP_CDC_IN, 512),
     TUD_MSC_DESCRIPTOR(P3A_ITF_NUM_MSC, P3A_STRID_MSC_INTERFACE, P3A_USB_EP_MSC_OUT, P3A_USB_EP_MSC_IN, 512),
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     TUD_VENDOR_DESCRIPTOR(P3A_ITF_NUM_VENDOR, P3A_STRID_VENDOR_INTERFACE,
                           P3A_USB_EP_VENDOR_OUT, P3A_USB_EP_VENDOR_IN, 512),
+#endif
 };
 
 static uint8_t s_other_speed_configuration[P3A_CONFIG_TOTAL_LEN];
@@ -74,9 +82,16 @@ uint8_t const *tud_descriptor_other_speed_configuration_cb(uint8_t index)
 {
     (void)index;
 
-    uint8_t const *src = (tud_speed_get() == TUSB_SPEED_HIGH) ? s_full_speed_configuration
-                                                              : s_high_speed_configuration;
-    memcpy(s_other_speed_configuration, src, sizeof(s_other_speed_configuration));
+    uint8_t const *src;
+    if (tud_speed_get() == TUSB_SPEED_HIGH) {
+        src = s_full_speed_configuration;
+    } else {
+        src = s_high_speed_configuration;
+    }
+    
+    size_t src_size = (src == s_full_speed_configuration) ? sizeof(s_full_speed_configuration) : sizeof(s_high_speed_configuration);
+    size_t copy_size = (src_size < sizeof(s_other_speed_configuration)) ? src_size : sizeof(s_other_speed_configuration);
+    memcpy(s_other_speed_configuration, src, copy_size);
     s_other_speed_configuration[1] = TUSB_DESC_OTHER_SPEED_CONFIG;
     return s_other_speed_configuration;
 }
@@ -99,7 +114,9 @@ static const char *const s_string_desc[] = {
     "0001",
     "P3A CDC Console",
     "P3A SD Drive",
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     "P3A PICO-8 Stream",
+#endif
 };
 
 static uint16_t s_string_buf[32];

@@ -10,6 +10,7 @@
 extern "C" {
 #endif
 
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
 typedef struct __attribute__((packed)) {
     uint8_t report_id;
     uint8_t flags;
@@ -18,14 +19,17 @@ typedef struct __attribute__((packed)) {
     uint8_t pressure;
     uint8_t reserved;
 } pico8_touch_report_t;
+#endif
 
-#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
+#if CONFIG_P3A_USB_MSC_ENABLE
 
 esp_err_t app_usb_init(void);
 
-void app_usb_report_touch(const pico8_touch_report_t *report);
-
 bool app_usb_is_stream_active(void);
+
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
+void app_usb_report_touch(const pico8_touch_report_t *report);
+#endif
 
 #else
 
@@ -34,17 +38,19 @@ static inline esp_err_t app_usb_init(void)
     return ESP_OK;
 }
 
-static inline void app_usb_report_touch(const pico8_touch_report_t *report)
-{
-    (void)report;
-}
-
 static inline bool app_usb_is_stream_active(void)
 {
     return false;
 }
 
-#endif  // CONFIG_P3A_PICO8_USB_STREAM_ENABLE
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
+static inline void app_usb_report_touch(const pico8_touch_report_t *report)
+{
+    (void)report;
+}
+#endif
+
+#endif  // CONFIG_P3A_USB_MSC_ENABLE
 
 #ifdef __cplusplus
 }

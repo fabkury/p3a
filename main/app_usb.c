@@ -1,6 +1,6 @@
 #include "app_usb.h"
 
-#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
+#if CONFIG_P3A_USB_MSC_ENABLE
 
 #include <stdlib.h>
 #include <string.h>
@@ -13,7 +13,6 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
-#include "pico8_stream.h"
 #include "sdkconfig.h"
 #include "tinyusb.h"
 #include "tusb.h"
@@ -21,12 +20,18 @@
 #include "class/cdc/cdc_device.h"
 #include "class/msc/msc_device.h"
 
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
+#include "pico8_stream.h"
+#endif
+
 static const char *TAG = "app_usb";
 
 extern sdmmc_card_t *bsp_sdcard;
 
 static SemaphoreHandle_t s_msc_mutex = NULL;
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
 static SemaphoreHandle_t s_vendor_mutex = NULL;
+#endif
 static uint8_t *s_sector_buffer = NULL;
 static size_t s_sector_buffer_size = 0;
 static uint16_t s_block_size = 512;
@@ -48,6 +53,7 @@ esp_err_t app_usb_init(void)
         return ESP_ERR_NO_MEM;
     }
 
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     s_vendor_mutex = xSemaphoreCreateMutex();
     if (!s_vendor_mutex) {
         ESP_LOGE(TAG, "Failed to create vendor mutex");
@@ -55,6 +61,7 @@ esp_err_t app_usb_init(void)
         s_msc_mutex = NULL;
         return ESP_ERR_NO_MEM;
     }
+#endif
 
     const tinyusb_config_t tusb_cfg = {
         .device_descriptor = NULL,
@@ -73,7 +80,9 @@ esp_err_t app_usb_init(void)
     };
 
     ESP_RETURN_ON_ERROR(tinyusb_driver_install(&tusb_cfg), TAG, "Failed to install TinyUSB");
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     ESP_RETURN_ON_ERROR(pico8_stream_init(), TAG, "Failed to start PICO-8 stream task");
+#endif
 
     ESP_LOGI(TAG, "TinyUSB composite device initialized");
     return ESP_OK;
@@ -84,6 +93,7 @@ bool app_usb_is_stream_active(void)
     return s_usb_active && tud_ready();
 }
 
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
 void app_usb_report_touch(const pico8_touch_report_t *report)
 {
     if (!report || !s_usb_active || !tud_ready()) {
@@ -105,6 +115,7 @@ void app_usb_report_touch(const pico8_touch_report_t *report)
         xSemaphoreGive(s_vendor_mutex);
     }
 }
+#endif
 
 static esp_err_t update_card_capacity(void)
 {
@@ -243,7 +254,9 @@ void tud_umount_cb(void)
 {
     ESP_LOGI(TAG, "USB host disconnected");
     s_usb_active = false;
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     pico8_stream_reset();
+#endif
     animation_player_end_sd_export();
 }
 
@@ -251,7 +264,9 @@ void tud_suspend_cb(bool remote_wakeup_en)
 {
     (void)remote_wakeup_en;
     s_usb_active = false;
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     pico8_stream_reset();
+#endif
     animation_player_end_sd_export();
 }
 
@@ -362,11 +377,13 @@ bool app_usb_is_stream_active(void)
     return false;
 }
 
+#if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
 void app_usb_report_touch(const pico8_touch_report_t *report)
 {
     (void)report;
 }
+#endif
 
-#endif  // CONFIG_P3A_PICO8_USB_STREAM_ENABLE
+#endif  // CONFIG_P3A_USB_MSC_ENABLE
 
 

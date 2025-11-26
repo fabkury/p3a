@@ -23,7 +23,7 @@ else()
     )
 endif()
 
-if(CONFIG_P3A_PICO8_USB_STREAM_ENABLE)
+if(CONFIG_P3A_USB_MSC_ENABLE)
     list(APPEND srcs
         "app_usb.c"
         "usb_descriptors.c"

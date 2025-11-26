@@ -178,6 +178,15 @@ menu "Physical Player of Pixel Art (P3A)"
             select BSP_LCD_COLOR_FORMAT_RGB888
     endchoice
 
+    menu "USB"
+        config P3A_USB_MSC_ENABLE
+            bool "Enable USB Mass Storage Device"
+            default y
+            help
+                Enable USB composite device with CDC console and MSC (Mass Storage)
+                to expose the SD card as a USB drive.
+    endmenu
+
     menu "PICO-8 Monitor"
         config P3A_PICO8_ENABLE
             bool "Enable PICO-8 monitor feature"
@@ -189,12 +198,11 @@ menu "Physical Player of Pixel Art (P3A)"
                 from the firmware binary.
 
         config P3A_PICO8_USB_STREAM_ENABLE
-            bool "Enable USB composite + PICO-8 streaming"
+            bool "Enable USB PICO-8 streaming interface"
             default y
-            depends on P3A_PICO8_ENABLE
+            depends on P3A_PICO8_ENABLE && P3A_USB_MSC_ENABLE
             help
-                Enable the TinyUSB composite device that exposes CDC, MSC and a
-                vendor-specific streaming interface for the PICO-8 monitor mode.
-                Disable to build firmware without the USB composite stack.
+                Add vendor-specific USB interface for PICO-8 frame streaming.
+                Requires both PICO-8 monitor and USB MSC to be enabled.
     endmenu
 endmenu

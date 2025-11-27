@@ -62,8 +62,6 @@ p3a is in the **display prototype with Wi-Fi** stage. Upcoming milestones focus 
 See `ROADMAP.md` for a detailed phase-by-phase breakdown.
 
 ## Build & flash
-> **💡 Flash from your browser today!**  
-> The [Web Flasher guide](docs/flash-p3a.md) walks through the Espressif Web Flasher flow (Chrome/Edge) in plain language. Open it to find the “Open Web Flasher” button plus troubleshooting tips.
 
 1. Connect the board with a data-capable USB-C cable and keep Chrome/Edge open.
 2. Visit the guide above, click the button, pick your device from the browser dialog, and start flashing.

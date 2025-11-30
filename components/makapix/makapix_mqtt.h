@@ -6,16 +6,21 @@
 #include <stdint.h>
 
 /**
- * @brief Initialize MQTT client
+ * @brief Initialize MQTT client with mTLS authentication
  * 
- * Must be called before connect. Sets up client configuration.
+ * Must be called before connect. Sets up client configuration with mutual TLS.
+ * Authentication is via client certificate (no username/password needed).
  * 
- * @param player_key UUID string to use as MQTT username
+ * @param player_key UUID string for building topics and client ID
  * @param host MQTT broker hostname
- * @param port MQTT broker port (typically 8883 for TLS)
+ * @param port MQTT broker port (typically 8883 for mTLS)
+ * @param ca_cert CA certificate PEM string for server verification
+ * @param client_cert Client certificate PEM string for authentication
+ * @param client_key Client private key PEM string for authentication
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t port);
+esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t port,
+                            const char *ca_cert, const char *client_cert, const char *client_key);
 
 /**
  * @brief Connect to MQTT broker

@@ -57,7 +57,55 @@ esp_err_t makapix_store_get_mqtt_port(uint16_t *out_port);
 esp_err_t makapix_store_save_credentials(const char *player_key, const char *host, uint16_t port);
 
 /**
+ * @brief Check if TLS certificates are stored in SPIFFS
+ * 
+ * @return true if all certificates exist, false otherwise
+ */
+bool makapix_store_has_certificates(void);
+
+/**
+ * @brief Save TLS certificates to SPIFFS
+ * 
+ * Saves CA certificate, client certificate, and client private key to SPIFFS filesystem.
+ * 
+ * @param ca_pem CA certificate PEM string
+ * @param cert_pem Client certificate PEM string
+ * @param key_pem Client private key PEM string
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t makapix_store_save_certificates(const char *ca_pem, const char *cert_pem, const char *key_pem);
+
+/**
+ * @brief Get CA certificate from SPIFFS
+ * 
+ * @param buffer Buffer to receive certificate (must be at least max_len bytes)
+ * @param max_len Maximum length of buffer
+ * @return ESP_OK on success, ESP_ERR_NOT_FOUND if not stored, error code otherwise
+ */
+esp_err_t makapix_store_get_ca_cert(char *buffer, size_t max_len);
+
+/**
+ * @brief Get client certificate from SPIFFS
+ * 
+ * @param buffer Buffer to receive certificate (must be at least max_len bytes)
+ * @param max_len Maximum length of buffer
+ * @return ESP_OK on success, ESP_ERR_NOT_FOUND if not stored, error code otherwise
+ */
+esp_err_t makapix_store_get_client_cert(char *buffer, size_t max_len);
+
+/**
+ * @brief Get client private key from SPIFFS
+ * 
+ * @param buffer Buffer to receive private key (must be at least max_len bytes)
+ * @param max_len Maximum length of buffer
+ * @return ESP_OK on success, ESP_ERR_NOT_FOUND if not stored, error code otherwise
+ */
+esp_err_t makapix_store_get_client_key(char *buffer, size_t max_len);
+
+/**
  * @brief Clear all stored Makapix credentials
+ * 
+ * Clears NVS credentials and deletes certificate files from SPIFFS.
  * 
  * @return ESP_OK on success, error code otherwise
  */

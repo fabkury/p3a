@@ -254,7 +254,7 @@ IGNORE_EXTRA_COMPONENT:UNINITIALIZED=
 PROJECT_SOURCE_DIR:UNINITIALIZED=D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/p3a/repo
 
 //No help, variable specified on the command line.
-PYTHON:UNINITIALIZED=C:/Users/Fab/.espressif/python_env/idf5.5_py3.13_env/Scripts/python.exe
+PYTHON:UNINITIALIZED=C:/Users/Fab/.espressif/python_env/idf5.5_py3.11_env/Scripts/python.exe
 
 //No help, variable specified on the command line.
 PYTHON_DEPS_CHECKED:UNINITIALIZED=1

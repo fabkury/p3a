@@ -2523,6 +2523,13 @@ CONFIG_WIFI_PROV_STA_ALL_CHANNEL_SCAN=y
 # end of Wi-Fi Provisioning Manager
 
 #
+# Makapix Configuration
+#
+CONFIG_MAKAPIX_CLUB_HOST="dev.makapix.club"
+CONFIG_MAKAPIX_CLUB_MQTT_PORT=8883
+# end of Makapix Configuration
+
+#
 # CMake Utilities
 #
 # CONFIG_CU_RELINKER_ENABLE is not set

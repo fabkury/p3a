@@ -17,5 +17,7 @@ idf_component_register(
         fatfs
         driver
         esp-tls
+        esp_wifi
+        esp_netif
 )
 

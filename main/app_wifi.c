@@ -29,6 +29,8 @@
 #include "app_state.h"
 #include "http_api.h"
 #include "app_wifi.h"
+#include "sntp_sync.h"
+#include "makapix.h"
 
 #define EXAMPLE_ESP_WIFI_SSID      CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
@@ -271,6 +273,10 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         
         // Initialize app state and start REST API after STA gets IP
         ESP_LOGI(TAG, "STA connected, initializing app services");
+        
+        // Initialize SNTP for time synchronization
+        sntp_sync_init();
+        
         app_state_init();
         esp_err_t api_err = http_api_start();
         if (api_err != ESP_OK) {
@@ -284,6 +290,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             app_state_enter_ready();
             ESP_LOGI(TAG, "REST API started at http://p3a.local/");
         }
+        
+        // Connect to MQTT if registered
+        makapix_connect_if_registered();
     }
 }
 

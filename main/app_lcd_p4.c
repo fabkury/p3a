@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -23,6 +24,7 @@
 #include "bsp/display.h"
 #include "bsp/esp32_p4_wifi6_touch_lcd_4b.h"
 #include "animation_player.h"
+#include "ugfx_ui.h"
 
 // Forward declaration for auto-swap timer reset
 extern void auto_swap_reset_timer(void);
@@ -30,6 +32,7 @@ extern void auto_swap_reset_timer(void);
 #define TAG "app_lcd"
 
 static esp_lcd_panel_handle_t display_handle = NULL;
+static esp_lcd_panel_io_handle_t io_handle = NULL;
 static uint8_t *lcd_buffer[EXAMPLE_LCD_BUF_NUM] = { NULL };
 static size_t s_frame_buffer_bytes = (size_t)EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES * (EXAMPLE_LCD_BIT_PER_PIXEL / 8);
 static size_t s_frame_row_stride_bytes = (size_t)EXAMPLE_LCD_H_RES * (EXAMPLE_LCD_BIT_PER_PIXEL / 8);
@@ -47,26 +50,22 @@ void app_lcd_draw(uint8_t *buf, uint32_t len, uint16_t width, uint16_t height)
 
 esp_err_t app_lcd_init(void)
 {
+    ESP_LOGI(TAG, "P3A: Initialize display");
+
+    // Step 1: Initialize display panel
     bsp_display_config_t disp_config = { 0 };
-    esp_lcd_panel_io_handle_t mipi_dbi_io = NULL;
-
-    ESP_LOGI(TAG, "P3A: Initialize MIPI DSI bus");
-
-    ESP_ERROR_CHECK(bsp_display_new(&disp_config, &display_handle, &mipi_dbi_io));
+    ESP_ERROR_CHECK(bsp_display_new(&disp_config, &display_handle, &io_handle));
     
     // Initialize brightness control
     esp_err_t err = bsp_display_brightness_init();
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Brightness init failed: %s", esp_err_to_name(err));
     } else {
-        // Set initial brightness to 100%
         s_current_brightness = 100;
-        err = bsp_display_brightness_set(s_current_brightness);
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "Initial brightness set failed: %s", esp_err_to_name(err));
-        }
+        bsp_display_brightness_set(s_current_brightness);
     }
 
+    // Step 2: Get frame buffers for animation player
 #if EXAMPLE_LCD_BUF_NUM == 1
     ESP_ERROR_CHECK(esp_lcd_dpi_panel_get_frame_buffer(display_handle, 1, (void **)&lcd_buffer[0]));
 #elif EXAMPLE_LCD_BUF_NUM == 2
@@ -96,8 +95,8 @@ esp_err_t app_lcd_init(void)
     }
 
     ESP_LOGI(TAG, "Frame buffer stride: %zu bytes, size: %zu bytes", s_frame_row_stride_bytes, s_frame_buffer_bytes);
-    
-    // Initialize animation player
+
+    // Step 3: Initialize animation player
     err = animation_player_init(display_handle, lcd_buffer, s_buffer_count,
                                 s_frame_buffer_bytes, s_frame_row_stride_bytes);
     if (err != ESP_OK) {
@@ -105,15 +104,16 @@ esp_err_t app_lcd_init(void)
         return err;
     }
 
-    // Start animation player task
+    // Step 4: Start animation player task
     err = animation_player_start();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start animation player: %s", esp_err_to_name(err));
         return err;
     }
 
+    ESP_LOGI(TAG, "Display initialized successfully");
     return ESP_OK;
-    }
+}
 
 void app_lcd_set_animation_paused(bool paused)
 {
@@ -189,6 +189,48 @@ esp_err_t app_lcd_set_brightness(int brightness_percent)
         s_current_brightness = brightness_percent;
     }
     return err;
+}
+
+esp_err_t app_lcd_enter_ui_mode(void)
+{
+    if (animation_player_is_ui_mode()) {
+        return ESP_OK;
+    }
+    ESP_LOGI(TAG, "Entering UI mode");
+    return animation_player_enter_ui_mode();
+}
+
+esp_err_t app_lcd_exit_ui_mode(void)
+{
+    if (!animation_player_is_ui_mode()) {
+        return ESP_OK;
+    }
+    ESP_LOGI(TAG, "Exiting UI mode");
+    animation_player_exit_ui_mode();
+    return ESP_OK;
+}
+
+bool app_lcd_is_ui_mode(void)
+{
+    return animation_player_is_ui_mode();
+}
+
+uint8_t *app_lcd_get_framebuffer(int index)
+{
+    if (index < 0 || index >= s_buffer_count) {
+        return NULL;
+    }
+    return lcd_buffer[index];
+}
+
+size_t app_lcd_get_row_stride(void)
+{
+    return s_frame_row_stride_bytes;
+}
+
+esp_lcd_panel_handle_t app_lcd_get_panel_handle(void)
+{
+    return display_handle;
 }
 
 esp_err_t app_lcd_adjust_brightness(int delta_percent)

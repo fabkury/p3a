@@ -15,6 +15,10 @@
 #include "app_touch.h"
 #include "bsp/display.h"
 #include "sdkconfig.h"
+#include "makapix.h"
+
+// Debug provisioning mode - when enabled, long press doesn't trigger real provisioning
+#define DEBUG_PROVISIONING_ENABLED 1
 
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -32,9 +36,10 @@ static esp_lcd_touch_handle_t tp = NULL;
  * and swipe gestures (for brightness control) based on vertical movement distance.
  */
 typedef enum {
-    GESTURE_STATE_IDLE,        // No active touch
-    GESTURE_STATE_TAP,        // Potential tap/swap gesture (minimal movement)
-    GESTURE_STATE_BRIGHTNESS  // Brightness control gesture (vertical swipe detected)
+    GESTURE_STATE_IDLE,              // No active touch
+    GESTURE_STATE_TAP,              // Potential tap/swap gesture (minimal movement)
+    GESTURE_STATE_BRIGHTNESS,       // Brightness control gesture (vertical swipe detected)
+    GESTURE_STATE_LONG_PRESS_PENDING // Finger down, counting to 10s for provisioning
 } gesture_state_t;
 
 /**
@@ -83,10 +88,13 @@ static void app_touch_task(void *arg)
     gesture_state_t gesture_state = GESTURE_STATE_IDLE;
     uint16_t touch_start_x = 0;
     uint16_t touch_start_y = 0;
+    TickType_t touch_start_time = 0;
     int brightness_start = 100;  // Brightness at gesture start
     const uint16_t screen_height = BSP_LCD_V_RES;
     const uint16_t min_swipe_height = (screen_height * CONFIG_P3A_TOUCH_SWIPE_MIN_HEIGHT_PERCENT) / 100;
     const int max_brightness_delta = CONFIG_P3A_TOUCH_BRIGHTNESS_MAX_DELTA_PERCENT;
+    const TickType_t long_press_duration = pdMS_TO_TICKS(10000); // 10 seconds
+    const uint16_t long_press_movement_threshold = 20; // pixels - must stay within this distance
 
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     bool last_touch_valid = false;
@@ -110,13 +118,56 @@ static void app_touch_task(void *arg)
                 // Touch just started
                 touch_start_x = x[0];
                 touch_start_y = y[0];
+                touch_start_time = xTaskGetTickCount();
                 brightness_start = app_lcd_get_brightness();
                 gesture_state = GESTURE_STATE_TAP;
                 ESP_LOGD(TAG, "touch start @(%u,%u)", touch_start_x, touch_start_y);
             } else {
                 // Touch is active, check for gesture classification
+                int16_t delta_x = (int16_t)x[0] - (int16_t)touch_start_x;
                 int16_t delta_y = (int16_t)y[0] - (int16_t)touch_start_y;
+                uint16_t abs_delta_x = (delta_x < 0) ? -delta_x : delta_x;
                 uint16_t abs_delta_y = (delta_y < 0) ? -delta_y : delta_y;
+                
+                // Check for long press: finger held at same position for 10 seconds
+                TickType_t elapsed = xTaskGetTickCount() - touch_start_time;
+                uint16_t total_movement = abs_delta_x + abs_delta_y;
+                
+                if (gesture_state == GESTURE_STATE_TAP || gesture_state == GESTURE_STATE_LONG_PRESS_PENDING) {
+                    if (total_movement <= long_press_movement_threshold) {
+                        // Finger hasn't moved much, check for long press
+                        if (elapsed >= long_press_duration) {
+                            if (gesture_state != GESTURE_STATE_LONG_PRESS_PENDING) {
+                                gesture_state = GESTURE_STATE_LONG_PRESS_PENDING;
+                                
+#if DEBUG_PROVISIONING_ENABLED
+                                // Debug mode: long press doesn't trigger real provisioning
+                                ESP_LOGI(TAG, "Long press detected (DEBUG MODE - provisioning disabled)");
+#else
+                                // Check current makapix state
+                                makapix_state_t makapix_state = makapix_get_state();
+                                if (makapix_state == MAKAPIX_STATE_PROVISIONING || 
+                                    makapix_state == MAKAPIX_STATE_SHOW_CODE) {
+                                    // Already in provisioning/show_code mode - cancel and exit
+                                    ESP_LOGI(TAG, "Long press detected in registration mode - cancelling and exiting");
+                                    makapix_cancel_provisioning();
+                                } else {
+                                    // Not in provisioning mode - start new provisioning
+                                    ESP_LOGI(TAG, "Long press detected, starting provisioning");
+                                    makapix_start_provisioning();
+                                }
+#endif
+                            }
+                        } else {
+                            // Still counting, but not long enough yet
+                            gesture_state = GESTURE_STATE_TAP;
+                        }
+                    } else {
+                        // Finger moved, reset long press detection (don't cancel provisioning)
+                        // Cancellation only happens on completed 10-second press
+                        gesture_state = GESTURE_STATE_TAP;
+                    }
+                }
                 
                 // Transition to brightness control if vertical distance exceeds threshold
                 if (gesture_state == GESTURE_STATE_TAP && abs_delta_y >= min_swipe_height) {
@@ -187,7 +238,10 @@ static void app_touch_task(void *arg)
         } else {
             // Touch released
             if (gesture_state != GESTURE_STATE_IDLE) {
-                if (gesture_state == GESTURE_STATE_TAP) {
+                if (gesture_state == GESTURE_STATE_LONG_PRESS_PENDING) {
+                    // Long press was triggered, provisioning is in progress
+                    ESP_LOGD(TAG, "Long press gesture ended (provisioning in progress)");
+                } else if (gesture_state == GESTURE_STATE_TAP) {
                     // It was a tap, perform swap gesture
                     const uint16_t screen_midpoint = BSP_LCD_H_RES / 2;
                     if (touch_start_x < screen_midpoint) {

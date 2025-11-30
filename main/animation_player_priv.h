@@ -126,7 +126,14 @@ extern TaskHandle_t s_loader_task;
 extern SemaphoreHandle_t s_loader_sem;
 extern SemaphoreHandle_t s_buffer_mutex;
 
+typedef enum {
+    RENDER_MODE_ANIMATION,  // Animation pipeline owns buffers
+    RENDER_MODE_UI          // UI pipeline owns buffers
+} render_mode_t;
+
 extern bool s_anim_paused;
+extern volatile render_mode_t s_render_mode_request;   // Requested render mode
+extern volatile render_mode_t s_render_mode_active;    // Mode currently used by render loop
 
 extern TaskHandle_t s_upscale_worker_top;
 extern TaskHandle_t s_upscale_worker_bottom;

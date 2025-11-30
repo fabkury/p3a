@@ -19,6 +19,8 @@ SemaphoreHandle_t s_loader_sem = NULL;
 SemaphoreHandle_t s_buffer_mutex = NULL;
 
 bool s_anim_paused = false;
+volatile render_mode_t s_render_mode_request = RENDER_MODE_ANIMATION;
+volatile render_mode_t s_render_mode_active = RENDER_MODE_ANIMATION;
 
 TaskHandle_t s_upscale_worker_top = NULL;
 TaskHandle_t s_upscale_worker_bottom = NULL;
@@ -54,6 +56,23 @@ typedef struct {
     TaskHandle_t requester;
     esp_err_t result;
 } sd_refresh_request_t;
+
+static void animation_player_wait_for_render_mode(render_mode_t target_mode)
+{
+    const TickType_t check_delay = pdMS_TO_TICKS(5);
+    const TickType_t timeout = pdMS_TO_TICKS(500);
+    TickType_t waited = 0;
+
+    while (s_render_mode_active != target_mode) {
+        vTaskDelay(check_delay);
+        waited += check_delay;
+        if (waited >= timeout) {
+            ESP_LOGW(TAG, "Timed out waiting for render mode %d (active=%d)",
+                     target_mode, s_render_mode_active);
+            break;
+        }
+    }
+}
 
 static void animation_player_sd_refresh_task(void *arg)
 {
@@ -570,3 +589,28 @@ esp_err_t animation_player_swap_to_index(size_t index)
     return ESP_FAIL;
 }
 
+// ============================================================================
+// UI Mode Control - SIMPLE VERSION
+// ============================================================================
+
+esp_err_t animation_player_enter_ui_mode(void)
+{
+    ESP_LOGI(TAG, "Entering UI mode");
+    s_render_mode_request = RENDER_MODE_UI;
+    animation_player_wait_for_render_mode(RENDER_MODE_UI);
+    ESP_LOGI(TAG, "UI mode active");
+    return ESP_OK;
+}
+
+void animation_player_exit_ui_mode(void)
+{
+    ESP_LOGI(TAG, "Exiting UI mode");
+    s_render_mode_request = RENDER_MODE_ANIMATION;
+    animation_player_wait_for_render_mode(RENDER_MODE_ANIMATION);
+    ESP_LOGI(TAG, "Animation mode active");
+}
+
+bool animation_player_is_ui_mode(void)
+{
+    return (s_render_mode_active == RENDER_MODE_UI);
+}

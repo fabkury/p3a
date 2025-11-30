@@ -19,6 +19,10 @@
 #include "app_lcd.h"
 #include "favicon_data.h"
 #include "fs_init.h"
+#include "version.h"
+#include "makapix.h"
+#include "makapix_mqtt.h"
+#include "makapix_artwork.h"
 #if CONFIG_P3A_PICO8_ENABLE
 #include "pico8_stream.h"
 #endif
@@ -177,12 +181,71 @@ bool api_enqueue_resume(void) {
     return enqueue_cmd(CMD_RESUME);
 }
 
+// ---------- MQTT Command Handler ----------
+
+/**
+ * @brief Handle MQTT commands
+ * 
+ * Called by makapix_mqtt when a command is received via MQTT.
+ */
+static void makapix_command_handler(const char *command_type, cJSON *payload)
+{
+    ESP_LOGI(TAG, "MQTT command received: %s", command_type);
+    
+    if (strcmp(command_type, "swap_next") == 0) {
+        api_enqueue_swap_next();
+    } else if (strcmp(command_type, "swap_back") == 0) {
+        api_enqueue_swap_back();
+    } else if (strcmp(command_type, "show_artwork") == 0) {
+        // Extract artwork information from payload
+        cJSON *art_url = cJSON_GetObjectItem(payload, "art_url");
+        cJSON *storage_key = cJSON_GetObjectItem(payload, "storage_key");
+        cJSON *post_id = cJSON_GetObjectItem(payload, "post_id");
+        
+        if (art_url && cJSON_IsString(art_url) && 
+            storage_key && cJSON_IsString(storage_key)) {
+            
+            const char *url = cJSON_GetStringValue(art_url);
+            const char *key = cJSON_GetStringValue(storage_key);
+            int32_t pid = post_id && cJSON_IsNumber(post_id) ? (int32_t)cJSON_GetNumberValue(post_id) : 0;
+            
+            ESP_LOGI(TAG, "Downloading artwork: %s", url);
+            
+            // Download artwork to vault
+            char file_path[256];
+            esp_err_t err = makapix_artwork_download(url, key, file_path, sizeof(file_path));
+            if (err == ESP_OK) {
+                ESP_LOGI(TAG, "Artwork downloaded to: %s", file_path);
+                
+                // Ensure cache limit
+                makapix_artwork_ensure_cache_limit(250);
+                
+                // Update post ID tracking
+                makapix_set_current_post_id(pid);
+                
+                // Trigger swap_next to display the new artwork
+                // Note: Full playback implementation deferred per plan
+                api_enqueue_swap_next();
+            } else {
+                ESP_LOGE(TAG, "Failed to download artwork: %s", esp_err_to_name(err));
+            }
+        } else {
+            ESP_LOGE(TAG, "Invalid show_artwork payload");
+        }
+    } else {
+        ESP_LOGW(TAG, "Unknown command type: %s", command_type);
+    }
+}
+
 // ---------- Callback Registration ----------
 
 void http_api_set_action_handlers(action_callback_t swap_next, action_callback_t swap_back) {
     s_swap_next_callback = swap_next;
     s_swap_back_callback = swap_back;
     ESP_LOGI(TAG, "Action handlers registered");
+    
+    // Register MQTT command callback (only if makapix is available)
+    makapix_mqtt_set_command_callback(makapix_command_handler);
 }
 
 // ---------- HTTP Helper Functions ----------
@@ -1407,7 +1470,7 @@ static esp_err_t h_get_status(httpd_req_t *req) {
 
     cJSON *fw = cJSON_CreateObject();
     if (fw) {
-        cJSON_AddStringToObject(fw, "version", "1.0.0");
+        cJSON_AddStringToObject(fw, "version", FW_VERSION);
         cJSON_AddStringToObject(fw, "idf", IDF_VER);
         cJSON_AddItemToObject(data, "fw", fw);
     }

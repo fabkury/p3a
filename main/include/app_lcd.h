@@ -102,6 +102,53 @@ esp_err_t app_lcd_set_brightness(int brightness_percent);
  */
 esp_err_t app_lcd_adjust_brightness(int delta_percent);
 
+/**
+ * @brief Enter UI mode (pause animation)
+ * 
+ * Pauses animation playback to allow UI rendering.
+ * 
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t app_lcd_enter_ui_mode(void);
+
+/**
+ * @brief Exit UI mode (resume animation playback)
+ * 
+ * Resumes animation playback.
+ * 
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t app_lcd_exit_ui_mode(void);
+
+/**
+ * @brief Check if UI mode is active
+ * 
+ * @return true if UI mode is active, false otherwise
+ */
+bool app_lcd_is_ui_mode(void);
+
+/**
+ * @brief Get framebuffer pointer
+ * 
+ * @param index Buffer index (0 to EXAMPLE_LCD_BUF_NUM-1)
+ * @return Pointer to framebuffer, or NULL if invalid index
+ */
+uint8_t *app_lcd_get_framebuffer(int index);
+
+/**
+ * @brief Get framebuffer row stride in bytes
+ * 
+ * @return Row stride in bytes
+ */
+size_t app_lcd_get_row_stride(void);
+
+/**
+ * @brief Get LCD panel handle
+ * 
+ * @return Panel handle, or NULL if not initialized
+ */
+esp_lcd_panel_handle_t app_lcd_get_panel_handle(void);
+
 #ifdef __cplusplus
 }
 #endif

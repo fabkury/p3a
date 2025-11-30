@@ -1,0 +1,21 @@
+idf_component_register(
+    SRCS 
+        "makapix_store.c"
+        "makapix_provision.c"
+        "makapix_mqtt.c"
+        "makapix_artwork.c"
+        "makapix.c"
+        "makapix_certs.c"
+    INCLUDE_DIRS 
+        "."
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../main/include"
+    REQUIRES 
+        nvs_flash
+        esp_http_client
+        mqtt
+        json
+        fatfs
+        driver
+        esp-tls
+)
+

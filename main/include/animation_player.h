@@ -10,6 +10,28 @@
 extern "C" {
 #endif
 
+/**
+ * @brief Enter UI mode - animation task will call UI render function instead of animation
+ * 
+ * Sets render mode to UI. The animation task continues running but calls
+ * ugfx_ui_render_to_buffer() instead of rendering animation frames.
+ * Blocks until the render loop acknowledges the mode switch.
+ */
+esp_err_t animation_player_enter_ui_mode(void);
+
+/**
+ * @brief Exit UI mode - animation task resumes normal animation rendering
+ * 
+ * Sets render mode back to animation.
+ * Blocks until the render loop acknowledges the mode switch.
+ */
+void animation_player_exit_ui_mode(void);
+
+/**
+ * @brief Check if currently in UI mode
+ */
+bool animation_player_is_ui_mode(void);
+
 esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
                                 uint8_t **lcd_buffers,
                                 uint8_t buffer_count,

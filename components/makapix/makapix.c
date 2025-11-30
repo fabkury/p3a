@@ -31,6 +31,34 @@ static void status_timer_callback(TimerHandle_t xTimer)
 }
 
 /**
+ * @brief MQTT connection state change callback
+ */
+static void mqtt_connection_callback(bool connected)
+{
+    if (connected) {
+        ESP_LOGI(TAG, "MQTT connected successfully");
+        s_state = MAKAPIX_STATE_CONNECTED;
+        
+        // Publish initial status
+        makapix_mqtt_publish_status(makapix_get_current_post_id());
+
+        // Create periodic status timer if not already created
+        if (!s_status_timer) {
+            s_status_timer = xTimerCreate("status_timer", pdMS_TO_TICKS(STATUS_PUBLISH_INTERVAL_MS),
+                                          pdTRUE, NULL, status_timer_callback);
+            if (s_status_timer) {
+                xTimerStart(s_status_timer, 0);
+            }
+        }
+    } else {
+        ESP_LOGI(TAG, "MQTT disconnected");
+        if (s_state == MAKAPIX_STATE_CONNECTED || s_state == MAKAPIX_STATE_CONNECTING) {
+            s_state = MAKAPIX_STATE_DISCONNECTED;
+        }
+    }
+}
+
+/**
  * @brief Provisioning task
  */
 static void provisioning_task(void *pvParameters)
@@ -108,13 +136,11 @@ static void mqtt_reconnect_task(void *pvParameters)
                 esp_err_t err = makapix_mqtt_init(player_key, mqtt_host, mqtt_port);
                 if (err == ESP_OK) {
                     err = makapix_mqtt_connect();
-                    if (err == ESP_OK) {
-                        s_state = MAKAPIX_STATE_CONNECTED;
-                        ESP_LOGI(TAG, "MQTT reconnected successfully");
-                    } else {
+                    if (err != ESP_OK) {
                         s_state = MAKAPIX_STATE_DISCONNECTED;
                         ESP_LOGW(TAG, "MQTT connection failed: %s", esp_err_to_name(err));
                     }
+                    // State will be updated to CONNECTED by the connection callback when MQTT actually connects
                 } else {
                     s_state = MAKAPIX_STATE_DISCONNECTED;
                     ESP_LOGW(TAG, "MQTT init failed: %s", esp_err_to_name(err));
@@ -135,6 +161,9 @@ static void mqtt_reconnect_task(void *pvParameters)
 esp_err_t makapix_init(void)
 {
     makapix_store_init();
+
+    // Register MQTT connection state callback
+    makapix_mqtt_set_connection_callback(mqtt_connection_callback);
 
     if (makapix_store_has_player_key()) {
         ESP_LOGI(TAG, "Found stored player_key, will connect after WiFi");
@@ -250,20 +279,8 @@ esp_err_t makapix_connect_if_registered(void)
         return err;
     }
 
-    s_state = MAKAPIX_STATE_CONNECTED;
-    ESP_LOGI(TAG, "MQTT connected successfully");
-
-    // Publish initial status
-    makapix_mqtt_publish_status(makapix_get_current_post_id());
-
-    // Create periodic status timer
-    if (!s_status_timer) {
-        s_status_timer = xTimerCreate("status_timer", pdMS_TO_TICKS(STATUS_PUBLISH_INTERVAL_MS),
-                                      pdTRUE, NULL, status_timer_callback);
-        if (s_status_timer) {
-            xTimerStart(s_status_timer, 0);
-        }
-    }
+    // State will be updated to CONNECTED by the connection callback when MQTT actually connects
+    // Do not set CONNECTED here - connection is asynchronous
 
     return ESP_OK;
 }

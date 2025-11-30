@@ -2,6 +2,7 @@
 #include "esp_log.h"
 #include "app_lcd.h"
 #include "bsp/display.h"
+#include "makapix_mqtt.h"
 #include <string.h>
 #include <time.h>
 #include "freertos/FreeRTOS.h"
@@ -94,6 +95,13 @@ static void ugfx_ui_draw_layout(int32_t remaining_secs)
         gdispFillStringBox(0, gdispGetHeight() - 120, gdispGetWidth(), 30, timer_text,
                          gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0xFFFF00), GFX_BLACK, gJustifyCenter);
     }
+
+    // MQTT connection status
+    bool mqtt_connected = makapix_mqtt_is_connected();
+    const char *mqtt_status_text = mqtt_connected ? "MQTT: Connected" : "MQTT: Disconnected";
+    color_t mqtt_status_color = mqtt_connected ? HTML2COLOR(0x00FF00) : HTML2COLOR(0xFF0000);
+    gdispFillStringBox(0, gdispGetHeight() - 80, gdispGetWidth(), 30, mqtt_status_text,
+                     gdispOpenFont("* DejaVu Sans 24"), mqtt_status_color, GFX_BLACK, gJustifyCenter);
 }
 
 /**

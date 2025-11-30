@@ -51,3 +51,10 @@ esp_err_t makapix_mqtt_publish_status(int32_t current_post_id);
  */
 void makapix_mqtt_set_command_callback(void (*cb)(const char *command_type, cJSON *payload));
 
+/**
+ * @brief Set callback function for connection state changes
+ * 
+ * @param cb Callback function: void callback(bool connected)
+ */
+void makapix_mqtt_set_connection_callback(void (*cb)(bool connected));
+

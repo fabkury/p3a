@@ -20,6 +20,7 @@ static char s_client_id[64] = {0};        // Static buffer for client ID
 static char s_lwt_payload[128] = {0};     // Static buffer for LWT payload
 static bool s_mqtt_connected = false;     // Track connection state manually
 static void (*s_command_callback)(const char *command_type, cJSON *payload) = NULL;
+static void (*s_connection_callback)(bool connected) = NULL;
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
@@ -35,11 +36,19 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             int msg_id = esp_mqtt_client_subscribe(client, s_command_topic, 1);
             ESP_LOGI(TAG, "Subscribed to %s, msg_id=%d", s_command_topic, msg_id);
         }
+        // Notify connection callback
+        if (s_connection_callback) {
+            s_connection_callback(true);
+        }
         break;
 
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT disconnected");
         s_mqtt_connected = false;
+        // Notify connection callback
+        if (s_connection_callback) {
+            s_connection_callback(false);
+        }
         break;
 
     case MQTT_EVENT_SUBSCRIBED:
@@ -269,5 +278,10 @@ esp_err_t makapix_mqtt_publish_status(int32_t current_post_id)
 void makapix_mqtt_set_command_callback(void (*cb)(const char *command_type, cJSON *payload))
 {
     s_command_callback = cb;
+}
+
+void makapix_mqtt_set_connection_callback(void (*cb)(bool connected))
+{
+    s_connection_callback = cb;
 }
 

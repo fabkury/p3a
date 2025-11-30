@@ -18,7 +18,7 @@
 #include "makapix.h"
 
 // Debug provisioning mode - when enabled, long press doesn't trigger real provisioning
-#define DEBUG_PROVISIONING_ENABLED 1
+#define DEBUG_PROVISIONING_ENABLED 0
 
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))

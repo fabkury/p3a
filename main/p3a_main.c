@@ -26,7 +26,7 @@
 static const char *TAG = "p3a";
 
 // Debug provisioning mode - toggle every 5 seconds
-#define DEBUG_PROVISIONING_ENABLED 1
+#define DEBUG_PROVISIONING_ENABLED 0
 #define DEBUG_PROVISIONING_TOGGLE_MS 5000
 
 #define AUTO_SWAP_INTERVAL_SECONDS CONFIG_P3A_AUTO_SWAP_INTERVAL_SECONDS

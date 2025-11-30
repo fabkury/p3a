@@ -10,3 +10,9 @@ node_modules/
 docs/web-flasher/node_modules/
 .vscode/
 managed_components/
+components/makapix/certs/*.pem
+!components/makapix/certs/README.md
+!components/makapix/certs/*.inc
+!components/makapix/certs/convert_cert.py
+!components/makapix/certs/get_certificates.*
+reference/

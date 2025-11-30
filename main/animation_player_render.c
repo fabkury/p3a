@@ -1,4 +1,5 @@
 #include "animation_player_priv.h"
+#include "ugfx_ui.h"
 
 #define DIGIT_WIDTH  5
 #define DIGIT_HEIGHT 7
@@ -297,6 +298,7 @@ void upscale_worker_bottom_task(void *arg)
 
 static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int target_w, int target_h, bool use_prefetched)
 {
+    // Note: Caller should hold s_buffer_mutex and verify UI mode is not active
     if (!buf || !buf->ready || !dest_buffer || !buf->decoder) {
         return -1;
     }
@@ -398,23 +400,6 @@ bool lcd_panel_refresh_done_cb(esp_lcd_panel_handle_t panel, esp_lcd_dpi_panel_e
     return higher_prio_task_woken == pdTRUE;
 }
 
-static void swap_buffers(void)
-{
-    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-        animation_buffer_t temp = s_front_buffer;
-        s_front_buffer = s_back_buffer;
-        s_back_buffer = temp;
-
-        s_swap_requested = false;
-        s_back_buffer.ready = false;
-        s_back_buffer.first_frame_ready = false;
-        s_back_buffer.prefetch_pending = false;
-
-        xSemaphoreGive(s_buffer_mutex);
-
-        ESP_LOGI(TAG, "Buffers swapped: front now playing index %zu", s_front_buffer.asset_index);
-    }
-}
 
 esp_err_t prefetch_first_frame(animation_buffer_t *buf)
 {
@@ -508,219 +493,186 @@ void lcd_animation_task(void *arg)
     bool use_prefetched = false;
 
     while (true) {
+        // Wait for vsync if available
         if (use_vsync) {
             xSemaphoreTake(s_vsync_sem, portMAX_DELAY);
         }
 
-        bool paused_local = false;
-        bool swap_requested = false;
-        bool back_buffer_ready = false;
-        bool back_buffer_prefetch_pending = false;
+        // Check render mode FIRST - request → active handshake
+        const render_mode_t mode = s_render_mode_request;
+        s_render_mode_active = mode;
+        const bool ui_mode = (mode == RENDER_MODE_UI);
 
-        if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-            paused_local = s_anim_paused;
-            swap_requested = s_swap_requested;
-            back_buffer_ready = s_back_buffer.ready;
-            back_buffer_prefetch_pending = s_back_buffer.prefetch_pending;
-            xSemaphoreGive(s_buffer_mutex);
-        }
-
-        if (back_buffer_prefetch_pending) {
-            esp_err_t prefetch_err = prefetch_first_frame(&s_back_buffer);
-            if (prefetch_err == ESP_OK) {
-                if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-                    s_back_buffer.prefetch_pending = false;
-                    s_back_buffer.ready = true;
-                    if (s_swap_requested) {
-                        ESP_LOGD(TAG, "Render task: Prefetch complete, swap ready");
-                    }
-                    xSemaphoreGive(s_buffer_mutex);
-                }
-            } else {
-                ESP_LOGW(TAG, "Render task: Prefetch failed: %s", esp_err_to_name(prefetch_err));
-                if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-                    s_back_buffer.prefetch_pending = false;
-                    s_back_buffer.ready = true;
-                    xSemaphoreGive(s_buffer_mutex);
-                }
-            }
-            if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-                swap_requested = s_swap_requested;
-                back_buffer_ready = s_back_buffer.ready;
-                xSemaphoreGive(s_buffer_mutex);
-                ESP_LOGD(TAG, "Render task: Prefetch completed, buffer ready");
-            }
-        }
-
-        if (swap_requested && back_buffer_ready) {
-            swap_buffers();
-            use_prefetched = true;
-        }
-
-        uint8_t *frame = NULL;
-        int frame_delay_ms = 1;
-        uint32_t prev_frame_delay_ms = s_target_frame_delay_ms;
-
-#if CONFIG_P3A_PICO8_ENABLE
-        bool pico8_active = pico8_stream_should_render();
-
-        if (pico8_active) {
-            frame = s_lcd_buffers[s_render_buffer_index];
-            if (frame) {
-                frame_delay_ms = render_pico8_frame(frame);
-                if (frame_delay_ms < 0) {
-                    frame_delay_ms = 16;
-                }
-                s_target_frame_delay_ms = (uint32_t)frame_delay_ms;
-                s_last_display_buffer = s_render_buffer_index;
-                s_render_buffer_index = (s_render_buffer_index + 1) % buffer_count;
-#if APP_LCD_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
-                esp_err_t msync_err = esp_cache_msync(frame, s_frame_buffer_bytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-                if (msync_err != ESP_OK) {
-                    ESP_LOGW(TAG, "Cache sync failed (pico8): %s", esp_err_to_name(msync_err));
-                }
-#endif
-            }
-        } else
-#endif // CONFIG_P3A_PICO8_ENABLE
-        if (paused_local && use_prefetched && s_front_buffer.ready) {
-            frame = s_lcd_buffers[s_render_buffer_index];
-            if (frame) {
-                frame_delay_ms = render_next_frame(&s_front_buffer, frame, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, true);
-                use_prefetched = false;
-                if (frame_delay_ms < 0) {
-                    frame_delay_ms = 100;
-                }
-                s_target_frame_delay_ms = 100;
-                s_last_display_buffer = s_render_buffer_index;
-                s_render_buffer_index = (s_render_buffer_index + 1) % buffer_count;
-#if APP_LCD_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
-                esp_err_t msync_err = esp_cache_msync(frame, s_frame_buffer_bytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-                if (msync_err != ESP_OK) {
-                    ESP_LOGW(TAG, "Cache sync failed: %s", esp_err_to_name(msync_err));
-                }
-#endif
-            }
-        } else if (!paused_local && s_front_buffer.ready) {
-            s_frame_processing_start_us = esp_timer_get_time();
-
-            frame = s_lcd_buffers[s_render_buffer_index];
-            if (frame) {
-                prev_frame_delay_ms = s_target_frame_delay_ms;
-
-                frame_delay_ms = render_next_frame(&s_front_buffer, frame, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, use_prefetched);
-                use_prefetched = false;
-                if (frame_delay_ms < 0) {
-                    frame_delay_ms = 1;
-                }
-                s_target_frame_delay_ms = (uint32_t)frame_delay_ms;
-                s_latest_frame_duration_ms = frame_delay_ms;
-#if defined(CONFIG_P3A_LCD_DISPLAY_FRAME_DURATIONS)
-                const int text_scale = 3;
-                const int margin = text_scale * 2;
-
-                app_lcd_color_t color_text = color_white;
-                if (swap_requested) {
-                    color_text = color_red;
-                }
-
-                draw_text_top_right(frame, s_frame_duration_text, margin, margin, text_scale, color_text);
-#endif
-
-#if APP_LCD_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
-                esp_err_t msync_err = esp_cache_msync(frame, s_frame_buffer_bytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-                if (msync_err != ESP_OK) {
-                    ESP_LOGW(TAG, "Cache sync failed: %s", esp_err_to_name(msync_err));
-                }
-#endif
-                s_last_display_buffer = s_render_buffer_index;
-                s_render_buffer_index = (s_render_buffer_index + 1) % buffer_count;
-            }
-        } else {
-            uint8_t reuse_index = s_last_display_buffer;
-            if (reuse_index >= buffer_count) {
-                reuse_index = 0;
-            }
-            frame = s_lcd_buffers[reuse_index];
-            frame_delay_ms = 100;
-            s_target_frame_delay_ms = 100;
-            s_last_frame_present_us = 0;
-            s_frame_processing_start_us = 0;
-        }
-
-        if (!frame) {
-            s_last_frame_present_us = 0;
-            s_frame_processing_start_us = 0;
+        // Get the back buffer
+        uint8_t back_buffer_idx = s_render_buffer_index;
+        uint8_t *back_buffer = s_lcd_buffers[back_buffer_idx];
+        
+        if (!back_buffer) {
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
 
-        if (!paused_local && s_front_buffer.ready && !APP_LCD_MAX_SPEED_PLAYBACK_ENABLED) {
+        // Record frame processing start time
+        s_frame_processing_start_us = esp_timer_get_time();
+        
+        int frame_delay_ms = 100;
+        uint32_t prev_frame_delay_ms = s_target_frame_delay_ms;
+
+        // =====================================================================
+        // UI MODE: Render UI directly to back buffer
+        // =====================================================================
+        if (ui_mode) {
+            frame_delay_ms = ugfx_ui_render_to_buffer(back_buffer, s_frame_row_stride_bytes);
+            if (frame_delay_ms < 0) {
+                // UI not ready yet - show black screen
+                memset(back_buffer, 0, s_frame_buffer_bytes);
+                frame_delay_ms = 100;
+            }
+            s_target_frame_delay_ms = (uint32_t)frame_delay_ms;
+        }
+        // =====================================================================
+        // ANIMATION MODE: Render animation frame
+        // =====================================================================
+        else {
+            // Read animation state with mutex
+            bool paused_local = false;
+            bool swap_requested = false;
+            bool back_buffer_ready = false;
+            bool back_buffer_prefetch_pending = false;
+
+            if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+                paused_local = s_anim_paused;
+                swap_requested = s_swap_requested;
+                back_buffer_ready = s_back_buffer.ready;
+                back_buffer_prefetch_pending = s_back_buffer.prefetch_pending;
+                xSemaphoreGive(s_buffer_mutex);
+            }
+
+            // Handle prefetch (outside mutex - this can take time)
+            if (back_buffer_prefetch_pending) {
+                esp_err_t prefetch_err = prefetch_first_frame(&s_back_buffer);
+                if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+                    s_back_buffer.prefetch_pending = false;
+                    s_back_buffer.ready = (prefetch_err == ESP_OK);
+                    swap_requested = s_swap_requested;
+                    back_buffer_ready = s_back_buffer.ready;
+                    xSemaphoreGive(s_buffer_mutex);
+                }
+            }
+
+            // Handle buffer swap
+            if (swap_requested && back_buffer_ready) {
+                if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+                    animation_buffer_t temp = s_front_buffer;
+                    s_front_buffer = s_back_buffer;
+                    s_back_buffer = temp;
+                    s_swap_requested = false;
+                    s_back_buffer.ready = false;
+                    s_back_buffer.first_frame_ready = false;
+                    s_back_buffer.prefetch_pending = false;
+                    xSemaphoreGive(s_buffer_mutex);
+                    ESP_LOGI(TAG, "Buffers swapped: front now playing index %zu", s_front_buffer.asset_index);
+                }
+                use_prefetched = true;
+            }
+
+            // Render frame
+#if CONFIG_P3A_PICO8_ENABLE
+            bool pico8_active = pico8_stream_should_render();
+            if (pico8_active) {
+                frame_delay_ms = render_pico8_frame(back_buffer);
+                if (frame_delay_ms < 0) frame_delay_ms = 16;
+                s_target_frame_delay_ms = (uint32_t)frame_delay_ms;
+            } else
+#endif
+            if (paused_local && use_prefetched && s_front_buffer.ready) {
+                frame_delay_ms = render_next_frame(&s_front_buffer, back_buffer, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, true);
+                use_prefetched = false;
+                if (frame_delay_ms < 0) frame_delay_ms = 100;
+                s_target_frame_delay_ms = 100;
+            } else if (!paused_local && s_front_buffer.ready) {
+                prev_frame_delay_ms = s_target_frame_delay_ms;
+                frame_delay_ms = render_next_frame(&s_front_buffer, back_buffer, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, use_prefetched);
+                use_prefetched = false;
+                if (frame_delay_ms < 0) frame_delay_ms = 1;
+                s_target_frame_delay_ms = (uint32_t)frame_delay_ms;
+                s_latest_frame_duration_ms = frame_delay_ms;
+
+#if defined(CONFIG_P3A_LCD_DISPLAY_FRAME_DURATIONS)
+                const int text_scale = 3;
+                const int margin = text_scale * 2;
+                app_lcd_color_t color_text = swap_requested ? color_red : color_white;
+                draw_text_top_right(back_buffer, s_frame_duration_text, margin, margin, text_scale, color_text);
+#endif
+            } else {
+                // No frame to render, reuse last displayed buffer
+                back_buffer_idx = s_last_display_buffer;
+                if (back_buffer_idx >= buffer_count) back_buffer_idx = 0;
+                back_buffer = s_lcd_buffers[back_buffer_idx];
+                frame_delay_ms = 100;
+                s_target_frame_delay_ms = 100;
+            }
+        }
+
+        // =====================================================================
+        // Cache sync
+        // =====================================================================
+#if APP_LCD_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
+        esp_cache_msync(back_buffer, s_frame_buffer_bytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+#endif
+
+        // =====================================================================
+        // Flip buffers
+        // =====================================================================
+        s_last_display_buffer = back_buffer_idx;
+        s_render_buffer_index = (back_buffer_idx + 1) % buffer_count;
+
+        // =====================================================================
+        // Wait for frame timing
+        // =====================================================================
+        if (!APP_LCD_MAX_SPEED_PLAYBACK_ENABLED) {
             const int64_t now_us = esp_timer_get_time();
             const int64_t processing_time_us = now_us - s_frame_processing_start_us;
             const int64_t target_delay_us = (int64_t)prev_frame_delay_ms * 1000;
 
             if (processing_time_us < target_delay_us) {
                 const int64_t residual_us = target_delay_us - processing_time_us;
-                if (residual_us > 0) {
-                    const TickType_t residual_ticks = pdMS_TO_TICKS((residual_us + 500) / 1000);
-                    if (residual_ticks > 0) {
-                        vTaskDelay(residual_ticks);
-                    }
+                if (residual_us > 1000) {
+                    vTaskDelay(pdMS_TO_TICKS((residual_us + 500) / 1000));
                 }
             }
         }
-        const bool blank_display = (app_lcd_get_brightness() == 0);
-        if (blank_display) {
-            memset(frame, 0, s_frame_buffer_bytes);
+
+        // =====================================================================
+        // DMA present
+        // =====================================================================
+        if (app_lcd_get_brightness() == 0) {
+            memset(back_buffer, 0, s_frame_buffer_bytes);
 #if APP_LCD_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
-            esp_err_t blank_msync_err = esp_cache_msync(frame, s_frame_buffer_bytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-            if (blank_msync_err != ESP_OK) {
-                ESP_LOGW(TAG, "Cache sync failed (blank frame): %s", esp_err_to_name(blank_msync_err));
-            }
+            esp_cache_msync(back_buffer, s_frame_buffer_bytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
 #endif
         }
 
-        esp_err_t draw_err = esp_lcd_panel_draw_bitmap(s_display_handle, 0, 0,
-                                                       EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, frame);
+        esp_lcd_panel_draw_bitmap(s_display_handle, 0, 0, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, back_buffer);
 
-        if (draw_err != ESP_OK) {
-            ESP_LOGE(TAG, "Panel draw failed: %s", esp_err_to_name(draw_err));
-            vTaskDelay(pdMS_TO_TICKS(10));
-            continue;
+        // Update timing stats
+        const int64_t present_time_us = esp_timer_get_time();
+        if (s_last_frame_present_us != 0) {
+            s_latest_frame_duration_ms = (int)((present_time_us - s_last_frame_present_us + 500) / 1000);
+        }
+        s_last_frame_present_us = present_time_us;
+
+        if (s_last_duration_update_us == 0) s_last_duration_update_us = present_time_us;
+        if ((present_time_us - s_last_duration_update_us) >= 500000) {
+            snprintf(s_frame_duration_text, sizeof(s_frame_duration_text), "%d", s_latest_frame_duration_ms);
+            s_last_duration_update_us = present_time_us;
         }
 
-        if (!paused_local && s_front_buffer.ready) {
-            const int64_t now_us = esp_timer_get_time();
-
-            if (s_last_frame_present_us != 0) {
-                const int64_t frame_delta_us = now_us - s_last_frame_present_us;
-                s_latest_frame_duration_ms = (int)((frame_delta_us + 500) / 1000);
-            }
-            s_last_frame_present_us = now_us;
-
-            if (s_last_duration_update_us == 0) {
-                s_last_duration_update_us = now_us;
-            }
-            if ((now_us - s_last_duration_update_us) >= 500000) {
-                snprintf(s_frame_duration_text, sizeof(s_frame_duration_text), "%d", s_latest_frame_duration_ms);
-                s_last_duration_update_us = now_us;
-            }
+        // Yield if not using vsync
+        if (!use_vsync) {
+            vTaskDelay(1);
         }
-
-        TickType_t delay_ticks;
-        if (paused_local) {
-            delay_ticks = pdMS_TO_TICKS(100);
-        } else if (APP_LCD_MAX_SPEED_PLAYBACK_ENABLED) {
-            delay_ticks = 1;
-        } else {
-            delay_ticks = 1;
-        }
-        if (delay_ticks == 0) {
-            delay_ticks = 1;
-        }
-
-        vTaskDelay(delay_ticks);
     }
 }
+
 

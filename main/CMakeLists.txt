@@ -6,6 +6,8 @@ set(srcs
     "animation_player.c"
     "animation_player_render.c"
     "animation_player_loader.c"
+    "sdcard_channel.c"
+    "channel_player.c"
     "webp_animation_decoder.c"
     "png_animation_decoder.c"
     "jpeg_animation_decoder.c"

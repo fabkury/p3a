@@ -43,9 +43,9 @@ This document provides a comprehensive overview of the p3a (Pixel Pea) firmware 
 
 ### Codebase Statistics
 
-- **Total source files**: ~25 C/C++ files
-- **Total lines of code**: ~8,400 lines
-- **Components**: 5 custom components + multiple ESP-IDF registry dependencies
+- **Total source files**: ~30 C/C++ files
+- **Total lines of code**: ~10,000 lines
+- **Components**: 6 custom components + multiple ESP-IDF registry dependencies
 - **Build artifacts**: ~22MB (compiled binaries + SPIFFS image)
 
 ---
@@ -126,6 +126,7 @@ p3a/
 │   ├── app_state/            # Application state management
 │   ├── config_store/         # NVS-backed configuration
 │   ├── http_api/             # HTTP server and REST API
+│   ├── makapix/              # Makapix Club integration (MQTT, provisioning)
 │   ├── libwebp_decoder/      # libwebp wrapper
 │   └── animated_gif_decoder/ # Animated GIF decoder
 │
@@ -288,6 +289,25 @@ esptool.py --chip esp32p4 --before default_reset --after hard_reset \
 - **Files**: `AnimatedGIF.cpp`, `gif_animation_decoder.c/cpp`, `gif.inl`
 - **Dependencies**: None (vendored library)
 - **Function**: Decodes animated/static GIF images
+
+#### 6. **makapix**
+- **Purpose**: Makapix Club integration (device registration, cloud connectivity)
+- **Files**: 
+  - `makapix.c/h`: State machine, provisioning orchestration, connection management
+  - `makapix_mqtt.c/h`: TLS MQTT client with mutual TLS (mTLS) authentication
+  - `makapix_provision.c/h`: HTTP provisioning to dev.makapix.club
+  - `makapix_store.c/h`: Certificate and credential storage in NVS/SPIFFS
+  - `makapix_certs.c/h`: CA certificate handling
+  - `makapix_artwork.c/h`: Artwork metadata handling (future feed ingestion)
+- **Dependencies**: esp_mqtt, esp_http_client, esp_crt_bundle, cJSON, nvs_flash, spiffs
+- **Features**:
+  - Device registration via HTTPS to `dev.makapix.club`
+  - Registration code display for user verification
+  - TLS MQTT with client certificate authentication (mTLS)
+  - Status publishing every 30 seconds
+  - Command receiving from website (swap_next, swap_back, etc.)
+  - Automatic reconnection on connection loss
+  - Secure certificate storage in SPIFFS
 
 ### ESP Component Registry Dependencies
 
@@ -748,7 +768,8 @@ Configuration Descriptor:
 - `P3A_TOUCH_BRIGHTNESS_MAX_DELTA_PERCENT`: Max brightness change (default: 75%)
 
 #### PICO-8
-- `P3A_PICO8_USB_STREAM_ENABLE`: Enable USB PICO-8 streaming (default: yes)
+- `P3A_PICO8_ENABLE`: Enable PICO-8 monitor feature (default: no, disabled to reduce binary size)
+- `P3A_PICO8_USB_STREAM_ENABLE`: Enable USB PICO-8 streaming (requires PICO-8 enabled)
 - `P3A_PICO8_WEBSOCKET_TIMEOUT_SEC`: WebSocket inactivity timeout (default: 30s)
 
 #### Wi-Fi
@@ -885,18 +906,27 @@ ESP_LOGI(TAG, "\n%s", buf);
 
 ---
 
+## Current Infrastructure Status
+
+Implemented features:
+
+1. **TLS MQTT Client**: Device registration and secure connection to Makapix Club (implemented)
+2. **Remote Control**: Website can send commands to device via MQTT (implemented)
+3. **Status Publishing**: Device reports status every 30 seconds (implemented)
+
 ## Future Infrastructure Improvements
 
 Planned enhancements from ROADMAP.md:
 
-1. **TLS MQTT Client**: Subscribe to Makapix Club feeds
-2. **OTA Updates**: Firmware updates with rollback
-3. **Playlists**: JSON-based playlist management
-4. **Watchdog**: Task health monitoring
-5. **Diagnostics**: Crash dumps, heap tracking
-6. **Web Flasher**: Browser-based firmware flashing
-7. **CI/CD**: Automated builds and releases
-8. **Unit Tests**: Component-level testing framework
+1. **Feed Ingestion**: Download artworks automatically from MQTT notifications
+2. **Reactions**: Send likes to artworks from the device hardware
+3. **OTA Updates**: Firmware updates with rollback
+4. **Playlists**: JSON-based playlist management
+5. **Watchdog**: Task health monitoring
+6. **Diagnostics**: Crash dumps, heap tracking
+7. **Web Flasher**: Browser-based firmware flashing (under development)
+8. **CI/CD**: Automated builds and releases
+9. **Unit Tests**: Component-level testing framework
 
 ---
 
@@ -909,4 +939,4 @@ Planned enhancements from ROADMAP.md:
 
 ---
 
-*This document was generated for p3a firmware. Last updated: November 2025*
+*This document was generated for p3a firmware. Last updated: December 2025*

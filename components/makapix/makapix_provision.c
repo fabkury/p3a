@@ -3,6 +3,7 @@
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "cJSON.h"
 #include "version.h"
 #include "sdkconfig.h"
@@ -216,15 +217,16 @@ esp_err_t makapix_poll_credentials(const char *player_key, makapix_credentials_r
     ESP_LOGI(TAG, "Polling credentials from %s", url);
 
     // Allocate response buffer (certificates can be large)
+    // Use SPIRAM to leave internal RAM for mbedTLS SSL buffers
     #define CREDENTIALS_MAX_RESPONSE_SIZE 16384  // 16KB should be enough for 3 PEM certificates
     http_response_t response = {
-        .buffer = malloc(CREDENTIALS_MAX_RESPONSE_SIZE),
+        .buffer = heap_caps_malloc(CREDENTIALS_MAX_RESPONSE_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT),
         .buffer_size = CREDENTIALS_MAX_RESPONSE_SIZE,
         .data_len = 0
     };
     
     if (!response.buffer) {
-        ESP_LOGE(TAG, "Failed to allocate response buffer");
+        ESP_LOGE(TAG, "Failed to allocate response buffer from SPIRAM");
         return ESP_ERR_NO_MEM;
     }
     response.buffer[0] = '\0';
@@ -236,7 +238,7 @@ esp_err_t makapix_poll_credentials(const char *player_key, makapix_credentials_r
         .url = url,
         .event_handler = http_event_handler,
         .user_data = &response,
-        .timeout_ms = 10000,  // 10 second timeout for polling
+        .timeout_ms = 5000,  // Reduced from 10000 for faster cancellation response
     };
 
 #if USE_CUSTOM_CA

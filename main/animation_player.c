@@ -1,4 +1,6 @@
 #include "animation_player_priv.h"
+#include "channel_player.h"
+#include "sdcard_channel.h"
 
 esp_lcd_panel_handle_t s_display_handle = NULL;
 uint8_t **s_lcd_buffers = NULL;
@@ -142,39 +144,32 @@ static esp_err_t mount_sd_and_discover(char **animations_dir_out)
 
 static esp_err_t load_first_animation(void)
 {
-    size_t start_index = 0;
-    if (s_sd_file_list.health_flags) {
-        bool found_healthy = false;
-        for (size_t i = 0; i < s_sd_file_list.count; i++) {
-            if (s_sd_file_list.health_flags[i]) {
-                start_index = i;
-                found_healthy = true;
-                break;
-            }
-        }
-        if (!found_healthy) {
-            return ESP_ERR_NOT_FOUND;
-        }
+    // Get current post from channel player
+    const sdcard_post_t *post = NULL;
+    esp_err_t err = channel_player_get_current_post(&post);
+    if (err != ESP_OK || !post) {
+        ESP_LOGE(TAG, "No current post available from channel player");
+        return ESP_ERR_NOT_FOUND;
     }
 
-    esp_err_t load_err = load_animation_into_buffer(start_index, &s_front_buffer);
+    esp_err_t load_err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer);
     if (load_err == ESP_OK) {
-        ESP_LOGI(TAG, "Loaded animation at index %zu to start playback", start_index);
+        ESP_LOGI(TAG, "Loaded animation '%s' to start playback", post->name);
         return ESP_OK;
     }
 
-    ESP_LOGW(TAG, "Failed to load animation at index %zu, searching for alternatives...", start_index);
-    for (size_t i = 0; i < s_sd_file_list.count; i++) {
-        if (s_sd_file_list.health_flags && !s_sd_file_list.health_flags[i]) {
-            continue;
-        }
-        if (i == start_index) {
-            continue;
-        }
-        load_err = load_animation_into_buffer(i, &s_front_buffer);
-        if (load_err == ESP_OK) {
-            ESP_LOGI(TAG, "Loaded animation at index %zu to start playback", i);
-            return ESP_OK;
+    ESP_LOGW(TAG, "Failed to load animation '%s', trying next...", post->name);
+    
+    // Try advancing and loading next post
+    err = channel_player_advance();
+    if (err == ESP_OK) {
+        err = channel_player_get_current_post(&post);
+        if (err == ESP_OK && post) {
+            load_err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer);
+            if (load_err == ESP_OK) {
+                ESP_LOGI(TAG, "Loaded animation '%s' to start playback", post->name);
+                return ESP_OK;
+            }
         }
     }
 
@@ -202,6 +197,20 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         return err;
     }
 
+    // Initialize channel system
+    err = sdcard_channel_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize SD card channel: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = channel_player_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize channel player: %s", esp_err_to_name(err));
+        sdcard_channel_deinit();
+        return err;
+    }
+
     char *found_animations_dir = NULL;
     err = mount_sd_and_discover(&found_animations_dir);
     if (err != ESP_OK || !found_animations_dir) {
@@ -209,18 +218,32 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         if (found_animations_dir) {
             free(found_animations_dir);
         }
+        channel_player_deinit();
+        sdcard_channel_deinit();
         return (err == ESP_ERR_NOT_FOUND) ? ESP_ERR_NOT_FOUND : err;
     }
 
-    err = enumerate_animation_files(found_animations_dir);
+    err = sdcard_channel_refresh(found_animations_dir);
     free(found_animations_dir);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to enumerate animation files: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Failed to refresh channel: %s", esp_err_to_name(err));
+        channel_player_deinit();
+        sdcard_channel_deinit();
         return err;
     }
 
-    if (s_sd_file_list.count == 0) {
-        ESP_LOGE(TAG, "No animation files found");
+    err = channel_player_load_channel();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to load channel: %s", esp_err_to_name(err));
+        channel_player_deinit();
+        sdcard_channel_deinit();
+        return err;
+    }
+
+    if (channel_player_get_post_count() == 0) {
+        ESP_LOGE(TAG, "No animation posts loaded");
+        channel_player_deinit();
+        sdcard_channel_deinit();
         return ESP_ERR_NOT_FOUND;
     }
 
@@ -350,12 +373,17 @@ bool animation_player_is_paused(void)
 
 void animation_player_cycle_animation(bool forward)
 {
+    if (animation_player_is_ui_mode()) {
+        ESP_LOGW(TAG, "Swap request ignored: UI mode active");
+        return;
+    }
+
     if (animation_player_is_sd_export_locked()) {
         ESP_LOGW(TAG, "Swap request ignored: SD card is exported over USB");
         return;
     }
 
-    if (s_sd_file_list.count == 0) {
+    if (channel_player_get_post_count() == 0) {
         ESP_LOGW(TAG, "No animations available to cycle");
         return;
     }
@@ -366,26 +394,27 @@ void animation_player_cycle_animation(bool forward)
             xSemaphoreGive(s_buffer_mutex);
             return;
         }
+        xSemaphoreGive(s_buffer_mutex);
+    }
 
-        size_t current_index = s_front_buffer.ready ? s_front_buffer.asset_index : 0;
-        size_t target_index = forward ? get_next_asset_index(current_index) : get_previous_asset_index(current_index);
+    // Advance or go back in channel player (outside mutex to avoid deadlock)
+    esp_err_t err = forward ? channel_player_advance() : channel_player_go_back();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to cycle animation: %s", esp_err_to_name(err));
+        return;
+    }
 
-        if (target_index == current_index && s_sd_file_list.health_flags) {
-            bool any_healthy = false;
-            for (size_t i = 0; i < s_sd_file_list.count; i++) {
-                if (s_sd_file_list.health_flags[i]) {
-                    any_healthy = true;
-                    break;
-                }
-            }
-            if (!any_healthy) {
-                ESP_LOGW(TAG, "No healthy animation files available. Cannot cycle animation.");
-                xSemaphoreGive(s_buffer_mutex);
-                return;
-            }
+    // Now set the swap request flag
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        // Double-check conditions after advance (in case something changed)
+        if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
+            ESP_LOGW(TAG, "Animation change request ignored: swap already in progress");
+            xSemaphoreGive(s_buffer_mutex);
+            return;
         }
 
-        s_next_asset_index = target_index;
+        // Set flag for loader task (0 = backward, non-zero = forward)
+        s_next_asset_index = forward ? 1 : 0;
         s_swap_requested = true;
         xSemaphoreGive(s_buffer_mutex);
 
@@ -393,8 +422,10 @@ void animation_player_cycle_animation(bool forward)
             xSemaphoreGive(s_loader_sem);
         }
 
-        ESP_LOGI(TAG, "Queued animation load to '%s' (index %zu)",
-                 s_sd_file_list.filenames[target_index], target_index);
+        const sdcard_post_t *post = NULL;
+        if (channel_player_get_current_post(&post) == ESP_OK && post) {
+            ESP_LOGI(TAG, "Queued animation load to '%s'", post->name);
+        }
     }
 }
 
@@ -527,6 +558,8 @@ void animation_player_deinit(void)
     }
 
     free_sd_file_list();
+    channel_player_deinit();
+    sdcard_channel_deinit();
     if (s_sd_mounted) {
         bsp_sdcard_unmount();
         s_sd_mounted = false;
@@ -535,14 +568,7 @@ void animation_player_deinit(void)
 
 size_t animation_player_get_current_index(void)
 {
-    size_t current_index = SIZE_MAX;
-    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-        if (s_front_buffer.ready) {
-            current_index = s_front_buffer.asset_index;
-        }
-        xSemaphoreGive(s_buffer_mutex);
-    }
-    return current_index;
+    return channel_player_get_current_position();
 }
 
 esp_err_t animation_player_swap_to_index(size_t index)
@@ -551,42 +577,21 @@ esp_err_t animation_player_swap_to_index(size_t index)
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (s_sd_file_list.count == 0) {
+    size_t post_count = channel_player_get_post_count();
+    if (post_count == 0) {
         ESP_LOGW(TAG, "No animations available to swap");
         return ESP_ERR_NOT_FOUND;
     }
 
-    if (index >= s_sd_file_list.count) {
-        ESP_LOGE(TAG, "Invalid index: %zu (max: %zu)", index, s_sd_file_list.count - 1);
+    if (index >= post_count) {
+        ESP_LOGE(TAG, "Invalid index: %zu (max: %zu)", index, post_count - 1);
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (s_sd_file_list.health_flags && !s_sd_file_list.health_flags[index]) {
-        ESP_LOGW(TAG, "File at index %zu is marked as unhealthy", index);
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-        if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
-            ESP_LOGW(TAG, "Animation change request ignored: swap already in progress");
-            xSemaphoreGive(s_buffer_mutex);
-            return ESP_ERR_INVALID_STATE;
-        }
-
-        s_next_asset_index = index;
-        s_swap_requested = true;
-        xSemaphoreGive(s_buffer_mutex);
-
-        if (s_loader_sem) {
-            xSemaphoreGive(s_loader_sem);
-        }
-
-        ESP_LOGI(TAG, "Queued animation load to '%s' (index %zu)",
-                 s_sd_file_list.filenames[index], index);
-        return ESP_OK;
-    }
-
-    return ESP_FAIL;
+    // Note: Direct index access not directly supported by channel_player
+    // This would require additional API. For now, return not supported.
+    ESP_LOGW(TAG, "Direct index swap not yet supported with channel abstraction");
+    return ESP_ERR_NOT_SUPPORTED;
 }
 
 // ============================================================================
@@ -598,6 +603,17 @@ esp_err_t animation_player_enter_ui_mode(void)
     ESP_LOGI(TAG, "Entering UI mode");
     s_render_mode_request = RENDER_MODE_UI;
     animation_player_wait_for_render_mode(RENDER_MODE_UI);
+    
+    // Unload animation buffers to free internal RAM for HTTP/SSL operations
+    // This is critical because mbedTLS needs internal RAM for SSL buffers
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        ESP_LOGI(TAG, "Unloading animation buffers to free memory for provisioning");
+        unload_animation_buffer(&s_front_buffer);
+        unload_animation_buffer(&s_back_buffer);
+        s_swap_requested = false;
+        xSemaphoreGive(s_buffer_mutex);
+    }
+    
     ESP_LOGI(TAG, "UI mode active");
     return ESP_OK;
 }
@@ -605,6 +621,15 @@ esp_err_t animation_player_enter_ui_mode(void)
 void animation_player_exit_ui_mode(void)
 {
     ESP_LOGI(TAG, "Exiting UI mode");
+    
+    // Trigger reload of current animation (buffers were unloaded when entering UI mode)
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        // Signal loader to reload current animation into back buffer
+        s_swap_requested = true;
+        xSemaphoreGive(s_buffer_mutex);
+        xSemaphoreGive(s_loader_sem);  // Wake up loader task
+    }
+    
     s_render_mode_request = RENDER_MODE_ANIMATION;
     animation_player_wait_for_render_mode(RENDER_MODE_ANIMATION);
     ESP_LOGI(TAG, "Animation mode active");

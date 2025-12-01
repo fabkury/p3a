@@ -1,68 +1,144 @@
-# Flash p3a from Your Browser
+# Flash p3a Firmware
 
-This page is written for people who just want their Pixel Pea device to work—no firmware knowledge needed.
+This guide explains how to install the p3a firmware on your Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board.
 
-- **Required hardware**:
-  - Waveshare ESP32-P4-WIFI6-Touch-LCD-4B,
-  - USB-C cable that supports data,
-  - and a microSD card.
-- **Computer**: Windows, macOS, Linux, or Chromebook with the latest Chrome or Microsoft Edge. (Android Chrome works in most cases; iOS/Safari does **not** expose Web Serial yet.)
+## What you need
 
----
-
-## 1. Plug everything in
-1. Turn the device so you can reach the USB-C ports on the back/top edge.
-2. Use a USB-C cable that you know can transfer data (chargers-only cables will not work).
-3. Connect it to your laptop/desktop. The screen can stay dark—that is normal while we flash new firmware.
-
-## 2. Open the Web Flasher
-
-Click the button below. It opens a hosted copy of the Pixel Pea Web Flasher that bundles Espressif’s `esptool-js` with the offsets baked into one page.
-
-<p align="center">
-  <a href="https://rawcdn.githack.com/fabkury/p3a/main/docs/web-flasher/index.html" target="_blank" rel="noopener">
-    <img src="https://img.shields.io/badge/Open%20Pixel%20Pea%20Web%20Flasher-USB%20via%20Chrome-blue?style=for-the-badge" alt="Open Web Flasher">
-  </a>
-</p>
-
-Keep this guide open—we will refer back to it in the next steps.
-
-## 3. Let the browser do the work
-
-1. In the Web Flasher tab, click **Connect & install Pixel Pea**.
-2. Your browser asks for USB permission. Pick the entry that mentions `USB Serial` (on Windows it is usually `COMx`, on macOS/Linux it starts with `/dev/tty.usbmodem` or `/dev/ttyACM`).
-3. The flasher then downloads the four binary files (bootloader, partition table, firmware image, storage image) and pushes them to the ESP32-P4 automatically. You can watch progress in the log console.
-4. When the status reads **Success!**, unplug the cable, wait a second, and reconnect power. The Pixel Pea boot animation should appear and slide into artwork playback within a few seconds.
-
-### MicroSD reminder
-
-The firmware expects a microSD card with artwork. If you have not prepared one yet, copy some GIF/WebP/PNG/JPEG animations into an `animations` folder on the card, then insert it before rebooting.
+- **Hardware**: Waveshare ESP32-P4-WIFI6-Touch-LCD-4B and a microSD card
+- **USB cable**: A USB-C cable that supports data transfer (charging-only cables won't work)
+- **Computer**: Windows, macOS, or Linux
 
 ---
 
-## Frequently asked questions
+## Option 1: Web Flasher (Coming Soon)
 
-**The connect dialog is empty or my device does not show up.**  
-- Try a different USB port or cable (most failures are power-only cables).  
-- Close other apps that might already be using the serial port (Arduino, VS Code, etc.).  
-- On Windows, confirm that the device manager lists “USB Serial Device (COMx)”.
-
-**The flashing process fails halfway through.**  
-- Unplug the board, wait five seconds, plug it back in, and run the flasher again.  
-- Ensure no other peripherals are drawing power from the same USB hub.  
-- If it keeps failing, fall back to the manual `esptool.py` method described later in the repository README.
-
-**Are phones supported?**  
-- Chrome on Android usually works (you will get the same serial-port chooser).  
-- iOS/Safari currently does not expose Web Serial, so you need a desktop OS.
-
-**How do I know it really flashed something?**  
-- The console pane in the flasher prints `Writing at 0x...` for each region.  
-- When it reaches 100 %, the board automatically reboots; you will hear the Windows USB disconnect sound or see the LED blink.
+> **Status:** The browser-based web flasher is currently under development and will be available soon. Once ready, you'll be able to flash directly from your browser without installing any tools—just plug in your device and click a button.
+>
+> Bookmark this page and check back for updates, or use the manual method below in the meantime.
 
 ---
 
-## Need a deeper dive?
+## Option 2: Flash with esptool.py
 
-The `README.md` still documents how to build from source or flash manually with `esptool.py`. Use that path if you want to tweak `menuconfig`, modify the code, or flash over a slow/unsupported browser.
+This method works on any operating system and uses Espressif's official flashing tool.
 
+### Step 1: Install esptool
+
+If you have Python installed:
+
+```bash
+pip install esptool
+```
+
+Or use the copy bundled with ESP-IDF if you have that installed.
+
+### Step 2: Download the firmware files
+
+Download these files from the [releases page](https://github.com/fabkury/p3a/releases) or the `build/` folder:
+
+- `bootloader/bootloader.bin`
+- `partition_table/partition-table.bin`
+- `p3a.bin`
+- `storage.bin`
+
+### Step 3: Connect the board
+
+1. Locate the USB-C ports on your board
+2. Connect the **Full-Speed (FS) port** to your computer—this is the flashing port
+3. The screen may stay dark during flashing; that's normal
+
+### Step 4: Flash the firmware
+
+Run this command, adjusting the port as needed:
+
+```bash
+esptool.py --chip esp32p4 --port COM3 --baud 460800 \
+  --before default_reset --after hard_reset \
+  write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB \
+  0x2000 bootloader.bin \
+  0x8000 partition-table.bin \
+  0x10000 p3a.bin \
+  0x810000 storage.bin
+```
+
+**Port names by OS:**
+- **Windows**: `COM3`, `COM4`, etc. (check Device Manager)
+- **macOS**: `/dev/cu.usbmodem*` or `/dev/cu.usbserial*`
+- **Linux**: `/dev/ttyUSB0` or `/dev/ttyACM0`
+
+### Step 5: Reboot and enjoy
+
+Once flashing completes:
+1. Disconnect the USB cable
+2. Insert a microSD card with artwork (see [HOW-TO-USE.md](HOW-TO-USE.md#preparing-artwork))
+3. Reconnect power via USB-C
+4. Follow the Wi-Fi setup on the screen
+
+---
+
+## Option 3: Build from Source
+
+For developers who want to customize the firmware:
+
+### Prerequisites
+
+- [ESP-IDF v5.5.x](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/) with esp32p4 target
+- Git
+
+### Build and flash
+
+```bash
+# Clone the repository
+git clone https://github.com/fabkury/p3a.git
+cd p3a
+
+# Set target (first time only)
+idf.py set-target esp32p4
+
+# Optional: customize settings
+idf.py menuconfig
+
+# Build and flash
+idf.py build flash monitor
+```
+
+Use `-p PORT` to specify the serial port if auto-detection fails.
+
+### Configuration options
+
+Run `idf.py menuconfig` to access options under "Physical Player of Pixel Art (P3A)":
+
+- **Auto-swap interval**: How often to change artwork automatically
+- **Animation directory**: Where to look for artwork on SD card
+- **Touch sensitivity**: Gesture thresholds
+- **PICO-8 Monitor**: Enable/disable the PICO-8 streaming feature
+- **USB Mass Storage**: Enable/disable USB SD card access
+
+---
+
+## Troubleshooting
+
+### "No serial port found" or similar
+
+- Try a different USB cable (many cables are charge-only)
+- Try a different USB port on your computer
+- On Windows, check Device Manager for the COM port number
+- On Linux, you may need to add yourself to the `dialout` group: `sudo usermod -a -G dialout $USER`
+
+### "Failed to connect" or timeout errors
+
+- Make sure you're using the correct USB-C port (FS port for flashing)
+- Try holding the BOOT button while connecting
+- Reduce baud rate: replace `460800` with `115200`
+- Close any other programs that might be using the serial port
+
+### Flashing succeeds but device doesn't boot
+
+- Verify all four files were flashed to the correct addresses
+- Try erasing flash first: `esptool.py --chip esp32p4 erase_flash`
+- Re-flash all files
+
+### Need help?
+
+- Check the [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for technical details
+- Open an issue on the [GitHub repository](https://github.com/fabkury/p3a)

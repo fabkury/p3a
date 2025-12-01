@@ -41,73 +41,81 @@
 
 ## 3) Display & Touch
 
-**3.1 LCD**
-- Identify controller from schematic/BOM
-- ESP-IDF MIPI-DSI driver or vendor driver
-- Frame buffer 720×720 RGB565/RGB888
+**3.1 LCD** ✅ IMPLEMENTED
+- ST7703 MIPI-DSI controller via Waveshare BSP
+- Frame buffer 720×720 RGB565/RGB888 (configurable)
+- Multi-buffer rendering with PSRAM
 - **AC**: Solid color + checkerboard visible, no flicker
 
-**3.2 Touch**
-- Discover IC on I²C (FT5x06/GT911)
+**3.2 Touch** ✅ IMPLEMENTED
+- GT911 I²C touch controller
 - `touch_read()` with rotation mapping
+- Gestures: tap, vertical swipe, long-press
 - **AC**: Touch demo prints coordinates
 
-**3.3 UI Framework**
-- LVGL integration (esp-lvgl-port)
-- Minimal UI: status bar, FPS, brightness slider
-- **AC**: LVGL demo ≥30 FPS
+**3.3 UI Framework** ✅ IMPLEMENTED
+- µGFX for registration code display
+- Web UI for status/controls via HTTP
+- **AC**: UI renders correctly
 
 ---
 
 ## 4) Storage & Caching
 
-**4.1 Filesystem**
-- SPI flash: NVS + spiffs/littlefs for config
-- MicroSD: artwork cache
-- Partitions: `nvs`, `phy_init`, `otadata`, `ota_0`, `ota_1`, `app`, `spiffs`
-- **AC**: Read/write settings, SD hot-plug detected
+**4.1 Filesystem** ✅ IMPLEMENTED
+- SPI flash: NVS + SPIFFS for config and web UI
+- MicroSD: artwork storage via SDMMC
+- Partitions: `nvs`, `phy_init`, `factory`, `storage` (SPIFFS)
+- **AC**: Read/write settings, SD access works
 
-**4.2 Cache Policy**
+**4.2 Cache Policy** ⏳ PENDING
 - LRU cache on SD: asset ID/URL → `{meta, image.bin}`
 - Cap: 256 MB, purge oldest on low space
 - **AC**: Cache hits avoid network, purge works
+- **Note**: Awaiting feed ingestion implementation
 
 ---
 
 ## 5) Networking
 
-**5.1 Wi-Fi**
+**5.1 Wi-Fi** ✅ IMPLEMENTED
 - ESP32-C6 Wi-Fi 6 bring-up
-- Provisioning: SoftAP+Captive Portal or BLE
+- Provisioning: SoftAP+Captive Portal
 - **AC**: Connects WPA2/WPA3, persists credentials, handles failures
 
-**5.2 TLS**
-- Bundle CA set, certificate pinning for MQTT
+**5.2 TLS** ✅ IMPLEMENTED
+- ESP-IDF certificate bundle for HTTPS provisioning
+- Client certificates (mTLS) for MQTT authentication
 - **AC**: TLS handshake succeeds, invalid certs rejected
 
 ---
 
 ## 6) MQTT Client
 
-**6.1 Client**
+**6.1 Client** ✅ IMPLEMENTED
 - ESP-IDF `esp-mqtt` with TLS
 - Config from NVS: broker, port, client_id, cert/key/token, topics
+- **Status**: Device registration at dev.makapix.club, mTLS authentication, status publishing every 30s
 
-**6.2 Topics & Payloads**
-- Subscribe: `posts/new`, `posts/new/{artist}`, `device/{id}/cmd`
+**6.2 Topics & Payloads** ⏳ PARTIAL
+- Subscribe: `makapix/player/{player_key}/command` ✅
+- Publish: `makapix/player/{player_key}/status` ✅
+- **Implemented**: Status messages, basic commands (swap_next, swap_back, etc.)
+- **Not yet implemented**: `posts/new` feed subscription, artwork download queue
 - Payload schema (JSON): `{post_id, artist, playlist?, assets:[{url, sha256, w,h,format,frame_delay?}], expires_at}`
-- **AC**: Message enqueues download, duplicate suppress
+- **AC**: Message enqueues download, duplicate suppress — PENDING
 
-**Security**: Client certs/tokens, subscribe-only ACLs
+**Security**: Client certs/tokens ✅, subscribe-only ACLs
 
 ---
 
 ## 7) Downloader & Content Integrity
 
-**7.1 HTTP(S) Fetcher**
+**7.1 HTTP(S) Fetcher** ⏳ PENDING
 - Streaming GET with timeouts, size limit (1.5 MB/asset), gzip support
+- **Note**: HTTPS client exists for provisioning; artwork download from feeds not yet implemented
 
-**7.2 Validation**
+**7.2 Validation** ⏳ PENDING
 - Size/time limits, MIME sniffing (magic bytes)
 - Reject SVG, unsupported formats
 - **AC**: Invalid assets rejected, logged
@@ -116,17 +124,20 @@
 
 ## 8) Renderer & Playback
 
-**8.1 Decoders**
-- PNG (tinyPNGdec/lodepng), JPEG (TJpgDec), GIF (single-frame/basic animation)
-- Normalize to display format, center/pad, optional upscale ≤128×128
+**8.1 Decoders** ✅ IMPLEMENTED
+- WebP (libwebp), PNG (libpng), JPEG (esp_jpeg), GIF (animated_gif)
+- Normalize to display format, center/pad, nearest-neighbor upscale
 
-**8.2 Frame Pipeline**
-- Double-buffer or partial flush, VSYNC aware
-- Target ≥60 FPS redraws, ≥30 FPS UI
+**8.2 Frame Pipeline** ✅ IMPLEMENTED
+- Multi-buffer rendering with PSRAM
+- Prefetching adjacent animations
+- Max-speed or frame-timed playback modes
 
-**8.3 Playlists**
-- Sequence assets with per-item duration, touch "Next/Prev"
-- **AC**: 128×128 art crisp/centered, playlist loops, no tearing
+**8.3 Playlists** ⏳ PARTIAL
+- Sequential playback with auto-advance ✅
+- Touch "Next/Prev" ✅
+- **AC**: 128×128 art crisp/centered, playlist loops, no tearing ✅
+- JSON-based playlist management: PENDING
 
 ---
 
@@ -220,15 +231,33 @@
 
 ## 17) Execution Plan
 
-**Phase A — Bring-up** (1–2 weeks): §1, §2, §3.1–3.2 → LCD colors, touch readout, UART logs
+**Phase A — Bring-up** ✅ COMPLETE: §1, §2, §3.1–3.2 → LCD colors, touch readout, UART logs
 
-**Phase B — Core I/O** (1–2 weeks): §4, §5, §6 → MQTT subscribe, print payloads
+**Phase B — Core I/O** ✅ COMPLETE: §4, §5, §6 → Wi-Fi, TLS MQTT connection, device registration
 
-**Phase C — Playback** (1–2 weeks): §7–§8, §9.2 → Download & display workflow
+**Phase C — Playback** ⏳ IN PROGRESS: §7–§8, §9.2 → Local playback works; feed ingestion pending
 
-**Phase D — Polish** (1–2 weeks): §9.1, §10, §11, §12, §13 → OTA, recovery, cache robust
+**Phase D — Polish** (upcoming): §9.1, §10, §11, §12, §13 → OTA, recovery, reactions
 
-**Phase E — Test & Ship** (1–2 weeks): §14, §15, §16 → CI releases v1.0
+**Phase E — Test & Ship** (upcoming): §14, §15, §16 → CI releases v1.0
+
+### Current Status (December 2025)
+
+Completed:
+- Display pipeline with multi-buffer rendering
+- Animation playback from SD card with prefetching
+- Touch gestures (tap, swipe, long-press for registration)
+- Wi-Fi provisioning with captive portal
+- Local web UI and REST API
+- Device registration at dev.makapix.club
+- TLS MQTT client with mTLS authentication
+- Remote control from website (commands via MQTT)
+- USB composite device (serial + mass storage)
+
+In Progress:
+- Feed ingestion (automatic artwork download from MQTT notifications)
+- Hardware reactions (send likes to artworks)
+- Browser-based web flasher
 
 ---
 

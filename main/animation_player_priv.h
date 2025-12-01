@@ -4,6 +4,7 @@
 #include "animation_player.h"
 #include "animation_decoder.h"
 #include "app_lcd.h"
+#include "sdcard_channel.h"  // For asset_type_t (canonical definition)
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_timer.h"
@@ -68,12 +69,7 @@ typedef struct {
 } pico8_color_t;
 #endif // CONFIG_P3A_PICO8_ENABLE
 
-typedef enum {
-    ASSET_TYPE_WEBP,
-    ASSET_TYPE_GIF,
-    ASSET_TYPE_PNG,
-    ASSET_TYPE_JPEG,
-} asset_type_t;
+// asset_type_t is now defined in sdcard_channel.h
 
 typedef struct {
     char **filenames;
@@ -165,7 +161,7 @@ extern app_lcd_sd_file_list_t s_sd_file_list;
 extern bool s_sd_mounted;
 extern bool s_sd_export_active;
 
-esp_err_t load_animation_into_buffer(size_t asset_index, animation_buffer_t *buf);
+esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, animation_buffer_t *buf);
 void unload_animation_buffer(animation_buffer_t *buf);
 esp_err_t prefetch_first_frame(animation_buffer_t *buf);
 void animation_loader_task(void *arg);

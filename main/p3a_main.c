@@ -21,6 +21,7 @@
 #include "makapix.h"
 #include "sntp_sync.h"
 #include "ugfx_ui.h"
+#include "animation_player.h"  // For animation_player_is_ui_mode()
 #include "freertos/task.h"
 
 static const char *TAG = "p3a";
@@ -54,6 +55,11 @@ static void auto_swap_task(void *arg)
         if (app_lcd_is_animation_paused()) {
             ESP_LOGD(TAG, "Auto-swap skipped: animation is paused");
             continue;  // Skip auto-swap while paused
+        }
+        // Check if in UI mode (e.g., during provisioning)
+        if (animation_player_is_ui_mode()) {
+            ESP_LOGD(TAG, "Auto-swap skipped: UI mode active");
+            continue;  // Skip auto-swap during UI mode to avoid memory pressure
         }
         // Perform auto-swap
         ESP_LOGD(TAG, "Auto-swap: cycling forward");

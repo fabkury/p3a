@@ -18,6 +18,7 @@ static char s_registration_code[8] = {0};  // 6 chars + null + padding to avoid 
 static char s_registration_expires[64] = {0};  // Extra space to avoid truncation warning
 static TimerHandle_t s_status_timer = NULL;
 static bool s_provisioning_cancelled = false;  // Flag to prevent race condition
+static TaskHandle_t s_poll_task_handle = NULL;  // Handle for credential polling task
 
 // Forward declarations
 static void credentials_poll_task(void *pvParameters);
@@ -121,10 +122,11 @@ static void provisioning_task(void *pvParameters)
                 
                 // Start credential polling task
                 // Stack size needs to be large enough for makapix_credentials_result_t (3x 4096 byte arrays = ~12KB)
-                BaseType_t poll_ret = xTaskCreate(credentials_poll_task, "cred_poll", 16384, NULL, 5, NULL);
+                BaseType_t poll_ret = xTaskCreate(credentials_poll_task, "cred_poll", 16384, NULL, 5, &s_poll_task_handle);
                 if (poll_ret != pdPASS) {
                     ESP_LOGE(TAG, "Failed to create credential polling task");
                     s_state = MAKAPIX_STATE_IDLE;
+                    s_poll_task_handle = NULL;
                 }
             } else {
                 ESP_LOGI(TAG, "Provisioning was cancelled, discarding results");
@@ -271,6 +273,7 @@ static void credentials_poll_task(void *pvParameters)
     }
 
     ESP_LOGI(TAG, "Credential polling task exiting");
+    s_poll_task_handle = NULL;
     vTaskDelete(NULL);
 }
 
@@ -399,8 +402,18 @@ esp_err_t makapix_start_provisioning(void)
     if (s_state == MAKAPIX_STATE_PROVISIONING || s_state == MAKAPIX_STATE_SHOW_CODE) {
         ESP_LOGI(TAG, "Cancelling existing provisioning before starting new one");
         makapix_cancel_provisioning();
-        // Small delay to ensure cleanup completes
-        vTaskDelay(pdMS_TO_TICKS(100));
+        // Wait for polling task to fully exit (up to 15 seconds for HTTP timeout + cleanup)
+        if (s_poll_task_handle != NULL) {
+            ESP_LOGI(TAG, "Waiting for polling task to exit...");
+            int wait_count = 0;
+            while (s_poll_task_handle != NULL && wait_count < 150) {
+                vTaskDelay(pdMS_TO_TICKS(100));
+                wait_count++;
+            }
+            if (s_poll_task_handle != NULL) {
+                ESP_LOGW(TAG, "Polling task did not exit gracefully");
+            }
+        }
     }
 
     // Stop MQTT client to free network resources for provisioning

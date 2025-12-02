@@ -334,6 +334,9 @@ static void mqtt_reconnect_task(void *pvParameters)
                     continue;
                 }
                 
+                // Deinit existing client before reinitializing to prevent resource leaks
+                makapix_mqtt_deinit();
+                
                 err = makapix_mqtt_init(player_key, mqtt_host, mqtt_port, ca_cert, client_cert, client_key);
                 if (err == ESP_OK) {
                     ESP_LOGI(TAG, "MQTT init successful, attempting connect...");

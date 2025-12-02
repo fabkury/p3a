@@ -182,6 +182,15 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
         return ESP_ERR_INVALID_ARG;
     }
 
+    // If client already exists, destroy it first to prevent resource leaks
+    if (s_mqtt_client) {
+        ESP_LOGI(TAG, "Cleaning up existing MQTT client before reinitializing");
+        esp_mqtt_client_stop(s_mqtt_client);
+        esp_mqtt_client_destroy(s_mqtt_client);
+        s_mqtt_client = NULL;
+        s_mqtt_connected = false;
+    }
+
     strncpy(s_player_key, player_key, sizeof(s_player_key) - 1);
     s_player_key[sizeof(s_player_key) - 1] = '\0';
 
@@ -355,6 +364,25 @@ void makapix_mqtt_disconnect(void)
     }
     
     ESP_LOGI(TAG, "=== MQTT DISCONNECT END ===");
+}
+
+void makapix_mqtt_deinit(void)
+{
+    ESP_LOGI(TAG, "=== MQTT DEINIT START ===");
+    ESP_LOGI(TAG, "Client handle: %p", (void*)s_mqtt_client);
+    ESP_LOGI(TAG, "Connection state: %s", s_mqtt_connected ? "connected" : "disconnected");
+    
+    if (s_mqtt_client) {
+        esp_mqtt_client_stop(s_mqtt_client);
+        esp_mqtt_client_destroy(s_mqtt_client);
+        s_mqtt_client = NULL;
+        s_mqtt_connected = false;
+        ESP_LOGI(TAG, "MQTT client destroyed");
+    } else {
+        ESP_LOGW(TAG, "MQTT client handle is NULL, nothing to deinit");
+    }
+    
+    ESP_LOGI(TAG, "=== MQTT DEINIT END ===");
 }
 
 bool makapix_mqtt_is_connected(void)

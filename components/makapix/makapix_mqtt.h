@@ -35,6 +35,14 @@ esp_err_t makapix_mqtt_connect(void);
 void makapix_mqtt_disconnect(void);
 
 /**
+ * @brief Deinitialize and destroy MQTT client
+ * 
+ * Stops the client, destroys it, and frees all resources.
+ * Should be called before reinitializing with new configuration.
+ */
+void makapix_mqtt_deinit(void);
+
+/**
  * @brief Check if MQTT client is connected
  * 
  * @return true if connected, false otherwise

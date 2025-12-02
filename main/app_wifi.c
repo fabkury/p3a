@@ -31,6 +31,7 @@
 #include "app_wifi.h"
 #include "sntp_sync.h"
 #include "makapix.h"
+#include "makapix_mqtt.h"
 
 #define EXAMPLE_ESP_WIFI_SSID      CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
@@ -85,6 +86,8 @@ static const char *TAG = "app_wifi";
 static int s_retry_num = 0;
 static httpd_handle_t s_captive_portal_server = NULL;
 static esp_netif_t *ap_netif = NULL;
+static bool s_initial_connection_done = false;  // Track if we've ever successfully connected
+static bool s_services_initialized = false;     // Track if app services have been initialized
 
 // Callback for when REST API should be started (to register action handlers)
 static app_wifi_rest_callback_t s_rest_start_callback = NULL;
@@ -247,16 +250,38 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             ESP_LOGW(TAG, "esp_wifi_remote_connect failed: %s", esp_err_to_name(err));
         }
     } else if (event_base == WIFI_REMOTE_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_retry_num < EXAMPLE_ESP_MAXIMUM_RETRY) {
+        ESP_LOGW(TAG, "WiFi disconnected (initial_connection_done=%d, retry=%d)", 
+                 s_initial_connection_done, s_retry_num);
+        
+        // Stop MQTT client when WiFi disconnects to prevent futile reconnection attempts
+        if (s_initial_connection_done) {
+            ESP_LOGI(TAG, "Stopping MQTT client due to WiFi disconnect");
+            makapix_mqtt_disconnect();
+        }
+        
+        // For initial connection: use retry limit
+        // After initial connection succeeded: always keep trying (persistent reconnection)
+        if (!s_initial_connection_done && s_retry_num >= EXAMPLE_ESP_MAXIMUM_RETRY) {
+            ESP_LOGI(TAG, "Initial connection failed after %d attempts", EXAMPLE_ESP_MAXIMUM_RETRY);
+            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+        } else {
+            // Always try to reconnect
+            s_retry_num++;
+            
+            // Add delay for persistent reconnection to avoid hammering the AP
+            if (s_initial_connection_done && s_retry_num > 5) {
+                // After 5 quick retries, slow down to every 5 seconds
+                ESP_LOGI(TAG, "WiFi reconnect attempt %d (with backoff)", s_retry_num);
+                vTaskDelay(pdMS_TO_TICKS(5000));
+            } else {
+                ESP_LOGI(TAG, "WiFi reconnect attempt %d/%d", s_retry_num, 
+                         s_initial_connection_done ? -1 : EXAMPLE_ESP_MAXIMUM_RETRY);
+            }
+            
             esp_err_t err = esp_wifi_remote_connect();
             if (err != ESP_OK) {
                 ESP_LOGW(TAG, "esp_wifi_remote_connect failed: %s", esp_err_to_name(err));
             }
-            s_retry_num++;
-            ESP_LOGI(TAG, "retry to connect to the AP (attempt %d/%d)", s_retry_num, EXAMPLE_ESP_MAXIMUM_RETRY);
-        } else {
-            ESP_LOGI(TAG, "connect to the AP failed after %d attempts", EXAMPLE_ESP_MAXIMUM_RETRY);
-            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
@@ -271,27 +296,35 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             s_captive_portal_server = NULL;
         }
         
-        // Initialize app state and start REST API after STA gets IP
-        ESP_LOGI(TAG, "STA connected, initializing app services");
-        
-        // Initialize SNTP for time synchronization
-        sntp_sync_init();
-        
-        app_state_init();
-        esp_err_t api_err = http_api_start();
-        if (api_err != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to start HTTP API: %s", esp_err_to_name(api_err));
-            app_state_enter_error();
-        } else {
-            // Call callback to register action handlers
-            if (s_rest_start_callback) {
-                s_rest_start_callback();
+        // Initialize app services only once (first connection)
+        if (!s_services_initialized) {
+            ESP_LOGI(TAG, "STA connected, initializing app services");
+            
+            // Initialize SNTP for time synchronization
+            sntp_sync_init();
+            
+            app_state_init();
+            esp_err_t api_err = http_api_start();
+            if (api_err != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to start HTTP API: %s", esp_err_to_name(api_err));
+                app_state_enter_error();
+            } else {
+                // Call callback to register action handlers
+                if (s_rest_start_callback) {
+                    s_rest_start_callback();
+                }
+                app_state_enter_ready();
+                ESP_LOGI(TAG, "REST API started at http://p3a.local/");
             }
-            app_state_enter_ready();
-            ESP_LOGI(TAG, "REST API started at http://p3a.local/");
+            s_services_initialized = true;
+        } else {
+            ESP_LOGI(TAG, "WiFi reconnected after disconnect");
         }
         
-        // Connect to MQTT if registered
+        // Mark initial connection as done
+        s_initial_connection_done = true;
+        
+        // Connect/reconnect to MQTT if registered
         makapix_connect_if_registered();
     }
 }

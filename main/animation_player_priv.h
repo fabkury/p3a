@@ -71,6 +71,14 @@ typedef struct {
 
 // asset_type_t is now defined in sdcard_channel.h
 
+// Screen rotation angles
+typedef enum {
+    ROTATION_0   = 0,
+    ROTATION_90  = 90,
+    ROTATION_180 = 180,
+    ROTATION_270 = 270
+} screen_rotation_t;
+
 typedef struct {
     char **filenames;
     asset_type_t *types;
@@ -160,6 +168,10 @@ extern uint32_t s_target_frame_delay_ms;
 extern app_lcd_sd_file_list_t s_sd_file_list;
 extern bool s_sd_mounted;
 extern bool s_sd_export_active;
+
+// Screen rotation state
+extern screen_rotation_t g_screen_rotation;
+extern volatile bool g_rotation_in_progress;
 
 esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, animation_buffer_t *buf);
 void unload_animation_buffer(animation_buffer_t *buf);

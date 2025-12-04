@@ -1693,6 +1693,102 @@ static esp_err_t h_post_resume(httpd_req_t *req) {
 }
 
 /**
+ * GET /rotation
+ * Returns current screen rotation angle
+ */
+static esp_err_t h_get_rotation(httpd_req_t *req) {
+    screen_rotation_t rotation = app_get_screen_rotation();
+    
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+    
+    cJSON_AddBoolToObject(root, "ok", true);
+    cJSON_AddNumberToObject(root, "rotation", (double)rotation);
+    
+    char *json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    
+    if (!json_str) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+    
+    send_json_str(req, 200, json_str);
+    free(json_str);
+    return ESP_OK;
+}
+
+/**
+ * POST /rotation
+ * Sets screen rotation angle
+ * Body: {"rotation": 90}
+ */
+static esp_err_t h_post_rotation(httpd_req_t *req) {
+    if (!ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+    
+    // Read request body
+    char *buf = malloc(req->content_len + 1);
+    if (!buf) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+    
+    int ret = httpd_req_recv(req, buf, req->content_len);
+    if (ret <= 0) {
+        free(buf);
+        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+            httpd_resp_send_408(req);
+        }
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+    
+    // Parse JSON
+    cJSON *root = cJSON_Parse(buf);
+    free(buf);
+    
+    if (!root) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid JSON\",\"code\":\"INVALID_JSON\"}");
+        return ESP_OK;
+    }
+    
+    cJSON *rotation_item = cJSON_GetObjectItem(root, "rotation");
+    if (!rotation_item || !cJSON_IsNumber(rotation_item)) {
+        cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'rotation' field\",\"code\":\"INVALID_REQUEST\"}");
+        return ESP_OK;
+    }
+    
+    int rotation_value = (int)cJSON_GetNumberValue(rotation_item);
+    cJSON_Delete(root);
+    
+    // Validate rotation value
+    if (rotation_value != 0 && rotation_value != 90 && rotation_value != 180 && rotation_value != 270) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid rotation angle (must be 0, 90, 180, or 270)\",\"code\":\"INVALID_ROTATION\"}");
+        return ESP_OK;
+    }
+    
+    // Apply rotation
+    esp_err_t err = app_set_screen_rotation((screen_rotation_t)rotation_value);
+    if (err == ESP_ERR_INVALID_STATE) {
+        send_json(req, 409, "{\"ok\":false,\"error\":\"Rotation operation already in progress\",\"code\":\"ROTATION_IN_PROGRESS\"}");
+        return ESP_OK;
+    } else if (err != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to set rotation\",\"code\":\"ROTATION_FAILED\"}");
+        return ESP_OK;
+    }
+    
+    send_json(req, 200, "{\"ok\":true,\"data\":{\"rotation\":null}}");
+    return ESP_OK;
+}
+
+/**
  * POST /upload
  * Handles multipart/form-data file upload, saves to /sdcard/downloads, then moves to /sdcard/animations
  * Maximum file size: 5 MB
@@ -2275,6 +2371,18 @@ esp_err_t http_api_start(void) {
     u.uri = "/action/resume";
     u.method = HTTP_POST;
     u.handler = h_post_resume;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/rotation";
+    u.method = HTTP_GET;
+    u.handler = h_get_rotation;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/rotation";
+    u.method = HTTP_POST;
+    u.handler = h_post_rotation;
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
 

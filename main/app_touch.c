@@ -16,6 +16,7 @@
 #include "bsp/display.h"
 #include "sdkconfig.h"
 #include "makapix.h"
+#include "animation_player.h"
 
 // Debug provisioning mode - when enabled, long press doesn't trigger real provisioning
 #define DEBUG_PROVISIONING_ENABLED 0
@@ -77,6 +78,46 @@ static uint16_t scale_to_pico8(uint16_t value, uint16_t max_src, uint16_t max_ds
 }
 #endif
 
+/**
+ * @brief Transform touch coordinates based on current screen rotation
+ * 
+ * @param x Pointer to X coordinate (modified in place)
+ * @param y Pointer to Y coordinate (modified in place)
+ * @param rotation Current screen rotation
+ */
+static void transform_touch_coordinates(uint16_t *x, uint16_t *y, screen_rotation_t rotation)
+{
+    const uint16_t screen_w = BSP_LCD_H_RES;
+    const uint16_t screen_h = BSP_LCD_V_RES;
+    uint16_t temp;
+    
+    switch (rotation) {
+        case ROTATION_0:
+            // No transformation
+            break;
+            
+        case ROTATION_90:  // 90° CW
+            // (x, y) → (y, height - 1 - x)
+            temp = *x;
+            *x = *y;
+            *y = screen_h - 1 - temp;
+            break;
+            
+        case ROTATION_180:
+            // (x, y) → (width - 1 - x, height - 1 - y)
+            *x = screen_w - 1 - *x;
+            *y = screen_h - 1 - *y;
+            break;
+            
+        case ROTATION_270:  // 270° CW (90° CCW)
+            // (x, y) → (width - 1 - y, x)
+            temp = *x;
+            *x = screen_w - 1 - *y;
+            *y = temp;
+            break;
+    }
+}
+
 static void app_touch_task(void *arg)
 {
     const TickType_t poll_delay = pdMS_TO_TICKS(CONFIG_P3A_TOUCH_POLL_INTERVAL_MS);
@@ -106,6 +147,14 @@ static void app_touch_task(void *arg)
         esp_lcd_touch_read_data(tp);
         bool pressed = esp_lcd_touch_get_coordinates(tp, x, y, strength, &touch_count,
                                                      CONFIG_ESP_LCD_TOUCH_MAX_POINTS);
+
+        // Transform touch coordinates based on current rotation
+        if (pressed && touch_count > 0) {
+            screen_rotation_t rotation = app_get_screen_rotation();
+            for (uint8_t i = 0; i < touch_count; i++) {
+                transform_touch_coordinates(&x[i], &y[i], rotation);
+            }
+        }
 
         if (pressed && touch_count > 0) {
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE

@@ -57,16 +57,16 @@ esp_err_t makapix_store_get_mqtt_port(uint16_t *out_port);
 esp_err_t makapix_store_save_credentials(const char *player_key, const char *host, uint16_t port);
 
 /**
- * @brief Check if TLS certificates are stored in SPIFFS
+ * @brief Check if TLS certificates are stored in NVS
  * 
  * @return true if all certificates exist, false otherwise
  */
 bool makapix_store_has_certificates(void);
 
 /**
- * @brief Save TLS certificates to SPIFFS
+ * @brief Save TLS certificates to NVS
  * 
- * Saves CA certificate, client certificate, and client private key to SPIFFS filesystem.
+ * Saves CA certificate, client certificate, and client private key to NVS.
  * 
  * @param ca_pem CA certificate PEM string
  * @param cert_pem Client certificate PEM string
@@ -76,7 +76,7 @@ bool makapix_store_has_certificates(void);
 esp_err_t makapix_store_save_certificates(const char *ca_pem, const char *cert_pem, const char *key_pem);
 
 /**
- * @brief Get CA certificate from SPIFFS
+ * @brief Get CA certificate from NVS
  * 
  * @param buffer Buffer to receive certificate (must be at least max_len bytes)
  * @param max_len Maximum length of buffer
@@ -85,7 +85,7 @@ esp_err_t makapix_store_save_certificates(const char *ca_pem, const char *cert_p
 esp_err_t makapix_store_get_ca_cert(char *buffer, size_t max_len);
 
 /**
- * @brief Get client certificate from SPIFFS
+ * @brief Get client certificate from NVS
  * 
  * @param buffer Buffer to receive certificate (must be at least max_len bytes)
  * @param max_len Maximum length of buffer
@@ -94,7 +94,7 @@ esp_err_t makapix_store_get_ca_cert(char *buffer, size_t max_len);
 esp_err_t makapix_store_get_client_cert(char *buffer, size_t max_len);
 
 /**
- * @brief Get client private key from SPIFFS
+ * @brief Get client private key from NVS
  * 
  * @param buffer Buffer to receive private key (must be at least max_len bytes)
  * @param max_len Maximum length of buffer
@@ -105,7 +105,7 @@ esp_err_t makapix_store_get_client_key(char *buffer, size_t max_len);
 /**
  * @brief Clear all stored Makapix credentials
  * 
- * Clears NVS credentials and deletes certificate files from SPIFFS.
+ * Clears all NVS credentials including player_key, MQTT broker info, and certificates.
  * 
  * @return ESP_OK on success, error code otherwise
  */

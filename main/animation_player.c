@@ -48,7 +48,7 @@ int64_t s_last_duration_update_us = 0;
 int s_latest_frame_duration_ms = 0;
 char s_frame_duration_text[11] = "";
 int64_t s_frame_processing_start_us = 0;
-uint32_t s_target_frame_delay_ms = 16;
+uint32_t s_target_frame_delay_ms = 0;
 
 app_lcd_sd_file_list_t s_sd_file_list = {0};
 bool s_sd_mounted = false;

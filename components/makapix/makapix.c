@@ -89,12 +89,8 @@ static void provisioning_task(void *pvParameters)
 {
     makapix_provision_result_t result;
     
-    // Set status to "Querying endpoint"
+    // Set status to "Querying endpoint" right before making the HTTP request
     snprintf(s_provisioning_status, sizeof(s_provisioning_status), "Querying endpoint");
-    vTaskDelay(pdMS_TO_TICKS(100)); // Small delay to ensure UI updates
-    
-    // Set status to "Verifying server"
-    snprintf(s_provisioning_status, sizeof(s_provisioning_status), "Verifying server");
     
     esp_err_t err = makapix_provision_request(&result);
 
@@ -436,6 +432,10 @@ esp_err_t makapix_start_provisioning(void)
     }
 
     ESP_LOGI(TAG, "Starting provisioning...");
+    
+    // Set initial status message before transitioning state
+    snprintf(s_provisioning_status, sizeof(s_provisioning_status), "Starting...");
+    
     s_state = MAKAPIX_STATE_PROVISIONING;
     s_provisioning_cancelled = false;  // Reset cancellation flag
 

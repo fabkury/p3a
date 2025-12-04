@@ -197,7 +197,6 @@ esp_err_t ugfx_ui_show_registration(const char *code, const char *expires_at)
     }
 
     strncpy(s_current_code, code, sizeof(s_current_code) - 1);
-    s_current_code[sizeof(s_current_code) - 1] = '\0';
     s_show_status = false; // Switch from status to code display
     s_ui_active = true;
     

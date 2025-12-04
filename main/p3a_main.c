@@ -103,10 +103,26 @@ static void makapix_state_monitor_task(void *arg)
             ESP_LOGI(TAG, "Makapix state changed: %d -> %d", last_state, current_state);
 
             // Handle state transitions
-            if (current_state == MAKAPIX_STATE_SHOW_CODE) {
-                // Enter UI mode and show registration code
+            if (current_state == MAKAPIX_STATE_PROVISIONING) {
+                // Enter UI mode immediately and show status message
                 app_lcd_enter_ui_mode();
 
+                char status[128];
+                if (makapix_get_provisioning_status(status, sizeof(status)) == ESP_OK) {
+                    esp_err_t err = ugfx_ui_show_provisioning_status(status);
+                    if (err != ESP_OK) {
+                        ESP_LOGE(TAG, "Failed to show provisioning status UI: %s", esp_err_to_name(err));
+                    }
+                } else {
+                    // Default status message
+                    esp_err_t err = ugfx_ui_show_provisioning_status("Starting...");
+                    if (err != ESP_OK) {
+                        ESP_LOGE(TAG, "Failed to show provisioning status UI: %s", esp_err_to_name(err));
+                    }
+                }
+                ESP_LOGI(TAG, "Provisioning UI displayed");
+            } else if (current_state == MAKAPIX_STATE_SHOW_CODE) {
+                // Already in UI mode from PROVISIONING, just update to show code
                 char code[8];
                 char expires[64];
                 if (makapix_get_registration_code(code, sizeof(code)) == ESP_OK &&
@@ -122,7 +138,8 @@ static void makapix_state_monitor_task(void *arg)
                     ESP_LOGI(TAG, "   Enter at makapix.club");
                     ESP_LOGI(TAG, "============================================");
                 }
-            } else if (last_state == MAKAPIX_STATE_SHOW_CODE && current_state != MAKAPIX_STATE_SHOW_CODE) {
+            } else if ((last_state == MAKAPIX_STATE_PROVISIONING || last_state == MAKAPIX_STATE_SHOW_CODE) && 
+                       current_state != MAKAPIX_STATE_PROVISIONING && current_state != MAKAPIX_STATE_SHOW_CODE) {
                 // Exit UI mode FIRST, then hide registration
                 // This ensures animation takes over immediately without an intermediate black frame
                 app_lcd_exit_ui_mode();
@@ -131,6 +148,12 @@ static void makapix_state_monitor_task(void *arg)
             }
 
             last_state = current_state;
+        } else if (current_state == MAKAPIX_STATE_PROVISIONING) {
+            // Update status message during provisioning
+            char status[128];
+            if (makapix_get_provisioning_status(status, sizeof(status)) == ESP_OK) {
+                ugfx_ui_show_provisioning_status(status);
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(500)); // Check every 500ms

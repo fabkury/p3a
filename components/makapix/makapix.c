@@ -183,7 +183,7 @@ static void credentials_poll_task(void *pvParameters)
 
         esp_err_t err = makapix_poll_credentials(player_key, &creds);
         if (err == ESP_OK) {
-            ESP_LOGI(TAG, "Credentials received! Saving to SPIFFS...");
+            ESP_LOGI(TAG, "Credentials received! Saving to NVS...");
             
             // Preserve broker info before clearing (from initial provisioning response)
             // The credentials response may not include broker info, so we need to keep what we have

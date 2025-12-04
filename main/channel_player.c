@@ -52,7 +52,7 @@ esp_err_t channel_player_init(void)
     }
 
     memset(&s_player, 0, sizeof(s_player));
-    s_player.state.randomize = false; // Default: no randomization
+    s_player.state.randomize = true; // Default: no randomization
     s_player.initialized = true;
 
     ESP_LOGI(TAG, "Channel player initialized");

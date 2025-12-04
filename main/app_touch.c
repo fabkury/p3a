@@ -39,7 +39,7 @@ typedef enum {
     GESTURE_STATE_IDLE,              // No active touch
     GESTURE_STATE_TAP,              // Potential tap/swap gesture (minimal movement)
     GESTURE_STATE_BRIGHTNESS,       // Brightness control gesture (vertical swipe detected)
-    GESTURE_STATE_LONG_PRESS_PENDING // Finger down, counting to 10s for provisioning
+    GESTURE_STATE_LONG_PRESS_PENDING // Finger down, counting to 5s for provisioning
 } gesture_state_t;
 
 /**
@@ -93,8 +93,8 @@ static void app_touch_task(void *arg)
     const uint16_t screen_height = BSP_LCD_V_RES;
     const uint16_t min_swipe_height = (screen_height * CONFIG_P3A_TOUCH_SWIPE_MIN_HEIGHT_PERCENT) / 100;
     const int max_brightness_delta = CONFIG_P3A_TOUCH_BRIGHTNESS_MAX_DELTA_PERCENT;
-    const TickType_t long_press_duration = pdMS_TO_TICKS(10000); // 10 seconds
-    const uint16_t long_press_movement_threshold = 20; // pixels - must stay within this distance
+    const TickType_t long_press_duration = pdMS_TO_TICKS(5000); // 5 seconds
+    const uint16_t long_press_movement_threshold = 40; // pixels - must stay within this distance
 
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     bool last_touch_valid = false;
@@ -129,7 +129,7 @@ static void app_touch_task(void *arg)
                 uint16_t abs_delta_x = (delta_x < 0) ? -delta_x : delta_x;
                 uint16_t abs_delta_y = (delta_y < 0) ? -delta_y : delta_y;
                 
-                // Check for long press: finger held at same position for 10 seconds
+                // Check for long press: finger held at same position for 5 seconds
                 TickType_t elapsed = xTaskGetTickCount() - touch_start_time;
                 uint16_t total_movement = abs_delta_x + abs_delta_y;
                 

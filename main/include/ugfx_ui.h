@@ -21,6 +21,16 @@ esp_err_t ugfx_ui_init(void);
 void ugfx_ui_deinit(void);
 
 /**
+ * @brief Show provisioning status with a message
+ * 
+ * Displays a loading screen with a status message during provisioning.
+ * 
+ * @param status_message Status message to display (e.g., "Querying endpoint")
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t ugfx_ui_show_provisioning_status(const char *status_message);
+
+/**
  * @brief Activate registration code display
  * 
  * Sets up the UI state for displaying a registration code.

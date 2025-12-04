@@ -266,44 +266,267 @@ void transform_touch_coordinates(int *x, int *y, uint8_t rotation) {
 
 ---
 
+## µGFX UI Rotation
+
+### Overview
+
+The µGFX library used for the provisioning/registration UI has **built-in software rotation support** that is already enabled in the current codebase. This is handled through the `GDISP_HARDWARE_CONTROL` feature and coordinate transformation in the framebuffer driver.
+
+### How µGFX Rotation Works
+
+**Current Implementation**:
+- Driver: `components/ugfx/drivers/gdisp/framebuffer/gdisp_lld_framebuffer.c`
+- Configuration: `GDISP_HARDWARE_CONTROL` is enabled (line 19 of `gdisp_lld_config.h`)
+- Orientation support: Already implemented in `gdisp_lld_draw_pixel()` (lines 84-99)
+
+**Rotation Mechanism**:
+```c
+// In gdisp_lld_draw_pixel() - coordinate transformation per orientation
+switch(g->g.Orientation) {
+case gOrientation0:   // No rotation
+    pos = PIXIL_POS(g, g->p.x, g->p.y);
+    break;
+case gOrientation90:  // 90° CW
+    pos = PIXIL_POS(g, g->p.y, g->g.Width-g->p.x-1);
+    break;
+case gOrientation180: // 180°
+    pos = PIXIL_POS(g, g->g.Width-g->p.x-1, g->g.Height-g->p.y-1);
+    break;
+case gOrientation270: // 270° CW
+    pos = PIXIL_POS(g, g->g.Height-g->p.y-1, g->p.x);
+    break;
+}
+```
+
+**Width/Height Swapping**:
+The `gdisp_lld_control()` function automatically swaps width and height when rotating between portrait/landscape modes:
+```c
+case GDISP_CONTROL_ORIENTATION:
+    if (g->g.Orientation == gOrientation90 || g->g.Orientation == gOrientation270) {
+        // Swap dimensions for 90°/270° rotations
+        gCoord tmp = g->g.Width;
+        g->g.Width = g->g.Height;
+        g->g.Height = tmp;
+    }
+    g->g.Orientation = (gOrientation)g->p.ptr;
+```
+
+### µGFX Rotation API
+
+**Setting Orientation** (already available):
+```c
+// Use µGFX built-in control API
+gdispControl(GDISP_CONTROL_ORIENTATION, (void*)gOrientation90);
+
+// Or use the convenience function
+gdispSetOrientation(gOrientation90);
+```
+
+**Orientation Enum**:
+```c
+typedef enum gOrientation {
+    gOrientation0 = 0,        // 0° (native)
+    gOrientation90 = 90,      // 90° CW
+    gOrientation180 = 180,    // 180°
+    gOrientation270 = 270,    // 270° CW
+} gOrientation;
+```
+
+### Integration with Animation Rotation
+
+**Approach 6: Unified Rotation System (RECOMMENDED)**
+
+**Description**: Synchronize µGFX rotation with animation player rotation to provide consistent screen orientation across all display modes.
+
+**Implementation Strategy**:
+
+1. **Global Rotation State**:
+```c
+// In animation_player_priv.h
+typedef enum {
+    ROTATION_0   = 0,
+    ROTATION_90  = 90,
+    ROTATION_180 = 180,
+    ROTATION_270 = 270
+} screen_rotation_t;
+
+extern screen_rotation_t g_screen_rotation;
+```
+
+2. **Apply to Animation Player** (Approach 1 - Lookup Tables):
+```c
+// Modify lookup table generation based on g_screen_rotation
+esp_err_t set_animation_rotation(screen_rotation_t rotation) {
+    g_screen_rotation = rotation;
+    
+    // Trigger back buffer reload with new lookup tables
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        s_swap_requested = true;
+        xSemaphoreGive(s_buffer_mutex);
+        xSemaphoreGive(s_loader_sem);
+    }
+    
+    return ESP_OK;
+}
+```
+
+3. **Apply to µGFX UI**:
+```c
+// In ugfx_ui.c - add rotation sync function
+esp_err_t ugfx_ui_set_rotation(screen_rotation_t rotation) {
+    gOrientation ugfx_orientation;
+    
+    switch (rotation) {
+        case ROTATION_0:   ugfx_orientation = gOrientation0; break;
+        case ROTATION_90:  ugfx_orientation = gOrientation90; break;
+        case ROTATION_180: ugfx_orientation = gOrientation180; break;
+        case ROTATION_270: ugfx_orientation = gOrientation270; break;
+        default: return ESP_ERR_INVALID_ARG;
+    }
+    
+    if (s_ugfx_initialized) {
+        gdispSetOrientation(ugfx_orientation);
+    }
+    
+    return ESP_OK;
+}
+```
+
+4. **Unified API**:
+```c
+// Public API in animation_player.h
+esp_err_t app_set_screen_rotation(screen_rotation_t rotation) {
+    // Apply to animation player
+    set_animation_rotation(rotation);
+    
+    // Apply to µGFX UI
+    ugfx_ui_set_rotation(rotation);
+    
+    // Store in config
+    config_store_set_rotation(rotation);
+    
+    return ESP_OK;
+}
+```
+
+**Pros**:
+- ✅ Consistent rotation across animation and UI modes
+- ✅ Uses native µGFX rotation (already implemented)
+- ✅ Single API call rotates entire display
+- ✅ No additional performance overhead for UI
+- ✅ Clean architecture - each subsystem handles its own rotation
+
+**Cons**:
+- ⚠️ Animation rotation has 1-2 frame latency (acceptable)
+- ⚠️ Slight implementation effort to coordinate both systems (~50 lines)
+
+**Performance Impact**:
+- **Animation rendering**: 0% overhead (lookup table approach)
+- **µGFX rendering**: Minimal overhead (coordinate transform per pixel, but UI is infrequent)
+- **Total**: Negligible - UI renders only during provisioning/registration
+
+### µGFX Rotation Performance Analysis
+
+**Per-Pixel Cost**:
+- 1 switch statement (~4-8 CPU cycles)
+- 1-2 arithmetic operations (subtraction, no division)
+- **Total**: ~10-15 CPU cycles per pixel
+
+**Registration UI Frame**:
+- Text rendering: ~50,000 pixels (sparse, mostly empty)
+- Update frequency: 1 Hz (countdown timer)
+- Total overhead: ~0.5ms per frame (negligible at 1 FPS UI)
+
+**Why This Is Acceptable**:
+1. UI rendering is **infrequent** (once per second for timer updates)
+2. UI is **low complexity** (text only, no complex graphics)
+3. UI has **no strict timing** (registration screen, not animation playback)
+4. ESP32-P4 dual-core can handle the overhead easily
+
+### Implementation Checklist for µGFX Integration
+
+#### Core Changes
+- [ ] Add global rotation state (`screen_rotation_t`)
+- [ ] Create unified rotation API (`app_set_screen_rotation()`)
+- [ ] Add `ugfx_ui_set_rotation()` function
+- [ ] Initialize µGFX with correct orientation on startup
+- [ ] Synchronize rotation between animation and UI subsystems
+
+#### Configuration
+- [ ] Load rotation from NVS on boot
+- [ ] Apply to both animation player and µGFX
+- [ ] Persist changes to NVS
+
+#### Testing
+- [ ] Test rotation in animation mode (all 4 angles)
+- [ ] Test rotation in UI mode (registration screen)
+- [ ] Verify smooth transition between animation ↔ UI modes
+- [ ] Test rotation change while in UI mode
+- [ ] Verify touch coordinates work in all rotations
+
+#### Code Locations
+1. **`main/ugfx_ui.c`**: Add `ugfx_ui_set_rotation()`
+2. **`main/ugfx_ui.h`**: Expose rotation function
+3. **`main/animation_player.c`**: Add unified API
+4. **`main/animation_player.h`**: Public rotation functions
+5. **`components/config_store/`**: Add rotation persistence
+
+**Estimated Total LOC**: ~150 lines
+- Animation rotation: ~100 lines
+- µGFX integration: ~30 lines
+- Unified API: ~20 lines
+
+---
+
 ## Recommendations
 
-### Primary Recommendation: **Approach 1 (Lookup Table Rotation)**
+### Primary Recommendation: **Approach 6 (Unified Rotation System)**
 
 **Why**:
-1. **Zero performance impact**: No per-frame overhead
-2. **Simple implementation**: Minimal code changes (~100 lines)
-3. **Memory efficient**: Uses existing lookup table infrastructure
-4. **Maintainable**: Self-contained logic in one function
-5. **Compatible**: Works with all animation formats and UI rendering
-6. **Runtime capable**: Can change rotation between animations
+1. **Comprehensive**: Handles both animation and UI rotation
+2. **Zero performance impact for animations**: Uses lookup table approach
+3. **Minimal overhead for UI**: Uses µGFX built-in rotation (already implemented)
+4. **Consistent UX**: Same rotation across all display modes
+5. **Clean architecture**: Each subsystem manages its own rotation
+6. **Simple API**: Single function call to rotate entire display
 
-**Trade-off**: 1-2 frame latency when changing rotation (acceptable for user-initiated changes)
+**What This Involves**:
+- **Animation Player**: Lookup table rotation (Approach 1) - ~100 lines
+- **µGFX UI**: Native rotation support (already exists) - ~30 lines integration
+- **Unified API**: Coordinate both systems - ~20 lines
+- **Touch Transform**: Required for all approaches - ~20 lines
+
+**Trade-offs**: 
+- Animation rotation has 1-2 frame latency (acceptable for user-initiated changes)
+- µGFX has minimal per-pixel overhead (~10-15 cycles), but UI is infrequent (1 FPS)
 
 ### Secondary Recommendation: **Investigate Approach 2 (Hardware Rotation)**
 
 **Action**: Check panel datasheet and BSP for MADCTL or similar rotation support
-- If available: Use as primary method (instant, zero overhead)
-- If not: Fall back to Approach 1
+- If available: Use as primary method for instant rotation
+- If not: Use Approach 6 (Unified System)
 
 **Why investigate**:
-- Would provide instant rotation with zero overhead
+- Would provide instant rotation with zero overhead for both animation and UI
 - Simple to implement if supported
 - Best user experience
 
+**Note**: Hardware rotation would still need touch coordinate transformation
+
 ### Implementation Priority
 
-1. **Phase 1**: Implement Approach 1 (lookup table rotation)
-   - Add rotation API to animation_player.h
-   - Modify lookup table generation
-   - Add NVS config storage
+1. **Phase 1**: Implement Unified Rotation System (Approach 6)
+   - Add global rotation state and unified API
+   - Implement animation lookup table rotation
+   - Integrate µGFX rotation (call `gdispSetOrientation()`)
    - Add touch coordinate transformation
-   - Estimated effort: 4-6 hours
+   - Add NVS config storage
+   - Estimated effort: 5-7 hours
 
 2. **Phase 2**: Investigate hardware rotation (Approach 2)
    - Review panel documentation
    - Test MADCTL commands
-   - If successful, make primary method
+   - If successful, replace software rotation for instant changes
    - Estimated effort: 2-4 hours
 
 3. **Phase 3**: Add user interface
@@ -322,17 +545,29 @@ void transform_touch_coordinates(int *x, int *y, uint8_t rotation) {
 ## Implementation Checklist
 
 ### Core Rotation System
-- [ ] Define rotation enum (0°, 90°, 180°, 270°)
+- [ ] Define rotation enum (`screen_rotation_t`: 0°, 90°, 180°, 270°)
 - [ ] Add global rotation state variable
-- [ ] Implement lookup table rotation logic
+- [ ] Implement lookup table rotation logic for animations
 - [ ] Modify `load_animation_into_buffer()` to use rotation
 - [ ] Add touch coordinate transformation
 - [ ] Store/load rotation preference in NVS
 
-### API Functions
-- [ ] `animation_player_set_rotation(rotation_t angle)`
-- [ ] `animation_player_get_rotation()`
+### Animation Player Integration
+- [ ] `set_animation_rotation(screen_rotation_t angle)` - internal function
+- [ ] Update lookup table generation with rotation transforms
 - [ ] Trigger back buffer reload on rotation change
+
+### µGFX UI Integration
+- [ ] `ugfx_ui_set_rotation(screen_rotation_t angle)` - public function
+- [ ] Map `screen_rotation_t` to `gOrientation` enum
+- [ ] Call `gdispSetOrientation()` when rotation changes
+- [ ] Handle rotation change during active UI session
+
+### Unified API Functions
+- [ ] `app_set_screen_rotation(screen_rotation_t angle)` - main public API
+- [ ] `app_get_screen_rotation()` - query current rotation
+- [ ] Coordinate animation player and µGFX UI rotation
+- [ ] Apply rotation on system startup
 
 ### Configuration
 - [ ] Add rotation config to `config_store` component
@@ -345,11 +580,14 @@ void transform_touch_coordinates(int *x, int *y, uint8_t rotation) {
 - [ ] Optional: Touch gesture for quick rotation toggle
 
 ### Testing
-- [ ] Test all 4 rotation angles
-- [ ] Verify touch coordinates match display
+- [ ] Test all 4 rotation angles in animation mode
+- [ ] Test all 4 rotation angles in UI mode (registration screen)
+- [ ] Test mode transitions (animation ↔ UI) with rotation active
+- [ ] Verify touch coordinates match display in all rotations
 - [ ] Test with various aspect ratio source images
-- [ ] Performance validation (should be ~0ms overhead)
+- [ ] Performance validation (animations: ~0ms overhead, UI: negligible)
 - [ ] Memory leak testing on repeated rotation changes
+- [ ] Test rotation change while UI is active
 
 ---
 
@@ -357,46 +595,74 @@ void transform_touch_coordinates(int *x, int *y, uint8_t rotation) {
 
 ### Memory Requirements
 - Lookup tables: 2 × 720 × 2 bytes = 2.8KB per animation (already allocated)
+- µGFX rotation: 0 bytes (software transformation)
 - Config storage: ~4 bytes (rotation angle)
 - Total: **Negligible increase**
 
 ### Performance Targets
-- Rotation switch time: < 100ms (lookup table regeneration)
-- Per-frame overhead: 0ms
+- Rotation switch time: < 100ms (lookup table regeneration + µGFX update)
+- Per-frame overhead (animation): 0ms
+- Per-frame overhead (UI): ~0.5ms (negligible at 1 FPS UI update rate)
 - Animation load time increase: < 0.1ms
-- Frame rate: Unchanged (60 FPS capable)
+- Frame rate: Unchanged (60 FPS capable for animations, 1 FPS for UI)
 
 ### Compatibility Matrix
 
 | Feature | 0° | 90° | 180° | 270° | Notes |
 |---------|----|----|-----|------|-------|
-| WebP Animation | ✓ | ✓ | ✓ | ✓ | Full support |
-| GIF Animation | ✓ | ✓ | ✓ | ✓ | Full support |
-| PNG/JPEG | ✓ | ✓ | ✓ | ✓ | Full support |
-| UI Rendering (µGFX) | ✓ | ⚠️ | ⚠️ | ⚠️ | Needs separate handling |
-| PICO-8 Stream | ✓ | ⚠️ | ⚠️ | ⚠️ | Needs separate handling |
+| WebP Animation | ✓ | ✓ | ✓ | ✓ | Full support via lookup tables |
+| GIF Animation | ✓ | ✓ | ✓ | ✓ | Full support via lookup tables |
+| PNG/JPEG | ✓ | ✓ | ✓ | ✓ | Full support via lookup tables |
+| UI Rendering (µGFX) | ✓ | ✓ | ✓ | ✓ | Native µGFX rotation support |
+| PICO-8 Stream | ✓ | ⚠️ | ⚠️ | ⚠️ | Needs separate handling (future work) |
 | Touch Input | ✓ | ✓ | ✓ | ✓ | With coordinate transform |
 
-⚠️ = Requires additional implementation for µGFX and PICO-8 rendering paths
+⚠️ = PICO-8 requires additional implementation (future work)
 
 ---
 
 ## Conclusion
 
-The **lookup table rotation approach (Approach 1)** provides the optimal balance of:
-- **Performance**: Zero per-frame overhead
-- **Simplicity**: Minimal code changes, easy to maintain
+The **Unified Rotation System (Approach 6)** provides comprehensive rotation support across all display modes:
+
+### Key Benefits
+- **Animations**: Zero per-frame overhead via lookup table rotation
+- **UI**: Native µGFX rotation support (already implemented in driver)
+- **Unified API**: Single function call to rotate entire display
+- **Performance**: Negligible impact - animations at 0ms overhead, UI at ~0.5ms (only during infrequent updates)
 - **Memory efficiency**: No additional buffers required
 - **Runtime flexibility**: Can change rotation during operation
-- **Compatibility**: Works with entire rendering pipeline
+- **Clean architecture**: Each subsystem handles its own rotation independently
 
-This approach aligns perfectly with p3a's core function as a pixel art player where accurate frame timing is paramount. The implementation is straightforward, well-isolated, and introduces no risk to the existing optimized rendering pipeline.
+### Why This Works Well
+
+1. **For Animations** (Primary Use Case):
+   - Lookup table approach preserves accurate frame timing
+   - Zero overhead maintains 60 FPS capability
+   - Critical for pixel art playback accuracy
+
+2. **For UI** (Provisioning/Registration):
+   - µGFX rotation already implemented in framebuffer driver
+   - Minimal overhead acceptable (UI renders at 1 FPS)
+   - No complex graphics or tight timing requirements
+
+3. **System Integration**:
+   - Touch coordinates transformed consistently
+   - Single rotation state across all modes
+   - Smooth transitions between animation and UI
+
+### Implementation Summary
+
+**Total Effort**: ~150 lines of code, 5-7 hours
+- Animation rotation: ~100 lines
+- µGFX integration: ~30 lines  
+- Unified API & config: ~20 lines
 
 **Next Steps**: 
-1. Implement lookup table rotation (Approach 1)
-2. Test with all animation formats
+1. Implement unified rotation system (Approach 6)
+2. Test across all display modes (animation, UI, mode transitions)
 3. Add user-facing controls (web API, touch gestures)
-4. Optionally investigate hardware rotation as future optimization
+4. Optionally investigate hardware rotation for instant rotation (Approach 2)
 
 ---
 
@@ -404,30 +670,53 @@ This approach aligns perfectly with p3a's core function as a pixel art player wh
 
 ### Key Files for Implementation
 
+#### Animation Player
 1. **`main/animation_player_loader.c`**
    - Modify lookup table generation (~lines 405-419)
    - Add rotation parameter handling
 
 2. **`main/animation_player_priv.h`**
-   - Add rotation enum and state variable
-   - Declare rotation functions
+   - Add `screen_rotation_t` enum
+   - Add global rotation state variable
+   - Declare internal rotation functions
 
 3. **`main/animation_player.c`**
-   - Add public rotation API functions
+   - Add unified API: `app_set_screen_rotation()`
+   - Add internal: `set_animation_rotation()`
    - Handle rotation change requests
 
-4. **`main/app_touch.c`**
-   - Add touch coordinate transformation
-   - Apply before gesture processing
+#### µGFX UI Integration
+4. **`main/ugfx_ui.c`**
+   - Add `ugfx_ui_set_rotation()` function
+   - Map rotation enum to µGFX `gOrientation`
+   - Call `gdispSetOrientation()` when needed
 
-5. **`components/config_store/`**
+5. **`main/ugfx_ui.h`**
+   - Expose `ugfx_ui_set_rotation()` function
+   - Document rotation API
+
+#### Touch Input
+6. **`main/app_touch.c`**
+   - Add coordinate transformation function
+   - Apply before gesture processing (~20 lines)
+
+#### Configuration & API
+7. **`components/config_store/`**
    - Add rotation config persistence
+   - Load/save to NVS
 
-6. **`components/http_api/`**
-   - Add rotation endpoint
+8. **`components/http_api/`**
+   - Add `GET/POST /api/rotation` endpoint
+   - Expose rotation control via web interface
 
-### Estimated Total LOC: ~200 lines
+### µGFX Driver Reference
+- **`components/ugfx/drivers/gdisp/framebuffer/gdisp_lld_framebuffer.c`**
+  - Rotation already implemented (lines 84-99)
+  - Control function (lines 200+)
+  - Reference for understanding coordinate transforms
+
+**Estimated Total LOC**: ~150 lines
 - Core rotation: ~100 lines
+- µGFX integration: ~30 lines
 - Touch transform: ~20 lines
-- Config/API: ~50 lines
-- Testing/validation: ~30 lines
+

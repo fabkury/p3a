@@ -188,3 +188,57 @@ esp_err_t config_store_save(const cJSON *cfg) {
     return ESP_OK;
 }
 
+esp_err_t config_store_set_rotation(screen_rotation_t rotation)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to load config for rotation update");
+        return err;
+    }
+    
+    // Add or update rotation field
+    cJSON *rotation_item = cJSON_GetObjectItem(cfg, "rotation");
+    if (rotation_item) {
+        cJSON_SetNumberValue(rotation_item, (double)rotation);
+    } else {
+        cJSON_AddNumberToObject(cfg, "rotation", (double)rotation);
+    }
+    
+    // Save updated config
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Rotation saved to config: %d degrees", rotation);
+    }
+    
+    return err;
+}
+
+screen_rotation_t config_store_get_rotation(void)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to load config for rotation, using default");
+        return ROTATION_0;
+    }
+    
+    screen_rotation_t rotation = ROTATION_0;
+    cJSON *rotation_item = cJSON_GetObjectItem(cfg, "rotation");
+    if (rotation_item && cJSON_IsNumber(rotation_item)) {
+        int value = (int)cJSON_GetNumberValue(rotation_item);
+        // Validate rotation value
+        if (value == 0 || value == 90 || value == 180 || value == 270) {
+            rotation = (screen_rotation_t)value;
+        } else {
+            ESP_LOGW(TAG, "Invalid rotation value in config: %d, using default", value);
+        }
+    }
+    
+    cJSON_Delete(cfg);
+    return rotation;
+}
+
+

@@ -68,4 +68,23 @@ gBool ugfx_ui_is_active(void);
  */
 int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride);
 
+// Forward declaration for screen_rotation_t
+typedef enum {
+    ROTATION_0   = 0,
+    ROTATION_90  = 90,
+    ROTATION_180 = 180,
+    ROTATION_270 = 270
+} screen_rotation_t;
+
+/**
+ * @brief Set µGFX UI rotation
+ * 
+ * Sets the display orientation for µGFX rendering. Must be called after
+ * µGFX is initialized. Takes effect immediately.
+ * 
+ * @param rotation Screen rotation angle
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t ugfx_ui_set_rotation(screen_rotation_t rotation);
+
 

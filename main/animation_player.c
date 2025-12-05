@@ -1,6 +1,8 @@
 #include "animation_player_priv.h"
 #include "channel_player.h"
 #include "sdcard_channel.h"
+#include "ugfx_ui.h"
+#include "config_store.h"
 
 esp_lcd_panel_handle_t s_display_handle = NULL;
 uint8_t **s_lcd_buffers = NULL;
@@ -53,6 +55,10 @@ uint32_t s_target_frame_delay_ms = 0;
 app_lcd_sd_file_list_t s_sd_file_list = {0};
 bool s_sd_mounted = false;
 bool s_sd_export_active = false;
+
+// Screen rotation state
+screen_rotation_t g_screen_rotation = ROTATION_0;
+volatile bool g_rotation_in_progress = false;
 
 typedef struct {
     TaskHandle_t requester;
@@ -331,6 +337,15 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
         return ESP_FAIL;
+    }
+
+    // Load and apply saved rotation
+    screen_rotation_t saved_rotation = config_store_get_rotation();
+    if (saved_rotation != ROTATION_0) {
+        ESP_LOGI(TAG, "Restoring saved rotation: %d degrees", saved_rotation);
+        g_screen_rotation = saved_rotation;
+        // Apply to µGFX (animation lookup tables will use it automatically on first load)
+        ugfx_ui_set_rotation(saved_rotation);
     }
 
     return ESP_OK;
@@ -638,4 +653,67 @@ void animation_player_exit_ui_mode(void)
 bool animation_player_is_ui_mode(void)
 {
     return (s_render_mode_active == RENDER_MODE_UI);
+}
+
+// Screen rotation implementation
+esp_err_t app_set_screen_rotation(screen_rotation_t rotation)
+{
+    // Validate rotation angle
+    if (rotation != ROTATION_0 && rotation != ROTATION_90 && 
+        rotation != ROTATION_180 && rotation != ROTATION_270) {
+        ESP_LOGE(TAG, "Invalid rotation angle: %d", rotation);
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    // Check if rotation operation already in progress
+    if (g_rotation_in_progress) {
+        ESP_LOGW(TAG, "Rotation operation already in progress, rejecting new request");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // If same as current rotation, nothing to do
+    if (rotation == g_screen_rotation) {
+        ESP_LOGI(TAG, "Already at rotation %d degrees", rotation);
+        return ESP_OK;
+    }
+    
+    // Set rotation in progress flag
+    g_rotation_in_progress = true;
+    
+    // Update global state
+    screen_rotation_t old_rotation = g_screen_rotation;
+    g_screen_rotation = rotation;
+    
+    ESP_LOGI(TAG, "Setting screen rotation from %d to %d degrees", old_rotation, rotation);
+    
+    // Apply to µGFX UI immediately
+    esp_err_t err = ugfx_ui_set_rotation(rotation);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set µGFX rotation: %s", esp_err_to_name(err));
+        // Continue anyway - UI rotation is non-critical
+    }
+    
+    // Trigger animation reload with new rotation
+    // The loader task will regenerate lookup tables
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        s_swap_requested = true;
+        xSemaphoreGive(s_buffer_mutex);
+        xSemaphoreGive(s_loader_sem);
+    }
+    
+    // Store in config for persistence
+    config_store_set_rotation(rotation);
+    
+    // Clear rotation in progress flag after a small delay to allow operations to start
+    // We don't need to wait for completion, just ensure the request is processed
+    vTaskDelay(pdMS_TO_TICKS(50));
+    g_rotation_in_progress = false;
+    
+    ESP_LOGI(TAG, "Screen rotation set to %d degrees", rotation);
+    return ESP_OK;
+}
+
+screen_rotation_t app_get_screen_rotation(void)
+{
+    return g_screen_rotation;
 }

@@ -258,3 +258,35 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
     gdispClear(GFX_BLACK);
     return 100;
 }
+
+esp_err_t ugfx_ui_set_rotation(screen_rotation_t rotation)
+{
+    gOrientation ugfx_orientation;
+    
+    // Map screen_rotation_t to µGFX gOrientation
+    switch (rotation) {
+        case ROTATION_0:
+            ugfx_orientation = gOrientation0;
+            break;
+        case ROTATION_90:
+            ugfx_orientation = gOrientation90;
+            break;
+        case ROTATION_180:
+            ugfx_orientation = gOrientation180;
+            break;
+        case ROTATION_270:
+            ugfx_orientation = gOrientation270;
+            break;
+        default:
+            ESP_LOGE(TAG, "Invalid rotation angle: %d", rotation);
+            return ESP_ERR_INVALID_ARG;
+    }
+    
+    // Apply orientation if µGFX is initialized
+    if (s_ugfx_initialized) {
+        gdispSetOrientation(ugfx_orientation);
+        ESP_LOGI(TAG, "µGFX orientation set to %d degrees", rotation);
+    }
+    
+    return ESP_OK;
+}

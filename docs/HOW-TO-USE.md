@@ -92,7 +92,7 @@ When idle (no touch or API interaction), the device automatically advances to a 
 If the device can't connect to a saved network, it starts a captive portal:
 
 1. **Connect to the Wi-Fi network** `p3a-setup` from your phone or computer
-2. **A setup page should open automatically.** If not, open `http://192.168.4.1` in your browser
+2. **A setup page should open automatically.** If not, open `http://p3a.local/` or `http://192.168.4.1` in your browser
 3. **Enter your Wi-Fi credentials** (SSID and password)
 4. **Click "Save & Connect"**
 5. The device reboots and connects to your network
@@ -255,7 +255,7 @@ The device automatically exits PICO-8 mode after 30 seconds of inactivity (no fr
 
 - Ensure you're entering the correct password
 - The device supports WPA2 and WPA3 networks
-- If the captive portal doesn't appear, manually browse to `http://192.168.4.1`
+- If the captive portal doesn't appear, manually browse to `http://p3a.local/` or `http://192.168.4.1`
 
 ### Need more help?
 

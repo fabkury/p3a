@@ -390,14 +390,17 @@ From `dependencies.lock`:
 2. **Failure**: Starts captive portal AP mode
    - SSID: `p3a-setup` (configurable via `CONFIG_ESP_AP_SSID`)
    - IP: `192.168.4.1`
-   - DNS: Captive portal redirects all requests to `/setup`
+   - DNS: Responds to all DNS queries with AP IP (`192.168.4.1`) for captive portal detection
+   - mDNS: `p3a.local` available in AP mode for easier access
 3. **Configuration**: User submits SSID/password via web form
+   - Accessible at `http://p3a.local/` or `http://192.168.4.1`
 4. **Reconnection**: Device saves credentials to NVS and reboots
 
 #### mDNS (Multicast DNS)
 - **Hostname**: `p3a.local`
 - **Service**: `_http._tcp` advertised
 - **Library**: espressif/mdns component
+- **AP Mode**: mDNS initialized during captive portal setup, allowing `p3a.local` access before WiFi connection
 
 ### HTTP Server (http_api.c)
 

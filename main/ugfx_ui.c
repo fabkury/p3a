@@ -80,7 +80,7 @@ static void ugfx_ui_draw_layout(int32_t remaining_secs)
                      gdispOpenFont("* DejaVu Sans 32"), HTML2COLOR(0x00FF00), GFX_BLACK, gJustifyCenter);
 
     // Instructions
-    gdispFillStringBox(0, gdispGetHeight()/2 + 40, gdispGetWidth(), 50, "Enter this code at: https://makapix.club/",
+    gdispFillStringBox(0, gdispGetHeight()/2 + 40, gdispGetWidth(), 50, "Enter this code at: https://dev.makapix.club/",
                      gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
 
     // Countdown timer

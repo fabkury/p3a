@@ -1,7 +1,7 @@
 ## IDF Component Manager Manifest File
 dependencies:
   waveshare/esp32_p4_wifi6_touch_lcd_4b: "1.0.*"
-  espressif/esp_lcd_touch: "1.1.*"
+  espressif/esp_lcd_touch: "^1.2.0"
   espressif/libpng: "^1.6.39~1"
   espressif/mdns: "^1.0.*"
   espressif/esp_hosted: "*"

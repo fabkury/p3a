@@ -797,3 +797,40 @@ esp_err_t app_wifi_init(app_wifi_rest_callback_t rest_callback)
     return ESP_OK;
 }
 
+bool app_wifi_is_captive_portal_active(void)
+{
+    return s_captive_portal_server != NULL;
+}
+
+esp_err_t app_wifi_get_local_ip(char *ip_str, size_t max_len)
+{
+    if (!ip_str || max_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    ip_str[0] = '\0';
+    
+    // Check if in captive portal (AP) mode
+    if (s_captive_portal_server != NULL && ap_netif != NULL) {
+        esp_netif_ip_info_t ip_info;
+        if (esp_netif_get_ip_info(ap_netif, &ip_info) == ESP_OK) {
+            snprintf(ip_str, max_len, IPSTR, IP2STR(&ip_info.ip));
+            return ESP_OK;
+        }
+    }
+    
+    // Check if in STA mode with connection
+    esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (sta_netif != NULL) {
+        esp_netif_ip_info_t ip_info;
+        if (esp_netif_get_ip_info(sta_netif, &ip_info) == ESP_OK) {
+            if (ip_info.ip.addr != 0) {  // Check if IP is assigned
+                snprintf(ip_str, max_len, IPSTR, IP2STR(&ip_info.ip));
+                return ESP_OK;
+            }
+        }
+    }
+    
+    return ESP_ERR_NOT_FOUND;
+}
+

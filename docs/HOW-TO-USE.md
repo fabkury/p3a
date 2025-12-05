@@ -22,7 +22,7 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 
 - Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board
 - USB-C data cable (not a charging-only cable)
-- microSD card (FAT32 formatted)
+- microSD card
 - Some pixel art files (WebP, GIF, PNG, or JPEG)
 
 ### First-time setup
@@ -79,6 +79,7 @@ The 720×720 touchscreen recognizes these gestures:
 | **Swipe down** | Decrease brightness |
 | **Two-finger rotate** | Rotate screen (clockwise or counter-clockwise) |
 | **Long press** | Start device registration (for Makapix Club) |
+| **2-finger rotate** | Rotate the screen |
 
 ### Screen Rotation
 
@@ -262,13 +263,6 @@ The device automatically exits PICO-8 mode after 30 seconds of inactivity (no fr
 - mDNS doesn't work on all networks (especially corporate/guest networks)
 - Find the device's IP address from your router's DHCP client list
 - Access the device at `http://<IP-ADDRESS>/` instead
-
-### Artwork doesn't play
-
-- Ensure the microSD card is FAT32 formatted
-- Check that files are in the `/animations` folder
-- Verify files are valid WebP, GIF, PNG, or JPEG
-- Try rebooting the device
 
 ### Touch not responding
 

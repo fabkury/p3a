@@ -32,6 +32,7 @@
 #include "sntp_sync.h"
 #include "makapix.h"
 #include "makapix_mqtt.h"
+#include "mdns.h"
 
 #define EXAMPLE_ESP_WIFI_SSID      CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
@@ -572,53 +573,78 @@ static httpd_uri_t erase = {
     .user_ctx  = NULL
 };
 
-/* DNS Server for Captive Portal */
+/* DNS Server for Captive Portal - responds with AP IP to all queries */
 static void dns_server_task(void *pvParameters)
 {
     char rx_buffer[128];
-    int addr_family = AF_INET;
-    int ip_protocol = IPPROTO_UDP;
+    char tx_buffer[128];
 
-    struct sockaddr_in dest_addr;
-    dest_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(53);
+    struct sockaddr_in dest_addr = {
+        .sin_addr.s_addr = htonl(INADDR_ANY),
+        .sin_family = AF_INET,
+        .sin_port = htons(53)
+    };
 
-    int sock = socket(addr_family, SOCK_DGRAM, ip_protocol);
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock < 0) {
         ESP_LOGE(TAG, "Unable to create DNS socket");
         vTaskDelete(NULL);
         return;
     }
 
-    int err = bind(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-    if (err < 0) {
+    if (bind(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0) {
         ESP_LOGE(TAG, "DNS socket unable to bind");
         close(sock);
         vTaskDelete(NULL);
         return;
     }
 
-    ESP_LOGI(TAG, "DNS server started");
+    ESP_LOGI(TAG, "DNS server started - responding with 192.168.4.1 to all queries");
 
     while (1) {
         struct sockaddr_in source_addr;
         socklen_t socklen = sizeof(source_addr);
-        int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&source_addr, &socklen);
+        int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer), 0, 
+                          (struct sockaddr *)&source_addr, &socklen);
 
-        if (len < 0) {
-            // Continue on error
-            continue;
-        }
+        if (len < 12) continue;  // DNS header is 12 bytes minimum
 
-        // For captive portal, we acknowledge DNS queries
-        // The actual redirection happens at the HTTP level when devices try to access the internet
-        // This is a minimal implementation - proper DNS response would parse and respond correctly
+        // Build DNS response - copy request and modify flags
+        memcpy(tx_buffer, rx_buffer, len);
+        
+        // Set response flags: QR=1 (response), AA=1 (authoritative), RCODE=0 (no error)
+        tx_buffer[2] = 0x84;  // QR=1, Opcode=0, AA=1, TC=0, RD=0
+        tx_buffer[3] = 0x00;  // RA=0, Z=0, RCODE=0
+        
+        // Set answer count to 1
+        tx_buffer[6] = 0x00;
+        tx_buffer[7] = 0x01;
+        
+        // Append answer: pointer to name (0xC00C), type A, class IN, TTL, rdlength, IP
+        int answer_offset = len;
+        tx_buffer[answer_offset++] = 0xC0;  // Pointer to question name
+        tx_buffer[answer_offset++] = 0x0C;
+        tx_buffer[answer_offset++] = 0x00;  // Type A
+        tx_buffer[answer_offset++] = 0x01;
+        tx_buffer[answer_offset++] = 0x00;  // Class IN
+        tx_buffer[answer_offset++] = 0x01;
+        tx_buffer[answer_offset++] = 0x00;  // TTL (60 seconds)
+        tx_buffer[answer_offset++] = 0x00;
+        tx_buffer[answer_offset++] = 0x00;
+        tx_buffer[answer_offset++] = 0x3C;
+        tx_buffer[answer_offset++] = 0x00;  // RDLENGTH (4 bytes for IPv4)
+        tx_buffer[answer_offset++] = 0x04;
+        // IP: 192.168.4.1
+        tx_buffer[answer_offset++] = 192;
+        tx_buffer[answer_offset++] = 168;
+        tx_buffer[answer_offset++] = 4;
+        tx_buffer[answer_offset++] = 1;
+
+        sendto(sock, tx_buffer, answer_offset, 0, 
+               (struct sockaddr *)&source_addr, sizeof(source_addr));
     }
 
-    if (sock != -1) {
-        close(sock);
-    }
+    close(sock);
     vTaskDelete(NULL);
 }
 
@@ -639,6 +665,37 @@ static void start_captive_portal(void)
 
     // Start DNS server task
     xTaskCreate(dns_server_task, "dns_server", 4096, NULL, 5, NULL);
+}
+
+/* Start mDNS in AP mode so p3a.local works during WiFi setup */
+static esp_err_t start_mdns_ap(void)
+{
+    esp_err_t err = mdns_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "mDNS init failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = mdns_hostname_set("p3a");
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "mDNS hostname set failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = mdns_instance_name_set("p3a WiFi Setup");
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "mDNS instance name set failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "mDNS service add failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "mDNS started in AP mode: http://p3a.local/");
+    return ESP_OK;
 }
 
 /* Soft AP Initialization with Wi-Fi 6 */
@@ -697,6 +754,12 @@ static void wifi_init_softap(void)
 
     // Start captive portal
     start_captive_portal();
+
+    // Start mDNS so p3a.local works in AP mode
+    esp_err_t mdns_err = start_mdns_ap();
+    if (mdns_err != ESP_OK) {
+        ESP_LOGW(TAG, "mDNS start failed (captive portal still works via IP): %s", esp_err_to_name(mdns_err));
+    }
 }
 
 esp_err_t app_wifi_init(app_wifi_rest_callback_t rest_callback)
@@ -730,7 +793,7 @@ esp_err_t app_wifi_init(app_wifi_rest_callback_t rest_callback)
     wifi_init_softap();
     
     ESP_LOGI(TAG, "Captive portal is running. Connect to SSID: %s", EXAMPLE_ESP_AP_SSID);
-    ESP_LOGI(TAG, "Then open http://192.168.4.1 in your browser");
+    ESP_LOGI(TAG, "Then open http://p3a.local/ or http://192.168.4.1 in your browser");
     return ESP_OK;
 }
 

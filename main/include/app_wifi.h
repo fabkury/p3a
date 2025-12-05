@@ -50,13 +50,15 @@ esp_err_t app_wifi_erase_credentials(void);
 bool app_wifi_is_captive_portal_active(void);
 
 /**
- * @brief Get the current local IP address
+ * @brief Get the current local IPv4 address
  * 
- * Returns the IP address of either the AP (if in captive portal mode)
+ * Returns the IPv4 address of either the AP (if in captive portal mode)
  * or the STA interface (if connected to WiFi network).
  * 
- * @param ip_str Buffer to store IP address string (e.g., "192.168.4.1" for IPv4 or full IPv6 address)
- * @param max_len Maximum length of ip_str buffer (should be at least 48 bytes for IPv6 support)
+ * Note: Currently only supports IPv4. IPv6 support may be added in future.
+ * 
+ * @param ip_str Buffer to store IP address string (e.g., "192.168.4.1")
+ * @param max_len Maximum length of ip_str buffer (minimum 16 bytes recommended)
  * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no IP available, ESP_ERR_INVALID_ARG if invalid parameters
  */
 esp_err_t app_wifi_get_local_ip(char *ip_str, size_t max_len);

@@ -58,6 +58,38 @@ bool animation_player_is_sd_export_locked(void);
 esp_err_t animation_player_submit_pico8_frame(const uint8_t *palette_rgb, size_t palette_len,
                                               const uint8_t *pixel_data, size_t pixel_len);
 
+// Screen rotation types (must match animation_player_priv.h)
+typedef enum {
+    ROTATION_0   = 0,
+    ROTATION_90  = 90,
+    ROTATION_180 = 180,
+    ROTATION_270 = 270
+} screen_rotation_t;
+
+/**
+ * @brief Set screen rotation for entire display
+ * 
+ * Applies rotation to both animation playback and UI rendering.
+ * Animation rotation takes effect on next animation load (1-2 frames).
+ * UI rotation takes effect immediately.
+ * 
+ * If a rotation operation is already in progress, this function returns
+ * ESP_ERR_INVALID_STATE immediately without changing rotation.
+ * 
+ * @param rotation Rotation angle (0°, 90°, 180°, 270°)
+ * @return ESP_OK on success
+ *         ESP_ERR_INVALID_ARG if rotation angle is invalid
+ *         ESP_ERR_INVALID_STATE if rotation operation already in progress
+ */
+esp_err_t app_set_screen_rotation(screen_rotation_t rotation);
+
+/**
+ * @brief Get current screen rotation
+ * 
+ * @return Current rotation angle
+ */
+screen_rotation_t app_get_screen_rotation(void);
+
 #ifdef __cplusplus
 }
 #endif

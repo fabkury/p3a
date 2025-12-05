@@ -95,3 +95,22 @@ esp_err_t makapix_get_registration_code(char *out_code, size_t max_len);
  */
 esp_err_t makapix_get_registration_expires(char *out_expires, size_t max_len);
 
+/**
+ * @brief Set provisioning status message
+ * 
+ * Updates the status message shown during provisioning.
+ * Only works when in MAKAPIX_STATE_PROVISIONING state.
+ * 
+ * @param status_message Status message to display
+ */
+void makapix_set_provisioning_status(const char *status_message);
+
+/**
+ * @brief Get current provisioning status message
+ * 
+ * @param out_status Buffer to receive status message
+ * @param max_len Maximum length of buffer
+ * @return ESP_OK if available, ESP_ERR_NOT_FOUND otherwise
+ */
+esp_err_t makapix_get_provisioning_status(char *out_status, size_t max_len);
+

@@ -16,6 +16,7 @@ static makapix_state_t s_state = MAKAPIX_STATE_IDLE;
 static int32_t s_current_post_id = 0;
 static char s_registration_code[8] = {0};  // 6 chars + null + padding to avoid warning
 static char s_registration_expires[64] = {0};  // Extra space to avoid truncation warning
+static char s_provisioning_status[128] = {0};  // Status message during provisioning
 static TimerHandle_t s_status_timer = NULL;
 static bool s_provisioning_cancelled = false;  // Flag to prevent race condition
 static TaskHandle_t s_poll_task_handle = NULL;  // Handle for credential polling task
@@ -87,6 +88,10 @@ static void mqtt_connection_callback(bool connected)
 static void provisioning_task(void *pvParameters)
 {
     makapix_provision_result_t result;
+    
+    // Set status to "Querying endpoint" right before making the HTTP request
+    snprintf(s_provisioning_status, sizeof(s_provisioning_status), "Querying endpoint");
+    
     esp_err_t err = makapix_provision_request(&result);
 
     // Check if provisioning was cancelled while we were waiting
@@ -427,6 +432,10 @@ esp_err_t makapix_start_provisioning(void)
     }
 
     ESP_LOGI(TAG, "Starting provisioning...");
+    
+    // Set initial status message before transitioning state
+    snprintf(s_provisioning_status, sizeof(s_provisioning_status), "Starting...");
+    
     s_state = MAKAPIX_STATE_PROVISIONING;
     s_provisioning_cancelled = false;  // Reset cancellation flag
 
@@ -449,6 +458,7 @@ void makapix_cancel_provisioning(void)
         s_state = MAKAPIX_STATE_IDLE;
         memset(s_registration_code, 0, sizeof(s_registration_code));
         memset(s_registration_expires, 0, sizeof(s_registration_expires));
+        memset(s_provisioning_status, 0, sizeof(s_provisioning_status));
     }
 }
 
@@ -618,6 +628,33 @@ esp_err_t makapix_get_registration_expires(char *out_expires, size_t max_len)
 
     strncpy(out_expires, s_registration_expires, max_len - 1);
     out_expires[max_len - 1] = '\0';
+    return ESP_OK;
+}
+
+void makapix_set_provisioning_status(const char *status_message)
+{
+    if (status_message && s_state == MAKAPIX_STATE_PROVISIONING) {
+        strncpy(s_provisioning_status, status_message, sizeof(s_provisioning_status) - 1);
+        s_provisioning_status[sizeof(s_provisioning_status) - 1] = '\0';
+        ESP_LOGD(TAG, "Provisioning status: %s", s_provisioning_status);
+    }
+}
+
+/**
+ * @brief Get current provisioning status message
+ */
+esp_err_t makapix_get_provisioning_status(char *out_status, size_t max_len)
+{
+    if (!out_status || max_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (strlen(s_provisioning_status) == 0) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    strncpy(out_status, s_provisioning_status, max_len - 1);
+    out_status[max_len - 1] = '\0';
     return ESP_OK;
 }
 

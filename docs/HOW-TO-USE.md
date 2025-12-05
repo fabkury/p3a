@@ -79,7 +79,6 @@ The 720×720 touchscreen recognizes these gestures:
 | **Swipe down** | Decrease brightness |
 | **Two-finger rotate** | Rotate screen (clockwise or counter-clockwise) |
 | **Long press** | Start device registration (for Makapix Club) |
-| **2-finger rotate** | Rotate the screen |
 
 ### Screen Rotation
 

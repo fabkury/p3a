@@ -272,6 +272,7 @@ int render_pico8_frame(uint8_t *dest_buffer)
     s_upscale_lookup_y = s_pico8_lookup_y;
     s_upscale_src_w = PICO8_FRAME_WIDTH;
     s_upscale_src_h = PICO8_FRAME_HEIGHT;
+    s_upscale_rotation = ROTATION_0;  // PICO8 doesn't support rotation
     s_upscale_main_task = xTaskGetCurrentTaskHandle();
 
     s_upscale_worker_top_done = false;

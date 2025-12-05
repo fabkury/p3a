@@ -19,6 +19,7 @@
 
 #define GDISP_NEED_VALIDATION            GFXON
 #define GDISP_NEED_CLIP                  GFXON
+#define GDISP_NEED_CONTROL               GFXON   // Required for orientation control
 #define GDISP_NEED_TEXT                  GFXON
 #define GDISP_NEED_TEXT_WORDWRAP         GFXOFF
 #define GDISP_NEED_TEXT_BOXPADLR         1

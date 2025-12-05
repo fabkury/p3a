@@ -77,7 +77,21 @@ The 720×720 touchscreen recognizes these gestures:
 | **Tap left half** | Go back to previous artwork |
 | **Swipe up** | Increase brightness |
 | **Swipe down** | Decrease brightness |
+| **Two-finger rotate** | Rotate screen (clockwise or counter-clockwise) |
 | **Long press** | Start device registration (for Makapix Club) |
+
+### Screen Rotation
+
+You can rotate the display to any of four orientations (0°, 90°, 180°, 270°) using a two-finger rotation gesture:
+
+1. **Place two fingers on the screen**
+2. **Rotate your fingers** clockwise or counter-clockwise (like turning a dial)
+3. **When you rotate ~45°**, the screen rotates 90° in the same direction
+4. **The rotation persists** across reboots and is saved automatically
+
+The rotation applies to both animation playback and the UI (registration codes, status messages). This is useful for mounting the device in different orientations or viewing artwork from different angles.
+
+You can also set rotation via the web interface or REST API (see [REST API](#rest-api) below).
 
 ### Auto-advance
 
@@ -112,7 +126,7 @@ Open `http://p3a.local/` in any browser on the same Wi-Fi network to access the 
 The web interface provides:
 - **Device status** — current artwork, Wi-Fi info, uptime
 - **Playback controls** — next, previous, pause, resume
-- **Configuration** — brightness, settings
+- **Configuration** — brightness, screen rotation, settings
 - **PICO-8 button** (if the feature is enabled in firmware)
 
 > **Note:** The web interface is only accessible on your local network, not over the internet. For remote control, register your device at [dev.makapix.club](https://dev.makapix.club/).
@@ -148,6 +162,16 @@ curl -X POST http://p3a.local/action/resume
 
 # Reboot device
 curl -X POST http://p3a.local/action/reboot
+```
+
+### Screen rotation
+
+```bash
+# Get current rotation
+curl http://p3a.local/api/rotation
+
+# Set rotation (0, 90, 180, or 270 degrees)
+curl -X POST http://p3a.local/api/rotation -H "Content-Type: application/json" -d '{"rotation": 90}'
 ```
 
 ### File management

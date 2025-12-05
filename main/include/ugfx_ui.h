@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "gfx.h"  // For gBool type
+#include "animation_player.h"  // For screen_rotation_t
 
 /**
  * @brief Initialize µGFX UI system
@@ -67,14 +68,6 @@ gBool ugfx_ui_is_active(void);
  * @return Frame delay in ms (100 for UI), or -1 on error
  */
 int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride);
-
-// Forward declaration for screen_rotation_t
-typedef enum {
-    ROTATION_0   = 0,
-    ROTATION_90  = 90,
-    ROTATION_180 = 180,
-    ROTATION_270 = 270
-} screen_rotation_t;
 
 /**
  * @brief Set µGFX UI rotation

@@ -209,30 +209,125 @@ static void blit_webp_frame_rows(const uint8_t *src_rgba, int src_w, int src_h,
         return;
     }
 
-    for (int dst_y = row_start; dst_y < row_end; ++dst_y) {
-        const uint16_t src_y = lookup_y[dst_y];
-        const uint8_t *src_row = src_rgba + (size_t)src_y * src_w * 4;
+    const screen_rotation_t rotation = s_upscale_rotation;
 
+    for (int dst_y = row_start; dst_y < row_end; ++dst_y) {
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
         uint16_t *dst_row = (uint16_t *)(dst_buffer + (size_t)dst_y * s_frame_row_stride_bytes);
-        for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
-            const uint16_t src_x = lookup_x[dst_x];
-            const uint8_t *pixel = src_row + (size_t)src_x * 4;
-            dst_row[dst_x] = rgb565(pixel[0], pixel[1], pixel[2]);
-        }
 #else
         uint8_t *dst_row = dst_buffer + (size_t)dst_y * s_frame_row_stride_bytes;
-        for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
-            const uint16_t src_x = lookup_x[dst_x];
-            const uint8_t *pixel = src_row + (size_t)src_x * 4;
-            const size_t idx = (size_t)dst_x * 3U;
-            if ((idx + 2) < s_frame_row_stride_bytes) {
-                dst_row[idx + 0] = pixel[2];
-                dst_row[idx + 1] = pixel[1];
-                dst_row[idx + 2] = pixel[0];
+#endif
+
+        switch (rotation) {
+            case ROTATION_0: {
+                // Standard: src(lookup_x[dst_x], lookup_y[dst_y])
+                const uint16_t src_y = lookup_y[dst_y];
+                const uint8_t *src_row = src_rgba + (size_t)src_y * src_w * 4;
+                for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
+                    const uint16_t src_x = lookup_x[dst_x];
+                    const uint8_t *pixel = src_row + (size_t)src_x * 4;
+#if CONFIG_LCD_PIXEL_FORMAT_RGB565
+                    dst_row[dst_x] = rgb565(pixel[0], pixel[1], pixel[2]);
+#else
+                    const size_t idx = (size_t)dst_x * 3U;
+                    if ((idx + 2) < s_frame_row_stride_bytes) {
+                        dst_row[idx + 0] = pixel[2];
+                        dst_row[idx + 1] = pixel[1];
+                        dst_row[idx + 2] = pixel[0];
+                    }
+#endif
+                }
+                break;
+            }
+            
+            case ROTATION_90: {
+                // 90° CW: src(lookup_x[dst_y], src_h - 1 - lookup_y[dst_x])
+                // For each dst pixel, src_x = scaled(dst_y), src_y = src_h - 1 - scaled(dst_x)
+                const uint16_t src_x_fixed = lookup_x[dst_y];  // src_x constant for this dst row
+                for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
+                    const uint16_t raw_src_y = lookup_y[dst_x];
+                    const uint16_t src_y = (src_h - 1) - raw_src_y;
+                    const uint8_t *pixel = src_rgba + ((size_t)src_y * src_w + src_x_fixed) * 4;
+#if CONFIG_LCD_PIXEL_FORMAT_RGB565
+                    dst_row[dst_x] = rgb565(pixel[0], pixel[1], pixel[2]);
+#else
+                    const size_t idx = (size_t)dst_x * 3U;
+                    if ((idx + 2) < s_frame_row_stride_bytes) {
+                        dst_row[idx + 0] = pixel[2];
+                        dst_row[idx + 1] = pixel[1];
+                        dst_row[idx + 2] = pixel[0];
+                    }
+#endif
+                }
+                break;
+            }
+            
+            case ROTATION_180: {
+                // 180°: src(src_w - 1 - lookup_x[dst_x], src_h - 1 - lookup_y[dst_y])
+                const uint16_t raw_src_y = lookup_y[dst_y];
+                const uint16_t src_y = (src_h - 1) - raw_src_y;
+                const uint8_t *src_row = src_rgba + (size_t)src_y * src_w * 4;
+                for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
+                    const uint16_t raw_src_x = lookup_x[dst_x];
+                    const uint16_t src_x = (src_w - 1) - raw_src_x;
+                    const uint8_t *pixel = src_row + (size_t)src_x * 4;
+#if CONFIG_LCD_PIXEL_FORMAT_RGB565
+                    dst_row[dst_x] = rgb565(pixel[0], pixel[1], pixel[2]);
+#else
+                    const size_t idx = (size_t)dst_x * 3U;
+                    if ((idx + 2) < s_frame_row_stride_bytes) {
+                        dst_row[idx + 0] = pixel[2];
+                        dst_row[idx + 1] = pixel[1];
+                        dst_row[idx + 2] = pixel[0];
+                    }
+#endif
+                }
+                break;
+            }
+            
+            case ROTATION_270: {
+                // 270° CW (90° CCW): src(src_w - 1 - lookup_x[dst_y], lookup_y[dst_x])
+                // For each dst pixel, src_x = src_w - 1 - scaled(dst_y), src_y = scaled(dst_x)
+                const uint16_t raw_src_x = lookup_x[dst_y];
+                const uint16_t src_x_fixed = (src_w - 1) - raw_src_x;
+                for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
+                    const uint16_t src_y = lookup_y[dst_x];
+                    const uint8_t *pixel = src_rgba + ((size_t)src_y * src_w + src_x_fixed) * 4;
+#if CONFIG_LCD_PIXEL_FORMAT_RGB565
+                    dst_row[dst_x] = rgb565(pixel[0], pixel[1], pixel[2]);
+#else
+                    const size_t idx = (size_t)dst_x * 3U;
+                    if ((idx + 2) < s_frame_row_stride_bytes) {
+                        dst_row[idx + 0] = pixel[2];
+                        dst_row[idx + 1] = pixel[1];
+                        dst_row[idx + 2] = pixel[0];
+                    }
+#endif
+                }
+                break;
+            }
+            
+            default: {
+                // Fallback to no rotation
+                const uint16_t src_y = lookup_y[dst_y];
+                const uint8_t *src_row = src_rgba + (size_t)src_y * src_w * 4;
+                for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
+                    const uint16_t src_x = lookup_x[dst_x];
+                    const uint8_t *pixel = src_row + (size_t)src_x * 4;
+#if CONFIG_LCD_PIXEL_FORMAT_RGB565
+                    dst_row[dst_x] = rgb565(pixel[0], pixel[1], pixel[2]);
+#else
+                    const size_t idx = (size_t)dst_x * 3U;
+                    if ((idx + 2) < s_frame_row_stride_bytes) {
+                        dst_row[idx + 0] = pixel[2];
+                        dst_row[idx + 1] = pixel[1];
+                        dst_row[idx + 2] = pixel[0];
+                    }
+#endif
+                }
+                break;
             }
         }
-#endif
     }
 }
 
@@ -347,6 +442,7 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
     s_upscale_lookup_y = buf->upscale_lookup_y;
     s_upscale_src_w = buf->upscale_src_w;
     s_upscale_src_h = buf->upscale_src_h;
+    s_upscale_rotation = g_screen_rotation;
     s_upscale_main_task = xTaskGetCurrentTaskHandle();
 
     const int dst_h = target_h;
@@ -433,6 +529,7 @@ esp_err_t prefetch_first_frame(animation_buffer_t *buf)
     s_upscale_lookup_y = buf->upscale_lookup_y;
     s_upscale_src_w = buf->upscale_src_w;
     s_upscale_src_h = buf->upscale_src_h;
+    s_upscale_rotation = g_screen_rotation;
     s_upscale_main_task = xTaskGetCurrentTaskHandle();
 
     s_upscale_worker_top_done = false;

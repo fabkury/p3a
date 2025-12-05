@@ -1716,7 +1716,7 @@ static esp_err_t h_get_rotation(httpd_req_t *req) {
         return ESP_OK;
     }
     
-    send_json_str(req, 200, json_str);
+    send_json(req, 200, json_str);
     free(json_str);
     return ESP_OK;
 }

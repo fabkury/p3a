@@ -35,6 +35,7 @@ const uint16_t *s_upscale_lookup_x = NULL;
 const uint16_t *s_upscale_lookup_y = NULL;
 int s_upscale_src_w = 0;
 int s_upscale_src_h = 0;
+screen_rotation_t s_upscale_rotation = ROTATION_0;
 int s_upscale_row_start_top = 0;
 int s_upscale_row_end_top = 0;
 int s_upscale_row_start_bottom = 0;

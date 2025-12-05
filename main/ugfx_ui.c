@@ -21,6 +21,7 @@ static time_t s_expires_time = 0;
 static char s_current_code[16] = {0};
 static char s_status_message[128] = {0};
 static bool s_show_status = false;
+static gOrientation s_pending_orientation = gOrientation0;  // Orientation to apply when µGFX inits
 
 // External variables for board_framebuffer.h (used by µGFX driver)
 void *ugfx_framebuffer_ptr = NULL;
@@ -61,6 +62,12 @@ static esp_err_t ugfx_ui_init_gfx(uint8_t *framebuffer, size_t stride)
 
     gfxInit();
     s_ugfx_initialized = true;
+    
+    // Apply any pending orientation that was set before initialization
+    if (s_pending_orientation != gOrientation0) {
+        gdispSetOrientation(s_pending_orientation);
+        ESP_LOGI(TAG, "Applied pending orientation: %d", s_pending_orientation);
+    }
     
     ESP_LOGI(TAG, "µGFX initialized: display size %dx%d", gdispGetWidth(), gdispGetHeight());
     return ESP_OK;
@@ -282,10 +289,15 @@ esp_err_t ugfx_ui_set_rotation(screen_rotation_t rotation)
             return ESP_ERR_INVALID_ARG;
     }
     
+    // Store for later if µGFX not yet initialized
+    s_pending_orientation = ugfx_orientation;
+    
     // Apply orientation if µGFX is initialized
     if (s_ugfx_initialized) {
         gdispSetOrientation(ugfx_orientation);
         ESP_LOGI(TAG, "µGFX orientation set to %d degrees", rotation);
+    } else {
+        ESP_LOGI(TAG, "µGFX not initialized yet, orientation %d pending", rotation);
     }
     
     return ESP_OK;

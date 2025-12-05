@@ -39,3 +39,26 @@ esp_err_t config_store_save(const cJSON *cfg);
  */
 esp_err_t config_store_get_serialized(char **out_json, size_t *out_len);
 
+// Screen rotation types (must match animation_player.h)
+typedef enum {
+    ROTATION_0   = 0,
+    ROTATION_90  = 90,
+    ROTATION_180 = 180,
+    ROTATION_270 = 270
+} screen_rotation_t;
+
+/**
+ * @brief Set screen rotation in config
+ * 
+ * @param rotation Rotation angle (0°, 90°, 180°, 270°)
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t config_store_set_rotation(screen_rotation_t rotation);
+
+/**
+ * @brief Get screen rotation from config
+ * 
+ * @return Current rotation angle (defaults to ROTATION_0 if not set)
+ */
+screen_rotation_t config_store_get_rotation(void);
+

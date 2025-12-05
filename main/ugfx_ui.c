@@ -99,6 +99,7 @@ static void ugfx_ui_draw_captive_ap_info(void)
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
     
     y_pos += 40;
+    // Display AP SSID from config (EXAMPLE_ESP_AP_SSID is not accessible here)
     gdispFillStringBox(0, y_pos, gdispGetWidth(), 30, CONFIG_ESP_AP_SSID,
                      gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0x00FF00), GFX_BLACK, gJustifyCenter);
     
@@ -179,9 +180,11 @@ static void ugfx_ui_draw_layout(int32_t remaining_secs)
                      gdispOpenFont("* DejaVu Sans 24"), mqtt_status_color, GFX_BLACK, gJustifyCenter);
     
     // Local IP address
-    char ip_str[20];
+    // IPv6 addresses can be up to 45 characters (39 for address + 2 for brackets + 4 for scope)
+    // Buffer size of 48 accommodates IPv6 + null terminator
+    char ip_str[48];
     if (app_wifi_get_local_ip(ip_str, sizeof(ip_str)) == ESP_OK) {
-        char ip_label[40];
+        char ip_label[64];  // "IP: " + IPv6 address
         snprintf(ip_label, sizeof(ip_label), "IP: %s", ip_str);
         gdispFillStringBox(0, gdispGetHeight() - 80, gdispGetWidth(), 30, ip_label,
                          gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);

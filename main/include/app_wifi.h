@@ -55,8 +55,8 @@ bool app_wifi_is_captive_portal_active(void);
  * Returns the IP address of either the AP (if in captive portal mode)
  * or the STA interface (if connected to WiFi network).
  * 
- * @param ip_str Buffer to store IP address string (e.g., "192.168.4.1")
- * @param max_len Maximum length of ip_str buffer (should be at least 16 bytes)
+ * @param ip_str Buffer to store IP address string (e.g., "192.168.4.1" for IPv4 or full IPv6 address)
+ * @param max_len Maximum length of ip_str buffer (should be at least 48 bytes for IPv6 support)
  * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no IP available, ESP_ERR_INVALID_ARG if invalid parameters
  */
 esp_err_t app_wifi_get_local_ip(char *ip_str, size_t max_len);

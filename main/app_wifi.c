@@ -820,6 +820,8 @@ esp_err_t app_wifi_get_local_ip(char *ip_str, size_t max_len)
     }
     
     // Check if in STA mode with connection
+    // Note: "WIFI_STA_DEF" is the default interface key defined by ESP-IDF
+    // for the default WiFi STA interface created by esp_netif_create_default_wifi_sta()
     esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     if (sta_netif != NULL) {
         esp_netif_ip_info_t ip_info;

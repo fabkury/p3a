@@ -45,6 +45,9 @@
 #define MAX_SSID_LEN               32
 #define MAX_PASSWORD_LEN           64
 
+// ESP-IDF default interface key for WiFi STA (used by esp_netif_create_default_wifi_sta)
+#define WIFI_STA_NETIF_KEY         "WIFI_STA_DEF"
+
 #if CONFIG_ESP_WPA3_SAE_PWE_HUNT_AND_PECK
 #define ESP_WIFI_SAE_MODE WPA3_SAE_PWE_HUNT_AND_PECK
 #define EXAMPLE_H2E_IDENTIFIER ""
@@ -820,9 +823,7 @@ esp_err_t app_wifi_get_local_ip(char *ip_str, size_t max_len)
     }
     
     // Check if in STA mode with connection
-    // Note: "WIFI_STA_DEF" is the default interface key defined by ESP-IDF
-    // for the default WiFi STA interface created by esp_netif_create_default_wifi_sta()
-    esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey(WIFI_STA_NETIF_KEY);
     if (sta_netif != NULL) {
         esp_netif_ip_info_t ip_info;
         if (esp_netif_get_ip_info(sta_netif, &ip_info) == ESP_OK) {

@@ -99,7 +99,7 @@ static void ugfx_ui_draw_captive_ap_info(void)
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
     
     y_pos += 40;
-    // Display AP SSID from config (EXAMPLE_ESP_AP_SSID is not accessible here)
+    // Using CONFIG_ESP_AP_SSID directly (EXAMPLE_ESP_AP_SSID wrapper is local to app_wifi.c)
     gdispFillStringBox(0, y_pos, gdispGetWidth(), 30, CONFIG_ESP_AP_SSID,
                      gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0x00FF00), GFX_BLACK, gJustifyCenter);
     

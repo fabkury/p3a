@@ -21,7 +21,8 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 ## Features
 
 - **Pixel art playback**: Displays animated WebP, GIF, PNG, and JPEG files from microSD card
-- **Touch controls**: Tap to change artwork, swipe to adjust brightness
+- **Touch controls**: Tap to change artwork, swipe to adjust brightness, rotate with two fingers
+- **Screen rotation**: Rotate the display 0°, 90°, 180°, or 270° via touch gesture or web API
 - **Web interface**: Control the device from any browser at `http://p3a.local/`
 - **Cloud connectivity**: Register at [dev.makapix.club](https://dev.makapix.club/) to control your device remotely via secure TLS MQTT
 - **USB access**: Connect via USB-C to access the microSD card as a storage device
@@ -53,7 +54,8 @@ p3a is in active development. The following features are implemented:
 
 - Display pipeline with multi-buffer rendering
 - Animation playback with prefetching
-- Touch gestures (tap, swipe, long-press)
+- Touch gestures (tap, swipe, long-press, two-finger rotation)
+- Screen rotation (0°, 90°, 180°, 270°) with persistence
 - Wi-Fi provisioning with captive portal
 - Local web UI and REST API
 - **TLS MQTT client** with device registration and remote control from the website

@@ -17,6 +17,7 @@
 #include "sdkconfig.h"
 #include "makapix.h"
 #include "animation_player.h"
+#include <math.h>
 
 // Debug provisioning mode - when enabled, long press doesn't trigger real provisioning
 #define DEBUG_PROVISIONING_ENABLED 0
@@ -33,15 +34,70 @@ static esp_lcd_touch_handle_t tp = NULL;
 /**
  * @brief Gesture state machine states
  * 
- * The touch handler distinguishes between tap gestures (for animation swapping)
- * and swipe gestures (for brightness control) based on vertical movement distance.
+ * The touch handler distinguishes between tap gestures (for animation swapping),
+ * swipe gestures (for brightness control), and two-finger rotation gestures
+ * (for screen rotation) based on touch count and movement patterns.
  */
 typedef enum {
     GESTURE_STATE_IDLE,              // No active touch
     GESTURE_STATE_TAP,              // Potential tap/swap gesture (minimal movement)
     GESTURE_STATE_BRIGHTNESS,       // Brightness control gesture (vertical swipe detected)
-    GESTURE_STATE_LONG_PRESS_PENDING // Finger down, counting to 5s for provisioning
+    GESTURE_STATE_LONG_PRESS_PENDING, // Finger down, counting to 5s for provisioning
+    GESTURE_STATE_ROTATION          // Two-finger rotation gesture
 } gesture_state_t;
+
+// Rotation gesture configuration
+#define ROTATION_ANGLE_THRESHOLD_DEG  45.0f  // Degrees needed to trigger rotation
+#define ROTATION_ANGLE_THRESHOLD_RAD  (ROTATION_ANGLE_THRESHOLD_DEG * 3.14159265f / 180.0f)
+
+/**
+ * @brief Calculate angle between two touch points
+ * @return Angle in radians (-π to π)
+ */
+static float calculate_two_finger_angle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2)
+{
+    float dx = (float)x2 - (float)x1;
+    float dy = (float)y2 - (float)y1;
+    return atan2f(dy, dx);
+}
+
+/**
+ * @brief Normalize angle difference to range (-π, π)
+ */
+static float normalize_angle(float angle)
+{
+    while (angle > 3.14159265f) angle -= 2.0f * 3.14159265f;
+    while (angle < -3.14159265f) angle += 2.0f * 3.14159265f;
+    return angle;
+}
+
+/**
+ * @brief Get next rotation value (clockwise: 0→90→180→270→0)
+ */
+static screen_rotation_t get_next_rotation_cw(screen_rotation_t current)
+{
+    switch (current) {
+        case ROTATION_0:   return ROTATION_90;
+        case ROTATION_90:  return ROTATION_180;
+        case ROTATION_180: return ROTATION_270;
+        case ROTATION_270: return ROTATION_0;
+        default:           return ROTATION_0;
+    }
+}
+
+/**
+ * @brief Get next rotation value (counter-clockwise: 0→270→180→90→0)
+ */
+static screen_rotation_t get_next_rotation_ccw(screen_rotation_t current)
+{
+    switch (current) {
+        case ROTATION_0:   return ROTATION_270;
+        case ROTATION_90:  return ROTATION_0;
+        case ROTATION_180: return ROTATION_90;
+        case ROTATION_270: return ROTATION_180;
+        default:           return ROTATION_0;
+    }
+}
 
 /**
  * @brief Touch task implementing gesture recognition
@@ -127,8 +183,9 @@ static void app_touch_task(void *arg)
     uint8_t touch_count = 0;
     
     gesture_state_t gesture_state = GESTURE_STATE_IDLE;
-    uint16_t touch_start_x = 0;
-    uint16_t touch_start_y = 0;
+    uint16_t touch_start_x = 0;      // Raw coordinate for tap position detection
+    uint16_t touch_start_y = 0;      // Raw coordinate for tap position detection
+    uint16_t brightness_start_y = 0; // Visual Y coordinate for brightness baseline
     TickType_t touch_start_time = 0;
     int brightness_start = 100;  // Brightness at gesture start
     const uint16_t screen_height = BSP_LCD_V_RES;
@@ -136,6 +193,13 @@ static void app_touch_task(void *arg)
     const int max_brightness_delta = CONFIG_P3A_TOUCH_BRIGHTNESS_MAX_DELTA_PERCENT;
     const TickType_t long_press_duration = pdMS_TO_TICKS(5000); // 5 seconds
     const uint16_t long_press_movement_threshold = 40; // pixels - must stay within this distance
+    
+    // Two-finger rotation gesture state
+    float rotation_start_angle = 0.0f;      // Initial angle between two fingers
+    float rotation_cumulative = 0.0f;       // Cumulative rotation since gesture start
+    float rotation_last_angle = 0.0f;       // Last measured angle (for delta calculation)
+    bool rotation_triggered = false;        // Whether rotation was already triggered this gesture
+    uint8_t prev_touch_count = 0;           // Previous frame's touch count
 
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     bool last_touch_valid = false;
@@ -148,15 +212,78 @@ static void app_touch_task(void *arg)
         bool pressed = esp_lcd_touch_get_coordinates(tp, x, y, strength, &touch_count,
                                                      CONFIG_ESP_LCD_TOUCH_MAX_POINTS);
 
-        // Transform touch coordinates based on current rotation
-        if (pressed && touch_count > 0) {
-            screen_rotation_t rotation = app_get_screen_rotation();
-            for (uint8_t i = 0; i < touch_count; i++) {
-                transform_touch_coordinates(&x[i], &y[i], rotation);
+        // NOTE: We use RAW (untransformed) coordinates for gesture detection
+        // (swipe direction, brightness control) because gestures should work
+        // in physical screen space. Only transform for position-based actions
+        // (tap location for left/right half detection).
+
+        // Two-finger rotation gesture detection (use raw coordinates)
+        if (pressed && touch_count >= 2) {
+            float current_angle = calculate_two_finger_angle(x[0], y[0], x[1], y[1]);
+            
+            if (prev_touch_count < 2) {
+                // Just transitioned to 2 fingers - start rotation tracking
+                rotation_start_angle = current_angle;
+                rotation_last_angle = current_angle;
+                rotation_cumulative = 0.0f;
+                rotation_triggered = false;
+                gesture_state = GESTURE_STATE_ROTATION;
+                ESP_LOGD(TAG, "rotation gesture started, initial angle=%.2f deg", 
+                         rotation_start_angle * 180.0f / 3.14159265f);
+            } else if (gesture_state == GESTURE_STATE_ROTATION) {
+                // Continue tracking rotation
+                float angle_delta = normalize_angle(current_angle - rotation_last_angle);
+                rotation_cumulative += angle_delta;
+                rotation_last_angle = current_angle;
+                
+                // Check if rotation threshold exceeded
+                if (!rotation_triggered && fabsf(rotation_cumulative) >= ROTATION_ANGLE_THRESHOLD_RAD) {
+                    screen_rotation_t current_rot = app_get_screen_rotation();
+                    screen_rotation_t new_rot;
+                    
+                    if (rotation_cumulative > 0) {
+                        // Positive angle delta in screen coords (y down) = clockwise finger rotation
+                        new_rot = get_next_rotation_cw(current_rot);
+                        ESP_LOGI(TAG, "rotation gesture: CW, cumulative=%.2f deg", 
+                                 rotation_cumulative * 180.0f / 3.14159265f);
+                    } else {
+                        // Negative angle delta = counter-clockwise finger rotation
+                        new_rot = get_next_rotation_ccw(current_rot);
+                        ESP_LOGI(TAG, "rotation gesture: CCW, cumulative=%.2f deg", 
+                                 rotation_cumulative * 180.0f / 3.14159265f);
+                    }
+                    
+                    esp_err_t err = app_set_screen_rotation(new_rot);
+                    if (err == ESP_OK) {
+                        ESP_LOGI(TAG, "screen rotation changed to %d degrees", new_rot);
+                        rotation_triggered = true;
+                    } else {
+                        ESP_LOGW(TAG, "failed to set rotation: %s", esp_err_to_name(err));
+                    }
+                }
+            }
+            prev_touch_count = touch_count;
+            vTaskDelay(poll_delay);
+            continue;  // Skip single-finger processing when 2 fingers are down
+        }
+        
+        // Reset rotation state when fewer than 2 fingers
+        if (prev_touch_count >= 2 && touch_count < 2) {
+            if (gesture_state == GESTURE_STATE_ROTATION) {
+                ESP_LOGD(TAG, "rotation gesture ended");
+                gesture_state = GESTURE_STATE_IDLE;
             }
         }
+        prev_touch_count = touch_count;
 
         if (pressed && touch_count > 0) {
+            // Transform coordinates to visual space for brightness gesture detection
+            // (rotation gesture uses raw coordinates, brightness uses visual coordinates)
+            uint16_t visual_x = x[0];
+            uint16_t visual_y = y[0];
+            screen_rotation_t rotation = app_get_screen_rotation();
+            transform_touch_coordinates(&visual_x, &visual_y, rotation);
+            
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
             uint16_t scaled_x = scale_to_pico8(x[0], BSP_LCD_H_RES, 127);
             uint16_t scaled_y = scale_to_pico8(y[0], BSP_LCD_V_RES, 127);
@@ -164,7 +291,7 @@ static void app_touch_task(void *arg)
 #endif
 
             if (gesture_state == GESTURE_STATE_IDLE) {
-                // Touch just started
+                // Touch just started - store raw coordinates (for tap position detection)
                 touch_start_x = x[0];
                 touch_start_y = y[0];
                 touch_start_time = xTaskGetTickCount();
@@ -173,8 +300,14 @@ static void app_touch_task(void *arg)
                 ESP_LOGD(TAG, "touch start @(%u,%u)", touch_start_x, touch_start_y);
             } else {
                 // Touch is active, check for gesture classification
-                int16_t delta_x = (int16_t)x[0] - (int16_t)touch_start_x;
-                int16_t delta_y = (int16_t)y[0] - (int16_t)touch_start_y;
+                // Transform start coordinates to visual space for brightness gesture detection
+                uint16_t visual_start_x = touch_start_x;
+                uint16_t visual_start_y = touch_start_y;
+                transform_touch_coordinates(&visual_start_x, &visual_start_y, rotation);
+                
+                // Calculate deltas in visual space for brightness gesture
+                int16_t delta_x = (int16_t)visual_x - (int16_t)visual_start_x;
+                int16_t delta_y = (int16_t)visual_y - (int16_t)visual_start_y;
                 uint16_t abs_delta_x = (delta_x < 0) ? -delta_x : delta_x;
                 uint16_t abs_delta_y = (delta_y < 0) ? -delta_y : delta_y;
                 
@@ -219,17 +352,19 @@ static void app_touch_task(void *arg)
                 }
                 
                 // Transition to brightness control if vertical distance exceeds threshold
+                // Use visual coordinates so brightness gesture rotates with screen
                 if (gesture_state == GESTURE_STATE_TAP && abs_delta_y >= min_swipe_height) {
                     gesture_state = GESTURE_STATE_BRIGHTNESS;
                     brightness_start = app_lcd_get_brightness();
-                    touch_start_y = y[0]; // reset baseline to current finger position
+                    // Store visual Y as baseline for brightness calculation
+                    brightness_start_y = visual_y;
                     delta_y = 0;
-                    ESP_LOGD(TAG, "brightness gesture started @(%u,%u)", touch_start_x, touch_start_y);
+                    ESP_LOGD(TAG, "brightness gesture started @(%u,%u) visual", visual_x, visual_y);
                 }
 
                 if (gesture_state == GESTURE_STATE_BRIGHTNESS) {
-                    // Recompute delta against brightness baseline
-                    delta_y = (int16_t)y[0] - (int16_t)touch_start_y;
+                    // Recompute delta against brightness baseline using visual coordinates
+                    delta_y = (int16_t)visual_y - (int16_t)brightness_start_y;
 
                     // Calculate brightness change based on vertical distance
                     // Formula: brightness_delta = (-delta_y * max_brightness_delta) / screen_height
@@ -292,15 +427,23 @@ static void app_touch_task(void *arg)
                     ESP_LOGD(TAG, "Long press gesture ended (provisioning in progress)");
                 } else if (gesture_state == GESTURE_STATE_TAP) {
                     // It was a tap, perform swap gesture
+                    // Transform tap position to determine left/right in user's visual space
+                    uint16_t tap_x = touch_start_x;
+                    uint16_t tap_y = touch_start_y;
+                    transform_touch_coordinates(&tap_x, &tap_y, app_get_screen_rotation());
+                    
                     const uint16_t screen_midpoint = BSP_LCD_H_RES / 2;
-                    if (touch_start_x < screen_midpoint) {
+                    if (tap_x < screen_midpoint) {
                         // Left half: cycle backward
                         app_lcd_cycle_animation_backward();
                     } else {
                         // Right half: cycle forward
                         app_lcd_cycle_animation();
                     }
-                    ESP_LOGD(TAG, "tap gesture: swap animation");
+                    ESP_LOGD(TAG, "tap gesture: swap animation (tap_x=%u)", tap_x);
+                } else if (gesture_state == GESTURE_STATE_ROTATION) {
+                    // Rotation gesture ended (action already taken if threshold was reached)
+                    ESP_LOGD(TAG, "rotation gesture ended");
                 } else {
                     // It was a brightness gesture, already handled
                     ESP_LOGD(TAG, "brightness gesture ended");

@@ -2,6 +2,7 @@
 
 #include "cJSON.h"
 #include "esp_err.h"
+#include "animation_player.h"  // For screen_rotation_t
 
 /**
  * @brief Load configuration from NVS
@@ -38,14 +39,6 @@ esp_err_t config_store_save(const cJSON *cfg);
  * @return ESP_OK on success, error code otherwise
  */
 esp_err_t config_store_get_serialized(char **out_json, size_t *out_len);
-
-// Screen rotation types (must match animation_player.h)
-typedef enum {
-    ROTATION_0   = 0,
-    ROTATION_90  = 90,
-    ROTATION_180 = 180,
-    ROTATION_270 = 270
-} screen_rotation_t;
 
 /**
  * @brief Set screen rotation in config

@@ -402,69 +402,18 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf, asse
         return ESP_ERR_NO_MEM;
     }
 
-    // Generate lookup tables based on current screen rotation
-    screen_rotation_t rotation = g_screen_rotation;
-    
-    switch (rotation) {
-        case ROTATION_0:
-            // Standard mapping: (x, y) → (x, y)
-            for (int dst_x = 0; dst_x < target_w; ++dst_x) {
-                int src_x = (dst_x * canvas_w) / target_w;
-                if (src_x >= canvas_w) src_x = canvas_w - 1;
-                buf->upscale_lookup_x[dst_x] = (uint16_t)src_x;
-            }
-            for (int dst_y = 0; dst_y < target_h; ++dst_y) {
-                int src_y = (dst_y * canvas_h) / target_h;
-                if (src_y >= canvas_h) src_y = canvas_h - 1;
-                buf->upscale_lookup_y[dst_y] = (uint16_t)src_y;
-            }
-            break;
-            
-        case ROTATION_90:
-            // 90° CW: (x, y) → (y, width-1-x)
-            for (int dst_x = 0; dst_x < target_w; ++dst_x) {
-                int src_y = (dst_x * canvas_h) / target_w;
-                if (src_y >= canvas_h) src_y = canvas_h - 1;
-                buf->upscale_lookup_x[dst_x] = (uint16_t)src_y;
-            }
-            for (int dst_y = 0; dst_y < target_h; ++dst_y) {
-                int src_x = ((target_w - 1 - dst_y) * canvas_w) / target_h;
-                if (src_x < 0) src_x = 0;
-                if (src_x >= canvas_w) src_x = canvas_w - 1;
-                buf->upscale_lookup_y[dst_y] = (uint16_t)src_x;
-            }
-            break;
-            
-        case ROTATION_180:
-            // 180°: (x, y) → (width-1-x, height-1-y)
-            for (int dst_x = 0; dst_x < target_w; ++dst_x) {
-                int src_x = ((target_w - 1 - dst_x) * canvas_w) / target_w;
-                if (src_x < 0) src_x = 0;
-                if (src_x >= canvas_w) src_x = canvas_w - 1;
-                buf->upscale_lookup_x[dst_x] = (uint16_t)src_x;
-            }
-            for (int dst_y = 0; dst_y < target_h; ++dst_y) {
-                int src_y = ((target_h - 1 - dst_y) * canvas_h) / target_h;
-                if (src_y < 0) src_y = 0;
-                if (src_y >= canvas_h) src_y = canvas_h - 1;
-                buf->upscale_lookup_y[dst_y] = (uint16_t)src_y;
-            }
-            break;
-            
-        case ROTATION_270:
-            // 270° CW: (x, y) → (height-1-y, x)
-            for (int dst_x = 0; dst_x < target_w; ++dst_x) {
-                int src_y = ((target_h - 1 - dst_x) * canvas_h) / target_w;
-                if (src_y < 0) src_y = 0;
-                if (src_y >= canvas_h) src_y = canvas_h - 1;
-                buf->upscale_lookup_x[dst_x] = (uint16_t)src_y;
-            }
-            for (int dst_y = 0; dst_y < target_h; ++dst_y) {
-                int src_x = (dst_y * canvas_w) / target_h;
-                if (src_x >= canvas_w) src_x = canvas_w - 1;
-                buf->upscale_lookup_y[dst_y] = (uint16_t)src_x;
-            }
-            break;
+    // Generate standard upscale lookup tables (rotation handled in blit function)
+    // lookup_x[dst_x] = source X coordinate
+    // lookup_y[dst_y] = source Y coordinate  
+    for (int dst_x = 0; dst_x < target_w; ++dst_x) {
+        int src_x = (dst_x * canvas_w) / target_w;
+        if (src_x >= canvas_w) src_x = canvas_w - 1;
+        buf->upscale_lookup_x[dst_x] = (uint16_t)src_x;
+    }
+    for (int dst_y = 0; dst_y < target_h; ++dst_y) {
+        int src_y = (dst_y * canvas_h) / target_h;
+        if (src_y >= canvas_h) src_y = canvas_h - 1;
+        buf->upscale_lookup_y[dst_y] = (uint16_t)src_y;
     }
 
     buf->upscale_src_w = canvas_w;

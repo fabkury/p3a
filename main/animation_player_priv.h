@@ -71,13 +71,7 @@ typedef struct {
 
 // asset_type_t is now defined in sdcard_channel.h
 
-// Screen rotation angles
-typedef enum {
-    ROTATION_0   = 0,
-    ROTATION_90  = 90,
-    ROTATION_180 = 180,
-    ROTATION_270 = 270
-} screen_rotation_t;
+// screen_rotation_t is defined in animation_player.h (already included above)
 
 typedef struct {
     char **filenames;
@@ -148,6 +142,7 @@ extern const uint16_t *s_upscale_lookup_x;
 extern const uint16_t *s_upscale_lookup_y;
 extern int s_upscale_src_w;
 extern int s_upscale_src_h;
+extern screen_rotation_t s_upscale_rotation;
 extern int s_upscale_row_start_top;
 extern int s_upscale_row_end_top;
 extern int s_upscale_row_start_bottom;

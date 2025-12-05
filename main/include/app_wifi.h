@@ -42,3 +42,22 @@ esp_err_t app_wifi_get_saved_ssid(char *ssid, size_t max_len);
  */
 esp_err_t app_wifi_erase_credentials(void);
 
+/**
+ * @brief Check if captive portal is currently active
+ * 
+ * @return true if captive portal is running, false otherwise
+ */
+bool app_wifi_is_captive_portal_active(void);
+
+/**
+ * @brief Get the current local IP address
+ * 
+ * Returns the IP address of either the AP (if in captive portal mode)
+ * or the STA interface (if connected to WiFi network).
+ * 
+ * @param ip_str Buffer to store IP address string (e.g., "192.168.4.1")
+ * @param max_len Maximum length of ip_str buffer (should be at least 16 bytes)
+ * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no IP available, ESP_ERR_INVALID_ARG if invalid parameters
+ */
+esp_err_t app_wifi_get_local_ip(char *ip_str, size_t max_len);
+

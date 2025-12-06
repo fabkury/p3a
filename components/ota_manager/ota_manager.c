@@ -386,8 +386,9 @@ static void ota_check_task(void *arg)
     animation_player_pause_sd_access();
     
     // Wait for SDIO bus to fully settle
-    ESP_LOGI(TAG, "Waiting for SDIO bus to settle...");
-    vTaskDelay(pdMS_TO_TICKS(2000));  // 2 second delay for bus stabilization
+    // The ESP Hosted driver needs substantial time to flush any pending operations
+    ESP_LOGI(TAG, "Waiting for SDIO bus to settle (5s)...");
+    vTaskDelay(pdMS_TO_TICKS(5000));  // 5 second delay for bus stabilization
     
     set_state(OTA_STATE_CHECKING);
     

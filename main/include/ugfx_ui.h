@@ -32,6 +32,16 @@ void ugfx_ui_deinit(void);
 esp_err_t ugfx_ui_show_provisioning_status(const char *status_message);
 
 /**
+ * @brief Show captive portal AP information screen
+ * 
+ * Displays instructions on how to connect to the captive portal and
+ * configure WiFi settings.
+ * 
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t ugfx_ui_show_captive_ap_info(void);
+
+/**
  * @brief Activate registration code display
  * 
  * Sets up the UI state for displaying a registration code.

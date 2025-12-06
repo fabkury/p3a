@@ -82,25 +82,28 @@ static void mqtt_connection_callback(bool connected)
             ESP_LOGI(TAG, "Status timer stopped");
         }
         
+        // Only transition to DISCONNECTED and start reconnection if we were connected
+        // Don't interfere with provisioning or other states
         if (s_state == MAKAPIX_STATE_CONNECTED || s_state == MAKAPIX_STATE_CONNECTING) {
             s_state = MAKAPIX_STATE_DISCONNECTED;
             ESP_LOGI(TAG, "New state: %d (DISCONNECTED)", s_state);
-        } else {
-            ESP_LOGI(TAG, "State unchanged: %d", s_state);
-        }
-        
-        // Start reconnection task if not already running
-        if (s_reconnect_task_handle == NULL) {
-            ESP_LOGI(TAG, "Starting reconnection task...");
-            BaseType_t task_ret = xTaskCreate(mqtt_reconnect_task, "mqtt_reconn", 16384, NULL, 5, &s_reconnect_task_handle);
-            if (task_ret != pdPASS) {
-                ESP_LOGE(TAG, "Failed to create reconnection task");
-                s_reconnect_task_handle = NULL;
+            
+            // Start reconnection task if not already running
+            // Only do this when transitioning to DISCONNECTED (not during provisioning, etc.)
+            if (s_reconnect_task_handle == NULL) {
+                ESP_LOGI(TAG, "Starting reconnection task...");
+                BaseType_t task_ret = xTaskCreate(mqtt_reconnect_task, "mqtt_reconn", 16384, NULL, 5, &s_reconnect_task_handle);
+                if (task_ret != pdPASS) {
+                    ESP_LOGE(TAG, "Failed to create reconnection task");
+                    s_reconnect_task_handle = NULL;
+                } else {
+                    ESP_LOGI(TAG, "Reconnection task created successfully");
+                }
             } else {
-                ESP_LOGI(TAG, "Reconnection task created successfully");
+                ESP_LOGI(TAG, "Reconnection task already running");
             }
         } else {
-            ESP_LOGI(TAG, "Reconnection task already running");
+            ESP_LOGI(TAG, "State unchanged: %d (not starting reconnection)", s_state);
         }
     }
     ESP_LOGI(TAG, "=== END MQTT CONNECTION CALLBACK ===");
@@ -450,20 +453,22 @@ esp_err_t makapix_start_provisioning(void)
         }
     }
 
-    // Stop MQTT client to free network resources for provisioning
-    // This prevents MQTT reconnection attempts from interfering with HTTP requests
-    if (makapix_mqtt_is_connected() || s_state == MAKAPIX_STATE_DISCONNECTED) {
-        ESP_LOGI(TAG, "Stopping MQTT client for provisioning...");
-        makapix_mqtt_disconnect();
-    }
-
     ESP_LOGI(TAG, "Starting provisioning...");
     
     // Set initial status message before transitioning state
     snprintf(s_provisioning_status, sizeof(s_provisioning_status), "Starting...");
     
+    // Set state to PROVISIONING BEFORE disconnecting MQTT
+    // This prevents the disconnect callback from starting a reconnection task
     s_state = MAKAPIX_STATE_PROVISIONING;
     s_provisioning_cancelled = false;  // Reset cancellation flag
+
+    // Stop MQTT client to free network resources for provisioning
+    // This prevents MQTT reconnection attempts from interfering with HTTP requests
+    if (makapix_mqtt_is_connected()) {
+        ESP_LOGI(TAG, "Stopping MQTT client for provisioning...");
+        makapix_mqtt_disconnect();
+    }
 
     // Start provisioning task
     BaseType_t ret = xTaskCreate(provisioning_task, "makapix_prov", 8192, NULL, 5, NULL);

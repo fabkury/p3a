@@ -35,7 +35,7 @@ The p3a uses a sophisticated display pipeline optimized for pixel art animation 
 ### Key Components
 
 - **`animation_player_render.c`**: Core rendering loop (`lcd_animation_task`)
-- **`blit_webp_frame_rows()`**: Upscales decoded frames using pre-computed lookup tables
+- **`blit_upscaled_rows()`**: Upscales decoded RGBA frames using pre-computed lookup tables
 - **Upscale workers**: Two parallel tasks split rendering (top/bottom halves)
 - **Frame buffers**: Direct MIPI-DSI DPI panel buffers
 - **LCD driver**: `esp_lcd_mipi_dsi` with `esp_lcd_dpi_panel`
@@ -708,7 +708,7 @@ static esp_err_t set_rotation_handler(httpd_req_t *req) {
 
 ### Phase 2: Animation Player
 - [x] Simplified lookup table generation (standard upscale only)
-- [x] Implement coordinate transformations in `blit_webp_frame_rows()` for all 4 rotation angles
+- [x] Implement coordinate transformations in `blit_upscaled_rows()` for all 4 rotation angles
 - [x] Add `s_upscale_rotation` variable to track rotation state
 - [x] Modify render functions to set rotation state before upscaling
 - [x] Test with sample animations at each rotation angle
@@ -856,7 +856,7 @@ This implementation aligns perfectly with p3a's core function as a pixel art pla
 
 The final implementation differs slightly from the original plan:
 
-**Animation Rotation**: Instead of encoding rotation into lookup tables (which doesn't work for 90°/270° rotations), rotation is handled at render time in `blit_webp_frame_rows()`. The lookup tables remain standard upscale tables, and rotation transformations are applied during pixel copying. This approach:
+**Animation Rotation**: Instead of encoding rotation into lookup tables (which doesn't work for 90°/270° rotations), rotation is handled at render time in `blit_upscaled_rows()`. The lookup tables remain standard upscale tables, and rotation transformations are applied during pixel copying. This approach:
 - Works correctly for all rotation angles (including 90°/270°)
 - Maintains compatibility with the parallel upscale workers (top/bottom split)
 - Has minimal performance overhead (~5-10% for rotated frames)

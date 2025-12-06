@@ -405,15 +405,15 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf, asse
     // Generate standard upscale lookup tables (rotation handled in blit function)
     // lookup_x[dst_x] = source X coordinate
     // lookup_y[dst_y] = source Y coordinate  
-    for (int dst_x = 0; dst_x < target_w; ++dst_x) {
-        int src_x = (dst_x * canvas_w) / target_w;
-        if (src_x >= canvas_w) src_x = canvas_w - 1;
-        buf->upscale_lookup_x[dst_x] = (uint16_t)src_x;
-    }
-    for (int dst_y = 0; dst_y < target_h; ++dst_y) {
-        int src_y = (dst_y * canvas_h) / target_h;
-        if (src_y >= canvas_h) src_y = canvas_h - 1;
-        buf->upscale_lookup_y[dst_y] = (uint16_t)src_y;
+            for (int dst_x = 0; dst_x < target_w; ++dst_x) {
+                int src_x = (dst_x * canvas_w) / target_w;
+                if (src_x >= canvas_w) src_x = canvas_w - 1;
+                buf->upscale_lookup_x[dst_x] = (uint16_t)src_x;
+            }
+            for (int dst_y = 0; dst_y < target_h; ++dst_y) {
+                int src_y = (dst_y * canvas_h) / target_h;
+                if (src_y >= canvas_h) src_y = canvas_h - 1;
+                buf->upscale_lookup_y[dst_y] = (uint16_t)src_y;
     }
 
     buf->upscale_src_w = canvas_w;

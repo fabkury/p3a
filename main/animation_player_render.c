@@ -191,10 +191,28 @@ static void draw_text_top_right(uint8_t *frame, const char *text, int margin_x, 
 }
 #endif // CONFIG_P3A_LCD_DISPLAY_FRAME_DURATIONS
 
-static void blit_webp_frame_rows(const uint8_t *src_rgba, int src_w, int src_h,
-                                 uint8_t *dst_buffer, int dst_w, int dst_h,
-                                 int row_start, int row_end,
-                                 const uint16_t *lookup_x, const uint16_t *lookup_y)
+/**
+ * @brief Blit and upscale RGBA source pixels to display buffer with rotation
+ * 
+ * This function performs nearest-neighbor upscaling from decoded RGBA frame data
+ * (from any decoder: WebP, GIF, PNG, JPEG) to the display buffer format (RGB565
+ * or RGB888). Rotation is applied dynamically based on s_upscale_rotation.
+ * 
+ * @param src_rgba     Source RGBA pixel data (4 bytes per pixel)
+ * @param src_w        Source width in pixels
+ * @param src_h        Source height in pixels
+ * @param dst_buffer   Destination display buffer
+ * @param dst_w        Destination width in pixels
+ * @param dst_h        Destination height in pixels
+ * @param row_start    First row to render (inclusive)
+ * @param row_end      Last row to render (exclusive)
+ * @param lookup_x     Pre-computed X coordinate lookup table for upscaling
+ * @param lookup_y     Pre-computed Y coordinate lookup table for upscaling
+ */
+static void blit_upscaled_rows(const uint8_t *src_rgba, int src_w, int src_h,
+                               uint8_t *dst_buffer, int dst_w, int dst_h,
+                               int row_start, int row_end,
+                               const uint16_t *lookup_x, const uint16_t *lookup_y)
 {
     if (!src_rgba || !dst_buffer || src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0) {
         return;
@@ -223,9 +241,9 @@ static void blit_webp_frame_rows(const uint8_t *src_rgba, int src_w, int src_h,
                 // Standard: src(lookup_x[dst_x], lookup_y[dst_y])
                 const uint16_t src_y = lookup_y[dst_y];
                 const uint8_t *src_row = src_rgba + (size_t)src_y * src_w * 4;
-                for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
-                    const uint16_t src_x = lookup_x[dst_x];
-                    const uint8_t *pixel = src_row + (size_t)src_x * 4;
+        for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
+            const uint16_t src_x = lookup_x[dst_x];
+            const uint8_t *pixel = src_row + (size_t)src_x * 4;
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
                     dst_row[dst_x] = rgb565(pixel[0], pixel[1], pixel[2]);
 #else
@@ -274,12 +292,12 @@ static void blit_webp_frame_rows(const uint8_t *src_rgba, int src_w, int src_h,
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
                     dst_row[dst_x] = rgb565(pixel[0], pixel[1], pixel[2]);
 #else
-                    const size_t idx = (size_t)dst_x * 3U;
-                    if ((idx + 2) < s_frame_row_stride_bytes) {
-                        dst_row[idx + 0] = pixel[2];
-                        dst_row[idx + 1] = pixel[1];
-                        dst_row[idx + 2] = pixel[0];
-                    }
+            const size_t idx = (size_t)dst_x * 3U;
+            if ((idx + 2) < s_frame_row_stride_bytes) {
+                dst_row[idx + 0] = pixel[2];
+                dst_row[idx + 1] = pixel[1];
+                dst_row[idx + 2] = pixel[0];
+            }
 #endif
                 }
                 break;
@@ -301,7 +319,7 @@ static void blit_webp_frame_rows(const uint8_t *src_rgba, int src_w, int src_h,
                         dst_row[idx + 0] = pixel[2];
                         dst_row[idx + 1] = pixel[1];
                         dst_row[idx + 2] = pixel[0];
-                    }
+        }
 #endif
                 }
                 break;
@@ -344,9 +362,9 @@ void upscale_worker_top_task(void *arg)
 
         if (s_upscale_src_buffer && s_upscale_dst_buffer &&
             s_upscale_row_start_top < s_upscale_row_end_top) {
-            blit_webp_frame_rows(s_upscale_src_buffer,
-                                 s_upscale_src_w, s_upscale_src_h,
-                                 s_upscale_dst_buffer,
+            blit_upscaled_rows(s_upscale_src_buffer,
+                               s_upscale_src_w, s_upscale_src_h,
+                               s_upscale_dst_buffer,
                                  EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
                                  s_upscale_row_start_top, s_upscale_row_end_top,
                                  s_upscale_lookup_x, s_upscale_lookup_y);
@@ -374,9 +392,9 @@ void upscale_worker_bottom_task(void *arg)
 
         if (s_upscale_src_buffer && s_upscale_dst_buffer &&
             s_upscale_row_start_bottom < s_upscale_row_end_bottom) {
-            blit_webp_frame_rows(s_upscale_src_buffer,
-                                 s_upscale_src_w, s_upscale_src_h,
-                                 s_upscale_dst_buffer,
+            blit_upscaled_rows(s_upscale_src_buffer,
+                               s_upscale_src_w, s_upscale_src_h,
+                               s_upscale_dst_buffer,
                                  EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
                                  s_upscale_row_start_bottom, s_upscale_row_end_bottom,
                                  s_upscale_lookup_x, s_upscale_lookup_y);

@@ -1,6 +1,7 @@
 #include "ugfx_ui.h"
 #include "esp_log.h"
 #include "app_lcd.h"
+#include "app_wifi.h"
 #include "bsp/display.h"
 #include "makapix_mqtt.h"
 #include <string.h>
@@ -14,13 +15,21 @@
 
 static const char *TAG = "ugfx_ui";
 
+// UI mode enumeration
+typedef enum {
+    UI_MODE_NONE,              // No UI active
+    UI_MODE_STATUS,            // Provisioning status
+    UI_MODE_REGISTRATION,      // Registration code display
+    UI_MODE_CAPTIVE_AP_INFO    // Captive portal setup info
+} ui_mode_t;
+
 // UI state
 static bool s_ui_active = false;
 static bool s_ugfx_initialized = false;
 static time_t s_expires_time = 0;
 static char s_current_code[16] = {0};
 static char s_status_message[128] = {0};
-static bool s_show_status = false;
+static ui_mode_t s_ui_mode = UI_MODE_NONE;
 static gOrientation s_pending_orientation = gOrientation0;  // Orientation to apply when µGFX inits
 
 // External variables for board_framebuffer.h (used by µGFX driver)
@@ -71,6 +80,44 @@ static esp_err_t ugfx_ui_init_gfx(uint8_t *framebuffer, size_t stride)
     
     ESP_LOGI(TAG, "µGFX initialized: display size %dx%d", gdispGetWidth(), gdispGetHeight());
     return ESP_OK;
+}
+
+/**
+ * @brief Draw the captive portal AP info screen
+ */
+static void ugfx_ui_draw_captive_ap_info(void)
+{
+    gdispClear(GFX_BLACK);
+
+    // Title
+    gdispFillStringBox(0, 60, gdispGetWidth(), 30, "WiFi Setup Instructions",
+                     gdispOpenFont("* DejaVu Sans 24"), GFX_WHITE, GFX_BLACK, gJustifyCenter);
+
+    // Instructions (multi-line, smaller font)
+    int y_pos = 120;
+    gdispFillStringBox(0, y_pos, gdispGetWidth(), 30, "1. Connect to the WiFi network:",
+                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    
+    y_pos += 40;
+    // Using CONFIG_ESP_AP_SSID directly (EXAMPLE_ESP_AP_SSID wrapper is local to app_wifi.c)
+    gdispFillStringBox(0, y_pos, gdispGetWidth(), 30, CONFIG_ESP_AP_SSID,
+                     gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0x00FF00), GFX_BLACK, gJustifyCenter);
+    
+    y_pos += 50;
+    gdispFillStringBox(0, y_pos, gdispGetWidth(), 30, "2. Open your web browser",
+                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    
+    y_pos += 40;
+    gdispFillStringBox(0, y_pos, gdispGetWidth(), 30, "3. Go to: http://p3a.local",
+                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    
+    y_pos += 40;
+    gdispFillStringBox(0, y_pos, gdispGetWidth(), 30, "or http://192.168.4.1",
+                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    
+    y_pos += 50;
+    gdispFillStringBox(0, y_pos, gdispGetWidth(), 30, "4. Enter your WiFi credentials",
+                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
 }
 
 /**
@@ -129,8 +176,18 @@ static void ugfx_ui_draw_layout(int32_t remaining_secs)
     bool mqtt_connected = makapix_mqtt_is_connected();
     const char *mqtt_status_text = mqtt_connected ? "MQTT: Connected" : "MQTT: Disconnected";
     color_t mqtt_status_color = mqtt_connected ? HTML2COLOR(0x00FF00) : HTML2COLOR(0xFF0000);
-    gdispFillStringBox(0, gdispGetHeight() - 80, gdispGetWidth(), 30, mqtt_status_text,
+    gdispFillStringBox(0, gdispGetHeight() - 120, gdispGetWidth(), 30, mqtt_status_text,
                      gdispOpenFont("* DejaVu Sans 24"), mqtt_status_color, GFX_BLACK, gJustifyCenter);
+    
+    // Local IP address
+    // Buffer sized for IPv4 addresses (16 bytes would suffice, but 48 allows for future IPv6 support)
+    char ip_str[48];
+    if (app_wifi_get_local_ip(ip_str, sizeof(ip_str)) == ESP_OK) {
+        char ip_label[64];
+        snprintf(ip_label, sizeof(ip_label), "IP: %s", ip_str);
+        gdispFillStringBox(0, gdispGetHeight() - 80, gdispGetWidth(), 30, ip_label,
+                         gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    }
 }
 
 /**
@@ -171,7 +228,7 @@ void ugfx_ui_deinit(void)
     s_expires_time = 0;
     memset(s_current_code, 0, sizeof(s_current_code));
     memset(s_status_message, 0, sizeof(s_status_message));
-    s_show_status = false;
+    s_ui_mode = UI_MODE_NONE;
     ugfx_framebuffer_ptr = NULL;
 }
 
@@ -183,11 +240,22 @@ esp_err_t ugfx_ui_show_provisioning_status(const char *status_message)
 
     strncpy(s_status_message, status_message, sizeof(s_status_message) - 1);
     s_status_message[sizeof(s_status_message) - 1] = '\0';
-    s_show_status = true;
+    s_ui_mode = UI_MODE_STATUS;
     s_ui_active = true;
     memset(s_current_code, 0, sizeof(s_current_code)); // Clear code when showing status
     
     ESP_LOGI(TAG, "Provisioning status UI activated: %s", status_message);
+    return ESP_OK;
+}
+
+esp_err_t ugfx_ui_show_captive_ap_info(void)
+{
+    s_ui_mode = UI_MODE_CAPTIVE_AP_INFO;
+    s_ui_active = true;
+    memset(s_current_code, 0, sizeof(s_current_code));
+    memset(s_status_message, 0, sizeof(s_status_message));
+    
+    ESP_LOGI(TAG, "Captive AP info UI activated");
     return ESP_OK;
 }
 
@@ -204,7 +272,7 @@ esp_err_t ugfx_ui_show_registration(const char *code, const char *expires_at)
     }
 
     strncpy(s_current_code, code, sizeof(s_current_code) - 1);
-    s_show_status = false; // Switch from status to code display
+    s_ui_mode = UI_MODE_REGISTRATION;
     s_ui_active = true;
     
     ESP_LOGI(TAG, "Registration UI activated: code=%s", code);
@@ -215,7 +283,7 @@ void ugfx_ui_hide_registration(void)
 {
     s_ui_active = false;
     s_expires_time = 0;
-    s_show_status = false;
+    s_ui_mode = UI_MODE_NONE;
     memset(s_current_code, 0, sizeof(s_current_code));
     memset(s_status_message, 0, sizeof(s_status_message));
     
@@ -245,20 +313,29 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
         return 100;
     }
 
-    // Show status message if in status mode
-    if (s_show_status) {
-        ugfx_ui_draw_status();
-        return 100;
-    }
-
-    // Show registration code if available
-    if (s_current_code[0] != '\0') {
-        // Calculate remaining time and draw UI
-        time_t now;
-        time(&now);
-        int32_t remaining_secs = (int32_t)(s_expires_time - now);
-        ugfx_ui_draw_layout(remaining_secs);
-        return 100;
+    // Show appropriate screen based on UI mode
+    switch (s_ui_mode) {
+        case UI_MODE_STATUS:
+            ugfx_ui_draw_status();
+            return 100;
+            
+        case UI_MODE_CAPTIVE_AP_INFO:
+            ugfx_ui_draw_captive_ap_info();
+            return 100;
+            
+        case UI_MODE_REGISTRATION:
+            if (s_current_code[0] != '\0') {
+                // Calculate remaining time and draw UI
+                time_t now;
+                time(&now);
+                int32_t remaining_secs = (int32_t)(s_expires_time - now);
+                ugfx_ui_draw_layout(remaining_secs);
+                return 100;
+            }
+            break;
+            
+        default:
+            break;
     }
 
     // Fallback: clear to black

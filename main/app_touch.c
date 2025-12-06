@@ -13,10 +13,12 @@
 #include "app_lcd.h"
 #include "app_usb.h"
 #include "app_touch.h"
+#include "app_wifi.h"
 #include "bsp/display.h"
 #include "sdkconfig.h"
 #include "makapix.h"
 #include "animation_player.h"
+#include "ugfx_ui.h"
 #include <math.h>
 
 // Debug provisioning mode - when enabled, long press doesn't trigger real provisioning
@@ -326,17 +328,30 @@ static void app_touch_task(void *arg)
                                 // Debug mode: long press doesn't trigger real provisioning
                                 ESP_LOGI(TAG, "Long press detected (DEBUG MODE - provisioning disabled)");
 #else
-                                // Check current makapix state
-                                makapix_state_t makapix_state = makapix_get_state();
-                                if (makapix_state == MAKAPIX_STATE_PROVISIONING || 
-                                    makapix_state == MAKAPIX_STATE_SHOW_CODE) {
-                                    // Already in provisioning/show_code mode - cancel and exit
-                                    ESP_LOGI(TAG, "Long press detected in registration mode - cancelling and exiting");
-                                    makapix_cancel_provisioning();
+                                // Check if captive AP info screen is active
+                                if (ugfx_ui_is_active() && app_wifi_is_captive_portal_active()) {
+                                    // AP info screen is showing - hide it and exit UI mode
+                                    ESP_LOGI(TAG, "Long press detected with AP info showing - hiding AP info");
+                                    ugfx_ui_hide_registration();
+                                    app_lcd_exit_ui_mode();
+                                } else if (app_wifi_is_captive_portal_active()) {
+                                    // In captive portal mode but no UI - show AP info screen
+                                    ESP_LOGI(TAG, "Long press detected in captive portal mode - showing AP info");
+                                    app_lcd_enter_ui_mode();
+                                    ugfx_ui_show_captive_ap_info();
                                 } else {
-                                    // Not in provisioning mode - start new provisioning
-                                    ESP_LOGI(TAG, "Long press detected, starting provisioning");
-                                    makapix_start_provisioning();
+                                    // Check current makapix state
+                                    makapix_state_t makapix_state = makapix_get_state();
+                                    if (makapix_state == MAKAPIX_STATE_PROVISIONING || 
+                                        makapix_state == MAKAPIX_STATE_SHOW_CODE) {
+                                        // Already in provisioning/show_code mode - cancel and exit
+                                        ESP_LOGI(TAG, "Long press detected in registration mode - cancelling and exiting");
+                                        makapix_cancel_provisioning();
+                                    } else {
+                                        // Not in provisioning mode - start new provisioning
+                                        ESP_LOGI(TAG, "Long press detected, starting provisioning");
+                                        makapix_start_provisioning();
+                                    }
                                 }
 #endif
                             }

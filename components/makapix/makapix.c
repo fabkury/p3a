@@ -20,6 +20,7 @@ static char s_provisioning_status[128] = {0};  // Status message during provisio
 static TimerHandle_t s_status_timer = NULL;
 static bool s_provisioning_cancelled = false;  // Flag to prevent race condition
 static TaskHandle_t s_poll_task_handle = NULL;  // Handle for credential polling task
+static TaskHandle_t s_reconnect_task_handle = NULL;  // Handle for MQTT reconnection task
 
 // Forward declarations
 static void credentials_poll_task(void *pvParameters);
@@ -56,27 +57,50 @@ static void mqtt_connection_callback(bool connected)
         ESP_LOGI(TAG, "Publishing initial status...");
         makapix_mqtt_publish_status(makapix_get_current_post_id());
 
-        // Create periodic status timer if not already created
+        // Create or restart periodic status timer
         if (!s_status_timer) {
             ESP_LOGI(TAG, "Creating status timer (interval: %d ms)", STATUS_PUBLISH_INTERVAL_MS);
             s_status_timer = xTimerCreate("status_timer", pdMS_TO_TICKS(STATUS_PUBLISH_INTERVAL_MS),
                                           pdTRUE, NULL, status_timer_callback);
             if (s_status_timer) {
                 xTimerStart(s_status_timer, 0);
-                ESP_LOGI(TAG, "Status timer started");
+                ESP_LOGI(TAG, "Status timer created and started");
             } else {
                 ESP_LOGE(TAG, "Failed to create status timer");
             }
         } else {
-            ESP_LOGI(TAG, "Status timer already exists");
+            // Timer exists but may have been stopped during disconnect - restart it
+            xTimerStart(s_status_timer, 0);
+            ESP_LOGI(TAG, "Status timer restarted");
         }
     } else {
         ESP_LOGI(TAG, "MQTT disconnected");
+        
+        // Stop status timer to prevent publish attempts during reconnection
+        if (s_status_timer) {
+            xTimerStop(s_status_timer, 0);
+            ESP_LOGI(TAG, "Status timer stopped");
+        }
+        
         if (s_state == MAKAPIX_STATE_CONNECTED || s_state == MAKAPIX_STATE_CONNECTING) {
             s_state = MAKAPIX_STATE_DISCONNECTED;
             ESP_LOGI(TAG, "New state: %d (DISCONNECTED)", s_state);
         } else {
             ESP_LOGI(TAG, "State unchanged: %d", s_state);
+        }
+        
+        // Start reconnection task if not already running
+        if (s_reconnect_task_handle == NULL) {
+            ESP_LOGI(TAG, "Starting reconnection task...");
+            BaseType_t task_ret = xTaskCreate(mqtt_reconnect_task, "mqtt_reconn", 16384, NULL, 5, &s_reconnect_task_handle);
+            if (task_ret != pdPASS) {
+                ESP_LOGE(TAG, "Failed to create reconnection task");
+                s_reconnect_task_handle = NULL;
+            } else {
+                ESP_LOGI(TAG, "Reconnection task created successfully");
+            }
+        } else {
+            ESP_LOGI(TAG, "Reconnection task already running");
         }
     }
     ESP_LOGI(TAG, "=== END MQTT CONNECTION CALLBACK ===");
@@ -371,6 +395,8 @@ static void mqtt_reconnect_task(void *pvParameters)
         }
     }
 
+    ESP_LOGI(TAG, "Reconnection task exiting");
+    s_reconnect_task_handle = NULL;
     vTaskDelete(NULL);
 }
 
@@ -581,13 +607,18 @@ esp_err_t makapix_connect_if_registered(void)
         ESP_LOGE(TAG, "Failed to connect MQTT: %s (%d)", esp_err_to_name(err), err);
         ESP_LOGI(TAG, "Starting reconnection task...");
         s_state = MAKAPIX_STATE_DISCONNECTED;
-        // Start reconnection task
+        // Start reconnection task if not already running
         // Stack size needs to be large enough for certificate buffers (3x 4096 bytes = ~12KB)
-        BaseType_t task_ret = xTaskCreate(mqtt_reconnect_task, "mqtt_reconn", 16384, NULL, 5, NULL);
-        if (task_ret != pdPASS) {
-            ESP_LOGE(TAG, "Failed to create reconnection task");
+        if (s_reconnect_task_handle == NULL) {
+            BaseType_t task_ret = xTaskCreate(mqtt_reconnect_task, "mqtt_reconn", 16384, NULL, 5, &s_reconnect_task_handle);
+            if (task_ret != pdPASS) {
+                ESP_LOGE(TAG, "Failed to create reconnection task");
+                s_reconnect_task_handle = NULL;
+            } else {
+                ESP_LOGI(TAG, "Reconnection task created successfully");
+            }
         } else {
-            ESP_LOGI(TAG, "Reconnection task created successfully");
+            ESP_LOGI(TAG, "Reconnection task already running");
         }
         return err;
     }

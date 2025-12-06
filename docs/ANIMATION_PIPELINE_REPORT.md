@@ -751,9 +751,9 @@ The system uses **2 worker tasks** for parallel upscaling:
 
 **Algorithm**:
 ```c
-void blit_webp_frame_rows(src_rgba, src_w, src_h,
-                         dst_buffer, dst_w, dst_h,
-                         row_start, row_end,
+void blit_upscaled_rows(src_rgba, src_w, src_h,
+                        dst_buffer, dst_w, dst_h,
+                        row_start, row_end,
                          lookup_x, lookup_y)
 ```
 

@@ -63,6 +63,13 @@ static esp_err_t ugfx_ui_init_gfx(uint8_t *framebuffer, size_t stride)
     if (s_ugfx_initialized) {
         // Already initialized - update µGFX's internal framebuffer pointer directly
         gdisp_lld_set_framebuffer(framebuffer, (gCoord)stride);
+        
+        // Ensure orientation is applied (may have changed since last frame)
+        gOrientation current_orientation = gdispGetOrientation();
+        if (current_orientation != s_pending_orientation) {
+            gdispSetOrientation(s_pending_orientation);
+            ESP_LOGD(TAG, "Applied orientation change: %d -> %d", current_orientation, s_pending_orientation);
+        }
         return ESP_OK;
     }
 
@@ -348,18 +355,21 @@ esp_err_t ugfx_ui_set_rotation(screen_rotation_t rotation)
     gOrientation ugfx_orientation;
     
     // Map screen_rotation_t to µGFX gOrientation
+    // Note: µGFX uses CCW convention, our rotation uses CW convention
+    // - gOrientation90 = 90° CCW (270° CW) → maps to ROTATION_270
+    // - gOrientation270 = 270° CCW (90° CW) → maps to ROTATION_90
     switch (rotation) {
         case ROTATION_0:
             ugfx_orientation = gOrientation0;
             break;
         case ROTATION_90:
-            ugfx_orientation = gOrientation90;
+            ugfx_orientation = gOrientation270;  // 90° CW = 270° CCW
             break;
         case ROTATION_180:
             ugfx_orientation = gOrientation180;
             break;
         case ROTATION_270:
-            ugfx_orientation = gOrientation270;
+            ugfx_orientation = gOrientation90;  // 270° CW = 90° CCW
             break;
         default:
             ESP_LOGE(TAG, "Invalid rotation angle: %d", rotation);

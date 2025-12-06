@@ -687,27 +687,21 @@ esp_err_t app_set_screen_rotation(screen_rotation_t rotation)
     
     ESP_LOGI(TAG, "Setting screen rotation from %d to %d degrees", old_rotation, rotation);
     
-    // Apply to µGFX UI immediately
+    // Apply to µGFX UI (for provisioning screens)
     esp_err_t err = ugfx_ui_set_rotation(rotation);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to set µGFX rotation: %s", esp_err_to_name(err));
         // Continue anyway - UI rotation is non-critical
     }
     
-    // Trigger animation reload with new rotation
-    // The loader task will regenerate lookup tables
-    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-        s_swap_requested = true;
-        xSemaphoreGive(s_buffer_mutex);
-        xSemaphoreGive(s_loader_sem);
-    }
+    // NOTE: No animation reload needed! Rotation is applied dynamically at render time:
+    // - render_next_frame() and prefetch_first_frame() set s_upscale_rotation = g_screen_rotation
+    // - blit_upscaled_rows() applies rotation transformation based on s_upscale_rotation
+    // The next rendered frame will automatically use the new rotation.
     
     // Store in config for persistence
     config_store_set_rotation(rotation);
     
-    // Clear rotation in progress flag after a small delay to allow operations to start
-    // We don't need to wait for completion, just ensure the request is processed
-    vTaskDelay(pdMS_TO_TICKS(50));
     g_rotation_in_progress = false;
     
     ESP_LOGI(TAG, "Screen rotation set to %d degrees", rotation);

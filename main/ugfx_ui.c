@@ -4,6 +4,7 @@
 #include "app_wifi.h"
 #include "bsp/display.h"
 #include "makapix_mqtt.h"
+#include "makapix.h"
 #include <string.h>
 #include <time.h>
 #include "freertos/FreeRTOS.h"
@@ -155,45 +156,58 @@ static void ugfx_ui_draw_layout(int32_t remaining_secs)
     gdispClear(GFX_BLACK);
 
     // Title
-    gdispFillStringBox(0, 80, gdispGetWidth(), 30, "REGISTER PLAYER",
+    gdispFillStringBox(0, 50, gdispGetWidth(), 35, "REGISTER PLAYER",
                      gdispOpenFont("* DejaVu Sans 24"), GFX_WHITE, GFX_BLACK, gJustifyCenter);
 
     // Registration code (large, green)
-    gdispFillStringBox(0, gdispGetHeight()/2 - 40, gdispGetWidth(), 50, s_current_code,
+    gdispFillStringBox(0, gdispGetHeight()/2 - 100, gdispGetWidth(), 60, s_current_code,
                      gdispOpenFont("* DejaVu Sans 32"), HTML2COLOR(0x00FF00), GFX_BLACK, gJustifyCenter);
 
     // Instructions
-    gdispFillStringBox(0, gdispGetHeight()/2 + 40, gdispGetWidth(), 50, "Enter this code at: https://dev.makapix.club/",
-                     gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    gdispFillStringBox(0, gdispGetHeight()/2 - 10, gdispGetWidth(), 35, "Enter this code at:",
+                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    gdispFillStringBox(0, gdispGetHeight()/2 + 35, gdispGetWidth(), 35, "https://dev.makapix.club/",
+                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0x00BFFF), GFX_BLACK, gJustifyCenter);
 
-    // Countdown timer
-    if (remaining_secs <= 0) {
-        gdispFillStringBox(0, gdispGetHeight() - 120, gdispGetWidth(), 30, "Expired",
-                         gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0xFFFF00), GFX_BLACK, gJustifyCenter);
-    } else {
-        int minutes = remaining_secs / 60;
-        int seconds = remaining_secs % 60;
-        char timer_text[32];
-        snprintf(timer_text, sizeof(timer_text), "Expires in %02d:%02d", minutes, seconds);
-        gdispFillStringBox(0, gdispGetHeight() - 120, gdispGetWidth(), 30, timer_text,
-                         gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0xFFFF00), GFX_BLACK, gJustifyCenter);
+    // Countdown timer (prominent, below instructions)
+    // Note: Expiration is handled in ugfx_ui_render_to_buffer() which auto-exits provisioning
+    // Ensure remaining_secs is positive for correct modulo calculation
+    if (remaining_secs < 0) {
+        remaining_secs = 0;
     }
+    int minutes = remaining_secs / 60;
+    int seconds = remaining_secs % 60;
+    char timer_text[32];
+    snprintf(timer_text, sizeof(timer_text), "Expires in %02d:%02d", minutes, seconds);
+    // Color changes as time runs out: green > yellow > red
+    color_t timer_color;
+    if (remaining_secs > 300) {  // > 5 minutes: green
+        timer_color = HTML2COLOR(0x00FF00);
+    } else if (remaining_secs > 60) {  // > 1 minute: yellow
+        timer_color = HTML2COLOR(0xFFFF00);
+    } else {  // < 1 minute: red
+        timer_color = HTML2COLOR(0xFF4444);
+    }
+    gdispFillStringBox(0, gdispGetHeight()/2 + 90, gdispGetWidth(), 45, timer_text,
+                     gdispOpenFont("* DejaVu Sans 24"), timer_color, GFX_BLACK, gJustifyCenter);
 
+    // Bottom status area
+    int bottom_y = gdispGetHeight() - 100;
+    
     // MQTT connection status
     bool mqtt_connected = makapix_mqtt_is_connected();
     const char *mqtt_status_text = mqtt_connected ? "MQTT: Connected" : "MQTT: Disconnected";
-    color_t mqtt_status_color = mqtt_connected ? HTML2COLOR(0x00FF00) : HTML2COLOR(0xFF0000);
-    gdispFillStringBox(0, gdispGetHeight() - 120, gdispGetWidth(), 30, mqtt_status_text,
-                     gdispOpenFont("* DejaVu Sans 24"), mqtt_status_color, GFX_BLACK, gJustifyCenter);
+    color_t mqtt_status_color = mqtt_connected ? HTML2COLOR(0x00FF00) : HTML2COLOR(0xFF6666);
+    gdispFillStringBox(0, bottom_y, gdispGetWidth(), 30, mqtt_status_text,
+                     gdispOpenFont("* DejaVu Sans 16"), mqtt_status_color, GFX_BLACK, gJustifyCenter);
     
     // Local IP address
-    // Buffer sized for IPv4 addresses (16 bytes would suffice, but 48 allows for future IPv6 support)
     char ip_str[48];
     if (app_wifi_get_local_ip(ip_str, sizeof(ip_str)) == ESP_OK) {
         char ip_label[64];
         snprintf(ip_label, sizeof(ip_label), "IP: %s", ip_str);
-        gdispFillStringBox(0, gdispGetHeight() - 80, gdispGetWidth(), 30, ip_label,
-                         gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+        gdispFillStringBox(0, bottom_y + 40, gdispGetWidth(), 30, ip_label,
+                         gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0xAAAAAA), GFX_BLACK, gJustifyCenter);
     }
 }
 
@@ -332,10 +346,34 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
             
         case UI_MODE_REGISTRATION:
             if (s_current_code[0] != '\0') {
-                // Calculate remaining time and draw UI
+                // Calculate remaining time
                 time_t now;
                 time(&now);
+                
+                // Check if expiration time is valid (not zero/uninitialized)
+                if (s_expires_time == 0) {
+                    // Expiration time not set yet - show default 15 minutes
+                    int32_t remaining_secs = 900;  // 15 minutes
+                    ugfx_ui_draw_layout(remaining_secs);
+                    return 100;
+                }
+                
                 int32_t remaining_secs = (int32_t)(s_expires_time - now);
+                
+                // Clamp to reasonable range to prevent overflow issues
+                if (remaining_secs > 3600) {
+                    remaining_secs = 3600;  // Cap at 1 hour
+                }
+                
+                // Auto-exit provisioning when code expires
+                if (remaining_secs <= 0) {
+                    ESP_LOGI(TAG, "Registration code expired, automatically exiting provisioning");
+                    makapix_cancel_provisioning();
+                    // Draw black screen while transitioning out
+                    gdispClear(GFX_BLACK);
+                    return 100;
+                }
+                
                 ugfx_ui_draw_layout(remaining_secs);
                 return 100;
             }

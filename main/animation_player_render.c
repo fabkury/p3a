@@ -228,6 +228,10 @@ static void blit_upscaled_rows(const uint8_t *src_rgba, int src_w, int src_h,
     }
 
     const screen_rotation_t rotation = s_upscale_rotation;
+    
+    // Source pixels are RGBA (4 bytes), 32-bit aligned
+    // On little-endian: rgba = R | (G << 8) | (B << 16) | (A << 24)
+    const uint32_t *src_rgba32 = (const uint32_t *)src_rgba;
 
     for (int dst_y = row_start; dst_y < row_end; ++dst_y) {
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
@@ -240,19 +244,20 @@ static void blit_upscaled_rows(const uint8_t *src_rgba, int src_w, int src_h,
             case ROTATION_0: {
                 // Standard: src(lookup_x[dst_x], lookup_y[dst_y])
                 const uint16_t src_y = lookup_y[dst_y];
-                const uint8_t *src_row = src_rgba + (size_t)src_y * src_w * 4;
-        for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
-            const uint16_t src_x = lookup_x[dst_x];
-            const uint8_t *pixel = src_row + (size_t)src_x * 4;
+                const uint32_t *src_row32 = src_rgba32 + (size_t)src_y * src_w;
+                for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
+                    const uint16_t src_x = lookup_x[dst_x];
+                    const uint32_t rgba = src_row32[src_x];  // Single 32-bit read
+                    const uint8_t r = rgba & 0xFF;
+                    const uint8_t g = (rgba >> 8) & 0xFF;
+                    const uint8_t b = (rgba >> 16) & 0xFF;
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(pixel[0], pixel[1], pixel[2]);
+                    dst_row[dst_x] = rgb565(r, g, b);
 #else
                     const size_t idx = (size_t)dst_x * 3U;
-                    if ((idx + 2) < s_frame_row_stride_bytes) {
-                        dst_row[idx + 0] = pixel[2];
-                        dst_row[idx + 1] = pixel[1];
-                        dst_row[idx + 2] = pixel[0];
-                    }
+                    dst_row[idx + 0] = b;
+                    dst_row[idx + 1] = g;
+                    dst_row[idx + 2] = r;
 #endif
                 }
                 break;
@@ -260,21 +265,21 @@ static void blit_upscaled_rows(const uint8_t *src_rgba, int src_w, int src_h,
             
             case ROTATION_90: {
                 // 90° CW: src(lookup_x[dst_y], src_h - 1 - lookup_y[dst_x])
-                // For each dst pixel, src_x = scaled(dst_y), src_y = src_h - 1 - scaled(dst_x)
-                const uint16_t src_x_fixed = lookup_x[dst_y];  // src_x constant for this dst row
+                const uint16_t src_x_fixed = lookup_x[dst_y];
                 for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
                     const uint16_t raw_src_y = lookup_y[dst_x];
                     const uint16_t src_y = (src_h - 1) - raw_src_y;
-                    const uint8_t *pixel = src_rgba + ((size_t)src_y * src_w + src_x_fixed) * 4;
+                    const uint32_t rgba = src_rgba32[(size_t)src_y * src_w + src_x_fixed];
+                    const uint8_t r = rgba & 0xFF;
+                    const uint8_t g = (rgba >> 8) & 0xFF;
+                    const uint8_t b = (rgba >> 16) & 0xFF;
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(pixel[0], pixel[1], pixel[2]);
+                    dst_row[dst_x] = rgb565(r, g, b);
 #else
                     const size_t idx = (size_t)dst_x * 3U;
-                    if ((idx + 2) < s_frame_row_stride_bytes) {
-                        dst_row[idx + 0] = pixel[2];
-                        dst_row[idx + 1] = pixel[1];
-                        dst_row[idx + 2] = pixel[0];
-                    }
+                    dst_row[idx + 0] = b;
+                    dst_row[idx + 1] = g;
+                    dst_row[idx + 2] = r;
 #endif
                 }
                 break;
@@ -284,20 +289,21 @@ static void blit_upscaled_rows(const uint8_t *src_rgba, int src_w, int src_h,
                 // 180°: src(src_w - 1 - lookup_x[dst_x], src_h - 1 - lookup_y[dst_y])
                 const uint16_t raw_src_y = lookup_y[dst_y];
                 const uint16_t src_y = (src_h - 1) - raw_src_y;
-                const uint8_t *src_row = src_rgba + (size_t)src_y * src_w * 4;
+                const uint32_t *src_row32 = src_rgba32 + (size_t)src_y * src_w;
                 for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
                     const uint16_t raw_src_x = lookup_x[dst_x];
                     const uint16_t src_x = (src_w - 1) - raw_src_x;
-                    const uint8_t *pixel = src_row + (size_t)src_x * 4;
+                    const uint32_t rgba = src_row32[src_x];
+                    const uint8_t r = rgba & 0xFF;
+                    const uint8_t g = (rgba >> 8) & 0xFF;
+                    const uint8_t b = (rgba >> 16) & 0xFF;
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(pixel[0], pixel[1], pixel[2]);
+                    dst_row[dst_x] = rgb565(r, g, b);
 #else
-            const size_t idx = (size_t)dst_x * 3U;
-            if ((idx + 2) < s_frame_row_stride_bytes) {
-                dst_row[idx + 0] = pixel[2];
-                dst_row[idx + 1] = pixel[1];
-                dst_row[idx + 2] = pixel[0];
-            }
+                    const size_t idx = (size_t)dst_x * 3U;
+                    dst_row[idx + 0] = b;
+                    dst_row[idx + 1] = g;
+                    dst_row[idx + 2] = r;
 #endif
                 }
                 break;
@@ -305,21 +311,21 @@ static void blit_upscaled_rows(const uint8_t *src_rgba, int src_w, int src_h,
             
             case ROTATION_270: {
                 // 270° CW (90° CCW): src(src_w - 1 - lookup_x[dst_y], lookup_y[dst_x])
-                // For each dst pixel, src_x = src_w - 1 - scaled(dst_y), src_y = scaled(dst_x)
                 const uint16_t raw_src_x = lookup_x[dst_y];
                 const uint16_t src_x_fixed = (src_w - 1) - raw_src_x;
                 for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
                     const uint16_t src_y = lookup_y[dst_x];
-                    const uint8_t *pixel = src_rgba + ((size_t)src_y * src_w + src_x_fixed) * 4;
+                    const uint32_t rgba = src_rgba32[(size_t)src_y * src_w + src_x_fixed];
+                    const uint8_t r = rgba & 0xFF;
+                    const uint8_t g = (rgba >> 8) & 0xFF;
+                    const uint8_t b = (rgba >> 16) & 0xFF;
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(pixel[0], pixel[1], pixel[2]);
+                    dst_row[dst_x] = rgb565(r, g, b);
 #else
                     const size_t idx = (size_t)dst_x * 3U;
-                    if ((idx + 2) < s_frame_row_stride_bytes) {
-                        dst_row[idx + 0] = pixel[2];
-                        dst_row[idx + 1] = pixel[1];
-                        dst_row[idx + 2] = pixel[0];
-        }
+                    dst_row[idx + 0] = b;
+                    dst_row[idx + 1] = g;
+                    dst_row[idx + 2] = r;
 #endif
                 }
                 break;
@@ -328,19 +334,20 @@ static void blit_upscaled_rows(const uint8_t *src_rgba, int src_w, int src_h,
             default: {
                 // Fallback to no rotation
                 const uint16_t src_y = lookup_y[dst_y];
-                const uint8_t *src_row = src_rgba + (size_t)src_y * src_w * 4;
+                const uint32_t *src_row32 = src_rgba32 + (size_t)src_y * src_w;
                 for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
                     const uint16_t src_x = lookup_x[dst_x];
-                    const uint8_t *pixel = src_row + (size_t)src_x * 4;
+                    const uint32_t rgba = src_row32[src_x];
+                    const uint8_t r = rgba & 0xFF;
+                    const uint8_t g = (rgba >> 8) & 0xFF;
+                    const uint8_t b = (rgba >> 16) & 0xFF;
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(pixel[0], pixel[1], pixel[2]);
+                    dst_row[dst_x] = rgb565(r, g, b);
 #else
                     const size_t idx = (size_t)dst_x * 3U;
-                    if ((idx + 2) < s_frame_row_stride_bytes) {
-                        dst_row[idx + 0] = pixel[2];
-                        dst_row[idx + 1] = pixel[1];
-                        dst_row[idx + 2] = pixel[0];
-                    }
+                    dst_row[idx + 0] = b;
+                    dst_row[idx + 1] = g;
+                    dst_row[idx + 2] = r;
 #endif
                 }
                 break;

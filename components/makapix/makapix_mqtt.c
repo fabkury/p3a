@@ -1,5 +1,6 @@
 #include "makapix_mqtt.h"
 #include "mqtt_client.h"
+#include "esp_transport.h"
 #include "esp_log.h"
 #include "cJSON.h"
 #include "version.h"
@@ -232,7 +233,8 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
     ESP_LOGI(TAG, "LWT payload: %s", s_lwt_payload);
     ESP_LOGI(TAG, "LWT QoS: 1");
     ESP_LOGI(TAG, "LWT retain: false");
-    ESP_LOGI(TAG, "Keepalive: 60 seconds");
+    ESP_LOGI(TAG, "MQTT Keepalive: 60 seconds");
+    ESP_LOGI(TAG, "TCP Keepalive: enabled (idle=60s, interval=10s, count=5)");
     ESP_LOGI(TAG, "Reconnect timeout: 10000 ms");
     ESP_LOGI(TAG, "Network timeout: 10000 ms");
     ESP_LOGI(TAG, "Clean session: true");
@@ -247,6 +249,13 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
         .session.keepalive = 60,
         .network.reconnect_timeout_ms = 10000,
         .network.timeout_ms = 10000,
+        .network.disable_auto_reconnect = true,
+        .network.tcp_keep_alive_cfg = {
+            .keep_alive_enable = true,
+            .keep_alive_idle = 60,      // Start probes after 60s idle
+            .keep_alive_interval = 10,  // Probe every 10s
+            .keep_alive_count = 5,      // 5 failed probes = connection dead
+        },
         .session.disable_clean_session = false,
     };
 

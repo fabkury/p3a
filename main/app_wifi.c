@@ -330,6 +330,18 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         
         // Connect/reconnect to MQTT if registered
         makapix_connect_if_registered();
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_LOST_IP) {
+        // IP address lost - DHCP renewal likely failed
+        // Force WiFi reconnection to obtain a fresh DHCP lease
+        ESP_LOGW(TAG, "IP address lost! DHCP renewal likely failed.");
+        ESP_LOGI(TAG, "Forcing WiFi reconnection to obtain new IP...");
+        
+        // Stop MQTT to prevent futile connection attempts
+        makapix_mqtt_disconnect();
+        
+        // Force WiFi disconnect - this will trigger WIFI_EVENT_STA_DISCONNECTED
+        // which then triggers reconnection and fresh DHCP
+        esp_wifi_remote_disconnect();
     }
 }
 
@@ -350,8 +362,9 @@ static bool wifi_init_sta(const char *ssid, const char *password)
                                                         &event_handler,
                                                         NULL,
                                                         &instance_any_id));
+    // Register for all IP events to handle both IP_EVENT_STA_GOT_IP and IP_EVENT_STA_LOST_IP
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
-                                                        IP_EVENT_STA_GOT_IP,
+                                                        ESP_EVENT_ANY_ID,
                                                         &event_handler,
                                                         NULL,
                                                         &instance_got_ip));

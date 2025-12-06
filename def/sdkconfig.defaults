@@ -40,3 +40,18 @@ CONFIG_HTTPD_WS_SUPPORT=y
 CONFIG_BSP_SD_FORMAT_ON_MOUNT_FAIL=y
 # WiFi name
 CONFIG_LWIP_LOCAL_HOSTNAME="p3a"
+# DHCP: Use last IP while waiting for renewal to reduce "no IP" window
+CONFIG_LWIP_DHCP_RESTORE_LAST_IP=y
+
+# =============================================================================
+# OTA (Over-The-Air) Update Configuration
+# =============================================================================
+# Enable app rollback on boot failure (automatic rollback after 3 failed boots)
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+# Do not enable anti-rollback (allows downgrade for development)
+# CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK is not set
+# Enable application-level rollback support
+CONFIG_APP_ROLLBACK_ENABLE=y
+# Enable OTA development mode (accept pre-releases for testing)
+# IMPORTANT: Set to 'n' for production releases!
+CONFIG_OTA_DEV_MODE=y

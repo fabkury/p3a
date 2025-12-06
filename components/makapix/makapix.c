@@ -2,6 +2,7 @@
 #include "makapix_store.h"
 #include "makapix_provision.h"
 #include "makapix_mqtt.h"
+#include "app_wifi.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -317,9 +318,18 @@ static void mqtt_reconnect_task(void *pvParameters)
     char player_key[37];
     char mqtt_host[64];
     uint16_t mqtt_port;
+    char wifi_ip[16];
 
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(5000)); // Wait 5 seconds before retry
+
+        // Check if WiFi has a valid IP before attempting MQTT reconnection
+        // This prevents futile reconnection attempts when DHCP lease expired or WiFi is reconnecting
+        if (app_wifi_get_local_ip(wifi_ip, sizeof(wifi_ip)) != ESP_OK || 
+            strcmp(wifi_ip, "0.0.0.0") == 0) {
+            ESP_LOGW(TAG, "WiFi has no valid IP address, skipping MQTT reconnection");
+            continue;
+        }
 
         // Get MQTT host/port from store or use CONFIG fallback
         if (makapix_store_get_mqtt_host(mqtt_host, sizeof(mqtt_host)) != ESP_OK) {
@@ -334,6 +344,7 @@ static void mqtt_reconnect_task(void *pvParameters)
 
             if (!makapix_mqtt_is_connected()) {
                 ESP_LOGI(TAG, "=== MQTT RECONNECTION ATTEMPT ===");
+                ESP_LOGI(TAG, "WiFi IP: %s", wifi_ip);
                 ESP_LOGI(TAG, "Current state: %d", s_state);
                 ESP_LOGI(TAG, "Player key: %s", player_key);
                 ESP_LOGI(TAG, "MQTT host: %s", mqtt_host);

@@ -61,6 +61,35 @@ esp_err_t ugfx_ui_show_registration(const char *code, const char *expires_at);
 void ugfx_ui_hide_registration(void);
 
 /**
+ * @brief Show OTA update progress screen
+ * 
+ * Displays firmware update progress with a progress bar.
+ * Call ugfx_ui_update_ota_progress() to update the displayed progress.
+ * 
+ * @param version_from Current firmware version (can be NULL)
+ * @param version_to Target firmware version (can be NULL)
+ * @return ESP_OK on success
+ */
+esp_err_t ugfx_ui_show_ota_progress(const char *version_from, const char *version_to);
+
+/**
+ * @brief Update OTA progress display
+ * 
+ * Updates the progress percentage and status text shown on screen.
+ * 
+ * @param percent Progress percentage (0-100)
+ * @param status_text Status text to display (e.g., "Downloading...", "Verifying...")
+ */
+void ugfx_ui_update_ota_progress(int percent, const char *status_text);
+
+/**
+ * @brief Hide OTA progress screen
+ * 
+ * Deactivates the OTA progress UI and returns to normal animation mode.
+ */
+void ugfx_ui_hide_ota_progress(void);
+
+/**
  * @brief Check if UI is currently active
  * 
  * @return gTrue if UI is active, gFalse otherwise

@@ -77,3 +77,10 @@ esp_err_t sntp_sync_get_iso8601(char *buf, size_t len)
     return ESP_OK;
 }
 
+void sntp_sync_stop(void)
+{
+    esp_netif_sntp_deinit();
+    s_synchronized = false;
+    ESP_LOGI(TAG, "SNTP stopped");
+}
+

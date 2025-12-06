@@ -22,6 +22,7 @@
 #include "sntp_sync.h"
 #include "ugfx_ui.h"
 #include "animation_player.h"  // For animation_player_is_ui_mode()
+#include "ota_manager.h"       // For OTA boot validation
 #include "freertos/task.h"
 
 static const char *TAG = "p3a";
@@ -238,6 +239,13 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
+    // Validate OTA boot early - this must be done before any complex operations
+    // If running a new OTA firmware, this marks it as valid to prevent rollback
+    esp_err_t ota_err = ota_manager_validate_boot();
+    if (ota_err != ESP_OK) {
+        ESP_LOGW(TAG, "OTA boot validation issue: %s", esp_err_to_name(ota_err));
+    }
+
     // Initialize network interface and event loop
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -266,6 +274,13 @@ void app_main(void)
 
     // Initialize Wi-Fi (will start captive portal if needed, or connect to saved network)
     ESP_ERROR_CHECK(app_wifi_init(register_rest_action_handlers));
+
+    // Initialize OTA manager - starts periodic update checks
+    // (checks are skipped if WiFi is not connected)
+    esp_err_t ota_init_err = ota_manager_init();
+    if (ota_init_err != ESP_OK) {
+        ESP_LOGW(TAG, "OTA manager init failed: %s (OTA updates disabled)", esp_err_to_name(ota_init_err));
+    }
 
 #if DEBUG_PROVISIONING_ENABLED
     // Debug mode: toggle provisioning every 5 seconds without API calls

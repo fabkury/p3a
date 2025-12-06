@@ -21,7 +21,8 @@ typedef enum {
     UI_MODE_NONE,              // No UI active
     UI_MODE_STATUS,            // Provisioning status
     UI_MODE_REGISTRATION,      // Registration code display
-    UI_MODE_CAPTIVE_AP_INFO    // Captive portal setup info
+    UI_MODE_CAPTIVE_AP_INFO,   // Captive portal setup info
+    UI_MODE_OTA_PROGRESS       // OTA update progress
 } ui_mode_t;
 
 // UI state
@@ -32,6 +33,12 @@ static char s_current_code[16] = {0};
 static char s_status_message[128] = {0};
 static ui_mode_t s_ui_mode = UI_MODE_NONE;
 static gOrientation s_pending_orientation = gOrientation0;  // Orientation to apply when µGFX inits
+
+// OTA progress state
+static int s_ota_progress = 0;
+static char s_ota_status_text[64] = {0};
+static char s_ota_version_from[32] = {0};
+static char s_ota_version_to[32] = {0};
 
 // External variables for board_framebuffer.h (used by µGFX driver)
 void *ugfx_framebuffer_ptr = NULL;
@@ -146,6 +153,65 @@ static void ugfx_ui_draw_status(void)
     // Sub-text
     gdispFillStringBox(0, gdispGetHeight()/2 + 40, gdispGetWidth(), 50, "Please wait...",
                      gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+}
+
+/**
+ * @brief Draw the OTA progress screen
+ */
+static void ugfx_ui_draw_ota_progress(void)
+{
+    gdispClear(GFX_BLACK);
+    
+    gCoord screen_w = gdispGetWidth();
+    gCoord screen_h = gdispGetHeight();
+
+    // Title
+    gdispFillStringBox(0, 60, screen_w, 35, "FIRMWARE UPDATE",
+                     gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0x00FF88), GFX_BLACK, gJustifyCenter);
+
+    // Version info
+    char version_text[96];
+    if (strlen(s_ota_version_from) > 0 && strlen(s_ota_version_to) > 0) {
+        snprintf(version_text, sizeof(version_text), "v%s  ->  v%s", s_ota_version_from, s_ota_version_to);
+    } else {
+        snprintf(version_text, sizeof(version_text), "Installing update...");
+    }
+    gdispFillStringBox(0, 110, screen_w, 30, version_text,
+                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+
+    // Progress bar background
+    gCoord bar_x = 40;
+    gCoord bar_y = screen_h / 2 - 20;
+    gCoord bar_w = screen_w - 80;
+    gCoord bar_h = 40;
+    
+    // Draw bar outline
+    gdispDrawBox(bar_x - 2, bar_y - 2, bar_w + 4, bar_h + 4, HTML2COLOR(0x444444));
+    
+    // Draw bar background
+    gdispFillArea(bar_x, bar_y, bar_w, bar_h, HTML2COLOR(0x222222));
+    
+    // Draw progress fill
+    gCoord fill_w = (bar_w * s_ota_progress) / 100;
+    if (fill_w > 0) {
+        // Gradient-like effect using two shades
+        gdispFillArea(bar_x, bar_y, fill_w, bar_h / 2, HTML2COLOR(0x00FF88));
+        gdispFillArea(bar_x, bar_y + bar_h / 2, fill_w, bar_h / 2, HTML2COLOR(0x00CC6A));
+    }
+
+    // Progress percentage
+    char progress_text[16];
+    snprintf(progress_text, sizeof(progress_text), "%d%%", s_ota_progress);
+    gdispFillStringBox(0, bar_y + bar_h + 20, screen_w, 40, progress_text,
+                     gdispOpenFont("* DejaVu Sans 32"), GFX_WHITE, GFX_BLACK, gJustifyCenter);
+
+    // Status text
+    gdispFillStringBox(0, bar_y + bar_h + 80, screen_w, 30, s_ota_status_text,
+                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xFFFF00), GFX_BLACK, gJustifyCenter);
+
+    // Warning at bottom
+    gdispFillStringBox(0, screen_h - 60, screen_w, 25, "DO NOT POWER OFF",
+                     gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0xFF6666), GFX_BLACK, gJustifyCenter);
 }
 
 /**
@@ -311,6 +377,62 @@ void ugfx_ui_hide_registration(void)
     ESP_LOGI(TAG, "Registration UI deactivated");
 }
 
+esp_err_t ugfx_ui_show_ota_progress(const char *version_from, const char *version_to)
+{
+    // Store version info
+    if (version_from) {
+        strncpy(s_ota_version_from, version_from, sizeof(s_ota_version_from) - 1);
+        s_ota_version_from[sizeof(s_ota_version_from) - 1] = '\0';
+    } else {
+        s_ota_version_from[0] = '\0';
+    }
+    
+    if (version_to) {
+        strncpy(s_ota_version_to, version_to, sizeof(s_ota_version_to) - 1);
+        s_ota_version_to[sizeof(s_ota_version_to) - 1] = '\0';
+    } else {
+        s_ota_version_to[0] = '\0';
+    }
+    
+    s_ota_progress = 0;
+    strncpy(s_ota_status_text, "Preparing...", sizeof(s_ota_status_text) - 1);
+    s_ui_mode = UI_MODE_OTA_PROGRESS;
+    s_ui_active = true;
+    
+    ESP_LOGI(TAG, "OTA progress UI activated: %s -> %s", 
+             version_from ? version_from : "?", 
+             version_to ? version_to : "?");
+    return ESP_OK;
+}
+
+void ugfx_ui_update_ota_progress(int percent, const char *status_text)
+{
+    s_ota_progress = percent;
+    if (percent < 0) s_ota_progress = 0;
+    if (percent > 100) s_ota_progress = 100;
+    
+    if (status_text) {
+        strncpy(s_ota_status_text, status_text, sizeof(s_ota_status_text) - 1);
+        s_ota_status_text[sizeof(s_ota_status_text) - 1] = '\0';
+    }
+    
+    ESP_LOGD(TAG, "OTA progress: %d%% - %s", s_ota_progress, s_ota_status_text);
+}
+
+void ugfx_ui_hide_ota_progress(void)
+{
+    if (s_ui_mode == UI_MODE_OTA_PROGRESS) {
+        s_ui_active = false;
+        s_ui_mode = UI_MODE_NONE;
+        s_ota_progress = 0;
+        s_ota_status_text[0] = '\0';
+        s_ota_version_from[0] = '\0';
+        s_ota_version_to[0] = '\0';
+        
+        ESP_LOGI(TAG, "OTA progress UI deactivated");
+    }
+}
+
 gBool ugfx_ui_is_active(void)
 {
     return s_ui_active ? gTrue : gFalse;
@@ -343,6 +465,10 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
         case UI_MODE_CAPTIVE_AP_INFO:
             ugfx_ui_draw_captive_ap_info();
             return 100;
+            
+        case UI_MODE_OTA_PROGRESS:
+            ugfx_ui_draw_ota_progress();
+            return 50;  // Faster refresh for smooth progress updates
             
         case UI_MODE_REGISTRATION:
             if (s_current_code[0] != '\0') {

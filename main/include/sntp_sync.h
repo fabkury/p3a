@@ -31,3 +31,11 @@ bool sntp_sync_is_synchronized(void);
  */
 esp_err_t sntp_sync_get_iso8601(char *buf, size_t len);
 
+/**
+ * @brief Stop SNTP synchronization
+ * 
+ * Stops the SNTP client and frees resources.
+ * Can be restarted with sntp_sync_init().
+ */
+void sntp_sync_stop(void);
+

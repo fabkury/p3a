@@ -1,0 +1,742 @@
+/**
+ * @file ota_manager.c
+ * @brief OTA Manager implementation
+ */
+
+#include "ota_manager.h"
+#include "github_ota.h"
+#include "esp_ota_ops.h"
+#include "esp_https_ota.h"
+#include "esp_http_client.h"
+#include "esp_crt_bundle.h"
+#include "esp_partition.h"
+#include "esp_app_format.h"
+#include "esp_timer.h"
+#include "esp_log.h"
+#include "esp_netif.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "mbedtls/sha256.h"
+#include "nvs_flash.h"
+#include <string.h>
+#include <stdio.h>
+
+static const char *TAG = "ota_manager";
+
+// Check interval in microseconds (hours to us)
+#define CHECK_INTERVAL_US (CONFIG_OTA_CHECK_INTERVAL_HOURS * 60ULL * 60ULL * 1000000ULL)
+
+// OTA state
+static struct {
+    ota_state_t state;
+    github_release_info_t release_info;
+    int64_t last_check_time;
+    int download_progress;
+    char error_message[128];
+    SemaphoreHandle_t mutex;
+    esp_timer_handle_t check_timer;
+    TaskHandle_t check_task;
+    ota_progress_cb_t progress_callback;
+    ota_ui_cb_t ui_callback;
+    bool initialized;
+    bool ui_active;
+} s_ota = {
+    .state = OTA_STATE_IDLE,
+    .initialized = false,
+    .ui_active = false
+};
+
+// Forward declarations
+static void ota_check_task(void *arg);
+static void ota_timer_callback(void *arg);
+static esp_err_t ota_check_wifi_connected(void);
+static esp_err_t ota_verify_partition_sha256(const esp_partition_t *partition, 
+                                              size_t size, 
+                                              const uint8_t expected[32]);
+
+const char *ota_state_to_string(ota_state_t state)
+{
+    switch (state) {
+        case OTA_STATE_IDLE:              return "idle";
+        case OTA_STATE_CHECKING:          return "checking";
+        case OTA_STATE_UPDATE_AVAILABLE:  return "update_available";
+        case OTA_STATE_DOWNLOADING:       return "downloading";
+        case OTA_STATE_VERIFYING:         return "verifying";
+        case OTA_STATE_FLASHING:          return "flashing";
+        case OTA_STATE_PENDING_REBOOT:    return "pending_reboot";
+        case OTA_STATE_ERROR:             return "error";
+        default:                          return "unknown";
+    }
+}
+
+static void set_state(ota_state_t new_state)
+{
+    if (s_ota.mutex) {
+        xSemaphoreTake(s_ota.mutex, portMAX_DELAY);
+    }
+    s_ota.state = new_state;
+    ESP_LOGI(TAG, "OTA state: %s", ota_state_to_string(new_state));
+    if (s_ota.mutex) {
+        xSemaphoreGive(s_ota.mutex);
+    }
+}
+
+static void set_error(const char *message)
+{
+    if (s_ota.mutex) {
+        xSemaphoreTake(s_ota.mutex, portMAX_DELAY);
+    }
+    s_ota.state = OTA_STATE_ERROR;
+    strncpy(s_ota.error_message, message, sizeof(s_ota.error_message) - 1);
+    s_ota.error_message[sizeof(s_ota.error_message) - 1] = '\0';
+    ESP_LOGE(TAG, "OTA error: %s", message);
+    if (s_ota.mutex) {
+        xSemaphoreGive(s_ota.mutex);
+    }
+}
+
+static void set_progress(int percent, const char *status)
+{
+    if (s_ota.mutex) {
+        xSemaphoreTake(s_ota.mutex, portMAX_DELAY);
+    }
+    s_ota.download_progress = percent;
+    if (s_ota.mutex) {
+        xSemaphoreGive(s_ota.mutex);
+    }
+    
+    if (s_ota.progress_callback) {
+        s_ota.progress_callback(percent, status);
+    }
+}
+
+static void ota_exit_ui_mode(void)
+{
+    if (s_ota.ui_active && s_ota.ui_callback) {
+        s_ota.ui_callback(false, NULL, NULL);
+        s_ota.ui_active = false;
+    }
+}
+
+// External functions we'll call (defined elsewhere in p3a)
+extern bool pico8_stream_is_active(void);
+extern bool animation_player_is_sd_export_locked(void);
+
+bool ota_manager_is_blocked(const char **reason)
+{
+    #if CONFIG_P3A_PICO8_ENABLE
+    if (pico8_stream_is_active()) {
+        if (reason) *reason = "PICO-8 streaming active";
+        return true;
+    }
+    #endif
+    
+    if (animation_player_is_sd_export_locked()) {
+        if (reason) *reason = "USB mass storage active";
+        return true;
+    }
+    
+    if (s_ota.state == OTA_STATE_DOWNLOADING || 
+        s_ota.state == OTA_STATE_VERIFYING ||
+        s_ota.state == OTA_STATE_FLASHING) {
+        if (reason) *reason = "OTA already in progress";
+        return true;
+    }
+    
+    return false;
+}
+
+static esp_err_t ota_check_wifi_connected(void)
+{
+    // Try both interface keys (local WiFi and remote via ESP32-C6)
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (!netif) {
+        netif = esp_netif_get_handle_from_ifkey("WIFI_STA_RMT");
+    }
+    if (!netif) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    
+    esp_netif_ip_info_t ip_info;
+    if (esp_netif_get_ip_info(netif, &ip_info) != ESP_OK || ip_info.ip.addr == 0) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    
+    return ESP_OK;
+}
+
+esp_err_t ota_manager_init(void)
+{
+    if (s_ota.initialized) {
+        return ESP_OK;
+    }
+    
+    s_ota.mutex = xSemaphoreCreateMutex();
+    if (!s_ota.mutex) {
+        ESP_LOGE(TAG, "Failed to create mutex");
+        return ESP_ERR_NO_MEM;
+    }
+    
+    // Create periodic check timer
+    esp_timer_create_args_t timer_args = {
+        .callback = ota_timer_callback,
+        .name = "ota_check",
+    };
+    
+    esp_err_t err = esp_timer_create(&timer_args, &s_ota.check_timer);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to create timer: %s", esp_err_to_name(err));
+        vSemaphoreDelete(s_ota.mutex);
+        s_ota.mutex = NULL;
+        return err;
+    }
+    
+    // Start periodic timer
+    err = esp_timer_start_periodic(s_ota.check_timer, CHECK_INTERVAL_US);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start timer: %s", esp_err_to_name(err));
+        esp_timer_delete(s_ota.check_timer);
+        vSemaphoreDelete(s_ota.mutex);
+        s_ota.mutex = NULL;
+        return err;
+    }
+    
+    s_ota.initialized = true;
+#if CONFIG_OTA_DEV_MODE
+    ESP_LOGW(TAG, "OTA manager initialized in DEVELOPMENT MODE (pre-releases enabled, check interval: %d hours)", CONFIG_OTA_CHECK_INTERVAL_HOURS);
+#else
+    ESP_LOGI(TAG, "OTA manager initialized (check interval: %d hours)", CONFIG_OTA_CHECK_INTERVAL_HOURS);
+#endif
+    
+    // Do initial check after a short delay
+    esp_timer_handle_t initial_check_timer;
+    esp_timer_create_args_t initial_args = {
+        .callback = ota_timer_callback,
+        .name = "ota_initial",
+    };
+    if (esp_timer_create(&initial_args, &initial_check_timer) == ESP_OK) {
+        esp_timer_start_once(initial_check_timer, 30 * 1000000);  // 30 seconds after boot
+    }
+    
+    return ESP_OK;
+}
+
+void ota_manager_deinit(void)
+{
+    if (!s_ota.initialized) {
+        return;
+    }
+    
+    if (s_ota.check_timer) {
+        esp_timer_stop(s_ota.check_timer);
+        esp_timer_delete(s_ota.check_timer);
+        s_ota.check_timer = NULL;
+    }
+    
+    if (s_ota.mutex) {
+        vSemaphoreDelete(s_ota.mutex);
+        s_ota.mutex = NULL;
+    }
+    
+    s_ota.initialized = false;
+    ESP_LOGI(TAG, "OTA manager deinitialized");
+}
+
+ota_state_t ota_manager_get_state(void)
+{
+    return s_ota.state;
+}
+
+esp_err_t ota_manager_get_status(ota_status_t *status)
+{
+    if (!status) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    if (s_ota.mutex) {
+        xSemaphoreTake(s_ota.mutex, portMAX_DELAY);
+    }
+    
+    memset(status, 0, sizeof(ota_status_t));
+    
+    status->state = s_ota.state;
+    status->last_check_time = s_ota.last_check_time;
+    status->download_progress = s_ota.download_progress;
+    snprintf(status->error_message, sizeof(status->error_message), "%s", s_ota.error_message);
+    
+    // Get current running version
+    const esp_app_desc_t *app_desc = esp_app_get_description();
+    if (app_desc) {
+        snprintf(status->current_version, sizeof(status->current_version), "%s", app_desc->version);
+    }
+    
+    // Copy available release info if we have it
+    if (s_ota.state == OTA_STATE_UPDATE_AVAILABLE || 
+        s_ota.state == OTA_STATE_DOWNLOADING ||
+        s_ota.state == OTA_STATE_VERIFYING ||
+        s_ota.state == OTA_STATE_FLASHING) {
+        snprintf(status->available_version, sizeof(status->available_version), "%s", s_ota.release_info.version);
+        status->available_size = s_ota.release_info.firmware_size;
+        snprintf(status->release_notes, sizeof(status->release_notes), "%s", s_ota.release_info.release_notes);
+    }
+    
+    // Check if rollback is available
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    const esp_partition_t *other = esp_ota_get_next_update_partition(running);
+    if (other) {
+        esp_app_desc_t other_app_desc;
+        if (esp_ota_get_partition_description(other, &other_app_desc) == ESP_OK) {
+            status->can_rollback = true;
+            snprintf(status->rollback_version, sizeof(status->rollback_version), "%s", other_app_desc.version);
+        }
+    }
+    
+    // Dev mode status
+#if CONFIG_OTA_DEV_MODE
+    status->dev_mode = true;
+#else
+    status->dev_mode = false;
+#endif
+    status->is_prerelease = s_ota.release_info.is_prerelease;
+    
+    if (s_ota.mutex) {
+        xSemaphoreGive(s_ota.mutex);
+    }
+    
+    return ESP_OK;
+}
+
+static void ota_timer_callback(void *arg)
+{
+    (void)arg;
+    
+    // Don't start check if one is already in progress
+    if (s_ota.state == OTA_STATE_CHECKING) {
+        return;
+    }
+    
+    ota_manager_check_for_update();
+}
+
+static void ota_check_task(void *arg)
+{
+    (void)arg;
+    
+    set_state(OTA_STATE_CHECKING);
+    
+    // Check WiFi first
+    if (ota_check_wifi_connected() != ESP_OK) {
+        ESP_LOGW(TAG, "No WiFi connection, skipping update check");
+        set_state(OTA_STATE_IDLE);
+        s_ota.check_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    // Fetch latest release from GitHub
+    github_release_info_t release_info;
+    esp_err_t err = github_ota_get_latest_release(&release_info);
+    
+    if (s_ota.mutex) {
+        xSemaphoreTake(s_ota.mutex, portMAX_DELAY);
+    }
+    s_ota.last_check_time = esp_timer_get_time() / 1000000;  // Convert to seconds
+    if (s_ota.mutex) {
+        xSemaphoreGive(s_ota.mutex);
+    }
+    
+    if (err != ESP_OK) {
+        if (err == ESP_ERR_NOT_FOUND) {
+            ESP_LOGI(TAG, "No releases found on GitHub");
+        } else {
+            ESP_LOGW(TAG, "Failed to fetch release info: %s", esp_err_to_name(err));
+        }
+        set_state(OTA_STATE_IDLE);
+        s_ota.check_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    // Note: The GitHub API client already filters releases based on dev mode
+    // In dev mode, it returns the first prerelease (or falls back to regular)
+    // In production mode, it only returns regular releases
+    
+    // Compare versions
+    const esp_app_desc_t *current_app = esp_app_get_description();
+    if (!current_app) {
+        set_error("Failed to get current app info");
+        s_ota.check_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    int cmp = github_ota_compare_versions(release_info.version, current_app->version);
+    
+    if (cmp > 0) {
+        ESP_LOGI(TAG, "Update available: %s -> %s", current_app->version, release_info.version);
+        
+        if (s_ota.mutex) {
+            xSemaphoreTake(s_ota.mutex, portMAX_DELAY);
+        }
+        memcpy(&s_ota.release_info, &release_info, sizeof(release_info));
+        if (s_ota.mutex) {
+            xSemaphoreGive(s_ota.mutex);
+        }
+        
+        set_state(OTA_STATE_UPDATE_AVAILABLE);
+    } else {
+        ESP_LOGI(TAG, "Firmware is up to date (current: %s, latest: %s)", 
+                 current_app->version, release_info.version);
+        set_state(OTA_STATE_IDLE);
+    }
+    
+    s_ota.check_task = NULL;
+    vTaskDelete(NULL);
+}
+
+esp_err_t ota_manager_check_for_update(void)
+{
+    if (!s_ota.initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    if (s_ota.state == OTA_STATE_CHECKING) {
+        ESP_LOGW(TAG, "Check already in progress");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Clear previous error
+    s_ota.error_message[0] = '\0';
+    
+    // Start check task
+    BaseType_t ret = xTaskCreate(ota_check_task, "ota_check", 8192, NULL, 5, &s_ota.check_task);
+    if (ret != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create check task");
+        return ESP_ERR_NO_MEM;
+    }
+    
+    return ESP_OK;
+}
+
+static esp_err_t ota_verify_partition_sha256(const esp_partition_t *partition, 
+                                              size_t size, 
+                                              const uint8_t expected[32])
+{
+    if (!partition || !expected || size == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    ESP_LOGI(TAG, "Verifying SHA256 of partition %s (%zu bytes)...", partition->label, size);
+    
+    mbedtls_sha256_context ctx;
+    uint8_t computed[32];
+    uint8_t *buf = heap_caps_malloc(4096, MALLOC_CAP_DMA | MALLOC_CAP_8BIT);
+    
+    if (!buf) {
+        buf = malloc(4096);
+        if (!buf) {
+            return ESP_ERR_NO_MEM;
+        }
+    }
+    
+    mbedtls_sha256_init(&ctx);
+    mbedtls_sha256_starts(&ctx, 0);
+    
+    size_t offset = 0;
+    while (offset < size) {
+        size_t chunk = (size - offset < 4096) ? (size - offset) : 4096;
+        esp_err_t err = esp_partition_read(partition, offset, buf, chunk);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Partition read failed at offset %zu: %s", offset, esp_err_to_name(err));
+            free(buf);
+            mbedtls_sha256_free(&ctx);
+            return err;
+        }
+        mbedtls_sha256_update(&ctx, buf, chunk);
+        offset += chunk;
+        
+        // Update progress callback during verification
+        if ((offset % (256 * 1024) == 0 || offset >= size)) {
+            int verify_progress = (int)((offset * 100) / size);
+            if (s_ota.progress_callback) {
+                s_ota.progress_callback(verify_progress, "Verifying checksum...");
+            }
+        }
+    }
+    
+    mbedtls_sha256_finish(&ctx, computed);
+    mbedtls_sha256_free(&ctx);
+    free(buf);
+    
+    if (memcmp(computed, expected, 32) != 0) {
+        ESP_LOGE(TAG, "SHA256 mismatch!");
+        ESP_LOG_BUFFER_HEX_LEVEL("expected", expected, 32, ESP_LOG_ERROR);
+        ESP_LOG_BUFFER_HEX_LEVEL("computed", computed, 32, ESP_LOG_ERROR);
+        return ESP_ERR_INVALID_CRC;
+    }
+    
+    ESP_LOGI(TAG, "SHA256 verification passed");
+    return ESP_OK;
+}
+
+esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t ui_cb)
+{
+    if (!s_ota.initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    if (s_ota.state != OTA_STATE_UPDATE_AVAILABLE) {
+        ESP_LOGE(TAG, "No update available (state=%s)", ota_state_to_string(s_ota.state));
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Check blockers
+    const char *block_reason;
+    if (ota_manager_is_blocked(&block_reason)) {
+        ESP_LOGE(TAG, "OTA blocked: %s", block_reason);
+        set_error(block_reason);
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Check WiFi
+    if (ota_check_wifi_connected() != ESP_OK) {
+        set_error("No WiFi connection");
+        return ESP_ERR_NOT_FOUND;
+    }
+    
+    s_ota.progress_callback = progress_cb;
+    s_ota.ui_callback = ui_cb;
+    s_ota.download_progress = 0;
+    
+    const esp_app_desc_t *current_app = esp_app_get_description();
+    ESP_LOGI(TAG, "Starting OTA update: %s -> %s", 
+             current_app->version, s_ota.release_info.version);
+    
+    // Enter UI mode to stop animations and free memory
+    if (ui_cb) {
+        ui_cb(true, current_app->version, s_ota.release_info.version);
+        s_ota.ui_active = true;
+    }
+    
+    set_progress(0, "Preparing...");
+    
+    // Download SHA256 first if available
+    uint8_t expected_sha256[32] = {0};
+    bool have_sha256 = false;
+    
+    if (strlen(s_ota.release_info.sha256_url) > 0) {
+        set_progress(0, "Downloading checksum...");
+        
+        char sha256_hex[65];
+        esp_err_t err = github_ota_download_sha256(s_ota.release_info.sha256_url, sha256_hex, sizeof(sha256_hex));
+        if (err == ESP_OK) {
+            err = github_ota_hex_to_bin(sha256_hex, expected_sha256);
+            if (err == ESP_OK) {
+                have_sha256 = true;
+                ESP_LOGI(TAG, "SHA256 checksum downloaded");
+            }
+        }
+        if (!have_sha256) {
+            ESP_LOGW(TAG, "Failed to get SHA256 checksum, proceeding without verification");
+        }
+    }
+    
+    // Configure OTA
+    set_state(OTA_STATE_DOWNLOADING);
+    set_progress(0, "Connecting to server...");
+    
+    esp_http_client_config_t http_config = {
+        .url = s_ota.release_info.download_url,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .timeout_ms = CONFIG_OTA_DOWNLOAD_TIMEOUT_SEC * 1000,
+        .keep_alive_enable = true,
+        .buffer_size = CONFIG_OTA_HTTP_BUFFER_SIZE,
+        .buffer_size_tx = 1024,
+    };
+    
+    esp_https_ota_config_t ota_config = {
+        .http_config = &http_config,
+        .partial_http_download = false,
+    };
+    
+    esp_https_ota_handle_t ota_handle = NULL;
+    esp_err_t err = esp_https_ota_begin(&ota_config, &ota_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_https_ota_begin failed: %s", esp_err_to_name(err));
+        set_error("Failed to start download");
+        return err;
+    }
+    
+    // Get image info
+    esp_app_desc_t new_app_info;
+    err = esp_https_ota_get_img_desc(ota_handle, &new_app_info);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get image description: %s", esp_err_to_name(err));
+        esp_https_ota_abort(ota_handle);
+        set_error("Invalid firmware image");
+        return err;
+    }
+    
+    ESP_LOGI(TAG, "New firmware: version=%s, project=%s", new_app_info.version, new_app_info.project_name);
+    
+    // Download with progress
+    int total_size = esp_https_ota_get_image_size(ota_handle);
+    ESP_LOGI(TAG, "Downloading %d bytes...", total_size);
+    
+    set_progress(0, "Downloading firmware...");
+    
+    while (1) {
+        err = esp_https_ota_perform(ota_handle);
+        if (err != ESP_ERR_HTTPS_OTA_IN_PROGRESS) {
+            break;
+        }
+        
+        int downloaded = esp_https_ota_get_image_len_read(ota_handle);
+        int percent = (total_size > 0) ? (downloaded * 100 / total_size) : 0;
+        set_progress(percent, "Downloading...");
+    }
+    
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "OTA download failed: %s", esp_err_to_name(err));
+        esp_https_ota_abort(ota_handle);
+        set_error("Download failed");
+        ota_exit_ui_mode();
+        return err;
+    }
+    
+    // Check if image is valid
+    if (!esp_https_ota_is_complete_data_received(ota_handle)) {
+        ESP_LOGE(TAG, "Complete data was not received");
+        esp_https_ota_abort(ota_handle);
+        set_error("Incomplete download");
+        set_progress(s_ota.download_progress, "DOWNLOAD ERROR!");
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        ota_exit_ui_mode();
+        return ESP_ERR_INVALID_SIZE;
+    }
+    
+    set_state(OTA_STATE_FLASHING);
+    set_progress(100, "Writing to flash...");
+    
+    err = esp_https_ota_finish(ota_handle);
+    if (err != ESP_OK) {
+        set_progress(100, "FLASH ERROR!");
+        if (err == ESP_ERR_OTA_VALIDATE_FAILED) {
+            ESP_LOGE(TAG, "Image validation failed");
+            set_error("Image validation failed");
+        } else {
+            ESP_LOGE(TAG, "esp_https_ota_finish failed: %s", esp_err_to_name(err));
+            set_error("Flash write failed");
+        }
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        ota_exit_ui_mode();
+        return err;
+    }
+    
+    // Verify SHA256 if we have it
+    if (have_sha256) {
+        set_state(OTA_STATE_VERIFYING);
+        set_progress(0, "Verifying checksum...");
+        
+        const esp_partition_t *update_partition = esp_ota_get_next_update_partition(NULL);
+        if (update_partition) {
+            err = ota_verify_partition_sha256(update_partition, total_size, expected_sha256);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "SHA256 verification failed!");
+                set_progress(100, "VERIFY ERROR!");
+                vTaskDelay(pdMS_TO_TICKS(2000));
+                ota_exit_ui_mode();
+                // Mark partition as invalid
+                set_error("Checksum verification failed");
+                return err;
+            }
+        }
+    }
+    
+    set_state(OTA_STATE_PENDING_REBOOT);
+    set_progress(100, "Update complete!");
+    
+    ESP_LOGI(TAG, "OTA update successful! Rebooting in 3 seconds...");
+    
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    
+    // Note: We don't exit UI mode since we're rebooting immediately
+    esp_restart();
+    
+    // Never reached
+    return ESP_OK;
+}
+
+esp_err_t ota_manager_rollback(void)
+{
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    const esp_partition_t *other = esp_ota_get_next_update_partition(running);
+    
+    if (!other) {
+        ESP_LOGE(TAG, "No rollback partition available");
+        return ESP_ERR_NOT_FOUND;
+    }
+    
+    // Check if there's a valid image in the other slot
+    esp_app_desc_t other_app_info;
+    esp_err_t err = esp_ota_get_partition_description(other, &other_app_info);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "No valid image in rollback partition");
+        return ESP_ERR_NOT_FOUND;
+    }
+    
+    ESP_LOGI(TAG, "Rolling back from %s to %s", 
+             esp_app_get_description()->version, other_app_info.version);
+    
+    err = esp_ota_set_boot_partition(other);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set boot partition: %s", esp_err_to_name(err));
+        return err;
+    }
+    
+    ESP_LOGI(TAG, "Rollback scheduled, rebooting...");
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    esp_restart();
+    
+    // Never reached
+    return ESP_OK;
+}
+
+esp_err_t ota_manager_validate_boot(void)
+{
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    if (!running) {
+        ESP_LOGW(TAG, "Could not get running partition");
+        return ESP_OK;  // Not an error, might be factory partition
+    }
+    
+    esp_ota_img_states_t ota_state;
+    esp_err_t err = esp_ota_get_state_partition(running, &ota_state);
+    if (err != ESP_OK) {
+        // Probably running from factory partition
+        ESP_LOGI(TAG, "Running from non-OTA partition");
+        return ESP_OK;
+    }
+    
+    if (ota_state == ESP_OTA_IMG_PENDING_VERIFY) {
+        ESP_LOGI(TAG, "New OTA firmware pending verification");
+        
+        // Run basic self-tests
+        // For now, just check that we got this far successfully
+        // In a production system, you might check LCD, WiFi, etc.
+        
+        err = esp_ota_mark_app_valid_cancel_rollback();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to mark app valid: %s", esp_err_to_name(err));
+            return err;
+        }
+        
+        ESP_LOGI(TAG, "OTA firmware validated successfully");
+    } else if (ota_state == ESP_OTA_IMG_VALID) {
+        ESP_LOGD(TAG, "Running validated OTA firmware");
+    }
+    
+    return ESP_OK;
+}
+

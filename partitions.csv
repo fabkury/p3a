@@ -1,6 +1,22 @@
-# Name,   Type, SubType, Offset,  Size, Flags
-# Note: if you change the phy_init or app partition offset, make sure to change the offset in Kconfig.projbuild
-nvs,      data, nvs,     0x9000,  0x6000,
-phy_init, data, phy,     0xf000,  0x1000,
-factory,  app,  factory, ,        8M,
-storage,  data, spiffs,  ,        1M,
+# Name,    Type, SubType,  Offset,   Size,    Flags
+# p3a OTA-enabled partition table
+# Note: Changing from factory to OTA requires full re-flash of existing devices
+
+# NVS partition for configuration storage
+nvs,       data, nvs,      0x9000,   0x6000,
+
+# PHY initialization data
+phy_init,  data, phy,      0xf000,   0x1000,
+
+# OTA data partition - stores boot slot selection and rollback state
+otadata,   data, ota,      0x10000,  0x2000,
+
+# Dual OTA app partitions (8MB each = 16MB total for apps)
+# First OTA partition - primary boot slot
+ota_0,     app,  ota_0,    0x20000,  0x800000,
+
+# Second OTA partition - secondary boot slot for updates
+ota_1,     app,  ota_1,    0x820000, 0x800000,
+
+# SPIFFS for web UI assets
+storage,   data, spiffs,   0x1020000, 0x100000,

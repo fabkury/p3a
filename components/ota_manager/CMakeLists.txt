@@ -1,0 +1,20 @@
+idf_component_register(
+    SRCS
+        "ota_manager.c"
+        "github_ota.c"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        esp_http_client
+        esp_https_ota
+        esp_partition
+        esp_timer
+        json
+        nvs_flash
+        mbedtls
+        app_update
+        bootloader_support
+    PRIV_REQUIRES
+        esp_netif
+)
+

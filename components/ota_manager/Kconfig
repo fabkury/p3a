@@ -1,0 +1,53 @@
+menu "OTA Manager Configuration"
+
+config OTA_DEV_MODE
+    bool "Enable OTA development mode"
+    default n
+    help
+        When enabled, the device will also check for and install pre-release
+        versions from GitHub. This is useful for testing OTA updates before
+        publishing them to all users.
+        
+        Testing workflow:
+        1. Enable this option during development
+        2. Create pre-releases on GitHub for testing
+        3. Test the OTA flow thoroughly
+        4. Disable this option for production builds
+        5. Create regular releases for all users
+
+config OTA_CHECK_INTERVAL_HOURS
+    int "Update check interval (hours)"
+    default 2
+    range 1 24
+    help
+        How often to automatically check for firmware updates.
+        Default is 2 hours.
+
+config OTA_GITHUB_REPO
+    string "GitHub repository (owner/repo)"
+    default "fabkury/p3a"
+    help
+        GitHub repository for firmware releases in format "owner/repo".
+
+config OTA_FIRMWARE_ASSET_NAME
+    string "Firmware asset filename"
+    default "p3a.bin"
+    help
+        Name of the firmware binary file in GitHub releases.
+
+config OTA_DOWNLOAD_TIMEOUT_SEC
+    int "Download timeout (seconds)"
+    default 600
+    range 60 1800
+    help
+        Maximum time allowed for firmware download.
+
+config OTA_HTTP_BUFFER_SIZE
+    int "HTTP receive buffer size"
+    default 4096
+    range 1024 16384
+    help
+        Buffer size for HTTP client during OTA download.
+
+endmenu
+

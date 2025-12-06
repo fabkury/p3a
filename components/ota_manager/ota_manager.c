@@ -122,6 +122,11 @@ static void ota_exit_ui_mode(void)
 // External functions we'll call (defined elsewhere in p3a)
 extern bool pico8_stream_is_active(void);
 extern bool animation_player_is_sd_export_locked(void);
+extern bool animation_player_is_loader_busy(void);
+
+// Retry parameters for OTA check when animation loader is busy
+#define OTA_CHECK_RETRY_DELAY_MS    5000
+#define OTA_CHECK_MAX_RETRIES       6
 
 bool ota_manager_is_blocked(const char **reason)
 {
@@ -145,6 +150,11 @@ bool ota_manager_is_blocked(const char **reason)
     }
     
     return false;
+}
+
+bool ota_manager_is_checking(void)
+{
+    return s_ota.state == OTA_STATE_CHECKING;
 }
 
 static esp_err_t ota_check_wifi_connected(void)
@@ -322,6 +332,23 @@ static void ota_timer_callback(void *arg)
 static void ota_check_task(void *arg)
 {
     (void)arg;
+    
+    // Wait for animation loader to be idle to avoid SDIO bus contention
+    // The SD card (animation loading) and WiFi both use SDIO
+    int retry_count = 0;
+    while (animation_player_is_loader_busy() && retry_count < OTA_CHECK_MAX_RETRIES) {
+        retry_count++;
+        ESP_LOGI(TAG, "Animation loader busy, waiting %d ms before OTA check (attempt %d/%d)", 
+                 OTA_CHECK_RETRY_DELAY_MS, retry_count, OTA_CHECK_MAX_RETRIES);
+        vTaskDelay(pdMS_TO_TICKS(OTA_CHECK_RETRY_DELAY_MS));
+    }
+    
+    if (retry_count >= OTA_CHECK_MAX_RETRIES && animation_player_is_loader_busy()) {
+        ESP_LOGW(TAG, "Animation loader still busy after %d retries, skipping OTA check", OTA_CHECK_MAX_RETRIES);
+        s_ota.check_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
     
     set_state(OTA_STATE_CHECKING);
     

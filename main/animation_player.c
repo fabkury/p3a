@@ -3,6 +3,7 @@
 #include "sdcard_channel.h"
 #include "ugfx_ui.h"
 #include "config_store.h"
+#include "ota_manager.h"
 
 esp_lcd_panel_handle_t s_display_handle = NULL;
 uint8_t **s_lcd_buffers = NULL;
@@ -399,6 +400,13 @@ void animation_player_cycle_animation(bool forward)
         return;
     }
 
+    // Skip swap during OTA check to avoid SDIO bus contention
+    // (WiFi and SD card both use SDIO bus)
+    if (ota_manager_is_checking()) {
+        ESP_LOGW(TAG, "Swap request ignored: OTA check in progress (SDIO bus busy)");
+        return;
+    }
+
     if (channel_player_get_post_count() == 0) {
         ESP_LOGW(TAG, "No animations available to cycle");
         return;
@@ -513,6 +521,19 @@ bool animation_player_is_sd_export_locked(void)
         xSemaphoreGive(s_buffer_mutex);
     }
     return locked;
+}
+
+bool animation_player_is_loader_busy(void)
+{
+    bool busy = false;
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        busy = s_loader_busy || s_swap_requested || s_back_buffer.prefetch_pending;
+        xSemaphoreGive(s_buffer_mutex);
+    } else {
+        // Couldn't get mutex, assume busy to be safe
+        busy = s_loader_busy || s_swap_requested;
+    }
+    return busy;
 }
 
 esp_err_t animation_player_start(void)

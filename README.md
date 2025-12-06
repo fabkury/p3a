@@ -23,6 +23,7 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 - **Pixel art playback**: Displays animated WebP, GIF, PNG, and JPEG files from microSD card
 - **Touch controls**: Tap to change artwork, swipe to adjust brightness, rotate with two fingers
 - **Screen rotation**: Rotate the display 0°, 90°, 180°, or 270° via touch gesture or web API
+- **Over-the-Air updates**: Automatic firmware updates from GitHub Releases with rollback support
 - **Web interface**: Control the device from any browser at `http://p3a.local/`
 - **Cloud connectivity**: Register at [dev.makapix.club](https://dev.makapix.club/) to control your device remotely via secure TLS MQTT
 - **USB access**: Connect via USB-C to access the microSD card as a storage device
@@ -30,6 +31,26 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 
 <p align="center">
   <img src="images/p3a_10fps.gif" alt="p3a video">
+</p>
+
+## Over-the-Air Updates
+
+p3a automatically checks for firmware updates from GitHub Releases. When an update is available, you'll see a notification in the web interface.
+
+**Update features:**
+- **Automatic checks** every 2 hours (or check manually via web UI)
+- **One-click install** from the web interface at `http://p3a.local/ota`
+- **Progress display** on both the device screen and web interface
+- **Automatic rollback** if the new firmware fails to boot 3 times
+- **Manual rollback** to previous version via web UI
+- **SHA256 verification** ensures firmware integrity
+
+<p align="center">
+  <a href="images/PXL_20251206_184110573_red.mp4">
+    <img src="images/ota_updates.png" alt="OTA update web interface" width="400">
+  </a>
+  <br>
+  <em>OTA update page (click image to watch video)</em>
 </p>
 
 ## Hardware specs
@@ -59,12 +80,12 @@ p3a is in active development. The following features are implemented:
 - Wi-Fi provisioning with captive portal
 - Local web UI and REST API
 - **TLS MQTT client** with device registration and remote control from the website
+- **Over-the-Air (OTA) updates** from GitHub Releases with automatic rollback
 - USB composite device (serial console + mass storage)
 
 **Coming soon:**
 - Feed ingestion from Makapix Club (automatic artwork downloads)
 - Reactions from hardware (send likes to artworks)
-- OTA firmware updates
 - Browser-based web flasher (under development)
 
 See [ROADMAP.md](docs/ROADMAP.md) for the full development plan.
@@ -75,13 +96,14 @@ See [ROADMAP.md](docs/ROADMAP.md) for the full development plan.
 |----------|-------------|
 | [HOW-TO-USE.md](docs/HOW-TO-USE.md) | Detailed usage instructions |
 | [flash-p3a.md](docs/flash-p3a.md) | How to flash the firmware |
+| [OTA_IMPLEMENTATION_PLAN.md](docs/OTA_IMPLEMENTATION_PLAN.md) | Over-the-Air update system design |
 | [INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) | Technical architecture for developers |
 | [ROADMAP.md](docs/ROADMAP.md) | Development roadmap and milestones |
 
 ## Repository layout
 
 - `main/` — Application entry point, display/touch drivers, animation player, format decoders
-- `components/` — Custom components: app state, config store, HTTP API, Makapix integration, decoders
+- `components/` — Custom components: app state, config store, HTTP API, Makapix integration, OTA manager, decoders
 - `managed_components/` — ESP-IDF Component Registry dependencies
 - `webui/` — Web interface files (compiled into SPIFFS)
 - `docs/` — Documentation

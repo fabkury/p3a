@@ -158,13 +158,20 @@
 
 ## 10) OTA & Reliability
 
-**10.1 OTA**
-- ESP-IDF OTA dual slots, signed artifacts
-- **AC**: Power-loss-safe, fallback on boot failure, version in UI
+**10.1 OTA** ✅ IMPLEMENTED
+- ESP-IDF OTA dual slots (ota_0, ota_1 partitions)
+- GitHub Releases API integration for update discovery
+- Automatic periodic checks (every 2 hours)
+- Web UI for manual check, install, and rollback
+- SHA256 checksum verification
+- Progress display on LCD during updates
+- **AC**: Power-loss-safe ✅, automatic rollback on 3 boot failures ✅, version in web UI ✅
 
-**10.2 Watchdogs & Recovery**
-- Task WDT, network heartbeat
-- Boot loops → safe mode (disable auto-connect, recovery screen)
+**10.2 Watchdogs & Recovery** ⏳ PARTIAL
+- Task WDT ✅
+- Network heartbeat: via MQTT status publishing
+- Boot loops → automatic OTA rollback ✅
+- Safe mode recovery screen: PENDING
 
 **10.3 Logs/Diagnostics**
 - Ring buffer, dump to SD, "Send diag" over MQTT (compressed)
@@ -237,7 +244,7 @@
 
 **Phase C — Playback** ⏳ IN PROGRESS: §7–§8, §9.2 → Local playback works; feed ingestion pending
 
-**Phase D — Polish** (upcoming): §9.1, §10, §11, §12, §13 → OTA, recovery, reactions
+**Phase D — Polish** ⏳ IN PROGRESS: §9.1, §10, §11, §12, §13 → OTA ✅, recovery partial, reactions pending
 
 **Phase E — Test & Ship** (upcoming): §14, §15, §16 → CI releases v1.0
 
@@ -247,12 +254,14 @@ Completed:
 - Display pipeline with multi-buffer rendering
 - Animation playback from SD card with prefetching
 - Touch gestures (tap, swipe, long-press for registration)
+- Screen rotation (0°, 90°, 180°, 270°) with touch gesture and API
 - Wi-Fi provisioning with captive portal
 - Local web UI and REST API
 - Device registration at dev.makapix.club
 - TLS MQTT client with mTLS authentication
 - Remote control from website (commands via MQTT)
 - USB composite device (serial + mass storage)
+- **OTA firmware updates** from GitHub Releases with automatic rollback
 
 In Progress:
 - Feed ingestion (automatic artwork download from MQTT notifications)

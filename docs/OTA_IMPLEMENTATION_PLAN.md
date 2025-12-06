@@ -2,8 +2,22 @@
 
 > **Project**: p3a Pixel Art Animation Player  
 > **Feature**: Over-The-Air Updates via GitHub Releases  
-> **Status**: ✅ Phase 3 - Implementation Complete (Pending Testing)  
-> **Last Updated**: December 6, 2025 (Phase 3 Complete)
+> **Status**: ✅ IMPLEMENTED AND TESTED  
+> **Last Updated**: December 6, 2025
+
+### Implementation Status
+
+The OTA feature has been fully implemented and tested. Key components:
+
+- ✅ Dual partition scheme (ota_0, ota_1) with automatic boot selection
+- ✅ GitHub Releases API integration with pre-release support (dev mode)
+- ✅ Automatic periodic checks (every 2 hours)
+- ✅ Manual check/install/rollback via Web UI (`http://p3a.local/ota`)
+- ✅ Progress display on LCD during updates
+- ✅ SHA256 checksum verification
+- ✅ Automatic rollback after 3 consecutive boot failures
+- ✅ SDIO bus contention handling (WiFi vs SD card coordination)
+- ✅ Build automation (release binaries + checksums)
 
 ---
 
@@ -1551,5 +1565,4 @@ sha256sum p3a.bin | cut -d' ' -f1 > p3a.bin.sha256
 *Created: December 6, 2025*  
 *Phase 2 Review Completed: December 6, 2025*  
 *Phase 3 Implementation Completed: December 6, 2025*  
-*Author: Claude (AI Assistant) with Fab Kury*
 

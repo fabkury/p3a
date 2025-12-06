@@ -15,11 +15,11 @@
 static const char *TAG = "github_ota";
 
 // GitHub API URL template - fetch multiple releases to find prereleases
-#define GITHUB_API_URL "https://api.github.com/repos/" CONFIG_OTA_GITHUB_REPO "/releases?per_page=5"
+#define GITHUB_API_URL "https://api.github.com/repos/" CONFIG_OTA_GITHUB_REPO "/releases?per_page=3"
 #define GITHUB_USER_AGENT "p3a-ota/1.0"
 
-// Maximum response size for API calls (JSON can be large with release notes)
-#define MAX_API_RESPONSE_SIZE (32 * 1024)
+// Maximum response size for API calls (JSON can be large with release notes and assets)
+#define MAX_API_RESPONSE_SIZE (128 * 1024)
 // Maximum response size for SHA256 file (64 hex chars + some padding)
 #define MAX_SHA256_RESPONSE_SIZE 256
 
@@ -251,6 +251,9 @@ esp_err_t github_ota_get_latest_release(github_release_info_t *info)
     
     ESP_LOGI(TAG, "Fetching releases from GitHub: %s", GITHUB_API_URL);
     
+    // Yield to allow WiFi/SDIO driver to settle before starting transfer
+    vTaskDelay(pdMS_TO_TICKS(100));
+    
     esp_err_t err = esp_http_client_perform(client);
     int status_code = esp_http_client_get_status_code(client);
     
@@ -280,16 +283,25 @@ esp_err_t github_ota_get_latest_release(github_release_info_t *info)
         return ESP_ERR_HTTP_FETCH_HEADER;
     }
     
-    ESP_LOGD(TAG, "Received %zu bytes from GitHub API", resp.received);
+    ESP_LOGI(TAG, "Received %zu bytes from GitHub API (buffer max: %d)", resp.received, MAX_API_RESPONSE_SIZE);
+    
+    // Check if response was truncated
+    if (resp.received >= MAX_API_RESPONSE_SIZE - 1) {
+        ESP_LOGW(TAG, "Response may have been truncated!");
+    }
     
     // Parse JSON response - expect an array of releases
     cJSON *releases_array = cJSON_Parse(response_buffer);
-    free(response_buffer);
     
     if (!releases_array) {
-        ESP_LOGE(TAG, "Failed to parse JSON response");
+        const char *error_ptr = cJSON_GetErrorPtr();
+        ESP_LOGE(TAG, "Failed to parse JSON response. Error near: %.50s", error_ptr ? error_ptr : "(null)");
+        ESP_LOGE(TAG, "First 200 chars: %.200s", response_buffer);
+        free(response_buffer);
         return ESP_ERR_INVALID_RESPONSE;
     }
+    
+    free(response_buffer);
     
     if (!cJSON_IsArray(releases_array)) {
         ESP_LOGE(TAG, "Expected JSON array of releases");
@@ -395,6 +407,7 @@ esp_err_t github_ota_download_sha256(const char *sha256_url, char *sha256_hex, s
     };
     
     // GitHub raw URLs redirect to CDN, so we must follow redirects
+    // The buffer_size must be large enough to hold redirect response headers
     esp_http_client_config_t config = {
         .url = sha256_url,
         .method = HTTP_METHOD_GET,
@@ -403,7 +416,8 @@ esp_err_t github_ota_download_sha256(const char *sha256_url, char *sha256_hex, s
         .event_handler = http_event_handler,
         .user_data = &resp,
         .max_redirection_count = 5,  // Follow up to 5 redirects (GitHub -> CDN)
-        .buffer_size = 1024,         // Larger buffer for redirect handling
+        .buffer_size = 4096,         // Large buffer for redirect header handling
+        .buffer_size_tx = 1024,
     };
     
     esp_http_client_handle_t client = esp_http_client_init(&config);

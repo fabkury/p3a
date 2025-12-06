@@ -57,6 +57,7 @@ uint32_t s_target_frame_delay_ms = 0;
 app_lcd_sd_file_list_t s_sd_file_list = {0};
 bool s_sd_mounted = false;
 bool s_sd_export_active = false;
+bool s_sd_access_paused = false;  // Paused for external operations (OTA)
 
 // Screen rotation state
 screen_rotation_t g_screen_rotation = ROTATION_0;
@@ -400,6 +401,12 @@ void animation_player_cycle_animation(bool forward)
         return;
     }
 
+    // Skip swap when SD access is paused (OTA in progress)
+    if (animation_player_is_sd_paused()) {
+        ESP_LOGW(TAG, "Swap request ignored: SD access paused for OTA");
+        return;
+    }
+
     // Skip swap during OTA check to avoid SDIO bus contention
     // (WiFi and SD card both use SDIO bus)
     if (ota_manager_is_checking()) {
@@ -534,6 +541,47 @@ bool animation_player_is_loader_busy(void)
         busy = s_loader_busy || s_swap_requested;
     }
     return busy;
+}
+
+void animation_player_pause_sd_access(void)
+{
+    // Wait for any current loader operation to complete
+    int wait_count = 0;
+    while (animation_player_is_loader_busy() && wait_count < 100) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        wait_count++;
+    }
+    
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        s_sd_access_paused = true;
+        xSemaphoreGive(s_buffer_mutex);
+    } else {
+        s_sd_access_paused = true;
+    }
+    
+    ESP_LOGI(TAG, "SD card access paused for external operation");
+}
+
+void animation_player_resume_sd_access(void)
+{
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        s_sd_access_paused = false;
+        xSemaphoreGive(s_buffer_mutex);
+    } else {
+        s_sd_access_paused = false;
+    }
+    
+    ESP_LOGI(TAG, "SD card access resumed");
+}
+
+bool animation_player_is_sd_paused(void)
+{
+    bool paused = s_sd_access_paused;
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        paused = s_sd_access_paused;
+        xSemaphoreGive(s_buffer_mutex);
+    }
+    return paused;
 }
 
 esp_err_t animation_player_start(void)

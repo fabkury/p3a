@@ -592,6 +592,21 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
     
     set_progress(0, "Preparing...");
     
+    // Wait for system to stabilize after UI mode transition
+    ESP_LOGI(TAG, "Waiting for network to stabilize after UI mode transition...");
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    
+    // Re-check WiFi after UI mode transition
+    if (ota_check_wifi_connected() != ESP_OK) {
+        ESP_LOGE(TAG, "WiFi disconnected after UI mode transition");
+        set_error("WiFi disconnected");
+        set_progress(0, "WIFI ERROR!");
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        ota_exit_ui_mode();
+        set_state(OTA_STATE_ERROR);
+        return ESP_ERR_NOT_FOUND;
+    }
+    
     // Download SHA256 first if available
     uint8_t expected_sha256[32] = {0};
     bool have_sha256 = false;
@@ -601,7 +616,17 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
         set_progress(0, "Downloading checksum...");
         
         char sha256_hex[65];
-        esp_err_t err = github_ota_download_sha256(s_ota.release_info.sha256_url, sha256_hex, sizeof(sha256_hex));
+        esp_err_t err = ESP_FAIL;
+        
+        // Retry SHA256 download up to 3 times with delays
+        for (int retry = 0; retry < 3 && err != ESP_OK; retry++) {
+            if (retry > 0) {
+                ESP_LOGW(TAG, "Retrying SHA256 download (attempt %d/3)...", retry + 1);
+                vTaskDelay(pdMS_TO_TICKS(2000));  // Wait before retry
+            }
+            err = github_ota_download_sha256(s_ota.release_info.sha256_url, sha256_hex, sizeof(sha256_hex));
+        }
+        
         if (err == ESP_OK) {
             err = github_ota_hex_to_bin(sha256_hex, expected_sha256);
             if (err == ESP_OK) {
@@ -611,7 +636,7 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
                 ESP_LOGE(TAG, "Failed to parse SHA256 hex string");
             }
         } else {
-            ESP_LOGE(TAG, "Failed to download SHA256 checksum");
+            ESP_LOGE(TAG, "Failed to download SHA256 checksum after 3 attempts");
         }
         
         if (!have_sha256) {

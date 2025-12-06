@@ -64,6 +64,29 @@ bool animation_player_is_sd_export_locked(void);
  * @return true if loader is busy, false otherwise
  */
 bool animation_player_is_loader_busy(void);
+
+/**
+ * @brief Pause SD card access for external operations
+ * 
+ * Call this before WiFi HTTPS operations to prevent SDIO bus conflicts.
+ * While paused, animation swaps will be queued but not executed.
+ * Remember to call animation_player_resume_sd_access() when done.
+ */
+void animation_player_pause_sd_access(void);
+
+/**
+ * @brief Resume SD card access after external operations
+ * 
+ * Call this after WiFi HTTPS operations complete.
+ */
+void animation_player_resume_sd_access(void);
+
+/**
+ * @brief Check if SD card access is currently paused
+ * 
+ * @return true if paused, false otherwise
+ */
+bool animation_player_is_sd_paused(void);
 esp_err_t animation_player_submit_pico8_frame(const uint8_t *palette_rgb, size_t palette_len,
                                               const uint8_t *pixel_data, size_t pixel_len);
 

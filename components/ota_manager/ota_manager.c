@@ -120,9 +120,17 @@ static void ota_exit_ui_mode(void)
 }
 
 // External functions we'll call (defined elsewhere in p3a)
-extern bool pico8_stream_is_active(void);
 extern bool animation_player_is_sd_export_locked(void);
 extern bool animation_player_is_loader_busy(void);
+extern bool animation_player_is_ui_mode(void);
+extern void animation_player_pause_sd_access(void);
+extern void animation_player_resume_sd_access(void);
+
+#if CONFIG_P3A_PICO8_ENABLE
+extern bool pico8_stream_is_active(void);
+#else
+static inline bool pico8_stream_is_active(void) { return false; }
+#endif
 
 // Retry parameters for OTA check when animation loader is busy
 #define OTA_CHECK_RETRY_DELAY_MS    5000
@@ -226,7 +234,7 @@ esp_err_t ota_manager_init(void)
         .name = "ota_initial",
     };
     if (esp_timer_create(&initial_args, &initial_check_timer) == ESP_OK) {
-        esp_timer_start_once(initial_check_timer, 30 * 1000000);  // 30 seconds after boot
+        esp_timer_start_once(initial_check_timer, 60 * 1000000);  // 60 seconds after boot (more time for WiFi to stabilize)
     }
     
     return ESP_OK;
@@ -333,6 +341,28 @@ static void ota_check_task(void *arg)
 {
     (void)arg;
     
+    // Skip OTA check if device is not in regular animation playback mode
+    if (animation_player_is_ui_mode()) {
+        ESP_LOGW(TAG, "Skipping OTA check: UI mode active");
+        s_ota.check_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    if (animation_player_is_sd_export_locked()) {
+        ESP_LOGW(TAG, "Skipping OTA check: SD card exported over USB");
+        s_ota.check_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    if (pico8_stream_is_active()) {
+        ESP_LOGW(TAG, "Skipping OTA check: PICO-8 streaming active");
+        s_ota.check_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    
     // Wait for animation loader to be idle to avoid SDIO bus contention
     // The SD card (animation loading) and WiFi both use SDIO
     int retry_count = 0;
@@ -350,11 +380,21 @@ static void ota_check_task(void *arg)
         return;
     }
     
+    // CRITICAL: Pause SD card access to avoid SDIO bus conflicts
+    // The ESP32-C6 WiFi and SD card share SDIO resources
+    ESP_LOGI(TAG, "Pausing SD card access for OTA check...");
+    animation_player_pause_sd_access();
+    
+    // Wait for SDIO bus to fully settle
+    ESP_LOGI(TAG, "Waiting for SDIO bus to settle...");
+    vTaskDelay(pdMS_TO_TICKS(2000));  // 2 second delay for bus stabilization
+    
     set_state(OTA_STATE_CHECKING);
     
     // Check WiFi first
     if (ota_check_wifi_connected() != ESP_OK) {
         ESP_LOGW(TAG, "No WiFi connection, skipping update check");
+        animation_player_resume_sd_access();
         set_state(OTA_STATE_IDLE);
         s_ota.check_task = NULL;
         vTaskDelete(NULL);
@@ -364,6 +404,9 @@ static void ota_check_task(void *arg)
     // Fetch latest release from GitHub
     github_release_info_t release_info;
     esp_err_t err = github_ota_get_latest_release(&release_info);
+    
+    // Resume SD access immediately after GitHub API call completes
+    animation_player_resume_sd_access();
     
     if (s_ota.mutex) {
         xSemaphoreTake(s_ota.mutex, portMAX_DELAY);
@@ -551,8 +594,9 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
     // Download SHA256 first if available
     uint8_t expected_sha256[32] = {0};
     bool have_sha256 = false;
+    bool sha256_required = strlen(s_ota.release_info.sha256_url) > 0;
     
-    if (strlen(s_ota.release_info.sha256_url) > 0) {
+    if (sha256_required) {
         set_progress(0, "Downloading checksum...");
         
         char sha256_hex[65];
@@ -561,12 +605,26 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
             err = github_ota_hex_to_bin(sha256_hex, expected_sha256);
             if (err == ESP_OK) {
                 have_sha256 = true;
-                ESP_LOGI(TAG, "SHA256 checksum downloaded");
+                ESP_LOGI(TAG, "SHA256 checksum downloaded successfully");
+            } else {
+                ESP_LOGE(TAG, "Failed to parse SHA256 hex string");
             }
+        } else {
+            ESP_LOGE(TAG, "Failed to download SHA256 checksum");
         }
+        
         if (!have_sha256) {
-            ESP_LOGW(TAG, "Failed to get SHA256 checksum, proceeding without verification");
+            // SHA256 was expected but failed - refuse to proceed
+            ESP_LOGE(TAG, "Cannot verify firmware integrity - aborting update");
+            set_error("Checksum download failed");
+            set_progress(0, "CHECKSUM ERROR!");
+            vTaskDelay(pdMS_TO_TICKS(5000));  // Show error for 5 seconds
+            ota_exit_ui_mode();
+            set_state(OTA_STATE_ERROR);
+            return ESP_ERR_INVALID_CRC;
         }
+    } else {
+        ESP_LOGW(TAG, "No SHA256 URL provided, proceeding without checksum verification");
     }
     
     // Configure OTA
@@ -580,6 +638,7 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
         .keep_alive_enable = true,
         .buffer_size = CONFIG_OTA_HTTP_BUFFER_SIZE,
         .buffer_size_tx = 1024,
+        .max_redirection_count = 5,  // GitHub redirects to CDN
     };
     
     esp_https_ota_config_t ota_config = {

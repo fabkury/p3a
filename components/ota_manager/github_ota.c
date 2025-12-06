@@ -20,8 +20,8 @@ static const char *TAG = "github_ota";
 
 // Maximum response size for API calls (JSON can be large with release notes)
 #define MAX_API_RESPONSE_SIZE (32 * 1024)
-// Maximum response size for SHA256 file
-#define MAX_SHA256_RESPONSE_SIZE 128
+// Maximum response size for SHA256 file (64 hex chars + some padding)
+#define MAX_SHA256_RESPONSE_SIZE 256
 
 /**
  * @brief HTTP event handler for buffering response
@@ -382,7 +382,7 @@ esp_err_t github_ota_download_sha256(const char *sha256_url, char *sha256_hex, s
     
     memset(sha256_hex, 0, hex_buf_size);
     
-    // Allocate small buffer for SHA256 response
+    // Allocate buffer for SHA256 response (larger to handle redirect responses)
     char *response_buffer = malloc(MAX_SHA256_RESPONSE_SIZE);
     if (!response_buffer) {
         return ESP_ERR_NO_MEM;
@@ -394,6 +394,7 @@ esp_err_t github_ota_download_sha256(const char *sha256_url, char *sha256_hex, s
         .received = 0
     };
     
+    // GitHub raw URLs redirect to CDN, so we must follow redirects
     esp_http_client_config_t config = {
         .url = sha256_url,
         .method = HTTP_METHOD_GET,
@@ -401,6 +402,8 @@ esp_err_t github_ota_download_sha256(const char *sha256_url, char *sha256_hex, s
         .crt_bundle_attach = esp_crt_bundle_attach,
         .event_handler = http_event_handler,
         .user_data = &resp,
+        .max_redirection_count = 5,  // Follow up to 5 redirects (GitHub -> CDN)
+        .buffer_size = 1024,         // Larger buffer for redirect handling
     };
     
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -411,7 +414,7 @@ esp_err_t github_ota_download_sha256(const char *sha256_url, char *sha256_hex, s
     
     esp_http_client_set_header(client, "User-Agent", GITHUB_USER_AGENT);
     
-    ESP_LOGI(TAG, "Downloading SHA256 checksum...");
+    ESP_LOGI(TAG, "Downloading SHA256 checksum from: %s", sha256_url);
     
     esp_err_t err = esp_http_client_perform(client);
     int status_code = esp_http_client_get_status_code(client);
@@ -422,7 +425,7 @@ esp_err_t github_ota_download_sha256(const char *sha256_url, char *sha256_hex, s
         ESP_LOGE(TAG, "Failed to download SHA256: err=%s, status=%d", 
                  esp_err_to_name(err), status_code);
         free(response_buffer);
-        return ESP_ERR_HTTP_FETCH_HEADER;
+        return ESP_FAIL;
     }
     
     // Parse SHA256 - expect 64 hex characters

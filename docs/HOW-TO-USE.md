@@ -11,8 +11,9 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 5. [Web Interface](#web-interface)
 6. [REST API](#rest-api)
 7. [USB SD Card Access](#usb-sd-card-access)
-8. [Device Registration](#device-registration)
-9. [PICO-8 Monitor](#pico-8-monitor-optional)
+8. [Firmware Updates](#firmware-updates)
+9. [Device Registration](#device-registration)
+10. [PICO-8 Monitor](#pico-8-monitor-optional)
 
 ---
 
@@ -200,6 +201,59 @@ p3a has two USB-C ports, but only one (the High-Speed port) works as a USB stora
 - The currently playing animation continues, but you can't change artwork
 - Normal operation resumes after disconnecting the USB cable
 - Works with computers, smartphones (with USB OTG), and tablets
+
+---
+
+## Firmware Updates
+
+p3a supports Over-the-Air (OTA) firmware updates. The device automatically checks for new firmware from GitHub Releases every 2 hours.
+
+### Automatic update checks
+
+- The device checks for updates every 2 hours while connected to Wi-Fi
+- Updates are **never installed automatically**—you always approve updates manually
+- A notification appears on the main web page when an update is available
+
+### Installing an update
+
+1. **Open the web interface** at `http://p3a.local/`
+2. **Look for the update notification** (green banner) if an update is available
+3. **Click the notification** or go to `http://p3a.local/ota`
+4. **Review the available version** and release notes
+5. **Click "Install Update"** and confirm
+6. **Wait for the update to complete**—progress is shown on both the device screen and web interface
+7. **The device reboots automatically** when the update is complete
+
+> **Important:** Do not power off the device during an update. The update process takes 1-2 minutes depending on the firmware size.
+
+### Rollback to previous version
+
+If you need to revert to the previous firmware version:
+
+1. Go to `http://p3a.local/ota`
+2. If a previous version is available, a **"Rollback"** button will appear
+3. Click **"Rollback to Previous"** and confirm
+4. The device reboots with the previous firmware
+
+### Automatic rollback (safety feature)
+
+If the new firmware fails to boot properly 3 times in a row, the device automatically rolls back to the previous working firmware. This prevents "bricking" the device from a bad update.
+
+### REST API for updates
+
+```bash
+# Check current update status
+curl http://p3a.local/ota/status
+
+# Trigger manual update check
+curl -X POST http://p3a.local/ota/check
+
+# Install available update (if one exists)
+curl -X POST http://p3a.local/ota/install
+
+# Rollback to previous version
+curl -X POST http://p3a.local/ota/rollback
+```
 
 ---
 

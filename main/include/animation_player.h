@@ -55,6 +55,15 @@ esp_err_t animation_player_swap_to_index(size_t index);
 esp_err_t animation_player_begin_sd_export(void);
 esp_err_t animation_player_end_sd_export(void);
 bool animation_player_is_sd_export_locked(void);
+
+/**
+ * @brief Check if the animation loader is currently busy loading from SD card
+ * 
+ * Used to coordinate with OTA to avoid SDIO bus contention.
+ * 
+ * @return true if loader is busy, false otherwise
+ */
+bool animation_player_is_loader_busy(void);
 esp_err_t animation_player_submit_pico8_frame(const uint8_t *palette_rgb, size_t palette_len,
                                               const uint8_t *pixel_data, size_t pixel_len);
 

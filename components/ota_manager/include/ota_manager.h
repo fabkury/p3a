@@ -152,6 +152,16 @@ esp_err_t ota_manager_validate_boot(void);
 bool ota_manager_is_blocked(const char **reason);
 
 /**
+ * @brief Check if OTA is currently checking for updates
+ * 
+ * Used by animation player to avoid SDIO bus contention.
+ * Animation swaps should be deferred when this returns true.
+ * 
+ * @return true if OTA check is in progress, false otherwise
+ */
+bool ota_manager_is_checking(void);
+
+/**
  * @brief Get string representation of OTA state
  * 
  * @param state OTA state

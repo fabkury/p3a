@@ -11,7 +11,7 @@ cmake_minimum_required(VERSION 3.16)
 # - Increment MINOR for new features (backward compatible)
 # - Increment PATCH for bug fixes
 # For testing OTA, use pre-release versions on GitHub
-set(PROJECT_VER "0.5.2-dev")
+set(PROJECT_VER "0.5.3-dev")
 # =============================================================================
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
@@ -72,28 +72,38 @@ import hashlib
 import shutil
 
 build_dir = sys.argv[1] if len(sys.argv) > 1 else '.'
+project_dir = sys.argv[2] if len(sys.argv) > 2 else os.path.dirname(build_dir)
 release_subdir = '${RELEASE_SUBDIR}'
 release_dir = os.path.join(build_dir, release_subdir)
+version = '${PROJECT_VER}'
 
 # Create release directory
 os.makedirs(release_dir, exist_ok=True)
 
-# Files to copy (source relative to build_dir, destination name, flash address)
+# Files to copy (source relative to build_dir or project_dir, destination name, flash address, force flag for non-P4 binaries)
 files = [
-    ('p3a.bin', 'p3a.bin', '0x20000'),
-    ('bootloader/bootloader.bin', 'bootloader.bin', '0x2000'),
-    ('partition_table/partition-table.bin', 'partition-table.bin', '0x8000'),
-    ('ota_data_initial.bin', 'ota_data_initial.bin', '0x10000'),
-    ('storage.bin', 'storage.bin', '0x1020000'),
+    ('build:p3a.bin', 'p3a.bin', '0x20000', False),
+    ('build:bootloader/bootloader.bin', 'bootloader.bin', '0x2000', False),
+    ('build:partition_table/partition-table.bin', 'partition-table.bin', '0x8000', False),
+    ('build:ota_data_initial.bin', 'ota_data_initial.bin', '0x10000', False),
+    ('build:storage.bin', 'storage.bin', '0x1020000', False),
+    ('project:components/slave_ota/firmware/network_adapter.bin', 'network_adapter.bin', '0x1120000', True),
 ]
 
-print(f'\\n========== Creating Release: ${PROJECT_VER} ==========')
+print(f'\\n========== Creating Release: {version} ==========')
 print(f'Output directory: {release_dir}\\n')
 
 flash_entries = []
+has_force_files = False
 
-for src_rel, dst_name, flash_addr in files:
-    src = os.path.join(build_dir, src_rel)
+for src_spec, dst_name, flash_addr, needs_force in files:
+    # Parse source specification
+    src_type, src_rel = src_spec.split(':', 1)
+    if src_type == 'build':
+        src = os.path.join(build_dir, src_rel)
+    else:  # project
+        src = os.path.join(project_dir, src_rel)
+    
     dst = os.path.join(release_dir, dst_name)
     
     if not os.path.exists(src):
@@ -121,6 +131,8 @@ for src_rel, dst_name, flash_addr in files:
     
     # Add to flash entries
     flash_entries.append((flash_addr, dst_name))
+    if needs_force:
+        has_force_files = True
 
 # Generate flash_args file
 flash_args_path = os.path.join(release_dir, 'flash_args')
@@ -133,22 +145,129 @@ print(f'  OK: flash_args')
 
 # Generate flash command helper
 flash_cmd_path = os.path.join(release_dir, 'flash_command.txt')
+force_flag = ' --force' if has_force_files else ''
 with open(flash_cmd_path, 'w') as f:
     f.write('# Flash command for ESP32-P4\\n')
     f.write('# Run from this directory:\\n')
-    f.write('python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash @flash_args\\n')
+    f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash{force_flag} @flash_args\\n')
     f.write('\\n')
-    f.write('# Or with explicit port:\\n')
-    f.write('python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash @flash_args\\n')
+    f.write('# Or with explicit port (replace COM5 with your port):\\n')
+    f.write(f'python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash{force_flag} @flash_args\\n')
 
 print(f'  OK: flash_command.txt')
+
+# Generate README.md
+readme_path = os.path.join(release_dir, 'README.md')
+with open(readme_path, 'w') as f:
+    f.write(f'''# p3a Firmware v{version}
+
+This folder contains all files needed to flash the p3a firmware to an ESP32-P4 device
+(e.g., Waveshare ESP32-P4-WiFi6-Touch-LCD board).
+
+## Files Included
+
+| File | Description | Flash Address |
+|------|-------------|---------------|
+| `p3a.bin` | Main application firmware | 0x20000 |
+| `bootloader.bin` | ESP-IDF bootloader | 0x2000 |
+| `partition-table.bin` | Partition table | 0x8000 |
+| `ota_data_initial.bin` | OTA data (boot selection) | 0x10000 |
+| `storage.bin` | SPIFFS web UI assets | 0x1020000 |
+| `network_adapter.bin` | ESP32-C6 co-processor firmware | 0x1120000 |
+
+Each `.bin` file has a corresponding `.sha256` file containing its SHA256 checksum.
+
+## Prerequisites
+
+1. **Python 3.x** with `esptool` installed:
+   ```
+   pip install esptool
+   ```
+
+2. **USB driver** for your ESP32-P4 board
+
+3. Know your **serial port** (e.g., `COM5` on Windows, `/dev/ttyUSB0` on Linux)
+
+## Flashing Instructions
+
+### Option 1: Quick Flash (Recommended for updates)
+
+Open a terminal in this folder and run:
+
+```bash
+# Windows (replace COM5 with your port)
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash{force_flag} @flash_args
+
+# Linux/macOS (replace /dev/ttyUSB0 with your port)
+python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash{force_flag} @flash_args
+```
+
+### Option 2: Full Erase + Flash (Recommended for first flash or major updates)
+
+If you're having issues or this is a fresh device, erase the flash first:
+
+```bash
+# Erase all flash (WARNING: erases all saved settings!)
+python -m esptool --chip esp32p4 -p COM5 erase_flash
+
+# Then flash
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash{force_flag} @flash_args
+```
+
+### Option 3: Manual Flash (individual files)
+
+Flash each file separately:
+
+```bash
+python -m esptool --chip esp32p4 -p COM5 -b 460800 write_flash \\\\
+    0x2000 bootloader.bin \\\\
+    0x8000 partition-table.bin \\\\
+    0x10000 ota_data_initial.bin \\\\
+    0x20000 p3a.bin \\\\
+    0x1020000 storage.bin \\\\
+    0x1120000 network_adapter.bin --force
+```
+
+Note: `--force` is needed because `network_adapter.bin` is for ESP32-C6, not ESP32-P4.
+It's stored in a data partition and transferred to the co-processor via OTA at boot.
+
+## Verifying the Flash
+
+After flashing, the device should:
+1. Display the p3a splash screen
+2. Connect to WiFi (if previously configured) or start a captive portal
+3. Be accessible at http://p3a.local/
+
+## Troubleshooting
+
+- **\"Failed to connect\"**: Hold the BOOT button while pressing RST, then release BOOT
+- **\"Permission denied\"**: Run terminal as administrator or check USB permissions
+- **Device not responding**: Try erasing flash first, then reflashing
+- **Wrong port**: List ports with `python -m serial.tools.list_ports`
+
+## Checksum Verification
+
+To verify file integrity:
+
+```bash
+# Windows PowerShell
+Get-FileHash p3a.bin -Algorithm SHA256 | Select-Object Hash
+
+# Linux/macOS
+sha256sum p3a.bin
+```
+
+Compare with contents of `p3a.bin.sha256`.
+''')
+
+print(f'  OK: README.md')
 
 print(f'\\n========== Release files ready ==========\\n')
 ")
 
 # Add custom target that can be invoked manually: idf.py release
 add_custom_target(release
-    COMMAND ${PYTHON} "${CMAKE_BINARY_DIR}/create_release.py" "${CMAKE_BINARY_DIR}"
+    COMMAND ${PYTHON} "${CMAKE_BINARY_DIR}/create_release.py" "${CMAKE_BINARY_DIR}" "${CMAKE_SOURCE_DIR}"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Creating release package..."
     VERBATIM
@@ -161,7 +280,7 @@ add_dependencies(release gen_project_binary)
 # gen_project_binary is the ESP-IDF target that creates the .bin file
 add_custom_command(
     TARGET gen_project_binary POST_BUILD
-    COMMAND ${PYTHON} "${CMAKE_BINARY_DIR}/create_release.py" "${CMAKE_BINARY_DIR}"
+    COMMAND ${PYTHON} "${CMAKE_BINARY_DIR}/create_release.py" "${CMAKE_BINARY_DIR}" "${CMAKE_SOURCE_DIR}"
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Creating release package..."
     VERBATIM

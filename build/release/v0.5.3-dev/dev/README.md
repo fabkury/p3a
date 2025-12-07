@@ -35,10 +35,10 @@ Open a terminal in this folder and run:
 
 ```bash
 # Windows (replace COM5 with your port)
-python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash --force @flash_args
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --after hard-reset write-flash --force @flash_args
 
 # Linux/macOS (replace /dev/ttyUSB0 with your port)
-python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash --force @flash_args
+python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default-reset --after hard-reset write-flash --force @flash_args
 ```
 
 ### Option 2: Full Erase + Flash (Recommended for first flash or major updates)
@@ -47,10 +47,10 @@ If you're having issues or this is a fresh device, erase the flash first:
 
 ```bash
 # Erase all flash (WARNING: erases all saved settings!)
-python -m esptool --chip esp32p4 -p COM5 erase_flash
+python -m esptool --chip esp32p4 -p COM5 erase-flash
 
 # Then flash
-python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash --force @flash_args
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --after hard-reset write-flash --force @flash_args
 ```
 
 ### Option 3: Manual Flash (individual files)
@@ -58,7 +58,7 @@ python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --afte
 Flash each file separately:
 
 ```bash
-python -m esptool --chip esp32p4 -p COM5 -b 460800 write_flash \
+python -m esptool --chip esp32p4 -p COM5 -b 460800 write-flash \
     0x2000 bootloader.bin \
     0x8000 partition-table.bin \
     0x10000 ota_data_initial.bin \

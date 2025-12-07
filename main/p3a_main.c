@@ -6,7 +6,10 @@
 
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_system.h"
+#include "esp_app_desc.h"
 #include "nvs_flash.h"
+#include "nvs.h"
 #include "esp_netif.h"
 #include "esp_event.h"
 #include "freertos/FreeRTOS.h"
@@ -23,13 +26,97 @@
 #include "ugfx_ui.h"
 #include "animation_player.h"  // For animation_player_is_ui_mode()
 #include "ota_manager.h"       // For OTA boot validation
+#include "slave_ota.h"         // For ESP32-C6 co-processor OTA
 #include "freertos/task.h"
+
+// NVS namespace and keys for tracking firmware versions across boots
+#define NVS_BOOT_NAMESPACE "p3a_boot"
+#define NVS_LAST_P4_VERSION_KEY "last_p4_ver"
+#define NVS_LAST_C6_VERSION_KEY "last_c6_ver"
 
 static const char *TAG = "p3a";
 
 // Debug provisioning mode - toggle every 5 seconds
 #define DEBUG_PROVISIONING_ENABLED 0
 #define DEBUG_PROVISIONING_TOGGLE_MS 5000
+
+/**
+ * @brief Check if this is the first boot after a firmware update and schedule reboot if needed
+ * 
+ * After flashing new firmware (especially with new co-processor firmware), the system
+ * may need a "stabilization reboot" to ensure all hardware (particularly the ESP32-C6
+ * co-processor connected via SDIO) is in a clean state.
+ * 
+ * This function checks BOTH:
+ * - ESP32-P4 (host) firmware version
+ * - ESP32-C6 (co-processor) embedded firmware version
+ * 
+ * If either version changes, a stabilization reboot is needed.
+ * 
+ * @return true if this is first boot after update (caller should reboot)
+ * @return false if this is a normal boot (same versions)
+ */
+static bool check_first_boot_after_update(void)
+{
+    // Get current P4 (host) firmware version
+    const esp_app_desc_t *app_desc = esp_app_get_description();
+    const char *current_p4_version = app_desc->version;
+    
+    // Get embedded C6 (co-processor) firmware version
+    uint32_t c6_major = 0, c6_minor = 0, c6_patch = 0;
+    slave_ota_get_embedded_version(&c6_major, &c6_minor, &c6_patch);
+    char current_c6_version[32];
+    snprintf(current_c6_version, sizeof(current_c6_version), "%lu.%lu.%lu", c6_major, c6_minor, c6_patch);
+    
+    nvs_handle_t nvs;
+    esp_err_t err = nvs_open(NVS_BOOT_NAMESPACE, NVS_READWRITE, &nvs);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Could not open NVS for boot tracking: %s", esp_err_to_name(err));
+        return false;
+    }
+    
+    bool p4_changed = false;
+    bool c6_changed = false;
+    
+    // Check P4 version
+    char last_p4_version[32] = {0};
+    size_t len = sizeof(last_p4_version);
+    err = nvs_get_str(nvs, NVS_LAST_P4_VERSION_KEY, last_p4_version, &len);
+    
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGI(TAG, "First P4 boot detected (no previous P4 version in NVS)");
+        p4_changed = true;
+    } else if (err == ESP_OK && strcmp(last_p4_version, current_p4_version) != 0) {
+        ESP_LOGI(TAG, "P4 firmware changed: %s -> %s", last_p4_version, current_p4_version);
+        p4_changed = true;
+    }
+    
+    // Check C6 version
+    char last_c6_version[32] = {0};
+    len = sizeof(last_c6_version);
+    err = nvs_get_str(nvs, NVS_LAST_C6_VERSION_KEY, last_c6_version, &len);
+    
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGI(TAG, "First C6 boot detected (no previous C6 version in NVS)");
+        c6_changed = true;
+    } else if (err == ESP_OK && strcmp(last_c6_version, current_c6_version) != 0) {
+        ESP_LOGI(TAG, "C6 firmware changed: %s -> %s", last_c6_version, current_c6_version);
+        c6_changed = true;
+    }
+    
+    bool needs_reboot = p4_changed || c6_changed;
+    
+    if (needs_reboot) {
+        // Store current versions for next boot
+        nvs_set_str(nvs, NVS_LAST_P4_VERSION_KEY, current_p4_version);
+        nvs_set_str(nvs, NVS_LAST_C6_VERSION_KEY, current_c6_version);
+        nvs_commit(nvs);
+        ESP_LOGI(TAG, "Stored versions - P4: %s, C6: %s", current_p4_version, current_c6_version);
+    }
+    
+    nvs_close(nvs);
+    return needs_reboot;
+}
 
 #define AUTO_SWAP_INTERVAL_SECONDS CONFIG_P3A_AUTO_SWAP_INTERVAL_SECONDS
 
@@ -272,8 +359,28 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to create auto-swap task");
     }
 
+    // Check if this is first boot after firmware update
+    bool needs_stabilization_reboot = check_first_boot_after_update();
+    
     // Initialize Wi-Fi (will start captive portal if needed, or connect to saved network)
     ESP_ERROR_CHECK(app_wifi_init(register_rest_action_handlers));
+
+    // Check and update ESP32-C6 co-processor firmware if needed
+    // This uses the ESP-Hosted OTA feature to update the WiFi chip
+    esp_err_t slave_ota_err = slave_ota_check_and_update();
+    if (slave_ota_err != ESP_OK && slave_ota_err != ESP_ERR_NOT_FOUND) {
+        ESP_LOGW(TAG, "Slave OTA check failed: %s (continuing anyway)", esp_err_to_name(slave_ota_err));
+    }
+    
+    // After WiFi init, if this was first boot after update, do a stabilization reboot
+    // This ensures the ESP32-C6 co-processor and SDIO bus are in a clean state
+    if (needs_stabilization_reboot) {
+        ESP_LOGW(TAG, "First boot after firmware update - performing stabilization reboot...");
+        ESP_LOGI(TAG, "This ensures co-processor and SDIO bus are properly initialized");
+        vTaskDelay(pdMS_TO_TICKS(2000));  // Brief delay so user can see the message
+        esp_restart();
+        // Won't reach here
+    }
 
     // Initialize OTA manager - starts periodic update checks
     // (checks are skipped if WiFi is not connected)

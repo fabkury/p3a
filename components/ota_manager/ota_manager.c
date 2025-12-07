@@ -387,8 +387,8 @@ static void ota_check_task(void *arg)
     
     // Wait for SDIO bus to fully settle
     // The ESP Hosted driver needs substantial time to flush any pending operations
-    ESP_LOGI(TAG, "Waiting for SDIO bus to settle (5s)...");
-    vTaskDelay(pdMS_TO_TICKS(5000));  // 5 second delay for bus stabilization
+    ESP_LOGI(TAG, "Waiting for SDIO bus to settle (3s)...");
+    vTaskDelay(pdMS_TO_TICKS(3000));  // 3 second delay for bus stabilization
     
     set_state(OTA_STATE_CHECKING);
     
@@ -594,7 +594,7 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
     
     // Wait for system to stabilize after UI mode transition
     ESP_LOGI(TAG, "Waiting for network to stabilize after UI mode transition...");
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    vTaskDelay(pdMS_TO_TICKS(1000));
     
     // Re-check WiFi after UI mode transition
     if (ota_check_wifi_connected() != ESP_OK) {

@@ -12,4 +12,5 @@ idf_component_register(
         "include"
     PRIV_INCLUDE_DIRS
         "${CMAKE_CURRENT_SOURCE_DIR}"
+    REQUIRES animation_decoder
 )

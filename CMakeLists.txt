@@ -11,7 +11,7 @@ cmake_minimum_required(VERSION 3.16)
 # - Increment MINOR for new features (backward compatible)
 # - Increment PATCH for bug fixes
 # For testing OTA, use pre-release versions on GitHub
-set(PROJECT_VER "0.5.3-dev")
+set(PROJECT_VER "0.5.4-dev")
 # =============================================================================
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
@@ -134,10 +134,10 @@ for src_spec, dst_name, flash_addr, needs_force in files:
     if needs_force:
         has_force_files = True
 
-# Generate flash_args file
+# Generate flash_args file (address/filename pairs only, NO flash options)
+# Flash options must be passed on command line because @flash_args is parsed AFTER write_flash
 flash_args_path = os.path.join(release_dir, 'flash_args')
 with open(flash_args_path, 'w') as f:
-    f.write('--flash-mode dio --flash-freq 80m --flash-size 32MB\\n')
     for addr, name in flash_entries:
         f.write(f'{addr} {name}\\n')
 
@@ -146,13 +146,14 @@ print(f'  OK: flash_args')
 # Generate flash command helper
 flash_cmd_path = os.path.join(release_dir, 'flash_command.txt')
 force_flag = ' --force' if has_force_files else ''
+flash_opts = '--flash_mode dio --flash_freq 80m --flash_size 32MB'
 with open(flash_cmd_path, 'w') as f:
     f.write('# Flash command for ESP32-P4\\n')
     f.write('# Run from this directory:\\n')
-    f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default-reset --after hard-reset write-flash{force_flag} @flash_args\\n')
+    f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args\\n')
     f.write('\\n')
     f.write('# Or with explicit port (replace COM5 with your port):\\n')
-    f.write(f'python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --after hard-reset write-flash{force_flag} @flash_args\\n')
+    f.write(f'python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args\\n')
 
 print(f'  OK: flash_command.txt')
 
@@ -196,13 +197,13 @@ Open a terminal in this folder and run:
 
 ```bash
 # Windows command prompt (replace COM5 with your port)
-python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --after hard-reset write-flash{force_flag} @flash_args
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args
 
-# Windows PowerShell (replace COM5 with your port)
-python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --after hard-reset write-flash{force_flag} "@flash_args"
+# Windows PowerShell (replace COM5 with your port) (double quotes required around @flash_args)
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} \"@flash_args\"
 
 # Linux/macOS (replace /dev/ttyUSB0 with your port)
-python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default-reset --after hard-reset write-flash{force_flag} @flash_args
+python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args
 ```
 
 ### Option 2: Full Erase + Flash (Recommended for first flash or major updates)
@@ -211,10 +212,10 @@ If you're having issues or this is a fresh device, erase the flash first:
 
 ```bash
 # Erase all flash (WARNING: erases all saved settings!)
-python -m esptool --chip esp32p4 -p COM5 erase-flash
+python -m esptool --chip esp32p4 -p COM5 erase_flash
 
 # Then flash
-python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --after hard-reset write-flash{force_flag} @flash_args
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args
 ```
 
 ### Option 3: Manual Flash (individual files)
@@ -222,13 +223,13 @@ python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --afte
 Flash each file separately:
 
 ```bash
-python -m esptool --chip esp32p4 -p COM5 -b 460800 write-flash \\\\
+python -m esptool --chip esp32p4 -p COM5 -b 460800 write_flash {flash_opts}{force_flag} \\\\
     0x2000 bootloader.bin \\\\
     0x8000 partition-table.bin \\\\
     0x10000 ota_data_initial.bin \\\\
     0x20000 p3a.bin \\\\
     0x1020000 storage.bin \\\\
-    0x1120000 network_adapter.bin --force
+    0x1120000 network_adapter.bin
 ```
 
 Note: `--force` is needed because `network_adapter.bin` is for ESP32-C6, not ESP32-P4.

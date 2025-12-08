@@ -1,0 +1,17 @@
+menu "WiFi Manager"
+
+    config WIFI_MANAGER_ENABLED
+        bool "Enable WiFi Manager"
+        default y
+        help
+            Enable WiFi station with captive portal support.
+
+    config WIFI_MANAGER_SNTP_SERVER
+        string "SNTP server address"
+        default "pool.ntp.org"
+        depends on WIFI_MANAGER_ENABLED
+        help
+            NTP server for time synchronization.
+
+endmenu
+

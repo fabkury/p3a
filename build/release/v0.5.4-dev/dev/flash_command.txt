@@ -1,0 +1,6 @@
+# Flash command for ESP32-P4
+# Run from this directory:
+python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB --force @flash_args
+
+# Or with explicit port (replace COM5 with your port):
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB --force @flash_args

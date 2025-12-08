@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "../../main/include/animation_decoder.h"
-#include "../../main/include/animation_decoder_internal.h"
+#include "animation_decoder.h"
+#include "animation_decoder_internal.h"
 #include "AnimatedGIF.h"
 #include "esp_log.h"
 #include "esp_err.h"

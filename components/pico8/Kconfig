@@ -1,0 +1,37 @@
+menu "P3A Features"
+
+menu "PICO-8 Streaming"
+
+    config P3A_PICO8_ENABLE
+        bool "Enable PICO-8 streaming support"
+        default y
+        help
+            Enable PICO-8 pixel art streaming over USB/WebSocket.
+            When disabled, PICO-8 streaming functions are stubbed out
+            to reduce firmware size.
+
+    if P3A_PICO8_ENABLE
+
+        config P3A_PICO8_MODE_TIMEOUT_MS
+            int "PICO-8 mode timeout (ms)"
+            default 30000
+            range 5000 120000
+            help
+                Time in milliseconds after which PICO-8 mode will automatically
+                exit if no frames are received. This prevents the display from
+                being stuck in PICO-8 mode if the connection is lost.
+
+        config P3A_PICO8_USB_STREAM_ENABLE
+            bool "Enable USB PICO-8 streaming interface"
+            default y
+            depends on P3A_USB_MSC_ENABLE
+            help
+                Add vendor-specific USB interface for PICO-8 frame streaming.
+                Requires USB MSC to be enabled.
+
+    endif # P3A_PICO8_ENABLE
+
+endmenu # PICO-8 Streaming
+
+endmenu # P3A Features
+

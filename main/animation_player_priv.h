@@ -3,6 +3,10 @@
 
 #include "animation_player.h"
 #include "animation_decoder.h"
+#include "display_renderer.h"
+#include "playback_controller.h"
+#include "animation_metadata.h"
+#include "p3a_board.h"
 #include "app_lcd.h"
 #include "sdcard_channel.h"  // For asset_type_t (canonical definition)
 #include "esp_log.h"
@@ -15,7 +19,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "esp_lcd_panel_ops.h"
-#include "bsp/esp-bsp.h"
+#include "bsp/esp-bsp.h"  // For bsp_sdcard_mount/unmount, BSP_SD_MOUNT_POINT
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -50,28 +54,17 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-#if CONFIG_P3A_PICO8_ENABLE
-#define PICO8_FRAME_WIDTH        128
-#define PICO8_FRAME_HEIGHT       128
-#define PICO8_PALETTE_COLORS     16
-#define PICO8_FRAME_BYTES        (PICO8_FRAME_WIDTH * PICO8_FRAME_HEIGHT / 2)
-#define PICO8_STREAM_TIMEOUT_US  (250 * 1000)
-#endif // CONFIG_P3A_PICO8_ENABLE
-
 #define ANIMATIONS_PREFERRED_DIR "/sdcard/animations"
 #define ANIMATION_SD_REFRESH_STACK (16384)
 
-#if CONFIG_P3A_PICO8_ENABLE
-typedef struct {
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-} pico8_color_t;
-#endif // CONFIG_P3A_PICO8_ENABLE
+// asset_type_t is defined in sdcard_channel.h
 
-// asset_type_t is now defined in sdcard_channel.h
-
-// screen_rotation_t is defined in animation_player.h (already included above)
+// Use display_renderer's rotation type for compatibility
+typedef display_rotation_t screen_rotation_t;
+#define ROTATION_0   DISPLAY_ROTATION_0
+#define ROTATION_90  DISPLAY_ROTATION_90
+#define ROTATION_180 DISPLAY_ROTATION_180
+#define ROTATION_270 DISPLAY_ROTATION_270
 
 typedef struct {
     char **filenames;
@@ -89,32 +82,24 @@ typedef struct {
     animation_decoder_info_t decoder_info;
     asset_type_t type;
     size_t asset_index;
-    uint8_t *native_frame_b1;
-    uint8_t *native_frame_b2;
-    uint8_t native_buffer_active;
+    uint8_t *native_frame_b1;           // Native decoded frame buffer 1
+    uint8_t *native_frame_b2;           // Native decoded frame buffer 2
+    uint8_t native_buffer_active;       // Which native buffer is active (0 or 1)
     size_t native_frame_size;
     uint16_t *upscale_lookup_x;
     uint16_t *upscale_lookup_y;
     int upscale_src_w, upscale_src_h;
     int upscale_dst_w, upscale_dst_h;
-    uint8_t *prefetched_first_frame;
-    bool first_frame_ready;
-    bool decoder_at_frame_1;
-    bool prefetch_pending;
-    uint32_t prefetched_first_frame_delay_ms;
+    bool first_frame_ready;             // First frame decoded and ready in native_frame_b1
+    bool decoder_at_frame_1;            // Decoder has advanced past frame 0
+    bool prefetch_pending;              // Prefetch decode requested but not yet done
+    uint32_t prefetched_first_frame_delay_ms;  // Frame delay for the prefetched first frame
     uint32_t current_frame_delay_ms;
     bool ready;
+    char *filepath;  // Path to the animation file
 } animation_buffer_t;
 
-extern esp_lcd_panel_handle_t s_display_handle;
-extern uint8_t **s_lcd_buffers;
-extern uint8_t s_buffer_count;
-extern size_t s_frame_buffer_bytes;
-extern size_t s_frame_row_stride_bytes;
-
-extern SemaphoreHandle_t s_vsync_sem;
-extern TaskHandle_t s_anim_task;
-
+// Animation player state (now delegates to display_renderer for LCD operations)
 extern animation_buffer_t s_front_buffer;
 extern animation_buffer_t s_back_buffer;
 extern size_t s_next_asset_index;
@@ -124,56 +109,20 @@ extern TaskHandle_t s_loader_task;
 extern SemaphoreHandle_t s_loader_sem;
 extern SemaphoreHandle_t s_buffer_mutex;
 
-typedef enum {
-    RENDER_MODE_ANIMATION,  // Animation pipeline owns buffers
-    RENDER_MODE_UI          // UI pipeline owns buffers
-} render_mode_t;
-
 extern bool s_anim_paused;
-extern volatile render_mode_t s_render_mode_request;   // Requested render mode
-extern volatile render_mode_t s_render_mode_active;    // Mode currently used by render loop
-
-extern TaskHandle_t s_upscale_worker_top;
-extern TaskHandle_t s_upscale_worker_bottom;
-extern TaskHandle_t s_upscale_main_task;
-extern const uint8_t *s_upscale_src_buffer;
-extern uint8_t *s_upscale_dst_buffer;
-extern const uint16_t *s_upscale_lookup_x;
-extern const uint16_t *s_upscale_lookup_y;
-extern int s_upscale_src_w;
-extern int s_upscale_src_h;
-extern screen_rotation_t s_upscale_rotation;
-extern int s_upscale_row_start_top;
-extern int s_upscale_row_end_top;
-extern int s_upscale_row_start_bottom;
-extern int s_upscale_row_end_bottom;
-extern volatile bool s_upscale_worker_top_done;
-extern volatile bool s_upscale_worker_bottom_done;
-
-extern uint8_t s_render_buffer_index;
-extern uint8_t s_last_display_buffer;
-
-extern int64_t s_last_frame_present_us;
-extern int64_t s_last_duration_update_us;
-extern int s_latest_frame_duration_ms;
-extern char s_frame_duration_text[11];
-extern int64_t s_frame_processing_start_us;
-extern uint32_t s_target_frame_delay_ms;
 
 extern app_lcd_sd_file_list_t s_sd_file_list;
 extern bool s_sd_mounted;
 extern bool s_sd_export_active;
 
-// Screen rotation state
-extern screen_rotation_t g_screen_rotation;
-extern volatile bool g_rotation_in_progress;
-
+// Animation loading functions
 esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, animation_buffer_t *buf);
 void unload_animation_buffer(animation_buffer_t *buf);
 esp_err_t prefetch_first_frame(animation_buffer_t *buf);
 void animation_loader_task(void *arg);
 void animation_loader_wait_for_idle(void);
 
+// Directory enumeration
 bool directory_has_animation_files(const char *dir_path);
 esp_err_t find_animations_directory(const char *root_path, char **found_dir_out);
 esp_err_t enumerate_animation_files(const char *dir_path);
@@ -182,17 +131,7 @@ esp_err_t refresh_animation_file_list(void);
 size_t get_next_asset_index(size_t current_index);
 size_t get_previous_asset_index(size_t current_index);
 
-#if CONFIG_P3A_PICO8_ENABLE
-esp_err_t ensure_pico8_resources(void);
-void release_pico8_resources(void);
-bool pico8_stream_should_render(void);
-int render_pico8_frame(uint8_t *dest_buffer);
-#endif // CONFIG_P3A_PICO8_ENABLE
-
-bool lcd_panel_refresh_done_cb(esp_lcd_panel_handle_t panel, esp_lcd_dpi_panel_event_data_t *edata, void *user_ctx);
-void lcd_animation_task(void *arg);
-void upscale_worker_top_task(void *arg);
-void upscale_worker_bottom_task(void *arg);
+// Frame rendering callback (called by display_renderer)
+int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx);
 
 #endif // ANIMATION_PLAYER_PRIV_H
-

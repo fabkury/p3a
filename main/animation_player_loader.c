@@ -54,8 +54,7 @@ void animation_loader_task(void *arg)
             swap_was_requested = s_swap_requested;
             
             // Skip loading if in UI mode and not triggered by exit_ui_mode
-            // (exit_ui_mode sets s_swap_requested before signaling)
-            if (s_render_mode_active == RENDER_MODE_UI && !swap_was_requested) {
+            if (display_renderer_is_ui_mode() && !swap_was_requested) {
                 ESP_LOGD(TAG, "Loader task: Skipping load during UI mode");
                 xSemaphoreGive(s_buffer_mutex);
                 continue;
@@ -102,11 +101,8 @@ void animation_loader_task(void *arg)
 void free_sd_file_list(void)
 {
     // Legacy function - no longer needed with channel abstraction
-    // Kept for compatibility but does nothing
     (void)s_sd_file_list;
 }
-
-// get_asset_type removed - now handled by sdcard_channel
 
 bool directory_has_animation_files(const char *dir_path)
 {
@@ -205,12 +201,10 @@ esp_err_t find_animations_directory(const char *root_path, char **found_dir_out)
     return ESP_ERR_NOT_FOUND;
 }
 
-// Legacy function - now uses sdcard_channel
 esp_err_t enumerate_animation_files(const char *dir_path)
 {
     esp_err_t err = sdcard_channel_refresh(dir_path);
     if (err == ESP_OK) {
-        // Reload channel player with new channel data
         channel_player_load_channel();
     }
     return err;
@@ -278,7 +272,6 @@ esp_err_t refresh_animation_file_list(void)
     free(found_dir);
     
     if (enum_err == ESP_OK) {
-        // Reload channel player with new channel data
         channel_player_load_channel();
     }
     
@@ -315,13 +308,14 @@ void unload_animation_buffer(animation_buffer_t *buf)
     buf->upscale_dst_w = 0;
     buf->upscale_dst_h = 0;
 
-    free(buf->prefetched_first_frame);
-    buf->prefetched_first_frame = NULL;
     buf->first_frame_ready = false;
     buf->decoder_at_frame_1 = false;
     buf->prefetch_pending = false;
     buf->prefetched_first_frame_delay_ms = 1;
     buf->current_frame_delay_ms = 1;
+
+    free(buf->filepath);
+    buf->filepath = NULL;
 
     buf->ready = false;
     memset(&buf->decoder_info, 0, sizeof(buf->decoder_info));
@@ -402,9 +396,6 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf, asse
         return ESP_ERR_NO_MEM;
     }
 
-    // Generate standard upscale lookup tables (rotation handled in blit function)
-    // lookup_x[dst_x] = source X coordinate
-    // lookup_y[dst_y] = source Y coordinate  
             for (int dst_x = 0; dst_x < target_w; ++dst_x) {
                 int src_x = (dst_x * canvas_w) / target_w;
                 if (src_x >= canvas_w) src_x = canvas_w - 1;
@@ -443,7 +434,17 @@ esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, an
     buf->file_data = file_data;
     buf->file_size = file_size;
     buf->type = type;
-    buf->asset_index = channel_player_get_current_position(); // Store current position
+    buf->asset_index = channel_player_get_current_position();
+
+    // Store filepath
+    buf->filepath = strdup(filepath);
+    if (!buf->filepath) {
+        ESP_LOGE(TAG, "Failed to duplicate filepath");
+        free(file_data);
+        buf->file_data = NULL;
+        buf->file_size = 0;
+        return ESP_ERR_NO_MEM;
+    }
 
     err = init_animation_decoder_for_buffer(buf, type, file_data, file_size);
     if (err != ESP_OK) {
@@ -451,15 +452,13 @@ esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, an
         free(file_data);
         buf->file_data = NULL;
         buf->file_size = 0;
+        free(buf->filepath);
+        buf->filepath = NULL;
         return err;
     }
 
-    buf->prefetched_first_frame = (uint8_t *)malloc(s_frame_buffer_bytes);
-    if (!buf->prefetched_first_frame) {
-        ESP_LOGE(TAG, "Failed to allocate prefetched frame buffer");
-        unload_animation_buffer(buf);
-        return ESP_ERR_NO_MEM;
-    }
+    // No separate prefetch buffer needed - the first frame is decoded to native_frame_b1
+    // during prefetch, then upscaled directly to the display back buffer when displayed
     buf->first_frame_ready = false;
     buf->decoder_at_frame_1 = false;
     buf->prefetch_pending = false;
@@ -469,32 +468,25 @@ esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, an
     return ESP_OK;
 }
 
-// Legacy functions removed - now handled by channel_player
 size_t get_next_asset_index(size_t current_index)
 {
     (void)current_index;
-    // No-op - channel_player handles navigation
     return 0;
 }
 
 size_t get_previous_asset_index(size_t current_index)
 {
     (void)current_index;
-    // No-op - channel_player handles navigation
     return 0;
 }
 
 esp_err_t animation_player_add_file(const char *filename, const char *animations_dir, size_t insert_after_index, size_t *out_index)
 {
-    // Legacy function - dynamic file addition not supported with channel abstraction
-    // Files are automatically discovered from the animations directory
     (void)filename;
     (void)animations_dir;
     (void)insert_after_index;
     (void)out_index;
     
-    ESP_LOGW(TAG, "animation_player_add_file: Not supported with channel abstraction. "
-                   "Files are automatically discovered from animations directory.");
+    ESP_LOGW(TAG, "animation_player_add_file: Not supported with channel abstraction.");
     return ESP_ERR_NOT_SUPPORTED;
 }
-

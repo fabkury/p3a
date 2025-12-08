@@ -4,40 +4,31 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/**
+ * @file app_lcd_p4.c
+ * @brief Application-level display functions
+ * 
+ * This module provides high-level display operations for the p3a application.
+ * It uses the p3a_board component for hardware access and manages
+ * the animation player and UI mode.
+ */
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
-#include "freertos/task.h"
 
 #include "esp_err.h"
 #include "esp_log.h"
-#include "esp_lcd_mipi_dsi.h"
-#include "esp_heap_caps.h"
 
-#include "sdkconfig.h"
+#include "p3a_board.h"
 #include "app_lcd.h"
-#include "bsp/esp-bsp.h"
-#include "bsp/display.h"
-#include "bsp/esp32_p4_wifi6_touch_lcd_4b.h"
 #include "animation_player.h"
 #include "ugfx_ui.h"
 
 // Forward declaration for auto-swap timer reset
 extern void auto_swap_reset_timer(void);
 
-#define TAG "app_lcd"
-
-static esp_lcd_panel_handle_t display_handle = NULL;
-static esp_lcd_panel_io_handle_t io_handle = NULL;
-static uint8_t *lcd_buffer[EXAMPLE_LCD_BUF_NUM] = { NULL };
-static size_t s_frame_buffer_bytes = (size_t)EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES * (EXAMPLE_LCD_BIT_PER_PIXEL / 8);
-static size_t s_frame_row_stride_bytes = (size_t)EXAMPLE_LCD_H_RES * (EXAMPLE_LCD_BIT_PER_PIXEL / 8);
-static uint8_t s_buffer_count = EXAMPLE_LCD_BUF_NUM;
-static int s_current_brightness = 100;  // Track current brightness (0-100)
+static const char *TAG = "app_lcd";
 
 void app_lcd_draw(uint8_t *buf, uint32_t len, uint16_t width, uint16_t height)
 {
@@ -45,60 +36,34 @@ void app_lcd_draw(uint8_t *buf, uint32_t len, uint16_t width, uint16_t height)
     (void)len;
     (void)width;
     (void)height;
-    // The animation owns the display pipeline; external draw requests are ignored in this demo.
+    // The animation owns the display pipeline; external draw requests are ignored.
 }
 
 esp_err_t app_lcd_init(void)
 {
     ESP_LOGI(TAG, "P3A: Initialize display");
 
-    // Step 1: Initialize display panel
-    bsp_display_config_t disp_config = { 0 };
-    ESP_ERROR_CHECK(bsp_display_new(&disp_config, &display_handle, &io_handle));
-    
-    // Initialize brightness control
-    esp_err_t err = bsp_display_brightness_init();
+    // Step 1: Initialize board display hardware
+    esp_err_t err = p3a_board_display_init();
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Brightness init failed: %s", esp_err_to_name(err));
-    } else {
-        s_current_brightness = 100;
-        bsp_display_brightness_set(s_current_brightness);
+        ESP_LOGE(TAG, "Failed to initialize board display: %s", esp_err_to_name(err));
+        return err;
     }
 
-    // Step 2: Get frame buffers for animation player
-#if EXAMPLE_LCD_BUF_NUM == 1
-    ESP_ERROR_CHECK(esp_lcd_dpi_panel_get_frame_buffer(display_handle, 1, (void **)&lcd_buffer[0]));
-#elif EXAMPLE_LCD_BUF_NUM == 2
-    ESP_ERROR_CHECK(esp_lcd_dpi_panel_get_frame_buffer(display_handle, 2, (void **)&lcd_buffer[0], (void **)&lcd_buffer[1]));
-#else
-    ESP_ERROR_CHECK(esp_lcd_dpi_panel_get_frame_buffer(display_handle, 3, (void **)&lcd_buffer[0], (void **)&lcd_buffer[1], (void **)&lcd_buffer[2]));
-#endif
+    // Step 2: Get hardware info from board component
+    esp_lcd_panel_handle_t panel = p3a_board_get_panel();
+    uint8_t buffer_count = p3a_board_get_buffer_count();
+    size_t buffer_bytes = p3a_board_get_buffer_bytes();
+    size_t row_stride = p3a_board_get_row_stride();
 
-    s_buffer_count = EXAMPLE_LCD_BUF_NUM;
-    const size_t bytes_per_pixel = EXAMPLE_LCD_BIT_PER_PIXEL / 8;
-    if (bytes_per_pixel == 0) {
-        ESP_LOGE(TAG, "Invalid bytes per pixel configuration");
-        return ESP_ERR_INVALID_STATE;
-    }
-    s_frame_row_stride_bytes = (size_t)EXAMPLE_LCD_H_RES * bytes_per_pixel;
-    s_frame_buffer_bytes = s_frame_row_stride_bytes * EXAMPLE_LCD_V_RES;
-
-    if (s_buffer_count > 1 && lcd_buffer[0] && lcd_buffer[1] && lcd_buffer[1] > lcd_buffer[0]) {
-        const size_t spacing_bytes = (size_t)(lcd_buffer[1] - lcd_buffer[0]);
-        if (spacing_bytes > 0 && (spacing_bytes % EXAMPLE_LCD_V_RES) == 0) {
-            const size_t candidate_row_stride = spacing_bytes / EXAMPLE_LCD_V_RES;
-            if (candidate_row_stride >= s_frame_row_stride_bytes) {
-                s_frame_row_stride_bytes = candidate_row_stride;
-                s_frame_buffer_bytes = spacing_bytes;
-            }
-        }
+    // Build buffer array - MUST be static because display_renderer stores a pointer to it
+    static uint8_t *buffers[P3A_DISPLAY_BUFFERS];
+    for (int i = 0; i < buffer_count; i++) {
+        buffers[i] = p3a_board_get_buffer(i);
     }
 
-    ESP_LOGI(TAG, "Frame buffer stride: %zu bytes, size: %zu bytes", s_frame_row_stride_bytes, s_frame_buffer_bytes);
-
-    // Step 3: Initialize animation player
-    err = animation_player_init(display_handle, lcd_buffer, s_buffer_count,
-                                s_frame_buffer_bytes, s_frame_row_stride_bytes);
+    // Step 3: Initialize animation player with hardware resources
+    err = animation_player_init(panel, buffers, buffer_count, buffer_bytes, row_stride);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize animation player: %s", esp_err_to_name(err));
         return err;
@@ -115,11 +80,14 @@ esp_err_t app_lcd_init(void)
     return ESP_OK;
 }
 
+// ============================================================================
+// Animation control (application-level)
+// ============================================================================
+
 void app_lcd_set_animation_paused(bool paused)
 {
     bool was_paused = animation_player_is_paused();
     animation_player_set_paused(paused);
-    // Reset auto-swap timer when resuming playback
     if (was_paused && !paused) {
         auto_swap_reset_timer();
     }
@@ -142,7 +110,7 @@ void app_lcd_cycle_animation(void)
         return;
     }
     animation_player_cycle_animation(true);
-    auto_swap_reset_timer();  // Reset auto-swap timer on any swap
+    auto_swap_reset_timer();
 }
 
 void app_lcd_cycle_animation_backward(void)
@@ -152,44 +120,31 @@ void app_lcd_cycle_animation_backward(void)
         return;
     }
     animation_player_cycle_animation(false);
-    auto_swap_reset_timer();  // Reset auto-swap timer on any swap
+    auto_swap_reset_timer();
 }
+
+// ============================================================================
+// Brightness control (delegates to board component)
+// ============================================================================
 
 int app_lcd_get_brightness(void)
 {
-    return s_current_brightness;
+    return p3a_board_get_brightness();
 }
 
 esp_err_t app_lcd_set_brightness(int brightness_percent)
 {
-    if (brightness_percent < 0) {
-        brightness_percent = 0;
-    } else if (brightness_percent > 100) {
-        brightness_percent = 100;
+    return p3a_board_set_brightness(brightness_percent);
     }
     
-    // Apply cubic easing (ease-in): slow near 0%, faster near 100%
-    // - We interpret brightness_percent as the logical/UX value
-    // - Map it through an ease-in cubic curve: eased = (linear/100)^3 * 100
-    //   This makes small changes near 0% have very little effect (slow),
-    //   and the same change near 100% result in a larger visual step (fast).
-    float normalized = (float)brightness_percent / 100.0f;
-    float eased = normalized * normalized * normalized;   // ease-in cubic: x^3
-    int eased_brightness = (int)(eased * 100.0f + 0.5f);  // Round to nearest integer
-
-    // Clamp the eased value to valid range
-    if (eased_brightness < 0) {
-        eased_brightness = 0;
-    } else if (eased_brightness > 100) {
-        eased_brightness = 100;
-    }
-
-    esp_err_t err = bsp_display_brightness_set(eased_brightness);
-    if (err == ESP_OK) {
-        s_current_brightness = brightness_percent;
-    }
-    return err;
+esp_err_t app_lcd_adjust_brightness(int delta_percent)
+{
+    return p3a_board_adjust_brightness(delta_percent);
 }
+
+// ============================================================================
+// UI mode control (application-level)
+// ============================================================================
 
 esp_err_t app_lcd_enter_ui_mode(void)
 {
@@ -215,26 +170,21 @@ bool app_lcd_is_ui_mode(void)
     return animation_player_is_ui_mode();
 }
 
+// ============================================================================
+// Hardware access (delegates to board component)
+// ============================================================================
+
 uint8_t *app_lcd_get_framebuffer(int index)
 {
-    if (index < 0 || index >= s_buffer_count) {
-        return NULL;
-    }
-    return lcd_buffer[index];
+    return p3a_board_get_buffer(index);
 }
 
 size_t app_lcd_get_row_stride(void)
 {
-    return s_frame_row_stride_bytes;
+    return p3a_board_get_row_stride();
 }
 
 esp_lcd_panel_handle_t app_lcd_get_panel_handle(void)
 {
-    return display_handle;
-}
-
-esp_err_t app_lcd_adjust_brightness(int delta_percent)
-{
-    int new_brightness = s_current_brightness + delta_percent;
-    return app_lcd_set_brightness(new_brightness);
+    return p3a_board_get_panel();
 }

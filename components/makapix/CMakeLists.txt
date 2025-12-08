@@ -8,6 +8,7 @@ idf_component_register(
         "makapix_certs.c"
     INCLUDE_DIRS 
         "."
+    PRIV_INCLUDE_DIRS
         "${CMAKE_CURRENT_SOURCE_DIR}/../../main/include"
     REQUIRES 
         nvs_flash
@@ -19,5 +20,8 @@ idf_component_register(
         esp-tls
         esp_wifi
         esp_netif
+    PRIV_REQUIRES
+        wifi_manager
+    WHOLE_ARCHIVE
 )
 

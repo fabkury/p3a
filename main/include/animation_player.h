@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include "esp_err.h"
 #include "esp_lcd_panel_ops.h"
+#include "display_renderer.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -87,16 +88,21 @@ void animation_player_resume_sd_access(void);
  * @return true if paused, false otherwise
  */
 bool animation_player_is_sd_paused(void);
+
+/**
+ * @brief Submit a PICO-8 frame for rendering
+ * 
+ * @deprecated Use pico8_render_submit_frame() instead
+ */
 esp_err_t animation_player_submit_pico8_frame(const uint8_t *palette_rgb, size_t palette_len,
                                               const uint8_t *pixel_data, size_t pixel_len);
 
-// Screen rotation types (must match animation_player_priv.h)
-typedef enum {
-    ROTATION_0   = 0,
-    ROTATION_90  = 90,
-    ROTATION_180 = 180,
-    ROTATION_270 = 270
-} screen_rotation_t;
+// Screen rotation types - use display_renderer types
+typedef display_rotation_t screen_rotation_t;
+#define ROTATION_0   DISPLAY_ROTATION_0
+#define ROTATION_90  DISPLAY_ROTATION_90
+#define ROTATION_180 DISPLAY_ROTATION_180
+#define ROTATION_270 DISPLAY_ROTATION_270
 
 /**
  * @brief Set screen rotation for entire display

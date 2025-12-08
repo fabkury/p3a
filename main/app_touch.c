@@ -22,6 +22,7 @@
 
 // Debug provisioning mode - when enabled, long press doesn't trigger real provisioning
 #define DEBUG_PROVISIONING_ENABLED 0
+#define MATH_PI 3.14159265f
 
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -49,7 +50,7 @@ typedef enum {
 
 // Rotation gesture configuration
 #define ROTATION_ANGLE_THRESHOLD_DEG  45.0f  // Degrees needed to trigger rotation
-#define ROTATION_ANGLE_THRESHOLD_RAD  (ROTATION_ANGLE_THRESHOLD_DEG * 3.14159265f / 180.0f)
+#define ROTATION_ANGLE_THRESHOLD_RAD  (ROTATION_ANGLE_THRESHOLD_DEG * MATH_PI / 180.0f)
 
 /**
  * @brief Calculate angle between two touch points
@@ -67,8 +68,8 @@ static float calculate_two_finger_angle(uint16_t x1, uint16_t y1, uint16_t x2, u
  */
 static float normalize_angle(float angle)
 {
-    while (angle > 3.14159265f) angle -= 2.0f * 3.14159265f;
-    while (angle < -3.14159265f) angle += 2.0f * 3.14159265f;
+    while (angle > MATH_PI) angle -= 2.0f * MATH_PI;
+    while (angle < -MATH_PI) angle += 2.0f * MATH_PI;
     return angle;
 }
 
@@ -231,7 +232,7 @@ static void app_touch_task(void *arg)
                 rotation_triggered = false;
                 gesture_state = GESTURE_STATE_ROTATION;
                 ESP_LOGD(TAG, "rotation gesture started, initial angle=%.2f deg", 
-                         rotation_start_angle * 180.0f / 3.14159265f);
+                         rotation_start_angle * 180.0f / MATH_PI);
             } else if (gesture_state == GESTURE_STATE_ROTATION) {
                 // Continue tracking rotation
                 float angle_delta = normalize_angle(current_angle - rotation_last_angle);
@@ -247,12 +248,12 @@ static void app_touch_task(void *arg)
                         // Positive angle delta in screen coords (y down) = clockwise finger rotation
                         new_rot = get_next_rotation_cw(current_rot);
                         ESP_LOGI(TAG, "rotation gesture: CW, cumulative=%.2f deg", 
-                                 rotation_cumulative * 180.0f / 3.14159265f);
+                                 rotation_cumulative * 180.0f / MATH_PI);
                     } else {
                         // Negative angle delta = counter-clockwise finger rotation
                         new_rot = get_next_rotation_ccw(current_rot);
                         ESP_LOGI(TAG, "rotation gesture: CCW, cumulative=%.2f deg", 
-                                 rotation_cumulative * 180.0f / 3.14159265f);
+                                 rotation_cumulative * 180.0f / MATH_PI);
                     }
                     
                     esp_err_t err = app_set_screen_rotation(new_rot);

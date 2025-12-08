@@ -8,6 +8,14 @@ menu "Physical Player of Pixel Art (P3A)"
             help
                 Number of seconds of inactivity before automatically cycling to the next animation.
                 Set to 0 to disable auto-swap entirely.
+
+        config P3A_MEMORY_REPORTING_ENABLE
+            bool "Enable memory status reporting"
+            default n
+            help
+                When enabled, the device will log detailed memory statistics every 15 seconds,
+                including heap usage broken down by memory type (internal RAM, SPIRAM, DMA, etc.).
+                Useful for debugging memory issues but adds overhead.
     endmenu
 
     menu "Display"

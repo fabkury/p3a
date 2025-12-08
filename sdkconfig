@@ -762,13 +762,13 @@ CONFIG_PARTITION_TABLE_MD5=y
 # General
 #
 CONFIG_P3A_AUTO_SWAP_INTERVAL_SECONDS=30
-CONFIG_P3A_STATIC_FRAME_DELAY_MS=100
 # end of General
 
 #
 # Display
 #
 CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH=y
+CONFIG_P3A_DISPLAY_WAIT_AFTER_DRAW=y
 # end of Display
 
 #
@@ -810,20 +810,11 @@ CONFIG_ESP_WIFI_AUTH_WPA2_PSK=y
 # CONFIG_ESP_WIFI_AUTH_WAPI_PSK is not set
 # end of Wi-Fi
 
-# CONFIG_LCD_PIXEL_FORMAT_RGB565 is not set
-CONFIG_LCD_PIXEL_FORMAT_RGB888=y
-
 #
 # USB
 #
 CONFIG_P3A_USB_MSC_ENABLE=y
 # end of USB
-
-#
-# PICO-8 Monitor
-#
-# CONFIG_P3A_PICO8_ENABLE is not set
-# end of PICO-8 Monitor
 # end of Physical Player of Pixel Art (P3A)
 
 #
@@ -2519,6 +2510,20 @@ CONFIG_WIFI_PROV_STA_ALL_CHANNEL_SCAN=y
 # end of Wi-Fi Provisioning Manager
 
 #
+# Animation Decoder
+#
+CONFIG_ANIMATION_DECODER_STATIC_FRAME_DELAY_MS=100
+# end of Animation Decoder
+
+#
+# Channel Manager
+#
+CONFIG_CHANNEL_MANAGER_MAX_POSTS=1000
+CONFIG_CHANNEL_MANAGER_PAGE_SIZE=50
+CONFIG_CHANNEL_DEFAULT_ANIMATIONS_DIR="/sdcard/animations"
+# end of Channel Manager
+
+#
 # Makapix Configuration
 #
 CONFIG_MAKAPIX_CLUB_HOST="dev.makapix.club"
@@ -2535,6 +2540,39 @@ CONFIG_OTA_FIRMWARE_ASSET_NAME="p3a.bin"
 CONFIG_OTA_DOWNLOAD_TIMEOUT_SEC=600
 CONFIG_OTA_HTTP_BUFFER_SIZE=4096
 # end of OTA Manager Configuration
+
+#
+# P3A Board Configuration (EP44B)
+#
+CONFIG_P3A_BOARD_EP44B=y
+CONFIG_P3A_PIXEL_FORMAT_RGB888=y
+# CONFIG_P3A_PIXEL_FORMAT_RGB565 is not set
+CONFIG_P3A_DISPLAY_BUFFER_COUNT=2
+CONFIG_P3A_HAS_TOUCH=y
+CONFIG_P3A_HAS_BRIGHTNESS_CONTROL=y
+CONFIG_P3A_HAS_WIFI=y
+CONFIG_P3A_HAS_USB=y
+CONFIG_P3A_HAS_SDCARD=y
+# CONFIG_P3A_HAS_BUTTONS is not set
+# end of P3A Board Configuration (EP44B)
+
+#
+# P3A Features
+#
+
+#
+# PICO-8 Streaming
+#
+# CONFIG_P3A_PICO8_ENABLE is not set
+# end of PICO-8 Streaming
+# end of P3A Features
+
+#
+# WiFi Manager
+#
+CONFIG_WIFI_MANAGER_ENABLED=y
+CONFIG_WIFI_MANAGER_SNTP_SERVER="pool.ntp.org"
+# end of WiFi Manager
 
 #
 # CMake Utilities

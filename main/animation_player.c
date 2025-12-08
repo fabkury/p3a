@@ -4,16 +4,10 @@
 #include "ugfx_ui.h"
 #include "config_store.h"
 #include "ota_manager.h"
+#include "pico8_stream.h"
+#include "pico8_render.h"
 
-esp_lcd_panel_handle_t s_display_handle = NULL;
-uint8_t **s_lcd_buffers = NULL;
-uint8_t s_buffer_count = 0;
-size_t s_frame_buffer_bytes = 0;
-size_t s_frame_row_stride_bytes = 0;
-
-SemaphoreHandle_t s_vsync_sem = NULL;
-TaskHandle_t s_anim_task = NULL;
-
+// Animation player state
 animation_buffer_t s_front_buffer = {0};
 animation_buffer_t s_back_buffer = {0};
 size_t s_next_asset_index = 0;
@@ -24,66 +18,16 @@ SemaphoreHandle_t s_loader_sem = NULL;
 SemaphoreHandle_t s_buffer_mutex = NULL;
 
 bool s_anim_paused = false;
-volatile render_mode_t s_render_mode_request = RENDER_MODE_ANIMATION;
-volatile render_mode_t s_render_mode_active = RENDER_MODE_ANIMATION;
-
-TaskHandle_t s_upscale_worker_top = NULL;
-TaskHandle_t s_upscale_worker_bottom = NULL;
-TaskHandle_t s_upscale_main_task = NULL;
-const uint8_t *s_upscale_src_buffer = NULL;
-uint8_t *s_upscale_dst_buffer = NULL;
-const uint16_t *s_upscale_lookup_x = NULL;
-const uint16_t *s_upscale_lookup_y = NULL;
-int s_upscale_src_w = 0;
-int s_upscale_src_h = 0;
-screen_rotation_t s_upscale_rotation = ROTATION_0;
-int s_upscale_row_start_top = 0;
-int s_upscale_row_end_top = 0;
-int s_upscale_row_start_bottom = 0;
-int s_upscale_row_end_bottom = 0;
-volatile bool s_upscale_worker_top_done = false;
-volatile bool s_upscale_worker_bottom_done = false;
-
-uint8_t s_render_buffer_index = 0;
-uint8_t s_last_display_buffer = 0;
-
-int64_t s_last_frame_present_us = 0;
-int64_t s_last_duration_update_us = 0;
-int s_latest_frame_duration_ms = 0;
-char s_frame_duration_text[11] = "";
-int64_t s_frame_processing_start_us = 0;
-uint32_t s_target_frame_delay_ms = 0;
 
 app_lcd_sd_file_list_t s_sd_file_list = {0};
 bool s_sd_mounted = false;
 bool s_sd_export_active = false;
-bool s_sd_access_paused = false;  // Paused for external operations (OTA)
-
-// Screen rotation state
-screen_rotation_t g_screen_rotation = ROTATION_0;
-volatile bool g_rotation_in_progress = false;
+bool s_sd_access_paused = false;
 
 typedef struct {
     TaskHandle_t requester;
     esp_err_t result;
 } sd_refresh_request_t;
-
-static void animation_player_wait_for_render_mode(render_mode_t target_mode)
-{
-    const TickType_t check_delay = pdMS_TO_TICKS(5);
-    const TickType_t timeout = pdMS_TO_TICKS(500);
-    TickType_t waited = 0;
-
-    while (s_render_mode_active != target_mode) {
-        vTaskDelay(check_delay);
-        waited += check_delay;
-        if (waited >= timeout) {
-            ESP_LOGW(TAG, "Timed out waiting for render mode %d (active=%d)",
-                     target_mode, s_render_mode_active);
-            break;
-        }
-    }
-}
 
 static void animation_player_sd_refresh_task(void *arg)
 {
@@ -97,33 +41,6 @@ static void animation_player_sd_refresh_task(void *arg)
         }
     }
     vTaskDelete(NULL);
-}
-
-static esp_err_t prepare_vsync(void)
-{
-    if (s_buffer_count > 1) {
-        if (s_vsync_sem == NULL) {
-            s_vsync_sem = xSemaphoreCreateBinary();
-        }
-        if (s_vsync_sem == NULL) {
-            ESP_LOGE(TAG, "Failed to allocate VSYNC semaphore");
-            return ESP_ERR_NO_MEM;
-        }
-        (void)xSemaphoreTake(s_vsync_sem, 0);
-        xSemaphoreGive(s_vsync_sem);
-
-        esp_lcd_dpi_panel_event_callbacks_t cbs = {
-            .on_refresh_done = lcd_panel_refresh_done_cb,
-        };
-        return esp_lcd_dpi_panel_register_event_callbacks(s_display_handle, &cbs, s_vsync_sem);
-    }
-
-    if (s_vsync_sem) {
-        vSemaphoreDelete(s_vsync_sem);
-        s_vsync_sem = NULL;
-        ESP_LOGW(TAG, "Single LCD frame buffer in use; tearing may occur");
-    }
-    return ESP_OK;
 }
 
 static esp_err_t mount_sd_and_discover(char **animations_dir_out)
@@ -153,7 +70,6 @@ static esp_err_t mount_sd_and_discover(char **animations_dir_out)
 
 static esp_err_t load_first_animation(void)
 {
-    // Get current post from channel player
     const sdcard_post_t *post = NULL;
     esp_err_t err = channel_player_get_current_post(&post);
     if (err != ESP_OK || !post) {
@@ -164,12 +80,15 @@ static esp_err_t load_first_animation(void)
     esp_err_t load_err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer);
     if (load_err == ESP_OK) {
         ESP_LOGI(TAG, "Loaded animation '%s' to start playback", post->name);
+        
+        // Update playback controller with metadata
+        playback_controller_set_animation_metadata(post->filepath, true);
+        
         return ESP_OK;
     }
 
     ESP_LOGW(TAG, "Failed to load animation '%s', trying next...", post->name);
     
-    // Try advancing and loading next post
     err = channel_player_advance();
     if (err == ESP_OK) {
         err = channel_player_get_current_post(&post);
@@ -177,6 +96,7 @@ static esp_err_t load_first_animation(void)
             load_err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer);
             if (load_err == ESP_OK) {
                 ESP_LOGI(TAG, "Loaded animation '%s' to start playback", post->name);
+                playback_controller_set_animation_metadata(post->filepath, true);
                 return ESP_OK;
             }
         }
@@ -195,14 +115,18 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         return ESP_ERR_INVALID_ARG;
     }
 
-    s_display_handle = display_handle;
-    s_lcd_buffers = lcd_buffers;
-    s_buffer_count = buffer_count;
-    s_frame_buffer_bytes = buffer_bytes;
-    s_frame_row_stride_bytes = row_stride_bytes;
-
-    esp_err_t err = prepare_vsync();
+    // Initialize display renderer
+    esp_err_t err = display_renderer_init(display_handle, lcd_buffers, buffer_count, buffer_bytes, row_stride_bytes);
     if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize display renderer: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // Initialize playback controller
+    err = playback_controller_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize playback controller: %s", esp_err_to_name(err));
+        display_renderer_deinit();
         return err;
     }
 
@@ -210,6 +134,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     err = sdcard_channel_init();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize SD card channel: %s", esp_err_to_name(err));
+        playback_controller_deinit();
+        display_renderer_deinit();
         return err;
     }
 
@@ -217,6 +143,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize channel player: %s", esp_err_to_name(err));
         sdcard_channel_deinit();
+        playback_controller_deinit();
+        display_renderer_deinit();
         return err;
     }
 
@@ -229,6 +157,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         }
         channel_player_deinit();
         sdcard_channel_deinit();
+        playback_controller_deinit();
+        display_renderer_deinit();
         return (err == ESP_ERR_NOT_FOUND) ? ESP_ERR_NOT_FOUND : err;
     }
 
@@ -238,6 +168,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         ESP_LOGE(TAG, "Failed to refresh channel: %s", esp_err_to_name(err));
         channel_player_deinit();
         sdcard_channel_deinit();
+        playback_controller_deinit();
+        display_renderer_deinit();
         return err;
     }
 
@@ -246,6 +178,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         ESP_LOGE(TAG, "Failed to load channel: %s", esp_err_to_name(err));
         channel_player_deinit();
         sdcard_channel_deinit();
+        playback_controller_deinit();
+        display_renderer_deinit();
         return err;
     }
 
@@ -253,12 +187,18 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         ESP_LOGE(TAG, "No animation posts loaded");
         channel_player_deinit();
         sdcard_channel_deinit();
+        playback_controller_deinit();
+        display_renderer_deinit();
         return ESP_ERR_NOT_FOUND;
     }
 
     s_buffer_mutex = xSemaphoreCreateMutex();
     if (!s_buffer_mutex) {
         ESP_LOGE(TAG, "Failed to create buffer mutex");
+        channel_player_deinit();
+        sdcard_channel_deinit();
+        playback_controller_deinit();
+        display_renderer_deinit();
         return ESP_ERR_NO_MEM;
     }
 
@@ -267,6 +207,10 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         ESP_LOGE(TAG, "Failed to create loader semaphore");
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
+        channel_player_deinit();
+        sdcard_channel_deinit();
+        playback_controller_deinit();
+        display_renderer_deinit();
         return ESP_ERR_NO_MEM;
     }
 
@@ -280,43 +224,11 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         s_loader_sem = NULL;
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
+        channel_player_deinit();
+        sdcard_channel_deinit();
+        playback_controller_deinit();
+        display_renderer_deinit();
         return err;
-    }
-
-    if (s_upscale_worker_top == NULL) {
-        if (xTaskCreatePinnedToCore(upscale_worker_top_task,
-                                    "upscale_top",
-                                    2048,
-                                    NULL,
-                                    CONFIG_P3A_RENDER_TASK_PRIORITY,
-                                    &s_upscale_worker_top,
-                                    0) != pdPASS) {
-            ESP_LOGE(TAG, "Failed to create top upscale worker task");
-            unload_animation_buffer(&s_front_buffer);
-            vSemaphoreDelete(s_loader_sem);
-            s_loader_sem = NULL;
-            vSemaphoreDelete(s_buffer_mutex);
-            s_buffer_mutex = NULL;
-            return ESP_FAIL;
-        }
-    }
-
-    if (s_upscale_worker_bottom == NULL) {
-        if (xTaskCreatePinnedToCore(upscale_worker_bottom_task,
-                                    "upscale_bottom",
-                                    2048,
-                                    NULL,
-                                    CONFIG_P3A_RENDER_TASK_PRIORITY,
-                                    &s_upscale_worker_bottom,
-                                    1) != pdPASS) {
-            ESP_LOGE(TAG, "Failed to create bottom upscale worker task");
-            unload_animation_buffer(&s_front_buffer);
-            vSemaphoreDelete(s_loader_sem);
-            s_loader_sem = NULL;
-            vSemaphoreDelete(s_buffer_mutex);
-            s_buffer_mutex = NULL;
-            return ESP_FAIL;
-        }
     }
 
     esp_err_t prefetch_err = prefetch_first_frame(&s_front_buffer);
@@ -339,17 +251,15 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         s_loader_sem = NULL;
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
+        channel_player_deinit();
+        sdcard_channel_deinit();
+        playback_controller_deinit();
+        display_renderer_deinit();
         return ESP_FAIL;
     }
 
-    // Load and apply saved rotation
-    screen_rotation_t saved_rotation = config_store_get_rotation();
-    if (saved_rotation != ROTATION_0) {
-        ESP_LOGI(TAG, "Restoring saved rotation: %d degrees", saved_rotation);
-        g_screen_rotation = saved_rotation;
-        // Apply to µGFX (animation lookup tables will use it automatically on first load)
-        ugfx_ui_set_rotation(saved_rotation);
-    }
+    // Set the frame callback for display renderer
+    display_renderer_set_frame_callback(animation_player_render_frame_callback, NULL);
 
     return ESP_OK;
 }
@@ -391,7 +301,7 @@ bool animation_player_is_paused(void)
 
 void animation_player_cycle_animation(bool forward)
 {
-    if (animation_player_is_ui_mode()) {
+    if (display_renderer_is_ui_mode()) {
         ESP_LOGW(TAG, "Swap request ignored: UI mode active");
         return;
     }
@@ -401,14 +311,11 @@ void animation_player_cycle_animation(bool forward)
         return;
     }
 
-    // Skip swap when SD access is paused (OTA in progress)
     if (animation_player_is_sd_paused()) {
         ESP_LOGW(TAG, "Swap request ignored: SD access paused for OTA");
         return;
     }
 
-    // Skip swap during OTA check to avoid SDIO bus contention
-    // (WiFi and SD card both use SDIO bus)
     if (ota_manager_is_checking()) {
         ESP_LOGW(TAG, "Swap request ignored: OTA check in progress (SDIO bus busy)");
         return;
@@ -428,23 +335,19 @@ void animation_player_cycle_animation(bool forward)
         xSemaphoreGive(s_buffer_mutex);
     }
 
-    // Advance or go back in channel player (outside mutex to avoid deadlock)
     esp_err_t err = forward ? channel_player_advance() : channel_player_go_back();
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to cycle animation: %s", esp_err_to_name(err));
         return;
     }
 
-    // Now set the swap request flag
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-        // Double-check conditions after advance (in case something changed)
         if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
             ESP_LOGW(TAG, "Animation change request ignored: swap already in progress");
             xSemaphoreGive(s_buffer_mutex);
             return;
         }
 
-        // Set flag for loader task (0 = backward, non-zero = forward)
         s_next_asset_index = forward ? 1 : 0;
         s_swap_requested = true;
         xSemaphoreGive(s_buffer_mutex);
@@ -537,7 +440,6 @@ bool animation_player_is_loader_busy(void)
         busy = s_loader_busy || s_swap_requested || s_back_buffer.prefetch_pending;
         xSemaphoreGive(s_buffer_mutex);
     } else {
-        // Couldn't get mutex, assume busy to be safe
         busy = s_loader_busy || s_swap_requested;
     }
     return busy;
@@ -545,7 +447,6 @@ bool animation_player_is_loader_busy(void)
 
 void animation_player_pause_sd_access(void)
 {
-    // Wait for any current loader operation to complete
     int wait_count = 0;
     while (animation_player_is_loader_busy() && wait_count < 100) {
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -586,44 +487,19 @@ bool animation_player_is_sd_paused(void)
 
 esp_err_t animation_player_start(void)
 {
-    if (s_anim_task == NULL) {
-        if (xTaskCreate(lcd_animation_task,
-                        "lcd_anim",
-                        4096,
-                        NULL,
-                        CONFIG_P3A_RENDER_TASK_PRIORITY,
-                        &s_anim_task) != pdPASS) {
-            ESP_LOGE(TAG, "Failed to start LCD animation task");
-            return ESP_FAIL;
-        }
-    }
-    return ESP_OK;
+    return display_renderer_start();
 }
 
 void animation_player_deinit(void)
 {
 #if CONFIG_P3A_PICO8_ENABLE
-    release_pico8_resources();
+    pico8_render_deinit();
 #endif
     s_sd_export_active = false;
-
-    if (s_anim_task) {
-        vTaskDelete(s_anim_task);
-        s_anim_task = NULL;
-    }
 
     if (s_loader_task) {
         vTaskDelete(s_loader_task);
         s_loader_task = NULL;
-    }
-
-    if (s_upscale_worker_top) {
-        vTaskDelete(s_upscale_worker_top);
-        s_upscale_worker_top = NULL;
-    }
-    if (s_upscale_worker_bottom) {
-        vTaskDelete(s_upscale_worker_bottom);
-        s_upscale_worker_bottom = NULL;
     }
 
     unload_animation_buffer(&s_front_buffer);
@@ -637,14 +513,13 @@ void animation_player_deinit(void)
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
     }
-    if (s_vsync_sem) {
-        vSemaphoreDelete(s_vsync_sem);
-        s_vsync_sem = NULL;
-    }
 
     free_sd_file_list();
     channel_player_deinit();
     sdcard_channel_deinit();
+    playback_controller_deinit();
+    display_renderer_deinit();
+    
     if (s_sd_mounted) {
         bsp_sdcard_unmount();
         s_sd_mounted = false;
@@ -673,24 +548,24 @@ esp_err_t animation_player_swap_to_index(size_t index)
         return ESP_ERR_INVALID_ARG;
     }
 
-    // Note: Direct index access not directly supported by channel_player
-    // This would require additional API. For now, return not supported.
     ESP_LOGW(TAG, "Direct index swap not yet supported with channel abstraction");
     return ESP_ERR_NOT_SUPPORTED;
 }
 
 // ============================================================================
-// UI Mode Control - SIMPLE VERSION
+// UI Mode Control
 // ============================================================================
 
 esp_err_t animation_player_enter_ui_mode(void)
 {
     ESP_LOGI(TAG, "Entering UI mode");
-    s_render_mode_request = RENDER_MODE_UI;
-    animation_player_wait_for_render_mode(RENDER_MODE_UI);
+    
+    esp_err_t err = display_renderer_enter_ui_mode();
+    if (err != ESP_OK) {
+        return err;
+    }
     
     // Unload animation buffers to free internal RAM for HTTP/SSL operations
-    // This is critical because mbedTLS needs internal RAM for SSL buffers
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
         ESP_LOGI(TAG, "Unloading animation buffers to free memory for provisioning");
         unload_animation_buffer(&s_front_buffer);
@@ -698,6 +573,9 @@ esp_err_t animation_player_enter_ui_mode(void)
         s_swap_requested = false;
         xSemaphoreGive(s_buffer_mutex);
     }
+    
+    // Clear metadata since we're not playing an animation
+    playback_controller_clear_metadata();
     
     ESP_LOGI(TAG, "UI mode active");
     return ESP_OK;
@@ -707,77 +585,50 @@ void animation_player_exit_ui_mode(void)
 {
     ESP_LOGI(TAG, "Exiting UI mode");
     
-    // Trigger reload of current animation (buffers were unloaded when entering UI mode)
+    // Trigger reload of current animation
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-        // Signal loader to reload current animation into back buffer
         s_swap_requested = true;
         xSemaphoreGive(s_buffer_mutex);
-        xSemaphoreGive(s_loader_sem);  // Wake up loader task
+        xSemaphoreGive(s_loader_sem);
     }
     
-    s_render_mode_request = RENDER_MODE_ANIMATION;
-    animation_player_wait_for_render_mode(RENDER_MODE_ANIMATION);
+    display_renderer_exit_ui_mode();
     ESP_LOGI(TAG, "Animation mode active");
 }
 
 bool animation_player_is_ui_mode(void)
 {
-    return (s_render_mode_active == RENDER_MODE_UI);
+    return display_renderer_is_ui_mode();
 }
 
-// Screen rotation implementation
+// ============================================================================
+// PICO-8 compatibility wrapper
+// ============================================================================
+
+esp_err_t animation_player_submit_pico8_frame(const uint8_t *palette_rgb, size_t palette_len,
+                                              const uint8_t *pixel_data, size_t pixel_len)
+{
+#if CONFIG_P3A_PICO8_ENABLE
+    return pico8_render_submit_frame(palette_rgb, palette_len, pixel_data, pixel_len);
+#else
+    (void)palette_rgb;
+    (void)palette_len;
+    (void)pixel_data;
+    (void)pixel_len;
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
+}
+
+// ============================================================================
+// Screen rotation
+// ============================================================================
+
 esp_err_t app_set_screen_rotation(screen_rotation_t rotation)
 {
-    // Validate rotation angle
-    if (rotation != ROTATION_0 && rotation != ROTATION_90 && 
-        rotation != ROTATION_180 && rotation != ROTATION_270) {
-        ESP_LOGE(TAG, "Invalid rotation angle: %d", rotation);
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    // Check if rotation operation already in progress
-    if (g_rotation_in_progress) {
-        ESP_LOGW(TAG, "Rotation operation already in progress, rejecting new request");
-        return ESP_ERR_INVALID_STATE;
-    }
-    
-    // If same as current rotation, nothing to do
-    if (rotation == g_screen_rotation) {
-        ESP_LOGI(TAG, "Already at rotation %d degrees", rotation);
-        return ESP_OK;
-    }
-    
-    // Set rotation in progress flag
-    g_rotation_in_progress = true;
-    
-    // Update global state
-    screen_rotation_t old_rotation = g_screen_rotation;
-    g_screen_rotation = rotation;
-    
-    ESP_LOGI(TAG, "Setting screen rotation from %d to %d degrees", old_rotation, rotation);
-    
-    // Apply to µGFX UI (for provisioning screens)
-    esp_err_t err = ugfx_ui_set_rotation(rotation);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to set µGFX rotation: %s", esp_err_to_name(err));
-        // Continue anyway - UI rotation is non-critical
-    }
-    
-    // NOTE: No animation reload needed! Rotation is applied dynamically at render time:
-    // - render_next_frame() and prefetch_first_frame() set s_upscale_rotation = g_screen_rotation
-    // - blit_upscaled_rows() applies rotation transformation based on s_upscale_rotation
-    // The next rendered frame will automatically use the new rotation.
-    
-    // Store in config for persistence
-    config_store_set_rotation(rotation);
-    
-    g_rotation_in_progress = false;
-    
-    ESP_LOGI(TAG, "Screen rotation set to %d degrees", rotation);
-    return ESP_OK;
+    return display_renderer_set_rotation(rotation);
 }
 
 screen_rotation_t app_get_screen_rotation(void)
 {
-    return g_screen_rotation;
+    return display_renderer_get_rotation();
 }

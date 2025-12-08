@@ -20,7 +20,7 @@
 #include "app_usb.h"
 #include "app_wifi.h"
 #include "http_api.h"
-#include "fs_init.h"
+#include "p3a_board.h"  // For p3a_board_spiffs_mount()
 #include "makapix.h"
 #include "sntp_sync.h"
 #include "ugfx_ui.h"
@@ -338,7 +338,7 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     // Initialize SPIFFS filesystem
-    esp_err_t fs_ret = fs_init();
+    esp_err_t fs_ret = p3a_board_spiffs_mount();
     if (fs_ret != ESP_OK) {
         ESP_LOGW(TAG, "SPIFFS initialization failed: %s (continuing anyway)", esp_err_to_name(fs_ret));
     }

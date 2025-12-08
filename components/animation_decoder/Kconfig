@@ -1,0 +1,13 @@
+menu "Animation Decoder"
+
+    config ANIMATION_DECODER_STATIC_FRAME_DELAY_MS
+        int "Static image frame delay (ms)"
+        default 100
+        range 10 1000
+        help
+            Frame delay used for static images (PNG, JPEG) when played as animations.
+            This controls how long a static image is displayed before the decoder
+            indicates it's ready to "advance" to the next frame (which is the same image).
+
+endmenu
+

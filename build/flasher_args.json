@@ -1,7 +1,7 @@
 {
-    "write_flash_args" : [ "--flash-mode", "dio",
-                           "--flash-size", "32MB",
-                           "--flash-freq", "80m" ],
+    "write_flash_args" : [ "--flash_mode", "dio",
+                           "--flash_size", "32MB",
+                           "--flash_freq", "80m" ],
     "flash_settings" : {
         "flash_mode": "dio",
         "flash_size": "32MB",
@@ -22,8 +22,8 @@
     "slave_fw" : { "offset" : "0x1120000", "file" : "../components/slave_ota/firmware/network_adapter.bin", "encrypted" : "false" },
     "storage" : { "offset" : "0x1020000", "file" : "storage.bin", "encrypted" : "false" },
     "extra_esptool_args" : {
-        "after"  : "hard-reset",
-        "before" : "default-reset",
+        "after"  : "hard_reset",
+        "before" : "default_reset",
         "stub"   : true,
         "chip"   : "esp32p4"
     }

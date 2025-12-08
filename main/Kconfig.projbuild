@@ -8,14 +8,6 @@ menu "Physical Player of Pixel Art (P3A)"
             help
                 Number of seconds of inactivity before automatically cycling to the next animation.
                 Set to 0 to disable auto-swap entirely.
-
-        config P3A_STATIC_FRAME_DELAY_MS
-            int "Static image frame delay (ms)"
-            default 100
-            range 10 1000
-            help
-                Frame delay used for static images (PNG, JPEG) when played as animations.
-                This simulates animation timing for single-frame images.
     endmenu
 
     menu "Display"
@@ -25,6 +17,16 @@ menu "Physical Player of Pixel Art (P3A)"
             help
                 Enable cache flushes before handing the framebuffer to the panel driver.
                 Disable to evaluate DMA coherency without the extra msync cost.
+
+        config P3A_DISPLAY_WAIT_AFTER_DRAW
+            bool "Wait for VSYNC after draw (tear-free 2-buffer mode)"
+            default y
+            help
+                When enabled, the display renderer waits for VSYNC AFTER submitting
+                esp_lcd_panel_draw_bitmap(). This enforces tear-free rendering when
+                using 2 frame buffers by ensuring DMA finishes scanning the just-
+                submitted buffer before it is reused. Disable to use legacy timing
+                (wait before render). Recommended ON for 2-buffer setups.
     endmenu
 
     menu "Animation"
@@ -162,21 +164,8 @@ menu "Physical Player of Pixel Art (P3A)"
         endchoice
     endmenu
 
-    choice
-        prompt "LCD color format"
-        default LCD_PIXEL_FORMAT_RGB888
-        help
-            Select the framebuffer color encoding used by the panel driver.
-
-        config LCD_PIXEL_FORMAT_RGB565
-            bool "RGB565"
-            select BSP_LCD_COLOR_FORMAT_RGB565
-
-        config LCD_PIXEL_FORMAT_RGB888
-            bool "RGB888"
-            depends on IDF_TARGET_ESP32P4
-            select BSP_LCD_COLOR_FORMAT_RGB888
-    endchoice
+    # LCD color format is now configured in the board component (P3A Board Configuration)
+    # Legacy config symbols are provided by p3a_board.h for backward compatibility
 
     menu "USB"
         config P3A_USB_MSC_ENABLE
@@ -187,22 +176,6 @@ menu "Physical Player of Pixel Art (P3A)"
                 to expose the SD card as a USB drive.
     endmenu
 
-    menu "PICO-8 Monitor"
-        config P3A_PICO8_ENABLE
-            bool "Enable PICO-8 monitor feature"
-            default y
-            help
-                Enable the PICO-8 monitor feature which allows streaming PICO-8
-                gameplay to the display via WebSocket or USB.
-                Disabling this option removes all PICO-8 related code and assets
-                from the firmware binary.
+    # PICO-8 Monitor configuration moved to components/pico8/Kconfig
 
-        config P3A_PICO8_USB_STREAM_ENABLE
-            bool "Enable USB PICO-8 streaming interface"
-            default y
-            depends on P3A_PICO8_ENABLE && P3A_USB_MSC_ENABLE
-            help
-                Add vendor-specific USB interface for PICO-8 frame streaming.
-                Requires both PICO-8 monitor and USB MSC to be enabled.
-    endmenu
 endmenu

@@ -1,0 +1,116 @@
+Executing action: all (aliases: build)
+Running ninja in directory D:\Dropbox\PC\F\Estudo\Tecnologia\ESP32\p3a\repo\build
+Executing "ninja all"...
+[0/1] Re-running CMake...
+
+CMake Warning (dev) at CMakeLists.txt:202:
+  Syntax Warning in cmake code at column 119
+
+  Argument not separated from preceding token by whitespace.
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+CMake Warning (dev) at CMakeLists.txt:202:
+  Syntax Warning in cmake code at column 130
+
+  Argument not separated from preceding token by whitespace.
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- Component directory D:/Dropbox/PC/F/Estudo/Tecnologia/ESP32/p3a/repo/components/display_renderer does not contain a CMakeLists.txt file. No component will be added
+-- Minimal build - OFF
+-- ccache will be used for faster recompilation
+-- Building ESP-IDF components for target esp32p4
+NOTICE: Processing 19 dependencies:
+
+NOTICE: [1/19] espressif/cmake_utilities (0.5.3)
+
+NOTICE: [2/19] espressif/eppp_link (1.1.3)
+
+NOTICE: [3/19] espressif/esp_codec_dev (1.2.0)
+
+NOTICE: [4/19] espressif/esp_hosted (2.7.0)
+
+NOTICE: [5/19] espressif/esp_lcd_touch (1.2.0)
+
+NOTICE: [6/19] espressif/esp_lcd_touch_gt911 (1.2.0)
+
+NOTICE: [7/19] espressif/esp_lvgl_port (2.7.0)
+
+NOTICE: [8/19] espressif/esp_serial_slave_link (1.1.2)
+
+NOTICE: [9/19] espressif/esp_tinyusb (1.7.6~2)
+
+NOTICE: [10/19] espressif/esp_wifi_remote (1.2.2)
+
+NOTICE: [11/19] espressif/libpng (1.6.52)
+
+NOTICE: [12/19] espressif/mdns (1.9.1)
+
+NOTICE: [13/19] espressif/tinyusb (0.17.0~2)
+
+NOTICE: [14/19] espressif/wifi_remote_over_eppp (0.2.1)
+
+NOTICE: [15/19] espressif/zlib (1.3.1)
+
+NOTICE: [16/19] lvgl/lvgl (9.4.0)
+
+NOTICE: [17/19] waveshare/esp32_p4_wifi6_touch_lcd_4b (1.0.1)
+
+NOTICE: [18/19] waveshare/esp_lcd_st7703 (1.0.5)
+
+NOTICE: [19/19] idf (5.5.1)
+
+Traceback (most recent call last):
+  File "C:\Users\Fab\esp\v5.5.1\esp-idf\tools\idf.py", line 871, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\Fab\esp\v5.5.1\esp-idf\tools\idf.py", line 761, in main
+    cli(argv, prog_name=PROG, complete_var=SHELL_COMPLETE_VAR)
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Lib\site-packages\click\core.py", line 1161, in __call__
+    return self.main(*args, **kwargs)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Lib\site-packages\click\core.py", line 1082, in main
+    rv = self.invoke(ctx)
+  File "C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Lib\site-packages\click\core.py", line 1729, in invoke
+    return _process_result(rv)
+  File "C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Lib\site-packages\click\core.py", line 1666, in _process_result
+    value = ctx.invoke(self._result_callback, value, **ctx.params)
+  File "C:\Users\Fab\.espressif\python_env\idf5.5_py3.13_env\Lib\site-packages\click\core.py", line 788, in invoke
+    return __callback(*args, **kwargs)
+  File "C:\Users\Fab\esp\v5.5.1\esp-idf\tools\idf.py", line 656, in execute_tasks
+    task(ctx, global_args, task.action_args)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Fab\esp\v5.5.1\esp-idf\tools\idf.py", line 214, in __call__
+    self.callback(self.name, context, global_args, **action_args)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Fab\esp\v5.5.1\esp-idf\tools\idf_py_actions\core_ext.py", line 50, in build_target
+    run_target(target_name, args, force_progression=GENERATORS[args.generator].get('force_progression', False))
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Fab\esp\v5.5.1\esp-idf\tools\idf_py_actions\tools.py", line 501, in run_target
+    RunTool(generator_cmd[0], generator_cmd + [target_name], args.build_dir, env, custom_error_handler, hints=not args.no_hints,
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            force_progression=force_progression, interactive=interactive)()
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Fab\esp\v5.5.1\esp-idf\tools\idf_py_actions\tools.py", line 319, in __call__
+    process, stderr_output_file, stdout_output_file = asyncio.run(self.run_command(self.args, env_copy))
+                                                      ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Fab\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "C:\Users\Fab\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\Fab\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 725, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "C:\Users\Fab\esp\v5.5.1\esp-idf\tools\idf_py_actions\tools.py", line 364, in run_command
+    await asyncio.gather(
+        self.read_and_write_stream(p.stderr, stderr_output_file, sys.stderr),
+        self.read_and_write_stream(p.stdout, stdout_output_file, sys.stdout))
+  File "C:\Users\Fab\esp\v5.5.1\esp-idf\tools\idf_py_actions\tools.py", line 463, in read_and_write_stream
+    output_converter.write(output)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "C:\Users\Fab\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u0393' in position 36: character maps to <undefined>

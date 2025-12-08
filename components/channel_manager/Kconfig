@@ -1,0 +1,25 @@
+menu "Channel Manager"
+
+    config CHANNEL_MANAGER_MAX_POSTS
+        int "Maximum posts per channel"
+        default 1000
+        range 100 10000
+        help
+            Maximum number of posts (artworks) that can be loaded from a single channel.
+            Higher values use more RAM.
+
+    config CHANNEL_MANAGER_PAGE_SIZE
+        int "Query page size"
+        default 50
+        range 10 100
+        help
+            Number of posts returned per paginated query.
+
+    config CHANNEL_DEFAULT_ANIMATIONS_DIR
+        string "Default animations directory"
+        default "/sdcard/animations"
+        help
+            Default directory path for SD card animations.
+
+endmenu
+

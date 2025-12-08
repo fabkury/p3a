@@ -8,13 +8,12 @@
 #include "freertos/task.h"
 #include "esp_err.h"
 #include "esp_log.h"
-#include "bsp/touch.h"
 #include "esp_lcd_touch.h"
+#include "p3a_board.h"
 #include "app_lcd.h"
 #include "app_usb.h"
 #include "app_touch.h"
 #include "app_wifi.h"
-#include "bsp/display.h"
 #include "sdkconfig.h"
 #include "makapix.h"
 #include "animation_player.h"
@@ -145,8 +144,8 @@ static uint16_t scale_to_pico8(uint16_t value, uint16_t max_src, uint16_t max_ds
  */
 static void transform_touch_coordinates(uint16_t *x, uint16_t *y, screen_rotation_t rotation)
 {
-    const uint16_t screen_w = BSP_LCD_H_RES;
-    const uint16_t screen_h = BSP_LCD_V_RES;
+    const uint16_t screen_w = P3A_DISPLAY_WIDTH;
+    const uint16_t screen_h = P3A_DISPLAY_HEIGHT;
     uint16_t temp;
     
     switch (rotation) {
@@ -190,7 +189,7 @@ static void app_touch_task(void *arg)
     uint16_t brightness_start_y = 0; // Visual Y coordinate for brightness baseline
     TickType_t touch_start_time = 0;
     int brightness_start = 100;  // Brightness at gesture start
-    const uint16_t screen_height = BSP_LCD_V_RES;
+    const uint16_t screen_height = P3A_DISPLAY_HEIGHT;
     const uint16_t min_swipe_height = (screen_height * CONFIG_P3A_TOUCH_SWIPE_MIN_HEIGHT_PERCENT) / 100;
     const int max_brightness_delta = CONFIG_P3A_TOUCH_BRIGHTNESS_MAX_DELTA_PERCENT;
     const TickType_t long_press_duration = pdMS_TO_TICKS(5000); // 5 seconds
@@ -287,8 +286,8 @@ static void app_touch_task(void *arg)
             transform_touch_coordinates(&visual_x, &visual_y, rotation);
             
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
-            uint16_t scaled_x = scale_to_pico8(x[0], BSP_LCD_H_RES, 127);
-            uint16_t scaled_y = scale_to_pico8(y[0], BSP_LCD_V_RES, 127);
+            uint16_t scaled_x = scale_to_pico8(x[0], P3A_DISPLAY_WIDTH, 127);
+            uint16_t scaled_y = scale_to_pico8(y[0], P3A_DISPLAY_HEIGHT, 127);
             bool coords_changed = (!last_touch_valid) || (scaled_x != last_scaled_x) || (scaled_y != last_scaled_y);
 #endif
 
@@ -447,7 +446,7 @@ static void app_touch_task(void *arg)
                     uint16_t tap_y = touch_start_y;
                     transform_touch_coordinates(&tap_x, &tap_y, app_get_screen_rotation());
                     
-                    const uint16_t screen_midpoint = BSP_LCD_H_RES / 2;
+                    const uint16_t screen_midpoint = P3A_DISPLAY_WIDTH / 2;
                     if (tap_x < screen_midpoint) {
                         // Left half: cycle backward
                         app_lcd_cycle_animation_backward();
@@ -487,7 +486,8 @@ static void app_touch_task(void *arg)
 
 esp_err_t app_touch_init(void)
 {
-    esp_err_t err = bsp_touch_new(NULL, &tp);
+#if P3A_HAS_TOUCH
+    esp_err_t err = p3a_board_touch_init(&tp);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "touch init failed: %s", esp_err_to_name(err));
         return err;
@@ -501,4 +501,8 @@ esp_err_t app_touch_init(void)
     }
 
     return ESP_OK;
+#else
+    ESP_LOGW(TAG, "Touch not available on this board");
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
 }

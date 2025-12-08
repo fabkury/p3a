@@ -14,6 +14,9 @@
 #include "esp_event.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#if CONFIG_P3A_MEMORY_REPORTING_ENABLE
+#include "esp_heap_caps.h"
+#endif
 
 #include "app_lcd.h"
 #include "app_touch.h"
@@ -119,6 +122,9 @@ static bool check_first_boot_after_update(void)
 }
 
 #define AUTO_SWAP_INTERVAL_SECONDS CONFIG_P3A_AUTO_SWAP_INTERVAL_SECONDS
+#if CONFIG_P3A_MEMORY_REPORTING_ENABLE
+#define MEMORY_REPORT_INTERVAL_SECONDS 15
+#endif
 
 static TaskHandle_t s_auto_swap_task_handle = NULL;
 
@@ -154,6 +160,110 @@ static void auto_swap_task(void *arg)
         app_lcd_cycle_animation();
     }
 }
+
+#if CONFIG_P3A_MEMORY_REPORTING_ENABLE
+/**
+ * @brief Memory reporting task that logs memory statistics every 15 seconds
+ * 
+ * Reports:
+ * - Free heap memory (current and minimum since boot)
+ * - Memory breakdown by capability (internal RAM, SPIRAM if available, etc.)
+ * - Largest free block
+ * - Number of FreeRTOS tasks
+ */
+static void memory_report_task(void *arg)
+{
+    (void)arg;
+    const TickType_t delay_ticks = pdMS_TO_TICKS(MEMORY_REPORT_INTERVAL_SECONDS * 1000);
+    
+    ESP_LOGI(TAG, "Memory reporting task started: will report every %d seconds", MEMORY_REPORT_INTERVAL_SECONDS);
+    
+    // Wait a bit for system to initialize before first report
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    
+    while (true) {
+        // Get overall heap statistics
+        size_t free_heap = esp_get_free_heap_size();
+        size_t min_free_heap = esp_get_minimum_free_heap_size();
+        size_t largest_free_block = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+        
+        // Get memory breakdown by capability
+        size_t free_internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+        size_t total_internal = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
+        size_t used_internal = total_internal - free_internal;
+        
+        size_t free_spiram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+        size_t total_spiram = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+        size_t used_spiram = total_spiram - free_spiram;
+        
+        size_t free_dma = heap_caps_get_free_size(MALLOC_CAP_DMA);
+        size_t total_dma = heap_caps_get_total_size(MALLOC_CAP_DMA);
+        size_t used_dma = total_dma - free_dma;
+        
+        size_t free_8bit = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+        size_t total_8bit = heap_caps_get_total_size(MALLOC_CAP_8BIT);
+        size_t used_8bit = total_8bit - free_8bit;
+        
+        // Get task count
+        UBaseType_t num_tasks = uxTaskGetNumberOfTasks();
+        
+        // Log memory report
+        ESP_LOGI(TAG, "=== Memory Status Report ===");
+        ESP_LOGI(TAG, "Overall Heap:");
+        ESP_LOGI(TAG, "  Free: %zu bytes (%.2f KB)", free_heap, free_heap / 1024.0f);
+        ESP_LOGI(TAG, "  Min Free (since boot): %zu bytes (%.2f KB)", min_free_heap, min_free_heap / 1024.0f);
+        ESP_LOGI(TAG, "  Largest Free Block: %zu bytes (%.2f KB)", largest_free_block, largest_free_block / 1024.0f);
+        ESP_LOGI(TAG, "");
+        ESP_LOGI(TAG, "Memory by Type:");
+        ESP_LOGI(TAG, "  Internal RAM:");
+        ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_internal, total_internal / 1024.0f);
+        ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
+                 used_internal, used_internal / 1024.0f, 
+                 total_internal > 0 ? (100.0f * used_internal / total_internal) : 0.0f);
+        ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
+                 free_internal, free_internal / 1024.0f,
+                 total_internal > 0 ? (100.0f * free_internal / total_internal) : 0.0f);
+        
+        if (total_spiram > 0) {
+            ESP_LOGI(TAG, "  SPIRAM:");
+            ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_spiram, total_spiram / 1024.0f);
+            ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
+                     used_spiram, used_spiram / 1024.0f,
+                     total_spiram > 0 ? (100.0f * used_spiram / total_spiram) : 0.0f);
+            ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
+                     free_spiram, free_spiram / 1024.0f,
+                     total_spiram > 0 ? (100.0f * free_spiram / total_spiram) : 0.0f);
+        }
+        
+        if (total_dma > 0) {
+            ESP_LOGI(TAG, "  DMA-Capable:");
+            ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_dma, total_dma / 1024.0f);
+            ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
+                     used_dma, used_dma / 1024.0f,
+                     total_dma > 0 ? (100.0f * used_dma / total_dma) : 0.0f);
+            ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
+                     free_dma, free_dma / 1024.0f,
+                     total_dma > 0 ? (100.0f * free_dma / total_dma) : 0.0f);
+        }
+        
+        ESP_LOGI(TAG, "  8-bit Accessible:");
+        ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_8bit, total_8bit / 1024.0f);
+        ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
+                 used_8bit, used_8bit / 1024.0f,
+                 total_8bit > 0 ? (100.0f * used_8bit / total_8bit) : 0.0f);
+        ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
+                 free_8bit, free_8bit / 1024.0f,
+                 total_8bit > 0 ? (100.0f * free_8bit / total_8bit) : 0.0f);
+        
+        ESP_LOGI(TAG, "");
+        ESP_LOGI(TAG, "System:");
+        ESP_LOGI(TAG, "  FreeRTOS Tasks: %u", num_tasks);
+        ESP_LOGI(TAG, "============================");
+        
+        vTaskDelay(delay_ticks);
+    }
+}
+#endif // CONFIG_P3A_MEMORY_REPORTING_ENABLE
 
 void auto_swap_reset_timer(void)
 {
@@ -358,6 +468,15 @@ void app_main(void)
     if (created != pdPASS) {
         ESP_LOGE(TAG, "Failed to create auto-swap task");
     }
+
+#if CONFIG_P3A_MEMORY_REPORTING_ENABLE
+    // Create memory reporting task
+    const BaseType_t mem_task_created = xTaskCreate(memory_report_task, "mem_report", 3072, NULL,
+                                                    tskIDLE_PRIORITY + 1, NULL);
+    if (mem_task_created != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create memory reporting task");
+    }
+#endif // CONFIG_P3A_MEMORY_REPORTING_ENABLE
 
     // Check if this is first boot after firmware update
     bool needs_stabilization_reboot = check_first_boot_after_update();

@@ -194,7 +194,7 @@ static void app_touch_task(void *arg)
     const uint16_t min_swipe_height = (screen_height * CONFIG_P3A_TOUCH_SWIPE_MIN_HEIGHT_PERCENT) / 100;
     const int max_brightness_delta = CONFIG_P3A_TOUCH_BRIGHTNESS_MAX_DELTA_PERCENT;
     const TickType_t long_press_duration = pdMS_TO_TICKS(4000); // 4 seconds
-    const uint16_t long_press_movement_threshold = (MIN(screen_height, screen_width) * 65 + 500) / 1000; // 6.5% of smallest dimension, rounded
+    const uint32_t long_press_movement_threshold = ( (uint32_t)MIN(screen_height, screen_width) * 65U + 500U ) / 1000U; // 6.5% of smallest dimension, rounded
     
     // Two-finger rotation gesture state
     float rotation_start_angle = 0.0f;      // Initial angle between two fingers

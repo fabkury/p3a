@@ -270,6 +270,12 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
         ch->entries = NULL;
         ch->entry_count = 0;
         ch->base.loaded = true;
+        
+        // Start refresh to fetch channel data from server
+        if (!ch->refreshing) {
+            ESP_LOGI(TAG, "Starting refresh to populate empty channel");
+            makapix_impl_request_refresh(channel);
+        }
         return ESP_OK;
     }
     

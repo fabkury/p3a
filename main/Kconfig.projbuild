@@ -35,6 +35,16 @@ menu "Physical Player of Pixel Art (P3A)"
                 using 2 frame buffers by ensuring DMA finishes scanning the just-
                 submitted buffer before it is reused. Disable to use legacy timing
                 (wait before render). Recommended ON for 2-buffer setups.
+
+        config P3A_USE_PIE_SIMD
+            bool "Use PIE SIMD for vertical row duplication"
+            default y
+            depends on IDF_TARGET_ESP32P4
+            help
+                Enable PIE (SIMD) acceleration for copying vertically duplicated rows
+                during nearest-neighbor upscaling. Uses ESP32-P4 PIE 128-bit vector
+                load/store instructions to speed up row copying. When disabled, uses
+                standard memcpy. Only available on ESP32-P4.
     endmenu
 
     menu "Animation"

@@ -14,6 +14,7 @@
 #include <string.h>
 #include <strings.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 static const char *TAG = "makapix";
 

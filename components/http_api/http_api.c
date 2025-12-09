@@ -36,6 +36,7 @@
 #include "makapix_mqtt.h"
 #include "makapix_artwork.h"
 #include "ota_manager.h"
+#include "p3a_state.h"
 #if CONFIG_P3A_PICO8_ENABLE
 #include "pico8_stream.h"
 #endif
@@ -459,8 +460,8 @@ static esp_err_t h_put_config(httpd_req_t *req) {
 
 /**
  * POST /channel
- * Switch to a Makapix channel
- * Body: {"channel": "all"|"promoted"|"user"|"by_user", "user_handle": "..." (optional)}
+ * Switch to a channel
+ * Body: {"channel": "all"|"promoted"|"user"|"by_user"|"sdcard", "user_handle": "..." (optional)}
  */
 static esp_err_t h_post_channel(httpd_req_t *req) {
     if (!ensure_json_content(req)) {
@@ -501,7 +502,16 @@ static esp_err_t h_post_channel(httpd_req_t *req) {
     const char *ch_name = cJSON_GetStringValue(channel);
     const char *user = user_handle && cJSON_IsString(user_handle) ? cJSON_GetStringValue(user_handle) : NULL;
 
-    esp_err_t err = makapix_switch_to_channel(ch_name, user);
+    esp_err_t err;
+    
+    // Handle sdcard channel separately
+    if (strcmp(ch_name, "sdcard") == 0) {
+        err = p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL);
+    } else {
+        // Handle Makapix channels
+        err = makapix_switch_to_channel(ch_name, user);
+    }
+    
     cJSON_Delete(root);
 
     if (err != ESP_OK) {

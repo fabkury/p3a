@@ -19,6 +19,8 @@
 #include "freertos/semphr.h"
 #include "mbedtls/sha256.h"
 #include "nvs_flash.h"
+#include "p3a_state.h"
+#include "p3a_render.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -80,6 +82,30 @@ static void set_state(ota_state_t new_state)
     if (s_ota.mutex) {
         xSemaphoreGive(s_ota.mutex);
     }
+    
+    // Sync with unified p3a state machine
+    p3a_ota_substate_t p3a_substate;
+    switch (new_state) {
+        case OTA_STATE_CHECKING:
+            p3a_substate = P3A_OTA_CHECKING;
+            break;
+        case OTA_STATE_DOWNLOADING:
+            p3a_substate = P3A_OTA_DOWNLOADING;
+            break;
+        case OTA_STATE_VERIFYING:
+            p3a_substate = P3A_OTA_VERIFYING;
+            break;
+        case OTA_STATE_FLASHING:
+            p3a_substate = P3A_OTA_FLASHING;
+            break;
+        case OTA_STATE_PENDING_REBOOT:
+            p3a_substate = P3A_OTA_PENDING_REBOOT;
+            break;
+        default:
+            // Don't update substate for IDLE, UPDATE_AVAILABLE, ERROR
+            return;
+    }
+    p3a_state_set_ota_substate(p3a_substate);
 }
 
 static void set_error(const char *message)
@@ -105,6 +131,10 @@ static void set_progress(int percent, const char *status)
     if (s_ota.mutex) {
         xSemaphoreGive(s_ota.mutex);
     }
+    
+    // Update unified p3a state machine
+    p3a_state_set_ota_progress(percent, status);
+    p3a_render_set_ota_progress(percent, status, NULL, NULL);
     
     if (s_ota.progress_callback) {
         s_ota.progress_callback(percent, status);
@@ -584,6 +614,15 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
     ESP_LOGI(TAG, "Starting OTA update: %s -> %s", 
              current_app->version, s_ota.release_info.version);
     
+    // Enter unified p3a OTA state
+    esp_err_t state_err = p3a_state_enter_ota();
+    if (state_err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to enter p3a OTA state: %s (continuing anyway)", esp_err_to_name(state_err));
+    }
+    
+    // Update render state with version info
+    p3a_render_set_ota_progress(0, "Preparing...", current_app->version, s_ota.release_info.version);
+    
     // Enter UI mode to stop animations and free memory
     if (ui_cb) {
         ui_cb(true, current_app->version, s_ota.release_info.version);
@@ -604,6 +643,8 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
         vTaskDelay(pdMS_TO_TICKS(5000));
         ota_exit_ui_mode();
         set_state(OTA_STATE_ERROR);
+        // Exit p3a OTA state and return to playback
+        p3a_state_exit_to_playback();
         return ESP_ERR_NOT_FOUND;
     }
     
@@ -647,6 +688,8 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
             vTaskDelay(pdMS_TO_TICKS(5000));  // Show error for 5 seconds
             ota_exit_ui_mode();
             set_state(OTA_STATE_ERROR);
+            // Exit p3a OTA state and return to playback
+            p3a_state_exit_to_playback();
             return ESP_ERR_INVALID_CRC;
         }
     } else {
@@ -707,6 +750,8 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
         int downloaded = esp_https_ota_get_image_len_read(ota_handle);
         int percent = (total_size > 0) ? (downloaded * 100 / total_size) : 0;
         set_progress(percent, "Downloading...");
+        // Update render state with version info
+        p3a_render_set_ota_progress(percent, "Downloading...", current_app->version, s_ota.release_info.version);
     }
     
     if (err != ESP_OK) {
@@ -714,6 +759,8 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
         esp_https_ota_abort(ota_handle);
         set_error("Download failed");
         ota_exit_ui_mode();
+        // Exit p3a OTA state and return to playback
+        p3a_state_exit_to_playback();
         return err;
     }
     
@@ -725,6 +772,8 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
         set_progress(s_ota.download_progress, "DOWNLOAD ERROR!");
         vTaskDelay(pdMS_TO_TICKS(2000));
         ota_exit_ui_mode();
+        // Exit p3a OTA state and return to playback
+        p3a_state_exit_to_playback();
         return ESP_ERR_INVALID_SIZE;
     }
     
@@ -743,6 +792,8 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
         }
         vTaskDelay(pdMS_TO_TICKS(2000));
         ota_exit_ui_mode();
+        // Exit p3a OTA state and return to playback
+        p3a_state_exit_to_playback();
         return err;
     }
     
@@ -761,6 +812,8 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
                 ota_exit_ui_mode();
                 // Mark partition as invalid
                 set_error("Checksum verification failed");
+                // Exit p3a OTA state and return to playback
+                p3a_state_exit_to_playback();
                 return err;
             }
         }

@@ -18,6 +18,8 @@
 #include "makapix.h"
 #include "animation_player.h"
 #include "ugfx_ui.h"
+#include "p3a_state.h"
+#include "p3a_touch_router.h"
 #include <math.h>
 
 // Debug provisioning mode - when enabled, long press doesn't trigger real provisioning
@@ -241,27 +243,17 @@ static void app_touch_task(void *arg)
                 
                 // Check if rotation threshold exceeded
                 if (!rotation_triggered && fabsf(rotation_cumulative) >= ROTATION_ANGLE_THRESHOLD_RAD) {
-                    screen_rotation_t current_rot = app_get_screen_rotation();
-                    screen_rotation_t new_rot;
+                    // Route rotation through state-aware handler
+                    p3a_touch_event_t touch_event = {
+                        .type = (rotation_cumulative > 0) ? P3A_TOUCH_EVENT_ROTATION_CW : P3A_TOUCH_EVENT_ROTATION_CCW
+                    };
                     
-                    if (rotation_cumulative > 0) {
-                        // Positive angle delta in screen coords (y down) = clockwise finger rotation
-                        new_rot = get_next_rotation_cw(current_rot);
-                        ESP_LOGI(TAG, "rotation gesture: CW, cumulative=%.2f deg", 
+                    ESP_LOGI(TAG, "rotation gesture: %s, cumulative=%.2f deg", 
+                             (rotation_cumulative > 0) ? "CW" : "CCW",
                                  rotation_cumulative * 180.0f / MATH_PI);
-                    } else {
-                        // Negative angle delta = counter-clockwise finger rotation
-                        new_rot = get_next_rotation_ccw(current_rot);
-                        ESP_LOGI(TAG, "rotation gesture: CCW, cumulative=%.2f deg", 
-                                 rotation_cumulative * 180.0f / MATH_PI);
-                    }
                     
-                    esp_err_t err = app_set_screen_rotation(new_rot);
-                    if (err == ESP_OK) {
-                        ESP_LOGI(TAG, "screen rotation changed to %d degrees", new_rot);
+                    if (p3a_touch_router_handle_event(&touch_event) == ESP_OK) {
                         rotation_triggered = true;
-                    } else {
-                        ESP_LOGW(TAG, "failed to set rotation: %s", esp_err_to_name(err));
                     }
                 }
             }
@@ -325,36 +317,12 @@ static void app_touch_task(void *arg)
                             if (gesture_state != GESTURE_STATE_LONG_PRESS_PENDING) {
                                 gesture_state = GESTURE_STATE_LONG_PRESS_PENDING;
                                 
-#if DEBUG_PROVISIONING_ENABLED
-                                // Debug mode: long press doesn't trigger real provisioning
-                                ESP_LOGI(TAG, "Long press detected (DEBUG MODE - provisioning disabled)");
-#else
-                                // Check if captive AP info screen is active
-                                if (ugfx_ui_is_active() && app_wifi_is_captive_portal_active()) {
-                                    // AP info screen is showing - hide it and exit UI mode
-                                    ESP_LOGI(TAG, "Long press detected with AP info showing - hiding AP info");
-                                    ugfx_ui_hide_registration();
-                                    app_lcd_exit_ui_mode();
-                                } else if (app_wifi_is_captive_portal_active()) {
-                                    // In captive portal mode but no UI - show AP info screen
-                                    ESP_LOGI(TAG, "Long press detected in captive portal mode - showing AP info");
-                                    app_lcd_enter_ui_mode();
-                                    ugfx_ui_show_captive_ap_info();
-                                } else {
-                                    // Check current makapix state
-                                    makapix_state_t makapix_state = makapix_get_state();
-                                    if (makapix_state == MAKAPIX_STATE_PROVISIONING || 
-                                        makapix_state == MAKAPIX_STATE_SHOW_CODE) {
-                                        // Already in provisioning/show_code mode - cancel and exit
-                                        ESP_LOGI(TAG, "Long press detected in registration mode - cancelling and exiting");
-                                        makapix_cancel_provisioning();
-                                    } else {
-                                        // Not in provisioning mode - start new provisioning
-                                        ESP_LOGI(TAG, "Long press detected, starting provisioning");
-                                        makapix_start_provisioning();
-                                    }
-                                }
-#endif
+                                // Route long press through state-aware touch router
+                                p3a_touch_event_t touch_event = {
+                                    .type = P3A_TOUCH_EVENT_LONG_PRESS
+                                };
+                                p3a_touch_router_handle_event(&touch_event);
+                                ESP_LOGI(TAG, "Long press detected, routed to state handler");
                             }
                         } else {
                             // Still counting, but not long enough yet
@@ -379,6 +347,11 @@ static void app_touch_task(void *arg)
                 }
 
                 if (gesture_state == GESTURE_STATE_BRIGHTNESS) {
+                    // Check if brightness gestures are enabled in current state
+                    if (!p3a_touch_router_is_gesture_enabled(P3A_TOUCH_EVENT_BRIGHTNESS)) {
+                        // Reset to tap state if brightness not allowed
+                        gesture_state = GESTURE_STATE_TAP;
+                    } else {
                     // Recompute delta against brightness baseline using visual coordinates
                     delta_y = (int16_t)visual_y - (int16_t)brightness_start_y;
 
@@ -403,6 +376,7 @@ static void app_touch_task(void *arg)
                     if (target_brightness != current_brightness) {
                         app_lcd_set_brightness(target_brightness);
                         ESP_LOGD(TAG, "brightness: %d%% (delta_y=%d)", target_brightness, delta_y);
+                        }
                     }
                 }
             }
@@ -442,21 +416,18 @@ static void app_touch_task(void *arg)
                     // Long press was triggered, provisioning is in progress
                     ESP_LOGD(TAG, "Long press gesture ended (provisioning in progress)");
                 } else if (gesture_state == GESTURE_STATE_TAP) {
-                    // It was a tap, perform swap gesture
+                    // It was a tap, route through state-aware handler
                     // Transform tap position to determine left/right in user's visual space
                     uint16_t tap_x = touch_start_x;
                     uint16_t tap_y = touch_start_y;
                     transform_touch_coordinates(&tap_x, &tap_y, app_get_screen_rotation());
                     
                     const uint16_t screen_midpoint = P3A_DISPLAY_WIDTH / 2;
-                    if (tap_x < screen_midpoint) {
-                        // Left half: cycle backward
-                        app_lcd_cycle_animation_backward();
-                    } else {
-                        // Right half: cycle forward
-                        app_lcd_cycle_animation();
-                    }
-                    ESP_LOGD(TAG, "tap gesture: swap animation (tap_x=%u)", tap_x);
+                    p3a_touch_event_t touch_event = {
+                        .type = (tap_x < screen_midpoint) ? P3A_TOUCH_EVENT_TAP_LEFT : P3A_TOUCH_EVENT_TAP_RIGHT
+                    };
+                    p3a_touch_router_handle_event(&touch_event);
+                    ESP_LOGD(TAG, "tap gesture: routed to state handler (tap_x=%u)", tap_x);
                 } else if (gesture_state == GESTURE_STATE_ROTATION) {
                     // Rotation gesture ended (action already taken if threshold was reached)
                     ESP_LOGD(TAG, "rotation gesture ended");
@@ -493,6 +464,12 @@ esp_err_t app_touch_init(void)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "touch init failed: %s", esp_err_to_name(err));
         return err;
+    }
+
+    // Initialize touch router (for state-aware gesture routing)
+    err = p3a_touch_router_init();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "touch router init failed: %s (continuing anyway)", esp_err_to_name(err));
     }
 
     const BaseType_t created = xTaskCreate(app_touch_task, "app_touch_task", 4096, NULL,

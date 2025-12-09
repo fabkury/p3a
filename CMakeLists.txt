@@ -14,6 +14,18 @@ cmake_minimum_required(VERSION 3.16)
 set(PROJECT_VER "0.5.4-dev")
 # =============================================================================
 
+# Parse PROJECT_VER to extract major, minor, patch components
+# Handle versions with suffixes like "-dev", "-alpha", etc.
+string(REGEX REPLACE "^([0-9]+)\\.[0-9]+\\.[0-9]+.*" "\\1" FW_VERSION_MAJOR "${PROJECT_VER}")
+string(REGEX REPLACE "^[0-9]+\\.([0-9]+)\\.[0-9]+.*" "\\1" FW_VERSION_MINOR "${PROJECT_VER}")
+string(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.([0-9]+).*" "\\1" FW_VERSION_PATCH "${PROJECT_VER}")
+
+# Store in cache so components can access them
+set(PROJECT_VER "${PROJECT_VER}" CACHE STRING "Project version" FORCE)
+set(FW_VERSION_MAJOR "${FW_VERSION_MAJOR}" CACHE STRING "Firmware major version" FORCE)
+set(FW_VERSION_MINOR "${FW_VERSION_MINOR}" CACHE STRING "Firmware minor version" FORCE)
+set(FW_VERSION_PATCH "${FW_VERSION_PATCH}" CACHE STRING "Firmware patch version" FORCE)
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 add_compile_options(-Wno-ignored-qualifiers)
 project(p3a)
@@ -150,9 +162,14 @@ flash_opts = '--flash_mode dio --flash_freq 80m --flash_size 32MB'
 with open(flash_cmd_path, 'w') as f:
     f.write('# Flash command for ESP32-P4\\n')
     f.write('# Run from this directory:\\n')
+    f.write('# Windows Command Prompt:\\n')
     f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args\\n')
+    f.write('# Windows PowerShell:\\n')
+    f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} "@flash_args"\\n')
+    f.write('# Linux/macOS:\\n')
+    f.write(f'python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args\\n')
     f.write('\\n')
-    f.write('# Or with explicit port (replace COM5 with your port):\\n')
+    f.write('# Or with explicit port (replace COM5 or /dev/ttyUSB0 with your port)\\n')
     f.write(f'python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args\\n')
 
 print(f'  OK: flash_command.txt')

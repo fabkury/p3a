@@ -6,15 +6,26 @@
  * 
  * Version follows Semantic Versioning 2.0 (https://semver.org/)
  * MAJOR.MINOR.PATCH
+ * 
+ * Version is defined in CMakeLists.txt as PROJECT_VER and passed via compile definitions.
  */
 
-// Version components
-#define FW_VERSION_MAJOR  1
+// Version components (defined by CMake from PROJECT_VER)
+#ifndef FW_VERSION_MAJOR
+#define FW_VERSION_MAJOR  0
+#endif
+#ifndef FW_VERSION_MINOR
 #define FW_VERSION_MINOR  0
+#endif
+#ifndef FW_VERSION_PATCH
 #define FW_VERSION_PATCH  0
+#endif
 
-// Version string (must match components above)
-#define FW_VERSION        "1.0.0"
+// Version string (defined by CMake from PROJECT_VER)
+#ifndef FW_VERSION_STRING
+#define FW_VERSION_STRING "0.0.0"
+#endif
+#define FW_VERSION        FW_VERSION_STRING
 
 // Device model identifier
 #define FW_DEVICE_MODEL   "p3a"

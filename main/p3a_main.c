@@ -30,6 +30,8 @@
 #include "animation_player.h"  // For animation_player_is_ui_mode()
 #include "ota_manager.h"       // For OTA boot validation
 #include "slave_ota.h"         // For ESP32-C6 co-processor OTA
+#include "p3a_state.h"         // Unified p3a state machine
+#include "p3a_render.h"        // State-aware rendering
 #include "freertos/task.h"
 
 // NVS namespace and keys for tracking firmware versions across boots
@@ -390,10 +392,16 @@ static void register_rest_action_handlers(void)
 }
 
 #if !DEBUG_PROVISIONING_ENABLED
+/**
+ * @brief Monitor task that bridges makapix module states to unified p3a state machine
+ * 
+ * This task watches the makapix module's internal state and updates the unified
+ * p3a state machine accordingly. It also handles the UI transitions for provisioning.
+ */
 static void makapix_state_monitor_task(void *arg)
 {
     (void)arg;
-    makapix_state_t last_state = MAKAPIX_STATE_IDLE;
+    makapix_state_t last_makapix_state = MAKAPIX_STATE_IDLE;
 
     esp_err_t err = ugfx_ui_init();
     if (err != ESP_OK) {
@@ -402,40 +410,55 @@ static void makapix_state_monitor_task(void *arg)
     }
 
     while (true) {
-        makapix_state_t current_state = makapix_get_state();
+        makapix_state_t current_makapix_state = makapix_get_state();
 
-        if (current_state != last_state) {
-            ESP_LOGI(TAG, "Makapix state changed: %d -> %d", last_state, current_state);
+        if (current_makapix_state != last_makapix_state) {
+            ESP_LOGI(TAG, "Makapix state changed: %d -> %d", last_makapix_state, current_makapix_state);
 
-            // Handle state transitions
-            if (current_state == MAKAPIX_STATE_PROVISIONING) {
+            // Handle state transitions - sync with unified p3a state machine
+            if (current_makapix_state == MAKAPIX_STATE_PROVISIONING) {
+                // Transition p3a to provisioning state if allowed
+                if (p3a_state_get() == P3A_STATE_ANIMATION_PLAYBACK) {
+                    p3a_state_enter_provisioning();
+                }
+                p3a_state_set_provisioning_substate(P3A_PROV_STATUS);
+                
                 // Enter UI mode immediately and show status message
                 app_lcd_enter_ui_mode();
 
                 char status[128];
                 if (makapix_get_provisioning_status(status, sizeof(status)) == ESP_OK) {
-                    esp_err_t err = ugfx_ui_show_provisioning_status(status);
-                    if (err != ESP_OK) {
-                        ESP_LOGE(TAG, "Failed to show provisioning status UI: %s", esp_err_to_name(err));
+                    p3a_render_set_provisioning_status(status);
+                    esp_err_t show_err = ugfx_ui_show_provisioning_status(status);
+                    if (show_err != ESP_OK) {
+                        ESP_LOGE(TAG, "Failed to show provisioning status UI: %s", esp_err_to_name(show_err));
                     }
                 } else {
                     // Default status message
-                    esp_err_t err = ugfx_ui_show_provisioning_status("Starting...");
-                    if (err != ESP_OK) {
-                        ESP_LOGE(TAG, "Failed to show provisioning status UI: %s", esp_err_to_name(err));
+                    p3a_render_set_provisioning_status("Starting...");
+                    esp_err_t show_err = ugfx_ui_show_provisioning_status("Starting...");
+                    if (show_err != ESP_OK) {
+                        ESP_LOGE(TAG, "Failed to show provisioning status UI: %s", esp_err_to_name(show_err));
                     }
                 }
                 ESP_LOGI(TAG, "Provisioning UI displayed");
-            } else if (current_state == MAKAPIX_STATE_SHOW_CODE) {
+                
+            } else if (current_makapix_state == MAKAPIX_STATE_SHOW_CODE) {
+                // Update p3a provisioning sub-state
+                p3a_state_set_provisioning_substate(P3A_PROV_SHOW_CODE);
+                
                 // Already in UI mode from PROVISIONING, just update to show code
                 char code[8];
                 char expires[64];
                 if (makapix_get_registration_code(code, sizeof(code)) == ESP_OK &&
                     makapix_get_registration_expires(expires, sizeof(expires)) == ESP_OK) {
+                    // Update render state
+                    p3a_render_set_provisioning_code(code, expires);
+                    
                     // Show µGFX registration UI
-                    esp_err_t err = ugfx_ui_show_registration(code, expires);
-                    if (err != ESP_OK) {
-                        ESP_LOGE(TAG, "Failed to show registration UI: %s", esp_err_to_name(err));
+                    esp_err_t show_err = ugfx_ui_show_registration(code, expires);
+                    if (show_err != ESP_OK) {
+                        ESP_LOGE(TAG, "Failed to show registration UI: %s", esp_err_to_name(show_err));
                     }
                     ESP_LOGI(TAG, "============================================");
                     ESP_LOGI(TAG, "   REGISTRATION CODE: %s", code);
@@ -443,8 +466,12 @@ static void makapix_state_monitor_task(void *arg)
                     ESP_LOGI(TAG, "   Enter at makapix.club");
                     ESP_LOGI(TAG, "============================================");
                 }
-            } else if ((last_state == MAKAPIX_STATE_PROVISIONING || last_state == MAKAPIX_STATE_SHOW_CODE) && 
-                       current_state != MAKAPIX_STATE_PROVISIONING && current_state != MAKAPIX_STATE_SHOW_CODE) {
+                
+            } else if ((last_makapix_state == MAKAPIX_STATE_PROVISIONING || last_makapix_state == MAKAPIX_STATE_SHOW_CODE) && 
+                       current_makapix_state != MAKAPIX_STATE_PROVISIONING && current_makapix_state != MAKAPIX_STATE_SHOW_CODE) {
+                // Transition back to animation playback
+                p3a_state_exit_to_playback();
+                
                 // Exit UI mode FIRST, then hide registration
                 // This ensures animation takes over immediately without an intermediate black frame
                 app_lcd_exit_ui_mode();
@@ -452,11 +479,12 @@ static void makapix_state_monitor_task(void *arg)
                 ESP_LOGI(TAG, "Registration mode exited");
             }
 
-            last_state = current_state;
-        } else if (current_state == MAKAPIX_STATE_PROVISIONING) {
+            last_makapix_state = current_makapix_state;
+        } else if (current_makapix_state == MAKAPIX_STATE_PROVISIONING) {
             // Update status message during provisioning
             char status[128];
             if (makapix_get_provisioning_status(status, sizeof(status)) == ESP_OK) {
+                p3a_render_set_provisioning_status(status);
                 ugfx_ui_show_provisioning_status(status);
             }
         }
@@ -543,6 +571,14 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
+    // Initialize unified p3a state machine (must be after NVS)
+    // This loads the remembered channel and sets initial state
+    esp_err_t state_err = p3a_state_init();
+    if (state_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize p3a state machine: %s", esp_err_to_name(state_err));
+        // Continue anyway - state machine will use defaults
+    }
+
     // Validate OTA boot early - this must be done before any complex operations
     // If running a new OTA firmware, this marks it as valid to prevent rollback
     esp_err_t ota_err = ota_manager_validate_boot();
@@ -564,6 +600,12 @@ void app_main(void)
     ESP_ERROR_CHECK(app_lcd_init());
     ESP_ERROR_CHECK(app_touch_init());
 
+    // Initialize state-aware rendering (after display is ready)
+    esp_err_t render_err = p3a_render_init();
+    if (render_err != ESP_OK) {
+        ESP_LOGW(TAG, "p3a_render_init failed: %s (continuing anyway)", esp_err_to_name(render_err));
+    }
+
     ESP_ERROR_CHECK(app_usb_init());
 
     // Initialize Makapix module
@@ -574,7 +616,7 @@ void app_main(void)
     if (!s_dwell_time_mutex) {
         ESP_LOGE(TAG, "Failed to create dwell_time mutex");
     }
-    
+
     // Create auto-swap task
     const BaseType_t created = xTaskCreate(auto_swap_task, "auto_swap", 2048, NULL, 
                                            tskIDLE_PRIORITY + 1, &s_auto_swap_task_handle);

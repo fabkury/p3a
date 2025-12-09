@@ -1,6 +1,7 @@
 #include "playback_controller.h"
 #include "animation_metadata.h"
 #include "pico8_stream.h"
+#include "p3a_state.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -102,6 +103,12 @@ esp_err_t playback_controller_enter_pico8_mode(void)
     
     xSemaphoreGive(s_controller.mutex);
     
+    // Enter unified p3a PICO-8 streaming state
+    esp_err_t state_err = p3a_state_enter_pico8_streaming();
+    if (state_err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to enter p3a PICO-8 state: %s (continuing anyway)", esp_err_to_name(state_err));
+    }
+    
     // Enter PICO-8 streaming mode
     pico8_stream_enter_mode();
     
@@ -127,6 +134,9 @@ void playback_controller_exit_pico8_mode(void)
     }
     
     ESP_LOGI(TAG, "Exiting PICO-8 mode");
+    
+    // Exit unified p3a PICO-8 streaming state and return to playback
+    p3a_state_exit_to_playback();
     
     // If we had animation metadata, resume local animation mode
     if (animation_metadata_has_filepath(&s_controller.current_metadata)) {

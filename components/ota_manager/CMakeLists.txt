@@ -14,6 +14,7 @@ idf_component_register(
         mbedtls
         app_update
         bootloader_support
+        p3a_core
     PRIV_REQUIRES
         esp_netif
 )

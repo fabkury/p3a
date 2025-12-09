@@ -170,8 +170,10 @@ typedef struct comment_s {
 } comment_t;
 
 // Artwork metadata for comments screen
-// Note: This is separate from animation_metadata_t in channel_manager
-// as it specifically stores server-provided social data
+// Note: This is separate from animation_metadata_t in components/channel_manager/
+// because it stores server-provided social/community data (comments, reactions)
+// received via MQTT, while animation_metadata_t handles local sidecar JSON
+// metadata for file/artist information.
 typedef struct {
     char *artwork_name;               // Artwork name (allocated)
     char *author_name;                // Author name (allocated)
@@ -508,11 +510,11 @@ if (mode == DISPLAY_RENDER_MODE_COMMENTS) {
                 g_comments_viewport_y = page->scroll_offset;
                 
                 // Split screen between workers (same pattern as upscaling)
-                const int mid_row = 720 / 2;  // Display height / 2
+                const int mid_row = EXAMPLE_LCD_V_RES / 2;  // Display height / 2
                 g_comments_row_start_top = 0;
                 g_comments_row_end_top = mid_row;
                 g_comments_row_start_bottom = mid_row;
-                g_comments_row_end_bottom = 720;  // Display height
+                g_comments_row_end_bottom = EXAMPLE_LCD_V_RES;  // Display height
                 
                 // Notify workers and wait for completion
                 DISPLAY_MEMORY_BARRIER();
@@ -846,7 +848,7 @@ Default values:
 ### Step 5: Worker Integration (Days 8-9)
 - [ ] Extend worker tasks in `main/display_renderer.c` for comments UI rendering
 - [ ] Add shared state variables for comments mode
-- [ ] Implement viewport clipping for parallel rendering
+- [ ] Implement screen region division and clipping for parallel worker rendering
 - [ ] Implement metadata status-based rendering paths
 - [ ] Optimize drawing performance
 - [ ] Test split-screen rendering

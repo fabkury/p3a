@@ -6,6 +6,8 @@
 #include "makapix_channel_impl.h"
 #include "makapix_artwork.h"
 #include "app_wifi.h"
+#include "p3a_state.h"
+#include "p3a_render.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -776,10 +778,52 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
         return ESP_ERR_NO_MEM;
     }
     
-    // Load channel (will trigger refresh)
+    // Load channel (will trigger refresh if empty)
     esp_err_t err = channel_load(s_current_channel);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Channel load returned %s (may be empty, refresh will populate)", esp_err_to_name(err));
+    }
+    
+    // Check if channel is empty (first-time access)
+    channel_stats_t stats = {0};
+    channel_get_stats(s_current_channel, &stats);
+    
+    if (stats.total_items == 0) {
+        // Channel is empty - show loading message and wait for data
+        ESP_LOGI(TAG, "Channel empty, waiting for data from Makapix Club...");
+        p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_LOADING, -1, 
+                                       "Fetching from Makapix Club...");
+        
+        // Wait for refresh task to populate the channel (max 30 seconds)
+        const int MAX_WAIT_MS = 30000;
+        const int POLL_INTERVAL_MS = 500;
+        int waited_ms = 0;
+        
+        while (waited_ms < MAX_WAIT_MS) {
+            vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
+            waited_ms += POLL_INTERVAL_MS;
+            
+            // Check if channel now has entries
+            channel_get_stats(s_current_channel, &stats);
+            if (stats.total_items > 0) {
+                ESP_LOGI(TAG, "Channel now has %zu entries after %d ms", stats.total_items, waited_ms);
+                break;
+            }
+            
+            // Update loading message with elapsed time
+            if (waited_ms % 2000 == 0) {
+                ESP_LOGI(TAG, "Still waiting for channel data... (%d ms)", waited_ms);
+            }
+        }
+        
+        // Clear channel message
+        p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
+        
+        if (stats.total_items == 0) {
+            ESP_LOGW(TAG, "Timed out waiting for channel data");
+            p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_EMPTY, -1, 
+                                           "No artworks available yet");
+        }
     }
     
     // Start playback with server order

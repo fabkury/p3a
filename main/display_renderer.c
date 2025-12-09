@@ -549,6 +549,10 @@ static void blit_upscaled_rows(const uint8_t *src_rgba, int src_w, int src_h,
                 case DISPLAY_ROTATION_270:
                     rows_match = (lookup_x[run_start] == lookup_x[dst_y]);
                     break;
+                default:
+                    // Fallback to ROTATION_0 logic for safety
+                    rows_match = (lookup_y[run_start] == lookup_y[dst_y]);
+                    break;
             }
             if (rows_match) {
                 dst_y++;
@@ -635,6 +639,28 @@ static void blit_upscaled_rows(const uint8_t *src_rgba, int src_w, int src_h,
                 for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
                     const uint16_t src_y = lookup_y[dst_x];
                     const uint32_t rgba = src_rgba32[(size_t)src_y * src_w + src_x_fixed];
+                    const uint8_t r = rgba & 0xFF;
+                    const uint8_t g = (rgba >> 8) & 0xFF;
+                    const uint8_t b = (rgba >> 16) & 0xFF;
+#if CONFIG_LCD_PIXEL_FORMAT_RGB565
+                    dst_row[dst_x] = rgb565(r, g, b);
+#else
+                    const size_t idx = (size_t)dst_x * 3U;
+                    dst_row[idx + 0] = b;
+                    dst_row[idx + 1] = g;
+                    dst_row[idx + 2] = r;
+#endif
+                }
+                break;
+            }
+            
+            default: {
+                // Fallback to ROTATION_0 logic for safety
+                const uint16_t src_y = lookup_y[run_start];
+                const uint32_t *src_row32 = src_rgba32 + (size_t)src_y * src_w;
+                for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
+                    const uint16_t src_x = lookup_x[dst_x];
+                    const uint32_t rgba = src_row32[src_x];
                     const uint8_t r = rgba & 0xFF;
                     const uint8_t g = (rgba >> 8) & 0xFF;
                     const uint8_t b = (rgba >> 16) & 0xFF;

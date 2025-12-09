@@ -43,8 +43,9 @@ menu "Physical Player of Pixel Art (P3A)"
             help
                 Enable PIE (SIMD) acceleration for copying vertically duplicated rows
                 during nearest-neighbor upscaling. Uses ESP32-P4 PIE 128-bit vector
-                load/store instructions to speed up row copying. When disabled, uses
-                standard memcpy. Only available on ESP32-P4.
+                load/store instructions to speed up row copying. Applies to all screen
+                rotations (0°, 90°, 180°, 270°). When disabled, uses standard memcpy.
+                Only available on ESP32-P4.
     endmenu
 
     menu "Animation"

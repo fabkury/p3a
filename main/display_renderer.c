@@ -528,54 +528,161 @@ static void blit_upscaled_rows(const uint8_t *src_rgba, int src_w, int src_h,
     const uint32_t *src_rgba32 = (const uint32_t *)src_rgba;
 
 #ifdef CONFIG_P3A_USE_PIE_SIMD
-    // PIE SIMD optimization: For ROTATION_0, detect vertically duplicated rows
-    // and use pie_memcpy_128 to copy them instead of re-rendering
-    if (rotation == DISPLAY_ROTATION_0) {
-        int dst_y = row_start;
-        while (dst_y < row_end) {
-            // Get the source row for this destination row
-            const uint16_t src_y = lookup_y[dst_y];
-            
-            // Find how many consecutive destination rows map to the same source row
-            int run_start = dst_y;
-            dst_y++;
-            while (dst_y < row_end && lookup_y[dst_y] == src_y) {
+    // PIE SIMD optimization: Detect vertically duplicated rows and use pie_memcpy_128
+    // to copy them instead of re-rendering. Works for all rotation modes.
+    
+    int dst_y = row_start;
+    while (dst_y < row_end) {
+        // Find how many consecutive destination rows produce identical output
+        int run_start = dst_y;
+        dst_y++;
+        
+        // Check if consecutive rows are identical based on rotation mode
+        int rows_match = 1;
+        while (dst_y < row_end && rows_match) {
+            switch (rotation) {
+                case DISPLAY_ROTATION_0:
+                case DISPLAY_ROTATION_180:
+                    rows_match = (lookup_y[run_start] == lookup_y[dst_y]);
+                    break;
+                case DISPLAY_ROTATION_90:
+                case DISPLAY_ROTATION_270:
+                    rows_match = (lookup_x[run_start] == lookup_x[dst_y]);
+                    break;
+                default:
+                    rows_match = (lookup_y[run_start] == lookup_y[dst_y]);
+                    break;
+            }
+            if (rows_match) {
                 dst_y++;
             }
-            int run_end = dst_y; // First row AFTER this run
-            
-            // Render the first row of this vertical run using scalar code
+        }
+        int run_end = dst_y; // First row AFTER this run
+        
+        // Render the first row of this vertical run using scalar code
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
-            uint16_t *dst_row = (uint16_t *)(dst_buffer + (size_t)run_start * g_display_row_stride);
+        uint16_t *dst_row = (uint16_t *)(dst_buffer + (size_t)run_start * g_display_row_stride);
 #else
-            uint8_t *dst_row = dst_buffer + (size_t)run_start * g_display_row_stride;
+        uint8_t *dst_row = dst_buffer + (size_t)run_start * g_display_row_stride;
 #endif
-            const uint32_t *src_row32 = src_rgba32 + (size_t)src_y * src_w;
-            for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
-                const uint16_t src_x = lookup_x[dst_x];
-                const uint32_t rgba = src_row32[src_x];
-                const uint8_t r = rgba & 0xFF;
-                const uint8_t g = (rgba >> 8) & 0xFF;
-                const uint8_t b = (rgba >> 16) & 0xFF;
+
+        switch (rotation) {
+            case DISPLAY_ROTATION_0: {
+                const uint16_t src_y = lookup_y[run_start];
+                const uint32_t *src_row32 = src_rgba32 + (size_t)src_y * src_w;
+                for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
+                    const uint16_t src_x = lookup_x[dst_x];
+                    const uint32_t rgba = src_row32[src_x];
+                    const uint8_t r = rgba & 0xFF;
+                    const uint8_t g = (rgba >> 8) & 0xFF;
+                    const uint8_t b = (rgba >> 16) & 0xFF;
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                dst_row[dst_x] = rgb565(r, g, b);
+                    dst_row[dst_x] = rgb565(r, g, b);
 #else
-                const size_t idx = (size_t)dst_x * 3U;
-                dst_row[idx + 0] = b;
-                dst_row[idx + 1] = g;
-                dst_row[idx + 2] = r;
+                    const size_t idx = (size_t)dst_x * 3U;
+                    dst_row[idx + 0] = b;
+                    dst_row[idx + 1] = g;
+                    dst_row[idx + 2] = r;
 #endif
+                }
+                break;
             }
             
-            // Copy the rendered row to all subsequent rows in this vertical run using PIE SIMD
-            uint8_t *src_row_ptr = dst_buffer + (size_t)run_start * g_display_row_stride;
-            for (int ddy = run_start + 1; ddy < run_end; ++ddy) {
-                uint8_t *dst_row_ptr = dst_buffer + (size_t)ddy * g_display_row_stride;
-                pie_memcpy_128(dst_row_ptr, src_row_ptr, g_display_row_stride);
+            case DISPLAY_ROTATION_90: {
+                const uint16_t src_x_fixed = lookup_x[run_start];
+                for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
+                    const uint16_t raw_src_y = lookup_y[dst_x];
+                    const uint16_t src_y = (src_h - 1) - raw_src_y;
+                    const uint32_t rgba = src_rgba32[(size_t)src_y * src_w + src_x_fixed];
+                    const uint8_t r = rgba & 0xFF;
+                    const uint8_t g = (rgba >> 8) & 0xFF;
+                    const uint8_t b = (rgba >> 16) & 0xFF;
+#if CONFIG_LCD_PIXEL_FORMAT_RGB565
+                    dst_row[dst_x] = rgb565(r, g, b);
+#else
+                    const size_t idx = (size_t)dst_x * 3U;
+                    dst_row[idx + 0] = b;
+                    dst_row[idx + 1] = g;
+                    dst_row[idx + 2] = r;
+#endif
+                }
+                break;
+            }
+            
+            case DISPLAY_ROTATION_180: {
+                const uint16_t raw_src_y = lookup_y[run_start];
+                const uint16_t src_y = (src_h - 1) - raw_src_y;
+                const uint32_t *src_row32 = src_rgba32 + (size_t)src_y * src_w;
+                for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
+                    const uint16_t raw_src_x = lookup_x[dst_x];
+                    const uint16_t src_x = (src_w - 1) - raw_src_x;
+                    const uint32_t rgba = src_row32[src_x];
+                    const uint8_t r = rgba & 0xFF;
+                    const uint8_t g = (rgba >> 8) & 0xFF;
+                    const uint8_t b = (rgba >> 16) & 0xFF;
+#if CONFIG_LCD_PIXEL_FORMAT_RGB565
+                    dst_row[dst_x] = rgb565(r, g, b);
+#else
+                    const size_t idx = (size_t)dst_x * 3U;
+                    dst_row[idx + 0] = b;
+                    dst_row[idx + 1] = g;
+                    dst_row[idx + 2] = r;
+#endif
+                }
+                break;
+            }
+            
+            case DISPLAY_ROTATION_270: {
+                const uint16_t raw_src_x = lookup_x[run_start];
+                const uint16_t src_x_fixed = (src_w - 1) - raw_src_x;
+                for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
+                    const uint16_t src_y = lookup_y[dst_x];
+                    const uint32_t rgba = src_rgba32[(size_t)src_y * src_w + src_x_fixed];
+                    const uint8_t r = rgba & 0xFF;
+                    const uint8_t g = (rgba >> 8) & 0xFF;
+                    const uint8_t b = (rgba >> 16) & 0xFF;
+#if CONFIG_LCD_PIXEL_FORMAT_RGB565
+                    dst_row[dst_x] = rgb565(r, g, b);
+#else
+                    const size_t idx = (size_t)dst_x * 3U;
+                    dst_row[idx + 0] = b;
+                    dst_row[idx + 1] = g;
+                    dst_row[idx + 2] = r;
+#endif
+                }
+                break;
+            }
+            
+            default: {
+                const uint16_t src_y = lookup_y[run_start];
+                const uint32_t *src_row32 = src_rgba32 + (size_t)src_y * src_w;
+                for (int dst_x = 0; dst_x < dst_w; ++dst_x) {
+                    const uint16_t src_x = lookup_x[dst_x];
+                    const uint32_t rgba = src_row32[src_x];
+                    const uint8_t r = rgba & 0xFF;
+                    const uint8_t g = (rgba >> 8) & 0xFF;
+                    const uint8_t b = (rgba >> 16) & 0xFF;
+#if CONFIG_LCD_PIXEL_FORMAT_RGB565
+                    dst_row[dst_x] = rgb565(r, g, b);
+#else
+                    const size_t idx = (size_t)dst_x * 3U;
+                    dst_row[idx + 0] = b;
+                    dst_row[idx + 1] = g;
+                    dst_row[idx + 2] = r;
+#endif
+                }
+                break;
             }
         }
-        return;
+        
+        // Copy the rendered row to all subsequent rows in this vertical run using PIE SIMD
+        uint8_t *src_row_ptr = dst_buffer + (size_t)run_start * g_display_row_stride;
+        for (int ddy = run_start + 1; ddy < run_end; ++ddy) {
+            uint8_t *dst_row_ptr = dst_buffer + (size_t)ddy * g_display_row_stride;
+            pie_memcpy_128(dst_row_ptr, src_row_ptr, g_display_row_stride);
+        }
     }
+    return;
 #endif
 
     // Standard scalar path for all rotations (or when PIE SIMD is disabled)

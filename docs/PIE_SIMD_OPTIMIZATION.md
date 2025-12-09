@@ -63,8 +63,8 @@ For a 720×720 RGB565 framebuffer:
 ```
 CONFIG_P3A_USE_PIE_SIMD=y
 ```
-- Uses PIE SIMD for ROTATION_0 vertical runs
-- Falls back to scalar for other rotations
+- Uses PIE SIMD for all rotation modes (ROTATION_0, ROTATION_90, ROTATION_180, ROTATION_270)
+- Detects vertical runs based on rotation-specific lookup tables
 
 ### Disable
 ```
@@ -77,12 +77,15 @@ CONFIG_P3A_USE_PIE_SIMD=n
 ## Scope and Limitations
 
 ### What is optimized
-- ✅ ROTATION_0 vertical duplication
+- ✅ All screen rotations (ROTATION_0, ROTATION_90, ROTATION_180, ROTATION_270)
 - ✅ Compile-time optional
 - ✅ Handles any row size
 
+### Rotation-specific behavior
+- **ROTATION_0 and ROTATION_180**: Detects runs using `lookup_y` (vertical source row mapping)
+- **ROTATION_90 and ROTATION_270**: Detects runs using `lookup_x` (horizontal source column mapping)
+
 ### What is NOT changed
-- ❌ ROTATION_90, ROTATION_180, ROTATION_270 (use scalar path)
 - ❌ Horizontal upscaling (already efficient with lookup tables)
 - ❌ Color conversion (still done per-pixel)
 - ❌ First row of each run (rendered with scalar code)

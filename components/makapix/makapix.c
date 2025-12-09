@@ -2,6 +2,9 @@
 #include "makapix_store.h"
 #include "makapix_provision.h"
 #include "makapix_mqtt.h"
+#include "makapix_api.h"
+#include "makapix_channel_impl.h"
+#include "makapix_artwork.h"
 #include "app_wifi.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -9,12 +12,14 @@
 #include "freertos/timers.h"
 #include "sdkconfig.h"
 #include <string.h>
+#include <strings.h>
 #include <stdlib.h>
 
 static const char *TAG = "makapix";
 
 static makapix_state_t s_state = MAKAPIX_STATE_IDLE;
 static int32_t s_current_post_id = 0;
+static bool s_view_intent_intentional = false;  // Track if next view should be intentional
 static char s_registration_code[8] = {0};  // 6 chars + null + padding to avoid warning
 static char s_registration_expires[64] = {0};  // Extra space to avoid truncation warning
 static char s_provisioning_status[128] = {0};  // Status message during provisioning
@@ -22,10 +27,12 @@ static TimerHandle_t s_status_timer = NULL;
 static bool s_provisioning_cancelled = false;  // Flag to prevent race condition
 static TaskHandle_t s_poll_task_handle = NULL;  // Handle for credential polling task
 static TaskHandle_t s_reconnect_task_handle = NULL;  // Handle for MQTT reconnection task
+static channel_handle_t s_current_channel = NULL;  // Current active Makapix channel
 
 // Forward declarations
 static void credentials_poll_task(void *pvParameters);
 static void mqtt_reconnect_task(void *pvParameters);
+static channel_handle_t create_single_artwork_channel(const char *storage_key, const char *art_url);
 
 #define STATUS_PUBLISH_INTERVAL_MS (30000) // 30 seconds
 
@@ -421,6 +428,12 @@ esp_err_t makapix_init(void)
     // Register MQTT connection state callback
     makapix_mqtt_set_connection_callback(mqtt_connection_callback);
 
+    // Initialize MQTT API layer (response correlation). Ignore failure when player_key absent.
+    esp_err_t api_err = makapix_api_init();
+    if (api_err != ESP_OK) {
+        ESP_LOGW(TAG, "makapix_api_init failed (likely no player_key yet): %s", esp_err_to_name(api_err));
+    }
+
     if (makapix_store_has_player_key() && makapix_store_has_certificates()) {
         ESP_LOGI(TAG, "Found stored player_key and certificates, will connect after WiFi");
         s_state = MAKAPIX_STATE_IDLE; // Will transition to CONNECTING when WiFi connects
@@ -512,6 +525,13 @@ int32_t makapix_get_current_post_id(void)
 void makapix_set_current_post_id(int32_t post_id)
 {
     s_current_post_id = post_id;
+}
+
+bool makapix_get_and_clear_view_intent(void)
+{
+    bool intentional = s_view_intent_intentional;
+    s_view_intent_intentional = false;
+    return intentional;
 }
 
 esp_err_t makapix_connect_if_registered(void)
@@ -703,5 +723,297 @@ esp_err_t makapix_get_provisioning_status(char *out_status, size_t max_len)
     strncpy(out_status, s_provisioning_status, max_len - 1);
     out_status[max_len - 1] = '\0';
     return ESP_OK;
+}
+
+esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle)
+{
+    if (!channel) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    // Build channel ID
+    char channel_id[128] = {0};
+    if (strcmp(channel, "by_user") == 0) {
+        if (!user_handle || strlen(user_handle) == 0) {
+            ESP_LOGE(TAG, "user_handle required for by_user channel");
+            return ESP_ERR_INVALID_ARG;
+        }
+        snprintf(channel_id, sizeof(channel_id), "by_user_%s", user_handle);
+    } else {
+        strncpy(channel_id, channel, sizeof(channel_id) - 1);
+    }
+    
+    // Build channel name
+    char channel_name[128] = {0};
+    if (strcmp(channel, "all") == 0) {
+        strcpy(channel_name, "Recent");
+    } else if (strcmp(channel, "promoted") == 0) {
+        strcpy(channel_name, "Promoted");
+    } else if (strcmp(channel, "user") == 0) {
+        strcpy(channel_name, "My Artworks");
+    } else if (strcmp(channel, "by_user") == 0) {
+        snprintf(channel_name, sizeof(channel_name), "%s's Artworks", user_handle);
+    } else {
+        size_t copy_len = strlen(channel_id);
+        if (copy_len >= sizeof(channel_name)) copy_len = sizeof(channel_name) - 1;
+        memcpy(channel_name, channel_id, copy_len);
+        channel_name[copy_len] = '\0';
+    }
+    
+    ESP_LOGI(TAG, "Switching to channel: %s (id=%s)", channel_name, channel_id);
+    
+    // Destroy existing channel if any
+    if (s_current_channel) {
+        channel_destroy(s_current_channel);
+        s_current_channel = NULL;
+    }
+    
+    // Create new Makapix channel
+    s_current_channel = makapix_channel_create(channel_id, channel_name, "/sdcard/vault", "/sdcard/channels");
+    if (!s_current_channel) {
+        ESP_LOGE(TAG, "Failed to create channel");
+        return ESP_ERR_NO_MEM;
+    }
+    
+    // Load channel (will trigger refresh)
+    esp_err_t err = channel_load(s_current_channel);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Channel load returned %s (may be empty, refresh will populate)", esp_err_to_name(err));
+    }
+    
+    // Start playback with server order
+    err = channel_start_playback(s_current_channel, CHANNEL_ORDER_ORIGINAL, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to start playback: %s", esp_err_to_name(err));
+    }
+    
+    ESP_LOGI(TAG, "Channel switched successfully");
+    return ESP_OK;
+}
+
+esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const char *art_url)
+{
+    if (!storage_key || !art_url) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    ESP_LOGI(TAG, "Showing artwork: post_id=%ld, storage_key=%s", post_id, storage_key);
+    
+    // Destroy existing channel if any
+    if (s_current_channel) {
+        channel_destroy(s_current_channel);
+        s_current_channel = NULL;
+    }
+    
+    // Create transient in-memory single-item channel
+    channel_handle_t single_ch = create_single_artwork_channel(storage_key, art_url);
+    if (!single_ch) {
+        ESP_LOGE(TAG, "Failed to create transient artwork channel");
+        return ESP_ERR_NO_MEM;
+    }
+    
+    esp_err_t err = channel_load(single_ch);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Artwork channel load failed: %s", esp_err_to_name(err));
+        channel_destroy(single_ch);
+        s_current_channel = NULL;
+        // TODO: optionally fallback to sdcard channel here
+        return err;
+    }
+    
+    err = channel_start_playback(single_ch, CHANNEL_ORDER_ORIGINAL, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Artwork channel start playback failed: %s", esp_err_to_name(err));
+        channel_destroy(single_ch);
+        s_current_channel = NULL;
+        return err;
+    }
+    
+    s_current_channel = single_ch;
+    makapix_set_current_post_id(post_id);
+    s_view_intent_intentional = true;  // Next buffer swap will submit intentional view
+    
+    ESP_LOGI(TAG, "Transient artwork channel created and started");
+    return ESP_OK;
+}
+
+// ---------------------------------------------------------------------------
+// Transient in-memory single-artwork channel implementation
+// ---------------------------------------------------------------------------
+
+typedef struct {
+    struct channel_s base;
+    channel_item_ref_t item;
+    bool has_item;
+    char art_url[256];
+} single_artwork_channel_t;
+
+static uint32_t hash_string_local(const char *str)
+{
+    uint32_t hash = 5381;
+    int c;
+    while ((c = *str++)) {
+        hash = ((hash << 5) + hash) + c;
+    }
+    return hash;
+}
+
+static int detect_file_type_ext(const char *url)
+{
+    size_t len = strlen(url);
+    if (len >= 5 && strcasecmp(url + len - 5, ".webp") == 0) return 0; // webp
+    if (len >= 4 && strcasecmp(url + len - 4, ".gif") == 0)  return 1; // gif
+    if (len >= 4 && strcasecmp(url + len - 4, ".png") == 0)  return 2; // png
+    if (len >= 4 && strcasecmp(url + len - 4, ".jpg") == 0)  return 3; // jpg
+    if (len >= 5 && strcasecmp(url + len - 5, ".jpeg") == 0) return 3; // jpg
+    return 0;
+}
+
+static void build_vault_path_from_storage_key_simple(const char *storage_key, char *out, size_t out_len)
+{
+    uint32_t hash = hash_string_local(storage_key);
+    char dir1[3], dir2[3];
+    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)((hash >> 24) & 0xFF));
+    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)((hash >> 16) & 0xFF));
+    snprintf(out, out_len, "%s/%s/%s/%s", "/sdcard/vault", dir1, dir2, storage_key);
+}
+
+static esp_err_t single_ch_load(channel_handle_t channel)
+{
+    single_artwork_channel_t *ch = (single_artwork_channel_t *)channel;
+    if (!ch) return ESP_ERR_INVALID_ARG;
+    
+    struct stat st;
+    if (stat(ch->item.filepath, &st) != 0) {
+        // Not present, attempt download with retries
+        const int max_attempts = 3;
+        for (int attempt = 1; attempt <= max_attempts; attempt++) {
+            ESP_LOGI(TAG, "Downloading artwork (attempt %d/%d)...", attempt, max_attempts);
+            esp_err_t err = makapix_artwork_download(ch->art_url, ch->item.storage_key, ch->item.filepath, sizeof(ch->item.filepath));
+            if (err == ESP_OK) {
+                break;
+            }
+            ESP_LOGW(TAG, "Download attempt %d failed: %s", attempt, esp_err_to_name(err));
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            if (attempt == max_attempts) {
+                return ESP_FAIL;
+            }
+        }
+    }
+    
+    ch->has_item = true;
+    channel->loaded = true;
+    return ESP_OK;
+}
+
+static void single_ch_unload(channel_handle_t channel)
+{
+    single_artwork_channel_t *ch = (single_artwork_channel_t *)channel;
+    if (!ch) return;
+    ch->has_item = false;
+    channel->loaded = false;
+}
+
+static esp_err_t single_ch_start_playback(channel_handle_t channel, channel_order_mode_t order_mode, const channel_filter_config_t *filter)
+{
+    (void)order_mode;
+    (void)filter;
+    single_artwork_channel_t *ch = (single_artwork_channel_t *)channel;
+    if (!ch || !ch->has_item) return ESP_ERR_NOT_FOUND;
+    channel->current_order = CHANNEL_ORDER_ORIGINAL;
+    channel->current_filter = filter ? *filter : (channel_filter_config_t){0};
+    return ESP_OK;
+}
+
+static esp_err_t single_ch_next(channel_handle_t channel, channel_item_ref_t *out_item)
+{
+    single_artwork_channel_t *ch = (single_artwork_channel_t *)channel;
+    if (!ch || !ch->has_item) return ESP_ERR_NOT_FOUND;
+    if (out_item) *out_item = ch->item;
+    return ESP_OK;
+}
+
+static esp_err_t single_ch_prev(channel_handle_t channel, channel_item_ref_t *out_item)
+{
+    return single_ch_next(channel, out_item);
+}
+
+static esp_err_t single_ch_current(channel_handle_t channel, channel_item_ref_t *out_item)
+{
+    return single_ch_next(channel, out_item);
+}
+
+static esp_err_t single_ch_request_reshuffle(channel_handle_t channel)
+{
+    (void)channel;
+    return ESP_OK;
+}
+
+static esp_err_t single_ch_request_refresh(channel_handle_t channel)
+{
+    (void)channel;
+    return ESP_OK;
+}
+
+static esp_err_t single_ch_get_stats(channel_handle_t channel, channel_stats_t *out_stats)
+{
+    single_artwork_channel_t *ch = (single_artwork_channel_t *)channel;
+    if (!out_stats) return ESP_ERR_INVALID_ARG;
+    out_stats->total_items = ch->has_item ? 1 : 0;
+    out_stats->filtered_items = out_stats->total_items;
+    out_stats->current_position = ch->has_item ? 0 : 0;
+    return ESP_OK;
+}
+
+static void single_ch_destroy(channel_handle_t channel)
+{
+    single_artwork_channel_t *ch = (single_artwork_channel_t *)channel;
+    if (!ch) return;
+    if (ch->base.name) free(ch->base.name);
+    free(ch);
+}
+
+static const channel_ops_t s_single_ops = {
+    .load = single_ch_load,
+    .unload = single_ch_unload,
+    .start_playback = single_ch_start_playback,
+    .next_item = single_ch_next,
+    .prev_item = single_ch_prev,
+    .current_item = single_ch_current,
+    .request_reshuffle = single_ch_request_reshuffle,
+    .request_refresh = single_ch_request_refresh,
+    .get_stats = single_ch_get_stats,
+    .destroy = single_ch_destroy,
+};
+
+static channel_handle_t create_single_artwork_channel(const char *storage_key, const char *art_url)
+{
+    single_artwork_channel_t *ch = calloc(1, sizeof(single_artwork_channel_t));
+    if (!ch) return NULL;
+    
+    ch->base.ops = &s_single_ops;
+    ch->base.loaded = false;
+    ch->base.current_order = CHANNEL_ORDER_ORIGINAL;
+    ch->base.current_filter.required_flags = CHANNEL_FILTER_FLAG_NONE;
+    ch->base.current_filter.excluded_flags = CHANNEL_FILTER_FLAG_NONE;
+    ch->base.name = strdup("Artwork");
+    
+    // Build filepath from storage_key
+    build_vault_path_from_storage_key_simple(storage_key, ch->item.filepath, sizeof(ch->item.filepath));
+    strncpy(ch->item.storage_key, storage_key, sizeof(ch->item.storage_key) - 1);
+    ch->item.storage_key[sizeof(ch->item.storage_key) - 1] = '\0';
+    ch->item.item_index = 0;
+    // Set format flags
+    switch (detect_file_type_ext(art_url)) {
+        case 1: ch->item.flags = CHANNEL_FILTER_FLAG_GIF; break;
+        case 2: ch->item.flags = CHANNEL_FILTER_FLAG_PNG; break;
+        case 3: ch->item.flags = CHANNEL_FILTER_FLAG_JPEG; break;
+        case 0:
+        default: ch->item.flags = CHANNEL_FILTER_FLAG_WEBP; break;
+    }
+    strncpy(ch->art_url, art_url, sizeof(ch->art_url) - 1);
+    ch->art_url[sizeof(ch->art_url) - 1] = '\0';
+    ch->has_item = false;
+    return (channel_handle_t)ch;
 }
 

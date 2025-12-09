@@ -71,3 +71,29 @@ void makapix_mqtt_set_command_callback(void (*cb)(const char *command_type, cJSO
  */
 void makapix_mqtt_set_connection_callback(void (*cb)(bool connected));
 
+/**
+ * @brief Set callback for response messages (makapix/player/{player_key}/response/#)
+ * 
+ * @param cb Callback: void cb(const char *topic, const char *data, int data_len)
+ */
+void makapix_mqtt_set_response_callback(void (*cb)(const char *topic, const char *data, int data_len));
+
+/**
+ * @brief Publish raw payload to a topic with QoS
+ * 
+ * @param topic Topic string
+ * @param payload Null-terminated payload (JSON)
+ * @param qos QoS level (0 or 1)
+ * @return ESP_OK on success
+ */
+esp_err_t makapix_mqtt_publish_raw(const char *topic, const char *payload, int qos);
+
+/**
+ * @brief Subscribe to a topic
+ * 
+ * @param topic Topic string (may include wildcards)
+ * @param qos QoS level
+ * @return ESP_OK on success
+ */
+esp_err_t makapix_mqtt_subscribe(const char *topic, int qos);
+

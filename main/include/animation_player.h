@@ -128,6 +128,26 @@ esp_err_t app_set_screen_rotation(screen_rotation_t rotation);
  */
 screen_rotation_t app_get_screen_rotation(void);
 
+/**
+ * @brief Get current dwell time setting
+ * 
+ * Returns the configured dwell time (how long to display still images before auto-advancing).
+ * 
+ * @return Dwell time in seconds (1-100000, default 30)
+ */
+uint32_t animation_player_get_dwell_time(void);
+
+/**
+ * @brief Set dwell time setting
+ * 
+ * Configures how long to display still images before auto-advancing to the next artwork.
+ * The value is persisted to NVS and takes effect immediately.
+ * 
+ * @param dwell_time Dwell time in seconds (1-100000)
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG if value out of range
+ */
+esp_err_t animation_player_set_dwell_time(uint32_t dwell_time);
+
 #ifdef __cplusplus
 }
 #endif

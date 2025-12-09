@@ -6,6 +6,6 @@ idf_component_register(
          "vault_storage.c"
          "animation_metadata.c"
     INCLUDE_DIRS "include"
-    REQUIRES esp_common json
+    REQUIRES esp_common json makapix
 )
 

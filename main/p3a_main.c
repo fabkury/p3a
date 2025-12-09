@@ -122,27 +122,134 @@ static bool check_first_boot_after_update(void)
 }
 
 #define AUTO_SWAP_INTERVAL_SECONDS CONFIG_P3A_AUTO_SWAP_INTERVAL_SECONDS
+#define DEFAULT_DWELL_TIME_SECONDS 30
+#define MIN_DWELL_TIME_SECONDS 1
+#define MAX_DWELL_TIME_SECONDS 100000
+#define DWELL_TIME_NVS_KEY "dwell_time"
+
 #if CONFIG_P3A_MEMORY_REPORTING_ENABLE
 #define MEMORY_REPORT_INTERVAL_SECONDS 15
 #endif
 
 static TaskHandle_t s_auto_swap_task_handle = NULL;
+static uint32_t s_dwell_time_seconds = DEFAULT_DWELL_TIME_SECONDS;
+static SemaphoreHandle_t s_dwell_time_mutex = NULL;
+
+static uint32_t load_dwell_time_from_nvs(void)
+{
+    nvs_handle_t nvs;
+    esp_err_t err = nvs_open("p3a", NVS_READONLY, &nvs);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to open NVS for dwell_time read: %s", esp_err_to_name(err));
+        return DEFAULT_DWELL_TIME_SECONDS;
+    }
+    
+    uint32_t dwell_time = DEFAULT_DWELL_TIME_SECONDS;
+    err = nvs_get_u32(nvs, DWELL_TIME_NVS_KEY, &dwell_time);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGI(TAG, "No dwell_time in NVS, using default %u seconds", DEFAULT_DWELL_TIME_SECONDS);
+    } else if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to read dwell_time from NVS: %s", esp_err_to_name(err));
+    } else {
+        // Validate range
+        if (dwell_time < MIN_DWELL_TIME_SECONDS || dwell_time > MAX_DWELL_TIME_SECONDS) {
+            ESP_LOGW(TAG, "Invalid dwell_time %u, using default %u", dwell_time, DEFAULT_DWELL_TIME_SECONDS);
+            dwell_time = DEFAULT_DWELL_TIME_SECONDS;
+        } else {
+            ESP_LOGI(TAG, "Loaded dwell_time from NVS: %u seconds", dwell_time);
+        }
+    }
+    
+    nvs_close(nvs);
+    return dwell_time;
+}
+
+static esp_err_t save_dwell_time_to_nvs(uint32_t dwell_time)
+{
+    nvs_handle_t nvs;
+    esp_err_t err = nvs_open("p3a", NVS_READWRITE, &nvs);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS for dwell_time write: %s", esp_err_to_name(err));
+        return err;
+    }
+    
+    err = nvs_set_u32(nvs, DWELL_TIME_NVS_KEY, dwell_time);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to write dwell_time to NVS: %s", esp_err_to_name(err));
+        nvs_close(nvs);
+        return err;
+    }
+    
+    err = nvs_commit(nvs);
+    nvs_close(nvs);
+    
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Saved dwell_time to NVS: %u seconds", dwell_time);
+    } else {
+        ESP_LOGE(TAG, "Failed to commit dwell_time to NVS: %s", esp_err_to_name(err));
+    }
+    
+    return err;
+}
+
+uint32_t animation_player_get_dwell_time(void)
+{
+    if (s_dwell_time_mutex && xSemaphoreTake(s_dwell_time_mutex, portMAX_DELAY) == pdTRUE) {
+        uint32_t dwell = s_dwell_time_seconds;
+        xSemaphoreGive(s_dwell_time_mutex);
+        return dwell;
+    }
+    return s_dwell_time_seconds;
+}
+
+esp_err_t animation_player_set_dwell_time(uint32_t dwell_time)
+{
+    if (dwell_time < MIN_DWELL_TIME_SECONDS || dwell_time > MAX_DWELL_TIME_SECONDS) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    if (s_dwell_time_mutex && xSemaphoreTake(s_dwell_time_mutex, portMAX_DELAY) == pdTRUE) {
+        s_dwell_time_seconds = dwell_time;
+        xSemaphoreGive(s_dwell_time_mutex);
+    } else {
+        s_dwell_time_seconds = dwell_time;
+    }
+    
+    esp_err_t err = save_dwell_time_to_nvs(dwell_time);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to save dwell_time to NVS, but using in-memory value");
+    }
+    
+    // Notify auto-swap task to use new interval
+    if (s_auto_swap_task_handle) {
+        xTaskNotifyGive(s_auto_swap_task_handle);
+    }
+    
+    ESP_LOGI(TAG, "Dwell time set to %u seconds", dwell_time);
+    return ESP_OK;
+}
 
 static void auto_swap_task(void *arg)
 {
     (void)arg;
-    const TickType_t delay_ticks = pdMS_TO_TICKS(AUTO_SWAP_INTERVAL_SECONDS * 1000);
     
-    ESP_LOGI(TAG, "Auto-swap task started: will cycle forward every %d seconds", AUTO_SWAP_INTERVAL_SECONDS);
+    // Load dwell time from NVS
+    s_dwell_time_seconds = load_dwell_time_from_nvs();
+    
+    ESP_LOGI(TAG, "Auto-swap task started: will cycle forward every %u seconds", s_dwell_time_seconds);
     
     // Wait a bit for system to initialize before first swap
     vTaskDelay(pdMS_TO_TICKS(1000));
     
     while (true) {
+        // Get current dwell time (may have changed)
+        uint32_t current_dwell = animation_player_get_dwell_time();
+        const TickType_t delay_ticks = pdMS_TO_TICKS(current_dwell * 1000);
+        
         // Wait for interval or notification (which resets the timer)
         uint32_t notified = ulTaskNotifyTake(pdTRUE, delay_ticks);
         if (notified > 0) {
-            ESP_LOGD(TAG, "Auto-swap timer reset by user interaction");
+            ESP_LOGD(TAG, "Auto-swap timer reset by user interaction or dwell_time change");
             continue;  // Timer was reset, start waiting again
         }
         // Timeout occurred, check if paused before performing auto-swap
@@ -462,6 +569,12 @@ void app_main(void)
     // Initialize Makapix module
     ESP_ERROR_CHECK(makapix_init());
 
+    // Initialize dwell time mutex
+    s_dwell_time_mutex = xSemaphoreCreateMutex();
+    if (!s_dwell_time_mutex) {
+        ESP_LOGE(TAG, "Failed to create dwell_time mutex");
+    }
+    
     // Create auto-swap task
     const BaseType_t created = xTaskCreate(auto_swap_task, "auto_swap", 2048, NULL, 
                                            tskIDLE_PRIORITY + 1, &s_auto_swap_task_handle);

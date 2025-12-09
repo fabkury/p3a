@@ -286,7 +286,8 @@ uint32_t rgba3 = src_row32[lookup_x[dst_x + 3]];
 // PKBB16: Pack bottom bytes from two 16-bit halfwords
 // Can extract R,G,B channels in parallel using PIE bit manipulation
 
-// Example PIE operations (pseudo-code with intrinsics):
+// Example PIE operations (CONCEPTUAL pseudo-code - actual intrinsics TBD):
+// NOTE: Actual ESP-IDF PIE intrinsic names and API may differ
 v4u8 r_vec = __pie_unpack_r(rgba0, rgba1, rgba2, rgba3);  // Extract all R values
 v4u8 g_vec = __pie_unpack_g(rgba0, rgba1, rgba2, rgba3);  // Extract all G values
 v4u8 b_vec = __pie_unpack_b(rgba0, rgba1, rgba2, rgba3);  // Extract all B values
@@ -308,13 +309,14 @@ __pie_store_rgb888(dst_row, r_vec, g_vec, b_vec);
 **Target**: `display_renderer.c` upscaler inner loop (lines 396-410)
 
 **Current Performance**: 720×720 = 518,400 pixels per frame
-- Scalar: ~518,400 × 8 = 4.1M instructions
+- Scalar: ~518,400 pixels × 8 instructions/pixel = 4.1M instructions
 - Processing time: ~10 ms (estimated)
 
 **With PIE SIMD**:
-- PIE: ~518,400 ÷ 4 × 4 = 0.5M instructions
+- PIE: ~129,600 iterations (4 pixels each) × 4 instructions/iteration = 0.52M instructions
 - Processing time: ~3-4 ms (estimated)
 - **Speedup**: 2.5-3× (saves 6-7 ms per frame)
+- **Efficiency**: 8× fewer instructions per pixel (8 → 1 instruction/pixel)
 
 **Implementation Cost**: **MEDIUM-HIGH**
 - Requires PIE intrinsics (may need ESP-IDF library support)
@@ -975,7 +977,11 @@ Frame Processing Breakdown (128×128 source → 720×720 display):
 │ Frame Delay (user set)  ███████████ 38% (variable) │
 └─────────────────────────────────────────────────────┘
 Total: ~13 ms per frame (77 FPS) + animation delay
-Speedup: 1.7× faster frame processing
+Speedup: 1.7× faster frame processing (70% faster)
+
+Note: This represents best-case scenario with all optimizations.
+Conservative estimate: 23-35% speedup (Phase 0-2 only)
+Aggressive estimate: 31-53% speedup (all phases + RGB565)
 ```
 
 ---

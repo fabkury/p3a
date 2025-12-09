@@ -18,12 +18,15 @@ static esp_mqtt_client_handle_t s_mqtt_client = NULL;
 static char s_player_key[37] = {0};
 static char s_command_topic[128] = {0};
 static char s_status_topic[128] = {0};
+static char s_response_topic[128] = {0};
+static char s_response_prefix[128] = {0};
 static char s_mqtt_uri[256] = {0};        // Static buffer for MQTT URI
 static char s_client_id[64] = {0};        // Static buffer for client ID
 static char s_lwt_payload[128] = {0};     // Static buffer for LWT payload
 static bool s_mqtt_connected = false;     // Track connection state manually
 static void (*s_command_callback)(const char *command_type, cJSON *payload) = NULL;
 static void (*s_connection_callback)(bool connected) = NULL;
+static void (*s_response_callback)(const char *topic, const char *data, int data_len) = NULL;
 
 // Static buffers for certificates - ESP-IDF MQTT client stores pointers, doesn't copy
 // These must remain valid for the lifetime of the MQTT client
@@ -45,11 +48,17 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         ESP_LOGI(TAG, "Username: %s", s_player_key);
         ESP_LOGI(TAG, "Command topic: %s", s_command_topic);
         ESP_LOGI(TAG, "Status topic: %s", s_status_topic);
+        ESP_LOGI(TAG, "Response topic: %s", s_response_topic);
         s_mqtt_connected = true;
         // Subscribe to command topic
         if (strlen(s_command_topic) > 0) {
             int msg_id = esp_mqtt_client_subscribe(client, s_command_topic, 1);
             ESP_LOGI(TAG, "Subscribed to %s, msg_id=%d", s_command_topic, msg_id);
+        }
+        // Subscribe to response topic
+        if (strlen(s_response_topic) > 0) {
+            int msg_id = esp_mqtt_client_subscribe(client, s_response_topic, 1);
+            ESP_LOGI(TAG, "Subscribed to %s, msg_id=%d", s_response_topic, msg_id);
         }
         // Notify connection callback
         if (s_connection_callback) {
@@ -137,6 +146,12 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 free(json_str);
             }
         }
+        // Check if this is a response message (prefix match)
+        else if (event->topic_len > 0 && strncmp(event->topic, s_response_prefix, strlen(s_response_prefix)) == 0) {
+            if (s_response_callback) {
+                s_response_callback(event->topic, event->data, event->data_len);
+            }
+        }
         break;
 
     case MQTT_EVENT_ERROR:
@@ -207,6 +222,8 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
     // Build topic strings
     snprintf(s_command_topic, sizeof(s_command_topic), "makapix/player/%s/command", player_key);
     snprintf(s_status_topic, sizeof(s_status_topic), "makapix/player/%s/status", player_key);
+    snprintf(s_response_topic, sizeof(s_response_topic), "makapix/player/%s/response/#", player_key);
+    snprintf(s_response_prefix, sizeof(s_response_prefix), "makapix/player/%s/response/", player_key);
 
     // Build MQTT URI (using static buffer to persist after function returns)
     snprintf(s_mqtt_uri, sizeof(s_mqtt_uri), "mqtts://%s:%d", host, port);
@@ -484,6 +501,29 @@ void makapix_mqtt_set_command_callback(void (*cb)(const char *command_type, cJSO
 void makapix_mqtt_set_connection_callback(void (*cb)(bool connected))
 {
     s_connection_callback = cb;
+}
+
+void makapix_mqtt_set_response_callback(void (*cb)(const char *topic, const char *data, int data_len))
+{
+    s_response_callback = cb;
+}
+
+esp_err_t makapix_mqtt_publish_raw(const char *topic, const char *payload, int qos)
+{
+    if (!s_mqtt_client || !topic || !payload) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    int msg_id = esp_mqtt_client_publish(s_mqtt_client, topic, payload, 0, qos, 0);
+    return (msg_id >= 0) ? ESP_OK : ESP_FAIL;
+}
+
+esp_err_t makapix_mqtt_subscribe(const char *topic, int qos)
+{
+    if (!s_mqtt_client || !topic) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    int msg_id = esp_mqtt_client_subscribe(s_mqtt_client, topic, qos);
+    return (msg_id >= 0) ? ESP_OK : ESP_FAIL;
 }
 
 void makapix_mqtt_log_state(void)

@@ -25,6 +25,7 @@
 #include "app_state.h"
 #include "config_store.h"
 #include "app_wifi.h"
+#include "makapix.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "bsp/esp-bsp.h"
@@ -166,6 +167,23 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
         api_enqueue_swap_next();
     } else if (strcmp(command_type, "swap_back") == 0) {
         api_enqueue_swap_back();
+    } else if (strcmp(command_type, "play_channel") == 0) {
+        // Extract channel information from payload
+        cJSON *channel = cJSON_GetObjectItem(payload, "channel");
+        cJSON *user_handle = cJSON_GetObjectItem(payload, "user_handle");
+        
+        if (channel && cJSON_IsString(channel)) {
+            const char *ch_name = cJSON_GetStringValue(channel);
+            const char *user = user_handle && cJSON_IsString(user_handle) ? cJSON_GetStringValue(user_handle) : NULL;
+            
+            ESP_LOGI(HTTP_API_TAG, "Switching to channel: %s", ch_name);
+            esp_err_t err = makapix_switch_to_channel(ch_name, user);
+            if (err != ESP_OK) {
+                ESP_LOGE(HTTP_API_TAG, "Failed to switch channel: %s", esp_err_to_name(err));
+            }
+        } else {
+            ESP_LOGE(HTTP_API_TAG, "Invalid play_channel payload");
+        }
     } else if (strcmp(command_type, "show_artwork") == 0) {
         // Extract artwork information from payload
         cJSON *art_url = cJSON_GetObjectItem(payload, "art_url");
@@ -179,25 +197,10 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
             const char *key = cJSON_GetStringValue(storage_key);
             int32_t pid = post_id && cJSON_IsNumber(post_id) ? (int32_t)cJSON_GetNumberValue(post_id) : 0;
             
-            ESP_LOGI(HTTP_API_TAG, "Downloading artwork: %s", url);
-            
-            // Download artwork to vault
-            char file_path[256];
-            esp_err_t err = makapix_artwork_download(url, key, file_path, sizeof(file_path));
-            if (err == ESP_OK) {
-                ESP_LOGI(HTTP_API_TAG, "Artwork downloaded to: %s", file_path);
-                
-                // Ensure cache limit
-                makapix_artwork_ensure_cache_limit(250);
-                
-                // Update post ID tracking
-                makapix_set_current_post_id(pid);
-                
-                // Trigger swap_next to display the new artwork
-                // Note: Full playback implementation deferred per plan
-                api_enqueue_swap_next();
-            } else {
-                ESP_LOGE(HTTP_API_TAG, "Failed to download artwork: %s", esp_err_to_name(err));
+            ESP_LOGI(HTTP_API_TAG, "Showing artwork: %s", url);
+            esp_err_t err = makapix_show_artwork(pid, key, url);
+            if (err != ESP_OK) {
+                ESP_LOGE(HTTP_API_TAG, "Failed to show artwork: %s", esp_err_to_name(err));
             }
         } else {
             ESP_LOGE(HTTP_API_TAG, "Invalid show_artwork payload");
@@ -447,6 +450,132 @@ static esp_err_t h_put_config(httpd_req_t *req) {
 
     if (e != ESP_OK) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"CONFIG_SAVE_FAIL\",\"code\":\"CONFIG_SAVE_FAIL\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, "{\"ok\":true}");
+    return ESP_OK;
+}
+
+/**
+ * POST /channel
+ * Switch to a Makapix channel
+ * Body: {"channel": "all"|"promoted"|"user"|"by_user", "user_handle": "..." (optional)}
+ */
+static esp_err_t h_post_channel(httpd_req_t *req) {
+    if (!ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+
+    int err_status;
+    size_t len;
+    char *body = recv_body_json(req, &len, &err_status);
+    if (!body) {
+        if (err_status == 413) {
+            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
+        } else {
+            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
+        }
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_ParseWithLength(body, len);
+    free(body);
+
+    if (!root || !cJSON_IsObject(root)) {
+        if (root) cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
+        return ESP_OK;
+    }
+
+    cJSON *channel = cJSON_GetObjectItem(root, "channel");
+    cJSON *user_handle = cJSON_GetObjectItem(root, "user_handle");
+
+    if (!channel || !cJSON_IsString(channel)) {
+        cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'channel' field\",\"code\":\"INVALID_REQUEST\"}");
+        return ESP_OK;
+    }
+
+    const char *ch_name = cJSON_GetStringValue(channel);
+    const char *user = user_handle && cJSON_IsString(user_handle) ? cJSON_GetStringValue(user_handle) : NULL;
+
+    esp_err_t err = makapix_switch_to_channel(ch_name, user);
+    cJSON_Delete(root);
+
+    if (err != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Channel switch failed\",\"code\":\"CHANNEL_SWITCH_FAILED\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, "{\"ok\":true}");
+    return ESP_OK;
+}
+
+/**
+ * GET /settings/dwell_time
+ * Get current dwell time setting
+ */
+static esp_err_t h_get_dwell_time(httpd_req_t *req) {
+    uint32_t dwell_time = animation_player_get_dwell_time();
+    char response[128];
+    snprintf(response, sizeof(response), "{\"ok\":true,\"data\":{\"dwell_time\":%lu}}", (unsigned long)dwell_time);
+    send_json(req, 200, response);
+    return ESP_OK;
+}
+
+/**
+ * PUT /settings/dwell_time
+ * Set dwell time (1-100000 seconds)
+ * Body: {"dwell_time": 30}
+ */
+static esp_err_t h_put_dwell_time(httpd_req_t *req) {
+    if (!ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+
+    int err_status;
+    size_t len;
+    char *body = recv_body_json(req, &len, &err_status);
+    if (!body) {
+        if (err_status == 413) {
+            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
+        } else {
+            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
+        }
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_ParseWithLength(body, len);
+    free(body);
+
+    if (!root || !cJSON_IsObject(root)) {
+        if (root) cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
+        return ESP_OK;
+    }
+
+    cJSON *dwell_item = cJSON_GetObjectItem(root, "dwell_time");
+    if (!dwell_item || !cJSON_IsNumber(dwell_item)) {
+        cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'dwell_time' field\",\"code\":\"INVALID_REQUEST\"}");
+        return ESP_OK;
+    }
+
+    uint32_t dwell_time = (uint32_t)cJSON_GetNumberValue(dwell_item);
+    cJSON_Delete(root);
+
+    // Validate range: 1-100000 seconds
+    if (dwell_time < 1 || dwell_time > 100000) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid dwell_time (must be 1-100000 seconds)\",\"code\":\"INVALID_DWELL_TIME\"}");
+        return ESP_OK;
+    }
+
+    esp_err_t err = animation_player_set_dwell_time(dwell_time);
+    if (err != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to set dwell_time\",\"code\":\"SET_DWELL_TIME_FAILED\"}");
         return ESP_OK;
     }
 
@@ -799,6 +928,24 @@ esp_err_t http_api_start(void) {
     u.uri = "/rotation";
     u.method = HTTP_POST;
     u.handler = h_post_rotation;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/channel";
+    u.method = HTTP_POST;
+    u.handler = h_post_channel;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/settings/dwell_time";
+    u.method = HTTP_GET;
+    u.handler = h_get_dwell_time;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/settings/dwell_time";
+    u.method = HTTP_PUT;
+    u.handler = h_put_dwell_time;
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
 

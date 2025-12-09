@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esp_err.h"
+#include <stdbool.h>
 #include <stdint.h>
 
 /**
@@ -69,6 +70,16 @@ int32_t makapix_get_current_post_id(void);
 void makapix_set_current_post_id(int32_t post_id);
 
 /**
+ * @brief Get and clear view intent flag
+ * 
+ * Returns whether the next view should be marked as intentional.
+ * Clears the flag after reading.
+ * 
+ * @return true if intentional, false if automated
+ */
+bool makapix_get_and_clear_view_intent(void);
+
+/**
  * @brief Connect to MQTT if credentials are available
  * 
  * Should be called after WiFi is connected.
@@ -113,4 +124,27 @@ void makapix_set_provisioning_status(const char *status_message);
  * @return ESP_OK if available, ESP_ERR_NOT_FOUND otherwise
  */
 esp_err_t makapix_get_provisioning_status(char *out_status, size_t max_len);
+
+/**
+ * @brief Switch to a remote channel
+ * 
+ * Creates or switches to a Makapix remote channel (all, promoted, user, by_user).
+ * 
+ * @param channel Channel name ("all", "promoted", "user", or "by_user")
+ * @param user_handle User handle (required when channel is "by_user")
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle);
+
+/**
+ * @brief Show a specific artwork (creates artwork-channel)
+ * 
+ * Creates an ephemeral channel with a single artwork and switches to it.
+ * 
+ * @param post_id Post ID
+ * @param storage_key Storage key UUID
+ * @param art_url Artwork URL
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const char *art_url);
 

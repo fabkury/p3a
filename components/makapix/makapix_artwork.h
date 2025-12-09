@@ -2,6 +2,9 @@
 
 #include "esp_err.h"
 #include <stddef.h>
+#include <stdint.h>
+
+typedef void (*makapix_download_progress_cb)(size_t bytes_read, size_t content_length, void *user_ctx);
 
 /**
  * @brief Download artwork from URL and save to vault
@@ -16,6 +19,13 @@
  * @return ESP_OK on success, error code otherwise
  */
 esp_err_t makapix_artwork_download(const char *art_url, const char *storage_key, char *out_path, size_t path_len);
+
+/**
+ * @brief Download with progress reporting callback
+ */
+esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char *storage_key,
+                                                 char *out_path, size_t path_len,
+                                                 makapix_download_progress_cb cb, void *user_ctx);
 
 /**
  * @brief Ensure cache doesn't exceed limit by evicting oldest items

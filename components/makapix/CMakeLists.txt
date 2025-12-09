@@ -3,6 +3,7 @@ idf_component_register(
         "makapix_store.c"
         "makapix_provision.c"
         "makapix_mqtt.c"
+        "makapix_api.c"
         "makapix_artwork.c"
         "makapix.c"
         "makapix_certs.c"
@@ -20,8 +21,8 @@ idf_component_register(
         esp-tls
         esp_wifi
         esp_netif
+        channel_manager
     PRIV_REQUIRES
         wifi_manager
     WHOLE_ARCHIVE
 )
-

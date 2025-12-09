@@ -2,6 +2,8 @@
 #include "pico8_stream.h"
 #include "pico8_render.h"
 #include "ugfx_ui.h"
+#include "makapix.h"
+#include "makapix_api.h"
 
 // Frame rendering state
 static bool s_use_prefetched = false;
@@ -166,6 +168,21 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
             // Update playback controller with new animation metadata
             if (s_front_buffer.filepath) {
                 playback_controller_set_animation_metadata(s_front_buffer.filepath, true);
+            }
+            
+            // Submit view tracking for Makapix artworks
+            int32_t post_id = makapix_get_current_post_id();
+            if (post_id > 0) {
+                // Check if this is from vault (Makapix artwork)
+                if (s_front_buffer.filepath && strstr(s_front_buffer.filepath, "/vault/") != NULL) {
+                    // Get intent: intentional for show_artwork commands, automated otherwise
+                    bool is_intentional = makapix_get_and_clear_view_intent();
+                    makapix_view_intent_t intent = is_intentional ? MAKAPIX_VIEW_INTENT_INTENTIONAL : MAKAPIX_VIEW_INTENT_AUTOMATED;
+                    
+                    makapix_api_submit_view(post_id, intent);
+                    ESP_LOGD(TAG, "Submitted view for post_id=%ld (intent=%s)", post_id, 
+                             is_intentional ? "intentional" : "automated");
+                }
             }
         }
         s_use_prefetched = true;

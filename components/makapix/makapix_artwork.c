@@ -2,6 +2,7 @@
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include <string.h>
+#include <strings.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <dirent.h>
@@ -53,12 +54,23 @@ static esp_err_t ensure_vault_dirs(const char *dir1, const char *dir2)
     return ESP_OK;
 }
 
+typedef struct {
+    FILE *fp;
+    makapix_download_progress_cb progress_cb;
+    void *progress_ctx;
+    size_t content_length;
+    size_t bytes_read;
+    bool has_length;
+    int last_percent;
+} http_event_ctx_t;
+
 /**
- * @brief HTTP event handler for download
+ * @brief HTTP event handler for download with optional progress
  */
 static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
-    FILE *fp = (FILE *)evt->user_data;
+    http_event_ctx_t *ctx = (http_event_ctx_t *)evt->user_data;
+    if (!ctx) return ESP_FAIL;
 
     switch (evt->event_id) {
     case HTTP_EVENT_ERROR:
@@ -75,23 +87,39 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 
     case HTTP_EVENT_ON_HEADER:
         ESP_LOGD(TAG, "HTTP_EVENT_ON_HEADER, key=%s, value=%s", evt->header_key, evt->header_value);
+        if (strcasecmp(evt->header_key, "Content-Length") == 0) {
+            ctx->content_length = strtoul(evt->header_value, NULL, 10);
+            ctx->has_length = (ctx->content_length > 0);
+        }
         break;
 
     case HTTP_EVENT_ON_DATA:
         // Write data regardless of chunked or non-chunked transfer
-        if (fp && evt->data_len > 0) {
-            size_t written = fwrite(evt->data, 1, evt->data_len, fp);
-            if (written != evt->data_len) {
+        if (ctx->fp && evt->data_len > 0) {
+            size_t written = fwrite(evt->data, 1, evt->data_len, ctx->fp);
+            if (written != (size_t)evt->data_len) {
                 ESP_LOGE(TAG, "Failed to write all data to file");
                 return ESP_FAIL;
+            }
+            ctx->bytes_read += evt->data_len;
+            if (ctx->progress_cb) {
+                if (ctx->has_length && ctx->content_length > 0) {
+                    int percent = (int)((ctx->bytes_read * 100) / ctx->content_length);
+                    if (percent != ctx->last_percent) {
+                        ctx->last_percent = percent;
+                        ctx->progress_cb(ctx->bytes_read, ctx->content_length, ctx->progress_ctx);
+                    }
+                } else {
+                    ctx->progress_cb(ctx->bytes_read, 0, ctx->progress_ctx);
+                }
             }
         }
         break;
 
     case HTTP_EVENT_ON_FINISH:
         ESP_LOGD(TAG, "HTTP_EVENT_ON_FINISH");
-        if (fp) {
-            fflush(fp);
+        if (ctx->fp) {
+            fflush(ctx->fp);
         }
         break;
 
@@ -106,7 +134,9 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
     return ESP_OK;
 }
 
-esp_err_t makapix_artwork_download(const char *art_url, const char *storage_key, char *out_path, size_t path_len)
+esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char *storage_key,
+                                                 char *out_path, size_t path_len,
+                                                 makapix_download_progress_cb cb, void *user_ctx)
 {
     if (!art_url || !storage_key || !out_path || path_len == 0) {
         return ESP_ERR_INVALID_ARG;
@@ -146,10 +176,20 @@ esp_err_t makapix_artwork_download(const char *art_url, const char *storage_key,
     }
 
     // Configure HTTP client
+    http_event_ctx_t evt_ctx = {
+        .fp = fp,
+        .progress_cb = cb,
+        .progress_ctx = user_ctx,
+        .content_length = 0,
+        .bytes_read = 0,
+        .has_length = false,
+        .last_percent = -1,
+    };
+
     esp_http_client_config_t config = {
         .url = art_url,
         .event_handler = http_event_handler,
-        .user_data = fp,
+        .user_data = &evt_ctx,
         .timeout_ms = 30000,
     };
 
@@ -186,6 +226,11 @@ esp_err_t makapix_artwork_download(const char *art_url, const char *storage_key,
     esp_http_client_cleanup(client);
 
     return err;
+}
+
+esp_err_t makapix_artwork_download(const char *art_url, const char *storage_key, char *out_path, size_t path_len)
+{
+    return makapix_artwork_download_with_progress(art_url, storage_key, out_path, path_len, NULL, NULL);
 }
 
 /**

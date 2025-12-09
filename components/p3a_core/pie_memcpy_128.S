@@ -37,7 +37,7 @@ pie_memcpy_128:
     beqz    t3, .Ltail16       # if no 128B blocks, skip
 
     # HWLP on ESP32-P4 is sensitive to alignment of the setup instruction.
-    # Align to 4 bytes; fill with 16-bit c.nop if needed.
+    # Align to 4 bytes; fill with 0x0001 which is the 16-bit c.nop encoding.
     .balignw 4, 0x0001
     esp.lp.setup 0, t3, .Lblock_loop
 

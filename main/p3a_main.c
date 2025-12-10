@@ -617,8 +617,8 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to create dwell_time mutex");
     }
 
-    // Create auto-swap task
-    const BaseType_t created = xTaskCreate(auto_swap_task, "auto_swap", 2048, NULL, 
+    // Create auto-swap task (4096 bytes needed for channel_player calls to Makapix channels)
+    const BaseType_t created = xTaskCreate(auto_swap_task, "auto_swap", 4096, NULL, 
                                            tskIDLE_PRIORITY + 1, &s_auto_swap_task_handle);
     if (created != pdPASS) {
         ESP_LOGE(TAG, "Failed to create auto-swap task");

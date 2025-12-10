@@ -210,6 +210,15 @@ esp_err_t vault_parse_sha256(const char *hex_str, uint8_t *out_sha256);
  */
 esp_err_t vault_format_sha256(const uint8_t *sha256, char *out_hex, size_t out_len);
 
+// ============================================================================
+// Power-loss recovery: lazy cleanup
+// ============================================================================
+// 
+// Orphan .tmp files from incomplete writes are cleaned up lazily when
+// accessing files, rather than scanning on boot. This scales to 32K+ files.
+// The cleanup_tmp_file() helper is called automatically by access functions.
+// ============================================================================
+
 #ifdef __cplusplus
 }
 #endif

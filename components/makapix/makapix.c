@@ -8,7 +8,17 @@
 #include "app_wifi.h"
 #include "p3a_state.h"
 #include "p3a_render.h"
+#include "esp_err.h"
 #include "esp_log.h"
+
+// Forward declarations (to avoid including headers with dependencies not available to this component)
+esp_err_t app_lcd_enter_ui_mode(void);
+void app_lcd_exit_ui_mode(void);
+esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *message, int progress_percent);
+void ugfx_ui_hide_channel_message(void);
+esp_err_t channel_player_switch_to_makapix_channel(channel_handle_t makapix_channel);
+esp_err_t channel_player_switch_to_sdcard_channel(void);
+esp_err_t animation_player_request_swap_current(void);
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
@@ -30,23 +40,47 @@ static TimerHandle_t s_status_timer = NULL;
 static bool s_provisioning_cancelled = false;  // Flag to prevent race condition
 static TaskHandle_t s_poll_task_handle = NULL;  // Handle for credential polling task
 static TaskHandle_t s_reconnect_task_handle = NULL;  // Handle for MQTT reconnection task
+static TaskHandle_t s_status_publish_task_handle = NULL;  // Handle for status publish task
 static channel_handle_t s_current_channel = NULL;  // Current active Makapix channel
 
 // Forward declarations
 static void credentials_poll_task(void *pvParameters);
 static void mqtt_reconnect_task(void *pvParameters);
+static void status_publish_task(void *pvParameters);
 static channel_handle_t create_single_artwork_channel(const char *storage_key, const char *art_url);
 
 #define STATUS_PUBLISH_INTERVAL_MS (30000) // 30 seconds
 
 /**
  * @brief Timer callback for periodic status publishing
+ * Lightweight callback that just notifies the dedicated task to do the work
+ * Note: Timer callbacks run from the timer service task, not ISR context
  */
 static void status_timer_callback(TimerHandle_t xTimer)
 {
     (void)xTimer;
-    if (makapix_mqtt_is_connected()) {
-        makapix_mqtt_publish_status(makapix_get_current_post_id());
+    // Notify the dedicated task to publish status (non-blocking)
+    if (s_status_publish_task_handle != NULL) {
+        xTaskNotifyGive(s_status_publish_task_handle);
+    }
+}
+
+/**
+ * @brief Dedicated task for status publishing
+ * Runs in its own context with sufficient stack for JSON operations and logging
+ */
+static void status_publish_task(void *pvParameters)
+{
+    (void)pvParameters;
+    
+    while (1) {
+        // Wait for notification from timer callback
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        
+        // Publish status if MQTT is connected
+        if (makapix_mqtt_is_connected()) {
+            makapix_mqtt_publish_status(makapix_get_current_post_id());
+        }
     }
 }
 
@@ -67,6 +101,18 @@ static void mqtt_connection_callback(bool connected)
         // Publish initial status
         ESP_LOGI(TAG, "Publishing initial status...");
         makapix_mqtt_publish_status(makapix_get_current_post_id());
+
+        // Create status publish task if it doesn't exist
+        if (s_status_publish_task_handle == NULL) {
+            ESP_LOGI(TAG, "Creating status publish task...");
+            BaseType_t task_ret = xTaskCreate(status_publish_task, "status_pub", 4096, NULL, 5, &s_status_publish_task_handle);
+            if (task_ret != pdPASS) {
+                ESP_LOGE(TAG, "Failed to create status publish task");
+                s_status_publish_task_handle = NULL;
+            } else {
+                ESP_LOGI(TAG, "Status publish task created successfully");
+            }
+        }
 
         // Create or restart periodic status timer
         if (!s_status_timer) {
@@ -91,6 +137,14 @@ static void mqtt_connection_callback(bool connected)
         if (s_status_timer) {
             xTimerStop(s_status_timer, 0);
             ESP_LOGI(TAG, "Status timer stopped");
+        }
+        
+        // Delete status publish task to free resources
+        if (s_status_publish_task_handle != NULL) {
+            ESP_LOGI(TAG, "Deleting status publish task...");
+            vTaskDelete(s_status_publish_task_handle);
+            s_status_publish_task_handle = NULL;
+            ESP_LOGI(TAG, "Status publish task deleted");
         }
         
         // Only transition to DISCONNECTED and start reconnection if we were connected
@@ -780,56 +834,115 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
     
     // Load channel (will trigger refresh if empty)
     esp_err_t err = channel_load(s_current_channel);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Channel load returned %s (may be empty, refresh will populate)", esp_err_to_name(err));
+    bool refresh_started = false;
+    
+    if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
+        // Serious error (e.g., refresh task couldn't start due to memory)
+        ESP_LOGE(TAG, "Channel load failed: %s", esp_err_to_name(err));
+        p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_ERROR, -1, 
+                                       "Failed to load channel");
+        // Clean up: destroy the channel since we can't use it
+        channel_destroy(s_current_channel);
+        s_current_channel = NULL;
+        // Fall back to SD card channel to ensure device remains in valid state
+        p3a_state_fallback_to_sdcard();
+        return err;
     }
     
     // Check if channel is empty (first-time access)
     channel_stats_t stats = {0};
     channel_get_stats(s_current_channel, &stats);
     
-    if (stats.total_items == 0) {
-        // Channel is empty - show loading message and wait for data
+    if (stats.total_items == 0 && err == ESP_OK) {
+        // Channel is empty - check if refresh task actually started
+        // (refresh task failure would have returned error above, so if we're here, refresh should be running)
+        refresh_started = true;
         ESP_LOGI(TAG, "Channel empty, waiting for data from Makapix Club...");
+        
+        // Switch to UI mode to show loading message
+        app_lcd_enter_ui_mode();
+        ugfx_ui_show_channel_message(channel_name, "Loading from Makapix Club...", -1);
         p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_LOADING, -1, 
                                        "Fetching from Makapix Club...");
         
-        // Wait for refresh task to populate the channel (max 30 seconds)
-        const int MAX_WAIT_MS = 30000;
-        const int POLL_INTERVAL_MS = 500;
+        // Wait for refresh task to populate the channel (max 60 seconds for slow downloads)
+        // Poll frequently at first for quick response, then less often
+        const int MAX_WAIT_MS = 60000;
         int waited_ms = 0;
         
         while (waited_ms < MAX_WAIT_MS) {
-            vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
-            waited_ms += POLL_INTERVAL_MS;
+            // Poll faster at the beginning (100ms for first 5 sec, then 500ms)
+            int poll_interval = (waited_ms < 5000) ? 100 : 500;
+            vTaskDelay(pdMS_TO_TICKS(poll_interval));
+            waited_ms += poll_interval;
             
             // Check if channel now has entries
             channel_get_stats(s_current_channel, &stats);
             if (stats.total_items > 0) {
-                ESP_LOGI(TAG, "Channel now has %zu entries after %d ms", stats.total_items, waited_ms);
+                ESP_LOGI(TAG, "Channel now has %zu entries after %d ms - starting playback!", 
+                         stats.total_items, waited_ms);
                 break;
             }
             
-            // Update loading message with elapsed time
+            // Update loading message with elapsed time (every 2 seconds)
             if (waited_ms % 2000 == 0) {
                 ESP_LOGI(TAG, "Still waiting for channel data... (%d ms)", waited_ms);
+                // Update UI with time info
+                char msg[64];
+                snprintf(msg, sizeof(msg), "Loading... (%d sec)", waited_ms / 1000);
+                ugfx_ui_show_channel_message(channel_name, msg, -1);
             }
         }
         
-        // Clear channel message
+        // Exit UI mode regardless of outcome
+        ugfx_ui_hide_channel_message();
+        app_lcd_exit_ui_mode();
+        
+        // Clear loading message
         p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
         
         if (stats.total_items == 0) {
+            // Timeout - refresh didn't populate the channel
             ESP_LOGW(TAG, "Timed out waiting for channel data");
             p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_EMPTY, -1, 
                                            "No artworks available yet");
+            // Clean up: destroy the empty channel
+            channel_destroy(s_current_channel);
+            s_current_channel = NULL;
+            // Fall back to SD card channel to ensure device remains in valid state
+            p3a_state_fallback_to_sdcard();
+            return ESP_ERR_NOT_FOUND;
         }
     }
     
     // Start playback with server order
     err = channel_start_playback(s_current_channel, CHANNEL_ORDER_ORIGINAL, NULL);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to start playback: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Failed to start playback: %s", esp_err_to_name(err));
+        // Clean up: destroy the channel since playback failed
+        channel_destroy(s_current_channel);
+        s_current_channel = NULL;
+        
+        // Show error message
+        p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_ERROR, -1, 
+                                       "Failed to start playback");
+        // Fall back to SD card channel to ensure device remains in valid state
+        p3a_state_fallback_to_sdcard();
+        return err;
+    }
+    
+    // Switch the animation player's channel source to this Makapix channel
+    err = channel_player_switch_to_makapix_channel(s_current_channel);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to switch channel player source: %s", esp_err_to_name(err));
+        // Continue anyway - channel was created, just animation player might not use it
+    }
+    
+    // Trigger the animation player to load the first artwork from the new channel
+    err = animation_player_request_swap_current();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to trigger initial animation swap: %s", esp_err_to_name(err));
+        // Not fatal - user can manually swap
     }
     
     ESP_LOGI(TAG, "Channel switched successfully");
@@ -878,6 +991,18 @@ esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const c
     makapix_set_current_post_id(post_id);
     s_view_intent_intentional = true;  // Next buffer swap will submit intentional view
     
+    // Switch the animation player's channel source to this transient channel
+    err = channel_player_switch_to_makapix_channel(s_current_channel);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to switch channel player source: %s", esp_err_to_name(err));
+    }
+    
+    // Trigger the animation player to load the artwork
+    err = animation_player_request_swap_current();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to trigger animation swap: %s", esp_err_to_name(err));
+    }
+    
     ESP_LOGI(TAG, "Transient artwork channel created and started");
     return ESP_OK;
 }
@@ -903,24 +1028,30 @@ static uint32_t hash_string_local(const char *str)
     return hash;
 }
 
+// Extension strings for file naming
+static const char *s_ext_strings_local[] = { ".webp", ".gif", ".png", ".jpg" };
+
 static int detect_file_type_ext(const char *url)
 {
     size_t len = strlen(url);
+    // Check longer extensions first (e.g., .jpeg before .jpg), all comparisons are case-insensitive
     if (len >= 5 && strcasecmp(url + len - 5, ".webp") == 0) return 0; // webp
+    if (len >= 5 && strcasecmp(url + len - 5, ".jpeg") == 0) return 3; // JPEG (prefer .jpg but accept .jpeg)
     if (len >= 4 && strcasecmp(url + len - 4, ".gif") == 0)  return 1; // gif
     if (len >= 4 && strcasecmp(url + len - 4, ".png") == 0)  return 2; // png
-    if (len >= 4 && strcasecmp(url + len - 4, ".jpg") == 0)  return 3; // jpg
-    if (len >= 5 && strcasecmp(url + len - 5, ".jpeg") == 0) return 3; // jpg
+    if (len >= 4 && strcasecmp(url + len - 4, ".jpg") == 0)  return 3; // JPEG (canonical extension)
     return 0;
 }
 
-static void build_vault_path_from_storage_key_simple(const char *storage_key, char *out, size_t out_len)
+static void build_vault_path_from_storage_key_simple(const char *storage_key, const char *art_url, char *out, size_t out_len)
 {
     uint32_t hash = hash_string_local(storage_key);
     char dir1[3], dir2[3];
     snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)((hash >> 24) & 0xFF));
     snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)((hash >> 16) & 0xFF));
-    snprintf(out, out_len, "%s/%s/%s/%s", "/sdcard/vault", dir1, dir2, storage_key);
+    // Include file extension for type detection
+    int ext_idx = detect_file_type_ext(art_url);
+    snprintf(out, out_len, "%s/%s/%s/%s%s", "/sdcard/vault", dir1, dir2, storage_key, s_ext_strings_local[ext_idx]);
 }
 
 static esp_err_t single_ch_load(channel_handle_t channel)
@@ -1043,8 +1174,8 @@ static channel_handle_t create_single_artwork_channel(const char *storage_key, c
     ch->base.current_filter.excluded_flags = CHANNEL_FILTER_FLAG_NONE;
     ch->base.name = strdup("Artwork");
     
-    // Build filepath from storage_key
-    build_vault_path_from_storage_key_simple(storage_key, ch->item.filepath, sizeof(ch->item.filepath));
+    // Build filepath from storage_key (includes extension from art_url)
+    build_vault_path_from_storage_key_simple(storage_key, art_url, ch->item.filepath, sizeof(ch->item.filepath));
     strncpy(ch->item.storage_key, storage_key, sizeof(ch->item.storage_key) - 1);
     ch->item.storage_key[sizeof(ch->item.storage_key) - 1] = '\0';
     ch->item.item_index = 0;

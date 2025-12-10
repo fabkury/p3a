@@ -19,6 +19,9 @@
 
 static const char *TAG = "makapix_channel";
 
+// Weak symbol for SD pause check - prevents downloads during OTA to avoid SDIO bus contention
+extern bool animation_player_is_sd_paused(void) __attribute__((weak));
+
 /**
  * @brief File extensions enum
  */
@@ -28,6 +31,9 @@ typedef enum {
     EXT_PNG  = 2,
     EXT_JPEG = 3,
 } file_extension_t;
+
+// Extension strings for building file paths
+static const char *s_ext_strings[] = { ".webp", ".gif", ".png", ".jpg" };
 
 /**
  * @brief Internal Makapix channel state
@@ -156,7 +162,7 @@ static int compare_entries_by_created(const void *a, const void *b)
 
 // Helper: build vault filepath for an entry
 // NOTE: Must match the pattern used by makapix_artwork_download() in makapix_artwork.c
-// Path: /vault/{dir1}/{dir2}/{storage_key}
+// Path: /vault/{dir1}/{dir2}/{storage_key}.{ext}
 // where dir1/dir2 are derived from hash_string(storage_key)
 // storage_key is a UUID stored as first 16 bytes of entry->sha256
 static void build_vault_path(const makapix_channel_t *ch, 
@@ -173,8 +179,10 @@ static void build_vault_path(const makapix_channel_t *ch,
     snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)((hash >> 24) & 0xFF));
     snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)((hash >> 16) & 0xFF));
     
-    snprintf(out, out_len, "%s/%s/%s/%s", 
-             ch->vault_path, dir1, dir2, storage_key);
+    // Include file extension for type detection
+    int ext_idx = (entry->extension <= EXT_JPEG) ? entry->extension : EXT_WEBP;
+    snprintf(out, out_len, "%s/%s/%s/%s%s", 
+             ch->vault_path, dir1, dir2, storage_key, s_ext_strings[ext_idx]);
 }
 
 // Helper: get filter flags from entry
@@ -260,6 +268,15 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
     char index_path[256];
     build_index_path(ch, index_path, sizeof(index_path));
     
+    // Clean up orphan .tmp file if it exists (lazy cleanup)
+    char tmp_path[260];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", index_path);
+    struct stat tmp_st;
+    if (stat(tmp_path, &tmp_st) == 0 && S_ISREG(tmp_st.st_mode)) {
+        ESP_LOGD(TAG, "Removing orphan temp file: %s", tmp_path);
+        unlink(tmp_path);
+    }
+    
     ESP_LOGI(TAG, "Loading channel from: %s", index_path);
     
     // Try to open index file
@@ -274,7 +291,12 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
         // Start refresh to fetch channel data from server
         if (!ch->refreshing) {
             ESP_LOGI(TAG, "Starting refresh to populate empty channel");
-            makapix_impl_request_refresh(channel);
+            esp_err_t refresh_err = makapix_impl_request_refresh(channel);
+            if (refresh_err != ESP_OK) {
+                // Refresh task failed to start - caller needs to know
+                ESP_LOGE(TAG, "Failed to start refresh for empty channel");
+                return refresh_err;
+            }
         }
         return ESP_OK;
     }
@@ -517,8 +539,10 @@ static esp_err_t makapix_impl_request_refresh(channel_handle_t channel)
     }
     
     // Start background refresh task
+    // Stack needs to be large enough for MQTT+TLS, HTTP downloads, JSON parsing
+    // Note: makapix_query_response_t is allocated on heap in refresh task
     ch->refreshing = true;
-    BaseType_t ret = xTaskCreate(refresh_task_impl, "makapix_refresh", 16384, ch, 5, &ch->refresh_task);
+    BaseType_t ret = xTaskCreate(refresh_task_impl, "makapix_refresh", 24576, ch, 5, &ch->refresh_task);
     if (ret != pdPASS) {
         ch->refreshing = false;
         ESP_LOGE(TAG, "Failed to create refresh task");
@@ -541,16 +565,17 @@ static esp_err_t makapix_impl_get_stats(channel_handle_t channel, channel_stats_
     return ESP_OK;
 }
 
-// Helper: detect file type from URL
+// Helper: detect file type from URL (case-insensitive, accepts both .jpg and .jpeg)
 static file_extension_t detect_file_type(const char *url)
 {
     if (!url) return EXT_WEBP;
     size_t len = strlen(url);
+    // Check longer extensions first (e.g., .jpeg before .jpg)
     if (len >= 5 && strcasecmp(url + len - 5, ".webp") == 0) return EXT_WEBP;
+    if (len >= 5 && strcasecmp(url + len - 5, ".jpeg") == 0) return EXT_JPEG; // JPEG (prefer .jpg but accept .jpeg)
     if (len >= 4 && strcasecmp(url + len - 4, ".gif") == 0) return EXT_GIF;
     if (len >= 4 && strcasecmp(url + len - 4, ".png") == 0) return EXT_PNG;
-    if (len >= 4 && strcasecmp(url + len - 4, ".jpg") == 0) return EXT_JPEG;
-    if (len >= 5 && strcasecmp(url + len - 5, ".jpeg") == 0) return EXT_JPEG;
+    if (len >= 4 && strcasecmp(url + len - 4, ".jpg") == 0) return EXT_JPEG; // JPEG (canonical extension)
     return EXT_WEBP;
 }
 
@@ -612,6 +637,15 @@ static esp_err_t load_channel_metadata(makapix_channel_t *ch, char *out_cursor, 
     char meta_path[256];
     snprintf(meta_path, sizeof(meta_path), "%s/%s.json", ch->channels_path, ch->channel_id);
     
+    // Clean up orphan .tmp file if it exists (lazy cleanup)
+    char tmp_path[260];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", meta_path);
+    struct stat tmp_st;
+    if (stat(tmp_path, &tmp_st) == 0 && S_ISREG(tmp_st.st_mode)) {
+        ESP_LOGD(TAG, "Removing orphan temp file: %s", tmp_path);
+        unlink(tmp_path);
+    }
+    
     FILE *f = fopen(meta_path, "r");
     if (!f) {
         if (out_cursor) out_cursor[0] = '\0';
@@ -667,18 +701,33 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
     char index_path[256];
     build_index_path(ch, index_path, sizeof(index_path));
     
-    // Ensure directory exists
-    char *dir_sep = strrchr(index_path, '/');
+    // Ensure directory exists - create recursively
+    char dir_path[256];
+    strncpy(dir_path, index_path, sizeof(dir_path) - 1);
+    dir_path[sizeof(dir_path) - 1] = '\0';
+    char *dir_sep = strrchr(dir_path, '/');
     if (dir_sep) {
         *dir_sep = '\0';
-        struct stat st;
-        if (stat(index_path, &st) != 0) {
-            // Create directory recursively
-            char cmd[512];
-            snprintf(cmd, sizeof(cmd), "mkdir -p %s", index_path);
-            system(cmd);
+        // Create each level of the path
+        for (char *p = dir_path + 1; *p; p++) {
+            if (*p == '/') {
+                *p = '\0';
+                struct stat st;
+                if (stat(dir_path, &st) != 0) {
+                    if (mkdir(dir_path, 0755) != 0 && errno != EEXIST) {
+                        ESP_LOGE(TAG, "Failed to create directory %s: %d", dir_path, errno);
+                    }
+                }
+                *p = '/';
+            }
         }
-        *dir_sep = '/';
+        // Create final directory level
+        struct stat st;
+        if (stat(dir_path, &st) != 0) {
+            if (mkdir(dir_path, 0755) != 0 && errno != EEXIST) {
+                ESP_LOGE(TAG, "Failed to create directory %s: %d", dir_path, errno);
+            }
+        }
     }
     
     // Load existing entries
@@ -695,31 +744,68 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
         all_count = 0;
     }
     
-    // Add new entries
+    // Add new entries - process one at a time and save incrementally
+    // This allows the channel to have playable content sooner
     for (size_t i = 0; i < count; i++) {
         const makapix_post_t *post = &posts[i];
         
-        // Check if already exists (by storage_key UUID)
-        bool exists = false;
+        // Check if already exists in index (by storage_key UUID)
+        bool exists_in_index = false;
         for (size_t j = 0; j < all_count; j++) {
             char existing_key[40];
             bytes_to_uuid(all_entries[j].sha256, existing_key, sizeof(existing_key));
             if (strcasecmp(existing_key, post->storage_key) == 0) {
-                exists = true;
+                exists_in_index = true;
                 break;
             }
         }
-        if (exists) continue;
         
-        // Check if file already exists in vault
+        // Check if file actually exists on disk (even if in index)
         char vault_file[512];
         build_vault_path_from_storage_key(ch, post->storage_key, detect_file_type(post->art_url), vault_file, sizeof(vault_file));
         
+        // Clean up orphan .tmp file if it exists (lazy cleanup)
+        char tmp_file[516];
+        snprintf(tmp_file, sizeof(tmp_file), "%s.tmp", vault_file);
+        struct stat tmp_st;
+        if (stat(tmp_file, &tmp_st) == 0 && S_ISREG(tmp_st.st_mode)) {
+            ESP_LOGD(TAG, "Removing orphan temp file: %s", tmp_file);
+            unlink(tmp_file);
+        }
+        
         struct stat st;
-        bool needs_download = (stat(vault_file, &st) != 0);
+        bool file_exists = (stat(vault_file, &st) == 0);
+        bool needs_download = !file_exists;
+        
+        // If entry exists in index but file is missing, we need to re-download
+        if (exists_in_index && !file_exists) {
+            ESP_LOGW(TAG, "Entry exists in index but file missing, will re-download: %s", post->storage_key);
+        }
+        
+        // Skip if entry already in index AND file exists on disk
+        if (exists_in_index && file_exists) {
+            continue;
+        }
         
         if (needs_download) {
+            // Wait if SD access is paused (e.g., during OTA check to avoid SDIO bus contention)
+            if (animation_player_is_sd_paused) {
+                int wait_count = 0;
+                const int max_wait = 60;  // Wait up to 60 seconds
+                while (animation_player_is_sd_paused() && wait_count < max_wait) {
+                    if (wait_count == 0) {
+                        ESP_LOGI(TAG, "SD access paused, waiting before download...");
+                    }
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                    wait_count++;
+                }
+                if (wait_count > 0 && wait_count < max_wait) {
+                    ESP_LOGI(TAG, "SD access resumed after %d seconds, continuing download", wait_count);
+                }
+            }
+            
             // Download artwork (makapix_artwork_download saves to vault using storage_key)
+            ESP_LOGI(TAG, "Downloading artwork %zu/%zu: %s", i + 1, count, post->storage_key);
             char download_path[256];
             esp_err_t dl_err = makapix_artwork_download(post->art_url, post->storage_key, download_path, sizeof(download_path));
             if (dl_err != ESP_OK) {
@@ -729,6 +815,12 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
             // Update vault_file path to match downloaded path
             strncpy(vault_file, download_path, sizeof(vault_file) - 1);
             vault_file[sizeof(vault_file) - 1] = '\0';
+        }
+        
+        // If entry already exists in index (we just downloaded missing file), skip adding to index
+        if (exists_in_index) {
+            ESP_LOGI(TAG, "Re-downloaded missing file for existing index entry: %s", post->storage_key);
+            continue;
         }
         
         // Store the server's storage_key (UUID) as the entry identifier
@@ -762,6 +854,18 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
         entry->flags = 0;
         entry->extension = detect_file_type(post->art_url);
         memset(entry->reserved, 0, sizeof(entry->reserved));
+        
+        // Save index incrementally after first entry so channel becomes playable ASAP
+        if (all_count == 1 || (all_count % 3 == 0)) {
+            // Update channel state immediately so stats show items
+            free(ch->entries);
+            ch->entries = malloc(all_count * sizeof(makapix_channel_entry_t));
+            if (ch->entries) {
+                memcpy(ch->entries, all_entries, all_count * sizeof(makapix_channel_entry_t));
+                ch->entry_count = all_count;
+                ESP_LOGI(TAG, "Channel now has %zu entries", all_count);
+            }
+        }
     }
     
     // Write to temp file first (index_path is 256, need 4 more for .tmp)
@@ -777,6 +881,7 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
     
     FILE *f = fopen(temp_path, "wb");
     if (!f) {
+        ESP_LOGE(TAG, "Failed to open %s for writing: %d", temp_path, errno);
         free(all_entries);
         return ESP_FAIL;
     }
@@ -806,14 +911,16 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
 static void build_vault_path_from_storage_key(const makapix_channel_t *ch, const char *storage_key, 
                                                file_extension_t ext, char *out, size_t out_len)
 {
-    // Match makapix_artwork_download pattern: /vault/{dir1}/{dir2}/{storage_key}
+    // Match makapix_artwork_download pattern: /vault/{dir1}/{dir2}/{storage_key}.{ext}
     uint32_t hash = hash_string(storage_key);
     char dir1[3], dir2[3];
     snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)((hash >> 24) & 0xFF));
     snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)((hash >> 16) & 0xFF));
     
-    snprintf(out, out_len, "%s/%s/%s/%s", 
-             ch->vault_path, dir1, dir2, storage_key);
+    // Include file extension for type detection
+    int ext_idx = (ext <= EXT_JPEG) ? ext : EXT_WEBP;
+    snprintf(out, out_len, "%s/%s/%s/%s%s", 
+             ch->vault_path, dir1, dir2, storage_key, s_ext_strings[ext_idx]);
 }
 
 // Helper: evict excess artworks beyond limit
@@ -863,13 +970,36 @@ static esp_err_t evict_excess_artworks(makapix_channel_t *ch, size_t max_count)
     ch->entries = kept;
     ch->entry_count = kept_count;
     
-    // Rewrite index.bin
+    // Rewrite index.bin atomically (temp file + fsync + rename)
     char index_path[256];
     build_index_path(ch, index_path, sizeof(index_path));
-    FILE *f = fopen(index_path, "wb");
-    if (f) {
-        fwrite(kept, sizeof(makapix_channel_entry_t), kept_count, f);
+    
+    char temp_path[260];
+    snprintf(temp_path, sizeof(temp_path), "%s.tmp", index_path);
+    
+    FILE *f = fopen(temp_path, "wb");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open temp file for eviction: %d", errno);
+        return ESP_FAIL;
+    }
+    
+    size_t written = fwrite(kept, sizeof(makapix_channel_entry_t), kept_count, f);
+    if (written != kept_count) {
+        ESP_LOGE(TAG, "Failed to write evicted index: %zu/%zu", written, kept_count);
         fclose(f);
+        unlink(temp_path);
+        return ESP_FAIL;
+    }
+    
+    fflush(f);
+    fsync(fileno(f));
+    fclose(f);
+    
+    // Atomic rename
+    if (rename(temp_path, index_path) != 0) {
+        ESP_LOGE(TAG, "Failed to rename evicted index: %d", errno);
+        unlink(temp_path);
+        return ESP_FAIL;
     }
     
     ESP_LOGI(TAG, "Evicted %zu artworks, kept %zu", to_delete, kept_count);
@@ -933,43 +1063,52 @@ static void refresh_task_impl(void *pvParameters)
             query_req.cursor[copy_len] = '\0';
         }
         
+        // Allocate response on heap (too large for stack: ~23KB)
+        makapix_query_response_t *resp = malloc(sizeof(makapix_query_response_t));
+        if (!resp) {
+            ESP_LOGE(TAG, "Failed to allocate response buffer");
+            break;
+        }
+        
         // Query posts until we have TARGET_COUNT or no more available
         while (total_queried < TARGET_COUNT && ch->refreshing) {
-            makapix_query_response_t resp = {0};
-            esp_err_t err = makapix_api_query_posts(&query_req, &resp);
+            memset(resp, 0, sizeof(makapix_query_response_t));
+            esp_err_t err = makapix_api_query_posts(&query_req, resp);
             
-            if (err != ESP_OK || !resp.success) {
-                ESP_LOGW(TAG, "Query failed: %s", resp.error);
+            if (err != ESP_OK || !resp->success) {
+                ESP_LOGW(TAG, "Query failed: %s", resp->error);
                 break;
             }
             
-            if (resp.post_count == 0) {
+            if (resp->post_count == 0) {
                 ESP_LOGI(TAG, "No more posts available");
                 break;
             }
             
             // Update index.bin with new posts
-            update_index_bin(ch, resp.posts, resp.post_count);
-            total_queried += resp.post_count;
+            update_index_bin(ch, resp->posts, resp->post_count);
+            total_queried += resp->post_count;
             
             // Save cursor for next query
-            if (resp.has_more && strlen(resp.next_cursor) > 0) {
+            if (resp->has_more && strlen(resp->next_cursor) > 0) {
                 query_req.has_cursor = true;
-                size_t copy_len = strlen(resp.next_cursor);
+                size_t copy_len = strlen(resp->next_cursor);
                 if (copy_len >= sizeof(query_req.cursor)) copy_len = sizeof(query_req.cursor) - 1;
-                memcpy(query_req.cursor, resp.next_cursor, copy_len);
+                memcpy(query_req.cursor, resp->next_cursor, copy_len);
                 query_req.cursor[copy_len] = '\0';
             } else {
                 query_req.has_cursor = false;
             }
             
-            // Reload channel to pick up new entries
-            makapix_impl_load((channel_handle_t)ch);
+            // Note: update_index_bin() already updated ch->entries and ch->entry_count
+            // No need to reload from disk - that would overwrite our in-memory state
             
-            if (!resp.has_more) break;
+            if (!resp->has_more) break;
             
             vTaskDelay(pdMS_TO_TICKS(1000)); // Small delay between queries
         }
+        
+        free(resp);
         
         // Evict excess artworks
         evict_excess_artworks(ch, TARGET_COUNT);
@@ -979,10 +1118,11 @@ static void refresh_task_impl(void *pvParameters)
         save_channel_metadata(ch, query_req.has_cursor ? query_req.cursor : "", now);
         ch->last_refresh_time = now;
         
-        // Reload channel one final time
-        makapix_impl_load((channel_handle_t)ch);
+        // Note: Channel state is already up-to-date from update_index_bin()
+        // No need to reload - the in-memory state has all entries
         
-        ESP_LOGI(TAG, "Refresh cycle completed: queried %zu posts", total_queried);
+        ESP_LOGI(TAG, "Refresh cycle completed: queried %zu posts, channel has %zu entries", 
+                 total_queried, ch->entry_count);
         
         // Wait 1 hour before next refresh (or until cancelled)
         for (uint32_t elapsed = 0; elapsed < REFRESH_INTERVAL_SEC && ch->refreshing; elapsed++) {

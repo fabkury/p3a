@@ -30,6 +30,7 @@
 #include "freertos/semphr.h"
 #include "bsp/esp-bsp.h"
 #include "animation_player.h"
+#include "channel_player.h"
 #include "app_lcd.h"
 #include "version.h"
 #include "makapix.h"
@@ -507,6 +508,14 @@ static esp_err_t h_post_channel(httpd_req_t *req) {
     // Handle sdcard channel separately
     if (strcmp(ch_name, "sdcard") == 0) {
         err = p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL);
+        if (err == ESP_OK) {
+            // Switch animation player back to sdcard_channel source
+            channel_player_switch_to_sdcard_channel();
+            // Reload channel to pick up any new files
+            channel_player_load_channel();
+            // Trigger animation swap to show an item from sdcard
+            animation_player_request_swap_current();
+        }
     } else {
         // Handle Makapix channels
         err = makapix_switch_to_channel(ch_name, user);

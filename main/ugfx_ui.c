@@ -22,7 +22,8 @@ typedef enum {
     UI_MODE_STATUS,            // Provisioning status
     UI_MODE_REGISTRATION,      // Registration code display
     UI_MODE_CAPTIVE_AP_INFO,   // Captive portal setup info
-    UI_MODE_OTA_PROGRESS       // OTA update progress
+    UI_MODE_OTA_PROGRESS,      // OTA update progress
+    UI_MODE_CHANNEL_MESSAGE    // Channel loading/download status
 } ui_mode_t;
 
 // UI state
@@ -39,6 +40,11 @@ static int s_ota_progress = 0;
 static char s_ota_status_text[64] = {0};
 static char s_ota_version_from[32] = {0};
 static char s_ota_version_to[32] = {0};
+
+// Channel message state
+static char s_channel_name[64] = {0};
+static char s_channel_message[128] = {0};
+static int s_channel_progress = -1;
 
 // External variables for board_framebuffer.h (used by µGFX driver)
 void *ugfx_framebuffer_ptr = NULL;
@@ -212,6 +218,59 @@ static void ugfx_ui_draw_ota_progress(void)
     // Warning at bottom
     gdispFillStringBox(0, screen_h - 60, screen_w, 25, "DO NOT POWER OFF",
                      gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0xFF6666), GFX_BLACK, gJustifyCenter);
+}
+
+/**
+ * @brief Draw the channel loading/downloading message screen
+ */
+static void ugfx_ui_draw_channel_message(void)
+{
+    gdispClear(GFX_BLACK);
+    
+    gCoord screen_w = gdispGetWidth();
+    gCoord screen_h = gdispGetHeight();
+
+    // Channel name at top
+    if (strlen(s_channel_name) > 0) {
+        gdispFillStringBox(0, 60, screen_w, 35, s_channel_name,
+                         gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0x00AAFF), GFX_BLACK, gJustifyCenter);
+    }
+
+    // Main status message
+    gdispFillStringBox(0, screen_h / 2 - 40, screen_w, 40, s_channel_message,
+                     gdispOpenFont("* DejaVu Sans 24"), GFX_WHITE, GFX_BLACK, gJustifyCenter);
+
+    // Progress bar (if progress is defined, i.e. >= 0)
+    if (s_channel_progress >= 0) {
+        gCoord bar_x = 60;
+        gCoord bar_y = screen_h / 2 + 30;
+        gCoord bar_w = screen_w - 120;
+        gCoord bar_h = 24;
+        
+        // Draw bar outline
+        gdispDrawBox(bar_x - 2, bar_y - 2, bar_w + 4, bar_h + 4, HTML2COLOR(0x444444));
+        
+        // Draw bar background
+        gdispFillArea(bar_x, bar_y, bar_w, bar_h, HTML2COLOR(0x222222));
+        
+        // Draw progress fill
+        int progress = s_channel_progress;
+        if (progress > 100) progress = 100;
+        gCoord fill_w = (bar_w * progress) / 100;
+        if (fill_w > 0) {
+            gdispFillArea(bar_x, bar_y, fill_w, bar_h, HTML2COLOR(0x00AAFF));
+        }
+
+        // Progress percentage
+        char progress_text[16];
+        snprintf(progress_text, sizeof(progress_text), "%d%%", progress);
+        gdispFillStringBox(0, bar_y + bar_h + 15, screen_w, 30, progress_text,
+                         gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    }
+
+    // Hint at bottom
+    gdispFillStringBox(0, screen_h - 60, screen_w, 25, "Please wait...",
+                     gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0x888888), GFX_BLACK, gJustifyCenter);
 }
 
 /**
@@ -433,6 +492,44 @@ void ugfx_ui_hide_ota_progress(void)
     }
 }
 
+esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *message, int progress_percent)
+{
+    if (channel_name) {
+        strncpy(s_channel_name, channel_name, sizeof(s_channel_name) - 1);
+        s_channel_name[sizeof(s_channel_name) - 1] = '\0';
+    } else {
+        s_channel_name[0] = '\0';
+    }
+    
+    if (message) {
+        strncpy(s_channel_message, message, sizeof(s_channel_message) - 1);
+        s_channel_message[sizeof(s_channel_message) - 1] = '\0';
+    } else {
+        s_channel_message[0] = '\0';
+    }
+    
+    s_channel_progress = progress_percent;
+    s_ui_mode = UI_MODE_CHANNEL_MESSAGE;
+    s_ui_active = true;
+    
+    ESP_LOGI(TAG, "Channel message UI activated: %s - %s (%d%%)", 
+             s_channel_name, s_channel_message, s_channel_progress);
+    return ESP_OK;
+}
+
+void ugfx_ui_hide_channel_message(void)
+{
+    if (s_ui_mode == UI_MODE_CHANNEL_MESSAGE) {
+        s_ui_active = false;
+        s_ui_mode = UI_MODE_NONE;
+        s_channel_name[0] = '\0';
+        s_channel_message[0] = '\0';
+        s_channel_progress = -1;
+        
+        ESP_LOGI(TAG, "Channel message UI deactivated");
+    }
+}
+
 gBool ugfx_ui_is_active(void)
 {
     return s_ui_active ? gTrue : gFalse;
@@ -504,6 +601,10 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
                 return 100;
             }
             break;
+            
+        case UI_MODE_CHANNEL_MESSAGE:
+            ugfx_ui_draw_channel_message();
+            return 100;
             
         default:
             break;

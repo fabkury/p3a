@@ -1,10 +1,51 @@
 #include "animation_player_priv.h"
+#include "animation_player.h"
 #include "channel_player.h"
+#include <unistd.h>
+#include <errno.h>
+#include "freertos/task.h"
+
+// ============================================================================
+// Corrupt file deletion safeguard
+// ============================================================================
+// 
+// SAFEGUARD MEASURE: This mechanism prevents accidental cascade deletion of
+// good files. It tracks the last time a file was deleted due to corruption
+// and only allows deletion if:
+//   1. It's the first deletion since boot, OR
+//   2. More than 1 hour has passed since the last deletion
+//
+// This is a conservative safeguard that may need revision based on real-world
+// usage patterns. Future improvements could include:
+//   - Per-file deletion tracking (to allow re-deletion after re-download)
+//   - More sophisticated corruption detection
+//   - User-configurable deletion policies
+//
+// ============================================================================
+
+// Track last time a corrupt file was deleted (milliseconds since boot)
+static uint64_t s_last_corrupt_deletion_ms = 0;
+static const uint64_t CORRUPT_DELETION_COOLDOWN_MS = 3600000ULL;  // 1 hour
+
+// ============================================================================
+// Auto-retry safeguard
+// ============================================================================
+// Prevents infinite retry loops by only allowing auto-retry after a successful
+// swap. This ensures we don't get stuck retrying the same bad file repeatedly.
+// ============================================================================
+static bool s_last_swap_was_successful = false;
+
+void animation_loader_mark_swap_successful(void)
+{
+    s_last_swap_was_successful = true;
+}
 
 static void discard_failed_swap_request(esp_err_t error)
 {
+    bool had_swap_request = false;
+    
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-        bool had_swap_request = s_swap_requested;
+        had_swap_request = s_swap_requested;
         s_swap_requested = false;
         s_loader_busy = false;
 
@@ -13,14 +54,32 @@ static void discard_failed_swap_request(esp_err_t error)
         }
 
         xSemaphoreGive(s_buffer_mutex);
+    }
 
-        if (had_swap_request) {
-            ESP_LOGW(TAG, "Discarded swap request (error: %s). System remains responsive.",
+    if (had_swap_request) {
+        // SAFEGUARD: Only auto-retry if the last operation was a successful swap
+        // This prevents infinite retry loops when encountering consecutive bad files
+        if (s_last_swap_was_successful) {
+            ESP_LOGW(TAG, "Swap failed (error: %s). Auto-retrying with next item...",
                      esp_err_to_name(error));
+            
+            // Reset flag - if this retry also fails, we won't retry again
+            s_last_swap_was_successful = false;
+            
+            // Auto-retry: Request swap to the next item (channel already advanced by caller)
+            // This ensures we don't get stuck on corrupted/missing files
+            esp_err_t retry_err = animation_player_request_swap_current();
+            if (retry_err != ESP_OK) {
+                ESP_LOGW(TAG, "Auto-retry swap failed: %s. Will retry on next cycle.",
+                         esp_err_to_name(retry_err));
+            }
         } else {
-            ESP_LOGW(TAG, "Failed to load animation (error: %s). System remains responsive.",
+            ESP_LOGW(TAG, "Swap failed (error: %s). Auto-retry blocked (previous swap was not successful).",
                      esp_err_to_name(error));
         }
+    } else {
+        ESP_LOGW(TAG, "Failed to load animation (error: %s). System remains responsive.",
+                 esp_err_to_name(error));
     }
 }
 
@@ -77,8 +136,84 @@ void animation_loader_task(void *arg)
 
         ESP_LOGD(TAG, "Loader task: Loading animation '%s' into back buffer", post->name);
 
-        err = load_animation_into_buffer(post->filepath, post->type, &s_back_buffer);
+        // For vault files, check if file exists BEFORE trying to load
+        // This distinguishes between "missing" and "corrupt" files
+        bool file_missing = false;
+        if (post->filepath && strstr(post->filepath, "/vault/") != NULL) {
+            struct stat st;
+            if (stat(post->filepath, &st) != 0) {
+                file_missing = true;
+                ESP_LOGW(TAG, "Vault file missing (not downloaded yet): %s", post->filepath);
+            }
+        }
+
+        err = file_missing ? ESP_ERR_NOT_FOUND : load_animation_into_buffer(post->filepath, post->type, &s_back_buffer);
         if (err != ESP_OK) {
+            bool is_vault_file = post->filepath && strstr(post->filepath, "/vault/") != NULL;
+            
+            if (is_vault_file && file_missing) {
+                // File doesn't exist - advance to next and let background refresh re-download it
+                ESP_LOGW(TAG, "Skipping missing vault file, advancing to next: %s", post->filepath);
+                channel_player_advance();
+            } else if (is_vault_file) {
+                // File exists but failed to decode - it's corrupt
+                // SAFEGUARD: Only delete if first time since boot OR more than 1 hour since last deletion
+                uint64_t current_time_ms = (uint64_t)xTaskGetTickCount() * portTICK_PERIOD_MS;
+                bool can_delete = false;
+                
+                if (s_last_corrupt_deletion_ms == 0) {
+                    // First deletion since boot - always allowed
+                    can_delete = true;
+                } else {
+                    // Handle potential wrap-around (unlikely but safe)
+                    uint64_t time_since_last;
+                    if (current_time_ms >= s_last_corrupt_deletion_ms) {
+                        time_since_last = current_time_ms - s_last_corrupt_deletion_ms;
+                    } else {
+                        // Wrap-around occurred - treat as if enough time has passed
+                        time_since_last = CORRUPT_DELETION_COOLDOWN_MS;
+                    }
+                    if (time_since_last >= CORRUPT_DELETION_COOLDOWN_MS) {
+                        // More than 1 hour since last deletion - allowed
+                        can_delete = true;
+                    }
+                }
+                
+                if (can_delete) {
+                    ESP_LOGE(TAG, "========================================");
+                    ESP_LOGE(TAG, "DELETING CORRUPT VAULT FILE");
+                    ESP_LOGE(TAG, "File: %s", post->filepath);
+                    ESP_LOGE(TAG, "Error: %s", esp_err_to_name(err));
+                    ESP_LOGE(TAG, "Reason: File failed to decode, marking as corrupt");
+                    ESP_LOGE(TAG, "Action: Deleting file so it can be re-downloaded");
+                    ESP_LOGE(TAG, "========================================");
+                    
+                    if (unlink(post->filepath) == 0) {
+                        s_last_corrupt_deletion_ms = current_time_ms;
+                        ESP_LOGI(TAG, "Successfully deleted corrupt file. Will be re-downloaded on next channel refresh.");
+                    } else {
+                        ESP_LOGW(TAG, "Failed to delete corrupt file: %s (errno=%d)", post->filepath, errno);
+                    }
+                } else {
+                    // Calculate time since last deletion (handle wrap-around)
+                    uint64_t time_since_last;
+                    if (current_time_ms >= s_last_corrupt_deletion_ms) {
+                        time_since_last = current_time_ms - s_last_corrupt_deletion_ms;
+                    } else {
+                        // Wrap-around occurred - treat as very long time
+                        time_since_last = CORRUPT_DELETION_COOLDOWN_MS + 1;
+                    }
+                    uint64_t remaining_ms = (time_since_last < CORRUPT_DELETION_COOLDOWN_MS) ?
+                                            (CORRUPT_DELETION_COOLDOWN_MS - time_since_last) : 0;
+                    uint64_t remaining_minutes = remaining_ms / 60000ULL;
+                    uint64_t elapsed_minutes = time_since_last / 60000ULL;
+                    ESP_LOGW(TAG, "Corrupt file detected but deletion blocked by safeguard: %s", post->filepath);
+                    ESP_LOGW(TAG, "Last deletion was %llu minutes ago. Cooldown: %llu minutes remaining.",
+                             elapsed_minutes, remaining_minutes);
+                }
+                // Advance past corrupt file so we don't get stuck
+                channel_player_advance();
+            }
             discard_failed_swap_request(err);
             continue;
         }
@@ -133,11 +268,12 @@ bool directory_has_animation_files(const char *dir_path)
         if (S_ISREG(st.st_mode)) {
             const char *name = entry->d_name;
             size_t len = strlen(name);
+            // Check longer extensions first (e.g., .jpeg before .jpg), all comparisons are case-insensitive
             if ((len >= 5 && strcasecmp(name + len - 5, ".webp") == 0) ||
+                (len >= 5 && strcasecmp(name + len - 5, ".jpeg") == 0) ||
                 (len >= 4 && strcasecmp(name + len - 4, ".gif") == 0) ||
                 (len >= 4 && strcasecmp(name + len - 4, ".png") == 0) ||
-                (len >= 4 && strcasecmp(name + len - 4, ".jpg") == 0) ||
-                (len >= 5 && strcasecmp(name + len - 5, ".jpeg") == 0)) {
+                (len >= 4 && strcasecmp(name + len - 4, ".jpg") == 0)) {
                 has_anim = true;
                 break;
             }

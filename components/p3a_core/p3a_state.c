@@ -639,10 +639,29 @@ esp_err_t p3a_state_show_artwork(const char *storage_key, const char *art_url, i
     return ESP_OK;
 }
 
+// Forward declarations for channel player functions
+extern esp_err_t channel_player_switch_to_sdcard_channel(void) __attribute__((weak));
+extern esp_err_t channel_player_load_channel(void) __attribute__((weak));
+extern esp_err_t animation_player_request_swap_current(void) __attribute__((weak));
+
 esp_err_t p3a_state_fallback_to_sdcard(void)
 {
     ESP_LOGI(TAG, "Falling back to SD card channel");
-    return p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL);
+    
+    esp_err_t err = p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL);
+    
+    // Switch animation player back to sdcard_channel source
+    if (channel_player_switch_to_sdcard_channel) {
+        channel_player_switch_to_sdcard_channel();
+    }
+    if (channel_player_load_channel) {
+        channel_player_load_channel();
+    }
+    if (animation_player_request_swap_current) {
+        animation_player_request_swap_current();
+    }
+    
+    return err;
 }
 
 p3a_channel_type_t p3a_state_get_default_channel(void)

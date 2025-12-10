@@ -121,6 +121,7 @@ void unload_animation_buffer(animation_buffer_t *buf);
 esp_err_t prefetch_first_frame(animation_buffer_t *buf);
 void animation_loader_task(void *arg);
 void animation_loader_wait_for_idle(void);
+void animation_loader_mark_swap_successful(void);
 
 // Directory enumeration
 bool directory_has_animation_files(const char *dir_path);

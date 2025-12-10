@@ -342,6 +342,9 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
         }
     }
     
+    // Ensure data is flushed to storage before closing (power-loss safety)
+    fflush(fp);
+    fsync(fileno(fp));
     fclose(fp);
     free(recv_buf);
     
@@ -383,6 +386,15 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     // Final destination path in animations directory
     char final_path[512];
     snprintf(final_path, sizeof(final_path), "%s/%s", ANIMATIONS_DIR, filename);
+    
+    // Clean up orphan .tmp file if it exists (lazy cleanup)
+    char tmp_check[516];
+    snprintf(tmp_check, sizeof(tmp_check), "%s.tmp", final_path);
+    struct stat tmp_st;
+    if (stat(tmp_check, &tmp_st) == 0 && S_ISREG(tmp_st.st_mode)) {
+        ESP_LOGD(HTTP_API_TAG, "Removing orphan temp file: %s", tmp_check);
+        unlink(tmp_check);
+    }
     
     // Check if file already exists, delete it if it does
     if (stat(final_path, &st) == 0) {

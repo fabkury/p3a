@@ -53,6 +53,17 @@ size_t animation_player_get_current_index(void);
 esp_err_t animation_player_add_file(const char *filename, const char *animations_dir, size_t insert_after_index, size_t *out_index);
 esp_err_t animation_player_swap_to_index(size_t index);
 
+/**
+ * @brief Request a swap to load the current channel item
+ * 
+ * Triggers the animation loader to load the current item from the active channel
+ * (either sdcard_channel or makapix_channel) without advancing to the next item.
+ * Useful when switching channels to immediately display the first item.
+ * 
+ * @return ESP_OK on success, error if swap already in progress or no items
+ */
+esp_err_t animation_player_request_swap_current(void);
+
 esp_err_t animation_player_begin_sd_export(void);
 esp_err_t animation_player_end_sd_export(void);
 bool animation_player_is_sd_export_locked(void);

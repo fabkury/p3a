@@ -195,16 +195,17 @@ static esp_err_t sdcard_impl_load(channel_handle_t channel)
         
         size_t len = strlen(entry->d_name);
         asset_type_t type;
+        // Check longer extensions first (e.g., .jpeg before .jpg), all comparisons are case-insensitive
         if (len >= 5 && strcasecmp(entry->d_name + len - 5, ".webp") == 0) {
             type = ASSET_TYPE_WEBP;
+        } else if (len >= 5 && strcasecmp(entry->d_name + len - 5, ".jpeg") == 0) {
+            type = ASSET_TYPE_JPEG; // JPEG (prefer .jpg but accept .jpeg)
         } else if (len >= 4 && strcasecmp(entry->d_name + len - 4, ".gif") == 0) {
             type = ASSET_TYPE_GIF;
         } else if (len >= 4 && strcasecmp(entry->d_name + len - 4, ".png") == 0) {
             type = ASSET_TYPE_PNG;
         } else if (len >= 4 && strcasecmp(entry->d_name + len - 4, ".jpg") == 0) {
-            type = ASSET_TYPE_JPEG;
-        } else if (len >= 5 && strcasecmp(entry->d_name + len - 5, ".jpeg") == 0) {
-            type = ASSET_TYPE_JPEG;
+            type = ASSET_TYPE_JPEG; // JPEG (canonical extension)
         } else {
             continue;
         }

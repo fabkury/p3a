@@ -23,8 +23,12 @@ static struct {
 static asset_type_t get_asset_type(const char *filename)
 {
     size_t len = strlen(filename);
+    // Check longer extensions first (e.g., .jpeg before .jpg), all comparisons are case-insensitive
     if (len >= 5 && strcasecmp(filename + len - 5, ".webp") == 0) {
         return ASSET_TYPE_WEBP;
+    }
+    if (len >= 5 && strcasecmp(filename + len - 5, ".jpeg") == 0) {
+        return ASSET_TYPE_JPEG; // JPEG (prefer .jpg but accept .jpeg)
     }
     if (len >= 4 && strcasecmp(filename + len - 4, ".gif") == 0) {
         return ASSET_TYPE_GIF;
@@ -33,10 +37,7 @@ static asset_type_t get_asset_type(const char *filename)
         return ASSET_TYPE_PNG;
     }
     if (len >= 4 && strcasecmp(filename + len - 4, ".jpg") == 0) {
-        return ASSET_TYPE_JPEG;
-    }
-    if (len >= 5 && strcasecmp(filename + len - 5, ".jpeg") == 0) {
-        return ASSET_TYPE_JPEG;
+        return ASSET_TYPE_JPEG; // JPEG (canonical extension)
     }
     return ASSET_TYPE_WEBP;
 }

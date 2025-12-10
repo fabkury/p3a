@@ -128,25 +128,6 @@ void display_renderer_get_dimensions(int *width, int *height, size_t *stride);
 size_t display_renderer_get_buffer_bytes(void);
 
 /**
- * @brief Perform upscaled blit from RGBA source to display buffer
- * 
- * This is the core rendering function used by both animation and PICO-8.
- * Applies rotation and nearest-neighbor scaling using pre-computed lookup tables.
- * 
- * @param src_rgba Source RGBA pixel data (4 bytes per pixel)
- * @param src_w Source width
- * @param src_h Source height
- * @param dst_buffer Destination display buffer
- * @param lookup_x Pre-computed X coordinate lookup table
- * @param lookup_y Pre-computed Y coordinate lookup table
- * @param rotation Rotation to apply
- */
-void display_renderer_blit_upscaled(const uint8_t *src_rgba, int src_w, int src_h,
-                                    uint8_t *dst_buffer,
-                                    const uint16_t *lookup_x, const uint16_t *lookup_y,
-                                    display_rotation_t rotation);
-
-/**
  * @brief Trigger parallel upscale operation using worker tasks
  * 
  * Sets up shared state and notifies upscale workers to process rows.

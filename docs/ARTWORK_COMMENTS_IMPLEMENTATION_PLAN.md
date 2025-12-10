@@ -1,5 +1,17 @@
 # Artwork Comments Feature - Implementation Plan
 
+## Document Status
+
+**Last Updated**: 2025-12-09
+
+**Changes from Original Plan**:
+- Artwork comments is now a **sub-state of P3A_STATE_ANIMATION_PLAYBACK** (not a separate global state)
+- Added support for three metadata scenarios: artworks with comments, artworks with zero comments, and artworks without metadata
+- Integrated with current `p3a_state` system instead of creating separate state management
+- Updated to reflect current codebase structure including `components/p3a_core/`, `components/channel_manager/`, etc.
+- Uses existing `animation_metadata` from `playback_controller` to determine if sidecar JSON exists
+- No modifications needed to `playback_controller` (no new playback source)
+
 ## Overview
 
 This document provides a detailed implementation plan for adding the **Artwork Comments** feature to p3a. This feature allows users to view threaded comments on artworks by performing a 2-finger vertical swipe gesture.
@@ -7,12 +19,19 @@ This document provides a detailed implementation plan for adding the **Artwork C
 ## Background
 
 ### Current Global States
-The p3a system currently has three main global states:
-1. **Animation-playback** (paused or running)
-2. **Provisioning** (Makapix Club registration)
-3. **OTA-update** (firmware updates)
+The p3a system currently has four main global states (defined in `components/p3a_core/include/p3a_state.h`):
+1. **P3A_STATE_ANIMATION_PLAYBACK**: Normal animation playback from channels
+   - Sub-states: `P3A_PLAYBACK_PLAYING`, `P3A_PLAYBACK_CHANNEL_MESSAGE`
+2. **P3A_STATE_PROVISIONING**: Makapix Club registration
+   - Sub-states: `P3A_PROV_STATUS`, `P3A_PROV_SHOW_CODE`, `P3A_PROV_CAPTIVE_AP_INFO`
+3. **P3A_STATE_OTA**: Firmware updates
+   - Sub-states: `P3A_OTA_CHECKING`, `P3A_OTA_DOWNLOADING`, `P3A_OTA_VERIFYING`, `P3A_OTA_FLASHING`, `P3A_OTA_PENDING_REBOOT`
+4. **P3A_STATE_PICO8_STREAMING**: Real-time PICO-8 frame streaming
 
-We need to add a fourth state: **Artwork-comments**
+**Artwork-comments will be implemented as a sub-state of P3A_STATE_ANIMATION_PLAYBACK**, not as a separate global state. This is appropriate because:
+- Comments are specific to an artwork being played
+- Not all artworks have comment functionality (e.g., local SD card artworks without sidecar JSON files)
+- It allows seamless transition back to playback when exiting comments mode
 
 ### Current Architecture
 
@@ -42,13 +61,29 @@ The p3a codebase has a well-structured graphics pipeline:
 
 ## Requirements Summary
 
+### Artwork Metadata Status
+
+The system must distinguish between three artwork metadata scenarios:
+
+1. **Artwork with metadata and comments available**: Full comments UI with artwork metadata
+   - Source: Makapix channels with server-provided sidecar JSON
+   - Display: Full metadata header + comments section
+
+2. **Artwork with metadata but zero comments**: Metadata present, server confirms no comments
+   - Source: Makapix channels with sidecar JSON but empty comments array
+   - Display: "No comments" message centered on screen
+
+3. **Artwork without metadata**: No sidecar JSON available
+   - Source: SD card animations without corresponding .json sidecar file
+   - Display: "No artwork metadata" message centered on screen
+
 ### UI Layout
 
 When user enters artwork-comments with 2-finger vertical swipe:
 
 1. **Background**: Solid color (initially black, configurable at runtime)
 
-2. **Top Section**: Artwork metadata
+2. **Top Section**: Artwork metadata (only if metadata available)
    - Artwork name
    - Artwork author
    - Artwork posted date
@@ -74,6 +109,10 @@ When user enters artwork-comments with 2-finger vertical swipe:
    - Parent box size calculated from text body + space for all children
 
 5. **Scrolling**: 1-finger vertical swipes scroll through comments
+
+6. **Empty State Messages**:
+   - "No comments" when metadata exists but comments array is empty
+   - "No artwork metadata" when no sidecar JSON file exists for the animation
 
 ### Technical Requirements
 
@@ -102,6 +141,14 @@ Create `main/include/artwork_comments.h`:
 // Maximum nesting level for comments (0 = root, 1 = reply, 2 = reply to reply)
 #define COMMENT_MAX_DEPTH 2
 
+// Metadata availability status
+typedef enum {
+    METADATA_STATUS_UNKNOWN,          // Initial state, not yet checked
+    METADATA_STATUS_NOT_AVAILABLE,    // No sidecar JSON file exists
+    METADATA_STATUS_AVAILABLE_NO_COMMENTS,  // Metadata exists, zero comments
+    METADATA_STATUS_AVAILABLE_WITH_COMMENTS // Metadata exists with comments
+} metadata_status_t;
+
 // Comment structure
 typedef struct comment_s {
     uint32_t id;                      // Unique comment ID
@@ -123,17 +170,22 @@ typedef struct comment_s {
 } comment_t;
 
 // Artwork metadata for comments screen
+// Note: This is separate from animation_metadata_t in components/channel_manager/
+// because it stores server-provided social/community data (comments, reactions)
+// received via MQTT, while animation_metadata_t handles local sidecar JSON
+// metadata for file/artist information.
 typedef struct {
     char *artwork_name;               // Artwork name (allocated)
     char *author_name;                // Author name (allocated)
     time_t posted_time;               // Posted timestamp
     uint16_t reaction_counts[5];     // Count for each emoji reaction
     uint16_t total_comments;          // Total comment count
-} artwork_metadata_t;
+} artwork_comments_metadata_t;
 
 // Comments page state
 typedef struct {
-    artwork_metadata_t metadata;      // Artwork metadata
+    metadata_status_t status;         // Current metadata status
+    artwork_comments_metadata_t metadata; // Artwork metadata (only if available)
     comment_t **root_comments;        // Array of root-level comments
     uint16_t root_comment_count;      // Number of root comments
     
@@ -143,7 +195,7 @@ typedef struct {
     
     // Loading state
     bool loading;                     // True if waiting for server data
-    bool loaded;                      // True if comments have arrived
+    bool loaded;                      // True if server response received
 } comments_page_t;
 
 // Initialize comments system
@@ -153,9 +205,10 @@ esp_err_t artwork_comments_init(void);
 void artwork_comments_deinit(void);
 
 // Enter comments mode for current artwork
+// Checks animation_metadata from playback_controller to determine if sidecar exists
 esp_err_t artwork_comments_enter(void);
 
-// Exit comments mode
+// Exit comments mode (returns to playback)
 void artwork_comments_exit(void);
 
 // Check if currently in comments mode
@@ -170,50 +223,99 @@ const comments_page_t *artwork_comments_get_page(void);
 #endif // ARTWORK_COMMENTS_H
 ```
 
-#### 1.2 Add Comments State to Playback Controller
+#### 1.2 Add Comments Sub-state to P3A State Machine
 
-Extend `playback_controller.h` to add a new playback source:
+**Instead of adding a new global state**, extend `components/p3a_core/include/p3a_state.h` to add a new sub-state to `P3A_STATE_ANIMATION_PLAYBACK`:
 
 ```c
+/**
+ * @brief Animation playback sub-states
+ */
 typedef enum {
-    PLAYBACK_SOURCE_NONE,
-    PLAYBACK_SOURCE_PICO8_STREAM,
-    PLAYBACK_SOURCE_LOCAL_ANIMATION,
-    PLAYBACK_SOURCE_COMMENTS       // NEW: Artwork comments mode
-} playback_source_t;
+    P3A_PLAYBACK_PLAYING,           ///< Normal animation display
+    P3A_PLAYBACK_CHANNEL_MESSAGE,   ///< Displaying channel status message
+    P3A_PLAYBACK_ARTWORK_COMMENTS,  ///< NEW: Viewing artwork comments
+} p3a_playback_substate_t;
 ```
 
-Add functions to enter/exit comments mode:
+Add functions to enter/exit comments sub-state:
 ```c
-esp_err_t playback_controller_enter_comments_mode(void);
-void playback_controller_exit_comments_mode(void);
-bool playback_controller_is_comments_active(void);
+/**
+ * @brief Enter artwork comments sub-state
+ * 
+ * Transitions from PLAYING to ARTWORK_COMMENTS.
+ * Requires that playback_controller has valid animation metadata.
+ * 
+ * @return ESP_OK if transition successful
+ *         ESP_ERR_INVALID_STATE if not in ANIMATION_PLAYBACK state or no metadata
+ */
+esp_err_t p3a_state_enter_artwork_comments(void);
+
+/**
+ * @brief Exit artwork comments sub-state
+ * 
+ * Returns from ARTWORK_COMMENTS to PLAYING.
+ */
+void p3a_state_exit_artwork_comments(void);
+
+/**
+ * @brief Check if currently viewing artwork comments
+ * 
+ * @return true if in ARTWORK_COMMENTS sub-state
+ */
+bool p3a_state_is_artwork_comments(void);
 ```
+
+This approach maintains consistency with the existing state machine architecture where:
+- Provisioning and OTA are separate global states (they suspend playback entirely)
+- PICO8_STREAMING is a separate global state (it replaces animation content)
+- Comments viewing is contextual to the current artwork (stays within ANIMATION_PLAYBACK)
 
 #### 1.3 Update Display Renderer Modes
 
-Add new render mode to `display_renderer.h`:
+Add new render mode to `main/include/display_renderer.h`:
 
 ```c
 typedef enum {
-    DISPLAY_RENDER_MODE_ANIMATION,
-    DISPLAY_RENDER_MODE_UI,
-    DISPLAY_RENDER_MODE_COMMENTS    // NEW: Comments rendering mode
+    DISPLAY_RENDER_MODE_ANIMATION,  // Animation/streaming pipeline owns buffers
+    DISPLAY_RENDER_MODE_UI,         // UI pipeline owns buffers (provisioning, OTA)
+    DISPLAY_RENDER_MODE_COMMENTS    // NEW: Comments UI rendering (uses worker tasks)
 } display_render_mode_t;
 ```
 
 Add functions:
 ```c
+/**
+ * @brief Enter comments rendering mode
+ * 
+ * Blocks until render loop acknowledges mode switch.
+ * 
+ * @return ESP_OK on success
+ */
 esp_err_t display_renderer_enter_comments_mode(void);
+
+/**
+ * @brief Exit comments rendering mode
+ * 
+ * Returns to ANIMATION mode. Blocks until render loop acknowledges.
+ */
 void display_renderer_exit_comments_mode(void);
+
+/**
+ * @brief Check if currently in comments mode
+ * 
+ * @return true if comments mode active
+ */
 bool display_renderer_is_comments_mode(void);
 ```
+
+The comments mode will reuse the existing upscale worker tasks (`g_upscale_worker_top` and `g_upscale_worker_bottom`) but repurpose them for UI rendering instead of upscaling operations.
 
 ### Phase 2: Touch Gesture Detection
 
 #### 2.1 Add 2-Finger Vertical Swipe Detection
 
-In `app_touch.c`, add new gesture state:
+In `main/app_touch.c`, add new gesture state to the existing `gesture_state_t` enum:
 
 ```c
 typedef enum {
@@ -226,17 +328,23 @@ typedef enum {
 } gesture_state_t;
 ```
 
-Detection logic (in `app_touch_task`):
-- Detect when 2 fingers are touching (already have multi-touch support)
+Detection logic (integrate into existing touch handler):
+- Detect when 2 fingers are touching (multi-touch support already exists)
 - Track vertical movement of both fingers
 - If both fingers move in same direction (up or down) by minimum threshold
 - And horizontal movement is small
-- Trigger comments mode entry/exit
+- Trigger comments sub-state entry/exit via `p3a_state_enter_artwork_comments()` / `p3a_state_exit_artwork_comments()`
 
 **Swipe direction mapping**:
-- **2-finger swipe UP**: Enter comments mode
-- **2-finger swipe DOWN** (when in comments): Exit comments mode
-- **1-finger swipe UP/DOWN** (when in comments): Scroll comments
+- **2-finger swipe UP**: Call `p3a_state_enter_artwork_comments()` to enter comments sub-state
+- **2-finger swipe DOWN** (when in comments): Call `p3a_state_exit_artwork_comments()` to return to playback
+- **1-finger swipe UP/DOWN** (when in comments): Call `artwork_comments_scroll()` instead of brightness adjustment
+
+**Entry conditions check**:
+Before entering comments mode, verify:
+1. Current state is `P3A_STATE_ANIMATION_PLAYBACK` and sub-state is `P3A_PLAYBACK_PLAYING`
+2. Use `playback_controller_has_animation_metadata()` to check if metadata might be available
+3. If conditions not met, ignore the gesture or show brief error message
 
 ### Phase 3: Comment Box Rendering System
 
@@ -367,7 +475,7 @@ void draw_comment_clipped(uint8_t *fb, size_t stride,
 
 #### 6.1 Modify `display_render_task`
 
-In `display_renderer.c`, add new mode handling:
+In `main/display_renderer.c`, add new mode handling to the existing render loop:
 
 ```c
 if (mode == DISPLAY_RENDER_MODE_COMMENTS) {
@@ -382,25 +490,46 @@ if (mode == DISPLAY_RENDER_MODE_COMMENTS) {
         // Show loading indicator
         draw_loading_message(back_buffer, g_display_row_stride);
     } else if (page->loaded) {
-        // Set up shared state for workers
-        g_comments_dst_buffer = back_buffer;
-        g_comments_page = page;
-        g_comments_viewport_y = page->scroll_offset;
-        
-        // Split screen between workers (like upscale)
-        const int mid_row = EXAMPLE_LCD_V_RES / 2;
-        g_comments_row_start_top = 0;
-        g_comments_row_end_top = mid_row;
-        g_comments_row_start_bottom = mid_row;
-        g_comments_row_end_bottom = EXAMPLE_LCD_V_RES;
-        
-        // Notify workers and wait for completion
-        DISPLAY_MEMORY_BARRIER();
-        xTaskNotify(g_upscale_worker_top, 1, eSetBits);
-        xTaskNotify(g_upscale_worker_bottom, 1, eSetBits);
-        
-        // Wait for both workers (use notification bits)
-        // ... (same pattern as upscaling)
+        // Check metadata status and render accordingly
+        switch (page->status) {
+            case METADATA_STATUS_NOT_AVAILABLE:
+                // Show "No artwork metadata" centered on screen
+                draw_centered_message(back_buffer, g_display_row_stride, "No artwork metadata");
+                break;
+            
+            case METADATA_STATUS_AVAILABLE_NO_COMMENTS:
+                // Show metadata header + "No comments" message
+                draw_metadata_header(back_buffer, g_display_row_stride, &page->metadata);
+                draw_centered_message(back_buffer, g_display_row_stride, "No comments");
+                break;
+            
+            case METADATA_STATUS_AVAILABLE_WITH_COMMENTS:
+                // Set up shared state for workers
+                g_comments_dst_buffer = back_buffer;
+                g_comments_page = page;
+                g_comments_viewport_y = page->scroll_offset;
+                
+                // Split screen between workers (same pattern as upscaling)
+                const int mid_row = EXAMPLE_LCD_V_RES / 2;  // Display height / 2
+                g_comments_row_start_top = 0;
+                g_comments_row_end_top = mid_row;
+                g_comments_row_start_bottom = mid_row;
+                g_comments_row_end_bottom = EXAMPLE_LCD_V_RES;  // Display height
+                
+                // Notify workers and wait for completion
+                DISPLAY_MEMORY_BARRIER();
+                xTaskNotify(g_upscale_worker_top, 1, eSetBits);
+                xTaskNotify(g_upscale_worker_bottom, 1, eSetBits);
+                
+                // Wait for both workers (same pattern as existing upscale code)
+                // ... (notification bits handling)
+                break;
+            
+            default:
+                // Unknown status - show error
+                draw_centered_message(back_buffer, g_display_row_stride, "Error loading comments");
+                break;
+        }
     }
     
     frame_delay_ms = 100;  // 10 FPS
@@ -440,16 +569,17 @@ void display_upscale_worker_top_task(void *arg) {
 
 #### 7.1 MQTT Topic Structure
 
-Add to `components/makapix/makapix_mqtt.h`:
+Add to `components/makapix/include/makapix_mqtt.h` or create new header:
 
 ```c
 // Request comments for current artwork
 // Publish to: makapix/device/{device_id}/artwork/comments/request
-// Payload: {"artwork_id": "<id>"}
+// Payload: {"artwork_id": "<id>", "filepath": "/path/to/file.webp"}
 
 // Receive comments response
 // Subscribe to: makapix/device/{device_id}/artwork/comments/response
 // Payload: {
+//   "status": "success" | "no_metadata" | "no_comments",
 //   "artwork": {
 //     "id": "<id>",
 //     "name": "Artwork Name",
@@ -475,6 +605,11 @@ Add to `components/makapix/makapix_mqtt.h`:
 //     }
 //   ]
 // }
+// 
+// Response status values:
+// - "success": Full metadata and comments provided
+// - "no_metadata": Artwork not found in server database (use METADATA_STATUS_NOT_AVAILABLE)
+// - "no_comments": Artwork exists but has zero comments (use METADATA_STATUS_AVAILABLE_NO_COMMENTS)
 ```
 
 #### 7.2 MQTT Handler Implementation
@@ -482,49 +617,155 @@ Add to `components/makapix/makapix_mqtt.h`:
 Create `components/makapix/makapix_comments.c`:
 
 ```c
-esp_err_t makapix_request_comments(const char *artwork_id);
+/**
+ * @brief Request comments for the current artwork
+ * 
+ * Uses animation_metadata from playback_controller to get filepath.
+ * Publishes MQTT request to server.
+ * 
+ * @return ESP_OK on success
+ *         ESP_ERR_INVALID_STATE if no artwork is playing or no metadata
+ */
+esp_err_t makapix_request_comments(void);
+
+/**
+ * @brief Parse comments response from server
+ * 
+ * Updates artwork_comments state based on response.
+ * 
+ * @param json_payload JSON response string
+ * @return ESP_OK on success
+ */
 esp_err_t makapix_parse_comments_response(const char *json_payload);
 ```
 
 Parser must:
-1. Parse JSON response
-2. Build tree structure of comments
-3. Enforce max depth of 2
-4. Allocate memory for all strings
-5. Call `layout_comments_page()` after building tree
+1. Parse JSON response and check "status" field
+2. Set appropriate metadata_status_t based on status
+3. If status is "success", build tree structure of comments
+4. Enforce max depth of 2
+5. Allocate memory for all strings
+6. Call `layout_comments_page()` after building tree
+7. If status is "no_metadata" or "no_comments", set status accordingly
 
-### Phase 8: Main State Machine Integration
+### Phase 8: State Machine Integration
 
 #### 8.1 State Transition Logic
 
-In `p3a_main.c`, add comments monitoring similar to provisioning:
+In `components/p3a_core/p3a_state.c`, implement the new sub-state functions:
 
 ```c
-static void comments_monitor_task(void *arg) {
-    while (true) {
-        if (artwork_comments_is_active()) {
-            // Comments mode is active
-            // Check for exit condition or updates
-        }
-        vTaskDelay(pdMS_TO_TICKS(100));
+esp_err_t p3a_state_enter_artwork_comments(void)
+{
+    // Take mutex
+    if (xSemaphoreTake(s_state.mutex, portMAX_DELAY) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
     }
+    
+    // Verify we're in ANIMATION_PLAYBACK state
+    if (s_state.current_state != P3A_STATE_ANIMATION_PLAYBACK) {
+        xSemaphoreGive(s_state.mutex);
+        ESP_LOGW(TAG, "Cannot enter comments - not in ANIMATION_PLAYBACK");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Verify we're in PLAYING sub-state
+    if (s_state.playback_substate != P3A_PLAYBACK_PLAYING) {
+        xSemaphoreGive(s_state.mutex);
+        ESP_LOGW(TAG, "Cannot enter comments - not in PLAYING sub-state");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Transition to ARTWORK_COMMENTS sub-state
+    s_state.playback_substate = P3A_PLAYBACK_ARTWORK_COMMENTS;
+    xSemaphoreGive(s_state.mutex);
+    
+    // Call artwork_comments module to initialize and load data
+    esp_err_t ret = artwork_comments_enter();
+    if (ret != ESP_OK) {
+        // Revert sub-state on failure
+        xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+        s_state.playback_substate = P3A_PLAYBACK_PLAYING;
+        xSemaphoreGive(s_state.mutex);
+        return ret;
+    }
+    
+    // Switch display renderer to comments mode
+    display_renderer_enter_comments_mode();
+    
+    ESP_LOGI(TAG, "Entered ARTWORK_COMMENTS sub-state");
+    return ESP_OK;
+}
+
+void p3a_state_exit_artwork_comments(void)
+{
+    // Take mutex
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    
+    if (s_state.current_state != P3A_STATE_ANIMATION_PLAYBACK ||
+        s_state.playback_substate != P3A_PLAYBACK_ARTWORK_COMMENTS) {
+        xSemaphoreGive(s_state.mutex);
+        ESP_LOGW(TAG, "Not in ARTWORK_COMMENTS sub-state");
+        return;
+    }
+    
+    // Transition back to PLAYING sub-state
+    s_state.playback_substate = P3A_PLAYBACK_PLAYING;
+    xSemaphoreGive(s_state.mutex);
+    
+    // Clean up comments module
+    artwork_comments_exit();
+    
+    // Switch display renderer back to animation mode
+    display_renderer_exit_comments_mode();
+    
+    ESP_LOGI(TAG, "Exited ARTWORK_COMMENTS sub-state");
+}
+
+bool p3a_state_is_artwork_comments(void)
+{
+    bool result = false;
+    if (xSemaphoreTake(s_state.mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        result = (s_state.current_state == P3A_STATE_ANIMATION_PLAYBACK &&
+                  s_state.playback_substate == P3A_PLAYBACK_ARTWORK_COMMENTS);
+        xSemaphoreGive(s_state.mutex);
+    }
+    return result;
 }
 ```
 
+Note: This replaces the need for a separate comments monitor task. The state is managed through the p3a_state system.
+
 #### 8.2 Touch Handler Integration
 
-In `app_touch.c`, add handler for entering comments:
+In `main/app_touch.c`, integrate with existing touch gesture handler:
 
 ```c
+// In the touch event processing function:
 if (/* 2-finger vertical swipe detected */) {
-    if (!artwork_comments_is_active()) {
-        // Enter comments mode
-        ESP_LOGI(TAG, "Entering artwork comments mode");
-        artwork_comments_enter();
-    } else {
-        // Exit comments mode
-        ESP_LOGI(TAG, "Exiting artwork comments mode");
-        artwork_comments_exit();
+    // Check if we're in a state that allows comments
+    p3a_state_t current_state = p3a_state_get();
+    
+    if (current_state == P3A_STATE_ANIMATION_PLAYBACK) {
+        if (p3a_state_is_artwork_comments()) {
+            // Exit comments mode (2-finger swipe down)
+            ESP_LOGI(TAG, "Exiting artwork comments mode");
+            p3a_state_exit_artwork_comments();
+        } else {
+            // Try to enter comments mode (2-finger swipe up)
+            // First check if metadata is available
+            if (playback_controller_has_animation_metadata()) {
+                ESP_LOGI(TAG, "Entering artwork comments mode");
+                esp_err_t ret = p3a_state_enter_artwork_comments();
+                if (ret != ESP_OK) {
+                    ESP_LOGW(TAG, "Failed to enter comments mode: %s", esp_err_to_name(ret));
+                    // Optionally show brief error message via UI
+                }
+            } else {
+                ESP_LOGI(TAG, "Cannot enter comments - no animation metadata");
+                // Optionally show brief "No metadata" message
+            }
+        }
     }
 }
 ```
@@ -532,19 +773,31 @@ if (/* 2-finger vertical swipe detected */) {
 When in comments mode, remap 1-finger vertical swipes to scrolling:
 
 ```c
-if (artwork_comments_is_active() && gesture_state == GESTURE_STATE_BRIGHTNESS) {
-    // Repurpose brightness gesture as scrolling
-    int16_t scroll_delta = delta_y;  // Y movement
-    artwork_comments_scroll(scroll_delta);
-    gesture_state = GESTURE_STATE_SCROLLING;
+// In existing brightness/swipe gesture handler:
+if (gesture_state == GESTURE_STATE_BRIGHTNESS) {
+    if (p3a_state_is_artwork_comments()) {
+        // Repurpose brightness gesture as scrolling when in comments
+        int16_t scroll_delta = -delta_y;  // Invert Y for natural scrolling
+        artwork_comments_scroll(scroll_delta);
+        // Don't update brightness
+    } else {
+        // Normal brightness control
+        // ... existing brightness code ...
+    }
 }
 ```
+
+Touch routing strategy:
+- Check `p3a_state_is_artwork_comments()` to determine if gestures should be routed to comments
+- 2-finger vertical swipe: Toggle comments mode (enter/exit)
+- 1-finger vertical swipe: Scroll comments (when in comments mode) or brightness (when in playback)
+- Other gestures (tap, long-press, rotation) remain unchanged or disabled in comments mode
 
 ### Phase 9: Configuration System
 
 #### 9.1 Runtime Configuration
 
-Add to `components/config_store/`:
+Add to `components/config_store/include/config_store.h` or `components/config_store/config_store.h`:
 
 ```c
 // Background color for comments screen
@@ -563,51 +816,67 @@ Default values:
 ## Implementation Sequence
 
 ### Step 1: Foundation (Days 1-2)
-- [ ] Create data structures (`artwork_comments.h`)
-- [ ] Implement basic state management (`artwork_comments.c`)
-- [ ] Add render mode to display renderer
-- [ ] Update playback controller
+- [ ] Create data structures in `main/include/artwork_comments.h` with metadata_status_t enum
+- [ ] Implement basic state management in `main/artwork_comments.c`
+- [ ] Add `P3A_PLAYBACK_ARTWORK_COMMENTS` sub-state to `components/p3a_core/include/p3a_state.h`
+- [ ] Implement state transition functions in `components/p3a_core/p3a_state.c`
+- [ ] Add `DISPLAY_RENDER_MODE_COMMENTS` to `main/include/display_renderer.h`
+- [ ] Implement display mode functions in `main/display_renderer.c`
 
 ### Step 2: Touch Input (Day 3)
+- [ ] Add `GESTURE_STATE_TWO_FINGER_SWIPE` to `main/app_touch.c`
 - [ ] Implement 2-finger vertical swipe detection
-- [ ] Add gesture state transitions
+- [ ] Integrate with `p3a_state_enter_artwork_comments()` / `p3a_state_exit_artwork_comments()`
+- [ ] Add metadata availability check before entering comments
+- [ ] Add gesture routing logic for comments mode (scroll vs brightness)
 - [ ] Test gesture recognition
 
 ### Step 3: Rendering Core (Days 4-5)
-- [ ] Create sprite system
+- [ ] Create sprite system in `main/comments_sprites.c`
 - [ ] Implement comment box drawing
-- [ ] Add text rendering and wrapping
+- [ ] Add text rendering and wrapping using µGFX
+- [ ] Implement empty state messages ("No comments", "No artwork metadata")
 - [ ] Test individual component rendering
 
 ### Step 4: Layout Engine (Days 6-7)
-- [ ] Implement layout algorithm
-- [ ] Handle nested comments correctly
+- [ ] Create `main/comments_layout.c`
+- [ ] Implement layout algorithm for threaded comments
+- [ ] Handle nested comments correctly (max depth 2)
 - [ ] Calculate page height
 - [ ] Test layout with mock data
 
 ### Step 5: Worker Integration (Days 8-9)
-- [ ] Extend worker tasks for UI rendering
-- [ ] Implement viewport clipping
+- [ ] Extend worker tasks in `main/display_renderer.c` for comments UI rendering
+- [ ] Add shared state variables for comments mode
+- [ ] Implement screen region division and clipping for parallel worker rendering
+- [ ] Implement metadata status-based rendering paths
 - [ ] Optimize drawing performance
 - [ ] Test split-screen rendering
 
 ### Step 6: MQTT Integration (Days 10-11)
-- [ ] Define MQTT protocol
-- [ ] Implement request/response handlers
-- [ ] Add JSON parsing
-- [ ] Test with mock server
+- [ ] Define MQTT protocol in `components/makapix/include/makapix_mqtt.h` with status field
+- [ ] Create `components/makapix/makapix_comments.c`
+- [ ] Implement `makapix_request_comments()` using playback_controller metadata
+- [ ] Implement JSON parsing with status handling ("success", "no_metadata", "no_comments")
+- [ ] Build comment tree structure with max depth enforcement
+- [ ] Test with mock server responses
 
-### Step 7: Main Loop Integration (Days 12-13)
-- [ ] Wire up state transitions
-- [ ] Connect touch gestures to comments mode
-- [ ] Implement scrolling
+### Step 7: State Machine Integration (Days 12-13)
+- [ ] Wire up all state transition functions
+- [ ] Connect touch gestures to state transitions
+- [ ] Implement scrolling in comments mode
+- [ ] Test transitions between PLAYING and ARTWORK_COMMENTS sub-states
+- [ ] Test with SD card artworks (no metadata scenario)
+- [ ] Test with Makapix artworks (metadata + comments scenarios)
 - [ ] Test end-to-end flow
 
 ### Step 8: Polish (Days 14-15)
 - [ ] Add loading indicators
-- [ ] Handle error cases (no comments, network failure)
+- [ ] Handle error cases (network failure, malformed JSON)
+- [ ] Test all three metadata scenarios thoroughly
 - [ ] Performance optimization
 - [ ] Memory leak testing
+- [ ] Documentation updates
 
 ## Testing Strategy
 
@@ -618,10 +887,16 @@ Default values:
 - JSON parsing for malformed data
 
 ### Integration Tests
-- Enter/exit comments mode
-- Scrolling behavior
-- MQTT request/response cycle
-- State transitions with other modes (provisioning, OTA)
+- Enter/exit comments sub-state from PLAYING sub-state
+- Verify state transitions are blocked when not in ANIMATION_PLAYBACK
+- Scrolling behavior in comments mode
+- MQTT request/response cycle with different status values
+- Test all three metadata scenarios:
+  1. Artwork with comments (METADATA_STATUS_AVAILABLE_WITH_COMMENTS)
+  2. Artwork with zero comments (METADATA_STATUS_AVAILABLE_NO_COMMENTS)
+  3. SD card artwork without sidecar (METADATA_STATUS_NOT_AVAILABLE)
+- State persistence when entering/exiting comments
+- Gesture routing in comments mode vs. playback mode
 
 ### Performance Tests
 - Frame time measurement (should be ≤100ms)
@@ -664,7 +939,10 @@ Default values:
    - **Recommendation**: Show "Comments unavailable" message, allow retry
 
 5. **Empty state**: What to show if artwork has no comments?
-   - **Recommendation**: Show "No comments yet" message in center
+   - **Answer**: Implemented via metadata_status_t enum - "No comments" for zero comments, "No artwork metadata" for missing sidecar
+
+6. **Metadata handling**: How to distinguish between no sidecar file vs. zero comments?
+   - **Answer**: Use animation_metadata.has_metadata from playback_controller to check for sidecar, then MQTT response status field determines if comments exist
 
 ## Future Enhancements
 
@@ -679,11 +957,15 @@ Default values:
 
 ## References
 
-- Existing provisioning UI: `main/ugfx_ui.c`
-- Touch gesture system: `main/app_touch.c`
-- Display renderer architecture: `main/display_renderer.c`
-- MQTT implementation: `components/makapix/makapix_mqtt.c`
-- Worker task pattern: `display_upscale_worker_*_task` functions
+- Current state machine: `components/p3a_core/include/p3a_state.h` and `components/p3a_core/p3a_state.c`
+- Animation metadata system: `components/channel_manager/include/animation_metadata.h`
+- Playback controller: `main/playback_controller.c` and `main/include/playback_controller.h`
+- Touch gesture system: `main/app_touch.c` and `main/include/app_touch.h`
+- Display renderer architecture: `main/display_renderer.c` and `main/include/display_renderer.h`
+- Display renderer private API: `main/display_renderer_priv.h`
+- UI rendering: `main/ugfx_ui.c` and `main/include/ugfx_ui.h`
+- MQTT implementation: `components/makapix/` (makapix_mqtt.c and related files)
+- Worker task pattern: `display_upscale_worker_*_task` functions in display_renderer.c
 
 ## Appendix A: File Structure
 
@@ -691,35 +973,42 @@ New files to create:
 ```
 main/
   include/
-    artwork_comments.h           - Public API
+    artwork_comments.h           - Public API with metadata_status_t
     comments_render.h            - Rendering API
     comments_layout.h            - Layout API
-  artwork_comments.c             - Core state management
+  artwork_comments.c             - Core state management and entry point
   comments_render.c              - UI rendering implementation
   comments_layout.c              - Layout algorithm
   comments_sprites.c             - Sprite data and drawing
 
 components/makapix/
-  makapix_comments.c             - MQTT comment fetching
-  makapix_comments.h             - MQTT comment API
+  include/
+    makapix_comments.h           - MQTT comment API
+  makapix_comments.c             - MQTT comment fetching and parsing
 
 components/config_store/
-  - Add color configuration APIs
+  - Add color configuration APIs to existing files
 ```
 
 Modified files:
 ```
+components/p3a_core/
+  include/
+    p3a_state.h                  - Add P3A_PLAYBACK_ARTWORK_COMMENTS sub-state
+  p3a_state.c                    - Implement state transition functions
+
 main/
-  app_touch.c                    - Add 2-finger swipe detection
-  display_renderer.c             - Add comments render mode
-  display_renderer_priv.h        - Add comments worker state
-  playback_controller.c          - Add comments playback source
-  p3a_main.c                     - Add comments state monitoring
+  app_touch.c                    - Add 2-finger swipe detection and routing
+  display_renderer.c             - Add DISPLAY_RENDER_MODE_COMMENTS handling
+  display_renderer_priv.h        - Add comments worker shared state variables
 
 main/include/
   display_renderer.h             - Add comments mode APIs
-  playback_controller.h          - Add comments mode APIs
 ```
+
+**Note**: Unlike the original plan, we do NOT modify:
+- `playback_controller.h` or `playback_controller.c` (no new playback source needed)
+- `p3a_main.c` (no separate monitor task needed, uses p3a_state system)
 
 ## Appendix B: Color Definitions
 
@@ -747,3 +1036,13 @@ static inline uint16_t rgb888_to_rgb565(uint32_t rgb888) {
 ## Document History
 
 - **2024-12-08**: Initial plan created based on codebase analysis
+- **2025-12-09**: Major revision to align with current codebase state:
+  - Changed from global state to sub-state of `P3A_STATE_ANIMATION_PLAYBACK`
+  - Added `metadata_status_t` enum to handle three artwork scenarios
+  - Updated all file paths to reflect current component structure
+  - Integrated with `p3a_state` system instead of separate state management
+  - Removed `playback_controller` modifications (not needed)
+  - Updated touch handling to use `p3a_state` functions
+  - Added clarification on sidecar JSON vs. server metadata
+  - Updated MQTT protocol with status field for better error handling
+  - Revised implementation sequence and testing strategy

@@ -158,16 +158,20 @@ print(f'  OK: flash_args')
 # Generate flash command helper
 flash_cmd_path = os.path.join(release_dir, 'flash_command.txt')
 force_flag = ' --force' if has_force_files else ''
-flash_opts = '--flash_mode dio --flash_freq 80m --flash_size 32MB'
+flash_opts = '--flash-mode dio --flash-freq 80m --flash-size 32MB'
 with open(flash_cmd_path, 'w') as f:
     f.write('# Flash command for ESP32-P4\\n')
     f.write('# Run from this directory:\\n')
+    f.write('\\n')
     f.write('# Windows Command Prompt:\\n')
     f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args\\n')
+    f.write('\\n')
     f.write('# Windows PowerShell:\\n')
-    f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} "@flash_args"\\n')
+    f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} \"@flash_args\"\\n')
+    f.write('\\n')
     f.write('# Linux/macOS:\\n')
     f.write(f'python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args\\n')
+    f.write('\\n')
     f.write('\\n')
     f.write('# Or with explicit port (replace COM5 or /dev/ttyUSB0 with your port)\\n')
     f.write(f'python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args\\n')

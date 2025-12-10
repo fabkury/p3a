@@ -10,6 +10,13 @@ static const char *TAG = "channel_player";
 static struct {
     channel_player_state_t state;
     bool initialized;
+    
+    // Makapix channel support
+    channel_player_source_t source_type;
+    channel_handle_t makapix_channel;
+    sdcard_post_t makapix_current_post;  // Cached current post for API compatibility
+    char makapix_filepath_buf[256];      // Buffer for filepath string
+    char makapix_name_buf[128];          // Buffer for name string
 } s_player = {0};
 
 static void shuffle_indices(size_t *indices, size_t count)
@@ -182,6 +189,60 @@ esp_err_t channel_player_get_current_post(const sdcard_post_t **out_post)
         return ESP_ERR_INVALID_ARG;
     }
 
+    // Handle Makapix channel source
+    if (s_player.source_type == CHANNEL_PLAYER_SOURCE_MAKAPIX && s_player.makapix_channel) {
+        channel_item_ref_t item;
+        esp_err_t err = channel_current_item(s_player.makapix_channel, &item);
+        if (err != ESP_OK) {
+            return err;
+        }
+        
+        // Convert channel_item_ref_t to sdcard_post_t
+        strncpy(s_player.makapix_filepath_buf, item.filepath, sizeof(s_player.makapix_filepath_buf) - 1);
+        s_player.makapix_filepath_buf[sizeof(s_player.makapix_filepath_buf) - 1] = '\0';
+        
+        // Extract name from filepath (last path component)
+        const char *name = strrchr(item.filepath, '/');
+        if (name) {
+            name++;  // Skip the '/'
+        } else {
+            name = item.filepath;
+        }
+        strncpy(s_player.makapix_name_buf, name, sizeof(s_player.makapix_name_buf) - 1);
+        s_player.makapix_name_buf[sizeof(s_player.makapix_name_buf) - 1] = '\0';
+        
+        // Determine asset type from file extension (required - no fallback)
+        const char *ext = strrchr(item.filepath, '.');
+        if (!ext) {
+            ESP_LOGE(TAG, "File has no extension, cannot determine type: %s", item.filepath);
+            return ESP_ERR_NOT_SUPPORTED;
+        }
+        
+        asset_type_t type;
+        if (strcasecmp(ext, ".webp") == 0) {
+            type = ASSET_TYPE_WEBP;
+        } else if (strcasecmp(ext, ".gif") == 0) {
+            type = ASSET_TYPE_GIF;
+        } else if (strcasecmp(ext, ".png") == 0) {
+            type = ASSET_TYPE_PNG;
+        } else if (strcasecmp(ext, ".jpg") == 0 || strcasecmp(ext, ".jpeg") == 0) {
+            type = ASSET_TYPE_JPEG;
+        } else {
+            ESP_LOGE(TAG, "Unsupported file extension: %s", ext);
+            return ESP_ERR_NOT_SUPPORTED;
+        }
+        
+        s_player.makapix_current_post.name = s_player.makapix_name_buf;
+        s_player.makapix_current_post.filepath = s_player.makapix_filepath_buf;
+        s_player.makapix_current_post.type = type;
+        s_player.makapix_current_post.created_at = 0;  // Not tracked for Makapix
+        s_player.makapix_current_post.healthy = true;
+        
+        *out_post = &s_player.makapix_current_post;
+        return ESP_OK;
+    }
+
+    // Handle SD card source
     if (s_player.state.count == 0) {
         return ESP_ERR_NOT_FOUND;
     }
@@ -198,6 +259,13 @@ esp_err_t channel_player_advance(void)
         return ESP_ERR_INVALID_STATE;
     }
 
+    // Handle Makapix channel source
+    if (s_player.source_type == CHANNEL_PLAYER_SOURCE_MAKAPIX && s_player.makapix_channel) {
+        channel_item_ref_t item;
+        return channel_next_item(s_player.makapix_channel, &item);
+    }
+
+    // Handle SD card source
     if (s_player.state.count == 0) {
         return ESP_ERR_NOT_FOUND;
     }
@@ -225,6 +293,13 @@ esp_err_t channel_player_go_back(void)
         return ESP_ERR_INVALID_STATE;
     }
 
+    // Handle Makapix channel source
+    if (s_player.source_type == CHANNEL_PLAYER_SOURCE_MAKAPIX && s_player.makapix_channel) {
+        channel_item_ref_t item;
+        return channel_prev_item(s_player.makapix_channel, &item);
+    }
+
+    // Handle SD card source
     if (s_player.state.count == 0) {
         return ESP_ERR_NOT_FOUND;
     }
@@ -278,6 +353,57 @@ size_t channel_player_get_current_position(void)
 
 size_t channel_player_get_post_count(void)
 {
-    return s_player.initialized ? s_player.state.count : 0;
+    if (!s_player.initialized) {
+        return 0;
+    }
+    
+    // Handle Makapix channel source
+    if (s_player.source_type == CHANNEL_PLAYER_SOURCE_MAKAPIX && s_player.makapix_channel) {
+        channel_stats_t stats;
+        if (channel_get_stats(s_player.makapix_channel, &stats) == ESP_OK) {
+            return stats.filtered_items > 0 ? stats.filtered_items : stats.total_items;
+        }
+        return 0;
+    }
+    
+    return s_player.state.count;
+}
+
+esp_err_t channel_player_switch_to_makapix_channel(channel_handle_t makapix_channel)
+{
+    if (!s_player.initialized) {
+        ESP_LOGE(TAG, "Channel player not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    if (!makapix_channel) {
+        ESP_LOGE(TAG, "Invalid makapix channel handle");
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    s_player.source_type = CHANNEL_PLAYER_SOURCE_MAKAPIX;
+    s_player.makapix_channel = makapix_channel;
+    
+    ESP_LOGI(TAG, "Switched to Makapix channel as playback source");
+    return ESP_OK;
+}
+
+esp_err_t channel_player_switch_to_sdcard_channel(void)
+{
+    if (!s_player.initialized) {
+        ESP_LOGE(TAG, "Channel player not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    s_player.source_type = CHANNEL_PLAYER_SOURCE_SDCARD;
+    s_player.makapix_channel = NULL;
+    
+    ESP_LOGI(TAG, "Switched to SD card channel as playback source");
+    return ESP_OK;
+}
+
+channel_player_source_t channel_player_get_source_type(void)
+{
+    return s_player.initialized ? s_player.source_type : CHANNEL_PLAYER_SOURCE_SDCARD;
 }
 

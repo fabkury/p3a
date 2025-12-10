@@ -9,9 +9,9 @@
  * @brief Initialize MQTT client with mTLS authentication
  * 
  * Must be called before connect. Sets up client configuration with mutual TLS.
- * Authentication is via client certificate (no username/password needed).
+ * Authentication uses both mTLS (client certificate) and username (player_key).
  * 
- * @param player_key UUID string for building topics and client ID
+ * @param player_key UUID string for building topics, client ID, and MQTT username
  * @param host MQTT broker hostname
  * @param port MQTT broker port (typically 8883 for mTLS)
  * @param ca_cert CA certificate PEM string for server verification
@@ -48,6 +48,16 @@ void makapix_mqtt_deinit(void);
  * @return true if connected, false otherwise
  */
 bool makapix_mqtt_is_connected(void);
+
+/**
+ * @brief Check if MQTT client is ready to send/receive requests
+ * 
+ * Ready means connected AND response topic subscription has been confirmed.
+ * Use this before sending API requests to ensure responses can be received.
+ * 
+ * @return true if ready to send requests, false otherwise
+ */
+bool makapix_mqtt_is_ready(void);
 
 /**
  * @brief Publish status message to broker

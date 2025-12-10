@@ -35,13 +35,13 @@ Open a terminal in this folder and run:
 
 ```bash
 # Windows command prompt (replace COM5 with your port)
-python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB --force @flash_args
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force @flash_args
 
 # Windows PowerShell (replace COM5 with your port) (double quotes required around @flash_args)
-python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB --force "@flash_args"
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force "@flash_args"
 
 # Linux/macOS (replace /dev/ttyUSB0 with your port)
-python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB --force @flash_args
+python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force @flash_args
 ```
 
 ### Option 2: Full Erase + Flash (Recommended for first flash or major updates)
@@ -53,7 +53,7 @@ If you're having issues or this is a fresh device, erase the flash first:
 python -m esptool --chip esp32p4 -p COM5 erase_flash
 
 # Then flash
-python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB --force @flash_args
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force @flash_args
 ```
 
 ### Option 3: Manual Flash (individual files)
@@ -61,7 +61,7 @@ python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --afte
 Flash each file separately:
 
 ```bash
-python -m esptool --chip esp32p4 -p COM5 -b 460800 write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB --force \
+python -m esptool --chip esp32p4 -p COM5 -b 460800 write_flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force \
     0x2000 bootloader.bin \
     0x8000 partition-table.bin \
     0x10000 ota_data_initial.bin \

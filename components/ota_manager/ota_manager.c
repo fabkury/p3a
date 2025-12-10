@@ -411,14 +411,15 @@ static void ota_check_task(void *arg)
     }
     
     // CRITICAL: Pause SD card access to avoid SDIO bus conflicts
-    // The ESP32-C6 WiFi and SD card share SDIO resources
+    // The ESP32-C6 WiFi and SD card share SDIO resources on ESP32-P4
     ESP_LOGI(TAG, "Pausing SD card access for OTA check...");
     animation_player_pause_sd_access();
     
     // Wait for SDIO bus to fully settle
     // The ESP Hosted driver needs substantial time to flush any pending operations
-    ESP_LOGI(TAG, "Waiting for SDIO bus to settle (3s)...");
-    vTaskDelay(pdMS_TO_TICKS(3000));  // 3 second delay for bus stabilization
+    // Increased from 3s to 5s for more reliable operation
+    ESP_LOGI(TAG, "Waiting for SDIO bus to settle (5s)...");
+    vTaskDelay(pdMS_TO_TICKS(5000));  // 5 second delay for bus stabilization
     
     set_state(OTA_STATE_CHECKING);
     
@@ -432,9 +433,28 @@ static void ota_check_task(void *arg)
         return;
     }
     
-    // Fetch latest release from GitHub
+    // Fetch latest release from GitHub with retry logic
+    // SDIO bus contention between WiFi and SD card can cause transient failures
     github_release_info_t release_info;
-    esp_err_t err = github_ota_get_latest_release(&release_info);
+    esp_err_t err = ESP_FAIL;
+    const int max_github_retries = 3;
+    
+    for (int github_attempt = 1; github_attempt <= max_github_retries; github_attempt++) {
+        err = github_ota_get_latest_release(&release_info);
+        if (err == ESP_OK || err == ESP_ERR_NOT_FOUND) {
+            // Success or no releases found - don't retry
+            break;
+        }
+        
+        if (github_attempt < max_github_retries) {
+            ESP_LOGW(TAG, "GitHub API call failed (attempt %d/%d): %s. Retrying in 3s...",
+                     github_attempt, max_github_retries, esp_err_to_name(err));
+            vTaskDelay(pdMS_TO_TICKS(3000));
+        } else {
+            ESP_LOGE(TAG, "GitHub API call failed after %d attempts: %s",
+                     max_github_retries, esp_err_to_name(err));
+        }
+    }
     
     // Resume SD access immediately after GitHub API call completes
     animation_player_resume_sd_access();

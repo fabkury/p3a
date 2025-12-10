@@ -363,6 +363,52 @@ void animation_player_cycle_animation(bool forward)
     }
 }
 
+esp_err_t animation_player_request_swap_current(void)
+{
+    if (display_renderer_is_ui_mode()) {
+        ESP_LOGW(TAG, "Swap request ignored: UI mode active");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (animation_player_is_sd_export_locked()) {
+        ESP_LOGW(TAG, "Swap request ignored: SD card is exported over USB");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (animation_player_is_sd_paused()) {
+        ESP_LOGW(TAG, "Swap request ignored: SD access paused for OTA");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (channel_player_get_post_count() == 0) {
+        ESP_LOGW(TAG, "No animations available to swap");
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
+            ESP_LOGW(TAG, "Swap request ignored: swap already in progress");
+            xSemaphoreGive(s_buffer_mutex);
+            return ESP_ERR_INVALID_STATE;
+        }
+
+        // Don't advance - just request swap to current item
+        s_swap_requested = true;
+        xSemaphoreGive(s_buffer_mutex);
+
+        if (s_loader_sem) {
+            xSemaphoreGive(s_loader_sem);
+        }
+
+        const sdcard_post_t *post = NULL;
+        if (channel_player_get_current_post(&post) == ESP_OK && post) {
+            ESP_LOGI(TAG, "Requested swap to current: '%s'", post->name);
+        }
+        return ESP_OK;
+    }
+    return ESP_FAIL;
+}
+
 esp_err_t animation_player_begin_sd_export(void)
 {
     if (animation_player_is_sd_export_locked()) {

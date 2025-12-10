@@ -95,6 +95,30 @@ static esp_err_t ensure_shard_dirs(vault_handle_t handle, const uint8_t *sha256)
     return ESP_OK;
 }
 
+// Helper: clean up orphan .tmp file for a given path (lazy cleanup)
+static void cleanup_tmp_file(const char *path)
+{
+    if (!path) return;
+    
+    // Build temp file path
+    char tmp_path[280];
+    size_t path_len = strlen(path);
+    if (path_len + 4 >= sizeof(tmp_path)) {
+        return;  // Path too long
+    }
+    
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
+    
+    // Check if .tmp file exists and remove it
+    struct stat st;
+    if (stat(tmp_path, &st) == 0 && S_ISREG(st.st_mode)) {
+        ESP_LOGD(TAG, "Removing orphan temp file: %s", tmp_path);
+        if (unlink(tmp_path) != 0) {
+            ESP_LOGW(TAG, "Failed to remove temp file: %s (errno=%d)", tmp_path, errno);
+        }
+    }
+}
+
 // Helper: atomic write (write to .tmp, fsync, rename)
 static esp_err_t atomic_write(const char *final_path, const void *data, size_t len)
 {
@@ -180,6 +204,9 @@ bool vault_file_exists(vault_handle_t handle, const uint8_t *sha256, vault_file_
     char path[280];
     build_file_path(handle, sha256, s_ext_strings[type], path, sizeof(path));
     
+    // Clean up orphan .tmp file if it exists (lazy cleanup)
+    cleanup_tmp_file(path);
+    
     struct stat st;
     return stat(path, &st) == 0 && S_ISREG(st.st_mode);
 }
@@ -195,6 +222,10 @@ esp_err_t vault_get_file_path(vault_handle_t handle,
     }
     
     build_file_path(handle, sha256, s_ext_strings[type], out_path, out_path_len);
+    
+    // Clean up orphan .tmp file if it exists (lazy cleanup)
+    cleanup_tmp_file(out_path);
+    
     return ESP_OK;
 }
 
@@ -217,6 +248,9 @@ esp_err_t vault_store_file(vault_handle_t handle,
     // Build path
     char path[280];
     build_file_path(handle, sha256, s_ext_strings[type], path, sizeof(path));
+    
+    // Clean up orphan .tmp file if it exists (lazy cleanup)
+    cleanup_tmp_file(path);
     
     // Check if already exists
     struct stat st;
@@ -266,6 +300,9 @@ bool vault_sidecar_exists(vault_handle_t handle, const uint8_t *sha256)
     char path[280];
     build_file_path(handle, sha256, "json", path, sizeof(path));
     
+    // Clean up orphan .tmp file if it exists (lazy cleanup)
+    cleanup_tmp_file(path);
+    
     struct stat st;
     return stat(path, &st) == 0 && S_ISREG(st.st_mode);
 }
@@ -280,6 +317,10 @@ esp_err_t vault_get_sidecar_path(vault_handle_t handle,
     }
     
     build_file_path(handle, sha256, "json", out_path, out_path_len);
+    
+    // Clean up orphan .tmp file if it exists (lazy cleanup)
+    cleanup_tmp_file(out_path);
+    
     return ESP_OK;
 }
 
@@ -301,6 +342,9 @@ esp_err_t vault_store_sidecar(vault_handle_t handle,
     char path[280];
     build_file_path(handle, sha256, "json", path, sizeof(path));
     
+    // Clean up orphan .tmp file if it exists (lazy cleanup)
+    cleanup_tmp_file(path);
+    
     // Write atomically
     return atomic_write(path, json_str, strlen(json_str));
 }
@@ -316,6 +360,9 @@ esp_err_t vault_read_sidecar(vault_handle_t handle,
     
     char path[280];
     build_file_path(handle, sha256, "json", path, sizeof(path));
+    
+    // Clean up orphan .tmp file if it exists (lazy cleanup)
+    cleanup_tmp_file(path);
     
     FILE *f = fopen(path, "r");
     if (!f) {
@@ -446,4 +493,26 @@ esp_err_t vault_format_sha256(const uint8_t *sha256, char *out_hex, size_t out_l
     
     return ESP_OK;
 }
+
+// ============================================================================
+// Power-loss recovery: lazy .tmp file cleanup
+// ============================================================================
+// 
+// Instead of scanning all files on boot (which doesn't scale to 32K+ files),
+// we use lazy cleanup: when accessing file X, we check if X.tmp exists and
+// remove it before proceeding. This approach:
+// - Zero boot-time cost
+// - O(1) per file access
+// - Scales to any number of files
+// - Self-healing during normal operation
+//
+// The cleanup_tmp_file() helper is called by:
+// - vault_file_exists()
+// - vault_get_file_path()
+// - vault_store_file()
+// - vault_sidecar_exists()
+// - vault_get_sidecar_path()
+// - vault_store_sidecar()
+// - vault_read_sidecar()
+// ============================================================================
 

@@ -165,6 +165,9 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
             
             ESP_LOGI(TAG, "Buffers swapped: front now playing index %zu", s_front_buffer.asset_index);
             
+            // Mark successful swap for auto-retry safeguard
+            animation_loader_mark_swap_successful();
+            
             // Update playback controller with new animation metadata
             if (s_front_buffer.filepath) {
                 playback_controller_set_animation_metadata(s_front_buffer.filepath, true);

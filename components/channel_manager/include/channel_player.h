@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include "esp_err.h"
 #include "sdcard_channel.h"  // For sdcard_post_t and asset_type_t
+#include "channel_interface.h"  // For channel_handle_t
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,6 +16,14 @@ extern "C" {
 #else
 #define CHANNEL_PLAYER_MAX_POSTS 1000
 #endif
+
+/**
+ * @brief Channel player source type
+ */
+typedef enum {
+    CHANNEL_PLAYER_SOURCE_SDCARD,   // Using sdcard_channel
+    CHANNEL_PLAYER_SOURCE_MAKAPIX,  // Using a Makapix channel_handle_t
+} channel_player_source_t;
 
 /**
  * @brief Channel player state structure
@@ -101,6 +110,31 @@ size_t channel_player_get_current_position(void);
  * @return Number of loaded posts, or 0 if none loaded
  */
 size_t channel_player_get_post_count(void);
+
+/**
+ * @brief Switch to a Makapix channel as the playback source
+ * 
+ * After calling this, channel_player_get_current_post(), advance(), etc.
+ * will use the provided Makapix channel instead of sdcard_channel.
+ * 
+ * @param makapix_channel Channel handle (must remain valid while in use)
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t channel_player_switch_to_makapix_channel(channel_handle_t makapix_channel);
+
+/**
+ * @brief Switch back to SD card channel as the playback source
+ * 
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t channel_player_switch_to_sdcard_channel(void);
+
+/**
+ * @brief Get current playback source type
+ * 
+ * @return Current source type (SDCARD or MAKAPIX)
+ */
+channel_player_source_t channel_player_get_source_type(void);
 
 #ifdef __cplusplus
 }

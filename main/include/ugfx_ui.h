@@ -90,6 +90,24 @@ void ugfx_ui_update_ota_progress(int percent, const char *status_text);
 void ugfx_ui_hide_ota_progress(void);
 
 /**
+ * @brief Show channel loading message
+ * 
+ * Displays a status message about channel loading/downloading progress.
+ * 
+ * @param channel_name Name of the channel being loaded
+ * @param message Status message (e.g., "Loading...", "Downloading artwork...")
+ * @param progress_percent Progress percentage (0-100), or -1 if indeterminate
+ */
+esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *message, int progress_percent);
+
+/**
+ * @brief Hide channel message
+ * 
+ * Deactivates the channel message UI and returns to normal animation mode.
+ */
+void ugfx_ui_hide_channel_message(void);
+
+/**
  * @brief Check if UI is currently active
  * 
  * @return gTrue if UI is active, gFalse otherwise

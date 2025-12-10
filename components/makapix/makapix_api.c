@@ -95,22 +95,33 @@ static void generate_request_id(char *out, size_t len)
 
 static void response_callback(const char *topic, const char *data, int data_len)
 {
-    if (!topic || !data || data_len <= 0) return;
+    ESP_LOGD(TAG, "Response callback invoked: topic=%s, len=%d", topic ? topic : "(NULL)", data_len);
+    
+    if (!topic || !data || data_len <= 0) {
+        ESP_LOGW(TAG, "Invalid callback parameters - returning");
+        return;
+    }
 
     // Copy payload to null-terminated buffer
     char *payload = malloc(data_len + 1);
-    if (!payload) return;
+    if (!payload) {
+        ESP_LOGE(TAG, "Failed to allocate payload buffer");
+        ESP_LOGI(TAG, "========================================");
+        return;
+    }
     memcpy(payload, data, data_len);
     payload[data_len] = '\0';
 
     cJSON *json = cJSON_Parse(payload);
     if (!json) {
+        ESP_LOGE(TAG, "Failed to parse JSON response");
         free(payload);
         return;
     }
 
     cJSON *id = cJSON_GetObjectItem(json, "request_id");
     if (!id || !cJSON_IsString(id)) {
+        ESP_LOGW(TAG, "No request_id field found in response");
         cJSON_Delete(json);
         free(payload);
         return;
@@ -118,13 +129,16 @@ static void response_callback(const char *topic, const char *data, int data_len)
 
     const char *req_id = cJSON_GetStringValue(id);
     if (!req_id) {
+        ESP_LOGW(TAG, "request_id is NULL");
         cJSON_Delete(json);
         free(payload);
         return;
     }
 
+    ESP_LOGD(TAG, "Matching response to request_id: %s", req_id);
     pending_request_t *pending = pending_find(req_id);
     if (pending) {
+        ESP_LOGI(TAG, "Response received for request %s", req_id);
         // Replace any previous payload
         if (pending->response_str) {
             free(pending->response_str);
@@ -133,6 +147,7 @@ static void response_callback(const char *topic, const char *data, int data_len)
         // Signal completion
         xSemaphoreGive(pending->done_sem);
     } else {
+        ESP_LOGW(TAG, "No matching pending request for %s - ignoring response", req_id);
         free(payload);
     }
 
@@ -164,6 +179,7 @@ static void pending_add(pending_request_t *req)
     if (xSemaphoreTake(s_pending_mutex, portMAX_DELAY) == pdTRUE) {
         req->next = s_pending_head;
         s_pending_head = req;
+        ESP_LOGD(TAG, "Added pending request: request_id=%s", req->request_id);
         xSemaphoreGive(s_pending_mutex);
     }
 }
@@ -172,6 +188,7 @@ static void pending_remove(pending_request_t *req)
 {
     if (!s_pending_mutex || !req) return;
     if (xSemaphoreTake(s_pending_mutex, portMAX_DELAY) == pdTRUE) {
+        ESP_LOGD(TAG, "Removing pending request: request_id=%s", req->request_id);
         pending_request_t **pp = &s_pending_head;
         while (*pp) {
             if (*pp == req) {
@@ -197,6 +214,30 @@ static esp_err_t publish_and_wait(cJSON *request_obj, cJSON **out_response)
 {
     if (!request_obj || !out_response) return ESP_ERR_INVALID_ARG;
 
+    // Check MQTT connection first
+    if (!makapix_mqtt_is_connected()) {
+        ESP_LOGE(TAG, "Cannot publish request: MQTT not connected");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Wait for response topic subscription to be confirmed (max 5 seconds)
+    // This is critical: server won't route responses if we're not subscribed
+    if (!makapix_mqtt_is_ready()) {
+        ESP_LOGI(TAG, "Waiting for response topic subscription...");
+        const int max_wait_ms = 5000;
+        const int poll_ms = 100;
+        int waited = 0;
+        while (!makapix_mqtt_is_ready() && waited < max_wait_ms) {
+            vTaskDelay(pdMS_TO_TICKS(poll_ms));
+            waited += poll_ms;
+        }
+        if (!makapix_mqtt_is_ready()) {
+            ESP_LOGE(TAG, "Response topic subscription not confirmed after %d ms", max_wait_ms);
+            return ESP_ERR_INVALID_STATE;
+        }
+        ESP_LOGI(TAG, "Response topic subscription confirmed after %d ms", waited);
+    }
+
     char request_id[48] = {0};
     generate_request_id(request_id, sizeof(request_id));
 
@@ -210,6 +251,9 @@ static esp_err_t publish_and_wait(cJSON *request_obj, cJSON **out_response)
     if (!payload) {
         return ESP_ERR_NO_MEM;
     }
+    
+    ESP_LOGD(TAG, "Request topic: %s", topic);
+    ESP_LOGD(TAG, "Request payload: %s", payload);
 
     pending_request_t pending = {0};
     memcpy(pending.request_id, request_id, sizeof(pending.request_id) - 1);
@@ -228,19 +272,45 @@ static esp_err_t publish_and_wait(cJSON *request_obj, cJSON **out_response)
     uint32_t delay_ms = 1000;
 
     for (int attempt = 0; attempt < MAKAPIX_MAX_RETRIES; attempt++) {
-        ESP_LOGI(TAG, "Publishing request %s (attempt %d)", request_id, attempt + 1);
+        // Check connection and subscription before each attempt
+        if (!makapix_mqtt_is_ready()) {
+            ESP_LOGW(TAG, "MQTT not ready during request %s (connected=%d), aborting", 
+                     request_id, makapix_mqtt_is_connected());
+            result = ESP_ERR_INVALID_STATE;
+            break;
+        }
+        
+        ESP_LOGI(TAG, "Publishing request %s (attempt %d/%d)", request_id, attempt + 1, MAKAPIX_MAX_RETRIES);
         esp_err_t pub_err = makapix_mqtt_publish_raw(topic, payload, 1);
         if (pub_err != ESP_OK) {
+            ESP_LOGE(TAG, "Publish failed: %s", esp_err_to_name(pub_err));
             ESP_LOGW(TAG, "Publish failed: %s", esp_err_to_name(pub_err));
+            // If not connected, don't retry
+            if (pub_err == ESP_ERR_INVALID_STATE) {
+                result = pub_err;
+                break;
+            }
         } else {
-            if (xSemaphoreTake(pending.done_sem, pdMS_TO_TICKS(MAKAPIX_REQUEST_TIMEOUT_MS)) == pdTRUE) {
+            ESP_LOGD(TAG, "Waiting for response to %s (timeout: %d ms)", request_id, MAKAPIX_REQUEST_TIMEOUT_MS);
+            TickType_t start_ticks = xTaskGetTickCount();
+            BaseType_t sem_result = xSemaphoreTake(pending.done_sem, pdMS_TO_TICKS(MAKAPIX_REQUEST_TIMEOUT_MS));
+            TickType_t elapsed_ticks = xTaskGetTickCount() - start_ticks;
+            if (sem_result == pdTRUE) {
+                ESP_LOGI(TAG, "Response received for %s after %lu ms", request_id, 
+                         (unsigned long)(elapsed_ticks * portTICK_PERIOD_MS));
                 result = ESP_OK;
                 break;
+            } else {
+                ESP_LOGW(TAG, "Timeout waiting for response to %s (waited %lu ms)", request_id,
+                         (unsigned long)(elapsed_ticks * portTICK_PERIOD_MS));
             }
         }
         // Backoff before retry
-        vTaskDelay(pdMS_TO_TICKS(delay_ms));
-        delay_ms = (delay_ms * 2 > 60000) ? 60000 : delay_ms * 2;
+        if (attempt < MAKAPIX_MAX_RETRIES - 1) {
+            ESP_LOGD(TAG, "Retrying in %lu ms...", (unsigned long)delay_ms);
+            vTaskDelay(pdMS_TO_TICKS(delay_ms));
+            delay_ms = (delay_ms * 2 > 60000) ? 60000 : delay_ms * 2;
+        }
     }
 
     if (result == ESP_OK && pending.response_str) {
@@ -248,10 +318,12 @@ static esp_err_t publish_and_wait(cJSON *request_obj, cJSON **out_response)
         if (resp_json) {
             *out_response = resp_json;
         } else {
+            ESP_LOGE(TAG, "Failed to parse response JSON");
             result = ESP_ERR_INVALID_RESPONSE;
         }
-    } else {
-        result = ESP_ERR_TIMEOUT;
+    } else if (result == ESP_OK) {
+        ESP_LOGE(TAG, "Response marked OK but no response_str");
+        result = ESP_ERR_INVALID_RESPONSE;
     }
 
     pending_remove(&pending);

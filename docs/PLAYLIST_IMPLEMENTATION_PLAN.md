@@ -1140,12 +1140,15 @@ uint32_t get_effective_dwell_time(artwork_ref_t *artwork,
 
 ## Implementation Phases
 
-### Phase 1: Core Infrastructure (Week 1)
-- [ ] Create `playlist_manager.c/h`
-- [ ] Create `play_navigator.c/h`
+### Phase 1: Core Infrastructure (Week 1) - IN PROGRESS
+- [x] Create `playlist_manager.h` - Header with API definitions
+- [x] Create `play_navigator.h` - Header with API definitions
+- [ ] Implement `playlist_manager.c` - Core logic
+- [ ] Implement `play_navigator.c` - Navigation logic
 - [ ] Add NVS settings for PE, play_order, etc.
 - [ ] Implement JSON parsing for playlist posts
 - [ ] Add `/sdcard/playlists/` storage
+- [ ] Update makapix_api to include PE parameter
 
 ### Phase 2: Navigation Logic (Week 1)
 - [ ] Implement p/q indices tracking
@@ -1197,75 +1200,71 @@ uint32_t get_effective_dwell_time(artwork_ref_t *artwork,
 
 ---
 
-## Open Questions
+## Open Questions - RESOLVED
+
+All questions have been answered by stakeholder:
 
 ### 1. Server-Side Implementation
 
 **Q**: Does the server already support the `PE` parameter and playlist post structure?
 
-**A**: According to requirements, we need to specify the JSON structure, and the server team will implement it. The structure proposed in this document should be reviewed and approved before server implementation begins.
+**A**: ✅ Yes. Server has been implemented as per our needs.
 
 ### 2. Channel-Level vs Global Settings
 
 **Q**: Should some settings (PE, randomize_playlist) be per-channel or global?
 
-**A**: Requirements state PE is **global per-device**. However, play_order might benefit from being per-channel (e.g., random order for "all" channel, server order for "user" channel). Recommend:
-- **Global**: PE, live_mode, dwell_time
-- **Per-channel**: play_order, randomize_playlist (stored in channel metadata)
+**A**: ✅ All settings are **global** (not per-channel).
 
 ### 3. Playlist-in-Playlist
 
 **Q**: What happens if server accidentally returns a playlist containing another playlist?
 
-**A**: Requirements explicitly state playlists **cannot** contain playlists. Server must enforce this. Client should:
-- Log error if nested playlist detected
-- Skip the nested playlist (treat as unavailable)
-- Report issue to server via telemetry
+**A**: ✅ Skip the nested playlist (treat as unavailable). This should never happen but handle gracefully.
 
 ### 4. Artwork Deduplication
 
 **Q**: If same artwork appears in multiple playlists, how do we track usage for deletion?
 
-**A**: Use reference counting:
+**A**: ✅ Use reference counting:
 - Each `storage_key` in vault has a refcount
-- Increment when adding to playlist
+- Increment when adding to playlist  
 - Decrement when removing from playlist
 - Delete file only when refcount reaches 0
-- Store refcounts in `vault_index.json`
+- Store refcounts in the artwork's **sidecar JSON** (not separate vault_index.json)
 
 ### 5. Maximum Download Parallelism
 
 **Q**: How many concurrent downloads should we allow?
 
-**A**: Recommendation:
-- **1 concurrent download** to simplify SDIO bus contention
-- Downloads run on dedicated task with large stack
-- Use `sdio_bus_lock()` / `sdio_bus_unlock()` to prevent conflicts with Wi-Fi
+**A**: ✅ **One** concurrent download.
 
 ### 6. Playlist Artwork Ordering
 
 **Q**: When randomize_playlist is OFF, what order do artworks follow?
 
-**A**: Server order (the order in the `artworks` array from server response).
+**A**: ✅ Server order (the order in the `artworks` array from server response).
 
 ### 7. Live Mode Channel Seed
 
 **Q**: Should channel seed be per-channel or global?
 
-**A**: Requirements state: "channel-level seed is generated from hardcoded constant (0xFAB) and channel ID". So:
+**A**: ✅ Channel-level seed is generated from hardcoded constant (0xFAB) and channel ID:
 ```c
 uint64_t channel_seed = 0xFAB ^ ((uint64_t)channel_id);
 ```
 
-### 8. Handling Deleted Playlists
+### 8. Handling Deleted Playlists and Eviction
 
 **Q**: What if user navigates to a playlist that was deleted from server?
 
-**A**: 
-- Keep cached metadata locally
-- Show "Playlist unavailable" message if refresh fails 404
-- Allow playback of downloaded artworks
-- Remove from channel on next refresh
+**A**: ✅ Complex reference-counting based eviction system:
+- Channels cache up to 1024 artworks (not posts) according to play order
+- Artworks in playlists inherit references from the playlist's channel reference
+- When channel updates, posts no longer in channel lose their reference
+- Playlists/artworks without references are queued for background eviction
+- Eviction runs asynchronously (many file operations, cannot block SDIO bus)
+- If playlist loses all channel references, it and its unreferenced artworks get evicted
 
 ---
 

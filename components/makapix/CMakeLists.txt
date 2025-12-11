@@ -23,6 +23,7 @@ idf_component_register(
         esp_netif
         channel_manager
         p3a_core
+        sdio_bus
     PRIV_REQUIRES
         wifi_manager
     WHOLE_ARCHIVE

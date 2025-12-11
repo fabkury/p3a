@@ -15,6 +15,7 @@ idf_component_register(
         app_update
         bootloader_support
         p3a_core
+        sdio_bus
     PRIV_REQUIRES
         esp_netif
 )

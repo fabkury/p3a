@@ -753,7 +753,7 @@ void display_render_task(void *arg)
 
             if (processing_time_us < target_delay_us) {
                 const int64_t residual_us = target_delay_us - processing_time_us;
-                if (residual_us > 1000) {
+                if (residual_us > 2000) {
                     vTaskDelay(pdMS_TO_TICKS((residual_us + 500) / 1000));
                 }
             }

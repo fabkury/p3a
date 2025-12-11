@@ -5,6 +5,7 @@
 #include "makapix_api.h"
 #include "makapix_channel_impl.h"
 #include "makapix_artwork.h"
+#include "sdio_bus.h"
 #include "app_wifi.h"
 #include "p3a_state.h"
 #include "p3a_render.h"
@@ -76,6 +77,14 @@ static void status_publish_task(void *pvParameters)
     while (1) {
         // Wait for notification from timer callback
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        
+        // Skip publishing if SDIO bus is locked (e.g., during OTA check/download)
+        // MQTT publishing uses WiFi which could conflict with critical operations
+        if (sdio_bus_is_locked()) {
+            ESP_LOGD(TAG, "Skipping status publish: SDIO bus locked by %s",
+                     sdio_bus_get_holder() ? sdio_bus_get_holder() : "unknown");
+            continue;
+        }
         
         // Publish status if MQTT is connected
         if (makapix_mqtt_is_connected()) {

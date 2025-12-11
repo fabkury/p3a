@@ -1,8 +1,11 @@
 #include "makapix_artwork.h"
+#include "sdio_bus.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_crt_bundle.h"
 #include "esp_heap_caps.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "sdkconfig.h"
 #include <string.h>
 #include <strings.h>
@@ -110,6 +113,26 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
 {
     if (!art_url || !storage_key || !out_path || path_len == 0) {
         return ESP_ERR_INVALID_ARG;
+    }
+
+    // Wait if SDIO bus is locked (e.g., by OTA check/download)
+    // This prevents artwork downloads from conflicting with critical WiFi operations
+    if (sdio_bus_is_locked()) {
+        const char *holder = sdio_bus_get_holder();
+        ESP_LOGI(TAG, "SDIO bus locked by %s, waiting before download...", holder ? holder : "unknown");
+        
+        int wait_count = 0;
+        const int max_wait = 60;  // Wait up to 60 seconds
+        while (sdio_bus_is_locked() && wait_count < max_wait) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            wait_count++;
+        }
+        
+        if (wait_count >= max_wait) {
+            ESP_LOGW(TAG, "Timed out waiting for SDIO bus, proceeding anyway");
+        } else {
+            ESP_LOGI(TAG, "SDIO bus available after %d seconds", wait_count);
+        }
     }
 
     // Ensure vault base directory exists

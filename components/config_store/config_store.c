@@ -241,4 +241,246 @@ screen_rotation_t config_store_get_rotation(void)
     return rotation;
 }
 
+// ============================================================================
+// Playlist Settings
+// ============================================================================
+
+esp_err_t config_store_set_pe(uint32_t pe)
+{
+    if (pe > 1023) {
+        ESP_LOGE(TAG, "Invalid PE value: %lu (max 1023)", pe);
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+    
+    cJSON *pe_item = cJSON_GetObjectItem(cfg, "pe");
+    if (pe_item) {
+        cJSON_SetNumberValue(pe_item, (double)pe);
+    } else {
+        cJSON_AddNumberToObject(cfg, "pe", (double)pe);
+    }
+    
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "PE saved to config: %lu", pe);
+    }
+    
+    return err;
+}
+
+uint32_t config_store_get_pe(void)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return 8;  // Default
+    }
+    
+    uint32_t pe = 8;
+    cJSON *pe_item = cJSON_GetObjectItem(cfg, "pe");
+    if (pe_item && cJSON_IsNumber(pe_item)) {
+        int value = (int)cJSON_GetNumberValue(pe_item);
+        if (value >= 0 && value <= 1023) {
+            pe = (uint32_t)value;
+        }
+    }
+    
+    cJSON_Delete(cfg);
+    return pe;
+}
+
+esp_err_t config_store_set_play_order(uint8_t order)
+{
+    if (order > 2) {
+        ESP_LOGE(TAG, "Invalid play order: %u", order);
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+    
+    cJSON *order_item = cJSON_GetObjectItem(cfg, "play_order");
+    if (order_item) {
+        cJSON_SetNumberValue(order_item, (double)order);
+    } else {
+        cJSON_AddNumberToObject(cfg, "play_order", (double)order);
+    }
+    
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Play order saved: %u", order);
+    }
+    
+    return err;
+}
+
+uint8_t config_store_get_play_order(void)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return 0;  // Default: server order
+    }
+    
+    uint8_t order = 0;
+    cJSON *order_item = cJSON_GetObjectItem(cfg, "play_order");
+    if (order_item && cJSON_IsNumber(order_item)) {
+        int value = (int)cJSON_GetNumberValue(order_item);
+        if (value >= 0 && value <= 2) {
+            order = (uint8_t)value;
+        }
+    }
+    
+    cJSON_Delete(cfg);
+    return order;
+}
+
+esp_err_t config_store_set_randomize_playlist(bool enable)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+    
+    cJSON *item = cJSON_GetObjectItem(cfg, "randomize_playlist");
+    if (item) {
+        // cJSON doesn't have SetBoolValue, so delete and re-add
+        cJSON_DeleteItemFromObject(cfg, "randomize_playlist");
+    }
+    cJSON_AddBoolToObject(cfg, "randomize_playlist", enable);
+    
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Randomize playlist saved: %s", enable ? "ON" : "OFF");
+    }
+    
+    return err;
+}
+
+bool config_store_get_randomize_playlist(void)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return false;  // Default: OFF
+    }
+    
+    bool enable = false;
+    cJSON *item = cJSON_GetObjectItem(cfg, "randomize_playlist");
+    if (item && cJSON_IsBool(item)) {
+        enable = cJSON_IsTrue(item);
+    }
+    
+    cJSON_Delete(cfg);
+    return enable;
+}
+
+esp_err_t config_store_set_live_mode(bool enable)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+    
+    cJSON *item = cJSON_GetObjectItem(cfg, "live_mode");
+    if (item) {
+        cJSON_DeleteItemFromObject(cfg, "live_mode");
+    }
+    cJSON_AddBoolToObject(cfg, "live_mode", enable);
+    
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Live mode saved: %s", enable ? "ON" : "OFF");
+    }
+    
+    return err;
+}
+
+bool config_store_get_live_mode(void)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return false;  // Default: OFF
+    }
+    
+    bool enable = false;
+    cJSON *item = cJSON_GetObjectItem(cfg, "live_mode");
+    if (item && cJSON_IsBool(item)) {
+        enable = cJSON_IsTrue(item);
+    }
+    
+    cJSON_Delete(cfg);
+    return enable;
+}
+
+esp_err_t config_store_set_dwell_time(uint32_t dwell_time_ms)
+{
+    if (dwell_time_ms == 0 || dwell_time_ms > 100000000) {  // Max ~27 hours
+        ESP_LOGE(TAG, "Invalid dwell time: %lu ms", dwell_time_ms);
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+    
+    cJSON *item = cJSON_GetObjectItem(cfg, "dwell_time_ms");
+    if (item) {
+        cJSON_SetNumberValue(item, (double)dwell_time_ms);
+    } else {
+        cJSON_AddNumberToObject(cfg, "dwell_time_ms", (double)dwell_time_ms);
+    }
+    
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Dwell time saved: %lu ms", dwell_time_ms);
+    }
+    
+    return err;
+}
+
+uint32_t config_store_get_dwell_time(void)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return 30000;  // Default: 30 seconds
+    }
+    
+    uint32_t dwell_time = 30000;
+    cJSON *item = cJSON_GetObjectItem(cfg, "dwell_time_ms");
+    if (item && cJSON_IsNumber(item)) {
+        int value = (int)cJSON_GetNumberValue(item);
+        if (value > 0 && value <= 100000000) {
+            dwell_time = (uint32_t)value;
+        }
+    }
+    
+    cJSON_Delete(cfg);
+    return dwell_time;
+}
+
 

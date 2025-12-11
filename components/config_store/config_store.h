@@ -55,3 +55,78 @@ esp_err_t config_store_set_rotation(screen_rotation_t rotation);
  */
 screen_rotation_t config_store_get_rotation(void);
 
+/**
+ * @brief Set playlist expansion (PE)
+ * 
+ * @param pe Playlist expansion (0-1023, 0 = infinite)
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_pe(uint32_t pe);
+
+/**
+ * @brief Get playlist expansion (PE)
+ * 
+ * @return PE value (defaults to 8 if not set)
+ */
+uint32_t config_store_get_pe(void);
+
+/**
+ * @brief Set play order mode
+ * 
+ * @param order Play order (0=server, 1=created, 2=random)
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_play_order(uint8_t order);
+
+/**
+ * @brief Get play order mode
+ * 
+ * @return Play order (defaults to 0/server if not set)
+ */
+uint8_t config_store_get_play_order(void);
+
+/**
+ * @brief Set randomize playlist mode
+ * 
+ * @param enable True to randomize playlists internally
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_randomize_playlist(bool enable);
+
+/**
+ * @brief Get randomize playlist mode
+ * 
+ * @return True if randomize playlist enabled (defaults to false)
+ */
+bool config_store_get_randomize_playlist(void);
+
+/**
+ * @brief Set Live Mode
+ * 
+ * @param enable True to enable Live Mode sync
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_live_mode(bool enable);
+
+/**
+ * @brief Get Live Mode
+ * 
+ * @return True if Live Mode enabled (defaults to false)
+ */
+bool config_store_get_live_mode(void);
+
+/**
+ * @brief Set dwell time
+ * 
+ * @param dwell_time_ms Dwell time in milliseconds
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_dwell_time(uint32_t dwell_time_ms);
+
+/**
+ * @brief Get dwell time
+ * 
+ * @return Dwell time in milliseconds (defaults to 30000)
+ */
+uint32_t config_store_get_dwell_time(void);
+

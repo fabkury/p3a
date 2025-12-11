@@ -1146,11 +1146,11 @@ uint32_t get_effective_dwell_time(artwork_ref_t *artwork,
 - [x] Implement `playlist_manager.c` - Core logic (basic version)
 - [x] Implement `play_navigator.c` - Navigation logic (basic version)
 - [x] Update CMakeLists.txt to build new components
-- [ ] Add NVS settings for PE, play_order, etc.
+- [x] Add NVS settings for PE, play_order, randomize_playlist, live_mode, dwell_time
 - [ ] Implement JSON parsing for playlist posts in makapix_api.c
-- [ ] Add `/sdcard/playlists/` storage (directory creation done)
 - [ ] Complete playlist server fetching integration
 - [ ] Enhance navigator with full playlist support
+- [ ] Test Phase 1 components
 
 ### Phase 2: Navigation Logic (Week 1)
 - [ ] Implement p/q indices tracking

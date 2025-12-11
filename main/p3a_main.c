@@ -30,6 +30,7 @@
 #include "animation_player.h"  // For animation_player_is_ui_mode()
 #include "ota_manager.h"       // For OTA boot validation
 #include "slave_ota.h"         // For ESP32-C6 co-processor OTA
+#include "sdio_bus.h"          // SDIO bus coordination
 #include "p3a_state.h"         // Unified p3a state machine
 #include "p3a_render.h"        // State-aware rendering
 #include "freertos/task.h"
@@ -570,6 +571,13 @@ void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
+    // Initialize SDIO bus coordinator early
+    // This provides mutual exclusion for SDIO operations (WiFi and SD card)
+    esp_err_t sdio_err = sdio_bus_init();
+    if (sdio_err != ESP_OK) {
+        ESP_LOGW(TAG, "SDIO bus coordinator init failed: %s (continuing anyway)", esp_err_to_name(sdio_err));
+    }
 
     // Initialize unified p3a state machine (must be after NVS)
     // This loads the remembered channel and sets initial state

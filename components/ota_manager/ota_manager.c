@@ -5,6 +5,7 @@
 
 #include "ota_manager.h"
 #include "github_ota.h"
+#include "sdio_bus.h"
 #include "esp_ota_ops.h"
 #include "esp_https_ota.h"
 #include "esp_http_client.h"
@@ -393,8 +394,7 @@ static void ota_check_task(void *arg)
         return;
     }
     
-    // Wait for animation loader to be idle to avoid SDIO bus contention
-    // The SD card (animation loading) and WiFi both use SDIO
+    // Wait for animation loader to be idle before acquiring SDIO bus
     int retry_count = 0;
     while (animation_player_is_loader_busy() && retry_count < OTA_CHECK_MAX_RETRIES) {
         retry_count++;
@@ -410,16 +410,25 @@ static void ota_check_task(void *arg)
         return;
     }
     
-    // CRITICAL: Pause SD card access to avoid SDIO bus conflicts
-    // The ESP32-C6 WiFi and SD card share SDIO resources on ESP32-P4
-    ESP_LOGI(TAG, "Pausing SD card access for OTA check...");
+    // CRITICAL: Acquire exclusive SDIO bus access to avoid bus contention
+    // The ESP32-P4 shares SDMMC controller between WiFi (SDIO Slot 1) and SD card (Slot 0)
+    // High-bandwidth WiFi operations can conflict with SD card access
+    ESP_LOGI(TAG, "Acquiring SDIO bus for OTA check...");
+    esp_err_t bus_err = sdio_bus_acquire(30000, "OTA_CHECK");  // 30s timeout
+    if (bus_err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to acquire SDIO bus, skipping OTA check");
+        s_ota.check_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    // Also pause SD access to prevent new file operations
     animation_player_pause_sd_access();
     
     // Wait for SDIO bus to fully settle
-    // The ESP Hosted driver needs substantial time to flush any pending operations
-    // Increased from 3s to 5s for more reliable operation
-    ESP_LOGI(TAG, "Waiting for SDIO bus to settle (5s)...");
-    vTaskDelay(pdMS_TO_TICKS(5000));  // 5 second delay for bus stabilization
+    // The ESP Hosted driver needs time to flush any pending operations
+    ESP_LOGI(TAG, "Waiting for SDIO bus to settle (3s)...");
+    vTaskDelay(pdMS_TO_TICKS(3000));
     
     set_state(OTA_STATE_CHECKING);
     
@@ -427,6 +436,7 @@ static void ota_check_task(void *arg)
     if (ota_check_wifi_connected() != ESP_OK) {
         ESP_LOGW(TAG, "No WiFi connection, skipping update check");
         animation_player_resume_sd_access();
+        sdio_bus_release();
         set_state(OTA_STATE_IDLE);
         s_ota.check_task = NULL;
         vTaskDelete(NULL);
@@ -434,7 +444,6 @@ static void ota_check_task(void *arg)
     }
     
     // Fetch latest release from GitHub with retry logic
-    // SDIO bus contention between WiFi and SD card can cause transient failures
     github_release_info_t release_info;
     esp_err_t err = ESP_FAIL;
     const int max_github_retries = 3;
@@ -456,8 +465,9 @@ static void ota_check_task(void *arg)
         }
     }
     
-    // Resume SD access immediately after GitHub API call completes
+    // Release SDIO bus and resume SD access after GitHub API call completes
     animation_player_resume_sd_access();
+    sdio_bus_release();
     
     if (s_ota.mutex) {
         xSemaphoreTake(s_ota.mutex, portMAX_DELAY);

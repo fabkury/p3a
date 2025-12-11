@@ -1,6 +1,7 @@
 #include "makapix_channel_impl.h"
 #include "makapix_api.h"
 #include "makapix_artwork.h"
+#include "sdio_bus.h"
 #include "esp_log.h"
 #include "esp_random.h"
 #include "esp_timer.h"
@@ -788,20 +789,27 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
         }
         
         if (needs_download) {
-            // Wait if SD access is paused (e.g., during OTA check to avoid SDIO bus contention)
-            if (animation_player_is_sd_paused) {
-                int wait_count = 0;
-                const int max_wait = 60;  // Wait up to 60 seconds
-                while (animation_player_is_sd_paused() && wait_count < max_wait) {
-                    if (wait_count == 0) {
-                        ESP_LOGI(TAG, "SD access paused, waiting before download...");
-                    }
-                    vTaskDelay(pdMS_TO_TICKS(1000));
-                    wait_count++;
+            // Wait if SDIO bus is locked or SD access is paused (e.g., during OTA)
+            // This prevents downloads from conflicting with OTA HTTPS operations
+            int wait_count = 0;
+            const int max_wait = 30;  // Wait up to 30 seconds
+            while (wait_count < max_wait) {
+                bool should_wait = sdio_bus_is_locked();
+                if (!should_wait && animation_player_is_sd_paused) {
+                    should_wait = animation_player_is_sd_paused();
                 }
-                if (wait_count > 0 && wait_count < max_wait) {
-                    ESP_LOGI(TAG, "SD access resumed after %d seconds, continuing download", wait_count);
+                if (!should_wait) break;
+                
+                if (wait_count == 0) {
+                    const char *holder = sdio_bus_get_holder();
+                    ESP_LOGI(TAG, "SDIO bus busy (%s), waiting before download...",
+                             holder ? holder : "SD paused");
                 }
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                wait_count++;
+            }
+            if (wait_count > 0 && wait_count < max_wait) {
+                ESP_LOGI(TAG, "SDIO bus available after %d seconds, continuing download", wait_count);
             }
             
             // Download artwork (makapix_artwork_download saves to vault using storage_key)

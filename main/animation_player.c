@@ -4,6 +4,7 @@
 #include "ugfx_ui.h"
 #include "config_store.h"
 #include "ota_manager.h"
+#include "sdio_bus.h"
 #include "pico8_stream.h"
 #include "pico8_render.h"
 
@@ -316,6 +317,14 @@ void animation_player_cycle_animation(bool forward)
         return;
     }
 
+    // Check if SDIO bus is locked (e.g., by OTA check/download)
+    // Discard swap to prevent concurrent SD card access during WiFi operations
+    if (sdio_bus_is_locked()) {
+        ESP_LOGW(TAG, "Swap request ignored: SDIO bus locked by %s", 
+                 sdio_bus_get_holder() ? sdio_bus_get_holder() : "unknown");
+        return;
+    }
+
     if (ota_manager_is_checking()) {
         ESP_LOGW(TAG, "Swap request ignored: OTA check in progress (SDIO bus busy)");
         return;
@@ -377,6 +386,14 @@ esp_err_t animation_player_request_swap_current(void)
 
     if (animation_player_is_sd_paused()) {
         ESP_LOGW(TAG, "Swap request ignored: SD access paused for OTA");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // Check if SDIO bus is locked (e.g., by OTA check/download)
+    // Discard swap to prevent concurrent SD card access during WiFi operations
+    if (sdio_bus_is_locked()) {
+        ESP_LOGW(TAG, "Swap request ignored: SDIO bus locked by %s", 
+                 sdio_bus_get_holder() ? sdio_bus_get_holder() : "unknown");
         return ESP_ERR_INVALID_STATE;
     }
 

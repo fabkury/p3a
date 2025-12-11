@@ -1147,14 +1147,14 @@ uint32_t get_effective_dwell_time(artwork_ref_t *artwork,
 
 ## Implementation Phases
 
-### Phase 1: Core Infrastructure (Week 1) - IN PROGRESS
+### Phase 1: Core Infrastructure (Week 1) - 80% Complete
 - [x] Create `playlist_manager.h` - Header with API definitions
 - [x] Create `play_navigator.h` - Header with API definitions
 - [x] Implement `playlist_manager.c` - Core logic (basic version)
 - [x] Implement `play_navigator.c` - Navigation logic (basic version)
 - [x] Update CMakeLists.txt to build new components
 - [x] Add NVS settings for PE, play_order, randomize_playlist, live_mode, dwell_time
-- [ ] Implement JSON parsing for playlist posts in makapix_api.c
+- [x] Implement JSON parsing for playlist posts in makapix_api.c (PE parameter + playlist parsing)
 - [ ] Complete playlist server fetching integration
 - [ ] Enhance navigator with full playlist support
 - [ ] Test Phase 1 components

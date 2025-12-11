@@ -340,33 +340,125 @@ static void parse_post_object(cJSON *post_obj, makapix_post_t *out_post)
 
     cJSON *id = cJSON_GetObjectItem(post_obj, "post_id");
     if (cJSON_IsNumber(id)) out_post->post_id = (int)id->valuedouble;
-
-    cJSON *storage = cJSON_GetObjectItem(post_obj, "storage_key");
-    if (cJSON_IsString(storage)) strncpy(out_post->storage_key, storage->valuestring, sizeof(out_post->storage_key) - 1);
-
-    cJSON *url = cJSON_GetObjectItem(post_obj, "art_url");
-    if (cJSON_IsString(url)) strncpy(out_post->art_url, url->valuestring, sizeof(out_post->art_url) - 1);
-
-    cJSON *canvas = cJSON_GetObjectItem(post_obj, "canvas");
-    if (cJSON_IsString(canvas)) strncpy(out_post->canvas, canvas->valuestring, sizeof(out_post->canvas) - 1);
-
-    cJSON *w = cJSON_GetObjectItem(post_obj, "width");
-    if (cJSON_IsNumber(w)) out_post->width = (int)w->valuedouble;
-
-    cJSON *h = cJSON_GetObjectItem(post_obj, "height");
-    if (cJSON_IsNumber(h)) out_post->height = (int)h->valuedouble;
-
-    cJSON *fc = cJSON_GetObjectItem(post_obj, "frame_count");
-    if (cJSON_IsNumber(fc)) out_post->frame_count = (int)fc->valuedouble;
-
-    cJSON *ht = cJSON_GetObjectItem(post_obj, "has_transparency");
-    out_post->has_transparency = cJSON_IsBool(ht) ? cJSON_IsTrue(ht) : false;
-
+    
+    // Parse kind field (artwork or playlist)
+    cJSON *kind = cJSON_GetObjectItem(post_obj, "kind");
+    if (cJSON_IsString(kind)) {
+        const char *kind_str = cJSON_GetStringValue(kind);
+        if (strcmp(kind_str, "playlist") == 0) {
+            out_post->kind = MAKAPIX_POST_KIND_PLAYLIST;
+        } else {
+            out_post->kind = MAKAPIX_POST_KIND_ARTWORK;
+        }
+    } else {
+        out_post->kind = MAKAPIX_POST_KIND_ARTWORK;  // Default to artwork
+    }
+    
+    // Common fields for all posts
     cJSON *owner = cJSON_GetObjectItem(post_obj, "owner_handle");
     if (cJSON_IsString(owner)) strncpy(out_post->owner_handle, owner->valuestring, sizeof(out_post->owner_handle) - 1);
 
     cJSON *created = cJSON_GetObjectItem(post_obj, "created_at");
     if (cJSON_IsString(created)) strncpy(out_post->created_at, created->valuestring, sizeof(out_post->created_at) - 1);
+    
+    cJSON *metadata_modified = cJSON_GetObjectItem(post_obj, "metadata_modified_at");
+    if (cJSON_IsString(metadata_modified)) strncpy(out_post->metadata_modified_at, metadata_modified->valuestring, sizeof(out_post->metadata_modified_at) - 1);
+    
+    if (out_post->kind == MAKAPIX_POST_KIND_PLAYLIST) {
+        // Parse playlist-specific fields
+        cJSON *total_artworks = cJSON_GetObjectItem(post_obj, "total_artworks");
+        if (cJSON_IsNumber(total_artworks)) out_post->total_artworks = (int)total_artworks->valuedouble;
+        
+        cJSON *dwell_time = cJSON_GetObjectItem(post_obj, "dwell_time_ms");
+        if (cJSON_IsNumber(dwell_time)) out_post->playlist_dwell_time_ms = (uint32_t)dwell_time->valuedouble;
+        
+        // Parse artworks array
+        cJSON *artworks = cJSON_GetObjectItem(post_obj, "artworks");
+        if (cJSON_IsArray(artworks)) {
+            size_t count = cJSON_GetArraySize(artworks);
+            if (count > 0) {
+                out_post->artworks = (makapix_artwork_t *)calloc(count, sizeof(makapix_artwork_t));
+                if (out_post->artworks) {
+                    out_post->artworks_count = 0;
+                    for (size_t i = 0; i < count; i++) {
+                        cJSON *artwork_obj = cJSON_GetArrayItem(artworks, i);
+                        if (artwork_obj) {
+                            makapix_artwork_t *artwork = &out_post->artworks[out_post->artworks_count];
+                            
+                            cJSON *aid = cJSON_GetObjectItem(artwork_obj, "post_id");
+                            if (cJSON_IsNumber(aid)) artwork->post_id = (int)aid->valuedouble;
+                            
+                            cJSON *storage = cJSON_GetObjectItem(artwork_obj, "storage_key");
+                            if (cJSON_IsString(storage)) strncpy(artwork->storage_key, storage->valuestring, sizeof(artwork->storage_key) - 1);
+                            
+                            cJSON *url = cJSON_GetObjectItem(artwork_obj, "art_url");
+                            if (cJSON_IsString(url)) strncpy(artwork->art_url, url->valuestring, sizeof(artwork->art_url) - 1);
+                            
+                            cJSON *canvas = cJSON_GetObjectItem(artwork_obj, "canvas");
+                            if (cJSON_IsString(canvas)) strncpy(artwork->canvas, canvas->valuestring, sizeof(artwork->canvas) - 1);
+                            
+                            cJSON *w = cJSON_GetObjectItem(artwork_obj, "width");
+                            if (cJSON_IsNumber(w)) artwork->width = (int)w->valuedouble;
+                            
+                            cJSON *h = cJSON_GetObjectItem(artwork_obj, "height");
+                            if (cJSON_IsNumber(h)) artwork->height = (int)h->valuedouble;
+                            
+                            cJSON *fc = cJSON_GetObjectItem(artwork_obj, "frame_count");
+                            if (cJSON_IsNumber(fc)) artwork->frame_count = (int)fc->valuedouble;
+                            
+                            cJSON *ht = cJSON_GetObjectItem(artwork_obj, "has_transparency");
+                            artwork->has_transparency = cJSON_IsBool(ht) ? cJSON_IsTrue(ht) : false;
+                            
+                            cJSON *aowner = cJSON_GetObjectItem(artwork_obj, "owner_handle");
+                            if (cJSON_IsString(aowner)) strncpy(artwork->owner_handle, aowner->valuestring, sizeof(artwork->owner_handle) - 1);
+                            
+                            cJSON *acreated = cJSON_GetObjectItem(artwork_obj, "created_at");
+                            if (cJSON_IsString(acreated)) strncpy(artwork->created_at, acreated->valuestring, sizeof(artwork->created_at) - 1);
+                            
+                            cJSON *ameta_modified = cJSON_GetObjectItem(artwork_obj, "metadata_modified_at");
+                            if (cJSON_IsString(ameta_modified)) strncpy(artwork->metadata_modified_at, ameta_modified->valuestring, sizeof(artwork->metadata_modified_at) - 1);
+                            
+                            cJSON *aart_modified = cJSON_GetObjectItem(artwork_obj, "artwork_modified_at");
+                            if (cJSON_IsString(aart_modified)) strncpy(artwork->artwork_modified_at, aart_modified->valuestring, sizeof(artwork->artwork_modified_at) - 1);
+                            
+                            cJSON *adwell = cJSON_GetObjectItem(artwork_obj, "dwell_time_ms");
+                            if (cJSON_IsNumber(adwell)) artwork->dwell_time_ms = (uint32_t)adwell->valuedouble;
+                            
+                            out_post->artworks_count++;
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // Parse artwork-specific fields
+        cJSON *storage = cJSON_GetObjectItem(post_obj, "storage_key");
+        if (cJSON_IsString(storage)) strncpy(out_post->storage_key, storage->valuestring, sizeof(out_post->storage_key) - 1);
+
+        cJSON *url = cJSON_GetObjectItem(post_obj, "art_url");
+        if (cJSON_IsString(url)) strncpy(out_post->art_url, url->valuestring, sizeof(out_post->art_url) - 1);
+
+        cJSON *canvas = cJSON_GetObjectItem(post_obj, "canvas");
+        if (cJSON_IsString(canvas)) strncpy(out_post->canvas, canvas->valuestring, sizeof(out_post->canvas) - 1);
+
+        cJSON *w = cJSON_GetObjectItem(post_obj, "width");
+        if (cJSON_IsNumber(w)) out_post->width = (int)w->valuedouble;
+
+        cJSON *h = cJSON_GetObjectItem(post_obj, "height");
+        if (cJSON_IsNumber(h)) out_post->height = (int)h->valuedouble;
+
+        cJSON *fc = cJSON_GetObjectItem(post_obj, "frame_count");
+        if (cJSON_IsNumber(fc)) out_post->frame_count = (int)fc->valuedouble;
+
+        cJSON *ht = cJSON_GetObjectItem(post_obj, "has_transparency");
+        out_post->has_transparency = cJSON_IsBool(ht) ? cJSON_IsTrue(ht) : false;
+        
+        cJSON *artwork_modified = cJSON_GetObjectItem(post_obj, "artwork_modified_at");
+        if (cJSON_IsString(artwork_modified)) strncpy(out_post->artwork_modified_at, artwork_modified->valuestring, sizeof(out_post->artwork_modified_at) - 1);
+        
+        cJSON *dwell_time = cJSON_GetObjectItem(post_obj, "dwell_time_ms");
+        if (cJSON_IsNumber(dwell_time)) out_post->dwell_time_ms = (uint32_t)dwell_time->valuedouble;
+    }
 }
 
 static void parse_query_response(cJSON *resp_json, makapix_query_response_t *out)
@@ -427,6 +519,11 @@ esp_err_t makapix_api_query_posts(const makapix_query_request_t *req, makapix_qu
 
     if (req->sort == MAKAPIX_SORT_RANDOM && req->random_seed_present) {
         cJSON_AddNumberToObject(root, "random_seed", req->random_seed);
+    }
+    
+    // Add PE (playlist expansion) parameter
+    if (req->pe > 0) {
+        cJSON_AddNumberToObject(root, "PE", req->pe);
     }
 
     cJSON *response_json = NULL;

@@ -52,6 +52,22 @@ uint64_t live_mode_get_channel_start_time(void *channel);
  */
 uint64_t live_mode_get_playlist_start_time(uint32_t created_at);
 
+/**
+ * @brief Get effective dwell time for an artwork
+ * 
+ * Resolves dwell time using priority chain:
+ * 1. Artwork-specific dwell (if non-zero)
+ * 2. Channel dwell override (if non-zero)
+ * 3. Global default dwell
+ * 
+ * Enforces minimum dwell time to prevent issues.
+ * 
+ * @param artwork_dwell_ms Artwork's dwell time in ms (0 if not set)
+ * @param channel_dwell_ms Channel override dwell time in ms (0 if not set)
+ * @return Effective dwell time in milliseconds (never less than default)
+ */
+uint32_t live_mode_get_effective_dwell_ms(uint32_t artwork_dwell_ms, uint32_t channel_dwell_ms);
+
 #ifdef __cplusplus
 }
 #endif

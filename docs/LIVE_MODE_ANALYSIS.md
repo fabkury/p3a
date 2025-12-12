@@ -9,25 +9,32 @@
 
 ## 🎯 Implementation Progress
 
-### Phase A: Foundation (Week 1) - 🚧 IN PROGRESS
+### Phase A: Foundation (Week 1) - ✅ COMPLETE
 - [x] **A1**: Add true random seed XOR on boot ✅
   - Added `config_store_set_effective_seed()` / `get_effective_seed()`
   - Boot-time XOR: `effective_seed = master_seed ^ esp_random()`
   - NTP sync callback replaces effective seed with master seed
   - Updated play_navigator to use effective seed
-- [ ] **A2**: Add swap_future structure and basic APIs
+- [x] **A2**: Add swap_future structure and basic APIs ✅
+  - Created `swap_future.h` and `swap_future.c`
+  - Implemented scheduling, cancellation, and status checking
+  - Thread-safe with mutex protection
+  - Integrated into animation_player init/deinit
 - [x] **A3**: Add channel/playlist start time helpers ✅
   - Created `live_mode` component with time helpers
   - Defined `LIVE_MODE_CHANNEL_EPOCH_UNIX` (Jan 16, 2026)
   - Implemented `live_mode_get_wall_clock_ms()`
   - Implemented `live_mode_get_channel_start_time()`
   - Implemented `live_mode_get_playlist_start_time()`
-- [ ] **A4**: Add effective dwell time resolution
+- [x] **A4**: Add effective dwell time resolution ✅
+  - Implemented `live_mode_get_effective_dwell_ms()`
+  - Layered priority: artwork → channel → global → default (30s)
+  - Enforces minimum dwell time
 - [x] **A5**: Add wall-clock time helpers ✅
   - UTC timezone enforcement in app_main
   - 64-bit millisecond timestamp functions
 
-### Phase B: swap_future Execution (Week 2) - ⏳ PENDING
+### Phase B: swap_future Execution (Week 2) - 🚧 NEXT
 ### Phase C: Live Mode Entry/Exit (Week 2) - ⏳ PENDING
 ### Phase D: Continuous Sync (Week 3) - ⏳ PENDING
 ### Phase E: Testing & Polish (Week 4) - ⏳ PENDING

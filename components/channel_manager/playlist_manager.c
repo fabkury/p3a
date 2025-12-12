@@ -3,13 +3,142 @@
 #include "makapix_api.h"
 #include "esp_log.h"
 #include "cJSON.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <time.h>
 
 static const char *TAG = "playlist_mgr";
 
 #define PLAYLISTS_DIR "/sdcard/playlists"
+
+typedef struct {
+    char storage_key[96];
+    char filepath[256];
+    uint32_t refcount;
+} refcount_entry_t;
+
+// Forward declare for refcount rebuild (definition below)
+static esp_err_t load_playlist_json(const char *filepath, playlist_metadata_t **out_playlist);
+
+static bool is_vault_filepath(const char *path)
+{
+    if (!path) return false;
+    return (strstr(path, "/vault/") != NULL);
+}
+
+static char *build_meta_path_from_asset_path(const char *filepath)
+{
+    if (!filepath) return NULL;
+    size_t len = strlen(filepath);
+    const char *dot = strrchr(filepath, '.');
+    const char *slash = strrchr(filepath, '/');
+    if (dot && slash && dot < slash) {
+        dot = NULL;
+    }
+    size_t stem_len = dot ? (size_t)(dot - filepath) : len;
+    size_t out_len = stem_len + 9 + 1; // "_meta.json"
+    char *out = (char *)malloc(out_len);
+    if (!out) return NULL;
+    memcpy(out, filepath, stem_len);
+    strcpy(out + stem_len, "_meta.json");
+    return out;
+}
+
+static esp_err_t write_refcount_meta(const char *asset_filepath, uint32_t refcount)
+{
+    if (!asset_filepath) return ESP_ERR_INVALID_ARG;
+    if (!is_vault_filepath(asset_filepath)) return ESP_OK;
+
+    struct stat st;
+    if (stat(asset_filepath, &st) != 0) return ESP_ERR_NOT_FOUND;
+
+    char *meta_path = build_meta_path_from_asset_path(asset_filepath);
+    if (!meta_path) return ESP_ERR_NO_MEM;
+
+    FILE *f = fopen(meta_path, "w");
+    if (!f) {
+        free(meta_path);
+        return ESP_FAIL;
+    }
+
+    fprintf(f, "{\"refcount\":%lu,\"size\":%lu}\n", (unsigned long)refcount, (unsigned long)st.st_size);
+    fclose(f);
+    free(meta_path);
+    return ESP_OK;
+}
+
+static esp_err_t rebuild_vault_refcounts_from_playlists(void)
+{
+    DIR *dir = opendir(PLAYLISTS_DIR);
+    if (!dir) return ESP_OK;
+
+    refcount_entry_t *entries = NULL;
+    size_t entry_count = 0;
+    size_t entry_cap = 0;
+
+    struct dirent *de;
+    while ((de = readdir(dir)) != NULL) {
+        if (de->d_name[0] == '.') continue;
+        size_t nlen = strlen(de->d_name);
+        if (nlen < 6 || strcasecmp(de->d_name + nlen - 5, ".json") != 0) continue;
+
+        char path[256];
+        int w = snprintf(path, sizeof(path), "%s/%s", PLAYLISTS_DIR, de->d_name);
+        if (w < 0 || w >= (int)sizeof(path)) continue;
+
+        playlist_metadata_t *pl = NULL;
+        if (load_playlist_json(path, &pl) != ESP_OK || !pl) continue;
+
+        for (int32_t i = 0; i < pl->loaded_artworks; i++) {
+            const artwork_ref_t *a = &pl->artworks[i];
+            if (!is_vault_filepath(a->filepath)) continue;
+            if (a->storage_key[0] == '\0') continue;
+
+            // Find or insert by storage_key
+            size_t j;
+            for (j = 0; j < entry_count; j++) {
+                if (strcmp(entries[j].storage_key, a->storage_key) == 0) {
+                    entries[j].refcount++;
+                    break;
+                }
+            }
+            if (j == entry_count) {
+                if (entry_count == entry_cap) {
+                    size_t new_cap = entry_cap ? entry_cap * 2 : 32;
+                    refcount_entry_t *tmp = (refcount_entry_t *)realloc(entries, new_cap * sizeof(refcount_entry_t));
+                    if (!tmp) {
+                        playlist_free(pl);
+                        free(entries);
+                        closedir(dir);
+                        return ESP_ERR_NO_MEM;
+                    }
+                    entries = tmp;
+                    entry_cap = new_cap;
+                }
+                memset(&entries[entry_count], 0, sizeof(entries[entry_count]));
+                strlcpy(entries[entry_count].storage_key, a->storage_key, sizeof(entries[entry_count].storage_key));
+                strlcpy(entries[entry_count].filepath, a->filepath, sizeof(entries[entry_count].filepath));
+                entries[entry_count].refcount = 1;
+                entry_count++;
+            }
+        }
+
+        playlist_free(pl);
+    }
+
+    closedir(dir);
+
+    for (size_t i = 0; i < entry_count; i++) {
+        (void)write_refcount_meta(entries[i].filepath, entries[i].refcount);
+    }
+
+    free(entries);
+    return ESP_OK;
+}
 
 // Current cached playlist
 static playlist_metadata_t *s_current_playlist = NULL;
@@ -20,6 +149,69 @@ static esp_err_t parse_artwork_from_json(cJSON *artwork_json, artwork_ref_t *out
 static esp_err_t parse_playlist_from_json(cJSON *json, playlist_metadata_t **out_playlist);
 static esp_err_t save_playlist_json(playlist_metadata_t *playlist, const char *filepath);
 static esp_err_t load_playlist_json(const char *filepath, playlist_metadata_t **out_playlist);
+
+// Best-effort ISO8601 UTC parser: "YYYY-MM-DDTHH:MM:SSZ" -> time_t. Returns 0 on failure.
+static time_t parse_iso8601_utc(const char *s)
+{
+    if (!s || !*s) return 0;
+    int year, month, day, hour, min, sec;
+    if (sscanf(s, "%d-%d-%dT%d:%d:%dZ", &year, &month, &day, &hour, &min, &sec) != 6) {
+        return 0;
+    }
+    struct tm tm = {0};
+    tm.tm_year = year - 1900;
+    tm.tm_mon = month - 1;
+    tm.tm_mday = day;
+    tm.tm_hour = hour;
+    tm.tm_min = min;
+    tm.tm_sec = sec;
+    return mktime(&tm);
+}
+
+static asset_type_t asset_type_from_url(const char *url)
+{
+    if (!url) return ASSET_TYPE_WEBP;
+    const char *ext = strrchr(url, '.');
+    if (!ext) return ASSET_TYPE_WEBP;
+    if (strcasecmp(ext, ".webp") == 0) return ASSET_TYPE_WEBP;
+    if (strcasecmp(ext, ".gif") == 0) return ASSET_TYPE_GIF;
+    if (strcasecmp(ext, ".png") == 0) return ASSET_TYPE_PNG;
+    if (strcasecmp(ext, ".jpg") == 0 || strcasecmp(ext, ".jpeg") == 0) return ASSET_TYPE_JPEG;
+    return ASSET_TYPE_WEBP;
+}
+
+static uint32_t hash_string_djb2(const char *str)
+{
+    uint32_t hash = 5381;
+    int c;
+    while ((c = *str++)) {
+        hash = ((hash << 5) + hash) + (uint32_t)c;
+    }
+    return hash;
+}
+
+// Build vault path based on storage_key UUID (matches makapix_artwork_download sharding).
+static void build_vault_path_from_storage_key_uuid(const char *storage_key, const char *art_url, char *out, size_t out_len)
+{
+    if (!storage_key || !out || out_len == 0) return;
+    uint32_t hash = hash_string_djb2(storage_key);
+    char dir1[3], dir2[3];
+    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)((hash >> 24) & 0xFF));
+    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)((hash >> 16) & 0xFF));
+
+    const char *ext = ".webp";
+    if (art_url) {
+        const char *dot = strrchr(art_url, '.');
+        if (dot) {
+            if (strcasecmp(dot, ".webp") == 0) ext = ".webp";
+            else if (strcasecmp(dot, ".gif") == 0) ext = ".gif";
+            else if (strcasecmp(dot, ".png") == 0) ext = ".png";
+            else if (strcasecmp(dot, ".jpg") == 0 || strcasecmp(dot, ".jpeg") == 0) ext = ".jpg";
+        }
+    }
+
+    snprintf(out, out_len, "/sdcard/vault/%s/%s/%s%s", dir1, dir2, storage_key, ext);
+}
 
 esp_err_t playlist_manager_init(void)
 {
@@ -35,6 +227,9 @@ esp_err_t playlist_manager_init(void)
         }
     }
     
+    // Best-effort: rebuild vault refcount sidecars from cached playlists.
+    (void)rebuild_vault_refcounts_from_playlists();
+
     ESP_LOGI(TAG, "Playlist manager initialized");
     return ESP_OK;
 }
@@ -170,15 +365,13 @@ esp_err_t playlist_update_artwork_status(int32_t post_id, int32_t artwork_post_i
     
     for (int32_t i = 0; i < playlist->loaded_artworks; i++) {
         if (playlist->artworks[i].post_id == artwork_post_id) {
-            bool was_downloaded = playlist->artworks[i].downloaded;
             playlist->artworks[i].downloaded = downloaded;
-            
-            // Update available count
-            if (downloaded && !was_downloaded) {
-                playlist->available_artworks++;
-            } else if (!downloaded && was_downloaded) {
-                playlist->available_artworks--;
+            // available_artworks is informational only; keep it as "downloaded count"
+            int32_t cnt = 0;
+            for (int32_t j = 0; j < playlist->loaded_artworks; j++) {
+                if (playlist->artworks[j].downloaded) cnt++;
             }
+            playlist->available_artworks = cnt;
             
             found = true;
             break;
@@ -248,18 +441,97 @@ esp_err_t playlist_save_to_disk(playlist_metadata_t *playlist)
         return err;
     }
     
-    return save_playlist_json(playlist, filepath);
+    esp_err_t save_err = save_playlist_json(playlist, filepath);
+    if (save_err == ESP_OK) {
+        // Update refcount sidecars in a single pass (avoids per-playlist incremental drift).
+        (void)rebuild_vault_refcounts_from_playlists();
+    }
+    return save_err;
 }
 
 // Continued in next part...
 
 esp_err_t playlist_fetch_from_server(int32_t post_id, uint32_t pe, playlist_metadata_t **out_playlist)
 {
-    // TODO: Implement actual server fetch via makapix_api
-    // This is a placeholder that will be implemented when makapix_api.c is updated
-    
-    ESP_LOGW(TAG, "playlist_fetch_from_server not yet implemented for post_id %ld", post_id);
-    return ESP_ERR_NOT_SUPPORTED;
+    if (!out_playlist) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Fetch post via Makapix API
+    makapix_post_t post = {0};
+    uint16_t pe16 = (pe > 1023) ? 1023 : (uint16_t)pe;
+    esp_err_t err = makapix_api_get_post(post_id, true, pe16, &post);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "makapix_api_get_post failed for %ld: %s", post_id, esp_err_to_name(err));
+        return err;
+    }
+
+    if (post.kind != MAKAPIX_POST_KIND_PLAYLIST) {
+        if (post.artworks) free(post.artworks);
+        ESP_LOGE(TAG, "Post %ld is not a playlist", post_id);
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+
+    playlist_metadata_t *playlist = (playlist_metadata_t *)calloc(1, sizeof(playlist_metadata_t));
+    if (!playlist) {
+        if (post.artworks) free(post.artworks);
+        return ESP_ERR_NO_MEM;
+    }
+
+    playlist->post_id = post.post_id;
+    playlist->total_artworks = post.total_artworks;
+    playlist->loaded_artworks = (int32_t)post.artworks_count;
+    playlist->available_artworks = 0;
+    playlist->dwell_time_ms = post.playlist_dwell_time_ms;
+    playlist->metadata_modified_at = parse_iso8601_utc(post.metadata_modified_at);
+
+    if (post.artworks_count > 0 && post.artworks) {
+        playlist->artworks = (artwork_ref_t *)calloc(post.artworks_count, sizeof(artwork_ref_t));
+        if (!playlist->artworks) {
+            free(playlist);
+            free(post.artworks);
+            return ESP_ERR_NO_MEM;
+        }
+
+        for (size_t i = 0; i < post.artworks_count; i++) {
+            const makapix_artwork_t *src = &post.artworks[i];
+            artwork_ref_t *dst = &playlist->artworks[i];
+            memset(dst, 0, sizeof(*dst));
+
+            dst->post_id = src->post_id;
+            strncpy(dst->storage_key, src->storage_key, sizeof(dst->storage_key) - 1);
+            strlcpy(dst->art_url, src->art_url, sizeof(dst->art_url));
+            dst->type = asset_type_from_url(src->art_url);
+            dst->dwell_time_ms = src->dwell_time_ms;
+            dst->width = (uint16_t)src->width;
+            dst->height = (uint16_t)src->height;
+            dst->frame_count = (uint16_t)src->frame_count;
+            dst->has_transparency = src->has_transparency;
+            dst->metadata_modified_at = parse_iso8601_utc(src->metadata_modified_at);
+            dst->artwork_modified_at = parse_iso8601_utc(src->artwork_modified_at);
+
+            char vault_path[512];
+            build_vault_path_from_storage_key_uuid(src->storage_key, src->art_url, vault_path, sizeof(vault_path));
+            struct stat st;
+            dst->downloaded = (stat(vault_path, &st) == 0);
+            strlcpy(dst->filepath, vault_path, sizeof(dst->filepath));
+        }
+
+        // available_artworks is informational only; keep it as "downloaded count"
+        int32_t cnt = 0;
+        for (int32_t i = 0; i < playlist->loaded_artworks; i++) {
+            if (playlist->artworks[i].downloaded) cnt++;
+        }
+        playlist->available_artworks = cnt;
+    }
+
+    if (post.artworks) {
+        free(post.artworks);
+        post.artworks = NULL;
+    }
+
+    *out_playlist = playlist;
+    return ESP_OK;
 }
 
 void playlist_free(playlist_metadata_t *playlist)
@@ -306,6 +578,7 @@ static esp_err_t parse_artwork_from_json(cJSON *artwork_json, artwork_ref_t *out
     }
     
     out_artwork->post_id = cJSON_GetNumberValue(post_id);
+    out_artwork->filepath[0] = '\0';
     strncpy(out_artwork->storage_key, cJSON_GetStringValue(storage_key), 
             sizeof(out_artwork->storage_key) - 1);
     strncpy(out_artwork->art_url, cJSON_GetStringValue(art_url), 
@@ -350,23 +623,18 @@ static esp_err_t parse_artwork_from_json(cJSON *artwork_json, artwork_ref_t *out
         out_artwork->artwork_modified_at = time(NULL);
     }
     
-    // Check if artwork is downloaded (in vault)
-    // TODO: Check vault for storage_key
-    out_artwork->downloaded = false;
-    
-    // Determine file type from storage_key extension
-    const char *ext = strrchr(out_artwork->storage_key, '.');
-    if (ext) {
-        if (strcasecmp(ext, ".webp") == 0) {
-            out_artwork->type = ASSET_TYPE_WEBP;
-        } else if (strcasecmp(ext, ".gif") == 0) {
-            out_artwork->type = ASSET_TYPE_GIF;
-        } else if (strcasecmp(ext, ".png") == 0) {
-            out_artwork->type = ASSET_TYPE_PNG;
-        } else if (strcasecmp(ext, ".jpg") == 0 || strcasecmp(ext, ".jpeg") == 0) {
-            out_artwork->type = ASSET_TYPE_JPEG;
-        }
+    // Download status (persisted by writer)
+    cJSON *downloaded = cJSON_GetObjectItem(artwork_json, "downloaded");
+    out_artwork->downloaded = cJSON_IsBool(downloaded) ? cJSON_IsTrue(downloaded) : false;
+
+    // Optional local filepath (vault or SD)
+    cJSON *filepath = cJSON_GetObjectItem(artwork_json, "filepath");
+    if (filepath && cJSON_IsString(filepath)) {
+        strncpy(out_artwork->filepath, cJSON_GetStringValue(filepath), sizeof(out_artwork->filepath) - 1);
     }
+    
+    // Determine file type from art_url extension
+    out_artwork->type = asset_type_from_url(out_artwork->art_url);
     
     return ESP_OK;
 }
@@ -422,16 +690,12 @@ static esp_err_t parse_playlist_from_json(cJSON *json, playlist_metadata_t **out
             }
             
             int loaded = 0;
-            int available = 0;
             
             for (int i = 0; i < artwork_count; i++) {
                 cJSON *artwork_json = cJSON_GetArrayItem(artworks, i);
                 if (artwork_json) {
                     esp_err_t err = parse_artwork_from_json(artwork_json, &playlist->artworks[loaded]);
                     if (err == ESP_OK) {
-                        if (playlist->artworks[loaded].downloaded) {
-                            available++;
-                        }
                         loaded++;
                     } else {
                         ESP_LOGW(TAG, "Failed to parse artwork at index %d", i);
@@ -440,7 +704,12 @@ static esp_err_t parse_playlist_from_json(cJSON *json, playlist_metadata_t **out
             }
             
             playlist->loaded_artworks = loaded;
-            playlist->available_artworks = available;
+            // available_artworks is informational only; keep it as "downloaded count"
+            int cnt = 0;
+            for (int i = 0; i < loaded; i++) {
+                if (playlist->artworks[i].downloaded) cnt++;
+            }
+            playlist->available_artworks = cnt;
         }
     }
     
@@ -473,6 +742,9 @@ static esp_err_t save_playlist_json(playlist_metadata_t *playlist, const char *f
             cJSON *artwork_json = cJSON_CreateObject();
             
             cJSON_AddNumberToObject(artwork_json, "post_id", artwork->post_id);
+            if (artwork->filepath[0] != '\0') {
+                cJSON_AddStringToObject(artwork_json, "filepath", artwork->filepath);
+            }
             cJSON_AddStringToObject(artwork_json, "storage_key", artwork->storage_key);
             cJSON_AddStringToObject(artwork_json, "art_url", artwork->art_url);
             cJSON_AddNumberToObject(artwork_json, "dwell_time_ms", artwork->dwell_time_ms);

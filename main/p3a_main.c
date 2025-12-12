@@ -28,6 +28,8 @@
 #include "sntp_sync.h"
 #include "ugfx_ui.h"
 #include "animation_player.h"  // For animation_player_is_ui_mode()
+#include "channel_player.h"
+#include "config_store.h"
 #include "ota_manager.h"       // For OTA boot validation
 #include "slave_ota.h"         // For ESP32-C6 co-processor OTA
 #include "sdio_bus.h"          // SDIO bus coordination
@@ -124,104 +126,33 @@ static bool check_first_boot_after_update(void)
     return needs_reboot;
 }
 
-#define AUTO_SWAP_INTERVAL_SECONDS CONFIG_P3A_AUTO_SWAP_INTERVAL_SECONDS
+// Dwell time:
+// - Per-item dwell is computed by channel playback (global/channel/playlist/artwork override chain).
+// - Global dwell setting exposed via HTTP is the *global override* (0 disables override).
 #define DEFAULT_DWELL_TIME_SECONDS 30
-#define MIN_DWELL_TIME_SECONDS 1
 #define MAX_DWELL_TIME_SECONDS 100000
-#define DWELL_TIME_NVS_KEY "dwell_time"
 
 #if CONFIG_P3A_MEMORY_REPORTING_ENABLE
 #define MEMORY_REPORT_INTERVAL_SECONDS 15
 #endif
 
 static TaskHandle_t s_auto_swap_task_handle = NULL;
-static uint32_t s_dwell_time_seconds = DEFAULT_DWELL_TIME_SECONDS;
-static SemaphoreHandle_t s_dwell_time_mutex = NULL;
-
-static uint32_t load_dwell_time_from_nvs(void)
-{
-    nvs_handle_t nvs;
-    esp_err_t err = nvs_open("p3a", NVS_READONLY, &nvs);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to open NVS for dwell_time read: %s", esp_err_to_name(err));
-        return DEFAULT_DWELL_TIME_SECONDS;
-    }
-    
-    uint32_t dwell_time = DEFAULT_DWELL_TIME_SECONDS;
-    err = nvs_get_u32(nvs, DWELL_TIME_NVS_KEY, &dwell_time);
-    if (err == ESP_ERR_NVS_NOT_FOUND) {
-        ESP_LOGI(TAG, "No dwell_time in NVS, using default %u seconds", DEFAULT_DWELL_TIME_SECONDS);
-    } else if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to read dwell_time from NVS: %s", esp_err_to_name(err));
-    } else {
-        // Validate range
-        if (dwell_time < MIN_DWELL_TIME_SECONDS || dwell_time > MAX_DWELL_TIME_SECONDS) {
-            ESP_LOGW(TAG, "Invalid dwell_time %u, using default %u", dwell_time, DEFAULT_DWELL_TIME_SECONDS);
-            dwell_time = DEFAULT_DWELL_TIME_SECONDS;
-        } else {
-            ESP_LOGI(TAG, "Loaded dwell_time from NVS: %u seconds", dwell_time);
-        }
-    }
-    
-    nvs_close(nvs);
-    return dwell_time;
-}
-
-static esp_err_t save_dwell_time_to_nvs(uint32_t dwell_time)
-{
-    nvs_handle_t nvs;
-    esp_err_t err = nvs_open("p3a", NVS_READWRITE, &nvs);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to open NVS for dwell_time write: %s", esp_err_to_name(err));
-        return err;
-    }
-    
-    err = nvs_set_u32(nvs, DWELL_TIME_NVS_KEY, dwell_time);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to write dwell_time to NVS: %s", esp_err_to_name(err));
-        nvs_close(nvs);
-        return err;
-    }
-    
-    err = nvs_commit(nvs);
-    nvs_close(nvs);
-    
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Saved dwell_time to NVS: %u seconds", dwell_time);
-    } else {
-        ESP_LOGE(TAG, "Failed to commit dwell_time to NVS: %s", esp_err_to_name(err));
-    }
-    
-    return err;
-}
 
 uint32_t animation_player_get_dwell_time(void)
 {
-    if (s_dwell_time_mutex && xSemaphoreTake(s_dwell_time_mutex, portMAX_DELAY) == pdTRUE) {
-        uint32_t dwell = s_dwell_time_seconds;
-        xSemaphoreGive(s_dwell_time_mutex);
-        return dwell;
-    }
-    return s_dwell_time_seconds;
+    // Return global override in seconds (0 = disabled)
+    uint32_t ms = config_store_get_dwell_time();
+    return (uint32_t)(ms / 1000u);
 }
 
 esp_err_t animation_player_set_dwell_time(uint32_t dwell_time)
 {
-    if (dwell_time < MIN_DWELL_TIME_SECONDS || dwell_time > MAX_DWELL_TIME_SECONDS) {
+    if (dwell_time > MAX_DWELL_TIME_SECONDS) {
         return ESP_ERR_INVALID_ARG;
     }
-    
-    if (s_dwell_time_mutex && xSemaphoreTake(s_dwell_time_mutex, portMAX_DELAY) == pdTRUE) {
-        s_dwell_time_seconds = dwell_time;
-        xSemaphoreGive(s_dwell_time_mutex);
-    } else {
-        s_dwell_time_seconds = dwell_time;
-    }
-    
-    esp_err_t err = save_dwell_time_to_nvs(dwell_time);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to save dwell_time to NVS, but using in-memory value");
-    }
+
+    esp_err_t err = config_store_set_dwell_time(dwell_time * 1000u);
+    if (err != ESP_OK) return err;
     
     // Notify auto-swap task to use new interval
     if (s_auto_swap_task_handle) {
@@ -232,22 +163,27 @@ esp_err_t animation_player_set_dwell_time(uint32_t dwell_time)
     return ESP_OK;
 }
 
+static uint32_t get_current_effective_dwell_ms(void)
+{
+    const sdcard_post_t *post = NULL;
+    if (channel_player_get_current_post(&post) == ESP_OK && post) {
+        if (post->dwell_time_ms > 0) return post->dwell_time_ms;
+    }
+    uint32_t global_override = config_store_get_dwell_time();
+    if (global_override > 0) return global_override;
+    return DEFAULT_DWELL_TIME_SECONDS * 1000u;
+}
+
 static void auto_swap_task(void *arg)
 {
     (void)arg;
-    
-    // Load dwell time from NVS
-    s_dwell_time_seconds = load_dwell_time_from_nvs();
-    
-    ESP_LOGI(TAG, "Auto-swap task started: will cycle forward every %u seconds", s_dwell_time_seconds);
+    ESP_LOGI(TAG, "Auto-swap task started");
     
     // Wait a bit for system to initialize before first swap
     vTaskDelay(pdMS_TO_TICKS(1000));
     
     while (true) {
-        // Get current dwell time (may have changed)
-        uint32_t current_dwell = animation_player_get_dwell_time();
-        const TickType_t delay_ticks = pdMS_TO_TICKS(current_dwell * 1000);
+        const TickType_t delay_ticks = pdMS_TO_TICKS(get_current_effective_dwell_ms());
         
         // Wait for interval or notification (which resets the timer)
         uint32_t notified = ulTaskNotifyTake(pdTRUE, delay_ticks);
@@ -619,12 +555,6 @@ void app_main(void)
     // Initialize Makapix module
     ESP_ERROR_CHECK(makapix_init());
 
-    // Initialize dwell time mutex
-    s_dwell_time_mutex = xSemaphoreCreateMutex();
-    if (!s_dwell_time_mutex) {
-        ESP_LOGE(TAG, "Failed to create dwell_time mutex");
-    }
-
     // Create auto-swap task (4096 bytes needed for channel_player calls to Makapix channels)
     const BaseType_t created = xTaskCreate(auto_swap_task, "auto_swap", 4096, NULL, 
                                            tskIDLE_PRIORITY + 1, &s_auto_swap_task_handle);
@@ -680,5 +610,5 @@ void app_main(void)
     xTaskCreate(makapix_state_monitor_task, "makapix_mon", 4096, NULL, 5, NULL);
 #endif
 
-    ESP_LOGI(TAG, "p3a ready: tap the display to cycle animations (auto-swap forward every %d seconds)", AUTO_SWAP_INTERVAL_SECONDS);
+    ESP_LOGI(TAG, "p3a ready: tap the display to cycle animations (auto-swap enabled)");
 }

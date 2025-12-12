@@ -33,12 +33,23 @@ typedef struct {
     uint32_t pe;                   // Playlist expansion (0 = infinite)
     bool randomize_playlist;       // Randomize within playlists
     bool live_mode;                // Live Mode synchronization
+    uint32_t global_seed;          // Global seed (shared across devices for deterministic random)
     
     uint32_t p;                    // Post index in channel
     uint32_t q;                    // In-playlist artwork index (0 if not in playlist)
-    
-    uint32_t channel_seed;         // For random mode
-    void *random_state;            // Opaque pointer to PCG state (for random mode)
+
+    // Cached post order mapping (indices into channel post list)
+    uint32_t *order_indices;
+    size_t order_count;
+
+    // Channel-level dwell override (0 = disabled)
+    uint32_t channel_dwell_override_ms;
+
+    // Live mode flattened schedule (built on demand)
+    bool live_ready;
+    uint32_t live_count;
+    uint32_t *live_p;               // p index into order_indices
+    uint32_t *live_q;               // q index within playlist (0..effective-1)
 } play_navigator_t;
 
 /**
@@ -50,8 +61,8 @@ typedef struct {
  * @param pe Playlist expansion
  * @return ESP_OK on success
  */
-esp_err_t play_navigator_init(play_navigator_t *nav, channel_handle_t channel, 
-                               play_order_mode_t order, uint32_t pe);
+esp_err_t play_navigator_init(play_navigator_t *nav, channel_handle_t channel,
+                               play_order_mode_t order, uint32_t pe, uint32_t global_seed);
 
 /**
  * @brief Deinitialize navigator and free resources
@@ -92,6 +103,11 @@ esp_err_t play_navigator_next(play_navigator_t *nav, artwork_ref_t *out_artwork)
  * @return ESP_OK on success
  */
 esp_err_t play_navigator_prev(play_navigator_t *nav, artwork_ref_t *out_artwork);
+
+/**
+ * @brief Request a reshuffle (random order only)
+ */
+esp_err_t play_navigator_request_reshuffle(play_navigator_t *nav);
 
 /**
  * @brief Jump to specific post/artwork position
@@ -144,6 +160,11 @@ void play_navigator_set_randomize_playlist(play_navigator_t *nav, bool enable);
  * @param enable True to enable Live Mode sync
  */
 void play_navigator_set_live_mode(play_navigator_t *nav, bool enable);
+
+/**
+ * @brief Set channel dwell override (ms, 0 disables override)
+ */
+void play_navigator_set_channel_dwell_override_ms(play_navigator_t *nav, uint32_t dwell_ms);
 
 /**
  * @brief Get current p/q position

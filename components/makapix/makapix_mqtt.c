@@ -7,6 +7,7 @@
 #include "sntp_sync.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
+#include "esp_heap_caps.h"
 #include "lwip/inet.h"
 #include <string.h>
 #include <stdio.h>
@@ -28,7 +29,7 @@ static bool s_response_subscribed = false;  // Track if response topic subscript
 static int s_pending_response_sub_msg_id = -1;  // Message ID of pending response subscription
 static void (*s_command_callback)(const char *command_type, cJSON *payload) = NULL;
 static void (*s_connection_callback)(bool connected) = NULL;
-static void (*s_response_callback)(const char *topic, const char *data, int data_len) = NULL;
+static void (*s_response_callback)(const char *topic, char *data, int data_len) = NULL;
 
 // Static buffers for certificates - ESP-IDF MQTT client stores pointers, doesn't copy
 // These must remain valid for the lifetime of the MQTT client
@@ -38,12 +39,13 @@ static char s_client_key[4096] = {0};
 
 // Message reassembly for fragmented MQTT messages
 // ESP-IDF MQTT client splits large messages across multiple MQTT_EVENT_DATA events
-#define MQTT_REASSEMBLY_BUFFER_SIZE 8192
+#define MQTT_REASSEMBLY_BUFFER_SIZE (128 * 1024)
 static char *s_reassembly_buffer = NULL;
 static size_t s_reassembly_len = 0;
 static size_t s_reassembly_total_len = 0;
 static char s_reassembly_topic[256] = {0};
 static bool s_reassembly_in_progress = false;
+static bool s_reassembly_drop = false;
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
@@ -132,6 +134,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 ESP_LOGW(TAG, "Discarding incomplete reassembly buffer (%zu bytes)", s_reassembly_len);
                 s_reassembly_in_progress = false;
                 s_reassembly_len = 0;
+                s_reassembly_total_len = 0;
+                s_reassembly_drop = false;
             }
             
             // Store the topic for this message
@@ -142,60 +146,95 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             
             ESP_LOGD(TAG, "New message, topic: %s, data_len: %d", s_reassembly_topic, event->data_len);
             
-            // Allocate reassembly buffer if needed
+            s_reassembly_total_len = (event->total_data_len > 0) ? (size_t)event->total_data_len : 0;
+
+            // Allocate reassembly buffer if needed (prefer PSRAM)
             if (!s_reassembly_buffer) {
-                s_reassembly_buffer = malloc(MQTT_REASSEMBLY_BUFFER_SIZE);
-                if (!s_reassembly_buffer) {
-                    ESP_LOGE(TAG, "Failed to allocate reassembly buffer");
-                    break;
+                s_reassembly_buffer = (char *)heap_caps_malloc(MQTT_REASSEMBLY_BUFFER_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+                if (s_reassembly_buffer) {
+                    ESP_LOGI(TAG, "Allocated MQTT reassembly buffer in PSRAM (%d bytes)", MQTT_REASSEMBLY_BUFFER_SIZE);
+                } else {
+                    s_reassembly_buffer = (char *)malloc(MQTT_REASSEMBLY_BUFFER_SIZE);
+                    if (s_reassembly_buffer) {
+                        ESP_LOGW(TAG, "PSRAM alloc failed; using internal heap for MQTT reassembly buffer (%d bytes)", MQTT_REASSEMBLY_BUFFER_SIZE);
+                    } else {
+                        ESP_LOGE(TAG, "Failed to allocate MQTT reassembly buffer (%d bytes)", MQTT_REASSEMBLY_BUFFER_SIZE);
+                        break;
+                    }
                 }
             }
             
-            // Copy first fragment
-            if (event->data_len > 0 && event->data) {
-                size_t copy_len = event->data_len;
-                if (copy_len > MQTT_REASSEMBLY_BUFFER_SIZE - 1) {
-                    copy_len = MQTT_REASSEMBLY_BUFFER_SIZE - 1;
-                    ESP_LOGW(TAG, "First fragment truncated to %zu bytes", copy_len);
-                }
-                memcpy(s_reassembly_buffer, event->data, copy_len);
-                s_reassembly_len = copy_len;
-                s_reassembly_in_progress = true;
+            s_reassembly_in_progress = true;
+            s_reassembly_len = 0;
+            s_reassembly_drop = false;
+
+            if (s_reassembly_total_len > 0 && s_reassembly_total_len > (MQTT_REASSEMBLY_BUFFER_SIZE - 1)) {
+                ESP_LOGE(TAG, "Inbound MQTT message too large (%zu bytes > %d). Dropping.", s_reassembly_total_len, MQTT_REASSEMBLY_BUFFER_SIZE - 1);
+                s_reassembly_drop = true;
             }
         } else if (s_reassembly_in_progress) {
             // This is a continuation fragment (topic_len == 0)
             ESP_LOGD(TAG, "Continuation fragment: %d bytes (buffer has %zu)", 
                      event->data_len, s_reassembly_len);
-            
-            if (event->data_len > 0 && event->data && s_reassembly_buffer) {
-                size_t space_left = MQTT_REASSEMBLY_BUFFER_SIZE - 1 - s_reassembly_len;
-                size_t copy_len = event->data_len;
-                if (copy_len > space_left) {
-                    copy_len = space_left;
-                    ESP_LOGW(TAG, "Fragment truncated to %zu bytes (buffer full)", copy_len);
-                }
-                memcpy(s_reassembly_buffer + s_reassembly_len, event->data, copy_len);
-                s_reassembly_len += copy_len;
-            }
         } else {
             // Continuation fragment but no reassembly in progress - discard
             ESP_LOGW(TAG, "Received continuation fragment without start - discarding");
             break;
         }
-        
-        // Check if message is complete by attempting to parse as JSON
-        // A complete JSON message will parse successfully
-        if (s_reassembly_in_progress && s_reassembly_buffer && s_reassembly_len > 0) {
-            s_reassembly_buffer[s_reassembly_len] = '\0';  // Null terminate for parsing
-            
-            // Try to parse - if it succeeds, message is complete
-            cJSON *test_json = cJSON_Parse(s_reassembly_buffer);
-            if (test_json) {
-                // Message is complete!
+
+        // Copy fragment into reassembly buffer using offset/total_len metadata.
+        if (s_reassembly_in_progress && event->data_len > 0 && event->data && s_reassembly_buffer && !s_reassembly_drop) {
+            size_t offset = (event->current_data_offset > 0) ? (size_t)event->current_data_offset : 0;
+            if (offset >= (MQTT_REASSEMBLY_BUFFER_SIZE - 1)) {
+                ESP_LOGE(TAG, "MQTT fragment offset out of range (%zu). Dropping message.", offset);
+                s_reassembly_drop = true;
+            } else {
+                size_t space_left = (MQTT_REASSEMBLY_BUFFER_SIZE - 1) - offset;
+                size_t copy_len = (size_t)event->data_len;
+                if (copy_len > space_left) {
+                    copy_len = space_left;
+                    ESP_LOGW(TAG, "MQTT fragment truncated to %zu bytes (buffer full)", copy_len);
+                }
+                memcpy(s_reassembly_buffer + offset, event->data, copy_len);
+                size_t end = offset + copy_len;
+                if (end > s_reassembly_len) {
+                    s_reassembly_len = end;
+                }
+            }
+        }
+
+        // Completion: rely on ESP-IDF metadata instead of JSON parsing.
+        bool is_complete = false;
+        if (s_reassembly_in_progress) {
+            if (event->total_data_len > 0) {
+                size_t total = (size_t)event->total_data_len;
+                size_t offset = (event->current_data_offset > 0) ? (size_t)event->current_data_offset : 0;
+                size_t frag = (event->data_len > 0) ? (size_t)event->data_len : 0;
+                is_complete = (offset + frag) >= total;
+                s_reassembly_total_len = total;
+            } else if (event->topic_len > 0) {
+                // No fragmentation metadata; treat as complete single-frame payload.
+                is_complete = true;
+                s_reassembly_total_len = s_reassembly_len;
+            }
+        }
+
+        if (s_reassembly_in_progress && is_complete) {
+            if (s_reassembly_drop) {
+                ESP_LOGW(TAG, "Dropped MQTT message on topic %s (too large/invalid fragments)", s_reassembly_topic);
+            } else if (!s_reassembly_buffer || s_reassembly_len == 0) {
+                ESP_LOGW(TAG, "Complete MQTT message but empty payload on topic %s", s_reassembly_topic);
+            } else {
+                // Null terminate for any consumers that treat it as C-string.
+                if (s_reassembly_len < MQTT_REASSEMBLY_BUFFER_SIZE) {
+                    s_reassembly_buffer[s_reassembly_len] = '\0';
+                } else {
+                    s_reassembly_buffer[MQTT_REASSEMBLY_BUFFER_SIZE - 1] = '\0';
+                }
+
                 ESP_LOGI(TAG, "MQTT message received: %s (%zu bytes)", s_reassembly_topic, s_reassembly_len);
-                cJSON_Delete(test_json);  // We just tested, will parse again in handler
-                
-                // Check if this is a command message
+
+                // Command topic: parse exactly once here (small payloads), pass payload object to callback.
                 if (strcmp(s_reassembly_topic, s_command_topic) == 0) {
                     cJSON *json = cJSON_Parse(s_reassembly_buffer);
                     if (json) {
@@ -205,43 +244,58 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                         if (command_type && cJSON_IsString(command_type) && s_command_callback) {
                             const char *cmd_type = cJSON_GetStringValue(command_type);
                             ESP_LOGI(TAG, "Received command: %s", cmd_type);
-                            
+
                             cJSON *payload_to_pass = payload;
                             cJSON *empty_payload = NULL;
                             if (!payload_to_pass) {
                                 empty_payload = cJSON_CreateObject();
                                 payload_to_pass = empty_payload;
                             }
-                            
+
                             s_command_callback(cmd_type, payload_to_pass);
-                            
+
                             if (empty_payload) {
                                 cJSON_Delete(empty_payload);
                             }
                         }
                         cJSON_Delete(json);
+                    } else {
+                        ESP_LOGW(TAG, "Failed to parse command JSON on topic %s", s_reassembly_topic);
                     }
                 }
-                // Check if this is a response message (prefix match)
+                // Response topic: do NOT parse here. Hand the owned string to makapix_api (single parse there).
                 else if (strncmp(s_reassembly_topic, s_response_prefix, strlen(s_response_prefix)) == 0) {
                     ESP_LOGD(TAG, "Routing response to callback");
                     if (s_response_callback) {
-                        s_response_callback(s_reassembly_topic, s_reassembly_buffer, (int)s_reassembly_len);
+                        // Transfer ownership of a right-sized buffer to the callback.
+                        char *owned = (char *)heap_caps_malloc(s_reassembly_len + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+                        if (!owned) {
+                            owned = (char *)malloc(s_reassembly_len + 1);
+                            if (owned) {
+                                ESP_LOGW(TAG, "PSRAM alloc failed; using internal heap for MQTT response payload (%zu bytes)", s_reassembly_len + 1);
+                            }
+                        }
+                        if (!owned) {
+                            ESP_LOGE(TAG, "Failed to allocate MQTT response payload (%zu bytes); dropping message", s_reassembly_len + 1);
+                        } else {
+                            memcpy(owned, s_reassembly_buffer, s_reassembly_len);
+                            owned[s_reassembly_len] = '\0';
+                            s_response_callback(s_reassembly_topic, owned, (int)s_reassembly_len);
+                        }
                     } else {
                         ESP_LOGW(TAG, "Response callback is NULL!");
                     }
                 } else {
                     ESP_LOGD(TAG, "Topic does not match command or response prefix");
                 }
-                
-                // Reset reassembly state
-                s_reassembly_in_progress = false;
-                s_reassembly_len = 0;
-                s_reassembly_topic[0] = '\0';
-            } else {
-                // JSON parsing failed - message might be incomplete, wait for more data
-                // (This is normal for fragmented messages, don't log it)
             }
+
+            // Reset reassembly state for next message
+            s_reassembly_in_progress = false;
+            s_reassembly_len = 0;
+            s_reassembly_total_len = 0;
+            s_reassembly_drop = false;
+            s_reassembly_topic[0] = '\0';
         }
         break;
 
@@ -507,7 +561,9 @@ void makapix_mqtt_deinit(void)
         s_reassembly_buffer = NULL;
     }
     s_reassembly_len = 0;
+    s_reassembly_total_len = 0;
     s_reassembly_in_progress = false;
+    s_reassembly_drop = false;
     s_reassembly_topic[0] = '\0';
     
     ESP_LOGI(TAG, "=== MQTT DEINIT END ===");
@@ -617,7 +673,7 @@ void makapix_mqtt_set_connection_callback(void (*cb)(bool connected))
     s_connection_callback = cb;
 }
 
-void makapix_mqtt_set_response_callback(void (*cb)(const char *topic, const char *data, int data_len))
+void makapix_mqtt_set_response_callback(void (*cb)(const char *topic, char *data, int data_len))
 {
     s_response_callback = cb;
 }

@@ -1,0 +1,45 @@
+#ifndef CHANNEL_SETTINGS_H
+#define CHANNEL_SETTINGS_H
+
+#include <stdint.h>
+#include <stdbool.h>
+#include "esp_err.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct {
+    // If present==false, value is ignored.
+    bool pe_present;
+    uint32_t pe;
+
+    bool play_order_present;
+    uint8_t play_order; // 0..2
+
+    bool randomize_playlist_present;
+    bool randomize_playlist;
+
+    bool live_mode_present;
+    bool live_mode;
+
+    // Channel dwell override (0 disables this override)
+    bool channel_dwell_time_present;
+    uint32_t channel_dwell_time_ms;
+} channel_settings_t;
+
+/**
+ * @brief Load per-channel settings from SD card.
+ *
+ * Makapix: /sdcard/channels/<id>/settings.json
+ * SD card: /sdcard/channels/sdcard-channel/settings.json
+ */
+esp_err_t channel_settings_load_for_channel_id(const char *channel_id, channel_settings_t *out);
+esp_err_t channel_settings_load_for_sdcard(channel_settings_t *out);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // CHANNEL_SETTINGS_H
+

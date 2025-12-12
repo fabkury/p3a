@@ -28,7 +28,7 @@ static pending_request_t *s_pending_head = NULL;
 static char s_player_key[37] = {0};
 
 // Forward declarations
-static void response_callback(const char *topic, const char *data, int data_len);
+static void response_callback(const char *topic, char *data, int data_len);
 static void generate_request_id(char *out, size_t len);
 static pending_request_t *pending_find(const char *request_id);
 static void pending_add(pending_request_t *req);
@@ -93,7 +93,7 @@ static void generate_request_id(char *out, size_t len)
     out[req_len] = '\0';
 }
 
-static void response_callback(const char *topic, const char *data, int data_len)
+static void response_callback(const char *topic, char *data, int data_len)
 {
     ESP_LOGD(TAG, "Response callback invoked: topic=%s, len=%d", topic ? topic : "(NULL)", data_len);
     
@@ -102,14 +102,8 @@ static void response_callback(const char *topic, const char *data, int data_len)
         return;
     }
 
-    // Copy payload to null-terminated buffer
-    char *payload = malloc(data_len + 1);
-    if (!payload) {
-        ESP_LOGE(TAG, "Failed to allocate payload buffer");
-        ESP_LOGI(TAG, "========================================");
-        return;
-    }
-    memcpy(payload, data, data_len);
+    // `data` is owned, heap-allocated, NUL-terminated (see makapix_mqtt.h contract).
+    char *payload = data;
     payload[data_len] = '\0';
 
     cJSON *json = cJSON_Parse(payload);
@@ -491,6 +485,50 @@ static void parse_query_response(cJSON *resp_json, makapix_query_response_t *out
     if (cJSON_IsString(next_cursor)) strncpy(out->next_cursor, next_cursor->valuestring, sizeof(out->next_cursor) - 1);
 }
 
+esp_err_t makapix_api_get_post(int32_t post_id, bool pe_present, uint16_t pe, makapix_post_t *out_post)
+{
+    if (!out_post) return ESP_ERR_INVALID_ARG;
+    memset(out_post, 0, sizeof(*out_post));
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return ESP_ERR_NO_MEM;
+
+    cJSON_AddStringToObject(root, "request_type", "get_post");
+    cJSON_AddNumberToObject(root, "post_id", (double)post_id);
+
+    if (pe_present) {
+        if (pe > 1023) pe = 1023;
+        cJSON_AddNumberToObject(root, "PE", pe);
+    }
+
+    cJSON *response_json = NULL;
+    esp_err_t err = publish_and_wait(root, &response_json);
+    cJSON_Delete(root);
+    if (err != ESP_OK) {
+        return err;
+    }
+    if (!response_json) {
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+
+    cJSON *success = cJSON_GetObjectItem(response_json, "success");
+    bool ok = cJSON_IsBool(success) ? cJSON_IsTrue(success) : false;
+    if (!ok) {
+        cJSON_Delete(response_json);
+        return ESP_FAIL;
+    }
+
+    cJSON *post_obj = cJSON_GetObjectItem(response_json, "post");
+    if (!cJSON_IsObject(post_obj)) {
+        cJSON_Delete(response_json);
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+
+    parse_post_object(post_obj, out_post);
+    cJSON_Delete(response_json);
+    return ESP_OK;
+}
+
 esp_err_t makapix_api_query_posts(const makapix_query_request_t *req, makapix_query_response_t *resp)
 {
     if (!req || !resp) return ESP_ERR_INVALID_ARG;
@@ -522,8 +560,12 @@ esp_err_t makapix_api_query_posts(const makapix_query_request_t *req, makapix_qu
     }
     
     // Add PE (playlist expansion) parameter
-    if (req->pe > 0) {
-        cJSON_AddNumberToObject(root, "PE", req->pe);
+    if (req->pe_present) {
+        uint16_t pe = req->pe;
+        if (pe > 1023) {
+            pe = 1023;
+        }
+        cJSON_AddNumberToObject(root, "PE", pe);
     }
 
     cJSON *response_json = NULL;

@@ -188,7 +188,7 @@ esp_err_t config_store_save(const cJSON *cfg) {
     return ESP_OK;
 }
 
-esp_err_t config_store_set_rotation(screen_rotation_t rotation)
+esp_err_t config_store_set_rotation(uint16_t rotation_degrees)
 {
     cJSON *cfg = NULL;
     esp_err_t err = config_store_load(&cfg);
@@ -200,9 +200,9 @@ esp_err_t config_store_set_rotation(screen_rotation_t rotation)
     // Add or update rotation field
     cJSON *rotation_item = cJSON_GetObjectItem(cfg, "rotation");
     if (rotation_item) {
-        cJSON_SetNumberValue(rotation_item, (double)rotation);
+        cJSON_SetNumberValue(rotation_item, (double)rotation_degrees);
     } else {
-        cJSON_AddNumberToObject(cfg, "rotation", (double)rotation);
+        cJSON_AddNumberToObject(cfg, "rotation", (double)rotation_degrees);
     }
     
     // Save updated config
@@ -210,28 +210,28 @@ esp_err_t config_store_set_rotation(screen_rotation_t rotation)
     cJSON_Delete(cfg);
     
     if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Rotation saved to config: %d degrees", rotation);
+        ESP_LOGI(TAG, "Rotation saved to config: %u degrees", (unsigned)rotation_degrees);
     }
     
     return err;
 }
 
-screen_rotation_t config_store_get_rotation(void)
+uint16_t config_store_get_rotation(void)
 {
     cJSON *cfg = NULL;
     esp_err_t err = config_store_load(&cfg);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to load config for rotation, using default");
-        return ROTATION_0;
+        return 0;
     }
     
-    screen_rotation_t rotation = ROTATION_0;
+    uint16_t rotation = 0;
     cJSON *rotation_item = cJSON_GetObjectItem(cfg, "rotation");
     if (rotation_item && cJSON_IsNumber(rotation_item)) {
         int value = (int)cJSON_GetNumberValue(rotation_item);
         // Validate rotation value
         if (value == 0 || value == 90 || value == 180 || value == 270) {
-            rotation = (screen_rotation_t)value;
+            rotation = (uint16_t)value;
         } else {
             ESP_LOGW(TAG, "Invalid rotation value in config: %d, using default", value);
         }
@@ -434,7 +434,8 @@ bool config_store_get_live_mode(void)
 
 esp_err_t config_store_set_dwell_time(uint32_t dwell_time_ms)
 {
-    if (dwell_time_ms == 0 || dwell_time_ms > 100000000) {  // Max ~27 hours
+    // 0 is allowed and means "global override disabled"
+    if (dwell_time_ms > 100000000) {  // Max ~27 hours
         ESP_LOGE(TAG, "Invalid dwell time: %lu ms", dwell_time_ms);
         return ESP_ERR_INVALID_ARG;
     }
@@ -467,20 +468,66 @@ uint32_t config_store_get_dwell_time(void)
     cJSON *cfg = NULL;
     esp_err_t err = config_store_load(&cfg);
     if (err != ESP_OK) {
-        return 30000;  // Default: 30 seconds
+        return 0;  // Default: disabled
     }
     
-    uint32_t dwell_time = 30000;
+    uint32_t dwell_time = 0;
     cJSON *item = cJSON_GetObjectItem(cfg, "dwell_time_ms");
     if (item && cJSON_IsNumber(item)) {
         int value = (int)cJSON_GetNumberValue(item);
-        if (value > 0 && value <= 100000000) {
+        if (value >= 0 && value <= 100000000) {
             dwell_time = (uint32_t)value;
         }
     }
     
     cJSON_Delete(cfg);
     return dwell_time;
+}
+
+esp_err_t config_store_set_global_seed(uint32_t seed)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "global_seed");
+    if (item) {
+        cJSON_SetNumberValue(item, (double)seed);
+    } else {
+        cJSON_AddNumberToObject(cfg, "global_seed", (double)seed);
+    }
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Global seed saved: %lu", (unsigned long)seed);
+    }
+
+    return err;
+}
+
+uint32_t config_store_get_global_seed(void)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return 0xFAB;
+    }
+
+    uint32_t seed = 0xFAB;
+    cJSON *item = cJSON_GetObjectItem(cfg, "global_seed");
+    if (item && cJSON_IsNumber(item)) {
+        double v = cJSON_GetNumberValue(item);
+        if (v >= 0) {
+            seed = (uint32_t)v;
+        }
+    }
+
+    cJSON_Delete(cfg);
+    return seed;
 }
 
 

@@ -23,17 +23,38 @@ extern "C" {
  */
 
 /**
- * @brief Channel entry stored in index.bin (44 bytes, packed)
+ * @brief Post kind stored in Makapix channel index
+ */
+typedef enum {
+    MAKAPIX_INDEX_POST_KIND_ARTWORK = 0,
+    MAKAPIX_INDEX_POST_KIND_PLAYLIST = 1,
+} makapix_index_post_kind_t;
+
+/**
+ * @brief Channel post entry stored in index.bin (fixed size, packed)
+ *
+ * Breaking change: this replaces the old artwork-only entry format.
+ * No migration/versioning is provided by design (SD card is expected to be wiped).
  */
 typedef struct __attribute__((packed)) {
-    uint8_t sha256[32];          // SHA256 hash of artwork file
-    uint32_t created_at;         // Unix timestamp
-    uint16_t flags;              // Filter flags (NSFW, format, etc.)
-    uint8_t extension;           // File extension enum (0=webp, 1=gif, 2=png, 3=jpg)
-    uint8_t reserved[5];         // Reserved for future use
+    int32_t post_id;                 // Makapix post_id
+    uint8_t kind;                    // makapix_index_post_kind_t
+    uint8_t extension;               // For artwork posts only (0=webp, 1=gif, 2=png, 3=jpg)
+    uint16_t filter_flags;           // Filter flags (NSFW, etc.) - 0 if unknown/not applicable
+
+    uint32_t created_at;             // Unix timestamp (0 if unknown)
+    uint32_t metadata_modified_at;   // Unix timestamp (0 if unknown)
+    uint32_t artwork_modified_at;    // Unix timestamp (0 if unknown, artwork posts only)
+    uint32_t dwell_time_ms;          // 0 = use channel default
+
+    int32_t total_artworks;          // Playlist posts: total artworks (0 if unknown)
+
+    uint8_t storage_key_uuid[16];    // Artwork posts: UUID bytes (0 if unknown)
+
+    uint8_t reserved[20];            // Reserved for future use (keeps struct 64 bytes)
 } makapix_channel_entry_t;
 
-_Static_assert(sizeof(makapix_channel_entry_t) == 44, "Channel entry must be 44 bytes");
+_Static_assert(sizeof(makapix_channel_entry_t) == 64, "Makapix channel entry must be 64 bytes");
 
 /**
  * @brief Create a new Makapix channel

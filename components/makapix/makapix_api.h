@@ -36,7 +36,8 @@ typedef struct {
     uint8_t limit;          // 1-50
     bool random_seed_present;
     uint32_t random_seed;
-    uint16_t pe;            // Playlist expansion: 0-1023 (0 = all, default = 8 if not set)
+    bool pe_present;        // True if PE should be sent (including PE=0)
+    uint16_t pe;            // Playlist expansion: 0-1023 (0 = all)
 } makapix_query_request_t;
 
 /**
@@ -115,6 +116,14 @@ esp_err_t makapix_api_init(void);
  * @brief Query posts (channels) via MQTT
  */
 esp_err_t makapix_api_query_posts(const makapix_query_request_t *req, makapix_query_response_t *resp);
+
+/**
+ * @brief Fetch a single post by post_id (artwork or playlist)
+ *
+ * If the returned post is a playlist, the caller must free `out_post->artworks`
+ * when done.
+ */
+esp_err_t makapix_api_get_post(int32_t post_id, bool pe_present, uint16_t pe, makapix_post_t *out_post);
 
 /**
  * @brief Submit a view event

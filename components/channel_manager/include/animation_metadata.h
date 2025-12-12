@@ -18,8 +18,8 @@ extern "C" {
  * - If JSON sidecar exists and was parsed successfully, has_metadata = true
  * - If no sidecar or parse failed, has_metadata = false and placeholder fields are NULL/0/false
  * 
- * The JSON sidecar file has the same stem as the animation file but with .json extension:
- * e.g. animation_2025_12_05.webp -> animation_2025_12_05.json
+ * The JSON sidecar file has the same stem as the animation file but with _meta.json suffix:
+ * e.g. animation_2025_12_05.webp -> animation_2025_12_05_meta.json
  */
 typedef struct {
     // Always present when playing an animation
@@ -70,7 +70,7 @@ esp_err_t animation_metadata_set_filepath(animation_metadata_t *meta, const char
  * @brief Load metadata from JSON sidecar file
  * 
  * Looks for a JSON sidecar file with the same stem as the animation file.
- * For example: /sdcard/animations/art.webp -> /sdcard/animations/art.json
+ * For example: /sdcard/animations/art.webp -> /sdcard/animations/art_meta.json
  * 
  * If the sidecar exists and is valid JSON, populates the metadata fields
  * and sets has_metadata = true. If no sidecar exists or parsing fails,

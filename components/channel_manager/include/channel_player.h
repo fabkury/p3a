@@ -26,17 +26,6 @@ typedef enum {
 } channel_player_source_t;
 
 /**
- * @brief Channel player state structure
- */
-typedef struct {
-    sdcard_post_t *posts;  // Array of loaded posts (up to 1000)
-    size_t *indices;       // Playback order (indices into posts array)
-    size_t count;          // Number of loaded posts
-    size_t current_pos;   // Current position in playback order
-    bool randomize;       // Randomization enabled (default: false)
-} channel_player_state_t;
-
-/**
  * @brief Initialize the channel player
  * 
  * @return ESP_OK on success, error code otherwise
@@ -47,6 +36,11 @@ esp_err_t channel_player_init(void);
  * @brief Deinitialize the channel player and free resources
  */
 void channel_player_deinit(void);
+
+/**
+ * @brief Provide SD card channel handle (owned by channel_player)
+ */
+esp_err_t channel_player_set_sdcard_channel_handle(channel_handle_t sdcard_channel);
 
 /**
  * @brief Load posts from the channel for playback

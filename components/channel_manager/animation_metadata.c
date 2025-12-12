@@ -81,8 +81,8 @@ const char *animation_metadata_get_filepath(const animation_metadata_t *meta)
 /**
  * @brief Build the sidecar JSON path from animation filepath
  * 
- * Replaces the file extension with .json
- * e.g. /sdcard/animations/art.webp -> /sdcard/animations/art.json
+ * Replaces the file extension with _meta.json
+ * e.g. /sdcard/animations/art.webp -> /sdcard/animations/art_meta.json
  */
 static char *build_sidecar_path(const char *filepath)
 {
@@ -108,16 +108,16 @@ static char *build_sidecar_path(const char *filepath)
         stem_len = len;
     }
     
-    // Allocate space for stem + ".json" + null
-    size_t sidecar_len = stem_len + 5 + 1;
+    // Allocate space for stem + "_meta.json" + null
+    size_t sidecar_len = stem_len + 9 + 1;
     char *sidecar_path = (char *)malloc(sidecar_len);
     if (!sidecar_path) {
         return NULL;
     }
     
-    // Copy stem and append .json
+    // Copy stem and append _meta.json
     memcpy(sidecar_path, filepath, stem_len);
-    strcpy(sidecar_path + stem_len, ".json");
+    strcpy(sidecar_path + stem_len, "_meta.json");
     
     return sidecar_path;
 }

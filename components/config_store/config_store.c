@@ -530,4 +530,25 @@ uint32_t config_store_get_global_seed(void)
     return seed;
 }
 
+// Runtime-only effective seed (not persisted)
+static uint32_t s_effective_seed = 0;
+static bool s_effective_seed_set = false;
+
+void config_store_set_effective_seed(uint32_t seed)
+{
+    s_effective_seed = seed;
+    s_effective_seed_set = true;
+    ESP_LOGI(TAG, "Effective seed set to: 0x%08x", seed);
+}
+
+uint32_t config_store_get_effective_seed(void)
+{
+    if (s_effective_seed_set) {
+        return s_effective_seed;
+    }
+    
+    // Default to master seed if not explicitly set
+    return config_store_get_global_seed();
+}
+
 

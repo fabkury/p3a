@@ -362,6 +362,9 @@ void animation_player_cycle_animation(bool forward)
         return;
     }
 
+    // Exit Live Mode if active (manual swaps break synchronization)
+    channel_player_exit_live_mode();
+
     if (channel_player_get_post_count() == 0) {
         ESP_LOGW(TAG, "No animations available to cycle");
         return;

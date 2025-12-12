@@ -105,6 +105,42 @@ bool swap_future_has_pending(void);
  */
 esp_err_t swap_future_execute(const swap_future_t *swap);
 
+/**
+ * @brief Enter Live Mode
+ * 
+ * Attempts to enter Live Mode by:
+ * 1. Verifying preconditions (NTP sync, channel loaded)
+ * 2. Building live schedule if needed
+ * 3. Calculating current sync position
+ * 4. Scheduling swap_future to jump to correct position
+ * 
+ * @param navigator Play navigator to enter Live Mode
+ * @return ESP_OK on success
+ *         ESP_ERR_INVALID_STATE if preconditions not met
+ *         ESP_ERR_NOT_FOUND if schedule cannot be built
+ */
+esp_err_t live_mode_enter(void *navigator);
+
+/**
+ * @brief Exit Live Mode
+ * 
+ * Exits Live Mode by:
+ * 1. Clearing live_mode flag in navigator
+ * 2. Canceling any pending swap_future
+ * 3. Resuming normal playback
+ * 
+ * @param navigator Play navigator to exit Live Mode from
+ */
+void live_mode_exit(void *navigator);
+
+/**
+ * @brief Check if currently in Live Mode
+ * 
+ * @param navigator Play navigator to check
+ * @return true if in Live Mode, false otherwise
+ */
+bool live_mode_is_active(void *navigator);
+
 #ifdef __cplusplus
 }
 #endif

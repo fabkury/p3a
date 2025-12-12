@@ -53,7 +53,29 @@
   - Needs HTTP API endpoint for testing
   - Will create simple test endpoint
 
-### Phase C: Live Mode Entry/Exit (Week 2) - ⏳ NEXT
+### Phase C: Live Mode Entry/Exit (Week 2) - 🚧 IN PROGRESS
+- [x] **C1**: Implement `build_live_schedule()` ✅
+  - Already implemented in play_navigator.c
+  - Flattens play queue into live_p[] and live_q[] arrays
+  - Handles PE and randomize_playlist
+- [x] **C2**: Implement `live_mode_enter()` ✅
+  - Verifies NTP synchronization
+  - Enables Live Mode in navigator
+  - Schedule will be built on next play_navigator_current() call
+- [x] **C3**: Implement `live_mode_exit()` ✅
+  - Disables Live Mode in navigator
+  - Cancels any pending swap_future
+  - Resumes normal playback
+- [x] **C4**: Add manual swap detection ✅
+  - Added channel_player_exit_live_mode()
+  - Called in animation_player_cycle_animation()
+  - HTTP API swaps will also exit Live Mode
+- [ ] **C5**: Add Live Mode status indicators
+  - MQTT status messages
+  - Web UI endpoint
+  - Log messages (partially done)
+
+### Phase D: Continuous Sync (Week 3) - ⏳ PENDING
 ### Phase D: Continuous Sync (Week 3) - ⏳ PENDING
 ### Phase E: Testing & Polish (Week 4) - ⏳ PENDING
 ### Phase F: Future Enhancements - ⏳ PENDING

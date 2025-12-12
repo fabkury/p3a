@@ -130,6 +130,21 @@ esp_err_t channel_player_switch_to_sdcard_channel(void);
  */
 channel_player_source_t channel_player_get_source_type(void);
 
+/**
+ * @brief Check if Live Mode is currently active
+ * 
+ * @return true if Live Mode is enabled and active, false otherwise
+ */
+bool channel_player_is_live_mode_active(void);
+
+/**
+ * @brief Exit Live Mode if currently active
+ * 
+ * Exits Live Mode by disabling it in the navigator and canceling
+ * any pending swap_futures. Should be called on manual swaps.
+ */
+void channel_player_exit_live_mode(void);
+
 #ifdef __cplusplus
 }
 #endif

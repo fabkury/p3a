@@ -21,7 +21,12 @@
 #include "esp_wifi.h"
 #include "esp_wifi_remote.h"
 #include "esp_netif.h"
-#include "mdns.h"
+#include <errno.h>
+#include <string.h>
+#include <fcntl.h>
+#include "lwip/sockets.h"
+#include "lwip/netdb.h"
+#include "lwip/inet.h"
 #include "app_state.h"
 #include "config_store.h"
 #include "app_wifi.h"
@@ -870,59 +875,142 @@ static esp_err_t h_post_rotation(httpd_req_t *req) {
     return ESP_OK;
 }
 
-// ---------- mDNS Setup ----------
+// ---------- Network Diagnostics ----------
 
-static esp_err_t start_mdns(void) {
-    esp_err_t err = mdns_init();
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-        ESP_LOGE(HTTP_API_TAG, "mDNS init failed: %s", esp_err_to_name(err));
-        return err;
-    }
-    if (err == ESP_ERR_INVALID_STATE) {
-        // mDNS already initialized (e.g. AP provisioning path). Continue and (re)configure.
-        ESP_LOGW(HTTP_API_TAG, "mDNS already initialized; reconfiguring");
-    }
-
-    err = mdns_hostname_set("p3a");
-    if (err != ESP_OK) {
-        ESP_LOGE(HTTP_API_TAG, "mDNS hostname set failed: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    err = mdns_instance_name_set("p3a");
-    if (err != ESP_OK) {
-        ESP_LOGE(HTTP_API_TAG, "mDNS instance name set failed: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    err = mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-        ESP_LOGE(HTTP_API_TAG, "mDNS service add failed: %s", esp_err_to_name(err));
-        return err;
-    }
-    if (err == ESP_ERR_INVALID_STATE) {
-        // Service might already exist; that's fine.
-        ESP_LOGW(HTTP_API_TAG, "mDNS HTTP service already added; continuing");
-    }
-
-    // Hosted Wi-Fi uses a custom netif key; register it explicitly so p3a.local works
-    // even when the STA interface is "WIFI_STA_RMT".
-    esp_netif_t *rmt = esp_netif_get_handle_from_ifkey("WIFI_STA_RMT");
-    if (rmt) {
-        esp_err_t rerr = mdns_register_netif(rmt);
-        if (rerr == ESP_OK) {
-            ESP_LOGI(HTTP_API_TAG, "mDNS registered WIFI_STA_RMT netif");
-            (void)mdns_netif_action(rmt, (mdns_event_actions_t)(MDNS_EVENT_ENABLE_IP4 | MDNS_EVENT_ANNOUNCE_IP4));
-        } else if (rerr == ESP_ERR_INVALID_STATE) {
-            // Already registered or mdns not running.
-            ESP_LOGD(HTTP_API_TAG, "mDNS WIFI_STA_RMT netif already registered");
+static void log_all_netifs(void) {
+    ESP_LOGI(HTTP_API_TAG, "=== Network Interface Diagnostics ===");
+    
+    // Iterate all network interfaces
+    esp_netif_t *netif = NULL;
+    int count = 0;
+    while ((netif = esp_netif_next(netif)) != NULL) {
+        count++;
+        const char *desc = esp_netif_get_desc(netif);
+        const char *key = esp_netif_get_ifkey(netif);
+        bool is_up = esp_netif_is_netif_up(netif);
+        
+        esp_netif_ip_info_t ip_info;
+        esp_err_t err = esp_netif_get_ip_info(netif, &ip_info);
+        
+        if (err == ESP_OK && ip_info.ip.addr != 0) {
+            ESP_LOGI(HTTP_API_TAG, "  [%d] %s (%s): UP=%d IP=" IPSTR " GW=" IPSTR,
+                     count, desc ? desc : "?", key ? key : "?", is_up,
+                     IP2STR(&ip_info.ip), IP2STR(&ip_info.gw));
         } else {
-            ESP_LOGW(HTTP_API_TAG, "mDNS register WIFI_STA_RMT failed: %s", esp_err_to_name(rerr));
+            ESP_LOGI(HTTP_API_TAG, "  [%d] %s (%s): UP=%d (no IP)", 
+                     count, desc ? desc : "?", key ? key : "?", is_up);
+        }
+    }
+    if (count == 0) {
+        ESP_LOGW(HTTP_API_TAG, "  No network interfaces found!");
+    }
+    ESP_LOGI(HTTP_API_TAG, "=== End Network Diagnostics ===");
+}
+
+static void verify_server_listening(void) {
+    // Try to connect to our own HTTP server to verify it's actually listening.
+    // Test both loopback and the device's own STA IP. If "own IP" fails locally, the server
+    // may be bound to loopback-only, which would explain why LAN clients can't connect.
+
+    const struct {
+        const char *name;
+        bool use_loopback;
+    } targets[] = {
+        { "loopback", true },
+        { "sta-ip",   false },
+    };
+
+    esp_netif_ip_info_t sta_ip = {0};
+    bool have_sta_ip = false;
+    {
+        esp_netif_t *sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        if (sta && esp_netif_get_ip_info(sta, &sta_ip) == ESP_OK && sta_ip.ip.addr != 0) {
+            have_sta_ip = true;
         }
     }
 
-    ESP_LOGI(HTTP_API_TAG, "mDNS started: p3a.local");
+    for (size_t i = 0; i < sizeof(targets)/sizeof(targets[0]); i++) {
+        if (!targets[i].use_loopback && !have_sta_ip) {
+            ESP_LOGW(HTTP_API_TAG, "HTTP self-connect %s skipped (no STA IP yet)", targets[i].name);
+            continue;
+        }
+
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) {
+            ESP_LOGW(HTTP_API_TAG, "HTTP self-connect %s: socket() failed (errno=%d)", targets[i].name, errno);
+            continue;
+        }
+
+        struct sockaddr_in addr = {0};
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(80);
+        addr.sin_addr.s_addr = targets[i].use_loopback ? htonl(INADDR_LOOPBACK) : sta_ip.ip.addr;
+
+        // Set non-blocking to avoid long timeout
+        int flags = fcntl(sock, F_GETFL, 0);
+        (void)fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+
+        int result = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
+        if (result == 0 || errno == EINPROGRESS) {
+            char ipbuf[16] = {0};
+            inet_ntoa_r(addr.sin_addr, ipbuf, sizeof(ipbuf));
+            ESP_LOGI(HTTP_API_TAG, "HTTP self-connect %s OK (dst=%s:80)", targets[i].name, ipbuf);
+        } else {
+            ESP_LOGW(HTTP_API_TAG, "HTTP self-connect %s failed: errno=%d (%s)", targets[i].name, errno, strerror(errno));
+        }
+
+        close(sock);
+    }
+}
+
+static void format_sockaddr(const struct sockaddr *sa, char *out, size_t out_len) {
+    if (!out || out_len == 0) return;
+    out[0] = '\0';
+
+    if (!sa) {
+        snprintf(out, out_len, "(null)");
+        return;
+    }
+
+    if (sa->sa_family == AF_INET) {
+        const struct sockaddr_in *in = (const struct sockaddr_in *)sa;
+        char ipbuf[16] = {0};
+        inet_ntoa_r(in->sin_addr, ipbuf, sizeof(ipbuf));
+        snprintf(out, out_len, "%s:%u", ipbuf, (unsigned)ntohs(in->sin_port));
+        return;
+    }
+
+    snprintf(out, out_len, "(af=%d)", (int)sa->sa_family);
+}
+
+static esp_err_t http_open_fn(httpd_handle_t hd, int sockfd) {
+    (void)hd;
+    struct sockaddr_storage peer = {0};
+    struct sockaddr_storage local = {0};
+    socklen_t peer_len = sizeof(peer);
+    socklen_t local_len = sizeof(local);
+    char peer_s[64];
+    char local_s[64];
+
+    if (getpeername(sockfd, (struct sockaddr *)&peer, &peer_len) == 0) {
+        format_sockaddr((struct sockaddr *)&peer, peer_s, sizeof(peer_s));
+    } else {
+        snprintf(peer_s, sizeof(peer_s), "(peer? errno=%d)", errno);
+    }
+
+    if (getsockname(sockfd, (struct sockaddr *)&local, &local_len) == 0) {
+        format_sockaddr((struct sockaddr *)&local, local_s, sizeof(local_s));
+    } else {
+        snprintf(local_s, sizeof(local_s), "(local? errno=%d)", errno);
+    }
+
+    ESP_LOGI(HTTP_API_TAG, "HTTP open: fd=%d peer=%s local=%s", sockfd, peer_s, local_s);
     return ESP_OK;
+}
+
+static void http_close_fn(httpd_handle_t hd, int sockfd) {
+    (void)hd;
+    ESP_LOGI(HTTP_API_TAG, "HTTP close: fd=%d", sockfd);
 }
 
 // ---------- Start/Stop ----------
@@ -940,18 +1028,14 @@ esp_err_t http_api_start(void) {
 
     // Create worker task if not exists
     if (!s_worker) {
-        BaseType_t ret = xTaskCreate(api_worker_task, "api_worker", 4096, NULL, 5, &s_worker);
+        // This task executes user actions (swap/OTA/etc). These paths can be stack-hungry due to
+        // nested calls + logging/formatting, so keep a healthy margin to avoid stack protection faults.
+        BaseType_t ret = xTaskCreate(api_worker_task, "api_worker", 8192, NULL, 5, &s_worker);
         if (ret != pdPASS) {
             ESP_LOGE(HTTP_API_TAG, "Failed to create worker task");
             return ESP_ERR_NO_MEM;
         }
         ESP_LOGI(HTTP_API_TAG, "Worker task created");
-    }
-
-    // Start mDNS
-    esp_err_t e = start_mdns();
-    if (e != ESP_OK) {
-        ESP_LOGW(HTTP_API_TAG, "mDNS start failed (continuing anyway): %s", esp_err_to_name(e));
     }
 
 #if CONFIG_P3A_PICO8_ENABLE
@@ -969,6 +1053,8 @@ esp_err_t http_api_start(void) {
     cfg.lru_purge_enable = true;
     cfg.max_uri_handlers = 28;  // Increased from 20 to accommodate OTA endpoints
     cfg.uri_match_fn = httpd_uri_match_wildcard;
+    cfg.open_fn = http_open_fn;
+    cfg.close_fn = http_close_fn;
 
     esp_err_t httpd_err = httpd_start(&s_server, &cfg);
     if (httpd_err != ESP_OK) {
@@ -1083,6 +1169,11 @@ esp_err_t http_api_start(void) {
     http_api_register_upload_handler(s_server);
 
     ESP_LOGI(HTTP_API_TAG, "HTTP API server started on port 80");
+    
+    // Diagnostic: log network interfaces and verify server is listening
+    log_all_netifs();
+    verify_server_listening();
+    
     return ESP_OK;
 }
 

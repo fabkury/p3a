@@ -265,7 +265,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
 
     if (xTaskCreate(animation_loader_task,
                     "anim_loader",
-                    4096,
+                    8192,
                     NULL,
                     CONFIG_P3A_RENDER_TASK_PRIORITY - 1,
                     &s_loader_task) != pdPASS) {

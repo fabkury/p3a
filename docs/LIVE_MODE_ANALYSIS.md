@@ -2,7 +2,62 @@
 
 **Date**: December 12, 2025  
 **Author**: GitHub Copilot  
-**Purpose**: Comprehensive analysis of Live Mode requirements and implementation status
+**Status**: 🚧 IN PROGRESS - Phase A  
+**Purpose**: Live progress-tracking document for Live Mode implementation
+
+---
+
+## 🎯 Implementation Progress
+
+### Phase A: Foundation (Week 1) - 🚧 IN PROGRESS
+- [x] **A1**: Add true random seed XOR on boot ✅
+  - Added `config_store_set_effective_seed()` / `get_effective_seed()`
+  - Boot-time XOR: `effective_seed = master_seed ^ esp_random()`
+  - NTP sync callback replaces effective seed with master seed
+  - Updated play_navigator to use effective seed
+- [ ] **A2**: Add swap_future structure and basic APIs
+- [x] **A3**: Add channel/playlist start time helpers ✅
+  - Created `live_mode` component with time helpers
+  - Defined `LIVE_MODE_CHANNEL_EPOCH_UNIX` (Jan 16, 2026)
+  - Implemented `live_mode_get_wall_clock_ms()`
+  - Implemented `live_mode_get_channel_start_time()`
+  - Implemented `live_mode_get_playlist_start_time()`
+- [ ] **A4**: Add effective dwell time resolution
+- [x] **A5**: Add wall-clock time helpers ✅
+  - UTC timezone enforcement in app_main
+  - 64-bit millisecond timestamp functions
+
+### Phase B: swap_future Execution (Week 2) - ⏳ PENDING
+### Phase C: Live Mode Entry/Exit (Week 2) - ⏳ PENDING
+### Phase D: Continuous Sync (Week 3) - ⏳ PENDING
+### Phase E: Testing & Polish (Week 4) - ⏳ PENDING
+### Phase F: Future Enhancements - ⏳ PENDING
+
+---
+
+## 📋 Decisions Made
+
+All open questions have been answered:
+
+1. **Master Seed Scope**: Global (no per-channel variation)
+2. **Channel Creation Date**: Hardcoded constant (Jan 16, 2026)
+3. **Playlist Creation Date**: Use `post.created_at`
+4. **Timing Precision**: Millisecond (ms) is sufficient
+5. **Unavailable Files**: Skip forward until available (with safeguards)
+6. **Downloads During Live Mode**: Yes, with skip-ahead and re-sync logic
+7. **auto_swap_task**: Enhance (not replace) for Live Mode timing
+8. **Manual Swap Exit**: Exit immediately, clear flag
+
+**Edge Case Solutions**:
+- Clock drift: Periodic re-sync, graceful degradation
+- Playlist changes: Background refresh, soft re-sync attempts
+- Download races: Known limitation, require all files for perfect sync
+- Time zones: UTC exclusively
+- Epoch overflow: 64-bit timestamps throughout
+- Long playlists: Windowed schedule, on-the-fly calculation
+- Zero dwell: Enforce 30s default
+- Simultaneous swaps: Existing guard handles
+- OTA during Live Mode: Discard OTA checks, cannot enter during OTA
 
 ---
 

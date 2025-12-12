@@ -38,6 +38,7 @@
 #include "makapix_artwork.h"
 #include "ota_manager.h"
 #include "p3a_state.h"
+#include "esp_heap_caps.h"
 #if CONFIG_P3A_PICO8_ENABLE
 #include "pico8_stream.h"
 #endif
@@ -873,9 +874,13 @@ static esp_err_t h_post_rotation(httpd_req_t *req) {
 
 static esp_err_t start_mdns(void) {
     esp_err_t err = mdns_init();
-    if (err != ESP_OK) {
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         ESP_LOGE(HTTP_API_TAG, "mDNS init failed: %s", esp_err_to_name(err));
         return err;
+    }
+    if (err == ESP_ERR_INVALID_STATE) {
+        // mDNS already initialized (e.g. AP provisioning path). Continue and (re)configure.
+        ESP_LOGW(HTTP_API_TAG, "mDNS already initialized; reconfiguring");
     }
 
     err = mdns_hostname_set("p3a");
@@ -891,9 +896,29 @@ static esp_err_t start_mdns(void) {
     }
 
     err = mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
-    if (err != ESP_OK) {
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         ESP_LOGE(HTTP_API_TAG, "mDNS service add failed: %s", esp_err_to_name(err));
         return err;
+    }
+    if (err == ESP_ERR_INVALID_STATE) {
+        // Service might already exist; that's fine.
+        ESP_LOGW(HTTP_API_TAG, "mDNS HTTP service already added; continuing");
+    }
+
+    // Hosted Wi-Fi uses a custom netif key; register it explicitly so p3a.local works
+    // even when the STA interface is "WIFI_STA_RMT".
+    esp_netif_t *rmt = esp_netif_get_handle_from_ifkey("WIFI_STA_RMT");
+    if (rmt) {
+        esp_err_t rerr = mdns_register_netif(rmt);
+        if (rerr == ESP_OK) {
+            ESP_LOGI(HTTP_API_TAG, "mDNS registered WIFI_STA_RMT netif");
+            (void)mdns_netif_action(rmt, (mdns_event_actions_t)(MDNS_EVENT_ENABLE_IP4 | MDNS_EVENT_ANNOUNCE_IP4));
+        } else if (rerr == ESP_ERR_INVALID_STATE) {
+            // Already registered or mdns not running.
+            ESP_LOGD(HTTP_API_TAG, "mDNS WIFI_STA_RMT netif already registered");
+        } else {
+            ESP_LOGW(HTTP_API_TAG, "mDNS register WIFI_STA_RMT failed: %s", esp_err_to_name(rerr));
+        }
     }
 
     ESP_LOGI(HTTP_API_TAG, "mDNS started: p3a.local");
@@ -945,10 +970,19 @@ esp_err_t http_api_start(void) {
     cfg.max_uri_handlers = 28;  // Increased from 20 to accommodate OTA endpoints
     cfg.uri_match_fn = httpd_uri_match_wildcard;
 
-    if (httpd_start(&s_server, &cfg) != ESP_OK) {
-        ESP_LOGE(HTTP_API_TAG, "Failed to start HTTP server");
-        return ESP_FAIL;
+    esp_err_t httpd_err = httpd_start(&s_server, &cfg);
+    if (httpd_err != ESP_OK) {
+        ESP_LOGE(HTTP_API_TAG, "Failed to start HTTP server: %s", esp_err_to_name(httpd_err));
+        ESP_LOGE(HTTP_API_TAG, "Heap (default): free=%u, min_free=%u", (unsigned)esp_get_free_heap_size(), (unsigned)esp_get_minimum_free_heap_size());
+        ESP_LOGE(HTTP_API_TAG, "Heap (internal): free=%u, largest=%u",
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+        ESP_LOGE(HTTP_API_TAG, "Heap (spiram): free=%u, largest=%u",
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+        return httpd_err;
     }
+    ESP_LOGI(HTTP_API_TAG, "HTTP server started on port %d", cfg.server_port);
 
     // Register core REST API handlers
     httpd_uri_t u = {0};

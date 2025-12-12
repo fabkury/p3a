@@ -555,8 +555,10 @@ void app_main(void)
     // Initialize Makapix module
     ESP_ERROR_CHECK(makapix_init());
 
-    // Create auto-swap task (4096 bytes needed for channel_player calls to Makapix channels)
-    const BaseType_t created = xTaskCreate(auto_swap_task, "auto_swap", 4096, NULL, 
+    // Create auto-swap task.
+    // This task may call into channel playback logic (which can be stack-hungry due to logging/formatting),
+    // so keep a comfortable margin to avoid stack protection faults.
+    const BaseType_t created = xTaskCreate(auto_swap_task, "auto_swap", 8192, NULL,
                                            tskIDLE_PRIORITY + 1, &s_auto_swap_task_handle);
     if (created != pdPASS) {
         ESP_LOGE(TAG, "Failed to create auto-swap task");

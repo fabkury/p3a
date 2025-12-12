@@ -300,7 +300,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             s_captive_portal_server = NULL;
         }
         
-        // Initialize app services only once (first connection)
+        // Initialize app services only once (first successful start)
         if (!s_services_initialized) {
             ESP_LOGI(TAG, "STA connected, initializing app services");
             
@@ -312,6 +312,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             if (api_err != ESP_OK) {
                 ESP_LOGE(TAG, "Failed to start HTTP API: %s", esp_err_to_name(api_err));
                 app_state_enter_error();
+                // IMPORTANT: do not mark services initialized on failure.
+                // We want to retry on next reconnect (or next IP event) because failures can be transient
+                // (e.g., port 80 still held by captive portal, low memory, etc.).
             } else {
                 // Call callback to register action handlers
                 if (s_rest_start_callback) {
@@ -319,8 +322,8 @@ static void event_handler(void* arg, esp_event_base_t event_base,
                 }
                 app_state_enter_ready();
                 ESP_LOGI(TAG, "REST API started at http://p3a.local/");
+                s_services_initialized = true;
             }
-            s_services_initialized = true;
         } else {
             ESP_LOGI(TAG, "WiFi reconnected after disconnect");
         }

@@ -7,6 +7,7 @@
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "cJSON.h"
 #include <string.h>
 #include <stdlib.h>
@@ -215,8 +216,16 @@ esp_err_t github_ota_get_latest_release(github_release_info_t *info)
     
     memset(info, 0, sizeof(github_release_info_t));
     
-    // Allocate response buffer
-    char *response_buffer = malloc(MAX_API_RESPONSE_SIZE);
+    // Allocate response buffer (prefer PSRAM to avoid starving TLS/internal heap)
+    char *response_buffer = (char *)heap_caps_malloc(MAX_API_RESPONSE_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (response_buffer) {
+        ESP_LOGI(TAG, "Allocated GitHub API response buffer in PSRAM (%d bytes)", MAX_API_RESPONSE_SIZE);
+    } else {
+        response_buffer = (char *)malloc(MAX_API_RESPONSE_SIZE);
+        if (response_buffer) {
+            ESP_LOGW(TAG, "PSRAM alloc failed; using internal heap for GitHub API response buffer (%d bytes)", MAX_API_RESPONSE_SIZE);
+        }
+    }
     if (!response_buffer) {
         ESP_LOGE(TAG, "Failed to allocate response buffer");
         return ESP_ERR_NO_MEM;
@@ -394,8 +403,14 @@ esp_err_t github_ota_download_sha256(const char *sha256_url, char *sha256_hex, s
     
     memset(sha256_hex, 0, hex_buf_size);
     
-    // Allocate buffer for SHA256 response (larger to handle redirect responses)
-    char *response_buffer = malloc(MAX_SHA256_RESPONSE_SIZE);
+    // Allocate buffer for SHA256 response (prefer PSRAM)
+    char *response_buffer = (char *)heap_caps_malloc(MAX_SHA256_RESPONSE_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!response_buffer) {
+        response_buffer = (char *)malloc(MAX_SHA256_RESPONSE_SIZE);
+        if (response_buffer) {
+            ESP_LOGW(TAG, "PSRAM alloc failed; using internal heap for SHA256 response buffer (%d bytes)", MAX_SHA256_RESPONSE_SIZE);
+        }
+    }
     if (!response_buffer) {
         return ESP_ERR_NO_MEM;
     }

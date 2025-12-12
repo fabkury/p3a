@@ -36,8 +36,20 @@ typedef struct {
     uint8_t limit;          // 1-50
     bool random_seed_present;
     uint32_t random_seed;
+    uint16_t pe;            // Playlist expansion: 0-1023 (0 = all, default = 8 if not set)
 } makapix_query_request_t;
 
+/**
+ * @brief Post kind enumeration
+ */
+typedef enum {
+    MAKAPIX_POST_KIND_ARTWORK,
+    MAKAPIX_POST_KIND_PLAYLIST,
+} makapix_post_kind_t;
+
+/**
+ * @brief Artwork within a playlist
+ */
 typedef struct {
     int post_id;
     char storage_key[64];
@@ -49,6 +61,37 @@ typedef struct {
     bool has_transparency;
     char owner_handle[64];
     char created_at[40];
+    char metadata_modified_at[40];
+    char artwork_modified_at[40];
+    uint32_t dwell_time_ms;  // 0 = use playlist/channel default
+} makapix_artwork_t;
+
+/**
+ * @brief Post (can be artwork or playlist)
+ */
+typedef struct {
+    int post_id;
+    makapix_post_kind_t kind;
+    char owner_handle[64];
+    char created_at[40];
+    char metadata_modified_at[40];
+    
+    // For artwork posts:
+    char storage_key[64];
+    char art_url[256];
+    char canvas[16];
+    int width;
+    int height;
+    int frame_count;
+    bool has_transparency;
+    char artwork_modified_at[40];
+    uint32_t dwell_time_ms;
+    
+    // For playlist posts:
+    int total_artworks;              // Total artworks in playlist
+    makapix_artwork_t *artworks;     // Array of artworks (up to PE count)
+    size_t artworks_count;           // Number of artworks in array
+    uint32_t playlist_dwell_time_ms; // Default dwell time for playlist artworks
 } makapix_post_t;
 
 #define MAKAPIX_MAX_POSTS_PER_RESPONSE 50

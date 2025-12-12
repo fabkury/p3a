@@ -292,6 +292,24 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+
+        // Ensure mDNS is enabled/announced on STA after getting an IP.
+        // Important: depending on init ordering, mdns_init() might have happened after GOT_IP in the past,
+        // which means mDNS would never get enabled on the STA interface and p3a.local would not resolve.
+        {
+            esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey(WIFI_STA_NETIF_KEY);
+            if (sta_netif) {
+                esp_err_t merr = mdns_netif_action(sta_netif,
+                                                  (mdns_event_actions_t)(MDNS_EVENT_ENABLE_IP4 | MDNS_EVENT_ANNOUNCE_IP4));
+                if (merr == ESP_OK) {
+                    ESP_LOGI(TAG, "mDNS announced on %s", WIFI_STA_NETIF_KEY);
+                } else {
+                    ESP_LOGW(TAG, "mDNS announce failed on %s: %s", WIFI_STA_NETIF_KEY, esp_err_to_name(merr));
+                }
+            } else {
+                ESP_LOGW(TAG, "STA netif not found for mDNS announce (ifkey=%s)", WIFI_STA_NETIF_KEY);
+            }
+        }
         
         // Stop captive portal server if running (to avoid port 80 conflict)
         if (s_captive_portal_server != NULL) {
@@ -348,12 +366,68 @@ static void event_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
+/* Start mDNS in STA mode so p3a.local works on the LAN */
+static esp_err_t start_mdns_sta(void)
+{
+    esp_err_t err = mdns_init();
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "mDNS init failed: %s", esp_err_to_name(err));
+        return err;
+    }
+    if (err == ESP_ERR_INVALID_STATE) {
+        // mDNS already initialized (e.g., we previously started AP mode captive portal).
+        ESP_LOGW(TAG, "mDNS already initialized; reconfiguring for STA");
+    }
+
+    err = mdns_hostname_set("p3a");
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "mDNS hostname set failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = mdns_instance_name_set("p3a");
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "mDNS instance name set failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // Advertise HTTP service. Treat "already exists" as OK.
+    err = mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+    // Some mdns versions return ESP_ERR_INVALID_ARG when the service already exists.
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE && err != ESP_ERR_INVALID_ARG) {
+        ESP_LOGE(TAG, "mDNS service add failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "mDNS configured in STA mode: http://p3a.local/");
+    return ESP_OK;
+}
+
 static bool wifi_init_sta(const char *ssid, const char *password)
 {
     s_wifi_event_group = xEventGroupCreate();
     s_retry_num = 0;
 
     esp_netif_create_default_wifi_sta();
+
+    // Set a hostname on the STA netif as a secondary discovery mechanism (DHCP/DNS on some networks).
+    // This does NOT replace mDNS (.local), but helps on LANs that publish DHCP hostnames.
+    {
+        esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey(WIFI_STA_NETIF_KEY);
+        if (sta_netif) {
+            esp_err_t herr = esp_netif_set_hostname(sta_netif, "p3a");
+            if (herr != ESP_OK) {
+                ESP_LOGW(TAG, "esp_netif_set_hostname failed: %s", esp_err_to_name(herr));
+            }
+        }
+    }
+
+    // Start mDNS early (before GOT_IP) so it can reliably hook IP events and respond to queries.
+    // If it fails, the UI still works via IP address.
+    esp_err_t mdns_err = start_mdns_sta();
+    if (mdns_err != ESP_OK) {
+        ESP_LOGW(TAG, "mDNS start failed in STA mode (UI still works via IP): %s", esp_err_to_name(mdns_err));
+    }
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_remote_init(&cfg));
@@ -690,9 +764,12 @@ static void start_captive_portal(void)
 static esp_err_t start_mdns_ap(void)
 {
     esp_err_t err = mdns_init();
-    if (err != ESP_OK) {
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         ESP_LOGE(TAG, "mDNS init failed: %s", esp_err_to_name(err));
         return err;
+    }
+    if (err == ESP_ERR_INVALID_STATE) {
+        ESP_LOGW(TAG, "mDNS already initialized; reconfiguring for AP");
     }
 
     err = mdns_hostname_set("p3a");
@@ -708,7 +785,8 @@ static esp_err_t start_mdns_ap(void)
     }
 
     err = mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
-    if (err != ESP_OK) {
+    // Some mdns versions return ESP_ERR_INVALID_ARG when the service already exists.
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE && err != ESP_ERR_INVALID_ARG) {
         ESP_LOGE(TAG, "mDNS service add failed: %s", esp_err_to_name(err));
         return err;
     }

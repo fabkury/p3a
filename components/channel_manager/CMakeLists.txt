@@ -5,6 +5,8 @@ idf_component_register(
          "makapix_channel_impl.c"
          "vault_storage.c"
          "animation_metadata.c"
+         "playlist_manager.c"
+         "play_navigator.c"
     INCLUDE_DIRS "include"
     REQUIRES esp_common json makapix sdio_bus
 )

@@ -508,6 +508,20 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
+    // Set timezone to UTC for Live Mode synchronization
+    setenv("TZ", "UTC", 1);
+    tzset();
+    ESP_LOGI(TAG, "Timezone set to UTC for Live Mode");
+
+    // Initialize effective seed with true random for pre-NTP behavior
+    // This will be replaced with master seed once NTP syncs
+    uint32_t true_random_seed = esp_random();
+    uint32_t master_seed = config_store_get_global_seed();
+    uint32_t effective_seed = master_seed ^ true_random_seed;
+    config_store_set_effective_seed(effective_seed);
+    ESP_LOGI(TAG, "Master seed: 0x%08x, True random: 0x%08x, Effective seed: 0x%08x (pre-NTP)", 
+             master_seed, true_random_seed, effective_seed);
+
     // Initialize SDIO bus coordinator early
     // This provides mutual exclusion for SDIO operations (WiFi and SD card)
     esp_err_t sdio_err = sdio_bus_init();

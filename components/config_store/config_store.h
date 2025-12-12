@@ -144,3 +144,21 @@ esp_err_t config_store_set_global_seed(uint32_t seed);
  */
 uint32_t config_store_get_global_seed(void);
 
+/**
+ * @brief Set effective random seed (runtime-only, not persisted)
+ *
+ * The effective seed is used for actual random operations.
+ * Before NTP sync: effective_seed = master_seed XOR true_random
+ * After NTP sync: effective_seed = master_seed
+ *
+ * @param seed Effective seed to use
+ */
+void config_store_set_effective_seed(uint32_t seed);
+
+/**
+ * @brief Get effective random seed (runtime-only)
+ *
+ * @return Current effective seed (defaults to master seed if not set)
+ */
+uint32_t config_store_get_effective_seed(void);
+

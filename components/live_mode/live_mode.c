@@ -1,4 +1,5 @@
 #include "live_mode.h"
+#include "config_store.h"
 #include <sys/time.h>
 #include "esp_log.h"
 
@@ -31,4 +32,26 @@ uint64_t live_mode_get_playlist_start_time(uint32_t created_at)
     
     // Fallback to channel epoch if no creation date
     return LIVE_MODE_CHANNEL_EPOCH_UNIX;
+}
+
+uint32_t live_mode_get_effective_dwell_ms(uint32_t artwork_dwell_ms, uint32_t channel_dwell_ms)
+{
+    // Priority 1: Artwork-specific dwell
+    if (artwork_dwell_ms > 0) {
+        return artwork_dwell_ms;
+    }
+    
+    // Priority 2: Channel dwell override
+    if (channel_dwell_ms > 0) {
+        return channel_dwell_ms;
+    }
+    
+    // Priority 3: Global default (from config_store, converted to ms)
+    uint32_t global_dwell_s = config_store_get_dwell_time();
+    if (global_dwell_s > 0) {
+        return global_dwell_s * 1000;
+    }
+    
+    // Fallback: hardcoded default (30 seconds)
+    return LIVE_MODE_DEFAULT_DWELL_MS;
 }

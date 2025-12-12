@@ -9,6 +9,7 @@
 #include "sdio_bus.h"
 #include "pico8_stream.h"
 #include "pico8_render.h"
+#include "swap_future.h"
 
 // Animation player state
 animation_buffer_t s_front_buffer = {0};
@@ -174,6 +175,13 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         playback_controller_deinit();
         display_renderer_deinit();
         return err;
+    }
+
+    // Initialize swap_future system for Live Mode
+    err = swap_future_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize swap_future system: %s", esp_err_to_name(err));
+        // Non-fatal - continue without swap_future support
     }
 
     // Create SD card channel handle using the discovered animations directory
@@ -583,6 +591,8 @@ void animation_player_deinit(void)
     pico8_render_deinit();
 #endif
     s_sd_export_active = false;
+
+    swap_future_deinit();
 
     if (s_loader_task) {
         vTaskDelete(s_loader_task);

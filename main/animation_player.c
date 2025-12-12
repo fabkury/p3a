@@ -458,6 +458,52 @@ esp_err_t animation_player_request_swap_current(void)
     return ESP_FAIL;
 }
 
+esp_err_t swap_future_execute(const swap_future_t *swap)
+{
+    if (!swap || !swap->valid) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    ESP_LOGI(TAG, "Executing swap_future: frame=%u, live=%d", 
+             swap->start_frame, swap->is_live_mode_swap);
+    
+    // Check if OTA is in progress
+    if (ota_manager_is_checking()) {
+        ESP_LOGW(TAG, "swap_future blocked: OTA check in progress");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Check if SD access is paused
+    if (animation_player_is_sd_paused()) {
+        ESP_LOGW(TAG, "swap_future blocked: SD access paused");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Check if swap already in progress
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
+            ESP_LOGW(TAG, "swap_future blocked: swap already in progress");
+            xSemaphoreGive(s_buffer_mutex);
+            return ESP_ERR_INVALID_STATE;
+        }
+        
+        // For now, we trigger a regular swap since we need more infrastructure
+        // to support loading arbitrary artworks (Phase C will add this)
+        // TODO: Store swap->artwork info for loader to use
+        s_swap_requested = true;
+        xSemaphoreGive(s_buffer_mutex);
+        
+        if (s_loader_sem) {
+            xSemaphoreGive(s_loader_sem);
+        }
+        
+        ESP_LOGI(TAG, "swap_future triggered loader (start_frame support in Phase B2)");
+        return ESP_OK;
+    }
+    
+    return ESP_ERR_TIMEOUT;
+}
+
 esp_err_t animation_player_begin_sd_export(void)
 {
     if (animation_player_is_sd_export_locked()) {

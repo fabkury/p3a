@@ -24,6 +24,7 @@ extern "C" {
  */
 typedef struct {
     int32_t post_id;
+    char filepath[256];         // Local path to artwork file (vault or SD). May be empty if unknown.
     char storage_key[96];      // SHA256-based key in vault
     char art_url[256];         // Download URL
     asset_type_t type;         // File type (WebP, GIF, etc)

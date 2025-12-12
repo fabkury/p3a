@@ -48,6 +48,7 @@ typedef struct {
     time_t created_at;    // File creation timestamp
     char *filepath;       // Full path for loading
     asset_type_t type;    // GIF, WebP, etc.
+    uint32_t dwell_time_ms; // Effective dwell time for this item
     bool healthy;         // Load health flag
 } sdcard_post_t;
 

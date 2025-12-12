@@ -1,6 +1,8 @@
 #include "animation_player_priv.h"
 #include "channel_player.h"
-#include "sdcard_channel.h"
+#include "sdcard_channel_impl.h"
+#include "playlist_manager.h"
+#include "download_manager.h"
 #include "ugfx_ui.h"
 #include "config_store.h"
 #include "ota_manager.h"
@@ -131,10 +133,33 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         return err;
     }
 
-    // Initialize channel system
-    err = sdcard_channel_init();
+    // Mount SD card and discover animations directory early (required for playlist + per-channel files)
+    char *found_animations_dir = NULL;
+    err = mount_sd_and_discover(&found_animations_dir);
+    if (err != ESP_OK || !found_animations_dir) {
+        ESP_LOGE(TAG, "Failed to find animations directory: %s", esp_err_to_name(err));
+        if (found_animations_dir) {
+            free(found_animations_dir);
+        }
+        playback_controller_deinit();
+        display_renderer_deinit();
+        return (err == ESP_ERR_NOT_FOUND) ? ESP_ERR_NOT_FOUND : err;
+    }
+
+    err = playlist_manager_init();
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize SD card channel: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Failed to initialize playlist manager: %s", esp_err_to_name(err));
+        free(found_animations_dir);
+        playback_controller_deinit();
+        display_renderer_deinit();
+        return err;
+    }
+
+    err = download_manager_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize download manager: %s", esp_err_to_name(err));
+        playlist_manager_deinit();
+        free(found_animations_dir);
         playback_controller_deinit();
         display_renderer_deinit();
         return err;
@@ -143,42 +168,36 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     err = channel_player_init();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize channel player: %s", esp_err_to_name(err));
-        sdcard_channel_deinit();
+        download_manager_deinit();
+        playlist_manager_deinit();
+        free(found_animations_dir);
         playback_controller_deinit();
         display_renderer_deinit();
         return err;
     }
 
-    char *found_animations_dir = NULL;
-    err = mount_sd_and_discover(&found_animations_dir);
-    if (err != ESP_OK || !found_animations_dir) {
-        ESP_LOGE(TAG, "Failed to find animations directory: %s", esp_err_to_name(err));
-        if (found_animations_dir) {
-            free(found_animations_dir);
-        }
-        channel_player_deinit();
-        sdcard_channel_deinit();
-        playback_controller_deinit();
-        display_renderer_deinit();
-        return (err == ESP_ERR_NOT_FOUND) ? ESP_ERR_NOT_FOUND : err;
-    }
-
-    err = sdcard_channel_refresh(found_animations_dir);
+    // Create SD card channel handle using the discovered animations directory
+    channel_handle_t sd_ch = sdcard_channel_create("SD Card", found_animations_dir);
     free(found_animations_dir);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to refresh channel: %s", esp_err_to_name(err));
+    if (!sd_ch) {
+        ESP_LOGE(TAG, "Failed to create SD card channel handle");
         channel_player_deinit();
-        sdcard_channel_deinit();
+        download_manager_deinit();
+        playlist_manager_deinit();
         playback_controller_deinit();
         display_renderer_deinit();
-        return err;
+        return ESP_ERR_NO_MEM;
     }
+
+    channel_player_set_sdcard_channel_handle(sd_ch);
+    channel_player_switch_to_sdcard_channel();
 
     err = channel_player_load_channel();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to load channel: %s", esp_err_to_name(err));
         channel_player_deinit();
-        sdcard_channel_deinit();
+        download_manager_deinit();
+        playlist_manager_deinit();
         playback_controller_deinit();
         display_renderer_deinit();
         return err;
@@ -187,7 +206,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     if (channel_player_get_post_count() == 0) {
         ESP_LOGE(TAG, "No animation posts loaded");
         channel_player_deinit();
-        sdcard_channel_deinit();
+        download_manager_deinit();
+        playlist_manager_deinit();
         playback_controller_deinit();
         display_renderer_deinit();
         return ESP_ERR_NOT_FOUND;
@@ -197,7 +217,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     if (!s_buffer_mutex) {
         ESP_LOGE(TAG, "Failed to create buffer mutex");
         channel_player_deinit();
-        sdcard_channel_deinit();
+        download_manager_deinit();
+        playlist_manager_deinit();
         playback_controller_deinit();
         display_renderer_deinit();
         return ESP_ERR_NO_MEM;
@@ -209,7 +230,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
         channel_player_deinit();
-        sdcard_channel_deinit();
+        download_manager_deinit();
+        playlist_manager_deinit();
         playback_controller_deinit();
         display_renderer_deinit();
         return ESP_ERR_NO_MEM;
@@ -226,7 +248,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
         channel_player_deinit();
-        sdcard_channel_deinit();
+        download_manager_deinit();
+        playlist_manager_deinit();
         playback_controller_deinit();
         display_renderer_deinit();
         return err;
@@ -253,7 +276,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
         channel_player_deinit();
-        sdcard_channel_deinit();
+        download_manager_deinit();
+        playlist_manager_deinit();
         playback_controller_deinit();
         display_renderer_deinit();
         return ESP_FAIL;
@@ -579,7 +603,8 @@ void animation_player_deinit(void)
 
     free_sd_file_list();
     channel_player_deinit();
-    sdcard_channel_deinit();
+    download_manager_deinit();
+    playlist_manager_deinit();
     playback_controller_deinit();
     display_renderer_deinit();
     

@@ -4,7 +4,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <time.h>
 #include "esp_err.h"
+#include "sdcard_channel.h"  // asset_type_t
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,7 +52,53 @@ typedef struct {
     char storage_key[96];     // Vault storage key (SHA256 hex prefix + extension)
     uint32_t item_index;      // Index within the channel
     channel_filter_flags_t flags;  // Cached filter flags
+    uint32_t dwell_time_ms;   // Effective dwell time for this item (0 = default)
 } channel_item_ref_t;
+
+/**
+ * @brief Channel post kind (high-level unit of content)
+ *
+ * A post can be either a single artwork or a playlist of artworks.
+ */
+typedef enum {
+    CHANNEL_POST_KIND_ARTWORK = 0,
+    CHANNEL_POST_KIND_PLAYLIST = 1,
+} channel_post_kind_t;
+
+/**
+ * @brief Unified post representation for navigation (p/q)
+ *
+ * This is intentionally a "small" struct: playlist posts only carry identifiers
+ * and counts. Playlist artwork metadata is expected to be loaded via
+ * playlist_manager using playlist post_id.
+ */
+typedef struct {
+    int32_t post_id;
+    channel_post_kind_t kind;
+
+    // Common fields
+    uint32_t created_at;            // Unix timestamp (0 if unknown)
+    time_t metadata_modified_at;    // 0 if unknown
+    uint32_t dwell_time_ms;         // 0 = use channel default
+
+    union {
+        struct {
+            char filepath[256];     // Direct path to file (SD card or vault)
+            char storage_key[96];   // Vault storage key (UUID for Makapix, filename for SD)
+            char art_url[256];      // Empty for SD card sources
+            asset_type_t type;
+            uint16_t width;
+            uint16_t height;
+            uint16_t frame_count;
+            bool has_transparency;
+            time_t artwork_modified_at; // 0 if unknown
+        } artwork;
+
+        struct {
+            int32_t total_artworks;  // Server or local playlist size (0 if unknown)
+        } playlist;
+    } u;
+} channel_post_t;
 
 /**
  * @brief Channel statistics
@@ -175,6 +223,12 @@ typedef struct {
      * @param channel Channel handle
      */
     void (*destroy)(channel_handle_t channel);
+
+    // ---------------------------------------------------------------------
+    // Optional post-level API (required for playlist support)
+    // ---------------------------------------------------------------------
+    size_t (*get_post_count)(channel_handle_t channel);
+    esp_err_t (*get_post)(channel_handle_t channel, size_t post_index, channel_post_t *out_post);
     
 } channel_ops_t;
 
@@ -202,6 +256,26 @@ struct channel_s {
 #define channel_request_refresh(ch) ((ch)->ops->request_refresh(ch))
 #define channel_get_stats(ch, out) ((ch)->ops->get_stats((ch), (out)))
 #define channel_destroy(ch) ((ch)->ops->destroy(ch))
+
+// Post-level helpers (optional ops)
+static inline size_t channel_get_post_count(channel_handle_t ch)
+{
+    if (!ch || !ch->ops || !ch->ops->get_post_count) {
+        return 0;
+    }
+    return ch->ops->get_post_count(ch);
+}
+
+static inline esp_err_t channel_get_post(channel_handle_t ch, size_t post_index, channel_post_t *out_post)
+{
+    if (!ch || !out_post) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!ch->ops || !ch->ops->get_post) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+    return ch->ops->get_post(ch, post_index, out_post);
+}
 
 #ifdef __cplusplus
 }

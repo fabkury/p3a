@@ -586,15 +586,78 @@ static esp_err_t h_put_dwell_time(httpd_req_t *req) {
     uint32_t dwell_time = (uint32_t)cJSON_GetNumberValue(dwell_item);
     cJSON_Delete(root);
 
-    // Validate range: 1-100000 seconds
-    if (dwell_time < 1 || dwell_time > 100000) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid dwell_time (must be 1-100000 seconds)\",\"code\":\"INVALID_DWELL_TIME\"}");
+    // Validate range: 0-100000 seconds (0 disables global override)
+    if (dwell_time > 100000) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid dwell_time (must be 0-100000 seconds)\",\"code\":\"INVALID_DWELL_TIME\"}");
         return ESP_OK;
     }
 
     esp_err_t err = animation_player_set_dwell_time(dwell_time);
     if (err != ESP_OK) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to set dwell_time\",\"code\":\"SET_DWELL_TIME_FAILED\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, "{\"ok\":true}");
+    return ESP_OK;
+}
+
+/**
+ * GET /settings/global_seed
+ */
+static esp_err_t h_get_global_seed(httpd_req_t *req)
+{
+    uint32_t seed = config_store_get_global_seed();
+    char response[128];
+    snprintf(response, sizeof(response), "{\"ok\":true,\"data\":{\"global_seed\":%lu}}", (unsigned long)seed);
+    send_json(req, 200, response);
+    return ESP_OK;
+}
+
+/**
+ * PUT /settings/global_seed
+ * Body: {"global_seed": 4011}
+ */
+static esp_err_t h_put_global_seed(httpd_req_t *req)
+{
+    if (!ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+
+    int err_status;
+    size_t len;
+    char *body = recv_body_json(req, &len, &err_status);
+    if (!body) {
+        if (err_status == 413) {
+            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
+        } else {
+            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
+        }
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_ParseWithLength(body, len);
+    free(body);
+    if (!root || !cJSON_IsObject(root)) {
+        if (root) cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
+        return ESP_OK;
+    }
+
+    cJSON *seed_item = cJSON_GetObjectItem(root, "global_seed");
+    if (!seed_item || !cJSON_IsNumber(seed_item)) {
+        cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'global_seed' field\",\"code\":\"INVALID_REQUEST\"}");
+        return ESP_OK;
+    }
+
+    uint32_t seed = (uint32_t)cJSON_GetNumberValue(seed_item);
+    cJSON_Delete(root);
+
+    esp_err_t err = config_store_set_global_seed(seed);
+    if (err != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to set global_seed\",\"code\":\"SET_GLOBAL_SEED_FAILED\"}");
         return ESP_OK;
     }
 
@@ -965,6 +1028,18 @@ esp_err_t http_api_start(void) {
     u.uri = "/settings/dwell_time";
     u.method = HTTP_PUT;
     u.handler = h_put_dwell_time;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/settings/global_seed";
+    u.method = HTTP_GET;
+    u.handler = h_get_global_seed;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/settings/global_seed";
+    u.method = HTTP_PUT;
+    u.handler = h_put_global_seed;
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
 

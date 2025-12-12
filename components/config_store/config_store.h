@@ -2,7 +2,7 @@
 
 #include "cJSON.h"
 #include "esp_err.h"
-#include "animation_player.h"  // For screen_rotation_t
+#include <stdbool.h>
 
 /**
  * @brief Load configuration from NVS
@@ -46,14 +46,14 @@ esp_err_t config_store_get_serialized(char **out_json, size_t *out_len);
  * @param rotation Rotation angle (0°, 90°, 180°, 270°)
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t config_store_set_rotation(screen_rotation_t rotation);
+esp_err_t config_store_set_rotation(uint16_t rotation_degrees);
 
 /**
  * @brief Get screen rotation from config
  * 
  * @return Current rotation angle (defaults to ROTATION_0 if not set)
  */
-screen_rotation_t config_store_get_rotation(void);
+uint16_t config_store_get_rotation(void);
 
 /**
  * @brief Set playlist expansion (PE)
@@ -129,4 +129,18 @@ esp_err_t config_store_set_dwell_time(uint32_t dwell_time_ms);
  * @return Dwell time in milliseconds (defaults to 30000)
  */
 uint32_t config_store_get_dwell_time(void);
+
+/**
+ * @brief Set global random seed (persisted, applied after reboot)
+ *
+ * @param seed Global seed (default 0xFAB)
+ */
+esp_err_t config_store_set_global_seed(uint32_t seed);
+
+/**
+ * @brief Get global random seed (persisted)
+ *
+ * @return Global seed (defaults to 0xFAB)
+ */
+uint32_t config_store_get_global_seed(void);
 

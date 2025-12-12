@@ -287,7 +287,7 @@ esp_err_t display_renderer_set_rotation(display_rotation_t rotation)
         ESP_LOGW(DISPLAY_TAG, "Failed to set µGFX rotation: %s", esp_err_to_name(err));
     }
     
-    config_store_set_rotation(rotation);
+    config_store_set_rotation((uint16_t)rotation);
     g_rotation_in_progress = false;
     
     ESP_LOGI(DISPLAY_TAG, "Screen rotation set to %d degrees", rotation);

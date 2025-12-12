@@ -7,7 +7,9 @@ idf_component_register(
          "animation_metadata.c"
          "playlist_manager.c"
          "play_navigator.c"
+         "download_manager.c"
+         "channel_settings.c"
     INCLUDE_DIRS "include"
-    REQUIRES esp_common json makapix sdio_bus
+    REQUIRES esp_common json makapix sdio_bus config_store sync_playlist wifi_manager
 )
 

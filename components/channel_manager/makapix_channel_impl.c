@@ -1,6 +1,11 @@
 #include "makapix_channel_impl.h"
 #include "makapix_api.h"
 #include "makapix_artwork.h"
+#include "play_navigator.h"
+#include "playlist_manager.h"
+#include "download_manager.h"
+#include "config_store.h"
+#include "channel_settings.h"
 #include "sdio_bus.h"
 #include "esp_log.h"
 #include "esp_random.h"
@@ -20,6 +25,10 @@
 
 static const char *TAG = "makapix_channel";
 
+static uint32_t compute_effective_dwell_ms(uint32_t global_override_ms,
+                                           uint32_t channel_override_ms,
+                                           uint32_t playlist_or_artwork_ms);
+
 // Weak symbol for SD pause check - prevents downloads during OTA to avoid SDIO bus contention
 extern bool animation_player_is_sd_paused(void) __attribute__((weak));
 
@@ -36,6 +45,25 @@ typedef enum {
 // Extension strings for building file paths
 static const char *s_ext_strings[] = { ".webp", ".gif", ".png", ".jpg" };
 
+// Best-effort ISO8601 UTC parser: "YYYY-MM-DDTHH:MM:SSZ" -> time_t.
+// Returns 0 on failure.
+static time_t parse_iso8601_utc(const char *s)
+{
+    if (!s || !*s) return 0;
+    int year, month, day, hour, min, sec;
+    if (sscanf(s, "%d-%d-%dT%d:%d:%dZ", &year, &month, &day, &hour, &min, &sec) != 6) {
+        return 0;
+    }
+    struct tm tm = {0};
+    tm.tm_year = year - 1900;
+    tm.tm_mon = month - 1;
+    tm.tm_mday = day;
+    tm.tm_hour = hour;
+    tm.tm_min = min;
+    tm.tm_sec = sec;
+    return mktime(&tm);
+}
+
 /**
  * @brief Internal Makapix channel state
  */
@@ -51,10 +79,10 @@ typedef struct {
     makapix_channel_entry_t *entries;  // Array of entries from index.bin
     size_t entry_count;              // Number of entries
     
-    // Playback order
-    uint32_t *playback_order;        // Indices into entries array
-    size_t order_count;              // Items in playback order
-    size_t current_pos;              // Current position
+    // Playback (playlist-aware)
+    play_navigator_t navigator;
+    bool navigator_ready;
+    uint32_t channel_dwell_override_ms;
     
     // Refresh state
     bool refreshing;                 // Background refresh in progress
@@ -84,6 +112,8 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
 static esp_err_t evict_excess_artworks(makapix_channel_t *ch, size_t max_count);
 static void build_vault_path_from_storage_key(const makapix_channel_t *ch, const char *storage_key, 
                                                file_extension_t ext, char *out, size_t out_len);
+static size_t makapix_impl_get_post_count(channel_handle_t channel);
+static esp_err_t makapix_impl_get_post(channel_handle_t channel, size_t post_index, channel_post_t *out_post);
 
 // Virtual function table
 static const channel_ops_t s_makapix_ops = {
@@ -97,6 +127,8 @@ static const channel_ops_t s_makapix_ops = {
     .request_refresh = makapix_impl_request_refresh,
     .get_stats = makapix_impl_get_stats,
     .destroy = makapix_impl_destroy,
+    .get_post_count = makapix_impl_get_post_count,
+    .get_post = makapix_impl_get_post,
 };
 
 
@@ -161,18 +193,18 @@ static int compare_entries_by_created(const void *a, const void *b)
     return 0;
 }
 
-// Helper: build vault filepath for an entry
+// Helper: build vault filepath for an artwork entry
 // NOTE: Must match the pattern used by makapix_artwork_download() in makapix_artwork.c
 // Path: /vault/{dir1}/{dir2}/{storage_key}.{ext}
 // where dir1/dir2 are derived from hash_string(storage_key)
-// storage_key is a UUID stored as first 16 bytes of entry->sha256
+// storage_key is a UUID stored as 16 bytes in entry->storage_key_uuid
 static void build_vault_path(const makapix_channel_t *ch, 
                               const makapix_channel_entry_t *entry,
                               char *out, size_t out_len)
 {
     // Convert stored bytes back to UUID string
     char storage_key[40];
-    bytes_to_uuid(entry->sha256, storage_key, sizeof(storage_key));
+    bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
     
     // Use same hash function as makapix_artwork_download
     uint32_t hash = hash_string(storage_key);
@@ -189,14 +221,16 @@ static void build_vault_path(const makapix_channel_t *ch,
 // Helper: get filter flags from entry
 static channel_filter_flags_t get_entry_flags(const makapix_channel_entry_t *entry)
 {
-    channel_filter_flags_t flags = entry->flags;
+    channel_filter_flags_t flags = entry->filter_flags;
     
-    // Add format flags based on extension
-    switch (entry->extension) {
-        case EXT_GIF:  flags |= CHANNEL_FILTER_FLAG_GIF; break;
-        case EXT_WEBP: flags |= CHANNEL_FILTER_FLAG_WEBP; break;
-        case EXT_PNG:  flags |= CHANNEL_FILTER_FLAG_PNG; break;
-        case EXT_JPEG: flags |= CHANNEL_FILTER_FLAG_JPEG; break;
+    // Add format flags based on extension (artwork posts only)
+    if (entry->kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+        switch (entry->extension) {
+            case EXT_GIF:  flags |= CHANNEL_FILTER_FLAG_GIF; break;
+            case EXT_WEBP: flags |= CHANNEL_FILTER_FLAG_WEBP; break;
+            case EXT_PNG:  flags |= CHANNEL_FILTER_FLAG_PNG; break;
+            case EXT_JPEG: flags |= CHANNEL_FILTER_FLAG_JPEG; break;
+        }
     }
     
     return flags;
@@ -230,7 +264,7 @@ static void fill_item_from_entry(const makapix_channel_t *ch,
     memset(out, 0, sizeof(*out));
     
     build_vault_path(ch, entry, out->filepath, sizeof(out->filepath));
-    bytes_to_uuid(entry->sha256, out->storage_key, sizeof(out->storage_key));
+    bytes_to_uuid(entry->storage_key_uuid, out->storage_key, sizeof(out->storage_key));
     out->item_index = index;
     out->flags = get_entry_flags(entry);
 }
@@ -308,9 +342,17 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
     fseek(f, 0, SEEK_SET);
     
     if (file_size <= 0 || file_size % sizeof(makapix_channel_entry_t) != 0) {
-        ESP_LOGE(TAG, "Invalid index file size: %ld", file_size);
+        // Likely stale/legacy index format. Delete and repopulate.
+        ESP_LOGW(TAG, "Invalid/stale index.bin size (%ld). Deleting and refreshing: %s", file_size, index_path);
         fclose(f);
-        return ESP_ERR_INVALID_SIZE;
+        unlink(index_path);
+        ch->entries = NULL;
+        ch->entry_count = 0;
+        ch->base.loaded = true;
+        if (!ch->refreshing) {
+            return makapix_impl_request_refresh(channel);
+        }
+        return ESP_OK;
     }
     
     size_t entry_count = file_size / sizeof(makapix_channel_entry_t);
@@ -361,15 +403,15 @@ static void makapix_impl_unload(channel_handle_t channel)
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch) return;
     
+    if (ch->navigator_ready) {
+        play_navigator_deinit(&ch->navigator);
+        ch->navigator_ready = false;
+    }
+
     free(ch->entries);
     ch->entries = NULL;
-    
-    free(ch->playback_order);
-    ch->playback_order = NULL;
-    
+
     ch->entry_count = 0;
-    ch->order_count = 0;
-    ch->current_pos = 0;
     ch->base.loaded = false;
 }
 
@@ -379,46 +421,7 @@ static esp_err_t makapix_impl_start_playback(channel_handle_t channel,
 {
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch || !ch->base.loaded) return ESP_ERR_INVALID_STATE;
-    
-    // Free old order
-    free(ch->playback_order);
-    ch->playback_order = NULL;
-    ch->order_count = 0;
-    ch->current_pos = 0;
-    
-    if (ch->entry_count == 0) {
-        ESP_LOGW(TAG, "No entries in channel");
-        return ESP_ERR_NOT_FOUND;
-    }
-    
-    // Count entries that pass filter
-    size_t pass_count = 0;
-    for (size_t i = 0; i < ch->entry_count; i++) {
-        if (entry_passes_filter(&ch->entries[i], filter)) {
-            pass_count++;
-        }
-    }
-    
-    if (pass_count == 0) {
-        ESP_LOGW(TAG, "No entries pass filter");
-        return ESP_ERR_NOT_FOUND;
-    }
-    
-    // Allocate order array
-    ch->playback_order = malloc(pass_count * sizeof(uint32_t));
-    if (!ch->playback_order) {
-        return ESP_ERR_NO_MEM;
-    }
-    
-    // Fill with passing entries
-    size_t idx = 0;
-    for (size_t i = 0; i < ch->entry_count && idx < pass_count; i++) {
-        if (entry_passes_filter(&ch->entries[i], filter)) {
-            ch->playback_order[idx++] = (uint32_t)i;
-        }
-    }
-    ch->order_count = pass_count;
-    
+
     // Store settings
     ch->base.current_order = order_mode;
     if (filter) {
@@ -426,106 +429,151 @@ static esp_err_t makapix_impl_start_playback(channel_handle_t channel,
     } else {
         memset(&ch->base.current_filter, 0, sizeof(ch->base.current_filter));
     }
-    
-    // Apply ordering
-    switch (order_mode) {
-        case CHANNEL_ORDER_CREATED:
-            // Sort by created_at (newest first)
-            for (size_t i = 0; i < ch->order_count - 1; i++) {
-                for (size_t j = 0; j < ch->order_count - i - 1; j++) {
-                    uint32_t ta = ch->entries[ch->playback_order[j]].created_at;
-                    uint32_t tb = ch->entries[ch->playback_order[j+1]].created_at;
-                    if (ta < tb) {
-                        uint32_t tmp = ch->playback_order[j];
-                        ch->playback_order[j] = ch->playback_order[j+1];
-                        ch->playback_order[j+1] = tmp;
-                    }
-                }
-            }
-            break;
-            
-        case CHANNEL_ORDER_RANDOM:
-            shuffle_order(ch->playback_order, ch->order_count);
-            break;
-            
-        case CHANNEL_ORDER_ORIGINAL:
-        default:
-            // Keep order from index.bin (server order)
-            break;
+
+    // (Re)initialize playlist-aware navigator for item playback
+    if (ch->navigator_ready) {
+        play_navigator_deinit(&ch->navigator);
+        ch->navigator_ready = false;
     }
-    
-    ESP_LOGI(TAG, "Started playback: %zu items, order=%d", ch->order_count, order_mode);
+
+    play_order_mode_t play_order = PLAY_ORDER_SERVER;
+    switch (order_mode) {
+        case CHANNEL_ORDER_CREATED: play_order = PLAY_ORDER_CREATED; break;
+        case CHANNEL_ORDER_RANDOM:  play_order = PLAY_ORDER_RANDOM;  break;
+        case CHANNEL_ORDER_ORIGINAL:
+        default:                   play_order = PLAY_ORDER_SERVER;  break;
+    }
+
+    uint32_t pe = config_store_get_pe();
+    channel_settings_t settings = {0};
+    if (channel_settings_load_for_channel_id(ch->channel_id, &settings) != ESP_OK) {
+        // not fatal: fall back to global config_store values
+        memset(&settings, 0, sizeof(settings));
+    }
+
+    if (settings.pe_present) {
+        pe = settings.pe;
+    }
+
+    if (settings.channel_dwell_time_present) {
+        ch->channel_dwell_override_ms = settings.channel_dwell_time_ms;
+    } else {
+        ch->channel_dwell_override_ms = 0;
+    }
+
+    uint32_t global_seed = config_store_get_global_seed();
+
+    esp_err_t err = play_navigator_init(&ch->navigator, channel, play_order, pe, global_seed);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to init play navigator: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    play_navigator_set_channel_dwell_override_ms(&ch->navigator, ch->channel_dwell_override_ms);
+
+    // Apply per-channel settings, falling back to global config when absent.
+    play_navigator_set_randomize_playlist(&ch->navigator,
+                                         settings.randomize_playlist_present ? settings.randomize_playlist
+                                                                             : config_store_get_randomize_playlist());
+    play_navigator_set_live_mode(&ch->navigator,
+                                 settings.live_mode_present ? settings.live_mode
+                                                           : config_store_get_live_mode());
+
+    ch->navigator_ready = true;
+    ESP_LOGI(TAG, "Started playback (navigator): posts=%zu order=%d pe=%lu",
+             channel_get_post_count(channel), order_mode, (unsigned long)pe);
     return ESP_OK;
 }
 
 static esp_err_t makapix_impl_next_item(channel_handle_t channel, channel_item_ref_t *out_item)
 {
     makapix_channel_t *ch = (makapix_channel_t *)channel;
-    if (!ch || !ch->playback_order || ch->order_count == 0) {
-        return ESP_ERR_NOT_FOUND;
+    if (!ch || !out_item || !ch->navigator_ready) return ESP_ERR_NOT_FOUND;
+
+    artwork_ref_t art = {0};
+    esp_err_t err = play_navigator_next(&ch->navigator, &art);
+    if (err != ESP_OK) return err;
+
+    memset(out_item, 0, sizeof(*out_item));
+    strlcpy(out_item->filepath, art.filepath, sizeof(out_item->filepath));
+    strlcpy(out_item->storage_key, art.storage_key, sizeof(out_item->storage_key));
+    out_item->item_index = 0;
+    out_item->flags = CHANNEL_FILTER_FLAG_NONE;
+    out_item->dwell_time_ms = compute_effective_dwell_ms(config_store_get_dwell_time(),
+                                                         ch->channel_dwell_override_ms,
+                                                         art.dwell_time_ms);
+    switch (art.type) {
+        case ASSET_TYPE_GIF:  out_item->flags |= CHANNEL_FILTER_FLAG_GIF; break;
+        case ASSET_TYPE_WEBP: out_item->flags |= CHANNEL_FILTER_FLAG_WEBP; break;
+        case ASSET_TYPE_PNG:  out_item->flags |= CHANNEL_FILTER_FLAG_PNG; break;
+        case ASSET_TYPE_JPEG: out_item->flags |= CHANNEL_FILTER_FLAG_JPEG; break;
+        default: break;
     }
-    
-    ch->current_pos++;
-    if (ch->current_pos >= ch->order_count) {
-        ch->current_pos = 0;
-        if (ch->base.current_order == CHANNEL_ORDER_RANDOM) {
-            shuffle_order(ch->playback_order, ch->order_count);
-        }
-    }
-    
-    uint32_t entry_idx = ch->playback_order[ch->current_pos];
-    fill_item_from_entry(ch, &ch->entries[entry_idx], entry_idx, out_item);
-    
     return ESP_OK;
 }
 
 static esp_err_t makapix_impl_prev_item(channel_handle_t channel, channel_item_ref_t *out_item)
 {
     makapix_channel_t *ch = (makapix_channel_t *)channel;
-    if (!ch || !ch->playback_order || ch->order_count == 0) {
-        return ESP_ERR_NOT_FOUND;
+    if (!ch || !out_item || !ch->navigator_ready) return ESP_ERR_NOT_FOUND;
+
+    artwork_ref_t art = {0};
+    esp_err_t err = play_navigator_prev(&ch->navigator, &art);
+    if (err != ESP_OK) return err;
+
+    memset(out_item, 0, sizeof(*out_item));
+    strlcpy(out_item->filepath, art.filepath, sizeof(out_item->filepath));
+    strlcpy(out_item->storage_key, art.storage_key, sizeof(out_item->storage_key));
+    out_item->item_index = 0;
+    out_item->flags = CHANNEL_FILTER_FLAG_NONE;
+    out_item->dwell_time_ms = compute_effective_dwell_ms(config_store_get_dwell_time(),
+                                                         ch->channel_dwell_override_ms,
+                                                         art.dwell_time_ms);
+    switch (art.type) {
+        case ASSET_TYPE_GIF:  out_item->flags |= CHANNEL_FILTER_FLAG_GIF; break;
+        case ASSET_TYPE_WEBP: out_item->flags |= CHANNEL_FILTER_FLAG_WEBP; break;
+        case ASSET_TYPE_PNG:  out_item->flags |= CHANNEL_FILTER_FLAG_PNG; break;
+        case ASSET_TYPE_JPEG: out_item->flags |= CHANNEL_FILTER_FLAG_JPEG; break;
+        default: break;
     }
-    
-    if (ch->current_pos == 0) {
-        ch->current_pos = ch->order_count - 1;
-    } else {
-        ch->current_pos--;
-    }
-    
-    uint32_t entry_idx = ch->playback_order[ch->current_pos];
-    fill_item_from_entry(ch, &ch->entries[entry_idx], entry_idx, out_item);
-    
     return ESP_OK;
 }
 
 static esp_err_t makapix_impl_current_item(channel_handle_t channel, channel_item_ref_t *out_item)
 {
     makapix_channel_t *ch = (makapix_channel_t *)channel;
-    if (!ch || !ch->playback_order || ch->order_count == 0) {
-        return ESP_ERR_NOT_FOUND;
+    if (!ch || !out_item || !ch->navigator_ready) return ESP_ERR_NOT_FOUND;
+
+    artwork_ref_t art = {0};
+    esp_err_t err = play_navigator_current(&ch->navigator, &art);
+    if (err != ESP_OK) return err;
+
+    memset(out_item, 0, sizeof(*out_item));
+    strlcpy(out_item->filepath, art.filepath, sizeof(out_item->filepath));
+    strlcpy(out_item->storage_key, art.storage_key, sizeof(out_item->storage_key));
+    out_item->item_index = 0;
+    out_item->flags = CHANNEL_FILTER_FLAG_NONE;
+    out_item->dwell_time_ms = compute_effective_dwell_ms(config_store_get_dwell_time(),
+                                                         ch->channel_dwell_override_ms,
+                                                         art.dwell_time_ms);
+    switch (art.type) {
+        case ASSET_TYPE_GIF:  out_item->flags |= CHANNEL_FILTER_FLAG_GIF; break;
+        case ASSET_TYPE_WEBP: out_item->flags |= CHANNEL_FILTER_FLAG_WEBP; break;
+        case ASSET_TYPE_PNG:  out_item->flags |= CHANNEL_FILTER_FLAG_PNG; break;
+        case ASSET_TYPE_JPEG: out_item->flags |= CHANNEL_FILTER_FLAG_JPEG; break;
+        default: break;
     }
-    
-    uint32_t entry_idx = ch->playback_order[ch->current_pos];
-    fill_item_from_entry(ch, &ch->entries[entry_idx], entry_idx, out_item);
-    
     return ESP_OK;
 }
 
 static esp_err_t makapix_impl_request_reshuffle(channel_handle_t channel)
 {
     makapix_channel_t *ch = (makapix_channel_t *)channel;
-    if (!ch || !ch->playback_order || ch->order_count == 0) {
-        return ESP_ERR_INVALID_STATE;
-    }
-    
-    if (ch->base.current_order != CHANNEL_ORDER_RANDOM) {
-        return ESP_OK;
-    }
-    
-    shuffle_order(ch->playback_order, ch->order_count);
-    ch->current_pos = 0;
-    
-    ESP_LOGI(TAG, "Reshuffled");
+    if (!ch || !ch->navigator_ready) return ESP_ERR_INVALID_STATE;
+    if (ch->base.current_order != CHANNEL_ORDER_RANDOM) return ESP_OK;
+    // Deterministic shuffle is derived from global_seed; just rebuild navigator order.
+    play_navigator_set_order(&ch->navigator, PLAY_ORDER_RANDOM);
+    ESP_LOGI(TAG, "Reshuffled (navigator)");
     return ESP_OK;
 }
 
@@ -560,9 +608,81 @@ static esp_err_t makapix_impl_get_stats(channel_handle_t channel, channel_stats_
     if (!ch || !out_stats) return ESP_ERR_INVALID_ARG;
     
     out_stats->total_items = ch->entry_count;
-    out_stats->filtered_items = ch->order_count;
-    out_stats->current_position = ch->current_pos;
+    out_stats->filtered_items = ch->entry_count;
+    if (ch->navigator_ready) {
+        uint32_t p = 0, q = 0;
+        play_navigator_get_position(&ch->navigator, &p, &q);
+        (void)q;
+        out_stats->current_position = p;
+    } else {
+        out_stats->current_position = 0;
+    }
     
+    return ESP_OK;
+}
+
+static size_t makapix_impl_get_post_count(channel_handle_t channel)
+{
+    makapix_channel_t *ch = (makapix_channel_t *)channel;
+    if (!ch) return 0;
+    return ch->entry_count;
+}
+
+static uint32_t compute_effective_dwell_ms(uint32_t global_override_ms,
+                                           uint32_t channel_override_ms,
+                                           uint32_t playlist_or_artwork_ms)
+{
+    uint32_t eff = playlist_or_artwork_ms;
+    if (channel_override_ms != 0) eff = channel_override_ms;
+    if (global_override_ms != 0) eff = global_override_ms;
+    if (eff == 0) eff = 30000;
+    return eff;
+}
+
+// Forward declaration (used by item helpers below)
+static uint32_t compute_effective_dwell_ms(uint32_t global_override_ms,
+                                           uint32_t channel_override_ms,
+                                           uint32_t playlist_or_artwork_ms);
+
+static esp_err_t makapix_impl_get_post(channel_handle_t channel, size_t post_index, channel_post_t *out_post)
+{
+    makapix_channel_t *ch = (makapix_channel_t *)channel;
+    if (!ch || !out_post) return ESP_ERR_INVALID_ARG;
+    if (!ch->base.loaded) return ESP_ERR_INVALID_STATE;
+    if (post_index >= ch->entry_count) return ESP_ERR_INVALID_ARG;
+
+    const makapix_channel_entry_t *entry = &ch->entries[post_index];
+    memset(out_post, 0, sizeof(*out_post));
+
+    out_post->post_id = entry->post_id;
+    out_post->kind = (entry->kind == MAKAPIX_INDEX_POST_KIND_PLAYLIST) ? CHANNEL_POST_KIND_PLAYLIST : CHANNEL_POST_KIND_ARTWORK;
+    out_post->created_at = entry->created_at;
+    out_post->metadata_modified_at = (time_t)entry->metadata_modified_at;
+    out_post->dwell_time_ms = entry->dwell_time_ms; // 0 = channel default
+
+    if (out_post->kind == CHANNEL_POST_KIND_PLAYLIST) {
+        out_post->u.playlist.total_artworks = entry->total_artworks;
+    } else {
+        // Fill artwork fields
+        build_vault_path(ch, entry, out_post->u.artwork.filepath, sizeof(out_post->u.artwork.filepath));
+        bytes_to_uuid(entry->storage_key_uuid, out_post->u.artwork.storage_key, sizeof(out_post->u.artwork.storage_key));
+        out_post->u.artwork.art_url[0] = '\0';
+
+        switch (entry->extension) {
+            case EXT_WEBP: out_post->u.artwork.type = ASSET_TYPE_WEBP; break;
+            case EXT_GIF:  out_post->u.artwork.type = ASSET_TYPE_GIF;  break;
+            case EXT_PNG:  out_post->u.artwork.type = ASSET_TYPE_PNG;  break;
+            case EXT_JPEG: out_post->u.artwork.type = ASSET_TYPE_JPEG; break;
+            default:       out_post->u.artwork.type = ASSET_TYPE_WEBP; break;
+        }
+
+        out_post->u.artwork.width = 0;
+        out_post->u.artwork.height = 0;
+        out_post->u.artwork.frame_count = 0;
+        out_post->u.artwork.has_transparency = false;
+        out_post->u.artwork.artwork_modified_at = (time_t)entry->artwork_modified_at;
+    }
+
     return ESP_OK;
 }
 
@@ -699,9 +819,11 @@ static esp_err_t load_channel_metadata(makapix_channel_t *ch, char *out_cursor, 
 // Helper: update index.bin with new posts
 static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *posts, size_t count)
 {
+    if (!ch || !posts) return ESP_ERR_INVALID_ARG;
+
     char index_path[256];
     build_index_path(ch, index_path, sizeof(index_path));
-    
+
     // Ensure directory exists - create recursively
     char dir_path[256];
     strncpy(dir_path, index_path, sizeof(dir_path) - 1);
@@ -709,7 +831,6 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
     char *dir_sep = strrchr(dir_path, '/');
     if (dir_sep) {
         *dir_sep = '\0';
-        // Create each level of the path
         for (char *p = dir_path + 1; *p; p++) {
             if (*p == '/') {
                 *p = '\0';
@@ -722,7 +843,6 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
                 *p = '/';
             }
         }
-        // Create final directory level
         struct stat st;
         if (stat(dir_path, &st) != 0) {
             if (mkdir(dir_path, 0755) != 0 && errno != EEXIST) {
@@ -730,11 +850,10 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
             }
         }
     }
-    
-    // Load existing entries
+
+    // Copy existing entries
     makapix_channel_entry_t *all_entries = NULL;
     size_t all_count = ch->entry_count;
-    
     if (ch->entries && ch->entry_count > 0) {
         all_entries = malloc((all_count + count) * sizeof(makapix_channel_entry_t));
         if (!all_entries) return ESP_ERR_NO_MEM;
@@ -744,173 +863,209 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
         if (!all_entries) return ESP_ERR_NO_MEM;
         all_count = 0;
     }
-    
-    // Add new entries - process one at a time and save incrementally
-    // This allows the channel to have playable content sooner
+
     for (size_t i = 0; i < count; i++) {
         const makapix_post_t *post = &posts[i];
-        
-        // Check if already exists in index (by storage_key UUID)
-        bool exists_in_index = false;
+
+        // Find existing entry by (post_id, kind)
+        int found_idx = -1;
         for (size_t j = 0; j < all_count; j++) {
-            char existing_key[40];
-            bytes_to_uuid(all_entries[j].sha256, existing_key, sizeof(existing_key));
-            if (strcasecmp(existing_key, post->storage_key) == 0) {
-                exists_in_index = true;
+            if (all_entries[j].post_id == post->post_id && all_entries[j].kind == (uint8_t)post->kind) {
+                found_idx = (int)j;
                 break;
             }
         }
-        
-        // Check if file actually exists on disk (even if in index)
-        char vault_file[512];
-        build_vault_path_from_storage_key(ch, post->storage_key, detect_file_type(post->art_url), vault_file, sizeof(vault_file));
-        
-        // Clean up orphan .tmp file if it exists (lazy cleanup)
-        char tmp_file[516];
-        snprintf(tmp_file, sizeof(tmp_file), "%s.tmp", vault_file);
-        struct stat tmp_st;
-        if (stat(tmp_file, &tmp_st) == 0 && S_ISREG(tmp_st.st_mode)) {
-            ESP_LOGD(TAG, "Removing orphan temp file: %s", tmp_file);
-            unlink(tmp_file);
-        }
-        
-        struct stat st;
-        bool file_exists = (stat(vault_file, &st) == 0);
-        bool needs_download = !file_exists;
-        
-        // If entry exists in index but file is missing, we need to re-download
-        if (exists_in_index && !file_exists) {
-            ESP_LOGW(TAG, "Entry exists in index but file missing, will re-download: %s", post->storage_key);
-        }
-        
-        // Skip if entry already in index AND file exists on disk
-        if (exists_in_index && file_exists) {
-            continue;
-        }
-        
-        if (needs_download) {
-            // Wait if SDIO bus is locked or SD access is paused (e.g., during OTA)
-            // This prevents downloads from conflicting with OTA HTTPS operations
-            int wait_count = 0;
-            const int max_wait = 30;  // Wait up to 30 seconds
-            while (wait_count < max_wait) {
-                bool should_wait = sdio_bus_is_locked();
-                if (!should_wait && animation_player_is_sd_paused) {
-                    should_wait = animation_player_is_sd_paused();
+
+        makapix_channel_entry_t tmp = {0};
+        tmp.post_id = post->post_id;
+        tmp.kind = (uint8_t)post->kind;
+        tmp.created_at = (uint32_t)parse_iso8601_utc(post->created_at);
+        tmp.metadata_modified_at = (uint32_t)parse_iso8601_utc(post->metadata_modified_at);
+        tmp.filter_flags = 0;
+
+        if (post->kind == MAKAPIX_POST_KIND_ARTWORK) {
+            // Download the artwork if missing
+            char vault_file[512];
+            build_vault_path_from_storage_key(ch, post->storage_key, detect_file_type(post->art_url), vault_file, sizeof(vault_file));
+
+            // Clean up orphan .tmp file if it exists (lazy cleanup)
+            char tmp_file[516];
+            snprintf(tmp_file, sizeof(tmp_file), "%s.tmp", vault_file);
+            struct stat tmp_st;
+            if (stat(tmp_file, &tmp_st) == 0 && S_ISREG(tmp_st.st_mode)) {
+                ESP_LOGD(TAG, "Removing orphan temp file: %s", tmp_file);
+                unlink(tmp_file);
+            }
+
+            struct stat st;
+            bool file_exists = (stat(vault_file, &st) == 0);
+            if (!file_exists) {
+                // Wait if SDIO bus is locked or SD access is paused (e.g., during OTA)
+                int wait_count = 0;
+                const int max_wait = 30;
+                while (wait_count < max_wait) {
+                    bool should_wait = sdio_bus_is_locked();
+                    if (!should_wait && animation_player_is_sd_paused) {
+                        should_wait = animation_player_is_sd_paused();
+                    }
+                    if (!should_wait) break;
+                    if (wait_count == 0) {
+                        const char *holder = sdio_bus_get_holder();
+                        ESP_LOGI(TAG, "SDIO bus busy (%s), waiting before download...",
+                                 holder ? holder : "SD paused");
+                    }
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                    wait_count++;
                 }
-                if (!should_wait) break;
-                
-                if (wait_count == 0) {
-                    const char *holder = sdio_bus_get_holder();
-                    ESP_LOGI(TAG, "SDIO bus busy (%s), waiting before download...",
-                             holder ? holder : "SD paused");
+
+                ESP_LOGI(TAG, "Downloading artwork %zu/%zu: %s", i + 1, count, post->storage_key);
+                char download_path[256];
+                esp_err_t dl_err = makapix_artwork_download(post->art_url, post->storage_key, download_path, sizeof(download_path));
+                if (dl_err != ESP_OK) {
+                    ESP_LOGW(TAG, "Failed to download artwork %s: %s", post->art_url, esp_err_to_name(dl_err));
+                    continue;
                 }
-                vTaskDelay(pdMS_TO_TICKS(1000));
-                wait_count++;
             }
-            if (wait_count > 0 && wait_count < max_wait) {
-                ESP_LOGI(TAG, "SDIO bus available after %d seconds, continuing download", wait_count);
+
+            uint8_t uuid_bytes[16] = {0};
+            if (!uuid_to_bytes(post->storage_key, uuid_bytes)) {
+                ESP_LOGW(TAG, "Failed to parse storage_key UUID: %s", post->storage_key);
+                continue;
             }
-            
-            // Download artwork (makapix_artwork_download saves to vault using storage_key)
-            ESP_LOGI(TAG, "Downloading artwork %zu/%zu: %s", i + 1, count, post->storage_key);
-            char download_path[256];
-            esp_err_t dl_err = makapix_artwork_download(post->art_url, post->storage_key, download_path, sizeof(download_path));
-            if (dl_err != ESP_OK) {
-                ESP_LOGW(TAG, "Failed to download artwork %s: %s", post->art_url, esp_err_to_name(dl_err));
-                continue; // Skip this post
+            memcpy(tmp.storage_key_uuid, uuid_bytes, sizeof(tmp.storage_key_uuid));
+            tmp.extension = detect_file_type(post->art_url);
+            tmp.artwork_modified_at = (uint32_t)parse_iso8601_utc(post->artwork_modified_at);
+            tmp.dwell_time_ms = post->dwell_time_ms;
+            tmp.total_artworks = 0;
+        } else if (post->kind == MAKAPIX_POST_KIND_PLAYLIST) {
+            tmp.extension = 0;
+            tmp.artwork_modified_at = 0;
+            tmp.dwell_time_ms = post->playlist_dwell_time_ms;
+            tmp.total_artworks = post->total_artworks;
+            memset(tmp.storage_key_uuid, 0, sizeof(tmp.storage_key_uuid));
+
+            // Best-effort: write/update playlist cache on disk based on server response
+            playlist_metadata_t playlist = {0};
+            playlist.post_id = post->post_id;
+            playlist.total_artworks = post->total_artworks;
+            playlist.loaded_artworks = 0;
+            playlist.available_artworks = 0;
+            playlist.dwell_time_ms = post->playlist_dwell_time_ms;
+            playlist.metadata_modified_at = parse_iso8601_utc(post->metadata_modified_at);
+
+            if (post->artworks_count > 0 && post->artworks) {
+                playlist.artworks = calloc(post->artworks_count, sizeof(artwork_ref_t));
+                if (playlist.artworks) {
+                    playlist.loaded_artworks = (int32_t)post->artworks_count;
+                    for (size_t ai = 0; ai < post->artworks_count; ai++) {
+                        const makapix_artwork_t *src = &post->artworks[ai];
+                        artwork_ref_t *dst = &playlist.artworks[ai];
+                        memset(dst, 0, sizeof(*dst));
+                        dst->post_id = src->post_id;
+                        strncpy(dst->storage_key, src->storage_key, sizeof(dst->storage_key) - 1);
+                        strlcpy(dst->art_url, src->art_url, sizeof(dst->art_url));
+                        dst->dwell_time_ms = src->dwell_time_ms;
+                        dst->metadata_modified_at = parse_iso8601_utc(src->metadata_modified_at);
+                        dst->artwork_modified_at = parse_iso8601_utc(src->artwork_modified_at);
+                        dst->width = (uint16_t)src->width;
+                        dst->height = (uint16_t)src->height;
+                        dst->frame_count = (uint16_t)src->frame_count;
+                        dst->has_transparency = src->has_transparency;
+
+                        // Determine type from URL extension
+                        switch (detect_file_type(src->art_url)) {
+                            case EXT_WEBP: dst->type = ASSET_TYPE_WEBP; break;
+                            case EXT_GIF:  dst->type = ASSET_TYPE_GIF;  break;
+                            case EXT_PNG:  dst->type = ASSET_TYPE_PNG;  break;
+                            case EXT_JPEG: dst->type = ASSET_TYPE_JPEG; break;
+                            default:       dst->type = ASSET_TYPE_WEBP; break;
+                        }
+
+                        // Downloaded? (file exists in vault)
+                        char vault_file[512];
+                        build_vault_path_from_storage_key(ch, src->storage_key, detect_file_type(src->art_url), vault_file, sizeof(vault_file));
+                        struct stat st;
+                        dst->downloaded = (stat(vault_file, &st) == 0);
+                        strlcpy(dst->filepath, vault_file, sizeof(dst->filepath));
+
+                        // Opportunistic background download of the first PE items (single downloader).
+                        // This is intentionally conservative: we only enqueue a limited prefix.
+                        uint32_t pe_setting = config_store_get_pe();
+                        uint32_t want = (pe_setting == 0) ? 32 : pe_setting;
+                        if (want > 32) want = 32;
+                        if (!dst->downloaded && ai < want) {
+                            (void)download_queue_artwork(post->post_id, dst, DOWNLOAD_PRIORITY_LOW);
+                        }
+                    }
+
+                    // available_artworks is informational only; keep it as "downloaded count"
+                    int32_t cnt = 0;
+                    for (int32_t j = 0; j < playlist.loaded_artworks; j++) {
+                        if (playlist.artworks[j].downloaded) cnt++;
+                    }
+                    playlist.available_artworks = cnt;
+                }
             }
-            // Update vault_file path to match downloaded path
-            strncpy(vault_file, download_path, sizeof(vault_file) - 1);
-            vault_file[sizeof(vault_file) - 1] = '\0';
-        }
-        
-        // If entry already exists in index (we just downloaded missing file), skip adding to index
-        if (exists_in_index) {
-            ESP_LOGI(TAG, "Re-downloaded missing file for existing index entry: %s", post->storage_key);
+
+            // Save and free temporary playlist structure
+            if (playlist.artworks) {
+                playlist_save_to_disk(&playlist);
+                free(playlist.artworks);
+                playlist.artworks = NULL;
+            } else {
+                // Still save minimal metadata (no artworks array)
+                playlist_save_to_disk(&playlist);
+            }
+        } else {
             continue;
         }
-        
-        // Store the server's storage_key (UUID) as the entry identifier
-        // NOTE: We store storage_key (not file content SHA256) because that's what's used for paths
-        // UUID is stored as 16 bytes in the first half of sha256 field
-        uint8_t storage_key_bytes[32] = {0};
-        if (!uuid_to_bytes(post->storage_key, storage_key_bytes)) {
-            ESP_LOGW(TAG, "Failed to parse storage_key UUID: %s", post->storage_key);
-            continue;
-        }
-        
-        // Parse created_at timestamp (ISO8601: YYYY-MM-DDTHH:MM:SSZ)
-        time_t created_at = 0;
-        int year, month, day, hour, min, sec;
-        if (sscanf(post->created_at, "%d-%d-%dT%d:%d:%dZ", 
-                   &year, &month, &day, &hour, &min, &sec) == 6) {
-            struct tm tm = {0};
-            tm.tm_year = year - 1900;
-            tm.tm_mon = month - 1;
-            tm.tm_mday = day;
-            tm.tm_hour = hour;
-            tm.tm_min = min;
-            tm.tm_sec = sec;
-            created_at = mktime(&tm);
-        }
-        
-        // Create entry - note: sha256 field actually stores storage_key bytes for path lookup
-        makapix_channel_entry_t *entry = &all_entries[all_count++];
-        memcpy(entry->sha256, storage_key_bytes, 32);
-        entry->created_at = (uint32_t)created_at;
-        entry->flags = 0;
-        entry->extension = detect_file_type(post->art_url);
-        memset(entry->reserved, 0, sizeof(entry->reserved));
-        
-        // Save index incrementally after first entry so channel becomes playable ASAP
-        if (all_count == 1 || (all_count % 3 == 0)) {
-            // Update channel state immediately so stats show items
-            free(ch->entries);
-            ch->entries = malloc(all_count * sizeof(makapix_channel_entry_t));
-            if (ch->entries) {
-                memcpy(ch->entries, all_entries, all_count * sizeof(makapix_channel_entry_t));
-                ch->entry_count = all_count;
-                ESP_LOGI(TAG, "Channel now has %zu entries", all_count);
-            }
+
+        if (found_idx >= 0) {
+            all_entries[(size_t)found_idx] = tmp;
+        } else {
+            all_entries[all_count++] = tmp;
         }
     }
-    
-    // Write to temp file first (index_path is 256, need 4 more for .tmp)
+
+    // Atomic write index.bin
     char temp_path[260];
     size_t path_len = strlen(index_path);
-    if (path_len + 4 < sizeof(temp_path)) {
-        snprintf(temp_path, sizeof(temp_path), "%s.tmp", index_path);
-    } else {
+    if (path_len + 4 >= sizeof(temp_path)) {
         ESP_LOGE(TAG, "Index path too long for temp file");
         free(all_entries);
         return ESP_ERR_INVALID_ARG;
     }
-    
+    snprintf(temp_path, sizeof(temp_path), "%s.tmp", index_path);
+
     FILE *f = fopen(temp_path, "wb");
     if (!f) {
         ESP_LOGE(TAG, "Failed to open %s for writing: %d", temp_path, errno);
         free(all_entries);
         return ESP_FAIL;
     }
-    
-    fwrite(all_entries, sizeof(makapix_channel_entry_t), all_count, f);
+    size_t written = fwrite(all_entries, sizeof(makapix_channel_entry_t), all_count, f);
     fflush(f);
     fsync(fileno(f));
     fclose(f);
-    
-    // Atomic rename
-    if (rename(temp_path, index_path) != 0) {
+
+    if (written != all_count) {
+        ESP_LOGE(TAG, "Failed to write index.bin: %zu/%zu", written, all_count);
         unlink(temp_path);
         free(all_entries);
         return ESP_FAIL;
     }
-    
-    // Update channel state
+
+    if (rename(temp_path, index_path) != 0) {
+        ESP_LOGE(TAG, "Failed to rename index temp file: %d", errno);
+        unlink(temp_path);
+        free(all_entries);
+        return ESP_FAIL;
+    }
+
     free(ch->entries);
     ch->entries = all_entries;
     ch->entry_count = all_count;
-    
+
     ESP_LOGI(TAG, "Updated index.bin: %zu total entries", all_count);
     return ESP_OK;
 }
@@ -934,83 +1089,105 @@ static void build_vault_path_from_storage_key(const makapix_channel_t *ch, const
 // Helper: evict excess artworks beyond limit
 static esp_err_t evict_excess_artworks(makapix_channel_t *ch, size_t max_count)
 {
-    if (ch->entry_count <= max_count) return ESP_OK;
-    
-    // Sort entries by created_at (oldest first)
-    makapix_channel_entry_t *sorted = malloc(ch->entry_count * sizeof(makapix_channel_entry_t));
+    if (!ch) return ESP_ERR_INVALID_ARG;
+
+    // Count artwork entries only (playlists do not directly consume vault files here)
+    size_t artwork_count = 0;
+    for (size_t i = 0; i < ch->entry_count; i++) {
+        if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+            artwork_count++;
+        }
+    }
+
+    if (artwork_count <= max_count) return ESP_OK;
+
+    // Sort artwork entries by created_at (oldest first)
+    makapix_channel_entry_t *sorted = malloc(artwork_count * sizeof(makapix_channel_entry_t));
     if (!sorted) return ESP_ERR_NO_MEM;
-    
-    memcpy(sorted, ch->entries, ch->entry_count * sizeof(makapix_channel_entry_t));
-    qsort(sorted, ch->entry_count, sizeof(makapix_channel_entry_t), compare_entries_by_created);
-    
-    // Delete oldest entries beyond limit
-    size_t to_delete = ch->entry_count - max_count;
+
+    size_t si = 0;
+    for (size_t i = 0; i < ch->entry_count; i++) {
+        if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+            sorted[si++] = ch->entries[i];
+        }
+    }
+
+    qsort(sorted, artwork_count, sizeof(makapix_channel_entry_t), compare_entries_by_created);
+
+    const size_t to_delete = artwork_count - max_count;
+
+    // Delete oldest artwork files beyond limit and mark their post_ids for removal from index
     for (size_t i = 0; i < to_delete; i++) {
         char vault_path[512];
         build_vault_path(ch, &sorted[i], vault_path, sizeof(vault_path));
         unlink(vault_path);
     }
-    
-    // Rebuild index.bin without deleted entries
-    makapix_channel_entry_t *kept = malloc(max_count * sizeof(makapix_channel_entry_t));
+
+    // Build kept array (remove the deleted artwork entries by (post_id, kind))
+    makapix_channel_entry_t *kept = malloc(ch->entry_count * sizeof(makapix_channel_entry_t));
     if (!kept) {
         free(sorted);
         return ESP_ERR_NO_MEM;
     }
-    
-    // Keep only entries that weren't deleted
+
     size_t kept_count = 0;
     for (size_t i = 0; i < ch->entry_count; i++) {
         bool should_keep = true;
-        for (size_t j = 0; j < to_delete; j++) {
-            if (memcmp(ch->entries[i].sha256, sorted[j].sha256, 32) == 0) {
-                should_keep = false;
-                break;
+        if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+            for (size_t j = 0; j < to_delete; j++) {
+                if (ch->entries[i].post_id == sorted[j].post_id &&
+                    ch->entries[i].kind == sorted[j].kind) {
+                    should_keep = false;
+                    break;
+                }
             }
         }
         if (should_keep) {
             kept[kept_count++] = ch->entries[i];
         }
     }
-    
+
     free(sorted);
-    free(ch->entries);
-    ch->entries = kept;
-    ch->entry_count = kept_count;
-    
+
     // Rewrite index.bin atomically (temp file + fsync + rename)
     char index_path[256];
     build_index_path(ch, index_path, sizeof(index_path));
-    
+
     char temp_path[260];
     snprintf(temp_path, sizeof(temp_path), "%s.tmp", index_path);
-    
+
     FILE *f = fopen(temp_path, "wb");
     if (!f) {
         ESP_LOGE(TAG, "Failed to open temp file for eviction: %d", errno);
+        free(kept);
         return ESP_FAIL;
     }
-    
+
     size_t written = fwrite(kept, sizeof(makapix_channel_entry_t), kept_count, f);
-    if (written != kept_count) {
-        ESP_LOGE(TAG, "Failed to write evicted index: %zu/%zu", written, kept_count);
-        fclose(f);
-        unlink(temp_path);
-        return ESP_FAIL;
-    }
-    
     fflush(f);
     fsync(fileno(f));
     fclose(f);
-    
-    // Atomic rename
+
+    if (written != kept_count) {
+        ESP_LOGE(TAG, "Failed to write evicted index: %zu/%zu", written, kept_count);
+        unlink(temp_path);
+        free(kept);
+        return ESP_FAIL;
+    }
+
     if (rename(temp_path, index_path) != 0) {
         ESP_LOGE(TAG, "Failed to rename evicted index: %d", errno);
         unlink(temp_path);
+        free(kept);
         return ESP_FAIL;
     }
-    
-    ESP_LOGI(TAG, "Evicted %zu artworks, kept %zu", to_delete, kept_count);
+
+    free(ch->entries);
+    ch->entries = kept;
+    ch->entry_count = kept_count;
+
+    ESP_LOGI(TAG, "Evicted %zu artwork files, kept %zu entries (artworks capped at %zu)",
+             to_delete, kept_count, max_count);
     return ESP_OK;
 }
 
@@ -1050,6 +1227,9 @@ static void refresh_task_impl(void *pvParameters)
     query_req.sort = MAKAPIX_SORT_SERVER_ORDER; // Default
     query_req.limit = 30; // Query 30 at a time
     query_req.has_cursor = false;
+    // Always send PE explicitly. p3a default is 8; user may set PE=0 ("all").
+    query_req.pe_present = true;
+    query_req.pe = (uint16_t)config_store_get_pe();
     
     const size_t TARGET_COUNT = 128;
     const uint32_t REFRESH_INTERVAL_SEC = 3600; // 1 hour
@@ -1095,6 +1275,15 @@ static void refresh_task_impl(void *pvParameters)
             
             // Update index.bin with new posts
             update_index_bin(ch, resp->posts, resp->post_count);
+
+            // Free any heap allocations inside parsed posts (playlist artworks arrays)
+            for (size_t pi = 0; pi < resp->post_count; pi++) {
+                if (resp->posts[pi].kind == MAKAPIX_POST_KIND_PLAYLIST && resp->posts[pi].artworks) {
+                    free(resp->posts[pi].artworks);
+                    resp->posts[pi].artworks = NULL;
+                    resp->posts[pi].artworks_count = 0;
+                }
+            }
             total_queried += resp->post_count;
             
             // Save cursor for next query

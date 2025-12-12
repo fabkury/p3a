@@ -84,9 +84,14 @@ void makapix_mqtt_set_connection_callback(void (*cb)(bool connected));
 /**
  * @brief Set callback for response messages (makapix/player/{player_key}/response/#)
  * 
- * @param cb Callback: void cb(const char *topic, const char *data, int data_len)
+ * Ownership contract:
+ * - `data` is heap-allocated and NUL-terminated.
+ * - The callback takes ownership of `data` and MUST free it (or transfer ownership)
+ *   once done.
+ *
+ * @param cb Callback: void cb(const char *topic, char *data, int data_len)
  */
-void makapix_mqtt_set_response_callback(void (*cb)(const char *topic, const char *data, int data_len));
+void makapix_mqtt_set_response_callback(void (*cb)(const char *topic, char *data, int data_len));
 
 /**
  * @brief Publish raw payload to a topic with QoS

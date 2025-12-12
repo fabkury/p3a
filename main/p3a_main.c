@@ -35,6 +35,8 @@
 #include "sdio_bus.h"          // SDIO bus coordination
 #include "p3a_state.h"         // Unified p3a state machine
 #include "p3a_render.h"        // State-aware rendering
+#include "swap_future.h"       // Live Mode swap_future
+#include "live_mode.h"         // Live Mode time helpers
 #include "freertos/task.h"
 
 // NVS namespace and keys for tracking firmware versions across boots
@@ -183,6 +185,36 @@ static void auto_swap_task(void *arg)
     vTaskDelay(pdMS_TO_TICKS(1000));
     
     while (true) {
+        // Check for pending swap_future first
+        swap_future_t pending_swap;
+        uint64_t current_time_ms = live_mode_get_wall_clock_ms();
+        
+        if (swap_future_is_ready(current_time_ms, &pending_swap)) {
+            // We have a swap_future that's ready to execute
+            // Measure timing precision
+            int64_t timing_error_ms = (int64_t)current_time_ms - (int64_t)pending_swap.target_time_ms;
+            ESP_LOGI(TAG, "Auto-swap: Executing swap_future (timing error: %lld ms)", timing_error_ms);
+            
+            esp_err_t err = swap_future_execute(&pending_swap);
+            if (err == ESP_OK) {
+                // Clear the swap_future after successful execution
+                swap_future_cancel();
+                
+                // Log timing statistics
+                if (timing_error_ms < -10 || timing_error_ms > 50) {
+                    ESP_LOGW(TAG, "swap_future timing outside acceptable range: %lld ms", timing_error_ms);
+                }
+            } else {
+                ESP_LOGW(TAG, "Failed to execute swap_future: %s", esp_err_to_name(err));
+                // Cancel anyway to avoid retrying endlessly
+                swap_future_cancel();
+            }
+            
+            // Continue to next iteration
+            continue;
+        }
+        
+        // No swap_future ready, use normal dwell-based timing
         const TickType_t delay_ticks = pdMS_TO_TICKS(get_current_effective_dwell_ms());
         
         // Wait for interval or notification (which resets the timer)

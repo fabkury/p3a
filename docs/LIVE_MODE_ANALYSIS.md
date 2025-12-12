@@ -2,7 +2,7 @@
 
 **Date**: December 12, 2025  
 **Author**: GitHub Copilot  
-**Status**: 🚧 IN PROGRESS - Phase A  
+**Status**: 🚧 IN PROGRESS - Phase B  
 **Purpose**: Live progress-tracking document for Live Mode implementation
 
 ---
@@ -34,8 +34,26 @@
   - UTC timezone enforcement in app_main
   - 64-bit millisecond timestamp functions
 
-### Phase B: swap_future Execution (Week 2) - 🚧 NEXT
-### Phase C: Live Mode Entry/Exit (Week 2) - ⏳ PENDING
+### Phase B: swap_future Execution (Week 2) - 🚧 IN PROGRESS
+- [x] **B1**: Implement `execute_swap_future()` ✅
+  - Created `swap_future_execute()` in animation_player.c
+  - Guards against OTA, SD pause, concurrent swaps
+  - Triggers loader with s_swap_requested flag
+- [ ] **B2**: Add start-frame support in animation loader
+  - Requires decoder modifications (GIF, WebP)
+  - Deferred - complex, lower priority for basic Live Mode
+- [x] **B3**: Integrate swap_future with auto_swap_task ✅
+  - Modified auto_swap_task to check for ready swap_futures
+  - Executes swap_future before normal dwell-based swaps
+  - Cancels swap_future after execution
+- [x] **B4**: Add timing precision measurement ✅
+  - Logs timing error (actual - target) for each swap_future
+  - Warns if outside acceptable range (>50ms late or >10ms early)
+- [ ] **B5**: Test basic swap_future without Live Mode
+  - Needs HTTP API endpoint for testing
+  - Will create simple test endpoint
+
+### Phase C: Live Mode Entry/Exit (Week 2) - ⏳ NEXT
 ### Phase D: Continuous Sync (Week 3) - ⏳ PENDING
 ### Phase E: Testing & Polish (Week 4) - ⏳ PENDING
 ### Phase F: Future Enhancements - ⏳ PENDING

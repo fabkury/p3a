@@ -89,6 +89,22 @@ esp_err_t swap_future_get_pending(swap_future_t *out_swap);
  */
 bool swap_future_has_pending(void);
 
+/**
+ * @brief Execute a pending swap_future
+ * 
+ * Triggers the animation loader to load the artwork specified in the swap_future.
+ * This function should be called when swap_future_is_ready() returns true.
+ * 
+ * Note: This function requires animation_player internal state, so it's declared
+ * here but should be implemented by animation_player.c
+ * 
+ * @param swap The swap_future to execute
+ * @return ESP_OK on success
+ *         ESP_ERR_INVALID_ARG if swap is NULL
+ *         ESP_ERR_INVALID_STATE if swap cannot be executed
+ */
+esp_err_t swap_future_execute(const swap_future_t *swap);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,6 +1,6 @@
-# p3a (Pixel Pea) — Physical Pixel Art Player
+# p3a — Physical Pixel Art Player
 
-p3a ("Pixel Pea") is a physical pixel art player inside the Makapix Club ecosystem. It is an ESP32-P4-powered Wi-Fi art frame that displays pixel artworks, supports touch gestures, and can be controlled from your phone or laptop. Register your device at [dev.makapix.club](https://dev.makapix.club/) to unlock cloud connectivity and remote control.
+p3a is a physical pixel art player inside the Makapix Club ecosystem. It is an ESP32-P4-powered Wi-Fi art frame that displays pixel artworks, supports touch gestures, and can be controlled from your phone or laptop. Register your device at [dev.makapix.club](https://dev.makapix.club/) to unlock cloud connectivity and remote control.
 
 ## Hardware photos
 <p>

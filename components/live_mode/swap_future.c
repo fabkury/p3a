@@ -1,4 +1,6 @@
 #include "swap_future.h"
+#include "play_navigator.h"
+#include "sntp_sync.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -163,4 +165,60 @@ bool swap_future_has_pending(void)
     }
     
     return has_pending;
+}
+
+esp_err_t live_mode_enter(void *navigator)
+{
+    if (!navigator) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    play_navigator_t *nav = (play_navigator_t *)navigator;
+    
+    // Check precondition: NTP must be synchronized
+    if (!sntp_sync_is_synchronized()) {
+        ESP_LOGW(TAG, "Cannot enter Live Mode: NTP not synchronized");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    ESP_LOGI(TAG, "Entering Live Mode");
+    
+    // Enable Live Mode in navigator (will rebuild schedule if needed)
+    play_navigator_set_live_mode(nav, true);
+    
+    // The next call to play_navigator_current() will build the live schedule
+    // and jump to the correct position via SyncPlaylist
+    
+    ESP_LOGI(TAG, "Live Mode entered successfully");
+    
+    return ESP_OK;
+}
+
+void live_mode_exit(void *navigator)
+{
+    if (!navigator) {
+        return;
+    }
+    
+    play_navigator_t *nav = (play_navigator_t *)navigator;
+    
+    ESP_LOGI(TAG, "Exiting Live Mode");
+    
+    // Disable Live Mode in navigator
+    play_navigator_set_live_mode(nav, false);
+    
+    // Cancel any pending swap_future
+    swap_future_cancel();
+    
+    ESP_LOGI(TAG, "Live Mode exited");
+}
+
+bool live_mode_is_active(void *navigator)
+{
+    if (!navigator) {
+        return false;
+    }
+    
+    play_navigator_t *nav = (play_navigator_t *)navigator;
+    return nav->live_mode;
 }

@@ -1,6 +1,7 @@
 #include "channel_player.h"
 #include "sdcard_channel_impl.h"
 #include "config_store.h"
+#include "swap_future.h"
 
 #include "esp_log.h"
 #include <string.h>
@@ -287,4 +288,27 @@ esp_err_t channel_player_switch_to_sdcard_channel(void)
 channel_player_source_t channel_player_get_source_type(void)
 {
     return s_player.initialized ? s_player.source_type : CHANNEL_PLAYER_SOURCE_SDCARD;
+}
+
+bool channel_player_is_live_mode_active(void)
+{
+    if (!s_player.initialized || !s_player.current_channel) {
+        return false;
+    }
+    
+    // Get navigator from current channel and check live_mode flag
+    return live_mode_is_active(channel_get_navigator(s_player.current_channel));
+}
+
+void channel_player_exit_live_mode(void)
+{
+    if (!s_player.initialized || !s_player.current_channel) {
+        return;
+    }
+    
+    void *nav = channel_get_navigator(s_player.current_channel);
+    if (nav && live_mode_is_active(nav)) {
+        ESP_LOGI(TAG, "Manual swap detected - exiting Live Mode");
+        live_mode_exit(nav);
+    }
 }

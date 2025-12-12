@@ -11,6 +11,15 @@
 
 static const char *TAG = "play_navigator";
 
+// Helper to get the effective seed for random operations
+static uint32_t get_effective_seed(play_navigator_t *nav)
+{
+    // Use effective seed (true random pre-NTP, deterministic post-NTP)
+    uint32_t effective = config_store_get_effective_seed();
+    // XOR with navigator's global seed for per-navigator variation if needed
+    return effective ^ nav->global_seed;
+}
+
 static uint32_t prng_next_u32(uint32_t *state)
 {
     // xorshift32
@@ -25,7 +34,7 @@ static uint32_t prng_next_u32(uint32_t *state)
 static void shuffle_indices(uint32_t *indices, size_t count, uint32_t seed)
 {
     if (!indices || count <= 1) return;
-    uint32_t s = seed ? seed : 0xFAB;
+    uint32_t s = seed ? seed : config_store_get_effective_seed();
     for (size_t i = count - 1; i > 0; i--) {
         uint32_t r = prng_next_u32(&s);
         size_t j = (size_t)(r % (uint32_t)(i + 1));
@@ -94,7 +103,7 @@ static esp_err_t rebuild_order(play_navigator_t *nav)
 
         free(items);
     } else if (nav->order == PLAY_ORDER_RANDOM) {
-        shuffle_indices(indices, post_count, nav->global_seed);
+        shuffle_indices(indices, post_count, get_effective_seed(nav));
     } else {
         // PLAY_ORDER_SERVER: keep sequential
     }
@@ -137,9 +146,9 @@ static uint32_t playlist_map_q_to_index(play_navigator_t *nav, int32_t playlist_
 {
     if (!nav || effective_size == 0) return 0;
     if (!nav->randomize_playlist) return q;
-    // Per spec: global_seed ^ playlist_post_id ^ playlist_post_q_index
-    uint32_t seed = nav->global_seed ^ (uint32_t)playlist_post_id ^ q;
-    uint32_t s = seed ? seed : 0xFAB;
+    // Per spec: effective_seed ^ playlist_post_id ^ playlist_post_q_index
+    uint32_t seed = get_effective_seed(nav) ^ (uint32_t)playlist_post_id ^ q;
+    uint32_t s = seed ? seed : config_store_get_effective_seed();
     uint32_t r = prng_next_u32(&s);
     return r % effective_size;
 }
@@ -253,7 +262,7 @@ static esp_err_t build_live_schedule(play_navigator_t *nav)
         return ESP_ERR_NOT_FOUND;
     }
 
-    SyncPlaylist.init((uint64_t)nav->global_seed, 0, anims, nav->live_count, SYNC_MODE_PRECISE);
+    SyncPlaylist.init((uint64_t)get_effective_seed(nav), 0, anims, nav->live_count, SYNC_MODE_PRECISE);
     SyncPlaylist.enable_live(true);
     free(anims);
 

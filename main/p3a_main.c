@@ -7,6 +7,7 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "esp_random.h"
 #include "esp_app_desc.h"
 #include "nvs_flash.h"
 #include "nvs.h"
@@ -185,32 +186,45 @@ static void auto_swap_task(void *arg)
     vTaskDelay(pdMS_TO_TICKS(1000));
     
     while (true) {
-        // Check for pending swap_future first
-        swap_future_t pending_swap;
-        uint64_t current_time_ms = live_mode_get_wall_clock_ms();
-        
-        if (swap_future_is_ready(current_time_ms, &pending_swap)) {
-            // We have a swap_future that's ready to execute
-            // Measure timing precision
-            int64_t timing_error_ms = (int64_t)current_time_ms - (int64_t)pending_swap.target_time_ms;
-            ESP_LOGI(TAG, "Auto-swap: Executing swap_future (timing error: %lld ms)", timing_error_ms);
-            
-            esp_err_t err = swap_future_execute(&pending_swap);
-            if (err == ESP_OK) {
-                // Clear the swap_future after successful execution
-                swap_future_cancel();
-                
-                // Log timing statistics
-                if (timing_error_ms < -10 || timing_error_ms > 50) {
-                    ESP_LOGW(TAG, "swap_future timing outside acceptable range: %lld ms", timing_error_ms);
+        // swap_future path (precise wall-clock scheduling)
+        if (swap_future_has_pending()) {
+            swap_future_t pending_swap = {0};
+            uint64_t now_ms = live_mode_get_wall_clock_ms();
+
+            if (swap_future_is_ready(now_ms, &pending_swap)) {
+                int64_t timing_error_ms = (int64_t)now_ms - (int64_t)pending_swap.target_time_ms;
+                ESP_LOGI(TAG, "Auto-swap: Executing swap_future (timing error: %lld ms)", timing_error_ms);
+
+                esp_err_t err = swap_future_execute(&pending_swap);
+                if (err == ESP_OK) {
+                    swap_future_cancel();
+                    if (timing_error_ms < -10 || timing_error_ms > 50) {
+                        ESP_LOGW(TAG, "swap_future timing outside acceptable range: %lld ms", timing_error_ms);
+                    }
+                } else {
+                    ESP_LOGW(TAG, "Failed to execute swap_future: %s", esp_err_to_name(err));
+                    swap_future_cancel();
                 }
-            } else {
-                ESP_LOGW(TAG, "Failed to execute swap_future: %s", esp_err_to_name(err));
-                // Cancel anyway to avoid retrying endlessly
-                swap_future_cancel();
+                continue;
             }
-            
-            // Continue to next iteration
+
+            // Not ready yet: sleep until target (or until notified).
+            if (swap_future_get_pending(&pending_swap) == ESP_OK) {
+                uint64_t wait_ms = (pending_swap.target_time_ms > now_ms) ? (pending_swap.target_time_ms - now_ms) : 0;
+                TickType_t wait_ticks = pdMS_TO_TICKS((uint32_t)((wait_ms > 0xFFFFFFFFULL) ? 0xFFFFFFFFULL : wait_ms));
+                (void)ulTaskNotifyTake(pdTRUE, wait_ticks);
+                continue;
+            }
+        }
+
+        // Live Mode continuous sync: ensure next swap_future is scheduled.
+        if (channel_player_is_live_mode_active()) {
+            void *nav = channel_player_get_navigator();
+            if (nav) {
+                (void)live_mode_schedule_next_swap(nav);
+            }
+            // Loop to allow swap_future path above to pick it up.
+            (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10));
             continue;
         }
         

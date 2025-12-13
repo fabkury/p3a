@@ -138,6 +138,13 @@ channel_player_source_t channel_player_get_source_type(void);
 bool channel_player_is_live_mode_active(void);
 
 /**
+ * @brief Get the current channel's navigator (opaque pointer)
+ *
+ * @return Navigator pointer (typically play_navigator_t*), or NULL if unavailable.
+ */
+void *channel_player_get_navigator(void);
+
+/**
  * @brief Exit Live Mode if currently active
  * 
  * Exits Live Mode by disabling it in the navigator and canceling

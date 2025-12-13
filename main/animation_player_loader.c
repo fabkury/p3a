@@ -1,6 +1,7 @@
 #include "animation_player_priv.h"
 #include "animation_player.h"
 #include "channel_player.h"
+#include "swap_future.h"
 #include <unistd.h>
 #include <errno.h>
 #include "freertos/task.h"
@@ -40,7 +41,7 @@ void animation_loader_mark_swap_successful(void)
     s_last_swap_was_successful = true;
 }
 
-static void discard_failed_swap_request(esp_err_t error)
+static void discard_failed_swap_request(esp_err_t error, bool is_live_mode_swap)
 {
     bool had_swap_request = false;
     
@@ -57,6 +58,14 @@ static void discard_failed_swap_request(esp_err_t error)
     }
 
     if (had_swap_request) {
+        // Live Mode: recovery is handled by live_mode_recover_from_failed_swap().
+        // Here we only ensure the system is left in a clean state.
+        if (is_live_mode_swap) {
+            ESP_LOGW(TAG, "Live Mode swap failed (error: %s). Triggering recovery logic.",
+                     esp_err_to_name(error));
+            return;
+        }
+
         // SAFEGUARD: Only auto-retry if the last operation was a successful swap
         // This prevents infinite retry loops when encountering consecutive bad files
         if (s_last_swap_was_successful) {
@@ -81,6 +90,53 @@ static void discard_failed_swap_request(esp_err_t error)
         ESP_LOGW(TAG, "Failed to load animation (error: %s). System remains responsive.",
                  esp_err_to_name(error));
     }
+}
+
+// Exposed for prefetch-time corruption handling.
+bool animation_loader_try_delete_corrupt_vault_file(const char *filepath, esp_err_t error)
+{
+    if (!filepath || strstr(filepath, "/vault/") == NULL) {
+        return false;
+    }
+
+    // SAFEGUARD: Only delete if first time since boot OR more than 1 hour since last deletion
+    uint64_t current_time_ms = (uint64_t)xTaskGetTickCount() * portTICK_PERIOD_MS;
+    bool can_delete = false;
+
+    if (s_last_corrupt_deletion_ms == 0) {
+        can_delete = true;
+    } else {
+        uint64_t time_since_last;
+        if (current_time_ms >= s_last_corrupt_deletion_ms) {
+            time_since_last = current_time_ms - s_last_corrupt_deletion_ms;
+        } else {
+            time_since_last = CORRUPT_DELETION_COOLDOWN_MS;
+        }
+        if (time_since_last >= CORRUPT_DELETION_COOLDOWN_MS) {
+            can_delete = true;
+        }
+    }
+
+    if (!can_delete) {
+        return false;
+    }
+
+    ESP_LOGE(TAG, "========================================");
+    ESP_LOGE(TAG, "DELETING CORRUPT VAULT FILE");
+    ESP_LOGE(TAG, "File: %s", filepath);
+    ESP_LOGE(TAG, "Error: %s", esp_err_to_name(error));
+    ESP_LOGE(TAG, "Reason: File failed to decode/prefetch, marking as corrupt");
+    ESP_LOGE(TAG, "Action: Deleting file so it can be re-downloaded");
+    ESP_LOGE(TAG, "========================================");
+
+    if (unlink(filepath) == 0) {
+        s_last_corrupt_deletion_ms = current_time_ms;
+        ESP_LOGI(TAG, "Successfully deleted corrupt file. Will be re-downloaded on next channel refresh.");
+        return true;
+    }
+
+    ESP_LOGW(TAG, "Failed to delete corrupt file: %s (errno=%d)", filepath, errno);
+    return false;
 }
 
 void animation_loader_wait_for_idle(void)
@@ -125,102 +181,110 @@ void animation_loader_task(void *arg)
             continue;
         }
 
-        // Get current post from channel player
-        const sdcard_post_t *post = NULL;
-        esp_err_t err = channel_player_get_current_post(&post);
-        if (err != ESP_OK || !post) {
-            ESP_LOGE(TAG, "Loader task: No current post available");
-            discard_failed_swap_request(ESP_ERR_NOT_FOUND);
-            continue;
-        }
-
-        ESP_LOGD(TAG, "Loader task: Loading animation '%s' into back buffer", post->name);
-
-        // For vault files, check if file exists BEFORE trying to load
-        // This distinguishes between "missing" and "corrupt" files
-        bool file_missing = false;
-        if (post->filepath && strstr(post->filepath, "/vault/") != NULL) {
-            struct stat st;
-            if (stat(post->filepath, &st) != 0) {
-                file_missing = true;
-                ESP_LOGW(TAG, "Vault file missing (not downloaded yet): %s", post->filepath);
+        // If swap_future_execute() provided an override, use it for this load.
+        animation_load_override_t ov = {0};
+        if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+            ov = s_load_override;
+            if (s_load_override.valid) {
+                // Consume one-shot override
+                s_load_override.valid = false;
             }
+            xSemaphoreGive(s_buffer_mutex);
         }
 
-        err = file_missing ? ESP_ERR_NOT_FOUND : load_animation_into_buffer(post->filepath, post->type, &s_back_buffer);
+        const sdcard_post_t *post = NULL;
+        const char *filepath = NULL;
+        asset_type_t type = ASSET_TYPE_WEBP;
+        const char *name_for_log = NULL;
+        uint32_t start_frame = 0;
+        uint64_t start_time_ms = 0;
+        uint32_t live_index = 0;
+
+        if (ov.valid) {
+            filepath = ov.filepath;
+            type = ov.type;
+            name_for_log = ov.filepath;
+            start_frame = ov.start_frame;
+            start_time_ms = ov.start_time_ms;
+            live_index = ov.live_index;
+            ESP_LOGI(TAG, "Loader task: swap_future override load: %s (type=%d start_frame=%u start_time_ms=%llu)",
+                     filepath, (int)type, (unsigned)start_frame, (unsigned long long)start_time_ms);
+        } else {
+            // Get current post from channel player
+            esp_err_t err = channel_player_get_current_post(&post);
+            if (err != ESP_OK || !post) {
+                ESP_LOGE(TAG, "Loader task: No current post available");
+            discard_failed_swap_request(ESP_ERR_NOT_FOUND, false);
+                continue;
+            }
+            filepath = post->filepath;
+            type = post->type;
+            name_for_log = post->name;
+        }
+
+        ESP_LOGD(TAG, "Loader task: Loading animation '%s' into back buffer", name_for_log ? name_for_log : "(null)");
+
+        // Check if file exists BEFORE trying to load.
+        // This distinguishes "missing" from "corrupt decode" (especially for vault).
+        bool file_missing = false;
+        if (filepath) {
+            struct stat st;
+            if (stat(filepath, &st) != 0) {
+                file_missing = true;
+                ESP_LOGW(TAG, "File missing: %s", filepath);
+            }
+        } else {
+            file_missing = true;
+        }
+
+        esp_err_t err = file_missing ? ESP_ERR_NOT_FOUND : load_animation_into_buffer(filepath, type, &s_back_buffer,
+                                                                                      start_frame, start_time_ms);
         if (err != ESP_OK) {
-            bool is_vault_file = post->filepath && strstr(post->filepath, "/vault/") != NULL;
+            bool is_vault_file = filepath && strstr(filepath, "/vault/") != NULL;
             
             if (is_vault_file && file_missing) {
                 // File doesn't exist - advance to next and let background refresh re-download it
-                ESP_LOGW(TAG, "Skipping missing vault file, advancing to next: %s", post->filepath);
-                channel_player_advance();
+                if (!ov.valid || !ov.is_live_mode_swap) {
+                    ESP_LOGW(TAG, "Skipping missing vault file, advancing to next: %s", filepath);
+                    channel_player_advance();
+                }
+            } else if (file_missing) {
+                // Missing non-vault file (e.g., SD card): advance in non-live playback
+                if (!ov.valid || !ov.is_live_mode_swap) {
+                    ESP_LOGW(TAG, "Skipping missing file, advancing to next: %s", filepath ? filepath : "(null)");
+                    channel_player_advance();
+                }
             } else if (is_vault_file) {
                 // File exists but failed to decode - it's corrupt
-                // SAFEGUARD: Only delete if first time since boot OR more than 1 hour since last deletion
-                uint64_t current_time_ms = (uint64_t)xTaskGetTickCount() * portTICK_PERIOD_MS;
-                bool can_delete = false;
-                
-                if (s_last_corrupt_deletion_ms == 0) {
-                    // First deletion since boot - always allowed
-                    can_delete = true;
-                } else {
-                    // Handle potential wrap-around (unlikely but safe)
-                    uint64_t time_since_last;
-                    if (current_time_ms >= s_last_corrupt_deletion_ms) {
-                        time_since_last = current_time_ms - s_last_corrupt_deletion_ms;
-                    } else {
-                        // Wrap-around occurred - treat as if enough time has passed
-                        time_since_last = CORRUPT_DELETION_COOLDOWN_MS;
-                    }
-                    if (time_since_last >= CORRUPT_DELETION_COOLDOWN_MS) {
-                        // More than 1 hour since last deletion - allowed
-                        can_delete = true;
-                    }
-                }
-                
-                if (can_delete) {
-                    ESP_LOGE(TAG, "========================================");
-                    ESP_LOGE(TAG, "DELETING CORRUPT VAULT FILE");
-                    ESP_LOGE(TAG, "File: %s", post->filepath);
-                    ESP_LOGE(TAG, "Error: %s", esp_err_to_name(err));
-                    ESP_LOGE(TAG, "Reason: File failed to decode, marking as corrupt");
-                    ESP_LOGE(TAG, "Action: Deleting file so it can be re-downloaded");
-                    ESP_LOGE(TAG, "========================================");
-                    
-                    if (unlink(post->filepath) == 0) {
-                        s_last_corrupt_deletion_ms = current_time_ms;
-                        ESP_LOGI(TAG, "Successfully deleted corrupt file. Will be re-downloaded on next channel refresh.");
-                    } else {
-                        ESP_LOGW(TAG, "Failed to delete corrupt file: %s (errno=%d)", post->filepath, errno);
-                    }
-                } else {
-                    // Calculate time since last deletion (handle wrap-around)
-                    uint64_t time_since_last;
-                    if (current_time_ms >= s_last_corrupt_deletion_ms) {
-                        time_since_last = current_time_ms - s_last_corrupt_deletion_ms;
-                    } else {
-                        // Wrap-around occurred - treat as very long time
-                        time_since_last = CORRUPT_DELETION_COOLDOWN_MS + 1;
-                    }
-                    uint64_t remaining_ms = (time_since_last < CORRUPT_DELETION_COOLDOWN_MS) ?
-                                            (CORRUPT_DELETION_COOLDOWN_MS - time_since_last) : 0;
-                    uint64_t remaining_minutes = remaining_ms / 60000ULL;
-                    uint64_t elapsed_minutes = time_since_last / 60000ULL;
-                    ESP_LOGW(TAG, "Corrupt file detected but deletion blocked by safeguard: %s", post->filepath);
-                    ESP_LOGW(TAG, "Last deletion was %llu minutes ago. Cooldown: %llu minutes remaining.",
-                             elapsed_minutes, remaining_minutes);
-                }
+                (void)animation_loader_try_delete_corrupt_vault_file(filepath, err);
                 // Advance past corrupt file so we don't get stuck
-                channel_player_advance();
+                if (!ov.valid || !ov.is_live_mode_swap) {
+                    channel_player_advance();
+                }
+            } else {
+                // Non-vault decode failure (e.g., SD card corrupt): advance in non-live playback
+                if (!ov.valid || !ov.is_live_mode_swap) {
+                    ESP_LOGW(TAG, "Decode failed, advancing to next: %s", filepath ? filepath : "(null)");
+                    channel_player_advance();
+                }
             }
-            discard_failed_swap_request(err);
+            discard_failed_swap_request(err, ov.valid ? ov.is_live_mode_swap : false);
+
+            // Live Mode recovery: skip forward to next candidate (bounded) without stalling.
+            if (ov.valid && ov.is_live_mode_swap) {
+                void *nav = channel_player_get_navigator();
+                if (nav) {
+                    (void)live_mode_recover_from_failed_swap(nav, live_index, err);
+                }
+            }
             continue;
         }
 
         if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
             s_back_buffer.prefetch_pending = true;
             s_back_buffer.ready = false;
+            s_back_buffer.is_live_mode_swap = ov.valid ? ov.is_live_mode_swap : false;
+            s_back_buffer.live_index = ov.valid ? live_index : 0;
             if (swap_was_requested) {
                 s_swap_requested = true;
                 ESP_LOGD(TAG, "Loader task: Swap was requested, will swap after prefetch");
@@ -229,7 +293,7 @@ void animation_loader_task(void *arg)
             xSemaphoreGive(s_buffer_mutex);
         }
 
-        ESP_LOGD(TAG, "Loader task: Successfully loaded animation '%s' (prefetch_pending=true)", post->name);
+        ESP_LOGD(TAG, "Loader task: Successfully loaded animation '%s' (prefetch_pending=true)", name_for_log ? name_for_log : "(null)");
     }
 }
 
@@ -449,6 +513,10 @@ void unload_animation_buffer(animation_buffer_t *buf)
     buf->prefetch_pending = false;
     buf->prefetched_first_frame_delay_ms = 1;
     buf->current_frame_delay_ms = 1;
+    buf->start_time_ms = 0;
+    buf->start_frame = 0;
+    buf->is_live_mode_swap = false;
+    buf->live_index = 0;
 
     free(buf->filepath);
     buf->filepath = NULL;
@@ -551,7 +619,8 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf, asse
     return ESP_OK;
 }
 
-esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, animation_buffer_t *buf)
+esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, animation_buffer_t *buf,
+                                     uint32_t start_frame, uint64_t start_time_ms)
 {
     if (!buf || !filepath) {
         return ESP_ERR_INVALID_ARG;
@@ -598,6 +667,10 @@ esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, an
     buf->first_frame_ready = false;
     buf->decoder_at_frame_1 = false;
     buf->prefetch_pending = false;
+
+    // Propagate start alignment parameters (used by prefetch_first_frame()).
+    buf->start_frame = start_frame;
+    buf->start_time_ms = start_time_ms;
 
     ESP_LOGI(TAG, "Loaded animation into buffer: %s", filepath);
 

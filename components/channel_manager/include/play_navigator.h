@@ -167,6 +167,14 @@ void play_navigator_set_live_mode(play_navigator_t *nav, bool enable);
 void play_navigator_set_channel_dwell_override_ms(play_navigator_t *nav, uint32_t dwell_ms);
 
 /**
+ * @brief Mark the Live Mode schedule as dirty (to be rebuilt on next access)
+ *
+ * Safe to call from other tasks: it only flips a boolean. The next call to
+ * play_navigator_current() in Live Mode will rebuild the flattened schedule.
+ */
+void play_navigator_mark_live_dirty(play_navigator_t *nav);
+
+/**
  * @brief Get current p/q position
  * 
  * @param nav Navigator

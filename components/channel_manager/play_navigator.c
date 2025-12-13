@@ -4,12 +4,21 @@
 #include "sntp_sync.h"
 #include "config_store.h"
 #include "download_manager.h"
+#include "live_mode.h"
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <time.h>
 
 static const char *TAG = "play_navigator";
+
+static uint64_t wall_clock_ms(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (uint64_t)tv.tv_sec * 1000ULL + (uint64_t)tv.tv_usec / 1000ULL;
+}
 
 // Helper to get the effective seed for random operations
 static uint32_t get_effective_seed(play_navigator_t *nav)
@@ -222,6 +231,8 @@ static esp_err_t build_live_schedule(play_navigator_t *nav)
 
     uint32_t global_override_ms = config_store_get_dwell_time();
     uint32_t idx = 0;
+    const uint64_t channel_epoch_ms = live_mode_get_channel_start_time(nav->channel) * 1000ULL;
+    uint64_t seg_cursor_ms = 0; // virtual time from channel epoch within one channel cycle
 
     for (size_t i = 0; i < nav->order_count && idx < total; i++) {
         channel_post_t post = {0};
@@ -232,19 +243,77 @@ static esp_err_t build_live_schedule(play_navigator_t *nav)
             if (playlist_get(post.post_id, nav->pe, &pl) != ESP_OK || !pl) continue;
 
             uint32_t effective = get_effective_playlist_size(pl, nav->pe);
-            for (uint32_t q = 0; q < effective && idx < total; q++) {
+            if (effective == 0) {
+                continue;
+            }
+            if ((uint32_t)pl->loaded_artworks < effective) {
+                // For Live Mode, we require a complete deterministic schedule across devices.
+                ESP_LOGW(TAG, "Live schedule: playlist %ld metadata incomplete (loaded=%ld < effective=%u)",
+                         (long)post.post_id, (long)pl->loaded_artworks, (unsigned)effective);
+                free(anims);
+                free_live_schedule(nav);
+                return ESP_ERR_INVALID_STATE;
+            }
+
+            uint32_t *dwell_by_q = (uint32_t *)calloc(effective, sizeof(uint32_t));
+            if (!dwell_by_q) {
+                free(anims);
+                free_live_schedule(nav);
+                return ESP_ERR_NO_MEM;
+            }
+
+            uint64_t playlist_cycle_ms = 0;
+            for (uint32_t q = 0; q < effective; q++) {
+                uint32_t art_idx = playlist_map_q_to_index(nav, post.post_id, effective, q);
+                if (art_idx >= (uint32_t)pl->loaded_artworks) {
+                    // Should not happen due to loaded_artworks >= effective check.
+                    dwell_by_q[q] = 30000;
+                } else {
+                    const artwork_ref_t *a = &pl->artworks[art_idx];
+                    uint32_t dwell = (pl->dwell_time_ms != 0) ? pl->dwell_time_ms : a->dwell_time_ms;
+                    dwell_by_q[q] = compute_effective_dwell_ms(global_override_ms,
+                                                               nav->channel_dwell_override_ms,
+                                                               dwell);
+                }
+                playlist_cycle_ms += (uint64_t)dwell_by_q[q];
+            }
+            if (playlist_cycle_ms == 0) {
+                playlist_cycle_ms = (uint64_t)effective * 30000ULL;
+            }
+
+            // Align the playlist segment to the playlist's own creation time (post.created_at).
+            // Compute which q should be active when the channel reaches this playlist segment in virtual time.
+            const uint64_t playlist_start_ms = live_mode_get_playlist_start_time(post.created_at) * 1000ULL;
+            const uint64_t seg_start_ms = channel_epoch_ms + seg_cursor_ms;
+            uint64_t rel_ms = 0;
+            if (seg_start_ms > playlist_start_ms) {
+                rel_ms = seg_start_ms - playlist_start_ms;
+            }
+            uint64_t phase_ms = rel_ms % playlist_cycle_ms;
+
+            uint32_t start_q = 0;
+            for (uint32_t q = 0; q < effective; q++) {
+                uint32_t d = dwell_by_q[q] ? dwell_by_q[q] : 30000;
+                if (phase_ms < (uint64_t)d) {
+                    start_q = q;
+                    break;
+                }
+                phase_ms -= (uint64_t)d;
+            }
+
+            for (uint32_t k = 0; k < effective && idx < total; k++) {
+                uint32_t q = (start_q + k) % effective;
                 uint32_t art_idx = playlist_map_q_to_index(nav, post.post_id, effective, q);
                 if (art_idx >= (uint32_t)pl->loaded_artworks) continue;
-                const artwork_ref_t *a = &pl->artworks[art_idx];
 
-                uint32_t dwell = (pl->dwell_time_ms != 0) ? pl->dwell_time_ms : a->dwell_time_ms;
-                anims[idx].duration_ms = compute_effective_dwell_ms(global_override_ms,
-                                                                    nav->channel_dwell_override_ms,
-                                                                    dwell);
+                anims[idx].duration_ms = dwell_by_q[q] ? dwell_by_q[q] : 30000;
                 nav->live_p[idx] = (uint32_t)i;
                 nav->live_q[idx] = q;
                 idx++;
             }
+
+            seg_cursor_ms += playlist_cycle_ms;
+            free(dwell_by_q);
         } else {
             anims[idx].duration_ms = compute_effective_dwell_ms(global_override_ms,
                                                                 nav->channel_dwell_override_ms,
@@ -252,6 +321,7 @@ static esp_err_t build_live_schedule(play_navigator_t *nav)
             nav->live_p[idx] = (uint32_t)i;
             nav->live_q[idx] = 0;
             idx++;
+            seg_cursor_ms += (uint64_t)anims[idx - 1].duration_ms;
         }
     }
 
@@ -262,7 +332,8 @@ static esp_err_t build_live_schedule(play_navigator_t *nav)
         return ESP_ERR_NOT_FOUND;
     }
 
-    SyncPlaylist.init((uint64_t)get_effective_seed(nav), 0, anims, nav->live_count, SYNC_MODE_PRECISE);
+    uint64_t start_ms = live_mode_get_channel_start_time(nav->channel) * 1000ULL;
+    SyncPlaylist.init((uint64_t)get_effective_seed(nav), start_ms, anims, nav->live_count, SYNC_MODE_PRECISE);
     SyncPlaylist.enable_live(true);
     free(anims);
 
@@ -391,7 +462,7 @@ esp_err_t play_navigator_current(play_navigator_t *nav, artwork_ref_t *out_artwo
 
         uint32_t cur_idx = 0;
         uint32_t elapsed_ms = 0;
-        (void)SyncPlaylist.update((uint64_t)time(NULL), &cur_idx, &elapsed_ms);
+        (void)SyncPlaylist.update(wall_clock_ms(), &cur_idx, &elapsed_ms);
         if (cur_idx >= nav->live_count) return ESP_ERR_NOT_FOUND;
 
         nav->p = nav->live_p[cur_idx];
@@ -619,6 +690,14 @@ void play_navigator_set_channel_dwell_override_ms(play_navigator_t *nav, uint32_
     if (nav->live_mode) {
         free_live_schedule(nav);
     }
+}
+
+void play_navigator_mark_live_dirty(play_navigator_t *nav)
+{
+    if (!nav) return;
+    // Do not free here (may be called from other tasks). The schedule will be rebuilt
+    // by the playback task the next time play_navigator_current() runs in Live Mode.
+    nav->live_ready = false;
 }
 
 esp_err_t play_navigator_request_reshuffle(play_navigator_t *nav)

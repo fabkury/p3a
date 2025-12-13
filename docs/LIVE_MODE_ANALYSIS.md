@@ -39,9 +39,20 @@
   - Created `swap_future_execute()` in animation_player.c
   - Guards against OTA, SD pause, concurrent swaps
   - Triggers loader with s_swap_requested flag
-- [ ] **B2**: Add start-frame support in animation loader
-  - Requires decoder modifications (GIF, WebP)
-  - Deferred - complex, lower priority for basic Live Mode
+- [x] **B2**: Add start-frame support in animation loader ✅
+  - **Goal**: when loading an animation due to a `swap_future`, start playback at the frame that corresponds to a given wall-clock start time (or explicit start-frame), so devices can re-sync *only at swap boundaries*.
+  - **Groundwork decisions**:
+    - **Primary sync input** is an **ideal wall-clock start time** (`start_time_ms`), not an opaque "frame number". Frame numbers are derived from time offsets.
+    - **Seeking is decoder-driven**: seek by iterating frames and accumulating *real per-frame delays* (GIF/WebP) until the desired elapsed time is reached. This avoids relying on average frame durations.
+    - **WebP strategy**: keep using `WebPAnimDecoder` (it performs proper blending/disposal); seeking will reset and iterate frames while avoiding unnecessary memcpy for skipped frames.
+    - **GIF strategy**: use existing `AnimatedGIF` pipeline; seeking will reset and iterate frames (discarding output) until the requested frame/time offset is reached. Yield periodically to avoid starving the scheduler.
+    - **Still images (PNG/JPEG/WebP still)**: seek is a no-op (always frame 0).
+  - **Data path changes (implemented)**:
+    - `swap_future_t` now carries `start_time_ms` (ideal start) in addition to `target_time_ms`.
+    - Loader accepts `start_frame/start_time_ms` and prefetch seeks to `(now_ms - start_time_ms)` (or skips `start_frame`) before decoding the first frame.
+  - **Pain points / risks**:
+    - Seeking by iteration can be CPU-expensive for long animations or large offsets (worst case: many small-delay frames). Mitigation: constrain offsets to the current dwell window, avoid memcpy when discarding, yield during long loops, and log seek cost.
+    - Correctness depends on accurate frame delay reporting from decoders; must validate that delay units/semantics are consistent across GIF/WebP implementations.
 - [x] **B3**: Integrate swap_future with auto_swap_task ✅
   - Modified auto_swap_task to check for ready swap_futures
   - Executes swap_future before normal dwell-based swaps
@@ -49,9 +60,9 @@
 - [x] **B4**: Add timing precision measurement ✅
   - Logs timing error (actual - target) for each swap_future
   - Warns if outside acceptable range (>50ms late or >10ms early)
-- [ ] **B5**: Test basic swap_future without Live Mode
-  - Needs HTTP API endpoint for testing
-  - Will create simple test endpoint
+- [x] **B5**: Test basic swap_future without Live Mode ✅
+  - Add a single `/debug` endpoint **only when** `CONFIG_OTA_DEV_MODE=y`
+  - `/debug` dispatches multiple debug actions via JSON payloads (one of them: schedule/exercise swap_future seek)
 
 ### Phase C: Live Mode Entry/Exit (Week 2) - 🚧 IN PROGRESS
 - [x] **C1**: Implement `build_live_schedule()` ✅
@@ -61,7 +72,7 @@
 - [x] **C2**: Implement `live_mode_enter()` ✅
   - Verifies NTP synchronization
   - Enables Live Mode in navigator
-  - Schedule will be built on next play_navigator_current() call
+  - Builds live schedule and schedules an immediate entry `swap_future` with `start_time_ms` to align to current elapsed position
 - [x] **C3**: Implement `live_mode_exit()` ✅
   - Disables Live Mode in navigator
   - Cancels any pending swap_future
@@ -70,13 +81,11 @@
   - Added channel_player_exit_live_mode()
   - Called in animation_player_cycle_animation()
   - HTTP API swaps will also exit Live Mode
-- [ ] **C5**: Add Live Mode status indicators
-  - MQTT status messages
-  - Web UI endpoint
-  - Log messages (partially done)
+- [x] **C5**: Add Live Mode status indicators ✅
+  - MQTT status messages include `"live_mode": true/false`
+  - HTTP endpoint `/api/state` includes `"live_mode": true/false`
 
-### Phase D: Continuous Sync (Week 3) - ⏳ PENDING
-### Phase D: Continuous Sync (Week 3) - ⏳ PENDING
+### Phase D: Continuous Sync (Week 3) - 🚧 IN PROGRESS
 ### Phase E: Testing & Polish (Week 4) - ⏳ PENDING
 ### Phase F: Future Enhancements - ⏳ PENDING
 
@@ -563,8 +572,13 @@ typedef struct {
 
 **Proposal**:
 - Check availability before entering Live Mode
-- If in Live Mode and file missing, skip deterministically (same skip on all devices)
-- Log warning, attempt background download
+- If in Live Mode and a scheduled item is missing/corrupt, **skip forward** in the flattened live schedule to the next **decodable** item (bounded scan, wraparound)
+- **Never stall**: keep playing (or immediately swap to the next available) and treat each dwell boundary as the next re-sync opportunity
+- **Safeguards**:
+  - Scan forward up to **32 artworks** per recovery attempt
+  - Wraparound is allowed/expected
+  - Exponential backoff when no candidates in scan window
+  - Corrupt vault files are deleted (with the 1-hour safeguard) so they can be re-downloaded
 
 ---
 

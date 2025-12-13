@@ -74,6 +74,7 @@ static esp_err_t sdcard_impl_get_stats(channel_handle_t channel, channel_stats_t
 static void sdcard_impl_destroy(channel_handle_t channel);
 static size_t sdcard_impl_get_post_count(channel_handle_t channel);
 static esp_err_t sdcard_impl_get_post(channel_handle_t channel, size_t post_index, channel_post_t *out_post);
+static void *sdcard_impl_get_navigator(channel_handle_t channel);
 
 // Virtual function table
 static const channel_ops_t s_sdcard_ops = {
@@ -89,6 +90,7 @@ static const channel_ops_t s_sdcard_ops = {
     .destroy = sdcard_impl_destroy,
     .get_post_count = sdcard_impl_get_post_count,
     .get_post = sdcard_impl_get_post,
+    .get_navigator = sdcard_impl_get_navigator,
 };
 
 static uint32_t hash_string_djb2(const char *s)
@@ -692,6 +694,13 @@ static void sdcard_impl_destroy(channel_handle_t channel)
     free(ch);
 
     ESP_LOGI(TAG, "Channel destroyed");
+}
+
+static void *sdcard_impl_get_navigator(channel_handle_t channel)
+{
+    sdcard_channel_t *ch = (sdcard_channel_t *)channel;
+    if (!ch) return NULL;
+    return ch->navigator_ready ? (void *)&ch->navigator : NULL;
 }
 
 // Public creation function

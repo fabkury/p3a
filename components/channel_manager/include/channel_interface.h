@@ -229,6 +229,13 @@ typedef struct {
     // ---------------------------------------------------------------------
     size_t (*get_post_count)(channel_handle_t channel);
     esp_err_t (*get_post)(channel_handle_t channel, size_t post_index, channel_post_t *out_post);
+
+    // ---------------------------------------------------------------------
+    // Optional navigator API (used by Live Mode)
+    // ---------------------------------------------------------------------
+    // Returns an opaque pointer to the channel's play navigator (typically play_navigator_t*).
+    // Can return NULL if navigator is not initialized/available for this channel.
+    void *(*get_navigator)(channel_handle_t channel);
     
 } channel_ops_t;
 
@@ -275,6 +282,14 @@ static inline esp_err_t channel_get_post(channel_handle_t ch, size_t post_index,
         return ESP_ERR_NOT_SUPPORTED;
     }
     return ch->ops->get_post(ch, post_index, out_post);
+}
+
+static inline void *channel_get_navigator(channel_handle_t ch)
+{
+    if (!ch || !ch->ops || !ch->ops->get_navigator) {
+        return NULL;
+    }
+    return ch->ops->get_navigator(ch);
 }
 
 #ifdef __cplusplus

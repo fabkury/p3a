@@ -114,6 +114,7 @@ static void build_vault_path_from_storage_key(const makapix_channel_t *ch, const
                                                file_extension_t ext, char *out, size_t out_len);
 static size_t makapix_impl_get_post_count(channel_handle_t channel);
 static esp_err_t makapix_impl_get_post(channel_handle_t channel, size_t post_index, channel_post_t *out_post);
+static void *makapix_impl_get_navigator(channel_handle_t channel);
 
 // Virtual function table
 static const channel_ops_t s_makapix_ops = {
@@ -129,6 +130,7 @@ static const channel_ops_t s_makapix_ops = {
     .destroy = makapix_impl_destroy,
     .get_post_count = makapix_impl_get_post_count,
     .get_post = makapix_impl_get_post,
+    .get_navigator = makapix_impl_get_navigator,
 };
 
 
@@ -1276,6 +1278,11 @@ static void refresh_task_impl(void *pvParameters)
             // Update index.bin with new posts
             update_index_bin(ch, resp->posts, resp->post_count);
 
+            // If Live Mode is active, mark schedule dirty so it is rebuilt on next access.
+            if (ch->navigator_ready && ch->navigator.live_mode) {
+                play_navigator_mark_live_dirty(&ch->navigator);
+            }
+
             // Free any heap allocations inside parsed posts (playlist artworks arrays)
             for (size_t pi = 0; pi < resp->post_count; pi++) {
                 if (resp->posts[pi].kind == MAKAPIX_POST_KIND_PLAYLIST && resp->posts[pi].artworks) {
@@ -1361,6 +1368,13 @@ static void makapix_impl_destroy(channel_handle_t channel)
     free(ch);
     
     ESP_LOGI(TAG, "Channel destroyed");
+}
+
+static void *makapix_impl_get_navigator(channel_handle_t channel)
+{
+    makapix_channel_t *ch = (makapix_channel_t *)channel;
+    if (!ch) return NULL;
+    return ch->navigator_ready ? (void *)&ch->navigator : NULL;
 }
 
 // Public functions

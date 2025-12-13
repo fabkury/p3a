@@ -4,10 +4,124 @@
 #include "ugfx_ui.h"
 #include "makapix.h"
 #include "makapix_api.h"
+#include "channel_player.h"
+#include "swap_future.h"
+#include <sys/time.h>
 
 // Frame rendering state
 static bool s_use_prefetched = false;
 static uint32_t s_target_frame_delay_ms = 100;
+
+static uint64_t wall_clock_ms(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (uint64_t)tv.tv_sec * 1000ULL + (uint64_t)tv.tv_usec / 1000ULL;
+}
+
+static esp_err_t prefetch_first_frame_seeked(animation_buffer_t *buf, uint32_t start_frame, uint64_t start_time_ms)
+{
+    if (!buf || !buf->decoder || !buf->native_frame_b1 || !buf->native_frame_b2) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint32_t frame_count = (uint32_t)buf->decoder_info.frame_count;
+    if (frame_count <= 1) {
+        // Still images: no seeking required; fall back to normal prefetch path.
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    // Derive elapsed time from ideal wall-clock start, if provided.
+    uint32_t elapsed_ms = 0;
+    if (start_time_ms != 0) {
+        const uint64_t now_ms = wall_clock_ms();
+        elapsed_ms = (now_ms > start_time_ms) ? (uint32_t)MIN(now_ms - start_time_ms, (uint64_t)UINT32_MAX) : 0;
+    }
+
+    // If explicit start_frame is provided (and no start_time_ms), use it.
+    bool use_frame_seek = (start_time_ms == 0 && start_frame > 0);
+
+    // Always reset before seeking.
+    esp_err_t err = animation_decoder_reset(buf->decoder);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    // Compute intrinsic loop duration (ms) so we can modulo large elapsed offsets.
+    uint32_t loop_ms = 0;
+    if (!use_frame_seek && elapsed_ms > 0) {
+        uint64_t total = 0;
+        for (uint32_t i = 0; i < frame_count; i++) {
+            err = animation_decoder_decode_next(buf->decoder, buf->native_frame_b2);
+            if (err != ESP_OK) {
+                break;
+            }
+            uint32_t d = 1;
+            (void)animation_decoder_get_frame_delay(buf->decoder, &d);
+            if (d < 1) d = 1;
+            total += d;
+        }
+        loop_ms = (total > 0) ? (uint32_t)MIN(total, (uint64_t)UINT32_MAX) : 0;
+
+        // Reset again for the actual seek.
+        (void)animation_decoder_reset(buf->decoder);
+        if (err != ESP_OK) {
+            // Fall back to a non-seeked prefetch.
+            return ESP_ERR_NOT_SUPPORTED;
+        }
+        if (loop_ms > 0) {
+            elapsed_ms = elapsed_ms % loop_ms;
+        } else {
+            elapsed_ms = 0;
+        }
+    }
+
+    // Seek by decoding and discarding frames until we reach the desired position.
+    uint32_t spent = 0;
+    uint32_t desired_frame_delay_ms = 1;
+
+    if (use_frame_seek) {
+        const uint32_t target = start_frame % frame_count;
+        for (uint32_t i = 0; i < target; i++) {
+            err = animation_decoder_decode_next(buf->decoder, buf->native_frame_b2);
+            if (err != ESP_OK) return err;
+        }
+    } else if (elapsed_ms > 0) {
+        while (true) {
+            err = animation_decoder_decode_next(buf->decoder, buf->native_frame_b2);
+            if (err != ESP_OK) return err;
+            uint32_t d = 1;
+            (void)animation_decoder_get_frame_delay(buf->decoder, &d);
+            if (d < 1) d = 1;
+            if ((uint64_t)spent + (uint64_t)d > (uint64_t)elapsed_ms) {
+                // This decoded frame is the correct one for the elapsed offset.
+                desired_frame_delay_ms = d;
+                memcpy(buf->native_frame_b1, buf->native_frame_b2, buf->native_frame_size);
+                break;
+            }
+            spent += d;
+        }
+        // We already have the desired first frame in native_frame_b1.
+        buf->prefetched_first_frame_delay_ms = desired_frame_delay_ms;
+        buf->first_frame_ready = true;
+        buf->decoder_at_frame_1 = true;
+        buf->start_time_ms = 0;
+        buf->start_frame = 0;
+        return ESP_OK;
+    }
+
+    // Frame-based seek: decode the desired first frame now.
+    err = animation_decoder_decode_next(buf->decoder, buf->native_frame_b1);
+    if (err != ESP_OK) return err;
+    (void)animation_decoder_get_frame_delay(buf->decoder, &desired_frame_delay_ms);
+    if (desired_frame_delay_ms < 1) desired_frame_delay_ms = 1;
+    buf->prefetched_first_frame_delay_ms = desired_frame_delay_ms;
+    buf->first_frame_ready = true;
+    buf->decoder_at_frame_1 = true;
+    buf->start_time_ms = 0;
+    buf->start_frame = 0;
+    return ESP_OK;
+}
 
 /**
  * @brief Decode the next animation frame and upscale to display buffer
@@ -82,6 +196,21 @@ esp_err_t prefetch_first_frame(animation_buffer_t *buf)
         return ESP_ERR_INVALID_ARG;
     }
 
+    // If Live Mode / swap_future provided a start alignment, prefetch the correctly-aligned first frame.
+    if ((buf->start_time_ms != 0) || (buf->start_frame != 0)) {
+        esp_err_t seek_err = prefetch_first_frame_seeked(buf, buf->start_frame, buf->start_time_ms);
+        if (seek_err == ESP_OK) {
+            ESP_LOGD(TAG, "Prefetched seeked first frame (start_time_ms=%llu start_frame=%u)",
+                     (unsigned long long)buf->start_time_ms, (unsigned)buf->start_frame);
+            return ESP_OK;
+        }
+        // If seek is not supported or fails, fall back to frame 0 prefetch.
+        ESP_LOGW(TAG, "Seeked prefetch failed (%s). Falling back to frame 0.", esp_err_to_name(seek_err));
+        buf->start_time_ms = 0;
+        buf->start_frame = 0;
+        (void)animation_decoder_reset(buf->decoder);
+    }
+
     // Decode first frame to native_frame_b1
     // The upscale will happen later, directly to the display back buffer
     uint8_t *decode_buffer = buf->native_frame_b1;
@@ -142,12 +271,53 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
     // Handle prefetch (outside mutex - this can take time)
     if (back_buffer_prefetch_pending) {
         esp_err_t prefetch_err = prefetch_first_frame(&s_back_buffer);
+        bool was_live = false;
+        uint32_t failed_live_idx = 0;
+        char failed_path[256] = {0};
+
         if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
             s_back_buffer.prefetch_pending = false;
             s_back_buffer.ready = (prefetch_err == ESP_OK);
             swap_requested = s_swap_requested;
             back_buffer_ready = s_back_buffer.ready;
+
+            was_live = s_back_buffer.is_live_mode_swap;
+            failed_live_idx = s_back_buffer.live_index;
+            if (s_back_buffer.filepath) {
+                strlcpy(failed_path, s_back_buffer.filepath, sizeof(failed_path));
+            }
+
+            // If prefetch failed, clear swap request so we don't get stuck.
+            if (prefetch_err != ESP_OK) {
+                s_swap_requested = false;
+            }
             xSemaphoreGive(s_buffer_mutex);
+        }
+
+        if (prefetch_err != ESP_OK) {
+            ESP_LOGW(TAG, "Prefetch failed: %s", esp_err_to_name(prefetch_err));
+
+            // Attempt to delete corrupt vault files (safeguarded).
+            if (failed_path[0] != '\0') {
+                (void)animation_loader_try_delete_corrupt_vault_file(failed_path, prefetch_err);
+            }
+
+            // Clean up back buffer contents so future attempts are clean.
+            if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+                unload_animation_buffer(&s_back_buffer);
+                xSemaphoreGive(s_buffer_mutex);
+            }
+
+            if (was_live) {
+                void *nav = channel_player_get_navigator();
+                if (nav) {
+                    (void)live_mode_recover_from_failed_swap(nav, failed_live_idx, prefetch_err);
+                }
+            } else {
+                // Non-live swap: advance and retry to avoid stalling.
+                (void)channel_player_advance();
+                (void)animation_player_request_swap_current();
+            }
         }
     }
 
@@ -164,6 +334,10 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
             xSemaphoreGive(s_buffer_mutex);
             
             ESP_LOGI(TAG, "Buffers swapped: front now playing index %zu", s_front_buffer.asset_index);
+
+            if (s_front_buffer.is_live_mode_swap) {
+                live_mode_notify_swap_succeeded(s_front_buffer.live_index);
+            }
             
             // Mark successful swap for auto-retry safeguard
             animation_loader_mark_swap_successful();

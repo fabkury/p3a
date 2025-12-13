@@ -23,6 +23,9 @@ SemaphoreHandle_t s_buffer_mutex = NULL;
 
 bool s_anim_paused = false;
 
+// swap_future load override (one-shot)
+animation_load_override_t s_load_override = {0};
+
 app_lcd_sd_file_list_t s_sd_file_list = {0};
 bool s_sd_mounted = false;
 bool s_sd_export_active = false;
@@ -81,7 +84,7 @@ static esp_err_t load_first_animation(void)
         return ESP_ERR_NOT_FOUND;
     }
 
-    esp_err_t load_err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer);
+    esp_err_t load_err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer, 0, 0);
     if (load_err == ESP_OK) {
         ESP_LOGI(TAG, "Loaded animation '%s' to start playback", post->name);
         
@@ -97,7 +100,7 @@ static esp_err_t load_first_animation(void)
     if (err == ESP_OK) {
         err = channel_player_get_current_post(&post);
         if (err == ESP_OK && post) {
-            load_err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer);
+            load_err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer, 0, 0);
             if (load_err == ESP_OK) {
                 ESP_LOGI(TAG, "Loaded animation '%s' to start playback", post->name);
                 playback_controller_set_animation_metadata(post->filepath, true);
@@ -469,6 +472,11 @@ esp_err_t swap_future_execute(const swap_future_t *swap)
     
     ESP_LOGI(TAG, "Executing swap_future: frame=%u, live=%d", 
              swap->start_frame, swap->is_live_mode_swap);
+
+    if (swap->artwork.filepath[0] == '\0') {
+        ESP_LOGW(TAG, "swap_future invalid: artwork filepath missing");
+        return ESP_ERR_INVALID_ARG;
+    }
     
     // Check if OTA is in progress
     if (ota_manager_is_checking()) {
@@ -482,17 +490,23 @@ esp_err_t swap_future_execute(const swap_future_t *swap)
         return ESP_ERR_INVALID_STATE;
     }
     
-    // Check if swap already in progress
+    // Check if swap already in progress and install one-shot loader override.
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
             ESP_LOGW(TAG, "swap_future blocked: swap already in progress");
             xSemaphoreGive(s_buffer_mutex);
             return ESP_ERR_INVALID_STATE;
         }
-        
-        // For now, we trigger a regular swap since we need more infrastructure
-        // to support loading arbitrary artworks (Phase C will add this)
-        // TODO: Store swap->artwork info for loader to use
+
+        memset(&s_load_override, 0, sizeof(s_load_override));
+        s_load_override.valid = true;
+        strlcpy(s_load_override.filepath, swap->artwork.filepath, sizeof(s_load_override.filepath));
+        s_load_override.type = swap->artwork.type;
+        s_load_override.start_frame = swap->start_frame;
+        s_load_override.start_time_ms = swap->start_time_ms;
+        s_load_override.is_live_mode_swap = swap->is_live_mode_swap;
+        s_load_override.live_index = swap->live_index;
+
         s_swap_requested = true;
         xSemaphoreGive(s_buffer_mutex);
         
@@ -500,7 +514,9 @@ esp_err_t swap_future_execute(const swap_future_t *swap)
             xSemaphoreGive(s_loader_sem);
         }
         
-        ESP_LOGI(TAG, "swap_future triggered loader (start_frame support in Phase B2)");
+        ESP_LOGI(TAG, "swap_future triggered loader: %s (type=%d start_frame=%u start_time_ms=%llu)",
+                 s_load_override.filepath, (int)s_load_override.type,
+                 (unsigned)s_load_override.start_frame, (unsigned long long)s_load_override.start_time_ms);
         return ESP_OK;
     }
     

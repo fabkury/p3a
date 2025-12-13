@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
-#include "channel_interface.h"
+#include "playlist_manager.h"  // artwork_ref_t
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,7 +18,9 @@ extern "C" {
 typedef struct {
     bool valid;                   // Whether this swap_future is active
     uint64_t target_time_ms;      // Wall-clock time (ms since epoch) to execute swap
+    uint64_t start_time_ms;       // Ideal wall-clock time when this animation should have started (ms since epoch)
     uint32_t start_frame;         // Which frame to begin at (0-based, 0 = start from beginning)
+    uint32_t live_index;          // Flattened Live Mode index (0..live_count-1). Undefined if not a Live Mode swap.
     artwork_ref_t artwork;        // Artwork to load and swap to
     bool is_live_mode_swap;       // Whether this swap maintains Live Mode synchronization
     bool is_automated;            // True for auto-swaps, false for manual swaps
@@ -140,6 +142,39 @@ void live_mode_exit(void *navigator);
  * @return true if in Live Mode, false otherwise
  */
 bool live_mode_is_active(void *navigator);
+
+/**
+ * @brief Live Mode helper: schedule the next automatic swap_future
+ *
+ * Calculates the next Live Mode transition time from wall clock, and schedules a swap_future
+ * that will execute at the ideal boundary. Intended to be called by auto_swap_task.
+ *
+ * @param navigator Play navigator (play_navigator_t*)
+ * @return ESP_OK if scheduled, ESP_ERR_INVALID_STATE if not in Live Mode, or other error.
+ */
+esp_err_t live_mode_schedule_next_swap(void *navigator);
+
+/**
+ * @brief Live Mode recovery: after a failed swap, skip forward to a decodable item
+ *
+ * Searches forward (wraparound) in the flattened live schedule up to a bounded scan depth,
+ * and schedules an immediate swap_future to the first candidate whose file exists.
+ *
+ * Note: "available" is fully determined by loader+prefetch success; this function only chooses
+ * candidates deterministically and triggers attempts. It does not block to decode.
+ *
+ * @param navigator Play navigator (play_navigator_t*)
+ * @param failed_live_index Live schedule index that failed (0..live_count-1)
+ * @param reason Error code for logging/backoff decisions
+ */
+esp_err_t live_mode_recover_from_failed_swap(void *navigator, uint32_t failed_live_index, esp_err_t reason);
+
+/**
+ * @brief Live Mode notification: swap succeeded
+ *
+ * Used to reset recovery backoff counters when a scheduled swap completes successfully.
+ */
+void live_mode_notify_swap_succeeded(uint32_t live_index);
 
 #ifdef __cplusplus
 }

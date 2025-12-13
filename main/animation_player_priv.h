@@ -97,6 +97,17 @@ typedef struct {
     uint32_t current_frame_delay_ms;
     bool ready;
     char *filepath;  // Path to the animation file
+
+    // Live Mode / swap_future start alignment
+    // - start_time_ms: ideal wall-clock time when this animation "started" (UTC, ms since epoch).
+    //   Prefetch will align by seeking to (now_ms - start_time_ms).
+    // - start_frame: optional explicit frame seek (frame index); used when start_time_ms == 0.
+    uint64_t start_time_ms;
+    uint32_t start_frame;
+
+    // Live Mode swap context (for recovery)
+    bool is_live_mode_swap;
+    uint32_t live_index;
 } animation_buffer_t;
 
 // Animation player state (now delegates to display_renderer for LCD operations)
@@ -109,6 +120,21 @@ extern TaskHandle_t s_loader_task;
 extern SemaphoreHandle_t s_loader_sem;
 extern SemaphoreHandle_t s_buffer_mutex;
 
+// Override for the next load triggered by swap_future_execute().
+// If valid, the loader will load this filepath/type instead of channel_player current item,
+// and will propagate start_time_ms/start_frame to the back buffer for prefetch alignment.
+typedef struct {
+    bool valid;
+    char filepath[256];
+    asset_type_t type;
+    uint64_t start_time_ms;
+    uint32_t start_frame;
+    bool is_live_mode_swap;
+    uint32_t live_index;
+} animation_load_override_t;
+
+extern animation_load_override_t s_load_override;
+
 extern bool s_anim_paused;
 
 extern app_lcd_sd_file_list_t s_sd_file_list;
@@ -116,12 +142,14 @@ extern bool s_sd_mounted;
 extern bool s_sd_export_active;
 
 // Animation loading functions
-esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, animation_buffer_t *buf);
+esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, animation_buffer_t *buf,
+                                     uint32_t start_frame, uint64_t start_time_ms);
 void unload_animation_buffer(animation_buffer_t *buf);
 esp_err_t prefetch_first_frame(animation_buffer_t *buf);
 void animation_loader_task(void *arg);
 void animation_loader_wait_for_idle(void);
 void animation_loader_mark_swap_successful(void);
+bool animation_loader_try_delete_corrupt_vault_file(const char *filepath, esp_err_t error);
 
 // Directory enumeration
 bool directory_has_animation_files(const char *dir_path);

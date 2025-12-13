@@ -300,6 +300,14 @@ bool channel_player_is_live_mode_active(void)
     return live_mode_is_active(channel_get_navigator(s_player.current_channel));
 }
 
+void *channel_player_get_navigator(void)
+{
+    if (!s_player.initialized || !s_player.current_channel) {
+        return NULL;
+    }
+    return channel_get_navigator(s_player.current_channel);
+}
+
 void channel_player_exit_live_mode(void)
 {
     if (!s_player.initialized || !s_player.current_channel) {

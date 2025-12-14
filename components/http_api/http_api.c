@@ -327,6 +327,36 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
         api_enqueue_swap_next();
     } else if (strcmp(command_type, "swap_back") == 0) {
         api_enqueue_swap_back();
+    } else if (strcmp(command_type, "set_background_color") == 0) {
+        // Payload: {"r":0,"g":0,"b":0}
+        if (!payload || !cJSON_IsObject(payload)) {
+            ESP_LOGE(HTTP_API_TAG, "Invalid set_background_color payload (expected object)");
+            return;
+        }
+
+        cJSON *r = cJSON_GetObjectItem(payload, "r");
+        cJSON *g = cJSON_GetObjectItem(payload, "g");
+        cJSON *b = cJSON_GetObjectItem(payload, "b");
+
+        if (!r || !g || !b || !cJSON_IsNumber(r) || !cJSON_IsNumber(g) || !cJSON_IsNumber(b)) {
+            ESP_LOGE(HTTP_API_TAG, "Invalid set_background_color payload fields");
+            return;
+        }
+
+        int rv = (int)cJSON_GetNumberValue(r);
+        int gv = (int)cJSON_GetNumberValue(g);
+        int bv = (int)cJSON_GetNumberValue(b);
+        if (rv < 0) rv = 0;
+        if (rv > 255) rv = 255;
+        if (gv < 0) gv = 0;
+        if (gv > 255) gv = 255;
+        if (bv < 0) bv = 0;
+        if (bv > 255) bv = 255;
+
+        esp_err_t err = config_store_set_background_color((uint8_t)rv, (uint8_t)gv, (uint8_t)bv);
+        if (err != ESP_OK) {
+            ESP_LOGE(HTTP_API_TAG, "Failed to set background color: %s", esp_err_to_name(err));
+        }
     } else if (strcmp(command_type, "play_channel") == 0) {
         // Extract channel information from payload
         cJSON *channel = cJSON_GetObjectItem(payload, "channel");

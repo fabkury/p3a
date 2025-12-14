@@ -2,9 +2,17 @@
 #include "animation_player.h"
 #include "channel_player.h"
 #include "swap_future.h"
+#include "sdio_bus.h"
+#include "ota_manager.h"
 #include <unistd.h>
 #include <errno.h>
 #include "freertos/task.h"
+
+// Some tooling configurations may not resolve component include paths reliably for C files.
+// Keep explicit prototypes here to avoid "implicit declaration" diagnostics.
+bool sdio_bus_is_locked(void);
+const char *sdio_bus_get_holder(void);
+bool ota_manager_is_checking(void);
 
 // ============================================================================
 // Corrupt file deletion safeguard
@@ -89,6 +97,23 @@ static void discard_failed_swap_request(esp_err_t error, bool is_live_mode_swap)
     } else {
         ESP_LOGW(TAG, "Failed to load animation (error: %s). System remains responsive.",
                  esp_err_to_name(error));
+    }
+}
+
+// Clear an in-flight swap request without treating it as a failure (no auto-retry).
+// Used for cases where a swap is intentionally ignored.
+static void discard_ignored_swap_request(void)
+{
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        s_swap_requested = false;
+        s_loader_busy = false;
+
+        // Back buffer should not be populated for ignored swaps, but keep it safe.
+        if (s_back_buffer.decoder || s_back_buffer.file_data) {
+            unload_animation_buffer(&s_back_buffer);
+        }
+
+        xSemaphoreGive(s_buffer_mutex);
     }
 }
 
@@ -192,6 +217,62 @@ void animation_loader_task(void *arg)
             xSemaphoreGive(s_buffer_mutex);
         }
 
+        // Apply deferred manual cycle (advance/go_back + exit Live Mode) in the loader task context
+        // to avoid overflowing the touch task stack.
+        if (!ov.valid) {
+            bool do_cycle = false;
+            bool cycle_forward = true;
+            if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+                do_cycle = s_cycle_pending;
+                cycle_forward = s_cycle_forward;
+                s_cycle_pending = false;
+                xSemaphoreGive(s_buffer_mutex);
+            }
+            if (do_cycle) {
+                // Re-run "swap request ignored" checks here (moved from touch path).
+                if (display_renderer_is_ui_mode()) {
+                    ESP_LOGW(TAG, "Deferred cycle ignored: UI mode active");
+                    discard_failed_swap_request(ESP_ERR_INVALID_STATE, false);
+                    continue;
+                }
+                if (animation_player_is_sd_export_locked()) {
+                    ESP_LOGW(TAG, "Deferred cycle ignored: SD card is exported over USB");
+                    discard_failed_swap_request(ESP_ERR_INVALID_STATE, false);
+                    continue;
+                }
+                if (animation_player_is_sd_paused()) {
+                    ESP_LOGW(TAG, "Deferred cycle ignored: SD access paused for OTA");
+                    discard_failed_swap_request(ESP_ERR_INVALID_STATE, false);
+                    continue;
+                }
+                if (sdio_bus_is_locked()) {
+                    ESP_LOGW(TAG, "Deferred cycle ignored: SDIO bus locked by %s",
+                             sdio_bus_get_holder() ? sdio_bus_get_holder() : "unknown");
+                    discard_failed_swap_request(ESP_ERR_INVALID_STATE, false);
+                    continue;
+                }
+                if (ota_manager_is_checking()) {
+                    ESP_LOGW(TAG, "Deferred cycle ignored: OTA check in progress");
+                    discard_failed_swap_request(ESP_ERR_INVALID_STATE, false);
+                    continue;
+                }
+                if (channel_player_get_post_count() == 0) {
+                    ESP_LOGW(TAG, "Deferred cycle ignored: no animations available");
+                    discard_failed_swap_request(ESP_ERR_NOT_FOUND, false);
+                    continue;
+                }
+
+                // Manual swaps break synchronization.
+                channel_player_exit_live_mode();
+                esp_err_t adv_err = cycle_forward ? channel_player_advance() : channel_player_go_back();
+                if (adv_err != ESP_OK) {
+                    ESP_LOGW(TAG, "Deferred cycle failed: %s", esp_err_to_name(adv_err));
+                    discard_failed_swap_request(adv_err, false);
+                    continue;
+                }
+            }
+        }
+
         const sdcard_post_t *post = NULL;
         const char *filepath = NULL;
         asset_type_t type = ASSET_TYPE_WEBP;
@@ -220,6 +301,26 @@ void animation_loader_task(void *arg)
             filepath = post->filepath;
             type = post->type;
             name_for_log = post->name;
+        }
+
+        // If this is a normal swap request (not swap_future) and the target filepath is
+        // exactly the same as what we're already playing, ignore the swap entirely.
+        // swap_future is exempt because it can carry start alignment (re-sync) semantics.
+        if (!ov.valid && filepath) {
+            bool same_as_current = false;
+            if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+                const char *current_fp = s_front_buffer.filepath;
+                if (current_fp && strcmp(current_fp, filepath) == 0) {
+                    same_as_current = true;
+                }
+                xSemaphoreGive(s_buffer_mutex);
+            }
+
+            if (same_as_current) {
+                ESP_LOGI(TAG, "Loader task: Ignoring swap request (already playing): %s", filepath);
+                discard_ignored_swap_request();
+                continue;
+            }
         }
 
         ESP_LOGD(TAG, "Loader task: Loading animation '%s' into back buffer", name_for_log ? name_for_log : "(null)");
@@ -459,17 +560,8 @@ esp_err_t refresh_animation_file_list(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    char *found_dir = NULL;
-    esp_err_t err = find_animations_directory(BSP_SD_MOUNT_POINT, &found_dir);
-    if (err != ESP_OK || !found_dir) {
-        if (found_dir) {
-            free(found_dir);
-        }
-        return err != ESP_OK ? err : ESP_ERR_NOT_FOUND;
-    }
-
-    esp_err_t enum_err = sdcard_channel_refresh(found_dir);
-    free(found_dir);
+    const char *animations_dir = ANIMATIONS_PREFERRED_DIR;
+    esp_err_t enum_err = sdcard_channel_refresh(animations_dir);
     
     if (enum_err == ESP_OK) {
         channel_player_load_channel();
@@ -497,6 +589,7 @@ void unload_animation_buffer(animation_buffer_t *buf)
     buf->native_frame_b1 = NULL;
     buf->native_frame_b2 = NULL;
     buf->native_buffer_active = 0;
+    buf->native_bytes_per_pixel = 0;
     buf->native_frame_size = 0;
 
     heap_caps_free(buf->upscale_lookup_x);
@@ -507,12 +600,20 @@ void unload_animation_buffer(animation_buffer_t *buf)
     buf->upscale_src_h = 0;
     buf->upscale_dst_w = 0;
     buf->upscale_dst_h = 0;
+    buf->upscale_offset_x = 0;
+    buf->upscale_offset_y = 0;
+    buf->upscale_scaled_w = 0;
+    buf->upscale_scaled_h = 0;
+    buf->upscale_has_borders = false;
+    buf->upscale_rotation_built = DISPLAY_ROTATION_0;
 
     buf->first_frame_ready = false;
     buf->decoder_at_frame_1 = false;
     buf->prefetch_pending = false;
     buf->prefetched_first_frame_delay_ms = 1;
     buf->current_frame_delay_ms = 1;
+    buf->static_frame_cached = false;
+    buf->static_bg_generation = 0;
     buf->start_time_ms = 0;
     buf->start_frame = 0;
     buf->is_live_mode_swap = false;
@@ -524,6 +625,138 @@ void unload_animation_buffer(animation_buffer_t *buf)
     buf->ready = false;
     memset(&buf->decoder_info, 0, sizeof(buf->decoder_info));
     buf->asset_index = 0;
+}
+
+// ============================================================================
+// Upscale map building (aspect-ratio preserving + rotation-aware)
+// ============================================================================
+
+static esp_err_t build_upscale_maps_for_buffer(animation_buffer_t *buf, int canvas_w, int canvas_h, display_rotation_t rotation)
+{
+    if (!buf || canvas_w <= 0 || canvas_h <= 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const int target_w = EXAMPLE_LCD_H_RES;
+    const int target_h = EXAMPLE_LCD_V_RES;
+
+    // Compute scaled rectangle in PHYSICAL framebuffer coordinates (dst_x/dst_y).
+    // For 90/270 we swap source dimensions for aspect-ratio decisions (matches visual rotation),
+    // but lookup tables always map to the original source axes:
+    // - lookup_x maps to source X in [0, canvas_w)
+    // - lookup_y maps to source Y in [0, canvas_h)
+    const bool swap_src = (rotation == DISPLAY_ROTATION_90 || rotation == DISPLAY_ROTATION_270);
+    const int src_w_eff = swap_src ? canvas_h : canvas_w;
+    const int src_h_eff = swap_src ? canvas_w : canvas_h;
+
+    int scaled_w = target_w;
+    int scaled_h = target_h;
+
+    // Fit-to-screen, preserve aspect ratio (no cropping).
+    if ((int64_t)src_w_eff * (int64_t)target_h >= (int64_t)src_h_eff * (int64_t)target_w) {
+        // Source wider (or equal): fit width
+        scaled_w = target_w;
+        scaled_h = (int)(((int64_t)target_w * (int64_t)src_h_eff) / (int64_t)src_w_eff);
+    } else {
+        // Source taller: fit height
+        scaled_h = target_h;
+        scaled_w = (int)(((int64_t)target_h * (int64_t)src_w_eff) / (int64_t)src_h_eff);
+    }
+
+    if (scaled_w < 1) scaled_w = 1;
+    if (scaled_h < 1) scaled_h = 1;
+    if (scaled_w > target_w) scaled_w = target_w;
+    if (scaled_h > target_h) scaled_h = target_h;
+
+    const int offset_x = (target_w - scaled_w) / 2;
+    const int offset_y = (target_h - scaled_h) / 2;
+    const bool has_borders = (offset_x > 0) || (offset_y > 0);
+
+    // Lookup lengths depend on rotation because the blitter indexes lookup_x by dst_x for 0/180
+    // but by dst_y for 90/270 (and lookup_y vice-versa).
+    //
+    // IMPORTANT: We do NOT want to free/allocate lookup tables repeatedly under heavy swap/rotate spam.
+    // That creates heap churn and amplifies the impact of any latent corruption. Instead we allocate
+    // both tables once at a fixed "max" length and only rewrite the active prefix.
+    const int used_lookup_x_len = swap_src ? scaled_h : scaled_w; // maps to source X (canvas_w)
+    const int used_lookup_y_len = swap_src ? scaled_w : scaled_h; // maps to source Y (canvas_h)
+    const int max_len = (target_w > target_h) ? target_w : target_h;
+
+    if (!buf->upscale_lookup_x) {
+        buf->upscale_lookup_x = (uint16_t *)heap_caps_malloc((size_t)max_len * sizeof(uint16_t), MALLOC_CAP_INTERNAL);
+        if (!buf->upscale_lookup_x) {
+            ESP_LOGE(TAG, "Failed to allocate upscale lookup X (max_len=%d)", max_len);
+            return ESP_ERR_NO_MEM;
+        }
+    }
+    if (!buf->upscale_lookup_y) {
+        buf->upscale_lookup_y = (uint16_t *)heap_caps_malloc((size_t)max_len * sizeof(uint16_t), MALLOC_CAP_INTERNAL);
+        if (!buf->upscale_lookup_y) {
+            ESP_LOGE(TAG, "Failed to allocate upscale lookup Y (max_len=%d)", max_len);
+            heap_caps_free(buf->upscale_lookup_x);
+            buf->upscale_lookup_x = NULL;
+            return ESP_ERR_NO_MEM;
+        }
+    }
+
+    // Build lookup_x -> source X in [0, canvas_w) for the active prefix
+    for (int i = 0; i < used_lookup_x_len; ++i) {
+        int src_x = (i * canvas_w) / used_lookup_x_len;
+        if (src_x >= canvas_w) src_x = canvas_w - 1;
+        if (src_x < 0) src_x = 0;
+        buf->upscale_lookup_x[i] = (uint16_t)src_x;
+    }
+    // Fill remainder defensively with last valid value
+    if (used_lookup_x_len > 0) {
+        const uint16_t last = buf->upscale_lookup_x[used_lookup_x_len - 1];
+        for (int i = used_lookup_x_len; i < max_len; ++i) {
+            buf->upscale_lookup_x[i] = last;
+        }
+    }
+
+    // Build lookup_y -> source Y in [0, canvas_h) for the active prefix
+    for (int i = 0; i < used_lookup_y_len; ++i) {
+        int src_y = (i * canvas_h) / used_lookup_y_len;
+        if (src_y >= canvas_h) src_y = canvas_h - 1;
+        if (src_y < 0) src_y = 0;
+        buf->upscale_lookup_y[i] = (uint16_t)src_y;
+    }
+    if (used_lookup_y_len > 0) {
+        const uint16_t last = buf->upscale_lookup_y[used_lookup_y_len - 1];
+        for (int i = used_lookup_y_len; i < max_len; ++i) {
+            buf->upscale_lookup_y[i] = last;
+        }
+    }
+
+    buf->upscale_src_w = canvas_w;
+    buf->upscale_src_h = canvas_h;
+    buf->upscale_dst_w = target_w;
+    buf->upscale_dst_h = target_h;
+    buf->upscale_offset_x = offset_x;
+    buf->upscale_offset_y = offset_y;
+    buf->upscale_scaled_w = scaled_w;
+    buf->upscale_scaled_h = scaled_h;
+    buf->upscale_has_borders = has_borders;
+    buf->upscale_rotation_built = rotation;
+
+    ESP_LOGD(TAG, "Upscale maps: %dx%d -> %dx%d (offset %d,%d, scaled %dx%d, borders=%d, rot=%d)",
+             canvas_w, canvas_h, target_w, target_h, offset_x, offset_y, scaled_w, scaled_h,
+             (int)has_borders, (int)rotation);
+
+    return ESP_OK;
+}
+
+esp_err_t animation_loader_rebuild_upscale_maps(animation_buffer_t *buf, display_rotation_t rotation)
+{
+    if (!buf || !buf->decoder) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    const int canvas_w = (int)buf->decoder_info.canvas_width;
+    const int canvas_h = (int)buf->decoder_info.canvas_height;
+    if (canvas_w <= 0 || canvas_h <= 0) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+    return build_upscale_maps_for_buffer(buf, canvas_w, canvas_h, rotation);
 }
 
 static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf, asset_type_t type, const uint8_t *data, size_t size)
@@ -558,9 +791,24 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf, asse
         return err;
     }
 
+    // One-time diagnostic (DEBUG): how this asset flows through the pipeline.
+    {
+        uint8_t br = 0, bg = 0, bb = 0;
+        config_store_get_background_color(&br, &bg, &bb);
+        const char *pf = (buf->decoder_info.pixel_format == ANIMATION_PIXEL_FORMAT_RGB888) ? "RGB888" : "RGBA8888";
+        ESP_LOGD(TAG, "Decoder: %ux%u frames=%u transp=%d fmt=%s bg=(%u,%u,%u)",
+                 (unsigned)buf->decoder_info.canvas_width,
+                 (unsigned)buf->decoder_info.canvas_height,
+                 (unsigned)buf->decoder_info.frame_count,
+                 (int)buf->decoder_info.has_transparency,
+                 pf,
+                 (unsigned)br, (unsigned)bg, (unsigned)bb);
+    }
+
     const int canvas_w = (int)buf->decoder_info.canvas_width;
     const int canvas_h = (int)buf->decoder_info.canvas_height;
-    buf->native_frame_size = (size_t)canvas_w * canvas_h * 4;
+    buf->native_bytes_per_pixel = (buf->decoder_info.pixel_format == ANIMATION_PIXEL_FORMAT_RGB888) ? 3 : 4;
+    buf->native_frame_size = (size_t)canvas_w * canvas_h * (size_t)buf->native_bytes_per_pixel;
 
     buf->native_frame_b1 = (uint8_t *)malloc(buf->native_frame_size);
     if (!buf->native_frame_b1) {
@@ -580,41 +828,13 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf, asse
 
     buf->native_buffer_active = 0;
 
-    const int target_w = EXAMPLE_LCD_H_RES;
-    const int target_h = EXAMPLE_LCD_V_RES;
-
-    heap_caps_free(buf->upscale_lookup_x);
-    heap_caps_free(buf->upscale_lookup_y);
-
-    buf->upscale_lookup_x = (uint16_t *)heap_caps_malloc((size_t)target_w * sizeof(uint16_t), MALLOC_CAP_INTERNAL);
-    if (!buf->upscale_lookup_x) {
-        ESP_LOGE(TAG, "Failed to allocate upscale lookup X");
+    // Build aspect-ratio preserving lookup maps for the CURRENT rotation.
+    // If rotation changes later, the maps must be rebuilt.
+    esp_err_t map_err = build_upscale_maps_for_buffer(buf, canvas_w, canvas_h, display_renderer_get_rotation());
+    if (map_err != ESP_OK) {
         unload_animation_buffer(buf);
-        return ESP_ERR_NO_MEM;
+        return map_err;
     }
-
-    buf->upscale_lookup_y = (uint16_t *)heap_caps_malloc((size_t)target_h * sizeof(uint16_t), MALLOC_CAP_INTERNAL);
-    if (!buf->upscale_lookup_y) {
-        ESP_LOGE(TAG, "Failed to allocate upscale lookup Y");
-        unload_animation_buffer(buf);
-        return ESP_ERR_NO_MEM;
-    }
-
-            for (int dst_x = 0; dst_x < target_w; ++dst_x) {
-                int src_x = (dst_x * canvas_w) / target_w;
-                if (src_x >= canvas_w) src_x = canvas_w - 1;
-                buf->upscale_lookup_x[dst_x] = (uint16_t)src_x;
-            }
-            for (int dst_y = 0; dst_y < target_h; ++dst_y) {
-                int src_y = (dst_y * canvas_h) / target_h;
-                if (src_y >= canvas_h) src_y = canvas_h - 1;
-                buf->upscale_lookup_y[dst_y] = (uint16_t)src_y;
-    }
-
-    buf->upscale_src_w = canvas_w;
-    buf->upscale_src_h = canvas_h;
-    buf->upscale_dst_w = target_w;
-    buf->upscale_dst_h = target_h;
 
     return ESP_OK;
 }

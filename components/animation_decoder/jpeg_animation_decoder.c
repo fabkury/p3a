@@ -25,11 +25,9 @@ typedef struct {
     uint32_t canvas_height;
     uint8_t *rgb_buffer;      // RGB888 buffer from hardware decoder
     size_t rgb_buffer_size;
-    uint8_t *rgba_buffer;     // RGBA buffer for output (converted from RGB)
-    size_t rgba_buffer_size;
     bool initialized;
     uint32_t current_frame_delay_ms;
-    jpeg_dec_output_format_t output_format;  // RGB888 or RGB565
+    jpeg_dec_output_format_t output_format;  // RGB888
 } jpeg_decoder_data_t;
 
 esp_err_t jpeg_decoder_init(animation_decoder_t **decoder, const uint8_t *data, size_t size)
@@ -87,16 +85,9 @@ esp_err_t jpeg_decoder_init(animation_decoder_t **decoder, const uint8_t *data, 
     jpeg_data->canvas_width = info.width;
     jpeg_data->canvas_height = info.height;
 
-    // Determine output format based on LCD configuration
-    // JPEG hardware can output RGB888 or RGB565
-    // We'll use RGB888 and convert to RGBA for the interface
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-    jpeg_data->output_format = JPEG_DECODE_OUT_FORMAT_RGB565;
-    jpeg_data->rgb_buffer_size = (size_t)info.width * info.height * 2;  // RGB565 = 2 bytes per pixel
-#else
+    // Always decode to RGB888 for p3a's internal pipeline.
     jpeg_data->output_format = JPEG_DECODE_OUT_FORMAT_RGB888;
     jpeg_data->rgb_buffer_size = (size_t)info.width * info.height * 3;  // RGB888 = 3 bytes per pixel
-#endif
 
     // Allocate RGB buffer for hardware decoder output
     jpeg_decode_memory_alloc_cfg_t mem_cfg = {
@@ -112,17 +103,6 @@ esp_err_t jpeg_decoder_init(animation_decoder_t **decoder, const uint8_t *data, 
     }
     jpeg_data->rgb_buffer_size = allocated_size;  // Use actual allocated size
 
-    // Allocate RGBA buffer for output (always RGBA for interface compatibility)
-    jpeg_data->rgba_buffer_size = (size_t)info.width * info.height * 4;
-    jpeg_data->rgba_buffer = (uint8_t *)malloc(jpeg_data->rgba_buffer_size);
-    if (!jpeg_data->rgba_buffer) {
-        ESP_LOGE(TAG, "Failed to allocate RGBA buffer (%zu bytes)", jpeg_data->rgba_buffer_size);
-        free(jpeg_data->rgb_buffer);
-        jpeg_del_decoder_engine(jpeg_data->decoder_engine);
-        free(jpeg_data);
-        return ESP_ERR_NO_MEM;
-    }
-
     // Configure decode parameters
     jpeg_decode_cfg_t decode_cfg = {
         .output_format = jpeg_data->output_format,
@@ -137,46 +117,11 @@ esp_err_t jpeg_decoder_init(animation_decoder_t **decoder, const uint8_t *data, 
                                &out_size);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to decode JPEG: %s", esp_err_to_name(err));
-        free(jpeg_data->rgba_buffer);
         free(jpeg_data->rgb_buffer);
         jpeg_del_decoder_engine(jpeg_data->decoder_engine);
         free(jpeg_data);
         return err;
     }
-
-    // Convert RGB to RGBA
-    const size_t pixel_count = (size_t)info.width * info.height;
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-    // Convert RGB565 to RGBA8888
-    uint16_t *rgb565_src = (uint16_t *)jpeg_data->rgb_buffer;
-    uint8_t *rgba_dst = jpeg_data->rgba_buffer;
-    for (size_t i = 0; i < pixel_count; i++) {
-        uint16_t pixel = rgb565_src[i];
-        // Extract RGB565 components
-        uint8_t r = ((pixel >> 11) & 0x1F) << 3;
-        uint8_t g = ((pixel >> 5) & 0x3F) << 2;
-        uint8_t b = (pixel & 0x1F) << 3;
-        // Expand to full 8-bit range
-        r |= r >> 5;
-        g |= g >> 6;
-        b |= b >> 5;
-        // Store as RGBA
-        rgba_dst[i * 4 + 0] = r;
-        rgba_dst[i * 4 + 1] = g;
-        rgba_dst[i * 4 + 2] = b;
-        rgba_dst[i * 4 + 3] = 255;  // Alpha = opaque
-    }
-#else
-    // Convert RGB888 to RGBA8888
-    uint8_t *rgb_src = jpeg_data->rgb_buffer;
-    uint8_t *rgba_dst = jpeg_data->rgba_buffer;
-    for (size_t i = 0; i < pixel_count; i++) {
-        rgba_dst[i * 4 + 0] = rgb_src[i * 3 + 0];  // R
-        rgba_dst[i * 4 + 1] = rgb_src[i * 3 + 1];  // G
-        rgba_dst[i * 4 + 2] = rgb_src[i * 3 + 2];  // B
-        rgba_dst[i * 4 + 3] = 255;  // Alpha = opaque
-    }
-#endif
 
     jpeg_data->initialized = true;
 
@@ -184,7 +129,6 @@ esp_err_t jpeg_decoder_init(animation_decoder_t **decoder, const uint8_t *data, 
     animation_decoder_t *dec = (animation_decoder_t *)calloc(1, sizeof(animation_decoder_t));
     if (!dec) {
         ESP_LOGE(TAG, "Failed to allocate decoder");
-        free(jpeg_data->rgba_buffer);
         free(jpeg_data->rgb_buffer);
         jpeg_del_decoder_engine(jpeg_data->decoder_engine);
         free(jpeg_data);
@@ -218,6 +162,7 @@ esp_err_t jpeg_decoder_get_info_wrapper(animation_decoder_t *decoder, animation_
     info->canvas_height = jpeg_data->canvas_height;
     info->frame_count = 1; // JPEG is always single frame
     info->has_transparency = false; // JPEG doesn't support transparency
+    info->pixel_format = ANIMATION_PIXEL_FORMAT_RGB888;
 
     return ESP_OK;
 }
@@ -229,14 +174,39 @@ esp_err_t jpeg_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_b
     }
 
     jpeg_decoder_data_t *jpeg_data = (jpeg_decoder_data_t *)decoder->impl.jpeg.jpeg_decoder;
-    if (!jpeg_data || !jpeg_data->initialized || !jpeg_data->rgba_buffer) {
+    if (!jpeg_data || !jpeg_data->initialized || !jpeg_data->rgb_buffer) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    // Copy pre-decoded RGBA frame
-    memcpy(rgba_buffer, jpeg_data->rgba_buffer, jpeg_data->rgba_buffer_size);
+    // Convert RGB888 -> RGBA8888 on demand (legacy API)
+    const size_t pixel_count = (size_t)jpeg_data->canvas_width * (size_t)jpeg_data->canvas_height;
+    const uint8_t *rgb = jpeg_data->rgb_buffer;
+    uint8_t *dst = rgba_buffer;
+    for (size_t i = 0; i < pixel_count; i++) {
+        dst[i * 4 + 0] = rgb[i * 3 + 0];
+        dst[i * 4 + 1] = rgb[i * 3 + 1];
+        dst[i * 4 + 2] = rgb[i * 3 + 2];
+        dst[i * 4 + 3] = 255;
+    }
     jpeg_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
 
+    return ESP_OK;
+}
+
+esp_err_t jpeg_decoder_decode_next_rgb(animation_decoder_t *decoder, uint8_t *rgb_buffer)
+{
+    if (!decoder || !rgb_buffer || decoder->type != ANIMATION_DECODER_TYPE_JPEG) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    jpeg_decoder_data_t *jpeg_data = (jpeg_decoder_data_t *)decoder->impl.jpeg.jpeg_decoder;
+    if (!jpeg_data || !jpeg_data->initialized || !jpeg_data->rgb_buffer) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    const size_t sz = (size_t)jpeg_data->canvas_width * (size_t)jpeg_data->canvas_height * 3U;
+    memcpy(rgb_buffer, jpeg_data->rgb_buffer, sz);
+    jpeg_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
     return ESP_OK;
 }
 
@@ -285,10 +255,6 @@ void jpeg_decoder_unload(animation_decoder_t **decoder)
 
     jpeg_decoder_data_t *jpeg_data = (jpeg_decoder_data_t *)dec->impl.jpeg.jpeg_decoder;
     if (jpeg_data) {
-        if (jpeg_data->rgba_buffer) {
-            free(jpeg_data->rgba_buffer);
-            jpeg_data->rgba_buffer = NULL;
-        }
         if (jpeg_data->rgb_buffer) {
             free(jpeg_data->rgb_buffer);
             jpeg_data->rgb_buffer = NULL;

@@ -7,6 +7,7 @@
 #include "animation_decoder.h"
 #include "animation_decoder_internal.h"
 #include "static_image_decoder_common.h"
+#include "config_store.h"
 #include "png.h"
 #include "esp_log.h"
 #include "esp_err.h"
@@ -22,7 +23,9 @@ typedef struct {
     size_t read_offset;
     uint32_t canvas_width;
     uint32_t canvas_height;
-    uint8_t *rgba_buffer;
+    uint8_t *rgb_buffer;   // RGB888 when opaque
+    size_t rgb_buffer_size;
+    uint8_t *rgba_buffer;  // RGBA8888 when source has transparency
     size_t rgba_buffer_size;
     bool has_transparency;
     bool initialized;
@@ -119,7 +122,7 @@ esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
     png_data->canvas_height = height;
     png_data->has_transparency = (color_type & PNG_COLOR_MASK_ALPHA) != 0 || png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS);
 
-    // Transform to RGBA format
+    // Transform to RGB or RGBA
     if (bit_depth == 16) {
         png_set_strip_16(png_ptr);
     }
@@ -129,14 +132,20 @@ esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
     if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8) {
         png_set_expand_gray_1_2_4_to_8(png_ptr);
     }
-    if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)) {
-        png_set_tRNS_to_alpha(png_ptr);
-    }
     if (color_type == PNG_COLOR_TYPE_GRAY || color_type == PNG_COLOR_TYPE_GRAY_ALPHA) {
         png_set_gray_to_rgb(png_ptr);
     }
-    if (!(color_type & PNG_COLOR_MASK_ALPHA)) {
-        png_set_add_alpha(png_ptr, 0xFF, PNG_FILLER_AFTER);
+    if (png_data->has_transparency) {
+        // Ensure an explicit alpha channel for blending
+        if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)) {
+            png_set_tRNS_to_alpha(png_ptr);
+        }
+        if (!(color_type & PNG_COLOR_MASK_ALPHA)) {
+            png_set_add_alpha(png_ptr, 0xFF, PNG_FILLER_AFTER);
+        }
+    } else {
+        // Keep it RGB (no alpha) for performance
+        // If there is an alpha channel, has_transparency would already be true.
     }
 
     number_of_passes = png_set_interlace_handling(png_ptr);
@@ -147,14 +156,26 @@ esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
     // Update info after transformations
     png_read_update_info(png_ptr, info_ptr);
 
-    // Allocate RGBA buffer
-    png_data->rgba_buffer_size = (size_t)width * height * 4;
-    png_data->rgba_buffer = (uint8_t *)malloc(png_data->rgba_buffer_size);
-    if (!png_data->rgba_buffer) {
-        ESP_LOGE(TAG, "Failed to allocate RGBA buffer (%zu bytes)", png_data->rgba_buffer_size);
-        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-        free(png_data);
-        return ESP_ERR_NO_MEM;
+    const png_size_t rowbytes = png_get_rowbytes(png_ptr, info_ptr);
+
+    if (png_data->has_transparency) {
+        png_data->rgba_buffer_size = (size_t)rowbytes * (size_t)height;
+        png_data->rgba_buffer = (uint8_t *)malloc(png_data->rgba_buffer_size);
+        if (!png_data->rgba_buffer) {
+            ESP_LOGE(TAG, "Failed to allocate RGBA buffer (%zu bytes)", png_data->rgba_buffer_size);
+            png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+            free(png_data);
+            return ESP_ERR_NO_MEM;
+        }
+    } else {
+        png_data->rgb_buffer_size = (size_t)rowbytes * (size_t)height;
+        png_data->rgb_buffer = (uint8_t *)malloc(png_data->rgb_buffer_size);
+        if (!png_data->rgb_buffer) {
+            ESP_LOGE(TAG, "Failed to allocate RGB buffer (%zu bytes)", png_data->rgb_buffer_size);
+            png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+            free(png_data);
+            return ESP_ERR_NO_MEM;
+        }
     }
 
     // Allocate row pointers
@@ -162,14 +183,16 @@ esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
     if (!row_pointers) {
         ESP_LOGE(TAG, "Failed to allocate row pointers");
         free(png_data->rgba_buffer);
+        free(png_data->rgb_buffer);
         png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
         free(png_data);
         return ESP_ERR_NO_MEM;
     }
 
     // Set up row pointers
+    uint8_t *base = png_data->has_transparency ? png_data->rgba_buffer : png_data->rgb_buffer;
     for (png_uint_32 y = 0; y < height; y++) {
-        row_pointers[y] = png_data->rgba_buffer + (size_t)y * width * 4;
+        row_pointers[y] = base + (size_t)y * (size_t)rowbytes;
     }
 
     // Read image data (handle interlaced images if needed)
@@ -228,6 +251,7 @@ esp_err_t png_decoder_get_info(animation_decoder_t *decoder, animation_decoder_i
     info->canvas_height = png_data->canvas_height;
     info->frame_count = 1; // PNG is always single frame
     info->has_transparency = png_data->has_transparency;
+    info->pixel_format = ANIMATION_PIXEL_FORMAT_RGB888;
 
     return ESP_OK;
 }
@@ -239,14 +263,99 @@ esp_err_t png_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_bu
     }
 
     png_decoder_data_t *png_data = (png_decoder_data_t *)decoder->impl.png.png_decoder;
-    if (!png_data || !png_data->initialized || !png_data->rgba_buffer) {
+    if (!png_data || !png_data->initialized) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    // Copy pre-decoded frame
-    memcpy(rgba_buffer, png_data->rgba_buffer, png_data->rgba_buffer_size);
+    if (png_data->has_transparency) {
+        if (!png_data->rgba_buffer || png_data->rgba_buffer_size == 0) {
+            return ESP_ERR_INVALID_STATE;
+        }
+        memcpy(rgba_buffer, png_data->rgba_buffer, png_data->rgba_buffer_size);
+    } else {
+        if (!png_data->rgb_buffer || png_data->rgb_buffer_size == 0) {
+            return ESP_ERR_INVALID_STATE;
+        }
+        const size_t pixel_count = (size_t)png_data->canvas_width * (size_t)png_data->canvas_height;
+        const uint8_t *src = png_data->rgb_buffer;
+        for (size_t i = 0; i < pixel_count; i++) {
+            rgba_buffer[i * 4 + 0] = src[i * 3 + 0];
+            rgba_buffer[i * 4 + 1] = src[i * 3 + 1];
+            rgba_buffer[i * 4 + 2] = src[i * 3 + 2];
+            rgba_buffer[i * 4 + 3] = 255;
+        }
+    }
     png_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
 
+    return ESP_OK;
+}
+
+static inline uint8_t div255_u16(uint16_t x)
+{
+    // Accurate (x / 255) for 0..65535 using 16-bit math.
+    uint16_t t = (uint16_t)(x + 128);
+    return (uint8_t)((t + (t >> 8)) >> 8);
+}
+
+static inline uint8_t blend_chan(uint8_t src, uint8_t bg, uint8_t a)
+{
+    const uint16_t inv = (uint16_t)(255U - (uint16_t)a);
+    const uint16_t x = (uint16_t)src * (uint16_t)a + (uint16_t)bg * inv;
+    return div255_u16(x);
+}
+
+esp_err_t png_decoder_decode_next_rgb(animation_decoder_t *decoder, uint8_t *rgb_buffer)
+{
+    if (!decoder || !rgb_buffer || decoder->type != ANIMATION_DECODER_TYPE_PNG) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    png_decoder_data_t *png_data = (png_decoder_data_t *)decoder->impl.png.png_decoder;
+    if (!png_data || !png_data->initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!png_data->has_transparency) {
+        if (!png_data->rgb_buffer || png_data->rgb_buffer_size == 0) {
+            return ESP_ERR_INVALID_STATE;
+        }
+        const size_t sz = (size_t)png_data->canvas_width * (size_t)png_data->canvas_height * 3U;
+        memcpy(rgb_buffer, png_data->rgb_buffer, sz);
+        png_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
+        return ESP_OK;
+    }
+
+    if (!png_data->rgba_buffer || png_data->rgba_buffer_size == 0) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    uint8_t bg_r = 0, bg_g = 0, bg_b = 0;
+    config_store_get_background_color(&bg_r, &bg_g, &bg_b);
+
+    const size_t pixel_count = (size_t)png_data->canvas_width * (size_t)png_data->canvas_height;
+    const uint8_t *src = png_data->rgba_buffer;
+    uint8_t *dst = rgb_buffer;
+    for (size_t i = 0; i < pixel_count; i++) {
+        const uint8_t r = src[i * 4 + 0];
+        const uint8_t g = src[i * 4 + 1];
+        const uint8_t b = src[i * 4 + 2];
+        const uint8_t a = src[i * 4 + 3];
+        if (a == 255) {
+            dst[i * 3 + 0] = r;
+            dst[i * 3 + 1] = g;
+            dst[i * 3 + 2] = b;
+        } else if (a == 0) {
+            dst[i * 3 + 0] = bg_r;
+            dst[i * 3 + 1] = bg_g;
+            dst[i * 3 + 2] = bg_b;
+        } else {
+            dst[i * 3 + 0] = blend_chan(r, bg_r, a);
+            dst[i * 3 + 1] = blend_chan(g, bg_g, a);
+            dst[i * 3 + 2] = blend_chan(b, bg_b, a);
+        }
+    }
+
+    png_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
     return ESP_OK;
 }
 
@@ -295,6 +404,10 @@ void png_decoder_unload(animation_decoder_t **decoder)
 
     png_decoder_data_t *png_data = (png_decoder_data_t *)dec->impl.png.png_decoder;
     if (png_data) {
+        if (png_data->rgb_buffer) {
+            free(png_data->rgb_buffer);
+            png_data->rgb_buffer = NULL;
+        }
         if (png_data->rgba_buffer) {
             free(png_data->rgba_buffer);
             png_data->rgba_buffer = NULL;

@@ -20,6 +20,8 @@ animation_buffer_t s_back_buffer = {0};
 size_t s_next_asset_index = 0;
 bool s_swap_requested = false;
 bool s_loader_busy = false;
+volatile bool s_cycle_pending = false;
+volatile bool s_cycle_forward = true;
 TaskHandle_t s_loader_task = NULL;
 SemaphoreHandle_t s_loader_sem = NULL;
 SemaphoreHandle_t s_buffer_mutex = NULL;
@@ -65,17 +67,18 @@ static esp_err_t mount_sd_and_discover(char **animations_dir_out)
     }
 
     const char *preferred_dir = ANIMATIONS_PREFERRED_DIR;
-    if (directory_has_animation_files(preferred_dir)) {
-        *animations_dir_out = strdup(preferred_dir);
-        if (!*animations_dir_out) {
-            return ESP_ERR_NO_MEM;
-        }
-        ESP_LOGI(TAG, "Using preferred animations directory: %s", preferred_dir);
-        return ESP_OK;
+    *animations_dir_out = strdup(preferred_dir);
+    if (!*animations_dir_out) {
+        return ESP_ERR_NO_MEM;
     }
-
-    ESP_LOGI(TAG, "Preferred directory empty or missing, searching SD card...");
-    return find_animations_directory(BSP_SD_MOUNT_POINT, animations_dir_out);
+    
+    if (directory_has_animation_files(preferred_dir)) {
+        ESP_LOGI(TAG, "Using animations directory: %s", preferred_dir);
+    } else {
+        ESP_LOGI(TAG, "Animations directory is empty: %s", preferred_dir);
+    }
+    
+    return ESP_OK;
 }
 
 static esp_err_t load_first_animation(void)
@@ -379,75 +382,26 @@ bool animation_player_is_paused(void)
 
 void animation_player_cycle_animation(bool forward)
 {
-    if (display_renderer_is_ui_mode()) {
-        ESP_LOGW(TAG, "Swap request ignored: UI mode active");
-        return;
-    }
-
-    if (animation_player_is_sd_export_locked()) {
-        ESP_LOGW(TAG, "Swap request ignored: SD card is exported over USB");
-        return;
-    }
-
-    if (animation_player_is_sd_paused()) {
-        ESP_LOGW(TAG, "Swap request ignored: SD access paused for OTA");
-        return;
-    }
-
-    // Check if SDIO bus is locked (e.g., by OTA check/download)
-    // Discard swap to prevent concurrent SD card access during WiFi operations
-    if (sdio_bus_is_locked()) {
-        ESP_LOGW(TAG, "Swap request ignored: SDIO bus locked by %s", 
-                 sdio_bus_get_holder() ? sdio_bus_get_holder() : "unknown");
-        return;
-    }
-
-    if (ota_manager_is_checking()) {
-        ESP_LOGW(TAG, "Swap request ignored: OTA check in progress (SDIO bus busy)");
-        return;
-    }
-
-    // Exit Live Mode if active (manual swaps break synchronization)
-    channel_player_exit_live_mode();
-
-    if (channel_player_get_post_count() == 0) {
-        ESP_LOGW(TAG, "No animations available to cycle");
-        return;
-    }
-
+    // IMPORTANT: This function is called from the touch task. Keep it stack-light.
+    // Do not call into channel/navigation code here; that can trigger Live Mode schedule builds
+    // (deep stack) and overflow app_touch_task. Instead, defer all work to the loader task.
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
         if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
-            ESP_LOGW(TAG, "Animation change request ignored: swap already in progress");
-            xSemaphoreGive(s_buffer_mutex);
-            return;
-        }
-        xSemaphoreGive(s_buffer_mutex);
-    }
-
-    esp_err_t err = forward ? channel_player_advance() : channel_player_go_back();
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to cycle animation: %s", esp_err_to_name(err));
-        return;
-    }
-
-    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-        if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
-            ESP_LOGW(TAG, "Animation change request ignored: swap already in progress");
             xSemaphoreGive(s_buffer_mutex);
             return;
         }
 
+        // IMPORTANT: Do NOT call channel_player_advance/go_back in the touch task context.
+        // Those paths can build Live Mode schedules and overflow the 4KB touch task stack.
+        // Instead, defer channel navigation to the loader task (which has a larger stack).
+        s_cycle_pending = true;
+        s_cycle_forward = forward;
         s_next_asset_index = forward ? 1 : 0;
         s_swap_requested = true;
         xSemaphoreGive(s_buffer_mutex);
 
         if (s_loader_sem) {
             xSemaphoreGive(s_loader_sem);
-        }
-
-        const sdcard_post_t *post = NULL;
-        if (channel_player_get_current_post(&post) == ESP_OK && post) {
-            ESP_LOGI(TAG, "Queued animation load to '%s'", post->name);
         }
     }
 }
@@ -830,7 +784,11 @@ esp_err_t animation_player_submit_pico8_frame(const uint8_t *palette_rgb, size_t
 
 esp_err_t app_set_screen_rotation(screen_rotation_t rotation)
 {
-    return display_renderer_set_rotation(rotation);
+    esp_err_t err = display_renderer_set_rotation(rotation);
+    if (err == ESP_OK) {
+        animation_player_render_on_rotation_changed(rotation);
+    }
+    return err;
 }
 
 screen_rotation_t app_get_screen_rotation(void)

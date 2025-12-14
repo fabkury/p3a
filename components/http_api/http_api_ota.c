@@ -504,39 +504,47 @@ static esp_err_t h_get_ota_page(httpd_req_t *req) {
     return ESP_OK;
 }
 
+// ---------- Sub-router entrypoints ----------
+
+esp_err_t http_api_ota_route_get(httpd_req_t *req) {
+    const char *uri = req ? req->uri : NULL;
+    if (!uri) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    if (strcmp(uri, "/ota") == 0) {
+        return h_get_ota_page(req);
+    }
+    if (strcmp(uri, "/ota/status") == 0) {
+        return h_get_ota_status(req);
+    }
+
+    return ESP_ERR_NOT_FOUND;
+}
+
+esp_err_t http_api_ota_route_post(httpd_req_t *req) {
+    const char *uri = req ? req->uri : NULL;
+    if (!uri) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    if (strcmp(uri, "/ota/check") == 0) {
+        return h_post_ota_check(req);
+    }
+    if (strcmp(uri, "/ota/install") == 0) {
+        return h_post_ota_install(req);
+    }
+    if (strcmp(uri, "/ota/rollback") == 0) {
+        return h_post_ota_rollback(req);
+    }
+
+    return ESP_ERR_NOT_FOUND;
+}
+
 // ---------- Registration Function ----------
 
 void http_api_register_ota_handlers(httpd_handle_t server) {
-    httpd_uri_t u = {0};
-
-    u.uri = "/ota";
-    u.method = HTTP_GET;
-    u.handler = h_get_ota_page;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(server, &u);
-
-    u.uri = "/ota/status";
-    u.method = HTTP_GET;
-    u.handler = h_get_ota_status;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(server, &u);
-
-    u.uri = "/ota/check";
-    u.method = HTTP_POST;
-    u.handler = h_post_ota_check;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(server, &u);
-
-    u.uri = "/ota/install";
-    u.method = HTTP_POST;
-    u.handler = h_post_ota_install;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(server, &u);
-
-    u.uri = "/ota/rollback";
-    u.method = HTTP_POST;
-    u.handler = h_post_ota_rollback;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(server, &u);
+    // Kept for API stability; OTA endpoints are now served via the method routers (GET/POST /*).
+    (void)server;
 }
 

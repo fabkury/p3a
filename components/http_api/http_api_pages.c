@@ -1360,40 +1360,53 @@ static esp_err_t h_get_seed(httpd_req_t *req)
     return ESP_OK;
 }
 
+// ---------- Sub-router entrypoints ----------
+
+esp_err_t http_api_pages_route_get(httpd_req_t *req) {
+    const char *uri = req ? req->uri : NULL;
+    if (!uri) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    if (strcmp(uri, "/favicon.ico") == 0) {
+        return h_get_favicon(req);
+    }
+    if (strcmp(uri, "/") == 0) {
+        return h_get_root(req);
+    }
+    if (strcmp(uri, "/config/network") == 0) {
+        return h_get_network_config(req);
+    }
+    if (strcmp(uri, "/seed") == 0) {
+        return h_get_seed(req);
+    }
+
+#if CONFIG_P3A_PICO8_ENABLE
+    if (strcmp(uri, "/pico8") == 0) {
+        return h_get_pico8(req);
+    }
+#endif
+
+    return ESP_ERR_NOT_FOUND;
+}
+
+esp_err_t http_api_pages_route_post(httpd_req_t *req) {
+    const char *uri = req ? req->uri : NULL;
+    if (!uri) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    if (strcmp(uri, "/erase") == 0) {
+        return h_post_erase(req);
+    }
+
+    return ESP_ERR_NOT_FOUND;
+}
+
 // ---------- Registration Function ----------
 
 void http_api_register_page_handlers(httpd_handle_t server) {
     httpd_uri_t u = {0};
-
-    u.uri = "/favicon.ico";
-    u.method = HTTP_GET;
-    u.handler = h_get_favicon;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(server, &u);
-
-    u.uri = "/";
-    u.method = HTTP_GET;
-    u.handler = h_get_root;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(server, &u);
-
-    u.uri = "/config/network";
-    u.method = HTTP_GET;
-    u.handler = h_get_network_config;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(server, &u);
-
-    u.uri = "/seed";
-    u.method = HTTP_GET;
-    u.handler = h_get_seed;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(server, &u);
-
-    u.uri = "/erase";
-    u.method = HTTP_POST;
-    u.handler = h_post_erase;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(server, &u);
 
     u.uri = "/static/*";
     u.method = HTTP_GET;
@@ -1402,12 +1415,6 @@ void http_api_register_page_handlers(httpd_handle_t server) {
     register_uri_handler_or_log(server, &u);
 
 #if CONFIG_P3A_PICO8_ENABLE
-    u.uri = "/pico8";
-    u.method = HTTP_GET;
-    u.handler = h_get_pico8;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(server, &u);
-
     // WebSocket endpoint for PICO-8 streaming
     httpd_uri_t ws_uri = {
         .uri = "/pico_stream",

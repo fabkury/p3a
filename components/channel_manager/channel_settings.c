@@ -113,7 +113,8 @@ esp_err_t channel_settings_load_for_channel_id(const char *channel_id, channel_s
     if (!channel_id || !out) return ESP_ERR_INVALID_ARG;
 
     char path[256];
-    snprintf(path, sizeof(path), "/sdcard/channels/%s/settings.json", channel_id);
+    // New layout: /sdcard/channel/<channel_id>.settings.json (flat; no per-channel directory)
+    snprintf(path, sizeof(path), "/sdcard/channel/%s.settings.json", channel_id);
     esp_err_t err = load_settings_path(path, out);
     if (err == ESP_ERR_NOT_FOUND) {
         return ESP_ERR_NOT_FOUND;
@@ -127,7 +128,8 @@ esp_err_t channel_settings_load_for_channel_id(const char *channel_id, channel_s
 esp_err_t channel_settings_load_for_sdcard(channel_settings_t *out)
 {
     if (!out) return ESP_ERR_INVALID_ARG;
-    const char *path = "/sdcard/channels/sdcard-channel/settings.json";
+    // New layout: /sdcard/channel/sdcard-channel.settings.json
+    const char *path = "/sdcard/channel/sdcard-channel.settings.json";
     esp_err_t err = load_settings_path(path, out);
     if (err == ESP_ERR_NOT_FOUND) {
         return ESP_ERR_NOT_FOUND;

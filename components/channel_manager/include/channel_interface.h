@@ -122,7 +122,7 @@ typedef struct {
      * @brief Load channel data into memory
      * 
      * For SD card channel: scans directory for animation files
-     * For Makapix channel: loads index.bin from disk
+     * For Makapix channel: loads channel index (.bin) from disk
      * 
      * @param channel Channel handle
      * @return ESP_OK on success

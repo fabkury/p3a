@@ -8,6 +8,9 @@
 
 static const char *TAG = "channel_player";
 
+// External: wakes the auto_swap_task in main/p3a_main.c so it can restart its countdown.
+extern void auto_swap_reset_timer(void) __attribute__((weak));
+
 // Internal player state
 static struct {
     bool initialized;
@@ -261,6 +264,9 @@ esp_err_t channel_player_switch_to_makapix_channel(channel_handle_t makapix_chan
     s_player.current_channel = makapix_channel;
 
     ESP_LOGI(TAG, "Switched to Makapix channel as playback source");
+    if (auto_swap_reset_timer) {
+        auto_swap_reset_timer();
+    }
     return ESP_OK;
 }
 
@@ -282,6 +288,9 @@ esp_err_t channel_player_switch_to_sdcard_channel(void)
     s_player.current_channel = s_player.sdcard_channel;
 
     ESP_LOGI(TAG, "Switched to SD card channel as playback source");
+    if (auto_swap_reset_timer) {
+        auto_swap_reset_timer();
+    }
     return ESP_OK;
 }
 

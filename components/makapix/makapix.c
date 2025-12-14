@@ -835,7 +835,7 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
     }
     
     // Create new Makapix channel
-    s_current_channel = makapix_channel_create(channel_id, channel_name, "/sdcard/vault", "/sdcard/channels");
+    s_current_channel = makapix_channel_create(channel_id, channel_name, "/sdcard/vault", "/sdcard/channel");
     if (!s_current_channel) {
         ESP_LOGE(TAG, "Failed to create channel");
         return ESP_ERR_NO_MEM;
@@ -955,6 +955,22 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
     }
     
     ESP_LOGI(TAG, "Channel switched successfully");
+
+    // Persist "last channel" selection (NVS) via unified p3a state machine.
+    // This is the authoritative mechanism used at boot to restore the last channel.
+    if (strcmp(channel, "all") == 0) {
+        (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_ALL, NULL);
+    } else if (strcmp(channel, "promoted") == 0) {
+        (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_PROMOTED, NULL);
+    } else if (strcmp(channel, "user") == 0) {
+        (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_USER, NULL);
+    } else if (strcmp(channel, "by_user") == 0) {
+        (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_BY_USER, user_handle);
+    } else {
+        // Unknown channel string: do not overwrite persisted channel selection.
+        ESP_LOGW(TAG, "Not persisting unknown channel key: %s", channel);
+    }
+
     return ESP_OK;
 }
 
@@ -1014,6 +1030,17 @@ esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const c
     
     ESP_LOGI(TAG, "Transient artwork channel created and started");
     return ESP_OK;
+}
+
+void makapix_adopt_channel_handle(void *channel)
+{
+    // NOTE: `channel_handle_t` is opaque and defined in channel_manager. We take void* here to keep makapix.h lightweight.
+    // Ownership transfer: if a different channel is already owned, destroy it.
+    channel_handle_t ch = (channel_handle_t)channel;
+    if (s_current_channel && s_current_channel != ch) {
+        channel_destroy(s_current_channel);
+    }
+    s_current_channel = ch;
 }
 
 // ---------------------------------------------------------------------------

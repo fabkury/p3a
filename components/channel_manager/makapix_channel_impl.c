@@ -12,6 +12,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "cJSON.h"
 #include <stdlib.h>
 #include <string.h>
@@ -23,7 +24,150 @@
 #include <dirent.h>
 #include <unistd.h>
 
+// TEMP DEBUG: `statvfs()` is not available in this ESP-IDF/newlib configuration.
+// Keep the free-space report disabled (see makapix_temp_debug_log_rename_failure()).
+#define MAKAPIX_HAVE_STATVFS 0
+
 static const char *TAG = "makapix_channel";
+
+// TEMP DEBUG: Instrument rename() failures for channel index atomic writes.
+// Remove this block (or set to 0) once the root cause is understood.
+#define MAKAPIX_TEMP_DEBUG_RENAME_FAIL 1
+
+#if MAKAPIX_TEMP_DEBUG_RENAME_FAIL
+static void makapix_temp_debug_log_rename_failure(const char *src_path, const char *dst_path, int rename_errno)
+{
+    if (!src_path || !dst_path) return;
+
+    // Capture high-signal context first
+    ESP_LOGE(TAG,
+             "TEMP DEBUG: rename('%s' -> '%s') failed: errno=%d (%s), task='%s', core=%d, uptime_us=%lld",
+             src_path,
+             dst_path,
+             rename_errno,
+             strerror(rename_errno),
+             pcTaskGetName(NULL),
+             xPortGetCoreID(),
+             (long long)esp_timer_get_time());
+
+    // Stat source (temp) file
+    struct stat st_src = {0};
+    if (stat(src_path, &st_src) == 0) {
+        ESP_LOGE(TAG,
+                 "TEMP DEBUG: src stat ok: mode=0%o size=%ld mtime=%ld",
+                 (unsigned int)st_src.st_mode,
+                 (long)st_src.st_size,
+                 (long)st_src.st_mtime);
+    } else {
+        int e = errno;
+        ESP_LOGE(TAG, "TEMP DEBUG: src stat failed: errno=%d (%s)", e, strerror(e));
+    }
+
+    // Stat destination (final) file
+    struct stat st_dst = {0};
+    if (stat(dst_path, &st_dst) == 0) {
+        ESP_LOGE(TAG,
+                 "TEMP DEBUG: dst stat ok (dst exists): mode=0%o size=%ld mtime=%ld",
+                 (unsigned int)st_dst.st_mode,
+                 (long)st_dst.st_size,
+                 (long)st_dst.st_mtime);
+    } else {
+        int e = errno;
+        ESP_LOGE(TAG, "TEMP DEBUG: dst stat failed (dst likely missing): errno=%d (%s)", e, strerror(e));
+    }
+
+    // Try to report filesystem free space at/near destination (best-effort).
+    // (FATFS often returns EEXIST if dst already exists and overwrite-on-rename is not supported)
+#if MAKAPIX_HAVE_STATVFS
+    struct statvfs vfs = {0};
+    if (statvfs(dst_path, &vfs) == 0) {
+        unsigned long long bsize = (unsigned long long)vfs.f_frsize ? (unsigned long long)vfs.f_frsize
+                                                                    : (unsigned long long)vfs.f_bsize;
+        unsigned long long free_bytes = bsize * (unsigned long long)vfs.f_bavail;
+        unsigned long long total_bytes = bsize * (unsigned long long)vfs.f_blocks;
+        ESP_LOGE(TAG,
+                 "TEMP DEBUG: statvfs ok: bsize=%llu blocks=%llu bavail=%llu => free=%llu bytes, total=%llu bytes",
+                 bsize,
+                 (unsigned long long)vfs.f_blocks,
+                 (unsigned long long)vfs.f_bavail,
+                 free_bytes,
+                 total_bytes);
+    } else {
+        int e = errno;
+        ESP_LOGE(TAG, "TEMP DEBUG: statvfs failed: errno=%d (%s)", e, strerror(e));
+    }
+#else
+    ESP_LOGE(TAG, "TEMP DEBUG: statvfs unavailable in this build; skipping free-space report");
+#endif
+}
+#endif
+
+// Cheap validation for index files. This is intentionally lightweight (no CRC/header).
+// It prevents promoting/loading clearly corrupt files (e.g., truncated writes).
+// NOTE: entry size is fixed at 64 bytes (see makapix_channel_entry_t).
+#define MAKAPIX_INDEX_MAX_ENTRIES 8192  // 8192 * 64 = 512KB max index size
+
+static bool makapix_index_file_stat_is_valid(const struct stat *st)
+{
+    if (!st) return false;
+    if (!S_ISREG(st->st_mode)) return false;
+    if (st->st_size <= 0) return false;
+    if ((st->st_size % (long)sizeof(makapix_channel_entry_t)) != 0) return false;
+    if (st->st_size > (long)(MAKAPIX_INDEX_MAX_ENTRIES * sizeof(makapix_channel_entry_t))) return false;
+    return true;
+}
+
+// Recover/cleanup channel index (.bin) and its temp (.bin.tmp) before any loads.
+// This addresses power-loss/crash windows and FATFS rename semantics.
+// TEMP NOTE: This is not debug-only; it is required correctness on filesystems where rename() won't overwrite.
+static void makapix_index_recover_and_cleanup(const char *index_path)
+{
+    if (!index_path) return;
+
+    char tmp_path[260];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", index_path);
+
+    struct stat st_bin = {0};
+    struct stat st_tmp = {0};
+    const bool have_bin = (stat(index_path, &st_bin) == 0);
+    const bool have_tmp = (stat(tmp_path, &st_tmp) == 0);
+
+    if (!have_tmp) return;
+
+    const bool tmp_valid = makapix_index_file_stat_is_valid(&st_tmp);
+    const bool bin_valid = have_bin ? makapix_index_file_stat_is_valid(&st_bin) : false;
+
+    if (!tmp_valid) {
+        ESP_LOGW(TAG, "Index temp file invalid; removing: %s (size=%ld)", tmp_path, (long)st_tmp.st_size);
+        unlink(tmp_path);
+        return;
+    }
+
+    if (!have_bin) {
+        // Index missing but temp exists and looks valid -> promote temp.
+        ESP_LOGW(TAG, "Recovering missing channel index from temp: %s -> %s", tmp_path, index_path);
+        if (rename(tmp_path, index_path) != 0) {
+            ESP_LOGE(TAG, "Failed to recover index from temp: errno=%d (%s)", errno, strerror(errno));
+        }
+        return;
+    }
+
+    // Both exist. Choose which to keep.
+    // If the existing index is invalid, or temp is newer-or-equal, promote temp.
+    if (!bin_valid || st_tmp.st_mtime >= st_bin.st_mtime) {
+        ESP_LOGW(TAG, "Promoting index temp over existing channel index (bin_valid=%d): %s -> %s",
+                 (int)bin_valid, tmp_path, index_path);
+        (void)unlink(index_path); // required on FATFS: rename() won't overwrite
+        if (rename(tmp_path, index_path) != 0) {
+            ESP_LOGE(TAG, "Failed to promote index temp: errno=%d (%s)", errno, strerror(errno));
+        }
+        return;
+    }
+
+    // Existing index appears valid and newer than temp -> discard temp.
+    ESP_LOGW(TAG, "Discarding stale index temp file: %s", tmp_path);
+    unlink(tmp_path);
+}
 
 static uint32_t compute_effective_dwell_ms(uint32_t global_override_ms,
                                            uint32_t channel_override_ms,
@@ -76,7 +220,7 @@ typedef struct {
     char *channels_path;             // Base channels path
     
     // Loaded entries
-    makapix_channel_entry_t *entries;  // Array of entries from index.bin
+    makapix_channel_entry_t *entries;  // Array of entries from channel index file (<channel>.bin)
     size_t entry_count;              // Number of entries
     
     // Playback (playlist-aware)
@@ -88,6 +232,9 @@ typedef struct {
     bool refreshing;                 // Background refresh in progress
     TaskHandle_t refresh_task;      // Background refresh task handle
     time_t last_refresh_time;        // Last successful refresh timestamp
+
+    // Serialize channel index load/write to avoid races during unlink+rename window
+    SemaphoreHandle_t index_io_lock;
     
 } makapix_channel_t;
 
@@ -284,10 +431,10 @@ static void shuffle_order(uint32_t *order, size_t count)
     }
 }
 
-// Helper: build index.bin path
+// Helper: build channel index path (new layout: /sdcard/channel/<channel>.bin)
 static void build_index_path(const makapix_channel_t *ch, char *out, size_t out_len)
 {
-    snprintf(out, out_len, "%s/%s/index.bin", ch->channels_path, ch->channel_id);
+    snprintf(out, out_len, "%s/%s.bin", ch->channels_path, ch->channel_id);
 }
 
 // Interface implementation
@@ -304,15 +451,13 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
     
     char index_path[256];
     build_index_path(ch, index_path, sizeof(index_path));
-    
-    // Clean up orphan .tmp file if it exists (lazy cleanup)
-    char tmp_path[260];
-    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", index_path);
-    struct stat tmp_st;
-    if (stat(tmp_path, &tmp_st) == 0 && S_ISREG(tmp_st.st_mode)) {
-        ESP_LOGD(TAG, "Removing orphan temp file: %s", tmp_path);
-        unlink(tmp_path);
+
+    // Recover/cleanup channel index (.bin) and temp (.bin.tmp) before attempting to load.
+    // This is required because FATFS rename() won't overwrite an existing destination (EEXIST).
+    if (ch->index_io_lock) {
+        xSemaphoreTake(ch->index_io_lock, portMAX_DELAY);
     }
+    makapix_index_recover_and_cleanup(index_path);
     
     ESP_LOGI(TAG, "Loading channel from: %s", index_path);
     
@@ -332,8 +477,14 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
             if (refresh_err != ESP_OK) {
                 // Refresh task failed to start - caller needs to know
                 ESP_LOGE(TAG, "Failed to start refresh for empty channel");
+                if (ch->index_io_lock) {
+                    xSemaphoreGive(ch->index_io_lock);
+                }
                 return refresh_err;
             }
+        }
+        if (ch->index_io_lock) {
+            xSemaphoreGive(ch->index_io_lock);
         }
         return ESP_OK;
     }
@@ -345,14 +496,20 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
     
     if (file_size <= 0 || file_size % sizeof(makapix_channel_entry_t) != 0) {
         // Likely stale/legacy index format. Delete and repopulate.
-        ESP_LOGW(TAG, "Invalid/stale index.bin size (%ld). Deleting and refreshing: %s", file_size, index_path);
+        ESP_LOGW(TAG, "Invalid/stale channel index size (%ld). Deleting and refreshing: %s", file_size, index_path);
         fclose(f);
         unlink(index_path);
         ch->entries = NULL;
         ch->entry_count = 0;
         ch->base.loaded = true;
         if (!ch->refreshing) {
+            if (ch->index_io_lock) {
+                xSemaphoreGive(ch->index_io_lock);
+            }
             return makapix_impl_request_refresh(channel);
+        }
+        if (ch->index_io_lock) {
+            xSemaphoreGive(ch->index_io_lock);
         }
         return ESP_OK;
     }
@@ -363,6 +520,9 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
     ch->entries = malloc(entry_count * sizeof(makapix_channel_entry_t));
     if (!ch->entries) {
         fclose(f);
+        if (ch->index_io_lock) {
+            xSemaphoreGive(ch->index_io_lock);
+        }
         return ESP_ERR_NO_MEM;
     }
     
@@ -379,6 +539,9 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
             free(ch->entries);
             ch->entries = NULL;
             fclose(f);
+            if (ch->index_io_lock) {
+                xSemaphoreGive(ch->index_io_lock);
+            }
             return ESP_FAIL;
         }
         read_count += read;
@@ -395,6 +558,10 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
     // Start refresh if not already refreshing
     if (!ch->refreshing) {
         makapix_impl_request_refresh(channel);
+    }
+
+    if (ch->index_io_lock) {
+        xSemaphoreGive(ch->index_io_lock);
     }
     
     return ESP_OK;
@@ -818,13 +985,19 @@ static esp_err_t load_channel_metadata(makapix_channel_t *ch, char *out_cursor, 
     return ESP_OK;
 }
 
-// Helper: update index.bin with new posts
+// Helper: update channel index (.bin) with new posts
 static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *posts, size_t count)
 {
     if (!ch || !posts) return ESP_ERR_INVALID_ARG;
 
     char index_path[256];
     build_index_path(ch, index_path, sizeof(index_path));
+
+    const bool have_lock = (ch->index_io_lock != NULL);
+    if (have_lock) {
+        xSemaphoreTake(ch->index_io_lock, portMAX_DELAY);
+    }
+    esp_err_t ret = ESP_OK;
 
     // Ensure directory exists - create recursively
     char dir_path[256];
@@ -858,11 +1031,17 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
     size_t all_count = ch->entry_count;
     if (ch->entries && ch->entry_count > 0) {
         all_entries = malloc((all_count + count) * sizeof(makapix_channel_entry_t));
-        if (!all_entries) return ESP_ERR_NO_MEM;
+        if (!all_entries) {
+            ret = ESP_ERR_NO_MEM;
+            goto out;
+        }
         memcpy(all_entries, ch->entries, all_count * sizeof(makapix_channel_entry_t));
     } else {
         all_entries = malloc(count * sizeof(makapix_channel_entry_t));
-        if (!all_entries) return ESP_ERR_NO_MEM;
+        if (!all_entries) {
+            ret = ESP_ERR_NO_MEM;
+            goto out;
+        }
         all_count = 0;
     }
 
@@ -1029,21 +1208,21 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
         }
     }
 
-    // Atomic write index.bin
+    // Atomic write channel index (.bin)
     char temp_path[260];
     size_t path_len = strlen(index_path);
     if (path_len + 4 >= sizeof(temp_path)) {
         ESP_LOGE(TAG, "Index path too long for temp file");
-        free(all_entries);
-        return ESP_ERR_INVALID_ARG;
+        ret = ESP_ERR_INVALID_ARG;
+        goto out;
     }
     snprintf(temp_path, sizeof(temp_path), "%s.tmp", index_path);
 
     FILE *f = fopen(temp_path, "wb");
     if (!f) {
         ESP_LOGE(TAG, "Failed to open %s for writing: %d", temp_path, errno);
-        free(all_entries);
-        return ESP_FAIL;
+        ret = ESP_FAIL;
+        goto out;
     }
     size_t written = fwrite(all_entries, sizeof(makapix_channel_entry_t), all_count, f);
     fflush(f);
@@ -1051,25 +1230,56 @@ static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *p
     fclose(f);
 
     if (written != all_count) {
-        ESP_LOGE(TAG, "Failed to write index.bin: %zu/%zu", written, all_count);
+        ESP_LOGE(TAG, "Failed to write channel index: %zu/%zu", written, all_count);
         unlink(temp_path);
-        free(all_entries);
-        return ESP_FAIL;
+        ret = ESP_FAIL;
+        goto out;
+    }
+
+    // FATFS rename() won't overwrite an existing destination: remove old index first.
+    if (unlink(index_path) != 0) {
+        if (errno != ENOENT) {
+            ESP_LOGW(TAG, "Failed to unlink old index before rename: %s (errno=%d)", index_path, errno);
+        }
     }
 
     if (rename(temp_path, index_path) != 0) {
-        ESP_LOGE(TAG, "Failed to rename index temp file: %d", errno);
-        unlink(temp_path);
-        free(all_entries);
-        return ESP_FAIL;
+        const int rename_errno = errno;
+#if MAKAPIX_TEMP_DEBUG_RENAME_FAIL
+        // TEMP DEBUG: capture additional evidence around sporadic rename() failures (e.g. EEXIST=17 on FATFS)
+        makapix_temp_debug_log_rename_failure(temp_path, index_path, rename_errno);
+#endif
+        // If unlink() above failed to remove the destination, try once more on EEXIST then retry rename.
+        if (rename_errno == EEXIST) {
+            (void)unlink(index_path);
+            if (rename(temp_path, index_path) == 0) {
+                goto rename_ok;
+            }
+        }
+
+        // IMPORTANT: keep .tmp so boot-time recovery can promote it if needed.
+        ESP_LOGE(TAG, "Failed to rename index temp file: %d", rename_errno);
+        ret = ESP_FAIL;
+        goto out;
     }
 
+rename_ok:
     free(ch->entries);
     ch->entries = all_entries;
     ch->entry_count = all_count;
 
-    ESP_LOGI(TAG, "Updated index.bin: %zu total entries", all_count);
-    return ESP_OK;
+    ESP_LOGI(TAG, "Updated channel index: %zu total entries", all_count);
+    ret = ESP_OK;
+    all_entries = NULL; // ownership transferred to ch
+
+out:
+    if (ret != ESP_OK) {
+        free(all_entries);
+    }
+    if (have_lock) {
+        xSemaphoreGive(ch->index_io_lock);
+    }
+    return ret;
 }
 
 // Helper: build vault path from storage_key (matches makapix_artwork_download pattern)
@@ -1151,9 +1361,14 @@ static esp_err_t evict_excess_artworks(makapix_channel_t *ch, size_t max_count)
 
     free(sorted);
 
-    // Rewrite index.bin atomically (temp file + fsync + rename)
+    // Rewrite channel index (.bin) atomically (temp file + fsync + rename)
     char index_path[256];
     build_index_path(ch, index_path, sizeof(index_path));
+
+    const bool have_lock = (ch->index_io_lock != NULL);
+    if (have_lock) {
+        xSemaphoreTake(ch->index_io_lock, portMAX_DELAY);
+    }
 
     char temp_path[260];
     snprintf(temp_path, sizeof(temp_path), "%s.tmp", index_path);
@@ -1162,6 +1377,9 @@ static esp_err_t evict_excess_artworks(makapix_channel_t *ch, size_t max_count)
     if (!f) {
         ESP_LOGE(TAG, "Failed to open temp file for eviction: %d", errno);
         free(kept);
+        if (have_lock) {
+            xSemaphoreGive(ch->index_io_lock);
+        }
         return ESP_FAIL;
     }
 
@@ -1174,22 +1392,50 @@ static esp_err_t evict_excess_artworks(makapix_channel_t *ch, size_t max_count)
         ESP_LOGE(TAG, "Failed to write evicted index: %zu/%zu", written, kept_count);
         unlink(temp_path);
         free(kept);
+        if (have_lock) {
+            xSemaphoreGive(ch->index_io_lock);
+        }
         return ESP_FAIL;
+    }
+
+    if (unlink(index_path) != 0) {
+        if (errno != ENOENT) {
+            ESP_LOGW(TAG, "Failed to unlink old evicted index before rename: %s (errno=%d)", index_path, errno);
+        }
     }
 
     if (rename(temp_path, index_path) != 0) {
-        ESP_LOGE(TAG, "Failed to rename evicted index: %d", errno);
-        unlink(temp_path);
+        const int rename_errno = errno;
+#if MAKAPIX_TEMP_DEBUG_RENAME_FAIL
+        // TEMP DEBUG: same instrumentation as the main index writer.
+        makapix_temp_debug_log_rename_failure(temp_path, index_path, rename_errno);
+#endif
+        if (rename_errno == EEXIST) {
+            (void)unlink(index_path);
+            if (rename(temp_path, index_path) == 0) {
+                goto rename_ok;
+            }
+        }
+
+        // Keep temp for boot-time recovery/debug.
+        ESP_LOGE(TAG, "Failed to rename evicted index: %d", rename_errno);
         free(kept);
+        if (have_lock) {
+            xSemaphoreGive(ch->index_io_lock);
+        }
         return ESP_FAIL;
     }
 
+rename_ok:
     free(ch->entries);
     ch->entries = kept;
     ch->entry_count = kept_count;
 
     ESP_LOGI(TAG, "Evicted %zu artwork files, kept %zu entries (artworks capped at %zu)",
              to_delete, kept_count, max_count);
+    if (have_lock) {
+        xSemaphoreGive(ch->index_io_lock);
+    }
     return ESP_OK;
 }
 
@@ -1275,7 +1521,7 @@ static void refresh_task_impl(void *pvParameters)
                 break;
             }
             
-            // Update index.bin with new posts
+            // Update channel index with new posts
             update_index_bin(ch, resp->posts, resp->post_count);
 
             // If Live Mode is active, mark schedule dirty so it is rebuilt on next access.
@@ -1361,6 +1607,10 @@ static void makapix_impl_destroy(channel_handle_t channel)
     }
     
     makapix_impl_unload(channel);
+    if (ch->index_io_lock) {
+        vSemaphoreDelete(ch->index_io_lock);
+        ch->index_io_lock = NULL;
+    }
     free(ch->channel_id);
     free(ch->vault_path);
     free(ch->channels_path);
@@ -1401,8 +1651,20 @@ channel_handle_t makapix_channel_create(const char *channel_id,
     ch->vault_path = strdup(vault_path);
     ch->channels_path = strdup(channels_path);
     ch->base.current_order = CHANNEL_ORDER_ORIGINAL;
+
+    ch->index_io_lock = xSemaphoreCreateMutex();
+    if (!ch->index_io_lock) {
+        free(ch->base.name);
+        free(ch->channel_id);
+        free(ch->vault_path);
+        free(ch->channels_path);
+        free(ch);
+        return NULL;
+    }
     
     if (!ch->base.name || !ch->channel_id || !ch->vault_path || !ch->channels_path) {
+        vSemaphoreDelete(ch->index_io_lock);
+        ch->index_io_lock = NULL;
         free(ch->base.name);
         free(ch->channel_id);
         free(ch->vault_path);

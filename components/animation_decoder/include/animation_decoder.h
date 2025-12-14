@@ -28,11 +28,17 @@ typedef enum {
 } animation_decoder_type_t;
 
 // Decoder information structure
+typedef enum {
+    ANIMATION_PIXEL_FORMAT_RGBA8888 = 0, // 4 bytes per pixel
+    ANIMATION_PIXEL_FORMAT_RGB888   = 1, // 3 bytes per pixel (opaque output)
+} animation_pixel_format_t;
+
 typedef struct {
     uint32_t canvas_width;
     uint32_t canvas_height;
     size_t frame_count;
     bool has_transparency;
+    animation_pixel_format_t pixel_format; // Preferred decoder output format
 } animation_decoder_info_t;
 
 /**
@@ -63,6 +69,15 @@ esp_err_t animation_decoder_get_info(animation_decoder_t *decoder, animation_dec
  * @return ESP_OK on success, error code otherwise
  */
 esp_err_t animation_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_buffer);
+
+/**
+ * @brief Decode the next frame to RGB buffer (opaque output)
+ *
+ * Buffer must be at least canvas_width * canvas_height * 3 bytes.
+ * When decoder reports has_transparency==true, output is composited/blended
+ * against the configured background color (no alpha channel is returned).
+ */
+esp_err_t animation_decoder_decode_next_rgb(animation_decoder_t *decoder, uint8_t *rgb_buffer);
 
 /**
  * @brief Get the delay (duration) of the last decoded frame in milliseconds

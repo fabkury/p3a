@@ -6,11 +6,33 @@
 #include "makapix_api.h"
 #include "channel_player.h"
 #include "swap_future.h"
+#include "config_store.h"
 #include <sys/time.h>
 
 // Frame rendering state
 static bool s_use_prefetched = false;
 static uint32_t s_target_frame_delay_ms = 100;
+
+// Rotation-dependent lookup maps must be rebuilt when rotation changes.
+static volatile bool s_upscale_maps_rebuild_pending = false;
+static volatile display_rotation_t s_upscale_maps_rebuild_rotation = DISPLAY_ROTATION_0;
+
+void animation_player_render_on_rotation_changed(display_rotation_t rotation)
+{
+    s_upscale_maps_rebuild_rotation = rotation;
+    s_upscale_maps_rebuild_pending = true;
+}
+
+static inline esp_err_t decode_next_native(animation_buffer_t *buf, uint8_t *dst)
+{
+    if (!buf || !buf->decoder || !dst) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (buf->native_bytes_per_pixel == 3) {
+        return animation_decoder_decode_next_rgb(buf->decoder, dst);
+    }
+    return animation_decoder_decode_next(buf->decoder, dst);
+}
 
 static uint64_t wall_clock_ms(void)
 {
@@ -52,7 +74,7 @@ static esp_err_t prefetch_first_frame_seeked(animation_buffer_t *buf, uint32_t s
     if (!use_frame_seek && elapsed_ms > 0) {
         uint64_t total = 0;
         for (uint32_t i = 0; i < frame_count; i++) {
-            err = animation_decoder_decode_next(buf->decoder, buf->native_frame_b2);
+            err = decode_next_native(buf, buf->native_frame_b2);
             if (err != ESP_OK) {
                 break;
             }
@@ -83,12 +105,12 @@ static esp_err_t prefetch_first_frame_seeked(animation_buffer_t *buf, uint32_t s
     if (use_frame_seek) {
         const uint32_t target = start_frame % frame_count;
         for (uint32_t i = 0; i < target; i++) {
-            err = animation_decoder_decode_next(buf->decoder, buf->native_frame_b2);
+            err = decode_next_native(buf, buf->native_frame_b2);
             if (err != ESP_OK) return err;
         }
     } else if (elapsed_ms > 0) {
         while (true) {
-            err = animation_decoder_decode_next(buf->decoder, buf->native_frame_b2);
+            err = decode_next_native(buf, buf->native_frame_b2);
             if (err != ESP_OK) return err;
             uint32_t d = 1;
             (void)animation_decoder_get_frame_delay(buf->decoder, &d);
@@ -111,7 +133,7 @@ static esp_err_t prefetch_first_frame_seeked(animation_buffer_t *buf, uint32_t s
     }
 
     // Frame-based seek: decode the desired first frame now.
-    err = animation_decoder_decode_next(buf->decoder, buf->native_frame_b1);
+    err = decode_next_native(buf, buf->native_frame_b1);
     if (err != ESP_OK) return err;
     (void)animation_decoder_get_frame_delay(buf->decoder, &desired_frame_delay_ms);
     if (desired_frame_delay_ms < 1) desired_frame_delay_ms = 1;
@@ -136,11 +158,29 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
     // No intermediate buffer or memcpy needed - the decode was done during prefetch,
     // now we just upscale directly to the display back buffer
     if (use_prefetched && buf->first_frame_ready && buf->native_frame_b1) {
-        display_renderer_parallel_upscale(buf->native_frame_b1, buf->upscale_src_w, buf->upscale_src_h,
-                                          dest_buffer,
-                                          buf->upscale_lookup_x, buf->upscale_lookup_y,
-                                          display_renderer_get_rotation());
+        if (buf->native_bytes_per_pixel == 3) {
+            display_renderer_parallel_upscale_rgb(buf->native_frame_b1, buf->upscale_src_w, buf->upscale_src_h,
+                                                  dest_buffer,
+                                                  buf->upscale_lookup_x, buf->upscale_lookup_y,
+                                                  buf->upscale_offset_x, buf->upscale_offset_y,
+                                                  buf->upscale_scaled_w, buf->upscale_scaled_h,
+                                                  buf->upscale_has_borders,
+                                                  display_renderer_get_rotation());
+        } else {
+            display_renderer_parallel_upscale(buf->native_frame_b1, buf->upscale_src_w, buf->upscale_src_h,
+                                              dest_buffer,
+                                              buf->upscale_lookup_x, buf->upscale_lookup_y,
+                                              buf->upscale_offset_x, buf->upscale_offset_y,
+                                              buf->upscale_scaled_w, buf->upscale_scaled_h,
+                                              buf->upscale_has_borders,
+                                              display_renderer_get_rotation());
+        }
         buf->first_frame_ready = false;
+        // Static images: keep using native_frame_b1 without re-decoding each tick
+        if (buf->decoder_info.frame_count <= 1) {
+            buf->static_frame_cached = true;
+            buf->static_bg_generation = config_store_get_background_color_generation();
+        }
         return (int)buf->prefetched_first_frame_delay_ms;
     }
 
@@ -149,12 +189,60 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
         return -1;
     }
 
+    // Static image fast path: reuse cached native_frame_b1 every frame (no re-decode),
+    // but if background changes AND the asset has transparency, refresh compositing once.
+    if (buf->decoder_info.frame_count <= 1 && buf->native_frame_b1) {
+        if (!buf->static_frame_cached) {
+            esp_err_t derr = decode_next_native(buf, buf->native_frame_b1);
+            if (derr != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to decode static frame: %s", esp_err_to_name(derr));
+                return -1;
+            }
+            uint32_t d = 1;
+            (void)animation_decoder_get_frame_delay(buf->decoder, &d);
+            if (d < 1) d = 1;
+            buf->prefetched_first_frame_delay_ms = d;
+            buf->static_frame_cached = true;
+            buf->static_bg_generation = config_store_get_background_color_generation();
+        } else if (buf->decoder_info.has_transparency) {
+            const uint32_t gen = config_store_get_background_color_generation();
+            if (gen != buf->static_bg_generation) {
+                // Background changed: re-decode once so decoder can re-composite against the new background.
+                esp_err_t derr = decode_next_native(buf, buf->native_frame_b1);
+                if (derr != ESP_OK) {
+                    ESP_LOGE(TAG, "Failed to refresh static frame after bg change: %s", esp_err_to_name(derr));
+                    return -1;
+                }
+                buf->static_bg_generation = gen;
+            }
+        }
+
+        if (buf->native_bytes_per_pixel == 3) {
+            display_renderer_parallel_upscale_rgb(buf->native_frame_b1, buf->upscale_src_w, buf->upscale_src_h,
+                                                  dest_buffer,
+                                                  buf->upscale_lookup_x, buf->upscale_lookup_y,
+                                                  buf->upscale_offset_x, buf->upscale_offset_y,
+                                                  buf->upscale_scaled_w, buf->upscale_scaled_h,
+                                                  buf->upscale_has_borders,
+                                                  display_renderer_get_rotation());
+        } else {
+            display_renderer_parallel_upscale(buf->native_frame_b1, buf->upscale_src_w, buf->upscale_src_h,
+                                              dest_buffer,
+                                              buf->upscale_lookup_x, buf->upscale_lookup_y,
+                                              buf->upscale_offset_x, buf->upscale_offset_y,
+                                              buf->upscale_scaled_w, buf->upscale_scaled_h,
+                                              buf->upscale_has_borders,
+                                              display_renderer_get_rotation());
+        }
+        return (int)buf->prefetched_first_frame_delay_ms;
+    }
+
     uint8_t *decode_buffer = (buf->native_buffer_active == 0) ? buf->native_frame_b1 : buf->native_frame_b2;
 
-    esp_err_t err = animation_decoder_decode_next(buf->decoder, decode_buffer);
+    esp_err_t err = decode_next_native(buf, decode_buffer);
     if (err == ESP_ERR_INVALID_STATE) {
         animation_decoder_reset(buf->decoder);
-        err = animation_decoder_decode_next(buf->decoder, decode_buffer);
+        err = decode_next_native(buf, decode_buffer);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "Animation decoder could not restart");
             return -1;
@@ -175,10 +263,23 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
     buf->native_buffer_active = (buf->native_buffer_active == 0) ? 1 : 0;
 
     // Use display_renderer for parallel upscaling with rotation
-    display_renderer_parallel_upscale(decode_buffer, buf->upscale_src_w, buf->upscale_src_h,
-                                      dest_buffer,
-                                      buf->upscale_lookup_x, buf->upscale_lookup_y,
-                                      display_renderer_get_rotation());
+    if (buf->native_bytes_per_pixel == 3) {
+        display_renderer_parallel_upscale_rgb(decode_buffer, buf->upscale_src_w, buf->upscale_src_h,
+                                              dest_buffer,
+                                              buf->upscale_lookup_x, buf->upscale_lookup_y,
+                                              buf->upscale_offset_x, buf->upscale_offset_y,
+                                              buf->upscale_scaled_w, buf->upscale_scaled_h,
+                                              buf->upscale_has_borders,
+                                              display_renderer_get_rotation());
+    } else {
+        display_renderer_parallel_upscale(decode_buffer, buf->upscale_src_w, buf->upscale_src_h,
+                                          dest_buffer,
+                                          buf->upscale_lookup_x, buf->upscale_lookup_y,
+                                          buf->upscale_offset_x, buf->upscale_offset_y,
+                                          buf->upscale_scaled_w, buf->upscale_scaled_h,
+                                          buf->upscale_has_borders,
+                                          display_renderer_get_rotation());
+    }
 
     return (int)buf->current_frame_delay_ms;
 }
@@ -214,7 +315,7 @@ esp_err_t prefetch_first_frame(animation_buffer_t *buf)
     // Decode first frame to native_frame_b1
     // The upscale will happen later, directly to the display back buffer
     uint8_t *decode_buffer = buf->native_frame_b1;
-    esp_err_t err = animation_decoder_decode_next(buf->decoder, decode_buffer);
+    esp_err_t err = decode_next_native(buf, decode_buffer);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to decode first frame for prefetch: %s", esp_err_to_name(err));
         return err;
@@ -253,6 +354,24 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
     }
 
     int frame_delay_ms = 100;
+
+    // If rotation changed since the last frame, rebuild upscale maps at a safe point (render task context).
+    if (s_upscale_maps_rebuild_pending) {
+        const display_rotation_t rot = s_upscale_maps_rebuild_rotation;
+        if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+            if (s_front_buffer.decoder) {
+                (void)animation_loader_rebuild_upscale_maps(&s_front_buffer, rot);
+            }
+            // IMPORTANT: Do not touch the back buffer while the loader task is busy mutating it.
+            // Rebuilding maps involves heap free/alloc and can race with loader load/unload,
+            // corrupting the heap (later crashes inside tlsf_free).
+            if (!s_loader_busy && s_back_buffer.decoder) {
+                (void)animation_loader_rebuild_upscale_maps(&s_back_buffer, rot);
+            }
+            xSemaphoreGive(s_buffer_mutex);
+        }
+        s_upscale_maps_rebuild_pending = false;
+    }
 
     // Read animation state with mutex
     bool paused_local = false;
@@ -331,6 +450,16 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
             s_back_buffer.ready = false;
             s_back_buffer.first_frame_ready = false;
             s_back_buffer.prefetch_pending = false;
+            
+            // Check if newly-swapped front buffer was built for a different rotation than current.
+            // If so, rebuild its upscale maps immediately (before rendering with stale tables).
+            const display_rotation_t current_rotation = display_renderer_get_rotation();
+            if (s_front_buffer.decoder &&
+                s_front_buffer.upscale_rotation_built != current_rotation) {
+                ESP_LOGI(TAG, "Rebuilding upscale maps for newly-swapped buffer (built for %d, current %d)",
+                         (int)s_front_buffer.upscale_rotation_built, (int)current_rotation);
+                (void)animation_loader_rebuild_upscale_maps(&s_front_buffer, current_rotation);
+            }
             xSemaphoreGive(s_buffer_mutex);
             
             ESP_LOGI(TAG, "Buffers swapped: front now playing index %zu", s_front_buffer.asset_index);

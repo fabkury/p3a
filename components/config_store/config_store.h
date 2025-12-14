@@ -3,6 +3,11 @@
 #include "cJSON.h"
 #include "esp_err.h"
 #include <stdbool.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @brief Load configuration from NVS
@@ -161,4 +166,37 @@ void config_store_set_effective_seed(uint32_t seed);
  * @return Current effective seed (defaults to master seed if not set)
  */
 uint32_t config_store_get_effective_seed(void);
+
+// ============================================================================
+// Background color (persisted)
+// ============================================================================
+
+/**
+ * @brief Set background color (persisted in NVS, applies at runtime)
+ *
+ * Stored in config JSON as:
+ *   { "background_color": { "r":0, "g":0, "b":0 } }
+ *
+ * Defaults to pure black if missing.
+ */
+esp_err_t config_store_set_background_color(uint8_t r, uint8_t g, uint8_t b);
+
+/**
+ * @brief Get background color (persisted; cached for runtime use)
+ *
+ * If not yet loaded, reads from NVS once; defaults to (0,0,0).
+ */
+void config_store_get_background_color(uint8_t *r, uint8_t *g, uint8_t *b);
+
+/**
+ * @brief Get a monotonically increasing generation counter for background color
+ *
+ * Increments whenever background color changes (via setters or config_save()).
+ * Decoders can use this to detect runtime changes.
+ */
+uint32_t config_store_get_background_color_generation(void);
+
+#ifdef __cplusplus
+}
+#endif
 

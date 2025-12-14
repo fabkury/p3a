@@ -7,6 +7,7 @@
 #include "animation_decoder.h"
 #include "animation_decoder_internal.h"
 #include "static_image_decoder_common.h"
+#include "config_store.h"
 #include "webp/demux.h"
 #include "webp/decode.h"
 #include "esp_log.h"
@@ -23,10 +24,25 @@ typedef struct {
     int last_timestamp_ms;      // Previous frame timestamp for delay calculation
     uint32_t current_frame_delay_ms;  // Delay of the last decoded frame
     bool is_animation;
-    uint8_t *still_rgba;
-    size_t still_frame_size;
-    bool still_has_alpha;
+    bool has_alpha_any;         // Any alpha present in the file (init-time check)
+    uint8_t *still_rgba;        // RGBA for still images with alpha
+    size_t still_rgba_size;
+    uint8_t *still_rgb;         // RGB for still images without alpha
+    size_t still_rgb_size;
 } webp_decoder_data_t;
+
+static inline uint8_t div255_u16(uint16_t x)
+{
+    uint16_t t = (uint16_t)(x + 128);
+    return (uint8_t)((t + (t >> 8)) >> 8);
+}
+
+static inline uint8_t blend_chan(uint8_t src, uint8_t bg, uint8_t a)
+{
+    const uint16_t inv = (uint16_t)(255U - (uint16_t)a);
+    const uint16_t x = (uint16_t)src * (uint16_t)a + (uint16_t)bg * inv;
+    return div255_u16(x);
+}
 
 esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decoder_type_t type, const uint8_t *data, size_t size)
 {
@@ -69,6 +85,7 @@ esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decode
         }
 
         webp_data->is_animation = (features.has_animation != 0);
+        webp_data->has_alpha_any = (features.has_alpha != 0);
 
         if (webp_data->is_animation) {
             WebPAnimDecoderOptions dec_opts;
@@ -78,7 +95,7 @@ esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decode
                 free(dec);
                 return ESP_FAIL;
             }
-            dec_opts.color_mode = MODE_RGBA;
+            dec_opts.color_mode = webp_data->has_alpha_any ? MODE_RGBA : MODE_RGB;
             dec_opts.use_threads = 0;
 
             WebPData webp_data_wrapped = {
@@ -113,31 +130,51 @@ esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decode
             webp_data->last_timestamp_ms = 0;
             webp_data->current_frame_delay_ms = 1;  // Default minimum delay
         } else {
-            const size_t frame_size = (size_t)features.width * features.height * 4;
-            webp_data->still_rgba = (uint8_t *)malloc(frame_size);
-            if (!webp_data->still_rgba) {
-                ESP_LOGE(TAG, "Failed to allocate buffer for still WebP frame (%zu bytes)", frame_size);
-                free(webp_data);
-                free(dec);
-                return ESP_ERR_NO_MEM;
-            }
+            if (webp_data->has_alpha_any) {
+                const size_t frame_size = (size_t)features.width * features.height * 4;
+                webp_data->still_rgba = (uint8_t *)malloc(frame_size);
+                if (!webp_data->still_rgba) {
+                    ESP_LOGE(TAG, "Failed to allocate buffer for still WebP RGBA frame (%zu bytes)", frame_size);
+                    free(webp_data);
+                    free(dec);
+                    return ESP_ERR_NO_MEM;
+                }
 
-            const int stride = features.width * 4;
-            if (!WebPDecodeRGBAInto(data, size, webp_data->still_rgba, frame_size, stride)) {
-                ESP_LOGE(TAG, "Failed to decode still WebP image");
-                free(webp_data->still_rgba);
-                free(webp_data);
-                free(dec);
-                return ESP_FAIL;
+                const int stride = features.width * 4;
+                if (!WebPDecodeRGBAInto(data, size, webp_data->still_rgba, frame_size, stride)) {
+                    ESP_LOGE(TAG, "Failed to decode still WebP image (RGBA)");
+                    free(webp_data->still_rgba);
+                    free(webp_data);
+                    free(dec);
+                    return ESP_FAIL;
+                }
+                webp_data->still_rgba_size = frame_size;
+            } else {
+                const size_t frame_size = (size_t)features.width * features.height * 3;
+                webp_data->still_rgb = (uint8_t *)malloc(frame_size);
+                if (!webp_data->still_rgb) {
+                    ESP_LOGE(TAG, "Failed to allocate buffer for still WebP RGB frame (%zu bytes)", frame_size);
+                    free(webp_data);
+                    free(dec);
+                    return ESP_ERR_NO_MEM;
+                }
+
+                const int stride = features.width * 3;
+                if (!WebPDecodeRGBInto(data, size, webp_data->still_rgb, frame_size, stride)) {
+                    ESP_LOGE(TAG, "Failed to decode still WebP image (RGB)");
+                    free(webp_data->still_rgb);
+                    free(webp_data);
+                    free(dec);
+                    return ESP_FAIL;
+                }
+                webp_data->still_rgb_size = frame_size;
             }
 
             webp_data->info.canvas_width = (uint32_t)features.width;
             webp_data->info.canvas_height = (uint32_t)features.height;
             webp_data->info.frame_count = 1;
             webp_data->info.loop_count = 0;
-            webp_data->info.bgcolor = features.has_alpha ? 0x00000000 : 0xFF000000;
-            webp_data->still_has_alpha = (features.has_alpha != 0);
-            webp_data->still_frame_size = frame_size;
+            webp_data->info.bgcolor = webp_data->has_alpha_any ? 0x00000000 : 0xFF000000;
             webp_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
             webp_data->last_timestamp_ms = 0;
         }
@@ -174,11 +211,8 @@ esp_err_t animation_decoder_get_info(animation_decoder_t *decoder, animation_dec
         info->canvas_width = webp_data->info.canvas_width;
         info->canvas_height = webp_data->info.canvas_height;
         info->frame_count = webp_data->info.frame_count;
-        if (webp_data->is_animation) {
-            info->has_transparency = (webp_data->info.bgcolor & 0xff000000) == 0;
-        } else {
-            info->has_transparency = webp_data->still_has_alpha;
-        }
+        info->has_transparency = webp_data->has_alpha_any;
+        info->pixel_format = ANIMATION_PIXEL_FORMAT_RGB888;
 
         return ESP_OK;
     } else if (decoder->type == ANIMATION_DECODER_TYPE_GIF) {
@@ -224,13 +258,39 @@ esp_err_t animation_decoder_decode_next(animation_decoder_t *decoder, uint8_t *r
             webp_data->current_frame_delay_ms = (uint32_t)frame_delay;
             webp_data->last_timestamp_ms = timestamp_ms;
 
-            const size_t frame_size = (size_t)webp_data->info.canvas_width * webp_data->info.canvas_height * 4;
-            memcpy(rgba_buffer, frame_rgba, frame_size);
-        } else {
-            if (!webp_data->still_rgba || webp_data->still_frame_size == 0) {
-                return ESP_ERR_INVALID_STATE;
+            if (webp_data->has_alpha_any) {
+                const size_t frame_size = (size_t)webp_data->info.canvas_width * webp_data->info.canvas_height * 4;
+                memcpy(rgba_buffer, frame_rgba, frame_size);
+            } else {
+                // MODE_RGB: expand to RGBA for legacy API
+                const size_t pixel_count = (size_t)webp_data->info.canvas_width * (size_t)webp_data->info.canvas_height;
+                const uint8_t *rgb = frame_rgba;
+                for (size_t i = 0; i < pixel_count; i++) {
+                    rgba_buffer[i * 4 + 0] = rgb[i * 3 + 0];
+                    rgba_buffer[i * 4 + 1] = rgb[i * 3 + 1];
+                    rgba_buffer[i * 4 + 2] = rgb[i * 3 + 2];
+                    rgba_buffer[i * 4 + 3] = 255;
+                }
             }
-            memcpy(rgba_buffer, webp_data->still_rgba, webp_data->still_frame_size);
+        } else {
+            if (webp_data->has_alpha_any) {
+                if (!webp_data->still_rgba || webp_data->still_rgba_size == 0) {
+                    return ESP_ERR_INVALID_STATE;
+                }
+                memcpy(rgba_buffer, webp_data->still_rgba, webp_data->still_rgba_size);
+            } else {
+                if (!webp_data->still_rgb || webp_data->still_rgb_size == 0) {
+                    return ESP_ERR_INVALID_STATE;
+                }
+                const size_t pixel_count = (size_t)webp_data->info.canvas_width * (size_t)webp_data->info.canvas_height;
+                const uint8_t *rgb = webp_data->still_rgb;
+                for (size_t i = 0; i < pixel_count; i++) {
+                    rgba_buffer[i * 4 + 0] = rgb[i * 3 + 0];
+                    rgba_buffer[i * 4 + 1] = rgb[i * 3 + 1];
+                    rgba_buffer[i * 4 + 2] = rgb[i * 3 + 2];
+                    rgba_buffer[i * 4 + 3] = 255;
+                }
+            }
             webp_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
         }
 
@@ -244,6 +304,117 @@ esp_err_t animation_decoder_decode_next(animation_decoder_t *decoder, uint8_t *r
     } else {
         return ESP_ERR_INVALID_ARG;
     }
+}
+
+esp_err_t animation_decoder_decode_next_rgb(animation_decoder_t *decoder, uint8_t *rgb_buffer)
+{
+    if (!decoder || !rgb_buffer) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (decoder->type == ANIMATION_DECODER_TYPE_WEBP) {
+        if (!decoder->impl.webp.initialized) {
+            return ESP_ERR_INVALID_STATE;
+        }
+
+        webp_decoder_data_t *webp_data = (webp_decoder_data_t *)decoder->impl.webp.decoder;
+        if (webp_data->is_animation) {
+            uint8_t *frame = NULL;
+            int timestamp_ms = 0;
+            if (!WebPAnimDecoderGetNext(webp_data->decoder, &frame, &timestamp_ms)) {
+                return ESP_ERR_INVALID_STATE;
+            }
+            if (!frame) return ESP_FAIL;
+
+            // Delay
+            int frame_delay = timestamp_ms - webp_data->last_timestamp_ms;
+            if (frame_delay < 1) frame_delay = 1;
+            webp_data->current_frame_delay_ms = (uint32_t)frame_delay;
+            webp_data->last_timestamp_ms = timestamp_ms;
+
+            const size_t pixel_count = (size_t)webp_data->info.canvas_width * (size_t)webp_data->info.canvas_height;
+            if (!webp_data->has_alpha_any) {
+                memcpy(rgb_buffer, frame, pixel_count * 3U);
+                return ESP_OK;
+            }
+
+            uint8_t bg_r = 0, bg_g = 0, bg_b = 0;
+            config_store_get_background_color(&bg_r, &bg_g, &bg_b);
+
+            const uint8_t *src = frame;
+            uint8_t *dst = rgb_buffer;
+            for (size_t i = 0; i < pixel_count; i++) {
+                const uint8_t r = src[i * 4 + 0];
+                const uint8_t g = src[i * 4 + 1];
+                const uint8_t b = src[i * 4 + 2];
+                const uint8_t a = src[i * 4 + 3];
+                if (a == 255) {
+                    dst[i * 3 + 0] = r;
+                    dst[i * 3 + 1] = g;
+                    dst[i * 3 + 2] = b;
+                } else if (a == 0) {
+                    dst[i * 3 + 0] = bg_r;
+                    dst[i * 3 + 1] = bg_g;
+                    dst[i * 3 + 2] = bg_b;
+                } else {
+                    dst[i * 3 + 0] = blend_chan(r, bg_r, a);
+                    dst[i * 3 + 1] = blend_chan(g, bg_g, a);
+                    dst[i * 3 + 2] = blend_chan(b, bg_b, a);
+                }
+            }
+            return ESP_OK;
+        }
+
+        // Still image
+        if (!webp_data->has_alpha_any) {
+            if (!webp_data->still_rgb || webp_data->still_rgb_size == 0) return ESP_ERR_INVALID_STATE;
+            memcpy(rgb_buffer, webp_data->still_rgb, webp_data->still_rgb_size);
+            webp_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
+            return ESP_OK;
+        }
+
+        if (!webp_data->still_rgba || webp_data->still_rgba_size == 0) return ESP_ERR_INVALID_STATE;
+
+        uint8_t bg_r = 0, bg_g = 0, bg_b = 0;
+        config_store_get_background_color(&bg_r, &bg_g, &bg_b);
+
+        const size_t pixel_count = (size_t)webp_data->info.canvas_width * (size_t)webp_data->info.canvas_height;
+        const uint8_t *src = webp_data->still_rgba;
+        uint8_t *dst = rgb_buffer;
+        for (size_t i = 0; i < pixel_count; i++) {
+            const uint8_t r = src[i * 4 + 0];
+            const uint8_t g = src[i * 4 + 1];
+            const uint8_t b = src[i * 4 + 2];
+            const uint8_t a = src[i * 4 + 3];
+            if (a == 255) {
+                dst[i * 3 + 0] = r;
+                dst[i * 3 + 1] = g;
+                dst[i * 3 + 2] = b;
+            } else if (a == 0) {
+                dst[i * 3 + 0] = bg_r;
+                dst[i * 3 + 1] = bg_g;
+                dst[i * 3 + 2] = bg_b;
+            } else {
+                dst[i * 3 + 0] = blend_chan(r, bg_r, a);
+                dst[i * 3 + 1] = blend_chan(g, bg_g, a);
+                dst[i * 3 + 2] = blend_chan(b, bg_b, a);
+            }
+        }
+        webp_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
+        return ESP_OK;
+    }
+
+    if (decoder->type == ANIMATION_DECODER_TYPE_GIF) {
+        return gif_decoder_decode_next_rgb(decoder, rgb_buffer);
+    }
+    if (decoder->type == ANIMATION_DECODER_TYPE_PNG) {
+        return png_decoder_decode_next_rgb(decoder, rgb_buffer);
+    }
+    if (decoder->type == ANIMATION_DECODER_TYPE_JPEG) {
+        return jpeg_decoder_decode_next_rgb(decoder, rgb_buffer);
+    }
+
+    return ESP_ERR_INVALID_ARG;
 }
 
 esp_err_t animation_decoder_reset(animation_decoder_t *decoder)
@@ -320,6 +491,10 @@ void animation_decoder_unload(animation_decoder_t **decoder)
             if (webp_data->still_rgba) {
                 free(webp_data->still_rgba);
                 webp_data->still_rgba = NULL;
+            }
+            if (webp_data->still_rgb) {
+                free(webp_data->still_rgb);
+                webp_data->still_rgb = NULL;
             }
             free(webp_data);
             dec->impl.webp.decoder = NULL;

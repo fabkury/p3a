@@ -3,7 +3,7 @@ idf_component_register(
          "png_animation_decoder.c"
          "jpeg_animation_decoder.c"
     INCLUDE_DIRS "include" "."
-    REQUIRES libwebp_decoder espressif__libpng esp_driver_jpeg
+    REQUIRES libwebp_decoder espressif__libpng esp_driver_jpeg config_store
     PRIV_REQUIRES animated_gif_decoder esp_common
 )
 

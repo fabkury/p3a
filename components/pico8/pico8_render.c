@@ -36,6 +36,11 @@ static struct {
     int64_t last_frame_time_us;     // Timestamp of last frame
     uint16_t *lookup_x;             // X coordinate lookup table
     uint16_t *lookup_y;             // Y coordinate lookup table
+    int offset_x;
+    int offset_y;
+    int scaled_w;
+    int scaled_h;
+    bool has_borders;
     pico8_color_t palette[PICO8_PALETTE_COLORS];  // Current palette
     bool palette_initialized;
     SemaphoreHandle_t mutex;
@@ -105,37 +110,72 @@ esp_err_t pico8_render_init(void)
         }
     }
     
-    // Allocate lookup tables
-    if (!s_pico8.lookup_x) {
-        s_pico8.lookup_x = (uint16_t *)heap_caps_malloc(P3A_DISPLAY_WIDTH * sizeof(uint16_t), MALLOC_CAP_INTERNAL);
-        if (!s_pico8.lookup_x) {
-            ESP_LOGE(TAG, "Failed to allocate PICO-8 lookup X table");
-            pico8_render_deinit();
-            return ESP_ERR_NO_MEM;
+    // Allocate lookup tables (aspect-ratio preserving). PICO-8 is square, but this avoids stretching
+    // on non-square displays and allows borders to be filled by the upscale workers.
+    {
+        const int target_w = P3A_DISPLAY_WIDTH;
+        const int target_h = P3A_DISPLAY_HEIGHT;
+        const int src_w = PICO8_FRAME_WIDTH;
+        const int src_h = PICO8_FRAME_HEIGHT;
+
+        int scaled_w = target_w;
+        int scaled_h = target_h;
+
+        if ((int64_t)src_w * (int64_t)target_h >= (int64_t)src_h * (int64_t)target_w) {
+            scaled_w = target_w;
+            scaled_h = (int)(((int64_t)target_w * (int64_t)src_h) / (int64_t)src_w);
+        } else {
+            scaled_h = target_h;
+            scaled_w = (int)(((int64_t)target_h * (int64_t)src_w) / (int64_t)src_h);
         }
-        for (int dst_x = 0; dst_x < P3A_DISPLAY_WIDTH; ++dst_x) {
-            int src_x = (dst_x * PICO8_FRAME_WIDTH) / P3A_DISPLAY_WIDTH;
-            if (src_x >= PICO8_FRAME_WIDTH) {
-                src_x = PICO8_FRAME_WIDTH - 1;
+
+        if (scaled_w < 1) scaled_w = 1;
+        if (scaled_h < 1) scaled_h = 1;
+        if (scaled_w > target_w) scaled_w = target_w;
+        if (scaled_h > target_h) scaled_h = target_h;
+
+        const int offset_x = (target_w - scaled_w) / 2;
+        const int offset_y = (target_h - scaled_h) / 2;
+        const bool has_borders = (offset_x > 0) || (offset_y > 0);
+
+        // Reallocate if size changed or not allocated
+        if (!s_pico8.lookup_x || s_pico8.scaled_w != scaled_w) {
+            if (s_pico8.lookup_x) heap_caps_free(s_pico8.lookup_x);
+            s_pico8.lookup_x = (uint16_t *)heap_caps_malloc((size_t)scaled_w * sizeof(uint16_t), MALLOC_CAP_INTERNAL);
+            if (!s_pico8.lookup_x) {
+                ESP_LOGE(TAG, "Failed to allocate PICO-8 lookup X table (len=%d)", scaled_w);
+                pico8_render_deinit();
+                return ESP_ERR_NO_MEM;
             }
-            s_pico8.lookup_x[dst_x] = (uint16_t)src_x;
         }
-    }
-    
-    if (!s_pico8.lookup_y) {
-        s_pico8.lookup_y = (uint16_t *)heap_caps_malloc(P3A_DISPLAY_HEIGHT * sizeof(uint16_t), MALLOC_CAP_INTERNAL);
-        if (!s_pico8.lookup_y) {
-            ESP_LOGE(TAG, "Failed to allocate PICO-8 lookup Y table");
-            pico8_render_deinit();
-            return ESP_ERR_NO_MEM;
-        }
-        for (int dst_y = 0; dst_y < P3A_DISPLAY_HEIGHT; ++dst_y) {
-            int src_y = (dst_y * PICO8_FRAME_HEIGHT) / P3A_DISPLAY_HEIGHT;
-            if (src_y >= PICO8_FRAME_HEIGHT) {
-                src_y = PICO8_FRAME_HEIGHT - 1;
+
+        if (!s_pico8.lookup_y || s_pico8.scaled_h != scaled_h) {
+            if (s_pico8.lookup_y) heap_caps_free(s_pico8.lookup_y);
+            s_pico8.lookup_y = (uint16_t *)heap_caps_malloc((size_t)scaled_h * sizeof(uint16_t), MALLOC_CAP_INTERNAL);
+            if (!s_pico8.lookup_y) {
+                ESP_LOGE(TAG, "Failed to allocate PICO-8 lookup Y table (len=%d)", scaled_h);
+                pico8_render_deinit();
+                return ESP_ERR_NO_MEM;
             }
-            s_pico8.lookup_y[dst_y] = (uint16_t)src_y;
         }
+
+        for (int x = 0; x < scaled_w; ++x) {
+            int src_x = (x * src_w) / scaled_w;
+            if (src_x >= src_w) src_x = src_w - 1;
+            s_pico8.lookup_x[x] = (uint16_t)src_x;
+        }
+
+        for (int y = 0; y < scaled_h; ++y) {
+            int src_y = (y * src_h) / scaled_h;
+            if (src_y >= src_h) src_y = src_h - 1;
+            s_pico8.lookup_y[y] = (uint16_t)src_y;
+        }
+
+        s_pico8.offset_x = offset_x;
+        s_pico8.offset_y = offset_y;
+        s_pico8.scaled_w = scaled_w;
+        s_pico8.scaled_h = scaled_h;
+        s_pico8.has_borders = has_borders;
     }
     
     // Initialize palette
@@ -367,6 +407,9 @@ int pico8_render_frame(uint8_t *dest_buffer, size_t row_stride)
     display_renderer_parallel_upscale(src, PICO8_FRAME_WIDTH, PICO8_FRAME_HEIGHT,
                                       dest_buffer,
                                       s_pico8.lookup_x, s_pico8.lookup_y,
+                                      s_pico8.offset_x, s_pico8.offset_y,
+                                      s_pico8.scaled_w, s_pico8.scaled_h,
+                                      s_pico8.has_borders,
                                       DISPLAY_ROTATION_0);
     
     return 16; // Frame delay (~60fps)

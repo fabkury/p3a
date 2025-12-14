@@ -13,6 +13,53 @@ static const char *TAG = "CFG";
 #define KEY_NEW   "cfg_new"
 #define MAX_JSON  (32 * 1024)
 
+// ============================================================================
+// Background color cache
+// ============================================================================
+
+static uint8_t s_bg_r = 0;
+static uint8_t s_bg_g = 0;
+static uint8_t s_bg_b = 0;
+static bool s_bg_loaded = false;
+static uint32_t s_bg_generation = 0;
+
+static uint8_t clamp_u8_num(const cJSON *n, uint8_t def)
+{
+    if (!n || !cJSON_IsNumber((cJSON *)n)) {
+        return def;
+    }
+    double v = cJSON_GetNumberValue((cJSON *)n);
+    if (v < 0) v = 0;
+    if (v > 255) v = 255;
+    return (uint8_t)v;
+}
+
+static void bg_apply_from_cfg(const cJSON *cfg)
+{
+    // Default: black
+    uint8_t r = 0, g = 0, b = 0;
+
+    if (cfg && cJSON_IsObject((cJSON *)cfg)) {
+        const cJSON *bg = cJSON_GetObjectItem((cJSON *)cfg, "background_color");
+        if (bg && cJSON_IsObject((cJSON *)bg)) {
+            r = clamp_u8_num(cJSON_GetObjectItem((cJSON *)bg, "r"), 0);
+            g = clamp_u8_num(cJSON_GetObjectItem((cJSON *)bg, "g"), 0);
+            b = clamp_u8_num(cJSON_GetObjectItem((cJSON *)bg, "b"), 0);
+        }
+    }
+
+    const bool changed = (!s_bg_loaded) || (r != s_bg_r) || (g != s_bg_g) || (b != s_bg_b);
+    s_bg_r = r;
+    s_bg_g = g;
+    s_bg_b = b;
+    if (changed) {
+        s_bg_generation++;
+        ESP_LOGI(TAG, "Background color updated: r=%u g=%u b=%u (gen=%lu)",
+                 (unsigned)s_bg_r, (unsigned)s_bg_g, (unsigned)s_bg_b, (unsigned long)s_bg_generation);
+    }
+    s_bg_loaded = true;
+}
+
 static esp_err_t ensure_nvs(nvs_handle_t *h) {
     esp_err_t err = nvs_open(NAMESPACE, NVS_READWRITE, h);
     if (err == ESP_ERR_NVS_NOT_INITIALIZED) {
@@ -104,6 +151,9 @@ esp_err_t config_store_load(cJSON **out_cfg) {
         return ESP_ERR_INVALID_ARG;
     }
 
+    // Keep background color cache in sync (cheap; uses parsed JSON we already have).
+    bg_apply_from_cfg(o);
+
     *out_cfg = o;
     return ESP_OK;
 }
@@ -183,6 +233,9 @@ esp_err_t config_store_save(const cJSON *cfg) {
         ESP_LOGE(TAG, "Failed to commit main blob: %s", esp_err_to_name(err));
         return err;
     }
+
+    // Update runtime cache from the config we just saved.
+    bg_apply_from_cfg(cfg);
 
     ESP_LOGI(TAG, "Config saved successfully (%zu bytes)", len);
     return ESP_OK;
@@ -549,6 +602,78 @@ uint32_t config_store_get_effective_seed(void)
     
     // Default to master seed if not explicitly set
     return config_store_get_global_seed();
+}
+
+// ============================================================================
+// Background color (persisted)
+// ============================================================================
+
+esp_err_t config_store_set_background_color(uint8_t r, uint8_t g, uint8_t b)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to load config for background_color update");
+        return err;
+    }
+
+    cJSON *bg = cJSON_GetObjectItem(cfg, "background_color");
+    if (bg && !cJSON_IsObject(bg)) {
+        cJSON_DeleteItemFromObject(cfg, "background_color");
+        bg = NULL;
+    }
+    if (!bg) {
+        bg = cJSON_CreateObject();
+        if (!bg) {
+            cJSON_Delete(cfg);
+            return ESP_ERR_NO_MEM;
+        }
+        cJSON_AddItemToObject(cfg, "background_color", bg);
+    }
+
+    // Set r/g/b (replace if exists)
+    cJSON *ri = cJSON_GetObjectItem(bg, "r");
+    if (ri) cJSON_SetNumberValue(ri, (double)r);
+    else cJSON_AddNumberToObject(bg, "r", (double)r);
+
+    cJSON *gi = cJSON_GetObjectItem(bg, "g");
+    if (gi) cJSON_SetNumberValue(gi, (double)g);
+    else cJSON_AddNumberToObject(bg, "g", (double)g);
+
+    cJSON *bi = cJSON_GetObjectItem(bg, "b");
+    if (bi) cJSON_SetNumberValue(bi, (double)b);
+    else cJSON_AddNumberToObject(bg, "b", (double)b);
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    return err;
+}
+
+void config_store_get_background_color(uint8_t *r, uint8_t *g, uint8_t *b)
+{
+    if (!s_bg_loaded) {
+        // Lazy-load from NVS once.
+        cJSON *cfg = NULL;
+        if (config_store_load(&cfg) == ESP_OK) {
+            cJSON_Delete(cfg);
+        } else {
+            // Keep defaults if load fails.
+            bg_apply_from_cfg(NULL);
+        }
+    }
+
+    if (r) *r = s_bg_r;
+    if (g) *g = s_bg_g;
+    if (b) *b = s_bg_b;
+}
+
+uint32_t config_store_get_background_color_generation(void)
+{
+    if (!s_bg_loaded) {
+        uint8_t r, g, b;
+        config_store_get_background_color(&r, &g, &b);
+    }
+    return s_bg_generation;
 }
 
 

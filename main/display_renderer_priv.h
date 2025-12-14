@@ -71,12 +71,22 @@ extern TaskHandle_t g_upscale_main_task;
 
 // Upscale shared state (set per-frame before notifying workers)
 extern const uint8_t *g_upscale_src_buffer;
+extern int g_upscale_src_bpp;
 extern uint8_t *g_upscale_dst_buffer;
 extern const uint16_t *g_upscale_lookup_x;
 extern const uint16_t *g_upscale_lookup_y;
 extern int g_upscale_src_w;
 extern int g_upscale_src_h;
 extern display_rotation_t g_upscale_rotation;
+extern int g_upscale_offset_x;
+extern int g_upscale_offset_y;
+extern int g_upscale_scaled_w;
+extern int g_upscale_scaled_h;
+extern volatile bool g_upscale_has_borders;
+extern uint8_t g_upscale_bg_r;
+extern uint8_t g_upscale_bg_g;
+extern uint8_t g_upscale_bg_b;
+extern uint16_t g_upscale_bg_rgb565;
 extern int g_upscale_row_start_top;
 extern int g_upscale_row_end_top;
 extern int g_upscale_row_start_bottom;

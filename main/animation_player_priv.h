@@ -9,6 +9,7 @@
 #include "p3a_board.h"
 #include "app_lcd.h"
 #include "sdcard_channel.h"  // For asset_type_t (canonical definition)
+#include "config_store.h"
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_timer.h"
@@ -85,11 +86,21 @@ typedef struct {
     uint8_t *native_frame_b1;           // Native decoded frame buffer 1
     uint8_t *native_frame_b2;           // Native decoded frame buffer 2
     uint8_t native_buffer_active;       // Which native buffer is active (0 or 1)
+    uint8_t native_bytes_per_pixel;     // 3 (RGB888) or 4 (RGBA8888)
     size_t native_frame_size;
     uint16_t *upscale_lookup_x;
     uint16_t *upscale_lookup_y;
     int upscale_src_w, upscale_src_h;
     int upscale_dst_w, upscale_dst_h;
+
+    // Aspect ratio preservation / borders (computed when building lookup tables)
+    int upscale_offset_x;      // X offset for centering (border on left)
+    int upscale_offset_y;      // Y offset for centering (border on top)
+    int upscale_scaled_w;      // Scaled image width (< dst_w if letterboxed)
+    int upscale_scaled_h;      // Scaled image height (< dst_h if pillarboxed)
+    bool upscale_has_borders;  // True if aspect ratio doesn't match; draw borders with bg color
+    display_rotation_t upscale_rotation_built;  // Rotation used when building lookup tables
+
     bool first_frame_ready;             // First frame decoded and ready in native_frame_b1
     bool decoder_at_frame_1;            // Decoder has advanced past frame 0
     bool prefetch_pending;              // Prefetch decode requested but not yet done
@@ -97,6 +108,12 @@ typedef struct {
     uint32_t current_frame_delay_ms;
     bool ready;
     char *filepath;  // Path to the animation file
+
+    // Static frame caching (frame_count <= 1):
+    // - Keep native_frame_b1 as the canonical decoded frame and reuse it every render tick
+    // - If background color changes and the asset has transparency, re-decode once to refresh compositing
+    bool static_frame_cached;
+    uint32_t static_bg_generation;
 
     // Live Mode / swap_future start alignment
     // - start_time_ms: ideal wall-clock time when this animation "started" (UTC, ms since epoch).
@@ -116,6 +133,8 @@ extern animation_buffer_t s_back_buffer;
 extern size_t s_next_asset_index;
 extern bool s_swap_requested;
 extern bool s_loader_busy;
+extern volatile bool s_cycle_pending;
+extern volatile bool s_cycle_forward;
 extern TaskHandle_t s_loader_task;
 extern SemaphoreHandle_t s_loader_sem;
 extern SemaphoreHandle_t s_buffer_mutex;
@@ -151,6 +170,10 @@ void animation_loader_wait_for_idle(void);
 void animation_loader_mark_swap_successful(void);
 bool animation_loader_try_delete_corrupt_vault_file(const char *filepath, esp_err_t error);
 
+// Rebuild aspect-ratio/rotation-dependent upscale maps for an already-loaded buffer.
+// Call from the render task (or otherwise ensure it doesn't race with render_next_frame()).
+esp_err_t animation_loader_rebuild_upscale_maps(animation_buffer_t *buf, display_rotation_t rotation);
+
 // Directory enumeration
 bool directory_has_animation_files(const char *dir_path);
 esp_err_t find_animations_directory(const char *root_path, char **found_dir_out);
@@ -162,5 +185,8 @@ size_t get_previous_asset_index(size_t current_index);
 
 // Frame rendering callback (called by display_renderer)
 int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx);
+
+// Notify the render task that rotation changed; it will rebuild lookup maps at a safe point.
+void animation_player_render_on_rotation_changed(display_rotation_t rotation);
 
 #endif // ANIMATION_PLAYER_PRIV_H

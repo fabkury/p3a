@@ -148,3 +148,14 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
  */
 esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const char *art_url);
 
+/**
+ * @brief Adopt a Makapix channel handle created elsewhere (boot restore path)
+ *
+ * The Makapix module owns and may destroy this handle on future channel switches.
+ * Intended to allow the animation player to restore the remembered channel before
+ * the Makapix module performs a normal interactive switch.
+ *
+ * @param channel Channel handle to adopt (can be NULL to clear)
+ */
+void makapix_adopt_channel_handle(void *channel);
+

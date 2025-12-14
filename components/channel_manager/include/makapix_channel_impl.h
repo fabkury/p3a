@@ -17,7 +17,7 @@ extern "C" {
  * Key features:
  * - Paginated queries to remote server
  * - Local caching of artwork files and metadata
- * - Binary index file (index.bin) for fast loading
+ * - Binary channel index file (<channel_id>.bin) for fast loading
  * - Background refresh via MQTT
  * - Power-loss safe file operations
  */
@@ -31,7 +31,7 @@ typedef enum {
 } makapix_index_post_kind_t;
 
 /**
- * @brief Channel post entry stored in index.bin (fixed size, packed)
+ * @brief Channel post entry stored in the channel index .bin file (fixed size, packed)
  *
  * Breaking change: this replaces the old artwork-only entry format.
  * No migration/versioning is provided by design (SD card is expected to be wiped).
@@ -62,7 +62,7 @@ _Static_assert(sizeof(makapix_channel_entry_t) == 64, "Makapix channel entry mus
  * @param channel_id UUID of the channel (e.g., "abc123-def456-...")
  * @param name Display name for the channel
  * @param vault_path Base path for vault storage (e.g., "/sdcard/vault")
- * @param channels_path Base path for channel data (e.g., "/sdcard/channels")
+ * @param channels_path Base path for channel data (e.g., "/sdcard/channel")
  * @return Channel handle or NULL on failure
  */
 channel_handle_t makapix_channel_create(const char *channel_id, 

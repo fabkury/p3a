@@ -10,6 +10,9 @@
 #include "pico8_stream.h"
 #include "pico8_render.h"
 #include "swap_future.h"
+#include "p3a_state.h"
+#include "makapix_channel_impl.h"
+#include "makapix.h"
 
 // Animation player state
 animation_buffer_t s_front_buffer = {0};
@@ -201,7 +204,46 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     }
 
     channel_player_set_sdcard_channel_handle(sd_ch);
-    channel_player_switch_to_sdcard_channel();
+    // Restore last remembered channel BEFORE loading the first animation,
+    // so boot doesn't briefly show SD card content then switch later.
+    p3a_channel_info_t saved = {0};
+    bool want_makapix = false;
+    char mk_channel_id[128] = {0};
+    char mk_channel_name[128] = {0};
+
+    if (p3a_state_get_channel_info(&saved) == ESP_OK) {
+        if (saved.type == P3A_CHANNEL_MAKAPIX_ALL) {
+            snprintf(mk_channel_id, sizeof(mk_channel_id), "all");
+            snprintf(mk_channel_name, sizeof(mk_channel_name), "Recent");
+            want_makapix = true;
+        } else if (saved.type == P3A_CHANNEL_MAKAPIX_PROMOTED) {
+            snprintf(mk_channel_id, sizeof(mk_channel_id), "promoted");
+            snprintf(mk_channel_name, sizeof(mk_channel_name), "Promoted");
+            want_makapix = true;
+        } else if (saved.type == P3A_CHANNEL_MAKAPIX_USER) {
+            snprintf(mk_channel_id, sizeof(mk_channel_id), "user");
+            snprintf(mk_channel_name, sizeof(mk_channel_name), "My Artworks");
+            want_makapix = true;
+        } else if (saved.type == P3A_CHANNEL_MAKAPIX_BY_USER && saved.user_handle[0] != '\0') {
+            snprintf(mk_channel_id, sizeof(mk_channel_id), "by_user_%s", saved.user_handle);
+            snprintf(mk_channel_name, sizeof(mk_channel_name), "%s's Artworks", saved.user_handle);
+            want_makapix = true;
+        }
+    }
+
+    if (want_makapix) {
+        channel_handle_t mk_ch = makapix_channel_create(mk_channel_id, mk_channel_name, "/sdcard/vault", "/sdcard/channel");
+        if (mk_ch) {
+            // Give ownership to makapix module so future switches clean up correctly.
+            makapix_adopt_channel_handle(mk_ch);
+            channel_player_switch_to_makapix_channel(mk_ch);
+        } else {
+            ESP_LOGW(TAG, "Failed to create Makapix channel for boot restore, falling back to SD card");
+            channel_player_switch_to_sdcard_channel();
+        }
+    } else {
+        channel_player_switch_to_sdcard_channel();
+    }
 
     err = channel_player_load_channel();
     if (err != ESP_OK) {

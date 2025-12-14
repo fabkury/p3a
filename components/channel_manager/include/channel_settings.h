@@ -31,8 +31,8 @@ typedef struct {
 /**
  * @brief Load per-channel settings from SD card.
  *
- * Makapix: /sdcard/channels/<id>/settings.json
- * SD card: /sdcard/channels/sdcard-channel/settings.json
+ * Makapix: /sdcard/channel/<id>.settings.json
+ * SD card: /sdcard/channel/sdcard-channel.settings.json
  */
 esp_err_t channel_settings_load_for_channel_id(const char *channel_id, channel_settings_t *out);
 esp_err_t channel_settings_load_for_sdcard(channel_settings_t *out);

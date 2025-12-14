@@ -475,6 +475,141 @@ const char* get_mime_type(const char* path) {
     return "application/octet-stream";
 }
 
+// ---------- Method routers (reduce URI handler usage) ----------
+
+// Forward declarations for handlers referenced by routers (defined later in this file)
+static esp_err_t h_get_api_state(httpd_req_t *req);
+static esp_err_t h_get_config(httpd_req_t *req);
+static esp_err_t h_put_config(httpd_req_t *req);
+static esp_err_t h_post_channel(httpd_req_t *req);
+static esp_err_t h_get_dwell_time(httpd_req_t *req);
+static esp_err_t h_put_dwell_time(httpd_req_t *req);
+static esp_err_t h_get_global_seed(httpd_req_t *req);
+static esp_err_t h_put_global_seed(httpd_req_t *req);
+static esp_err_t h_post_reboot(httpd_req_t *req);
+static esp_err_t h_post_swap_next(httpd_req_t *req);
+static esp_err_t h_post_swap_back(httpd_req_t *req);
+static esp_err_t h_post_pause(httpd_req_t *req);
+static esp_err_t h_post_resume(httpd_req_t *req);
+static esp_err_t h_get_rotation(httpd_req_t *req);
+static esp_err_t h_post_rotation(httpd_req_t *req);
+#if CONFIG_OTA_DEV_MODE
+static esp_err_t h_post_debug(httpd_req_t *req);
+#endif
+
+static esp_err_t h_get_router(httpd_req_t *req) {
+    const char *uri = req ? req->uri : NULL;
+    if (!uri) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Bad request");
+        return ESP_OK;
+    }
+
+    // Core JSON endpoints (hot paths kept here to avoid extra module hops)
+    if (strcmp(uri, "/api/state") == 0) {
+        return h_get_api_state(req);
+    }
+    if (strcmp(uri, "/config") == 0) {
+        return h_get_config(req);
+    }
+    if (strcmp(uri, "/rotation") == 0) {
+        return h_get_rotation(req);
+    }
+    if (strcmp(uri, "/settings/dwell_time") == 0) {
+        return h_get_dwell_time(req);
+    }
+    if (strcmp(uri, "/settings/global_seed") == 0) {
+        return h_get_global_seed(req);
+    }
+
+    // UI/pages module (/, /favicon.ico, /config/network, /seed, /pico8)
+    esp_err_t pr = http_api_pages_route_get(req);
+    if (pr == ESP_OK) {
+        return ESP_OK;
+    }
+
+    // OTA module (/ota, /ota/status)
+    esp_err_t orr = http_api_ota_route_get(req);
+    if (orr == ESP_OK) {
+        return ESP_OK;
+    }
+
+    httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
+    return ESP_OK;
+}
+
+static esp_err_t h_post_router(httpd_req_t *req) {
+    const char *uri = req ? req->uri : NULL;
+    if (!uri) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Bad request");
+        return ESP_OK;
+    }
+
+    // Core action endpoints
+    if (strcmp(uri, "/action/reboot") == 0) {
+        return h_post_reboot(req);
+    }
+    if (strcmp(uri, "/action/swap_next") == 0) {
+        return h_post_swap_next(req);
+    }
+    if (strcmp(uri, "/action/swap_back") == 0) {
+        return h_post_swap_back(req);
+    }
+    if (strcmp(uri, "/action/pause") == 0) {
+        return h_post_pause(req);
+    }
+    if (strcmp(uri, "/action/resume") == 0) {
+        return h_post_resume(req);
+    }
+    if (strcmp(uri, "/rotation") == 0) {
+        return h_post_rotation(req);
+    }
+    if (strcmp(uri, "/channel") == 0) {
+        return h_post_channel(req);
+    }
+
+    // UI/pages module (POST /erase)
+    esp_err_t pr = http_api_pages_route_post(req);
+    if (pr == ESP_OK) {
+        return ESP_OK;
+    }
+
+    // OTA module (POST /ota/check|install|rollback)
+    esp_err_t orr = http_api_ota_route_post(req);
+    if (orr == ESP_OK) {
+        return ESP_OK;
+    }
+
+#if CONFIG_OTA_DEV_MODE
+    if (strcmp(uri, "/debug") == 0) {
+        return h_post_debug(req);
+    }
+#endif
+
+    httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
+    return ESP_OK;
+}
+
+static esp_err_t h_put_router(httpd_req_t *req) {
+    const char *uri = req ? req->uri : NULL;
+    if (!uri) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Bad request");
+        return ESP_OK;
+    }
+
+    if (strcmp(uri, "/config") == 0) {
+        return h_put_config(req);
+    }
+    if (strcmp(uri, "/settings/dwell_time") == 0) {
+        return h_put_dwell_time(req);
+    }
+    if (strcmp(uri, "/settings/global_seed") == 0) {
+        return h_put_global_seed(req);
+    }
+
+    httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
+    return ESP_OK;
+}
+
 // ---------- REST API Handlers ----------
 
 /**
@@ -1259,7 +1394,7 @@ esp_err_t http_api_start(void) {
     cfg.stack_size = 16384;  // Increased to prevent stack overflow in WebSocket handlers
     cfg.server_port = 80;
     cfg.lru_purge_enable = true;
-    cfg.max_uri_handlers = 28;  // Increased from 20 to accommodate OTA endpoints
+    cfg.max_uri_handlers = 12;  // Reduced: most endpoints are multiplexed via method routers
     cfg.uri_match_fn = httpd_uri_match_wildcard;
     cfg.open_fn = http_open_fn;
     cfg.close_fn = http_close_fn;
@@ -1278,7 +1413,7 @@ esp_err_t http_api_start(void) {
     }
     ESP_LOGI(HTTP_API_TAG, "HTTP server started on port %d", cfg.server_port);
 
-    // Register core REST API handlers
+    // Register dedicated handlers first (more specific URIs must be registered before catch-all routers)
     httpd_uri_t u = {0};
 
     u.uri = "/status";
@@ -1287,109 +1422,29 @@ esp_err_t http_api_start(void) {
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
 
-    u.uri = "/api/state";
-    u.method = HTTP_GET;
-    u.handler = h_get_api_state;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
-    u.uri = "/config";
-    u.method = HTTP_GET;
-    u.handler = h_get_config;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
-    u.uri = "/config";
-    u.method = HTTP_PUT;
-    u.handler = h_put_config;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
-    u.uri = "/action/reboot";
-    u.method = HTTP_POST;
-    u.handler = h_post_reboot;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
-    u.uri = "/action/swap_next";
-    u.method = HTTP_POST;
-    u.handler = h_post_swap_next;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
-    u.uri = "/action/swap_back";
-    u.method = HTTP_POST;
-    u.handler = h_post_swap_back;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
-    u.uri = "/action/pause";
-    u.method = HTTP_POST;
-    u.handler = h_post_pause;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
-    u.uri = "/action/resume";
-    u.method = HTTP_POST;
-    u.handler = h_post_resume;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
-    u.uri = "/rotation";
-    u.method = HTTP_GET;
-    u.handler = h_get_rotation;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
-    u.uri = "/rotation";
-    u.method = HTTP_POST;
-    u.handler = h_post_rotation;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
-    u.uri = "/channel";
-    u.method = HTTP_POST;
-    u.handler = h_post_channel;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
-    u.uri = "/settings/dwell_time";
-    u.method = HTTP_GET;
-    u.handler = h_get_dwell_time;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
-    u.uri = "/settings/dwell_time";
-    u.method = HTTP_PUT;
-    u.handler = h_put_dwell_time;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
-    u.uri = "/settings/global_seed";
-    u.method = HTTP_GET;
-    u.handler = h_get_global_seed;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
-    u.uri = "/settings/global_seed";
-    u.method = HTTP_PUT;
-    u.handler = h_put_global_seed;
-    u.user_ctx = NULL;
-    register_uri_handler_or_log(s_server, &u);
-
     // Register handlers from other modules
     http_api_register_page_handlers(s_server);
     http_api_register_ota_handlers(s_server);
     http_api_register_upload_handler(s_server);
 
-#if CONFIG_OTA_DEV_MODE
-    // DEV-only: single multiplexed debug endpoint.
-    u.uri = "/debug";
-    u.method = HTTP_POST;
-    u.handler = h_post_debug;
+    // Register method routers last (catch-all)
+    u.uri = "/*";
+    u.method = HTTP_GET;
+    u.handler = h_get_router;
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
-#endif
+
+    u.uri = "/*";
+    u.method = HTTP_POST;
+    u.handler = h_post_router;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/*";
+    u.method = HTTP_PUT;
+    u.handler = h_put_router;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
 
     ESP_LOGI(HTTP_API_TAG, "HTTP API server started on port 80");
     

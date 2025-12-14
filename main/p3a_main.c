@@ -600,6 +600,10 @@ void app_main(void)
         ESP_LOGW(TAG, "SPIFFS initialization failed: %s (continuing anyway)", esp_err_to_name(fs_ret));
     }
 
+    // Initialize Makapix module early (after SPIFFS mount, before animation player/channel load).
+    // This ensures Makapix API layer is ready before any Makapix channel refresh tasks may start.
+    ESP_ERROR_CHECK(makapix_init());
+
     // Initialize LCD and touch
     ESP_ERROR_CHECK(app_lcd_init());
     ESP_ERROR_CHECK(app_touch_init());
@@ -611,9 +615,6 @@ void app_main(void)
     }
 
     ESP_ERROR_CHECK(app_usb_init());
-
-    // Initialize Makapix module
-    ESP_ERROR_CHECK(makapix_init());
 
     // Create auto-swap task.
     // This task may call into channel playback logic (which can be stack-hungry due to logging/formatting),
@@ -655,6 +656,9 @@ void app_main(void)
         esp_restart();
         // Won't reach here
     }
+
+    // NOTE: boot-time channel restore happens earlier during animation player initialization,
+    // so the first animation shown is already from the last remembered channel.
 
     // Initialize OTA manager - starts periodic update checks
     // (checks are skipped if WiFi is not connected)

@@ -97,13 +97,13 @@
 - Config from NVS: broker, port, client_id, cert/key/token, topics
 - **Status**: Device registration at dev.makapix.club, mTLS authentication, status publishing every 30s
 
-**6.2 Topics & Payloads** ⏳ PARTIAL
+**6.2 Topics & Payloads** ✅ IMPLEMENTED
 - Subscribe: `makapix/player/{player_key}/command` ✅
 - Publish: `makapix/player/{player_key}/status` ✅
-- **Implemented**: Status messages, basic commands (swap_next, swap_back, etc.)
-- **Not yet implemented**: `posts/new` feed subscription, artwork download queue
+- **Implemented**: Status messages, commands (swap_next, swap_back, etc.)
+- **Artwork sending** from dev.makapix.club directly to device ✅
 - Payload schema (JSON): `{post_id, artist, playlist?, assets:[{url, sha256, w,h,format,frame_delay?}], expires_at}`
-- **AC**: Message enqueues download, duplicate suppress — PENDING
+- **AC**: Message triggers display, download support ✅
 
 **Security**: Client certs/tokens ✅, subscribe-only ACLs
 
@@ -126,7 +126,10 @@
 
 **8.1 Decoders** ✅ IMPLEMENTED
 - WebP (libwebp), PNG (libpng), JPEG (esp_jpeg), GIF (animated_gif)
+- **Transparency/alpha channel support** for WebP, GIF, and PNG
 - Normalize to display format, center/pad, nearest-neighbor upscale
+- **Aspect ratio preservation** for non-square artworks
+- **Configurable background color** for transparent images and letterboxing
 
 **8.2 Frame Pipeline** ✅ IMPLEMENTED
 - Multi-buffer rendering with PSRAM
@@ -165,6 +168,7 @@
 - Web UI for manual check, install, and rollback
 - SHA256 checksum verification
 - Progress display on LCD during updates
+- **ESP32-C6 co-processor auto-flash** — firmware is updated automatically when needed
 - **AC**: Power-loss-safe ✅, automatic rollback on 3 boot failures ✅, version in web UI ✅
 
 **10.2 Watchdogs & Recovery** ⏳ PARTIAL
@@ -253,18 +257,22 @@
 Completed:
 - Display pipeline with multi-buffer rendering
 - Animation playback from SD card with prefetching
+- **Transparency/alpha channel support** for WebP, GIF, and PNG
+- **Aspect ratio preservation** for non-square artworks
+- **Configurable background color** for transparent images
 - Touch gestures (tap, swipe, long-press for registration)
 - Screen rotation (0°, 90°, 180°, 270°) with touch gesture and API
 - Wi-Fi provisioning with captive portal
 - Local web UI and REST API
 - Device registration at dev.makapix.club
 - TLS MQTT client with mTLS authentication
+- **Makapix Club integration** — send artworks directly from dev.makapix.club
 - Remote control from website (commands via MQTT)
 - USB composite device (serial + mass storage)
 - **OTA firmware updates** from GitHub Releases with automatic rollback
+- **ESP32-C6 co-processor auto-flash** — Wi-Fi module firmware updated automatically
 
 In Progress:
-- Feed ingestion (automatic artwork download from MQTT notifications)
 - Hardware reactions (send likes to artworks)
 - Browser-based web flasher
 

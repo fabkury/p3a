@@ -35,12 +35,16 @@ This document provides a comprehensive overview of the p3a (Pixel Pea) firmware 
 ### Key Features
 
 - Animated WebP, GIF, PNG, and JPEG playback
+- **Transparency support** for WebP, GIF, and PNG with configurable background color
+- **Aspect ratio preservation** for non-square artworks
 - Touch gestures for navigation and brightness control
 - Web-based control panel at `http://p3a.local/`
+- **Makapix Club integration** — send artworks directly from [dev.makapix.club](https://dev.makapix.club/)
+- **Over-the-Air updates** — install firmware updates wirelessly via web UI
+- **ESP32-C6 auto-flash** — co-processor firmware is updated automatically when needed
 - PICO-8 game monitor mode with WebSocket streaming
 - USB Mass Storage for SD card access
 - Captive portal for Wi-Fi provisioning
-- Makapix Club cloud integration via MQTT
 
 ### Codebase Statistics
 
@@ -200,9 +204,9 @@ p3a/
 │   ├── app_state/             # Application state management
 │   ├── config_store/          # NVS-backed configuration
 │   ├── http_api/              # HTTP server and REST API
-│   ├── makapix/               # Makapix Club integration (MQTT)
-│   ├── ota_manager/           # OTA update support
-│   ├── slave_ota/             # ESP32-C6 co-processor OTA
+│   ├── makapix/               # Makapix Club integration (MQTT, artwork sending)
+│   ├── ota_manager/           # OTA firmware updates from GitHub Releases
+│   ├── slave_ota/             # ESP32-C6 co-processor auto-flash
 │   ├── ugfx/                  # µGFX graphics library
 │   └── libwebp_decoder/       # libwebp wrapper
 │
@@ -355,6 +359,8 @@ idf.py flash monitor
 #### 5. **animation_decoder** (Image Decoders)
 - **Purpose**: Unified interface for image/animation decoding
 - **Formats**: WebP (animated), GIF (animated), PNG, JPEG
+- **Transparency**: Full alpha channel support for WebP, GIF, and PNG
+- **Aspect ratio**: Preserves original aspect ratio when scaling non-square images
 - **Files**: `webp_animation_decoder.c`, `png_animation_decoder.c`, `jpeg_animation_decoder.c`
 - **Interface**: `animation_decoder.h` provides `decoder_open()`, `decoder_get_frame()`, `decoder_close()`
 
@@ -363,6 +369,7 @@ idf.py flash monitor
 - **Features**:
   - Device provisioning via HTTPS
   - TLS MQTT with mTLS authentication
+  - **Artwork sending** — receive artworks directly from dev.makapix.club
   - Remote command receiving (swap_next, swap_back, etc.)
   - Status publishing every 30 seconds
 - **Files**: `makapix.c`, `makapix_mqtt.c`, `makapix_provision.c`, `makapix_store.c`
@@ -374,10 +381,28 @@ idf.py flash monitor
 
 #### 8. **config_store** (Configuration)
 - **Purpose**: NVS-backed persistent configuration
-- **Stores**: Wi-Fi credentials, brightness, auto-swap interval, rotation
+- **Stores**: Wi-Fi credentials, brightness, auto-swap interval, rotation, background color
 
 #### 9. **app_state** (State Machine)
 - **Purpose**: Centralized application state (ready, processing, error)
+
+#### 10. **ota_manager** (Over-the-Air Updates)
+- **Purpose**: Wireless firmware updates from GitHub Releases
+- **Features**:
+  - Automatic periodic update checks (every 2 hours)
+  - Web UI for manual check, install, and rollback
+  - SHA256 checksum verification
+  - Progress display on LCD during updates
+  - Automatic rollback if firmware fails to boot 3 times
+- **Files**: `ota_manager.c`, `ota_manager.h`
+
+#### 11. **slave_ota** (ESP32-C6 Co-processor Firmware)
+- **Purpose**: Automatic firmware management for the ESP32-C6 Wi-Fi co-processor
+- **Features**:
+  - Detects outdated or missing co-processor firmware
+  - Automatically flashes ESP-Hosted firmware during boot
+  - Progress display on LCD during flashing
+- **Files**: `slave_ota.c`, `slave_ota.h`
 
 ### ESP Component Registry Dependencies
 
@@ -502,18 +527,25 @@ idf.py flash monitor
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
 │   Decoder    │────>│ display_     │────>│ Frame Buffer │
 │ (WebP/GIF/   │     │ renderer     │     │  (PSRAM)     │
-│  PNG/JPEG)   │     │ (upscale)    │     └──────┬───────┘
-└──────────────┘     └──────────────┘            │
-                                                  ▼
+│  PNG/JPEG)   │     │ (upscale,    │     └──────┬───────┘
+└──────────────┘     │  alpha blend)│            │
+                     └──────────────┘            ▼
                                          ┌─────────────────┐
                                          │ LCD Panel DMA   │
                                          │ (MIPI-DSI)      │
                                          └─────────────────┘
 ```
 
+### Rendering Features
+
+- **Transparency/Alpha blending**: Images with transparent backgrounds are composited over a configurable background color
+- **Aspect ratio preservation**: Non-square images are scaled to fit while maintaining original proportions
+- **Configurable background**: Background color can be set via web UI or REST API
+- **Nearest-neighbor scaling**: Preserves crisp pixel art edges during upscaling
+
 ### Key Files
-- `display_renderer.c`: Frame buffer management, vsync, parallel upscaling
-- `animation_player_render.c`: Frame decoding and composition
+- `display_renderer.c`: Frame buffer management, vsync, parallel upscaling, alpha blending
+- `animation_player_render.c`: Frame decoding, aspect ratio calculation, composition
 - `playback_controller.c`: Source switching (animation, PICO-8, UI)
 
 ---

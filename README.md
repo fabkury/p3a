@@ -21,12 +21,15 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 ## Features
 
 - **Pixel art playback**: Displays animated WebP, GIF, PNG, and JPEG files from microSD card
+- **Transparency support**: Full alpha channel support for WebP, GIF, and PNG with configurable background color
+- **Aspect ratio preservation**: Non-square artworks are displayed without distortion, properly centered
 - **Touch controls**: Tap to change artwork, swipe to adjust brightness, rotate with two fingers
 - **Screen rotation**: Rotate the display 0°, 90°, 180°, or 270° via touch gesture or web API
-- **Over-the-Air updates**: Automatic firmware updates from GitHub Releases with rollback support
+- **Over-the-Air updates**: After the initial USB flash, update firmware wirelessly via the web UI
 - **Web interface**: Control the device from any browser at `http://p3a.local/`
-- **Cloud connectivity**: Register at [dev.makapix.club](https://dev.makapix.club/) to control your device remotely via secure TLS MQTT
+- **Makapix Club integration**: Send artworks directly from [dev.makapix.club](https://dev.makapix.club/) to your p3a
 - **USB access**: Connect via USB-C to access the microSD card as a storage device
+- **Auto co-processor updates**: p3a automatically flashes the ESP32-C6 Wi-Fi co-processor firmware when needed
 - **PICO-8 Monitor** (optional): Stream PICO-8 games to the display—disabled by default to reduce firmware size, can be enabled at compile time
 
 <p align="center">
@@ -35,15 +38,17 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 
 ## Over-the-Air Updates
 
-p3a automatically checks for firmware updates from GitHub Releases. When an update is available, you'll see a notification in the web interface.
+After the initial firmware flash via USB-C cable, all subsequent updates can be installed wirelessly. p3a automatically checks for firmware updates from GitHub Releases, and you can install them directly from the web interface.
 
 **Update features:**
+- **Wireless updates** — no need to reconnect USB after the first flash
 - **Automatic checks** every 2 hours (or check manually via web UI)
 - **One-click install** from the web interface at `http://p3a.local/ota`
 - **Progress display** on both the device screen and web interface
 - **Automatic rollback** if the new firmware fails to boot 3 times
 - **Manual rollback** to previous version via web UI
 - **SHA256 verification** ensures firmware integrity
+- **ESP32-C6 auto-update** — the Wi-Fi co-processor firmware is updated automatically when needed
 
 <p align="center">
   <a href="images/PXL_20251206_184110573_red.mp4">
@@ -75,16 +80,19 @@ p3a is in active development. The following features are implemented:
 
 - Display pipeline with multi-buffer rendering
 - Animation playback with prefetching
+- **Transparency support** for WebP, GIF, and PNG with configurable background color
+- **Aspect ratio preservation** for non-square artworks
 - Touch gestures (tap, swipe, long-press, two-finger rotation)
 - Screen rotation (0°, 90°, 180°, 270°) with persistence
 - Wi-Fi provisioning with captive portal
 - Local web UI and REST API
-- **TLS MQTT client** with device registration and remote control from the website
-- **Over-the-Air (OTA) updates** from GitHub Releases with automatic rollback
+- **Makapix Club integration** — send artworks directly from [dev.makapix.club](https://dev.makapix.club/)
+- **TLS MQTT client** with device registration and remote control
+- **Over-the-Air (OTA) updates** — install firmware updates wirelessly via web UI
+- **Automatic ESP32-C6 firmware updates** for the Wi-Fi co-processor
 - USB composite device (serial console + mass storage)
 
 **Coming soon:**
-- Feed ingestion from Makapix Club (automatic artwork downloads)
 - Reactions from hardware (send likes to artworks)
 - Browser-based web flasher (under development)
 
@@ -112,9 +120,10 @@ See [ROADMAP.md](docs/ROADMAP.md) for the full development plan.
 
 [Makapix Club](https://makapix.club/) is a pixel-art social network. Register your p3a at [dev.makapix.club](https://dev.makapix.club/) to:
 
-- Control your device remotely from the website
+- **Send artworks directly** from the website to your p3a
+- Control your device remotely from anywhere
 - Receive artwork notifications via secure MQTT
-- (Coming soon) Download artworks automatically and send reactions
+- (Coming soon) Send reactions to artworks from the device
 
 ## Contributing
 

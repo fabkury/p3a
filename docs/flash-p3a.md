@@ -2,6 +2,8 @@
 
 This guide explains how to install the p3a firmware on your Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board.
 
+> **Note:** You only need to flash via USB-C once. After the initial installation, all future firmware updates can be installed wirelessly through the web interface at `http://p3a.local/ota`. See [HOW-TO-USE.md](HOW-TO-USE.md#firmware-updates) for details.
+
 ## What you need
 
 - **Hardware**: Waveshare ESP32-P4-WIFI6-Touch-LCD-4B and a microSD card
@@ -142,3 +144,30 @@ Run `idf.py menuconfig` to access options under "Physical Player of Pixel Art (P
 
 - Check the [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for technical details
 - Open an issue on the [GitHub repository](https://github.com/fabkury/p3a)
+
+---
+
+## After the First Flash
+
+### Over-the-Air Updates
+
+Once your p3a is flashed and connected to Wi-Fi, you never need to connect a USB cable again for firmware updates. All subsequent updates can be installed wirelessly:
+
+1. Open `http://p3a.local/ota` in your browser
+2. Check for available updates
+3. Click "Install" to download and install the update
+4. The device reboots automatically when complete
+
+See [HOW-TO-USE.md](HOW-TO-USE.md#firmware-updates) for detailed instructions.
+
+### ESP32-C6 Co-processor Firmware
+
+The Waveshare board has two processors:
+- **ESP32-P4**: Main processor (runs p3a firmware)
+- **ESP32-C6**: Wi-Fi/Bluetooth co-processor (runs ESP-Hosted firmware)
+
+**You don't need to flash the ESP32-C6 separately.** The p3a firmware automatically detects when the co-processor firmware needs updating and flashes it during boot. This happens automatically when:
+- The ESP32-C6 firmware is outdated
+- The ESP32-C6 firmware is missing or corrupted
+
+The auto-flash process takes about 30 seconds. You'll see a progress indicator on the display. The device continues to normal operation once complete.

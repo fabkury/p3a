@@ -13,7 +13,8 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 7. [USB SD Card Access](#usb-sd-card-access)
 8. [Firmware Updates](#firmware-updates)
 9. [Device Registration](#device-registration)
-10. [PICO-8 Monitor](#pico-8-monitor-optional)
+10. [Makapix Club Features](#makapix-club-features)
+11. [PICO-8 Monitor](#pico-8-monitor-optional)
 
 ---
 
@@ -43,10 +44,12 @@ Once connected to your network, the device will start playing artwork automatica
 ### Supported formats
 
 p3a supports these image formats:
-- **WebP** (animated and static) — recommended for best quality and compression
-- **GIF** (animated and static)
-- **PNG** (static)
+- **WebP** (animated and static) — recommended for best quality and compression; supports transparency
+- **GIF** (animated and static) — supports transparency
+- **PNG** (static) — supports transparency with full alpha channel
 - **JPEG** (static)
+
+**Transparency support**: Images with transparent backgrounds or alpha channels are fully supported. The background color behind transparent areas can be configured via the web interface or REST API.
 
 ### File organization
 
@@ -61,10 +64,11 @@ The firmware looks for artwork in this order:
 
 ### Image guidelines
 
-- **Square canvases work best** — artwork is centered on the 720×720 display
+- **Any aspect ratio works** — non-square images are scaled to fit while preserving the original aspect ratio
 - **Small pixel art is upscaled** — a 128×128 image will be scaled up to fill the display
 - **Nearest-neighbor scaling** preserves crisp pixel edges
-- **Any aspect ratio works** — non-square images are centered with black borders
+- **Centered display** — artwork is centered on the 720×720 display with configurable background color
+- **Transparent artwork** — images with transparency are composited over the configured background color
 
 ---
 
@@ -206,7 +210,13 @@ p3a has two USB-C ports, but only one (the High-Speed port) works as a USB stora
 
 ## Firmware Updates
 
-p3a supports Over-the-Air (OTA) firmware updates. The device automatically checks for new firmware from GitHub Releases every 2 hours.
+p3a supports Over-the-Air (OTA) firmware updates. After the initial firmware flash via USB-C cable, all subsequent updates can be installed wirelessly through the web interface.
+
+### How OTA updates work
+
+- **First flash**: Use a USB-C cable to flash the initial firmware (see [flash-p3a.md](flash-p3a.md))
+- **Subsequent updates**: Download and install wirelessly via the web UI at `http://p3a.local/ota`
+- **ESP32-C6 co-processor**: The Wi-Fi module's firmware is updated automatically when needed
 
 ### Automatic update checks
 
@@ -261,9 +271,9 @@ curl -X POST http://p3a.local/ota/rollback
 
 Register your p3a at [dev.makapix.club](https://dev.makapix.club/) to enable cloud features:
 
+- **Send artworks directly** — browse artworks on the website and send them straight to your p3a
 - **Remote control** — change artwork, adjust brightness from anywhere
 - **Status monitoring** — see your device's online status
-- **(Coming soon)** Automatic artwork downloads from Makapix Club feeds
 - **(Coming soon)** Send reactions to artworks directly from the device
 
 ### How to register
@@ -281,6 +291,29 @@ The registration code expires after 15 minutes. If it expires, long-press again 
 - Communication uses TLS 1.2+ with mutual certificate authentication (mTLS)
 - Each device gets unique client certificates during registration
 - Commands are authenticated and encrypted end-to-end
+
+---
+
+## Makapix Club Features
+
+Once your device is registered at [dev.makapix.club](https://dev.makapix.club/), you can use these cloud features:
+
+### Sending artworks to your p3a
+
+1. Browse artworks on [dev.makapix.club](https://dev.makapix.club/)
+2. Click on any artwork to view it
+3. Click the **"Send to p3a"** button
+4. The artwork is sent directly to your device and displayed immediately
+
+Supported formats: WebP, GIF, PNG, and JPEG — including animations and images with transparency.
+
+### Remote control
+
+From the Makapix Club website, you can:
+- View your device's current status and artwork
+- Navigate between artworks (next/previous)
+- Adjust brightness
+- Control playback (pause/resume)
 
 ---
 

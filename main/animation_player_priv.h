@@ -104,6 +104,7 @@ typedef struct {
     bool first_frame_ready;             // First frame decoded and ready in native_frame_b1
     bool decoder_at_frame_1;            // Decoder has advanced past frame 0
     bool prefetch_pending;              // Prefetch decode requested but not yet done
+    bool prefetch_in_progress;          // Prefetch is currently executing (render task using buffers)
     uint32_t prefetched_first_frame_delay_ms;  // Frame delay for the prefetched first frame
     uint32_t current_frame_delay_ms;
     bool ready;

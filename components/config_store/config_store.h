@@ -196,6 +196,25 @@ void config_store_get_background_color(uint8_t *r, uint8_t *g, uint8_t *b);
  */
 uint32_t config_store_get_background_color_generation(void);
 
+// ============================================================================
+// FPS Display (persisted)
+// ============================================================================
+
+/**
+ * @brief Set whether to show FPS counter on screen
+ *
+ * @param enable True to show FPS, false to hide
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_show_fps(bool enable);
+
+/**
+ * @brief Get whether to show FPS counter on screen
+ *
+ * @return True if FPS display enabled (defaults to true)
+ */
+bool config_store_get_show_fps(void);
+
 #ifdef __cplusplus
 }
 #endif

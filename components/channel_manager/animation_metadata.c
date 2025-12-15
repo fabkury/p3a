@@ -109,7 +109,8 @@ static char *build_sidecar_path(const char *filepath)
     }
     
     // Allocate space for stem + "_meta.json" + null
-    size_t sidecar_len = stem_len + 9 + 1;
+    // "_meta.json" is 10 characters + 1 null terminator = 11 bytes
+    size_t sidecar_len = stem_len + 10 + 1;
     char *sidecar_path = (char *)malloc(sidecar_len);
     if (!sidecar_path) {
         return NULL;

@@ -60,6 +60,31 @@ static void bg_apply_from_cfg(const cJSON *cfg)
     s_bg_loaded = true;
 }
 
+// ============================================================================
+// FPS display cache
+// ============================================================================
+
+static bool s_show_fps = false;  // Default: OFF
+static bool s_show_fps_loaded = false;
+
+static void show_fps_apply_from_cfg(const cJSON *cfg)
+{
+    bool show_fps = false;  // Default: OFF
+    
+    if (cfg && cJSON_IsObject((cJSON *)cfg)) {
+        const cJSON *item = cJSON_GetObjectItem((cJSON *)cfg, "show_fps");
+        if (item && cJSON_IsBool((cJSON *)item)) {
+            show_fps = cJSON_IsTrue((cJSON *)item);
+        }
+    }
+    
+    if (!s_show_fps_loaded || show_fps != s_show_fps) {
+        ESP_LOGI(TAG, "Show FPS updated: %s", show_fps ? "ON" : "OFF");
+    }
+    s_show_fps = show_fps;
+    s_show_fps_loaded = true;
+}
+
 static esp_err_t ensure_nvs(nvs_handle_t *h) {
     esp_err_t err = nvs_open(NAMESPACE, NVS_READWRITE, h);
     if (err == ESP_ERR_NVS_NOT_INITIALIZED) {
@@ -151,8 +176,9 @@ esp_err_t config_store_load(cJSON **out_cfg) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    // Keep background color cache in sync (cheap; uses parsed JSON we already have).
+    // Keep runtime caches in sync (cheap; uses parsed JSON we already have).
     bg_apply_from_cfg(o);
+    show_fps_apply_from_cfg(o);
 
     *out_cfg = o;
     return ESP_OK;
@@ -234,8 +260,9 @@ esp_err_t config_store_save(const cJSON *cfg) {
         return err;
     }
 
-    // Update runtime cache from the config we just saved.
+    // Update runtime caches from the config we just saved.
     bg_apply_from_cfg(cfg);
+    show_fps_apply_from_cfg(cfg);
 
     ESP_LOGI(TAG, "Config saved successfully (%zu bytes)", len);
     return ESP_OK;
@@ -674,6 +701,60 @@ uint32_t config_store_get_background_color_generation(void)
         config_store_get_background_color(&r, &g, &b);
     }
     return s_bg_generation;
+}
+
+// ============================================================================
+// FPS Display (persisted)
+// ============================================================================
+
+esp_err_t config_store_set_show_fps(bool enable)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+    
+    cJSON *item = cJSON_GetObjectItem(cfg, "show_fps");
+    if (item) {
+        cJSON_DeleteItemFromObject(cfg, "show_fps");
+    }
+    cJSON_AddBoolToObject(cfg, "show_fps", enable);
+    
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    
+    if (err == ESP_OK) {
+        s_show_fps = enable;
+        s_show_fps_loaded = true;
+        ESP_LOGI(TAG, "Show FPS saved: %s", enable ? "ON" : "OFF");
+    }
+    
+    return err;
+}
+
+bool config_store_get_show_fps(void)
+{
+    if (s_show_fps_loaded) {
+        return s_show_fps;
+    }
+    
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        s_show_fps_loaded = true;
+        return s_show_fps;  // Return default (false)
+    }
+    
+    cJSON *item = cJSON_GetObjectItem(cfg, "show_fps");
+    if (item && cJSON_IsBool(item)) {
+        s_show_fps = cJSON_IsTrue(item);
+    }
+    // If not present in config, default is false (s_show_fps already initialized to false)
+    
+    s_show_fps_loaded = true;
+    cJSON_Delete(cfg);
+    return s_show_fps;
 }
 
 

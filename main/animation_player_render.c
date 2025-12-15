@@ -388,7 +388,41 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
     }
 
     // Handle prefetch (outside mutex - this can take time)
+    // SAFETY: Set prefetch_in_progress BEFORE starting, so loader task can check it.
+    // This is a critical section to prevent use-after-free heap corruption.
     if (back_buffer_prefetch_pending) {
+        // Re-acquire mutex to safely check buffer state and set in_progress flag.
+        bool buffer_valid = false;
+        if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+            // Double-check that prefetch is still pending AND buffer is valid
+            if (s_back_buffer.prefetch_pending && 
+                s_back_buffer.decoder && 
+                s_back_buffer.native_frame_b1) {
+                buffer_valid = true;
+                // CRITICAL: Mark that prefetch is now executing. The loader task
+                // MUST check this flag before unloading the back buffer.
+                s_back_buffer.prefetch_in_progress = true;
+            } else if (!s_back_buffer.prefetch_pending) {
+                ESP_LOGW(TAG, "Prefetch cancelled: prefetch_pending became false");
+            }
+            xSemaphoreGive(s_buffer_mutex);
+        }
+        
+        if (!buffer_valid) {
+            ESP_LOGE(TAG, "Prefetch aborted: back buffer invalid (decoder=%p, frame=%p, pending=%d)",
+                     (void*)s_back_buffer.decoder, 
+                     (void*)s_back_buffer.native_frame_b1,
+                     (int)s_back_buffer.prefetch_pending);
+            if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+                s_back_buffer.prefetch_pending = false;
+                s_back_buffer.prefetch_in_progress = false;
+                s_back_buffer.ready = false;
+                s_swap_requested = false;
+                xSemaphoreGive(s_buffer_mutex);
+            }
+            goto skip_prefetch;
+        }
+        
         esp_err_t prefetch_err = prefetch_first_frame(&s_back_buffer);
         bool was_live = false;
         uint32_t failed_live_idx = 0;
@@ -396,6 +430,7 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
 
         if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
             s_back_buffer.prefetch_pending = false;
+            s_back_buffer.prefetch_in_progress = false;  // Prefetch done, safe to unload
             s_back_buffer.ready = (prefetch_err == ESP_OK);
             swap_requested = s_swap_requested;
             back_buffer_ready = s_back_buffer.ready;
@@ -440,6 +475,7 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
         }
     }
 
+skip_prefetch:
     // Handle buffer swap
     if (swap_requested && back_buffer_ready) {
         if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
@@ -450,6 +486,7 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
             s_back_buffer.ready = false;
             s_back_buffer.first_frame_ready = false;
             s_back_buffer.prefetch_pending = false;
+            s_back_buffer.prefetch_in_progress = false;
             
             // Check if newly-swapped front buffer was built for a different rotation than current.
             // If so, rebuild its upscale maps immediately (before rendering with stale tables).

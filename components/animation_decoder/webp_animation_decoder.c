@@ -95,7 +95,10 @@ esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decode
                 free(dec);
                 return ESP_FAIL;
             }
-            dec_opts.color_mode = webp_data->has_alpha_any ? MODE_RGBA : MODE_RGB;
+            // NOTE: WebPAnimDecoder only supports RGBA-based modes (MODE_RGBA, MODE_BGRA,
+            // MODE_rgbA, MODE_bgrA). MODE_RGB is NOT supported and causes buffer misreads.
+            // Always use MODE_RGBA and convert to RGB in decode_next_rgb if needed.
+            dec_opts.color_mode = MODE_RGBA;
             dec_opts.use_threads = 0;
 
             WebPData webp_data_wrapped = {
@@ -258,20 +261,9 @@ esp_err_t animation_decoder_decode_next(animation_decoder_t *decoder, uint8_t *r
             webp_data->current_frame_delay_ms = (uint32_t)frame_delay;
             webp_data->last_timestamp_ms = timestamp_ms;
 
-            if (webp_data->has_alpha_any) {
-                const size_t frame_size = (size_t)webp_data->info.canvas_width * webp_data->info.canvas_height * 4;
-                memcpy(rgba_buffer, frame_rgba, frame_size);
-            } else {
-                // MODE_RGB: expand to RGBA for legacy API
-                const size_t pixel_count = (size_t)webp_data->info.canvas_width * (size_t)webp_data->info.canvas_height;
-                const uint8_t *rgb = frame_rgba;
-                for (size_t i = 0; i < pixel_count; i++) {
-                    rgba_buffer[i * 4 + 0] = rgb[i * 3 + 0];
-                    rgba_buffer[i * 4 + 1] = rgb[i * 3 + 1];
-                    rgba_buffer[i * 4 + 2] = rgb[i * 3 + 2];
-                    rgba_buffer[i * 4 + 3] = 255;
-                }
-            }
+            // WebPAnimDecoder always outputs RGBA (4 bytes per pixel)
+            const size_t frame_size = (size_t)webp_data->info.canvas_width * webp_data->info.canvas_height * 4;
+            memcpy(rgba_buffer, frame_rgba, frame_size);
         } else {
             if (webp_data->has_alpha_any) {
                 if (!webp_data->still_rgba || webp_data->still_rgba_size == 0) {
@@ -332,17 +324,26 @@ esp_err_t animation_decoder_decode_next_rgb(animation_decoder_t *decoder, uint8_
             webp_data->current_frame_delay_ms = (uint32_t)frame_delay;
             webp_data->last_timestamp_ms = timestamp_ms;
 
+            // WebPAnimDecoder always outputs RGBA (4 bytes per pixel), even for opaque animations.
+            // Convert to RGB here.
             const size_t pixel_count = (size_t)webp_data->info.canvas_width * (size_t)webp_data->info.canvas_height;
+            const uint8_t *src = frame;
+            uint8_t *dst = rgb_buffer;
+
             if (!webp_data->has_alpha_any) {
-                memcpy(rgb_buffer, frame, pixel_count * 3U);
+                // Opaque animation: just copy RGB channels, skip alpha
+                for (size_t i = 0; i < pixel_count; i++) {
+                    dst[i * 3 + 0] = src[i * 4 + 0];
+                    dst[i * 3 + 1] = src[i * 4 + 1];
+                    dst[i * 3 + 2] = src[i * 4 + 2];
+                }
                 return ESP_OK;
             }
 
+            // Animation with transparency: blend against background
             uint8_t bg_r = 0, bg_g = 0, bg_b = 0;
             config_store_get_background_color(&bg_r, &bg_g, &bg_b);
 
-            const uint8_t *src = frame;
-            uint8_t *dst = rgb_buffer;
             for (size_t i = 0; i < pixel_count; i++) {
                 const uint8_t r = src[i * 4 + 0];
                 const uint8_t g = src[i * 4 + 1];

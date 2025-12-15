@@ -1,200 +1,124 @@
 # Flash p3a Firmware
 
-This guide explains how to install the p3a firmware on your Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board.
-
-> **Note:** You only need to flash via USB-C once. After the initial installation, all future firmware updates can be installed wirelessly through the web interface at `http://p3a.local/ota`. See [HOW-TO-USE.md](HOW-TO-USE.md#firmware-updates) for details.
-
-## What you need
-
-- **Hardware**: Waveshare ESP32-P4-WIFI6-Touch-LCD-4B and a microSD card
-- **USB cable**: A USB-C cable that supports data transfer (charging-only cables won't work)
-- **Computer**: Windows, macOS, or Linux
+Flash the p3a firmware to your Waveshare ESP32-P4 board. This is a one-time process — after the initial flash, all future updates are installed wirelessly via `http://p3a.local/ota`.
 
 ---
 
-## Option 1: Web Flasher (Recommended)
+## Quick Start (5 minutes)
 
-The easiest way to flash p3a firmware is directly from your browser—no installation required.
+### Step 1: Install Python and esptool
 
-### Requirements
-- **Browser**: Google Chrome 89+ or Microsoft Edge 89+ (Firefox and Safari are not supported)
-- **Operating system**: Windows, macOS, Linux, or ChromeOS (mobile devices are not supported)
+**Windows:**
+1. Download Python from [python.org](https://www.python.org/downloads/)
+2. During installation, check **"Add Python to PATH"**
+3. Open PowerShell and run:
+   ```powershell
+   pip install esptool
+   ```
 
-### Steps
-
-1. Connect your ESP32-P4 board to your computer using the **Full-Speed (FS) USB-C port**
-2. Open the **[p3a Web Flasher](https://fabkury.github.io/p3a/web-flasher/)**
-3. Click **"Install p3a Firmware"**
-4. Select your device from the popup (it may appear as "USB JTAG/serial debug unit" or similar)
-5. Wait for the flashing to complete (~2-3 minutes)
-6. Disconnect and reboot your device
-
-That's it! Your p3a is now ready to use.
-
-> **Troubleshooting:** If you don't see your device in the list, try a different USB cable or USB port. Many cables are charge-only and don't support data transfer.
-
----
-
-## Option 2: Flash with esptool.py
-
-This method works on any operating system and uses Espressif's official flashing tool.
-
-### Step 1: Install esptool
-
-If you have Python installed:
-
+**macOS:**
 ```bash
-pip install esptool
+brew install python
+pip3 install esptool
 ```
 
-Or use the copy bundled with ESP-IDF if you have that installed.
+**Linux:**
+```bash
+sudo apt install python3 python3-pip
+pip3 install esptool
+```
 
-### Step 2: Download the firmware files
+### Step 2: Download firmware
 
-Download all `.bin` files from the [latest release](https://github.com/fabkury/p3a/releases/latest):
-
-- `bootloader.bin`
-- `partition-table.bin`
-- `ota_data_initial.bin`
-- `p3a.bin`
-- `storage.bin`
-- `network_adapter.bin`
+Download and extract the latest release:
+1. Go to [github.com/fabkury/p3a/releases](https://github.com/fabkury/p3a/releases)
+2. Download the `.zip` file from the latest release
+3. Extract to a folder (e.g., `p3a-firmware`)
 
 ### Step 3: Connect the board
 
-1. Locate the USB-C ports on your board
-2. Connect the **Full-Speed (FS) port** to your computer—this is the flashing port
-3. The screen may stay dark during flashing; that's normal
+1. Use a **USB-C data cable** (charging-only cables won't work)
+2. Connect to the **Full-Speed (FS) USB-C port** on your board
+3. Find your serial port:
+   - **Windows:** Open Device Manager → Ports → Note the COM number (e.g., `COM5`)
+   - **macOS:** Run `ls /dev/cu.usb*` in Terminal
+   - **Linux:** Run `ls /dev/ttyUSB*` or `ls /dev/ttyACM*`
 
-### Step 4: Flash the firmware
+### Step 4: Flash
 
-Run this command from the folder containing your downloaded files, adjusting the port as needed:
+Open a terminal in the firmware folder and run one command:
 
-```bash
-python -m esptool --chip esp32p4 -p COM5 -b 460800 \
-  --before default_reset --after hard_reset \
-  write_flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force \
-  0x2000 bootloader.bin \
-  0x8000 partition-table.bin \
-  0x10000 ota_data_initial.bin \
-  0x20000 p3a.bin \
-  0x1020000 storage.bin \
-  0x1120000 network_adapter.bin
+**Windows PowerShell:** (replace `COM5` with your port)
+```powershell
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force "@flash_args"
 ```
 
-**Port names by OS:**
-- **Windows**: `COM3`, `COM4`, etc. (check Device Manager)
-- **macOS**: `/dev/cu.usbmodem*` or `/dev/cu.usbserial*`
-- **Linux**: `/dev/ttyUSB0` or `/dev/ttyACM0`
-
-> **Note:** The `--force` flag is required because `network_adapter.bin` is ESP32-C6 firmware stored in a data partition for the co-processor.
-
-### Step 5: Reboot and enjoy
-
-Once flashing completes:
-1. Disconnect the USB cable
-2. Insert a microSD card with artwork (see [HOW-TO-USE.md](HOW-TO-USE.md#preparing-artwork))
-3. Reconnect power via USB-C
-4. Follow the Wi-Fi setup on the screen
-
----
-
-## Option 3: Build from Source
-
-For developers who want to customize the firmware:
-
-### Prerequisites
-
-- [ESP-IDF v5.5.x](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/) with esp32p4 target
-- Git
-
-### Build and flash
-
-```bash
-# Clone the repository
-git clone https://github.com/fabkury/p3a.git
-cd p3a
-
-# Set target (first time only)
-idf.py set-target esp32p4
-
-# Optional: customize settings
-idf.py menuconfig
-
-# Build and flash
-idf.py build flash monitor
+**Windows Command Prompt:**
+```cmd
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force @flash_args
 ```
 
-Use `-p PORT` to specify the serial port if auto-detection fails.
+**macOS/Linux:** (replace `/dev/ttyUSB0` with your port)
+```bash
+python3 -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force @flash_args
+```
 
-### Configuration options
+Wait ~2 minutes for flashing to complete. You'll see progress for each file.
 
-Run `idf.py menuconfig` to access options under "Physical Player of Pixel Art (P3A)":
+### Step 5: Done!
 
-- **Auto-swap interval**: How often to change artwork automatically
-- **Animation directory**: Where to look for artwork on SD card
-- **Touch sensitivity**: Gesture thresholds
-- **PICO-8 Monitor**: Enable/disable the PICO-8 streaming feature
-- **USB Mass Storage**: Enable/disable USB SD card access
+1. Disconnect and reconnect the USB cable
+2. The p3a splash screen appears
+3. Connect to the `p3a-setup` Wi-Fi network to configure your Wi-Fi
+4. Access your p3a at `http://p3a.local/`
 
 ---
 
 ## Troubleshooting
 
-### "No serial port found" or similar
-
-- Try a different USB cable (many cables are charge-only)
-- Try a different USB port on your computer
-- On Windows, check Device Manager for the COM port number
-- On Linux, you may need to add yourself to the `dialout` group: `sudo usermod -a -G dialout $USER`
-
-### "Failed to connect" or timeout errors
-
-- Make sure you're using the correct USB-C port (FS port for flashing)
-- Try holding the BOOT button while connecting
-- Reduce baud rate: replace `460800` with `115200`
-- Close any other programs that might be using the serial port
-
-### Web Flasher shows "Browser Not Supported"
-
-- Use Google Chrome or Microsoft Edge on desktop
-- Firefox, Safari, and mobile browsers do not support Web Serial API
-- Make sure you're not in incognito/private browsing mode
-
-### Flashing succeeds but device doesn't boot
-
-- Verify all six files were flashed to the correct addresses
-- Try erasing flash first: `python -m esptool --chip esp32p4 -p COM5 erase_flash`
-- Re-flash all files
-
-### Need help?
-
-- Check the [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for technical details
-- Open an issue on the [GitHub repository](https://github.com/fabkury/p3a)
+| Problem | Solution |
+|---------|----------|
+| "No serial port found" | Try a different USB cable — many are charge-only |
+| "Failed to connect" | Hold the **BOOT** button while connecting |
+| Permission denied (Linux) | Run: `sudo usermod -a -G dialout $USER` then log out/in |
+| Wrong COM port (Windows) | Check Device Manager → Ports |
+| Timeout errors | Try `-b 115200` instead of `-b 460800` |
 
 ---
 
-## After the First Flash
+## Why not a web flasher?
 
-### Over-the-Air Updates
+The browser-based esptool-js library has a [known limitation](https://github.com/espressif/esptool-js/issues) where it cannot properly configure flash settings for ESP32-P4 chips. We're tracking this issue with Espressif and will enable web flashing once it's resolved.
 
-Once your p3a is flashed and connected to Wi-Fi, you never need to connect a USB cable again for firmware updates. All subsequent updates can be installed wirelessly:
+---
 
+## After flashing
+
+### Wireless updates (OTA)
+
+After the initial flash, update wirelessly:
 1. Open `http://p3a.local/ota` in your browser
-2. Check for available updates
-3. Click "Install" to download and install the update
-4. The device reboots automatically when complete
+2. Click "Check for updates"
+3. Click "Install" if an update is available
 
-See [HOW-TO-USE.md](HOW-TO-USE.md#firmware-updates) for detailed instructions.
+### Adding artwork
 
-### ESP32-C6 Co-processor Firmware
+Copy WebP, GIF, PNG, or JPEG files to an `animations` folder on a microSD card, then insert it into your p3a.
 
-The Waveshare board has two processors:
-- **ESP32-P4**: Main processor (runs p3a firmware)
-- **ESP32-C6**: Wi-Fi/Bluetooth co-processor (runs ESP-Hosted firmware)
+See [HOW-TO-USE.md](HOW-TO-USE.md) for detailed instructions.
 
-**You don't need to flash the ESP32-C6 separately.** The p3a firmware automatically detects when the co-processor firmware needs updating and flashes it during boot. This happens automatically when:
-- The ESP32-C6 firmware is outdated
-- The ESP32-C6 firmware is missing or corrupted
+---
 
-The auto-flash process takes about 30 seconds. You'll see a progress indicator on the display. The device continues to normal operation once complete.
+## Advanced: Build from source
+
+For developers who want to customize the firmware:
+
+```bash
+# Clone and build
+git clone https://github.com/fabkury/p3a.git
+cd p3a
+idf.py set-target esp32p4
+idf.py build flash monitor
+```
+
+Requires [ESP-IDF v5.5.x](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/).

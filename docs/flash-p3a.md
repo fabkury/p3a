@@ -12,11 +12,26 @@ This guide explains how to install the p3a firmware on your Waveshare ESP32-P4-W
 
 ---
 
-## Option 1: Web Flasher (Coming Soon)
+## Option 1: Web Flasher (Recommended)
 
-> **Status:** The browser-based web flasher is currently under development and will be available soon. Once ready, you'll be able to flash directly from your browser without installing any tools—just plug in your device and click a button.
->
-> Bookmark this page and check back for updates, or use the manual method below in the meantime.
+The easiest way to flash p3a firmware is directly from your browser—no installation required.
+
+### Requirements
+- **Browser**: Google Chrome 89+ or Microsoft Edge 89+ (Firefox and Safari are not supported)
+- **Operating system**: Windows, macOS, Linux, or ChromeOS (mobile devices are not supported)
+
+### Steps
+
+1. Connect your ESP32-P4 board to your computer using the **Full-Speed (FS) USB-C port**
+2. Open the **[p3a Web Flasher](https://fabkury.github.io/p3a/web-flasher/)**
+3. Click **"Install p3a Firmware"**
+4. Select your device from the popup (it may appear as "USB JTAG/serial debug unit" or similar)
+5. Wait for the flashing to complete (~2-3 minutes)
+6. Disconnect and reboot your device
+
+That's it! Your p3a is now ready to use.
+
+> **Troubleshooting:** If you don't see your device in the list, try a different USB cable or USB port. Many cables are charge-only and don't support data transfer.
 
 ---
 
@@ -36,12 +51,14 @@ Or use the copy bundled with ESP-IDF if you have that installed.
 
 ### Step 2: Download the firmware files
 
-Download these files from the [releases page](https://github.com/fabkury/p3a/releases) or the `build/` folder:
+Download all `.bin` files from the [latest release](https://github.com/fabkury/p3a/releases/latest):
 
-- `bootloader/bootloader.bin`
-- `partition_table/partition-table.bin`
+- `bootloader.bin`
+- `partition-table.bin`
+- `ota_data_initial.bin`
 - `p3a.bin`
 - `storage.bin`
+- `network_adapter.bin`
 
 ### Step 3: Connect the board
 
@@ -51,22 +68,26 @@ Download these files from the [releases page](https://github.com/fabkury/p3a/rel
 
 ### Step 4: Flash the firmware
 
-Run this command, adjusting the port as needed:
+Run this command from the folder containing your downloaded files, adjusting the port as needed:
 
 ```bash
-esptool.py --chip esp32p4 --port COM3 --baud 460800 \
+python -m esptool --chip esp32p4 -p COM5 -b 460800 \
   --before default_reset --after hard_reset \
-  write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB \
+  write_flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force \
   0x2000 bootloader.bin \
   0x8000 partition-table.bin \
-  0x10000 p3a.bin \
-  0x810000 storage.bin
+  0x10000 ota_data_initial.bin \
+  0x20000 p3a.bin \
+  0x1020000 storage.bin \
+  0x1120000 network_adapter.bin
 ```
 
 **Port names by OS:**
 - **Windows**: `COM3`, `COM4`, etc. (check Device Manager)
 - **macOS**: `/dev/cu.usbmodem*` or `/dev/cu.usbserial*`
 - **Linux**: `/dev/ttyUSB0` or `/dev/ttyACM0`
+
+> **Note:** The `--force` flag is required because `network_adapter.bin` is ESP32-C6 firmware stored in a data partition for the co-processor.
 
 ### Step 5: Reboot and enjoy
 
@@ -134,10 +155,16 @@ Run `idf.py menuconfig` to access options under "Physical Player of Pixel Art (P
 - Reduce baud rate: replace `460800` with `115200`
 - Close any other programs that might be using the serial port
 
+### Web Flasher shows "Browser Not Supported"
+
+- Use Google Chrome or Microsoft Edge on desktop
+- Firefox, Safari, and mobile browsers do not support Web Serial API
+- Make sure you're not in incognito/private browsing mode
+
 ### Flashing succeeds but device doesn't boot
 
-- Verify all four files were flashed to the correct addresses
-- Try erasing flash first: `esptool.py --chip esp32p4 erase_flash`
+- Verify all six files were flashed to the correct addresses
+- Try erasing flash first: `python -m esptool --chip esp32p4 -p COM5 erase_flash`
 - Re-flash all files
 
 ### Need help?

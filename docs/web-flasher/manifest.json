@@ -1,0 +1,39 @@
+{
+  "name": "p3a Firmware",
+  "version": "0.5.4-dev",
+  "home_assistant_domain": "",
+  "funding_url": "",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-P4",
+      "parts": [
+        {
+          "path": "https://github.com/fabkury/p3a/releases/latest/download/bootloader.bin",
+          "offset": 8192
+        },
+        {
+          "path": "https://github.com/fabkury/p3a/releases/latest/download/partition-table.bin",
+          "offset": 32768
+        },
+        {
+          "path": "https://github.com/fabkury/p3a/releases/latest/download/ota_data_initial.bin",
+          "offset": 65536
+        },
+        {
+          "path": "https://github.com/fabkury/p3a/releases/latest/download/p3a.bin",
+          "offset": 131072
+        },
+        {
+          "path": "https://github.com/fabkury/p3a/releases/latest/download/storage.bin",
+          "offset": 16908288
+        },
+        {
+          "path": "https://github.com/fabkury/p3a/releases/latest/download/network_adapter.bin",
+          "offset": 17956864
+        }
+      ]
+    }
+  ]
+}
+

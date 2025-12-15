@@ -94,7 +94,6 @@ p3a is in active development. The following features are implemented:
 
 **Coming soon:**
 - Reactions from hardware (send likes to artworks)
-- Browser-based web flasher (under development)
 
 See [ROADMAP.md](docs/ROADMAP.md) for the full development plan.
 

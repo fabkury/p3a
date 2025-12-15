@@ -2,328 +2,586 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Pixel Pea Web Flasher</title>
+    <title>p3a Web Flasher</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link
-      rel="preconnect"
-      href="https://fonts.googleapis.com"
-    />
-    <link
-      rel="preconnect"
-      href="https://fonts.gstatic.com"
-      crossorigin
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap"
-      rel="stylesheet"
-    />
-    <script src="https://app.unpkg.com/web-serial-polyfill@1.0.15/files/dist/serial.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js"></script>
+    <meta name="description" content="Flash p3a firmware to your ESP32-P4 device directly from your browser" />
+    <link rel="icon" href="../../images/favicon.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
       :root {
-        color-scheme: light dark;
+        --bg-deep: #0a0a0f;
+        --bg-card: #12121a;
+        --bg-elevated: #1a1a24;
+        --accent: #00ffc8;
+        --accent-dim: #00b890;
+        --accent-glow: rgba(0, 255, 200, 0.15);
+        --text: #e8e8ec;
+        --text-muted: #8888a0;
+        --border: rgba(255, 255, 255, 0.08);
+        --error: #ff5566;
+        --warning: #ffaa00;
+        --success: #00ff88;
       }
+
       * {
         box-sizing: border-box;
-        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-          sans-serif;
-      }
-      body {
         margin: 0;
         padding: 0;
-        background: #0f172a;
-        color: #e2e8f0;
-        min-height: 100vh;
       }
+
+      html {
+        font-size: 16px;
+      }
+
+      body {
+        font-family: "Outfit", system-ui, sans-serif;
+        background: var(--bg-deep);
+        color: var(--text);
+        min-height: 100vh;
+        line-height: 1.6;
+        background-image: 
+          radial-gradient(ellipse at 50% 0%, rgba(0, 255, 200, 0.03) 0%, transparent 50%),
+          radial-gradient(ellipse at 80% 80%, rgba(100, 0, 255, 0.02) 0%, transparent 40%);
+      }
+
       main {
-        max-width: 720px;
+        max-width: 640px;
         margin: 0 auto;
         padding: 3rem 1.5rem 4rem;
       }
-      h1 {
-        font-size: clamp(2rem, 4vw, 2.6rem);
-        margin-bottom: 0.25rem;
+
+      header {
+        text-align: center;
+        margin-bottom: 2.5rem;
       }
-      .lede {
-        margin-bottom: 1.5rem;
-        color: #94a3b8;
-        line-height: 1.5;
-      }
-      button {
-        background: #38bdf8;
-        border: none;
-        color: #0f172a;
-        font-weight: 600;
-        font-size: 1.1rem;
-        padding: 0.85rem 1.5rem;
-        border-radius: 0.75rem;
-        cursor: pointer;
-        transition: background 0.2s ease, transform 0.2s ease;
-      }
-      button:hover:not([disabled]) {
-        background: #7dd3fc;
-        transform: translateY(-1px);
-      }
-      button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      .card {
-        border-radius: 1rem;
-        padding: 1.5rem;
-        background: #1e293b;
-        margin-top: 1.5rem;
-        box-shadow: 0 20px 60px rgba(15, 23, 42, 0.55);
-      }
-      .status {
-        font-weight: 600;
+
+      .logo {
+        font-family: "Space Mono", monospace;
+        font-size: 3rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        background: linear-gradient(135deg, var(--accent) 0%, #00ddaa 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
         margin-bottom: 0.5rem;
       }
-      progress {
-        width: 100%;
-        height: 0.75rem;
-        border-radius: 999px;
-        overflow: hidden;
-        appearance: none;
+
+      .tagline {
+        color: var(--text-muted);
+        font-size: 1.1rem;
       }
-      progress::-webkit-progress-bar {
-        background: #0f172a;
+
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 1rem;
+        padding: 2rem;
+        margin-bottom: 1.5rem;
       }
-      progress::-webkit-progress-value {
-        background: #38bdf8;
+
+      .flash-section {
+        text-align: center;
       }
-      .log {
-        background: #020617;
+
+      .flash-btn {
+        font-family: "Outfit", sans-serif;
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
+        border: none;
+        color: var(--bg-deep);
+        font-weight: 600;
+        font-size: 1.15rem;
+        padding: 1rem 2.5rem;
         border-radius: 0.75rem;
-        padding: 1rem;
-        height: 260px;
-        overflow-y: auto;
-        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 20px var(--accent-glow);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .flash-btn:hover:not([disabled]) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px var(--accent-glow);
+      }
+
+      .flash-btn:active:not([disabled]) {
+        transform: translateY(0);
+      }
+
+      .flash-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .flash-btn svg {
+        width: 1.25rem;
+        height: 1.25rem;
+      }
+
+      .status-card {
+        margin-top: 1.5rem;
+      }
+
+      .status-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+      }
+
+      .status-indicator {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--text-muted);
+        transition: background 0.3s ease;
+      }
+
+      .status-indicator.connected { background: var(--success); }
+      .status-indicator.flashing { background: var(--warning); animation: pulse 1s infinite; }
+      .status-indicator.error { background: var(--error); }
+      .status-indicator.success { background: var(--success); }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+
+      .status-text {
+        font-weight: 500;
+        font-size: 1rem;
+      }
+
+      .progress-container {
+        margin: 1rem 0;
+        display: none;
+      }
+
+      .progress-container.visible {
+        display: block;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: var(--bg-deep);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent) 0%, var(--accent-dim) 100%);
+        width: 0%;
+        transition: width 0.3s ease;
+        border-radius: 4px;
+      }
+
+      .progress-label {
+        font-family: "Space Mono", monospace;
         font-size: 0.85rem;
-        line-height: 1.4;
-        margin-top: 1rem;
-        border: 1px solid rgba(148, 163, 184, 0.15);
+        color: var(--text-muted);
+        margin-top: 0.5rem;
+        text-align: right;
       }
+
+      .log-container {
+        margin-top: 1.5rem;
+      }
+
+      .log-header {
+        font-family: "Space Mono", monospace;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 0.5rem;
+      }
+
+      .log {
+        background: var(--bg-deep);
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        padding: 1rem;
+        height: 200px;
+        overflow-y: auto;
+        font-family: "Space Mono", monospace;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        color: var(--text-muted);
+      }
+
+      .log .info { color: var(--text); }
+      .log .success { color: var(--success); }
+      .log .error { color: var(--error); }
+      .log .warning { color: var(--warning); }
+
       .requirements {
-        margin-top: 2rem;
-        color: #cbd5f5;
-        padding-left: 1.25rem;
+        background: var(--bg-elevated);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
       }
+
+      .requirements h3 {
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: var(--text);
+      }
+
+      .requirements ul {
+        list-style: none;
+        display: grid;
+        gap: 0.75rem;
+      }
+
       .requirements li {
-        margin-bottom: 0.4rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        font-size: 0.9rem;
+        color: var(--text-muted);
       }
-      .muted {
-        color: #94a3b8;
+
+      .requirements li::before {
+        content: "→";
+        color: var(--accent);
+        font-family: "Space Mono", monospace;
+        flex-shrink: 0;
       }
-      a {
-        color: #38bdf8;
+
+      .help-link {
+        display: block;
+        text-align: center;
+        margin-top: 2rem;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+      }
+
+      .help-link a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      .help-link a:hover {
+        text-decoration: underline;
+      }
+
+      .unsupported-banner {
+        background: rgba(255, 85, 102, 0.1);
+        border: 1px solid var(--error);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        text-align: center;
+        display: none;
+      }
+
+      .unsupported-banner.visible {
+        display: block;
+      }
+
+      .unsupported-banner h3 {
+        color: var(--error);
+        margin-bottom: 0.5rem;
+      }
+
+      .unsupported-banner p {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+      }
+
+      @media (max-width: 480px) {
+        main {
+          padding: 2rem 1rem 3rem;
+        }
+
+        .logo {
+          font-size: 2.5rem;
+        }
+
+        .card {
+          padding: 1.5rem;
+        }
+
+        .flash-btn {
+          width: 100%;
+          justify-content: center;
+        }
       }
     </style>
   </head>
   <body>
     <main>
-      <h1>Pixel Pea Web Flasher</h1>
-      <p class="lede">
-        Flash the latest Pixel Pea firmware straight from your browser. Use Chrome or
-        Edge on desktop, plug in the ESP32-P4 board with a USB-C cable, and click the
-        button below.
+      <header>
+        <div class="logo">p3a</div>
+        <p class="tagline">Physical Pixel Art Player — Web Flasher</p>
+      </header>
+
+      <div class="card flash-section">
+        <div id="unsupportedBanner" class="unsupported-banner">
+          <h3>Browser Not Supported</h3>
+          <p>Web Serial API is not available. Please use <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> on desktop.</p>
+        </div>
+
+        <button id="flashBtn" class="flash-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+          </svg>
+          Install p3a Firmware
+        </button>
+
+        <div class="status-card">
+          <div class="status-header">
+            <div id="statusIndicator" class="status-indicator"></div>
+            <span id="statusText" class="status-text">Ready to connect</span>
+          </div>
+
+          <div id="progressContainer" class="progress-container">
+            <div class="progress-bar">
+              <div id="progressFill" class="progress-fill"></div>
+            </div>
+            <div id="progressLabel" class="progress-label">0%</div>
+          </div>
+
+          <div class="log-container">
+            <div class="log-header">Console</div>
+            <div id="log" class="log"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card requirements">
+        <h3>Requirements</h3>
+        <ul>
+          <li>Google Chrome 89+ or Microsoft Edge 89+ on Windows, macOS, Linux, or ChromeOS</li>
+          <li>USB-C data cable (charging-only cables won't work)</li>
+          <li>Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board</li>
+          <li>microSD card with artwork files (optional, can add later)</li>
+        </ul>
+      </div>
+
+      <p class="help-link">
+        Need help? See the <a href="../flash-p3a.md">complete flashing guide</a> or <a href="https://github.com/fabkury/p3a/issues" target="_blank">open an issue</a>.
       </p>
-      <button id="flashBtn">Connect &amp; install Pixel Pea</button>
-
-      <section class="card">
-        <div id="status" class="status">Waiting to connect…</div>
-        <progress id="overallProgress" value="0" max="100" hidden></progress>
-        <div id="progressLabel" class="muted" hidden>Preparing files…</div>
-        <div class="log" id="log"></div>
-      </section>
-
-      <ul class="requirements">
-        <li>Google Chrome 89+ or Microsoft Edge 89+ on Windows, macOS, Linux, or ChromeOS.</li>
-        <li>USB-C data cable (charging-only cables will not work).</li>
-        <li>Insert a microSD card with artwork before flashing for best results.</li>
-        <li>
-          Mobile browsers on iOS are unsupported because Apple does not expose the Web
-          Serial API.
-        </li>
-      </ul>
     </main>
 
     <script type="module">
-      import { ESPLoader, Transport } from "./esptool-web.js";
+      // Import esptool-js from CDN
+      import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.5.7/bundle.js";
 
-      const CONFIG_URL =
-        "https://raw.githubusercontent.com/fabkury/p3a/main/docs/web-flasher/p3a-esp32p4.json";
+      const MANIFEST_URL = "manifest.json";
+
       const flashBtn = document.getElementById("flashBtn");
-      const statusEl = document.getElementById("status");
-      const progressEl = document.getElementById("overallProgress");
+      const statusIndicator = document.getElementById("statusIndicator");
+      const statusText = document.getElementById("statusText");
+      const progressContainer = document.getElementById("progressContainer");
+      const progressFill = document.getElementById("progressFill");
       const progressLabel = document.getElementById("progressLabel");
       const logEl = document.getElementById("log");
+      const unsupportedBanner = document.getElementById("unsupportedBanner");
 
-      const serialLib = navigator.serial || window.serial;
+      // Check for Web Serial support
+      if (!navigator.serial) {
+        unsupportedBanner.classList.add("visible");
+        flashBtn.disabled = true;
+        flashBtn.style.display = "none";
+      }
 
-      const log = (msg) => {
-        const time = new Date().toLocaleTimeString();
-        logEl.textContent += `[${time}] ${msg}\n`;
+      function log(msg, type = "info") {
+        const time = new Date().toLocaleTimeString("en-US", { hour12: false });
+        const span = document.createElement("span");
+        span.className = type;
+        span.textContent = `[${time}] ${msg}\n`;
+        logEl.appendChild(span);
         logEl.scrollTop = logEl.scrollHeight;
-      };
+      }
 
-      const setStatus = (msg) => {
-        statusEl.textContent = msg;
-      };
+      function setStatus(text, state = "") {
+        statusText.textContent = text;
+        statusIndicator.className = "status-indicator " + state;
+      }
 
-      const toggleProgress = (show, label = "") => {
-        progressEl.hidden = !show;
-        progressLabel.hidden = !show;
-        progressLabel.textContent = label;
-      };
+      function setProgress(percent, label = "") {
+        progressContainer.classList.add("visible");
+        progressFill.style.width = `${percent}%`;
+        progressLabel.textContent = label || `${Math.round(percent)}%`;
+      }
 
-      const bufferToBinaryString = (buffer) => {
+      function hideProgress() {
+        progressContainer.classList.remove("visible");
+      }
+
+      async function downloadBinary(url) {
+        log(`Downloading: ${url.split("/").pop()}`);
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`);
+        }
+        const buffer = await response.arrayBuffer();
+        // Convert to binary string for esptool-js
         const bytes = new Uint8Array(buffer);
-        const chunk = 0x8000;
         let binary = "";
-        for (let i = 0; i < bytes.length; i += chunk) {
-          const slice = bytes.subarray(i, i + chunk);
-          binary += String.fromCharCode(...slice);
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          const slice = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+          binary += String.fromCharCode.apply(null, slice);
         }
         return binary;
-      };
+      }
 
-      const downloadBinary = async (url, onProgress) => {
-        const resp = await fetch(url);
-        if (!resp.ok) {
-          throw new Error(`Download failed (${resp.status}) for ${url}`);
-        }
-        if (!resp.body) {
-          const buffer = await resp.arrayBuffer();
-          onProgress?.(buffer.byteLength, buffer.byteLength);
-          return bufferToBinaryString(buffer);
-        }
-
-        const reader = resp.body.getReader();
-        const total = Number(resp.headers.get("content-length")) || 0;
-        let received = 0;
-        const chunks = [];
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          received += value.length;
-          onProgress?.(received, total);
-        }
-
-        const buffer = new Uint8Array(received);
-        let offset = 0;
-        for (const chunk of chunks) {
-          buffer.set(chunk, offset);
-          offset += chunk.length;
-        }
-        return bufferToBinaryString(buffer.buffer);
-      };
-
-      const ensureSupport = () => {
-        if (!serialLib) {
-          throw new Error(
-            "This browser does not expose the Web Serial API. Use Chrome or Edge on desktop."
-          );
-        }
-      };
-
-      flashBtn.addEventListener("click", async () => {
-        ensureSupport();
+      async function flash() {
         flashBtn.disabled = true;
-        logEl.textContent = "";
-        toggleProgress(true, "Preparing…");
-        progressEl.value = 5;
+        logEl.innerHTML = "";
+        hideProgress();
 
-        let transport;
+        let transport = null;
+
         try {
-          setStatus("Downloading flash recipe…");
-          const config = await fetch(CONFIG_URL).then((resp) => {
-            if (!resp.ok) throw new Error("Could not fetch flashing manifest.");
-            return resp.json();
-          });
+          // Fetch manifest
+          setStatus("Fetching firmware info...", "");
+          log("Fetching manifest...");
+          
+          const manifestResp = await fetch(MANIFEST_URL);
+          if (!manifestResp.ok) {
+            throw new Error("Could not fetch firmware manifest");
+          }
+          const manifest = await manifestResp.json();
+          log(`Firmware: ${manifest.name} v${manifest.version}`, "success");
 
-          const entries = Object.entries(config.flash_files).map(([offset, url]) => ({
-            address: parseInt(offset, 16),
-            url,
-          }));
-
-          const fileArray = [];
-          for (let i = 0; i < entries.length; i++) {
-            const part = entries[i];
-            setStatus(`Downloading image ${i + 1} of ${entries.length}…`);
-            progressLabel.textContent = `Fetching ${part.url}`;
-            const data = await downloadBinary(part.url, (done, total) => {
-              const pct = total ? Math.round((done / total) * 20) : 0;
-              progressEl.value = 10 + pct;
-            });
-            fileArray.push({ data, address: part.address });
-            log(`Fetched ${part.url}`);
+          // Find ESP32-P4 build
+          const build = manifest.builds.find(b => b.chipFamily === "ESP32-P4");
+          if (!build) {
+            throw new Error("No ESP32-P4 build found in manifest");
           }
 
-          setStatus("Select the Pixel Pea board to begin flashing…");
-          progressLabel.textContent = "Waiting for device selection";
-          progressEl.value = 40;
-          const port = await serialLib.requestPort({});
+          // Download all firmware parts
+          setStatus("Downloading firmware...", "");
+          const fileArray = [];
+          const totalParts = build.parts.length;
+
+          for (let i = 0; i < totalParts; i++) {
+            const part = build.parts[i];
+            setProgress((i / totalParts) * 30, `Downloading ${i + 1}/${totalParts}...`);
+            const data = await downloadBinary(part.path);
+            fileArray.push({
+              data: data,
+              address: part.offset
+            });
+            log(`Downloaded: ${part.path.split("/").pop()} (${(data.length / 1024).toFixed(1)} KB)`, "success");
+          }
+
+          setProgress(30, "Files ready");
+
+          // Request serial port
+          setStatus("Select your device...", "");
+          log("Requesting serial port access...");
+          
+          const port = await navigator.serial.requestPort({
+            filters: [] // Accept any device
+          });
+
           transport = new Transport(port, true);
 
+          // Create ESP loader
           const loaderOptions = {
             transport,
-            baudrate: parseInt(config.default_baud || "460800", 10),
+            baudrate: 460800,
             terminal: {
-              clean: () => (logEl.textContent = ""),
-              writeLine: log,
-              write: log,
+              clean: () => {},
+              writeLine: (data) => log(data),
+              write: (data) => {
+                // Filter out verbose ROM communication
+                if (data && !data.startsWith("Writing at") && data.trim()) {
+                  const lastLine = logEl.lastChild;
+                  if (lastLine && !lastLine.textContent.endsWith("\n")) {
+                    lastLine.textContent += data;
+                  }
+                }
+              }
             },
-            debugLogging: false,
+            debugLogging: false
           };
 
+          setStatus("Connecting to device...", "connected");
+          log("Connecting to ESP32-P4...");
+
           const esploader = new ESPLoader(loaderOptions);
-          setStatus("Connecting to chip…");
           const chip = await esploader.main();
-          log(`Connected to ${chip}`);
-          setStatus("Flashing firmware (do not unplug) …");
+          
+          log(`Connected: ${chip}`, "success");
+          
+          if (!chip.toLowerCase().includes("esp32-p4") && !chip.toLowerCase().includes("esp32p4")) {
+            log(`Warning: Expected ESP32-P4, detected ${chip}`, "warning");
+          }
 
-          toggleProgress(true, "Writing to flash…");
-          progressEl.value = 55;
+          // Flash firmware
+          setStatus("Flashing firmware (do not disconnect)...", "flashing");
+          log("Starting flash process...");
+          setProgress(35, "Flashing...");
 
-          await esploader.writeFlash({
+          const flashOptions = {
             fileArray,
+            flashSize: "32MB",
+            flashMode: "dio",
+            flashFreq: "80m",
             eraseAll: false,
             compress: true,
             reportProgress: (fileIndex, written, total) => {
-              const partPct = total ? written / total : 0;
-              const overallPct = 55 + (fileIndex + partPct) * (40 / fileArray.length);
-              progressEl.value = Math.min(95, overallPct);
-              progressLabel.textContent = `Chunk ${fileIndex + 1}/${fileArray.length} – ${Math.round(
-                partPct * 100
-              )}%`;
-            },
-            calculateMD5Hash: (image) => CryptoJS.MD5(CryptoJS.enc.Latin1.parse(image)),
-          });
+              const fileProgress = total > 0 ? written / total : 0;
+              const overallProgress = 35 + ((fileIndex + fileProgress) / fileArray.length) * 60;
+              const currentFile = build.parts[fileIndex]?.path.split("/").pop() || `File ${fileIndex + 1}`;
+              setProgress(overallProgress, `Flashing ${currentFile}... ${Math.round(fileProgress * 100)}%`);
+            }
+          };
 
-          await esploader.after();
+          await esploader.writeFlash(flashOptions);
+
+          log("Flash complete!", "success");
+          setProgress(95, "Resetting device...");
+
+          // Hard reset
+          await esploader.hardReset();
+          
+          // Disconnect
           await transport.disconnect();
           transport = null;
 
-          toggleProgress(true, "All done!");
-          progressEl.value = 100;
-          setStatus("Success! Disconnect the cable and reboot the Pixel Pea.");
-          log("Flash complete.");
+          setProgress(100, "Complete!");
+          setStatus("Success! Disconnect and reboot your p3a.", "success");
+          log("✓ Firmware installed successfully!", "success");
+          log("Disconnect the USB cable and power cycle your device.", "info");
+
         } catch (err) {
           console.error(err);
-          toggleProgress(false);
-          setStatus(`Error: ${err.message || err}`);
-          log(err.stack || err.toString());
+          setStatus(`Error: ${err.message}`, "error");
+          log(`Error: ${err.message}`, "error");
+          
+          if (err.stack) {
+            console.error(err.stack);
+          }
+
           if (transport) {
-            await transport.disconnect().catch(() => {});
+            try {
+              await transport.disconnect();
+            } catch (e) {
+              // Ignore disconnect errors
+            }
           }
         } finally {
           flashBtn.disabled = false;
         }
-      });
+      }
+
+      flashBtn.addEventListener("click", flash);
+
+      // Log initial state
+      log("p3a Web Flasher ready");
+      log("Click 'Install p3a Firmware' to begin");
     </script>
   </body>
 </html>
-

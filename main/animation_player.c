@@ -318,6 +318,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
 
     s_front_buffer.ready = true;
     s_front_buffer.prefetch_pending = false;
+    s_front_buffer.prefetch_in_progress = false;
 
     if (xTaskCreate(animation_loader_task,
                     "anim_loader",
@@ -531,6 +532,7 @@ esp_err_t animation_player_begin_sd_export(void)
         s_sd_export_active = true;
         s_swap_requested = false;
         s_back_buffer.prefetch_pending = false;
+        s_back_buffer.prefetch_in_progress = false;
         xSemaphoreGive(s_buffer_mutex);
     } else {
         s_sd_export_active = true;

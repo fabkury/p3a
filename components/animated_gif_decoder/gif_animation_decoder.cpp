@@ -65,10 +65,6 @@ static inline void fill_rect_rgb(uint8_t *dst_rgb, int canvas_w,
                                  uint8_t r, uint8_t g, uint8_t b)
 {
     if (!dst_rgb || canvas_w <= 0 || w <= 0 || h <= 0) return;
-    if (x0 < 0) { w += x0; x0 = 0; }
-    if (y0 < 0) { h += y0; y0 = 0; }
-    if (w <= 0 || h <= 0) return;
-
     for (int y = 0; y < h; y++) {
         uint8_t *row = dst_rgb + ((size_t)(y0 + y) * (size_t)canvas_w + (size_t)x0) * 3U;
         for (int x = 0; x < w; x++) {

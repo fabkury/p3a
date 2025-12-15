@@ -200,6 +200,28 @@ void animation_loader_task(void *arg)
                 continue;
             }
             
+            // CRITICAL: Wait for any in-progress prefetch to complete before loading.
+            // The render task may be using the back buffer's decoder and frame buffers
+            // for prefetch (outside the mutex). Starting a new load would call
+            // unload_animation_buffer() which frees memory the render task is using,
+            // causing heap corruption (use-after-free → crash in tlsf_free).
+            //
+            // Check BOTH flags:
+            // - prefetch_pending: prefetch has been requested (loader set it)
+            // - prefetch_in_progress: prefetch is actively executing (render task set it)
+            if (s_back_buffer.prefetch_pending || s_back_buffer.prefetch_in_progress) {
+                ESP_LOGW(TAG, "Loader task: BLOCKED - prefetch active (pending=%d, in_progress=%d), waiting...",
+                         (int)s_back_buffer.prefetch_pending, (int)s_back_buffer.prefetch_in_progress);
+                xSemaphoreGive(s_buffer_mutex);
+                // Wait a bit and retry - the render task will clear the flags soon
+                vTaskDelay(pdMS_TO_TICKS(10));
+                // Re-queue ourselves by giving the semaphore back
+                if (s_loader_sem) {
+                    xSemaphoreGive(s_loader_sem);
+                }
+                continue;
+            }
+            
             s_loader_busy = true;
             xSemaphoreGive(s_buffer_mutex);
         } else {
@@ -610,6 +632,7 @@ void unload_animation_buffer(animation_buffer_t *buf)
     buf->first_frame_ready = false;
     buf->decoder_at_frame_1 = false;
     buf->prefetch_pending = false;
+    buf->prefetch_in_progress = false;
     buf->prefetched_first_frame_delay_ms = 1;
     buf->current_frame_delay_ms = 1;
     buf->static_frame_cached = false;
@@ -887,6 +910,7 @@ esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, an
     buf->first_frame_ready = false;
     buf->decoder_at_frame_1 = false;
     buf->prefetch_pending = false;
+    buf->prefetch_in_progress = false;
 
     // Propagate start alignment parameters (used by prefetch_first_frame()).
     buf->start_frame = start_frame;

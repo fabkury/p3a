@@ -11,10 +11,12 @@ p3a is a physical pixel art player inside the Makapix Club ecosystem. It is an E
 ## Quick start
 
 1. **Get the hardware**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) + microSD card
-2. **Flash the firmware**: Follow the [flashing guide](docs/flash-p3a.md)
+2. **Flash the firmware**: Follow the [flashing guide](docs/flash-p3a.md) (5 min, requires Python + USB cable)
 3. **Add artwork**: Copy WebP/GIF/PNG/JPEG files to an `animations` folder on the microSD card
 4. **Connect to Wi-Fi**: On first boot, connect to `p3a-setup` network and configure your Wi-Fi
 5. **Control it**: Open `http://p3a.local/` on your phone or tap the touchscreen
+
+> **Note:** The initial flash requires a command-line tool. After that, all updates are wireless via the web UI.
 
 For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 

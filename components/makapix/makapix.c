@@ -27,6 +27,7 @@ void channel_player_clear_channel(channel_handle_t channel_to_clear);
 #include "freertos/task.h"
 #include "freertos/timers.h"
 #include "sdkconfig.h"
+#include "mbedtls/sha256.h"
 #include <string.h>
 #include <strings.h>
 #include <stdlib.h>
@@ -997,6 +998,9 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
         // No local artworks - need to wait for at least one to be downloaded
         ESP_LOGI(TAG, "No local artworks available, waiting for first download...");
         
+        // IMMEDIATELY queue initial downloads (don't wait for the 2-second poll)
+        makapix_channel_ensure_downloads_ahead(s_current_channel, 16, NULL);
+        
         // Set up loading message UI.
         // IMPORTANT: Do NOT switch display render mode here. We keep the display in animation mode
         // and rely on p3a_render to draw the message reliably (avoids blank screen if UI mode fails).
@@ -1043,13 +1047,16 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
                 break;
             }
             
-            // Update loading message every 2 seconds
+            // Update loading message and trigger downloads every 2 seconds
             if (waited_ms % 2000 == 0) {
                 ESP_LOGI(TAG, "Still waiting for first artwork... (%d ms)", waited_ms);
                 char msg[64];
                 snprintf(msg, sizeof(msg), "Loading... (%d sec)", waited_ms / 1000);
                 ugfx_ui_show_channel_message(channel_name, msg, -1);
                 p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_LOADING, -1, msg);
+                
+                // Ensure downloads are being queued (in case queue drained or refresh completed)
+                makapix_channel_ensure_downloads_ahead(s_current_channel, 16, NULL);
             }
         }
         
@@ -1348,14 +1355,15 @@ typedef struct {
     char art_url[256];
 } single_artwork_channel_t;
 
-static uint32_t hash_string_local(const char *str)
+static esp_err_t storage_key_sha256_local(const char *storage_key, uint8_t out_sha256[32])
 {
-    uint32_t hash = 5381;
-    int c;
-    while ((c = *str++)) {
-        hash = ((hash << 5) + hash) + c;
+    if (!storage_key || !out_sha256) return ESP_ERR_INVALID_ARG;
+    int ret = mbedtls_sha256((const unsigned char *)storage_key, strlen(storage_key), out_sha256, 0);
+    if (ret != 0) {
+        ESP_LOGE(TAG, "SHA256 failed (ret=%d)", ret);
+        return ESP_FAIL;
     }
-    return hash;
+    return ESP_OK;
 }
 
 // Extension strings for file naming
@@ -1375,13 +1383,18 @@ static int detect_file_type_ext(const char *url)
 
 static void build_vault_path_from_storage_key_simple(const char *storage_key, const char *art_url, char *out, size_t out_len)
 {
-    uint32_t hash = hash_string_local(storage_key);
-    char dir1[3], dir2[3];
-    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)((hash >> 24) & 0xFF));
-    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)((hash >> 16) & 0xFF));
+    uint8_t sha256[32];
+    if (storage_key_sha256_local(storage_key, sha256) != ESP_OK) {
+        snprintf(out, out_len, "%s/%s%s", "/sdcard/vault", storage_key, ".webp");
+        return;
+    }
+    char dir1[3], dir2[3], dir3[3];
+    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
+    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
+    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
     // Include file extension for type detection
     int ext_idx = detect_file_type_ext(art_url);
-    snprintf(out, out_len, "%s/%s/%s/%s%s", "/sdcard/vault", dir1, dir2, storage_key, s_ext_strings_local[ext_idx]);
+    snprintf(out, out_len, "%s/%s/%s/%s/%s%s", "/sdcard/vault", dir1, dir2, dir3, storage_key, s_ext_strings_local[ext_idx]);
 }
 
 static esp_err_t single_ch_load(channel_handle_t channel)
@@ -1401,6 +1414,10 @@ static esp_err_t single_ch_load(channel_handle_t channel)
             }
             ESP_LOGW(TAG, "Download attempt %d failed: %s", attempt, esp_err_to_name(err));
             vTaskDelay(pdMS_TO_TICKS(2000));
+            if (err == ESP_ERR_NOT_FOUND) {
+                // Permanent miss (e.g., HTTP 404). Do not retry.
+                return ESP_ERR_NOT_FOUND;
+            }
             if (attempt == max_attempts) {
                 return ESP_FAIL;
             }

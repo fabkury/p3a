@@ -539,8 +539,17 @@ void p3a_state_set_channel_message(const p3a_channel_message_t *msg)
     if (!s_state.initialized || !msg) return;
     
     xSemaphoreTake(s_state.mutex, portMAX_DELAY);
-    s_state.playback_substate = P3A_PLAYBACK_CHANNEL_MESSAGE;
-    memcpy(&s_state.channel_message, msg, sizeof(p3a_channel_message_t));
+    // IMPORTANT: Treat "NONE" as clearing the channel message and returning to normal playback.
+    // Otherwise the renderer stays in CHANNEL_MESSAGE mode forever, which prevents normal
+    // animation playback (and swap/prefetch processing) from running.
+    if (msg->type == P3A_CHANNEL_MSG_NONE) {
+        s_state.playback_substate = P3A_PLAYBACK_PLAYING;
+        memset(&s_state.channel_message, 0, sizeof(s_state.channel_message));
+        s_state.channel_message.type = P3A_CHANNEL_MSG_NONE;
+    } else {
+        s_state.playback_substate = P3A_PLAYBACK_CHANNEL_MESSAGE;
+        memcpy(&s_state.channel_message, msg, sizeof(p3a_channel_message_t));
+    }
     xSemaphoreGive(s_state.mutex);
 }
 

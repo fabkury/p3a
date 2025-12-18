@@ -3,6 +3,7 @@
 #include "makapix_api.h"
 #include "esp_log.h"
 #include "cJSON.h"
+#include "mbedtls/sha256.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -180,24 +181,31 @@ static asset_type_t asset_type_from_url(const char *url)
     return ASSET_TYPE_WEBP;
 }
 
-static uint32_t hash_string_djb2(const char *str)
+static esp_err_t storage_key_sha256(const char *storage_key, uint8_t out_sha256[32])
 {
-    uint32_t hash = 5381;
-    int c;
-    while ((c = *str++)) {
-        hash = ((hash << 5) + hash) + (uint32_t)c;
+    if (!storage_key || !out_sha256) return ESP_ERR_INVALID_ARG;
+    int ret = mbedtls_sha256((const unsigned char *)storage_key, strlen(storage_key), out_sha256, 0);
+    if (ret != 0) {
+        ESP_LOGE(TAG, "SHA256 failed (ret=%d)", ret);
+        return ESP_FAIL;
     }
-    return hash;
+    return ESP_OK;
 }
 
 // Build vault path based on storage_key UUID (matches makapix_artwork_download sharding).
 static void build_vault_path_from_storage_key_uuid(const char *storage_key, const char *art_url, char *out, size_t out_len)
 {
     if (!storage_key || !out || out_len == 0) return;
-    uint32_t hash = hash_string_djb2(storage_key);
-    char dir1[3], dir2[3];
-    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)((hash >> 24) & 0xFF));
-    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)((hash >> 16) & 0xFF));
+    uint8_t sha256[32];
+    if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
+        // Best-effort fallback (no sharding)
+        snprintf(out, out_len, "/sdcard/vault/%s.webp", storage_key);
+        return;
+    }
+    char dir1[3], dir2[3], dir3[3];
+    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
+    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
+    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
 
     const char *ext = ".webp";
     if (art_url) {
@@ -210,7 +218,7 @@ static void build_vault_path_from_storage_key_uuid(const char *storage_key, cons
         }
     }
 
-    snprintf(out, out_len, "/sdcard/vault/%s/%s/%s%s", dir1, dir2, storage_key, ext);
+    snprintf(out, out_len, "/sdcard/vault/%s/%s/%s/%s%s", dir1, dir2, dir3, storage_key, ext);
 }
 
 esp_err_t playlist_manager_init(void)

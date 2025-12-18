@@ -105,6 +105,29 @@ esp_err_t makapix_channel_count_cached(const char *channel_id,
                                         size_t *out_total,
                                         size_t *out_cached);
 
+/**
+ * @brief Ensure downloads are queued for artworks ahead in the play queue
+ * 
+ * This is the primary function for managing artwork downloads. It:
+ * 1. Scans up to `lookahead` artworks ahead in the current play order
+ * 2. Counts how many are locally available
+ * 3. Queues missing files for download (if queue has space)
+ * 
+ * Call this after:
+ * - Starting playback on a channel
+ * - Navigating to next/previous artwork
+ * - While waiting for first artwork to download
+ * - After index updates from refresh
+ * 
+ * @param channel Channel handle (must be a Makapix channel)
+ * @param lookahead Number of artworks ahead to check (typically 16)
+ * @param out_available If not NULL, receives count of locally available artworks ahead
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG if channel is invalid
+ */
+esp_err_t makapix_channel_ensure_downloads_ahead(channel_handle_t channel,
+                                                  size_t lookahead,
+                                                  size_t *out_available);
+
 #ifdef __cplusplus
 }
 #endif

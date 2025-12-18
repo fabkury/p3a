@@ -92,9 +92,26 @@ static httpd_handle_t s_captive_portal_server = NULL;
 static esp_netif_t *ap_netif = NULL;
 static bool s_initial_connection_done = false;  // Track if we've ever successfully connected
 static bool s_services_initialized = false;     // Track if app services have been initialized
+static int s_consecutive_wifi_errors = 0;
+static const int s_max_consecutive_wifi_errors = 10;
+
+// Register WiFi/IP event handlers once; repeated registration causes duplicate callbacks.
+static bool s_event_handlers_registered = false;
+static esp_event_handler_instance_t s_instance_wifi_any_id;
+static esp_event_handler_instance_t s_instance_ip_any_id;
+
+// WiFi health monitor + recovery worker
+static TaskHandle_t s_wifi_health_task = NULL;
+static TaskHandle_t s_wifi_recovery_task = NULL;
+static bool s_reinit_in_progress = false;
+static const uint32_t s_wifi_health_interval_ms = 120000; // 120 seconds
 
 // Callback for when REST API should be started (to register action handlers)
 static app_wifi_rest_callback_t s_rest_start_callback = NULL;
+
+// Forward declaration (event_handler referenced before definition)
+static void event_handler(void* arg, esp_event_base_t event_base,
+                          int32_t event_id, void* event_data);
 
 /* NVS Credential Storage Functions */
 static esp_err_t wifi_load_credentials(char *ssid, char *password)
@@ -245,6 +262,208 @@ static void wifi_remote_init(void)
     // If esp_hosted requires explicit initialization, add it here
 }
 
+static void wifi_register_event_handlers_once(void)
+{
+    if (s_event_handlers_registered) {
+        return;
+    }
+
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_REMOTE_EVENT,
+                                                        ESP_EVENT_ANY_ID,
+                                                        &event_handler,
+                                                        NULL,
+                                                        &s_instance_wifi_any_id));
+
+    // Register for all IP events to handle both IP_EVENT_STA_GOT_IP and IP_EVENT_STA_LOST_IP
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
+                                                        ESP_EVENT_ANY_ID,
+                                                        &event_handler,
+                                                        NULL,
+                                                        &s_instance_ip_any_id));
+
+    s_event_handlers_registered = true;
+}
+
+static bool wifi_sta_has_ip(void)
+{
+    esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey(WIFI_STA_NETIF_KEY);
+    if (!sta_netif) {
+        return false;
+    }
+
+    esp_netif_ip_info_t ip_info;
+    if (esp_netif_get_ip_info(sta_netif, &ip_info) != ESP_OK) {
+        return false;
+    }
+    return ip_info.ip.addr != 0;
+}
+
+static void wifi_disable_power_save_best_effort(void)
+{
+    // esp_wifi_set_ps() exists in ESP-IDF. With esp_wifi_remote_* it should still apply to the
+    // underlying Wi-Fi driver; if not supported it will return an error which we log.
+    esp_err_t ps_err = esp_wifi_set_ps(WIFI_PS_NONE);
+    if (ps_err == ESP_OK) {
+        ESP_LOGI(TAG, "WiFi power save disabled for reliability (WIFI_PS_NONE)");
+    } else {
+        ESP_LOGW(TAG, "Failed to disable WiFi power save: %s (continuing with default)", esp_err_to_name(ps_err));
+    }
+}
+
+static void wifi_recovery_task(void *arg)
+{
+    (void)arg;
+    char saved_ssid[MAX_SSID_LEN] = {0};
+    char saved_password[MAX_PASSWORD_LEN] = {0};
+
+    while (true) {
+        // Wait until we are notified to perform a full reinit
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        ESP_LOGW(TAG, "WiFi recovery: performing full WiFi re-initialization");
+
+        // Best-effort stop/deinit
+        esp_err_t err = esp_wifi_remote_stop();
+        if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_INIT) {
+            ESP_LOGW(TAG, "esp_wifi_remote_stop failed: %s", esp_err_to_name(err));
+        }
+
+        err = esp_wifi_remote_deinit();
+        if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_INIT) {
+            ESP_LOGW(TAG, "esp_wifi_remote_deinit failed: %s", esp_err_to_name(err));
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        // Re-init WiFi remote driver
+        wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+        err = esp_wifi_remote_init(&cfg);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_wifi_remote_init failed during recovery: %s", esp_err_to_name(err));
+            s_reinit_in_progress = false;
+            continue;
+        }
+
+        // Ensure handlers stay registered (registering twice is prevented)
+        wifi_register_event_handlers_once();
+
+        // Reload credentials from NVS (user preference)
+        bool has_credentials = (wifi_load_credentials(saved_ssid, saved_password) == ESP_OK) && (strlen(saved_ssid) > 0);
+        if (!has_credentials) {
+            ESP_LOGE(TAG, "WiFi recovery: no saved credentials; cannot restart STA");
+            s_reinit_in_progress = false;
+            continue;
+        }
+
+        // Reconfigure STA and restart (non-blocking; event flow drives reconnect)
+        wifi_config_t wifi_config = {
+            .sta = {
+                .threshold.authmode = ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD,
+                .sae_pwe_h2e = ESP_WIFI_SAE_MODE,
+                .sae_h2e_identifier = EXAMPLE_H2E_IDENTIFIER,
+            },
+        };
+
+        size_t ssid_len = strlen(saved_ssid);
+        size_t password_len = strlen(saved_password);
+        if (ssid_len >= sizeof(wifi_config.sta.ssid)) {
+            ssid_len = sizeof(wifi_config.sta.ssid) - 1;
+        }
+        if (password_len >= sizeof(wifi_config.sta.password)) {
+            password_len = sizeof(wifi_config.sta.password) - 1;
+        }
+        memcpy((char*)wifi_config.sta.ssid, saved_ssid, ssid_len);
+        wifi_config.sta.ssid[ssid_len] = '\0';
+        memcpy((char*)wifi_config.sta.password, saved_password, password_len);
+        wifi_config.sta.password[password_len] = '\0';
+
+        // Clear connection bits before restarting
+        if (s_wifi_event_group) {
+            xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
+        }
+
+        ESP_ERROR_CHECK(esp_wifi_remote_set_mode(WIFI_MODE_STA));
+        ESP_ERROR_CHECK(esp_wifi_remote_set_config(WIFI_IF_STA, &wifi_config));
+        ESP_ERROR_CHECK(esp_wifi_remote_start());
+
+        wifi_disable_power_save_best_effort();
+        wifi_set_protocol_11ax(WIFI_IF_STA);
+
+        // Kick connection attempt
+        err = esp_wifi_remote_connect();
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "esp_wifi_remote_connect failed during recovery: %s", esp_err_to_name(err));
+        }
+
+        ESP_LOGW(TAG, "WiFi recovery: reinit complete; reconnect will proceed via events");
+        s_reinit_in_progress = false;
+    }
+}
+
+static void wifi_schedule_full_reinit(void)
+{
+    if (s_reinit_in_progress) {
+        ESP_LOGW(TAG, "WiFi recovery: reinit already in progress; ignoring request");
+        return;
+    }
+    if (!s_wifi_recovery_task) {
+        ESP_LOGE(TAG, "WiFi recovery: recovery task not running; cannot reinit");
+        return;
+    }
+
+    s_reinit_in_progress = true;
+    xTaskNotifyGive(s_wifi_recovery_task);
+}
+
+static void wifi_health_monitor_task(void *arg)
+{
+    (void)arg;
+    const char *HTAG = "wifi_health";
+
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(s_wifi_health_interval_ms));
+
+        // Only monitor after we have been successfully connected at least once.
+        if (!s_initial_connection_done) {
+            continue;
+        }
+
+        // Skip monitoring while captive portal is active (AP mode)
+        if (s_captive_portal_server != NULL) {
+            continue;
+        }
+
+        // Skip monitoring if we're already performing a recovery reinit
+        if (s_reinit_in_progress) {
+            continue;
+        }
+
+        // Only check when we appear to have an IP
+        if (!wifi_sta_has_ip()) {
+            continue;
+        }
+
+        // DNS-based reachability check (requires internet; chosen by user)
+        struct addrinfo hints = {
+            .ai_family = AF_INET,
+            .ai_socktype = SOCK_STREAM,
+        };
+        struct addrinfo *res = NULL;
+
+        int err = getaddrinfo("google.com", "80", &hints, &res);
+        if (err != 0 || res == NULL) {
+            ESP_LOGW(HTAG, "Health check failed (getaddrinfo): err=%d res=%p; forcing WiFi reconnect", err, res);
+            esp_wifi_remote_disconnect(); // triggers WIFI_EVENT_STA_DISCONNECTED -> reconnect logic
+        } else {
+            ESP_LOGD(HTAG, "Health check OK");
+        }
+
+        if (res) {
+            freeaddrinfo(res);
+        }
+    }
+}
+
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
 {
@@ -256,6 +475,16 @@ static void event_handler(void* arg, esp_event_base_t event_base,
     } else if (event_base == WIFI_REMOTE_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         ESP_LOGW(TAG, "WiFi disconnected (initial_connection_done=%d, retry=%d)", 
                  s_initial_connection_done, s_retry_num);
+
+        // Track consecutive errors and attempt a full reinit if we get stuck cycling.
+        // Reset occurs on GOT_IP.
+        s_consecutive_wifi_errors++;
+        if (s_consecutive_wifi_errors >= s_max_consecutive_wifi_errors) {
+            ESP_LOGE(TAG, "Too many consecutive WiFi errors (%d) - scheduling full re-init", s_consecutive_wifi_errors);
+            s_consecutive_wifi_errors = 0;
+            wifi_schedule_full_reinit();
+            return;
+        }
         
         // Stop MQTT client when WiFi disconnects to prevent futile reconnection attempts
         if (s_initial_connection_done) {
@@ -291,6 +520,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
+        s_consecutive_wifi_errors = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
 
         // Ensure mDNS is enabled/announced on STA after getting an IP.
@@ -405,7 +635,11 @@ static esp_err_t start_mdns_sta(void)
 
 static bool wifi_init_sta(const char *ssid, const char *password)
 {
-    s_wifi_event_group = xEventGroupCreate();
+    if (!s_wifi_event_group) {
+        s_wifi_event_group = xEventGroupCreate();
+    } else {
+        xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
+    }
     s_retry_num = 0;
 
     esp_netif_create_default_wifi_sta();
@@ -431,20 +665,7 @@ static bool wifi_init_sta(const char *ssid, const char *password)
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_remote_init(&cfg));
-
-    esp_event_handler_instance_t instance_any_id;
-    esp_event_handler_instance_t instance_got_ip;
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_REMOTE_EVENT,
-                                                        ESP_EVENT_ANY_ID,
-                                                        &event_handler,
-                                                        NULL,
-                                                        &instance_any_id));
-    // Register for all IP events to handle both IP_EVENT_STA_GOT_IP and IP_EVENT_STA_LOST_IP
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
-                                                        ESP_EVENT_ANY_ID,
-                                                        &event_handler,
-                                                        NULL,
-                                                        &instance_got_ip));
+    wifi_register_event_handlers_once();
 
     wifi_config_t wifi_config = {
         .sta = {
@@ -470,6 +691,9 @@ static bool wifi_init_sta(const char *ssid, const char *password)
     ESP_ERROR_CHECK(esp_wifi_remote_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_remote_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_remote_start());
+
+    // Recommendation 1: disable WiFi power save for reliability (USB-powered device).
+    wifi_disable_power_save_best_effort();
     
     // Enable Wi-Fi 6 protocol (best-effort)
     wifi_set_protocol_11ax(WIFI_IF_STA);
@@ -897,6 +1121,16 @@ esp_err_t app_wifi_init(app_wifi_rest_callback_t rest_callback)
 
     // Initialize Wi-Fi remote module (ESP32-C6 via SDIO)
     wifi_remote_init();
+
+    // Start recovery worker once (used by Recommendation 3)
+    if (!s_wifi_recovery_task) {
+        xTaskCreate(wifi_recovery_task, "wifi_recovery", 4096, NULL, 6, &s_wifi_recovery_task);
+    }
+
+    // Start WiFi health monitor once (Recommendation 2)
+    if (!s_wifi_health_task) {
+        xTaskCreate(wifi_health_monitor_task, "wifi_health", 4096, NULL, 5, &s_wifi_health_task);
+    }
 
     // Try to load saved credentials
     char saved_ssid[MAX_SSID_LEN] = {0};

@@ -948,13 +948,50 @@ static esp_err_t h_get_dwell_time(httpd_req_t *req) {
  * Get cached artwork counts for each Makapix channel
  */
 static esp_err_t h_get_channels_stats(httpd_req_t *req) {
-    size_t all_total = 0, all_cached = 0;
-    size_t promoted_total = 0, promoted_cached = 0;
-    
-    // Count cached artworks for each channel
-    makapix_channel_count_cached("all", "/sdcard/channel", "/sdcard/vault", &all_total, &all_cached);
-    makapix_channel_count_cached("promoted", "/sdcard/channel", "/sdcard/vault", &promoted_total, &promoted_cached);
-    
+    // Cache + serialize stats computation: counting involves SD card IO (stat per entry).
+    // With multiple browser tabs, doing this concurrently can lead to timeouts/failed requests.
+    static SemaphoreHandle_t s_stats_mu = NULL;
+    static int64_t s_last_us = 0;
+    static size_t s_all_total = 0, s_all_cached = 0;
+    static size_t s_promoted_total = 0, s_promoted_cached = 0;
+
+    if (!s_stats_mu) {
+        s_stats_mu = xSemaphoreCreateMutex();
+        // If mutex creation fails, fall back to direct computation (best-effort).
+    }
+
+    const int64_t now_us = esp_timer_get_time();
+    const bool should_refresh = (s_last_us == 0) || ((now_us - s_last_us) > 2 * 1000 * 1000);
+
+    size_t all_total = s_all_total, all_cached = s_all_cached;
+    size_t promoted_total = s_promoted_total, promoted_cached = s_promoted_cached;
+
+    bool have_lock = false;
+    if (s_stats_mu) {
+        have_lock = (xSemaphoreTake(s_stats_mu, pdMS_TO_TICKS(250)) == pdTRUE);
+    }
+
+    if (have_lock || !s_stats_mu) {
+        if (should_refresh) {
+            // Count cached artworks for each channel
+            makapix_channel_count_cached("all", "/sdcard/channel", "/sdcard/vault", &all_total, &all_cached);
+            makapix_channel_count_cached("promoted", "/sdcard/channel", "/sdcard/vault", &promoted_total, &promoted_cached);
+
+            s_all_total = all_total;
+            s_all_cached = all_cached;
+            s_promoted_total = promoted_total;
+            s_promoted_cached = promoted_cached;
+            s_last_us = now_us;
+        }
+        if (have_lock) xSemaphoreGive(s_stats_mu);
+    } else {
+        // Couldn't lock quickly (another request computing). Return last cached values.
+        all_total = s_all_total;
+        all_cached = s_all_cached;
+        promoted_total = s_promoted_total;
+        promoted_cached = s_promoted_cached;
+    }
+
     char response[256];
     snprintf(response, sizeof(response),
              "{\"ok\":true,\"data\":{"
@@ -1467,6 +1504,7 @@ esp_err_t http_api_start(void) {
     cfg.stack_size = 16384;  // Increased to prevent stack overflow in WebSocket handlers
     cfg.server_port = 80;
     cfg.lru_purge_enable = true;
+    cfg.max_open_sockets = 6;   // Limit connections to leave sockets for downloads (MQTT, HTTP client)
     cfg.max_uri_handlers = 12;  // Reduced: most endpoints are multiplexed via method routers
     cfg.uri_match_fn = httpd_uri_match_wildcard;
     cfg.open_fn = http_open_fn;

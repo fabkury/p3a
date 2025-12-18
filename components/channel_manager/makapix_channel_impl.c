@@ -10,6 +10,7 @@
 #include "esp_log.h"
 #include "esp_random.h"
 #include "esp_timer.h"
+#include "mbedtls/sha256.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -257,7 +258,6 @@ static esp_err_t save_channel_metadata(makapix_channel_t *ch, const char *cursor
 static esp_err_t load_channel_metadata(makapix_channel_t *ch, char *out_cursor, time_t *out_refresh_time);
 static esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *posts, size_t count);
 static esp_err_t evict_excess_artworks(makapix_channel_t *ch, size_t max_count);
-static void queue_downloads_by_play_position(makapix_channel_t *ch, size_t max_to_queue);
 static void build_vault_path_from_storage_key(const makapix_channel_t *ch, const char *storage_key, 
                                                file_extension_t ext, char *out, size_t out_len);
 static size_t makapix_impl_get_post_count(channel_handle_t channel);
@@ -322,15 +322,16 @@ static void bytes_to_uuid(const uint8_t *bytes, char *out, size_t out_len)
              bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]);
 }
 
-// Helper: simple hash function for storage_key
-static uint32_t hash_string(const char *str)
+// Helper: compute SHA256(storage_key) for Makapix vault sharding / URL syntax
+static esp_err_t storage_key_sha256(const char *storage_key, uint8_t out_sha256[32])
 {
-    uint32_t hash = 5381;
-    int c;
-    while ((c = *str++)) {
-        hash = ((hash << 5) + hash) + c; // hash * 33 + c
+    if (!storage_key || !out_sha256) return ESP_ERR_INVALID_ARG;
+    int ret = mbedtls_sha256((const unsigned char *)storage_key, strlen(storage_key), out_sha256, 0);
+    if (ret != 0) {
+        ESP_LOGE(TAG, "SHA256 failed (ret=%d)", ret);
+        return ESP_FAIL;
     }
-    return hash;
+    return ESP_OK;
 }
 
 // Helper: comparison function for qsort (entries by created_at, oldest first)
@@ -345,8 +346,8 @@ static int compare_entries_by_created(const void *a, const void *b)
 
 // Helper: build vault filepath for an artwork entry
 // NOTE: Must match the pattern used by makapix_artwork_download() in makapix_artwork.c
-// Path: /vault/{dir1}/{dir2}/{storage_key}.{ext}
-// where dir1/dir2 are derived from hash_string(storage_key)
+// Path: /vault/{aa}/{bb}/{cc}/{storage_key}.{ext}
+// where aa/bb/cc are derived from SHA256(storage_key)
 // storage_key is a UUID stored as 16 bytes in entry->storage_key_uuid
 static void build_vault_path(const makapix_channel_t *ch, 
                               const makapix_channel_entry_t *entry,
@@ -356,16 +357,21 @@ static void build_vault_path(const makapix_channel_t *ch,
     char storage_key[40];
     bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
     
-    // Use same hash function as makapix_artwork_download
-    uint32_t hash = hash_string(storage_key);
-    char dir1[3], dir2[3];
-    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)((hash >> 24) & 0xFF));
-    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)((hash >> 16) & 0xFF));
+    uint8_t sha256[32];
+    if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
+        // Best-effort fallback (should never happen)
+        snprintf(out, out_len, "%s/%s%s", ch->vault_path, storage_key, s_ext_strings[EXT_WEBP]);
+        return;
+    }
+    char dir1[3], dir2[3], dir3[3];
+    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
+    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
+    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
     
     // Include file extension for type detection
     int ext_idx = (entry->extension <= EXT_JPEG) ? entry->extension : EXT_WEBP;
-    snprintf(out, out_len, "%s/%s/%s/%s%s", 
-             ch->vault_path, dir1, dir2, storage_key, s_ext_strings[ext_idx]);
+    snprintf(out, out_len, "%s/%s/%s/%s/%s%s", 
+             ch->vault_path, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
 }
 
 // Helper: get filter flags from entry
@@ -652,6 +658,10 @@ static esp_err_t makapix_impl_start_playback(channel_handle_t channel,
     ch->navigator_ready = true;
     ESP_LOGI(TAG, "Started playback (navigator): posts=%zu order=%d pe=%lu",
              channel_get_post_count(channel), order_mode, (unsigned long)pe);
+    
+    // Ensure downloads are queued for artworks ahead in play order
+    makapix_channel_ensure_downloads_ahead(channel, 16, NULL);
+    
     return ESP_OK;
 }
 
@@ -659,9 +669,6 @@ static esp_err_t makapix_impl_next_item(channel_handle_t channel, channel_item_r
 {
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch || !out_item || !ch->navigator_ready) return ESP_ERR_NOT_FOUND;
-
-    // Track position before navigation
-    uint32_t old_p = ch->navigator.p;
     
     artwork_ref_t art = {0};
     esp_err_t err = play_navigator_next(&ch->navigator, &art);
@@ -683,14 +690,8 @@ static esp_err_t makapix_impl_next_item(channel_handle_t channel, channel_item_r
         default: break;
     }
     
-    // If position wrapped around or changed significantly, re-queue downloads
-    // to ensure we're downloading ahead of the current position
-    uint32_t new_p = ch->navigator.p;
-    if (new_p < old_p || (new_p - old_p) > 10) {
-        // Position wrapped or jumped - re-prioritize downloads
-        download_manager_cancel_channel(ch->channel_id);
-        queue_downloads_by_play_position(ch, 32);
-    }
+    // Ensure we have downloads queued ahead of current position
+    makapix_channel_ensure_downloads_ahead(channel, 16, NULL);
     
     return ESP_OK;
 }
@@ -699,9 +700,6 @@ static esp_err_t makapix_impl_prev_item(channel_handle_t channel, channel_item_r
 {
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch || !out_item || !ch->navigator_ready) return ESP_ERR_NOT_FOUND;
-
-    // Track position before navigation
-    uint32_t old_p = ch->navigator.p;
     
     artwork_ref_t art = {0};
     esp_err_t err = play_navigator_prev(&ch->navigator, &art);
@@ -723,14 +721,8 @@ static esp_err_t makapix_impl_prev_item(channel_handle_t channel, channel_item_r
         default: break;
     }
     
-    // If position wrapped around or changed significantly, re-queue downloads
-    // to ensure we're downloading ahead of the current position
-    uint32_t new_p = ch->navigator.p;
-    if (new_p > old_p || (old_p - new_p) > 10) {
-        // Position wrapped backwards or jumped - re-prioritize downloads
-        download_manager_cancel_channel(ch->channel_id);
-        queue_downloads_by_play_position(ch, 32);
-    }
+    // Ensure we have downloads queued ahead of current position
+    makapix_channel_ensure_downloads_ahead(channel, 16, NULL);
     
     return ESP_OK;
 }
@@ -1268,200 +1260,25 @@ out:
     return ret;
 }
 
-/**
- * @brief Queue background downloads for artwork posts that are not yet locally available
- * 
- * This function iterates through the provided posts and queues downloads for any
- * artwork posts whose files don't exist locally. Downloads happen in the background
- * via the download_manager, allowing playback to start immediately with available artworks.
- * 
- * Returns the number of items that could NOT be queued due to queue full (for backpressure).
- * 
- * @param ch Channel handle
- * @param posts Array of posts from server
- * @param count Number of posts
- * @return Number of artworks that couldn't be queued (0 = all queued successfully)
- */
-static size_t queue_artwork_downloads(makapix_channel_t *ch, const makapix_post_t *posts, size_t count)
-{
-    if (!ch || !posts || count == 0) return 0;
-
-    // Clear any previous cancellation for this channel so new downloads proceed
-    download_manager_clear_cancelled(ch->channel_id);
-
-    size_t queued = 0;
-    size_t already_available = 0;
-    size_t skipped_queue_full = 0;
-
-    for (size_t i = 0; i < count; i++) {
-        const makapix_post_t *post = &posts[i];
-
-        if (post->kind != MAKAPIX_POST_KIND_ARTWORK) {
-            // Playlist artworks are handled separately via their own download logic
-            continue;
-        }
-
-        // Build the expected vault path for this artwork
-        char vault_file[512];
-        build_vault_path_from_storage_key(ch, post->storage_key, 
-                                          detect_file_type(post->art_url), 
-                                          vault_file, sizeof(vault_file));
-
-        // Check if file already exists
-        struct stat st;
-        if (stat(vault_file, &st) == 0) {
-            already_available++;
-            continue;
-        }
-
-        // Check if queue has space before attempting to queue
-        // Reserve some space for high-priority items
-        size_t queue_space = download_manager_get_queue_space();
-        if (queue_space < 4) {
-            // Queue is nearly full - stop queueing and let refresh task handle backpressure
-            skipped_queue_full++;
-            continue;
-        }
-
-        // Queue download for this artwork
-        download_request_t req = {0};
-        req.playlist_post_id = 0;  // Not from a playlist
-        req.artwork_post_id = post->post_id;
-        strlcpy(req.storage_key, post->storage_key, sizeof(req.storage_key));
-        strlcpy(req.art_url, post->art_url, sizeof(req.art_url));
-        strlcpy(req.filepath, vault_file, sizeof(req.filepath));
-        strlcpy(req.channel_id, ch->channel_id, sizeof(req.channel_id));
-        
-        // First few artworks get higher priority to enable quicker playback start
-        if (queued < 3) {
-            req.priority = DOWNLOAD_PRIORITY_HIGH;
-        } else if (queued < 10) {
-            req.priority = DOWNLOAD_PRIORITY_MEDIUM;
-        } else {
-            req.priority = DOWNLOAD_PRIORITY_LOW;
-        }
-
-        esp_err_t err = download_queue(&req);
-        if (err == ESP_OK) {
-            queued++;
-        } else if (err == ESP_ERR_NO_MEM) {
-            // Queue full - count this for backpressure
-            skipped_queue_full++;
-        } else {
-            ESP_LOGW(TAG, "Failed to queue download for %s: %s", 
-                     post->storage_key, esp_err_to_name(err));
-        }
-    }
-
-    if (queued > 0 || already_available > 0) {
-        ESP_LOGI(TAG, "Queued %zu downloads, %zu already available (channel=%s)", 
-                 queued, already_available, ch->channel_id);
-    }
-    
-    return skipped_queue_full;
-}
-
 // Helper: build vault path from storage_key (matches makapix_artwork_download pattern)
 static void build_vault_path_from_storage_key(const makapix_channel_t *ch, const char *storage_key, 
                                                file_extension_t ext, char *out, size_t out_len)
 {
-    // Match makapix_artwork_download pattern: /vault/{dir1}/{dir2}/{storage_key}.{ext}
-    uint32_t hash = hash_string(storage_key);
-    char dir1[3], dir2[3];
-    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)((hash >> 24) & 0xFF));
-    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)((hash >> 16) & 0xFF));
+    // Match makapix_artwork_download pattern: /vault/{aa}/{bb}/{cc}/{storage_key}.{ext}
+    uint8_t sha256[32];
+    if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
+        snprintf(out, out_len, "%s/%s%s", ch->vault_path, storage_key, s_ext_strings[EXT_WEBP]);
+        return;
+    }
+    char dir1[3], dir2[3], dir3[3];
+    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
+    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
+    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
     
     // Include file extension for type detection
     int ext_idx = (ext <= EXT_JPEG) ? ext : EXT_WEBP;
-    snprintf(out, out_len, "%s/%s/%s/%s%s", 
-             ch->vault_path, dir1, dir2, storage_key, s_ext_strings[ext_idx]);
-}
-
-/**
- * @brief Queue downloads starting from current play position in play-queue order
- * 
- * This ensures downloads happen in the order the user will encounter them,
- * respecting the current play order (server, random, created).
- * 
- * @param ch Channel handle
- * @param max_to_queue Maximum number of items to queue
- */
-static void queue_downloads_by_play_position(makapix_channel_t *ch, size_t max_to_queue)
-{
-    if (!ch || !ch->navigator_ready || ch->entry_count == 0) return;
-    
-    download_manager_clear_cancelled(ch->channel_id);
-    
-    play_navigator_t *nav = &ch->navigator;
-    if (!nav->order_indices || nav->order_count == 0) return;
-    
-    // Get current position
-    uint32_t current_p = nav->p;
-    size_t queued = 0;
-    
-    // Scan ahead from current position in play order
-    for (size_t offset = 0; offset < nav->order_count && queued < max_to_queue; offset++) {
-        // Position in play order (wrapping around)
-        uint32_t pos_in_order = (current_p + (uint32_t)offset) % (uint32_t)nav->order_count;
-        uint32_t entry_idx = nav->order_indices[pos_in_order];
-        
-        if (entry_idx >= ch->entry_count) continue;
-        
-        const makapix_channel_entry_t *entry = &ch->entries[entry_idx];
-        
-        // Only queue artwork posts (not playlists - those are handled separately)
-        if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) continue;
-        
-        // Build vault path
-        char vault_path[512];
-        build_vault_path(ch, entry, vault_path, sizeof(vault_path));
-        
-        // Check if already downloaded
-        struct stat st;
-        if (stat(vault_path, &st) == 0) continue;
-        
-        // Check queue space
-        size_t queue_space = download_manager_get_queue_space();
-        if (queue_space < 4) break;
-        
-        // Queue download
-        download_request_t req = {0};
-        req.playlist_post_id = 0;
-        req.artwork_post_id = entry->post_id;
-        bytes_to_uuid(entry->storage_key_uuid, req.storage_key, sizeof(req.storage_key));
-        
-        // Build art_url (we don't store it, but download_manager needs it)
-        // NOTE: This is a limitation - we'd need to fetch from server or store in index
-        // For now, skip items where we don't have the URL
-        // Actually, makapix_artwork_download can work with just storage_key
-        snprintf(req.art_url, sizeof(req.art_url), 
-                 "https://%s/api/vault/%02x/%02x/%02x/%s%s",
-                 CONFIG_MAKAPIX_CLUB_HOST,
-                 entry->storage_key_uuid[0], entry->storage_key_uuid[1],
-                 entry->storage_key_uuid[2], req.storage_key, 
-                 s_ext_strings[entry->extension]);
-        
-        strlcpy(req.filepath, vault_path, sizeof(req.filepath));
-        strlcpy(req.channel_id, ch->channel_id, sizeof(req.channel_id));
-        
-        // Priority based on distance from current position
-        if (offset < 3) {
-            req.priority = DOWNLOAD_PRIORITY_HIGH;
-        } else if (offset < 10) {
-            req.priority = DOWNLOAD_PRIORITY_MEDIUM;
-        } else {
-            req.priority = DOWNLOAD_PRIORITY_LOW;
-        }
-        
-        if (download_queue(&req) == ESP_OK) {
-            queued++;
-        }
-    }
-    
-    if (queued > 0) {
-        ESP_LOGI(TAG, "Queued %zu downloads in play order (channel=%s, pos=%lu)", 
-                 queued, ch->channel_id, (unsigned long)current_p);
-    }
+    snprintf(out, out_len, "%s/%s/%s/%s/%s%s", 
+             ch->vault_path, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
 }
 
 // Helper: evict excess artworks beyond limit
@@ -1627,17 +1444,9 @@ static void refresh_task_impl(void *pvParameters)
             // Update channel index with new posts (metadata only, no downloads)
             update_index_bin(ch, resp->posts, resp->post_count);
 
-            // Queue background downloads for artworks that aren't locally available
-            // If navigator is ready, use play-position-based queueing for proper order
-            // Otherwise, fall back to server-order queueing
-            size_t skipped = 0;
-            if (ch->navigator_ready) {
-                // Queue downloads in play-queue order, starting from current position
-                queue_downloads_by_play_position(ch, 32);
-            } else {
-                // Navigator not ready - use server order (happens during initial load)
-                skipped = queue_artwork_downloads(ch, resp->posts, resp->post_count);
-            }
+            // Queue background downloads for artworks ahead in play order
+            // This ensures files are ready before the user reaches them
+            makapix_channel_ensure_downloads_ahead((channel_handle_t)ch, 16, NULL);
 
             // If Live Mode is active, mark schedule dirty so it is rebuilt on next access.
             if (ch->navigator_ready && ch->navigator.live_mode) {
@@ -1666,32 +1475,10 @@ static void refresh_task_impl(void *pvParameters)
             }
             
             // Note: update_index_bin() already updated ch->entries and ch->entry_count
-            // No need to reload from disk - that would overwrite our in-memory state
-            
             if (!resp->has_more) break;
             
-            // BACKPRESSURE: Wait for download queue to drain before querying next batch
-            // This prevents overwhelming the queue and the SDIO bus
-            if (skipped > 0) {
-                ESP_LOGI(TAG, "Download queue full (%zu skipped), waiting for space...", skipped);
-            }
-            
-            // Wait until queue has space for at least half a batch (16 items)
-            // Use a reasonable timeout to avoid indefinite blocking
-            const size_t MIN_SPACE_FOR_NEXT_BATCH = 16;
-            const uint32_t MAX_WAIT_MS = 60000; // 60 seconds max wait
-            
-            if (!download_manager_wait_for_space(MIN_SPACE_FOR_NEXT_BATCH, MAX_WAIT_MS)) {
-                // If we can't queue downloads, don't keep querying pages: it grows the index and
-                // makes the system look "stuck" (no files become available).
-                // Instead, back off and try again later while the downloader drains.
-                ESP_LOGW(TAG, "Timed out waiting for download queue space, backing off before next query");
-                vTaskDelay(pdMS_TO_TICKS(2000));
-                continue;
-            }
-            
-            // Additional delay to let SD card writes complete and reduce bus contention
-            vTaskDelay(pdMS_TO_TICKS(2000));
+            // Delay between queries to avoid overwhelming the SDIO bus
+            vTaskDelay(pdMS_TO_TICKS(1000));
         }
         
         free(resp);
@@ -1881,15 +1668,19 @@ esp_err_t makapix_channel_count_cached(const char *channel_id,
         char storage_key[37];
         bytes_to_uuid(entry.storage_key_uuid, storage_key, sizeof(storage_key));
         
-        uint32_t hash = hash_string(storage_key);
-        char dir1[3], dir2[3];
-        snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)((hash >> 24) & 0xFF));
-        snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)((hash >> 16) & 0xFF));
+        uint8_t sha256[32];
+        if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
+            continue;
+        }
+        char dir1[3], dir2[3], dir3[3];
+        snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
+        snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
+        snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
         
         int ext_idx = (entry.extension <= EXT_JPEG) ? entry.extension : EXT_WEBP;
         char file_path[256];
-        snprintf(file_path, sizeof(file_path), "%s/%s/%s/%s%s",
-                 vault_path, dir1, dir2, storage_key, s_ext_strings[ext_idx]);
+        snprintf(file_path, sizeof(file_path), "%s/%s/%s/%s/%s%s",
+                 vault_path, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
         
         struct stat st;
         if (stat(file_path, &st) == 0) {
@@ -1900,6 +1691,119 @@ esp_err_t makapix_channel_count_cached(const char *channel_id,
     fclose(f);
     
     if (out_cached) *out_cached = cached_count;
+    return ESP_OK;
+}
+
+esp_err_t makapix_channel_ensure_downloads_ahead(channel_handle_t channel,
+                                                  size_t lookahead,
+                                                  size_t *out_available)
+{
+    makapix_channel_t *ch = (makapix_channel_t *)channel;
+    if (!ch) {
+        if (out_available) *out_available = 0;
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    // Need entries to queue downloads
+    if (ch->entry_count == 0) {
+        if (out_available) *out_available = 0;
+        return ESP_OK;  // Not an error, just nothing to do yet
+    }
+    
+    // Clear any previous cancellation for this channel
+    download_manager_clear_cancelled(ch->channel_id);
+    
+    // Determine if we use navigator (play order) or index order
+    bool use_navigator = ch->navigator_ready && 
+                         ch->navigator.order_indices && 
+                         ch->navigator.order_count > 0;
+    
+    uint32_t current_p = use_navigator ? ch->navigator.p : 0;
+    size_t order_count = use_navigator ? ch->navigator.order_count : ch->entry_count;
+    size_t available_ahead = 0;
+    size_t queued = 0;
+    size_t limit = (lookahead < order_count) ? lookahead : order_count;
+    
+    // Scan ahead from current position (in play order if available, otherwise index order)
+    for (size_t offset = 0; offset < limit; offset++) {
+        uint32_t entry_idx;
+        if (use_navigator) {
+            uint32_t pos_in_order = (current_p + (uint32_t)offset) % (uint32_t)order_count;
+            entry_idx = ch->navigator.order_indices[pos_in_order];
+        } else {
+            // Fallback: use index order directly when navigator not ready
+            entry_idx = (uint32_t)offset;
+        }
+        
+        if (entry_idx >= ch->entry_count) continue;
+        
+        const makapix_channel_entry_t *entry = &ch->entries[entry_idx];
+        
+        // Only process artwork posts
+        if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) continue;
+        
+        // Build vault path
+        char vault_path[512];
+        build_vault_path(ch, entry, vault_path, sizeof(vault_path));
+        
+        // Check if already downloaded
+        struct stat st;
+        if (stat(vault_path, &st) == 0) {
+            available_ahead++;
+            continue;  // Already available, no need to queue
+        }
+        
+        // File not available - queue for download if we have space
+        size_t queue_space = download_manager_get_queue_space();
+        if (queue_space < 4) {
+            // Queue nearly full, stop queueing but continue counting
+            continue;
+        }
+        
+        // Build download request
+        download_request_t req = {0};
+        req.playlist_post_id = 0;
+        req.artwork_post_id = entry->post_id;
+        bytes_to_uuid(entry->storage_key_uuid, req.storage_key, sizeof(req.storage_key));
+        
+        // Build art_url using SHA256 sharding
+        uint8_t sha256[32];
+        if (storage_key_sha256(req.storage_key, sha256) == ESP_OK) {
+            snprintf(req.art_url, sizeof(req.art_url), 
+                     "https://%s/api/vault/%02x/%02x/%02x/%s%s",
+                     CONFIG_MAKAPIX_CLUB_HOST,
+                     (unsigned int)sha256[0], (unsigned int)sha256[1], (unsigned int)sha256[2],
+                     req.storage_key, 
+                     s_ext_strings[entry->extension]);
+        } else {
+            ESP_LOGW(TAG, "Failed to compute SHA256 for %s, skipping", req.storage_key);
+            continue;
+        }
+        
+        strlcpy(req.filepath, vault_path, sizeof(req.filepath));
+        strlcpy(req.channel_id, ch->channel_id, sizeof(req.channel_id));
+        
+        // Priority based on distance from current position
+        if (offset < 3) {
+            req.priority = DOWNLOAD_PRIORITY_HIGH;
+        } else if (offset < 10) {
+            req.priority = DOWNLOAD_PRIORITY_MEDIUM;
+        } else {
+            req.priority = DOWNLOAD_PRIORITY_LOW;
+        }
+        
+        if (download_queue(&req) == ESP_OK) {
+            queued++;
+        }
+    }
+    
+    if (out_available) *out_available = available_ahead;
+    
+    if (queued > 0) {
+        ESP_LOGI(TAG, "Ensured downloads: %zu available, %zu queued (channel=%s, nav=%s)", 
+                 available_ahead, queued, ch->channel_id, use_navigator ? "yes" : "no");
+    }
+    
     return ESP_OK;
 }
 

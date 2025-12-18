@@ -101,8 +101,13 @@ static void download_task(void *arg)
         }
 
         // Only Makapix-style downloads for now (needs URL + storage_key).
-        if (req.storage_key[0] == '\0' || req.art_url[0] == '\0') {
-            ESP_LOGW(TAG, "Skipping download (missing storage_key/art_url)");
+        if (req.storage_key[0] == '\0') {
+            ESP_LOGE(TAG, "Skipping download: storage_key is empty");
+            set_active_channel(NULL);
+            continue;
+        }
+        if (req.art_url[0] == '\0') {
+            ESP_LOGE(TAG, "Skipping download: art_url is empty (storage_key=%s)", req.storage_key);
             set_active_channel(NULL);
             continue;
         }
@@ -117,6 +122,9 @@ static void download_task(void *arg)
                 unlink(temp_path);
             }
         }
+
+        // Log that we're starting a download
+        ESP_LOGI(TAG, "Starting download: %s", req.storage_key);
 
         // Retry with backoff: 1s, 5s, 15s
         const int backoff_ms[] = { 1000, 5000, 15000 };
@@ -164,6 +172,12 @@ static void download_task(void *arg)
                 break;
             }
 
+            // Do not retry permanent misses
+            if (err == ESP_ERR_NOT_FOUND) {
+                ESP_LOGW(TAG, "Download not found (404), not retrying: %s", req.art_url);
+                break;
+            }
+
             ESP_LOGW(TAG, "Download attempt %d/%d failed (%s): %s",
                      attempt + 1, max_attempts, esp_err_to_name(err), req.art_url);
 
@@ -173,8 +187,9 @@ static void download_task(void *arg)
         }
 
         // Invoke completion callback on success (and if not cancelled)
-        if (download_success && !is_channel_cancelled(req.channel_id)) {
-            if (s_completion_cb && req.filepath[0]) {
+        if (download_success) {
+            ESP_LOGI(TAG, "Download complete: %s", req.storage_key);
+            if (!is_channel_cancelled(req.channel_id) && s_completion_cb && req.filepath[0]) {
                 s_completion_cb(req.channel_id, req.storage_key, req.filepath, s_completion_ctx);
             }
         }

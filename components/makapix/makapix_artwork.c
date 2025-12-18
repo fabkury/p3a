@@ -7,6 +7,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
+#include "mbedtls/sha256.h"
 #include <string.h>
 #include <strings.h>
 #include <stdio.h>
@@ -43,22 +44,24 @@ static int detect_extension_from_url(const char *url)
 }
 
 /**
- * @brief Simple hash function for storage_key to derive folder structure
+ * @brief SHA256(storage_key) helper (used for vault sharding and URL syntax)
  */
-static uint32_t hash_string(const char *str)
+static esp_err_t storage_key_sha256(const char *storage_key, uint8_t out_sha256[32])
 {
-    uint32_t hash = 5381;
-    int c;
-    while ((c = *str++)) {
-        hash = ((hash << 5) + hash) + c; // hash * 33 + c
+    if (!storage_key || !out_sha256) return ESP_ERR_INVALID_ARG;
+    // mbedTLS: is224=0 => SHA-256
+    int ret = mbedtls_sha256((const unsigned char *)storage_key, strlen(storage_key), out_sha256, 0);
+    if (ret != 0) {
+        ESP_LOGE(TAG, "SHA256 failed (ret=%d)", ret);
+        return ESP_FAIL;
     }
-    return hash;
+    return ESP_OK;
 }
 
 /**
  * @brief Ensure vault directory structure exists
  */
-static esp_err_t ensure_vault_dirs(const char *dir1, const char *dir2)
+static esp_err_t ensure_vault_dirs(const char *dir1, const char *dir2, const char *dir3)
 {
     char path[256];
     
@@ -74,6 +77,15 @@ static esp_err_t ensure_vault_dirs(const char *dir1, const char *dir2)
 
     // Create second level directory
     snprintf(path, sizeof(path), "%s/%s/%s", VAULT_BASE, dir1, dir2);
+    if (stat(path, &st) != 0) {
+        if (mkdir(path, 0755) != 0) {
+            ESP_LOGE(TAG, "Failed to create directory %s", path);
+            return ESP_FAIL;
+        }
+    }
+
+    // Create third level directory
+    snprintf(path, sizeof(path), "%s/%s/%s/%s", VAULT_BASE, dir1, dir2, dir3);
     if (stat(path, &st) != 0) {
         if (mkdir(path, 0755) != 0) {
             ESP_LOGE(TAG, "Failed to create directory %s", path);
@@ -144,21 +156,24 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
         }
     }
 
-    // Derive folder structure from hash
-    uint32_t hash = hash_string(storage_key);
-    char dir1[3], dir2[3];
-    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)((hash >> 24) & 0xFF));
-    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)((hash >> 16) & 0xFF));
+    // Derive folder structure from SHA256(storage_key): /vault/aa/bb/cc/<storage_key>.<ext>
+    uint8_t sha256[32];
+    esp_err_t err = storage_key_sha256(storage_key, sha256);
+    if (err != ESP_OK) return err;
+    char dir1[3], dir2[3], dir3[3];
+    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
+    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
+    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
 
     // Ensure directories exist
-    esp_err_t err = ensure_vault_dirs(dir1, dir2);
+    err = ensure_vault_dirs(dir1, dir2, dir3);
     if (err != ESP_OK) {
         return err;
     }
 
     // Detect extension from URL and build file path WITH extension
     int ext_idx = detect_extension_from_url(art_url);
-    snprintf(out_path, path_len, "%s/%s/%s/%s%s", VAULT_BASE, dir1, dir2, storage_key, s_ext_strings[ext_idx]);
+    snprintf(out_path, path_len, "%s/%s/%s/%s/%s%s", VAULT_BASE, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
 
     // Build full URL - if art_url starts with '/', prepend https://hostname
     char full_url[512];
@@ -241,6 +256,10 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         free(chunk_buffer);
+        if (status_code == 404) {
+            // Permanent miss: do not retry
+            return ESP_ERR_NOT_FOUND;
+        }
         return ESP_ERR_INVALID_RESPONSE;
     }
     

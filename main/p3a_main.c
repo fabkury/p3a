@@ -583,6 +583,10 @@ void app_main(void)
         // Continue anyway - state machine will use defaults
     }
 
+    // Initialize channel_player early to avoid "Channel player not initialized" errors
+    // if any early fallback or status paths touch it before animation_player finishes init.
+    (void)channel_player_init();
+
     // Validate OTA boot early - this must be done before any complex operations
     // If running a new OTA firmware, this marks it as valid to prevent rollback
     esp_err_t ota_err = ota_manager_validate_boot();

@@ -337,6 +337,15 @@ void display_renderer_deinit(void)
         g_display_mutex = NULL;
     }
 
+    // Unregister the ISR callback BEFORE deleting the semaphore to avoid
+    // the ISR trying to give a deleted semaphore (causes watchdog timeout)
+    if (g_display_panel && g_display_vsync_sem) {
+        esp_lcd_dpi_panel_event_callbacks_t cbs = {
+            .on_refresh_done = NULL,
+        };
+        esp_lcd_dpi_panel_register_event_callbacks(g_display_panel, &cbs, NULL);
+    }
+
     if (g_display_vsync_sem) {
         vSemaphoreDelete(g_display_vsync_sem);
         g_display_vsync_sem = NULL;
@@ -404,6 +413,19 @@ esp_err_t display_renderer_enter_ui_mode(void)
 {
     ESP_LOGI(DISPLAY_TAG, "Entering UI mode");
     g_display_mode_request = DISPLAY_RENDER_MODE_UI;
+    
+    // Give VSYNC semaphore multiple times to wake up render task
+    // The task may be blocked at either of two VSYNC wait points:
+    // 1. Before rendering (CONFIG_P3A_DISPLAY_WAIT_AFTER_DRAW=0)
+    // 2. After rendering (CONFIG_P3A_DISPLAY_WAIT_AFTER_DRAW=1)
+    // Giving multiple times ensures we wake it from either point
+    if (g_display_vsync_sem) {
+        xSemaphoreGive(g_display_vsync_sem);
+        // Short delay then give again in case task is at second wait point
+        vTaskDelay(pdMS_TO_TICKS(10));
+        xSemaphoreGive(g_display_vsync_sem);
+    }
+    
     wait_for_render_mode(DISPLAY_RENDER_MODE_UI);
     ESP_LOGI(DISPLAY_TAG, "UI mode active");
     return ESP_OK;
@@ -413,6 +435,13 @@ void display_renderer_exit_ui_mode(void)
 {
     ESP_LOGI(DISPLAY_TAG, "Exiting UI mode");
     g_display_mode_request = DISPLAY_RENDER_MODE_ANIMATION;
+    
+    // In UI mode the task yields with vTaskDelay, so it will naturally
+    // pick up the mode change. Give semaphore just in case.
+    if (g_display_vsync_sem) {
+        xSemaphoreGive(g_display_vsync_sem);
+    }
+    
     wait_for_render_mode(DISPLAY_RENDER_MODE_ANIMATION);
     ESP_LOGI(DISPLAY_TAG, "Animation mode active");
 }
@@ -1312,16 +1341,22 @@ void display_render_task(void *arg)
 #endif
 
     while (true) {
+        // Check render mode - must update g_display_mode_active for wait_for_render_mode()
+        display_render_mode_t mode = g_display_mode_request;
+        g_display_mode_active = mode;
+        
         // If not using the post-draw wait, block for VSYNC before rendering
+        // Skip VSYNC wait in UI mode - we use timer-based 10 FPS instead
+        // Check g_display_mode_request directly in case it changed while we were blocked
 #if !CONFIG_P3A_DISPLAY_WAIT_AFTER_DRAW
-        if (use_vsync) {
+        if (use_vsync && g_display_mode_request != DISPLAY_RENDER_MODE_UI) {
             xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
+            // Re-check mode after waking - it may have changed while we were blocked
+            mode = g_display_mode_request;
+            g_display_mode_active = mode;
         }
 #endif
 
-        // Check render mode
-        const display_render_mode_t mode = g_display_mode_request;
-        g_display_mode_active = mode;
         const bool ui_mode = (mode == DISPLAY_RENDER_MODE_UI);
 
         // Get the back buffer
@@ -1422,8 +1457,10 @@ void display_render_task(void *arg)
         esp_lcd_panel_draw_bitmap(g_display_panel, 0, 0, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, back_buffer);
 
         // Wait for frame transfer to complete (tear-free, double-buffer safe)
+        // Skip VSYNC wait in UI mode - check g_display_mode_request directly
+        // in case mode changed mid-iteration
 #if CONFIG_P3A_DISPLAY_WAIT_AFTER_DRAW
-        if (use_vsync) {
+        if (use_vsync && g_display_mode_request != DISPLAY_RENDER_MODE_UI) {
             xSemaphoreTake(g_display_vsync_sem, 0); // clear any stale
             xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
         }
@@ -1432,8 +1469,9 @@ void display_render_task(void *arg)
         // Update timing stats after the frame has been presented
         g_last_frame_present_us = esp_timer_get_time();
 
-        // Yield if not using vsync
-        if (!use_vsync) {
+        // In UI mode, yield to let other tasks run (we're not VSYNC-synced)
+        // Also yield if not using vsync - check current mode request
+        if (!use_vsync || g_display_mode_request == DISPLAY_RENDER_MODE_UI) {
             vTaskDelay(1);
         }
     }

@@ -342,11 +342,17 @@ static esp_err_t build_live_schedule(play_navigator_t *nav)
 }
 
 esp_err_t play_navigator_init(play_navigator_t *nav, channel_handle_t channel,
+                              const char *channel_id,
                               play_order_mode_t order, uint32_t pe, uint32_t global_seed)
 {
     if (!nav || !channel) return ESP_ERR_INVALID_ARG;
     memset(nav, 0, sizeof(*nav));
     nav->channel = channel;
+    if (channel_id && channel_id[0]) {
+        strlcpy(nav->channel_id, channel_id, sizeof(nav->channel_id));
+    } else {
+        nav->channel_id[0] = '\0';
+    }
     nav->order = order;
     nav->pe = pe;
     nav->global_seed = global_seed ? global_seed : 0xFAB;
@@ -441,7 +447,7 @@ static void prefetch_playlist_lookahead(play_navigator_t *nav,
         if (a->storage_key[0] == '\0' || a->art_url[0] == '\0') continue;
 
         download_priority_t prio = (k == 0) ? DOWNLOAD_PRIORITY_HIGH : DOWNLOAD_PRIORITY_MEDIUM;
-        (void)download_queue_artwork(playlist_post_id, a, prio);
+        (void)download_queue_artwork(nav->channel_id, playlist_post_id, a, prio);
     }
 }
 
@@ -583,6 +589,113 @@ esp_err_t play_navigator_next(play_navigator_t *nav, artwork_ref_t *out_artwork)
     return ESP_ERR_NOT_FOUND;
 }
 
+// Helper: find the last available artwork in the channel (for wrap-around)
+// Returns true if found, sets nav->p and nav->q to the position
+static bool find_last_available_artwork(play_navigator_t *nav)
+{
+    if (!nav || nav->order_count == 0) return false;
+    
+    // Scan backwards from the last position to find an available artwork
+    for (size_t i = nav->order_count; i > 0; i--) {
+        uint32_t p = (uint32_t)(i - 1);
+        channel_post_t post = {0};
+        if (channel_get_post(nav->channel, nav->order_indices[p], &post) != ESP_OK) continue;
+        
+        if (post.kind == CHANNEL_POST_KIND_PLAYLIST) {
+            playlist_metadata_t *pl = NULL;
+            if (playlist_get(post.post_id, nav->pe, &pl) != ESP_OK || !pl) continue;
+            
+            uint32_t effective = get_effective_playlist_size(pl, nav->pe);
+            if (effective == 0) continue;
+            
+            // Scan playlist backwards for available artwork
+            for (uint32_t k = effective; k > 0; k--) {
+                uint32_t q = k - 1;
+                uint32_t idx = playlist_map_q_to_index(nav, post.post_id, effective, q);
+                if (idx < (uint32_t)pl->loaded_artworks) {
+                    const artwork_ref_t *cand = &pl->artworks[idx];
+                    if (cand->downloaded && file_exists(cand->filepath)) {
+                        nav->p = p;
+                        nav->q = q;
+                        return true;
+                    }
+                }
+            }
+        } else {
+            // Artwork post - check if file exists
+            if (file_exists(post.u.artwork.filepath)) {
+                nav->p = p;
+                nav->q = 0;
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+// Helper: try to get artwork at current position, scanning BACKWARDS if unavailable
+static esp_err_t get_current_artwork_scan_backwards(play_navigator_t *nav, artwork_ref_t *out_artwork)
+{
+    if (!nav || !out_artwork) return ESP_ERR_INVALID_ARG;
+    
+    channel_post_t post = {0};
+    esp_err_t err = get_current_post(nav, &post);
+    if (err != ESP_OK) return err;
+    
+    memset(out_artwork, 0, sizeof(*out_artwork));
+    
+    if (post.kind == CHANNEL_POST_KIND_PLAYLIST) {
+        playlist_metadata_t *pl = NULL;
+        err = playlist_get(post.post_id, nav->pe, &pl);
+        if (err != ESP_OK || !pl) return (err != ESP_OK) ? err : ESP_ERR_NOT_FOUND;
+        
+        uint32_t effective = get_effective_playlist_size(pl, nav->pe);
+        if (effective == 0) return ESP_ERR_NOT_FOUND;
+        
+        // Scan BACKWARDS within playlist to find available artwork
+        uint32_t q = nav->q;
+        for (uint32_t tries = 0; tries < effective; tries++) {
+            uint32_t idx = playlist_map_q_to_index(nav, post.post_id, effective, q);
+            if (idx < (uint32_t)pl->loaded_artworks) {
+                const artwork_ref_t *cand = &pl->artworks[idx];
+                if (cand->downloaded && file_exists(cand->filepath)) {
+                    nav->q = q;
+                    *out_artwork = *cand;
+                    if (pl->dwell_time_ms != 0) {
+                        out_artwork->dwell_time_ms = pl->dwell_time_ms;
+                    }
+                    return ESP_OK;
+                }
+            }
+            // Move backwards in playlist (with wrap-around)
+            if (q == 0) q = effective - 1;
+            else q--;
+        }
+        return ESP_ERR_NOT_FOUND;
+    }
+    
+    // Artwork post - check if file exists
+    if (!file_exists(post.u.artwork.filepath)) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    
+    out_artwork->post_id = post.post_id;
+    strlcpy(out_artwork->filepath, post.u.artwork.filepath, sizeof(out_artwork->filepath));
+    strlcpy(out_artwork->storage_key, post.u.artwork.storage_key, sizeof(out_artwork->storage_key));
+    strlcpy(out_artwork->art_url, post.u.artwork.art_url, sizeof(out_artwork->art_url));
+    out_artwork->type = post.u.artwork.type;
+    out_artwork->dwell_time_ms = post.dwell_time_ms;
+    out_artwork->width = post.u.artwork.width;
+    out_artwork->height = post.u.artwork.height;
+    out_artwork->frame_count = post.u.artwork.frame_count;
+    out_artwork->has_transparency = post.u.artwork.has_transparency;
+    out_artwork->metadata_modified_at = post.metadata_modified_at;
+    out_artwork->artwork_modified_at = post.u.artwork.artwork_modified_at;
+    out_artwork->downloaded = true;
+    return ESP_OK;
+}
+
 esp_err_t play_navigator_prev(play_navigator_t *nav, artwork_ref_t *out_artwork)
 {
     if (!nav) return ESP_ERR_INVALID_ARG;
@@ -599,19 +712,39 @@ esp_err_t play_navigator_prev(play_navigator_t *nav, artwork_ref_t *out_artwork)
         return out_artwork ? play_navigator_current(nav, out_artwork) : ESP_OK;
     }
 
-    for (size_t tries = 0; tries < nav->order_count + 1; tries++) {
+    // Track starting position to detect full cycle
+    uint32_t start_p = nav->p;
+    uint32_t start_q = nav->q;
+    bool wrapped = false;
+
+    for (size_t tries = 0; tries < nav->order_count * 2 + 1; tries++) {
         channel_post_t post = {0};
-        if (get_current_post(nav, &post) != ESP_OK) return ESP_ERR_NOT_FOUND;
+        if (get_current_post(nav, &post) != ESP_OK) {
+            // Move back regardless
+            if (nav->p == 0) {
+                nav->p = (uint32_t)nav->order_count - 1;
+                wrapped = true;
+            } else {
+                nav->p--;
+            }
+            nav->q = 0;
+            continue;
+        }
 
         if (post.kind == CHANNEL_POST_KIND_PLAYLIST && nav->q > 0) {
             nav->q--;
         } else {
             // Move to previous post
-            if (nav->p == 0) nav->p = (uint32_t)nav->order_count - 1;
-            else nav->p--;
+            if (nav->p == 0) {
+                // Wrap around to the last position in the channel
+                nav->p = (uint32_t)nav->order_count - 1;
+                wrapped = true;
+            } else {
+                nav->p--;
+            }
             nav->q = 0;
 
-            // If previous post is a playlist, go to its last available item
+            // If previous post is a playlist, go to its last item
             channel_post_t prev_post = {0};
             if (get_current_post(nav, &prev_post) == ESP_OK && prev_post.kind == CHANNEL_POST_KIND_PLAYLIST) {
                 playlist_metadata_t *pl = NULL;
@@ -624,10 +757,18 @@ esp_err_t play_navigator_prev(play_navigator_t *nav, artwork_ref_t *out_artwork)
             }
         }
 
+        // Check if we've cycled back to start
+        if (wrapped && nav->p == start_p && nav->q == start_q) {
+            break;
+        }
+
         if (!out_artwork) return ESP_OK;
-        if (play_navigator_current(nav, out_artwork) == ESP_OK) {
+        
+        // Use backwards-scanning version to find available artwork
+        if (get_current_artwork_scan_backwards(nav, out_artwork) == ESP_OK) {
             return ESP_OK;
         }
+        // Keep going backwards to find an available artwork
     }
 
     return ESP_ERR_NOT_FOUND;

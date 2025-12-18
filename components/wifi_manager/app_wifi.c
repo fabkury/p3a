@@ -798,39 +798,71 @@ static esp_err_t start_mdns_ap(void)
 /* Soft AP Initialization with Wi-Fi 6 */
 static void wifi_init_softap(void)
 {
-    // Stop WiFi if it was already started (ignore errors if not initialized)
-    esp_err_t err = esp_wifi_remote_stop();
-    if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_INIT) {
-        ESP_LOGW(TAG, "esp_wifi_remote_stop failed: %s", esp_err_to_name(err));
-    }
-    err = esp_wifi_remote_deinit();
-    if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_INIT) {
-        ESP_LOGW(TAG, "esp_wifi_remote_deinit failed: %s", esp_err_to_name(err));
-    }
+    esp_err_t err;
     
-    ap_netif = esp_netif_create_default_wifi_ap();
+    // Check if WiFi is already initialized (from previous STA attempt)
+    wifi_mode_t current_mode;
+    bool wifi_already_initialized = (esp_wifi_remote_get_mode(&current_mode) == ESP_OK);
     
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_remote_init(&cfg));
+    if (wifi_already_initialized) {
+        // WiFi is already initialized from STA mode - just switch modes
+        // This is the standard ESP-IDF approach: stop -> set_mode -> set_config -> start
+        ESP_LOGI(TAG, "WiFi already initialized, switching from STA to AP mode");
+        
+        err = esp_wifi_remote_stop();
+        if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_INIT) {
+            ESP_LOGW(TAG, "esp_wifi_remote_stop failed: %s", esp_err_to_name(err));
+        }
+        
+        // Create AP netif (STA netif can coexist, no need to destroy it)
+        ap_netif = esp_netif_create_default_wifi_ap();
+        
+        wifi_config_t wifi_config = {
+            .ap = {
+                .ssid = EXAMPLE_ESP_AP_SSID,
+                .ssid_len = strlen(EXAMPLE_ESP_AP_SSID),
+                .channel = 1,
+                .password = EXAMPLE_ESP_AP_PASSWORD,
+                .max_connection = 4,
+                .authmode = strlen(EXAMPLE_ESP_AP_PASSWORD) > 0 ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN,
+            },
+        };
+        
+        if (strlen(EXAMPLE_ESP_AP_PASSWORD) == 0) {
+            wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+        }
 
-    wifi_config_t wifi_config = {
-        .ap = {
-            .ssid = EXAMPLE_ESP_AP_SSID,
-            .ssid_len = strlen(EXAMPLE_ESP_AP_SSID),
-            .channel = 1,
-            .password = EXAMPLE_ESP_AP_PASSWORD,
-            .max_connection = 4,
-            .authmode = strlen(EXAMPLE_ESP_AP_PASSWORD) > 0 ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN,
-        },
-    };
-    
-    if (strlen(EXAMPLE_ESP_AP_PASSWORD) == 0) {
-        wifi_config.ap.authmode = WIFI_AUTH_OPEN;
-    }
+        ESP_ERROR_CHECK(esp_wifi_remote_set_mode(WIFI_MODE_AP));
+        ESP_ERROR_CHECK(esp_wifi_remote_set_config(WIFI_IF_AP, &wifi_config));
+        ESP_ERROR_CHECK(esp_wifi_remote_start());
+    } else {
+        // WiFi not initialized yet - do fresh initialization for AP mode
+        ESP_LOGI(TAG, "Fresh WiFi initialization for AP mode");
+        
+        ap_netif = esp_netif_create_default_wifi_ap();
+        
+        wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+        ESP_ERROR_CHECK(esp_wifi_remote_init(&cfg));
 
-    ESP_ERROR_CHECK(esp_wifi_remote_set_mode(WIFI_MODE_AP));
-    ESP_ERROR_CHECK(esp_wifi_remote_set_config(WIFI_IF_AP, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_remote_start());
+        wifi_config_t wifi_config = {
+            .ap = {
+                .ssid = EXAMPLE_ESP_AP_SSID,
+                .ssid_len = strlen(EXAMPLE_ESP_AP_SSID),
+                .channel = 1,
+                .password = EXAMPLE_ESP_AP_PASSWORD,
+                .max_connection = 4,
+                .authmode = strlen(EXAMPLE_ESP_AP_PASSWORD) > 0 ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN,
+            },
+        };
+        
+        if (strlen(EXAMPLE_ESP_AP_PASSWORD) == 0) {
+            wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+        }
+
+        ESP_ERROR_CHECK(esp_wifi_remote_set_mode(WIFI_MODE_AP));
+        ESP_ERROR_CHECK(esp_wifi_remote_set_config(WIFI_IF_AP, &wifi_config));
+        ESP_ERROR_CHECK(esp_wifi_remote_start());
+    }
     
     // Enable Wi-Fi 6 protocol for AP (best-effort)
     wifi_set_protocol_11ax(WIFI_IF_AP);

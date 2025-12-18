@@ -561,7 +561,7 @@ static esp_err_t sdcard_impl_start_playback(channel_handle_t channel,
 
     uint32_t global_seed = config_store_get_global_seed();
 
-    esp_err_t err = play_navigator_init(&ch->navigator, channel, play_order, pe, global_seed);
+    esp_err_t err = play_navigator_init(&ch->navigator, channel, "sdcard", play_order, pe, global_seed);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to init play navigator: %s", esp_err_to_name(err));
         return err;

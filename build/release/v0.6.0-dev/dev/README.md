@@ -1,4 +1,4 @@
-# p3a Firmware v0.5.4-dev
+# p3a Firmware v0.6.0-dev
 
 This folder contains all files needed to flash the p3a firmware to an ESP32-P4 device
 (e.g., Waveshare ESP32-P4-WiFi6-Touch-LCD board).

@@ -13,7 +13,7 @@
 
 static const char *TAG = "makapix_api";
 
-#define MAKAPIX_REQUEST_TIMEOUT_MS 30000
+#define MAKAPIX_REQUEST_TIMEOUT_MS 10000
 #define MAKAPIX_MAX_RETRIES 3
 
 typedef struct pending_request_s {

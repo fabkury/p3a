@@ -5,6 +5,7 @@
 #include "makapix_api.h"
 #include "makapix_channel_impl.h"
 #include "makapix_artwork.h"
+#include "download_manager.h"
 #include "sdio_bus.h"
 #include "app_wifi.h"
 #include "p3a_state.h"
@@ -20,6 +21,8 @@ void ugfx_ui_hide_channel_message(void);
 esp_err_t channel_player_switch_to_makapix_channel(channel_handle_t makapix_channel);
 esp_err_t channel_player_switch_to_sdcard_channel(void);
 esp_err_t animation_player_request_swap_current(void);
+void channel_player_clear_channel(channel_handle_t channel_to_clear);
+// channel_request_refresh is a macro defined in channel_interface.h - no forward declaration needed
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
@@ -42,12 +45,26 @@ static bool s_provisioning_cancelled = false;  // Flag to prevent race condition
 static TaskHandle_t s_poll_task_handle = NULL;  // Handle for credential polling task
 static TaskHandle_t s_reconnect_task_handle = NULL;  // Handle for MQTT reconnection task
 static TaskHandle_t s_status_publish_task_handle = NULL;  // Handle for status publish task
+static TaskHandle_t s_channel_switch_task_handle = NULL;  // Handle for channel switch task
 static channel_handle_t s_current_channel = NULL;  // Current active Makapix channel
+
+// Channel loading state tracking
+static volatile bool s_channel_loading = false;          // True while a channel is being loaded
+static volatile bool s_channel_load_abort = false;       // Signal to abort current load
+static char s_loading_channel_id[128] = {0};             // Channel ID currently being loaded
+static char s_current_channel_id[128] = {0};             // Channel ID currently active (for download cancellation)
+
+// Pending channel request (set by handlers, processed by channel switch task)
+static char s_pending_channel[64] = {0};                 // Requested channel name
+static char s_pending_user_handle[64] = {0};             // User handle for by_user channel
+static volatile bool s_has_pending_channel = false;      // True if a new channel was requested
+static SemaphoreHandle_t s_channel_switch_sem = NULL;    // Semaphore to wake channel switch task
 
 // Forward declarations
 static void credentials_poll_task(void *pvParameters);
 static void mqtt_reconnect_task(void *pvParameters);
 static void status_publish_task(void *pvParameters);
+static void channel_switch_task(void *pvParameters);
 static channel_handle_t create_single_artwork_channel(const char *storage_key, const char *art_url);
 
 #define STATUS_PUBLISH_INTERVAL_MS (30000) // 30 seconds
@@ -89,6 +106,46 @@ static void status_publish_task(void *pvParameters)
         // Publish status if MQTT is connected
         if (makapix_mqtt_is_connected()) {
             makapix_mqtt_publish_status(makapix_get_current_post_id());
+        }
+    }
+}
+
+/**
+ * @brief Dedicated task for channel switching
+ * Runs in its own context to avoid blocking HTTP/MQTT handlers
+ * The blocking wait loop in makapix_switch_to_channel() runs here
+ */
+static void channel_switch_task(void *pvParameters)
+{
+    (void)pvParameters;
+    char channel[64];
+    char user_handle[64];
+    
+    ESP_LOGI(TAG, "Channel switch task started");
+    
+    while (1) {
+        // Wait for signal that a channel switch is requested
+        if (xSemaphoreTake(s_channel_switch_sem, portMAX_DELAY) == pdTRUE) {
+            // Get pending channel info
+            if (makapix_get_pending_channel(channel, sizeof(channel), user_handle, sizeof(user_handle))) {
+                makapix_clear_pending_channel();
+                
+                const char *user = user_handle[0] ? user_handle : NULL;
+                ESP_LOGI(TAG, "Channel switch task: switching to %s", channel);
+                
+                // This can block for up to 60 seconds - that's OK, we're in our own task
+                esp_err_t err = makapix_switch_to_channel(channel, user);
+                
+                if (err == ESP_ERR_INVALID_STATE) {
+                    // Channel load was aborted - a different channel was requested
+                    // The pending channel mechanism will handle it on next iteration
+                    ESP_LOGI(TAG, "Channel switch aborted for new request");
+                } else if (err != ESP_OK) {
+                    ESP_LOGE(TAG, "Channel switch failed: %s", esp_err_to_name(err));
+                } else {
+                    ESP_LOGI(TAG, "Channel switch completed successfully");
+                }
+            }
         }
     }
 }
@@ -138,6 +195,13 @@ static void mqtt_connection_callback(bool connected)
             // Timer exists but may have been stopped during disconnect - restart it
             xTimerStart(s_status_timer, 0);
             ESP_LOGI(TAG, "Status timer restarted");
+        }
+        
+        // Trigger refresh on the current Makapix channel if one exists
+        // This handles the boot-time case where the channel was loaded before MQTT connected
+        if (s_current_channel && s_current_channel_id[0]) {
+            ESP_LOGI(TAG, "Triggering refresh for current channel: %s", s_current_channel_id);
+            channel_request_refresh(s_current_channel);
         }
     } else {
         ESP_LOGI(TAG, "MQTT disconnected");
@@ -515,6 +579,26 @@ esp_err_t makapix_init(void)
     memset(s_registration_code, 0, sizeof(s_registration_code));
     memset(s_registration_expires, 0, sizeof(s_registration_expires));
 
+    // Create channel switch semaphore and task
+    // This task handles all blocking channel switch operations to keep HTTP/MQTT handlers responsive
+    if (s_channel_switch_sem == NULL) {
+        s_channel_switch_sem = xSemaphoreCreateBinary();
+        if (s_channel_switch_sem == NULL) {
+            ESP_LOGE(TAG, "Failed to create channel switch semaphore");
+            return ESP_ERR_NO_MEM;
+        }
+    }
+    
+    if (s_channel_switch_task_handle == NULL) {
+        BaseType_t task_ret = xTaskCreate(channel_switch_task, "ch_switch", 8192, NULL, 5, &s_channel_switch_task_handle);
+        if (task_ret != pdPASS) {
+            ESP_LOGE(TAG, "Failed to create channel switch task");
+            s_channel_switch_task_handle = NULL;
+            return ESP_ERR_NO_MEM;
+        }
+        ESP_LOGI(TAG, "Channel switch task created");
+    }
+
     return ESP_OK;
 }
 
@@ -809,6 +893,12 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
         strncpy(channel_id, channel, sizeof(channel_id) - 1);
     }
     
+    // Check if we're already on this channel - if so, do nothing (no cancellation either)
+    if (s_current_channel_id[0] && strcmp(s_current_channel_id, channel_id) == 0 && s_current_channel) {
+        ESP_LOGI(TAG, "Already on channel %s - ignoring duplicate switch request", channel_id);
+        return ESP_OK;
+    }
+    
     // Build channel name
     char channel_name[128] = {0};
     if (strcmp(channel, "all") == 0) {
@@ -826,10 +916,24 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
         channel_name[copy_len] = '\0';
     }
     
+    // Cancel downloads for the PREVIOUS channel (if different from new channel)
+    if (s_current_channel_id[0] && strcmp(s_current_channel_id, channel_id) != 0) {
+        ESP_LOGI(TAG, "Cancelling downloads for previous channel: %s", s_current_channel_id);
+        download_manager_cancel_channel(s_current_channel_id);
+    }
+    
+    // Mark channel as loading (clear any previous abort state)
+    s_channel_loading = true;
+    s_channel_load_abort = false;
+    strncpy(s_loading_channel_id, channel_id, sizeof(s_loading_channel_id) - 1);
+    s_loading_channel_id[sizeof(s_loading_channel_id) - 1] = '\0';
+    
     ESP_LOGI(TAG, "Switching to channel: %s (id=%s)", channel_name, channel_id);
     
     // Destroy existing channel if any
     if (s_current_channel) {
+        // Clear channel_player pointer BEFORE destroying to prevent race conditions
+        channel_player_clear_channel(s_current_channel);
         channel_destroy(s_current_channel);
         s_current_channel = NULL;
     }
@@ -838,104 +942,182 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
     s_current_channel = makapix_channel_create(channel_id, channel_name, "/sdcard/vault", "/sdcard/channel");
     if (!s_current_channel) {
         ESP_LOGE(TAG, "Failed to create channel");
+        s_channel_loading = false;
+        s_loading_channel_id[0] = '\0';
         return ESP_ERR_NO_MEM;
     }
     
-    // Load channel (will trigger refresh if empty)
+    // Update current channel ID tracker
+    strncpy(s_current_channel_id, channel_id, sizeof(s_current_channel_id) - 1);
+    s_current_channel_id[sizeof(s_current_channel_id) - 1] = '\0';
+    
+    // Load channel (will trigger refresh task if index is empty)
     esp_err_t err = channel_load(s_current_channel);
-    bool refresh_started = false;
     
     if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
         // Serious error (e.g., refresh task couldn't start due to memory)
         ESP_LOGE(TAG, "Channel load failed: %s", esp_err_to_name(err));
         p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_ERROR, -1, 
                                        "Failed to load channel");
-        // Clean up: destroy the channel since we can't use it
+        channel_player_clear_channel(s_current_channel);
         channel_destroy(s_current_channel);
         s_current_channel = NULL;
-        // Fall back to SD card channel to ensure device remains in valid state
+        s_channel_loading = false;
+        s_loading_channel_id[0] = '\0';
+        s_current_channel_id[0] = '\0';
         p3a_state_fallback_to_sdcard();
         return err;
     }
     
-    // Check if channel is empty (first-time access)
+    // Get channel stats - total_items is index entries (not necessarily downloaded)
     channel_stats_t stats = {0};
     channel_get_stats(s_current_channel, &stats);
     
-    if (stats.total_items == 0 && err == ESP_OK) {
-        // Channel is empty - check if refresh task actually started
-        // (refresh task failure would have returned error above, so if we're here, refresh should be running)
-        refresh_started = true;
-        ESP_LOGI(TAG, "Channel empty, waiting for data from Makapix Club...");
+    // Count locally AVAILABLE artworks (files that actually exist)
+    // This is different from total_items which includes index entries without files
+    size_t available_count = 0;
+    size_t post_count = channel_get_post_count(s_current_channel);
+    for (size_t i = 0; i < post_count; i++) {
+        channel_post_t post = {0};
+        if (channel_get_post(s_current_channel, i, &post) == ESP_OK) {
+            if (post.kind == CHANNEL_POST_KIND_ARTWORK) {
+                struct stat st;
+                if (stat(post.u.artwork.filepath, &st) == 0) {
+                    available_count++;
+                }
+            }
+        }
+    }
+    
+    ESP_LOGI(TAG, "Channel %s: %zu index entries, %zu locally available", 
+             channel_id, stats.total_items, available_count);
+    
+    // Decision: show loading UI only if ZERO artworks are locally available
+    if (available_count == 0) {
+        // No local artworks - need to wait for at least one to be downloaded
+        ESP_LOGI(TAG, "No local artworks available, waiting for first download...");
         
-        // Switch to UI mode to show loading message
-        app_lcd_enter_ui_mode();
+        // Set up loading message UI.
+        // IMPORTANT: Do NOT switch display render mode here. We keep the display in animation mode
+        // and rely on p3a_render to draw the message reliably (avoids blank screen if UI mode fails).
         ugfx_ui_show_channel_message(channel_name, "Loading from Makapix Club...", -1);
-        p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_LOADING, -1, 
+        p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_LOADING, -1,
                                        "Fetching from Makapix Club...");
         
-        // Wait for refresh task to populate the channel (max 60 seconds for slow downloads)
-        // Poll frequently at first for quick response, then less often
+        // Wait for FIRST artwork to become available (not the full batch)
+        // This is much faster than waiting for all 32
         const int MAX_WAIT_MS = 60000;
         int waited_ms = 0;
+        bool aborted = false;
+        bool got_artwork = false;
         
-        while (waited_ms < MAX_WAIT_MS) {
-            // Poll faster at the beginning (100ms for first 5 sec, then 500ms)
-            int poll_interval = (waited_ms < 5000) ? 100 : 500;
-            vTaskDelay(pdMS_TO_TICKS(poll_interval));
-            waited_ms += poll_interval;
-            
-            // Check if channel now has entries
-            channel_get_stats(s_current_channel, &stats);
-            if (stats.total_items > 0) {
-                ESP_LOGI(TAG, "Channel now has %zu entries after %d ms - starting playback!", 
-                         stats.total_items, waited_ms);
+        while (waited_ms < MAX_WAIT_MS && !aborted && !got_artwork) {
+            // Check for abort signal first for responsiveness
+            if (s_channel_load_abort || s_has_pending_channel) {
+                ESP_LOGI(TAG, "Channel load aborted by new request");
+                aborted = true;
                 break;
             }
             
-            // Update loading message with elapsed time (every 2 seconds)
+            vTaskDelay(pdMS_TO_TICKS(100));
+            waited_ms += 100;
+            
+            // Re-check available count (files are being downloaded in background)
+            size_t new_available = 0;
+            size_t new_post_count = channel_get_post_count(s_current_channel);
+            for (size_t i = 0; i < new_post_count && !got_artwork; i++) {
+                channel_post_t post = {0};
+                if (channel_get_post(s_current_channel, i, &post) == ESP_OK) {
+                    if (post.kind == CHANNEL_POST_KIND_ARTWORK) {
+                        struct stat st;
+                        if (stat(post.u.artwork.filepath, &st) == 0) {
+                            new_available++;
+                            got_artwork = true;  // Found one! Can start playback
+                        }
+                    }
+                }
+            }
+            
+            if (got_artwork) {
+                ESP_LOGI(TAG, "First artwork available after %d ms - starting playback!", waited_ms);
+                break;
+            }
+            
+            // Update loading message every 2 seconds
             if (waited_ms % 2000 == 0) {
-                ESP_LOGI(TAG, "Still waiting for channel data... (%d ms)", waited_ms);
-                // Update UI with time info
+                ESP_LOGI(TAG, "Still waiting for first artwork... (%d ms)", waited_ms);
                 char msg[64];
                 snprintf(msg, sizeof(msg), "Loading... (%d sec)", waited_ms / 1000);
                 ugfx_ui_show_channel_message(channel_name, msg, -1);
+                p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_LOADING, -1, msg);
             }
         }
         
-        // Exit UI mode regardless of outcome
-        ugfx_ui_hide_channel_message();
-        app_lcd_exit_ui_mode();
-        
         // Clear loading message
+        ugfx_ui_hide_channel_message();
         p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
         
-        if (stats.total_items == 0) {
-            // Timeout - refresh didn't populate the channel
-            ESP_LOGW(TAG, "Timed out waiting for channel data");
-            p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_EMPTY, -1, 
-                                           "No artworks available yet");
-            // Clean up: destroy the empty channel
+        // Handle abort
+        if (aborted) {
+            ESP_LOGI(TAG, "Cleaning up aborted channel load for %s", channel_id);
+            download_manager_cancel_channel(channel_id);
+            channel_player_clear_channel(s_current_channel);
             channel_destroy(s_current_channel);
             s_current_channel = NULL;
-            // Fall back to SD card channel to ensure device remains in valid state
+            s_channel_loading = false;
+            s_loading_channel_id[0] = '\0';
+            s_current_channel_id[0] = '\0';
+            s_channel_load_abort = false;
+            
+            char pending_ch[64] = {0};
+            char pending_user[64] = {0};
+            if (makapix_get_pending_channel(pending_ch, sizeof(pending_ch), pending_user, sizeof(pending_user))) {
+                makapix_clear_pending_channel();
+                return makapix_switch_to_channel(pending_ch, pending_user[0] ? pending_user : NULL);
+            }
+            return ESP_ERR_INVALID_STATE;
+        }
+        
+        // Handle timeout (no artwork available after waiting)
+        if (!got_artwork) {
+            ESP_LOGW(TAG, "Timed out waiting for first artwork");
+            p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_EMPTY, -1, 
+                                           "No artworks available yet");
+            download_manager_cancel_channel(channel_id);
+            channel_player_clear_channel(s_current_channel);
+            channel_destroy(s_current_channel);
+            s_current_channel = NULL;
+            s_channel_loading = false;
+            s_loading_channel_id[0] = '\0';
+            s_current_channel_id[0] = '\0';
+            
+            char pending_ch[64] = {0};
+            char pending_user[64] = {0};
+            if (makapix_get_pending_channel(pending_ch, sizeof(pending_ch), pending_user, sizeof(pending_user))) {
+                makapix_clear_pending_channel();
+                return makapix_switch_to_channel(pending_ch, pending_user[0] ? pending_user : NULL);
+            }
             p3a_state_fallback_to_sdcard();
             return ESP_ERR_NOT_FOUND;
         }
     }
     
+    // At this point we have at least one locally available artwork - start playback immediately!
+    // Background downloads will continue adding more artworks
+    
     // Start playback with server order
     err = channel_start_playback(s_current_channel, CHANNEL_ORDER_ORIGINAL, NULL);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start playback: %s", esp_err_to_name(err));
-        // Clean up: destroy the channel since playback failed
+        download_manager_cancel_channel(channel_id);
+        channel_player_clear_channel(s_current_channel);
         channel_destroy(s_current_channel);
         s_current_channel = NULL;
-        
-        // Show error message
+        s_channel_loading = false;
+        s_loading_channel_id[0] = '\0';
+        s_current_channel_id[0] = '\0';
         p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_ERROR, -1, 
                                        "Failed to start playback");
-        // Fall back to SD card channel to ensure device remains in valid state
         p3a_state_fallback_to_sdcard();
         return err;
     }
@@ -944,20 +1126,22 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
     err = channel_player_switch_to_makapix_channel(s_current_channel);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to switch channel player source: %s", esp_err_to_name(err));
-        // Continue anyway - channel was created, just animation player might not use it
+        // Continue anyway - channel was created
     }
     
-    // Trigger the animation player to load the first artwork from the new channel
+    // Trigger the animation player to load the first artwork
     err = animation_player_request_swap_current();
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to trigger initial animation swap: %s", esp_err_to_name(err));
-        // Not fatal - user can manually swap
     }
     
-    ESP_LOGI(TAG, "Channel switched successfully");
+    ESP_LOGI(TAG, "Channel switched successfully (background downloads continue)");
+    
+    // Clear loading state - playback started
+    s_channel_loading = false;
+    s_loading_channel_id[0] = '\0';
 
-    // Persist "last channel" selection (NVS) via unified p3a state machine.
-    // This is the authoritative mechanism used at boot to restore the last channel.
+    // Persist "last channel" selection
     if (strcmp(channel, "all") == 0) {
         (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_ALL, NULL);
     } else if (strcmp(channel, "promoted") == 0) {
@@ -967,7 +1151,6 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
     } else if (strcmp(channel, "by_user") == 0) {
         (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_BY_USER, user_handle);
     } else {
-        // Unknown channel string: do not overwrite persisted channel selection.
         ESP_LOGW(TAG, "Not persisting unknown channel key: %s", channel);
     }
 
@@ -984,6 +1167,7 @@ esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const c
     
     // Destroy existing channel if any
     if (s_current_channel) {
+        channel_player_clear_channel(s_current_channel);
         channel_destroy(s_current_channel);
         s_current_channel = NULL;
     }
@@ -1038,9 +1222,119 @@ void makapix_adopt_channel_handle(void *channel)
     // Ownership transfer: if a different channel is already owned, destroy it.
     channel_handle_t ch = (channel_handle_t)channel;
     if (s_current_channel && s_current_channel != ch) {
+        channel_player_clear_channel(s_current_channel);
         channel_destroy(s_current_channel);
     }
     s_current_channel = ch;
+    
+    // Track the channel ID for refresh triggering when MQTT connects
+    if (ch) {
+        const char *id = makapix_channel_get_id(ch);
+        if (id) {
+            strncpy(s_current_channel_id, id, sizeof(s_current_channel_id) - 1);
+            s_current_channel_id[sizeof(s_current_channel_id) - 1] = '\0';
+            ESP_LOGI(TAG, "Adopted channel: %s", s_current_channel_id);
+        }
+    } else {
+        s_current_channel_id[0] = '\0';
+    }
+}
+
+bool makapix_is_channel_loading(char *out_channel_id, size_t max_len)
+{
+    if (s_channel_loading && out_channel_id && max_len > 0) {
+        strncpy(out_channel_id, s_loading_channel_id, max_len - 1);
+        out_channel_id[max_len - 1] = '\0';
+    }
+    return s_channel_loading;
+}
+
+void makapix_abort_channel_load(void)
+{
+    if (s_channel_loading) {
+        ESP_LOGI(TAG, "Signaling abort of channel load: %s", s_loading_channel_id);
+        s_channel_load_abort = true;
+    }
+}
+
+esp_err_t makapix_request_channel_switch(const char *channel, const char *user_handle)
+{
+    if (!channel) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    // Build channel_id for comparison
+    char new_channel_id[128] = {0};
+    if (strcmp(channel, "by_user") == 0 && user_handle) {
+        snprintf(new_channel_id, sizeof(new_channel_id), "by_user_%s", user_handle);
+    } else {
+        strncpy(new_channel_id, channel, sizeof(new_channel_id) - 1);
+    }
+    
+    // Check if this is the same channel already loading
+    if (s_channel_loading && strcmp(s_loading_channel_id, new_channel_id) == 0) {
+        ESP_LOGI(TAG, "Channel %s already loading - ignoring duplicate request", channel);
+        return ESP_OK;  // Already loading this channel
+    }
+    
+    ESP_LOGI(TAG, "Request channel switch to: %s (loading=%d)", channel, s_channel_loading);
+    
+    // Store as pending channel
+    strncpy(s_pending_channel, channel, sizeof(s_pending_channel) - 1);
+    s_pending_channel[sizeof(s_pending_channel) - 1] = '\0';
+    
+    if (user_handle) {
+        strncpy(s_pending_user_handle, user_handle, sizeof(s_pending_user_handle) - 1);
+        s_pending_user_handle[sizeof(s_pending_user_handle) - 1] = '\0';
+    } else {
+        s_pending_user_handle[0] = '\0';
+    }
+    
+    s_has_pending_channel = true;
+    
+    // If a channel is currently loading, signal abort
+    // The channel_switch_task will pick up the pending channel when the current load exits
+    if (s_channel_loading) {
+        ESP_LOGI(TAG, "Aborting load of %s to switch to %s", s_loading_channel_id, channel);
+        s_channel_load_abort = true;
+        // Don't signal semaphore - the task will loop back after abort completes
+    } else {
+        // No channel loading - signal the task to start processing
+        if (s_channel_switch_sem) {
+            xSemaphoreGive(s_channel_switch_sem);
+        }
+    }
+    
+    return ESP_OK;
+}
+
+bool makapix_has_pending_channel(void)
+{
+    return s_has_pending_channel;
+}
+
+bool makapix_get_pending_channel(char *out_channel, size_t channel_len, char *out_user_handle, size_t user_len)
+{
+    if (!s_has_pending_channel) {
+        return false;
+    }
+    
+    if (out_channel && channel_len > 0) {
+        snprintf(out_channel, channel_len, "%s", s_pending_channel);
+    }
+    
+    if (out_user_handle && user_len > 0) {
+        snprintf(out_user_handle, user_len, "%s", s_pending_user_handle);
+    }
+    
+    return true;
+}
+
+void makapix_clear_pending_channel(void)
+{
+    s_has_pending_channel = false;
+    s_pending_channel[0] = '\0';
+    s_pending_user_handle[0] = '\0';
 }
 
 // ---------------------------------------------------------------------------

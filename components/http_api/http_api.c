@@ -41,6 +41,7 @@
 #include "makapix.h"
 #include "makapix_mqtt.h"
 #include "makapix_artwork.h"
+#include "makapix_channel_impl.h"
 #include "ota_manager.h"
 #include "p3a_state.h"
 #include "esp_heap_caps.h"
@@ -359,6 +360,8 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
         }
     } else if (strcmp(command_type, "play_channel") == 0) {
         // Extract channel information from payload
+        // Channel switching is handled by the dedicated channel_switch_task in makapix.c
+        // makapix_request_channel_switch() is non-blocking
         cJSON *channel = cJSON_GetObjectItem(payload, "channel");
         cJSON *user_handle = cJSON_GetObjectItem(payload, "user_handle");
         
@@ -366,16 +369,14 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
             const char *ch_name = cJSON_GetStringValue(channel);
             const char *user = user_handle && cJSON_IsString(user_handle) ? cJSON_GetStringValue(user_handle) : NULL;
             
-            ESP_LOGI(HTTP_API_TAG, "Switching to channel: %s", ch_name);
-            esp_err_t err = makapix_switch_to_channel(ch_name, user);
-            if (err != ESP_OK) {
-                ESP_LOGE(HTTP_API_TAG, "Failed to switch channel: %s", esp_err_to_name(err));
-            }
+            ESP_LOGI(HTTP_API_TAG, "Requesting channel switch to: %s", ch_name);
+            makapix_request_channel_switch(ch_name, user);
         } else {
             ESP_LOGE(HTTP_API_TAG, "Invalid play_channel payload");
         }
     } else if (strcmp(command_type, "show_artwork") == 0) {
-        // Extract artwork information from payload
+        // Extract artwork information and show it directly
+        // This creates a single-artwork channel and switches to it
         cJSON *art_url = cJSON_GetObjectItem(payload, "art_url");
         cJSON *storage_key = cJSON_GetObjectItem(payload, "storage_key");
         cJSON *post_id = cJSON_GetObjectItem(payload, "post_id");
@@ -387,7 +388,7 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
             const char *key = cJSON_GetStringValue(storage_key);
             int32_t pid = post_id && cJSON_IsNumber(post_id) ? (int32_t)cJSON_GetNumberValue(post_id) : 0;
             
-            ESP_LOGI(HTTP_API_TAG, "Showing artwork: %s", url);
+            ESP_LOGI(HTTP_API_TAG, "Showing artwork: %s", key);
             esp_err_t err = makapix_show_artwork(pid, key, url);
             if (err != ESP_OK) {
                 ESP_LOGE(HTTP_API_TAG, "Failed to show artwork: %s", esp_err_to_name(err));
@@ -523,6 +524,7 @@ static esp_err_t h_post_pause(httpd_req_t *req);
 static esp_err_t h_post_resume(httpd_req_t *req);
 static esp_err_t h_get_rotation(httpd_req_t *req);
 static esp_err_t h_post_rotation(httpd_req_t *req);
+static esp_err_t h_get_channels_stats(httpd_req_t *req);
 #if CONFIG_OTA_DEV_MODE
 static esp_err_t h_post_debug(httpd_req_t *req);
 #endif
@@ -549,6 +551,9 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     }
     if (strcmp(uri, "/settings/global_seed") == 0) {
         return h_get_global_seed(req);
+    }
+    if (strcmp(uri, "/channels/stats") == 0) {
+        return h_get_channels_stats(req);
     }
 
     // UI/pages module (/, /favicon.ico, /config/network, /seed, /pico8)
@@ -884,8 +889,14 @@ static esp_err_t h_post_channel(httpd_req_t *req) {
 
     esp_err_t err;
     
-    // Handle sdcard channel separately
+    // Handle sdcard channel separately (this is fast, can be done synchronously)
     if (strcmp(ch_name, "sdcard") == 0) {
+        // Abort any ongoing Makapix channel loading
+        if (makapix_is_channel_loading(NULL, 0)) {
+            ESP_LOGI(HTTP_API_TAG, "Aborting Makapix channel load for SD card switch");
+            makapix_abort_channel_load();
+        }
+        
         err = p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL);
         if (err == ESP_OK) {
             // Switch animation player back to sdcard_channel source
@@ -895,19 +906,28 @@ static esp_err_t h_post_channel(httpd_req_t *req) {
             // Trigger animation swap to show an item from sdcard
             animation_player_request_swap_current();
         }
-    } else {
-        // Handle Makapix channels
-        err = makapix_switch_to_channel(ch_name, user);
+        cJSON_Delete(root);
+        if (err != ESP_OK) {
+            send_json(req, 500, "{\"ok\":false,\"error\":\"Channel switch failed\",\"code\":\"CHANNEL_SWITCH_FAILED\"}");
+            return ESP_OK;
+        }
+        send_json(req, 200, "{\"ok\":true}");
+        return ESP_OK;
     }
+    
+    // Handle Makapix channels asynchronously via the channel switch task
+    // This returns immediately - the actual switch happens in background
+    err = makapix_request_channel_switch(ch_name, user);
     
     cJSON_Delete(root);
 
     if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Channel switch failed\",\"code\":\"CHANNEL_SWITCH_FAILED\"}");
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Channel switch request failed\",\"code\":\"CHANNEL_SWITCH_FAILED\"}");
         return ESP_OK;
     }
 
-    send_json(req, 200, "{\"ok\":true}");
+    // Request accepted - switch will happen in background
+    send_json(req, 202, "{\"ok\":true,\"message\":\"Channel switch initiated\"}");
     return ESP_OK;
 }
 
@@ -919,6 +939,29 @@ static esp_err_t h_get_dwell_time(httpd_req_t *req) {
     uint32_t dwell_time = animation_player_get_dwell_time();
     char response[128];
     snprintf(response, sizeof(response), "{\"ok\":true,\"data\":{\"dwell_time\":%lu}}", (unsigned long)dwell_time);
+    send_json(req, 200, response);
+    return ESP_OK;
+}
+
+/**
+ * GET /channels/stats
+ * Get cached artwork counts for each Makapix channel
+ */
+static esp_err_t h_get_channels_stats(httpd_req_t *req) {
+    size_t all_total = 0, all_cached = 0;
+    size_t promoted_total = 0, promoted_cached = 0;
+    
+    // Count cached artworks for each channel
+    makapix_channel_count_cached("all", "/sdcard/channel", "/sdcard/vault", &all_total, &all_cached);
+    makapix_channel_count_cached("promoted", "/sdcard/channel", "/sdcard/vault", &promoted_total, &promoted_cached);
+    
+    char response[256];
+    snprintf(response, sizeof(response),
+             "{\"ok\":true,\"data\":{"
+             "\"all\":{\"total\":%zu,\"cached\":%zu},"
+             "\"promoted\":{\"total\":%zu,\"cached\":%zu}"
+             "}}",
+             all_total, all_cached, promoted_total, promoted_cached);
     send_json(req, 200, response);
     return ESP_OK;
 }

@@ -152,6 +152,16 @@ void *channel_player_get_navigator(void);
  */
 void channel_player_exit_live_mode(void);
 
+/**
+ * @brief Clear the current channel pointer if it matches the given channel
+ * 
+ * This should be called BEFORE destroying a channel to prevent race conditions
+ * where other tasks might try to access the freed channel.
+ * 
+ * @param channel_to_clear Channel handle that is about to be destroyed
+ */
+void channel_player_clear_channel(channel_handle_t channel_to_clear);
+
 #ifdef __cplusplus
 }
 #endif

@@ -29,6 +29,9 @@ typedef enum {
  */
 typedef struct {
     channel_handle_t channel;      // Channel being navigated (not owned)
+    // Optional identifier for associating background downloads with the active channel.
+    // Used for cancellation/purging when switching channels.
+    char channel_id[64];
     play_order_mode_t order;       // Current play order
     uint32_t pe;                   // Playlist expansion (0 = infinite)
     bool randomize_playlist;       // Randomize within playlists
@@ -62,7 +65,8 @@ typedef struct {
  * @return ESP_OK on success
  */
 esp_err_t play_navigator_init(play_navigator_t *nav, channel_handle_t channel,
-                               play_order_mode_t order, uint32_t pe, uint32_t global_seed);
+                              const char *channel_id,
+                              play_order_mode_t order, uint32_t pe, uint32_t global_seed);
 
 /**
  * @brief Deinitialize navigator and free resources

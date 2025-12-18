@@ -159,3 +159,51 @@ esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const c
  */
 void makapix_adopt_channel_handle(void *channel);
 
+/**
+ * @brief Check if a channel is currently being loaded
+ * 
+ * @param out_channel_id If not NULL, receives the channel ID being loaded
+ * @param max_len Maximum length of out_channel_id buffer
+ * @return true if a channel is currently loading, false otherwise
+ */
+bool makapix_is_channel_loading(char *out_channel_id, size_t max_len);
+
+/**
+ * @brief Signal that the current channel load should be aborted
+ * 
+ * Used when a different channel is requested while one is loading.
+ * The loading function will check this flag and clean up.
+ */
+void makapix_abort_channel_load(void);
+
+/**
+ * @brief Request a channel switch (non-blocking)
+ * 
+ * If a channel is currently loading, this sets the new channel as "pending"
+ * and signals abort. When the current load exits (due to abort or timeout),
+ * it will automatically switch to the pending channel.
+ * 
+ * If no channel is loading, this triggers an immediate switch via the
+ * command queue.
+ * 
+ * @param channel Channel name ("all", "promoted", "user", or "by_user")
+ * @param user_handle User handle (required when channel is "by_user")
+ * @return ESP_OK on success
+ */
+esp_err_t makapix_request_channel_switch(const char *channel, const char *user_handle);
+
+/**
+ * @brief Check if there's a pending channel request
+ */
+bool makapix_has_pending_channel(void);
+
+/**
+ * @brief Get the pending channel details
+ */
+bool makapix_get_pending_channel(char *out_channel, size_t channel_len, char *out_user_handle, size_t user_len);
+
+/**
+ * @brief Clear the pending channel request
+ */
+void makapix_clear_pending_channel(void);
+

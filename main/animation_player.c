@@ -13,6 +13,8 @@
 #include "p3a_state.h"
 #include "makapix_channel_impl.h"
 #include "makapix.h"
+#include "p3a_render.h"
+#include "display_renderer.h"
 
 // Animation player state
 animation_buffer_t s_front_buffer = {0};
@@ -53,6 +55,25 @@ static void animation_player_sd_refresh_task(void *arg)
         }
     }
     vTaskDelete(NULL);
+}
+
+// Render dispatch: use state-aware renderer when available so channel status messages
+// can be drawn without entering display "UI mode" (which may be slow/unreliable on some boots).
+static int animation_player_render_dispatch_cb(uint8_t *dest_buffer, void *user_ctx)
+{
+    (void)user_ctx;
+    if (!dest_buffer) return -1;
+
+    size_t stride = 0;
+    display_renderer_get_dimensions(NULL, NULL, &stride);
+
+    p3a_render_result_t rr = {0};
+    if (p3a_render_frame(dest_buffer, stride, &rr) == ESP_OK) {
+        return rr.frame_delay_ms;
+    }
+
+    // Fallback to animation-only rendering.
+    return animation_player_render_frame_callback(dest_buffer, NULL);
 }
 
 static esp_err_t mount_sd_and_discover(char **animations_dir_out)
@@ -340,8 +361,10 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         return ESP_FAIL;
     }
 
-    // Set the frame callback for display renderer
-    display_renderer_set_frame_callback(animation_player_render_frame_callback, NULL);
+    // Initialize state-aware rendering and use it as the frame callback.
+    // This enables on-screen "loading channel" messages without switching render modes.
+    (void)p3a_render_init();
+    display_renderer_set_frame_callback(animation_player_render_dispatch_cb, NULL);
 
     return ESP_OK;
 }

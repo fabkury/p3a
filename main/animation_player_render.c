@@ -564,3 +564,11 @@ skip_prefetch:
 
     return frame_delay_ms;
 }
+
+// p3a_render integration: provide a stride-taking wrapper for the state-aware renderer.
+// p3a_render expects this symbol (weak-linked).
+int animation_player_render_frame_internal(uint8_t *buffer, size_t stride)
+{
+    (void)stride; // animation renderer already knows how to write a full display frame
+    return animation_player_render_frame_callback(buffer, NULL);
+}

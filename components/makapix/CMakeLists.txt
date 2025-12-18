@@ -28,3 +28,11 @@ idf_component_register(
         wifi_manager
     WHOLE_ARCHIVE
 )
+
+# Add compiler definitions for version information
+target_compile_definitions(${COMPONENT_LIB} PRIVATE
+    FW_VERSION_STRING="${PROJECT_VER}"
+    FW_VERSION_MAJOR=${FW_VERSION_MAJOR}
+    FW_VERSION_MINOR=${FW_VERSION_MINOR}
+    FW_VERSION_PATCH=${FW_VERSION_PATCH}
+)

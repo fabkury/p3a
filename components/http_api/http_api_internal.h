@@ -113,31 +113,25 @@ void http_api_register_ota_handlers(httpd_handle_t server);
  */
 void http_api_register_upload_handler(httpd_handle_t server);
 
-// ---------- Sub-router entrypoints (used by method routers in http_api.c) ----------
+// ---------- Sub-router Functions ----------
 
 /**
- * @brief Route GET requests for page/UI endpoints (/, /favicon.ico, /config/network, /seed, /pico8).
- *        Note: static file wildcard and WebSocket endpoints are registered separately.
- * @return ESP_OK if handled, ESP_ERR_NOT_FOUND if URI not owned by this module.
+ * @brief Route GET request through pages handlers
  */
 esp_err_t http_api_pages_route_get(httpd_req_t *req);
 
 /**
- * @brief Route POST requests for page/UI endpoints.
- *        Currently: /erase
- * @return ESP_OK if handled, ESP_ERR_NOT_FOUND if URI not owned by this module.
+ * @brief Route POST request through pages handlers
  */
 esp_err_t http_api_pages_route_post(httpd_req_t *req);
 
 /**
- * @brief Route GET requests for OTA endpoints (/ota, /ota/status).
- * @return ESP_OK if handled, ESP_ERR_NOT_FOUND if URI not owned by this module.
+ * @brief Route GET request through OTA handlers
  */
 esp_err_t http_api_ota_route_get(httpd_req_t *req);
 
 /**
- * @brief Route POST requests for OTA endpoints (/ota/check, /ota/install, /ota/rollback).
- * @return ESP_OK if handled, ESP_ERR_NOT_FOUND if URI not owned by this module.
+ * @brief Route POST request through OTA handlers
  */
 esp_err_t http_api_ota_route_post(httpd_req_t *req);
 

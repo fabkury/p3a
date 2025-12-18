@@ -329,3 +329,17 @@ void channel_player_exit_live_mode(void)
         live_mode_exit(nav);
     }
 }
+
+void channel_player_clear_channel(channel_handle_t channel_to_clear)
+{
+    if (!s_player.initialized) {
+        return;
+    }
+    
+    // Only clear if the current channel matches the one being cleared
+    // This prevents race conditions when switching channels
+    if (s_player.current_channel == channel_to_clear) {
+        ESP_LOGI(TAG, "Clearing current channel pointer (channel about to be destroyed)");
+        s_player.current_channel = NULL;
+    }
+}

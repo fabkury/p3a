@@ -86,6 +86,25 @@ const char *makapix_channel_get_id(channel_handle_t channel);
  */
 bool makapix_channel_is_refreshing(channel_handle_t channel);
 
+/**
+ * @brief Count cached artworks for a channel by reading its index file
+ * 
+ * This function reads the channel index file directly from disk and counts
+ * how many artwork entries have their files locally available.
+ * 
+ * @param channel_id Channel ID (e.g., "all", "promoted")
+ * @param channels_path Path to channels directory (e.g., "/sdcard/channel")
+ * @param vault_path Path to vault directory (e.g., "/sdcard/vault")
+ * @param out_total If not NULL, receives total index entries
+ * @param out_cached If not NULL, receives count of locally cached artworks
+ * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no index exists
+ */
+esp_err_t makapix_channel_count_cached(const char *channel_id,
+                                        const char *channels_path,
+                                        const char *vault_path,
+                                        size_t *out_total,
+                                        size_t *out_cached);
+
 #ifdef __cplusplus
 }
 #endif

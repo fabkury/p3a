@@ -1,6 +1,6 @@
 # p3a — Physical Pixel Art Player
 
-p3a is a physical pixel art player inside the Makapix Club ecosystem. It is an ESP32-P4-powered Wi-Fi art frame that displays pixel artworks, supports touch gestures, and can be controlled from your phone or laptop. Register your device at [dev.makapix.club](https://dev.makapix.club/) to unlock cloud connectivity and remote control.
+p3a is a Wi-Fi pixel art player that connects to [Makapix Club](https://makapix.club/), a pixel art social network. Play individual artworks or entire channels (like "Promoted Artworks" or "Recent Artworks") directly from the website to your device. Built on the ESP32-P4, it's a smart art frame you can control from anywhere—via touchscreen, web browser, REST API, or securely through Makapix Club's MQTTS backend. Register your p3a at [dev.makapix.club](https://dev.makapix.club/) for cloud connectivity.
 
 ## Hardware photos
 <p>
@@ -22,16 +22,30 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 
 ## Features
 
-- **Pixel art playback**: Displays animated WebP, GIF, PNG, and JPEG files from microSD card
-- **Transparency support**: Full alpha channel support for WebP, GIF, and PNG with configurable background color
-- **Aspect ratio preservation**: Non-square artworks are displayed without distortion, properly centered
+### Makapix Club Integration
+
+- **Play artworks and channels**: Stream individual artworks or entire channels (e.g., "Promoted Artworks", "Recent Artworks") directly from [Makapix Club](https://makapix.club/) to your p3a
+- **4 ways to control**: Touchscreen, local web UI at `http://p3a.local/`, REST API, or remotely via Makapix Club's secure MQTTS (MQTT over TLS) backend
+- **Cloud connectivity**: Register your device at [dev.makapix.club](https://dev.makapix.club/) to unlock remote control from anywhere
+- **Coming soon**: Send "likes" to artworks with a long-press, swipe up to view artwork comments from the Makapix community
+
+### Seamless Playback
+
+- **Freeze-free, gapless playback**: Robust multi-buffer rendering handles animations smoothly, even with corrupt or problematic files
+- **Full format support**: Animated WebP and GIF, still PNG and JPEG—all with complete transparency and alpha channel support
+- **Aspect ratio preservation**: Non-square artworks display without distortion, properly centered with configurable background colors
+
+### Control & Customization
+
 - **Touch controls**: Tap to change artwork, swipe to adjust brightness, rotate with two fingers
 - **Screen rotation**: Rotate the display 0°, 90°, 180°, or 270° via touch gesture or web API
-- **Over-the-Air updates**: After the initial USB flash, update firmware wirelessly via the web UI
-- **Web interface**: Control the device from any browser at `http://p3a.local/`
-- **Makapix Club integration**: Send artworks directly from [dev.makapix.club](https://dev.makapix.club/) to your p3a
+- **Web interface**: Full device control from any browser at `http://p3a.local/`
+- **Over-the-Air updates**: After initial USB flash, update firmware wirelessly via the web UI with automatic rollback protection
+
+### Hardware & Connectivity
+
 - **USB access**: Connect via USB-C to access the microSD card as a storage device
-- **Auto co-processor updates**: p3a automatically flashes the ESP32-C6 Wi-Fi co-processor firmware when needed
+- **Auto co-processor updates**: p3a automatically flashes the ESP32-C6 Wi-Fi 6 co-processor firmware when needed
 - **PICO-8 Monitor** (optional): Stream PICO-8 games to the display—disabled by default to reduce firmware size, can be enabled at compile time
 
 <p align="center">
@@ -78,24 +92,25 @@ After the initial firmware flash via USB-C cable, all subsequent updates can be 
 
 ## Current status
 
-p3a is in active development. The following features are implemented:
+p3a is in active development with **nearly complete Makapix Club support**. The following features are implemented:
 
-- Display pipeline with multi-buffer rendering
-- Animation playback with prefetching
+- Display pipeline with multi-buffer rendering for freeze-free playback
+- Animation playback with prefetching and robust error handling
 - **Transparency support** for WebP, GIF, and PNG with configurable background color
 - **Aspect ratio preservation** for non-square artworks
 - Touch gestures (tap, swipe, long-press, two-finger rotation)
 - Screen rotation (0°, 90°, 180°, 270°) with persistence
 - Wi-Fi provisioning with captive portal
 - Local web UI and REST API
-- **Makapix Club integration** — send artworks directly from [dev.makapix.club](https://dev.makapix.club/)
-- **TLS MQTT client** with device registration and remote control
+- **Makapix Club integration** — play individual artworks and entire channels from [dev.makapix.club](https://dev.makapix.club/)
+- **Secure MQTTS client** with device registration and remote control
 - **Over-the-Air (OTA) updates** — install firmware updates wirelessly via web UI
 - **Automatic ESP32-C6 firmware updates** for the Wi-Fi co-processor
 - USB composite device (serial console + mass storage)
 
 **Coming soon:**
-- Reactions from hardware (send likes to artworks)
+- Send "likes" to artworks with long-press gesture
+- Swipe up to view artwork comments from the Makapix community
 
 See [ROADMAP.md](docs/ROADMAP.md) for the full development plan.
 
@@ -119,12 +134,12 @@ See [ROADMAP.md](docs/ROADMAP.md) for the full development plan.
 
 ## Makapix Club integration
 
-[Makapix Club](https://makapix.club/) is a pixel-art social network. Register your p3a at [dev.makapix.club](https://dev.makapix.club/) to:
+[Makapix Club](https://makapix.club/) is a pixel-art social network where artists share their creations. Register your p3a at [dev.makapix.club](https://dev.makapix.club/) to:
 
-- **Send artworks directly** from the website to your p3a
-- Control your device remotely from anywhere
-- Receive artwork notifications via secure MQTT
-- (Coming soon) Send reactions to artworks from the device
+- **Play artworks and channels**: Stream individual artworks or entire channels (like "Promoted Artworks" or "Recent Artworks") directly to your p3a
+- **Remote control**: Control your device from anywhere via secure MQTTS (MQTT over TLS) connection
+- **Real-time updates**: Receive artwork notifications instantly
+- **Coming soon**: Send "likes" to artworks with a long-press, swipe up to view community comments
 
 ## Contributing
 

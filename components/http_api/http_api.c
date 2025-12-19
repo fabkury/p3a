@@ -359,21 +359,35 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
             ESP_LOGE(HTTP_API_TAG, "Failed to set background color: %s", esp_err_to_name(err));
         }
     } else if (strcmp(command_type, "play_channel") == 0) {
-        // Extract channel information from payload
-        // Channel switching is handled by the dedicated channel_switch_task in makapix.c
-        // makapix_request_channel_switch() is non-blocking
-        cJSON *channel = cJSON_GetObjectItem(payload, "channel");
-        cJSON *user_handle = cJSON_GetObjectItem(payload, "user_handle");
+        // Extract channel information from payload (new format)
+        // Payload contains exactly ONE of: channel_name, hashtag, or user_sqid
+        cJSON *channel_name = cJSON_GetObjectItem(payload, "channel_name");
+        cJSON *hashtag = cJSON_GetObjectItem(payload, "hashtag");
+        cJSON *user_sqid = cJSON_GetObjectItem(payload, "user_sqid");
         
-        if (channel && cJSON_IsString(channel)) {
-            const char *ch_name = cJSON_GetStringValue(channel);
-            const char *user = user_handle && cJSON_IsString(user_handle) ? cJSON_GetStringValue(user_handle) : NULL;
-            
-            ESP_LOGI(HTTP_API_TAG, "Requesting channel switch to: %s", ch_name);
-            makapix_request_channel_switch(ch_name, user);
+        const char *channel = NULL;
+        const char *identifier = NULL;
+        
+        if (channel_name && cJSON_IsString(channel_name)) {
+            // System channel: "all" or "promoted"
+            channel = cJSON_GetStringValue(channel_name);
+            ESP_LOGI(HTTP_API_TAG, "Requesting channel switch to: %s", channel);
+        } else if (hashtag && cJSON_IsString(hashtag)) {
+            // Hashtag channel
+            channel = "hashtag";
+            identifier = cJSON_GetStringValue(hashtag);
+            ESP_LOGI(HTTP_API_TAG, "Requesting channel switch to hashtag: #%s", identifier);
+        } else if (user_sqid && cJSON_IsString(user_sqid)) {
+            // User profile channel
+            channel = "by_user";
+            identifier = cJSON_GetStringValue(user_sqid);
+            ESP_LOGI(HTTP_API_TAG, "Requesting channel switch to user: %s", identifier);
         } else {
-            ESP_LOGE(HTTP_API_TAG, "Invalid play_channel payload");
+            ESP_LOGE(HTTP_API_TAG, "Invalid play_channel payload: missing channel_name, hashtag, or user_sqid");
+            return;
         }
+        
+        makapix_request_channel_switch(channel, identifier);
     } else if (strcmp(command_type, "show_artwork") == 0) {
         // Extract artwork information and show it directly
         // This creates a single-artwork channel and switches to it
@@ -875,17 +889,30 @@ static esp_err_t h_post_channel(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    cJSON *channel = cJSON_GetObjectItem(root, "channel");
-    cJSON *user_handle = cJSON_GetObjectItem(root, "user_handle");
+    // Parse new format: exactly ONE of channel_name, hashtag, or user_sqid
+    cJSON *channel_name = cJSON_GetObjectItem(root, "channel_name");
+    cJSON *hashtag = cJSON_GetObjectItem(root, "hashtag");
+    cJSON *user_sqid = cJSON_GetObjectItem(root, "user_sqid");
 
-    if (!channel || !cJSON_IsString(channel)) {
+    const char *ch_name = NULL;
+    const char *identifier = NULL;
+
+    if (channel_name && cJSON_IsString(channel_name)) {
+        // System channel: "all", "promoted", or "sdcard"
+        ch_name = cJSON_GetStringValue(channel_name);
+    } else if (hashtag && cJSON_IsString(hashtag)) {
+        // Hashtag channel
+        ch_name = "hashtag";
+        identifier = cJSON_GetStringValue(hashtag);
+    } else if (user_sqid && cJSON_IsString(user_sqid)) {
+        // User profile channel
+        ch_name = "by_user";
+        identifier = cJSON_GetStringValue(user_sqid);
+    } else {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'channel' field\",\"code\":\"INVALID_REQUEST\"}");
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing channel_name, hashtag, or user_sqid\",\"code\":\"INVALID_REQUEST\"}");
         return ESP_OK;
     }
-
-    const char *ch_name = cJSON_GetStringValue(channel);
-    const char *user = user_handle && cJSON_IsString(user_handle) ? cJSON_GetStringValue(user_handle) : NULL;
 
     esp_err_t err;
     
@@ -917,7 +944,7 @@ static esp_err_t h_post_channel(httpd_req_t *req) {
     
     // Handle Makapix channels asynchronously via the channel switch task
     // This returns immediately - the actual switch happens in background
-    err = makapix_request_channel_switch(ch_name, user);
+    err = makapix_request_channel_switch(ch_name, identifier);
     
     cJSON_Delete(root);
 

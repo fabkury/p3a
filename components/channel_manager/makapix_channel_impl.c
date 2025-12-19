@@ -552,7 +552,9 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
             return ESP_FAIL;
         }
         read_count += read;
-        // TODO: yield to other tasks here in production
+        // Yield to other tasks to prevent SDIO bus starvation
+        // (ESP32-P4 shares SDMMC controller between SD card and WiFi)
+        taskYIELD();
     }
     
     fclose(f);
@@ -1382,7 +1384,10 @@ static void refresh_task_impl(void *pvParameters)
         channel_type = MAKAPIX_CHANNEL_USER;
     } else if (strncmp(ch->channel_id, "by_user_", 8) == 0) {
         channel_type = MAKAPIX_CHANNEL_BY_USER;
-        strncpy(query_req.user_handle, ch->channel_id + 8, sizeof(query_req.user_handle) - 1);
+        strncpy(query_req.user_sqid, ch->channel_id + 8, sizeof(query_req.user_sqid) - 1);
+    } else if (strncmp(ch->channel_id, "hashtag_", 8) == 0) {
+        channel_type = MAKAPIX_CHANNEL_HASHTAG;
+        strncpy(query_req.hashtag, ch->channel_id + 8, sizeof(query_req.hashtag) - 1);
     } else if (strncmp(ch->channel_id, "artwork_", 8) == 0) {
         // Single artwork channel - handled separately
         ch->refreshing = false;

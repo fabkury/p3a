@@ -54,6 +54,7 @@ static volatile bool s_channel_loading = false;          // True while a channel
 static volatile bool s_channel_load_abort = false;       // Signal to abort current load
 static char s_loading_channel_id[128] = {0};             // Channel ID currently being loaded
 static char s_current_channel_id[128] = {0};             // Channel ID currently active (for download cancellation)
+static char s_previous_channel_id[128] = {0};            // Previous channel ID (for error fallback)
 
 // Pending channel request (set by handlers, processed by channel switch task)
 static char s_pending_channel[64] = {0};                 // Requested channel name
@@ -876,7 +877,7 @@ esp_err_t makapix_get_provisioning_status(char *out_status, size_t max_len)
     return ESP_OK;
 }
 
-esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle)
+esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
 {
     if (!channel) {
         return ESP_ERR_INVALID_ARG;
@@ -885,11 +886,17 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
     // Build channel ID
     char channel_id[128] = {0};
     if (strcmp(channel, "by_user") == 0) {
-        if (!user_handle || strlen(user_handle) == 0) {
-            ESP_LOGE(TAG, "user_handle required for by_user channel");
+        if (!identifier || strlen(identifier) == 0) {
+            ESP_LOGE(TAG, "identifier required for by_user channel");
             return ESP_ERR_INVALID_ARG;
         }
-        snprintf(channel_id, sizeof(channel_id), "by_user_%s", user_handle);
+        snprintf(channel_id, sizeof(channel_id), "by_user_%s", identifier);
+    } else if (strcmp(channel, "hashtag") == 0) {
+        if (!identifier || strlen(identifier) == 0) {
+            ESP_LOGE(TAG, "identifier required for hashtag channel");
+            return ESP_ERR_INVALID_ARG;
+        }
+        snprintf(channel_id, sizeof(channel_id), "hashtag_%s", identifier);
     } else {
         strncpy(channel_id, channel, sizeof(channel_id) - 1);
     }
@@ -909,7 +916,9 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
     } else if (strcmp(channel, "user") == 0) {
         strcpy(channel_name, "My Artworks");
     } else if (strcmp(channel, "by_user") == 0) {
-        snprintf(channel_name, sizeof(channel_name), "%s's Artworks", user_handle);
+        snprintf(channel_name, sizeof(channel_name), "@%s's Artworks", identifier);
+    } else if (strcmp(channel, "hashtag") == 0) {
+        snprintf(channel_name, sizeof(channel_name), "#%s", identifier);
     } else {
         size_t copy_len = strlen(channel_id);
         if (copy_len >= sizeof(channel_name)) copy_len = sizeof(channel_name) - 1;
@@ -922,6 +931,10 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
         ESP_LOGI(TAG, "Cancelling downloads for previous channel: %s", s_current_channel_id);
         download_manager_cancel_channel(s_current_channel_id);
     }
+    
+    // Store previous channel ID for error fallback
+    strncpy(s_previous_channel_id, s_current_channel_id, sizeof(s_previous_channel_id) - 1);
+    s_previous_channel_id[sizeof(s_previous_channel_id) - 1] = '\0';
     
     // Mark channel as loading (clear any previous abort state)
     s_channel_loading = true;
@@ -1087,9 +1100,20 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
         
         // Handle timeout (no artwork available after waiting)
         if (!got_artwork) {
-            ESP_LOGW(TAG, "Timed out waiting for first artwork");
-            p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_EMPTY, -1, 
-                                           "No artworks available yet");
+            ESP_LOGW(TAG, "Timed out waiting for first artwork - showing error message");
+            
+            // Display error message for 5 seconds
+            char error_msg[128];
+            snprintf(error_msg, sizeof(error_msg), "Channel '%s' unavailable", channel_name);
+            ugfx_ui_show_channel_message("Error", error_msg, -1);
+            p3a_render_set_channel_message("Error", P3A_CHANNEL_MSG_ERROR, -1, error_msg);
+            
+            vTaskDelay(pdMS_TO_TICKS(5000));  // Wait 5 seconds
+            
+            // Clear error message
+            ugfx_ui_hide_channel_message();
+            p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
+            
             download_manager_cancel_channel(channel_id);
             channel_player_clear_channel(s_current_channel);
             channel_destroy(s_current_channel);
@@ -1098,12 +1122,33 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
             s_loading_channel_id[0] = '\0';
             s_current_channel_id[0] = '\0';
             
+            // Check for pending channel first
             char pending_ch[64] = {0};
             char pending_user[64] = {0};
             if (makapix_get_pending_channel(pending_ch, sizeof(pending_ch), pending_user, sizeof(pending_user))) {
                 makapix_clear_pending_channel();
                 return makapix_switch_to_channel(pending_ch, pending_user[0] ? pending_user : NULL);
             }
+            
+            // Fall back to previous channel if available
+            if (s_previous_channel_id[0] != '\0') {
+                ESP_LOGI(TAG, "Falling back to previous channel: %s", s_previous_channel_id);
+                // Parse previous channel to extract channel type and identifier
+                char prev_channel[64] = {0};
+                char prev_identifier[64] = {0};
+                if (strncmp(s_previous_channel_id, "by_user_", 8) == 0) {
+                    snprintf(prev_channel, sizeof(prev_channel), "by_user");
+                    snprintf(prev_identifier, sizeof(prev_identifier), "%.63s", s_previous_channel_id + 8);
+                } else if (strncmp(s_previous_channel_id, "hashtag_", 8) == 0) {
+                    snprintf(prev_channel, sizeof(prev_channel), "hashtag");
+                    snprintf(prev_identifier, sizeof(prev_identifier), "%.63s", s_previous_channel_id + 8);
+                } else {
+                    snprintf(prev_channel, sizeof(prev_channel), "%.63s", s_previous_channel_id);
+                }
+                return makapix_switch_to_channel(prev_channel, prev_identifier[0] ? prev_identifier : NULL);
+            }
+            
+            // No previous channel - fall back to SD card
             p3a_state_fallback_to_sdcard();
             return ESP_ERR_NOT_FOUND;
         }
@@ -1156,7 +1201,9 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle
     } else if (strcmp(channel, "user") == 0) {
         (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_USER, NULL);
     } else if (strcmp(channel, "by_user") == 0) {
-        (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_BY_USER, user_handle);
+        (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_BY_USER, identifier);
+    } else if (strcmp(channel, "hashtag") == 0) {
+        (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_HASHTAG, identifier);
     } else {
         ESP_LOGW(TAG, "Not persisting unknown channel key: %s", channel);
     }
@@ -1264,7 +1311,7 @@ void makapix_abort_channel_load(void)
     }
 }
 
-esp_err_t makapix_request_channel_switch(const char *channel, const char *user_handle)
+esp_err_t makapix_request_channel_switch(const char *channel, const char *identifier)
 {
     if (!channel) {
         return ESP_ERR_INVALID_ARG;
@@ -1272,8 +1319,10 @@ esp_err_t makapix_request_channel_switch(const char *channel, const char *user_h
     
     // Build channel_id for comparison
     char new_channel_id[128] = {0};
-    if (strcmp(channel, "by_user") == 0 && user_handle) {
-        snprintf(new_channel_id, sizeof(new_channel_id), "by_user_%s", user_handle);
+    if (strcmp(channel, "by_user") == 0 && identifier) {
+        snprintf(new_channel_id, sizeof(new_channel_id), "by_user_%s", identifier);
+    } else if (strcmp(channel, "hashtag") == 0 && identifier) {
+        snprintf(new_channel_id, sizeof(new_channel_id), "hashtag_%s", identifier);
     } else {
         strncpy(new_channel_id, channel, sizeof(new_channel_id) - 1);
     }
@@ -1290,8 +1339,8 @@ esp_err_t makapix_request_channel_switch(const char *channel, const char *user_h
     strncpy(s_pending_channel, channel, sizeof(s_pending_channel) - 1);
     s_pending_channel[sizeof(s_pending_channel) - 1] = '\0';
     
-    if (user_handle) {
-        strncpy(s_pending_user_handle, user_handle, sizeof(s_pending_user_handle) - 1);
+    if (identifier) {
+        strncpy(s_pending_user_handle, identifier, sizeof(s_pending_user_handle) - 1);
         s_pending_user_handle[sizeof(s_pending_user_handle) - 1] = '\0';
     } else {
         s_pending_user_handle[0] = '\0';

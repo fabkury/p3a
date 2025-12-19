@@ -1,6 +1,6 @@
 # p3a — Physical Pixel Art Player
 
-p3a is a Wi-Fi pixel art player that connects to [Makapix Club](https://makapix.club/), a pixel art social network. Play individual artworks or entire channels (like "Promoted Artworks" or "Recent Artworks") directly from the website to your device. Built on the ESP32-P4, it's a smart art frame you can control from anywhere—via touchscreen, web browser, REST API, or securely through Makapix Club's MQTTS backend. Register your p3a at [dev.makapix.club](https://dev.makapix.club/) for cloud connectivity.
+p3a is a Wi-Fi pixel art player that connects to [Makapix Club](https://makapix.club/), a pixel art social network. Play individual artworks or entire channels directly from the website to your device. Built on the ESP32-P4, it's a smart art frame you can control from anywhere—via touchscreen, web browser, REST API, or securely through Makapix Club's MQTTS backend. Register your p3a at [dev.makapix.club](https://dev.makapix.club/) for cloud connectivity.
 
 ## Hardware photos
 <p>
@@ -10,11 +10,11 @@ p3a is a Wi-Fi pixel art player that connects to [Makapix Club](https://makapix.
 
 ## Quick start
 
-1. **Get the hardware**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) + microSD card
+1. **Get the hardware**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) + [microSD card](https://www.waveshare.com/micro-sd-card-16gb-kawau.htm?sku=18191)
 2. **Flash the firmware**: Follow the [flashing guide](docs/flash-p3a.md) (5 min, requires Python + USB cable)
-3. **Add artwork**: Copy WebP/GIF/PNG/JPEG files to an `animations` folder on the microSD card
-4. **Connect to Wi-Fi**: On first boot, connect to `p3a-setup` network and configure your Wi-Fi
-5. **Control it**: Open `http://p3a.local/` on your phone or tap the touchscreen
+3. **Connect to Wi-Fi**: On first boot, connect to the `p3a-setup` network and configure your Wi-Fi
+4. **Register it at Makapix Club**: Long press on the screen and follow the instructions
+5. **Send art to it**: Browse https://dev.makapix.club/ and securely send artworks to your p3a
 
 > **Note:** The initial flash requires a command-line tool. After that, all updates are wireless via the web UI.
 
@@ -24,16 +24,16 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 
 ### Makapix Club Integration
 
-- **Play artworks and channels**: Stream individual artworks or entire channels (e.g., "Promoted Artworks", "Recent Artworks") directly from [Makapix Club](https://makapix.club/) to your p3a
+- **Play artworks and channels**: Play individual artworks or entire channels (e.g., "Promoted Artworks", "Recent Artworks") directly from [Makapix Club](https://makapix.club/) to your p3a
 - **4 ways to control**: Touchscreen, local web UI at `http://p3a.local/`, REST API, or remotely via Makapix Club's secure MQTTS (MQTT over TLS) backend
 - **Cloud connectivity**: Register your device at [dev.makapix.club](https://dev.makapix.club/) to unlock remote control from anywhere
-- **Coming soon**: Send "likes" to artworks with a long-press, swipe up to view artwork comments from the Makapix community
+- **Coming soon**: Send a "like" to the artwork by touching the screen, swipe up to view artwork comments from the Makapix community
 
 ### Seamless Playback
 
 - **Freeze-free, gapless playback**: Robust multi-buffer rendering handles animations smoothly, even with corrupt or problematic files
-- **Full format support**: Animated WebP and GIF, still PNG and JPEG—all with complete transparency and alpha channel support
-- **Aspect ratio preservation**: Non-square artworks display without distortion, properly centered with configurable background colors
+- **Full format support**: Animated WebP and GIF, and still PNG all with transparency and alpha channel support, plus full JPEG support 
+- **Aspect ratio preservation**: Non-square artworks display without distortion, properly centered with configurable background color
 
 ### Control & Customization
 
@@ -44,7 +44,7 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 
 ### Hardware & Connectivity
 
-- **USB access**: Connect via USB-C to access the microSD card as a storage device
+- **USB access**: Connect via USB-C to access the microSD card as a storage device. Copy you own private, offline files to p3a
 - **Auto co-processor updates**: p3a automatically flashes the ESP32-C6 Wi-Fi 6 co-processor firmware when needed
 - **PICO-8 Monitor** (optional): Stream PICO-8 games to the display—disabled by default to reduce firmware size, can be enabled at compile time
 
@@ -92,19 +92,19 @@ After the initial firmware flash via USB-C cable, all subsequent updates can be 
 
 ## Current status
 
-p3a is in active development with **nearly complete Makapix Club support**. The following features are implemented:
+p3a is in active development. The following features are implemented:
 
 - Display pipeline with multi-buffer rendering for freeze-free playback
 - Animation playback with prefetching and robust error handling
-- **Transparency support** for WebP, GIF, and PNG with configurable background color
+- **Transparency & alpha channel support** for WebP, GIF, and PNG with configurable background color
 - **Aspect ratio preservation** for non-square artworks
 - Touch gestures (tap, swipe, long-press, two-finger rotation)
 - Screen rotation (0°, 90°, 180°, 270°) with persistence
-- Wi-Fi provisioning with captive portal
-- Local web UI and REST API
+- Wi-Fi provisioning with captive portal and mDNS (http://p3a.local/)
+- Local web UI and REST API, also with mDNS
 - **Makapix Club integration** — play individual artworks and entire channels from [dev.makapix.club](https://dev.makapix.club/)
-- **Secure MQTTS client** with device registration and remote control
-- **Over-the-Air (OTA) updates** — install firmware updates wirelessly via web UI
+- **Secure mTLS MQTT client** for device registration and remote control
+- **Over-the-Air (OTA) updates** — install firmware updates wirelessly via web UI with integrity verification and full rollback support 
 - **Automatic ESP32-C6 firmware updates** for the Wi-Fi co-processor
 - USB composite device (serial console + mass storage)
 

@@ -114,6 +114,7 @@ typedef enum {
     P3A_CHANNEL_MAKAPIX_PROMOTED,   ///< Makapix "promoted" channel
     P3A_CHANNEL_MAKAPIX_USER,       ///< Makapix "user" (following) channel
     P3A_CHANNEL_MAKAPIX_BY_USER,    ///< Makapix "by_user" channel (specific artist)
+    P3A_CHANNEL_MAKAPIX_HASHTAG,    ///< Makapix "hashtag" channel (specific hashtag)
     P3A_CHANNEL_MAKAPIX_ARTWORK,    ///< Transient single-artwork channel
 } p3a_channel_type_t;
 
@@ -122,7 +123,7 @@ typedef enum {
  */
 typedef struct {
     p3a_channel_type_t type;
-    char user_handle[64];           ///< For BY_USER channel
+    char identifier[64];            ///< For BY_USER (user_sqid) or HASHTAG (hashtag) channels
     char storage_key[64];           ///< For ARTWORK channel
     char display_name[64];          ///< Human-readable channel name
 } p3a_channel_info_t;
@@ -298,7 +299,7 @@ void p3a_state_set_ota_progress(int percent, const char *status_text);
  * @param user_handle User handle (required for BY_USER, ignored otherwise)
  * @return ESP_OK on success
  */
-esp_err_t p3a_state_switch_channel(p3a_channel_type_t type, const char *user_handle);
+esp_err_t p3a_state_switch_channel(p3a_channel_type_t type, const char *identifier);
 
 /**
  * @brief Switch to single-artwork channel (for show_artwork command)

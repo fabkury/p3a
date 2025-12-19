@@ -533,6 +533,37 @@ esp_err_t enumerate_animation_files(const char *dir_path)
     return err;
 }
 
+/**
+ * @brief Chunk size for SD card reads
+ * 
+ * SDIO Bus Contention Avoidance:
+ * ==============================
+ * The ESP32-P4 shares the SDMMC controller between SD card (Slot 0) and 
+ * WiFi (SDIO Slot 1 via ESP-Hosted). Reading large files in one blocking 
+ * fread() can starve WiFi traffic and cause "not enough mem" errors or 
+ * SDIO slave unresponsive crashes.
+ * 
+ * Solution: Read in smaller chunks with brief yields between chunks.
+ * This allows WiFi SDIO traffic to interleave with SD card access.
+ * 
+ * 64KB provides a good balance:
+ * - Large enough for efficient SD card throughput
+ * - Small enough to yield frequently for WiFi traffic
+ */
+#define SD_READ_CHUNK_SIZE (64 * 1024)
+
+/**
+ * @brief Maximum retries for SD card read operations
+ * 
+ * When SDIO bus contention causes read failures, we retry with backoff.
+ */
+#define SD_READ_MAX_RETRIES 3
+
+/**
+ * @brief Delay between retry attempts (ms)
+ */
+#define SD_READ_RETRY_DELAY_MS 50
+
 static esp_err_t load_animation_file_from_sd(const char *filepath, uint8_t **data_out, size_t *size_out)
 {
     FILE *f = fopen(filepath, "rb");
@@ -561,11 +592,65 @@ static esp_err_t load_animation_file_from_sd(const char *filepath, uint8_t **dat
         }
     }
 
-    size_t bytes_read = fread(buffer, 1, (size_t)file_size, f);
+    // =========================================================================
+    // CHUNKED READ WITH YIELDS - SDIO Bus Contention Avoidance
+    // =========================================================================
+    // Read in smaller chunks with brief yields between chunks to allow
+    // WiFi SDIO traffic to interleave with SD card access. This prevents
+    // "not enough mem" errors from DMA buffer exhaustion.
+    // =========================================================================
+    
+    size_t total_read = 0;
+    size_t remaining = (size_t)file_size;
+    int retry_count = 0;
+    
+    while (remaining > 0) {
+        size_t chunk_size = (remaining < SD_READ_CHUNK_SIZE) ? remaining : SD_READ_CHUNK_SIZE;
+        
+        size_t bytes_read = fread(buffer + total_read, 1, chunk_size, f);
+        
+        if (bytes_read == 0) {
+            // Check for read error vs EOF
+            if (ferror(f)) {
+                if (retry_count < SD_READ_MAX_RETRIES) {
+                    // Retry with backoff - SDIO bus may be congested
+                    retry_count++;
+                    ESP_LOGW(TAG, "SD read error at offset %zu, retry %d/%d", 
+                             total_read, retry_count, SD_READ_MAX_RETRIES);
+                    clearerr(f);
+                    vTaskDelay(pdMS_TO_TICKS(SD_READ_RETRY_DELAY_MS * retry_count));
+                    continue;
+                }
+                ESP_LOGE(TAG, "SD read failed after %d retries at offset %zu", 
+                         SD_READ_MAX_RETRIES, total_read);
+                fclose(f);
+                free(buffer);
+                return ESP_ERR_INVALID_SIZE;
+            }
+            // Unexpected EOF
+            ESP_LOGE(TAG, "Unexpected EOF: read %zu of %ld bytes", total_read, file_size);
+            fclose(f);
+            free(buffer);
+            return ESP_ERR_INVALID_SIZE;
+        }
+        
+        total_read += bytes_read;
+        remaining -= bytes_read;
+        retry_count = 0;  // Reset retry count on successful read
+        
+        // Yield briefly between chunks to allow WiFi SDIO traffic
+        // Only yield if there's more data to read and we've read a full chunk
+        if (remaining > 0 && bytes_read == chunk_size) {
+            // Brief yield (1 tick) to allow SDIO traffic to proceed
+            // This prevents bus starvation without significantly impacting throughput
+            taskYIELD();
+        }
+    }
+    
     fclose(f);
 
-    if (bytes_read != (size_t)file_size) {
-        ESP_LOGE(TAG, "Failed to read complete file: read %zu of %ld bytes", bytes_read, file_size);
+    if (total_read != (size_t)file_size) {
+        ESP_LOGE(TAG, "Failed to read complete file: read %zu of %ld bytes", total_read, file_size);
         free(buffer);
         return ESP_ERR_INVALID_SIZE;
     }

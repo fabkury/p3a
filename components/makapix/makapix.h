@@ -190,7 +190,7 @@ void makapix_abort_channel_load(void);
  * @param user_handle User handle (required when channel is "by_user")
  * @return ESP_OK on success
  */
-esp_err_t makapix_request_channel_switch(const char *channel, const char *user_handle);
+esp_err_t makapix_request_channel_switch(const char *channel, const char *identifier);
 
 /**
  * @brief Check if there's a pending channel request

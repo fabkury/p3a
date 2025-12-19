@@ -17,7 +17,7 @@ static const char *TAG = "p3a_state";
 // NVS storage
 #define NVS_NAMESPACE "p3a_state"
 #define NVS_KEY_CHANNEL_TYPE "ch_type"
-#define NVS_KEY_CHANNEL_USER "ch_user"
+#define NVS_KEY_CHANNEL_IDENT "ch_ident"
 #define NVS_KEY_LAST_STATE "last_state"
 
 // Maximum callbacks
@@ -89,6 +89,7 @@ static const char *channel_type_to_string(p3a_channel_type_t type)
         case P3A_CHANNEL_MAKAPIX_PROMOTED: return "promoted";
         case P3A_CHANNEL_MAKAPIX_USER: return "user";
         case P3A_CHANNEL_MAKAPIX_BY_USER: return "by_user";
+        case P3A_CHANNEL_MAKAPIX_HASHTAG: return "hashtag";
         case P3A_CHANNEL_MAKAPIX_ARTWORK: return "artwork";
         default: return "unknown";
     }
@@ -101,6 +102,7 @@ static p3a_channel_type_t string_to_channel_type(const char *str)
     if (strcmp(str, "promoted") == 0) return P3A_CHANNEL_MAKAPIX_PROMOTED;
     if (strcmp(str, "user") == 0) return P3A_CHANNEL_MAKAPIX_USER;
     if (strcmp(str, "by_user") == 0) return P3A_CHANNEL_MAKAPIX_BY_USER;
+    if (strcmp(str, "hashtag") == 0) return P3A_CHANNEL_MAKAPIX_HASHTAG;
     if (strcmp(str, "artwork") == 0) return P3A_CHANNEL_MAKAPIX_ARTWORK;
     return P3A_CHANNEL_SDCARD;
 }
@@ -121,8 +123,12 @@ static void update_channel_display_name(p3a_channel_info_t *info)
             snprintf(info->display_name, sizeof(info->display_name), "Makapix: Following");
             break;
         case P3A_CHANNEL_MAKAPIX_BY_USER:
-            // "Makapix: @" is 11 bytes, so we have 64 - 11 = 53 bytes for user_handle
-            snprintf(info->display_name, sizeof(info->display_name), "Makapix: @%.53s", info->user_handle);
+            // "Makapix: @" is 11 bytes, so we have 64 - 11 = 53 bytes for identifier
+            snprintf(info->display_name, sizeof(info->display_name), "Makapix: @%.53s", info->identifier);
+            break;
+        case P3A_CHANNEL_MAKAPIX_HASHTAG:
+            // "Makapix: #" is 11 bytes, so we have 64 - 11 = 53 bytes for identifier
+            snprintf(info->display_name, sizeof(info->display_name), "Makapix: #%.53s", info->identifier);
             break;
         case P3A_CHANNEL_MAKAPIX_ARTWORK:
             snprintf(info->display_name, sizeof(info->display_name), "Single Artwork");
@@ -205,10 +211,11 @@ esp_err_t p3a_state_persist_channel(void)
         ESP_LOGW(TAG, "Failed to save channel type: %s", esp_err_to_name(err));
     }
     
-    if (channel_copy.type == P3A_CHANNEL_MAKAPIX_BY_USER) {
-        err = nvs_set_str(handle, NVS_KEY_CHANNEL_USER, channel_copy.user_handle);
+    if (channel_copy.type == P3A_CHANNEL_MAKAPIX_BY_USER || 
+        channel_copy.type == P3A_CHANNEL_MAKAPIX_HASHTAG) {
+        err = nvs_set_str(handle, NVS_KEY_CHANNEL_IDENT, channel_copy.identifier);
         if (err != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to save user handle: %s", esp_err_to_name(err));
+            ESP_LOGW(TAG, "Failed to save channel identifier: %s", esp_err_to_name(err));
         }
     }
     
@@ -229,7 +236,7 @@ esp_err_t p3a_state_load_channel(p3a_channel_info_t *out_info)
         // No saved channel - default to SD card
         ESP_LOGI(TAG, "No saved channel, defaulting to SD card");
         out_info->type = P3A_CHANNEL_SDCARD;
-        memset(out_info->user_handle, 0, sizeof(out_info->user_handle));
+        memset(out_info->identifier, 0, sizeof(out_info->identifier));
         memset(out_info->storage_key, 0, sizeof(out_info->storage_key));
         update_channel_display_name(out_info);
         return ESP_OK;
@@ -244,16 +251,17 @@ esp_err_t p3a_state_load_channel(p3a_channel_info_t *out_info)
         out_info->type = P3A_CHANNEL_SDCARD;
     }
     
-    if (out_info->type == P3A_CHANNEL_MAKAPIX_BY_USER) {
-        len = sizeof(out_info->user_handle);
-        err = nvs_get_str(handle, NVS_KEY_CHANNEL_USER, out_info->user_handle, &len);
+    if (out_info->type == P3A_CHANNEL_MAKAPIX_BY_USER || 
+        out_info->type == P3A_CHANNEL_MAKAPIX_HASHTAG) {
+        len = sizeof(out_info->identifier);
+        err = nvs_get_str(handle, NVS_KEY_CHANNEL_IDENT, out_info->identifier, &len);
         if (err != ESP_OK) {
-            // Invalid by_user channel without user - fall back to SD card
+            // Invalid channel without identifier - fall back to SD card
             out_info->type = P3A_CHANNEL_SDCARD;
-            memset(out_info->user_handle, 0, sizeof(out_info->user_handle));
+            memset(out_info->identifier, 0, sizeof(out_info->identifier));
         }
     } else {
-        memset(out_info->user_handle, 0, sizeof(out_info->user_handle));
+        memset(out_info->identifier, 0, sizeof(out_info->identifier));
     }
     
     memset(out_info->storage_key, 0, sizeof(out_info->storage_key));
@@ -591,7 +599,7 @@ void p3a_state_set_ota_progress(int percent, const char *status_text)
 // Channel Management
 // ============================================================================
 
-esp_err_t p3a_state_switch_channel(p3a_channel_type_t type, const char *user_handle)
+esp_err_t p3a_state_switch_channel(p3a_channel_type_t type, const char *identifier)
 {
     if (!s_state.initialized) return ESP_ERR_INVALID_STATE;
     
@@ -602,11 +610,11 @@ esp_err_t p3a_state_switch_channel(p3a_channel_type_t type, const char *user_han
     // Update channel info
     s_state.current_channel.type = type;
     
-    if (user_handle && type == P3A_CHANNEL_MAKAPIX_BY_USER) {
-        snprintf(s_state.current_channel.user_handle, sizeof(s_state.current_channel.user_handle),
-                 "%s", user_handle);
+    if (identifier && (type == P3A_CHANNEL_MAKAPIX_BY_USER || type == P3A_CHANNEL_MAKAPIX_HASHTAG)) {
+        snprintf(s_state.current_channel.identifier, sizeof(s_state.current_channel.identifier),
+                 "%s", identifier);
     } else {
-        memset(s_state.current_channel.user_handle, 0, sizeof(s_state.current_channel.user_handle));
+        memset(s_state.current_channel.identifier, 0, sizeof(s_state.current_channel.identifier));
     }
     
     memset(s_state.current_channel.storage_key, 0, sizeof(s_state.current_channel.storage_key));
@@ -634,7 +642,7 @@ esp_err_t p3a_state_show_artwork(const char *storage_key, const char *art_url, i
     
     // Create transient artwork channel
     s_state.current_channel.type = P3A_CHANNEL_MAKAPIX_ARTWORK;
-    memset(s_state.current_channel.user_handle, 0, sizeof(s_state.current_channel.user_handle));
+    memset(s_state.current_channel.identifier, 0, sizeof(s_state.current_channel.identifier));
     snprintf(s_state.current_channel.storage_key, sizeof(s_state.current_channel.storage_key),
              "%s", storage_key);
     update_channel_display_name(&s_state.current_channel);

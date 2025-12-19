@@ -248,9 +248,13 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
             snprintf(mk_channel_id, sizeof(mk_channel_id), "user");
             snprintf(mk_channel_name, sizeof(mk_channel_name), "My Artworks");
             want_makapix = true;
-        } else if (saved.type == P3A_CHANNEL_MAKAPIX_BY_USER && saved.user_handle[0] != '\0') {
-            snprintf(mk_channel_id, sizeof(mk_channel_id), "by_user_%s", saved.user_handle);
-            snprintf(mk_channel_name, sizeof(mk_channel_name), "%s's Artworks", saved.user_handle);
+        } else if (saved.type == P3A_CHANNEL_MAKAPIX_BY_USER && saved.identifier[0] != '\0') {
+            snprintf(mk_channel_id, sizeof(mk_channel_id), "by_user_%s", saved.identifier);
+            snprintf(mk_channel_name, sizeof(mk_channel_name), "@%s's Artworks", saved.identifier);
+            want_makapix = true;
+        } else if (saved.type == P3A_CHANNEL_MAKAPIX_HASHTAG && saved.identifier[0] != '\0') {
+            snprintf(mk_channel_id, sizeof(mk_channel_id), "hashtag_%s", saved.identifier);
+            snprintf(mk_channel_name, sizeof(mk_channel_name), "#%s", saved.identifier);
             want_makapix = true;
         }
     }

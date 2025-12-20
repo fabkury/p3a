@@ -2,32 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>p3a Web Flasher</title>
+    <title>p3a Web Flasher — Not Available</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Flash your p3a Physical Pixel Art Player directly from your browser" />
+    <meta name="description" content="p3a web flasher - currently unavailable for ESP32-P4" />
     <link rel="icon" href="favicon.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <style>
       :root {
         --bg-deep: #0d1117;
         --bg-card: #161b22;
-        --bg-elevated: #21262d;
-        --bg-input: #0d1117;
-        --accent: #58a6ff;
-        --accent-bright: #79c0ff;
-        --accent-glow: rgba(88, 166, 255, 0.15);
-        --success: #3fb950;
-        --success-glow: rgba(63, 185, 80, 0.15);
-        --warning: #d29922;
-        --error: #f85149;
-        --error-glow: rgba(248, 81, 73, 0.15);
         --text: #e6edf3;
         --text-secondary: #8b949e;
         --text-muted: #6e7681;
+        --accent: #58a6ff;
         --border: #30363d;
-        --border-accent: #388bfd;
+        --warning: #d29922;
       }
 
       * {
@@ -36,33 +27,19 @@
         padding: 0;
       }
 
-      html {
-        font-size: 16px;
-      }
-
       body {
-        font-family: "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: "Noto Sans", -apple-system, BlinkMacSystemFont, sans-serif;
         background: var(--bg-deep);
         color: var(--text);
         min-height: 100vh;
         line-height: 1.6;
-        background-image: 
-          radial-gradient(ellipse at 20% 0%, rgba(88, 166, 255, 0.08) 0%, transparent 50%),
-          radial-gradient(ellipse at 80% 100%, rgba(63, 185, 80, 0.05) 0%, transparent 40%);
       }
 
       .container {
-        max-width: 720px;
+        max-width: 600px;
         margin: 0 auto;
-        padding: 2rem 1.5rem 4rem;
-      }
-
-      /* Header */
-      header {
+        padding: 3rem 1.5rem;
         text-align: center;
-        margin-bottom: 2rem;
-        padding-bottom: 2rem;
-        border-bottom: 1px solid var(--border);
       }
 
       .logo-container {
@@ -70,886 +47,96 @@
         align-items: center;
         justify-content: center;
         gap: 1rem;
-        margin-bottom: 0.75rem;
+        margin-bottom: 2rem;
       }
 
       .logo-img {
         width: 64px;
         height: 64px;
         image-rendering: pixelated;
-        filter: drop-shadow(0 0 8px rgba(88, 166, 255, 0.3));
       }
 
       .logo-text {
         font-family: "Noto Sans Mono", monospace;
         font-size: 2.5rem;
         font-weight: 700;
-        color: var(--text);
-        letter-spacing: -0.02em;
       }
 
-      .tagline {
-        color: var(--text-secondary);
-        font-size: 1.1rem;
-        font-weight: 400;
-      }
-
-      /* Browser Support Warning */
-      .browser-warning {
-        display: none;
-        background: var(--error-glow);
-        border: 1px solid var(--error);
-        border-radius: 8px;
-        padding: 1rem 1.25rem;
-        margin-bottom: 1.5rem;
-        text-align: center;
-      }
-
-      .browser-warning.show {
-        display: block;
-      }
-
-      .browser-warning h3 {
-        color: var(--error);
-        font-size: 1rem;
-        margin-bottom: 0.5rem;
-      }
-
-      .browser-warning p {
-        color: var(--text-secondary);
-        font-size: 0.9rem;
-        margin: 0;
-      }
-
-      /* Cards */
-      .card {
+      .status-card {
         background: var(--bg-card);
         border: 1px solid var(--border);
         border-radius: 12px;
-        padding: 1.5rem;
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+      }
+
+      h1 {
+        color: var(--warning);
+        font-size: 1.5rem;
         margin-bottom: 1rem;
       }
 
-      .card-header {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        margin-bottom: 1rem;
-      }
-
-      .card-header h2 {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: var(--text);
-      }
-
-      .step-number {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 28px;
-        height: 28px;
-        background: var(--bg-elevated);
-        border: 1px solid var(--border);
-        border-radius: 50%;
-        font-family: "Noto Sans Mono", monospace;
-        font-size: 0.85rem;
-        font-weight: 600;
+      p {
         color: var(--text-secondary);
-        flex-shrink: 0;
+        margin-bottom: 1rem;
       }
 
-      .step-number.active {
-        background: var(--accent-glow);
-        border-color: var(--accent);
-        color: var(--accent);
-      }
-
-      .step-number.complete {
-        background: var(--success-glow);
-        border-color: var(--success);
-        color: var(--success);
-      }
-
-      /* Buttons */
       .btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        font-family: "Noto Sans", sans-serif;
-        font-size: 0.95rem;
-        font-weight: 500;
-        padding: 0.75rem 1.25rem;
-        border-radius: 8px;
-        border: 1px solid transparent;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        text-decoration: none;
-      }
-
-      .btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-
-      .btn-primary {
+        display: inline-block;
         background: var(--accent);
         color: var(--bg-deep);
-        border-color: var(--accent);
+        font-weight: 600;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        text-decoration: none;
+        margin-top: 1rem;
       }
 
-      .btn-primary:hover:not(:disabled) {
-        background: var(--accent-bright);
-        border-color: var(--accent-bright);
-      }
-
-      .btn-secondary {
-        background: var(--bg-elevated);
-        color: var(--text);
-        border-color: var(--border);
-      }
-
-      .btn-secondary:hover:not(:disabled) {
-        background: var(--bg-card);
-        border-color: var(--text-muted);
-      }
-
-      .btn-danger {
-        background: var(--error);
-        color: white;
-        border-color: var(--error);
-      }
-
-      .btn-danger:hover:not(:disabled) {
+      .btn:hover {
         opacity: 0.9;
       }
 
-      .btn-full {
-        width: 100%;
-      }
-
-      /* Status Indicators */
-      .status-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        font-size: 0.8rem;
-        font-weight: 500;
-        padding: 0.25rem 0.6rem;
-        border-radius: 20px;
-        background: var(--bg-elevated);
-        color: var(--text-secondary);
-      }
-
-      .status-badge.connected {
-        background: var(--success-glow);
-        color: var(--success);
-      }
-
-      .status-badge.error {
-        background: var(--error-glow);
-        color: var(--error);
-      }
-
-      .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: currentColor;
-      }
-
-      /* Connection Card */
-      .connection-info {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem 1.5rem;
-        margin-top: 1rem;
-        padding-top: 1rem;
-        border-top: 1px solid var(--border);
-      }
-
-      .info-item {
-        display: flex;
-        flex-direction: column;
-        gap: 0.15rem;
-      }
-
-      .info-label {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-      }
-
-      .info-value {
-        font-family: "Noto Sans Mono", monospace;
-        font-size: 0.9rem;
-        color: var(--text);
-      }
-
-      /* Firmware Source Selection */
-      .source-options {
-        display: flex;
-        gap: 0.75rem;
-        margin-bottom: 1rem;
-      }
-
-      .source-option {
-        flex: 1;
-        padding: 0.85rem 1rem;
-        background: var(--bg-input);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        text-align: center;
-      }
-
-      .source-option:hover {
-        border-color: var(--text-muted);
-      }
-
-      .source-option.selected {
-        border-color: var(--accent);
-        background: var(--accent-glow);
-      }
-
-      .source-option input {
-        display: none;
-      }
-
-      .source-option-label {
-        font-weight: 500;
-        color: var(--text);
-        display: block;
-        margin-bottom: 0.2rem;
-      }
-
-      .source-option-desc {
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-      }
-
-      /* Version Select */
-      .version-select-container {
-        margin-bottom: 1rem;
-      }
-
-      .version-select-container label {
-        display: block;
+      .technical-note {
         font-size: 0.85rem;
-        color: var(--text-secondary);
-        margin-bottom: 0.5rem;
-      }
-
-      .version-select {
-        width: 100%;
-        padding: 0.7rem 1rem;
-        font-family: "Noto Sans", sans-serif;
-        font-size: 0.95rem;
-        background: var(--bg-input);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        color: var(--text);
-        cursor: pointer;
-        appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 0.75rem center;
-        padding-right: 2.5rem;
-      }
-
-      .version-select:focus {
-        outline: none;
-        border-color: var(--accent);
-      }
-
-      /* File Input */
-      .file-drop-zone {
-        border: 2px dashed var(--border);
-        border-radius: 8px;
-        padding: 2rem;
-        text-align: center;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        margin-bottom: 1rem;
-      }
-
-      .file-drop-zone:hover,
-      .file-drop-zone.dragover {
-        border-color: var(--accent);
-        background: var(--accent-glow);
-      }
-
-      .file-drop-zone p {
-        color: var(--text-secondary);
-        margin-bottom: 0.5rem;
-      }
-
-      .file-drop-zone small {
         color: var(--text-muted);
-        font-size: 0.8rem;
+        margin-top: 2rem;
       }
 
-      .file-drop-zone input {
-        display: none;
-      }
-
-      /* Firmware Status */
-      .firmware-status {
-        background: var(--bg-elevated);
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-      }
-
-      .firmware-file {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0.5rem 0;
-        border-bottom: 1px solid var(--border);
-      }
-
-      .firmware-file:last-child {
-        border-bottom: none;
-      }
-
-      .firmware-file-name {
-        font-family: "Noto Sans Mono", monospace;
-        font-size: 0.85rem;
-        color: var(--text);
-      }
-
-      .firmware-file-status {
-        font-size: 0.8rem;
-        color: var(--text-muted);
-      }
-
-      .firmware-file-status.loaded {
-        color: var(--success);
-      }
-
-      /* Progress Section */
-      .progress-section {
-        margin-top: 1rem;
-      }
-
-      .progress-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 0.5rem;
-      }
-
-      .progress-label {
-        font-size: 0.9rem;
-        color: var(--text-secondary);
-      }
-
-      .progress-percent {
-        font-family: "Noto Sans Mono", monospace;
-        font-size: 0.85rem;
-        color: var(--accent);
-      }
-
-      .progress-bar-container {
-        height: 8px;
-        background: var(--bg-elevated);
-        border-radius: 4px;
-        overflow: hidden;
-      }
-
-      .progress-bar {
-        height: 100%;
-        background: linear-gradient(90deg, var(--accent) 0%, var(--success) 100%);
-        border-radius: 4px;
-        transition: width 0.2s ease;
-        width: 0%;
-      }
-
-      .progress-bar.error {
-        background: var(--error);
-      }
-
-      /* Console */
-      .console-container {
-        margin-top: 1rem;
-      }
-
-      .console-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 0.5rem;
-      }
-
-      .console-title {
-        font-size: 0.85rem;
-        color: var(--text-secondary);
-        font-weight: 500;
-      }
-
-      .console-clear {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-        background: none;
-        border: none;
-        cursor: pointer;
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
-      }
-
-      .console-clear:hover {
-        background: var(--bg-elevated);
-        color: var(--text-secondary);
-      }
-
-      .console {
-        background: #000;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 1rem;
-        height: 200px;
-        overflow-y: auto;
-        font-family: "Noto Sans Mono", monospace;
-        font-size: 0.8rem;
-        line-height: 1.5;
-      }
-
-      .console-line {
-        margin-bottom: 0.15rem;
-        word-break: break-all;
-      }
-
-      .console-line.info {
-        color: var(--text-secondary);
-      }
-
-      .console-line.success {
-        color: var(--success);
-      }
-
-      .console-line.warning {
-        color: var(--warning);
-      }
-
-      .console-line.error {
-        color: var(--error);
-      }
-
-      .console-line .timestamp {
-        color: var(--text-muted);
-        margin-right: 0.5rem;
-      }
-
-      /* Action Buttons */
-      .action-buttons {
-        display: flex;
-        gap: 0.75rem;
-        margin-top: 1rem;
-      }
-
-      .action-buttons .btn {
-        flex: 1;
-      }
-
-      /* Hidden Elements */
-      .hidden {
-        display: none !important;
-      }
-
-      /* Footer */
-      footer {
-        text-align: center;
-        margin-top: 3rem;
-        padding-top: 2rem;
-        border-top: 1px solid var(--border);
-        color: var(--text-muted);
-        font-size: 0.85rem;
-      }
-
-      footer a {
+      .technical-note a {
         color: var(--accent);
         text-decoration: none;
       }
 
-      footer a:hover {
+      .technical-note a:hover {
         text-decoration: underline;
-      }
-
-      /* Help Section */
-      .help-section {
-        margin-top: 2rem;
-      }
-
-      .help-section details {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        margin-bottom: 0.5rem;
-      }
-
-      .help-section summary {
-        padding: 1rem 1.25rem;
-        cursor: pointer;
-        font-weight: 500;
-        color: var(--text);
-        list-style: none;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-      }
-
-      .help-section summary::-webkit-details-marker {
-        display: none;
-      }
-
-      .help-section summary::before {
-        content: "▶";
-        font-size: 0.7rem;
-        color: var(--text-muted);
-        transition: transform 0.15s ease;
-      }
-
-      .help-section details[open] summary::before {
-        transform: rotate(90deg);
-      }
-
-      .help-section .help-content {
-        padding: 0 1.25rem 1rem;
-        color: var(--text-secondary);
-        font-size: 0.9rem;
-      }
-
-      .help-section .help-content p {
-        margin-bottom: 0.75rem;
-      }
-
-      .help-section .help-content ul {
-        margin-left: 1.25rem;
-        margin-bottom: 0.75rem;
-      }
-
-      .help-section .help-content li {
-        margin-bottom: 0.25rem;
-      }
-
-      .help-section code {
-        font-family: "Noto Sans Mono", monospace;
-        font-size: 0.85em;
-        background: var(--bg-elevated);
-        padding: 0.15rem 0.4rem;
-        border-radius: 4px;
-      }
-
-      /* Success State */
-      .success-banner {
-        display: none;
-        background: var(--success-glow);
-        border: 1px solid var(--success);
-        border-radius: 8px;
-        padding: 1.5rem;
-        text-align: center;
-        margin-top: 1rem;
-      }
-
-      .success-banner.show {
-        display: block;
-      }
-
-      .success-banner h3 {
-        color: var(--success);
-        font-size: 1.2rem;
-        margin-bottom: 0.5rem;
-      }
-
-      .success-banner p {
-        color: var(--text-secondary);
-        margin-bottom: 0;
-      }
-
-      /* Spinner Animation */
-      @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-      }
-
-      .spin {
-        animation: spin 1s linear infinite;
-      }
-
-      /* Responsive */
-      @media (max-width: 600px) {
-        .container {
-          padding: 1.5rem 1rem 3rem;
-        }
-
-        .logo-img {
-          width: 48px;
-          height: 48px;
-        }
-
-        .logo-text {
-          font-size: 2rem;
-        }
-
-        .source-options {
-          flex-direction: column;
-        }
-
-        .action-buttons {
-          flex-direction: column;
-        }
-
-        .connection-info {
-          flex-direction: column;
-          gap: 0.75rem;
-        }
       }
     </style>
   </head>
   <body>
     <div class="container">
-      <header>
-        <div class="logo-container">
-          <img src="p3a-logo.png" alt="p3a logo" class="logo-img" />
-          <span class="logo-text">p3a</span>
-        </div>
-        <p class="tagline">Web Flasher — Physical Pixel Art Player</p>
-        <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
-          <strong>DEBUG v0.3.2</strong> — PR #226 + data verification logging
-        </p>
-      </header>
-
-      <!-- Browser Support Warning -->
-      <div id="browserWarning" class="browser-warning">
-        <h3>⚠️ Browser Not Supported</h3>
-        <p>Web Serial API requires Chrome, Edge, or Opera on desktop. Please switch to a supported browser.</p>
+      <div class="logo-container">
+        <img src="p3a-logo.png" alt="p3a" class="logo-img" />
+        <span class="logo-text">p3a</span>
       </div>
 
-      <!-- Step 1: Connect -->
-      <div class="card" id="step1Card">
-        <div class="card-header">
-          <span class="step-number" id="step1Number">1</span>
-          <h2>Connect Your Device</h2>
-          <span class="status-badge" id="connectionStatus">
-            <span class="status-dot"></span>
-            <span id="connectionStatusText">Disconnected</span>
-          </span>
-        </div>
-
-        <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
-          Connect your p3a (ESP32-P4) device via USB. Make sure it's in download mode — hold the BOOT button while plugging in if needed.
-        </p>
-
-        <button id="connectBtn" class="btn btn-primary btn-full">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-          </svg>
-          <span id="connectBtnText">Connect</span>
-        </button>
-
-        <div class="connection-info hidden" id="connectionInfo">
-          <div class="info-item">
-            <span class="info-label">Chip</span>
-            <span class="info-value" id="chipType">—</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">MAC Address</span>
-            <span class="info-value" id="macAddress">—</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Crystal</span>
-            <span class="info-value" id="crystalFreq">—</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Step 2: Select Firmware -->
-      <div class="card" id="step2Card">
-        <div class="card-header">
-          <span class="step-number" id="step2Number">2</span>
-          <h2>Select Firmware</h2>
-        </div>
-
-        <div class="source-options">
-          <label class="source-option selected" id="sourceRelease">
-            <input type="radio" name="firmwareSource" value="release" checked />
-            <span class="source-option-label">GitHub Release</span>
-            <span class="source-option-desc">Download latest</span>
-          </label>
-          <label class="source-option" id="sourceLocal">
-            <input type="radio" name="firmwareSource" value="local" />
-            <span class="source-option-label">Local Files</span>
-            <span class="source-option-desc">Upload your own</span>
-          </label>
-        </div>
-
-        <!-- Release Selection -->
-        <div id="releaseSection">
-          <div class="version-select-container">
-            <label for="versionSelect">Firmware Version</label>
-            <select id="versionSelect" class="version-select">
-              <option value="">Loading releases...</option>
-            </select>
-          </div>
-          <button id="downloadFirmwareBtn" class="btn btn-secondary btn-full" disabled>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-            </svg>
-            Download Firmware
-          </button>
-        </div>
-
-        <!-- Local Files Section -->
-        <div id="localSection" class="hidden">
-          <div class="file-drop-zone" id="fileDropZone">
-            <p>Drop firmware ZIP here or click to browse</p>
-            <small>Expects a ZIP with bootloader.bin, partition-table.bin, ota_data_initial.bin, p3a.bin, storage.bin, network_adapter.bin</small>
-            <input type="file" id="fileInput" accept=".zip,.bin" multiple />
-          </div>
-        </div>
-
-        <!-- Firmware Status -->
-        <div class="firmware-status hidden" id="firmwareStatus">
-          <div class="firmware-file">
-            <span class="firmware-file-name">bootloader.bin</span>
-            <span class="firmware-file-status" id="statusBootloader">Not loaded</span>
-          </div>
-          <div class="firmware-file">
-            <span class="firmware-file-name">partition-table.bin</span>
-            <span class="firmware-file-status" id="statusPartition">Not loaded</span>
-          </div>
-          <div class="firmware-file">
-            <span class="firmware-file-name">ota_data_initial.bin</span>
-            <span class="firmware-file-status" id="statusOta">Not loaded</span>
-          </div>
-          <div class="firmware-file">
-            <span class="firmware-file-name">p3a.bin</span>
-            <span class="firmware-file-status" id="statusApp">Not loaded</span>
-          </div>
-          <div class="firmware-file">
-            <span class="firmware-file-name">storage.bin</span>
-            <span class="firmware-file-status" id="statusStorage">Not loaded</span>
-          </div>
-          <div class="firmware-file">
-            <span class="firmware-file-name">network_adapter.bin</span>
-            <span class="firmware-file-status" id="statusNetwork">Not loaded</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Step 3: Flash -->
-      <div class="card" id="step3Card">
-        <div class="card-header">
-          <span class="step-number" id="step3Number">3</span>
-          <h2>Flash Firmware</h2>
-        </div>
-
-        <div class="action-buttons">
-          <button id="flashBtn" class="btn btn-primary" disabled>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-            </svg>
-            Flash Device
-          </button>
-          <button id="eraseBtn" class="btn btn-danger" disabled>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-            </svg>
-            Erase All
-          </button>
-        </div>
-
-        <!-- Progress -->
-        <div class="progress-section hidden" id="progressSection">
-          <div class="progress-header">
-            <span class="progress-label" id="progressLabel">Preparing...</span>
-            <span class="progress-percent" id="progressPercent">0%</span>
-          </div>
-          <div class="progress-bar-container">
-            <div class="progress-bar" id="progressBar"></div>
-          </div>
-        </div>
-
-        <!-- Success Banner -->
-        <div class="success-banner" id="successBanner">
-          <h3>✓ Flash Complete!</h3>
-          <p>Disconnect and reconnect your device. It should boot into p3a.</p>
-        </div>
-
-        <!-- Console -->
-        <div class="console-container">
-          <div class="console-header">
-            <span class="console-title">Console Output</span>
-            <button class="console-clear" id="clearConsoleBtn">Clear</button>
-          </div>
-          <div class="console" id="console"></div>
-        </div>
-      </div>
-
-      <!-- Help Section -->
-      <div class="help-section">
-        <details>
-          <summary>Troubleshooting</summary>
-          <div class="help-content">
-            <p><strong>Device not detected?</strong></p>
-            <ul>
-              <li>Make sure you're using a data USB cable, not a charge-only cable</li>
-              <li>Try holding the BOOT button while connecting</li>
-              <li>On Windows, you may need to install the <a href="https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers" target="_blank">CP210x drivers</a></li>
-            </ul>
-            <p><strong>Flashing fails or device doesn't boot?</strong></p>
-            <ul>
-              <li>Try clicking "Erase All" first, then flash again</li>
-              <li>Make sure all 6 firmware files are loaded</li>
-              <li>Check that your device is actually an ESP32-P4</li>
-            </ul>
-          </div>
-        </details>
-
-        <details>
-          <summary>What gets flashed?</summary>
-          <div class="help-content">
-            <p>The flasher writes 6 files to specific addresses:</p>
-            <ul>
-              <li><code>bootloader.bin</code> at <code>0x2000</code> — ESP32-P4 second stage bootloader</li>
-              <li><code>partition-table.bin</code> at <code>0x8000</code> — Flash partition layout</li>
-              <li><code>ota_data_initial.bin</code> at <code>0x10000</code> — OTA boot selection</li>
-              <li><code>p3a.bin</code> at <code>0x20000</code> — Main p3a application</li>
-              <li><code>storage.bin</code> at <code>0x1020000</code> — Persistent storage partition</li>
-              <li><code>network_adapter.bin</code> at <code>0x1120000</code> — ESP32-C6 Wi-Fi co-processor firmware</li>
-            </ul>
-            <p>Flash settings: DIO mode, 80MHz, 32MB</p>
-          </div>
-        </details>
-
-        <details>
-          <summary>Alternative: Command-line flashing</summary>
-          <div class="help-content">
-            <p>If web flashing doesn't work, you can use the Python esptool:</p>
-            <p>1. Install: <code>pip install esptool</code></p>
-            <p>2. Flash (Windows):</p>
-            <p><code>python -m esptool --chip esp32p4 -p COM5 -b 460800 write_flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force @flash_args</code></p>
-            <p>See the <a href="https://github.com/fabkury/p3a/blob/main/docs/flash-p3a.md" target="_blank">full flashing guide</a> for details.</p>
-          </div>
-        </details>
-      </div>
-
-      <footer>
+      <div class="status-card">
+        <h1>⚠️ Web Flasher Not Available</h1>
         <p>
-          <a href="https://github.com/fabkury/p3a" target="_blank">p3a on GitHub</a> · 
-          Made with ♥ for pixel art enthusiasts
+          Browser-based flashing is not currently functional for ESP32-P4 devices
+          due to a bug in Espressif's esptool-js library.
         </p>
-      </footer>
-    </div>
+        <p>
+          Please use the command-line tool instead — it takes about 5 minutes to set up
+          and works reliably.
+        </p>
+        <a href="https://github.com/fabkury/p3a/blob/main/docs/flash-p3a.md" class="btn">
+          → View Flashing Guide
+        </a>
+      </div>
 
-    <!-- Load JSZip for extracting firmware ZIPs -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    
-    <!-- Load esptool-js -->
-    <script type="module" src="flasher.js"></script>
+      <p class="technical-note">
+        Technical details: <a href="https://github.com/espressif/esptool-js/issues/229" target="_blank">esptool-js Issue #229</a>
+      </p>
+    </div>
   </body>
 </html>

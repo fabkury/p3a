@@ -4,21 +4,7 @@ Flash the p3a firmware to your Waveshare ESP32-P4 board. This is a one-time proc
 
 ---
 
-## Option 1: Web Flasher (Recommended)
-
-**[Launch Web Flasher →](web-flasher/index.html)**
-
-Flash directly from your browser — no software installation required!
-
-- Works in Chrome, Edge, or Opera
-- Just connect your device, select the firmware, and click Flash
-- Takes about 2 minutes
-
----
-
-## Option 2: Command Line
-
-If the web flasher doesn't work, use the command-line tool below.
+## Quick Start (5 minutes)
 
 ### Step 1: Install Python and esptool
 
@@ -97,12 +83,6 @@ Wait ~2 minutes for flashing to complete. You'll see progress for each file.
 | Permission denied (Linux) | Run: `sudo usermod -a -G dialout $USER` then log out/in |
 | Wrong COM port (Windows) | Check Device Manager → Ports |
 | Timeout errors | Try `-b 115200` instead of `-b 460800` |
-
----
-
-## Web Flasher Available!
-
-The browser-based [Web Flasher](web-flasher/index.html) is now available for ESP32-P4 devices. Recent updates to esptool-js fixed the compatibility issues we previously encountered. If you prefer a graphical interface or don't want to install Python, use the web flasher instead.
 
 ---
 

@@ -274,7 +274,9 @@ Completed:
 
 In Progress:
 - Hardware reactions (send likes to artworks)
-- Browser-based web flasher
+
+Blocked (external dependency):
+- Browser-based web flasher — blocked by [esptool-js bug](https://github.com/espressif/esptool-js/issues/229)
 
 ---
 

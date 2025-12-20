@@ -597,15 +597,28 @@ async function flash() {
     const totalSize = fileArray.reduce((sum, f) => sum + f.data.length, 0);
     let writtenSize = 0;
 
+    // Verify firmware data integrity before flashing
+    log('Verifying firmware data...');
+    for (const filename of CONFIG.requiredFiles) {
+      const data = state.firmware[filename];
+      const magic = data[0];
+      const first8 = Array.from(data.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+      log(`  ${filename}: ${data.length} bytes, first 8: [${first8}], magic: 0x${magic.toString(16)}`);
+      
+      // ESP image magic byte should be 0xE9 for app binaries
+      if ((filename === 'p3a.bin' || filename === 'bootloader.bin') && magic !== 0xE9) {
+        log(`  ⚠️ WARNING: ${filename} has unexpected magic byte 0x${magic.toString(16)} (expected 0xE9)`, 'warning');
+      }
+    }
+
     // Flash with proper settings
-    // NOTE: Compression disabled - may cause corruption with large files on ESP32-P4
     const flashOptions = {
       fileArray: fileArray,
       flashSize: CONFIG.flashSize,
       flashMode: CONFIG.flashMode,
       flashFreq: CONFIG.flashFreq,
       eraseAll: false,
-      compress: false,  // Disabled to test if compression causes corruption
+      compress: true,  // Required - PR #226 only supports compressed writes
       reportProgress: (fileIndex, written, total) => {
         // Calculate overall progress
         let currentFileOffset = 0;

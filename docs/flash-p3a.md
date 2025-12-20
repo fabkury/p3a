@@ -8,14 +8,14 @@ Flash the p3a firmware to your Waveshare ESP32-P4 board. This is a one-time proc
 
 The easiest way to flash your p3a on Windows.
 
-1. Download `p3a-flasher.exe` from the [Releases page](https://github.com/fabkury/p3a/releases)
-2. Connect your p3a via USB
+1. Download `p3a-flasher.exe` from the [releases folder](https://github.com/fabkury/p3a/tree/main/release/)
+2. Connect your p3a via USB-C
 3. Run `p3a-flasher.exe`
 4. Click **Flash Device**
 5. Wait ~2 minutes
-6. Done! Your p3a will automatically reboot.
+6. Done! Your device will automatically reboot into p3a.
 
-The flasher auto-detects your device and includes the firmware — no installation or configuration needed.
+The flasher auto-detects your device and includes the firmware — no installation, configuration or Internet connection needed.
 
 ---
 

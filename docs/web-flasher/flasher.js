@@ -4,12 +4,13 @@
  * Uses esptool-js to flash ESP32-P4 devices directly from the browser.
  * Requires Chrome, Edge, or Opera with Web Serial API support.
  * 
- * Note: Firmware files are loaded as Uint8Array for proper binary handling,
- * then converted to binary strings for esptool-js compatibility.
+ * This version uses a custom build of esptool-js from PR #226 which adds
+ * native Uint8Array support, fixing binary data corruption issues with ESP32-P4.
+ * https://github.com/espressif/esptool-js/pull/226
  */
 
-// Import esptool-js from unpkg (latest version with Uint8Array support)
-import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js/bundle.js';
+// Import esptool-js from local build (PR #226 with Uint8Array support)
+import { ESPLoader, Transport } from './lib/esptool-bundle.js';
 
 // ============================================================================
 // Configuration
@@ -583,14 +584,12 @@ async function flash() {
     log('Starting flash process...');
     log(`Flash settings: mode=${CONFIG.flashMode}, freq=${CONFIG.flashFreq}, size=${CONFIG.flashSize}`);
 
-    // Prepare file array - convert Uint8Array to binary string for esptool-js
-    // Note: esptool-js currently expects binary strings, not Uint8Array
+    // Prepare file array with Uint8Array data
+    // PR #226 adds native Uint8Array support to esptool-js
     const fileArray = CONFIG.requiredFiles.map(filename => ({
-      data: uint8ArrayToBinaryString(state.firmware[filename]),
+      data: state.firmware[filename],  // Uint8Array - native support in PR #226
       address: CONFIG.flashAddresses[filename]
     }));
-    
-    log('Firmware data converted to binary format');
 
     log(`Flashing ${fileArray.length} files...`);
 
@@ -706,17 +705,6 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-/**
- * Convert Uint8Array to binary string for esptool-js compatibility.
- * 
- * Uses ISO-8859-1 (Latin-1) encoding which provides a 1:1 mapping
- * of bytes 0-255 to Unicode code points 0-255. This preserves
- * binary data correctly when converted to a JavaScript string.
- */
-function uint8ArrayToBinaryString(uint8Array) {
-  // ISO-8859-1 (Latin-1) provides true 1:1 byte-to-character mapping
-  return new TextDecoder('iso-8859-1').decode(uint8Array);
-}
 
 // ============================================================================
 // Initialization

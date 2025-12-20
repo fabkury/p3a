@@ -135,3 +135,17 @@ esp_err_t http_api_ota_route_get(httpd_req_t *req);
  */
 esp_err_t http_api_ota_route_post(httpd_req_t *req);
 
+// ---------- PICO-8 Handlers (http_api_pico8.c) ----------
+
+#if CONFIG_P3A_PICO8_ENABLE
+/**
+ * @brief GET /pico8 - Serve PICO-8 monitor page
+ */
+esp_err_t h_get_pico8(httpd_req_t *req);
+
+/**
+ * @brief WebSocket /pico_stream - Handle PICO-8 streaming
+ */
+esp_err_t h_ws_pico_stream(httpd_req_t *req);
+#endif
+

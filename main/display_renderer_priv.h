@@ -114,5 +114,16 @@ void display_render_task(void *arg);
 void display_upscale_worker_top_task(void *arg);
 void display_upscale_worker_bottom_task(void *arg);
 
+// FPS overlay (display_fps_overlay.c)
+void fps_update_and_draw(uint8_t *buffer);
+
+// RGB565 conversion helper (shared between files)
+static inline uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b)
+{
+    return (uint16_t)(((uint16_t)(r & 0xF8) << 8) |
+                      ((uint16_t)(g & 0xFC) << 3) |
+                      ((uint16_t)b >> 3));
+}
+
 #endif // DISPLAY_RENDERER_PRIV_H
 

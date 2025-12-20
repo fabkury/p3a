@@ -3,6 +3,8 @@ idf_component_register(
          "channel_player.c"
          "sdcard_channel_impl.c"
          "makapix_channel_impl.c"
+         "makapix_channel_utils.c"
+         "makapix_channel_refresh.c"
          "vault_storage.c"
          "animation_metadata.c"
          "playlist_manager.c"

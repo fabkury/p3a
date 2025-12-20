@@ -6,6 +6,8 @@ idf_component_register(
         "makapix_api.c"
         "makapix_artwork.c"
         "makapix.c"
+        "makapix_provision_flow.c"
+        "makapix_connection.c"
         "makapix_certs.c"
     INCLUDE_DIRS 
         "."

@@ -1,5 +1,4 @@
 build/*
-!build/release/
 !build/*.bin
 !build/bootloader/bootloader.bin
 !build/partition_table/

@@ -1,0 +1,52 @@
+{
+  "name": "p3a Firmware",
+  "description": "Physical Pixel Art Player firmware for ESP32-P4",
+  "version": "1.0.0",
+  "chip": "esp32p4",
+  "flashSettings": {
+    "flashMode": "dio",
+    "flashFreq": "80m",
+    "flashSize": "32MB"
+  },
+  "parts": [
+    {
+      "name": "Bootloader",
+      "filename": "bootloader.bin",
+      "address": "0x2000",
+      "description": "ESP32-P4 second stage bootloader"
+    },
+    {
+      "name": "Partition Table",
+      "filename": "partition-table.bin",
+      "address": "0x8000",
+      "description": "Flash partition layout"
+    },
+    {
+      "name": "OTA Data",
+      "filename": "ota_data_initial.bin",
+      "address": "0x10000",
+      "description": "OTA boot selection data"
+    },
+    {
+      "name": "Application",
+      "filename": "p3a.bin",
+      "address": "0x20000",
+      "description": "Main p3a application"
+    },
+    {
+      "name": "Storage",
+      "filename": "storage.bin",
+      "address": "0x1020000",
+      "description": "Persistent storage partition"
+    },
+    {
+      "name": "Network Adapter",
+      "filename": "network_adapter.bin",
+      "address": "0x1120000",
+      "description": "ESP32-C6 Wi-Fi co-processor firmware"
+    }
+  ],
+  "repository": "https://github.com/fabkury/p3a",
+  "documentation": "https://github.com/fabkury/p3a/blob/main/docs/flash-p3a.md"
+}
+

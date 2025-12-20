@@ -4,8 +4,8 @@
  * Uses esptool-js to flash ESP32-P4 devices directly from the browser.
  * Requires Chrome, Edge, or Opera with Web Serial API support.
  * 
- * Key fix: Uses Uint8Array instead of binary strings for firmware data,
- * which allows esptool-js to properly parse the ESP32-P4 bootloader headers.
+ * Note: Firmware files are loaded as Uint8Array for proper binary handling,
+ * then converted to binary strings for esptool-js compatibility.
  */
 
 // Import esptool-js from unpkg (latest version with Uint8Array support)
@@ -583,11 +583,14 @@ async function flash() {
     log('Starting flash process...');
     log(`Flash settings: mode=${CONFIG.flashMode}, freq=${CONFIG.flashFreq}, size=${CONFIG.flashSize}`);
 
-    // Prepare file array with Uint8Array data (critical for ESP32-P4!)
+    // Prepare file array - convert Uint8Array to binary string for esptool-js
+    // Note: esptool-js currently expects binary strings, not Uint8Array
     const fileArray = CONFIG.requiredFiles.map(filename => ({
-      data: state.firmware[filename], // Uint8Array, not string!
+      data: uint8ArrayToBinaryString(state.firmware[filename]),
       address: CONFIG.flashAddresses[filename]
     }));
+    
+    log('Firmware data converted to binary format');
 
     log(`Flashing ${fileArray.length} files...`);
 
@@ -688,6 +691,25 @@ function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+/**
+ * Convert Uint8Array to binary string for esptool-js compatibility.
+ * esptool-js currently expects binary strings where each character
+ * represents one byte (charCode 0-255).
+ * 
+ * Uses chunked processing to avoid call stack overflow on large files.
+ */
+function uint8ArrayToBinaryString(uint8Array) {
+  const chunkSize = 0x8000; // 32KB chunks to avoid stack overflow
+  const chunks = [];
+  
+  for (let i = 0; i < uint8Array.length; i += chunkSize) {
+    const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+    chunks.push(String.fromCharCode.apply(null, chunk));
+  }
+  
+  return chunks.join('');
 }
 
 // ============================================================================

@@ -1,10 +1,27 @@
 # Flash p3a Firmware
 
-Flash the p3a firmware to your Waveshare ESP32-P4 board. This is a one-time process — after the initial flash, all future updates are installed wirelessly.
+Flash the p3a firmware to your Waveshare ESP32-P4 board. This is a one-time process — after the initial flash, all future updates are installed wirelessly via `http://p3a.local/ota`.
 
 ---
 
-## Quick Start (5 minutes)
+## Option 1: p3a Flasher (Windows) — Recommended
+
+The easiest way to flash your p3a on Windows.
+
+1. Download `p3a-flasher.exe` from the [Releases page](https://github.com/fabkury/p3a/releases)
+2. Connect your p3a via USB
+3. Run `p3a-flasher.exe`
+4. Click **Flash Device**
+5. Wait ~2 minutes
+6. Done! Your p3a will automatically reboot.
+
+The flasher auto-detects your device and includes the firmware — no installation or configuration needed.
+
+---
+
+## Option 2: Command Line (All Platforms)
+
+For macOS, Linux, or if you prefer the command line on Windows.
 
 ### Step 1: Install Python and esptool
 
@@ -30,9 +47,8 @@ pip3 install esptool
 
 ### Step 2: Download firmware
 
-Download and extract the latest release:
 1. Go to [github.com/fabkury/p3a/releases](https://github.com/fabkury/p3a/releases)
-2. Download the `.zip` file from the latest release
+2. Download the firmware `.zip` file from the latest release
 3. Extract to a folder (e.g., `p3a-firmware`)
 
 ### Step 3: Connect the board
@@ -63,14 +79,14 @@ python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --afte
 python3 -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force @flash_args
 ```
 
-Wait ~2 minutes for flashing to complete. You'll see progress for each file.
+Wait ~2 minutes for flashing to complete.
 
 ### Step 5: Done!
 
-1. Disconnect and reconnect the USB cable
-2. The p3a splash screen appears
-3. Connect to the `p3a-setup` Wi-Fi network to configure your Wi-Fi
-4. Access your p3a at `http://p3a.local/`
+The device will automatically reboot into p3a:
+1. The p3a splash screen appears
+2. Connect to the `p3a-setup` Wi-Fi network to configure your Wi-Fi
+3. Access your p3a at `http://p3a.local/`
 
 ---
 
@@ -112,7 +128,16 @@ For developers who want to customize the firmware:
 git clone https://github.com/fabkury/p3a.git
 cd p3a
 idf.py set-target esp32p4
-idf.py build flash monitor
+idf.py build
+```
+
+The build automatically creates:
+- `release/v{VERSION}/` — Firmware files for distribution
+- `release/v{VERSION}/p3a-flasher.exe` — Windows flasher with embedded firmware (if built on Windows)
+
+To disable flasher building during development:
+```bash
+idf.py build -DP3A_BUILD_FLASHER=OFF
 ```
 
 Requires [ESP-IDF v5.5.x](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/).

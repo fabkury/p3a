@@ -312,3 +312,32 @@ add_custom_command(
     VERBATIM
 )
 
+# =============================================================================
+# Flasher Tool Build (Windows executable with embedded firmware)
+# =============================================================================
+# Set P3A_BUILD_FLASHER to OFF to skip flasher build (faster dev builds)
+# Set to ON for release builds that need the flasher executable
+option(P3A_BUILD_FLASHER "Build the p3a-flasher.exe with embedded firmware" ON)
+
+if(P3A_BUILD_FLASHER AND WIN32)
+    message(STATUS "Flasher build: ENABLED (set -DP3A_BUILD_FLASHER=OFF to disable)")
+    
+    # Build flasher after release files are created
+    add_custom_command(
+        TARGET gen_project_binary POST_BUILD
+        COMMAND ${PYTHON} "${CMAKE_SOURCE_DIR}/flasher/build_flasher.py" 
+                "${CMAKE_SOURCE_DIR}" 
+                "${PROJECT_VER}" 
+                "${CMAKE_SOURCE_DIR}/${RELEASE_SUBDIR}"
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Building p3a-flasher.exe with embedded firmware..."
+        VERBATIM
+    )
+else()
+    if(NOT WIN32)
+        message(STATUS "Flasher build: SKIPPED (Windows only)")
+    else()
+        message(STATUS "Flasher build: DISABLED (set -DP3A_BUILD_FLASHER=ON to enable)")
+    endif()
+endif()
+

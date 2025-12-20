@@ -86,13 +86,13 @@ int p3a_boot_logo_render(uint8_t *buffer, int width, int height, size_t stride)
     uint8_t bg_r, bg_g, bg_b;
     config_store_get_background_color(&bg_r, &bg_g, &bg_b);
 
-    // Clear buffer to background color
+    // Clear buffer to background color (BGR888 format)
     for (int y = 0; y < height; y++) {
         uint8_t *row = buffer + y * stride;
         for (int x = 0; x < width; x++) {
-            row[x * 3 + 0] = bg_r;
+            row[x * 3 + 0] = bg_b;
             row[x * 3 + 1] = bg_g;
-            row[x * 3 + 2] = bg_b;
+            row[x * 3 + 2] = bg_r;
         }
     }
 
@@ -104,27 +104,26 @@ int p3a_boot_logo_render(uint8_t *buffer, int width, int height, size_t stride)
     int logo_y = (height - logo_h) / 2;
 
     if (elapsed_ms < P3A_BOOT_LOGO_FADE_IN_MS) {
-        // Phase 1: Fade-in with smoothstep curve (0 to 1.5 seconds)
+        // Phase 1: Fade-in with smoothstep curve
         float t = (float)elapsed_ms / (float)P3A_BOOT_LOGO_FADE_IN_MS;
         float smooth_t = smoothstep(t);
         uint8_t alpha = (uint8_t)(smooth_t * 255.0f);
 
-        // Use alpha blending with 2x scale
-        p3a_logo_blit_rgb888_alpha(
+        // Use alpha blending with scale (BGR888 format)
+        p3a_logo_blit_pixelwise_bgr888(
             buffer, width, height, stride,
             logo_x, logo_y,
             alpha,
-            bg_r, bg_g, bg_b,
+            bg_b, bg_g, bg_r,
             scale
         );
     } else {
-        // Phase 2: Full opacity hold (1.5 to 3.0 seconds)
-        // Use direct blit without alpha blending for efficiency
-        p3a_logo_blit_rgb888_alpha(
+        // Phase 2: Full opacity hold
+        p3a_logo_blit_pixelwise_bgr888(
             buffer, width, height, stride,
             logo_x, logo_y,
             255,
-            bg_r, bg_g, bg_b,
+            bg_b, bg_g, bg_r,
             scale
         );
     }

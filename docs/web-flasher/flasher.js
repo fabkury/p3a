@@ -631,7 +631,20 @@ async function flash() {
 
     // Hard reset the device
     log('Resetting device...');
-    await state.esploader.hardReset();
+    try {
+      // Try different reset methods depending on esptool-js version
+      if (typeof state.esploader.hardReset === 'function') {
+        await state.esploader.hardReset();
+      } else if (state.transport && typeof state.transport.setDTR === 'function') {
+        // Manual reset sequence: toggle DTR
+        await state.transport.setDTR(false);
+        await new Promise(r => setTimeout(r, 100));
+        await state.transport.setDTR(true);
+      }
+      log('Device reset. Please disconnect and reconnect USB.', 'success');
+    } catch (resetError) {
+      log('Auto-reset failed. Please manually reset or reconnect USB.', 'warning');
+    }
 
   } catch (error) {
     log(`Flash failed: ${error.message}`, 'error');
@@ -695,21 +708,14 @@ function formatSize(bytes) {
 
 /**
  * Convert Uint8Array to binary string for esptool-js compatibility.
- * esptool-js currently expects binary strings where each character
- * represents one byte (charCode 0-255).
  * 
- * Uses chunked processing to avoid call stack overflow on large files.
+ * Uses ISO-8859-1 (Latin-1) encoding which provides a 1:1 mapping
+ * of bytes 0-255 to Unicode code points 0-255. This preserves
+ * binary data correctly when converted to a JavaScript string.
  */
 function uint8ArrayToBinaryString(uint8Array) {
-  const chunkSize = 0x8000; // 32KB chunks to avoid stack overflow
-  const chunks = [];
-  
-  for (let i = 0; i < uint8Array.length; i += chunkSize) {
-    const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
-    chunks.push(String.fromCharCode.apply(null, chunk));
-  }
-  
-  return chunks.join('');
+  // ISO-8859-1 (Latin-1) provides true 1:1 byte-to-character mapping
+  return new TextDecoder('iso-8859-1').decode(uint8Array);
 }
 
 // ============================================================================

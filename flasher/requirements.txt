@@ -1,0 +1,18 @@
+# p3a Flasher Dependencies
+# Install with: pip install -r requirements.txt
+
+# Serial communication
+pyserial>=3.5
+
+# ESP32 flashing tool
+esptool>=4.7
+
+# HTTP requests for GitHub API
+requests>=2.28
+
+# Image handling for logo
+Pillow>=9.0
+
+# Executable bundling (for building)
+pyinstaller>=6.0
+

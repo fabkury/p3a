@@ -598,13 +598,14 @@ async function flash() {
     let writtenSize = 0;
 
     // Flash with proper settings
+    // NOTE: Compression disabled - may cause corruption with large files on ESP32-P4
     const flashOptions = {
       fileArray: fileArray,
       flashSize: CONFIG.flashSize,
       flashMode: CONFIG.flashMode,
       flashFreq: CONFIG.flashFreq,
       eraseAll: false,
-      compress: true,
+      compress: false,  // Disabled to test if compression causes corruption
       reportProgress: (fileIndex, written, total) => {
         // Calculate overall progress
         let currentFileOffset = 0;

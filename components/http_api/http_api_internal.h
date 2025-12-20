@@ -55,7 +55,7 @@ typedef struct {
 extern QueueHandle_t s_cmdq;
 extern httpd_handle_t s_server;
 
-// ---------- HTTP Helper Functions ----------
+// ---------- HTTP Helper Functions (http_api_utils.c) ----------
 
 /**
  * @brief Get HTTP status string from status code
@@ -91,10 +91,56 @@ void register_uri_handler_or_log(httpd_handle_t server, httpd_uri_t *uri);
  */
 const char* get_mime_type(const char* path);
 
-// ---------- Command Queue Functions ----------
+// ---------- Command Queue Functions (http_api.c) ----------
 
 bool api_enqueue_pause(void);
 bool api_enqueue_resume(void);
+
+// ---------- REST API Handlers (http_api_rest.c) ----------
+
+esp_err_t h_get_status(httpd_req_t *req);
+esp_err_t h_get_api_state(httpd_req_t *req);
+esp_err_t h_get_channels_stats(httpd_req_t *req);
+esp_err_t h_get_config(httpd_req_t *req);
+esp_err_t h_put_config(httpd_req_t *req);
+esp_err_t h_post_channel(httpd_req_t *req);
+esp_err_t h_get_dwell_time(httpd_req_t *req);
+esp_err_t h_put_dwell_time(httpd_req_t *req);
+esp_err_t h_get_global_seed(httpd_req_t *req);
+esp_err_t h_put_global_seed(httpd_req_t *req);
+esp_err_t h_post_reboot(httpd_req_t *req);
+esp_err_t h_post_swap_next(httpd_req_t *req);
+esp_err_t h_post_swap_back(httpd_req_t *req);
+esp_err_t h_post_pause(httpd_req_t *req);
+esp_err_t h_post_resume(httpd_req_t *req);
+esp_err_t h_get_rotation(httpd_req_t *req);
+esp_err_t h_post_rotation(httpd_req_t *req);
+
+#if CONFIG_OTA_DEV_MODE
+esp_err_t h_post_debug(httpd_req_t *req);
+#endif
+
+// ---------- Page Handlers (http_api_page_*.c) ----------
+
+/**
+ * @brief GET / - Main control page (http_api_page_root.c)
+ */
+esp_err_t h_get_root(httpd_req_t *req);
+
+/**
+ * @brief GET /config/network - Network status page (http_api_page_network.c)
+ */
+esp_err_t h_get_network_config(httpd_req_t *req);
+
+/**
+ * @brief POST /erase - Erase WiFi credentials (http_api_page_network.c)
+ */
+esp_err_t h_post_erase(httpd_req_t *req);
+
+/**
+ * @brief GET /seed - Global seed page (http_api_page_seed.c)
+ */
+esp_err_t h_get_seed(httpd_req_t *req);
 
 // ---------- Handler Registration Functions ----------
 
@@ -148,4 +194,3 @@ esp_err_t h_get_pico8(httpd_req_t *req);
  */
 esp_err_t h_ws_pico_stream(httpd_req_t *req);
 #endif
-

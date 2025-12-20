@@ -3,8 +3,8 @@
 
 const int p3a_logo_w = 46;
 const int p3a_logo_h = 53;
-const int p3a_logo_scaled_w = 92;
-const int p3a_logo_scaled_h = 106;
+// const int p3a_logo_scaled_w = 92;
+// const int p3a_logo_scaled_h = 106;
 
 static const uint8_t p3a_logo_pixels[] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,

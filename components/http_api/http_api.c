@@ -1,17 +1,18 @@
 /**
  * @file http_api.c
- * @brief HTTP API core - Server infrastructure and REST API handlers
+ * @brief HTTP API core - Server infrastructure and command processing
  * 
  * This is the main entry point for the HTTP API component.
  * Contains:
  * - Command queue and worker task
- * - HTTP helper functions
  * - mDNS setup
  * - Server start/stop
- * - REST API handlers (/status, /config, /action/..., /rotation)
+ * - Method routers (GET/POST/PUT)
+ * - Network diagnostics
  * 
- * Additional handlers are in separate files:
- * - http_api_pages.c: HTML pages and static file serving
+ * REST API handlers are in: http_api_rest.c
+ * Page handlers are in: http_api_page_*.c
+ * Additional handlers are in:
  * - http_api_ota.c: OTA update functionality
  * - http_api_upload.c: File upload handler
  */
@@ -79,7 +80,6 @@ static void api_worker_task(void *arg) {
             switch(cmd.type) {
                 case CMD_REBOOT:
                     do_reboot();
-                    // No return - device restarts
                     break;
 
                 case CMD_SWAP_NEXT:
@@ -125,157 +125,7 @@ static void api_worker_task(void *arg) {
     }
 }
 
-#if CONFIG_OTA_DEV_MODE
-#include "swap_future.h"
-#include "playlist_manager.h"
-#include <sys/time.h>
-// External: wakes the auto_swap_task in main/p3a_main.c.
-extern void auto_swap_reset_timer(void);
-
-static uint64_t wall_clock_ms_http(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (uint64_t)tv.tv_sec * 1000ULL + (uint64_t)tv.tv_usec / 1000ULL;
-}
-
-/**
- * POST /debug  (CONFIG_OTA_DEV_MODE only)
- *
- * JSON request:
- * {
- *   "op": "swap_future_test" | "swap_future_cancel" | "live_mode_enter" | "live_mode_exit",
- *   "data": { ... }
- * }
- */
-static esp_err_t h_post_debug(httpd_req_t *req)
-{
-    if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
-        return ESP_OK;
-    }
-
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
-
-    cJSON *op = cJSON_GetObjectItem(root, "op");
-    cJSON *data = cJSON_GetObjectItem(root, "data");
-    const char *op_s = (op && cJSON_IsString(op)) ? cJSON_GetStringValue(op) : NULL;
-
-    if (!op_s || !*op_s) {
-        cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'op'\",\"code\":\"INVALID_REQUEST\"}");
-        return ESP_OK;
-    }
-
-    cJSON *resp = cJSON_CreateObject();
-    cJSON_AddBoolToObject(resp, "ok", true);
-    cJSON_AddStringToObject(resp, "op", op_s);
-
-    if (strcmp(op_s, "swap_future_cancel") == 0) {
-        swap_future_cancel();
-        auto_swap_reset_timer();
-        cJSON_AddStringToObject(resp, "result", "cancelled");
-    } else if (strcmp(op_s, "live_mode_enter") == 0 || strcmp(op_s, "live_mode_exit") == 0) {
-        void *nav = channel_player_get_navigator();
-        if (!nav) {
-            cJSON_Delete(root);
-            cJSON_Delete(resp);
-            send_json(req, 409, "{\"ok\":false,\"error\":\"No navigator\",\"code\":\"NO_NAV\"}");
-            return ESP_OK;
-        }
-        esp_err_t e = (strcmp(op_s, "live_mode_enter") == 0) ? live_mode_enter(nav) : (live_mode_exit(nav), ESP_OK);
-        cJSON_AddNumberToObject(resp, "esp_err", (double)e);
-    } else if (strcmp(op_s, "swap_future_test") == 0) {
-        // Build swap_future targeting the current file.
-        const sdcard_post_t *post = NULL;
-        if (channel_player_get_current_post(&post) != ESP_OK || !post || !post->filepath) {
-            cJSON_Delete(root);
-            cJSON_Delete(resp);
-            send_json(req, 409, "{\"ok\":false,\"error\":\"No current post\",\"code\":\"NO_CURRENT\"}");
-            return ESP_OK;
-        }
-
-        uint32_t delay_ms = 1000;
-        uint32_t start_offset_ms = 0;
-        uint32_t start_frame = 0;
-
-        if (data && cJSON_IsObject(data)) {
-            cJSON *d = cJSON_GetObjectItem(data, "delay_ms");
-            if (d && cJSON_IsNumber(d) && cJSON_GetNumberValue(d) >= 0) {
-                delay_ms = (uint32_t)cJSON_GetNumberValue(d);
-            }
-            cJSON *o = cJSON_GetObjectItem(data, "start_offset_ms");
-            if (o && cJSON_IsNumber(o) && cJSON_GetNumberValue(o) >= 0) {
-                start_offset_ms = (uint32_t)cJSON_GetNumberValue(o);
-            }
-            cJSON *sf = cJSON_GetObjectItem(data, "start_frame");
-            if (sf && cJSON_IsNumber(sf) && cJSON_GetNumberValue(sf) >= 0) {
-                start_frame = (uint32_t)cJSON_GetNumberValue(sf);
-            }
-        }
-
-        uint64_t now_ms = wall_clock_ms_http();
-        uint64_t target_ms = now_ms + (uint64_t)delay_ms;
-        uint64_t start_ms = (start_offset_ms <= delay_ms) ? (target_ms - (uint64_t)start_offset_ms) : target_ms;
-
-        artwork_ref_t art = {0};
-        strlcpy(art.filepath, post->filepath, sizeof(art.filepath));
-        art.type = post->type;
-        art.dwell_time_ms = post->dwell_time_ms;
-        art.downloaded = true;
-
-        swap_future_t sf = {0};
-        sf.valid = true;
-        sf.target_time_ms = target_ms;
-        sf.start_time_ms = start_ms;
-        sf.start_frame = start_frame;
-        sf.artwork = art;
-        sf.is_live_mode_swap = false;
-        sf.is_automated = true;
-
-        swap_future_cancel();
-        esp_err_t e = swap_future_schedule(&sf);
-        auto_swap_reset_timer();
-
-        cJSON_AddNumberToObject(resp, "esp_err", (double)e);
-        cJSON_AddNumberToObject(resp, "now_ms", (double)now_ms);
-        cJSON_AddNumberToObject(resp, "target_time_ms", (double)target_ms);
-        cJSON_AddNumberToObject(resp, "start_time_ms", (double)start_ms);
-        cJSON_AddNumberToObject(resp, "start_frame", (double)start_frame);
-        cJSON_AddStringToObject(resp, "filepath", post->filepath);
-    } else {
-        cJSON_Delete(root);
-        cJSON_Delete(resp);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Unknown op\",\"code\":\"UNKNOWN_OP\"}");
-        return ESP_OK;
-    }
-
-    char *out = cJSON_PrintUnformatted(resp);
-    cJSON_Delete(root);
-    cJSON_Delete(resp);
-    if (!out) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-    send_json(req, 200, out);
-    free(out);
-    return ESP_OK;
-}
-#endif // CONFIG_OTA_DEV_MODE
+// ---------- Command Queue Functions ----------
 
 static bool enqueue_cmd(command_type_t t) {
     if (!s_cmdq) {
@@ -317,8 +167,6 @@ bool api_enqueue_resume(void) {
 
 /**
  * @brief Handle MQTT commands
- * 
- * Called by makapix_mqtt when a command is received via MQTT.
  */
 static void makapix_command_handler(const char *command_type, cJSON *payload)
 {
@@ -329,7 +177,6 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
     } else if (strcmp(command_type, "swap_back") == 0) {
         api_enqueue_swap_back();
     } else if (strcmp(command_type, "set_background_color") == 0) {
-        // Payload: {"r":0,"g":0,"b":0}
         if (!payload || !cJSON_IsObject(payload)) {
             ESP_LOGE(HTTP_API_TAG, "Invalid set_background_color payload (expected object)");
             return;
@@ -359,8 +206,6 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
             ESP_LOGE(HTTP_API_TAG, "Failed to set background color: %s", esp_err_to_name(err));
         }
     } else if (strcmp(command_type, "play_channel") == 0) {
-        // Extract channel information from payload (new format)
-        // Payload contains exactly ONE of: channel_name, hashtag, or user_sqid
         cJSON *channel_name = cJSON_GetObjectItem(payload, "channel_name");
         cJSON *hashtag = cJSON_GetObjectItem(payload, "hashtag");
         cJSON *user_sqid = cJSON_GetObjectItem(payload, "user_sqid");
@@ -369,16 +214,13 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
         const char *identifier = NULL;
         
         if (channel_name && cJSON_IsString(channel_name)) {
-            // System channel: "all" or "promoted"
             channel = cJSON_GetStringValue(channel_name);
             ESP_LOGI(HTTP_API_TAG, "Requesting channel switch to: %s", channel);
         } else if (hashtag && cJSON_IsString(hashtag)) {
-            // Hashtag channel
             channel = "hashtag";
             identifier = cJSON_GetStringValue(hashtag);
             ESP_LOGI(HTTP_API_TAG, "Requesting channel switch to hashtag: #%s", identifier);
         } else if (user_sqid && cJSON_IsString(user_sqid)) {
-            // User profile channel
             channel = "by_user";
             identifier = cJSON_GetStringValue(user_sqid);
             ESP_LOGI(HTTP_API_TAG, "Requesting channel switch to user: %s", identifier);
@@ -389,8 +231,6 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
         
         makapix_request_channel_switch(channel, identifier);
     } else if (strcmp(command_type, "show_artwork") == 0) {
-        // Extract artwork information and show it directly
-        // This creates a single-artwork channel and switches to it
         cJSON *art_url = cJSON_GetObjectItem(payload, "art_url");
         cJSON *storage_key = cJSON_GetObjectItem(payload, "storage_key");
         cJSON *post_id = cJSON_GetObjectItem(payload, "post_id");
@@ -422,36 +262,10 @@ void http_api_set_action_handlers(action_callback_t swap_next, action_callback_t
     s_swap_back_callback = swap_back;
     ESP_LOGI(HTTP_API_TAG, "Action handlers registered");
     
-    // Register MQTT command callback (only if makapix is available)
     makapix_mqtt_set_command_callback(makapix_command_handler);
 }
 
-// ---------- HTTP Helper Functions ----------
-
-// Utility functions moved to http_api_utils.c
-
-// ---------- Method routers (reduce URI handler usage) ----------
-
-// Forward declarations for handlers referenced by routers (defined later in this file)
-static esp_err_t h_get_api_state(httpd_req_t *req);
-static esp_err_t h_get_config(httpd_req_t *req);
-static esp_err_t h_put_config(httpd_req_t *req);
-static esp_err_t h_post_channel(httpd_req_t *req);
-static esp_err_t h_get_dwell_time(httpd_req_t *req);
-static esp_err_t h_put_dwell_time(httpd_req_t *req);
-static esp_err_t h_get_global_seed(httpd_req_t *req);
-static esp_err_t h_put_global_seed(httpd_req_t *req);
-static esp_err_t h_post_reboot(httpd_req_t *req);
-static esp_err_t h_post_swap_next(httpd_req_t *req);
-static esp_err_t h_post_swap_back(httpd_req_t *req);
-static esp_err_t h_post_pause(httpd_req_t *req);
-static esp_err_t h_post_resume(httpd_req_t *req);
-static esp_err_t h_get_rotation(httpd_req_t *req);
-static esp_err_t h_post_rotation(httpd_req_t *req);
-static esp_err_t h_get_channels_stats(httpd_req_t *req);
-#if CONFIG_OTA_DEV_MODE
-static esp_err_t h_post_debug(httpd_req_t *req);
-#endif
+// ---------- Method Routers ----------
 
 static esp_err_t h_get_router(httpd_req_t *req) {
     const char *uri = req ? req->uri : NULL;
@@ -460,7 +274,7 @@ static esp_err_t h_get_router(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    // Core JSON endpoints (hot paths kept here to avoid extra module hops)
+    // Core JSON endpoints
     if (strcmp(uri, "/api/state") == 0) {
         return h_get_api_state(req);
     }
@@ -480,13 +294,13 @@ static esp_err_t h_get_router(httpd_req_t *req) {
         return h_get_channels_stats(req);
     }
 
-    // UI/pages module (/, /favicon.ico, /config/network, /seed, /pico8)
+    // UI/pages module
     esp_err_t pr = http_api_pages_route_get(req);
     if (pr == ESP_OK) {
         return ESP_OK;
     }
 
-    // OTA module (/ota, /ota/status)
+    // OTA module
     esp_err_t orr = http_api_ota_route_get(req);
     if (orr == ESP_OK) {
         return ESP_OK;
@@ -526,13 +340,13 @@ static esp_err_t h_post_router(httpd_req_t *req) {
         return h_post_channel(req);
     }
 
-    // UI/pages module (POST /erase)
+    // UI/pages module
     esp_err_t pr = http_api_pages_route_post(req);
     if (pr == ESP_OK) {
         return ESP_OK;
     }
 
-    // OTA module (POST /ota/check|install|rollback)
+    // OTA module
     esp_err_t orr = http_api_ota_route_post(req);
     if (orr == ESP_OK) {
         return ESP_OK;
@@ -569,708 +383,11 @@ static esp_err_t h_put_router(httpd_req_t *req) {
     return ESP_OK;
 }
 
-// ---------- REST API Handlers ----------
-
-/**
- * GET /status
- * Returns device status including state, uptime, heap, RSSI, firmware info, and queue depth
- */
-static esp_err_t h_get_status(httpd_req_t *req) {
-    wifi_ap_record_t ap = {0};
-    int rssi_ok = (esp_wifi_remote_sta_get_ap_info(&ap) == ESP_OK);
-
-    cJSON *data = cJSON_CreateObject();
-    if (!data) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    cJSON_AddStringToObject(data, "state", app_state_str(app_state_get()));
-    cJSON_AddNumberToObject(data, "uptime_ms", (double)(esp_timer_get_time() / 1000ULL));
-    cJSON_AddNumberToObject(data, "heap_free", (double)esp_get_free_heap_size());
-    
-    if (rssi_ok) {
-        cJSON_AddNumberToObject(data, "rssi", ap.rssi);
-    } else {
-        cJSON_AddNullToObject(data, "rssi");
-    }
-
-    cJSON *fw = cJSON_CreateObject();
-    if (fw) {
-        cJSON_AddStringToObject(fw, "version", FW_VERSION);
-        cJSON_AddStringToObject(fw, "idf", IDF_VER);
-        cJSON_AddItemToObject(data, "fw", fw);
-    }
-
-    uint32_t queue_depth = s_cmdq ? uxQueueMessagesWaiting(s_cmdq) : 0;
-    cJSON_AddNumberToObject(data, "queue_depth", (double)queue_depth);
-
-    cJSON *root = cJSON_CreateObject();
-    if (!root) {
-        cJSON_Delete(data);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    cJSON_AddBoolToObject(root, "ok", true);
-    cJSON_AddItemToObject(root, "data", data);
-
-    char *out = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (!out) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, out);
-    free(out);
-    return ESP_OK;
-}
-
-/**
- * GET /api/state
- * Lightweight state snapshot for UI/automation.
- */
-static esp_err_t h_get_api_state(httpd_req_t *req)
-{
-    wifi_ap_record_t ap = {0};
-    int rssi_ok = (esp_wifi_remote_sta_get_ap_info(&ap) == ESP_OK);
-
-    cJSON *data = cJSON_CreateObject();
-    if (!data) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    cJSON_AddStringToObject(data, "state", app_state_str(app_state_get()));
-    cJSON_AddNumberToObject(data, "uptime_ms", (double)(esp_timer_get_time() / 1000ULL));
-    cJSON_AddNumberToObject(data, "heap_free", (double)esp_get_free_heap_size());
-    cJSON_AddBoolToObject(data, "live_mode", channel_player_is_live_mode_active());
-
-    if (rssi_ok) {
-        cJSON_AddNumberToObject(data, "rssi", ap.rssi);
-    } else {
-        cJSON_AddNullToObject(data, "rssi");
-    }
-
-    // Current Makapix post_id if available; NULL for SD card or unknown.
-    int32_t post_id = makapix_get_current_post_id();
-    if (post_id > 0) {
-        cJSON_AddNumberToObject(data, "current_post_id", (double)post_id);
-    } else {
-        cJSON_AddNullToObject(data, "current_post_id");
-    }
-
-    cJSON *root = cJSON_CreateObject();
-    if (!root) {
-        cJSON_Delete(data);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    cJSON_AddBoolToObject(root, "ok", true);
-    cJSON_AddItemToObject(root, "data", data);
-
-    char *out = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (!out) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, out);
-    free(out);
-    return ESP_OK;
-}
-
-/**
- * GET /config
- * Returns current configuration as JSON object
- */
-static esp_err_t h_get_config(httpd_req_t *req) {
-    char *json;
-    size_t len;
-    esp_err_t err = config_store_get_serialized(&json, &len);
-    if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"CONFIG_READ_FAIL\",\"code\":\"CONFIG_READ_FAIL\"}");
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_CreateObject();
-    if (!root) {
-        free(json);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    cJSON_AddBoolToObject(root, "ok", true);
-    cJSON *data = cJSON_ParseWithLength(json, len);
-    if (!data) {
-        data = cJSON_CreateObject();
-    }
-    cJSON_AddItemToObject(root, "data", data);
-
-    char *out = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    free(json);
-
-    if (!out) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, out);
-    free(out);
-    return ESP_OK;
-}
-
-/**
- * PUT /config
- * Accepts JSON config object (max 32 KB), validates, and saves to NVS
- */
-static esp_err_t h_put_config(httpd_req_t *req) {
-    if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
-        return ESP_OK;
-    }
-
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        if (err_status == 413) {
-            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
-        } else {
-            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        }
-        return ESP_OK;
-    }
-
-    cJSON *o = cJSON_ParseWithLength(body, len);
-    free(body);
-
-    if (!o || !cJSON_IsObject(o)) {
-        if (o) cJSON_Delete(o);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
-
-    esp_err_t e = config_store_save(o);
-    cJSON_Delete(o);
-
-    if (e != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"CONFIG_SAVE_FAIL\",\"code\":\"CONFIG_SAVE_FAIL\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, "{\"ok\":true}");
-    return ESP_OK;
-}
-
-/**
- * POST /channel
- * Switch to a channel
- * Body: {"channel": "all"|"promoted"|"user"|"by_user"|"sdcard", "user_handle": "..." (optional)}
- */
-static esp_err_t h_post_channel(httpd_req_t *req) {
-    if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
-        return ESP_OK;
-    }
-
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        if (err_status == 413) {
-            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
-        } else {
-            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        }
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
-
-    // Parse new format: exactly ONE of channel_name, hashtag, or user_sqid
-    cJSON *channel_name = cJSON_GetObjectItem(root, "channel_name");
-    cJSON *hashtag = cJSON_GetObjectItem(root, "hashtag");
-    cJSON *user_sqid = cJSON_GetObjectItem(root, "user_sqid");
-
-    const char *ch_name = NULL;
-    const char *identifier = NULL;
-
-    if (channel_name && cJSON_IsString(channel_name)) {
-        // System channel: "all", "promoted", or "sdcard"
-        ch_name = cJSON_GetStringValue(channel_name);
-    } else if (hashtag && cJSON_IsString(hashtag)) {
-        // Hashtag channel
-        ch_name = "hashtag";
-        identifier = cJSON_GetStringValue(hashtag);
-    } else if (user_sqid && cJSON_IsString(user_sqid)) {
-        // User profile channel
-        ch_name = "by_user";
-        identifier = cJSON_GetStringValue(user_sqid);
-    } else {
-        cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing channel_name, hashtag, or user_sqid\",\"code\":\"INVALID_REQUEST\"}");
-        return ESP_OK;
-    }
-
-    esp_err_t err;
-    
-    // Handle sdcard channel separately (this is fast, can be done synchronously)
-    if (strcmp(ch_name, "sdcard") == 0) {
-        // Abort any ongoing Makapix channel loading
-        if (makapix_is_channel_loading(NULL, 0)) {
-            ESP_LOGI(HTTP_API_TAG, "Aborting Makapix channel load for SD card switch");
-            makapix_abort_channel_load();
-        }
-        
-        err = p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL);
-        if (err == ESP_OK) {
-            // Switch animation player back to sdcard_channel source
-            channel_player_switch_to_sdcard_channel();
-            // Reload channel to pick up any new files
-            channel_player_load_channel();
-            // Trigger animation swap to show an item from sdcard
-            animation_player_request_swap_current();
-        }
-        cJSON_Delete(root);
-        if (err != ESP_OK) {
-            send_json(req, 500, "{\"ok\":false,\"error\":\"Channel switch failed\",\"code\":\"CHANNEL_SWITCH_FAILED\"}");
-            return ESP_OK;
-        }
-        send_json(req, 200, "{\"ok\":true}");
-        return ESP_OK;
-    }
-    
-    // Handle Makapix channels asynchronously via the channel switch task
-    // This returns immediately - the actual switch happens in background
-    err = makapix_request_channel_switch(ch_name, identifier);
-    
-    cJSON_Delete(root);
-
-    if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Channel switch request failed\",\"code\":\"CHANNEL_SWITCH_FAILED\"}");
-        return ESP_OK;
-    }
-
-    // Request accepted - switch will happen in background
-    send_json(req, 202, "{\"ok\":true,\"message\":\"Channel switch initiated\"}");
-    return ESP_OK;
-}
-
-/**
- * GET /settings/dwell_time
- * Get current dwell time setting
- */
-static esp_err_t h_get_dwell_time(httpd_req_t *req) {
-    uint32_t dwell_time = animation_player_get_dwell_time();
-    char response[128];
-    snprintf(response, sizeof(response), "{\"ok\":true,\"data\":{\"dwell_time\":%lu}}", (unsigned long)dwell_time);
-    send_json(req, 200, response);
-    return ESP_OK;
-}
-
-/**
- * GET /channels/stats
- * Get cached artwork counts for each Makapix channel
- */
-static esp_err_t h_get_channels_stats(httpd_req_t *req) {
-    // Cache + serialize stats computation: counting involves SD card IO (stat per entry).
-    // With multiple browser tabs, doing this concurrently can lead to timeouts/failed requests.
-    static SemaphoreHandle_t s_stats_mu = NULL;
-    static int64_t s_last_us = 0;
-    static size_t s_all_total = 0, s_all_cached = 0;
-    static size_t s_promoted_total = 0, s_promoted_cached = 0;
-
-    if (!s_stats_mu) {
-        s_stats_mu = xSemaphoreCreateMutex();
-        // If mutex creation fails, fall back to direct computation (best-effort).
-    }
-
-    const int64_t now_us = esp_timer_get_time();
-    const bool should_refresh = (s_last_us == 0) || ((now_us - s_last_us) > 2 * 1000 * 1000);
-
-    size_t all_total = s_all_total, all_cached = s_all_cached;
-    size_t promoted_total = s_promoted_total, promoted_cached = s_promoted_cached;
-
-    bool have_lock = false;
-    if (s_stats_mu) {
-        have_lock = (xSemaphoreTake(s_stats_mu, pdMS_TO_TICKS(250)) == pdTRUE);
-    }
-
-    if (have_lock || !s_stats_mu) {
-        if (should_refresh) {
-            // Count cached artworks for each channel
-            makapix_channel_count_cached("all", "/sdcard/channel", "/sdcard/vault", &all_total, &all_cached);
-            makapix_channel_count_cached("promoted", "/sdcard/channel", "/sdcard/vault", &promoted_total, &promoted_cached);
-
-            s_all_total = all_total;
-            s_all_cached = all_cached;
-            s_promoted_total = promoted_total;
-            s_promoted_cached = promoted_cached;
-            s_last_us = now_us;
-        }
-        if (have_lock) xSemaphoreGive(s_stats_mu);
-    } else {
-        // Couldn't lock quickly (another request computing). Return last cached values.
-        all_total = s_all_total;
-        all_cached = s_all_cached;
-        promoted_total = s_promoted_total;
-        promoted_cached = s_promoted_cached;
-    }
-
-    char response[256];
-    snprintf(response, sizeof(response),
-             "{\"ok\":true,\"data\":{"
-             "\"all\":{\"total\":%zu,\"cached\":%zu},"
-             "\"promoted\":{\"total\":%zu,\"cached\":%zu}"
-             "}}",
-             all_total, all_cached, promoted_total, promoted_cached);
-    send_json(req, 200, response);
-    return ESP_OK;
-}
-
-/**
- * PUT /settings/dwell_time
- * Set dwell time (1-100000 seconds)
- * Body: {"dwell_time": 30}
- */
-static esp_err_t h_put_dwell_time(httpd_req_t *req) {
-    if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
-        return ESP_OK;
-    }
-
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        if (err_status == 413) {
-            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
-        } else {
-            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        }
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
-
-    cJSON *dwell_item = cJSON_GetObjectItem(root, "dwell_time");
-    if (!dwell_item || !cJSON_IsNumber(dwell_item)) {
-        cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'dwell_time' field\",\"code\":\"INVALID_REQUEST\"}");
-        return ESP_OK;
-    }
-
-    uint32_t dwell_time = (uint32_t)cJSON_GetNumberValue(dwell_item);
-    cJSON_Delete(root);
-
-    // Validate range: 0-100000 seconds (0 disables global override)
-    if (dwell_time > 100000) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid dwell_time (must be 0-100000 seconds)\",\"code\":\"INVALID_DWELL_TIME\"}");
-        return ESP_OK;
-    }
-
-    esp_err_t err = animation_player_set_dwell_time(dwell_time);
-    if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to set dwell_time\",\"code\":\"SET_DWELL_TIME_FAILED\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, "{\"ok\":true}");
-    return ESP_OK;
-}
-
-/**
- * GET /settings/global_seed
- */
-static esp_err_t h_get_global_seed(httpd_req_t *req)
-{
-    uint32_t seed = config_store_get_global_seed();
-    char response[128];
-    snprintf(response, sizeof(response), "{\"ok\":true,\"data\":{\"global_seed\":%lu}}", (unsigned long)seed);
-    send_json(req, 200, response);
-    return ESP_OK;
-}
-
-/**
- * PUT /settings/global_seed
- * Body: {"global_seed": 4011}
- */
-static esp_err_t h_put_global_seed(httpd_req_t *req)
-{
-    if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
-        return ESP_OK;
-    }
-
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        if (err_status == 413) {
-            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
-        } else {
-            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        }
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
-
-    cJSON *seed_item = cJSON_GetObjectItem(root, "global_seed");
-    if (!seed_item || !cJSON_IsNumber(seed_item)) {
-        cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'global_seed' field\",\"code\":\"INVALID_REQUEST\"}");
-        return ESP_OK;
-    }
-
-    uint32_t seed = (uint32_t)cJSON_GetNumberValue(seed_item);
-    cJSON_Delete(root);
-
-    esp_err_t err = config_store_set_global_seed(seed);
-    if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to set global_seed\",\"code\":\"SET_GLOBAL_SEED_FAILED\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, "{\"ok\":true}");
-    return ESP_OK;
-}
-
-/**
- * POST /action/reboot
- * Enqueues reboot command, returns 202 Accepted
- */
-static esp_err_t h_post_reboot(httpd_req_t *req) {
-    // Allow empty body, but if provided and not JSON, enforce 415
-    if (req->content_len > 0 && !ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
-        return ESP_OK;
-    }
-
-    if (!api_enqueue_reboot()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"reboot\"}}");
-    return ESP_OK;
-}
-
-/**
- * POST /action/swap_next
- * Enqueues swap_next command, returns 202 Accepted
- * Returns 409 Conflict if state is ERROR
- */
-static esp_err_t h_post_swap_next(httpd_req_t *req) {
-    if (app_state_get() == STATE_ERROR) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"Bad state\",\"code\":\"BAD_STATE\"}");
-        return ESP_OK;
-    }
-
-    if (req->content_len > 0 && !ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
-        return ESP_OK;
-    }
-
-    if (!api_enqueue_swap_next()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"swap_next\"}}");
-    return ESP_OK;
-}
-
-/**
- * POST /action/swap_back
- * Enqueues swap_back command, returns 202 Accepted
- * Returns 409 Conflict if state is ERROR
- */
-static esp_err_t h_post_swap_back(httpd_req_t *req) {
-    if (app_state_get() == STATE_ERROR) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"Bad state\",\"code\":\"BAD_STATE\"}");
-        return ESP_OK;
-    }
-
-    if (req->content_len > 0 && !ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
-        return ESP_OK;
-    }
-
-    if (!api_enqueue_swap_back()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"swap_back\"}}");
-    return ESP_OK;
-}
-
-/**
- * POST /action/pause
- * Enqueues pause command, returns 202 Accepted
- */
-static esp_err_t h_post_pause(httpd_req_t *req) {
-    if (req->content_len > 0 && !ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
-        return ESP_OK;
-    }
-
-    if (!api_enqueue_pause()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"pause\"}}");
-    return ESP_OK;
-}
-
-/**
- * POST /action/resume
- * Enqueues resume command, returns 202 Accepted
- */
-static esp_err_t h_post_resume(httpd_req_t *req) {
-    if (req->content_len > 0 && !ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
-        return ESP_OK;
-    }
-
-    if (!api_enqueue_resume()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"resume\"}}");
-    return ESP_OK;
-}
-
-/**
- * GET /rotation
- * Returns current screen rotation angle
- */
-static esp_err_t h_get_rotation(httpd_req_t *req) {
-    screen_rotation_t rotation = app_get_screen_rotation();
-    
-    cJSON *root = cJSON_CreateObject();
-    if (!root) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-    
-    cJSON_AddBoolToObject(root, "ok", true);
-    cJSON_AddNumberToObject(root, "rotation", (double)rotation);
-    
-    char *json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    
-    if (!json_str) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-    
-    send_json(req, 200, json_str);
-    free(json_str);
-    return ESP_OK;
-}
-
-/**
- * POST /rotation
- * Sets screen rotation angle
- * Body: {"rotation": 90}
- */
-static esp_err_t h_post_rotation(httpd_req_t *req) {
-    if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
-        return ESP_OK;
-    }
-    
-    // Read request body
-    char *buf = malloc(req->content_len + 1);
-    if (!buf) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-    
-    int ret = httpd_req_recv(req, buf, req->content_len);
-    if (ret <= 0) {
-        free(buf);
-        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-            httpd_resp_send_408(req);
-        }
-        return ESP_FAIL;
-    }
-    buf[ret] = '\0';
-    
-    // Parse JSON
-    cJSON *root = cJSON_Parse(buf);
-    free(buf);
-    
-    if (!root) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
-    
-    cJSON *rotation_item = cJSON_GetObjectItem(root, "rotation");
-    if (!rotation_item || !cJSON_IsNumber(rotation_item)) {
-        cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'rotation' field\",\"code\":\"INVALID_REQUEST\"}");
-        return ESP_OK;
-    }
-    
-    int rotation_value = (int)cJSON_GetNumberValue(rotation_item);
-    cJSON_Delete(root);
-    
-    // Validate rotation value
-    if (rotation_value != 0 && rotation_value != 90 && rotation_value != 180 && rotation_value != 270) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid rotation angle (must be 0, 90, 180, or 270)\",\"code\":\"INVALID_ROTATION\"}");
-        return ESP_OK;
-    }
-    
-    // Apply rotation
-    esp_err_t err = app_set_screen_rotation((screen_rotation_t)rotation_value);
-    if (err == ESP_ERR_INVALID_STATE) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"Rotation operation already in progress\",\"code\":\"ROTATION_IN_PROGRESS\"}");
-        return ESP_OK;
-    } else if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to set rotation\",\"code\":\"ROTATION_FAILED\"}");
-        return ESP_OK;
-    }
-    
-    send_json(req, 200, "{\"ok\":true,\"data\":{\"rotation\":null}}");
-    return ESP_OK;
-}
-
 // ---------- Network Diagnostics ----------
 
 static void log_all_netifs(void) {
     ESP_LOGI(HTTP_API_TAG, "=== Network Interface Diagnostics ===");
     
-    // Iterate all network interfaces
     esp_netif_t *netif = NULL;
     int count = 0;
     while ((netif = esp_netif_next(netif)) != NULL) {
@@ -1298,10 +415,6 @@ static void log_all_netifs(void) {
 }
 
 static void verify_server_listening(void) {
-    // Try to connect to our own HTTP server to verify it's actually listening.
-    // Test both loopback and the device's own STA IP. If "own IP" fails locally, the server
-    // may be bound to loopback-only, which would explain why LAN clients can't connect.
-
     const struct {
         const char *name;
         bool use_loopback;
@@ -1336,7 +449,6 @@ static void verify_server_listening(void) {
         addr.sin_port = htons(80);
         addr.sin_addr.s_addr = targets[i].use_loopback ? htonl(INADDR_LOOPBACK) : sta_ip.ip.addr;
 
-        // Set non-blocking to avoid long timeout
         int flags = fcntl(sock, F_GETFL, 0);
         (void)fcntl(sock, F_SETFL, flags | O_NONBLOCK);
 
@@ -1418,8 +530,6 @@ esp_err_t http_api_start(void) {
 
     // Create worker task if not exists
     if (!s_worker) {
-        // This task executes user actions (swap/OTA/etc). These paths can be stack-hungry due to
-        // nested calls + logging/formatting, so keep a healthy margin to avoid stack protection faults.
         BaseType_t ret = xTaskCreate(api_worker_task, "api_worker", 8192, NULL, 5, &s_worker);
         if (ret != pdPASS) {
             ESP_LOGE(HTTP_API_TAG, "Failed to create worker task");
@@ -1429,7 +539,6 @@ esp_err_t http_api_start(void) {
     }
 
 #if CONFIG_P3A_PICO8_ENABLE
-    // Initialize PICO-8 stream parser (always, not just for USB)
     esp_err_t stream_init_ret = pico8_stream_init();
     if (stream_init_ret != ESP_OK) {
         ESP_LOGW(HTTP_API_TAG, "PICO-8 stream init failed: %s (continuing anyway)", esp_err_to_name(stream_init_ret));
@@ -1438,11 +547,11 @@ esp_err_t http_api_start(void) {
 
     // Start HTTP server
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
-    cfg.stack_size = 16384;  // Increased to prevent stack overflow in WebSocket handlers
+    cfg.stack_size = 16384;
     cfg.server_port = 80;
     cfg.lru_purge_enable = true;
-    cfg.max_open_sockets = 6;   // Limit connections to leave sockets for downloads (MQTT, HTTP client)
-    cfg.max_uri_handlers = 12;  // Reduced: most endpoints are multiplexed via method routers
+    cfg.max_open_sockets = 6;
+    cfg.max_uri_handlers = 12;
     cfg.uri_match_fn = httpd_uri_match_wildcard;
     cfg.open_fn = http_open_fn;
     cfg.close_fn = http_close_fn;
@@ -1461,7 +570,7 @@ esp_err_t http_api_start(void) {
     }
     ESP_LOGI(HTTP_API_TAG, "HTTP server started on port %d", cfg.server_port);
 
-    // Register dedicated handlers first (more specific URIs must be registered before catch-all routers)
+    // Register dedicated handlers first
     httpd_uri_t u = {0};
 
     u.uri = "/status";
@@ -1496,7 +605,6 @@ esp_err_t http_api_start(void) {
 
     ESP_LOGI(HTTP_API_TAG, "HTTP API server started on port 80");
     
-    // Diagnostic: log network interfaces and verify server is listening
     log_all_netifs();
     verify_server_listening();
     
@@ -1509,6 +617,5 @@ esp_err_t http_api_stop(void) {
         s_server = NULL;
         ESP_LOGI(HTTP_API_TAG, "HTTP API server stopped");
     }
-    // Worker task and queue remain active for simplicity
     return ESP_OK;
 }

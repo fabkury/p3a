@@ -9,11 +9,14 @@ endif()
 
 idf_component_register(SRCS "http_api.c"
                              "http_api_utils.c"
+                             "http_api_rest.c"
                              "http_api_pages.c"
+                             "http_api_page_root.c"
+                             "http_api_page_network.c"
+                             "http_api_page_seed.c"
                              "http_api_pico8.c"
                              "http_api_ota.c"
                              "http_api_upload.c"
                     INCLUDE_DIRS "."
                     REQUIRES ${http_api_requires}
                     PRIV_REQUIRES main)
-

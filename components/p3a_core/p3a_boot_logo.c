@@ -96,9 +96,12 @@ int p3a_boot_logo_render(uint8_t *buffer, int width, int height, size_t stride)
         }
     }
 
-    // Calculate centered position for 2x scaled logo
-    int logo_x = (width - p3a_logo_scaled_w) / 2;
-    int logo_y = (height - p3a_logo_scaled_h) / 2;
+    // Calculate centered position for scaled logo
+    const int scale = 3;
+    const int logo_w = p3a_logo_w * scale;
+    const int logo_h = p3a_logo_h * scale;
+    int logo_x = (width - logo_w) / 2;
+    int logo_y = (height - logo_h) / 2;
 
     if (elapsed_ms < P3A_BOOT_LOGO_FADE_IN_MS) {
         // Phase 1: Fade-in with smoothstep curve (0 to 1.5 seconds)
@@ -112,14 +115,17 @@ int p3a_boot_logo_render(uint8_t *buffer, int width, int height, size_t stride)
             logo_x, logo_y,
             alpha,
             bg_r, bg_g, bg_b,
-            2  // 2x scale
+            scale
         );
     } else {
         // Phase 2: Full opacity hold (1.5 to 3.0 seconds)
         // Use direct blit without alpha blending for efficiency
-        p3a_logo_blit_rgb888_2x(
+        p3a_logo_blit_rgb888_alpha(
             buffer, width, height, stride,
-            logo_x, logo_y
+            logo_x, logo_y,
+            255,
+            bg_r, bg_g, bg_b,
+            scale
         );
     }
 

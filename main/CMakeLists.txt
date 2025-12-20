@@ -3,6 +3,8 @@ set(srcs
     "app_touch.c"
     "p3a_main.c"
     "display_renderer.c"
+    "display_fps_overlay.c"
+    "display_upscaler.c"
     "animation_player.c"
     "animation_player_render.c"
     "animation_player_loader.c"

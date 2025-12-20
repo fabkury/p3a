@@ -63,8 +63,9 @@ endif()
 # Post-Build: Copy binaries to release directory and generate SHA256
 # =============================================================================
 # This creates a helper script that runs after the build to:
-# 1. Copy binaries to build/release/v{version}/ (or /dev/ for dev builds)
+# 1. Copy binaries to release/v{version}/ (or /dev/ for dev builds) in project root
 # 2. Generate .sha256 checksum files
+# Note: Release folder is outside build/ so it persists across clean builds
 
 # Determine if this is a dev build (contains -dev, -alpha, -beta, -rc, -test)
 string(REGEX MATCH "-(dev|alpha|beta|rc|test)" IS_DEV_BUILD "${PROJECT_VER}")
@@ -86,7 +87,7 @@ import shutil
 build_dir = sys.argv[1] if len(sys.argv) > 1 else '.'
 project_dir = sys.argv[2] if len(sys.argv) > 2 else os.path.dirname(build_dir)
 release_subdir = '${RELEASE_SUBDIR}'
-release_dir = os.path.join(build_dir, release_subdir)
+release_dir = os.path.join(project_dir, release_subdir)
 version = '${PROJECT_VER}'
 
 # Create release directory

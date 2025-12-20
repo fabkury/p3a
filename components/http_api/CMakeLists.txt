@@ -8,7 +8,9 @@ if(CONFIG_OTA_DEV_MODE)
 endif()
 
 idf_component_register(SRCS "http_api.c"
+                             "http_api_utils.c"
                              "http_api_pages.c"
+                             "http_api_pico8.c"
                              "http_api_ota.c"
                              "http_api_upload.c"
                     INCLUDE_DIRS "."

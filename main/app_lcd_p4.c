@@ -24,6 +24,7 @@
 #include "app_lcd.h"
 #include "animation_player.h"
 #include "ugfx_ui.h"
+#include "p3a_boot_logo.h"
 
 // Forward declaration for auto-swap timer reset
 extern void auto_swap_reset_timer(void);
@@ -48,6 +49,16 @@ esp_err_t app_lcd_init(void)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize board display: %s", esp_err_to_name(err));
         return err;
+    }
+
+    // Step 1.5: Initialize boot logo timer immediately
+    // This starts the logo display timer so rendering begins as soon as the
+    // render task starts. All subsequent initialization (SD card, channels, etc.)
+    // proceeds in parallel while the logo is displayed.
+    err = p3a_boot_logo_init();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Boot logo init failed: %s (continuing without logo)", esp_err_to_name(err));
+        // Non-fatal - continue without boot logo
     }
 
     // Step 2: Get hardware info from board component

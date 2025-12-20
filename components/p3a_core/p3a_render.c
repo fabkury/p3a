@@ -5,6 +5,8 @@
 
 #include "p3a_render.h"
 #include "p3a_state.h"
+#include "p3a_boot_logo.h"
+#include "p3a_board.h"
 #include "esp_log.h"
 #include <string.h>
 #include <stdio.h>
@@ -103,6 +105,17 @@ esp_err_t p3a_render_frame(uint8_t *buffer, size_t stride, p3a_render_result_t *
     
     result->frame_delay_ms = 100;  // Default
     result->buffer_modified = false;
+    
+    // Boot logo has highest priority - exclusive screen access during boot
+    if (p3a_boot_logo_is_active()) {
+        int delay = p3a_boot_logo_render(buffer, P3A_DISPLAY_WIDTH, P3A_DISPLAY_HEIGHT, stride);
+        if (delay > 0) {
+            result->frame_delay_ms = delay;
+            result->buffer_modified = true;
+            return ESP_OK;
+        }
+        // If delay < 0, boot logo just expired, fall through to normal rendering
+    }
     
     p3a_state_t state = p3a_state_get();
     

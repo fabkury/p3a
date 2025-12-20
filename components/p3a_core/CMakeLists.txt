@@ -3,13 +3,17 @@ idf_component_register(
         "p3a_state.c"
         "p3a_touch_router.c"
         "p3a_render.c"
+        "p3a_logo.c"
+        "p3a_boot_logo.c"
     INCLUDE_DIRS
         "include"
     REQUIRES
         esp_common
         freertos
         nvs_flash
+        esp_timer
+        config_store
+        p3a_board_ep44b
     PRIV_REQUIRES
         json
 )
-

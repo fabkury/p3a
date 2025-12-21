@@ -11,6 +11,7 @@
 #include "makapix_mqtt.h"
 #include "makapix_api.h"
 #include "makapix_channel_impl.h"
+#include "makapix_channel_events.h"
 #include "makapix_artwork.h"
 #include "download_manager.h"
 #include "channel_interface.h"

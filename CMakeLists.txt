@@ -11,7 +11,15 @@ cmake_minimum_required(VERSION 3.16)
 # - Increment MINOR for new features (backward compatible)
 # - Increment PATCH for bug fixes
 # For testing OTA, use pre-release versions on GitHub
-set(PROJECT_VER "0.6.0-dev")
+set(PROJECT_VER "0.6.2-dev")
+# =============================================================================
+
+# =============================================================================
+# Flasher Tool Build (Windows executable with embedded firmware)
+# =============================================================================
+# Set P3A_BUILD_FLASHER to OFF to skip flasher build (faster dev builds)
+# Set to ON for release builds that need the flasher executable
+set(P3A_BUILD_FLASHER OFF)
 # =============================================================================
 
 # Parse PROJECT_VER to extract major, minor, patch components
@@ -312,14 +320,8 @@ add_custom_command(
     VERBATIM
 )
 
-# =============================================================================
-# Flasher Tool Build (Windows executable with embedded firmware)
-# =============================================================================
-# Set P3A_BUILD_FLASHER to OFF to skip flasher build (faster dev builds)
-# Set to ON for release builds that need the flasher executable
-option(P3A_BUILD_FLASHER "Build the p3a-flasher.exe with embedded firmware" ON)
 
-if(P3A_BUILD_FLASHER AND WIN32)
+if(P3A_BUILD_FLASHER AND CMAKE_HOST_WIN32)
     message(STATUS "Flasher build: ENABLED (set -DP3A_BUILD_FLASHER=OFF to disable)")
     
     # Build flasher after release files are created
@@ -334,7 +336,7 @@ if(P3A_BUILD_FLASHER AND WIN32)
         VERBATIM
     )
 else()
-    if(NOT WIN32)
+    if(NOT CMAKE_HOST_WIN32)
         message(STATUS "Flasher build: SKIPPED (Windows only)")
     else()
         message(STATUS "Flasher build: DISABLED (set -DP3A_BUILD_FLASHER=ON to enable)")

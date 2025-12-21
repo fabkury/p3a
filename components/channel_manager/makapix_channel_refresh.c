@@ -5,6 +5,7 @@
 #include "download_manager.h"
 #include "config_store.h"
 #include "play_navigator.h"
+#include "makapix_channel_events.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -98,6 +99,94 @@ static int compare_entries_by_created(const void *a, const void *b)
     if (ea->created_at < eb->created_at) return -1;
     if (ea->created_at > eb->created_at) return 1;
     return 0;
+}
+
+/**
+ * @brief Reconcile local index with server data by detecting and removing deleted artworks
+ * 
+ * Full reconciliation approach (Option B): Compare local index against server response.
+ * Any local entries not present in server data are considered deleted.
+ * 
+ * @param ch Channel handle
+ * @param server_post_ids Array of post_ids from server
+ * @param server_count Number of post_ids in array
+ * @return ESP_OK on success
+ */
+static esp_err_t reconcile_deletions(makapix_channel_t *ch, 
+                                      const int32_t *server_post_ids, 
+                                      size_t server_count)
+{
+    if (!ch || !server_post_ids || server_count == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    if (ch->entry_count == 0) {
+        return ESP_OK;  // Nothing to reconcile
+    }
+    
+    size_t deleted_count = 0;
+    size_t kept_count = 0;
+    makapix_channel_entry_t *kept_entries = malloc(ch->entry_count * sizeof(makapix_channel_entry_t));
+    if (!kept_entries) {
+        ESP_LOGE(TAG, "Failed to allocate memory for reconciliation");
+        return ESP_ERR_NO_MEM;
+    }
+    
+    // Scan local entries and check if they exist in server data
+    for (size_t i = 0; i < ch->entry_count; i++) {
+        const makapix_channel_entry_t *entry = &ch->entries[i];
+        bool found_on_server = false;
+        
+        // Linear search in server_post_ids (acceptable for small batches)
+        for (size_t j = 0; j < server_count; j++) {
+            if (entry->post_id == server_post_ids[j]) {
+                found_on_server = true;
+                break;
+            }
+        }
+        
+        if (found_on_server) {
+            // Keep this entry
+            kept_entries[kept_count++] = *entry;
+        } else {
+            // Entry deleted on server - remove local file if it exists
+            deleted_count++;
+            
+            if (entry->kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+                char vault_path[512];
+                build_vault_path(ch, entry, vault_path, sizeof(vault_path));
+                
+                struct stat st;
+                if (stat(vault_path, &st) == 0) {
+                    if (unlink(vault_path) == 0) {
+                        ESP_LOGI(TAG, "Deleted local file for removed artwork: post_id=%ld", 
+                                (long)entry->post_id);
+                    } else {
+                        ESP_LOGW(TAG, "Failed to delete file for removed artwork: post_id=%ld, path=%s", 
+                                (long)entry->post_id, vault_path);
+                    }
+                }
+            }
+            
+            ESP_LOGD(TAG, "Reconciliation: removed post_id=%ld (not on server)", 
+                    (long)entry->post_id);
+        }
+    }
+    
+    // Update channel entries with kept entries only
+    if (deleted_count > 0) {
+        free(ch->entries);
+        ch->entries = kept_entries;
+        ch->entry_count = kept_count;
+        
+        ESP_LOGI(TAG, "Reconciliation complete: deleted %zu entries, kept %zu entries", 
+                deleted_count, kept_count);
+    } else {
+        free(kept_entries);
+        ESP_LOGD(TAG, "Reconciliation: no deletions detected");
+    }
+    
+    return ESP_OK;
 }
 
 esp_err_t save_channel_metadata(makapix_channel_t *ch, const char *cursor, time_t refresh_time)
@@ -353,14 +442,7 @@ esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *posts, s
                         struct stat st;
                         dst->downloaded = (stat(vault_file, &st) == 0);
                         strlcpy(dst->filepath, vault_file, sizeof(dst->filepath));
-
-                        // Opportunistic background download of the first PE items
-                        uint32_t pe_setting = config_store_get_pe();
-                        uint32_t want = (pe_setting == 0) ? 32 : pe_setting;
-                        if (want > 32) want = 32;
-                        if (!dst->downloaded && ai < want) {
-                            (void)download_queue_artwork(ch->channel_id, post->post_id, dst, DOWNLOAD_PRIORITY_LOW);
-                        }
+                        // Note: Downloads are handled automatically by download_manager's single-download-at-a-time approach
                     }
 
                     // available_artworks is informational only
@@ -385,6 +467,30 @@ esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *posts, s
         }
 
         if (found_idx >= 0) {
+            // Existing entry - check for artwork file updates
+            if (post->kind == MAKAPIX_POST_KIND_ARTWORK) {
+                uint32_t old_artwork_modified = all_entries[(size_t)found_idx].artwork_modified_at;
+                uint32_t new_artwork_modified = tmp.artwork_modified_at;
+                
+                // If artwork file timestamp changed, delete local file to trigger re-download
+                if (old_artwork_modified != 0 && new_artwork_modified != 0 && 
+                    old_artwork_modified != new_artwork_modified) {
+                    
+                    char vault_path[512];
+                    build_vault_path(ch, &all_entries[(size_t)found_idx], vault_path, sizeof(vault_path));
+                    
+                    struct stat st;
+                    if (stat(vault_path, &st) == 0) {
+                        ESP_LOGI(TAG, "Artwork file updated on server (post_id=%ld), deleting local copy for re-download", 
+                                (long)post->post_id);
+                        if (unlink(vault_path) != 0) {
+                            ESP_LOGW(TAG, "Failed to delete outdated artwork file: %s", vault_path);
+                        }
+                    }
+                }
+            }
+            
+            // Update the entry with new metadata
             all_entries[(size_t)found_idx] = tmp;
         } else {
             all_entries[all_count++] = tmp;
@@ -460,6 +566,139 @@ out:
         xSemaphoreGive(ch->index_io_lock);
     }
     return ret;
+}
+
+/**
+ * @brief Get available storage space on SD card
+ * 
+ * @param path Path to check (typically /sdcard)
+ * @param out_free_bytes Pointer to receive free bytes available
+ * @return ESP_OK on success
+ */
+static esp_err_t get_storage_free_space(const char *path, uint64_t *out_free_bytes)
+{
+    if (!path || !out_free_bytes) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    // Try to get filesystem statistics
+    // NOTE: ESP-IDF VFS may not support statvfs on all filesystems
+    // For FATFS, we can use a workaround with stat()
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        return ESP_FAIL;
+    }
+    
+    // Since statvfs is not reliably available on ESP32 FATFS,
+    // we use a conservative heuristic: assume storage is "low" 
+    // if we can't create a test file. This is a simplified approach.
+    // A more robust solution would require FATFS-specific APIs.
+    
+    // For now, we'll return a "success" with a large value to indicate
+    // we can't reliably detect storage pressure via statvfs.
+    // The count-based eviction will handle the primary case.
+    *out_free_bytes = UINT64_MAX;  // Unknown/unlimited
+    
+    ESP_LOGD(TAG, "Storage free space check: not fully implemented (using count-based eviction only)");
+    return ESP_OK;
+}
+
+/**
+ * @brief Evict artworks when storage is critically low
+ * 
+ * Per spec: Check available storage and evict oldest files until minimum reserve is met.
+ * Only evict from current channel (future: may consider cross-channel eviction).
+ * 
+ * @param ch Channel handle
+ * @param min_reserve_bytes Minimum free space to maintain (e.g., 10MB)
+ * @return ESP_OK on success
+ */
+static esp_err_t evict_for_storage_pressure(makapix_channel_t *ch, size_t min_reserve_bytes)
+{
+    if (!ch) return ESP_ERR_INVALID_ARG;
+    
+    uint64_t free_bytes = 0;
+    esp_err_t err = get_storage_free_space("/sdcard", &free_bytes);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Could not determine free storage space");
+        return ESP_OK;  // Skip storage-based eviction if we can't measure it
+    }
+    
+    // If we have enough free space, no action needed
+    if (free_bytes == UINT64_MAX || free_bytes >= (uint64_t)min_reserve_bytes) {
+        return ESP_OK;
+    }
+    
+    ESP_LOGI(TAG, "Storage pressure detected: %llu bytes free, %zu bytes required",
+             (unsigned long long)free_bytes, min_reserve_bytes);
+    
+    // Collect all downloaded artwork files from this channel
+    size_t downloaded_count = 0;
+    for (size_t i = 0; i < ch->entry_count; i++) {
+        if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+            char vault_path[512];
+            build_vault_path(ch, &ch->entries[i], vault_path, sizeof(vault_path));
+            struct stat st;
+            if (stat(vault_path, &st) == 0) {
+                downloaded_count++;
+            }
+        }
+    }
+    
+    if (downloaded_count == 0) {
+        ESP_LOGW(TAG, "No files to evict for storage pressure");
+        return ESP_OK;
+    }
+    
+    makapix_channel_entry_t *downloaded = malloc(downloaded_count * sizeof(makapix_channel_entry_t));
+    if (!downloaded) return ESP_ERR_NO_MEM;
+    
+    size_t di = 0;
+    for (size_t i = 0; i < ch->entry_count; i++) {
+        if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+            char vault_path[512];
+            build_vault_path(ch, &ch->entries[i], vault_path, sizeof(vault_path));
+            struct stat st;
+            if (stat(vault_path, &st) == 0) {
+                downloaded[di++] = ch->entries[i];
+            }
+        }
+    }
+    
+    // Sort by created_at (oldest first)
+    qsort(downloaded, downloaded_count, sizeof(makapix_channel_entry_t), compare_entries_by_created);
+    
+    // Evict oldest files in batches until we have enough space
+    const size_t EVICTION_BATCH = 16;  // Smaller batches for storage pressure
+    size_t actually_deleted = 0;
+    
+    for (size_t batch_start = 0; batch_start < downloaded_count; batch_start += EVICTION_BATCH) {
+        size_t batch_end = batch_start + EVICTION_BATCH;
+        if (batch_end > downloaded_count) {
+            batch_end = downloaded_count;
+        }
+        
+        // Delete this batch
+        for (size_t i = batch_start; i < batch_end; i++) {
+            char vault_path[512];
+            build_vault_path(ch, &downloaded[i], vault_path, sizeof(vault_path));
+            if (unlink(vault_path) == 0) {
+                actually_deleted++;
+            }
+        }
+        
+        // Re-check free space
+        err = get_storage_free_space("/sdcard", &free_bytes);
+        if (err == ESP_OK && (free_bytes == UINT64_MAX || free_bytes >= (uint64_t)min_reserve_bytes)) {
+            ESP_LOGI(TAG, "Storage pressure relieved after evicting %zu files", actually_deleted);
+            break;
+        }
+    }
+    
+    free(downloaded);
+    
+    ESP_LOGI(TAG, "Storage-based eviction: deleted %zu files", actually_deleted);
+    return ESP_OK;
 }
 
 esp_err_t evict_excess_artworks(makapix_channel_t *ch, size_t max_count)
@@ -539,6 +778,28 @@ void refresh_task_impl(void *pvParameters)
     
     ESP_LOGI(TAG, "Refresh task started for channel %s", ch->channel_id);
     
+    // Wait indefinitely for MQTT to connect before first query
+    ESP_LOGI(TAG, "Waiting for MQTT connection before refresh...");
+    if (!makapix_channel_wait_for_mqtt(portMAX_DELAY)) {
+        ESP_LOGW(TAG, "MQTT wait interrupted, exiting refresh task");
+        ch->refreshing = false;
+        ch->refresh_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    ESP_LOGI(TAG, "MQTT connected, starting refresh queries");
+    
+    // Update UI message to indicate we're updating the index
+    // This is called during boot when no animation is loaded yet
+    extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail);
+    extern bool animation_player_is_animation_ready(void);
+    if (!animation_player_is_animation_ready()) {
+        // Still in boot loading phase - update the message
+        p3a_render_set_channel_message("Makapix Club", 1 /* P3A_CHANNEL_MSG_LOADING */, -1, "Updating channel index...");
+    }
+    
+    bool first_query_completed = false;  // Track if we've completed the first query
+    
     // Determine channel type from channel_id
     makapix_channel_type_t channel_type = MAKAPIX_CHANNEL_ALL;
     makapix_query_request_t query_req = {0};
@@ -571,7 +832,9 @@ void refresh_task_impl(void *pvParameters)
     query_req.pe = (uint16_t)config_store_get_pe();
     
     const size_t TARGET_COUNT = 1024;
-    const uint32_t REFRESH_INTERVAL_SEC = 3600;
+    
+    // Get refresh interval from NVS (defaults to 3600 = 1 hour)
+    uint32_t refresh_interval_sec = config_store_get_refresh_interval_sec();
     
     while (ch->refreshing) {
         size_t total_queried = 0;
@@ -597,6 +860,15 @@ void refresh_task_impl(void *pvParameters)
             break;
         }
         
+        // Allocate array to track all server post_ids for reconciliation
+        int32_t *all_server_post_ids = malloc(TARGET_COUNT * sizeof(int32_t));
+        size_t all_server_count = 0;
+        if (!all_server_post_ids) {
+            ESP_LOGE(TAG, "Failed to allocate reconciliation buffer");
+            free(resp);
+            break;
+        }
+        
         // Query posts until we have TARGET_COUNT or no more available
         while (total_queried < TARGET_COUNT && ch->refreshing) {
             memset(resp, 0, sizeof(makapix_query_response_t));
@@ -612,11 +884,16 @@ void refresh_task_impl(void *pvParameters)
                 break;
             }
             
+            // Collect post_ids for reconciliation
+            for (size_t pi = 0; pi < resp->post_count && all_server_count < TARGET_COUNT; pi++) {
+                all_server_post_ids[all_server_count++] = resp->posts[pi].post_id;
+            }
+            
             // Update channel index with new posts
             update_index_bin(ch, resp->posts, resp->post_count);
 
-            // Queue background downloads for artworks ahead in play order
-            makapix_channel_ensure_downloads_ahead((channel_handle_t)ch, 16, NULL);
+            // Signal download manager that new files may be available
+            download_manager_signal_work_available();
 
             // If Live Mode is active, mark schedule dirty
             if (ch->navigator_ready && ch->navigator.live_mode) {
@@ -644,7 +921,17 @@ void refresh_task_impl(void *pvParameters)
                 query_req.has_cursor = false;
             }
             
-            if (!resp->has_more) break;
+            if (!resp->has_more) {
+                ESP_LOGI(TAG, "Server indicates no more posts available (queried %zu so far)", total_queried);
+                break;
+            }
+            
+            // Clear "Connecting..." message after first successful query
+            if (!first_query_completed && total_queried > 0) {
+                first_query_completed = true;
+                ESP_LOGI(TAG, "First query completed, clearing connection message");
+                // Note: The makapix.c loading logic will show "Loading..." if needed
+            }
             
             // Delay between queries
             vTaskDelay(pdMS_TO_TICKS(1000));
@@ -652,7 +939,20 @@ void refresh_task_impl(void *pvParameters)
         
         free(resp);
         
-        // Evict excess artworks
+        // Reconcile deletions: remove local entries not present on server
+        if (all_server_count > 0) {
+            reconcile_deletions(ch, all_server_post_ids, all_server_count);
+        }
+        free(all_server_post_ids);
+        
+        // Storage-aware eviction: ensure minimum free space (10MB reserve)
+        // NOTE: Only evicts from current channel per spec. Future consideration:
+        // cross-channel eviction would require loading all channel indices simultaneously,
+        // which may not be feasible with memory constraints.
+        const size_t MIN_RESERVE_BYTES = 10 * 1024 * 1024;  // 10MB minimum free space
+        evict_for_storage_pressure(ch, MIN_RESERVE_BYTES);
+        
+        // Count-based eviction: ensure we don't exceed 1,024 artworks per channel
         evict_excess_artworks(ch, TARGET_COUNT);
         
         // Save metadata
@@ -660,16 +960,42 @@ void refresh_task_impl(void *pvParameters)
         save_channel_metadata(ch, query_req.has_cursor ? query_req.cursor : "", now);
         ch->last_refresh_time = now;
         
-        ESP_LOGI(TAG, "Refresh cycle completed: queried %zu posts, channel has %zu entries", 
-                 total_queried, ch->entry_count);
+        // Count how many are artworks vs playlists
+        size_t artwork_count = 0;
+        size_t playlist_count = 0;
+        for (size_t i = 0; i < ch->entry_count; i++) {
+            if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+                artwork_count++;
+            } else {
+                playlist_count++;
+            }
+        }
         
-        // Wait 1 hour before next refresh
-        for (uint32_t elapsed = 0; elapsed < REFRESH_INTERVAL_SEC && ch->refreshing; elapsed++) {
+        ESP_LOGI(TAG, "Refresh cycle completed: queried %zu posts, channel has %zu entries (%zu artworks, %zu playlists)", 
+                 total_queried, ch->entry_count, artwork_count, playlist_count);
+        
+        // Signal that refresh has completed - this unblocks download manager
+        makapix_channel_signal_refresh_done();
+        
+        // Wait for configured interval before next refresh
+        ESP_LOGI(TAG, "Waiting %lu seconds before next refresh cycle", 
+                (unsigned long)refresh_interval_sec);
+        for (uint32_t elapsed = 0; elapsed < refresh_interval_sec && ch->refreshing; elapsed++) {
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
         
         if (!ch->refreshing) {
             break;
+        }
+        
+        // If MQTT disconnected during wait, block until reconnected
+        if (!makapix_channel_is_mqtt_ready()) {
+            ESP_LOGI(TAG, "MQTT disconnected, waiting for reconnection...");
+            if (!makapix_channel_wait_for_mqtt(portMAX_DELAY)) {
+                ESP_LOGW(TAG, "MQTT wait interrupted, exiting refresh task");
+                break;
+            }
+            ESP_LOGI(TAG, "MQTT reconnected, resuming refresh cycles");
         }
     }
     

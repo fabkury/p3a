@@ -7,6 +7,7 @@
 #include "esp_err.h"
 #include "channel_interface.h"
 #include "playlist_manager.h"
+#include "pcg32_reversible.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,6 +54,9 @@ typedef struct {
     uint32_t live_count;
     uint32_t *live_p;               // p index into order_indices
     uint32_t *live_q;               // q index within playlist (0..effective-1)
+    
+    // PCG32 PRNG for reversible random ordering
+    pcg32_rng_t pcg_rng;
 } play_navigator_t;
 
 /**

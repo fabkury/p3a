@@ -101,6 +101,16 @@ void animation_player_resume_sd_access(void);
 bool animation_player_is_sd_paused(void);
 
 /**
+ * @brief Check if an animation is ready to play
+ * 
+ * Returns true only when an animation has been successfully loaded
+ * into the front buffer and is ready for playback.
+ * 
+ * @return true if animation is ready, false if still loading or no animation loaded
+ */
+bool animation_player_is_animation_ready(void);
+
+/**
  * @brief Submit a PICO-8 frame for rendering
  * 
  * @deprecated Use pico8_render_submit_frame() instead

@@ -834,4 +834,61 @@ bool config_store_get_max_speed_playback(void)
     return s_max_speed_playback;
 }
 
+// ============================================================================
+// Refresh Interval (persisted)
+// ============================================================================
+
+esp_err_t config_store_set_refresh_interval_sec(uint32_t interval_sec)
+{
+    // Validate reasonable range: 60 seconds to 24 hours
+    if (interval_sec < 60 || interval_sec > 86400) {
+        ESP_LOGE(TAG, "Invalid refresh interval: %lu sec (must be 60-86400)", 
+                 (unsigned long)interval_sec);
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+    
+    cJSON *item = cJSON_GetObjectItem(cfg, "refresh_interval_sec");
+    if (item) {
+        cJSON_SetNumberValue(item, (double)interval_sec);
+    } else {
+        cJSON_AddNumberToObject(cfg, "refresh_interval_sec", (double)interval_sec);
+    }
+    
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Refresh interval saved: %lu seconds", (unsigned long)interval_sec);
+    }
+    
+    return err;
+}
+
+uint32_t config_store_get_refresh_interval_sec(void)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return 3600;  // Default: 1 hour
+    }
+    
+    uint32_t interval_sec = 3600;  // Default: 1 hour
+    cJSON *item = cJSON_GetObjectItem(cfg, "refresh_interval_sec");
+    if (item && cJSON_IsNumber(item)) {
+        double value = cJSON_GetNumberValue(item);
+        if (value >= 60 && value <= 86400) {
+            interval_sec = (uint32_t)value;
+        }
+    }
+    
+    cJSON_Delete(cfg);
+    return interval_sec;
+}
+
 

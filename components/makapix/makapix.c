@@ -55,6 +55,9 @@ static channel_handle_t create_single_artwork_channel(const char *storage_key, c
 esp_err_t makapix_init(void)
 {
     makapix_store_init();
+    
+    // Initialize MQTT event signaling for channel refresh coordination
+    makapix_channel_events_init();
 
     // Register MQTT connection state callback
     makapix_mqtt_set_connection_callback(makapix_mqtt_connection_callback);
@@ -438,12 +441,6 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         channel_name[copy_len] = '\0';
     }
     
-    // Cancel downloads for the PREVIOUS channel (if different from new channel)
-    if (s_current_channel_id[0] && strcmp(s_current_channel_id, channel_id) != 0) {
-        ESP_LOGI(MAKAPIX_TAG, "Cancelling downloads for previous channel: %s", s_current_channel_id);
-        download_manager_cancel_channel(s_current_channel_id);
-    }
-    
     // Store previous channel ID for error fallback
     strncpy(s_previous_channel_id, s_current_channel_id, sizeof(s_previous_channel_id) - 1);
     s_previous_channel_id[sizeof(s_previous_channel_id) - 1] = '\0';
@@ -495,6 +492,21 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         return err;
     }
     
+    // Show "Connecting..." message if MQTT not yet connected
+    // The refresh task is waiting for MQTT, so let the user know what's happening
+    if (!makapix_mqtt_is_connected()) {
+        ESP_LOGI(MAKAPIX_TAG, "MQTT not connected, showing 'Connecting...' message");
+        p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_LOADING, -1, 
+                                       "Connecting to Makapix Club...");
+        p3a_channel_message_t msg = {
+            .type = P3A_CHANNEL_MSG_LOADING,
+            .progress_percent = -1
+        };
+        snprintf(msg.channel_name, sizeof(msg.channel_name), "%s", channel_name);
+        snprintf(msg.detail, sizeof(msg.detail), "Connecting to Makapix Club...");
+        p3a_state_set_channel_message(&msg);
+    }
+    
     // Get channel stats - total_items is index entries (not necessarily downloaded)
     channel_stats_t stats = {0};
     channel_get_stats(s_current_channel, &stats);
@@ -518,20 +530,33 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     ESP_LOGI(MAKAPIX_TAG, "Channel %s: %zu index entries, %zu locally available", 
              channel_id, stats.total_items, available_count);
     
+    // Setup download callback for this channel (enables background downloads)
+    makapix_channel_setup_download_callback(s_current_channel);
+    
+    // Display title for UI messages is always "Makapix Club"
+    const char *ui_title = "Makapix Club";
+    
     // Decision: show loading UI only if ZERO artworks are locally available
     if (available_count == 0) {
         // No local artworks - need to wait for at least one to be downloaded
         ESP_LOGI(MAKAPIX_TAG, "No local artworks available, waiting for first download...");
         
-        // IMMEDIATELY queue initial downloads (don't wait for the 2-second poll)
-        makapix_channel_ensure_downloads_ahead(s_current_channel, 16, NULL);
-        
-        // Set up loading message UI.
+        // Set up loading message UI based on channel state
         // IMPORTANT: Do NOT switch display render mode here. We keep the display in animation mode
         // and rely on p3a_render to draw the message reliably (avoids blank screen if UI mode fails).
-        ugfx_ui_show_channel_message(channel_name, "Loading from Makapix Club...", -1);
-        p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_LOADING, -1,
-                                       "Fetching from Makapix Club...");
+        const char *loading_message;
+        if (stats.total_items == 0) {
+            // Empty index - waiting for refresh to populate
+            loading_message = "Updating channel index...";
+            ugfx_ui_show_channel_message(ui_title, loading_message, -1);
+            p3a_render_set_channel_message(ui_title, P3A_CHANNEL_MSG_LOADING, -1, loading_message);
+        } else {
+            // Has index but no downloaded files yet - show "Waiting for download..."
+            // The actual "Downloading artwork..." will be shown when download starts
+            loading_message = "Waiting for download...";
+            ugfx_ui_show_channel_message(ui_title, loading_message, -1);
+            p3a_render_set_channel_message(ui_title, P3A_CHANNEL_MSG_DOWNLOADING, -1, loading_message);
+        }
         
         // Wait for FIRST artwork to become available (not the full batch)
         // This is much faster than waiting for all 32
@@ -572,16 +597,28 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
                 break;
             }
             
-            // Update loading message and trigger downloads every 2 seconds
+            // Update loading message every 2 seconds
             if (waited_ms % 2000 == 0) {
                 ESP_LOGI(MAKAPIX_TAG, "Still waiting for first artwork... (%d ms)", waited_ms);
-                char msg[64];
-                snprintf(msg, sizeof(msg), "Loading... (%d sec)", waited_ms / 1000);
-                ugfx_ui_show_channel_message(channel_name, msg, -1);
-                p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_LOADING, -1, msg);
                 
-                // Ensure downloads are being queued (in case queue drained or refresh completed)
-                makapix_channel_ensure_downloads_ahead(s_current_channel, 16, NULL);
+                // Re-check if index was populated (refresh may have completed)
+                size_t current_total = channel_get_post_count(s_current_channel);
+                char msg[64];
+                int msg_type;
+                if (current_total == 0) {
+                    snprintf(msg, sizeof(msg), "Updating index... (%d sec)", waited_ms / 1000);
+                    msg_type = P3A_CHANNEL_MSG_LOADING;
+                } else {
+                    // Check if download is actively happening
+                    if (download_manager_is_busy()) {
+                        snprintf(msg, sizeof(msg), "Downloading artwork...");
+                    } else {
+                        snprintf(msg, sizeof(msg), "Waiting for download...");
+                    }
+                    msg_type = P3A_CHANNEL_MSG_DOWNLOADING;
+                }
+                ugfx_ui_show_channel_message(ui_title, msg, -1);
+                p3a_render_set_channel_message(ui_title, msg_type, -1, msg);
             }
         }
         
@@ -592,7 +629,6 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         // Handle abort
         if (aborted) {
             ESP_LOGI(MAKAPIX_TAG, "Cleaning up aborted channel load for %s", channel_id);
-            download_manager_cancel_channel(channel_id);
             channel_player_clear_channel(s_current_channel);
             channel_destroy(s_current_channel);
             s_current_channel = NULL;
@@ -626,7 +662,6 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
             ugfx_ui_hide_channel_message();
             p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
             
-            download_manager_cancel_channel(channel_id);
             channel_player_clear_channel(s_current_channel);
             channel_destroy(s_current_channel);
             s_current_channel = NULL;
@@ -673,7 +708,6 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     err = channel_start_playback(s_current_channel, CHANNEL_ORDER_ORIGINAL, NULL);
     if (err != ESP_OK) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to start playback: %s", esp_err_to_name(err));
-        download_manager_cancel_channel(channel_id);
         channel_player_clear_channel(s_current_channel);
         channel_destroy(s_current_channel);
         s_current_channel = NULL;
@@ -801,6 +835,10 @@ void makapix_adopt_channel_handle(void *channel)
             s_current_channel_id[sizeof(s_current_channel_id) - 1] = '\0';
             ESP_LOGI(MAKAPIX_TAG, "Adopted channel: %s", s_current_channel_id);
         }
+        
+        // Setup download callback for this channel (enables background downloads)
+        // This is critical for boot-time channel restoration to work properly
+        makapix_channel_setup_download_callback(ch);
     } else {
         s_current_channel_id[0] = '\0';
     }

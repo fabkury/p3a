@@ -15,6 +15,7 @@
 #include "makapix.h"
 #include "p3a_render.h"
 #include "display_renderer.h"
+#include "makapix_channel_events.h"
 
 // Animation player state
 animation_buffer_t s_front_buffer = {0};
@@ -285,13 +286,10 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     }
 
     if (channel_player_get_post_count() == 0) {
-        ESP_LOGE(TAG, "No animation posts loaded");
-        channel_player_deinit();
-        download_manager_deinit();
-        playlist_manager_deinit();
-        playback_controller_deinit();
-        display_renderer_deinit();
-        return ESP_ERR_NOT_FOUND;
+        ESP_LOGI(TAG, "Channel empty, will populate from server");
+        // Don't fail - just continue with empty channel
+        // The p3a_render system will show appropriate message (Connecting... / Loading...)
+        // and playback will start once artworks are downloaded
     }
 
     s_buffer_mutex = xSemaphoreCreateMutex();
@@ -321,29 +319,39 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     memset(&s_front_buffer, 0, sizeof(s_front_buffer));
     memset(&s_back_buffer, 0, sizeof(s_back_buffer));
 
+    // Initialize state-aware rendering EARLY so we can show UI messages
+    // even before the first animation is loaded. This is critical for
+    // showing "Downloading artwork..." messages on fresh boot.
+    (void)p3a_render_init();
+    display_renderer_set_frame_callback(animation_player_render_dispatch_cb, NULL);
+
     err = load_first_animation();
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Unable to load initial animation: %s", esp_err_to_name(err));
-        vSemaphoreDelete(s_loader_sem);
-        s_loader_sem = NULL;
-        vSemaphoreDelete(s_buffer_mutex);
-        s_buffer_mutex = NULL;
-        channel_player_deinit();
-        download_manager_deinit();
-        playlist_manager_deinit();
-        playback_controller_deinit();
-        display_renderer_deinit();
-        return err;
-    }
+        // No animation available yet - this is OK for Makapix channels
+        // where files may not be downloaded yet. Show loading message
+        // and continue initialization. The loader task will pick up
+        // animations as they become available.
+        ESP_LOGW(TAG, "No initial animation available: %s (will wait for downloads)", esp_err_to_name(err));
+        
+        // Show loading message - render system is already initialized above
+        // Use "Makapix Club" as title and indicate we're connecting
+        p3a_render_set_channel_message("Makapix Club", P3A_CHANNEL_MSG_LOADING, -1, 
+                                       "Connecting to Makapix Club...");
+        
+        // Mark front buffer as not ready - will be loaded by loader task
+        s_front_buffer.ready = false;
+        s_front_buffer.prefetch_pending = false;
+        s_front_buffer.prefetch_in_progress = false;
+    } else {
+        esp_err_t prefetch_err = prefetch_first_frame(&s_front_buffer);
+        if (prefetch_err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to prefetch first frame during init: %s", esp_err_to_name(prefetch_err));
+        }
 
-    esp_err_t prefetch_err = prefetch_first_frame(&s_front_buffer);
-    if (prefetch_err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to prefetch first frame during init: %s", esp_err_to_name(prefetch_err));
+        s_front_buffer.ready = true;
+        s_front_buffer.prefetch_pending = false;
+        s_front_buffer.prefetch_in_progress = false;
     }
-
-    s_front_buffer.ready = true;
-    s_front_buffer.prefetch_pending = false;
-    s_front_buffer.prefetch_in_progress = false;
 
     if (xTaskCreate(animation_loader_task,
                     "anim_loader",
@@ -364,11 +372,6 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         display_renderer_deinit();
         return ESP_FAIL;
     }
-
-    // Initialize state-aware rendering and use it as the frame callback.
-    // This enables on-screen "loading channel" messages without switching render modes.
-    (void)p3a_render_init();
-    display_renderer_set_frame_callback(animation_player_render_dispatch_cb, NULL);
 
     return ESP_OK;
 }
@@ -553,6 +556,9 @@ esp_err_t animation_player_begin_sd_export(void)
         return ESP_OK;
     }
 
+    // Signal SD unavailable to pause any pending downloads
+    makapix_channel_signal_sd_unavailable();
+
     animation_loader_wait_for_idle();
 
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
@@ -603,6 +609,9 @@ esp_err_t animation_player_end_sd_export(void)
     } else {
         s_sd_export_active = false;
     }
+
+    // Signal SD available to resume any paused downloads
+    makapix_channel_signal_sd_available();
 
     ESP_LOGI(TAG, "SD card returned to local control");
     return refresh_err;
@@ -668,6 +677,16 @@ bool animation_player_is_sd_paused(void)
         xSemaphoreGive(s_buffer_mutex);
     }
     return paused;
+}
+
+bool animation_player_is_animation_ready(void)
+{
+    bool ready = false;
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        ready = s_front_buffer.ready;
+        xSemaphoreGive(s_buffer_mutex);
+    }
+    return ready;
 }
 
 esp_err_t animation_player_start(void)

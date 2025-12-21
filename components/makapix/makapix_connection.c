@@ -7,6 +7,7 @@
  */
 
 #include "makapix_internal.h"
+#include "makapix_channel_events.h"
 
 /**
  * @brief Timer callback for periodic status publishing
@@ -103,6 +104,9 @@ void makapix_mqtt_connection_callback(bool connected)
         s_makapix_state = MAKAPIX_STATE_CONNECTED;
         ESP_LOGI(MAKAPIX_TAG, "New state: %d (CONNECTED)", s_makapix_state);
         
+        // Signal all waiting refresh tasks that MQTT is now available
+        makapix_channel_signal_mqtt_connected();
+        
         // Publish initial status
         ESP_LOGI(MAKAPIX_TAG, "Publishing initial status...");
         makapix_mqtt_publish_status(makapix_get_current_post_id());
@@ -136,14 +140,13 @@ void makapix_mqtt_connection_callback(bool connected)
             ESP_LOGI(MAKAPIX_TAG, "Status timer restarted");
         }
         
-        // Trigger refresh on the current Makapix channel if one exists
-        // This handles the boot-time case where the channel was loaded before MQTT connected
-        if (s_current_channel && s_current_channel_id[0]) {
-            ESP_LOGI(MAKAPIX_TAG, "Triggering refresh for current channel: %s", s_current_channel_id);
-            channel_request_refresh(s_current_channel);
-        }
+        // Note: No need to explicitly trigger refresh - the refresh task will
+        // automatically proceed once the MQTT connected event is signaled
     } else {
         ESP_LOGI(MAKAPIX_TAG, "MQTT disconnected");
+        
+        // Signal disconnection so refresh tasks will wait for reconnection
+        makapix_channel_signal_mqtt_disconnected();
         
         // Stop status timer to prevent publish attempts during reconnection
         if (s_status_timer) {

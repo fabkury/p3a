@@ -23,6 +23,11 @@ from pathlib import Path
 
 
 def main():
+    # Force UTF-8 output on Windows to support Unicode symbols
+    if sys.platform == 'win32':
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
     if len(sys.argv) < 4:
         print("Usage: python build_flasher.py <project_dir> <version> <release_dir>")
         print("Example: python build_flasher.py . 0.6.0-dev release/v0.6.0-dev/dev")
@@ -121,7 +126,7 @@ def main():
         print("\nRunning PyInstaller...")
         
         pyinstaller_args = [
-            sys.executable, '-m', 'PyInstaller',
+            'python', '-m', 'PyInstaller',
             '--name', 'p3a-flasher',
             '--onefile',
             '--windowed',

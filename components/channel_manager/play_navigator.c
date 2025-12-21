@@ -5,6 +5,7 @@
 #include "config_store.h"
 #include "download_manager.h"
 #include "live_mode.h"
+#include "pcg32_reversible.h"
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -29,23 +30,13 @@ static uint32_t get_effective_seed(play_navigator_t *nav)
     return effective ^ nav->global_seed;
 }
 
-static uint32_t prng_next_u32(uint32_t *state)
+// Fisher-Yates shuffle using PCG32 for deterministic random ordering
+static void shuffle_indices(uint32_t *indices, size_t count, pcg32_rng_t *rng)
 {
-    // xorshift32
-    uint32_t x = *state;
-    x ^= x << 13;
-    x ^= x >> 17;
-    x ^= x << 5;
-    *state = x;
-    return x;
-}
-
-static void shuffle_indices(uint32_t *indices, size_t count, uint32_t seed)
-{
-    if (!indices || count <= 1) return;
-    uint32_t s = seed ? seed : config_store_get_effective_seed();
+    if (!indices || count <= 1 || !rng) return;
+    
     for (size_t i = count - 1; i > 0; i--) {
-        uint32_t r = prng_next_u32(&s);
+        uint32_t r = pcg32_next_u32(rng);
         size_t j = (size_t)(r % (uint32_t)(i + 1));
         uint32_t tmp = indices[i];
         indices[i] = indices[j];
@@ -64,7 +55,8 @@ static esp_err_t rebuild_order(play_navigator_t *nav)
         nav->order_count = 0;
         nav->p = 0;
         nav->q = 0;
-        return ESP_ERR_NOT_FOUND;
+        // Return OK with empty order - channel can still be used once posts arrive
+        return ESP_OK;
     }
 
     uint32_t *indices = (uint32_t *)malloc(post_count * sizeof(uint32_t));
@@ -112,7 +104,11 @@ static esp_err_t rebuild_order(play_navigator_t *nav)
 
         free(items);
     } else if (nav->order == PLAY_ORDER_RANDOM) {
-        shuffle_indices(indices, post_count, get_effective_seed(nav));
+        // Seed PCG32 with effective seed and shuffle
+        uint64_t seed = (uint64_t)get_effective_seed(nav);
+        uint64_t stream = (uint64_t)nav->global_seed;  // Use global_seed as stream selector
+        pcg32_seed(&nav->pcg_rng, seed, stream);
+        shuffle_indices(indices, post_count, &nav->pcg_rng);
     } else {
         // PLAY_ORDER_SERVER: keep sequential
     }
@@ -155,10 +151,14 @@ static uint32_t playlist_map_q_to_index(play_navigator_t *nav, int32_t playlist_
 {
     if (!nav || effective_size == 0) return 0;
     if (!nav->randomize_playlist) return q;
+    
     // Per spec: effective_seed ^ playlist_post_id ^ playlist_post_q_index
-    uint32_t seed = get_effective_seed(nav) ^ (uint32_t)playlist_post_id ^ q;
-    uint32_t s = seed ? seed : config_store_get_effective_seed();
-    uint32_t r = prng_next_u32(&s);
+    // Use PCG32 for deterministic per-playlist randomization
+    uint64_t seed = (uint64_t)(get_effective_seed(nav) ^ (uint32_t)playlist_post_id);
+    uint64_t stream = (uint64_t)q;  // q as stream selector for independent per-q randomness
+    pcg32_rng_t temp_rng;
+    pcg32_seed(&temp_rng, seed, stream);
+    uint32_t r = pcg32_next_u32(&temp_rng);
     return r % effective_size;
 }
 
@@ -433,22 +433,14 @@ static void prefetch_playlist_lookahead(play_navigator_t *nav,
                                         uint32_t start_q,
                                         uint32_t target_buffer)
 {
-    if (!nav || !pl || effective == 0 || target_buffer == 0) return;
-
-    uint32_t n = target_buffer;
-    if (n > effective) n = effective;
-
-    for (uint32_t k = 0; k < n; k++) {
-        uint32_t q = (start_q + k) % effective;
-        uint32_t idx = playlist_map_q_to_index(nav, playlist_post_id, effective, q);
-        if (idx >= (uint32_t)pl->loaded_artworks) continue;
-        const artwork_ref_t *a = &pl->artworks[idx];
-        if (a->downloaded) continue;
-        if (a->storage_key[0] == '\0' || a->art_url[0] == '\0') continue;
-
-        download_priority_t prio = (k == 0) ? DOWNLOAD_PRIORITY_HIGH : DOWNLOAD_PRIORITY_MEDIUM;
-        (void)download_queue_artwork(nav->channel_id, playlist_post_id, a, prio);
-    }
+    // Downloads are handled automatically by download_manager's single-download approach
+    // This function is now a no-op; the download_manager scans from current position
+    (void)nav;
+    (void)playlist_post_id;
+    (void)pl;
+    (void)effective;
+    (void)start_q;
+    (void)target_buffer;
 }
 
 esp_err_t play_navigator_current(play_navigator_t *nav, artwork_ref_t *out_artwork)

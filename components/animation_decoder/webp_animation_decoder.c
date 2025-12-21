@@ -12,6 +12,7 @@
 #include "webp/decode.h"
 #include "esp_log.h"
 #include "esp_err.h"
+#include "debug_http_log.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -311,12 +312,20 @@ esp_err_t animation_decoder_decode_next_rgb(animation_decoder_t *decoder, uint8_
 
         webp_decoder_data_t *webp_data = (webp_decoder_data_t *)decoder->impl.webp.decoder;
         if (webp_data->is_animation) {
+#if CONFIG_P3A_PERF_DEBUG
+            int64_t t_webp_start = debug_timer_now_us();
+#endif
+            
             uint8_t *frame = NULL;
             int timestamp_ms = 0;
             if (!WebPAnimDecoderGetNext(webp_data->decoder, &frame, &timestamp_ms)) {
                 return ESP_ERR_INVALID_STATE;
             }
             if (!frame) return ESP_FAIL;
+
+#if CONFIG_P3A_PERF_DEBUG
+            int64_t t_webp_decode_done = debug_timer_now_us();
+#endif
 
             // Delay
             int frame_delay = timestamp_ms - webp_data->last_timestamp_ms;
@@ -331,14 +340,33 @@ esp_err_t animation_decoder_decode_next_rgb(animation_decoder_t *decoder, uint8_
             uint8_t *dst = rgb_buffer;
 
             if (!webp_data->has_alpha_any) {
+#if CONFIG_P3A_PERF_DEBUG
+                int64_t t_convert_start = debug_timer_now_us();
+#endif
+                
                 // Opaque animation: just copy RGB channels, skip alpha
                 for (size_t i = 0; i < pixel_count; i++) {
                     dst[i * 3 + 0] = src[i * 4 + 0];
                     dst[i * 3 + 1] = src[i * 4 + 1];
                     dst[i * 3 + 2] = src[i * 4 + 2];
                 }
+                
+#if CONFIG_P3A_PERF_DEBUG
+                int64_t t_convert_end = debug_timer_now_us();
+                // Record decode details (aggregated) - use false since we don't know if target here
+                debug_perf_record_decode_detail(false,
+                                               t_webp_decode_done - t_webp_start,
+                                               t_convert_end - t_convert_start,
+                                               false,
+                                               (int64_t)pixel_count);
+#endif
+                
                 return ESP_OK;
             }
+
+#if CONFIG_P3A_PERF_DEBUG
+            int64_t t_blend_start = debug_timer_now_us();
+#endif
 
             // Animation with transparency: blend against background
             uint8_t bg_r = 0, bg_g = 0, bg_b = 0;
@@ -363,6 +391,17 @@ esp_err_t animation_decoder_decode_next_rgb(animation_decoder_t *decoder, uint8_
                     dst[i * 3 + 2] = blend_chan(b, bg_b, a);
                 }
             }
+            
+#if CONFIG_P3A_PERF_DEBUG
+            int64_t t_blend_end = debug_timer_now_us();
+            // Record decode details with alpha blending
+            debug_perf_record_decode_detail(false,
+                                           t_webp_decode_done - t_webp_start,
+                                           t_blend_end - t_blend_start,
+                                           true,
+                                           (int64_t)pixel_count);
+#endif
+            
             return ESP_OK;
         }
 

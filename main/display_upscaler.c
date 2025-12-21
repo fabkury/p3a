@@ -78,20 +78,26 @@ static void blit_upscaled_rows_rgba(const uint8_t *src_rgba, int src_w, int src_
             case DISPLAY_ROTATION_0: {
                 const uint16_t src_y = lookup_y[local_y];
                 const uint32_t *src_row32 = src_rgba32 + (size_t)src_y * src_w;
+                // Optimization: cache source pixel when src_x doesn't change (helps high upscale ratios)
+                uint16_t prev_src_x = UINT16_MAX;
+                uint8_t cached_r = 0, cached_g = 0, cached_b = 0;
                 for (int dst_x = offset_x; dst_x < (offset_x + scaled_w); ++dst_x) {
                     const int local_x = dst_x - offset_x;
                     const uint16_t src_x = lookup_x[local_x];
-                    const uint32_t rgba = src_row32[src_x];
-                    const uint8_t r = rgba & 0xFF;
-                    const uint8_t g = (rgba >> 8) & 0xFF;
-                    const uint8_t b = (rgba >> 16) & 0xFF;
+                    if (src_x != prev_src_x) {
+                        const uint32_t rgba = src_row32[src_x];
+                        cached_r = rgba & 0xFF;
+                        cached_g = (rgba >> 8) & 0xFF;
+                        cached_b = (rgba >> 16) & 0xFF;
+                        prev_src_x = src_x;
+                    }
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(r, g, b);
+                    dst_row[dst_x] = rgb565(cached_r, cached_g, cached_b);
 #else
                     const size_t idx = (size_t)dst_x * 3U;
-                    dst_row[idx + 0] = b;
-                    dst_row[idx + 1] = g;
-                    dst_row[idx + 2] = r;
+                    dst_row[idx + 0] = cached_b;
+                    dst_row[idx + 1] = cached_g;
+                    dst_row[idx + 2] = cached_r;
 #endif
                 }
                 break;
@@ -214,6 +220,13 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
         return;
     }
 
+#if CONFIG_P3A_PERF_DEBUG
+    static uint32_t s_upscale_call_count = 0;
+    static uint32_t s_rows_rendered = 0;
+    static uint32_t s_rows_copied = 0;
+    s_upscale_call_count++;
+#endif
+
 #if CONFIG_P3A_USE_PIE_SIMD
     const uint16_t *run_lookup = (rotation == DISPLAY_ROTATION_90 || rotation == DISPLAY_ROTATION_270)
                                   ? lookup_x : lookup_y;
@@ -236,10 +249,16 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
         const uint16_t run_key = run_lookup[local_y];
         if (run_key == prev_run_key && last_rendered_row != NULL) {
             memcpy(dst_row_bytes, last_rendered_row, g_display_row_stride);
+#if CONFIG_P3A_PERF_DEBUG
+            s_rows_copied++;
+#endif
             continue;
         }
         prev_run_key = run_key;
         last_rendered_row = dst_row_bytes;
+#endif
+#if CONFIG_P3A_PERF_DEBUG
+        s_rows_rendered++;
 #endif
 
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
@@ -252,20 +271,26 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
             case DISPLAY_ROTATION_0: {
                 const uint16_t src_y = lookup_y[local_y];
                 const uint8_t *src_row = src_rgb + (size_t)src_y * (size_t)src_w * 3U;
+                // Optimization: cache source pixel when src_x doesn't change (helps high upscale ratios)
+                uint16_t prev_src_x = UINT16_MAX;
+                uint8_t cached_r = 0, cached_g = 0, cached_b = 0;
                 for (int dst_x = offset_x; dst_x < (offset_x + scaled_w); ++dst_x) {
                     const int local_x = dst_x - offset_x;
                     const uint16_t src_x = lookup_x[local_x];
-                    const uint8_t *p = src_row + (size_t)src_x * 3U;
-                    const uint8_t r = p[0];
-                    const uint8_t g = p[1];
-                    const uint8_t b = p[2];
+                    if (src_x != prev_src_x) {
+                        const uint8_t *p = src_row + (size_t)src_x * 3U;
+                        cached_r = p[0];
+                        cached_g = p[1];
+                        cached_b = p[2];
+                        prev_src_x = src_x;
+                    }
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(r, g, b);
+                    dst_row[dst_x] = rgb565(cached_r, cached_g, cached_b);
 #else
                     const size_t idx = (size_t)dst_x * 3U;
-                    dst_row[idx + 0] = b;
-                    dst_row[idx + 1] = g;
-                    dst_row[idx + 2] = r;
+                    dst_row[idx + 0] = cached_b;
+                    dst_row[idx + 1] = cached_g;
+                    dst_row[idx + 2] = cached_r;
 #endif
                 }
                 break;
@@ -297,21 +322,27 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
                 const uint16_t raw_src_y = lookup_y[local_y];
                 const uint16_t src_y = (src_h - 1) - raw_src_y;
                 const uint8_t *src_row = src_rgb + (size_t)src_y * (size_t)src_w * 3U;
+                // Optimization: cache source pixel when src_x doesn't change
+                uint16_t prev_raw_src_x = UINT16_MAX;
+                uint8_t cached_r = 0, cached_g = 0, cached_b = 0;
                 for (int dst_x = offset_x; dst_x < (offset_x + scaled_w); ++dst_x) {
                     const int local_x = dst_x - offset_x;
                     const uint16_t raw_src_x = lookup_x[local_x];
-                    const uint16_t src_x = (src_w - 1) - raw_src_x;
-                    const uint8_t *p = src_row + (size_t)src_x * 3U;
-                    const uint8_t r = p[0];
-                    const uint8_t g = p[1];
-                    const uint8_t b = p[2];
+                    if (raw_src_x != prev_raw_src_x) {
+                        const uint16_t src_x = (src_w - 1) - raw_src_x;
+                        const uint8_t *p = src_row + (size_t)src_x * 3U;
+                        cached_r = p[0];
+                        cached_g = p[1];
+                        cached_b = p[2];
+                        prev_raw_src_x = raw_src_x;
+                    }
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(r, g, b);
+                    dst_row[dst_x] = rgb565(cached_r, cached_g, cached_b);
 #else
                     const size_t idx = (size_t)dst_x * 3U;
-                    dst_row[idx + 0] = b;
-                    dst_row[idx + 1] = g;
-                    dst_row[idx + 2] = r;
+                    dst_row[idx + 0] = cached_b;
+                    dst_row[idx + 1] = cached_g;
+                    dst_row[idx + 2] = cached_r;
 #endif
                 }
                 break;
@@ -342,26 +373,45 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
             default: {
                 const uint16_t src_y = lookup_y[local_y];
                 const uint8_t *src_row = src_rgb + (size_t)src_y * (size_t)src_w * 3U;
+                // Optimization: cache source pixel when src_x doesn't change
+                uint16_t prev_src_x = UINT16_MAX;
+                uint8_t cached_r = 0, cached_g = 0, cached_b = 0;
                 for (int dst_x = offset_x; dst_x < (offset_x + scaled_w); ++dst_x) {
                     const int local_x = dst_x - offset_x;
                     const uint16_t src_x = lookup_x[local_x];
-                    const uint8_t *p = src_row + (size_t)src_x * 3U;
-                    const uint8_t r = p[0];
-                    const uint8_t g = p[1];
-                    const uint8_t b = p[2];
+                    if (src_x != prev_src_x) {
+                        const uint8_t *p = src_row + (size_t)src_x * 3U;
+                        cached_r = p[0];
+                        cached_g = p[1];
+                        cached_b = p[2];
+                        prev_src_x = src_x;
+                    }
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(r, g, b);
+                    dst_row[dst_x] = rgb565(cached_r, cached_g, cached_b);
 #else
                     const size_t idx = (size_t)dst_x * 3U;
-                    dst_row[idx + 0] = b;
-                    dst_row[idx + 1] = g;
-                    dst_row[idx + 2] = r;
+                    dst_row[idx + 0] = cached_b;
+                    dst_row[idx + 1] = cached_g;
+                    dst_row[idx + 2] = cached_r;
 #endif
                 }
                 break;
             }
         }
     }
+
+#if CONFIG_P3A_PERF_DEBUG
+    // Log row stats every 1000 upscale calls
+    if (s_upscale_call_count % 1000 == 0) {
+        ESP_LOGI(DISPLAY_TAG, "UPSCALE_ROWS: src=%dx%d rendered=%lu copied=%lu (calls=%lu)",
+                 src_w, src_h,
+                 (unsigned long)s_rows_rendered,
+                 (unsigned long)s_rows_copied,
+                 (unsigned long)s_upscale_call_count);
+        s_rows_rendered = 0;
+        s_rows_copied = 0;
+    }
+#endif
 }
 
 // ============================================================================

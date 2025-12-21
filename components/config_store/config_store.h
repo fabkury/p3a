@@ -215,6 +215,28 @@ esp_err_t config_store_set_show_fps(bool enable);
  */
 bool config_store_get_show_fps(void);
 
+// ============================================================================
+// Max Speed Playback (persisted)
+// ============================================================================
+
+/**
+ * @brief Set max speed playback mode
+ *
+ * When enabled, frame timing delays are skipped and animations play
+ * as fast as the system can decode and render them.
+ *
+ * @param enable True to enable max speed playback
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_max_speed_playback(bool enable);
+
+/**
+ * @brief Get max speed playback mode
+ *
+ * @return True if max speed playback enabled (defaults to false)
+ */
+bool config_store_get_max_speed_playback(void);
+
 #ifdef __cplusplus
 }
 #endif

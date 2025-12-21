@@ -67,6 +67,9 @@ static void bg_apply_from_cfg(const cJSON *cfg)
 static bool s_show_fps = false;  // Default: OFF
 static bool s_show_fps_loaded = false;
 
+static bool s_max_speed_playback = false;  // Default: OFF
+static bool s_max_speed_playback_loaded = false;
+
 static void show_fps_apply_from_cfg(const cJSON *cfg)
 {
     bool show_fps = false;  // Default: OFF
@@ -83,6 +86,24 @@ static void show_fps_apply_from_cfg(const cJSON *cfg)
     }
     s_show_fps = show_fps;
     s_show_fps_loaded = true;
+}
+
+static void max_speed_playback_apply_from_cfg(const cJSON *cfg)
+{
+    bool max_speed = false;  // Default: OFF
+    
+    if (cfg && cJSON_IsObject((cJSON *)cfg)) {
+        const cJSON *item = cJSON_GetObjectItem((cJSON *)cfg, "max_speed_playback");
+        if (item && cJSON_IsBool((cJSON *)item)) {
+            max_speed = cJSON_IsTrue((cJSON *)item);
+        }
+    }
+    
+    if (!s_max_speed_playback_loaded || max_speed != s_max_speed_playback) {
+        ESP_LOGI(TAG, "Max speed playback updated: %s", max_speed ? "ON" : "OFF");
+    }
+    s_max_speed_playback = max_speed;
+    s_max_speed_playback_loaded = true;
 }
 
 static esp_err_t ensure_nvs(nvs_handle_t *h) {
@@ -179,6 +200,7 @@ esp_err_t config_store_load(cJSON **out_cfg) {
     // Keep runtime caches in sync (cheap; uses parsed JSON we already have).
     bg_apply_from_cfg(o);
     show_fps_apply_from_cfg(o);
+    max_speed_playback_apply_from_cfg(o);
 
     *out_cfg = o;
     return ESP_OK;
@@ -263,6 +285,7 @@ esp_err_t config_store_save(const cJSON *cfg) {
     // Update runtime caches from the config we just saved.
     bg_apply_from_cfg(cfg);
     show_fps_apply_from_cfg(cfg);
+    max_speed_playback_apply_from_cfg(cfg);
 
     ESP_LOGI(TAG, "Config saved successfully (%zu bytes)", len);
     return ESP_OK;
@@ -755,6 +778,60 @@ bool config_store_get_show_fps(void)
     s_show_fps_loaded = true;
     cJSON_Delete(cfg);
     return s_show_fps;
+}
+
+// ============================================================================
+// Max Speed Playback (persisted)
+// ============================================================================
+
+esp_err_t config_store_set_max_speed_playback(bool enable)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+    
+    cJSON *item = cJSON_GetObjectItem(cfg, "max_speed_playback");
+    if (item) {
+        cJSON_DeleteItemFromObject(cfg, "max_speed_playback");
+    }
+    cJSON_AddBoolToObject(cfg, "max_speed_playback", enable);
+    
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    
+    if (err == ESP_OK) {
+        s_max_speed_playback = enable;
+        s_max_speed_playback_loaded = true;
+        ESP_LOGI(TAG, "Max speed playback saved: %s", enable ? "ON" : "OFF");
+    }
+    
+    return err;
+}
+
+bool config_store_get_max_speed_playback(void)
+{
+    if (s_max_speed_playback_loaded) {
+        return s_max_speed_playback;
+    }
+    
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        s_max_speed_playback_loaded = true;
+        return s_max_speed_playback;  // Return default (false)
+    }
+    
+    cJSON *item = cJSON_GetObjectItem(cfg, "max_speed_playback");
+    if (item && cJSON_IsBool(item)) {
+        s_max_speed_playback = cJSON_IsTrue(item);
+    }
+    // If not present in config, default is false
+    
+    s_max_speed_playback_loaded = true;
+    cJSON_Delete(cfg);
+    return s_max_speed_playback;
 }
 
 

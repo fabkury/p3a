@@ -437,7 +437,112 @@ Secondary issues related to buffer swap mutex protection should also be addresse
 
 ---
 
+## Appendix A: Upscale Performance Investigation (December 2024)
+
+### Background
+
+A specific animation (`e7fbb22e-3c16-46bd-b488-53ab8dc4c524.webp`, nicknamed "sonic_animation") played consistently slower than its target frame rate. Investigation revealed that the **upscaling step** was the primary bottleneck, not decoding.
+
+### Key Findings
+
+**Test Configuration:**
+- Display: 480×480 pixels
+- Target animation: 64×64 pixels (high upscale factor ~7.5×)
+- Comparison animation: 256×256 pixels (low upscale factor ~1.9×)
+
+**Performance Data (Before Optimization):**
+
+| Animation | Source | Scaled | Upscale Avg (µs) | Budget Used |
+|-----------|--------|--------|------------------|-------------|
+| TARGET    | 64×64  | 476×476| 25,399           | 51%         |
+| OTHER     | 256×256| 476×476| 13,419           | 20%         |
+
+**Counterintuitive Result:** The smaller source image took **nearly 2× longer** to upscale despite having fewer source pixels. This is because the upscale loop iterates over **destination pixels**, not source pixels. High upscale factors mean many destination pixels map to the same source pixel, causing redundant memory reads.
+
+### Source Pixel Caching Optimization
+
+The fix caches the source pixel when `src_x` doesn't change between consecutive destination pixels:
+
+```c
+// Before: Redundant reads for same src_x
+for (int dst_x = offset_x; dst_x < (offset_x + scaled_w); ++dst_x) {
+    const uint16_t src_x = lookup_x[local_x];
+    const uint8_t *p = src_row + (size_t)src_x * 3U;  // Read every iteration
+    // ... use p[0], p[1], p[2]
+}
+
+// After: Cache when src_x repeats
+uint16_t prev_src_x = UINT16_MAX;
+uint8_t cached_r = 0, cached_g = 0, cached_b = 0;
+for (int dst_x = offset_x; dst_x < (offset_x + scaled_w); ++dst_x) {
+    const uint16_t src_x = lookup_x[local_x];
+    if (src_x != prev_src_x) {
+        const uint8_t *p = src_row + (size_t)src_x * 3U;
+        cached_r = p[0]; cached_g = p[1]; cached_b = p[2];
+        prev_src_x = src_x;
+    }
+    // ... use cached_r, cached_g, cached_b
+}
+```
+
+This optimization is applied to:
+- `blit_upscaled_rows_rgb()` for `DISPLAY_ROTATION_0` and `DISPLAY_ROTATION_180`
+- `blit_upscaled_rows_rgba()` for `DISPLAY_ROTATION_0` and `DISPLAY_ROTATION_180`
+
+**Location:** `main/display_upscaler.c`
+
+### Additional Findings
+
+1. **Row duplication** (memcpy when src_y repeats) was already implemented but showed limited benefit for the target animation (only 10% of rows were copied for 64×64 source).
+
+2. **Dual-worker mode** (parallel upscaling) is the default and recommended configuration (`DISPLAY_UPSCALE_SINGLE_WORKER = 0`). Single-worker mode was tested and performed worse.
+
+3. **90°/270° rotation** cases don't benefit from the same caching pattern due to different memory access patterns and are left as-is.
+
+---
+
+## Appendix B: Design Principles
+
+### Frame Skipping is Prohibited
+
+**p3a never skips frames.** This is a fundamental design decision, not an oversight.
+
+**Rationale:**
+1. **Visual Quality:** Frame skipping causes visual discontinuity and jarring playback, especially noticeable in pixel art where every frame is hand-crafted.
+2. **Animation Integrity:** Many pixel art animations rely on specific frame sequences for effects (e.g., dithering patterns, sub-pixel animation). Skipping frames breaks these effects.
+3. **Predictability:** Users and content creators expect deterministic playback. Frame skipping introduces unpredictable behavior based on system load.
+
+**When performance is insufficient:**
+- Animations play slower than intended (all frames shown, just delayed)
+- This is preferable to choppy/skipped playback
+- Optimization efforts focus on making the pipeline faster, not on adaptive frame dropping
+
+**Implementation notes:**
+- `display_renderer.c` does NOT implement any frame skipping logic
+- Animation playback controller does NOT have catch-up mechanics
+- If `processing_time > frame_budget`, the next frame simply starts late
+
+### Debug Instrumentation
+
+Performance instrumentation is compile-time optional via `CONFIG_P3A_PERF_DEBUG`:
+
+```c
+// In components/debug_http_log/debug_http_log.h
+#ifndef CONFIG_P3A_PERF_DEBUG
+#define CONFIG_P3A_PERF_DEBUG 0  // OFF by default
+#endif
+```
+
+When disabled (default), all instrumentation functions become zero-overhead no-ops.
+
+To enable for debugging:
+1. Change `CONFIG_P3A_PERF_DEBUG` to `1` in `debug_http_log.h`
+2. Rebuild
+3. Monitor serial output for `PERF_STATS` reports every 1000 frames
+
+---
+
 **Investigation conducted by:** GitHub Copilot  
 **Files analyzed:** 15+ source files across main/ and components/ directories  
 **Code paths traced:** Display rendering, animation decoding (GIF/WebP), decoder reset, timing calculation  
-**Revised:** December 20, 2024 - Corrected understanding of pipelined frame timing
+**Revised:** December 21, 2024 - Added upscale performance investigation and design principles

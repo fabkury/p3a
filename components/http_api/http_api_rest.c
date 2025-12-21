@@ -528,6 +528,72 @@ esp_err_t h_post_channel(httpd_req_t *req) {
     return ESP_OK;
 }
 
+/**
+ * GET /channel
+ * Get current channel information
+ * Returns: {"ok": true, "data": {"channel_name": "all"|"promoted"|"sdcard"|"other"}}
+ */
+esp_err_t h_get_channel(httpd_req_t *req) {
+    p3a_channel_info_t channel_info;
+    esp_err_t err = p3a_state_get_channel_info(&channel_info);
+    
+    if (err != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to get channel info\",\"code\":\"GET_CHANNEL_FAILED\"}");
+        return ESP_OK;
+    }
+    
+    // Map channel type to channel_name string for Web UI
+    const char *channel_name = "other";
+    switch (channel_info.type) {
+        case P3A_CHANNEL_SDCARD:
+            channel_name = "sdcard";
+            break;
+        case P3A_CHANNEL_MAKAPIX_ALL:
+            channel_name = "all";
+            break;
+        case P3A_CHANNEL_MAKAPIX_PROMOTED:
+            channel_name = "promoted";
+            break;
+        case P3A_CHANNEL_MAKAPIX_USER:
+        case P3A_CHANNEL_MAKAPIX_BY_USER:
+        case P3A_CHANNEL_MAKAPIX_HASHTAG:
+        case P3A_CHANNEL_MAKAPIX_ARTWORK:
+        default:
+            channel_name = "other";
+            break;
+    }
+    
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+    
+    cJSON_AddBoolToObject(root, "ok", true);
+    
+    cJSON *data = cJSON_CreateObject();
+    if (!data) {
+        cJSON_Delete(root);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+    
+    cJSON_AddStringToObject(data, "channel_name", channel_name);
+    cJSON_AddItemToObject(root, "data", data);
+    
+    char *out = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    
+    if (!out) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+    
+    send_json(req, 200, out);
+    free(out);
+    return ESP_OK;
+}
+
 // ---------- Settings Handlers ----------
 
 /**

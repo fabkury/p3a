@@ -7,11 +7,17 @@
 #include "channel_player.h"
 #include "swap_future.h"
 #include "config_store.h"
+#include "debug_http_log.h"
 #include <sys/time.h>
 
 // Frame rendering state
 static bool s_use_prefetched = false;
 static uint32_t s_target_frame_delay_ms = 100;
+
+#if CONFIG_P3A_PERF_DEBUG
+// Debug: Track target animation for performance analysis
+static bool s_is_target_animation = false;
+#endif
 
 // Rotation-dependent lookup maps must be rebuilt when rotation changes.
 static volatile bool s_upscale_maps_rebuild_pending = false;
@@ -150,6 +156,10 @@ static esp_err_t prefetch_first_frame_seeked(animation_buffer_t *buf, uint32_t s
  */
 static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int target_w, int target_h, bool use_prefetched)
 {
+#if CONFIG_P3A_PERF_DEBUG
+    int64_t t_start = debug_timer_now_us();
+#endif
+    
     if (!buf || !buf->ready || !dest_buffer || !buf->decoder) {
         return -1;
     }
@@ -239,6 +249,10 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
 
     uint8_t *decode_buffer = (buf->native_buffer_active == 0) ? buf->native_frame_b1 : buf->native_frame_b2;
 
+#if CONFIG_P3A_PERF_DEBUG
+    int64_t t_decode_start = debug_timer_now_us();
+#endif
+    
     esp_err_t err = decode_next_native(buf, decode_buffer);
     if (err == ESP_ERR_INVALID_STATE) {
         animation_decoder_reset(buf->decoder);
@@ -252,6 +266,11 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
         return -1;
     }
 
+#if CONFIG_P3A_PERF_DEBUG
+    int64_t t_decode_end = debug_timer_now_us();
+    int64_t decode_time_us = t_decode_end - t_decode_start;
+#endif
+    
     uint32_t frame_delay_ms = 1;
     esp_err_t delay_err = animation_decoder_get_frame_delay(buf->decoder, &frame_delay_ms);
     if (delay_err != ESP_OK) {
@@ -261,6 +280,10 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
     buf->current_frame_delay_ms = frame_delay_ms;
 
     buf->native_buffer_active = (buf->native_buffer_active == 0) ? 1 : 0;
+
+#if CONFIG_P3A_PERF_DEBUG
+    int64_t t_upscale_start = debug_timer_now_us();
+#endif
 
     // Use display_renderer for parallel upscaling with rotation
     if (buf->native_bytes_per_pixel == 3) {
@@ -280,6 +303,19 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
                                           buf->upscale_has_borders,
                                           display_renderer_get_rotation());
     }
+
+#if CONFIG_P3A_PERF_DEBUG
+    int64_t t_upscale_end = debug_timer_now_us();
+    int64_t upscale_time_us = t_upscale_end - t_upscale_start;
+    int64_t total_time_us = t_upscale_end - t_start;
+    
+    // Record frame timing for aggregated stats
+    debug_perf_record_frame(s_is_target_animation,
+                           decode_time_us,
+                           upscale_time_us,
+                           total_time_us,
+                           (int64_t)frame_delay_ms);
+#endif
 
     return (int)buf->current_frame_delay_ms;
 }
@@ -487,6 +523,24 @@ skip_prefetch:
             s_back_buffer.first_frame_ready = false;
             s_back_buffer.prefetch_pending = false;
             s_back_buffer.prefetch_in_progress = false;
+            
+#if CONFIG_P3A_PERF_DEBUG
+            // Flush stats before animation change, then check if new animation is target
+            debug_perf_flush_stats();
+            s_is_target_animation = false;
+            if (s_front_buffer.filepath && strstr(s_front_buffer.filepath, "e7fbb22e-3c16-46bd-b488-53ab8dc4c524") != NULL) {
+                s_is_target_animation = true;
+                ESP_LOGI(TAG, "PERF: Target animation loaded (sonic_animation)");
+            }
+            // Log animation dimensions for analysis
+            ESP_LOGI(TAG, "PERF_DIM: native=%dx%d upscale_src=%dx%d scaled=%dx%d offset=%d,%d bpp=%d",
+                     s_front_buffer.decoder_info.canvas_width, 
+                     s_front_buffer.decoder_info.canvas_height,
+                     s_front_buffer.upscale_src_w, s_front_buffer.upscale_src_h,
+                     s_front_buffer.upscale_scaled_w, s_front_buffer.upscale_scaled_h,
+                     s_front_buffer.upscale_offset_x, s_front_buffer.upscale_offset_y,
+                     s_front_buffer.native_bytes_per_pixel);
+#endif
             
             // Check if newly-swapped front buffer was built for a different rotation than current.
             // If so, rebuild its upscale maps immediately (before rendering with stale tables).

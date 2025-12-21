@@ -467,7 +467,8 @@ void display_render_task(void *arg)
         g_last_display_buffer = back_buffer_idx;
         g_render_buffer_index = (back_buffer_idx + 1) % buffer_count;
 
-        if (!APP_LCD_MAX_SPEED_PLAYBACK_ENABLED) {
+        // Max speed playback: skip frame timing delays when enabled
+        if (!config_store_get_max_speed_playback()) {
             const int64_t now_us = esp_timer_get_time();
             const int64_t processing_time_us = now_us - frame_processing_start_us;
             const int64_t target_delay_us = (int64_t)prev_frame_delay_ms * 1000;

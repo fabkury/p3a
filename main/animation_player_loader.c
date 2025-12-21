@@ -4,8 +4,11 @@
 #include "swap_future.h"
 #include "sdio_bus.h"
 #include "ota_manager.h"
+#include "p3a_render.h"
+#include "p3a_state.h"
 #include <unistd.h>
 #include <errno.h>
+#include <sys/stat.h>
 #include "freertos/task.h"
 
 // Some tooling configurations may not resolve component include paths reliably for C files.
@@ -184,14 +187,70 @@ void animation_loader_task(void *arg)
     (void)arg;
 
     while (true) {
-        if (xSemaphoreTake(s_loader_sem, portMAX_DELAY) != pdTRUE) {
-            continue;
-        }
+        // Use timeout so we can periodically check if front buffer needs loading
+        // This handles the boot case where no animation was initially available
+        bool semaphore_signaled = (xSemaphoreTake(s_loader_sem, pdMS_TO_TICKS(1000)) == pdTRUE);
 
         bool swap_was_requested = false;
+        bool front_buffer_needs_loading = false;
 
         if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
             swap_was_requested = s_swap_requested;
+            front_buffer_needs_loading = !s_front_buffer.ready && !s_front_buffer.decoder;
+            
+            // If no signal and front buffer is ready, just continue waiting
+            if (!semaphore_signaled && !front_buffer_needs_loading) {
+                xSemaphoreGive(s_buffer_mutex);
+                continue;
+            }
+            
+            // Handle boot case: front buffer needs loading (no initial animation was available)
+            if (front_buffer_needs_loading && !swap_was_requested) {
+                xSemaphoreGive(s_buffer_mutex);
+                
+                // Try to load the first available animation into the front buffer
+                const sdcard_post_t *post = NULL;
+                esp_err_t err = channel_player_get_current_post(&post);
+                if (err != ESP_OK || !post || !post->filepath) {
+                    // No post available yet - keep waiting
+                    continue;
+                }
+                
+                // Check if file exists
+                struct stat st;
+                if (stat(post->filepath, &st) != 0) {
+                    // File doesn't exist yet - keep waiting for downloads
+                    continue;
+                }
+                
+                ESP_LOGI(TAG, "Boot loading: Found available animation: %s", post->filepath);
+                
+                // Load directly into front buffer
+                err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer, 0, 0);
+                if (err != ESP_OK) {
+                    ESP_LOGW(TAG, "Boot loading: Failed to load animation: %s", esp_err_to_name(err));
+                    // Try advancing to next
+                    channel_player_advance();
+                    continue;
+                }
+                
+                // Success - mark front buffer as ready and clear loading message
+                if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+                    s_front_buffer.ready = true;
+                    xSemaphoreGive(s_buffer_mutex);
+                }
+                
+                ESP_LOGI(TAG, "Boot loading: First animation loaded successfully, clearing loading message");
+                p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
+                
+                // Prefetch first frame
+                esp_err_t prefetch_err = prefetch_first_frame(&s_front_buffer);
+                if (prefetch_err != ESP_OK) {
+                    ESP_LOGW(TAG, "Boot loading: Failed to prefetch first frame: %s", esp_err_to_name(prefetch_err));
+                }
+                
+                continue;
+            }
             
             // Skip loading if in UI mode and not triggered by exit_ui_mode
             if (display_renderer_is_ui_mode() && !swap_was_requested) {

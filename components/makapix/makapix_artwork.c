@@ -20,8 +20,8 @@ static const char *TAG = "makapix_artwork";
 static const char *VAULT_BASE = "/sdcard/vault";
 
 // Chunk size for serialized download (read chunk from WiFi, then write to SD)
-// 1MB provides good balance between throughput and memory usage
-#define DOWNLOAD_CHUNK_SIZE (1 * 1024 * 1024)
+// 128KB provides good balance between throughput and memory usage
+#define DOWNLOAD_CHUNK_SIZE (128 * 1024)
 
 // Extension strings for file naming
 static const char *s_ext_strings[] = { ".webp", ".gif", ".png", ".jpg" };
@@ -377,6 +377,23 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
         fclose(fp);
         unlink(temp_path);
         return ESP_ERR_INVALID_SIZE;
+    }
+    
+    // File size verification: compare actual bytes written vs expected Content-Length
+    // RATIONALE: This serves as our file integrity check, avoiding the CPU cost of
+    // hashing the entire file after download. We rely on the HTTP stack (TLS) for
+    // preventing corruption during transfer. This check catches truncated downloads
+    // and storage write failures.
+    // NOTE: Unhealthy/corrupted files that pass size check should be marked for
+    // deletion by a separate verification system (not yet implemented).
+    if (progress.content_length > 0 && progress.total_received != progress.content_length) {
+        ESP_LOGE(TAG, "File size mismatch: received %zu bytes, expected %zu bytes",
+                progress.total_received, progress.content_length);
+        fclose(fp);
+        unlink(temp_path);
+        return ESP_ERR_INVALID_SIZE;
+    } else if (progress.content_length > 0) {
+        ESP_LOGI(TAG, "File size verified: %zu bytes match Content-Length", progress.total_received);
     }
 
     // Ensure all data is flushed to SD card

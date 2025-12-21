@@ -32,6 +32,7 @@
 #include "sntp_sync.h"
 #include "makapix.h"
 #include "makapix_mqtt.h"
+#include "makapix_channel_events.h"
 #include "mdns.h"
 
 #define EXAMPLE_ESP_WIFI_SSID      CONFIG_ESP_WIFI_SSID
@@ -486,6 +487,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             return;
         }
         
+        // Signal WiFi disconnection to pause downloads and refresh tasks
+        makapix_channel_signal_wifi_disconnected();
+        
         // Stop MQTT client when WiFi disconnects to prevent futile reconnection attempts
         if (s_initial_connection_done) {
             ESP_LOGI(TAG, "Stopping MQTT client due to WiFi disconnect");
@@ -522,6 +526,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         s_retry_num = 0;
         s_consecutive_wifi_errors = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+        
+        // Signal WiFi connection to wake up download manager
+        makapix_channel_signal_wifi_connected();
 
         // Ensure mDNS is enabled/announced on STA after getting an IP.
         // Important: depending on init ordering, mdns_init() might have happened after GOT_IP in the past,

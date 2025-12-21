@@ -229,6 +229,15 @@ static void auto_swap_task(void *arg)
         }
         
         // No swap_future ready, use normal dwell-based timing
+        
+        // Don't start the dwell timer until an animation is actually playing
+        // This prevents the timer from running during boot/loading phases
+        if (!animation_player_is_animation_ready()) {
+            // Wait a short time and check again
+            vTaskDelay(pdMS_TO_TICKS(500));
+            continue;
+        }
+        
         const TickType_t delay_ticks = pdMS_TO_TICKS(get_current_effective_dwell_ms());
         
         // Wait for interval or notification (which resets the timer)
@@ -246,6 +255,11 @@ static void auto_swap_task(void *arg)
         if (animation_player_is_ui_mode()) {
             ESP_LOGD(TAG, "Auto-swap skipped: UI mode active");
             continue;  // Skip auto-swap during UI mode to avoid memory pressure
+        }
+        // Double-check animation is still ready (could have been unloaded during wait)
+        if (!animation_player_is_animation_ready()) {
+            ESP_LOGD(TAG, "Auto-swap skipped: no animation ready");
+            continue;
         }
         // Perform auto-swap
         ESP_LOGD(TAG, "Auto-swap: cycling forward");

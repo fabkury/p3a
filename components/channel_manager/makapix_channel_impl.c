@@ -285,9 +285,6 @@ static esp_err_t makapix_impl_start_playback(channel_handle_t channel,
     ESP_LOGI(TAG, "Started playback (navigator): posts=%zu order=%d pe=%lu",
              channel_get_post_count(channel), order_mode, (unsigned long)pe);
     
-    // Ensure downloads are queued for artworks ahead
-    makapix_channel_ensure_downloads_ahead(channel, 16, NULL);
-    
     return ESP_OK;
 }
 
@@ -316,8 +313,6 @@ static esp_err_t makapix_impl_next_item(channel_handle_t channel, channel_item_r
         default: break;
     }
     
-    makapix_channel_ensure_downloads_ahead(channel, 16, NULL);
-    
     return ESP_OK;
 }
 
@@ -345,8 +340,6 @@ static esp_err_t makapix_impl_prev_item(channel_handle_t channel, channel_item_r
         case ASSET_TYPE_JPEG: out_item->flags |= CHANNEL_FILTER_FLAG_JPEG; break;
         default: break;
     }
-    
-    makapix_channel_ensure_downloads_ahead(channel, 16, NULL);
     
     return ESP_OK;
 }
@@ -657,23 +650,27 @@ esp_err_t makapix_channel_count_cached(const char *channel_id,
     return ESP_OK;
 }
 
-esp_err_t makapix_channel_ensure_downloads_ahead(channel_handle_t channel,
-                                                  size_t lookahead,
-                                                  size_t *out_available)
+// Current channel for download callback (only one channel can be active for downloads)
+static makapix_channel_t *s_download_channel = NULL;
+
+// Download callback: called by download manager to get next file
+static esp_err_t download_get_next_callback(download_request_t *out_request, void *user_ctx)
 {
-    makapix_channel_t *ch = (makapix_channel_t *)channel;
-    if (!ch) {
-        if (out_available) *out_available = 0;
+    (void)user_ctx;
+    makapix_channel_t *ch = s_download_channel;
+    
+    if (!ch || !out_request) {
+        ESP_LOGW(TAG, "download_get_next_callback: invalid args (ch=%p, req=%p)", ch, out_request);
         return ESP_ERR_INVALID_ARG;
     }
     
     if (ch->entry_count == 0) {
-        if (out_available) *out_available = 0;
-        return ESP_OK;
+        ESP_LOGI(TAG, "download_get_next_callback: channel %s has 0 entries", ch->channel_id);
+        return ESP_ERR_NOT_FOUND;
     }
     
-    // Clear any previous cancellation for this channel
-    download_manager_clear_cancelled(ch->channel_id);
+    ESP_LOGI(TAG, "download_get_next_callback: scanning %zu entries for channel %s", 
+             ch->entry_count, ch->channel_id);
     
     // Determine if we use navigator or index order
     bool use_navigator = ch->navigator_ready && 
@@ -682,18 +679,15 @@ esp_err_t makapix_channel_ensure_downloads_ahead(channel_handle_t channel,
     
     uint32_t current_p = use_navigator ? ch->navigator.p : 0;
     size_t order_count = use_navigator ? ch->navigator.order_count : ch->entry_count;
-    size_t available_ahead = 0;
-    size_t queued = 0;
-    size_t limit = (lookahead < order_count) ? lookahead : order_count;
     
-    // Scan ahead from current position
-    for (size_t offset = 0; offset < limit; offset++) {
+    // First pass: scan from current position forward (prioritize upcoming files)
+    for (size_t offset = 0; offset < order_count; offset++) {
         uint32_t entry_idx;
         if (use_navigator) {
             uint32_t pos_in_order = (current_p + (uint32_t)offset) % (uint32_t)order_count;
             entry_idx = ch->navigator.order_indices[pos_in_order];
         } else {
-            entry_idx = (uint32_t)offset;
+            entry_idx = (uint32_t)((current_p + offset) % order_count);
         }
         
         if (entry_idx >= ch->entry_count) continue;
@@ -709,60 +703,73 @@ esp_err_t makapix_channel_ensure_downloads_ahead(channel_handle_t channel,
         // Check if already downloaded
         struct stat st;
         if (stat(vault_path, &st) == 0) {
-            available_ahead++;
-            continue;
+            continue;  // Already downloaded, check next
         }
         
-        // File not available - queue for download
-        size_t queue_space = download_manager_get_queue_space();
-        if (queue_space < 4) {
-            continue;
-        }
-        
-        // Build download request
-        download_request_t req = {0};
-        req.playlist_post_id = 0;
-        req.artwork_post_id = entry->post_id;
-        bytes_to_uuid(entry->storage_key_uuid, req.storage_key, sizeof(req.storage_key));
+        // Found a file that needs downloading - fill out the request
+        memset(out_request, 0, sizeof(*out_request));
+        bytes_to_uuid(entry->storage_key_uuid, out_request->storage_key, sizeof(out_request->storage_key));
         
         // Build art_url using SHA256 sharding
         uint8_t sha256[32];
-        if (storage_key_sha256(req.storage_key, sha256) == ESP_OK) {
-            snprintf(req.art_url, sizeof(req.art_url), 
-                     "https://%s/api/vault/%02x/%02x/%02x/%s%s",
-                     CONFIG_MAKAPIX_CLUB_HOST,
-                     (unsigned int)sha256[0], (unsigned int)sha256[1], (unsigned int)sha256[2],
-                     req.storage_key, 
-                     s_ext_strings[entry->extension]);
-        } else {
-            ESP_LOGW(TAG, "Failed to compute SHA256 for %s, skipping", req.storage_key);
+        if (storage_key_sha256(out_request->storage_key, sha256) != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to compute SHA256 for %s, skipping", out_request->storage_key);
             continue;
         }
         
-        strlcpy(req.filepath, vault_path, sizeof(req.filepath));
-        strlcpy(req.channel_id, ch->channel_id, sizeof(req.channel_id));
+        snprintf(out_request->art_url, sizeof(out_request->art_url), 
+                 "https://%s/api/vault/%02x/%02x/%02x/%s%s",
+                 CONFIG_MAKAPIX_CLUB_HOST,
+                 (unsigned int)sha256[0], (unsigned int)sha256[1], (unsigned int)sha256[2],
+                 out_request->storage_key, 
+                 s_ext_strings[entry->extension]);
         
-        // Priority based on distance
-        if (offset < 3) {
-            req.priority = DOWNLOAD_PRIORITY_HIGH;
-        } else if (offset < 10) {
-            req.priority = DOWNLOAD_PRIORITY_MEDIUM;
-        } else {
-            req.priority = DOWNLOAD_PRIORITY_LOW;
-        }
+        strlcpy(out_request->filepath, vault_path, sizeof(out_request->filepath));
+        strlcpy(out_request->channel_id, ch->channel_id, sizeof(out_request->channel_id));
         
-        if (download_queue(&req) == ESP_OK) {
-            queued++;
-        }
+        ESP_LOGD(TAG, "Next download: %s (offset=%zu from p=%lu)", 
+                 out_request->storage_key, offset, (unsigned long)current_p);
+        
+        return ESP_OK;
     }
     
-    if (out_available) *out_available = available_ahead;
-    
-    if (queued > 0) {
-        ESP_LOGI(TAG, "Ensured downloads: %zu available, %zu queued (channel=%s, nav=%s)", 
-                 available_ahead, queued, ch->channel_id, use_navigator ? "yes" : "no");
+    // Scanned entire channel, all files are downloaded
+    // Count how many files we actually have
+    size_t downloaded_count = 0;
+    for (size_t i = 0; i < ch->entry_count; i++) {
+        if (ch->entries[i].kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) continue;
+        char vault_path[512];
+        build_vault_path(ch, &ch->entries[i], vault_path, sizeof(vault_path));
+        struct stat st;
+        if (stat(vault_path, &st) == 0) {
+            downloaded_count++;
+        }
+    }
+    ESP_LOGI(TAG, "All files downloaded for channel %s: %zu/%zu artworks cached", 
+             ch->channel_id, downloaded_count, ch->entry_count);
+    return ESP_ERR_NOT_FOUND;
+}
+
+esp_err_t makapix_channel_get_next_download(channel_handle_t channel,
+                                             download_request_t *out_request)
+{
+    makapix_channel_t *ch = (makapix_channel_t *)channel;
+    return download_get_next_callback(out_request, ch);
+}
+
+void makapix_channel_setup_download_callback(channel_handle_t channel)
+{
+    makapix_channel_t *ch = (makapix_channel_t *)channel;
+    if (!ch) {
+        ESP_LOGW(TAG, "Cannot setup download callback: NULL channel");
+        return;
     }
     
-    return ESP_OK;
+    s_download_channel = ch;
+    download_manager_set_next_callback(download_get_next_callback, NULL);
+    ESP_LOGI(TAG, "Download callback setup for channel %s", ch->channel_id);
+    
+    // Signal that downloads may be available
+    download_manager_signal_work_available();
 }
 

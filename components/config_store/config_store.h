@@ -168,6 +168,25 @@ void config_store_set_effective_seed(uint32_t seed);
 uint32_t config_store_get_effective_seed(void);
 
 // ============================================================================
+// Refresh Interval (persisted)
+// ============================================================================
+
+/**
+ * @brief Set background refresh interval for Makapix channels
+ * 
+ * @param interval_sec Refresh interval in seconds (default: 3600 = 1 hour)
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_refresh_interval_sec(uint32_t interval_sec);
+
+/**
+ * @brief Get background refresh interval for Makapix channels
+ * 
+ * @return Refresh interval in seconds (defaults to 3600 = 1 hour)
+ */
+uint32_t config_store_get_refresh_interval_sec(void);
+
+// ============================================================================
 // Background color (persisted)
 // ============================================================================
 

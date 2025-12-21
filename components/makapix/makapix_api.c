@@ -555,7 +555,8 @@ esp_err_t makapix_api_query_posts(const makapix_query_request_t *req, makapix_qu
 
     uint8_t limit = req->limit;
     if (limit == 0) limit = 30;
-    if (limit > 50) limit = 50;
+    // Per spec: maximum pagination size is 32 artworks per query
+    if (limit > 32) limit = 32;
     cJSON_AddNumberToObject(root, "limit", limit);
 
     if (req->sort == MAKAPIX_SORT_RANDOM && req->random_seed_present) {

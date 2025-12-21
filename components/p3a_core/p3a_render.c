@@ -46,6 +46,8 @@ static struct {
 // µGFX UI rendering functions (weak symbols - implemented elsewhere)
 extern int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride) __attribute__((weak));
 extern esp_err_t ugfx_ui_init(void) __attribute__((weak));
+extern esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *message, int progress_percent) __attribute__((weak));
+extern void ugfx_ui_hide_channel_message(void) __attribute__((weak));
 
 // Animation rendering (weak symbol)
 extern int animation_player_render_frame_internal(uint8_t *buffer, size_t stride) __attribute__((weak));
@@ -261,6 +263,18 @@ void p3a_render_set_channel_message(const char *channel_name,
         snprintf(msg.detail, sizeof(msg.detail), "%s", detail);
     }
     p3a_state_set_channel_message(&msg);
+    
+    // Activate/deactivate µGFX channel message UI
+    // This is required for the UI to actually render the message
+    if (msg_type != P3A_CHANNEL_MSG_NONE) {
+        if (ugfx_ui_show_channel_message) {
+            ugfx_ui_show_channel_message(channel_name, detail, progress_percent);
+        }
+    } else {
+        if (ugfx_ui_hide_channel_message) {
+            ugfx_ui_hide_channel_message();
+        }
+    }
     
     ESP_LOGD(TAG, "Channel message: %s - %s (%d%%)",
              channel_name ? channel_name : "",

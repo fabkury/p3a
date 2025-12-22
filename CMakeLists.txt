@@ -19,7 +19,7 @@ set(PROJECT_VER "0.6.3-dev")
 # =============================================================================
 # Set P3A_BUILD_FLASHER to OFF to skip flasher build (faster dev builds)
 # Set to ON for release builds that need the flasher executable
-set(P3A_BUILD_FLASHER OFF)
+set(P3A_BUILD_FLASHER ON)
 # =============================================================================
 
 # Parse PROJECT_VER to extract major, minor, patch components
@@ -33,6 +33,8 @@ set(PROJECT_VER "${PROJECT_VER}" CACHE STRING "Project version" FORCE)
 set(FW_VERSION_MAJOR "${FW_VERSION_MAJOR}" CACHE STRING "Firmware major version" FORCE)
 set(FW_VERSION_MINOR "${FW_VERSION_MINOR}" CACHE STRING "Firmware minor version" FORCE)
 set(FW_VERSION_PATCH "${FW_VERSION_PATCH}" CACHE STRING "Firmware patch version" FORCE)
+
+set(RELEASE_SUBDIR "release/v${PROJECT_VER}")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 add_compile_options(-Wno-ignored-qualifiers)
@@ -77,12 +79,6 @@ endif()
 
 # Determine if this is a dev build (contains -dev, -alpha, -beta, -rc, -test)
 string(REGEX MATCH "-(dev|alpha|beta|rc|test)" IS_DEV_BUILD "${PROJECT_VER}")
-
-if(IS_DEV_BUILD)
-    set(RELEASE_SUBDIR "release/v${PROJECT_VER}/dev")
-else()
-    set(RELEASE_SUBDIR "release/v${PROJECT_VER}")
-endif()
 
 # Create release helper script at configure time
 file(WRITE "${CMAKE_BINARY_DIR}/create_release.py" "

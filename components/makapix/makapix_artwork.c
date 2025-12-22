@@ -131,7 +131,7 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
     // This prevents artwork downloads from conflicting with critical WiFi operations
     if (sdio_bus_is_locked()) {
         const char *holder = sdio_bus_get_holder();
-        ESP_LOGI(TAG, "SDIO bus locked by %s, waiting before download...", holder ? holder : "unknown");
+        ESP_LOGD(TAG, "SDIO bus locked by %s, waiting before download...", holder ? holder : "unknown");
         
         int wait_count = 0;
         const int max_wait = 60;  // Wait up to 60 seconds
@@ -143,7 +143,7 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
         if (wait_count >= max_wait) {
             ESP_LOGW(TAG, "Timed out waiting for SDIO bus, proceeding anyway");
         } else {
-            ESP_LOGI(TAG, "SDIO bus available after %d seconds", wait_count);
+            ESP_LOGD(TAG, "SDIO bus available after %d seconds", wait_count);
         }
     }
 
@@ -201,7 +201,7 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
     char temp_path[path_len + 8];
     snprintf(temp_path, sizeof(temp_path), "%s.tmp", out_path);
     
-    ESP_LOGI(TAG, "Downloading artwork from %s to %s", full_url, out_path);
+    ESP_LOGD(TAG, "Downloading artwork from %s to %s", full_url, out_path);
 
     // =========================================================================
     // SERIALIZED CHUNKED DOWNLOAD
@@ -229,7 +229,7 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
         ESP_LOGD(TAG, "Using internal RAM for chunk buffer");
     }
     
-    ESP_LOGI(TAG, "Starting chunked download (%d KB chunks)", DOWNLOAD_CHUNK_SIZE / 1024);
+    ESP_LOGD(TAG, "Starting chunked download (%d KB chunks)", DOWNLOAD_CHUNK_SIZE / 1024);
 
     // Configure HTTP client for manual read control
     esp_http_client_config_t config = {
@@ -270,7 +270,7 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
         return ESP_ERR_INVALID_RESPONSE;
     }
     
-    ESP_LOGI(TAG, "HTTP 200 OK, Content-Length: %lld bytes", content_length);
+    ESP_LOGD(TAG, "HTTP 200 OK, Content-Length: %lld bytes", content_length);
 
     // Open temp file for writing
     FILE *fp = fopen(temp_path, "wb");
@@ -400,7 +400,7 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
         unlink(temp_path);
         return ESP_ERR_INVALID_SIZE;
     } else if (progress.content_length > 0) {
-        ESP_LOGI(TAG, "File size verified: %zu bytes match Content-Length", progress.total_received);
+        ESP_LOGD(TAG, "File size verified: %zu bytes match Content-Length", progress.total_received);
     }
 
     // Ensure all data is flushed to SD card
@@ -408,7 +408,7 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
     fsync(fileno(fp));
     fclose(fp);
     
-    ESP_LOGI(TAG, "Download complete: %zu bytes written to temp file", progress.total_received);
+    ESP_LOGD(TAG, "Download complete: %zu bytes written to temp file", progress.total_received);
 
     // =========================================================================
     // ATOMIC RENAME: temp file → final file (power-loss safe)
@@ -419,7 +419,7 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
         return ESP_FAIL;
     }
     
-    ESP_LOGI(TAG, "Artwork saved successfully (%zu bytes)", progress.total_received);
+    ESP_LOGD(TAG, "Artwork saved successfully (%zu bytes)", progress.total_received);
     return ESP_OK;
 }
 
@@ -518,7 +518,7 @@ esp_err_t makapix_artwork_ensure_cache_limit(size_t max_items)
     size_t file_count = 0;
     collect_files(vault_base, files, max_files, &file_count);
 
-    ESP_LOGI(TAG, "Found %zu files in vault", file_count);
+    ESP_LOGD(TAG, "Found %zu files in vault", file_count);
 
     if (file_count <= max_items) {
         free(files);
@@ -540,7 +540,7 @@ esp_err_t makapix_artwork_ensure_cache_limit(size_t max_items)
         }
     }
 
-    ESP_LOGI(TAG, "Evicted %zu files from cache", deleted);
+    ESP_LOGD(TAG, "Evicted %zu files from cache", deleted);
 
     free(files);
     return ESP_OK;

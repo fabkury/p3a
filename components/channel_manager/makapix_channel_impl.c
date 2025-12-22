@@ -20,6 +20,9 @@
 
 static const char *TAG = "makapix_channel";
 
+// Current channel for download callback (only one channel can be active for downloads)
+static makapix_channel_t *s_download_channel = NULL;
+
 // Weak symbol for SD pause check
 extern bool animation_player_is_sd_paused(void) __attribute__((weak));
 
@@ -96,7 +99,7 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
     }
     makapix_index_recover_and_cleanup(index_path);
     
-    ESP_LOGI(TAG, "Loading channel from: %s", index_path);
+    ESP_LOGD(TAG, "Loading channel from: %s", index_path);
     
     // Try to open index file
     FILE *f = fopen(index_path, "rb");
@@ -108,7 +111,7 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
         
         // Start refresh to fetch channel data from server
         if (!ch->refreshing) {
-            ESP_LOGI(TAG, "Starting refresh to populate empty channel");
+            ESP_LOGD(TAG, "Starting refresh to populate empty channel");
             esp_err_t refresh_err = makapix_impl_request_refresh(channel);
             if (refresh_err != ESP_OK) {
                 ESP_LOGE(TAG, "Failed to start refresh for empty channel");
@@ -187,7 +190,7 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
     ch->entry_count = entry_count;
     ch->base.loaded = true;
     
-    ESP_LOGI(TAG, "Loaded %zu entries", ch->entry_count);
+    ESP_LOGD(TAG, "Loaded %zu entries", ch->entry_count);
     
     // Start refresh if not already refreshing
     if (!ch->refreshing) {
@@ -282,7 +285,7 @@ static esp_err_t makapix_impl_start_playback(channel_handle_t channel,
                                                            : config_store_get_live_mode());
 
     ch->navigator_ready = true;
-    ESP_LOGI(TAG, "Started playback (navigator): posts=%zu order=%d pe=%lu",
+    ESP_LOGD(TAG, "Started playback (navigator): posts=%zu order=%d pe=%lu",
              channel_get_post_count(channel), order_mode, (unsigned long)pe);
     
     return ESP_OK;
@@ -377,7 +380,7 @@ static esp_err_t makapix_impl_request_reshuffle(channel_handle_t channel)
     if (!ch || !ch->navigator_ready) return ESP_ERR_INVALID_STATE;
     if (ch->base.current_order != CHANNEL_ORDER_RANDOM) return ESP_OK;
     play_navigator_set_order(&ch->navigator, PLAY_ORDER_RANDOM);
-    ESP_LOGI(TAG, "Reshuffled (navigator)");
+    ESP_LOGD(TAG, "Reshuffled (navigator)");
     return ESP_OK;
 }
 
@@ -400,7 +403,7 @@ static esp_err_t makapix_impl_request_refresh(channel_handle_t channel)
         return ESP_ERR_NO_MEM;
     }
     
-    ESP_LOGI(TAG, "Refresh task started for channel %s", ch->channel_id);
+    ESP_LOGD(TAG, "Refresh task started for channel %s", ch->channel_id);
     return ESP_OK;
 }
 
@@ -477,6 +480,14 @@ static void makapix_impl_destroy(channel_handle_t channel)
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch) return;
     
+    // Clear download callback if this channel is the download source
+    // This prevents the download task from accessing freed memory
+    if (s_download_channel == ch) {
+        download_manager_set_next_callback(NULL, NULL);
+        s_download_channel = NULL;
+        ESP_LOGD(TAG, "Cleared download callback for destroyed channel");
+    }
+    
     // Stop refresh task if running
     if (ch->refreshing && ch->refresh_task) {
         ch->refreshing = false;
@@ -498,7 +509,7 @@ static void makapix_impl_destroy(channel_handle_t channel)
     free(ch->base.name);
     free(ch);
     
-    ESP_LOGI(TAG, "Channel destroyed");
+    ESP_LOGD(TAG, "Channel destroyed");
 }
 
 static void *makapix_impl_get_navigator(channel_handle_t channel)
@@ -554,7 +565,7 @@ channel_handle_t makapix_channel_create(const char *channel_id,
         return NULL;
     }
     
-    ESP_LOGI(TAG, "Created channel: %s (id=%s)", ch->base.name, ch->channel_id);
+    ESP_LOGD(TAG, "Created channel: %s (id=%s)", ch->base.name, ch->channel_id);
     return (channel_handle_t)ch;
 }
 
@@ -650,9 +661,6 @@ esp_err_t makapix_channel_count_cached(const char *channel_id,
     return ESP_OK;
 }
 
-// Current channel for download callback (only one channel can be active for downloads)
-static makapix_channel_t *s_download_channel = NULL;
-
 // Download callback: called by download manager to get next file
 static esp_err_t download_get_next_callback(download_request_t *out_request, void *user_ctx)
 {
@@ -664,12 +672,19 @@ static esp_err_t download_get_next_callback(download_request_t *out_request, voi
         return ESP_ERR_INVALID_ARG;
     }
     
+    // Safety check: validate critical pointers to prevent use-after-free
+    // If the channel is being destroyed, these might be NULL or invalid
+    if (!ch->entries || !ch->channel_id) {
+        ESP_LOGW(TAG, "download_get_next_callback: channel appears to be destroyed or invalid");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
     if (ch->entry_count == 0) {
-        ESP_LOGI(TAG, "download_get_next_callback: channel %s has 0 entries", ch->channel_id);
+        ESP_LOGD(TAG, "download_get_next_callback: channel %s has 0 entries", ch->channel_id);
         return ESP_ERR_NOT_FOUND;
     }
     
-    ESP_LOGI(TAG, "download_get_next_callback: scanning %zu entries for channel %s", 
+    ESP_LOGD(TAG, "download_get_next_callback: scanning %zu entries for channel %s", 
              ch->entry_count, ch->channel_id);
     
     // Determine if we use navigator or index order
@@ -745,7 +760,7 @@ static esp_err_t download_get_next_callback(download_request_t *out_request, voi
             downloaded_count++;
         }
     }
-    ESP_LOGI(TAG, "All files downloaded for channel %s: %zu/%zu artworks cached", 
+    ESP_LOGD(TAG, "All files downloaded for channel %s: %zu/%zu artworks cached", 
              ch->channel_id, downloaded_count, ch->entry_count);
     return ESP_ERR_NOT_FOUND;
 }
@@ -767,7 +782,7 @@ void makapix_channel_setup_download_callback(channel_handle_t channel)
     
     s_download_channel = ch;
     download_manager_set_next_callback(download_get_next_callback, NULL);
-    ESP_LOGI(TAG, "Download callback setup for channel %s", ch->channel_id);
+    ESP_LOGD(TAG, "Download callback setup for channel %s", ch->channel_id);
     
     // Signal that downloads may be available
     download_manager_signal_work_available();

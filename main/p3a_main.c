@@ -95,10 +95,10 @@ static bool check_first_boot_after_update(void)
     err = nvs_get_str(nvs, NVS_LAST_P4_VERSION_KEY, last_p4_version, &len);
     
     if (err == ESP_ERR_NVS_NOT_FOUND) {
-        ESP_LOGI(TAG, "First P4 boot detected (no previous P4 version in NVS)");
+        ESP_LOGD(TAG, "First P4 boot detected (no previous P4 version in NVS)");
         p4_changed = true;
     } else if (err == ESP_OK && strcmp(last_p4_version, current_p4_version) != 0) {
-        ESP_LOGI(TAG, "P4 firmware changed: %s -> %s", last_p4_version, current_p4_version);
+        ESP_LOGD(TAG, "P4 firmware changed: %s -> %s", last_p4_version, current_p4_version);
         p4_changed = true;
     }
     
@@ -108,10 +108,10 @@ static bool check_first_boot_after_update(void)
     err = nvs_get_str(nvs, NVS_LAST_C6_VERSION_KEY, last_c6_version, &len);
     
     if (err == ESP_ERR_NVS_NOT_FOUND) {
-        ESP_LOGI(TAG, "First C6 boot detected (no previous C6 version in NVS)");
+        ESP_LOGD(TAG, "First C6 boot detected (no previous C6 version in NVS)");
         c6_changed = true;
     } else if (err == ESP_OK && strcmp(last_c6_version, current_c6_version) != 0) {
-        ESP_LOGI(TAG, "C6 firmware changed: %s -> %s", last_c6_version, current_c6_version);
+        ESP_LOGD(TAG, "C6 firmware changed: %s -> %s", last_c6_version, current_c6_version);
         c6_changed = true;
     }
     
@@ -122,7 +122,7 @@ static bool check_first_boot_after_update(void)
         nvs_set_str(nvs, NVS_LAST_P4_VERSION_KEY, current_p4_version);
         nvs_set_str(nvs, NVS_LAST_C6_VERSION_KEY, current_c6_version);
         nvs_commit(nvs);
-        ESP_LOGI(TAG, "Stored versions - P4: %s, C6: %s", current_p4_version, current_c6_version);
+        ESP_LOGD(TAG, "Stored versions - P4: %s, C6: %s", current_p4_version, current_c6_version);
     }
     
     nvs_close(nvs);
@@ -162,7 +162,7 @@ esp_err_t animation_player_set_dwell_time(uint32_t dwell_time)
         xTaskNotifyGive(s_auto_swap_task_handle);
     }
     
-    ESP_LOGI(TAG, "Dwell time set to %u seconds", dwell_time);
+    ESP_LOGD(TAG, "Dwell time set to %u seconds", dwell_time);
     return ESP_OK;
 }
 
@@ -180,7 +180,7 @@ static uint32_t get_current_effective_dwell_ms(void)
 static void auto_swap_task(void *arg)
 {
     (void)arg;
-    ESP_LOGI(TAG, "Auto-swap task started");
+    ESP_LOGD(TAG, "Auto-swap task started");
     
     // Wait a bit for system to initialize before first swap
     vTaskDelay(pdMS_TO_TICKS(1000));
@@ -193,7 +193,7 @@ static void auto_swap_task(void *arg)
 
             if (swap_future_is_ready(now_ms, &pending_swap)) {
                 int64_t timing_error_ms = (int64_t)now_ms - (int64_t)pending_swap.target_time_ms;
-                ESP_LOGI(TAG, "Auto-swap: Executing swap_future (timing error: %lld ms)", timing_error_ms);
+                ESP_LOGD(TAG, "Auto-swap: Executing swap_future (timing error: %lld ms)", timing_error_ms);
 
                 esp_err_t err = swap_future_execute(&pending_swap);
                 if (err == ESP_OK) {
@@ -282,7 +282,7 @@ static void memory_report_task(void *arg)
     (void)arg;
     const TickType_t delay_ticks = pdMS_TO_TICKS(MEMORY_REPORT_INTERVAL_SECONDS * 1000);
     
-    ESP_LOGI(TAG, "Memory reporting task started: will report every %d seconds", MEMORY_REPORT_INTERVAL_SECONDS);
+    ESP_LOGD(TAG, "Memory reporting task started: will report every %d seconds", MEMORY_REPORT_INTERVAL_SECONDS);
     
     // Wait a bit for system to initialize before first report
     vTaskDelay(pdMS_TO_TICKS(2000));
@@ -313,58 +313,58 @@ static void memory_report_task(void *arg)
         // Get task count
         UBaseType_t num_tasks = uxTaskGetNumberOfTasks();
         
-        // Log memory report
-        ESP_LOGI(TAG, "=== Memory Status Report ===");
-        ESP_LOGI(TAG, "Overall Heap:");
-        ESP_LOGI(TAG, "  Free: %zu bytes (%.2f KB)", free_heap, free_heap / 1024.0f);
-        ESP_LOGI(TAG, "  Min Free (since boot): %zu bytes (%.2f KB)", min_free_heap, min_free_heap / 1024.0f);
-        ESP_LOGI(TAG, "  Largest Free Block: %zu bytes (%.2f KB)", largest_free_block, largest_free_block / 1024.0f);
-        ESP_LOGI(TAG, "");
-        ESP_LOGI(TAG, "Memory by Type:");
-        ESP_LOGI(TAG, "  Internal RAM:");
-        ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_internal, total_internal / 1024.0f);
-        ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
+        // Log memory report (debug level - periodic monitoring)
+        ESP_LOGD(TAG, "=== Memory Status Report ===");
+        ESP_LOGD(TAG, "Overall Heap:");
+        ESP_LOGD(TAG, "  Free: %zu bytes (%.2f KB)", free_heap, free_heap / 1024.0f);
+        ESP_LOGD(TAG, "  Min Free (since boot): %zu bytes (%.2f KB)", min_free_heap, min_free_heap / 1024.0f);
+        ESP_LOGD(TAG, "  Largest Free Block: %zu bytes (%.2f KB)", largest_free_block, largest_free_block / 1024.0f);
+        ESP_LOGD(TAG, "");
+        ESP_LOGD(TAG, "Memory by Type:");
+        ESP_LOGD(TAG, "  Internal RAM:");
+        ESP_LOGD(TAG, "    Total: %zu bytes (%.2f KB)", total_internal, total_internal / 1024.0f);
+        ESP_LOGD(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
                  used_internal, used_internal / 1024.0f, 
                  total_internal > 0 ? (100.0f * used_internal / total_internal) : 0.0f);
-        ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
+        ESP_LOGD(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
                  free_internal, free_internal / 1024.0f,
                  total_internal > 0 ? (100.0f * free_internal / total_internal) : 0.0f);
         
         if (total_spiram > 0) {
-            ESP_LOGI(TAG, "  SPIRAM:");
-            ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_spiram, total_spiram / 1024.0f);
-            ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
+            ESP_LOGD(TAG, "  SPIRAM:");
+            ESP_LOGD(TAG, "    Total: %zu bytes (%.2f KB)", total_spiram, total_spiram / 1024.0f);
+            ESP_LOGD(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
                      used_spiram, used_spiram / 1024.0f,
                      total_spiram > 0 ? (100.0f * used_spiram / total_spiram) : 0.0f);
-            ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
+            ESP_LOGD(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
                      free_spiram, free_spiram / 1024.0f,
                      total_spiram > 0 ? (100.0f * free_spiram / total_spiram) : 0.0f);
         }
         
         if (total_dma > 0) {
-            ESP_LOGI(TAG, "  DMA-Capable:");
-            ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_dma, total_dma / 1024.0f);
-            ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
+            ESP_LOGD(TAG, "  DMA-Capable:");
+            ESP_LOGD(TAG, "    Total: %zu bytes (%.2f KB)", total_dma, total_dma / 1024.0f);
+            ESP_LOGD(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
                      used_dma, used_dma / 1024.0f,
                      total_dma > 0 ? (100.0f * used_dma / total_dma) : 0.0f);
-            ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
+            ESP_LOGD(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
                      free_dma, free_dma / 1024.0f,
                      total_dma > 0 ? (100.0f * free_dma / total_dma) : 0.0f);
         }
         
-        ESP_LOGI(TAG, "  8-bit Accessible:");
-        ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_8bit, total_8bit / 1024.0f);
-        ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
+        ESP_LOGD(TAG, "  8-bit Accessible:");
+        ESP_LOGD(TAG, "    Total: %zu bytes (%.2f KB)", total_8bit, total_8bit / 1024.0f);
+        ESP_LOGD(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
                  used_8bit, used_8bit / 1024.0f,
                  total_8bit > 0 ? (100.0f * used_8bit / total_8bit) : 0.0f);
-        ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
+        ESP_LOGD(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
                  free_8bit, free_8bit / 1024.0f,
                  total_8bit > 0 ? (100.0f * free_8bit / total_8bit) : 0.0f);
         
-        ESP_LOGI(TAG, "");
-        ESP_LOGI(TAG, "System:");
-        ESP_LOGI(TAG, "  FreeRTOS Tasks: %u", num_tasks);
-        ESP_LOGI(TAG, "============================");
+        ESP_LOGD(TAG, "");
+        ESP_LOGD(TAG, "System:");
+        ESP_LOGD(TAG, "  FreeRTOS Tasks: %u", num_tasks);
+        ESP_LOGD(TAG, "============================");
         
         vTaskDelay(delay_ticks);
     }
@@ -385,7 +385,7 @@ static void register_rest_action_handlers(void)
         app_lcd_cycle_animation,           // swap_next callback
         app_lcd_cycle_animation_backward   // swap_back callback
     );
-    ESP_LOGI(TAG, "REST action handlers registered");
+    ESP_LOGD(TAG, "REST action handlers registered");
 }
 
 #if !DEBUG_PROVISIONING_ENABLED
@@ -410,7 +410,7 @@ static void makapix_state_monitor_task(void *arg)
         makapix_state_t current_makapix_state = makapix_get_state();
 
         if (current_makapix_state != last_makapix_state) {
-            ESP_LOGI(TAG, "Makapix state changed: %d -> %d", last_makapix_state, current_makapix_state);
+            ESP_LOGD(TAG, "Makapix state changed: %d -> %d", last_makapix_state, current_makapix_state);
 
             // Handle state transitions - sync with unified p3a state machine
             if (current_makapix_state == MAKAPIX_STATE_PROVISIONING) {
@@ -438,7 +438,7 @@ static void makapix_state_monitor_task(void *arg)
                         ESP_LOGE(TAG, "Failed to show provisioning status UI: %s", esp_err_to_name(show_err));
                     }
                 }
-                ESP_LOGI(TAG, "Provisioning UI displayed");
+                ESP_LOGD(TAG, "Provisioning UI displayed");
                 
             } else if (current_makapix_state == MAKAPIX_STATE_SHOW_CODE) {
                 // Update p3a provisioning sub-state
@@ -473,7 +473,7 @@ static void makapix_state_monitor_task(void *arg)
                 // This ensures animation takes over immediately without an intermediate black frame
                 app_lcd_exit_ui_mode();
                 ugfx_ui_hide_registration();
-                ESP_LOGI(TAG, "Registration mode exited");
+                ESP_LOGD(TAG, "Registration mode exited");
             }
 
             last_makapix_state = current_makapix_state;
@@ -503,7 +503,7 @@ static void debug_provisioning_task(void *arg)
     static const char *mock_code = "DBG123";
     static const char *mock_expires = "2099-12-31T23:59:59Z";
 
-    ESP_LOGI(TAG, "Debug provisioning task started (toggle every %d ms)", DEBUG_PROVISIONING_TOGGLE_MS);
+    ESP_LOGD(TAG, "Debug provisioning task started (toggle every %d ms)", DEBUG_PROVISIONING_TOGGLE_MS);
 
     // Wait for LCD to be initialized
     while (!app_lcd_get_panel_handle()) {
@@ -516,7 +516,7 @@ static void debug_provisioning_task(void *arg)
         ESP_LOGE(TAG, "Failed to initialize µGFX UI: %s", esp_err_to_name(err));
         return;
     }
-    ESP_LOGI(TAG, "µGFX initialized, debug task ready");
+    ESP_LOGD(TAG, "µGFX initialized, debug task ready");
 
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(DEBUG_PROVISIONING_TOGGLE_MS));
@@ -524,7 +524,7 @@ static void debug_provisioning_task(void *arg)
         in_debug_mode = !in_debug_mode;
 
         if (in_debug_mode) {
-            ESP_LOGI(TAG, ">>> ENTERING DEBUG PROVISIONING MODE <<<");
+            ESP_LOGD(TAG, ">>> ENTERING DEBUG PROVISIONING MODE <<<");
             
             // Enter UI mode - this gets the framebuffer and sets it for µGFX
             err = app_lcd_enter_ui_mode();
@@ -540,13 +540,9 @@ static void debug_provisioning_task(void *arg)
             }
             
             // Log mock registration info
-            ESP_LOGI(TAG, "============================================");
-            ESP_LOGI(TAG, "   [DEBUG] REGISTRATION CODE: %s", mock_code);
-            ESP_LOGI(TAG, "   [DEBUG] Expires: %s", mock_expires);
-            ESP_LOGI(TAG, "   Enter at makapix.club");
-            ESP_LOGI(TAG, "============================================");
+            ESP_LOGD(TAG, "[DEBUG] Registration code: %s (expires: %s)", mock_code, mock_expires);
         } else {
-            ESP_LOGI(TAG, ">>> EXITING DEBUG PROVISIONING MODE <<<");
+            ESP_LOGD(TAG, ">>> EXITING DEBUG PROVISIONING MODE <<<");
             // Exit UI mode FIRST, then hide registration
             // This ensures animation takes over immediately without an intermediate black frame
             app_lcd_exit_ui_mode();
@@ -571,7 +567,7 @@ void app_main(void)
     // Set timezone to UTC for Live Mode synchronization
     setenv("TZ", "UTC", 1);
     tzset();
-    ESP_LOGI(TAG, "Timezone set to UTC for Live Mode");
+    ESP_LOGD(TAG, "Timezone set to UTC for Live Mode");
 
     // Initialize effective seed with true random for pre-NTP behavior
     // This will be replaced with master seed once NTP syncs
@@ -579,7 +575,7 @@ void app_main(void)
     uint32_t master_seed = config_store_get_global_seed();
     uint32_t effective_seed = master_seed ^ true_random_seed;
     config_store_set_effective_seed(effective_seed);
-    ESP_LOGI(TAG, "Master seed: 0x%08x, True random: 0x%08x, Effective seed: 0x%08x (pre-NTP)", 
+    ESP_LOGD(TAG, "Master seed: 0x%08x, True random: 0x%08x, Effective seed: 0x%08x (pre-NTP)", 
              master_seed, true_random_seed, effective_seed);
 
     // Initialize SDIO bus coordinator early
@@ -669,7 +665,7 @@ void app_main(void)
     // This ensures the ESP32-C6 co-processor and SDIO bus are in a clean state
     if (needs_stabilization_reboot) {
         ESP_LOGW(TAG, "First boot after firmware update - performing stabilization reboot...");
-        ESP_LOGI(TAG, "This ensures co-processor and SDIO bus are properly initialized");
+        ESP_LOGD(TAG, "This ensures co-processor and SDIO bus are properly initialized");
         vTaskDelay(pdMS_TO_TICKS(2000));  // Brief delay so user can see the message
         esp_restart();
         // Won't reach here

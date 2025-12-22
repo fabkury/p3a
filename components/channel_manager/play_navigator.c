@@ -1,5 +1,6 @@
 #include "play_navigator.h"
 #include "esp_log.h"
+#include "esp_random.h"
 #include "sync_playlist.h"
 #include "sntp_sync.h"
 #include "config_store.h"
@@ -366,7 +367,20 @@ esp_err_t play_navigator_init(play_navigator_t *nav, channel_handle_t channel,
     nav->p = 0;
     nav->q = 0;
 
-    return rebuild_order(nav);
+    esp_err_t err = rebuild_order(nav);
+    if (err != ESP_OK) {
+        return err;
+    }
+    
+    // For random order, start at a random position instead of always position 0
+    // This uses true random (esp_random) for variety on each channel entry
+    if (order == PLAY_ORDER_RANDOM && nav->order_count > 0) {
+        nav->p = esp_random() % nav->order_count;
+        ESP_LOGD("play_nav", "Random order: starting at position %lu/%zu", 
+                 (unsigned long)nav->p, nav->order_count);
+    }
+    
+    return ESP_OK;
 }
 
 void play_navigator_deinit(play_navigator_t *nav)
@@ -790,8 +804,29 @@ void play_navigator_set_pe(play_navigator_t *nav, uint32_t pe)
 void play_navigator_set_order(play_navigator_t *nav, play_order_mode_t order)
 {
     if (!nav) return;
+    
+    // Remember current actual post index before rebuilding
+    uint32_t current_post_idx = 0;
+    bool had_valid_position = false;
+    if (nav->order_indices && nav->order_count > 0 && nav->p < nav->order_count) {
+        current_post_idx = nav->order_indices[nav->p];
+        had_valid_position = true;
+    }
+    
     nav->order = order;
     (void)rebuild_order(nav);
+    
+    // Find the current post in the new order to preserve position
+    if (had_valid_position && nav->order_indices && nav->order_count > 0) {
+        for (size_t i = 0; i < nav->order_count; i++) {
+            if (nav->order_indices[i] == current_post_idx) {
+                nav->p = (uint32_t)i;
+                // Keep q unchanged - we're on the same artwork within playlist
+                break;
+            }
+        }
+    }
+    
     if (nav->live_mode) free_live_schedule(nav);
 }
 

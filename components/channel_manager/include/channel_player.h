@@ -162,6 +162,18 @@ void channel_player_exit_live_mode(void);
  */
 void channel_player_clear_channel(channel_handle_t channel_to_clear);
 
+/**
+ * @brief Hot-swap the play order while preserving current position
+ * 
+ * Changes the play order mode for the current channel without restarting playback.
+ * The current artwork remains displayed, and navigation continues from there
+ * in the new order.
+ * 
+ * @param play_order Play order: 1=CREATED (date descending), 2=RANDOM
+ * @return ESP_OK on success, ESP_ERR_INVALID_STATE if no channel active
+ */
+esp_err_t channel_player_set_play_order(uint8_t play_order);
+
 #ifdef __cplusplus
 }
 #endif

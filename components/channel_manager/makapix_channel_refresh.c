@@ -159,7 +159,7 @@ static esp_err_t reconcile_deletions(makapix_channel_t *ch,
                 struct stat st;
                 if (stat(vault_path, &st) == 0) {
                     if (unlink(vault_path) == 0) {
-                        ESP_LOGI(TAG, "Deleted local file for removed artwork: post_id=%ld", 
+                        ESP_LOGD(TAG, "Deleted local file for removed artwork: post_id=%ld", 
                                 (long)entry->post_id);
                     } else {
                         ESP_LOGW(TAG, "Failed to delete file for removed artwork: post_id=%ld, path=%s", 
@@ -178,12 +178,9 @@ static esp_err_t reconcile_deletions(makapix_channel_t *ch,
         free(ch->entries);
         ch->entries = kept_entries;
         ch->entry_count = kept_count;
-        
-        ESP_LOGI(TAG, "Reconciliation complete: deleted %zu entries, kept %zu entries", 
-                deleted_count, kept_count);
+        ESP_LOGD(TAG, "Reconciled: %zu deleted", deleted_count);
     } else {
         free(kept_entries);
-        ESP_LOGD(TAG, "Reconciliation: no deletions detected");
     }
     
     return ESP_OK;
@@ -481,7 +478,7 @@ esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *posts, s
                     
                     struct stat st;
                     if (stat(vault_path, &st) == 0) {
-                        ESP_LOGI(TAG, "Artwork file updated on server (post_id=%ld), deleting local copy for re-download", 
+                        ESP_LOGD(TAG, "Artwork file updated on server (post_id=%ld), deleting local copy for re-download", 
                                 (long)post->post_id);
                         if (unlink(vault_path) != 0) {
                             ESP_LOGW(TAG, "Failed to delete outdated artwork file: %s", vault_path);
@@ -554,7 +551,7 @@ rename_ok:
     ch->entries = all_entries;
     ch->entry_count = all_count;
 
-    ESP_LOGI(TAG, "Updated channel index: %zu total entries", all_count);
+    ESP_LOGD(TAG, "Index updated: %zu entries", all_count);
     ret = ESP_OK;
     all_entries = NULL; // ownership transferred to ch
 
@@ -629,7 +626,7 @@ static esp_err_t evict_for_storage_pressure(makapix_channel_t *ch, size_t min_re
         return ESP_OK;
     }
     
-    ESP_LOGI(TAG, "Storage pressure detected: %llu bytes free, %zu bytes required",
+    ESP_LOGD(TAG, "Storage pressure detected: %llu bytes free, %zu bytes required",
              (unsigned long long)free_bytes, min_reserve_bytes);
     
     // Collect all downloaded artwork files from this channel
@@ -690,14 +687,14 @@ static esp_err_t evict_for_storage_pressure(makapix_channel_t *ch, size_t min_re
         // Re-check free space
         err = get_storage_free_space("/sdcard", &free_bytes);
         if (err == ESP_OK && (free_bytes == UINT64_MAX || free_bytes >= (uint64_t)min_reserve_bytes)) {
-            ESP_LOGI(TAG, "Storage pressure relieved after evicting %zu files", actually_deleted);
+            ESP_LOGD(TAG, "Storage pressure relieved after evicting %zu files", actually_deleted);
             break;
         }
     }
     
     free(downloaded);
     
-    ESP_LOGI(TAG, "Storage-based eviction: deleted %zu files", actually_deleted);
+    ESP_LOGD(TAG, "Storage-based eviction: deleted %zu files", actually_deleted);
     return ESP_OK;
 }
 
@@ -720,7 +717,7 @@ esp_err_t evict_excess_artworks(makapix_channel_t *ch, size_t max_count)
 
     if (downloaded_count <= max_count) return ESP_OK;
 
-    ESP_LOGI(TAG, "Eviction needed: %zu downloaded files exceed limit of %zu", 
+    ESP_LOGD(TAG, "Eviction needed: %zu downloaded files exceed limit of %zu", 
              downloaded_count, max_count);
 
     // Collect only artwork entries that have files
@@ -762,7 +759,7 @@ esp_err_t evict_excess_artworks(makapix_channel_t *ch, size_t max_count)
 
     free(downloaded);
 
-    ESP_LOGI(TAG, "Evicted %zu artwork files to stay within limit of %zu", 
+    ESP_LOGD(TAG, "Evicted %zu artwork files to stay within limit of %zu", 
              actually_deleted, max_count);
     
     return ESP_OK;
@@ -776,18 +773,13 @@ void refresh_task_impl(void *pvParameters)
         return;
     }
     
-    ESP_LOGI(TAG, "Refresh task started for channel %s", ch->channel_id);
-    
-    // Wait indefinitely for MQTT to connect before first query
-    ESP_LOGI(TAG, "Waiting for MQTT connection before refresh...");
+    // Wait for MQTT before first query
     if (!makapix_channel_wait_for_mqtt(portMAX_DELAY)) {
-        ESP_LOGW(TAG, "MQTT wait interrupted, exiting refresh task");
         ch->refreshing = false;
         ch->refresh_task = NULL;
         vTaskDelete(NULL);
         return;
     }
-    ESP_LOGI(TAG, "MQTT connected, starting refresh queries");
     
     // Update UI message to indicate we're updating the index
     // This is called during boot when no animation is loaded yet
@@ -880,7 +872,7 @@ void refresh_task_impl(void *pvParameters)
             }
             
             if (resp->post_count == 0) {
-                ESP_LOGI(TAG, "No more posts available");
+                ESP_LOGD(TAG, "No more posts available");
                 break;
             }
             
@@ -922,15 +914,11 @@ void refresh_task_impl(void *pvParameters)
             }
             
             if (!resp->has_more) {
-                ESP_LOGI(TAG, "Server indicates no more posts available (queried %zu so far)", total_queried);
                 break;
             }
             
-            // Clear "Connecting..." message after first successful query
             if (!first_query_completed && total_queried > 0) {
                 first_query_completed = true;
-                ESP_LOGI(TAG, "First query completed, clearing connection message");
-                // Note: The makapix.c loading logic will show "Loading..." if needed
             }
             
             // Delay between queries
@@ -971,15 +959,12 @@ void refresh_task_impl(void *pvParameters)
             }
         }
         
-        ESP_LOGI(TAG, "Refresh cycle completed: queried %zu posts, channel has %zu entries (%zu artworks, %zu playlists)", 
-                 total_queried, ch->entry_count, artwork_count, playlist_count);
+        ESP_LOGD(TAG, "Channel %s: %zu entries (%zu artworks)", ch->channel_id, ch->entry_count, artwork_count);
         
         // Signal that refresh has completed - this unblocks download manager
         makapix_channel_signal_refresh_done();
         
-        // Wait for configured interval before next refresh
-        ESP_LOGI(TAG, "Waiting %lu seconds before next refresh cycle", 
-                (unsigned long)refresh_interval_sec);
+        // Wait for next refresh cycle
         for (uint32_t elapsed = 0; elapsed < refresh_interval_sec && ch->refreshing; elapsed++) {
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
@@ -988,18 +973,14 @@ void refresh_task_impl(void *pvParameters)
             break;
         }
         
-        // If MQTT disconnected during wait, block until reconnected
+        // If MQTT disconnected, wait for reconnection
         if (!makapix_channel_is_mqtt_ready()) {
-            ESP_LOGI(TAG, "MQTT disconnected, waiting for reconnection...");
             if (!makapix_channel_wait_for_mqtt(portMAX_DELAY)) {
-                ESP_LOGW(TAG, "MQTT wait interrupted, exiting refresh task");
                 break;
             }
-            ESP_LOGI(TAG, "MQTT reconnected, resuming refresh cycles");
         }
     }
     
-    ESP_LOGI(TAG, "Refresh task exiting");
     ch->refreshing = false;
     ch->refresh_task = NULL;
     vTaskDelete(NULL);

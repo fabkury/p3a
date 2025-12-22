@@ -2,6 +2,7 @@
 #include "sdcard_channel_impl.h"
 #include "config_store.h"
 #include "swap_future.h"
+#include "play_navigator.h"
 
 #include "esp_log.h"
 #include <string.h>
@@ -66,8 +67,6 @@ esp_err_t channel_player_init(void)
     memset(&s_player, 0, sizeof(s_player));
     s_player.source_type = CHANNEL_PLAYER_SOURCE_SDCARD;
     s_player.initialized = true;
-
-    ESP_LOGI(TAG, "Channel player initialized");
     return ESP_OK;
 }
 
@@ -84,8 +83,6 @@ void channel_player_deinit(void)
 
     s_player.current_channel = NULL;
     s_player.initialized = false;
-
-    ESP_LOGI(TAG, "Channel player deinitialized");
 }
 
 esp_err_t channel_player_set_sdcard_channel_handle(channel_handle_t sdcard_channel)
@@ -262,8 +259,6 @@ esp_err_t channel_player_switch_to_makapix_channel(channel_handle_t makapix_chan
 
     s_player.source_type = CHANNEL_PLAYER_SOURCE_MAKAPIX;
     s_player.current_channel = makapix_channel;
-
-    ESP_LOGI(TAG, "Switched to Makapix channel as playback source");
     if (auto_swap_reset_timer) {
         auto_swap_reset_timer();
     }
@@ -286,8 +281,6 @@ esp_err_t channel_player_switch_to_sdcard_channel(void)
 
     s_player.source_type = CHANNEL_PLAYER_SOURCE_SDCARD;
     s_player.current_channel = s_player.sdcard_channel;
-
-    ESP_LOGI(TAG, "Switched to SD card channel as playback source");
     if (auto_swap_reset_timer) {
         auto_swap_reset_timer();
     }
@@ -342,4 +335,33 @@ void channel_player_clear_channel(channel_handle_t channel_to_clear)
         ESP_LOGI(TAG, "Clearing current channel pointer (channel about to be destroyed)");
         s_player.current_channel = NULL;
     }
+}
+
+esp_err_t channel_player_set_play_order(uint8_t play_order)
+{
+    if (!s_player.initialized || !s_player.current_channel) {
+        ESP_LOGW(TAG, "Cannot set play order: no active channel");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    play_navigator_t *nav = (play_navigator_t *)channel_get_navigator(s_player.current_channel);
+    if (!nav) {
+        ESP_LOGW(TAG, "Cannot set play order: no navigator");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    play_order_mode_t mode;
+    switch (play_order) {
+        case 1: mode = PLAY_ORDER_CREATED; break;
+        case 2: mode = PLAY_ORDER_RANDOM; break;
+        case 0:
+        default:
+            mode = PLAY_ORDER_SERVER;
+            break;
+    }
+    
+    ESP_LOGI(TAG, "Hot-swapping play order to %d", (int)mode);
+    play_navigator_set_order(nav, mode);
+    
+    return ESP_OK;
 }

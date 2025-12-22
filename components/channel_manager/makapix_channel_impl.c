@@ -357,6 +357,7 @@ static esp_err_t makapix_impl_current_item(channel_handle_t channel, channel_ite
     if (err != ESP_OK) return err;
 
     memset(out_item, 0, sizeof(*out_item));
+    out_item->post_id = art.post_id;
     strlcpy(out_item->filepath, art.filepath, sizeof(out_item->filepath));
     strlcpy(out_item->storage_key, art.storage_key, sizeof(out_item->storage_key));
     out_item->item_index = 0;

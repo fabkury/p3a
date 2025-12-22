@@ -81,6 +81,12 @@ esp_err_t makapix_init(void)
     if (api_err != ESP_OK) {
         ESP_LOGW(MAKAPIX_TAG, "makapix_api_init failed (likely no player_key yet): %s", esp_err_to_name(api_err));
     }
+    
+    // Initialize view tracker for timed view events
+    esp_err_t view_err = view_tracker_init();
+    if (view_err != ESP_OK) {
+        ESP_LOGE(MAKAPIX_TAG, "view_tracker_init failed: %s", esp_err_to_name(view_err));
+    }
 
     if (makapix_store_has_player_key() && makapix_store_has_certificates()) {
         ESP_LOGD(MAKAPIX_TAG, "Credentials found, will connect after WiFi");

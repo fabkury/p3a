@@ -61,6 +61,27 @@ esp_err_t channel_player_load_channel(void);
 esp_err_t channel_player_get_current_post(const sdcard_post_t **out_post);
 
 /**
+ * @brief Get the current item reference from the active channel
+ * 
+ * Returns the raw channel item with post_id, filepath, etc.
+ * 
+ * @param out_item Pointer to receive item reference
+ * @return ESP_OK on success, ESP_ERR_INVALID_STATE if no channel loaded
+ */
+esp_err_t channel_player_get_current_item(channel_item_ref_t *out_item);
+
+/**
+ * @brief Get the post_id of the current item (lightweight, stack-safe)
+ * 
+ * Use this instead of channel_player_get_current_item() when you only need
+ * the post_id and want to minimize stack usage.
+ * 
+ * @param out_post_id Pointer to receive post_id (0 if not applicable)
+ * @return ESP_OK on success, ESP_ERR_INVALID_STATE if no channel loaded
+ */
+esp_err_t channel_player_get_current_post_id(int32_t *out_post_id);
+
+/**
  * @brief Advance to the next post
  * 
  * If at the end of the list and randomization is enabled, re-randomizes

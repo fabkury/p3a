@@ -603,6 +603,7 @@ static esp_err_t fill_item_from_artwork(sdcard_channel_t *ch, const artwork_ref_
     if (!ch || !art || !out_item) return ESP_ERR_INVALID_ARG;
 
     memset(out_item, 0, sizeof(*out_item));
+    out_item->post_id = art->post_id;  // Will be 0 for SD card items (not Makapix artworks)
     strlcpy(out_item->filepath, art->filepath, sizeof(out_item->filepath));
     strlcpy(out_item->storage_key, art->storage_key, sizeof(out_item->storage_key));
     out_item->item_index = 0;

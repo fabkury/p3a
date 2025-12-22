@@ -112,3 +112,31 @@ esp_err_t makapix_mqtt_publish_raw(const char *topic, const char *payload, int q
  */
 esp_err_t makapix_mqtt_subscribe(const char *topic, int qos);
 
+/**
+ * @brief Publish view event (fire-and-forget)
+ * 
+ * Sends a view event to the Makapix Club server with metadata about the artwork viewing.
+ * This is a fire-and-forget operation (no response expected).
+ * 
+ * Topic: makapix/player/{player_key}/view
+ * 
+ * Payload includes:
+ * - post_id: Artwork post ID
+ * - timestamp: ISO 8601 UTC timestamp
+ * - timezone: Empty string (reserved for future use)
+ * - intent: "artwork" (show_artwork command) or "channel" (channel playback)
+ * - play_order: 0=server, 1=created, 2=random
+ * - channel: Channel name (e.g., "promoted", "all", "sdcard")
+ * - player_key: Device player key
+ * 
+ * @param post_id Post ID of the artwork
+ * @param intent "artwork" or "channel"
+ * @param play_order Play order mode (0-2)
+ * @param channel_name Channel name string
+ * @param player_key Player key UUID string
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t makapix_mqtt_publish_view(int32_t post_id, const char *intent, 
+                                     uint8_t play_order, const char *channel_name,
+                                     const char *player_key);
+

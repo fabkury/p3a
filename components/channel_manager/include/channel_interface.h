@@ -48,6 +48,7 @@ typedef struct {
  * Contains everything needed to load and display an artwork.
  */
 typedef struct {
+    int32_t post_id;          // Post ID for view tracking (0 if not a Makapix artwork)
     char filepath[256];       // Full path to the asset file
     char storage_key[96];     // Vault storage key (SHA256 hex prefix + extension)
     uint32_t item_index;      // Index within the channel

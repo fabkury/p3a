@@ -130,6 +130,40 @@ esp_err_t channel_player_load_channel(void)
     return ensure_channel_loaded(s_player.current_channel);
 }
 
+esp_err_t channel_player_get_current_item(channel_item_ref_t *out_item)
+{
+    if (!s_player.initialized || !out_item) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!s_player.current_channel) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    return channel_current_item(s_player.current_channel, out_item);
+}
+
+esp_err_t channel_player_get_current_post_id(int32_t *out_post_id)
+{
+    if (!s_player.initialized || !out_post_id) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *out_post_id = 0;
+
+    if (!s_player.current_channel) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // Use static buffer to avoid stack allocation in caller's context
+    static channel_item_ref_t s_temp_item;
+    esp_err_t err = channel_current_item(s_player.current_channel, &s_temp_item);
+    if (err == ESP_OK) {
+        *out_post_id = s_temp_item.post_id;
+    }
+    return err;
+}
+
 esp_err_t channel_player_get_current_post(const sdcard_post_t **out_post)
 {
     if (!s_player.initialized || !out_post) {

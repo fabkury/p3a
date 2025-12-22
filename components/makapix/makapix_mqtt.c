@@ -560,6 +560,76 @@ esp_err_t makapix_mqtt_subscribe(const char *topic, int qos)
     return (msg_id >= 0) ? ESP_OK : ESP_FAIL;
 }
 
+esp_err_t makapix_mqtt_publish_view(int32_t post_id, const char *intent, 
+                                     uint8_t play_order, const char *channel_name,
+                                     const char *player_key)
+{
+    if (!intent || !channel_name || !player_key) {
+        ESP_LOGE(TAG, "publish_view: invalid arguments");
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    if (!s_mqtt_client || !s_mqtt_connected) {
+        ESP_LOGW(TAG, "publish_view: MQTT not connected, cannot publish");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Build topic: makapix/player/{player_key}/view
+    char topic[160];
+    snprintf(topic, sizeof(topic), "makapix/player/%s/view", player_key);
+    
+    // Build JSON payload
+    cJSON *view = cJSON_CreateObject();
+    if (!view) {
+        ESP_LOGE(TAG, "publish_view: failed to create JSON object");
+        return ESP_ERR_NO_MEM;
+    }
+    
+    cJSON_AddNumberToObject(view, "post_id", (double)post_id);
+    
+    // Get current timestamp
+    char timestamp[32];
+    esp_err_t time_err = sntp_sync_get_iso8601(timestamp, sizeof(timestamp));
+    if (time_err == ESP_OK) {
+        cJSON_AddStringToObject(view, "timestamp", timestamp);
+    } else {
+        // Fallback if time not synchronized
+        cJSON_AddStringToObject(view, "timestamp", "1970-01-01T00:00:00Z");
+        ESP_LOGW(TAG, "publish_view: time not synchronized, using fallback timestamp");
+    }
+    
+    // Timezone field (empty for now, reserved for future use)
+    cJSON_AddStringToObject(view, "timezone", "");
+    
+    cJSON_AddStringToObject(view, "intent", intent);
+    cJSON_AddNumberToObject(view, "play_order", (double)play_order);
+    cJSON_AddStringToObject(view, "channel", channel_name);
+    cJSON_AddStringToObject(view, "player_key", player_key);
+    
+    char *json_string = cJSON_PrintUnformatted(view);
+    cJSON_Delete(view);
+    
+    if (!json_string) {
+        ESP_LOGE(TAG, "publish_view: failed to serialize JSON");
+        return ESP_ERR_NO_MEM;
+    }
+    
+    ESP_LOGD(TAG, "Publishing view to topic: %s", topic);
+    ESP_LOGD(TAG, "View payload: %s", json_string);
+    
+    // Publish with QoS 1 (at least once delivery)
+    int msg_id = esp_mqtt_client_publish(s_mqtt_client, topic, json_string, 0, 1, 0);
+    free(json_string);
+    
+    if (msg_id < 0) {
+        ESP_LOGE(TAG, "publish_view: esp_mqtt_client_publish failed with %d", msg_id);
+        return ESP_FAIL;
+    }
+    
+    ESP_LOGD(TAG, "publish_view: published successfully, msg_id=%d", msg_id);
+    return ESP_OK;
+}
+
 void makapix_mqtt_log_state(void)
 {
     ESP_LOGI(TAG, "State: %s, URI: %s", 

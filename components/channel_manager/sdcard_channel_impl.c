@@ -330,8 +330,14 @@ static esp_err_t sdcard_impl_load(channel_handle_t channel)
 
     DIR *dir = opendir(dir_path);
     if (!dir) {
-        ESP_LOGE(TAG, "Failed to open directory: %s (errno: %d)", dir_path, errno);
-        return ESP_FAIL;
+        // Treat a missing directory as an empty channel (sd_path should normally ensure it exists).
+        // This is critical for first boot / empty SD card: we still want the render pipeline alive
+        // so the UI can show "No artworks" and allow provisioning.
+        ESP_LOGW(TAG, "Failed to open directory: %s (errno: %d) - treating as empty channel", dir_path, errno);
+        ch->entries = NULL;
+        ch->entry_count = 0;
+        ch->base.loaded = true;
+        return ESP_OK;
     }
 
     // Pass 1: count eligible files
@@ -360,7 +366,12 @@ static esp_err_t sdcard_impl_load(channel_handle_t channel)
 
     if (count == 0) {
         closedir(dir);
-        return ESP_ERR_NOT_FOUND;
+        // Empty directory is not an error: keep channel loaded with zero entries.
+        ch->entries = NULL;
+        ch->entry_count = 0;
+        ch->base.loaded = true;
+        ESP_LOGI(TAG, "SD channel is empty (%s)", dir_path);
+        return ESP_OK;
     }
 
     ch->entries = (sdcard_entry_t *)calloc(count, sizeof(sdcard_entry_t));
@@ -444,7 +455,11 @@ static esp_err_t sdcard_impl_load(channel_handle_t channel)
     if (ch->entry_count == 0) {
         free(ch->entries);
         ch->entries = NULL;
-        return ESP_ERR_NOT_FOUND;
+        // Only playlists/sidecars were present or everything was filtered out.
+        // Still treat as an empty loaded channel.
+        ch->base.loaded = true;
+        ESP_LOGI(TAG, "SD channel has no playable entries after filtering (%s)", dir_path);
+        return ESP_OK;
     }
 
     ch->base.loaded = true;

@@ -110,10 +110,23 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
                 }
             } else {
                 // Start provisioning
-                if (makapix_start_provisioning) {
+                ESP_LOGI(TAG, "Long press detected - attempting to start provisioning");
+                if (!makapix_start_provisioning) {
+                    ESP_LOGW(TAG, "Provisioning not available (makapix_start_provisioning is NULL)");
+                } else {
                     esp_err_t err = p3a_state_enter_provisioning();
                     if (err == ESP_OK) {
+                        ESP_LOGI(TAG, "State transition to provisioning successful, starting provisioning");
                         makapix_start_provisioning();
+                    } else {
+                        ESP_LOGW(TAG, "State transition to provisioning denied: %s (current state: %s)",
+                                esp_err_to_name(err), p3a_state_get_name(p3a_state_get()));
+                        // Force start provisioning anyway if we're in animation playback state
+                        // This handles the edge case where substate might be blocking
+                        if (p3a_state_get() == P3A_STATE_ANIMATION_PLAYBACK) {
+                            ESP_LOGI(TAG, "Forcing provisioning start from animation playback state");
+                            makapix_start_provisioning();
+                        }
                     }
                 }
             }

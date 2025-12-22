@@ -653,20 +653,9 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         
         // Handle timeout (no artwork available after waiting)
         if (!got_artwork) {
-            ESP_LOGW(MAKAPIX_TAG, "Timed out waiting for first artwork - showing error message");
+            ESP_LOGW(MAKAPIX_TAG, "Timed out waiting for first artwork - checking for fallback options");
             
-            // Display error message for 5 seconds
-            char error_msg[128];
-            snprintf(error_msg, sizeof(error_msg), "Channel '%s' unavailable", channel_name);
-            ugfx_ui_show_channel_message("Error", error_msg, -1);
-            p3a_render_set_channel_message("Error", P3A_CHANNEL_MSG_ERROR, -1, error_msg);
-            
-            vTaskDelay(pdMS_TO_TICKS(5000));  // Wait 5 seconds
-            
-            // Clear error message
-            ugfx_ui_hide_channel_message();
-            p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
-            
+            // Clean up current channel
             channel_player_clear_channel(s_current_channel);
             channel_destroy(s_current_channel);
             s_current_channel = NULL;
@@ -679,12 +668,18 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
             char pending_user[64] = {0};
             if (makapix_get_pending_channel(pending_ch, sizeof(pending_ch), pending_user, sizeof(pending_user))) {
                 makapix_clear_pending_channel();
+                // Clear loading message before switching
+                ugfx_ui_hide_channel_message();
+                p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
                 return makapix_switch_to_channel(pending_ch, pending_user[0] ? pending_user : NULL);
             }
             
             // Fall back to previous channel if available
             if (s_previous_channel_id[0] != '\0') {
                 ESP_LOGI(MAKAPIX_TAG, "Falling back to previous channel: %s", s_previous_channel_id);
+                // Clear loading message before switching
+                ugfx_ui_hide_channel_message();
+                p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
                 // Parse previous channel to extract channel type and identifier
                 char prev_channel[64] = {0};
                 char prev_identifier[64] = {0};
@@ -701,6 +696,8 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
             }
             
             // No previous channel - fall back to SD card
+            // Don't clear channel message - let fallback function show appropriate message
+            // (it will show "No artworks available" if SD card is also empty)
             p3a_state_fallback_to_sdcard();
             return ESP_ERR_NOT_FOUND;
         }

@@ -166,8 +166,24 @@ static esp_err_t render_animation_playback(uint8_t *buffer, size_t stride, p3a_r
     // Delegate to animation player's internal render function
     if (animation_player_render_frame_internal) {
         int delay = animation_player_render_frame_internal(buffer, stride);
-        result->frame_delay_ms = delay;
-        result->buffer_modified = true;
+        if (delay >= 0) {
+            result->frame_delay_ms = delay;
+            result->buffer_modified = true;
+            return ESP_OK;
+        }
+        
+        // Animation renderer returned -1 (no animation loaded)
+        // Fall back to channel message UI if available
+        if (ugfx_ui_render_to_buffer) {
+            delay = ugfx_ui_render_to_buffer(buffer, stride);
+            result->frame_delay_ms = delay > 0 ? delay : 100;
+            result->buffer_modified = (delay >= 0);
+            return ESP_OK;
+        }
+        
+        // No UI available either - signal buffer not modified
+        result->frame_delay_ms = 100;
+        result->buffer_modified = false;
         return ESP_OK;
     }
     

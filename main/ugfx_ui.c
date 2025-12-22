@@ -236,9 +236,57 @@ static void ugfx_ui_draw_channel_message(void)
                          gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0x00AAFF), GFX_BLACK, gJustifyCenter);
     }
 
-    // Main status message
-    gdispFillStringBox(0, screen_h / 2 - 40, screen_w, 40, s_channel_message,
-                     gdispOpenFont("* DejaVu Sans 24"), GFX_WHITE, GFX_BLACK, gJustifyCenter);
+    // Main status message (supports '\n' line breaks)
+    gFont msg_font = gdispOpenFont("* DejaVu Sans 24");
+    const char *msg = s_channel_message;
+    if (!msg) msg = "";
+
+    // Split into up to 3 lines on '\n' (rendering '\n' directly shows as '?' on some builds)
+    enum { MAX_LINES = 3 };
+    const char *line_start[MAX_LINES] = {0};
+    size_t line_len[MAX_LINES] = {0};
+    int line_count = 0;
+
+    const char *p = msg;
+    line_start[line_count] = p;
+    while (*p && line_count < MAX_LINES) {
+        if (*p == '\r') {
+            // ignore CR (Windows newlines)
+            p++;
+            continue;
+        }
+        if (*p == '\n') {
+            line_len[line_count] = (size_t)(p - line_start[line_count]);
+            line_count++;
+            if (line_count >= MAX_LINES) break;
+            p++; // skip '\n'
+            line_start[line_count] = p;
+            continue;
+        }
+        p++;
+    }
+    if (line_count < MAX_LINES) {
+        line_len[line_count] = (size_t)(p - line_start[line_count]);
+        line_count++;
+    }
+    if (line_count <= 0) line_count = 1;
+
+    // Compute line height and vertical placement (centered around middle)
+    gCoord line_h = gdispGetFontMetric(msg_font, gFontLineSpacing);
+    if (line_h <= 0) line_h = 28;
+    gCoord block_h = (gCoord)(line_count * line_h);
+    gCoord start_y = (screen_h / 2) - (block_h / 2);
+
+    for (int i = 0; i < line_count; i++) {
+        char line_buf[128];
+        size_t n = line_len[i];
+        if (n >= sizeof(line_buf)) n = sizeof(line_buf) - 1;
+        memcpy(line_buf, line_start[i], n);
+        line_buf[n] = '\0';
+
+        gdispFillStringBox(0, start_y + (gCoord)(i * line_h), screen_w, line_h, line_buf,
+                           msg_font, GFX_WHITE, GFX_BLACK, gJustifyCenter);
+    }
 
     // Progress bar (if progress is defined, i.e. >= 0)
     if (s_channel_progress >= 0) {

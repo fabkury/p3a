@@ -70,12 +70,31 @@ static int animation_player_render_dispatch_cb(uint8_t *dest_buffer, void *user_
     display_renderer_get_dimensions(NULL, NULL, &stride);
 
     p3a_render_result_t rr = {0};
-    if (p3a_render_frame(dest_buffer, stride, &rr) == ESP_OK) {
+    esp_err_t render_err = p3a_render_frame(dest_buffer, stride, &rr);
+    
+    if (render_err == ESP_OK && rr.buffer_modified) {
+        // State-aware renderer succeeded and drew something
         return rr.frame_delay_ms;
     }
-
-    // Fallback to animation-only rendering.
-    return animation_player_render_frame_callback(dest_buffer, NULL);
+    
+    // If p3a_render returned OK but didn't modify buffer (e.g., waiting for something),
+    // or if it failed entirely, try direct animation rendering
+    int anim_delay = animation_player_render_frame_callback(dest_buffer, NULL);
+    if (anim_delay >= 0) {
+        return anim_delay;
+    }
+    
+    // No animation available - try µGFX UI directly as last resort
+    // This ensures channel messages show even if state machine isn't set up correctly
+    if (ugfx_ui_is_active()) {
+        int ui_delay = ugfx_ui_render_to_buffer(dest_buffer, stride);
+        if (ui_delay >= 0) {
+            return ui_delay;
+        }
+    }
+    
+    // Absolute fallback: return -1 to show last frame or black
+    return -1;
 }
 
 static esp_err_t mount_sd_and_discover(char **animations_dir_out)
@@ -356,10 +375,19 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         // animations as they become available.
         ESP_LOGW(TAG, "No initial animation available: %s (will wait for downloads)", esp_err_to_name(err));
         
-        // Show loading message - render system is already initialized above
-        // Use "Makapix Club" as title and indicate we're connecting
-        p3a_render_set_channel_message("Makapix Club", P3A_CHANNEL_MSG_LOADING, -1, 
-                                       "Connecting to Makapix Club...");
+        // Show a state-aware message even when no animation is available.
+        // IMPORTANT: On some devices, UI text historically only appeared after one animation loaded.
+        // The fix is to ensure we keep the render pipeline alive and always set an explicit channel message.
+        channel_player_source_t src = channel_player_get_source_type();
+        if (src == CHANNEL_PLAYER_SOURCE_SDCARD) {
+            // Empty SD card boot: show "no artworks" and hint for provisioning
+            p3a_render_set_channel_message("microSD card", P3A_CHANNEL_MSG_EMPTY, -1,
+                                           "No artworks found on microSD card.\nLong-press to register.");
+        } else {
+            // Makapix boot: show connecting/loading
+            p3a_render_set_channel_message("Makapix Club", P3A_CHANNEL_MSG_LOADING, -1,
+                                           "Connecting to Makapix Club...");
+        }
         
         // Mark front buffer as not ready - will be loaded by loader task
         s_front_buffer.ready = false;

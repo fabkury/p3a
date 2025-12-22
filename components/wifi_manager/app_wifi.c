@@ -123,7 +123,7 @@ static esp_err_t wifi_load_credentials(char *ssid, char *password)
 
     err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs_handle);
     if (err != ESP_OK) {
-        ESP_LOGI(TAG, "No saved credentials found");
+        ESP_LOGD(TAG, "No saved credentials found");
         return err;
     }
 
@@ -131,7 +131,7 @@ static esp_err_t wifi_load_credentials(char *ssid, char *password)
     required_size = MAX_SSID_LEN;
     err = nvs_get_str(nvs_handle, NVS_KEY_SSID, ssid, &required_size);
     if (err != ESP_OK) {
-        ESP_LOGI(TAG, "Failed to read SSID from NVS");
+        ESP_LOGD(TAG, "Failed to read SSID from NVS");
         nvs_close(nvs_handle);
         return err;
     }
@@ -140,13 +140,13 @@ static esp_err_t wifi_load_credentials(char *ssid, char *password)
     required_size = MAX_PASSWORD_LEN;
     err = nvs_get_str(nvs_handle, NVS_KEY_PASSWORD, password, &required_size);
     if (err != ESP_OK) {
-        ESP_LOGI(TAG, "Failed to read password from NVS");
+        ESP_LOGD(TAG, "Failed to read password from NVS");
         nvs_close(nvs_handle);
         return err;
     }
 
     nvs_close(nvs_handle);
-    ESP_LOGI(TAG, "Loaded credentials: SSID=%s", ssid);
+    ESP_LOGD(TAG, "Loaded credentials: SSID=%s", ssid);
     return ESP_OK;
 }
 
@@ -181,7 +181,7 @@ static esp_err_t wifi_save_credentials(const char *ssid, const char *password)
     }
 
     nvs_close(nvs_handle);
-    ESP_LOGI(TAG, "Saved credentials: SSID=%s", ssid);
+    ESP_LOGD(TAG, "Saved credentials: SSID=%s", ssid);
     return err;
 }
 
@@ -212,7 +212,7 @@ esp_err_t app_wifi_erase_credentials(void)
     }
 
     nvs_close(nvs_handle);
-    ESP_LOGI(TAG, "Erased credentials");
+    ESP_LOGD(TAG, "Erased credentials");
     return ESP_OK;
 }
 
@@ -245,22 +245,13 @@ esp_err_t app_wifi_get_saved_ssid(char *ssid, size_t max_len)
 static void wifi_set_protocol_11ax(wifi_interface_t interface)
 {
     uint8_t protocol_bitmap = WIFI_PROTOCOL_11AX | WIFI_PROTOCOL_11N | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11B;
-    esp_err_t ret = esp_wifi_remote_set_protocol(interface, protocol_bitmap);
-    if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "Wi-Fi 6 (802.11ax) protocol enabled for interface %d", interface);
-    } else {
-        ESP_LOGW(TAG, "Failed to set Wi-Fi 6 protocol: %s", esp_err_to_name(ret));
-    }
+    esp_wifi_remote_set_protocol(interface, protocol_bitmap);
 }
 
 /* Wi-Fi Remote Initialization (ESP32-C6 via SDIO) */
 static void wifi_remote_init(void)
 {
-    // Note: esp_hosted component initialization may be handled automatically
-    // or may require specific initialization based on hardware configuration.
-    // This is a placeholder - adjust based on actual esp_hosted API requirements.
-    ESP_LOGI(TAG, "Initializing Wi-Fi remote module (ESP32-C6)");
-    // If esp_hosted requires explicit initialization, add it here
+    // esp_hosted component initialization handled by component
 }
 
 static void wifi_register_event_handlers_once(void)
@@ -301,14 +292,7 @@ static bool wifi_sta_has_ip(void)
 
 static void wifi_disable_power_save_best_effort(void)
 {
-    // esp_wifi_set_ps() exists in ESP-IDF. With esp_wifi_remote_* it should still apply to the
-    // underlying Wi-Fi driver; if not supported it will return an error which we log.
-    esp_err_t ps_err = esp_wifi_set_ps(WIFI_PS_NONE);
-    if (ps_err == ESP_OK) {
-        ESP_LOGI(TAG, "WiFi power save disabled for reliability (WIFI_PS_NONE)");
-    } else {
-        ESP_LOGW(TAG, "Failed to disable WiFi power save: %s (continuing with default)", esp_err_to_name(ps_err));
-    }
+    esp_wifi_set_ps(WIFI_PS_NONE);
 }
 
 static void wifi_recovery_task(void *arg)
@@ -492,14 +476,14 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         
         // Stop MQTT client when WiFi disconnects to prevent futile reconnection attempts
         if (s_initial_connection_done) {
-            ESP_LOGI(TAG, "Stopping MQTT client due to WiFi disconnect");
+            ESP_LOGD(TAG, "Stopping MQTT client due to WiFi disconnect");
             makapix_mqtt_disconnect();
         }
         
         // For initial connection: use retry limit
         // After initial connection succeeded: always keep trying (persistent reconnection)
         if (!s_initial_connection_done && s_retry_num >= EXAMPLE_ESP_MAXIMUM_RETRY) {
-            ESP_LOGI(TAG, "Initial connection failed after %d attempts", EXAMPLE_ESP_MAXIMUM_RETRY);
+            ESP_LOGD(TAG, "Initial connection failed after %d attempts", EXAMPLE_ESP_MAXIMUM_RETRY);
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         } else {
             // Always try to reconnect
@@ -508,10 +492,10 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             // Add delay for persistent reconnection to avoid hammering the AP
             if (s_initial_connection_done && s_retry_num > 5) {
                 // After 5 quick retries, slow down to every 5 seconds
-                ESP_LOGI(TAG, "WiFi reconnect attempt %d (with backoff)", s_retry_num);
+                ESP_LOGD(TAG, "WiFi reconnect attempt %d (with backoff)", s_retry_num);
                 vTaskDelay(pdMS_TO_TICKS(5000));
             } else {
-                ESP_LOGI(TAG, "WiFi reconnect attempt %d/%d", s_retry_num, 
+                ESP_LOGD(TAG, "WiFi reconnect attempt %d/%d", s_retry_num, 
                          s_initial_connection_done ? -1 : EXAMPLE_ESP_MAXIMUM_RETRY);
             }
             
@@ -522,83 +506,51 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-        ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+        ESP_LOGI(TAG, "IP: " IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         s_consecutive_wifi_errors = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
         
-        // Signal WiFi connection to wake up download manager
         makapix_channel_signal_wifi_connected();
 
-        // Ensure mDNS is enabled/announced on STA after getting an IP.
-        // Important: depending on init ordering, mdns_init() might have happened after GOT_IP in the past,
-        // which means mDNS would never get enabled on the STA interface and p3a.local would not resolve.
+        // Ensure mDNS is announced
         {
             esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey(WIFI_STA_NETIF_KEY);
             if (sta_netif) {
-                esp_err_t merr = mdns_netif_action(sta_netif,
-                                                  (mdns_event_actions_t)(MDNS_EVENT_ENABLE_IP4 | MDNS_EVENT_ANNOUNCE_IP4));
-                if (merr == ESP_OK) {
-                    ESP_LOGI(TAG, "mDNS announced on %s", WIFI_STA_NETIF_KEY);
-                } else {
-                    ESP_LOGW(TAG, "mDNS announce failed on %s: %s", WIFI_STA_NETIF_KEY, esp_err_to_name(merr));
-                }
-            } else {
-                ESP_LOGW(TAG, "STA netif not found for mDNS announce (ifkey=%s)", WIFI_STA_NETIF_KEY);
+                mdns_netif_action(sta_netif,
+                                  (mdns_event_actions_t)(MDNS_EVENT_ENABLE_IP4 | MDNS_EVENT_ANNOUNCE_IP4));
             }
         }
         
-        // Stop captive portal server if running (to avoid port 80 conflict)
+        // Stop captive portal if running
         if (s_captive_portal_server != NULL) {
-            ESP_LOGI(TAG, "Stopping captive portal server");
             httpd_stop(s_captive_portal_server);
             s_captive_portal_server = NULL;
         }
         
-        // Initialize app services only once (first successful start)
+        // Initialize app services once
         if (!s_services_initialized) {
-            ESP_LOGI(TAG, "STA connected, initializing app services");
-            
-            // Initialize SNTP for time synchronization
             sntp_sync_init();
-            
             app_state_init();
             esp_err_t api_err = http_api_start();
             if (api_err != ESP_OK) {
                 ESP_LOGE(TAG, "Failed to start HTTP API: %s", esp_err_to_name(api_err));
                 app_state_enter_error();
-                // IMPORTANT: do not mark services initialized on failure.
-                // We want to retry on next reconnect (or next IP event) because failures can be transient
-                // (e.g., port 80 still held by captive portal, low memory, etc.).
             } else {
-                // Call callback to register action handlers
                 if (s_rest_start_callback) {
                     s_rest_start_callback();
                 }
                 app_state_enter_ready();
-                ESP_LOGI(TAG, "REST API started at http://p3a.local/");
+                ESP_LOGD(TAG, "HTTP ready at http://p3a.local/");
                 s_services_initialized = true;
             }
-        } else {
-            ESP_LOGI(TAG, "WiFi reconnected after disconnect");
         }
         
-        // Mark initial connection as done
         s_initial_connection_done = true;
-        
-        // Connect/reconnect to MQTT if registered
         makapix_connect_if_registered();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_LOST_IP) {
-        // IP address lost - DHCP renewal likely failed
-        // Force WiFi reconnection to obtain a fresh DHCP lease
-        ESP_LOGW(TAG, "IP address lost! DHCP renewal likely failed.");
-        ESP_LOGI(TAG, "Forcing WiFi reconnection to obtain new IP...");
-        
-        // Stop MQTT to prevent futile connection attempts
+        ESP_LOGW(TAG, "IP lost - reconnecting");
         makapix_mqtt_disconnect();
-        
-        // Force WiFi disconnect - this will trigger WIFI_EVENT_STA_DISCONNECTED
-        // which then triggers reconnection and fresh DHCP
         esp_wifi_remote_disconnect();
     }
 }
@@ -608,35 +560,12 @@ static esp_err_t start_mdns_sta(void)
 {
     esp_err_t err = mdns_init();
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-        ESP_LOGE(TAG, "mDNS init failed: %s", esp_err_to_name(err));
-        return err;
-    }
-    if (err == ESP_ERR_INVALID_STATE) {
-        // mDNS already initialized (e.g., we previously started AP mode captive portal).
-        ESP_LOGW(TAG, "mDNS already initialized; reconfiguring for STA");
-    }
-
-    err = mdns_hostname_set("p3a");
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "mDNS hostname set failed: %s", esp_err_to_name(err));
         return err;
     }
 
-    err = mdns_instance_name_set("p3a");
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "mDNS instance name set failed: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    // Advertise HTTP service. Treat "already exists" as OK.
-    err = mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
-    // Some mdns versions return ESP_ERR_INVALID_ARG when the service already exists.
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE && err != ESP_ERR_INVALID_ARG) {
-        ESP_LOGE(TAG, "mDNS service add failed: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    ESP_LOGI(TAG, "mDNS configured in STA mode: http://p3a.local/");
+    mdns_hostname_set("p3a");
+    mdns_instance_name_set("p3a");
+    mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
     return ESP_OK;
 }
 
@@ -663,12 +592,7 @@ static bool wifi_init_sta(const char *ssid, const char *password)
         }
     }
 
-    // Start mDNS early (before GOT_IP) so it can reliably hook IP events and respond to queries.
-    // If it fails, the UI still works via IP address.
-    esp_err_t mdns_err = start_mdns_sta();
-    if (mdns_err != ESP_OK) {
-        ESP_LOGW(TAG, "mDNS start failed in STA mode (UI still works via IP): %s", esp_err_to_name(mdns_err));
-    }
+    start_mdns_sta();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_remote_init(&cfg));
@@ -705,7 +629,7 @@ static bool wifi_init_sta(const char *ssid, const char *password)
     // Enable Wi-Fi 6 protocol (best-effort)
     wifi_set_protocol_11ax(WIFI_IF_STA);
 
-    ESP_LOGI(TAG, "wifi_init_sta finished. Connecting to SSID:%s", ssid);
+    ESP_LOGD(TAG, "Connecting to: %s", ssid);
 
     /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
      * number of re-tries (WIFI_FAIL_BIT). The bits are set by event_handler() (see above) */
@@ -716,10 +640,10 @@ static bool wifi_init_sta(const char *ssid, const char *password)
             pdMS_TO_TICKS(30000)); // 30 second timeout
 
     if (bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(TAG, "Connected to AP SSID:%s", ssid);
+        ESP_LOGD(TAG, "Connected to: %s", ssid);
         return true;
     } else if (bits & WIFI_FAIL_BIT) {
-        ESP_LOGI(TAG, "Failed to connect to SSID:%s after %d attempts", ssid, EXAMPLE_ESP_MAXIMUM_RETRY);
+        ESP_LOGW(TAG, "Failed to connect after %d attempts", EXAMPLE_ESP_MAXIMUM_RETRY);
         return false;
     } else {
         ESP_LOGW(TAG, "Connection timeout");
@@ -855,7 +779,7 @@ static esp_err_t save_post_handler(httpd_req_t *req)
 
     if (strlen(ssid) > 0) {
         wifi_save_credentials(ssid, password);
-        ESP_LOGI(TAG, "Saved credentials, rebooting...");
+        ESP_LOGD(TAG, "Saved credentials, rebooting...");
         httpd_resp_send(req, "<html><body><h1>Credentials saved! Rebooting...</h1></body></html>", HTTPD_RESP_USE_STRLEN);
         vTaskDelay(pdMS_TO_TICKS(1000));
         esp_restart();
@@ -869,7 +793,7 @@ static esp_err_t save_post_handler(httpd_req_t *req)
 static esp_err_t erase_post_handler(httpd_req_t *req)
 {
     app_wifi_erase_credentials();
-    ESP_LOGI(TAG, "Erased credentials, rebooting...");
+    ESP_LOGD(TAG, "Erased credentials, rebooting...");
     httpd_resp_send(req, "<html><body><h1>Credentials erased! Rebooting...</h1></body></html>", HTTPD_RESP_USE_STRLEN);
     vTaskDelay(pdMS_TO_TICKS(1000));
     esp_restart();
@@ -923,7 +847,7 @@ static void dns_server_task(void *pvParameters)
         return;
     }
 
-    ESP_LOGI(TAG, "DNS server started - responding with 192.168.4.1 to all queries");
+    ESP_LOGD(TAG, "DNS server started - responding with 192.168.4.1 to all queries");
 
     while (1) {
         struct sockaddr_in source_addr;
@@ -982,7 +906,7 @@ static void start_captive_portal(void)
         httpd_register_uri_handler(s_captive_portal_server, &root);
         httpd_register_uri_handler(s_captive_portal_server, &save);
         httpd_register_uri_handler(s_captive_portal_server, &erase);
-        ESP_LOGI(TAG, "HTTP server started on port 80");
+        ESP_LOGD(TAG, "HTTP server started on port 80");
     } else {
         ESP_LOGE(TAG, "Failed to start HTTP server");
     }
@@ -1022,7 +946,7 @@ static esp_err_t start_mdns_ap(void)
         return err;
     }
 
-    ESP_LOGI(TAG, "mDNS started in AP mode: http://p3a.local/");
+    ESP_LOGD(TAG, "mDNS started in AP mode: http://p3a.local/");
     return ESP_OK;
 }
 
@@ -1038,7 +962,7 @@ static void wifi_init_softap(void)
     if (wifi_already_initialized) {
         // WiFi is already initialized from STA mode - just switch modes
         // This is the standard ESP-IDF approach: stop -> set_mode -> set_config -> start
-        ESP_LOGI(TAG, "WiFi already initialized, switching from STA to AP mode");
+        ESP_LOGD(TAG, "WiFi already initialized, switching from STA to AP mode");
         
         err = esp_wifi_remote_stop();
         if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_INIT) {
@@ -1068,7 +992,7 @@ static void wifi_init_softap(void)
         ESP_ERROR_CHECK(esp_wifi_remote_start());
     } else {
         // WiFi not initialized yet - do fresh initialization for AP mode
-        ESP_LOGI(TAG, "Fresh WiFi initialization for AP mode");
+        ESP_LOGD(TAG, "Fresh WiFi initialization for AP mode");
         
         ap_netif = esp_netif_create_default_wifi_ap();
         
@@ -1098,7 +1022,7 @@ static void wifi_init_softap(void)
     // Enable Wi-Fi 6 protocol for AP (best-effort)
     wifi_set_protocol_11ax(WIFI_IF_AP);
 
-    ESP_LOGI(TAG, "Soft AP initialized. SSID:%s password:%s", EXAMPLE_ESP_AP_SSID, 
+    ESP_LOGD(TAG, "Soft AP initialized. SSID:%s password:%s", EXAMPLE_ESP_AP_SSID, 
              strlen(EXAMPLE_ESP_AP_PASSWORD) > 0 ? EXAMPLE_ESP_AP_PASSWORD : "none");
 
     // Configure AP IP address
@@ -1110,7 +1034,7 @@ static void wifi_init_softap(void)
     esp_netif_set_ip_info(ap_netif, &ip_info);
     esp_netif_dhcps_start(ap_netif);
 
-    ESP_LOGI(TAG, "AP IP address: " IPSTR, IP2STR(&ip_info.ip));
+    ESP_LOGD(TAG, "AP IP address: " IPSTR, IP2STR(&ip_info.ip));
 
     // Start captive portal
     start_captive_portal();
@@ -1146,24 +1070,15 @@ esp_err_t app_wifi_init(app_wifi_rest_callback_t rest_callback)
     bool has_credentials = (wifi_load_credentials(saved_ssid, saved_password) == ESP_OK);
     
     if (has_credentials && strlen(saved_ssid) > 0) {
-        ESP_LOGI(TAG, "Found saved credentials, attempting to connect...");
         bool connected = wifi_init_sta(saved_ssid, saved_password);
-        
         if (connected) {
-            ESP_LOGI(TAG, "Successfully connected to WiFi network");
             return ESP_OK;
-        } else {
-            ESP_LOGI(TAG, "Failed to connect with saved credentials, starting captive portal");
         }
-    } else {
-        ESP_LOGI(TAG, "No saved credentials found, starting captive portal");
     }
 
-    // Start Soft AP with captive portal
+    // Start captive portal
+    ESP_LOGD(TAG, "Starting captive portal: %s", EXAMPLE_ESP_AP_SSID);
     wifi_init_softap();
-    
-    ESP_LOGI(TAG, "Captive portal is running. Connect to SSID: %s", EXAMPLE_ESP_AP_SSID);
-    ESP_LOGI(TAG, "Then open http://p3a.local/ or http://192.168.4.1 in your browser");
     return ESP_OK;
 }
 

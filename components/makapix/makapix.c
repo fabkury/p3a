@@ -5,6 +5,20 @@
 
 #include "makapix_internal.h"
 #include "mbedtls/sha256.h"
+#include "config_store.h"
+
+// Helper to map global play_order setting to channel_order_mode
+static channel_order_mode_t get_global_channel_order(void)
+{
+    uint8_t play_order = config_store_get_play_order();
+    switch (play_order) {
+        case 1: return CHANNEL_ORDER_CREATED;
+        case 2: return CHANNEL_ORDER_RANDOM;
+        case 0:
+        default:
+            return CHANNEL_ORDER_ORIGINAL;
+    }
+}
 
 // Shared TAG for logging (defined here, declared extern in internal header)
 const char *MAKAPIX_TAG = "makapix";
@@ -69,13 +83,9 @@ esp_err_t makapix_init(void)
     }
 
     if (makapix_store_has_player_key() && makapix_store_has_certificates()) {
-        ESP_LOGI(MAKAPIX_TAG, "Found stored player_key and certificates, will connect after WiFi");
-        s_makapix_state = MAKAPIX_STATE_IDLE; // Will transition to CONNECTING when WiFi connects
-    } else if (makapix_store_has_player_key()) {
-        ESP_LOGI(MAKAPIX_TAG, "Found stored player_key but no certificates, device needs re-registration");
+        ESP_LOGD(MAKAPIX_TAG, "Credentials found, will connect after WiFi");
         s_makapix_state = MAKAPIX_STATE_IDLE;
     } else {
-        ESP_LOGI(MAKAPIX_TAG, "No player_key found, waiting for provisioning gesture");
         s_makapix_state = MAKAPIX_STATE_IDLE;
     }
 
@@ -100,7 +110,6 @@ esp_err_t makapix_init(void)
             s_channel_switch_task_handle = NULL;
             return ESP_ERR_NO_MEM;
         }
-        ESP_LOGI(MAKAPIX_TAG, "Channel switch task created");
     }
 
     return ESP_OK;
@@ -140,11 +149,11 @@ esp_err_t makapix_start_provisioning(void)
 {
     // If already in provisioning/show_code, cancel first
     if (s_makapix_state == MAKAPIX_STATE_PROVISIONING || s_makapix_state == MAKAPIX_STATE_SHOW_CODE) {
-        ESP_LOGI(MAKAPIX_TAG, "Cancelling existing provisioning before starting new one");
+        ESP_LOGD(MAKAPIX_TAG, "Cancelling existing provisioning before starting new one");
         makapix_cancel_provisioning();
         // Wait for polling task to fully exit (up to 15 seconds for HTTP timeout + cleanup)
         if (s_poll_task_handle != NULL) {
-            ESP_LOGI(MAKAPIX_TAG, "Waiting for polling task to exit...");
+            ESP_LOGD(MAKAPIX_TAG, "Waiting for polling task to exit...");
             int wait_count = 0;
             while (s_poll_task_handle != NULL && wait_count < 150) {
                 vTaskDelay(pdMS_TO_TICKS(100));
@@ -156,7 +165,7 @@ esp_err_t makapix_start_provisioning(void)
         }
     }
 
-    ESP_LOGI(MAKAPIX_TAG, "Starting provisioning...");
+    ESP_LOGD(MAKAPIX_TAG, "Starting provisioning...");
     
     // Set initial status message before transitioning state
     snprintf(s_provisioning_status, sizeof(s_provisioning_status), "Starting...");
@@ -169,7 +178,7 @@ esp_err_t makapix_start_provisioning(void)
     // Stop MQTT client to free network resources for provisioning
     // This prevents MQTT reconnection attempts from interfering with HTTP requests
     if (makapix_mqtt_is_connected()) {
-        ESP_LOGI(MAKAPIX_TAG, "Stopping MQTT client for provisioning...");
+        ESP_LOGD(MAKAPIX_TAG, "Stopping MQTT client for provisioning...");
         makapix_mqtt_disconnect();
     }
 
@@ -187,7 +196,7 @@ esp_err_t makapix_start_provisioning(void)
 void makapix_cancel_provisioning(void)
 {
     if (s_makapix_state == MAKAPIX_STATE_PROVISIONING || s_makapix_state == MAKAPIX_STATE_SHOW_CODE) {
-        ESP_LOGI(MAKAPIX_TAG, "Cancelling provisioning");
+        ESP_LOGD(MAKAPIX_TAG, "Cancelling provisioning");
         s_provisioning_cancelled = true;  // Set flag to abort provisioning task
         s_makapix_state = MAKAPIX_STATE_IDLE;
         memset(s_registration_code, 0, sizeof(s_registration_code));
@@ -273,32 +282,26 @@ esp_err_t makapix_connect_if_registered(void)
 
     // Check if certificates are available
     if (!makapix_store_has_certificates()) {
-        ESP_LOGI(MAKAPIX_TAG, "Certificates not found, cannot connect to MQTT");
-        ESP_LOGI(MAKAPIX_TAG, "Device needs to complete registration and receive certificates");
+        ESP_LOGD(MAKAPIX_TAG, "Certificates not found, cannot connect to MQTT");
+        ESP_LOGD(MAKAPIX_TAG, "Device needs to complete registration and receive certificates");
         return ESP_ERR_NOT_FOUND;
     }
 
     // Try to get MQTT host from store, fallback to CONFIG
     err = makapix_store_get_mqtt_host(mqtt_host, sizeof(mqtt_host));
     if (err != ESP_OK) {
-        ESP_LOGI(MAKAPIX_TAG, "No MQTT host stored, using CONFIG value: %s", CONFIG_MAKAPIX_CLUB_HOST);
+        ESP_LOGD(MAKAPIX_TAG, "No MQTT host stored, using CONFIG value: %s", CONFIG_MAKAPIX_CLUB_HOST);
         snprintf(mqtt_host, sizeof(mqtt_host), "%s", CONFIG_MAKAPIX_CLUB_HOST);
     }
 
     // Try to get MQTT port from store, fallback to CONFIG
     err = makapix_store_get_mqtt_port(&mqtt_port);
     if (err != ESP_OK) {
-        ESP_LOGI(MAKAPIX_TAG, "No MQTT port stored, using CONFIG value: %d", CONFIG_MAKAPIX_CLUB_MQTT_PORT);
+        ESP_LOGD(MAKAPIX_TAG, "No MQTT port stored, using CONFIG value: %d", CONFIG_MAKAPIX_CLUB_MQTT_PORT);
         mqtt_port = CONFIG_MAKAPIX_CLUB_MQTT_PORT;
     }
 
-    ESP_LOGI(MAKAPIX_TAG, "=== makapix_connect_if_registered START ===");
-    ESP_LOGI(MAKAPIX_TAG, "Current state: %d", s_makapix_state);
-    ESP_LOGI(MAKAPIX_TAG, "Stored player_key: %s", player_key);
-    ESP_LOGI(MAKAPIX_TAG, "Stored MQTT host: %s", mqtt_host);
-    ESP_LOGI(MAKAPIX_TAG, "Stored MQTT port: %d", mqtt_port);
-    ESP_LOGI(MAKAPIX_TAG, "Certificates: available");
-    ESP_LOGI(MAKAPIX_TAG, "Connecting to MQTT broker: %s:%d", mqtt_host, mqtt_port);
+    ESP_LOGD(MAKAPIX_TAG, "Connecting to %s:%d", mqtt_host, mqtt_port);
     s_makapix_state = MAKAPIX_STATE_CONNECTING;
 
     // Load certificates from SPIFFS (allocate dynamically to avoid stack overflow)
@@ -360,30 +363,15 @@ esp_err_t makapix_connect_if_registered(void)
 
     err = makapix_mqtt_connect();
     if (err != ESP_OK) {
-        ESP_LOGE(MAKAPIX_TAG, "Failed to connect MQTT: %s (%d)", esp_err_to_name(err), err);
-        ESP_LOGI(MAKAPIX_TAG, "Starting reconnection task...");
+        ESP_LOGE(MAKAPIX_TAG, "Failed to connect: %s", esp_err_to_name(err));
         s_makapix_state = MAKAPIX_STATE_DISCONNECTED;
-        // Start reconnection task if not already running
-        // Stack size needs to be large enough for certificate buffers (3x 4096 bytes = ~12KB)
         if (s_reconnect_task_handle == NULL) {
-            BaseType_t task_ret = xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", 16384, NULL, 5, &s_reconnect_task_handle);
-            if (task_ret != pdPASS) {
-                ESP_LOGE(MAKAPIX_TAG, "Failed to create reconnection task");
+            if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", 16384, NULL, 5, &s_reconnect_task_handle) != pdPASS) {
                 s_reconnect_task_handle = NULL;
-            } else {
-                ESP_LOGI(MAKAPIX_TAG, "Reconnection task created successfully");
             }
-        } else {
-            ESP_LOGI(MAKAPIX_TAG, "Reconnection task already running");
         }
         return err;
     }
-
-    ESP_LOGI(MAKAPIX_TAG, "makapix_mqtt_connect() returned OK");
-    ESP_LOGI(MAKAPIX_TAG, "=== makapix_connect_if_registered END ===");
-
-    // State will be updated to CONNECTED by the connection callback when MQTT actually connects
-    // Do not set CONNECTED here - connection is asynchronous
 
     return ESP_OK;
 }
@@ -416,9 +404,8 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         strncpy(channel_id, channel, sizeof(channel_id) - 1);
     }
     
-    // Check if we're already on this channel - if so, do nothing (no cancellation either)
+    // Check if we're already on this channel
     if (s_current_channel_id[0] && strcmp(s_current_channel_id, channel_id) == 0 && s_current_channel) {
-        ESP_LOGI(MAKAPIX_TAG, "Already on channel %s - ignoring duplicate switch request", channel_id);
         return ESP_OK;
     }
     
@@ -451,7 +438,7 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     strncpy(s_loading_channel_id, channel_id, sizeof(s_loading_channel_id) - 1);
     s_loading_channel_id[sizeof(s_loading_channel_id) - 1] = '\0';
     
-    ESP_LOGI(MAKAPIX_TAG, "Switching to channel: %s (id=%s)", channel_name, channel_id);
+    ESP_LOGD(MAKAPIX_TAG, "Switching to channel: %s", channel_name);
     
     // Destroy existing channel if any
     if (s_current_channel) {
@@ -500,7 +487,7 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     // Show "Connecting..." message if MQTT not yet connected
     // The refresh task is waiting for MQTT, so let the user know what's happening
     if (!makapix_mqtt_is_connected()) {
-        ESP_LOGI(MAKAPIX_TAG, "MQTT not connected, showing 'Connecting...' message");
+        ESP_LOGD(MAKAPIX_TAG, "MQTT not connected, showing 'Connecting...' message");
         p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_LOADING, -1, 
                                        "Connecting to Makapix Club...");
         p3a_channel_message_t msg = {
@@ -532,7 +519,7 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         }
     }
     
-    ESP_LOGI(MAKAPIX_TAG, "Channel %s: %zu index entries, %zu locally available", 
+    ESP_LOGD(MAKAPIX_TAG, "Channel %s: %zu entries, %zu available", 
              channel_id, stats.total_items, available_count);
     
     // Setup download callback for this channel (enables background downloads)
@@ -543,8 +530,6 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     
     // Decision: show loading UI only if ZERO artworks are locally available
     if (available_count == 0) {
-        // No local artworks - need to wait for at least one to be downloaded
-        ESP_LOGI(MAKAPIX_TAG, "No local artworks available, waiting for first download...");
         
         // Set up loading message UI based on channel state
         // IMPORTANT: Do NOT switch display render mode here. We keep the display in animation mode
@@ -573,7 +558,7 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         while (waited_ms < MAX_WAIT_MS && !aborted && !got_artwork) {
             // Check for abort signal first for responsiveness
             if (s_channel_load_abort || s_has_pending_channel) {
-                ESP_LOGI(MAKAPIX_TAG, "Channel load aborted by new request");
+                ESP_LOGD(MAKAPIX_TAG, "Channel load aborted by new request");
                 aborted = true;
                 break;
             }
@@ -598,13 +583,11 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
             }
             
             if (got_artwork) {
-                ESP_LOGI(MAKAPIX_TAG, "First artwork available after %d ms - starting playback!", waited_ms);
                 break;
             }
             
             // Update loading message every 2 seconds
             if (waited_ms % 2000 == 0) {
-                ESP_LOGI(MAKAPIX_TAG, "Still waiting for first artwork... (%d ms)", waited_ms);
                 
                 // Re-check if index was populated (refresh may have completed)
                 size_t current_total = channel_get_post_count(s_current_channel);
@@ -633,7 +616,6 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         
         // Handle abort
         if (aborted) {
-            ESP_LOGI(MAKAPIX_TAG, "Cleaning up aborted channel load for %s", channel_id);
             channel_player_clear_channel(s_current_channel);
             channel_destroy(s_current_channel);
             s_current_channel = NULL;
@@ -651,9 +633,9 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
             return ESP_ERR_INVALID_STATE;
         }
         
-        // Handle timeout (no artwork available after waiting)
+        // Handle timeout
         if (!got_artwork) {
-            ESP_LOGW(MAKAPIX_TAG, "Timed out waiting for first artwork - checking for fallback options");
+            ESP_LOGW(MAKAPIX_TAG, "Timed out waiting for artwork");
             
             // Clean up current channel
             channel_player_clear_channel(s_current_channel);
@@ -676,7 +658,6 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
             
             // Fall back to previous channel if available
             if (s_previous_channel_id[0] != '\0') {
-                ESP_LOGI(MAKAPIX_TAG, "Falling back to previous channel: %s", s_previous_channel_id);
                 // Clear loading message before switching
                 ugfx_ui_hide_channel_message();
                 p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
@@ -706,8 +687,8 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     // At this point we have at least one locally available artwork - start playback immediately!
     // Background downloads will continue adding more artworks
     
-    // Start playback with server order
-    err = channel_start_playback(s_current_channel, CHANNEL_ORDER_ORIGINAL, NULL);
+    // Start playback with global play order setting
+    err = channel_start_playback(s_current_channel, get_global_channel_order(), NULL);
     if (err != ESP_OK) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to start playback: %s", esp_err_to_name(err));
         channel_player_clear_channel(s_current_channel);
@@ -735,7 +716,7 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         ESP_LOGW(MAKAPIX_TAG, "Failed to trigger initial animation swap: %s", esp_err_to_name(err));
     }
     
-    ESP_LOGI(MAKAPIX_TAG, "Channel switched successfully (background downloads continue)");
+    ESP_LOGD(MAKAPIX_TAG, "Channel %s ready", channel_name);
     
     // Clear loading state - playback started
     s_channel_loading = false;
@@ -765,7 +746,7 @@ esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const c
         return ESP_ERR_INVALID_ARG;
     }
     
-    ESP_LOGI(MAKAPIX_TAG, "Showing artwork: post_id=%ld, storage_key=%s", post_id, storage_key);
+    ESP_LOGD(MAKAPIX_TAG, "Showing artwork: post_id=%ld, storage_key=%s", post_id, storage_key);
     
     // Destroy existing channel if any
     if (s_current_channel) {
@@ -790,7 +771,7 @@ esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const c
         return err;
     }
     
-    err = channel_start_playback(single_ch, CHANNEL_ORDER_ORIGINAL, NULL);
+    err = channel_start_playback(single_ch, get_global_channel_order(), NULL);
     if (err != ESP_OK) {
         ESP_LOGE(MAKAPIX_TAG, "Artwork channel start playback failed: %s", esp_err_to_name(err));
         channel_destroy(single_ch);
@@ -814,7 +795,7 @@ esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const c
         ESP_LOGW(MAKAPIX_TAG, "Failed to trigger animation swap: %s", esp_err_to_name(err));
     }
     
-    ESP_LOGI(MAKAPIX_TAG, "Transient artwork channel created and started");
+    ESP_LOGD(MAKAPIX_TAG, "Transient artwork channel created and started");
     return ESP_OK;
 }
 
@@ -835,7 +816,6 @@ void makapix_adopt_channel_handle(void *channel)
         if (id) {
             strncpy(s_current_channel_id, id, sizeof(s_current_channel_id) - 1);
             s_current_channel_id[sizeof(s_current_channel_id) - 1] = '\0';
-            ESP_LOGI(MAKAPIX_TAG, "Adopted channel: %s", s_current_channel_id);
         }
         
         // Setup download callback for this channel (enables background downloads)
@@ -858,7 +838,6 @@ bool makapix_is_channel_loading(char *out_channel_id, size_t max_len)
 void makapix_abort_channel_load(void)
 {
     if (s_channel_loading) {
-        ESP_LOGI(MAKAPIX_TAG, "Signaling abort of channel load: %s", s_loading_channel_id);
         s_channel_load_abort = true;
     }
 }
@@ -881,11 +860,8 @@ esp_err_t makapix_request_channel_switch(const char *channel, const char *identi
     
     // Check if this is the same channel already loading
     if (s_channel_loading && strcmp(s_loading_channel_id, new_channel_id) == 0) {
-        ESP_LOGI(MAKAPIX_TAG, "Channel %s already loading - ignoring duplicate request", channel);
-        return ESP_OK;  // Already loading this channel
+        return ESP_OK;
     }
-    
-    ESP_LOGI(MAKAPIX_TAG, "Request channel switch to: %s (loading=%d)", channel, s_channel_loading);
     
     // Store as pending channel
     strncpy(s_pending_channel, channel, sizeof(s_pending_channel) - 1);
@@ -900,12 +876,8 @@ esp_err_t makapix_request_channel_switch(const char *channel, const char *identi
     
     s_has_pending_channel = true;
     
-    // If a channel is currently loading, signal abort
-    // The channel_switch_task will pick up the pending channel when the current load exits
     if (s_channel_loading) {
-        ESP_LOGI(MAKAPIX_TAG, "Aborting load of %s to switch to %s", s_loading_channel_id, channel);
         s_channel_load_abort = true;
-        // Don't signal semaphore - the task will loop back after abort completes
     } else {
         // No channel loading - signal the task to start processing
         if (s_channel_switch_sem) {
@@ -1014,7 +986,7 @@ static esp_err_t single_ch_load(channel_handle_t channel)
         // Not present, attempt download with retries
         const int max_attempts = 3;
         for (int attempt = 1; attempt <= max_attempts; attempt++) {
-            ESP_LOGI(MAKAPIX_TAG, "Downloading artwork (attempt %d/%d)...", attempt, max_attempts);
+            ESP_LOGD(MAKAPIX_TAG, "Downloading artwork (attempt %d/%d)...", attempt, max_attempts);
             esp_err_t err = makapix_artwork_download(ch->art_url, ch->item.storage_key, ch->item.filepath, sizeof(ch->item.filepath));
             if (err == ESP_OK) {
                 break;

@@ -55,73 +55,46 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
-        ESP_LOGI(TAG, "=== MQTT CONNECTED ===");
-        ESP_LOGI(TAG, "Session present: %d", event->session_present);
-        ESP_LOGI(TAG, "URI: %s", s_mqtt_uri);
-        ESP_LOGI(TAG, "Client ID: %s", s_client_id);
-        ESP_LOGI(TAG, "Username: %s", s_player_key);
-        ESP_LOGI(TAG, "Command topic: %s", s_command_topic);
-        ESP_LOGI(TAG, "Status topic: %s", s_status_topic);
-        ESP_LOGI(TAG, "Response topic: %s", s_response_topic);
+        ESP_LOGI(TAG, "Connected to %s", s_mqtt_uri);
         s_mqtt_connected = true;
-        s_response_subscribed = false;  // Reset until subscription confirmed
+        s_response_subscribed = false;
         s_pending_response_sub_msg_id = -1;
-        // Subscribe to command topic
+        // Subscribe to command and response topics
         if (strlen(s_command_topic) > 0) {
-            int msg_id = esp_mqtt_client_subscribe(client, s_command_topic, 1);
-            ESP_LOGI(TAG, "Subscribed to %s, msg_id=%d", s_command_topic, msg_id);
+            esp_mqtt_client_subscribe(client, s_command_topic, 1);
         }
-        // Subscribe to response topic (critical - must complete before sending requests)
         if (strlen(s_response_topic) > 0) {
-            int msg_id = esp_mqtt_client_subscribe(client, s_response_topic, 1);
-            s_pending_response_sub_msg_id = msg_id;
-            ESP_LOGI(TAG, "Subscribed to %s, msg_id=%d (awaiting SUBACK)", s_response_topic, msg_id);
+            s_pending_response_sub_msg_id = esp_mqtt_client_subscribe(client, s_response_topic, 1);
         }
-        // Notify connection callback
         if (s_connection_callback) {
             s_connection_callback(true);
         }
         break;
 
     case MQTT_EVENT_DISCONNECTED:
-        ESP_LOGI(TAG, "=== MQTT DISCONNECTED ===");
-        ESP_LOGI(TAG, "URI: %s", s_mqtt_uri);
-        ESP_LOGI(TAG, "Client ID: %s", s_client_id);
+        ESP_LOGW(TAG, "Disconnected");
         s_mqtt_connected = false;
         s_response_subscribed = false;
         s_pending_response_sub_msg_id = -1;
-        // Notify connection callback
         if (s_connection_callback) {
             s_connection_callback(false);
         }
         break;
 
     case MQTT_EVENT_SUBSCRIBED:
-        ESP_LOGI(TAG, "=== MQTT SUBSCRIBED ===");
-        ESP_LOGI(TAG, "Message ID: %d", event->msg_id);
-        if (event->data_len > 0) {
-            ESP_LOGI(TAG, "Data: %.*s", event->data_len, event->data);
-        }
-        // Check if this is the response topic subscription confirmation
         if (event->msg_id == s_pending_response_sub_msg_id) {
             s_response_subscribed = true;
             s_pending_response_sub_msg_id = -1;
-            ESP_LOGI(TAG, "Response topic subscription confirmed - ready to send requests");
+            ESP_LOGD(TAG, "Response subscription confirmed");
         }
         break;
 
     case MQTT_EVENT_UNSUBSCRIBED:
-        ESP_LOGI(TAG, "=== MQTT UNSUBSCRIBED ===");
-        ESP_LOGI(TAG, "Message ID: %d", event->msg_id);
-        if (event->data_len > 0) {
-            ESP_LOGI(TAG, "Data: %.*s", event->data_len, event->data);
-        }
+        ESP_LOGD(TAG, "Unsubscribed msg_id=%d", event->msg_id);
         break;
 
     case MQTT_EVENT_PUBLISHED:
-        ESP_LOGI(TAG, "=== MQTT PUBLISHED ===");
-        ESP_LOGI(TAG, "Message ID: %d", event->msg_id);
-        ESP_LOGI(TAG, "Publish confirmed by broker");
+        ESP_LOGD(TAG, "Published msg_id=%d", event->msg_id);
         break;
 
     case MQTT_EVENT_DATA:
@@ -152,16 +125,12 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             // Allocate reassembly buffer if needed (prefer PSRAM)
             if (!s_reassembly_buffer) {
                 s_reassembly_buffer = (char *)heap_caps_malloc(MQTT_REASSEMBLY_BUFFER_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-                if (s_reassembly_buffer) {
-                    ESP_LOGI(TAG, "Allocated MQTT reassembly buffer in PSRAM (%d bytes)", MQTT_REASSEMBLY_BUFFER_SIZE);
-                } else {
+                if (!s_reassembly_buffer) {
                     s_reassembly_buffer = (char *)malloc(MQTT_REASSEMBLY_BUFFER_SIZE);
-                    if (s_reassembly_buffer) {
-                        ESP_LOGW(TAG, "PSRAM alloc failed; using internal heap for MQTT reassembly buffer (%d bytes)", MQTT_REASSEMBLY_BUFFER_SIZE);
-                    } else {
-                        ESP_LOGE(TAG, "Failed to allocate MQTT reassembly buffer (%d bytes)", MQTT_REASSEMBLY_BUFFER_SIZE);
-                        break;
-                    }
+                }
+                if (!s_reassembly_buffer) {
+                    ESP_LOGE(TAG, "Failed to allocate reassembly buffer");
+                    break;
                 }
             }
             
@@ -233,7 +202,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                     s_reassembly_buffer[MQTT_REASSEMBLY_BUFFER_SIZE - 1] = '\0';
                 }
 
-                ESP_LOGI(TAG, "MQTT message received: %s (%zu bytes)", s_reassembly_topic, s_reassembly_len);
+                ESP_LOGD(TAG, "Received: %s (%zu bytes)", s_reassembly_topic, s_reassembly_len);
 
                 // Command topic: parse exactly once here (small payloads), pass payload object to callback.
                 if (strcmp(s_reassembly_topic, s_command_topic) == 0) {
@@ -244,7 +213,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
                         if (command_type && cJSON_IsString(command_type) && s_command_callback) {
                             const char *cmd_type = cJSON_GetStringValue(command_type);
-                            ESP_LOGI(TAG, "Received command: %s", cmd_type);
+                            ESP_LOGD(TAG, "Command: %s", cmd_type);
 
                             cJSON *payload_to_pass = payload;
                             cJSON *empty_payload = NULL;
@@ -325,14 +294,11 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         break;
 
     case MQTT_EVENT_BEFORE_CONNECT:
-        ESP_LOGI(TAG, "=== MQTT BEFORE_CONNECT ===");
-        ESP_LOGI(TAG, "URI: %s", s_mqtt_uri);
-        ESP_LOGI(TAG, "Client ID: %s", s_client_id);
-        ESP_LOGI(TAG, "Authentication: mTLS (client certificate)");
+        ESP_LOGD(TAG, "Connecting to %s", s_mqtt_uri);
         break;
 
     default:
-        ESP_LOGI(TAG, "MQTT event: %ld (0x%lx)", event_id, event_id);
+        ESP_LOGD(TAG, "Event: %ld", event_id);
         break;
     }
 }
@@ -344,9 +310,8 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
         return ESP_ERR_INVALID_ARG;
     }
 
-    // If client already exists, destroy it first to prevent resource leaks
+    // Clean up existing client if any
     if (s_mqtt_client) {
-        ESP_LOGI(TAG, "Cleaning up existing MQTT client before reinitializing");
         esp_mqtt_client_stop(s_mqtt_client);
         esp_mqtt_client_destroy(s_mqtt_client);
         s_mqtt_client = NULL;
@@ -356,8 +321,7 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
     strncpy(s_player_key, player_key, sizeof(s_player_key) - 1);
     s_player_key[sizeof(s_player_key) - 1] = '\0';
 
-    // Copy certificates to static buffers - ESP-IDF MQTT client stores pointers, doesn't copy
-    // These must remain valid for the lifetime of the MQTT client
+    // Copy certificates to static buffers
     strncpy(s_ca_cert, ca_cert, sizeof(s_ca_cert) - 1);
     s_ca_cert[sizeof(s_ca_cert) - 1] = '\0';
     strncpy(s_client_cert, client_cert, sizeof(s_client_cert) - 1);
@@ -371,36 +335,12 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
     snprintf(s_response_topic, sizeof(s_response_topic), "makapix/player/%s/response/#", player_key);
     snprintf(s_response_prefix, sizeof(s_response_prefix), "makapix/player/%s/response/", player_key);
 
-    // Build MQTT URI (using static buffer to persist after function returns)
+    // Build MQTT URI and client ID
     snprintf(s_mqtt_uri, sizeof(s_mqtt_uri), "mqtts://%s:%d", host, port);
-
-    // Build client ID (using static buffer to persist after function returns)
     snprintf(s_client_id, sizeof(s_client_id), "p3a-%s", player_key);
-
-    // Build Last Will Testament payload (using static buffer to persist after function returns)
     snprintf(s_lwt_payload, sizeof(s_lwt_payload), "{\"player_key\":\"%s\",\"status\":\"offline\"}", player_key);
 
-    ESP_LOGI(TAG, "=== MQTT INIT START ===");
-    ESP_LOGI(TAG, "Player key: %s", player_key);
-    ESP_LOGI(TAG, "Host: %s", host);
-    ESP_LOGI(TAG, "Port: %d", port);
-    ESP_LOGI(TAG, "URI: %s", s_mqtt_uri);
-    ESP_LOGI(TAG, "Client ID: %s", s_client_id);
-    ESP_LOGI(TAG, "Authentication: mTLS (mutual TLS)");
-    ESP_LOGI(TAG, "CA cert length: %zu bytes", strlen(s_ca_cert));
-    ESP_LOGI(TAG, "Client cert length: %zu bytes", strlen(s_client_cert));
-    ESP_LOGI(TAG, "Client key length: %zu bytes", strlen(s_client_key));
-    ESP_LOGI(TAG, "Command topic: %s", s_command_topic);
-    ESP_LOGI(TAG, "Status topic: %s", s_status_topic);
-    ESP_LOGI(TAG, "LWT topic: %s", s_status_topic);
-    ESP_LOGI(TAG, "LWT payload: %s", s_lwt_payload);
-    ESP_LOGI(TAG, "LWT QoS: 1");
-    ESP_LOGI(TAG, "LWT retain: false");
-    ESP_LOGI(TAG, "MQTT Keepalive: 60 seconds");
-    ESP_LOGI(TAG, "TCP Keepalive: enabled (idle=60s, interval=10s, count=5)");
-    ESP_LOGI(TAG, "Reconnect timeout: 10000 ms");
-    ESP_LOGI(TAG, "Network timeout: 10000 ms");
-    ESP_LOGI(TAG, "Clean session: true");
+    ESP_LOGI(TAG, "Initializing MQTT client for %s:%d", host, port);
 
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = s_mqtt_uri,
@@ -424,139 +364,51 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
         .session.disable_clean_session = false,
     };
 
-    // Set mTLS certificates (mutual TLS authentication) - use static buffers
-    mqtt_cfg.broker.verification.certificate = s_ca_cert;  // CA cert for server verification
-    mqtt_cfg.credentials.authentication.certificate = s_client_cert;  // Client cert for authentication
-    mqtt_cfg.credentials.authentication.key = s_client_key;  // Client private key
-    
-    ESP_LOGI(TAG, "mTLS configuration: CA cert, client cert, and client key set (copied to static buffers)");
+    // Set mTLS certificates
+    mqtt_cfg.broker.verification.certificate = s_ca_cert;
+    mqtt_cfg.credentials.authentication.certificate = s_client_cert;
+    mqtt_cfg.credentials.authentication.key = s_client_key;
 
     s_mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
     if (!s_mqtt_client) {
-        ESP_LOGE(TAG, "Failed to initialize MQTT client (out of memory)");
+        ESP_LOGE(TAG, "Failed to init MQTT client");
         return ESP_ERR_NO_MEM;
     }
 
     esp_mqtt_client_register_event(s_mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
-    ESP_LOGI(TAG, "MQTT client initialized successfully");
-    ESP_LOGI(TAG, "=== MQTT INIT END ===");
-
     return ESP_OK;
-}
-
-static void log_wifi_status(void)
-{
-    wifi_ap_record_t ap_info;
-    esp_err_t wifi_err = esp_wifi_sta_get_ap_info(&ap_info);
-    if (wifi_err == ESP_OK) {
-        ESP_LOGI(TAG, "WiFi AP SSID: %s", ap_info.ssid);
-        ESP_LOGI(TAG, "WiFi AP RSSI: %d dBm", ap_info.rssi);
-        ESP_LOGI(TAG, "WiFi AP Channel: %d", ap_info.primary);
-    } else {
-        ESP_LOGW(TAG, "WiFi AP info not available: %s (%d)", esp_err_to_name(wifi_err), wifi_err);
-    }
-
-    wifi_mode_t wifi_mode;
-    wifi_err = esp_wifi_get_mode(&wifi_mode);
-    if (wifi_err == ESP_OK) {
-        const char *mode_str = "UNKNOWN";
-        switch (wifi_mode) {
-            case WIFI_MODE_NULL: mode_str = "NULL"; break;
-            case WIFI_MODE_STA: mode_str = "STA"; break;
-            case WIFI_MODE_AP: mode_str = "AP"; break;
-            case WIFI_MODE_APSTA: mode_str = "APSTA"; break;
-            case WIFI_MODE_NAN: mode_str = "NAN"; break;
-            case WIFI_MODE_MAX: mode_str = "MAX"; break;
-            default: mode_str = "UNKNOWN"; break;
-        }
-        ESP_LOGI(TAG, "WiFi mode: %s (%d)", mode_str, wifi_mode);
-    }
-
-    esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-    if (sta_netif) {
-        esp_netif_ip_info_t ip_info;
-        esp_err_t ip_err = esp_netif_get_ip_info(sta_netif, &ip_info);
-        if (ip_err == ESP_OK) {
-            ESP_LOGI(TAG, "WiFi IP: " IPSTR, IP2STR(&ip_info.ip));
-            ESP_LOGI(TAG, "WiFi Netmask: " IPSTR, IP2STR(&ip_info.netmask));
-            ESP_LOGI(TAG, "WiFi Gateway: " IPSTR, IP2STR(&ip_info.gw));
-        } else {
-            ESP_LOGW(TAG, "WiFi IP info not available: %s (%d)", esp_err_to_name(ip_err), ip_err);
-        }
-    } else {
-        ESP_LOGW(TAG, "WiFi STA netif not found");
-    }
 }
 
 esp_err_t makapix_mqtt_connect(void)
 {
-    ESP_LOGI(TAG, "=== MQTT CONNECT START ===");
-    
-    // Log WiFi status before attempting MQTT connection
-    ESP_LOGI(TAG, "--- WiFi Status ---");
-    log_wifi_status();
-    ESP_LOGI(TAG, "--- End WiFi Status ---");
-    
     if (!s_mqtt_client) {
-        ESP_LOGE(TAG, "MQTT client not initialized (NULL)");
-        ESP_LOGE(TAG, "Current connection state: %s", s_mqtt_connected ? "connected" : "disconnected");
+        ESP_LOGE(TAG, "MQTT client not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "MQTT client handle: %p", (void*)s_mqtt_client);
-    ESP_LOGI(TAG, "Current connection state: %s", s_mqtt_connected ? "connected" : "disconnected");
-    ESP_LOGI(TAG, "URI: %s", s_mqtt_uri);
-    ESP_LOGI(TAG, "Client ID: %s", s_client_id);
-    ESP_LOGI(TAG, "Calling esp_mqtt_client_start()...");
-
     esp_err_t err = esp_mqtt_client_start(s_mqtt_client);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start MQTT client");
-        ESP_LOGE(TAG, "Error code: %d (%s)", err, esp_err_to_name(err));
-        ESP_LOGE(TAG, "Error description: %s", esp_err_to_name(err));
-    } else {
-        ESP_LOGI(TAG, "esp_mqtt_client_start() returned ESP_OK");
-        ESP_LOGI(TAG, "Connection attempt initiated (connection is asynchronous)");
+        ESP_LOGE(TAG, "Failed to start: %s", esp_err_to_name(err));
     }
-
-    ESP_LOGI(TAG, "=== MQTT CONNECT END ===");
     return err;
 }
 
 void makapix_mqtt_disconnect(void)
 {
-    ESP_LOGI(TAG, "=== MQTT DISCONNECT START ===");
-    ESP_LOGI(TAG, "Client handle: %p", (void*)s_mqtt_client);
-    ESP_LOGI(TAG, "Connection state before disconnect: %s", s_mqtt_connected ? "connected" : "disconnected");
-    
     if (s_mqtt_client) {
         esp_mqtt_client_stop(s_mqtt_client);
-        ESP_LOGI(TAG, "esp_mqtt_client_stop() called");
-        ESP_LOGI(TAG, "MQTT client stopped");
-    } else {
-        ESP_LOGW(TAG, "MQTT client handle is NULL, nothing to disconnect");
     }
-    
-    ESP_LOGI(TAG, "=== MQTT DISCONNECT END ===");
 }
 
 void makapix_mqtt_deinit(void)
 {
-    ESP_LOGI(TAG, "=== MQTT DEINIT START ===");
-    ESP_LOGI(TAG, "Client handle: %p", (void*)s_mqtt_client);
-    ESP_LOGI(TAG, "Connection state: %s", s_mqtt_connected ? "connected" : "disconnected");
-    
     if (s_mqtt_client) {
         esp_mqtt_client_stop(s_mqtt_client);
         esp_mqtt_client_destroy(s_mqtt_client);
         s_mqtt_client = NULL;
         s_mqtt_connected = false;
-        ESP_LOGI(TAG, "MQTT client destroyed");
-    } else {
-        ESP_LOGW(TAG, "MQTT client handle is NULL, nothing to deinit");
     }
     
-    // Free reassembly buffer
     if (s_reassembly_buffer) {
         free(s_reassembly_buffer);
         s_reassembly_buffer = NULL;
@@ -566,8 +418,6 @@ void makapix_mqtt_deinit(void)
     s_reassembly_in_progress = false;
     s_reassembly_drop = false;
     s_reassembly_topic[0] = '\0';
-    
-    ESP_LOGI(TAG, "=== MQTT DEINIT END ===");
 }
 
 bool makapix_mqtt_is_connected(void)
@@ -712,15 +562,8 @@ esp_err_t makapix_mqtt_subscribe(const char *topic, int qos)
 
 void makapix_mqtt_log_state(void)
 {
-    ESP_LOGI(TAG, "=== MQTT STATE REPORT ===");
-    ESP_LOGI(TAG, "Client handle: %p", (void*)s_mqtt_client);
-    ESP_LOGI(TAG, "Connection state: %s", s_mqtt_connected ? "connected" : "disconnected");
-    ESP_LOGI(TAG, "URI: %s", strlen(s_mqtt_uri) > 0 ? s_mqtt_uri : "(not set)");
-    ESP_LOGI(TAG, "Client ID: %s", strlen(s_client_id) > 0 ? s_client_id : "(not set)");
-    ESP_LOGI(TAG, "Username: %s", strlen(s_player_key) > 0 ? s_player_key : "(not set)");
-    ESP_LOGI(TAG, "Command topic: %s", strlen(s_command_topic) > 0 ? s_command_topic : "(not set)");
-    ESP_LOGI(TAG, "Status topic: %s", strlen(s_status_topic) > 0 ? s_status_topic : "(not set)");
-    ESP_LOGI(TAG, "LWT payload: %s", strlen(s_lwt_payload) > 0 ? s_lwt_payload : "(not set)");
-    ESP_LOGI(TAG, "=== END MQTT STATE REPORT ===");
+    ESP_LOGI(TAG, "State: %s, URI: %s", 
+             s_mqtt_connected ? "connected" : "disconnected",
+             strlen(s_mqtt_uri) > 0 ? s_mqtt_uri : "(not set)");
 }
 

@@ -61,27 +61,18 @@ static void download_task(void *arg)
     (void)arg;
     download_request_t req;
 
-    ESP_LOGI(TAG, "Download task started");
-
     while (true) {
-        // Wait for prerequisites: WiFi connected, channel refreshed
+        // Wait for prerequisites
         if (!makapix_channel_is_wifi_ready()) {
-            ESP_LOGI(TAG, "Waiting for WiFi...");
             makapix_channel_wait_for_wifi(portMAX_DELAY);
-            ESP_LOGI(TAG, "WiFi connected");
         }
         
         if (!makapix_channel_is_refresh_done()) {
-            ESP_LOGI(TAG, "Waiting for channel refresh...");
             makapix_channel_wait_for_refresh(portMAX_DELAY);
-            ESP_LOGI(TAG, "Channel refresh done");
         }
 
-        // Wait for SD card to be available
         if (!makapix_channel_is_sd_available()) {
-            ESP_LOGI(TAG, "Waiting for SD card (USB export)...");
             makapix_channel_wait_for_sd(portMAX_DELAY);
-            ESP_LOGI(TAG, "SD card available");
         }
 
         // Wait if SDIO bus is locked or SD access is paused
@@ -93,33 +84,21 @@ static void download_task(void *arg)
                 should_wait = animation_player_is_sd_paused();
             }
             if (!should_wait) break;
-            if (wait_count == 0) {
-                const char *holder = sdio_bus_get_holder();
-                ESP_LOGI(TAG, "SDIO busy (%s), waiting...", holder ? holder : "SD paused");
-            }
             vTaskDelay(pdMS_TO_TICKS(1000));
             wait_count++;
         }
 
         // Get next file to download from channel
         if (!s_get_next_cb) {
-            // No callback set - wait for signal
-            ESP_LOGI(TAG, "No get_next callback set, waiting for channel setup...");
             makapix_channel_wait_for_downloads_needed(portMAX_DELAY);
-            ESP_LOGI(TAG, "Woken from signal, rechecking callback...");
             continue;
         }
 
         memset(&req, 0, sizeof(req));
-        ESP_LOGI(TAG, "Checking for files to download...");
         esp_err_t get_err = s_get_next_cb(&req, s_get_next_ctx);
         
         if (get_err == ESP_ERR_NOT_FOUND) {
-            // Nothing to download - all files available (or channel is empty)
-            // Wait for signal that new files may be available
-            ESP_LOGI(TAG, "No files need downloading (all available or channel empty), sleeping...");
             makapix_channel_wait_for_downloads_needed(portMAX_DELAY);
-            ESP_LOGI(TAG, "Woken from signal, rechecking...");
             continue;
         }
         
@@ -159,7 +138,6 @@ static void download_task(void *arg)
 
         // Start download
         set_busy(true, req.channel_id);
-        ESP_LOGI(TAG, "Starting download: %s", req.storage_key);
         
         // Update UI message if no animation is playing yet
         extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail);
@@ -174,8 +152,6 @@ static void download_task(void *arg)
         set_busy(false, NULL);
 
         if (err == ESP_OK) {
-            ESP_LOGI(TAG, "Download complete: %s", req.storage_key);
-            // Signal that more downloads may be available
             makapix_channel_signal_downloads_needed();
         } else {
             if (err == ESP_ERR_NOT_FOUND) {
@@ -209,7 +185,6 @@ esp_err_t download_manager_init(void)
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGI(TAG, "Download manager started (single download mode)");
     return ESP_OK;
 }
 

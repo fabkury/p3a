@@ -109,6 +109,8 @@ esp_err_t h_get_dwell_time(httpd_req_t *req);
 esp_err_t h_put_dwell_time(httpd_req_t *req);
 esp_err_t h_get_global_seed(httpd_req_t *req);
 esp_err_t h_put_global_seed(httpd_req_t *req);
+esp_err_t h_get_play_order(httpd_req_t *req);
+esp_err_t h_put_play_order(httpd_req_t *req);
 esp_err_t h_post_reboot(httpd_req_t *req);
 esp_err_t h_post_swap_next(httpd_req_t *req);
 esp_err_t h_post_swap_back(httpd_req_t *req);

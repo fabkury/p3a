@@ -30,7 +30,7 @@ void makapix_channel_events_init(void)
     xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_MQTT_CONNECTED | MAKAPIX_EVENT_WIFI_CONNECTED | MAKAPIX_EVENT_SD_UNAVAILABLE);
     xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_MQTT_DISCONNECTED | MAKAPIX_EVENT_WIFI_DISCONNECTED | MAKAPIX_EVENT_SD_AVAILABLE);
     
-    ESP_LOGI(TAG, "Event signaling initialized (MQTT + WiFi + SD)");
+    ESP_LOGD(TAG, "Event signaling initialized (MQTT + WiFi + SD)");
 }
 
 void makapix_channel_events_deinit(void)
@@ -38,7 +38,7 @@ void makapix_channel_events_deinit(void)
     if (s_mqtt_event_group) {
         vEventGroupDelete(s_mqtt_event_group);
         s_mqtt_event_group = NULL;
-        ESP_LOGI(TAG, "MQTT event signaling deinitialized");
+        ESP_LOGD(TAG, "MQTT event signaling deinitialized");
     }
 }
 
@@ -49,7 +49,7 @@ void makapix_channel_signal_mqtt_connected(void)
         return;
     }
     
-    ESP_LOGI(TAG, "Signaling MQTT connected - waking refresh tasks");
+    ESP_LOGD(TAG, "Signaling MQTT connected - waking refresh tasks");
     xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_MQTT_DISCONNECTED);
     xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_MQTT_CONNECTED);
 }
@@ -61,7 +61,7 @@ void makapix_channel_signal_mqtt_disconnected(void)
         return;
     }
     
-    ESP_LOGI(TAG, "Signaling MQTT disconnected");
+    ESP_LOGD(TAG, "Signaling MQTT disconnected");
     xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_MQTT_CONNECTED);
     xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_MQTT_DISCONNECTED);
 }
@@ -109,7 +109,7 @@ void makapix_channel_signal_wifi_connected(void)
         return;
     }
     
-    ESP_LOGI(TAG, "Signaling WiFi connected - waking download tasks");
+    ESP_LOGD(TAG, "Signaling WiFi connected - waking download tasks");
     xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_WIFI_DISCONNECTED);
     xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_WIFI_CONNECTED);
 }
@@ -121,7 +121,7 @@ void makapix_channel_signal_wifi_disconnected(void)
         return;
     }
     
-    ESP_LOGI(TAG, "Signaling WiFi disconnected");
+    ESP_LOGD(TAG, "Signaling WiFi disconnected");
     xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_WIFI_CONNECTED);
     xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_WIFI_DISCONNECTED);
 }
@@ -169,7 +169,7 @@ void makapix_channel_signal_refresh_done(void)
         return;
     }
     
-    ESP_LOGI(TAG, "Signaling channel refresh done - waking download tasks");
+    ESP_LOGD(TAG, "Signaling channel refresh done - waking download tasks");
     xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_REFRESH_DONE);
 }
 
@@ -225,7 +225,7 @@ void makapix_channel_signal_sd_available(void)
         return;
     }
     
-    ESP_LOGI(TAG, "Signaling SD card available - waking download tasks");
+    ESP_LOGD(TAG, "Signaling SD card available - waking download tasks");
     xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_UNAVAILABLE);
     xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_AVAILABLE);
 }
@@ -237,7 +237,7 @@ void makapix_channel_signal_sd_unavailable(void)
         return;
     }
     
-    ESP_LOGI(TAG, "Signaling SD card unavailable (USB export) - pausing downloads");
+    ESP_LOGD(TAG, "Signaling SD card unavailable (USB export) - pausing downloads");
     xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_AVAILABLE);
     xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_UNAVAILABLE);
 }

@@ -87,7 +87,7 @@ static esp_err_t ugfx_ui_init_gfx(uint8_t *framebuffer, size_t stride)
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "Initializing µGFX with framebuffer %p, dimensions %dx%d, stride=%zu", 
+    ESP_LOGD(TAG, "Initializing µGFX with framebuffer %p, dimensions %dx%d, stride=%zu", 
              framebuffer, ugfx_screen_width, ugfx_screen_height, stride);
 
     gfxInit();
@@ -96,10 +96,10 @@ static esp_err_t ugfx_ui_init_gfx(uint8_t *framebuffer, size_t stride)
     // Apply any pending orientation that was set before initialization
     if (s_pending_orientation != gOrientation0) {
         gdispSetOrientation(s_pending_orientation);
-        ESP_LOGI(TAG, "Applied pending orientation: %d", s_pending_orientation);
+        ESP_LOGD(TAG, "Applied pending orientation: %d", s_pending_orientation);
     }
     
-    ESP_LOGI(TAG, "µGFX initialized: display size %dx%d", gdispGetWidth(), gdispGetHeight());
+    ESP_LOGD(TAG, "µGFX initialized: display size %dx%d", gdispGetWidth(), gdispGetHeight());
     return ESP_OK;
 }
 
@@ -407,7 +407,7 @@ static bool parse_iso8601(const char *timestamp, time_t *out_time)
 
 esp_err_t ugfx_ui_init(void)
 {
-    ESP_LOGI(TAG, "µGFX UI system ready");
+    ESP_LOGD(TAG, "µGFX UI system ready");
     return ESP_OK;
 }
 
@@ -438,7 +438,7 @@ esp_err_t ugfx_ui_show_provisioning_status(const char *status_message)
     s_ui_active = true;
     memset(s_current_code, 0, sizeof(s_current_code)); // Clear code when showing status
     
-    ESP_LOGI(TAG, "Provisioning status UI activated: %s", status_message);
+    ESP_LOGD(TAG, "Provisioning status UI activated: %s", status_message);
     return ESP_OK;
 }
 
@@ -449,7 +449,7 @@ esp_err_t ugfx_ui_show_captive_ap_info(void)
     memset(s_current_code, 0, sizeof(s_current_code));
     memset(s_status_message, 0, sizeof(s_status_message));
     
-    ESP_LOGI(TAG, "Captive AP info UI activated");
+    ESP_LOGD(TAG, "Captive AP info UI activated");
     return ESP_OK;
 }
 
@@ -469,7 +469,7 @@ esp_err_t ugfx_ui_show_registration(const char *code, const char *expires_at)
     s_ui_mode = UI_MODE_REGISTRATION;
     s_ui_active = true;
     
-    ESP_LOGI(TAG, "Registration UI activated: code=%s", code);
+    ESP_LOGD(TAG, "Registration UI activated: code=%s", code);
     return ESP_OK;
 }
 
@@ -481,7 +481,7 @@ void ugfx_ui_hide_registration(void)
     memset(s_current_code, 0, sizeof(s_current_code));
     memset(s_status_message, 0, sizeof(s_status_message));
     
-    ESP_LOGI(TAG, "Registration UI deactivated");
+    ESP_LOGD(TAG, "Registration UI deactivated");
 }
 
 esp_err_t ugfx_ui_show_ota_progress(const char *version_from, const char *version_to)
@@ -506,7 +506,7 @@ esp_err_t ugfx_ui_show_ota_progress(const char *version_from, const char *versio
     s_ui_mode = UI_MODE_OTA_PROGRESS;
     s_ui_active = true;
     
-    ESP_LOGI(TAG, "OTA progress UI activated: %s -> %s", 
+    ESP_LOGD(TAG, "OTA progress UI activated: %s -> %s", 
              version_from ? version_from : "?", 
              version_to ? version_to : "?");
     return ESP_OK;
@@ -536,7 +536,7 @@ void ugfx_ui_hide_ota_progress(void)
         s_ota_version_from[0] = '\0';
         s_ota_version_to[0] = '\0';
         
-        ESP_LOGI(TAG, "OTA progress UI deactivated");
+        ESP_LOGD(TAG, "OTA progress UI deactivated");
     }
 }
 
@@ -560,7 +560,7 @@ esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *mes
     s_ui_mode = UI_MODE_CHANNEL_MESSAGE;
     s_ui_active = true;
     
-    ESP_LOGI(TAG, "Channel message UI activated: %s - %s (%d%%)", 
+    ESP_LOGD(TAG, "Channel message UI activated: %s - %s (%d%%)", 
              s_channel_name, s_channel_message, s_channel_progress);
     return ESP_OK;
 }
@@ -574,7 +574,7 @@ void ugfx_ui_hide_channel_message(void)
         s_channel_message[0] = '\0';
         s_channel_progress = -1;
         
-        ESP_LOGI(TAG, "Channel message UI deactivated");
+        ESP_LOGD(TAG, "Channel message UI deactivated");
     }
 }
 
@@ -638,7 +638,7 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
                 
                 // Auto-exit provisioning when code expires
                 if (remaining_secs <= 0) {
-                    ESP_LOGI(TAG, "Registration code expired, automatically exiting provisioning");
+                    ESP_LOGD(TAG, "Registration code expired, automatically exiting provisioning");
                     makapix_cancel_provisioning();
                     // Draw black screen while transitioning out
                     gdispClear(GFX_BLACK);
@@ -695,9 +695,9 @@ esp_err_t ugfx_ui_set_rotation(screen_rotation_t rotation)
     // Apply orientation if µGFX is initialized
     if (s_ugfx_initialized) {
         gdispSetOrientation(ugfx_orientation);
-        ESP_LOGI(TAG, "µGFX orientation set to %d degrees", rotation);
+        ESP_LOGD(TAG, "µGFX orientation set to %d degrees", rotation);
     } else {
-        ESP_LOGI(TAG, "µGFX not initialized yet, orientation %d pending", rotation);
+        ESP_LOGD(TAG, "µGFX not initialized yet, orientation %d pending", rotation);
     }
     
     return ESP_OK;

@@ -1066,7 +1066,7 @@ esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, an
     buf->start_frame = start_frame;
     buf->start_time_ms = start_time_ms;
 
-    ESP_LOGI(TAG, "Loaded animation into buffer: %s", filepath);
+    ESP_LOGD(TAG, "Loaded: %s", filepath);
 
     return ESP_OK;
 }

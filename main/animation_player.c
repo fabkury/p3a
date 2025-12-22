@@ -132,9 +132,9 @@ static esp_err_t mount_sd_and_discover(char **animations_dir_out)
     }
     
     if (directory_has_animation_files(animations_path)) {
-        ESP_LOGI(TAG, "Using animations directory: %s", animations_path);
+        ESP_LOGD(TAG, "Using animations directory: %s", animations_path);
     } else {
-        ESP_LOGI(TAG, "Animations directory is empty: %s", animations_path);
+        ESP_LOGD(TAG, "Animations directory is empty: %s", animations_path);
     }
     
     return ESP_OK;
@@ -151,7 +151,7 @@ static esp_err_t load_first_animation(void)
 
     esp_err_t load_err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer, 0, 0);
     if (load_err == ESP_OK) {
-        ESP_LOGI(TAG, "Loaded animation '%s' to start playback", post->name);
+        ESP_LOGD(TAG, "Playing: %s", post->name);
         
         // Update playback controller with metadata
         playback_controller_set_animation_metadata(post->filepath, true);
@@ -167,7 +167,7 @@ static esp_err_t load_first_animation(void)
         if (err == ESP_OK && post) {
             load_err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer, 0, 0);
             if (load_err == ESP_OK) {
-                ESP_LOGI(TAG, "Loaded animation '%s' to start playback", post->name);
+                ESP_LOGD(TAG, "Playing: %s", post->name);
                 playback_controller_set_animation_metadata(post->filepath, true);
                 return ESP_OK;
             }
@@ -328,7 +328,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     }
 
     if (channel_player_get_post_count() == 0) {
-        ESP_LOGI(TAG, "Channel empty, will populate from server");
+        ESP_LOGD(TAG, "Channel empty, will populate from server");
         // Don't fail - just continue with empty channel
         // The p3a_render system will show appropriate message (Connecting... / Loading...)
         // and playback will start once artworks are downloaded
@@ -438,7 +438,7 @@ void animation_player_set_paused(bool paused)
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
         s_anim_paused = paused;
         xSemaphoreGive(s_buffer_mutex);
-        ESP_LOGI(TAG, "Animation %s", paused ? "paused" : "resumed");
+        ESP_LOGD(TAG, "Animation %s", paused ? "paused" : "resumed");
     }
 }
 
@@ -448,7 +448,7 @@ void animation_player_toggle_pause(void)
         s_anim_paused = !s_anim_paused;
         bool paused = s_anim_paused;
         xSemaphoreGive(s_buffer_mutex);
-        ESP_LOGI(TAG, "Animation %s", paused ? "paused" : "resumed");
+        ESP_LOGD(TAG, "Animation %s", paused ? "paused" : "resumed");
     }
 }
 
@@ -535,7 +535,7 @@ esp_err_t animation_player_request_swap_current(void)
 
         const sdcard_post_t *post = NULL;
         if (channel_player_get_current_post(&post) == ESP_OK && post) {
-            ESP_LOGI(TAG, "Requested swap to current: '%s'", post->name);
+            ESP_LOGD(TAG, "Requested swap to current: '%s'", post->name);
         }
         return ESP_OK;
     }
@@ -548,7 +548,7 @@ esp_err_t swap_future_execute(const swap_future_t *swap)
         return ESP_ERR_INVALID_ARG;
     }
     
-    ESP_LOGI(TAG, "Executing swap_future: frame=%u, live=%d", 
+    ESP_LOGD(TAG, "Executing swap_future: frame=%u, live=%d", 
              swap->start_frame, swap->is_live_mode_swap);
 
     if (swap->artwork.filepath[0] == '\0') {
@@ -592,7 +592,7 @@ esp_err_t swap_future_execute(const swap_future_t *swap)
             xSemaphoreGive(s_loader_sem);
         }
         
-        ESP_LOGI(TAG, "swap_future triggered loader: %s (type=%d start_frame=%u start_time_ms=%llu)",
+        ESP_LOGD(TAG, "swap_future triggered loader: %s (type=%d start_frame=%u start_time_ms=%llu)",
                  s_load_override.filepath, (int)s_load_override.type,
                  (unsigned)s_load_override.start_frame, (unsigned long long)s_load_override.start_time_ms);
         return ESP_OK;
@@ -622,7 +622,7 @@ esp_err_t animation_player_begin_sd_export(void)
         s_sd_export_active = true;
     }
 
-    ESP_LOGI(TAG, "SD card exported to USB host");
+    ESP_LOGD(TAG, "SD card exported to USB host");
     return ESP_OK;
 }
 
@@ -664,7 +664,7 @@ esp_err_t animation_player_end_sd_export(void)
     // Signal SD available to resume any paused downloads
     makapix_channel_signal_sd_available();
 
-    ESP_LOGI(TAG, "SD card returned to local control");
+    ESP_LOGD(TAG, "SD card returned to local control");
     return refresh_err;
 }
 
@@ -705,7 +705,7 @@ void animation_player_pause_sd_access(void)
         s_sd_access_paused = true;
     }
     
-    ESP_LOGI(TAG, "SD card access paused for external operation");
+    ESP_LOGD(TAG, "SD card access paused for external operation");
 }
 
 void animation_player_resume_sd_access(void)
@@ -717,7 +717,7 @@ void animation_player_resume_sd_access(void)
         s_sd_access_paused = false;
     }
     
-    ESP_LOGI(TAG, "SD card access resumed");
+    ESP_LOGD(TAG, "SD card access resumed");
 }
 
 bool animation_player_is_sd_paused(void)
@@ -816,7 +816,7 @@ esp_err_t animation_player_swap_to_index(size_t index)
 
 esp_err_t animation_player_enter_ui_mode(void)
 {
-    ESP_LOGI(TAG, "Entering UI mode");
+    ESP_LOGD(TAG, "Entering UI mode");
     
     esp_err_t err = display_renderer_enter_ui_mode();
     if (err != ESP_OK) {
@@ -825,7 +825,7 @@ esp_err_t animation_player_enter_ui_mode(void)
     
     // Unload animation buffers to free internal RAM for HTTP/SSL operations
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-        ESP_LOGI(TAG, "Unloading animation buffers to free memory for provisioning");
+        ESP_LOGD(TAG, "Unloading animation buffers to free memory for provisioning");
         unload_animation_buffer(&s_front_buffer);
         unload_animation_buffer(&s_back_buffer);
         s_swap_requested = false;
@@ -835,13 +835,13 @@ esp_err_t animation_player_enter_ui_mode(void)
     // Clear metadata since we're not playing an animation
     playback_controller_clear_metadata();
     
-    ESP_LOGI(TAG, "UI mode active");
+    ESP_LOGD(TAG, "UI mode active");
     return ESP_OK;
 }
 
 void animation_player_exit_ui_mode(void)
 {
-    ESP_LOGI(TAG, "Exiting UI mode");
+    ESP_LOGD(TAG, "Exiting UI mode");
     
     // Trigger reload of current animation
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
@@ -851,7 +851,7 @@ void animation_player_exit_ui_mode(void)
     }
     
     display_renderer_exit_ui_mode();
-    ESP_LOGI(TAG, "Animation mode active");
+    ESP_LOGD(TAG, "Animation mode active");
 }
 
 bool animation_player_is_ui_mode(void)

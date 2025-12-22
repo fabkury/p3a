@@ -70,11 +70,9 @@ static void do_reboot(void) {
 }
 
 static void api_worker_task(void *arg) {
-    ESP_LOGI(HTTP_API_TAG, "Worker task started");
     for(;;) {
         command_t cmd;
         if (xQueueReceive(s_cmdq, &cmd, portMAX_DELAY) == pdTRUE) {
-            ESP_LOGI(HTTP_API_TAG, "Processing command %lu (type=%d)", cmd.id, cmd.type);
             app_state_enter_processing();
 
             switch(cmd.type) {
@@ -84,40 +82,33 @@ static void api_worker_task(void *arg) {
 
                 case CMD_SWAP_NEXT:
                     if (s_swap_next_callback) {
-                        ESP_LOGI(HTTP_API_TAG, "Executing swap_next");
                         s_swap_next_callback();
                         app_state_enter_ready();
                     } else {
-                        ESP_LOGW(HTTP_API_TAG, "swap_next callback not set");
                         app_state_enter_error();
                     }
                     break;
 
                 case CMD_SWAP_BACK:
                     if (s_swap_back_callback) {
-                        ESP_LOGI(HTTP_API_TAG, "Executing swap_back");
                         s_swap_back_callback();
                         app_state_enter_ready();
                     } else {
-                        ESP_LOGW(HTTP_API_TAG, "swap_back callback not set");
                         app_state_enter_error();
                     }
                     break;
 
                 case CMD_PAUSE:
-                    ESP_LOGI(HTTP_API_TAG, "Executing pause");
                     app_lcd_set_animation_paused(true);
                     app_state_enter_ready();
                     break;
 
                 case CMD_RESUME:
-                    ESP_LOGI(HTTP_API_TAG, "Executing resume");
                     app_lcd_set_animation_paused(false);
                     app_state_enter_ready();
                     break;
 
                 default:
-                    ESP_LOGE(HTTP_API_TAG, "Unknown command type: %d", cmd.type);
                     app_state_enter_error();
                     break;
             }
@@ -129,18 +120,11 @@ static void api_worker_task(void *arg) {
 
 static bool enqueue_cmd(command_type_t t) {
     if (!s_cmdq) {
-        ESP_LOGE(HTTP_API_TAG, "Command queue not initialized");
         return false;
     }
 
     command_t c = { .type = t, .id = ++s_cmd_id };
-    BaseType_t result = xQueueSend(s_cmdq, &c, pdMS_TO_TICKS(10));
-    if (result != pdTRUE) {
-        ESP_LOGW(HTTP_API_TAG, "Failed to enqueue command (queue full)");
-        return false;
-    }
-    ESP_LOGI(HTTP_API_TAG, "Command %lu enqueued", c.id);
-    return true;
+    return xQueueSend(s_cmdq, &c, pdMS_TO_TICKS(10)) == pdTRUE;
 }
 
 bool api_enqueue_reboot(void) {
@@ -170,8 +154,6 @@ bool api_enqueue_resume(void) {
  */
 static void makapix_command_handler(const char *command_type, cJSON *payload)
 {
-    ESP_LOGI(HTTP_API_TAG, "MQTT command received: %s", command_type);
-    
     if (strcmp(command_type, "swap_next") == 0) {
         api_enqueue_swap_next();
     } else if (strcmp(command_type, "swap_back") == 0) {
@@ -215,17 +197,13 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
         
         if (channel_name && cJSON_IsString(channel_name)) {
             channel = cJSON_GetStringValue(channel_name);
-            ESP_LOGI(HTTP_API_TAG, "Requesting channel switch to: %s", channel);
         } else if (hashtag && cJSON_IsString(hashtag)) {
             channel = "hashtag";
             identifier = cJSON_GetStringValue(hashtag);
-            ESP_LOGI(HTTP_API_TAG, "Requesting channel switch to hashtag: #%s", identifier);
         } else if (user_sqid && cJSON_IsString(user_sqid)) {
             channel = "by_user";
             identifier = cJSON_GetStringValue(user_sqid);
-            ESP_LOGI(HTTP_API_TAG, "Requesting channel switch to user: %s", identifier);
         } else {
-            ESP_LOGE(HTTP_API_TAG, "Invalid play_channel payload: missing channel_name, hashtag, or user_sqid");
             return;
         }
         
@@ -242,16 +220,8 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
             const char *key = cJSON_GetStringValue(storage_key);
             int32_t pid = post_id && cJSON_IsNumber(post_id) ? (int32_t)cJSON_GetNumberValue(post_id) : 0;
             
-            ESP_LOGI(HTTP_API_TAG, "Showing artwork: %s", key);
-            esp_err_t err = makapix_show_artwork(pid, key, url);
-            if (err != ESP_OK) {
-                ESP_LOGE(HTTP_API_TAG, "Failed to show artwork: %s", esp_err_to_name(err));
-            }
-        } else {
-            ESP_LOGE(HTTP_API_TAG, "Invalid show_artwork payload");
+            makapix_show_artwork(pid, key, url);
         }
-    } else {
-        ESP_LOGW(HTTP_API_TAG, "Unknown command type: %s", command_type);
     }
 }
 
@@ -260,8 +230,6 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
 void http_api_set_action_handlers(action_callback_t swap_next, action_callback_t swap_back) {
     s_swap_next_callback = swap_next;
     s_swap_back_callback = swap_back;
-    ESP_LOGI(HTTP_API_TAG, "Action handlers registered");
-    
     makapix_mqtt_set_command_callback(makapix_command_handler);
 }
 
@@ -289,6 +257,9 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     }
     if (strcmp(uri, "/settings/global_seed") == 0) {
         return h_get_global_seed(req);
+    }
+    if (strcmp(uri, "/settings/play_order") == 0) {
+        return h_get_play_order(req);
     }
     if (strcmp(uri, "/channels/stats") == 0) {
         return h_get_channels_stats(req);
@@ -381,6 +352,9 @@ static esp_err_t h_put_router(httpd_req_t *req) {
     if (strcmp(uri, "/settings/global_seed") == 0) {
         return h_put_global_seed(req);
     }
+    if (strcmp(uri, "/settings/play_order") == 0) {
+        return h_put_play_order(req);
+    }
 
     httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
     return ESP_OK;
@@ -389,83 +363,11 @@ static esp_err_t h_put_router(httpd_req_t *req) {
 // ---------- Network Diagnostics ----------
 
 static void log_all_netifs(void) {
-    ESP_LOGI(HTTP_API_TAG, "=== Network Interface Diagnostics ===");
-    
-    esp_netif_t *netif = NULL;
-    int count = 0;
-    while ((netif = esp_netif_next(netif)) != NULL) {
-        count++;
-        const char *desc = esp_netif_get_desc(netif);
-        const char *key = esp_netif_get_ifkey(netif);
-        bool is_up = esp_netif_is_netif_up(netif);
-        
-        esp_netif_ip_info_t ip_info;
-        esp_err_t err = esp_netif_get_ip_info(netif, &ip_info);
-        
-        if (err == ESP_OK && ip_info.ip.addr != 0) {
-            ESP_LOGI(HTTP_API_TAG, "  [%d] %s (%s): UP=%d IP=" IPSTR " GW=" IPSTR,
-                     count, desc ? desc : "?", key ? key : "?", is_up,
-                     IP2STR(&ip_info.ip), IP2STR(&ip_info.gw));
-        } else {
-            ESP_LOGI(HTTP_API_TAG, "  [%d] %s (%s): UP=%d (no IP)", 
-                     count, desc ? desc : "?", key ? key : "?", is_up);
-        }
-    }
-    if (count == 0) {
-        ESP_LOGW(HTTP_API_TAG, "  No network interfaces found!");
-    }
-    ESP_LOGI(HTTP_API_TAG, "=== End Network Diagnostics ===");
+    // Network diagnostics disabled for cleaner boot - use http_api_log_netifs() for debug
 }
 
 static void verify_server_listening(void) {
-    const struct {
-        const char *name;
-        bool use_loopback;
-    } targets[] = {
-        { "loopback", true },
-        { "sta-ip",   false },
-    };
-
-    esp_netif_ip_info_t sta_ip = {0};
-    bool have_sta_ip = false;
-    {
-        esp_netif_t *sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-        if (sta && esp_netif_get_ip_info(sta, &sta_ip) == ESP_OK && sta_ip.ip.addr != 0) {
-            have_sta_ip = true;
-        }
-    }
-
-    for (size_t i = 0; i < sizeof(targets)/sizeof(targets[0]); i++) {
-        if (!targets[i].use_loopback && !have_sta_ip) {
-            ESP_LOGW(HTTP_API_TAG, "HTTP self-connect %s skipped (no STA IP yet)", targets[i].name);
-            continue;
-        }
-
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock < 0) {
-            ESP_LOGW(HTTP_API_TAG, "HTTP self-connect %s: socket() failed (errno=%d)", targets[i].name, errno);
-            continue;
-        }
-
-        struct sockaddr_in addr = {0};
-        addr.sin_family = AF_INET;
-        addr.sin_port = htons(80);
-        addr.sin_addr.s_addr = targets[i].use_loopback ? htonl(INADDR_LOOPBACK) : sta_ip.ip.addr;
-
-        int flags = fcntl(sock, F_GETFL, 0);
-        (void)fcntl(sock, F_SETFL, flags | O_NONBLOCK);
-
-        int result = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
-        if (result == 0 || errno == EINPROGRESS) {
-            char ipbuf[16] = {0};
-            inet_ntoa_r(addr.sin_addr, ipbuf, sizeof(ipbuf));
-            ESP_LOGI(HTTP_API_TAG, "HTTP self-connect %s OK (dst=%s:80)", targets[i].name, ipbuf);
-        } else {
-            ESP_LOGW(HTTP_API_TAG, "HTTP self-connect %s failed: errno=%d (%s)", targets[i].name, errno, strerror(errno));
-        }
-
-        close(sock);
-    }
+    // Server verification disabled for cleaner boot
 }
 
 static void format_sockaddr(const struct sockaddr *sa, char *out, size_t out_len) {
@@ -490,32 +392,13 @@ static void format_sockaddr(const struct sockaddr *sa, char *out, size_t out_len
 
 static esp_err_t http_open_fn(httpd_handle_t hd, int sockfd) {
     (void)hd;
-    struct sockaddr_storage peer = {0};
-    struct sockaddr_storage local = {0};
-    socklen_t peer_len = sizeof(peer);
-    socklen_t local_len = sizeof(local);
-    char peer_s[64];
-    char local_s[64];
-
-    if (getpeername(sockfd, (struct sockaddr *)&peer, &peer_len) == 0) {
-        format_sockaddr((struct sockaddr *)&peer, peer_s, sizeof(peer_s));
-    } else {
-        snprintf(peer_s, sizeof(peer_s), "(peer? errno=%d)", errno);
-    }
-
-    if (getsockname(sockfd, (struct sockaddr *)&local, &local_len) == 0) {
-        format_sockaddr((struct sockaddr *)&local, local_s, sizeof(local_s));
-    } else {
-        snprintf(local_s, sizeof(local_s), "(local? errno=%d)", errno);
-    }
-
-    ESP_LOGI(HTTP_API_TAG, "HTTP open: fd=%d peer=%s local=%s", sockfd, peer_s, local_s);
+    (void)sockfd;
     return ESP_OK;
 }
 
 static void http_close_fn(httpd_handle_t hd, int sockfd) {
     (void)hd;
-    ESP_LOGI(HTTP_API_TAG, "HTTP close: fd=%d", sockfd);
+    (void)sockfd;
 }
 
 // ---------- Start/Stop ----------
@@ -528,7 +411,6 @@ esp_err_t http_api_start(void) {
             ESP_LOGE(HTTP_API_TAG, "Failed to create command queue");
             return ESP_ERR_NO_MEM;
         }
-        ESP_LOGI(HTTP_API_TAG, "Command queue created (length=%d)", QUEUE_LEN);
     }
 
     // Create worker task if not exists
@@ -538,7 +420,6 @@ esp_err_t http_api_start(void) {
             ESP_LOGE(HTTP_API_TAG, "Failed to create worker task");
             return ESP_ERR_NO_MEM;
         }
-        ESP_LOGI(HTTP_API_TAG, "Worker task created");
     }
 
 #if CONFIG_P3A_PICO8_ENABLE
@@ -571,7 +452,7 @@ esp_err_t http_api_start(void) {
                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
         return httpd_err;
     }
-    ESP_LOGI(HTTP_API_TAG, "HTTP server started on port %d", cfg.server_port);
+    ESP_LOGI(HTTP_API_TAG, "HTTP server started on port 80");
 
     // Register dedicated handlers first
     httpd_uri_t u = {0};
@@ -606,11 +487,6 @@ esp_err_t http_api_start(void) {
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
 
-    ESP_LOGI(HTTP_API_TAG, "HTTP API server started on port 80");
-    
-    log_all_netifs();
-    verify_server_listening();
-    
     return ESP_OK;
 }
 

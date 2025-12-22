@@ -726,7 +726,13 @@ esp_err_t refresh_animation_file_list(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    const char *animations_dir = ANIMATIONS_PREFERRED_DIR;
+    char animations_dir[128];
+    esp_err_t path_err = sd_path_get_animations(animations_dir, sizeof(animations_dir));
+    if (path_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get animations directory path");
+        return path_err;
+    }
+
     esp_err_t enum_err = sdcard_channel_refresh(animations_dir);
     
     if (enum_err == ESP_OK) {

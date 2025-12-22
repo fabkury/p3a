@@ -10,6 +10,7 @@
 #include "app_lcd.h"
 #include "sdcard_channel.h"  // For asset_type_t (canonical definition)
 #include "config_store.h"
+#include "sd_path.h"
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_timer.h"
@@ -55,7 +56,11 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-#define ANIMATIONS_PREFERRED_DIR "/sdcard/animations"
+// Note: ANIMATIONS_PREFERRED_DIR is now deprecated.
+// Use sd_path_get_animations() to get the current animations directory path.
+// This macro is kept for compatibility but should not be used in new code.
+// Note: SD card root is now configurable via sd_path module (default: /p3a)
+// This gets combined with SD mount point at runtime
 #define ANIMATION_SD_REFRESH_STACK (16384)
 
 // asset_type_t is defined in sdcard_channel.h

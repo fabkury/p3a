@@ -53,8 +53,8 @@ void makapix_cancel_provisioning(void);
 /**
  * @brief Get current post ID being displayed
  * 
- * Returns 0 when playing local animations from /sdcard/animations/.
- * Will return actual post_id when playing from /sdcard/vault/ (future).
+ * Returns 0 when playing local animations from the local animations folder.
+ * Will return actual post_id when playing from the vault (Makapix artworks).
  * 
  * @return Current post ID, or 0 for local animations
  */

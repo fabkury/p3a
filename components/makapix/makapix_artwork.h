@@ -9,8 +9,8 @@ typedef void (*makapix_download_progress_cb)(size_t bytes_read, size_t content_l
 /**
  * @brief Download artwork from URL and save to vault
  * 
- * Downloads the artwork image and saves it to /sdcard/vault/ with hash-derived folder structure.
- * The file path will be: /sdcard/vault/{hash[0:2]}/{hash[2:4]}/{storage_key}
+ * Downloads the artwork image and saves it to the vault with hash-derived folder structure.
+ * The file path will be: <vault_dir>/{hash[0:2]}/{hash[2:4]}/{storage_key}
  * 
  * @param art_url Full URL to download the artwork from
  * @param storage_key UUID string identifying the artwork
@@ -30,7 +30,7 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
 /**
  * @brief Ensure cache doesn't exceed limit by evicting oldest items
  * 
- * Scans /sdcard/vault/ and deletes oldest files (by creation date) until
+ * Scans the vault directory and deletes oldest files (by creation date) until
  * the total count is below max_items.
  * 
  * @param max_items Maximum number of items to keep in cache (default: 250)

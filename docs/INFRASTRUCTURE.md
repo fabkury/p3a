@@ -498,15 +498,30 @@ idf.py flash monitor
 - **Purpose**: Web UI assets, configuration
 
 ### SD Card (SDMMC)
-- **Mount point**: `/sdcard`
+- **Mount point**: `/sdcard` (hardware level, BSP configured)
+- **p3a root folder**: `/sdcard/p3a` (default, user-configurable via web UI)
 - **Primary use**: Animation asset storage
-- **Preferred directory**: `/sdcard/animations`
+- **User configuration**: Users specify folder name (e.g., `/p3a`, `/data`) in web UI
+- **Internal handling**: `/sdcard` prefix is prepended automatically at runtime
+- **Example**: User sets `/p3a` → System uses `/sdcard/p3a/animations`, `/sdcard/p3a/vault`, etc.
+- **Reboot required**: Changes to root folder take effect after reboot
 - **Supported formats**: `.webp`, `.gif`, `.png`, `.jpg/.jpeg`
 
 ### Vault Storage (channel_manager)
-- **Layout**: `/vault/ab/cd/<sha256>.<ext>` (SHA256-sharded)
+- **Layout**: `/sdcard/p3a/vault/ab/cd/<sha256>.<ext>` (SHA256-sharded)
 - **Sidecar**: `.json` metadata files alongside assets
 - **Atomic writes**: `.tmp` + `fsync` + `rename`
+
+### SD Card Directory Structure
+All p3a data is stored under the configurable root folder (`/sdcard/p3a` by default):
+```
+/sdcard/p3a/
+├── animations/    # Local animation files (WebP, GIF, PNG, JPEG)
+├── vault/         # Cached artwork from Makapix (sharded by SHA256)
+├── channel/       # Channel settings and index files
+├── playlists/     # Playlist cache files
+└── downloads/     # Temporary upload storage
+```
 
 ### NVS (Non-Volatile Storage)
 - **Partition**: `nvs` (24KB)

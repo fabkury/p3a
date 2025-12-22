@@ -70,7 +70,7 @@ esp_err_t animation_metadata_set_filepath(animation_metadata_t *meta, const char
  * @brief Load metadata from JSON sidecar file
  * 
  * Looks for a JSON sidecar file with the same stem as the animation file.
- * For example: /sdcard/animations/art.webp -> /sdcard/animations/art_meta.json
+ * For example: <animations_dir>/art.webp -> <animations_dir>/art_meta.json
  * 
  * If the sidecar exists and is valid JSON, populates the metadata fields
  * and sets has_metadata = true. If no sidecar exists or parsing fails,

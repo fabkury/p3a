@@ -15,6 +15,7 @@
  */
 
 #include "http_api_internal.h"
+#include "sd_path.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include "esp_wifi_remote.h"
@@ -320,8 +321,12 @@ esp_err_t h_get_channels_stats(httpd_req_t *req) {
 
     if (have_lock || !s_stats_mu) {
         if (should_refresh) {
-            makapix_channel_count_cached("all", "/sdcard/channel", "/sdcard/vault", &all_total, &all_cached);
-            makapix_channel_count_cached("promoted", "/sdcard/channel", "/sdcard/vault", &promoted_total, &promoted_cached);
+            char channel_path[128], vault_path[128];
+            sd_path_get_channel(channel_path, sizeof(channel_path));
+            sd_path_get_vault(vault_path, sizeof(vault_path));
+            
+            makapix_channel_count_cached("all", channel_path, vault_path, &all_total, &all_cached);
+            makapix_channel_count_cached("promoted", channel_path, vault_path, &promoted_total, &promoted_cached);
 
             s_all_total = all_total;
             s_all_cached = all_cached;

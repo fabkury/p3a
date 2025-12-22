@@ -7,6 +7,7 @@
  */
 
 #include "http_api_internal.h"
+#include "sd_path.h"
 #include "esp_timer.h"
 #include "animation_player.h"
 #include <sys/stat.h>
@@ -16,14 +17,21 @@
 
 /**
  * POST /upload
- * Handles multipart/form-data file upload, saves to /sdcard/downloads, then moves to /sdcard/animations
+ * Handles multipart/form-data file upload, saves to downloads dir, then moves to animations dir
  * Maximum file size: 5 MB
  * Supported formats: WebP, GIF, JPG, JPEG, PNG
  */
 static esp_err_t h_post_upload(httpd_req_t *req) {
     const size_t MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-    const char *DOWNLOADS_DIR = "/sdcard/downloads";
-    const char *ANIMATIONS_DIR = "/sdcard/animations";
+    
+    // Get dynamic paths
+    char DOWNLOADS_DIR[128];
+    char ANIMATIONS_DIR[128];
+    if (sd_path_get_downloads(DOWNLOADS_DIR, sizeof(DOWNLOADS_DIR)) != ESP_OK ||
+        sd_path_get_animations(ANIMATIONS_DIR, sizeof(ANIMATIONS_DIR)) != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to get SD paths\",\"code\":\"PATH_ERROR\"}");
+        return ESP_OK;
+    }
     
     // Check Content-Type
     char content_type[128] = {0};

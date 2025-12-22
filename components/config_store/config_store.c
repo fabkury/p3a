@@ -891,4 +891,68 @@ uint32_t config_store_get_refresh_interval_sec(void)
     return interval_sec;
 }
 
+// ============================================================================
+// SD Card Root Folder (persisted, requires reboot)
+// ============================================================================
+
+esp_err_t config_store_set_sdcard_root(const char *root_path)
+{
+    if (!root_path || root_path[0] == '\0') {
+        ESP_LOGE(TAG, "Invalid SD root path");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "sdcard_root");
+    if (item) {
+        cJSON_DeleteItemFromObject(cfg, "sdcard_root");
+    }
+    cJSON_AddStringToObject(cfg, "sdcard_root", root_path);
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "SD root path saved: %s (reboot required)", root_path);
+    }
+
+    return err;
+}
+
+esp_err_t config_store_get_sdcard_root(char **out_path)
+{
+    if (!out_path) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *out_path = NULL;
+
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "sdcard_root");
+    if (item && cJSON_IsString(item)) {
+        const char *val = cJSON_GetStringValue(item);
+        if (val && val[0] != '\0') {
+            *out_path = strdup(val);
+            if (!*out_path) {
+                cJSON_Delete(cfg);
+                return ESP_ERR_NO_MEM;
+            }
+            cJSON_Delete(cfg);
+            return ESP_OK;
+        }
+    }
+
+    cJSON_Delete(cfg);
+    return ESP_ERR_NOT_FOUND;
+}
 

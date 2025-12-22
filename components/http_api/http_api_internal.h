@@ -139,9 +139,9 @@ esp_err_t h_get_network_config(httpd_req_t *req);
 esp_err_t h_post_erase(httpd_req_t *req);
 
 /**
- * @brief GET /seed - Global seed page (http_api_page_seed.c)
+ * @brief GET /settings - Settings page (http_api_page_settings.c)
  */
-esp_err_t h_get_seed(httpd_req_t *req);
+esp_err_t h_get_settings(httpd_req_t *req);
 
 // ---------- Handler Registration Functions ----------
 

@@ -182,8 +182,10 @@ curl -X POST http://p3a.local/api/rotation -H "Content-Type: application/json" -
 ### File management
 
 ```bash
-# List files on SD card
-curl "http://p3a.local/files/list?path=/sdcard/animations"
+# List files on SD card (default p3a root folder: /sdcard/p3a)
+# Note: Root folder is configurable via Settings page
+# Users set a folder name (e.g., /p3a), system prepends /sdcard automatically
+curl "http://p3a.local/files/list?path=/sdcard/p3a/animations"
 ```
 
 ---

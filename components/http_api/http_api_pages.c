@@ -11,7 +11,7 @@
  * Page handlers are in separate files:
  * - http_api_page_root.c: GET / (main control page)
  * - http_api_page_network.c: GET /config/network, POST /erase
- * - http_api_page_seed.c: GET /seed
+ * - http_api_page_settings.c: GET /settings
  * - http_api_pico8.c: GET /pico8, WS /pico_stream
  */
 
@@ -125,8 +125,8 @@ esp_err_t http_api_pages_route_get(httpd_req_t *req) {
     if (strcmp(uri, "/config/network") == 0) {
         return h_get_network_config(req);
     }
-    if (strcmp(uri, "/seed") == 0) {
-        return h_get_seed(req);
+    if (strcmp(uri, "/settings") == 0) {
+        return h_get_settings(req);
     }
 
 #if CONFIG_P3A_PICO8_ENABLE

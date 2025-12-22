@@ -1,6 +1,7 @@
 #include "playlist_manager.h"
 #include "vault_storage.h"
 #include "makapix_api.h"
+#include "sd_path.h"
 #include "esp_log.h"
 #include "cJSON.h"
 #include "mbedtls/sha256.h"
@@ -13,8 +14,6 @@
 #include <time.h>
 
 static const char *TAG = "playlist_mgr";
-
-#define PLAYLISTS_DIR "/sdcard/playlists"
 
 typedef struct {
     char storage_key[96];
@@ -74,7 +73,12 @@ static esp_err_t write_refcount_meta(const char *asset_filepath, uint32_t refcou
 
 static esp_err_t rebuild_vault_refcounts_from_playlists(void)
 {
-    DIR *dir = opendir(PLAYLISTS_DIR);
+    char playlists_dir[128];
+    if (sd_path_get_playlists(playlists_dir, sizeof(playlists_dir)) != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    DIR *dir = opendir(playlists_dir);
     if (!dir) return ESP_OK;
 
     refcount_entry_t *entries = NULL;
@@ -88,7 +92,7 @@ static esp_err_t rebuild_vault_refcounts_from_playlists(void)
         if (nlen < 6 || strcasecmp(de->d_name + nlen - 5, ".json") != 0) continue;
 
         char path[256];
-        int w = snprintf(path, sizeof(path), "%s/%s", PLAYLISTS_DIR, de->d_name);
+        int w = snprintf(path, sizeof(path), "%s/%s", playlists_dir, de->d_name);
         if (w < 0 || w >= (int)sizeof(path)) continue;
 
         playlist_metadata_t *pl = NULL;
@@ -196,10 +200,17 @@ static esp_err_t storage_key_sha256(const char *storage_key, uint8_t out_sha256[
 static void build_vault_path_from_storage_key_uuid(const char *storage_key, const char *art_url, char *out, size_t out_len)
 {
     if (!storage_key || !out || out_len == 0) return;
+    
+    char vault_base[128];
+    if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
+        snprintf(out, out_len, "%s/vault/%s.webp", SD_PATH_DEFAULT_ROOT, storage_key);
+        return;
+    }
+    
     uint8_t sha256[32];
     if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
         // Best-effort fallback (no sharding)
-        snprintf(out, out_len, "/sdcard/vault/%s.webp", storage_key);
+        snprintf(out, out_len, "%s/%s.webp", vault_base, storage_key);
         return;
     }
     char dir1[3], dir2[3], dir3[3];
@@ -218,18 +229,24 @@ static void build_vault_path_from_storage_key_uuid(const char *storage_key, cons
         }
     }
 
-    snprintf(out, out_len, "/sdcard/vault/%s/%s/%s/%s%s", dir1, dir2, dir3, storage_key, ext);
+    snprintf(out, out_len, "%s/%s/%s/%s/%s%s", vault_base, dir1, dir2, dir3, storage_key, ext);
 }
 
 esp_err_t playlist_manager_init(void)
 {
     ESP_LOGI(TAG, "Initializing playlist manager");
     
+    char playlists_dir[128];
+    if (sd_path_get_playlists(playlists_dir, sizeof(playlists_dir)) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get playlists directory path");
+        return ESP_FAIL;
+    }
+    
     // Create playlists directory if it doesn't exist
     struct stat st;
-    if (stat(PLAYLISTS_DIR, &st) != 0) {
-        ESP_LOGI(TAG, "Creating playlists directory: %s", PLAYLISTS_DIR);
-        if (mkdir(PLAYLISTS_DIR, 0755) != 0) {
+    if (stat(playlists_dir, &st) != 0) {
+        ESP_LOGI(TAG, "Creating playlists directory: %s", playlists_dir);
+        if (mkdir(playlists_dir, 0755) != 0) {
             ESP_LOGE(TAG, "Failed to create playlists directory");
             return ESP_FAIL;
         }
@@ -414,7 +431,12 @@ esp_err_t playlist_get_cache_path(int32_t post_id, char *out_path, size_t out_pa
         return ESP_ERR_INVALID_ARG;
     }
     
-    int written = snprintf(out_path, out_path_len, "%s/%ld.json", PLAYLISTS_DIR, post_id);
+    char playlists_dir[128];
+    if (sd_path_get_playlists(playlists_dir, sizeof(playlists_dir)) != ESP_OK) {
+        return ESP_FAIL;
+    }
+    
+    int written = snprintf(out_path, out_path_len, "%s/%ld.json", playlists_dir, post_id);
     if (written < 0 || (size_t)written >= out_path_len) {
         return ESP_ERR_INVALID_SIZE;
     }

@@ -62,8 +62,8 @@ _Static_assert(sizeof(makapix_channel_entry_t) == 64, "Makapix channel entry mus
  * 
  * @param channel_id UUID of the channel (e.g., "abc123-def456-...")
  * @param name Display name for the channel
- * @param vault_path Base path for vault storage (e.g., "/sdcard/vault")
- * @param channels_path Base path for channel data (e.g., "/sdcard/channel")
+ * @param vault_path Base path for vault storage (e.g., "/sdcard/p3a/vault" or custom)
+ * @param channels_path Base path for channel data (e.g., "/sdcard/p3a/channel" or custom)
  * @return Channel handle or NULL on failure
  */
 channel_handle_t makapix_channel_create(const char *channel_id, 
@@ -94,8 +94,8 @@ bool makapix_channel_is_refreshing(channel_handle_t channel);
  * how many artwork entries have their files locally available.
  * 
  * @param channel_id Channel ID (e.g., "all", "promoted")
- * @param channels_path Path to channels directory (e.g., "/sdcard/channel")
- * @param vault_path Path to vault directory (e.g., "/sdcard/vault")
+ * @param channels_path Path to channels directory (e.g., "/sdcard/p3a/channel" or custom)
+ * @param vault_path Path to vault directory (e.g., "/sdcard/p3a/vault" or custom)
  * @param out_total If not NULL, receives total index entries
  * @param out_cached If not NULL, receives count of locally cached artworks
  * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no index exists

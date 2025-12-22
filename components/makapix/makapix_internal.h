@@ -19,6 +19,7 @@
 #include "app_wifi.h"
 #include "p3a_state.h"
 #include "p3a_render.h"
+#include "sd_path.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"

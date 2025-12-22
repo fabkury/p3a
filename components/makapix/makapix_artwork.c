@@ -1,4 +1,5 @@
 #include "makapix_artwork.h"
+#include "sd_path.h"
 #include "sdio_bus.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
@@ -17,7 +18,6 @@
 #include <time.h>
 
 static const char *TAG = "makapix_artwork";
-static const char *VAULT_BASE = "/sdcard/vault";
 
 // Chunk size for serialized download (read chunk from WiFi, then write to SD)
 // 128KB provides good balance between throughput and memory usage
@@ -61,13 +61,13 @@ static esp_err_t storage_key_sha256(const char *storage_key, uint8_t out_sha256[
 /**
  * @brief Ensure vault directory structure exists
  */
-static esp_err_t ensure_vault_dirs(const char *dir1, const char *dir2, const char *dir3)
+static esp_err_t ensure_vault_dirs(const char *vault_base, const char *dir1, const char *dir2, const char *dir3)
 {
     char path[256];
+    struct stat st;
     
     // Create first level directory
-    snprintf(path, sizeof(path), "%s/%s", VAULT_BASE, dir1);
-    struct stat st;
+    snprintf(path, sizeof(path), "%s/%s", vault_base, dir1);
     if (stat(path, &st) != 0) {
         if (mkdir(path, 0755) != 0) {
             ESP_LOGE(TAG, "Failed to create directory %s", path);
@@ -76,7 +76,7 @@ static esp_err_t ensure_vault_dirs(const char *dir1, const char *dir2, const cha
     }
 
     // Create second level directory
-    snprintf(path, sizeof(path), "%s/%s/%s", VAULT_BASE, dir1, dir2);
+    snprintf(path, sizeof(path), "%s/%s/%s", vault_base, dir1, dir2);
     if (stat(path, &st) != 0) {
         if (mkdir(path, 0755) != 0) {
             ESP_LOGE(TAG, "Failed to create directory %s", path);
@@ -85,7 +85,7 @@ static esp_err_t ensure_vault_dirs(const char *dir1, const char *dir2, const cha
     }
 
     // Create third level directory
-    snprintf(path, sizeof(path), "%s/%s/%s/%s", VAULT_BASE, dir1, dir2, dir3);
+    snprintf(path, sizeof(path), "%s/%s/%s/%s", vault_base, dir1, dir2, dir3);
     if (stat(path, &st) != 0) {
         if (mkdir(path, 0755) != 0) {
             ESP_LOGE(TAG, "Failed to create directory %s", path);
@@ -147,10 +147,17 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
         }
     }
 
+    // Get vault base path
+    char vault_base[128];
+    if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get vault path");
+        return ESP_FAIL;
+    }
+
     // Ensure vault base directory exists
     struct stat st;
-    if (stat(VAULT_BASE, &st) != 0) {
-        if (mkdir(VAULT_BASE, 0755) != 0) {
+    if (stat(vault_base, &st) != 0) {
+        if (mkdir(vault_base, 0755) != 0) {
             ESP_LOGE(TAG, "Failed to create vault directory");
             return ESP_FAIL;
         }
@@ -166,14 +173,14 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
     snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
 
     // Ensure directories exist
-    err = ensure_vault_dirs(dir1, dir2, dir3);
+    err = ensure_vault_dirs(vault_base, dir1, dir2, dir3);
     if (err != ESP_OK) {
         return err;
     }
 
     // Detect extension from URL and build file path WITH extension
     int ext_idx = detect_extension_from_url(art_url);
-    snprintf(out_path, path_len, "%s/%s/%s/%s/%s%s", VAULT_BASE, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
+    snprintf(out_path, path_len, "%s/%s/%s/%s/%s%s", vault_base, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
 
     // Build full URL - if art_url starts with '/', prepend https://hostname
     char full_url[512];
@@ -485,9 +492,16 @@ static size_t collect_files(const char *dir, file_info_t *files, size_t max_file
 
 esp_err_t makapix_artwork_ensure_cache_limit(size_t max_items)
 {
+    // Get vault base path
+    char vault_base[128];
+    if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get vault path");
+        return ESP_FAIL;
+    }
+
     // Check if vault directory exists
     struct stat st;
-    if (stat(VAULT_BASE, &st) != 0) {
+    if (stat(vault_base, &st) != 0) {
         // Vault doesn't exist yet, nothing to evict
         return ESP_OK;
     }
@@ -502,7 +516,7 @@ esp_err_t makapix_artwork_ensure_cache_limit(size_t max_items)
 
     // Collect all files
     size_t file_count = 0;
-    collect_files(VAULT_BASE, files, max_files, &file_count);
+    collect_files(vault_base, files, max_files, &file_count);
 
     ESP_LOGI(TAG, "Found %zu files in vault", file_count);
 

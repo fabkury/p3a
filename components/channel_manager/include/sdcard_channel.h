@@ -34,10 +34,14 @@ typedef enum {
 #define SDCARD_CHANNEL_PAGE_SIZE 50
 #endif
 
+// Note: ANIMATIONS_DEFAULT_DIR is now deprecated.
+// Use sd_path_get_animations() to get the current animations directory path.
+// This macro is kept for Kconfig compatibility but should not be used in new code.
 #ifdef CONFIG_CHANNEL_DEFAULT_ANIMATIONS_DIR
 #define ANIMATIONS_DEFAULT_DIR CONFIG_CHANNEL_DEFAULT_ANIMATIONS_DIR
 #else
-#define ANIMATIONS_DEFAULT_DIR "/sdcard/animations"
+// Note: Animations directory is now managed by sd_path module (configurable root)
+// Use sd_path_get_animations() instead of this hardcoded path
 #endif
 
 /**

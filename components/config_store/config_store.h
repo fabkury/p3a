@@ -256,6 +256,29 @@ esp_err_t config_store_set_max_speed_playback(bool enable);
  */
 bool config_store_get_max_speed_playback(void);
 
+// ============================================================================
+// SD Card Root Folder (persisted, requires reboot)
+// ============================================================================
+
+/**
+ * @brief Set SD card root folder path
+ *
+ * All p3a data directories (animations, vault, channel, etc.) will be
+ * created under this root folder. Changes require a reboot to take effect.
+ *
+ * @param root_path Root folder path - user-friendly format (e.g., "/p3a", "/data")
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_sdcard_root(const char *root_path);
+
+/**
+ * @brief Get SD card root folder path
+ *
+ * @param out_path Pointer to receive allocated string (caller must free)
+ * @return ESP_OK on success, ESP_ERR_NOT_FOUND if not set
+ */
+esp_err_t config_store_get_sdcard_root(char **out_path);
+
 #ifdef __cplusplus
 }
 #endif

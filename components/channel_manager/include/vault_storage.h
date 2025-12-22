@@ -46,7 +46,7 @@ typedef struct vault_storage_s *vault_handle_t;
 /**
  * @brief Initialize vault storage
  * 
- * @param base_path Base directory for vault (e.g., "/sdcard/vault")
+ * @param base_path Base directory for vault (e.g., "/sdcard/p3a/vault" or custom path)
  * @param out_handle Pointer to receive vault handle
  * @return ESP_OK on success
  */

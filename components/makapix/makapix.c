@@ -461,8 +461,13 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         s_current_channel = NULL;
     }
     
+    // Get dynamic paths
+    char vault_path[128], channel_path[128];
+    sd_path_get_vault(vault_path, sizeof(vault_path));
+    sd_path_get_channel(channel_path, sizeof(channel_path));
+    
     // Create new Makapix channel
-    s_current_channel = makapix_channel_create(channel_id, channel_name, "/sdcard/vault", "/sdcard/channel");
+    s_current_channel = makapix_channel_create(channel_id, channel_name, vault_path, channel_path);
     if (!s_current_channel) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to create channel");
         s_channel_loading = false;
@@ -982,9 +987,15 @@ static int detect_file_type_ext(const char *url)
 
 static void build_vault_path_from_storage_key_simple(const char *storage_key, const char *art_url, char *out, size_t out_len)
 {
+    char vault_base[128];
+    if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
+        snprintf(out, out_len, "%s/vault/%s.webp", SD_PATH_DEFAULT_ROOT, storage_key);
+        return;
+    }
+    
     uint8_t sha256[32];
     if (storage_key_sha256_local(storage_key, sha256) != ESP_OK) {
-        snprintf(out, out_len, "%s/%s%s", "/sdcard/vault", storage_key, ".webp");
+        snprintf(out, out_len, "%s/%s%s", vault_base, storage_key, ".webp");
         return;
     }
     char dir1[3], dir2[3], dir3[3];
@@ -993,7 +1004,7 @@ static void build_vault_path_from_storage_key_simple(const char *storage_key, co
     snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
     // Include file extension for type detection
     int ext_idx = detect_file_type_ext(art_url);
-    snprintf(out, out_len, "%s/%s/%s/%s/%s%s", "/sdcard/vault", dir1, dir2, dir3, storage_key, s_ext_strings_local[ext_idx]);
+    snprintf(out, out_len, "%s/%s/%s/%s/%s%s", vault_base, dir1, dir2, dir3, storage_key, s_ext_strings_local[ext_idx]);
 }
 
 static esp_err_t single_ch_load(channel_handle_t channel)

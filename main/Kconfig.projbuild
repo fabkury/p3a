@@ -49,9 +49,11 @@ menu "Physical Player of Pixel Art (P3A)"
     menu "Animation"
         config P3A_SD_ANIMATIONS_DIR
             string "SD card animations directory"
-            default "/sdcard/animations"
+            default "/sdcard/p3a/animations"
             help
                 Directory path on SD card containing WebP animation files.
+                All p3a data is stored under a configurable root folder (default: /p3a).
+                The full path combines SD mount point (/sdcard) with the root folder.
                 Files will be loaded alphabetically.
 
         config P3A_MAX_SPEED_PLAYBACK

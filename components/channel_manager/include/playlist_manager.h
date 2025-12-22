@@ -57,7 +57,7 @@ typedef struct {
 /**
  * @brief Initialize the playlist manager
  * 
- * Creates /sdcard/playlists/ directory if needed.
+ * Creates the playlists directory if needed (under the configured p3a root folder).
  * 
  * @return ESP_OK on success
  */

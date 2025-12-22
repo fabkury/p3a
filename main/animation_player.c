@@ -1,4 +1,5 @@
 #include "animation_player_priv.h"
+#include "sd_path.h"
 #include "channel_player.h"
 #include "sdcard_channel_impl.h"
 #include "playlist_manager.h"
@@ -88,16 +89,33 @@ static esp_err_t mount_sd_and_discover(char **animations_dir_out)
         s_sd_mounted = true;
     }
 
-    const char *preferred_dir = ANIMATIONS_PREFERRED_DIR;
-    *animations_dir_out = strdup(preferred_dir);
+    // Initialize SD path module (loads configured root from NVS)
+    sd_path_init();
+    
+    // Ensure all required directories exist under the configured root
+    esp_err_t dir_err = sd_path_ensure_directories();
+    if (dir_err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to create some SD directories: %s", esp_err_to_name(dir_err));
+        // Continue anyway - directories might already exist or be read-only
+    }
+
+    // Get the animations directory path
+    char animations_path[128];
+    esp_err_t path_err = sd_path_get_animations(animations_path, sizeof(animations_path));
+    if (path_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get animations path");
+        return path_err;
+    }
+
+    *animations_dir_out = strdup(animations_path);
     if (!*animations_dir_out) {
         return ESP_ERR_NO_MEM;
     }
     
-    if (directory_has_animation_files(preferred_dir)) {
-        ESP_LOGI(TAG, "Using animations directory: %s", preferred_dir);
+    if (directory_has_animation_files(animations_path)) {
+        ESP_LOGI(TAG, "Using animations directory: %s", animations_path);
     } else {
-        ESP_LOGI(TAG, "Animations directory is empty: %s", preferred_dir);
+        ESP_LOGI(TAG, "Animations directory is empty: %s", animations_path);
     }
     
     return ESP_OK;
@@ -261,7 +279,12 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     }
 
     if (want_makapix) {
-        channel_handle_t mk_ch = makapix_channel_create(mk_channel_id, mk_channel_name, "/sdcard/vault", "/sdcard/channel");
+        // Get dynamic paths
+        char vault_path[128], channel_path[128];
+        sd_path_get_vault(vault_path, sizeof(vault_path));
+        sd_path_get_channel(channel_path, sizeof(channel_path));
+        
+        channel_handle_t mk_ch = makapix_channel_create(mk_channel_id, mk_channel_name, vault_path, channel_path);
         if (mk_ch) {
             // Give ownership to makapix module so future switches clean up correctly.
             makapix_adopt_channel_handle(mk_ch);

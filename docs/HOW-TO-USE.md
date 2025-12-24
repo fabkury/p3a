@@ -29,13 +29,9 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 
 ### First-time setup
 
-1. **Flash the firmware** if you haven't already. See [flash-p3a.md](flash-p3a.md) for instructions.
-2. **Prepare your microSD card** with artwork (see [Preparing Artwork](#preparing-artwork) below).
-3. **Insert the microSD card** into the slot on the board.
-4. **Connect power** via USB-C. The device will boot and start the Wi-Fi setup process.
-5. **Configure Wi-Fi** by following the [Wi-Fi Setup](#wi-fi-setup) instructions.
-
-Once connected to your network, the device will start playing artwork automatically.
+1. **Insert the microSD card** into the slot on the board.
+2. **Flash the firmware**. See [flash-p3a.md](flash-p3a.md) for instructions.
+3. **Configure Wi-Fi** by following the [Wi-Fi Setup](#wi-fi-setup) instructions.
 
 ---
 

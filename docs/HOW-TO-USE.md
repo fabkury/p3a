@@ -25,17 +25,13 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 - Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board
 - USB-C data cable (not a charging-only cable)
 - microSD card
-- Some pixel art files (WebP, GIF, PNG, or JPEG)
+- a small screwdriver
 
 ### First-time setup
 
-1. **Flash the firmware** if you haven't already. See [flash-p3a.md](flash-p3a.md) for instructions.
-2. **Prepare your microSD card** with artwork (see [Preparing Artwork](#preparing-artwork) below).
-3. **Insert the microSD card** into the slot on the board.
-4. **Connect power** via USB-C. The device will boot and start the Wi-Fi setup process.
-5. **Configure Wi-Fi** by following the [Wi-Fi Setup](#wi-fi-setup) instructions.
-
-Once connected to your network, the device will start playing artwork automatically.
+1. **Insert the microSD card** into the slot on the board. This requires unscrewing the back plate.
+2. **Flash the firmware**. See [flash-p3a.md](flash-p3a.md) for instructions.
+3. **Configure Wi-Fi** by following the [Wi-Fi Setup](#wi-fi-setup) instructions.
 
 ---
 

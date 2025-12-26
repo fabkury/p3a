@@ -257,6 +257,28 @@ esp_err_t config_store_set_max_speed_playback(bool enable);
 bool config_store_get_max_speed_playback(void);
 
 // ============================================================================
+// View Acknowledgment (persisted)
+// ============================================================================
+
+/**
+ * @brief Set view acknowledgment mode
+ *
+ * When enabled, view events will include "request_ack": true and the player
+ * will wait for acknowledgment from the server. Used for debugging.
+ *
+ * @param enable True to request acknowledgment for view events
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_view_ack(bool enable);
+
+/**
+ * @brief Get view acknowledgment mode
+ *
+ * @return True if view acknowledgment enabled (defaults to false)
+ */
+bool config_store_get_view_ack(void);
+
+// ============================================================================
 // SD Card Root Folder (persisted, requires reboot)
 // ============================================================================
 

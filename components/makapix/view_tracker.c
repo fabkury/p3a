@@ -274,18 +274,34 @@ static void send_view_event(void)
     const char *channel_name = get_channel_name_for_view(channel_info.type);
     const char *intent = get_intent_string(s_state.is_intentional);
     
+    // Determine channel-specific fields based on channel type
+    const char *channel_user_sqid = NULL;
+    const char *channel_hashtag = NULL;
+    
+    if (channel_info.type == P3A_CHANNEL_MAKAPIX_BY_USER && channel_info.identifier[0] != '\0') {
+        channel_user_sqid = channel_info.identifier;
+    } else if (channel_info.type == P3A_CHANNEL_MAKAPIX_HASHTAG && channel_info.identifier[0] != '\0') {
+        channel_hashtag = channel_info.identifier;
+    }
+    
+    // Get view acknowledgment setting
+    bool request_ack = config_store_get_view_ack();
+    
     // Send view event via MQTT
     esp_err_t err = makapix_mqtt_publish_view(
         s_state.current_post_id,
         intent,
         play_order,
         channel_name,
-        player_key
+        player_key,
+        channel_user_sqid,
+        channel_hashtag,
+        request_ack
     );
     
     if (err == ESP_OK) {
-        ESP_LOGI(TAG, "View event sent: post_id=%" PRId32 ", intent=%s, channel=%s, play_order=%u",
-                 s_state.current_post_id, intent, channel_name, play_order);
+        ESP_LOGI(TAG, "View event sent: post_id=%" PRId32 ", intent=%s, channel=%s, play_order=%u, ack=%s",
+                 s_state.current_post_id, intent, channel_name, play_order, request_ack ? "true" : "false");
     } else {
         ESP_LOGW(TAG, "Failed to send view event: %s", esp_err_to_name(err));
     }
@@ -301,7 +317,7 @@ static const char *get_channel_name_for_view(p3a_channel_type_t channel_type)
         case P3A_CHANNEL_MAKAPIX_PROMOTED:
             return "promoted";
         case P3A_CHANNEL_MAKAPIX_USER:
-            return "user";
+            return "by_user";  // Server calls this "by_user"
         case P3A_CHANNEL_MAKAPIX_BY_USER:
             return "by_user";
         case P3A_CHANNEL_MAKAPIX_HASHTAG:

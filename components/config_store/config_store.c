@@ -535,6 +535,47 @@ bool config_store_get_live_mode(void)
     return enable;
 }
 
+// ============================================================================
+// View Acknowledgment
+// ============================================================================
+
+esp_err_t config_store_set_view_ack(bool enable)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+    
+    cJSON *item = cJSON_GetObjectItem(cfg, "view_ack");
+    if (item) {
+        cJSON_DeleteItemFromObject(cfg, "view_ack");
+    }
+    cJSON_AddBoolToObject(cfg, "view_ack", enable);
+    
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    return err;
+}
+
+bool config_store_get_view_ack(void)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return false;  // Default: OFF (fire-and-forget)
+    }
+    
+    bool enable = false;
+    cJSON *item = cJSON_GetObjectItem(cfg, "view_ack");
+    if (item && cJSON_IsBool(item)) {
+        enable = cJSON_IsTrue(item);
+    }
+    
+    cJSON_Delete(cfg);
+    return enable;
+}
+
 esp_err_t config_store_set_dwell_time(uint32_t dwell_time_ms)
 {
     // 0 is allowed and means "global override disabled"

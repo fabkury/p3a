@@ -11,7 +11,7 @@ cmake_minimum_required(VERSION 3.16)
 # - Increment MINOR for new features (backward compatible)
 # - Increment PATCH for bug fixes
 # For testing OTA, use pre-release versions on GitHub
-set(PROJECT_VER "0.6.4-dev")
+set(PROJECT_VER "0.6.5-dev")
 # =============================================================================
 
 # =============================================================================
@@ -19,7 +19,7 @@ set(PROJECT_VER "0.6.4-dev")
 # =============================================================================
 # Set P3A_BUILD_FLASHER to OFF to skip flasher build (faster dev builds)
 # Set to ON for release builds that need the flasher executable
-set(P3A_BUILD_FLASHER ON)
+set(P3A_BUILD_FLASHER OFF)
 # =============================================================================
 
 # Parse PROJECT_VER to extract major, minor, patch components

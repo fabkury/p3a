@@ -19,7 +19,7 @@ set(PROJECT_VER "0.6.4-dev")
 # =============================================================================
 # Set P3A_BUILD_FLASHER to OFF to skip flasher build (faster dev builds)
 # Set to ON for release builds that need the flasher executable
-set(P3A_BUILD_FLASHER OFF)
+set(P3A_BUILD_FLASHER ON)
 # =============================================================================
 
 # Parse PROJECT_VER to extract major, minor, patch components

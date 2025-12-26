@@ -113,10 +113,9 @@ esp_err_t makapix_mqtt_publish_raw(const char *topic, const char *payload, int q
 esp_err_t makapix_mqtt_subscribe(const char *topic, int qos);
 
 /**
- * @brief Publish view event (fire-and-forget)
+ * @brief Publish view event
  * 
  * Sends a view event to the Makapix Club server with metadata about the artwork viewing.
- * This is a fire-and-forget operation (no response expected).
  * 
  * Topic: makapix/player/{player_key}/view
  * 
@@ -126,17 +125,24 @@ esp_err_t makapix_mqtt_subscribe(const char *topic, int qos);
  * - timezone: Empty string (reserved for future use)
  * - intent: "artwork" (show_artwork command) or "channel" (channel playback)
  * - play_order: 0=server, 1=created, 2=random
- * - channel: Channel name (e.g., "promoted", "all", "sdcard")
+ * - channel: Channel name (e.g., "promoted", "all", "by_user", "hashtag", "artwork")
  * - player_key: Device player key
+ * - channel_user_sqid: User sqid (for "by_user" channel) or NULL
+ * - channel_hashtag: Hashtag without # (for "hashtag" channel) or NULL
+ * - request_ack: Whether to request acknowledgment from server
  * 
  * @param post_id Post ID of the artwork
  * @param intent "artwork" or "channel"
  * @param play_order Play order mode (0-2)
  * @param channel_name Channel name string
  * @param player_key Player key UUID string
+ * @param channel_user_sqid User sqid for "by_user" channel, NULL otherwise
+ * @param channel_hashtag Hashtag (without #) for "hashtag" channel, NULL otherwise
+ * @param request_ack Whether to request acknowledgment
  * @return ESP_OK on success, error code otherwise
  */
 esp_err_t makapix_mqtt_publish_view(int32_t post_id, const char *intent, 
                                      uint8_t play_order, const char *channel_name,
-                                     const char *player_key);
+                                     const char *player_key, const char *channel_user_sqid,
+                                     const char *channel_hashtag, bool request_ack);
 

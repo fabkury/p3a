@@ -22,6 +22,7 @@ static char s_command_topic[128] = {0};
 static char s_status_topic[128] = {0};
 static char s_response_topic[128] = {0};
 static char s_response_prefix[128] = {0};
+static char s_view_ack_topic[128] = {0};
 static char s_mqtt_uri[256] = {0};        // Static buffer for MQTT URI
 static char s_client_id[64] = {0};        // Static buffer for client ID
 static char s_lwt_payload[128] = {0};     // Static buffer for LWT payload
@@ -65,6 +66,10 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         }
         if (strlen(s_response_topic) > 0) {
             s_pending_response_sub_msg_id = esp_mqtt_client_subscribe(client, s_response_topic, 1);
+        }
+        if (strlen(s_view_ack_topic) > 0) {
+            esp_mqtt_client_subscribe(client, s_view_ack_topic, 1);
+            ESP_LOGI(TAG, "Subscribed to view acknowledgments: %s", s_view_ack_topic);
         }
         if (s_connection_callback) {
             s_connection_callback(true);
@@ -233,6 +238,29 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                         ESP_LOGW(TAG, "Failed to parse command JSON on topic %s", s_reassembly_topic);
                     }
                 }
+                // View acknowledgment topic: parse and log the acknowledgment
+                else if (strcmp(s_reassembly_topic, s_view_ack_topic) == 0) {
+                    cJSON *json = cJSON_Parse(s_reassembly_buffer);
+                    if (json) {
+                        cJSON *success = cJSON_GetObjectItem(json, "success");
+                        if (success && cJSON_IsBool(success)) {
+                            if (cJSON_IsTrue(success)) {
+                                ESP_LOGI(TAG, "✓ View acknowledgment: SUCCESS");
+                            } else {
+                                cJSON *error = cJSON_GetObjectItem(json, "error");
+                                cJSON *error_code = cJSON_GetObjectItem(json, "error_code");
+                                const char *error_msg = error && cJSON_IsString(error) ? cJSON_GetStringValue(error) : "unknown";
+                                const char *error_code_str = error_code && cJSON_IsString(error_code) ? cJSON_GetStringValue(error_code) : "unknown";
+                                ESP_LOGW(TAG, "✗ View acknowledgment: FAILED - %s (code: %s)", error_msg, error_code_str);
+                            }
+                        } else {
+                            ESP_LOGW(TAG, "View acknowledgment missing 'success' field");
+                        }
+                        cJSON_Delete(json);
+                    } else {
+                        ESP_LOGW(TAG, "Failed to parse view acknowledgment JSON");
+                    }
+                }
                 // Response topic: do NOT parse here. Hand the owned string to makapix_api (single parse there).
                 else if (strncmp(s_reassembly_topic, s_response_prefix, strlen(s_response_prefix)) == 0) {
                     ESP_LOGD(TAG, "Routing response to callback");
@@ -334,6 +362,7 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
     snprintf(s_status_topic, sizeof(s_status_topic), "makapix/player/%s/status", player_key);
     snprintf(s_response_topic, sizeof(s_response_topic), "makapix/player/%s/response/#", player_key);
     snprintf(s_response_prefix, sizeof(s_response_prefix), "makapix/player/%s/response/", player_key);
+    snprintf(s_view_ack_topic, sizeof(s_view_ack_topic), "makapix/player/%s/view/ack", player_key);
 
     // Build MQTT URI and client ID
     snprintf(s_mqtt_uri, sizeof(s_mqtt_uri), "mqtts://%s:%d", host, port);
@@ -562,7 +591,8 @@ esp_err_t makapix_mqtt_subscribe(const char *topic, int qos)
 
 esp_err_t makapix_mqtt_publish_view(int32_t post_id, const char *intent, 
                                      uint8_t play_order, const char *channel_name,
-                                     const char *player_key)
+                                     const char *player_key, const char *channel_user_sqid,
+                                     const char *channel_hashtag, bool request_ack)
 {
     if (!intent || !channel_name || !player_key) {
         ESP_LOGE(TAG, "publish_view: invalid arguments");
@@ -605,6 +635,22 @@ esp_err_t makapix_mqtt_publish_view(int32_t post_id, const char *intent,
     cJSON_AddNumberToObject(view, "play_order", (double)play_order);
     cJSON_AddStringToObject(view, "channel", channel_name);
     cJSON_AddStringToObject(view, "player_key", player_key);
+    
+    // Add channel-specific fields (null if not applicable)
+    if (channel_user_sqid && channel_user_sqid[0] != '\0') {
+        cJSON_AddStringToObject(view, "channel_user_sqid", channel_user_sqid);
+    } else {
+        cJSON_AddNullToObject(view, "channel_user_sqid");
+    }
+    
+    if (channel_hashtag && channel_hashtag[0] != '\0') {
+        cJSON_AddStringToObject(view, "channel_hashtag", channel_hashtag);
+    } else {
+        cJSON_AddNullToObject(view, "channel_hashtag");
+    }
+    
+    // Add request_ack field
+    cJSON_AddBoolToObject(view, "request_ack", request_ack);
     
     char *json_string = cJSON_PrintUnformatted(view);
     cJSON_Delete(view);

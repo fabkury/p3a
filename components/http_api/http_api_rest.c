@@ -505,6 +505,9 @@ esp_err_t h_post_channel(httpd_req_t *req) {
             makapix_abort_channel_load();
         }
         
+        // Clear Makapix current channel state so switching back to same channel works
+        makapix_clear_current_channel();
+        
         err = p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL);
         if (err == ESP_OK) {
             channel_player_switch_to_sdcard_channel();
@@ -828,7 +831,7 @@ esp_err_t h_post_reboot(httpd_req_t *req) {
 }
 
 /**
- * POST /action/swap_next
+ * POST /action/swap_next (Phase 4: Direct call, no queue)
  */
 esp_err_t h_post_swap_next(httpd_req_t *req) {
     if (app_state_get() == STATE_ERROR) {
@@ -841,17 +844,21 @@ esp_err_t h_post_swap_next(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    if (!api_enqueue_swap_next()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
-        return ESP_OK;
+    // Direct call to channel_player
+    esp_err_t err = channel_player_swap_next();
+    if (err == ESP_ERR_INVALID_STATE) {
+        send_json(req, 409, "{\"ok\":false,\"error\":\"Command in progress\",\"code\":\"BUSY\"}");
+    } else if (err != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Navigation failed\",\"code\":\"NAV_ERROR\"}");
+    } else {
+        send_json(req, 200, "{\"ok\":true,\"data\":{\"action\":\"swap_next\"}}");
     }
-
-    send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"swap_next\"}}");
+    
     return ESP_OK;
 }
 
 /**
- * POST /action/swap_back
+ * POST /action/swap_back (Phase 4: Direct call, no queue)
  */
 esp_err_t h_post_swap_back(httpd_req_t *req) {
     if (app_state_get() == STATE_ERROR) {
@@ -864,12 +871,16 @@ esp_err_t h_post_swap_back(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    if (!api_enqueue_swap_back()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
-        return ESP_OK;
+    // Direct call to channel_player
+    esp_err_t err = channel_player_swap_back();
+    if (err == ESP_ERR_INVALID_STATE) {
+        send_json(req, 409, "{\"ok\":false,\"error\":\"Command in progress\",\"code\":\"BUSY\"}");
+    } else if (err != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Navigation failed\",\"code\":\"NAV_ERROR\"}");
+    } else {
+        send_json(req, 200, "{\"ok\":true,\"data\":{\"action\":\"swap_back\"}}");
     }
-
-    send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"swap_back\"}}");
+    
     return ESP_OK;
 }
 

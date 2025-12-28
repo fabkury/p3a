@@ -3,6 +3,7 @@
 
 #include "channel_interface.h"
 #include "sdcard_channel.h"
+#include "play_navigator.h"
 
 #ifdef __cplusplus
 extern "C" {

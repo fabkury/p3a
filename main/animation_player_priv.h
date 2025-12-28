@@ -131,6 +131,9 @@ typedef struct {
     // Live Mode swap context (for recovery)
     bool is_live_mode_swap;
     uint32_t live_index;
+    
+    // View tracking: post_id of the artwork being displayed
+    int32_t post_id;
 } animation_buffer_t;
 
 // Animation player state (now delegates to display_renderer for LCD operations)
@@ -156,6 +159,7 @@ typedef struct {
     uint32_t start_frame;
     bool is_live_mode_swap;
     uint32_t live_index;
+    int32_t post_id;  // For view tracking
 } animation_load_override_t;
 
 extern animation_load_override_t s_load_override;

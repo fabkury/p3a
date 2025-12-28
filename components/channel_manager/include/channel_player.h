@@ -3,9 +3,11 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include "esp_err.h"
 #include "sdcard_channel.h"  // For sdcard_post_t and asset_type_t
 #include "channel_interface.h"  // For channel_handle_t
+#include "p3a_state.h"  // For p3a_channel_type_t
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,6 +26,23 @@ typedef enum {
     CHANNEL_PLAYER_SOURCE_SDCARD,   // Using sdcard_channel
     CHANNEL_PLAYER_SOURCE_MAKAPIX,  // Using a Makapix channel_handle_t
 } channel_player_source_t;
+
+/**
+ * @brief Swap request structure for validated artwork transitions
+ * 
+ * This structure contains all information needed for animation_player
+ * to perform a seamless transition to a new artwork. All fields are
+ * pre-validated by channel_player before being passed to animation_player.
+ */
+typedef struct swap_request_s {
+    char filepath[256];        // Validated file path (file exists)
+    asset_type_t type;         // File type (WebP, GIF, PNG, JPEG)
+    int32_t post_id;           // For view tracking (0 if not applicable)
+    uint32_t dwell_time_ms;    // Effective dwell time for this artwork
+    uint64_t start_time_ms;    // For Live Mode alignment (0 = ignore)
+    uint32_t start_frame;      // For Live Mode alignment (0 = start from beginning)
+    bool is_live_mode;         // Whether this maintains Live Mode synchronization
+} swap_request_t;
 
 /**
  * @brief Initialize the channel player
@@ -194,6 +213,93 @@ void channel_player_clear_channel(channel_handle_t channel_to_clear);
  * @return ESP_OK on success, ESP_ERR_INVALID_STATE if no channel active
  */
 esp_err_t channel_player_set_play_order(uint8_t play_order);
+
+// ============================================================================
+// NEW NAVIGATION API (Phase 1 Refactor)
+// ============================================================================
+
+/**
+ * @brief Request navigation to next artwork
+ * 
+ * Returns immediately. If a command is already being processed, this call
+ * is ignored and returns ESP_ERR_INVALID_STATE.
+ * 
+ * @return ESP_OK if command accepted
+ *         ESP_ERR_INVALID_STATE if another command is in progress
+ */
+esp_err_t channel_player_swap_next(void);
+
+/**
+ * @brief Request navigation to previous artwork
+ * 
+ * Returns immediately. If a command is already being processed, this call
+ * is ignored and returns ESP_ERR_INVALID_STATE.
+ * 
+ * @return ESP_OK if command accepted
+ *         ESP_ERR_INVALID_STATE if another command is in progress
+ */
+esp_err_t channel_player_swap_back(void);
+
+/**
+ * @brief Check if a navigation command is currently being processed
+ * 
+ * @return true if command active, false if idle
+ */
+bool channel_player_is_command_active(void);
+
+/**
+ * @brief Switch to a different channel
+ * 
+ * Immediately marks the new channel as active and attempts to display
+ * the first available artwork. If no artworks are available, displays
+ * an appropriate message but still considers the switch successful.
+ * 
+ * @param type Channel type (SDCARD, MAKAPIX_ALL, etc.)
+ * @param identifier Additional identifier (user_sqid, hashtag, etc.) or NULL
+ * @return ESP_OK on success (even if channel is empty)
+ *         ESP_ERR_INVALID_ARG if parameters invalid
+ */
+esp_err_t channel_player_switch_channel(p3a_channel_type_t type, const char *identifier);
+
+/**
+ * @brief Set global dwell time override
+ * 
+ * @param seconds Dwell time in seconds (0 = disable override)
+ * @return ESP_OK on success
+ */
+esp_err_t channel_player_set_dwell_time(uint32_t seconds);
+
+/**
+ * @brief Get current dwell time setting
+ * 
+ * @return Dwell time in seconds
+ */
+uint32_t channel_player_get_dwell_time(void);
+
+/**
+ * @brief Enter Live Mode synchronized playback
+ * 
+ * @return ESP_OK on success
+ *         ESP_ERR_INVALID_STATE if preconditions not met (e.g., NTP not synced)
+ */
+esp_err_t channel_player_enter_live_mode(void);
+
+/**
+ * @brief Notification from animation_player that swap succeeded
+ * 
+ * Called by animation_player after successfully swapping to new artwork.
+ * Used for Live Mode scheduling and dwell timer reset.
+ */
+void channel_player_notify_swap_succeeded(void);
+
+/**
+ * @brief Notification from animation_player that swap failed
+ * 
+ * Called by animation_player if swap fails. Used for Live Mode recovery.
+ * 
+ * @param error The error code from the failed swap
+ */
+void channel_player_notify_swap_failed(esp_err_t error);
 
 #ifdef __cplusplus
 }

@@ -207,3 +207,11 @@ bool makapix_get_pending_channel(char *out_channel, size_t channel_len, char *ou
  */
 void makapix_clear_pending_channel(void);
 
+/**
+ * @brief Clear the current Makapix channel state
+ * 
+ * Call this when switching away from Makapix (e.g., to SD card) to ensure
+ * that switching back to the same Makapix channel works correctly.
+ */
+void makapix_clear_current_channel(void);
+

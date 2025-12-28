@@ -129,23 +129,18 @@ static bool check_first_boot_after_update(void)
     return needs_reboot;
 }
 
-// Dwell time:
-// - Per-item dwell is computed by channel playback (global/channel/playlist/artwork override chain).
-// - Global dwell setting exposed via HTTP is the *global override* (0 disables override).
-#define DEFAULT_DWELL_TIME_SECONDS 30
+// Phase 7: Dwell time management moved to channel_player
+// These functions now delegate to channel_player
+
 #define MAX_DWELL_TIME_SECONDS 100000
 
 #if CONFIG_P3A_MEMORY_REPORTING_ENABLE
 #define MEMORY_REPORT_INTERVAL_SECONDS 15
 #endif
 
-static TaskHandle_t s_auto_swap_task_handle = NULL;
-
 uint32_t animation_player_get_dwell_time(void)
 {
-    // Return global override in seconds (0 = disabled)
-    uint32_t ms = config_store_get_dwell_time();
-    return (uint32_t)(ms / 1000u);
+    return channel_player_get_dwell_time();
 }
 
 esp_err_t animation_player_set_dwell_time(uint32_t dwell_time)
@@ -153,119 +148,16 @@ esp_err_t animation_player_set_dwell_time(uint32_t dwell_time)
     if (dwell_time > MAX_DWELL_TIME_SECONDS) {
         return ESP_ERR_INVALID_ARG;
     }
-
+    
+    // Store in config
     esp_err_t err = config_store_set_dwell_time(dwell_time * 1000u);
     if (err != ESP_OK) return err;
     
-    // Notify auto-swap task to use new interval
-    if (s_auto_swap_task_handle) {
-        xTaskNotifyGive(s_auto_swap_task_handle);
-    }
-    
-    ESP_LOGD(TAG, "Dwell time set to %u seconds", dwell_time);
-    return ESP_OK;
+    // Update channel_player
+    return channel_player_set_dwell_time(dwell_time);
 }
 
-static uint32_t get_current_effective_dwell_ms(void)
-{
-    const sdcard_post_t *post = NULL;
-    if (channel_player_get_current_post(&post) == ESP_OK && post) {
-        if (post->dwell_time_ms > 0) return post->dwell_time_ms;
-    }
-    uint32_t global_override = config_store_get_dwell_time();
-    if (global_override > 0) return global_override;
-    return DEFAULT_DWELL_TIME_SECONDS * 1000u;
-}
-
-static void auto_swap_task(void *arg)
-{
-    (void)arg;
-    ESP_LOGD(TAG, "Auto-swap task started");
-    
-    // Wait a bit for system to initialize before first swap
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    
-    while (true) {
-        // swap_future path (precise wall-clock scheduling)
-        if (swap_future_has_pending()) {
-            swap_future_t pending_swap = {0};
-            uint64_t now_ms = live_mode_get_wall_clock_ms();
-
-            if (swap_future_is_ready(now_ms, &pending_swap)) {
-                int64_t timing_error_ms = (int64_t)now_ms - (int64_t)pending_swap.target_time_ms;
-                ESP_LOGD(TAG, "Auto-swap: Executing swap_future (timing error: %lld ms)", timing_error_ms);
-
-                esp_err_t err = swap_future_execute(&pending_swap);
-                if (err == ESP_OK) {
-                    swap_future_cancel();
-                    if (timing_error_ms < -10 || timing_error_ms > 50) {
-                        ESP_LOGW(TAG, "swap_future timing outside acceptable range: %lld ms", timing_error_ms);
-                    }
-                } else {
-                    ESP_LOGW(TAG, "Failed to execute swap_future: %s", esp_err_to_name(err));
-                    swap_future_cancel();
-                }
-                continue;
-            }
-
-            // Not ready yet: sleep until target (or until notified).
-            if (swap_future_get_pending(&pending_swap) == ESP_OK) {
-                uint64_t wait_ms = (pending_swap.target_time_ms > now_ms) ? (pending_swap.target_time_ms - now_ms) : 0;
-                TickType_t wait_ticks = pdMS_TO_TICKS((uint32_t)((wait_ms > 0xFFFFFFFFULL) ? 0xFFFFFFFFULL : wait_ms));
-                (void)ulTaskNotifyTake(pdTRUE, wait_ticks);
-                continue;
-            }
-        }
-
-        // Live Mode continuous sync: ensure next swap_future is scheduled.
-        if (channel_player_is_live_mode_active()) {
-            void *nav = channel_player_get_navigator();
-            if (nav) {
-                (void)live_mode_schedule_next_swap(nav);
-            }
-            // Loop to allow swap_future path above to pick it up.
-            (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10));
-            continue;
-        }
-        
-        // No swap_future ready, use normal dwell-based timing
-        
-        // Don't start the dwell timer until an animation is actually playing
-        // This prevents the timer from running during boot/loading phases
-        if (!animation_player_is_animation_ready()) {
-            // Wait a short time and check again
-            vTaskDelay(pdMS_TO_TICKS(500));
-            continue;
-        }
-        
-        const TickType_t delay_ticks = pdMS_TO_TICKS(get_current_effective_dwell_ms());
-        
-        // Wait for interval or notification (which resets the timer)
-        uint32_t notified = ulTaskNotifyTake(pdTRUE, delay_ticks);
-        if (notified > 0) {
-            ESP_LOGD(TAG, "Auto-swap timer reset by user interaction or dwell_time change");
-            continue;  // Timer was reset, start waiting again
-        }
-        // Timeout occurred, check if paused before performing auto-swap
-        if (app_lcd_is_animation_paused()) {
-            ESP_LOGD(TAG, "Auto-swap skipped: animation is paused");
-            continue;  // Skip auto-swap while paused
-        }
-        // Check if in UI mode (e.g., during provisioning)
-        if (animation_player_is_ui_mode()) {
-            ESP_LOGD(TAG, "Auto-swap skipped: UI mode active");
-            continue;  // Skip auto-swap during UI mode to avoid memory pressure
-        }
-        // Double-check animation is still ready (could have been unloaded during wait)
-        if (!animation_player_is_animation_ready()) {
-            ESP_LOGD(TAG, "Auto-swap skipped: no animation ready");
-            continue;
-        }
-        // Perform auto-swap
-        ESP_LOGD(TAG, "Auto-swap: cycling forward");
-        app_lcd_cycle_animation();
-    }
-}
+// Phase 7: auto_swap_task removed - timer task now in channel_player
 
 #if CONFIG_P3A_MEMORY_REPORTING_ENABLE
 /**
@@ -371,12 +263,7 @@ static void memory_report_task(void *arg)
 }
 #endif // CONFIG_P3A_MEMORY_REPORTING_ENABLE
 
-void auto_swap_reset_timer(void)
-{
-    if (s_auto_swap_task_handle != NULL) {
-        xTaskNotifyGive(s_auto_swap_task_handle);
-    }
-}
+// Phase 7: auto_swap_reset_timer removed - timer now in channel_player
 
 static void register_rest_action_handlers(void)
 {
@@ -630,14 +517,7 @@ void app_main(void)
 
     ESP_ERROR_CHECK(app_usb_init());
 
-    // Create auto-swap task.
-    // This task may call into channel playback logic (which can be stack-hungry due to logging/formatting),
-    // so keep a comfortable margin to avoid stack protection faults.
-    const BaseType_t created = xTaskCreate(auto_swap_task, "auto_swap", 8192, NULL,
-                                           tskIDLE_PRIORITY + 1, &s_auto_swap_task_handle);
-    if (created != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create auto-swap task");
-    }
+    // Phase 7: auto_swap_task removed - timer task now in channel_player
 
 #if CONFIG_P3A_MEMORY_REPORTING_ENABLE
     // Create memory reporting task

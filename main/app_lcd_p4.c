@@ -23,11 +23,11 @@
 #include "p3a_board.h"
 #include "app_lcd.h"
 #include "animation_player.h"
+#include "channel_player.h"  // Phase 4: Direct navigation calls
 #include "ugfx_ui.h"
 #include "p3a_boot_logo.h"
 
-// Forward declaration for auto-swap timer reset
-extern void auto_swap_reset_timer(void);
+// Phase 7: auto_swap_reset_timer removed - timer now in channel_player
 
 static const char *TAG = "app_lcd";
 
@@ -99,9 +99,7 @@ void app_lcd_set_animation_paused(bool paused)
 {
     bool was_paused = animation_player_is_paused();
     animation_player_set_paused(paused);
-    if (was_paused && !paused) {
-        auto_swap_reset_timer();
-    }
+    // Phase 7: Timer reset no longer needed - channel_player manages its own timer
 }
 
 void app_lcd_toggle_animation_pause(void)
@@ -114,14 +112,14 @@ bool app_lcd_is_animation_paused(void)
     return animation_player_is_paused();
 }
 
+// Phase 4: Direct call to channel_player (no deferred navigation)
 void app_lcd_cycle_animation(void)
 {
     if (animation_player_is_sd_export_locked()) {
         ESP_LOGW(TAG, "Swap ignored while SD is exported over USB");
         return;
     }
-    animation_player_cycle_animation(true);
-    auto_swap_reset_timer();
+    channel_player_swap_next();
 }
 
 void app_lcd_cycle_animation_backward(void)
@@ -130,8 +128,7 @@ void app_lcd_cycle_animation_backward(void)
         ESP_LOGW(TAG, "Swap ignored while SD is exported over USB");
         return;
     }
-    animation_player_cycle_animation(false);
-    auto_swap_reset_timer();
+    channel_player_swap_back();
 }
 
 // ============================================================================

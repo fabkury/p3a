@@ -923,6 +923,15 @@ void makapix_clear_pending_channel(void)
     s_pending_user_handle[0] = '\0';
 }
 
+void makapix_clear_current_channel(void)
+{
+    // Clear the current channel ID so we don't skip switching back to the same channel later
+    // This should be called when switching away from Makapix (e.g., to SD card)
+    s_current_channel_id[0] = '\0';
+    s_current_channel = NULL;  // Don't destroy - ownership may have been transferred
+    ESP_LOGD(MAKAPIX_TAG, "Cleared current Makapix channel state");
+}
+
 // ---------------------------------------------------------------------------
 // Transient in-memory single-artwork channel implementation
 // ---------------------------------------------------------------------------

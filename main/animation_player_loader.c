@@ -52,6 +52,8 @@ void animation_loader_mark_swap_successful(void)
     s_last_swap_was_successful = true;
 }
 
+// Simplified discard (Phase 3): No auto-retry, no navigation.
+// Just clean up state and notify channel_player of failure.
 static void discard_failed_swap_request(esp_err_t error, bool is_live_mode_swap)
 {
     bool had_swap_request = false;
@@ -69,37 +71,15 @@ static void discard_failed_swap_request(esp_err_t error, bool is_live_mode_swap)
     }
 
     if (had_swap_request) {
-        // Live Mode: recovery is handled by live_mode_recover_from_failed_swap().
-        // Here we only ensure the system is left in a clean state.
-        if (is_live_mode_swap) {
-            ESP_LOGW(TAG, "Live Mode swap failed (error: %s). Triggering recovery logic.",
-                     esp_err_to_name(error));
-            return;
-        }
-
-        // SAFEGUARD: Only auto-retry if the last operation was a successful swap
-        // This prevents infinite retry loops when encountering consecutive bad files
-        if (s_last_swap_was_successful) {
-            ESP_LOGW(TAG, "Swap failed (error: %s). Auto-retrying with next item...",
-                     esp_err_to_name(error));
-            
-            // Reset flag - if this retry also fails, we won't retry again
-            s_last_swap_was_successful = false;
-            
-            // Auto-retry: Request swap to the next item (channel already advanced by caller)
-            // This ensures we don't get stuck on corrupted/missing files
-            esp_err_t retry_err = animation_player_request_swap_current();
-            if (retry_err != ESP_OK) {
-                ESP_LOGW(TAG, "Auto-retry swap failed: %s. Will retry on next cycle.",
-                         esp_err_to_name(retry_err));
-            }
-        } else {
-            ESP_LOGW(TAG, "Swap failed (error: %s). Auto-retry blocked (previous swap was not successful).",
-                     esp_err_to_name(error));
-        }
-    } else {
-        ESP_LOGW(TAG, "Failed to load animation (error: %s). System remains responsive.",
-                 esp_err_to_name(error));
+        ESP_LOGW(TAG, "Swap failed (error: %s). Displaying error.", esp_err_to_name(error));
+        
+        // Display error message
+        char error_msg[128];
+        snprintf(error_msg, sizeof(error_msg), "Failed to load artwork: %s", esp_err_to_name(error));
+        p3a_render_set_channel_message("Playback Error", P3A_CHANNEL_MSG_ERROR, -1, error_msg);
+        
+        // Notify channel_player for Live Mode recovery if needed
+        channel_player_notify_swap_failed(error);
     }
 }
 
@@ -229,9 +209,10 @@ void animation_loader_task(void *arg)
                 err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer, 0, 0);
                 if (err != ESP_OK) {
                     ESP_LOGW(TAG, "Boot loading: Failed to load animation: %s", esp_err_to_name(err));
-                    // Try advancing to next
-                    channel_player_advance();
-                    continue;
+                    // Phase 3: No auto-advance on boot load failure
+                    // Display error and stop trying
+                    p3a_render_set_channel_message("Boot Error", P3A_CHANNEL_MSG_ERROR, -1, "Failed to load first animation");
+                    break;
                 }
                 
                 // Success - mark front buffer as ready and clear loading message
@@ -343,14 +324,11 @@ void animation_loader_task(void *arg)
                     continue;
                 }
 
-                // Manual swaps break synchronization.
-                channel_player_exit_live_mode();
-                esp_err_t adv_err = cycle_forward ? channel_player_advance() : channel_player_go_back();
-                if (adv_err != ESP_OK) {
-                    ESP_LOGW(TAG, "Deferred cycle failed: %s", esp_err_to_name(adv_err));
-                    discard_failed_swap_request(adv_err, false);
-                    continue;
-                }
+                // Phase 3: Deferred cycle logic removed - navigation now handled by channel_player
+                // This code path is deprecated and should not be reached
+                ESP_LOGW(TAG, "Deferred cycle logic deprecated - navigation should use channel_player API");
+                discard_failed_swap_request(ESP_ERR_NOT_SUPPORTED, false);
+                continue;
             }
         }
 
@@ -361,6 +339,7 @@ void animation_loader_task(void *arg)
         uint32_t start_frame = 0;
         uint64_t start_time_ms = 0;
         uint32_t live_index = 0;
+        int32_t post_id = 0;
 
         if (ov.valid) {
             filepath = ov.filepath;
@@ -369,8 +348,9 @@ void animation_loader_task(void *arg)
             start_frame = ov.start_frame;
             start_time_ms = ov.start_time_ms;
             live_index = ov.live_index;
-            ESP_LOGI(TAG, "Loader task: swap_future override load: %s (type=%d start_frame=%u start_time_ms=%llu)",
-                     filepath, (int)type, (unsigned)start_frame, (unsigned long long)start_time_ms);
+            post_id = ov.post_id;
+            ESP_LOGI(TAG, "Loader task: swap request: %s (type=%d start_frame=%u start_time_ms=%llu post_id=%d)",
+                     filepath, (int)type, (unsigned)start_frame, (unsigned long long)start_time_ms, (int)post_id);
         } else {
             // Get current post from channel player
             esp_err_t err = channel_player_get_current_post(&post);
@@ -382,6 +362,9 @@ void animation_loader_task(void *arg)
             filepath = post->filepath;
             type = post->type;
             name_for_log = post->name;
+            // sdcard_post_t has no post_id (not from Makapix); set to 0
+            // View tracker will ignore non-vault paths anyway
+            post_id = 0;
         }
 
         // If this is a normal swap request (not swap_future) and the target filepath is
@@ -426,39 +409,21 @@ void animation_loader_task(void *arg)
             
             if (is_vault_file && file_missing) {
                 // File doesn't exist - advance to next and let background refresh re-download it
-                if (!ov.valid || !ov.is_live_mode_swap) {
-                    ESP_LOGW(TAG, "Skipping missing vault file, advancing to next: %s", filepath);
-                    channel_player_advance();
-                }
+                // Phase 3: No navigation on load failure
+                ESP_LOGW(TAG, "Missing vault file: %s", filepath);
             } else if (file_missing) {
-                // Missing non-vault file (e.g., SD card): advance in non-live playback
-                if (!ov.valid || !ov.is_live_mode_swap) {
-                    ESP_LOGW(TAG, "Skipping missing file, advancing to next: %s", filepath ? filepath : "(null)");
-                    channel_player_advance();
-                }
+                // Phase 3: No navigation on load failure
+                ESP_LOGW(TAG, "Missing file: %s", filepath ? filepath : "(null)");
             } else if (is_vault_file) {
                 // File exists but failed to decode - it's corrupt
                 (void)animation_loader_try_delete_corrupt_vault_file(filepath, err);
-                // Advance past corrupt file so we don't get stuck
-                if (!ov.valid || !ov.is_live_mode_swap) {
-                    channel_player_advance();
-                }
             } else {
-                // Non-vault decode failure (e.g., SD card corrupt): advance in non-live playback
-                if (!ov.valid || !ov.is_live_mode_swap) {
-                    ESP_LOGW(TAG, "Decode failed, advancing to next: %s", filepath ? filepath : "(null)");
-                    channel_player_advance();
-                }
+                // Phase 3: No navigation on load failure
+                ESP_LOGW(TAG, "Decode failed: %s", filepath ? filepath : "(null)");
             }
+            
+            // Clean up and notify channel_player
             discard_failed_swap_request(err, ov.valid ? ov.is_live_mode_swap : false);
-
-            // Live Mode recovery: skip forward to next candidate (bounded) without stalling.
-            if (ov.valid && ov.is_live_mode_swap) {
-                void *nav = channel_player_get_navigator();
-                if (nav) {
-                    (void)live_mode_recover_from_failed_swap(nav, live_index, err);
-                }
-            }
             continue;
         }
 
@@ -467,6 +432,7 @@ void animation_loader_task(void *arg)
             s_back_buffer.ready = false;
             s_back_buffer.is_live_mode_swap = ov.valid ? ov.is_live_mode_swap : false;
             s_back_buffer.live_index = ov.valid ? live_index : 0;
+            s_back_buffer.post_id = post_id;  // For view tracking
             if (swap_was_requested) {
                 s_swap_requested = true;
                 ESP_LOGD(TAG, "Loader task: Swap was requested, will swap after prefetch");

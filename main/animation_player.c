@@ -159,21 +159,8 @@ static esp_err_t load_first_animation(void)
         return ESP_OK;
     }
 
-    ESP_LOGW(TAG, "Failed to load animation '%s', trying next...", post->name);
-    
-    err = channel_player_advance();
-    if (err == ESP_OK) {
-        err = channel_player_get_current_post(&post);
-        if (err == ESP_OK && post) {
-            load_err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer, 0, 0);
-            if (load_err == ESP_OK) {
-                ESP_LOGD(TAG, "Playing: %s", post->name);
-                playback_controller_set_animation_metadata(post->filepath, true);
-                return ESP_OK;
-            }
-        }
-    }
-
+    // Phase 3: No auto-retry on boot load failure
+    ESP_LOGW(TAG, "Failed to load animation '%s': %s", post->name, esp_err_to_name(load_err));
     return load_err;
 }
 
@@ -490,57 +477,124 @@ void animation_player_cycle_animation(bool forward)
 
 esp_err_t animation_player_request_swap_current(void)
 {
+    // Get current item from channel player to build a proper swap request
+    channel_item_ref_t item = {0};
+    esp_err_t err = channel_player_get_current_item(&item);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "No current item to swap to: %s", esp_err_to_name(err));
+        return err;
+    }
+    
+    if (item.filepath[0] == '\0') {
+        ESP_LOGW(TAG, "Current item has empty filepath");
+        return ESP_ERR_NOT_FOUND;
+    }
+    
+    // Build swap request with the current item's data
+    swap_request_t request = {0};
+    strlcpy(request.filepath, item.filepath, sizeof(request.filepath));
+    request.post_id = item.post_id;
+    request.type = ASSET_TYPE_WEBP;  // Default, will be determined by loader
+    
+    // Determine asset type from filepath extension
+    const char *ext = strrchr(item.filepath, '.');
+    if (ext) {
+        if (strcasecmp(ext, ".gif") == 0) request.type = ASSET_TYPE_GIF;
+        else if (strcasecmp(ext, ".png") == 0) request.type = ASSET_TYPE_PNG;
+        else if (strcasecmp(ext, ".jpg") == 0 || strcasecmp(ext, ".jpeg") == 0) request.type = ASSET_TYPE_JPEG;
+    }
+    
+    // Get dwell time from config
+    request.dwell_time_ms = config_store_get_dwell_time() * 1000;
+    request.is_live_mode = false;
+    request.start_frame = 0;
+    request.start_time_ms = 0;
+    
+    ESP_LOGD(TAG, "Requested swap to current: '%s' (post_id=%d)", item.filepath, item.post_id);
+    
+    // Use the new swap request API
+    return animation_player_request_swap(&request);
+}
+
+// ============================================================================
+// NEW SIMPLIFIED API (Phase 3 Refactor)
+// ============================================================================
+
+esp_err_t animation_player_request_swap(const swap_request_t *request)
+{
+    if (!request) {
+        ESP_LOGE(TAG, "Invalid swap request: NULL");
+        return ESP_ERR_INVALID_ARG;
+    }
+    
     if (display_renderer_is_ui_mode()) {
         ESP_LOGW(TAG, "Swap request ignored: UI mode active");
         return ESP_ERR_INVALID_STATE;
     }
-
+    
     if (animation_player_is_sd_export_locked()) {
         ESP_LOGW(TAG, "Swap request ignored: SD card is exported over USB");
         return ESP_ERR_INVALID_STATE;
     }
-
+    
     if (animation_player_is_sd_paused()) {
         ESP_LOGW(TAG, "Swap request ignored: SD access paused for OTA");
         return ESP_ERR_INVALID_STATE;
     }
-
-    // Check if SDIO bus is locked (e.g., by OTA check/download)
-    // Discard swap to prevent concurrent SD card access during WiFi operations
+    
     if (sdio_bus_is_locked()) {
         ESP_LOGW(TAG, "Swap request ignored: SDIO bus locked by %s", 
                  sdio_bus_get_holder() ? sdio_bus_get_holder() : "unknown");
         return ESP_ERR_INVALID_STATE;
     }
-
-    if (channel_player_get_post_count() == 0) {
-        ESP_LOGW(TAG, "No animations available to swap");
-        return ESP_ERR_NOT_FOUND;
-    }
-
+    
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
         if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
             ESP_LOGW(TAG, "Swap request ignored: swap already in progress");
             xSemaphoreGive(s_buffer_mutex);
             return ESP_ERR_INVALID_STATE;
         }
-
-        // Don't advance - just request swap to current item
+        
+        // Set up load override with validated swap request data
+        memset(&s_load_override, 0, sizeof(s_load_override));
+        s_load_override.valid = true;
+        s_load_override.is_live_mode_swap = request->is_live_mode;
+        s_load_override.start_frame = request->start_frame;
+        s_load_override.start_time_ms = request->start_time_ms;
+        s_load_override.type = request->type;
+        s_load_override.post_id = request->post_id;
+        strlcpy(s_load_override.filepath, request->filepath, sizeof(s_load_override.filepath));
+        
         s_swap_requested = true;
         xSemaphoreGive(s_buffer_mutex);
-
+        
         if (s_loader_sem) {
             xSemaphoreGive(s_loader_sem);
         }
-
-        const sdcard_post_t *post = NULL;
-        if (channel_player_get_current_post(&post) == ESP_OK && post) {
-            ESP_LOGD(TAG, "Requested swap to current: '%s'", post->name);
-        }
+        
+        ESP_LOGD(TAG, "Swap request accepted: %s (post_id=%d)", 
+                 request->filepath, request->post_id);
         return ESP_OK;
     }
+    
     return ESP_FAIL;
 }
+
+void animation_player_display_message(const char *title, const char *body)
+{
+    if (!body) return;
+    
+    p3a_render_set_channel_message(
+        title ? title : "Info",
+        P3A_CHANNEL_MSG_ERROR,  // Use ERROR type for visibility
+        -1,  // No timeout
+        body
+    );
+    
+    ESP_LOGI(TAG, "Displaying message: %s - %s", title, body);
+}
+
+// ============================================================================
 
 esp_err_t swap_future_execute(const swap_future_t *swap)
 {
@@ -584,6 +638,7 @@ esp_err_t swap_future_execute(const swap_future_t *swap)
         s_load_override.start_time_ms = swap->start_time_ms;
         s_load_override.is_live_mode_swap = swap->is_live_mode_swap;
         s_load_override.live_index = swap->live_index;
+        s_load_override.post_id = swap->artwork.post_id;
 
         s_swap_requested = true;
         xSemaphoreGive(s_buffer_mutex);

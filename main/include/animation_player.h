@@ -11,6 +11,10 @@
 extern "C" {
 #endif
 
+// Forward declaration - full definition in channel_player.h
+struct swap_request_s;
+typedef struct swap_request_s swap_request_t;
+
 /**
  * @brief Enter UI mode - animation task will call UI render function instead of animation
  * 
@@ -44,7 +48,50 @@ esp_err_t animation_player_load_asset(const char *filepath);
 void animation_player_set_paused(bool paused);
 void animation_player_toggle_pause(void);
 bool animation_player_is_paused(void);
+
+// ============================================================================
+// NEW SIMPLIFIED API (Phase 1 Refactor)
+// ============================================================================
+
+/**
+ * @brief Request a validated swap to a specific artwork
+ * 
+ * This is the new simplified API. animation_player acts as a naive renderer
+ * that either succeeds in the transition or displays an error message.
+ * NO navigation logic, NO auto-retry, NO skipping.
+ * 
+ * @param request Pre-validated swap request from channel_player
+ * @return ESP_OK if swap request accepted
+ *         ESP_ERR_INVALID_STATE if swap already in progress
+ */
+esp_err_t animation_player_request_swap(const swap_request_t *request);
+
+/**
+ * @brief Display a message overlaid on the screen
+ * 
+ * Used to show error messages or channel status without clearing
+ * the currently displayed artwork.
+ * 
+ * @param title Message title (NULL for no title)
+ * @param body Message body
+ */
+void animation_player_display_message(const char *title, const char *body);
+
+// ============================================================================
+// DEPRECATED API (to be removed after refactor)
+// ============================================================================
+
+/**
+ * @deprecated Use channel_player_swap_next/swap_back instead
+ */
 void animation_player_cycle_animation(bool forward);
+
+/**
+ * @deprecated Use channel_player_switch_channel instead
+ */
+esp_err_t animation_player_request_swap_current(void);
+
+// ============================================================================
 
 esp_err_t animation_player_start(void);
 void animation_player_deinit(void);

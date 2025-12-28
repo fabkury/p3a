@@ -26,15 +26,16 @@ esp_err_t view_tracker_init(void);
 void view_tracker_deinit(void);
 
 /**
- * @brief Signal that a buffer swap occurred (ZERO STACK USAGE)
+ * @brief Signal that a buffer swap occurred with artwork info
  * 
- * Call this from the render task after a buffer swap. This function does
- * ZERO stack allocation and NO function calls - it just sets atomic flags.
- * The view tracker task will poll for changes and handle them.
+ * Call this from the render task after a buffer swap. The post_id and filepath
+ * are captured at swap time to ensure correct view tracking even if the channel
+ * navigator advances before the view tracker processes the event.
  * 
- * This must be called from the render callback BEFORE any filepath becomes invalid.
+ * @param post_id   The post ID of the artwork now playing (0 to stop tracking)
+ * @param filepath  The filepath of the artwork now playing (NULL to stop tracking)
  */
-void view_tracker_signal_swap(void);
+void view_tracker_signal_swap(int32_t post_id, const char *filepath);
 
 /**
  * @brief Stop tracking views

@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include "esp_err.h"
 #include "playlist_manager.h"  // artwork_ref_t
+#include "play_navigator.h"    // play_navigator_t
 
 #ifdef __cplusplus
 extern "C" {

@@ -25,8 +25,14 @@ static const char *TAG = "view_tracker";
 #define VIEW_TRIGGER_SECONDS 5
 #define VIEW_RESET_SECONDS 30
 
-// Atomic flag for swap notification (set by render task, cleared by view tracker task)
-static volatile uint32_t s_swap_pending = 0;
+// Pending swap info (set by render task, consumed by view tracker task)
+typedef struct {
+    volatile uint32_t pending;
+    int32_t post_id;
+    char filepath[256];
+} pending_swap_t;
+
+static pending_swap_t s_pending_swap = {0};
 
 // State structure
 typedef struct {
@@ -62,7 +68,7 @@ esp_err_t view_tracker_init(void)
     }
     
     memset(&s_state, 0, sizeof(s_state));
-    s_swap_pending = 0;
+    memset(&s_pending_swap, 0, sizeof(s_pending_swap));
     
     // Create dedicated task for processing (6KB stack - enough for channel_player, MQTT/JSON/logging)
     BaseType_t task_created = xTaskCreate(
@@ -122,12 +128,18 @@ void view_tracker_deinit(void)
     ESP_LOGI(TAG, "View tracker deinitialized");
 }
 
-void view_tracker_signal_swap(void)
+void view_tracker_signal_swap(int32_t post_id, const char *filepath)
 {
-    // CRITICAL: This function is called from the render task
-    // It must use ZERO stack and make NO function calls that could use stack
-    // Just set an atomic flag - the view tracker task will handle the rest
-    Atomic_CompareAndSwap_u32(&s_swap_pending, 0, 1);
+    // Store the swap info for the view tracker task to process
+    // This captures the post_id and filepath at swap time, before the navigator can advance
+    s_pending_swap.post_id = post_id;
+    if (filepath) {
+        strlcpy(s_pending_swap.filepath, filepath, sizeof(s_pending_swap.filepath));
+    } else {
+        s_pending_swap.filepath[0] = '\0';
+    }
+    // Signal that a swap is pending (memory barrier to ensure data is visible)
+    __atomic_store_n(&s_pending_swap.pending, 1, __ATOMIC_RELEASE);
 }
 
 void view_tracker_stop(void)
@@ -184,7 +196,7 @@ static void view_tracker_task(void *pvParameters)
     
     while (1) {
         // Check for swap event (poll the atomic flag)
-        uint32_t swap_was_pending = Atomic_CompareAndSwap_u32(&s_swap_pending, 1, 0);
+        uint32_t swap_was_pending = __atomic_exchange_n(&s_pending_swap.pending, 0, __ATOMIC_ACQUIRE);
         if (swap_was_pending == 1) {
             // A swap occurred - process it with our own stack
             process_swap_event();
@@ -200,20 +212,20 @@ static void view_tracker_task(void *pvParameters)
 
 static void process_swap_event(void)
 {
-    // Now safe to do all the heavy work - we're in our own task with 4KB stack
+    // Read the swap info that was captured at swap time
+    int32_t post_id = s_pending_swap.post_id;
+    char filepath[256];
+    strlcpy(filepath, s_pending_swap.filepath, sizeof(filepath));
     
-    // Get current item from channel player
-    channel_item_ref_t current_item = {0};
-    esp_err_t err = channel_player_get_current_item(&current_item);
-    
-    if (err != ESP_OK || current_item.post_id <= 0) {
-        ESP_LOGD(TAG, "No valid post_id for current item");
+    // Check for valid post_id
+    if (post_id <= 0) {
+        ESP_LOGD(TAG, "No valid post_id for swapped artwork");
         view_tracker_stop();
         return;
     }
     
     // Check if this is a Makapix artwork (filepath contains /vault/)
-    if (strstr(current_item.filepath, "/vault/") == NULL) {
+    if (strstr(filepath, "/vault/") == NULL) {
         ESP_LOGD(TAG, "Not a Makapix artwork, stopping tracker");
         view_tracker_stop();
         return;
@@ -224,27 +236,26 @@ static void process_swap_event(void)
     
     // Check if this is a redundant change (same artwork)
     if (s_state.tracking_active && 
-        s_state.current_post_id == current_item.post_id &&
-        strcmp(s_state.current_filepath, current_item.filepath) == 0) {
+        s_state.current_post_id == post_id &&
+        strcmp(s_state.current_filepath, filepath) == 0) {
         ESP_LOGD(TAG, "Redundant animation change detected, not resetting timer");
         return;
     }
     
     // New animation - update state and restart timer
-    s_state.current_post_id = current_item.post_id;
+    s_state.current_post_id = post_id;
     s_state.is_intentional = is_intentional;
     s_state.elapsed_seconds = 0;
     s_state.tracking_active = true;
     
-    strncpy(s_state.current_filepath, current_item.filepath, sizeof(s_state.current_filepath) - 1);
-    s_state.current_filepath[sizeof(s_state.current_filepath) - 1] = '\0';
+    strlcpy(s_state.current_filepath, filepath, sizeof(s_state.current_filepath));
     
     // Restart timer
     xTimerStop(s_state.timer, 0);
     xTimerStart(s_state.timer, 0);
     
     ESP_LOGI(TAG, "Started tracking post_id=%" PRId32 ", intent=%s", 
-             current_item.post_id, is_intentional ? "artwork" : "channel");
+             post_id, is_intentional ? "artwork" : "channel");
 }
 
 static void send_view_event(void)

@@ -497,16 +497,10 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
                 xSemaphoreGive(s_buffer_mutex);
             }
 
-            if (was_live) {
-                void *nav = channel_player_get_navigator();
-                if (nav) {
-                    (void)live_mode_recover_from_failed_swap(nav, failed_live_idx, prefetch_err);
-                }
-            } else {
-                // Non-live swap: advance and retry to avoid stalling.
-                (void)channel_player_advance();
-                (void)animation_player_request_swap_current();
-            }
+            // Phase 3: No auto-retry or navigation on prefetch failure
+            // Just notify channel_player
+            ESP_LOGW(TAG, "Prefetch failed: %s", esp_err_to_name(prefetch_err));
+            channel_player_notify_swap_failed(prefetch_err);
         }
     }
 
@@ -552,11 +546,15 @@ skip_prefetch:
             }
             xSemaphoreGive(s_buffer_mutex);
             
-            ESP_LOGI(TAG, "Buffers swapped: front now playing index %zu", s_front_buffer.asset_index);
+            ESP_LOGI(TAG, "Buffers swapped: now playing %s", 
+                     s_front_buffer.filepath ? s_front_buffer.filepath : "(unknown)");
 
             if (s_front_buffer.is_live_mode_swap) {
                 live_mode_notify_swap_succeeded(s_front_buffer.live_index);
             }
+            
+            // Notify channel_player that swap succeeded (resets dwell timer)
+            channel_player_notify_swap_succeeded();
             
             // Mark successful swap for auto-retry safeguard
             animation_loader_mark_swap_successful();
@@ -566,9 +564,8 @@ skip_prefetch:
                 playback_controller_set_animation_metadata(s_front_buffer.filepath, true);
             }
             
-            // Signal view tracker that a swap occurred (ZERO STACK USAGE)
-            // The view tracker task will poll for this signal and gather all needed data
-            view_tracker_signal_swap();
+            // Signal view tracker with the artwork info captured at swap time
+            view_tracker_signal_swap(s_front_buffer.post_id, s_front_buffer.filepath);
         }
         s_use_prefetched = true;
     }

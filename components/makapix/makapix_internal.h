@@ -23,6 +23,7 @@
 #include "sd_path.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
@@ -40,7 +41,8 @@ esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *mes
 void ugfx_ui_hide_channel_message(void);
 esp_err_t channel_player_switch_to_makapix_channel(channel_handle_t makapix_channel);
 esp_err_t channel_player_switch_to_sdcard_channel(void);
-esp_err_t animation_player_request_swap_current(void);
+esp_err_t animation_player_request_swap_current(void);  // Deprecated
+esp_err_t channel_player_swap_to(uint32_t p, uint32_t q);  // Use this instead
 void channel_player_clear_channel(channel_handle_t channel_to_clear);
 
 // Shared TAG for logging

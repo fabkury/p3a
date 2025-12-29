@@ -318,3 +318,43 @@ void makapix_channel_clear_downloads_needed(void)
     xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_DOWNLOADS_NEEDED);
 }
 
+void makapix_channel_signal_file_available(void)
+{
+    if (!s_mqtt_event_group) {
+        ESP_LOGW(TAG, "Event group not initialized");
+        return;
+    }
+    
+    ESP_LOGD(TAG, "Signaling file available - waking waiting tasks");
+    xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_FILE_AVAILABLE);
+}
+
+bool makapix_channel_wait_for_file_available(uint32_t timeout_ms)
+{
+    if (!s_mqtt_event_group) {
+        ESP_LOGE(TAG, "Event group not initialized");
+        return false;
+    }
+    
+    // Wait for either file_available or refresh_done (which may add new files)
+    TickType_t timeout_ticks = (timeout_ms == portMAX_DELAY) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
+    EventBits_t bits = xEventGroupWaitBits(
+        s_mqtt_event_group,
+        MAKAPIX_EVENT_FILE_AVAILABLE | MAKAPIX_EVENT_REFRESH_DONE,
+        pdFALSE,  // Don't clear on exit - let caller handle state
+        pdFALSE,  // Wait for any bit
+        timeout_ticks
+    );
+    
+    return (bits & (MAKAPIX_EVENT_FILE_AVAILABLE | MAKAPIX_EVENT_REFRESH_DONE)) != 0;
+}
+
+void makapix_channel_clear_file_available(void)
+{
+    if (!s_mqtt_event_group) {
+        return;
+    }
+    
+    xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_FILE_AVAILABLE);
+}
+

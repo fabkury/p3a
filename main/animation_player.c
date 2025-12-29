@@ -17,6 +17,7 @@
 #include "p3a_render.h"
 #include "display_renderer.h"
 #include "makapix_channel_events.h"
+#include "fresh_boot.h"
 
 // Animation player state
 animation_buffer_t s_front_buffer = {0};
@@ -106,6 +107,12 @@ static esp_err_t mount_sd_and_discover(char **animations_dir_out)
             return sd_err;
         }
         s_sd_mounted = true;
+
+#if CONFIG_P3A_FORCE_FRESH_SDCARD
+        // Debug: Erase SD card p3a directory to simulate fresh boot
+        ESP_LOGW(TAG, "CONFIG_P3A_FORCE_FRESH_SDCARD enabled - erasing /sdcard/p3a");
+        fresh_boot_erase_sdcard();
+#endif
     }
 
     // Initialize SD path module (loads configured root from NVS)
@@ -140,29 +147,8 @@ static esp_err_t mount_sd_and_discover(char **animations_dir_out)
     return ESP_OK;
 }
 
-static esp_err_t load_first_animation(void)
-{
-    const sdcard_post_t *post = NULL;
-    esp_err_t err = channel_player_get_current_post(&post);
-    if (err != ESP_OK || !post) {
-        ESP_LOGE(TAG, "No current post available from channel player");
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    esp_err_t load_err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer, 0, 0);
-    if (load_err == ESP_OK) {
-        ESP_LOGD(TAG, "Playing: %s", post->name);
-        
-        // Update playback controller with metadata
-        playback_controller_set_animation_metadata(post->filepath, true);
-        
-        return ESP_OK;
-    }
-
-    // Phase 3: No auto-retry on boot load failure
-    ESP_LOGW(TAG, "Failed to load animation '%s': %s", post->name, esp_err_to_name(load_err));
-    return load_err;
-}
+// NOTE: load_first_animation() was removed. Boot playback now uses swap_to(0, 0)
+// which goes through the proper swap mechanism.
 
 esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
                                  uint8_t **lcd_buffers,
@@ -354,42 +340,33 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     (void)p3a_render_init();
     display_renderer_set_frame_callback(animation_player_render_dispatch_cb, NULL);
 
-    err = load_first_animation();
-    if (err != ESP_OK) {
-        // No animation available yet - this is OK for Makapix channels
-        // where files may not be downloaded yet. Show loading message
-        // and continue initialization. The loader task will pick up
-        // animations as they become available.
-        ESP_LOGW(TAG, "No initial animation available: %s (will wait for downloads)", esp_err_to_name(err));
-        
-        // Show a state-aware message even when no animation is available.
-        // IMPORTANT: On some devices, UI text historically only appeared after one animation loaded.
-        // The fix is to ensure we keep the render pipeline alive and always set an explicit channel message.
-        channel_player_source_t src = channel_player_get_source_type();
-        if (src == CHANNEL_PLAYER_SOURCE_SDCARD) {
+    // NOTE: We no longer call load_first_animation() here.
+    // Instead, we'll call swap_to(0, 0) after the loader task starts.
+    // This ensures the swap mechanism is properly used, which:
+    // 1. Goes through the proper swap flow (back buffer → prefetch → swap)
+    // 2. Starts the auto-swap timer correctly
+    // 3. Shows appropriate loading messages if no files available
+    
+    // Show initial loading message based on channel type
+    channel_player_source_t src = channel_player_get_source_type();
+    if (src == CHANNEL_PLAYER_SOURCE_SDCARD) {
+        if (channel_player_get_post_count() == 0) {
             // Empty SD card boot: show "no artworks" and hint for provisioning
             p3a_render_set_channel_message("microSD card", P3A_CHANNEL_MSG_EMPTY, -1,
-                                           "No artworks found on microSD card.\nLong-press to register.");
-        } else {
-            // Makapix boot: show connecting/loading
+                                           "No artworks found on microSD card.\nLong-press to configure Wi-Fi and register.");
+        }
+    } else {
+        // Makapix boot: show connecting/loading (channel may be populated after MQTT connects)
+        if (channel_player_get_post_count() == 0) {
             p3a_render_set_channel_message("Makapix Club", P3A_CHANNEL_MSG_LOADING, -1,
                                            "Connecting to Makapix Club...");
         }
-        
-        // Mark front buffer as not ready - will be loaded by loader task
-        s_front_buffer.ready = false;
-        s_front_buffer.prefetch_pending = false;
-        s_front_buffer.prefetch_in_progress = false;
-    } else {
-        esp_err_t prefetch_err = prefetch_first_frame(&s_front_buffer);
-        if (prefetch_err != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to prefetch first frame during init: %s", esp_err_to_name(prefetch_err));
-        }
-
-        s_front_buffer.ready = true;
-        s_front_buffer.prefetch_pending = false;
-        s_front_buffer.prefetch_in_progress = false;
     }
+    
+    // Mark front buffer as not ready - will be loaded by swap_to(0, 0) after loader starts
+    s_front_buffer.ready = false;
+    s_front_buffer.prefetch_pending = false;
+    s_front_buffer.prefetch_in_progress = false;
 
     if (xTaskCreate(animation_loader_task,
                     "anim_loader",
@@ -409,6 +386,18 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         playback_controller_deinit();
         display_renderer_deinit();
         return ESP_FAIL;
+    }
+
+    // Try to start playback at position (0, 0).
+    // If there are available files, this will load the first one.
+    // If no files available, this will fail but that's OK - the loading
+    // message is already displayed and files will load once available.
+    if (channel_player_get_post_count() > 0) {
+        esp_err_t swap_err = channel_player_swap_to(0, 0);
+        if (swap_err != ESP_OK) {
+            ESP_LOGW(TAG, "Initial swap_to(0,0) failed: %s (may need downloads)", 
+                     esp_err_to_name(swap_err));
+        }
     }
 
     return ESP_OK;

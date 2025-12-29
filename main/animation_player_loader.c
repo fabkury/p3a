@@ -184,54 +184,10 @@ void animation_loader_task(void *arg)
                 continue;
             }
             
-            // Handle boot case: front buffer needs loading (no initial animation was available)
-            if (front_buffer_needs_loading && !swap_was_requested) {
-                xSemaphoreGive(s_buffer_mutex);
-                
-                // Try to load the first available animation into the front buffer
-                const sdcard_post_t *post = NULL;
-                esp_err_t err = channel_player_get_current_post(&post);
-                if (err != ESP_OK || !post || !post->filepath) {
-                    // No post available yet - keep waiting
-                    continue;
-                }
-                
-                // Check if file exists
-                struct stat st;
-                if (stat(post->filepath, &st) != 0) {
-                    // File doesn't exist yet - keep waiting for downloads
-                    continue;
-                }
-                
-                ESP_LOGI(TAG, "Boot loading: Found available animation: %s", post->filepath);
-                
-                // Load directly into front buffer
-                err = load_animation_into_buffer(post->filepath, post->type, &s_front_buffer, 0, 0);
-                if (err != ESP_OK) {
-                    ESP_LOGW(TAG, "Boot loading: Failed to load animation: %s", esp_err_to_name(err));
-                    // Phase 3: No auto-advance on boot load failure
-                    // Display error and stop trying
-                    p3a_render_set_channel_message("Boot Error", P3A_CHANNEL_MSG_ERROR, -1, "Failed to load first animation");
-                    break;
-                }
-                
-                // Success - mark front buffer as ready and clear loading message
-                if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-                    s_front_buffer.ready = true;
-                    xSemaphoreGive(s_buffer_mutex);
-                }
-                
-                ESP_LOGI(TAG, "Boot loading: First animation loaded successfully, clearing loading message");
-                p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
-                
-                // Prefetch first frame
-                esp_err_t prefetch_err = prefetch_first_frame(&s_front_buffer);
-                if (prefetch_err != ESP_OK) {
-                    ESP_LOGW(TAG, "Boot loading: Failed to prefetch first frame: %s", esp_err_to_name(prefetch_err));
-                }
-                
-                continue;
-            }
+            // NOTE: Boot loading was removed. The channel system now uses swap_to(0, 0)
+            // to initiate playback through the standard swap mechanism. This ensures
+            // the channel state is properly initialized and the auto-swap timer starts
+            // correctly after the first real swap.
             
             // Skip loading if in UI mode and not triggered by exit_ui_mode
             if (display_renderer_is_ui_mode() && !swap_was_requested) {
@@ -351,12 +307,12 @@ void animation_loader_task(void *arg)
             post_id = ov.post_id;
             ESP_LOGI(TAG, "Loader task: swap request: %s (type=%d start_frame=%u start_time_ms=%llu post_id=%d)",
                      filepath, (int)type, (unsigned)start_frame, (unsigned long long)start_time_ms, (int)post_id);
-        } else {
-            // Get current post from channel player
+        } else if (swap_was_requested) {
+            // Get current post from channel player only if an actual swap was requested
             esp_err_t err = channel_player_get_current_post(&post);
             if (err != ESP_OK || !post) {
                 ESP_LOGE(TAG, "Loader task: No current post available");
-            discard_failed_swap_request(ESP_ERR_NOT_FOUND, false);
+                discard_failed_swap_request(ESP_ERR_NOT_FOUND, false);
                 continue;
             }
             filepath = post->filepath;
@@ -365,6 +321,15 @@ void animation_loader_task(void *arg)
             // sdcard_post_t has no post_id (not from Makapix); set to 0
             // View tracker will ignore non-vault paths anyway
             post_id = 0;
+        } else {
+            // No swap request and no override - nothing to do
+            // This handles the case where we woke up due to timeout while waiting
+            // for the channel to become ready. Just mark as not busy and continue.
+            if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+                s_loader_busy = false;
+                xSemaphoreGive(s_buffer_mutex);
+            }
+            continue;
         }
 
         // If this is a normal swap request (not swap_future) and the target filepath is

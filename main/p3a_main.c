@@ -38,6 +38,7 @@
 #include "p3a_render.h"        // State-aware rendering
 #include "swap_future.h"       // Live Mode swap_future
 #include "live_mode.h"         // Live Mode time helpers
+#include "fresh_boot.h"        // Fresh boot debug helpers
 #include "freertos/task.h"
 
 // NVS namespace and keys for tracking firmware versions across boots
@@ -451,6 +452,12 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
+#if CONFIG_P3A_FORCE_FRESH_NVS
+    // Debug: Erase p3a NVS namespaces to simulate fresh boot
+    ESP_LOGW(TAG, "CONFIG_P3A_FORCE_FRESH_NVS enabled - erasing p3a NVS namespaces");
+    fresh_boot_erase_nvs();
+#endif
+
     // Set timezone to UTC for Live Mode synchronization
     setenv("TZ", "UTC", 1);
     tzset();
@@ -529,7 +536,14 @@ void app_main(void)
 #endif // CONFIG_P3A_MEMORY_REPORTING_ENABLE
 
     // Check if this is first boot after firmware update
+    // Skip this check when FORCE_FRESH_NVS is enabled, as we intentionally erased
+    // the p3a_boot namespace and don't want an infinite reboot loop
+#if CONFIG_P3A_FORCE_FRESH_NVS
+    bool needs_stabilization_reboot = false;
+    ESP_LOGW(TAG, "Skipping stabilization reboot check (CONFIG_P3A_FORCE_FRESH_NVS enabled)");
+#else
     bool needs_stabilization_reboot = check_first_boot_after_update();
+#endif
     
     // Initialize Wi-Fi (will start captive portal if needed, or connect to saved network)
     ESP_ERROR_CHECK(app_wifi_init(register_rest_action_handlers));

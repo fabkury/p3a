@@ -554,14 +554,26 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
             p3a_render_set_channel_message(ui_title, P3A_CHANNEL_MSG_DOWNLOADING, -1, loading_message);
         }
         
-        // Wait for FIRST artwork to become available (not the full batch)
-        // This is much faster than waiting for all 32
+        // Wait for FIRST artwork to become available using polling approach
+        // We poll every 500ms to check for available files and update UI every 2 seconds
         const int MAX_WAIT_MS = 60000;
-        int waited_ms = 0;
+        const int POLL_INTERVAL_MS = 500;
+        const int UI_UPDATE_INTERVAL_MS = 2000;
+        int64_t start_time = esp_timer_get_time() / 1000;  // Convert to ms
+        int64_t last_ui_update = 0;
         bool aborted = false;
         bool got_artwork = false;
         
-        while (waited_ms < MAX_WAIT_MS && !aborted && !got_artwork) {
+        while (!aborted && !got_artwork) {
+            int64_t now = esp_timer_get_time() / 1000;
+            int64_t elapsed_ms = now - start_time;
+            
+            // Check timeout
+            if (elapsed_ms >= MAX_WAIT_MS) {
+                ESP_LOGW(MAKAPIX_TAG, "Timed out waiting for first artwork after %lld ms", (long long)elapsed_ms);
+                break;
+            }
+            
             // Check for abort signal first for responsiveness
             if (s_channel_load_abort || s_has_pending_channel) {
                 ESP_LOGD(MAKAPIX_TAG, "Channel load aborted by new request");
@@ -569,11 +581,7 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
                 break;
             }
             
-            vTaskDelay(pdMS_TO_TICKS(100));
-            waited_ms += 100;
-            
-            // Re-check available count (files are being downloaded in background)
-            size_t new_available = 0;
+            // Check for available artwork
             size_t new_post_count = channel_get_post_count(s_current_channel);
             for (size_t i = 0; i < new_post_count && !got_artwork; i++) {
                 channel_post_t post = {0};
@@ -581,8 +589,8 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
                     if (post.kind == CHANNEL_POST_KIND_ARTWORK) {
                         struct stat st;
                         if (stat(post.u.artwork.filepath, &st) == 0) {
-                            new_available++;
                             got_artwork = true;  // Found one! Can start playback
+                            ESP_LOGI(MAKAPIX_TAG, "First artwork available after %lld ms", (long long)elapsed_ms);
                         }
                     }
                 }
@@ -592,15 +600,14 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
                 break;
             }
             
-            // Update loading message every 2 seconds
-            if (waited_ms % 2000 == 0) {
-                
-                // Re-check if index was populated (refresh may have completed)
+            // Update loading message every UI_UPDATE_INTERVAL_MS
+            if (elapsed_ms - last_ui_update >= UI_UPDATE_INTERVAL_MS) {
+                last_ui_update = elapsed_ms;
                 size_t current_total = channel_get_post_count(s_current_channel);
                 char msg[64];
                 int msg_type;
                 if (current_total == 0) {
-                    snprintf(msg, sizeof(msg), "Updating index... (%d sec)", waited_ms / 1000);
+                    snprintf(msg, sizeof(msg), "Updating index... (%lld sec)", (long long)(elapsed_ms / 1000));
                     msg_type = P3A_CHANNEL_MSG_LOADING;
                 } else {
                     // Check if download is actively happening
@@ -614,6 +621,9 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
                 ugfx_ui_show_channel_message(ui_title, msg, -1);
                 p3a_render_set_channel_message(ui_title, msg_type, -1, msg);
             }
+            
+            // Wait a bit before checking again
+            vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
         }
         
         // Clear loading message
@@ -716,13 +726,15 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         // Continue anyway - channel was created
     }
     
-    // Trigger the animation player to load the first artwork
-    err = animation_player_request_swap_current();
+    // Start playback at position (0, 0) using the standard swap mechanism
+    // This goes through the proper flow: prepares swap request → loads to back buffer → swaps
+    // The auto-swap timer starts automatically after the first successful swap
+    err = channel_player_swap_to(0, 0);
     if (err != ESP_OK) {
-        ESP_LOGW(MAKAPIX_TAG, "Failed to trigger initial animation swap: %s", esp_err_to_name(err));
+        ESP_LOGW(MAKAPIX_TAG, "Failed to initiate playback swap: %s", esp_err_to_name(err));
     }
     
-    ESP_LOGD(MAKAPIX_TAG, "Channel %s ready", channel_name);
+    ESP_LOGD(MAKAPIX_TAG, "Channel %s ready, playback initiated", channel_name);
     
     // Clear loading state - playback started
     s_channel_loading = false;
@@ -795,10 +807,10 @@ esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const c
         ESP_LOGE(MAKAPIX_TAG, "Failed to switch channel player source: %s", esp_err_to_name(err));
     }
     
-    // Trigger the animation player to load the artwork
-    err = animation_player_request_swap_current();
+    // Start playback at position (0, 0) using the standard swap mechanism
+    err = channel_player_swap_to(0, 0);
     if (err != ESP_OK) {
-        ESP_LOGW(MAKAPIX_TAG, "Failed to trigger animation swap: %s", esp_err_to_name(err));
+        ESP_LOGW(MAKAPIX_TAG, "Failed to initiate artwork swap: %s", esp_err_to_name(err));
     }
     
     ESP_LOGD(MAKAPIX_TAG, "Transient artwork channel created and started");

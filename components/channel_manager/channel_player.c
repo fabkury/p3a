@@ -438,7 +438,7 @@ static esp_err_t prepare_swap_request(swap_request_t *out)
     
     // Check file exists
     if (!file_exists(artwork.filepath)) {
-        ESP_LOGW(TAG, "Artwork file does not exist: %s", artwork.filepath);
+        // Don't log here - the caller will log a summary
         return ESP_ERR_NOT_FOUND;
     }
     
@@ -602,15 +602,29 @@ esp_err_t channel_player_swap_next(void)
     
     if (err == ESP_ERR_NOT_FOUND) {
         // File doesn't exist - try to find next available artwork
-        ESP_LOGW(TAG, "Current artwork not available, searching for next valid one");
+        // Limit: 2x the channel size to prevent infinite loops while allowing full channel scan
+        size_t max_attempts = s_player.order_count * 2;
+        if (max_attempts > 200) max_attempts = 200;
+        if (max_attempts == 0) max_attempts = 1;  // Safety: allow at least 1 attempt
         
-        // Try up to order_count times to find a valid file
-        for (size_t attempt = 0; attempt < s_player.order_count && attempt < 100; attempt++) {
+        size_t skips = 0;
+        for (size_t attempt = 0; attempt < max_attempts; attempt++) {
             err = navigate_next_internal();
             if (err != ESP_OK) break;
             
             err = prepare_swap_request(&request);
-            if (err == ESP_OK) break;  // Found a valid one
+            if (err == ESP_OK) {
+                // Found a valid one
+                if (skips > 0) {
+                    ESP_LOGI(TAG, "Found available artwork after skipping %zu unavailable file(s)", skips);
+                }
+                break;
+            }
+            skips++;
+        }
+        
+        if (err != ESP_OK && skips > 0) {
+            ESP_LOGW(TAG, "No available artwork found after scanning %zu positions", skips);
         }
     }
     
@@ -669,14 +683,29 @@ esp_err_t channel_player_swap_back(void)
     
     if (err == ESP_ERR_NOT_FOUND) {
         // File doesn't exist - try to find previous available artwork
-        ESP_LOGW(TAG, "Current artwork not available, searching for previous valid one");
+        // Limit: 2x the channel size to prevent infinite loops while allowing full channel scan
+        size_t max_attempts = s_player.order_count * 2;
+        if (max_attempts > 200) max_attempts = 200;
+        if (max_attempts == 0) max_attempts = 1;  // Safety: allow at least 1 attempt
         
-        for (size_t attempt = 0; attempt < s_player.order_count && attempt < 100; attempt++) {
+        size_t skips = 0;
+        for (size_t attempt = 0; attempt < max_attempts; attempt++) {
             err = navigate_prev_internal();
             if (err != ESP_OK) break;
             
             err = prepare_swap_request(&request);
-            if (err == ESP_OK) break;
+            if (err == ESP_OK) {
+                // Found a valid one
+                if (skips > 0) {
+                    ESP_LOGI(TAG, "Found available artwork after skipping %zu unavailable file(s) backwards", skips);
+                }
+                break;
+            }
+            skips++;
+        }
+        
+        if (err != ESP_OK && skips > 0) {
+            ESP_LOGW(TAG, "No available artwork found after scanning %zu positions backwards", skips);
         }
     }
     
@@ -695,6 +724,97 @@ esp_err_t channel_player_swap_back(void)
     xSemaphoreGive(s_player.command_mutex);
     
     return ESP_OK;
+}
+
+esp_err_t channel_player_swap_to(uint32_t p, uint32_t q)
+{
+    if (!s_player.initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    if (!s_player.current_channel) {
+        ESP_LOGE(TAG, "swap_to: No channel loaded");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // If order_count is 0, try to rebuild (channel may have been populated since last check)
+    if (s_player.order_count == 0) {
+        rebuild_order();
+        if (s_player.order_count == 0) {
+            ESP_LOGD(TAG, "swap_to: Channel still empty after rebuild (order_count=0)");
+            return ESP_ERR_NOT_FOUND;
+        }
+        ESP_LOGI(TAG, "swap_to: Rebuilt order, now have %zu items", s_player.order_count);
+    }
+    
+    if (xSemaphoreTake(s_player.command_mutex, 0) != pdTRUE) {
+        ESP_LOGD(TAG, "Command already in progress, ignoring swap_to");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    s_player.command_active = true;
+    
+    // Exit Live Mode on explicit swap_to
+    if (s_player.live_mode) {
+        ESP_LOGI(TAG, "swap_to detected - exiting Live Mode");
+        s_player.live_mode = false;
+        swap_future_cancel();
+    }
+    
+    // Set position directly
+    s_player.p = p % s_player.order_count;  // Wrap to valid range
+    s_player.q = q;
+    
+    ESP_LOGI(TAG, "swap_to: Setting position to p=%lu, q=%lu", (unsigned long)s_player.p, (unsigned long)s_player.q);
+    
+    // Prepare validated swap request
+    swap_request_t request = {0};
+    esp_err_t err = prepare_swap_request(&request);
+    
+    if (err == ESP_ERR_NOT_FOUND) {
+        // File doesn't exist - try to find next available artwork
+        // Limit: 2x the channel size to prevent infinite loops
+        size_t max_attempts = s_player.order_count * 2;
+        if (max_attempts > 200) max_attempts = 200;
+        if (max_attempts == 0) max_attempts = 1;
+        
+        size_t skips = 0;
+        for (size_t attempt = 0; attempt < max_attempts; attempt++) {
+            err = navigate_next_internal();
+            if (err != ESP_OK) break;
+            
+            err = prepare_swap_request(&request);
+            if (err == ESP_OK) {
+                if (skips > 0) {
+                    ESP_LOGI(TAG, "swap_to: Found available artwork after skipping %zu unavailable file(s)", skips);
+                }
+                break;
+            }
+            skips++;
+        }
+        
+        if (err != ESP_OK && skips > 0) {
+            ESP_LOGW(TAG, "swap_to: No available artwork found after scanning %zu positions", skips);
+        }
+    }
+    
+    if (err == ESP_OK) {
+        // Valid swap request - send to animation_player
+        if (animation_player_request_swap) {
+            err = animation_player_request_swap(&request);
+        } else {
+            ESP_LOGW(TAG, "animation_player_request_swap not available");
+            err = ESP_FAIL;
+        }
+    } else {
+        // No valid artworks found
+        ESP_LOGW(TAG, "swap_to: No valid artworks available at or after position p=%lu", (unsigned long)p);
+    }
+    
+    s_player.command_active = false;
+    xSemaphoreGive(s_player.command_mutex);
+    
+    return err;
 }
 
 bool channel_player_is_command_active(void)

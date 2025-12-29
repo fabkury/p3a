@@ -26,6 +26,7 @@ extern "C" {
 #define MAKAPIX_EVENT_SD_AVAILABLE      (1 << 5)
 #define MAKAPIX_EVENT_SD_UNAVAILABLE    (1 << 6)
 #define MAKAPIX_EVENT_DOWNLOADS_NEEDED  (1 << 7)
+#define MAKAPIX_EVENT_FILE_AVAILABLE    (1 << 8)
 
 /**
  * @brief Initialize the Makapix channel events system
@@ -188,6 +189,36 @@ bool makapix_channel_wait_for_downloads_needed(uint32_t timeout_ms);
  * Called after checking for work and finding nothing to do.
  */
 void makapix_channel_clear_downloads_needed(void);
+
+/**
+ * @brief Signal that a file became available (download completed)
+ * 
+ * Called by download_manager when an artwork download finishes.
+ * This wakes up any tasks waiting for the first file to become available.
+ */
+void makapix_channel_signal_file_available(void);
+
+/**
+ * @brief Wait for a file to become available
+ * 
+ * Blocks until any of these conditions occurs:
+ * - A file download completes (MAKAPIX_EVENT_FILE_AVAILABLE)
+ * - Channel refresh completes (MAKAPIX_EVENT_REFRESH_DONE)
+ * - Timeout expires
+ * 
+ * This is useful when waiting for the first artwork in a channel.
+ * 
+ * @param timeout_ms Timeout in milliseconds (use portMAX_DELAY for infinite wait)
+ * @return true if signaled, false if timeout
+ */
+bool makapix_channel_wait_for_file_available(uint32_t timeout_ms);
+
+/**
+ * @brief Clear the file available flag
+ * 
+ * Called before starting to wait for a new file.
+ */
+void makapix_channel_clear_file_available(void);
 
 #ifdef __cplusplus
 }

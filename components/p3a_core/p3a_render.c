@@ -125,6 +125,12 @@ esp_err_t p3a_render_frame(uint8_t *buffer, size_t stride, p3a_render_result_t *
         case P3A_STATE_ANIMATION_PLAYBACK: {
             p3a_playback_substate_t substate = p3a_state_get_playback_substate();
             if (substate == P3A_PLAYBACK_CHANNEL_MESSAGE) {
+                // IMPORTANT: Still call animation renderer to process prefetch/swap
+                // even when showing a channel message. This prevents the loader task
+                // from getting stuck waiting for prefetch to complete.
+                if (animation_player_render_frame_internal) {
+                    (void)animation_player_render_frame_internal(buffer, stride);
+                }
                 return render_channel_message(buffer, stride, result);
             } else {
                 return render_animation_playback(buffer, stride, result);

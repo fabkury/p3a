@@ -675,8 +675,9 @@ static esp_err_t download_get_next_callback(download_request_t *out_request, voi
     
     // Safety check: validate critical pointers to prevent use-after-free
     // If the channel is being destroyed, these might be NULL or invalid
+    // This is expected during channel switches and is handled gracefully
     if (!ch->entries || !ch->channel_id) {
-        ESP_LOGW(TAG, "download_get_next_callback: channel appears to be destroyed or invalid");
+        ESP_LOGD(TAG, "download_get_next_callback: channel is being destroyed/switched, returning");
         return ESP_ERR_INVALID_STATE;
     }
     

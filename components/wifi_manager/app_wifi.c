@@ -651,40 +651,154 @@ static bool wifi_init_sta(const char *ssid, const char *password)
     }
 }
 
+// Shared UI style for all p3a web pages (including captive portal pages served by wifi_manager)
+#define P3A_UI_STYLE \
+"* { box-sizing: border-box; }" \
+"body {" \
+"  margin: 0;" \
+"  padding: 12px 10px 16px;" \
+"  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;" \
+"  background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);" \
+"  min-height: 100vh;" \
+"  display: flex;" \
+"  flex-direction: column;" \
+"  align-items: center;" \
+"  gap: 12px;" \
+"  color: #fff;" \
+"}" \
+"@supports (min-height: 100svh) { body { min-height: 100svh; } }" \
+"@supports (min-height: 100dvh) { body { min-height: 100dvh; } }" \
+".header { text-align: center; padding: 8px 0 4px; }" \
+".header h1 {" \
+"  margin: 0;" \
+"  font-size: clamp(2rem, 4vw, 2.4rem);" \
+"  font-weight: 300;" \
+"  letter-spacing: 0.1em;" \
+"  text-transform: lowercase;" \
+"}" \
+".subtitle { margin: 0; opacity: 0.9; font-size: 0.95rem; }" \
+".card {" \
+"  width: min(520px, 100%%);" \
+"  background: rgba(255,255,255,0.95);" \
+"  border-radius: 16px;" \
+"  padding: 14px;" \
+"  box-shadow: 0 4px 12px rgba(0,0,0,0.15);" \
+"  color: #111;" \
+"}" \
+".card h2 {" \
+"  margin: 0 0 10px;" \
+"  font-size: 0.85rem;" \
+"  font-weight: 600;" \
+"  color: #333;" \
+"  text-transform: uppercase;" \
+"  letter-spacing: 0.05em;" \
+"}" \
+".field { margin-bottom: 10px; }" \
+"label { display: block; font-size: 0.85rem; color: #444; margin-bottom: 6px; }" \
+"input[type=text], input[type=password] {" \
+"  width: 100%%;" \
+"  padding: 12px;" \
+"  border: 1px solid #ddd;" \
+"  border-radius: 10px;" \
+"  font-size: 1rem;" \
+"  outline: none;" \
+"}" \
+"input[type=text]:focus, input[type=password]:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.15); }" \
+".btn {" \
+"  width: 100%%;" \
+"  background: #667eea;" \
+"  color: white;" \
+"  padding: 13px 14px;" \
+"  border: none;" \
+"  border-radius: 12px;" \
+"  font-size: 0.98rem;" \
+"  font-weight: 600;" \
+"  cursor: pointer;" \
+"  transition: transform 0.2s;" \
+"  -webkit-tap-highlight-color: transparent;" \
+"}" \
+".btn:active { transform: scale(0.98); }" \
+".btn-secondary { background: #ff6b6b; box-shadow: 0 4px 12px rgba(255,107,107,0.25); }" \
+".btn-ghost {" \
+"  background: rgba(102,126,234,0.12);" \
+"  color: #3b4cca;" \
+"  border: 1px solid rgba(102,126,234,0.25);" \
+"}" \
+".help { margin: 10px 0 0; font-size: 0.85rem; color: #555; line-height: 1.35; }" \
+".help code { background: rgba(102,126,234,0.12); padding: 2px 6px; border-radius: 8px; }" \
+".divider { height: 1px; background: #eee; margin: 12px 0; }" \
+".pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: rgba(102,126,234,0.12); color: #334; font-weight: 600; }" \
+".list { margin: 10px 0 0; padding-left: 18px; color: #444; }" \
+".list li { margin: 6px 0; }" \
+".muted { color: #666; font-size: 0.85rem; }" \
+"a { color: #3b4cca; }" \
+"a:visited { color: #3b4cca; }"
+
 /* Captive Portal HTML */
-static const char* captive_portal_html = 
+static const char* captive_portal_html =
 "<!DOCTYPE html>"
-"<html>"
+"<html lang=\"en\">"
 "<head>"
-"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-"<title>ESP32 WiFi Configuration</title>"
-"<style>"
-"body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }"
-".container { max-width: 400px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }"
-"h1 { color: #333; text-align: center; }"
-"input[type=text], input[type=password] { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }"
-"button { background-color: #4CAF50; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%; margin: 5px 0; }"
-"button:hover { background-color: #45a049; }"
-".erase-btn { background-color: #f44336; }"
-".erase-btn:hover { background-color: #da190b; }"
-"</style>"
+"<meta charset=\"UTF-8\">"
+"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">"
+"<title>p3a - Wi-Fi Setup</title>"
+"<style>" P3A_UI_STYLE "</style>"
 "</head>"
 "<body>"
-"<div class=\"container\">"
-"<h1>WiFi Configuration</h1>"
-"<form action=\"/save\" method=\"POST\">"
-"<label for=\"ssid\">SSID:</label>"
-"<input type=\"text\" id=\"ssid\" name=\"ssid\" required>"
-"<label for=\"password\">Password:</label>"
-"<input type=\"password\" id=\"password\" name=\"password\">"
-"<button type=\"submit\">Save & Connect</button>"
-"</form>"
-"<form action=\"/erase\" method=\"POST\">"
-"<button type=\"submit\" class=\"erase-btn\">Erase Saved Credentials</button>"
-"</form>"
-"</div>"
+"  <div class=\"header\">"
+"    <h1>p3a</h1>"
+"    <p class=\"subtitle\">Wi-Fi setup</p>"
+"  </div>"
+"  <div class=\"card\">"
+"    <h2>Connect to Wi-Fi</h2>"
+"    <form action=\"/save\" method=\"POST\" autocomplete=\"on\">"
+"      <div class=\"field\">"
+"        <label for=\"ssid\">Network name (SSID)</label>"
+"        <input type=\"text\" id=\"ssid\" name=\"ssid\" required maxlength=\"32\" autocapitalize=\"none\" spellcheck=\"false\" placeholder=\"e.g. MyHomeWiFi\">"
+"      </div>"
+"      <div class=\"field\">"
+"        <label for=\"password\">Password (optional)</label>"
+"        <input type=\"password\" id=\"password\" name=\"password\" maxlength=\"64\" placeholder=\"Wi-Fi password\">"
+"      </div>"
+"      <button class=\"btn\" type=\"submit\">Save &amp; connect</button>"
+"    </form>"
+"    <p class=\"help\">After saving, p3a will reboot and join your Wi-Fi network. Then open <code>http://p3a.local/</code> to control your p3a.</p>"
+"    <div class=\"divider\"></div>"
+"    <form action=\"/erase\" method=\"POST\" onsubmit=\"return confirm('Erase saved Wi-Fi credentials? p3a will reboot into setup mode.');\">"
+"      <button class=\"btn btn-secondary\" type=\"submit\">Erase Wi-Fi credentials</button>"
+"    </form>"
+"  </div>"
 "</body>"
 "</html>";
+
+static void html_escape(const char *in, char *out, size_t out_len)
+{
+    if (!out || out_len == 0) return;
+    out[0] = '\0';
+    if (!in) return;
+
+    size_t o = 0;
+    for (size_t i = 0; in[i] != '\0' && o + 1 < out_len; i++) {
+        const char *rep = NULL;
+        switch (in[i]) {
+            case '&': rep = "&amp;"; break;
+            case '<': rep = "&lt;"; break;
+            case '>': rep = "&gt;"; break;
+            case '"': rep = "&quot;"; break;
+            case '\'': rep = "&#39;"; break;
+            default: rep = NULL; break;
+        }
+        if (rep) {
+            size_t rlen = strlen(rep);
+            if (o + rlen >= out_len) break;
+            memcpy(out + o, rep, rlen);
+            o += rlen;
+        } else {
+            out[o++] = in[i];
+        }
+    }
+    out[o] = '\0';
+}
 
 /* URL Decode Function - Decodes all %XX hex sequences and converts + to space */
 static void url_decode(char *str)
@@ -780,11 +894,107 @@ static esp_err_t save_post_handler(httpd_req_t *req)
     if (strlen(ssid) > 0) {
         wifi_save_credentials(ssid, password);
         ESP_LOGD(TAG, "Saved credentials, rebooting...");
-        httpd_resp_send(req, "<html><body><h1>Credentials saved! Rebooting...</h1></body></html>", HTTPD_RESP_USE_STRLEN);
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        char ssid_escaped[128] = {0};
+        html_escape(ssid, ssid_escaped, sizeof(ssid_escaped));
+
+        // Post-setup page: keep UI styling, explain what happens next, and attempt to open p3a.local after a countdown.
+        // Allocate on heap to avoid stack overflow (httpd task has limited stack)
+        const size_t html_size = 6144;
+        char *html = malloc(html_size);
+        if (!html) {
+            httpd_resp_set_type(req, "text/html");
+            httpd_resp_send(req, "<html><body><h1>Saved. Rebooting...</h1></body></html>", HTTPD_RESP_USE_STRLEN);
+            vTaskDelay(pdMS_TO_TICKS(1200));
+            esp_restart();
+            return ESP_OK;
+        }
+        
+        int len = snprintf(
+            html,
+            html_size,
+            "<!DOCTYPE html>"
+            "<html lang=\"en\">"
+            "<head>"
+            "<meta charset=\"UTF-8\">"
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">"
+            "<title>p3a - Connecting</title>"
+            "<style>" P3A_UI_STYLE "</style>"
+            "</head>"
+            "<body>"
+            "  <div class=\"header\">"
+            "    <h1>p3a</h1>"
+            "    <p class=\"subtitle\">connecting to wi-fi</p>"
+            "  </div>"
+            "  <div class=\"card\">"
+            "    <h2>Saved! Rebooting now</h2>"
+            "    <p class=\"muted\">Connecting to:</p>"
+            "    <div class=\"pill\">%s</div>"
+            "    <p class=\"help\">p3a has saved your credentials and will now reboot. The <code>p3a-setup</code> network will cease to exist and p3a will connect to the Wi-Fi network you provided.</p>"
+            "    <ul class=\"list\">"
+            "      <li>After the device turns on, wait a few seconds for it to connect to Wi-Fi.</li>"
+            "      <li>Then open <code>http://p3a.local/</code> again to control your p3a.</li>"
+            "      <li>If p3a is unable to connect to the provided Wi-Fi, it will begin offering the <code>p3a-setup</code> network again for you to reconfigure.</li>"
+            "    </ul>"
+            "    <div class=\"divider\"></div>"
+            "    <p class=\"help\">This page will try to open <code>http://p3a.local/</code> in <span class=\"pill\"><span id=\"sec\">25</span>s</span>.</p>"
+            "    <button class=\"btn btn-ghost\" type=\"button\" onclick=\"window.location.href='http://p3a.local/';\">Open p3a.local now</button>"
+            "    <p class=\"help\"><strong>Troubleshooting (brief):</strong> If <code>p3a.local</code> doesn't work, make sure your phone/computer is on the same Wi-Fi network you chose. If needed, check your router's connected-devices list and open the device IP address in your browser.</p>"
+            "    <p class=\"help\"><strong>Makapix Club:</strong> To register at <a href=\"https://makapix.club/\">Makapix Club</a>, long-press on the screen and follow the instructions.</p>"
+            "  </div>"
+            "  <script>"
+            "  (function(){"
+            "    var remaining = 25;"
+            "    var el = document.getElementById('sec');"
+            "    function tick(){"
+            "      remaining--; if (el) el.textContent = String(remaining);"
+            "      if (remaining <= 0){ clearInterval(timer); window.location.href='http://p3a.local/'; }"
+            "    }"
+            "    var timer = setInterval(tick, 1000);"
+            "  })();"
+            "  </script>"
+            "</body>"
+            "</html>",
+            ssid_escaped
+        );
+
+        httpd_resp_set_type(req, "text/html");
+        if (len < 0) {
+            httpd_resp_send(req, captive_portal_html, HTTPD_RESP_USE_STRLEN);
+        } else if ((size_t)len >= html_size) {
+            httpd_resp_send(req, "<html><body><h1>Saved. Rebooting...</h1></body></html>", HTTPD_RESP_USE_STRLEN);
+        } else {
+            httpd_resp_send(req, html, len);
+        }
+        free(html);
+
+        // Delay before reboot to allow the response to be sent and rendered.
+        vTaskDelay(pdMS_TO_TICKS(1200));
         esp_restart();
     } else {
-        httpd_resp_send(req, "<html><body><h1>Error: SSID required</h1></body></html>", HTTPD_RESP_USE_STRLEN);
+        const char *html =
+            "<!DOCTYPE html>"
+            "<html lang=\"en\">"
+            "<head>"
+            "<meta charset=\"UTF-8\">"
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">"
+            "<title>p3a - Wi-Fi Setup</title>"
+            "<style>" P3A_UI_STYLE "</style>"
+            "</head>"
+            "<body>"
+            "  <div class=\"header\">"
+            "    <h1>p3a</h1>"
+            "    <p class=\"subtitle\">wi-fi setup</p>"
+            "  </div>"
+            "  <div class=\"card\">"
+            "    <h2>SSID required</h2>"
+            "    <p class=\"help\">Please enter a network name (SSID) and try again.</p>"
+            "    <div class=\"divider\"></div>"
+            "    <button class=\"btn\" type=\"button\" onclick=\"window.location.href='/';\">Back</button>"
+            "  </div>"
+            "</body>"
+            "</html>";
+        httpd_resp_set_type(req, "text/html");
+        httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
     }
     
     return ESP_OK;
@@ -794,8 +1004,51 @@ static esp_err_t erase_post_handler(httpd_req_t *req)
 {
     app_wifi_erase_credentials();
     ESP_LOGD(TAG, "Erased credentials, rebooting...");
-    httpd_resp_send(req, "<html><body><h1>Credentials erased! Rebooting...</h1></body></html>", HTTPD_RESP_USE_STRLEN);
-    vTaskDelay(pdMS_TO_TICKS(1000));
+
+    const char *html =
+        "<!DOCTYPE html>"
+        "<html lang=\"en\">"
+        "<head>"
+        "<meta charset=\"UTF-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">"
+        "<title>p3a - Reset Wi-Fi</title>"
+        "<style>" P3A_UI_STYLE "</style>"
+        "</head>"
+        "<body>"
+        "  <div class=\"header\">"
+        "    <h1>p3a</h1>"
+        "    <p class=\"subtitle\">resetting wi-fi</p>"
+        "  </div>"
+        "  <div class=\"card\">"
+        "    <h2>Wi-Fi erased. Rebooting now</h2>"
+        "    <p class=\"help\">Saved Wi-Fi credentials have been erased. p3a will reboot into setup mode and create the <code>p3a-setup</code> Wi-Fi network again.</p>"
+        "    <ul class=\"list\">"
+        "      <li>After reboot, connect to <code>p3a-setup</code>.</li>"
+        "      <li>Then open <code>http://p3a.local/</code> to set up Wi-Fi.</li>"
+        "    </ul>"
+        "    <div class=\"divider\"></div>"
+        "    <p class=\"help\">This page will auto-reload in <span class=\"pill\"><span id=\"sec\">10</span>s</span>.</p>"
+        "    <button class=\"btn btn-ghost\" type=\"button\" onclick=\"window.location.reload();\">Reload now</button>"
+        "  </div>"
+        "  <script>"
+        "  (function(){"
+        "    var remaining = 10;"
+        "    var el = document.getElementById('sec');"
+        "    function tick(){"
+        "      remaining--; if (el) el.textContent = String(remaining);"
+        "      if (remaining <= 0){ clearInterval(timer); window.location.reload(); }"
+        "    }"
+        "    var timer = setInterval(tick, 1000);"
+        "  })();"
+        "  </script>"
+        "</body>"
+        "</html>";
+
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
+
+    // Delay before reboot to allow the response to be sent and rendered.
+    vTaskDelay(pdMS_TO_TICKS(1200));
     esp_restart();
     return ESP_OK;
 }

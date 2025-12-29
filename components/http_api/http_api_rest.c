@@ -23,6 +23,7 @@
 #include "app_state.h"
 #include "config_store.h"
 #include "makapix.h"
+#include "makapix_store.h"
 #include "makapix_channel_impl.h"
 #include "animation_player.h"
 #include "channel_player.h"
@@ -343,13 +344,18 @@ esp_err_t h_get_channels_stats(httpd_req_t *req) {
         promoted_cached = s_promoted_cached;
     }
 
-    char response[256];
+    // Check if Makapix is registered (has player_key)
+    bool is_registered = makapix_store_has_player_key();
+    
+    char response[300];
     snprintf(response, sizeof(response),
              "{\"ok\":true,\"data\":{"
              "\"all\":{\"total\":%zu,\"cached\":%zu},"
-             "\"promoted\":{\"total\":%zu,\"cached\":%zu}"
+             "\"promoted\":{\"total\":%zu,\"cached\":%zu},"
+             "\"registered\":%s"
              "}}",
-             all_total, all_cached, promoted_total, promoted_cached);
+             all_total, all_cached, promoted_total, promoted_cached,
+             is_registered ? "true" : "false");
     send_json(req, 200, response);
     return ESP_OK;
 }
@@ -512,7 +518,7 @@ esp_err_t h_post_channel(httpd_req_t *req) {
         if (err == ESP_OK) {
             channel_player_switch_to_sdcard_channel();
             channel_player_load_channel();
-            animation_player_request_swap_current();
+            channel_player_swap_to(0, 0);  // Start playback at first item
         }
         cJSON_Delete(root);
         if (err != ESP_OK) {

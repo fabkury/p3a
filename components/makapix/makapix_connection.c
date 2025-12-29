@@ -8,6 +8,7 @@
 
 #include "makapix_internal.h"
 #include "makapix_channel_events.h"
+#include "makapix_api.h"
 
 /**
  * @brief Timer callback for periodic status publishing
@@ -83,6 +84,12 @@ void makapix_mqtt_connection_callback(bool connected)
 {
     if (connected) {
         s_makapix_state = MAKAPIX_STATE_CONNECTED;
+        
+        // Reinitialize API to load player_key (especially important after fresh registration)
+        esp_err_t api_init_err = makapix_api_init();
+        if (api_init_err != ESP_OK) {
+            ESP_LOGW(MAKAPIX_TAG, "makapix_api_init failed after MQTT connect: %s", esp_err_to_name(api_init_err));
+        }
         
         // Signal waiting refresh tasks
         makapix_channel_signal_mqtt_connected();

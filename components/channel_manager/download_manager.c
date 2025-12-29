@@ -33,6 +33,7 @@ static void *s_get_next_ctx = NULL;
 // Current download state
 static char s_active_channel[64] = {0};
 static bool s_busy = false;
+static bool s_playback_initiated = false;  // Track if we've started playback (don't show download messages after this)
 
 static bool file_exists(const char *path)
 {
@@ -98,13 +99,19 @@ static void download_task(void *arg)
         esp_err_t get_err = s_get_next_cb(&req, s_get_next_ctx);
         
         if (get_err == ESP_ERR_NOT_FOUND) {
+            // All files in current channel are downloaded - wait for signal
+            ESP_LOGD(TAG, "All channel files downloaded, waiting for more work");
             makapix_channel_wait_for_downloads_needed(portMAX_DELAY);
             continue;
         }
         
         if (get_err != ESP_OK) {
-            // Error getting next file - wait a bit and retry
-            ESP_LOGW(TAG, "Error getting next download: %s", esp_err_to_name(get_err));
+            // Error getting next file (expected during channel switches)
+            if (get_err == ESP_ERR_INVALID_STATE) {
+                ESP_LOGD(TAG, "Channel switching, download callback returning (expected)");
+            } else {
+                ESP_LOGW(TAG, "Error getting next download: %s", esp_err_to_name(get_err));
+            }
             vTaskDelay(pdMS_TO_TICKS(5000));
             continue;
         }
@@ -139,10 +146,11 @@ static void download_task(void *arg)
         // Start download
         set_busy(true, req.channel_id);
         
-        // Update UI message if no animation is playing yet
+        // Update UI message if no animation is playing yet AND we haven't initiated playback
+        // This ensures the message only shows during initial boot, not on subsequent downloads
         extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail);
         extern bool animation_player_is_animation_ready(void);
-        if (!animation_player_is_animation_ready()) {
+        if (!s_playback_initiated && !animation_player_is_animation_ready()) {
             p3a_render_set_channel_message("Makapix Club", 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1, "Downloading artwork...");
         }
 
@@ -153,6 +161,23 @@ static void download_task(void *arg)
 
         if (err == ESP_OK) {
             makapix_channel_signal_downloads_needed();
+            makapix_channel_signal_file_available();  // Wake tasks waiting for first file
+            
+            // Check if we should trigger playback (first file downloaded during boot)
+            extern bool animation_player_is_animation_ready(void);
+            if (!animation_player_is_animation_ready() && !s_playback_initiated) {
+                // No animation playing yet - try to start playback
+                extern esp_err_t channel_player_swap_to(uint32_t p, uint32_t q);
+                esp_err_t swap_err = channel_player_swap_to(0, 0);
+                if (swap_err == ESP_OK) {
+                    ESP_LOGI(TAG, "First download complete - triggered playback");
+                    s_playback_initiated = true;  // Mark that we've initiated playback
+                    // Clear the loading message since playback is starting
+                    p3a_render_set_channel_message(NULL, 0 /* P3A_CHANNEL_MSG_NONE */, -1, NULL);
+                } else {
+                    ESP_LOGD(TAG, "swap_to(0,0) after download returned: %s", esp_err_to_name(swap_err));
+                }
+            }
         } else {
             if (err == ESP_ERR_NOT_FOUND) {
                 ESP_LOGW(TAG, "Download not found (404): %s", req.storage_key);
@@ -178,6 +203,8 @@ esp_err_t download_manager_init(void)
     if (!s_mutex) {
         return ESP_ERR_NO_MEM;
     }
+    
+    s_playback_initiated = false;  // Reset on init
 
     if (xTaskCreate(download_task, "download_mgr", 16384, NULL, 5, &s_task) != pdPASS) {
         vSemaphoreDelete(s_mutex);

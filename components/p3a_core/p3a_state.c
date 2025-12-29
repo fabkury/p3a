@@ -659,7 +659,7 @@ esp_err_t p3a_state_show_artwork(const char *storage_key, const char *art_url, i
 // Forward declarations for channel player functions
 extern esp_err_t channel_player_switch_to_sdcard_channel(void) __attribute__((weak));
 extern esp_err_t channel_player_load_channel(void) __attribute__((weak));
-extern esp_err_t animation_player_request_swap_current(void) __attribute__((weak));
+extern esp_err_t channel_player_swap_to(uint32_t p, uint32_t q) __attribute__((weak));
 
 // External UI function declarations
 extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail) __attribute__((weak));
@@ -702,8 +702,8 @@ esp_err_t p3a_state_fallback_to_sdcard(void)
             ugfx_ui_show_channel_message("p3a", "No artworks available.\nLong-press to register.", -1);
         }
     } else {
-        if (animation_player_request_swap_current) {
-            animation_player_request_swap_current();
+        if (channel_player_swap_to) {
+            channel_player_swap_to(0, 0);  // Start playback at first item
         }
     }
     

@@ -6,6 +6,7 @@ idf_component_register(
         "p3a_logo.c"
         "p3a_boot_logo.c"
         "sd_path.c"
+        "fresh_boot.c"
     INCLUDE_DIRS
         "include"
     REQUIRES

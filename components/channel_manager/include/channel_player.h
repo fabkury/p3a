@@ -241,6 +241,21 @@ esp_err_t channel_player_swap_next(void);
 esp_err_t channel_player_swap_back(void);
 
 /**
+ * @brief Request navigation to a specific position and swap to it
+ * 
+ * Sets the playback position to (p, q) and initiates a swap to that artwork.
+ * If the artwork at that position isn't available, scans forward to find
+ * the first available artwork.
+ * 
+ * @param p Post index in the play order
+ * @param q Artwork index within a playlist (0 for single artworks)
+ * @return ESP_OK if command accepted and swap initiated
+ *         ESP_ERR_INVALID_STATE if another command is in progress
+ *         ESP_ERR_NOT_FOUND if no available artwork found
+ */
+esp_err_t channel_player_swap_to(uint32_t p, uint32_t q);
+
+/**
  * @brief Check if a navigation command is currently being processed
  * 
  * @return true if command active, false if idle

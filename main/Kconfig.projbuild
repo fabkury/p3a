@@ -16,6 +16,28 @@ menu "Physical Player of Pixel Art (P3A)"
                 When enabled, the device will log detailed memory statistics every 15 seconds,
                 including heap usage broken down by memory type (internal RAM, SPIRAM, DMA, etc.).
                 Useful for debugging memory issues but adds overhead.
+
+        config P3A_FORCE_FRESH_NVS
+            bool "Force fresh NVS on boot (debug)"
+            default n
+            help
+                When enabled, all p3a NVS namespaces are erased on boot.
+                Useful for testing fresh device behavior.
+
+        config P3A_FORCE_FRESH_WIFI
+            bool "Also erase WiFi credentials (requires FORCE_FRESH_NVS)"
+            default n
+            depends on P3A_FORCE_FRESH_NVS
+            help
+                When enabled along with FORCE_FRESH_NVS, WiFi credentials
+                are also erased, forcing re-provisioning.
+
+        config P3A_FORCE_FRESH_SDCARD
+            bool "Force fresh SD card on boot (debug)"
+            default n
+            help
+                When enabled, the /sdcard/p3a folder is deleted and recreated
+                empty on boot. Useful for testing fresh device behavior.
     endmenu
 
     menu "Display"

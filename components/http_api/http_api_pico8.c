@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 /**
  * @file http_api_pico8.c
  * @brief HTTP API PICO-8 handlers

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 /**
  * @file http_api.c
  * @brief HTTP API core - Server infrastructure and command processing

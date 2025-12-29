@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 #ifndef DISPLAY_RENDERER_H
 #define DISPLAY_RENDERER_H
 

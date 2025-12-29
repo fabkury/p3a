@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 /* WiFi station Example with Captive Portal
 
    This example code is in the Public Domain (or CC0 licensed, at your option.)

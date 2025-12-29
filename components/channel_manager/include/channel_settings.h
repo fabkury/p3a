@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 #ifndef CHANNEL_SETTINGS_H
 #define CHANNEL_SETTINGS_H
 

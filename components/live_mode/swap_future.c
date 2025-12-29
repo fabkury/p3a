@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 #include "swap_future.h"
 #include "play_navigator.h"
 #include "sync_playlist.h"

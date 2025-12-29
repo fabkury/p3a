@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 #include "sntp_sync.h"
 #include "esp_sntp.h"
 #include "esp_log.h"

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 #ifndef ANIMATION_PLAYER_H
 #define ANIMATION_PLAYER_H
 

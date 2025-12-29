@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 #include "ugfx_ui.h"
 #include "esp_log.h"
 #include "app_lcd.h"

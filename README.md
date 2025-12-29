@@ -144,6 +144,14 @@ See [ROADMAP.md](docs/ROADMAP.md) for the full development plan.
 - **Real-time updates**: Receive artwork notifications instantly
 - **Coming soon**: Send "likes" to artworks with a long-press, swipe up to view community comments
 
+## License
+
+p3a is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for the full license text.
+
+For detailed information about all dependencies and their licenses, see [LICENSING.md](LICENSING.md).
+
 ## Contributing
 
-Contributions are welcome! See the [INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) for technical details about the codebase.
+Contributions are welcome! By contributing to p3a, you agree that your contributions will be licensed under the Apache License 2.0.
+
+See the [INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) for technical details about the codebase.

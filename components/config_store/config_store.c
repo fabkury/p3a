@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 #include "config_store.h"
 #include "nvs.h"
 #include "nvs_flash.h"

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 #include "makapix_provision.h"
 #include "makapix_certs.h"
 #include "esp_http_client.h"

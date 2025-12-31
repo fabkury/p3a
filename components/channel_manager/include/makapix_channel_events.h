@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 /**
  * @file makapix_channel_events.h
  * @brief MQTT connection event signaling for Makapix channel refresh tasks

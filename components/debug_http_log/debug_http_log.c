@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 /**
  * @file debug_http_log.c
  * @brief Pre-aggregated performance statistics collection (compile-time optional)

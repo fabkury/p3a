@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 #include "playback_controller.h"
 #include "animation_metadata.h"
 #include "pico8_stream.h"

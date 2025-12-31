@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 #ifndef MAKAPIX_CHANNEL_IMPL_H
 #define MAKAPIX_CHANNEL_IMPL_H
 

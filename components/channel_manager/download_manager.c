@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 /**
  * @file download_manager.c
  * @brief Simplified download manager - single download at a time

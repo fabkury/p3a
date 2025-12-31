@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 /**
  * @file play_navigator.c
  * @brief Internal play navigator implementation for channel navigation

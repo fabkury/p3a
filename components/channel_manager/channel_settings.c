@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 #include "channel_settings.h"
 #include "sd_path.h"
 #include "cJSON.h"

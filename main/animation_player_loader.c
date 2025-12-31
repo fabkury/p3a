@@ -206,12 +206,13 @@ void animation_loader_task(void *arg)
             // - prefetch_pending: prefetch has been requested (loader set it)
             // - prefetch_in_progress: prefetch is actively executing (render task set it)
             if (s_back_buffer.prefetch_pending || s_back_buffer.prefetch_in_progress) {
-                ESP_LOGW(TAG, "Loader task: BLOCKED - prefetch active (pending=%d, in_progress=%d), waiting...",
-                         (int)s_back_buffer.prefetch_pending, (int)s_back_buffer.prefetch_in_progress);
+                ESP_LOGD(TAG, "Loader task: waiting for prefetch to complete...");
                 xSemaphoreGive(s_buffer_mutex);
-                // Wait a bit and retry - the render task will clear the flags soon
-                vTaskDelay(pdMS_TO_TICKS(10));
-                // Re-queue ourselves by giving the semaphore back
+                // Wait for render task to signal prefetch completion (max 5 seconds)
+                if (xSemaphoreTake(s_prefetch_done_sem, pdMS_TO_TICKS(5000)) == pdFALSE) {
+                    ESP_LOGW(TAG, "Loader task: prefetch wait timed out after 5s");
+                }
+                // Re-queue ourselves to check if prefetch is now done
                 if (s_loader_sem) {
                     xSemaphoreGive(s_loader_sem);
                 }

@@ -3,9 +3,10 @@
  * @brief Boot logo display manager with fade-in animation
  *
  * Displays the p3a logo at boot with a smooth fade-in effect:
- * - 0.0 to 1.5 seconds: Fade in from 0% to 100% opacity (smoothstep curve)
- * - 1.5 to 3.0 seconds: Hold at full opacity
- * - After 3.0 seconds: Release screen for normal rendering
+ * - 0.0 to 0.5 seconds: Background color only (no logo)
+ * - 0.5 to 2.5 seconds: Fade in from 0% to 100% opacity (smoothstep curve)
+ * - 2.5 to 3.5 seconds: Hold at full opacity
+ * - After 3.5 seconds: Release screen for normal rendering
  *
  * The boot logo is non-blocking - all other boot operations proceed in parallel.
  * While active, the logo has exclusive control of rendering (nothing else draws).
@@ -22,14 +23,17 @@
 extern "C" {
 #endif
 
+/** Duration of initial delay phase (background only) in milliseconds */
+#define P3A_BOOT_LOGO_DELAY_MS     500
+
 /** Duration of fade-in phase in milliseconds */
-#define P3A_BOOT_LOGO_FADE_IN_MS   1500
+#define P3A_BOOT_LOGO_FADE_IN_MS   2000
 
 /** Duration of full opacity hold phase in milliseconds */
-#define P3A_BOOT_LOGO_HOLD_MS      1500
+#define P3A_BOOT_LOGO_HOLD_MS      1000
 
-/** Total boot logo duration (fade-in + hold) */
-#define P3A_BOOT_LOGO_TOTAL_MS     (P3A_BOOT_LOGO_FADE_IN_MS + P3A_BOOT_LOGO_HOLD_MS)
+/** Total boot logo duration (delay + fade-in + hold) */
+#define P3A_BOOT_LOGO_TOTAL_MS     (P3A_BOOT_LOGO_DELAY_MS + P3A_BOOT_LOGO_FADE_IN_MS + P3A_BOOT_LOGO_HOLD_MS)
 
 /** Target frame duration during logo display (20 FPS) */
 #define P3A_BOOT_LOGO_FRAME_MS     50
@@ -47,7 +51,7 @@ esp_err_t p3a_boot_logo_init(void);
 /**
  * @brief Check if boot logo display period is still active
  *
- * @return true if within the boot logo period (< 3 seconds from init)
+ * @return true if within the boot logo period (< 3.5 seconds from init)
  */
 bool p3a_boot_logo_is_active(void);
 

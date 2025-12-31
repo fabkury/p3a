@@ -541,15 +541,20 @@ static void timer_task(void *arg)
         
         // Normal mode: dwell-based auto-swap
         uint32_t dwell_ms = s_player.dwell_time_seconds * 1000;
-        if (dwell_ms == 0) dwell_ms = 10000;  // Default 10s
-        
+
+        // If dwell_time is 0, auto-swap is disabled - just wait for touch events
+        if (dwell_ms == 0) {
+            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
+            continue;
+        }
+
         // Wait for dwell timeout or reset notification
         uint32_t notified = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(dwell_ms));
         if (notified > 0) {
             // Timer was reset
             continue;
         }
-        
+
         // Timeout: perform auto-swap
         ESP_LOGD(TAG, "Auto-swap timer elapsed, advancing");
         channel_player_swap_next();
@@ -995,7 +1000,10 @@ esp_err_t channel_player_init(void)
     s_player.randomize_playlist = false;
     s_player.live_mode = false;
     s_player.global_seed = esp_random();
-    s_player.dwell_time_seconds = 0;  // Use per-artwork dwell
+
+    // Load dwell time from NVS (default 30s, 0 = disabled)
+    uint32_t dwell_ms = config_store_get_dwell_time();
+    s_player.dwell_time_seconds = dwell_ms / 1000;
     
     s_player.command_mutex = xSemaphoreCreateMutex();
     if (!s_player.command_mutex) {

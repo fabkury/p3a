@@ -40,20 +40,20 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 add_compile_options(-Wno-ignored-qualifiers)
 project(p3a)
 
-# Create SPIFFS image from webui directory
+# Create LittleFS image from webui directory
 # When PICO-8 is disabled, filter out PICO-8 related assets to reduce binary size
 if(CONFIG_P3A_PICO8_ENABLE)
     # PICO-8 enabled: use full webui directory
-    spiffs_create_partition_image(storage webui FLASH_IN_PROJECT)
+    littlefs_create_partition_image(storage webui FLASH_IN_PROJECT)
 else()
     # PICO-8 disabled: create filtered webui without PICO-8 assets
     set(WEBUI_STAGING_DIR "${CMAKE_BINARY_DIR}/webui_filtered")
-    
+
     # Clean and recreate staging directory
     file(REMOVE_RECURSE "${WEBUI_STAGING_DIR}")
     file(MAKE_DIRECTORY "${WEBUI_STAGING_DIR}")
     file(MAKE_DIRECTORY "${WEBUI_STAGING_DIR}/static")
-    
+
     # Copy static files excluding PICO-8 related assets
     file(GLOB STATIC_FILES "${CMAKE_SOURCE_DIR}/webui/static/*")
     foreach(STATIC_FILE ${STATIC_FILES})
@@ -63,10 +63,10 @@ else()
             file(COPY ${STATIC_FILE} DESTINATION "${WEBUI_STAGING_DIR}/static")
         endif()
     endforeach()
-    
+
     # Do not copy pico8/ directory at all
-    
-    spiffs_create_partition_image(storage "${WEBUI_STAGING_DIR}" FLASH_IN_PROJECT)
+
+    littlefs_create_partition_image(storage "${WEBUI_STAGING_DIR}" FLASH_IN_PROJECT)
 endif()
 
 # =============================================================================
@@ -104,7 +104,7 @@ files = [
     ('build:partition_table/partition-table.bin', 'partition-table.bin', '0x8000', False),
     ('build:ota_data_initial.bin', 'ota_data_initial.bin', '0x10000', False),
     ('build:storage.bin', 'storage.bin', '0x1020000', False),
-    ('project:components/slave_ota/firmware/network_adapter.bin', 'network_adapter.bin', '0x1120000', True),
+    ('project:components/slave_ota/firmware/network_adapter.bin', 'network_adapter.bin', '0x1420000', True),
 ]
 
 print(f'\\n========== Creating Release: {version} ==========')
@@ -271,8 +271,8 @@ The device will automatically reboot into p3a:
 | `bootloader.bin` | ESP-IDF bootloader | 0x2000 |
 | `partition-table.bin` | Partition table | 0x8000 |
 | `ota_data_initial.bin` | OTA data (boot selection) | 0x10000 |
-| `storage.bin` | SPIFFS web UI assets | 0x1020000 |
-| `network_adapter.bin` | ESP32-C6 co-processor firmware | 0x1120000 |
+| `storage.bin` | LittleFS web UI assets (4 MB) | 0x1020000 |
+| `network_adapter.bin` | ESP32-C6 co-processor firmware | 0x1420000 |
 
 Each `.bin` file has a corresponding `.sha256` file containing its SHA256 checksum.
 

@@ -40,8 +40,8 @@ esp_err_t p3a_boot_logo_init(void)
     s_boot_logo.initialized = true;
     s_boot_logo.skipped = false;
 
-    ESP_LOGI(TAG, "Boot logo initialized: fade-in %dms, hold %dms, total %dms",
-             P3A_BOOT_LOGO_FADE_IN_MS, P3A_BOOT_LOGO_HOLD_MS, P3A_BOOT_LOGO_TOTAL_MS);
+    ESP_LOGI(TAG, "Boot logo initialized: delay %dms, fade-in %dms, hold %dms, total %dms",
+             P3A_BOOT_LOGO_DELAY_MS, P3A_BOOT_LOGO_FADE_IN_MS, P3A_BOOT_LOGO_HOLD_MS, P3A_BOOT_LOGO_TOTAL_MS);
 
     return ESP_OK;
 }
@@ -103,9 +103,12 @@ int p3a_boot_logo_render(uint8_t *buffer, int width, int height, size_t stride)
     int logo_x = (width - logo_w) / 2;
     int logo_y = (height - logo_h) / 2;
 
-    if (elapsed_ms < P3A_BOOT_LOGO_FADE_IN_MS) {
+    if (elapsed_ms < P3A_BOOT_LOGO_DELAY_MS) {
+        // Phase 0: Background color only - buffer already cleared, skip logo
+        // Nothing to draw, just return
+    } else if (elapsed_ms < P3A_BOOT_LOGO_DELAY_MS + P3A_BOOT_LOGO_FADE_IN_MS) {
         // Phase 1: Fade-in with smoothstep curve
-        float t = (float)elapsed_ms / (float)P3A_BOOT_LOGO_FADE_IN_MS;
+        float t = (float)(elapsed_ms - P3A_BOOT_LOGO_DELAY_MS) / (float)P3A_BOOT_LOGO_FADE_IN_MS;
         float smooth_t = smoothstep(t);
         uint8_t alpha = (uint8_t)(smooth_t * 255.0f);
 

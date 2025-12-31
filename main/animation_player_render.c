@@ -455,6 +455,10 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
                 s_swap_requested = false;
                 xSemaphoreGive(s_buffer_mutex);
             }
+            // Signal loader task that prefetch is done (aborted)
+            if (s_prefetch_done_sem) {
+                xSemaphoreGive(s_prefetch_done_sem);
+            }
             goto skip_prefetch;
         }
         
@@ -481,6 +485,11 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
                 s_swap_requested = false;
             }
             xSemaphoreGive(s_buffer_mutex);
+        }
+
+        // Signal loader task that prefetch is done
+        if (s_prefetch_done_sem) {
+            xSemaphoreGive(s_prefetch_done_sem);
         }
 
         if (prefetch_err != ESP_OK) {

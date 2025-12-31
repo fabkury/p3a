@@ -18,8 +18,8 @@ ota_0,     app,  ota_0,    0x20000,  0x800000,
 # Second OTA partition - secondary boot slot for updates
 ota_1,     app,  ota_1,    0x820000, 0x800000,
 
-# SPIFFS for web UI assets
-storage,   data, spiffs,   0x1020000, 0x100000,
+# LittleFS for web UI assets (4 MB)
+storage,   data, spiffs,   0x1020000, 0x400000,
 
 # ESP32-C6 co-processor firmware (for OTA update via ESP-Hosted)
-slave_fw,  data, 0x40,     0x1120000, 0x200000,
+slave_fw,  data, 0x40,     0x1420000, 0x200000,

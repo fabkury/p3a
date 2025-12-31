@@ -147,6 +147,7 @@ extern volatile bool s_cycle_forward;
 extern TaskHandle_t s_loader_task;
 extern SemaphoreHandle_t s_loader_sem;
 extern SemaphoreHandle_t s_buffer_mutex;
+extern SemaphoreHandle_t s_prefetch_done_sem;  // Signaled when prefetch completes
 
 // Override for the next load triggered by swap_future_execute().
 // If valid, the loader will load this filepath/type instead of channel_player current item,

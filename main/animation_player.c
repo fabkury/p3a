@@ -30,6 +30,7 @@ volatile bool s_cycle_forward = true;
 TaskHandle_t s_loader_task = NULL;
 SemaphoreHandle_t s_loader_sem = NULL;
 SemaphoreHandle_t s_buffer_mutex = NULL;
+SemaphoreHandle_t s_prefetch_done_sem = NULL;
 
 bool s_anim_paused = false;
 
@@ -321,6 +322,21 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     s_loader_sem = xSemaphoreCreateBinary();
     if (!s_loader_sem) {
         ESP_LOGE(TAG, "Failed to create loader semaphore");
+        vSemaphoreDelete(s_buffer_mutex);
+        s_buffer_mutex = NULL;
+        channel_player_deinit();
+        download_manager_deinit();
+        playlist_manager_deinit();
+        playback_controller_deinit();
+        display_renderer_deinit();
+        return ESP_ERR_NO_MEM;
+    }
+
+    s_prefetch_done_sem = xSemaphoreCreateBinary();
+    if (!s_prefetch_done_sem) {
+        ESP_LOGE(TAG, "Failed to create prefetch done semaphore");
+        vSemaphoreDelete(s_loader_sem);
+        s_loader_sem = NULL;
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
         channel_player_deinit();

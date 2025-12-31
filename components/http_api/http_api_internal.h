@@ -91,6 +91,19 @@ void register_uri_handler_or_log(httpd_handle_t server, httpd_uri_t *uri);
  */
 const char* get_mime_type(const char* path);
 
+/**
+ * @brief Serve a file from LittleFS with automatic gzip support
+ *
+ * Tries to serve the gzipped version (filepath.gz) first. If found,
+ * sets Content-Encoding: gzip header and browser decompresses.
+ * Falls back to uncompressed version if .gz not found.
+ *
+ * @param req HTTP request
+ * @param filepath Full path to file (e.g., "/spiffs/index.html")
+ * @return ESP_OK on success, error code on failure
+ */
+esp_err_t serve_file(httpd_req_t *req, const char *filepath);
+
 // ---------- Command Queue Functions (http_api.c) ----------
 
 bool api_enqueue_pause(void);
@@ -98,6 +111,7 @@ bool api_enqueue_resume(void);
 
 // ---------- REST API Handlers (http_api_rest.c) ----------
 
+esp_err_t h_get_ui_config(httpd_req_t *req);
 esp_err_t h_get_status(httpd_req_t *req);
 esp_err_t h_get_api_state(httpd_req_t *req);
 esp_err_t h_get_channels_stats(httpd_req_t *req);

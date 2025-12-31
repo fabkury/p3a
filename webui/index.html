@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="icon" type="image/png" href="/favicon.ico">
+<title>p3a</title>
+<style>
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    padding: 12px 10px 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    overflow-x: hidden;
+}
+@supports (min-height: 100svh) {
+    body { min-height: 100svh; }
+}
+@supports (min-height: 100dvh) {
+    body { min-height: 100dvh; }
+}
+.header {
+    text-align: center;
+    padding: 8px 0 4px;
+    color: white;
+}
+.header h1 {
+    margin: 0;
+    font-size: clamp(2rem, 4vw, 2.5rem);
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    text-transform: lowercase;
+}
+.controls {
+    flex: 0 0 auto;
+    width: min(420px, 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    gap: 16px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 18px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.arrow-row {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+.arrow-btn {
+    background: rgba(255,255,255,0.95);
+    border: none;
+    border-radius: 50%;
+    width: 72px;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.8rem;
+    color: #667eea;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.arrow-btn:active { transform: scale(0.92); box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+.arrow-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.pause-btn {
+    background: rgba(255,255,255,0.95);
+    border: none;
+    border-radius: 12px;
+    padding: 10px 28px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #667eea;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+    min-width: 110px;
+}
+.pause-btn:active { transform: scale(0.95); }
+.channel-btn {
+    background: rgba(255,255,255,0.95);
+    border: none;
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #667eea;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+    width: 100%;
+}
+.channel-btn:active { transform: scale(0.95); }
+.channel-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.channel-btn.selected {
+    background: #667eea;
+    color: white;
+    box-shadow: 0 6px 16px rgba(102,126,234,0.4);
+}
+.channel-btn.selected .cache-badge {
+    color: rgba(255,255,255,0.9);
+    background: rgba(255,255,255,0.2);
+}
+.cache-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #666;
+    background: rgba(0,0,0,0.08);
+    padding: 2px 6px;
+    border-radius: 8px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+.cache-badge:empty { display: none; }
+.footer {
+    width: min(420px, 100%);
+    padding: 8px 0 4px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.footer-btn {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 0.85rem;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.footer-btn:active { background: rgba(255,255,255,0.3); }
+.status {
+    position: fixed;
+    top: clamp(48px, 12vh, 80px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    display: none;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.status.success { background: #4CAF50; color: white; }
+.status.error { background: #f44336; color: white; }
+.upload-section {
+    width: min(420px, 100%);
+    background: rgba(255,255,255,0.95);
+    border-radius: 16px;
+    padding: 14px;
+    margin: 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.upload-section h3 {
+    margin: 0 0 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #333;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.upload-form { display: flex; flex-direction: column; gap: 8px; }
+.file-input-wrapper { position: relative; overflow: hidden; }
+.file-input-wrapper input[type=file] { position: absolute; left: -9999px; }
+.file-input-label {
+    display: block;
+    padding: 9px;
+    background: #667eea;
+    color: white;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.file-input-label:active { background: #5568d3; }
+.file-name { font-size: 0.75rem; color: #555; word-break: break-word; min-height: 1.2em; }
+.upload-btn {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 9px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.upload-btn:active:not(:disabled) { background: #45a049; }
+.upload-btn:disabled { background: #ccc; cursor: not-allowed; }
+.upload-progress { display: none; margin-top: 6px; }
+.upload-progress.active { display: block; }
+.progress-bar { width: 100%; height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden; }
+.progress-fill { height: 100%; background: #4CAF50; transition: width 0.3s; width: 0%; }
+@media (max-width: 480px) {
+    .header h1 { font-size: 1.9rem; }
+    .controls { padding: 14px; }
+    .arrow-btn { width: 64px; height: 64px; font-size: 1.6rem; }
+    .arrow-row { gap: 16px; }
+    .pause-btn { padding: 9px 20px; font-size: 0.85rem; }
+}
+@media (max-height: 640px) {
+    .header h1 { font-size: 1.75rem; letter-spacing: 0.08em; }
+    .controls { padding: 12px; gap: 12px; }
+    .arrow-btn { width: 60px; height: 60px; font-size: 1.5rem; }
+    .pause-btn { padding: 8px 18px; font-size: 0.82rem; }
+    .upload-section { padding: 12px; }
+    .footer { padding-top: 4px; }
+}
+@media (min-width: 481px) {
+    .arrow-btn:hover { transform: scale(1.05); }
+    .pause-btn:hover { transform: scale(1.02); }
+    .footer-btn:hover { background: rgba(255,255,255,0.3); }
+}
+.update-banner {
+    display: none;
+    width: min(420px, 100%);
+    background: linear-gradient(135deg, #00c853 0%, #00e676 100%);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: white;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 4px 12px rgba(0,200,83,0.3);
+}
+.update-banner:active { transform: scale(0.98); }
+.update-banner h4 { margin: 0 0 4px; font-size: 0.95rem; font-weight: 600; }
+.update-banner p { margin: 0; font-size: 0.8rem; opacity: 0.9; }
+.shuffle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 4px 0;
+    width: 100%;
+}
+.shuffle-label { font-size: 0.9rem; color: rgba(255,255,255,0.95); font-weight: 500; }
+.toggle-switch { position: relative; display: inline-block; width: 48px; height: 26px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(255,255,255,0.3);
+    transition: 0.3s;
+    border-radius: 26px;
+}
+.toggle-slider:before {
+    position: absolute;
+    content: '';
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+.toggle-switch input:checked + .toggle-slider { background-color: rgba(255,255,255,0.9); }
+.toggle-switch input:checked + .toggle-slider:before { transform: translateX(22px); background-color: #667eea; }
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>p3a</h1>
+</div>
+<div class="controls">
+    <div class="arrow-row">
+        <button class="arrow-btn" id="back-btn" onclick="sendCommand('swap_back')">&#9664;</button>
+        <button class="arrow-btn" id="next-btn" onclick="sendCommand('swap_next')">&#9654;</button>
+    </div>
+    <button class="pause-btn" id="pause-btn" onclick="togglePause()">Pause</button>
+</div>
+<div class="controls" style="margin-top: 0;">
+    <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
+        <button class="channel-btn" id="ch-all" onclick="switchChannel('all')">Recent Artworks <span id="cache-all" class="cache-badge"></span></button>
+        <button class="channel-btn" id="ch-promoted" onclick="switchChannel('promoted')">Promoted <span id="cache-promoted" class="cache-badge"></span></button>
+        <button class="channel-btn" onclick="switchChannel('sdcard')">SD Card</button>
+    </div>
+    <div class="shuffle-row">
+        <span class="shuffle-label">Shuffle</span>
+        <label class="toggle-switch">
+            <input type="checkbox" id="shuffle-toggle" onchange="toggleShuffle(this.checked)">
+            <span class="toggle-slider"></span>
+        </label>
+    </div>
+</div>
+<div class="upload-section">
+    <h3>Upload</h3>
+    <form class="upload-form" id="upload-form" enctype="multipart/form-data">
+        <div class="file-input-wrapper">
+            <label for="file-input" class="file-input-label">Choose File</label>
+            <input type="file" id="file-input" name="file" accept=".webp,.gif,.jpg,.jpeg,.png,image/webp,image/gif,image/jpeg,image/png" required>
+        </div>
+        <div class="file-name" id="file-name"></div>
+        <button type="submit" class="upload-btn" id="upload-btn">Upload</button>
+        <div class="upload-progress" id="upload-progress">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+        </div>
+    </form>
+</div>
+<div class="update-banner" id="update-banner" onclick="window.location.href='/ota'">
+    <h4>&#x2B06; Update Available</h4>
+    <p id="update-version">A new firmware version is ready to install</p>
+</div>
+<div class="footer">
+    <button class="footer-btn" onclick="window.location.href='/config/network'">Network</button>
+    <button class="footer-btn" id="pico8-btn" style="display:none" onclick="window.location.href='/pico8'">PICO-8</button>
+    <button class="footer-btn" onclick="window.location.href='/settings'">Settings</button>
+    <button class="footer-btn" onclick="window.location.href='/ota'">Update</button>
+</div>
+<div class="status" id="status"></div>
+<script>
+var isPaused = false;
+var LCD_MAX_WIDTH = 720;
+var LCD_MAX_HEIGHT = 720;
+
+// Load UI config from device
+fetch('/api/ui-config').then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok && d.data) {
+        LCD_MAX_WIDTH = d.data.lcd_width || 720;
+        LCD_MAX_HEIGHT = d.data.lcd_height || 720;
+        if (d.data.pico8_enabled) {
+            document.getElementById('pico8-btn').style.display = '';
+        }
+    }
+}).catch(function(e) { console.log('Config fetch failed:', e); });
+
+function showToast(msg, isError) {
+    var status = document.getElementById('status');
+    status.textContent = msg;
+    status.className = isError ? 'status error' : 'status success';
+    status.style.display = 'block';
+    setTimeout(function() { status.style.display = 'none'; }, 6000);
+}
+function togglePause() {
+    var action = isPaused ? 'resume' : 'pause';
+    var status = document.getElementById('status');
+    var pauseBtn = document.getElementById('pause-btn');
+    pauseBtn.disabled = true;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/action/' + action, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            var pauseBtn = document.getElementById('pause-btn');
+            try {
+                var result = JSON.parse(xhr.responseText);
+                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
+                    isPaused = !isPaused;
+                    pauseBtn.textContent = isPaused ? 'Resume' : 'Pause';
+                    status.textContent = isPaused ? 'Paused' : 'Resumed';
+                    status.className = 'status success';
+                } else {
+                    status.textContent = 'Command failed: ' + (result.error || 'HTTP ' + xhr.status);
+                    status.className = 'status error';
+                }
+            } catch (e) {
+                status.textContent = 'Parse error: ' + e.message;
+                status.className = 'status error';
+            }
+            status.style.display = 'block';
+            setTimeout(function() { status.style.display = 'none'; }, 6000);
+            pauseBtn.disabled = false;
+        }
+    };
+    xhr.send('{}');
+}
+function sendCommand(action) {
+    console.log('Sending command:', action);
+    var status = document.getElementById('status');
+    var backBtn = document.getElementById('back-btn');
+    var nextBtn = document.getElementById('next-btn');
+    backBtn.disabled = true;
+    nextBtn.disabled = true;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/action/' + action, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            try {
+                var result = JSON.parse(xhr.responseText);
+                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
+                    status.textContent = 'Command sent successfully';
+                    status.className = 'status success';
+                } else {
+                    status.textContent = 'Command failed: ' + (result.error || 'HTTP ' + xhr.status);
+                    status.className = 'status error';
+                }
+            } catch (e) {
+                status.textContent = 'Parse error: ' + e.message;
+                status.className = 'status error';
+            }
+            status.style.display = 'block';
+            setTimeout(function() { status.style.display = 'none'; }, 6000);
+            backBtn.disabled = false;
+            nextBtn.disabled = false;
+        }
+    };
+    xhr.send('{}');
+}
+function switchChannel(channel) {
+    console.log('Switching to channel:', channel);
+    var status = document.getElementById('status');
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/channel', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            try {
+                var result = JSON.parse(xhr.responseText);
+                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
+                    var channelName = channel === 'all' ? 'Recent Artworks' : (channel === 'promoted' ? 'Promoted' : 'SD Card');
+                    status.textContent = 'Switched to ' + channelName;
+                    status.className = 'status success';
+                    updateSelectedChannel(channel);
+                } else {
+                    status.textContent = 'Channel switch failed: ' + (result.error || 'HTTP ' + xhr.status);
+                    status.className = 'status error';
+                }
+            } catch (e) {
+                status.textContent = 'Parse error: ' + e.message;
+                status.className = 'status error';
+            }
+            status.style.display = 'block';
+            setTimeout(function() { status.style.display = 'none'; }, 6000);
+        }
+    };
+    xhr.send(JSON.stringify({channel_name: channel}));
+}
+var fileInput = document.getElementById('file-input');
+var fileName = document.getElementById('file-name');
+var uploadForm = document.getElementById('upload-form');
+var uploadBtn = document.getElementById('upload-btn');
+var uploadProgress = document.getElementById('upload-progress');
+var progressFill = document.getElementById('progress-fill');
+var statusDiv = document.getElementById('status');
+
+function isJpegFile(file) {
+    var name = file.name.toLowerCase();
+    return name.endsWith('.jpg') || name.endsWith('.jpeg') || file.type === 'image/jpeg';
+}
+function getImageDimensions(file) {
+    return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onerror = function() { reject(new Error('Failed to read file.')); };
+        reader.onload = function() {
+            var img = new Image();
+            img.onload = function() { resolve({ width: img.width, height: img.height }); };
+            img.onerror = function() { reject(new Error('Failed to load image.')); };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+function resizeAndConvertToPng(file, maxW, maxH) {
+    return new Promise(function(resolve, reject) {
+        if (!file.type.startsWith('image/')) {
+            reject(new Error('Selected file is not an image.'));
+            return;
+        }
+        var reader = new FileReader();
+        reader.onerror = function() { reject(new Error('Failed to read file.')); };
+        reader.onload = function() {
+            var img = new Image();
+            img.onload = function() {
+                try {
+                    var width = img.width;
+                    var height = img.height;
+                    var scale = Math.min(maxW / width, maxH / height, 1);
+                    var newW = Math.round(width * scale);
+                    var newH = Math.round(height * scale);
+                    var canvas = document.createElement('canvas');
+                    canvas.width = newW;
+                    canvas.height = newH;
+                    var ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, newW, newH);
+                    canvas.toBlob(function(blob) {
+                        if (!blob) {
+                            reject(new Error('Canvas conversion to PNG failed.'));
+                        } else {
+                            resolve(blob);
+                        }
+                    }, 'image/png', 1.0);
+                } catch (e) {
+                    reject(e);
+                }
+            };
+            img.onerror = function() { reject(new Error('Failed to load image.')); };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+fileInput.addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (file) {
+        var maxSize = isJpegFile(file) ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
+        var maxSizeMB = isJpegFile(file) ? '25MB' : '5MB';
+        if (file.size > maxSize) {
+            fileName.textContent = 'File too large! Maximum size is ' + maxSizeMB + '.';
+            fileName.style.color = '#f44336';
+            uploadBtn.disabled = true;
+            fileInput.value = '';
+        } else {
+            fileName.textContent = 'Selected: ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+            fileName.style.color = '#666';
+            uploadBtn.disabled = false;
+        }
+    } else {
+        fileName.textContent = '';
+        uploadBtn.disabled = false;
+    }
+});
+uploadForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var file = fileInput.files[0];
+    if (!file) {
+        statusDiv.textContent = 'Please select a file';
+        statusDiv.className = 'status error';
+        statusDiv.style.display = 'block';
+        setTimeout(function() { statusDiv.style.display = 'none'; }, 6000);
+        return;
+    }
+    var maxSize = isJpegFile(file) ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
+    var maxSizeMB = isJpegFile(file) ? '25MB' : '5MB';
+    if (file.size > maxSize) {
+        statusDiv.textContent = 'File too large! Maximum size is ' + maxSizeMB + '.';
+        statusDiv.className = 'status error';
+        statusDiv.style.display = 'block';
+        setTimeout(function() { statusDiv.style.display = 'none'; }, 6000);
+        return;
+    }
+    uploadBtn.disabled = true;
+    statusDiv.textContent = 'Processing...';
+    statusDiv.className = 'status';
+    statusDiv.style.display = 'block';
+    var processAndUpload = function(fileToUpload, filename) {
+        var formData = new FormData();
+        formData.append('file', fileToUpload, filename);
+        uploadProgress.classList.add('active');
+        progressFill.style.width = '0%';
+        statusDiv.textContent = 'Uploading...';
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/upload', true);
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                var percentComplete = (e.loaded / e.total) * 100;
+                progressFill.style.width = percentComplete + '%';
+            }
+        };
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                uploadBtn.disabled = false;
+                uploadProgress.classList.remove('active');
+                progressFill.style.width = '0%';
+                try {
+                    var result = JSON.parse(xhr.responseText);
+                    if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
+                        statusDiv.textContent = 'Upload successful!';
+                        statusDiv.className = 'status success';
+                        fileInput.value = '';
+                        fileName.textContent = '';
+                    } else {
+                        statusDiv.textContent = 'Upload failed: ' + (result.error || 'HTTP ' + xhr.status);
+                        statusDiv.className = 'status error';
+                    }
+                } catch (e) {
+                    statusDiv.textContent = 'Upload failed: ' + xhr.statusText;
+                    statusDiv.className = 'status error';
+                }
+                statusDiv.style.display = 'block';
+                setTimeout(function() { statusDiv.style.display = 'none'; }, 5000);
+            }
+        };
+        xhr.send(formData);
+    };
+    if (isJpegFile(file)) {
+        getImageDimensions(file).then(function(dims) {
+            if (dims.width > LCD_MAX_WIDTH || dims.height > LCD_MAX_HEIGHT) {
+                return resizeAndConvertToPng(file, LCD_MAX_WIDTH, LCD_MAX_HEIGHT).then(function(pngBlob) {
+                    var pngFileName = file.name.replace(/\.[^/.]+$/, '.png');
+                    processAndUpload(pngBlob, pngFileName);
+                });
+            } else {
+                processAndUpload(file, file.name);
+            }
+        }).catch(function(err) {
+            uploadBtn.disabled = false;
+            statusDiv.textContent = 'Error processing image: ' + err.message;
+            statusDiv.className = 'status error';
+            statusDiv.style.display = 'block';
+            setTimeout(function() { statusDiv.style.display = 'none'; }, 5000);
+        });
+    } else {
+        processAndUpload(file, file.name);
+    }
+});
+function checkForUpdates() {
+    fetch('/ota/status').then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok && d.data.state === 'update_available') {
+            var banner = document.getElementById('update-banner');
+            var verText = document.getElementById('update-version');
+            verText.textContent = 'v' + d.data.current_version + ' -> v' + d.data.available_version;
+            banner.style.display = 'block';
+        }
+    }).catch(function(e) { console.log('Update check failed:', e); });
+}
+function loadChannelStats(attempt) {
+    attempt = attempt || 0;
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/channels/stats', true);
+    xhr.timeout = 5000;
+    function retry() {
+        if (attempt < 2) {
+            setTimeout(function() { loadChannelStats(attempt + 1); }, 500);
+        }
+    }
+    xhr.onerror = retry;
+    xhr.ontimeout = retry;
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        if (xhr.status !== 200) { retry(); return; }
+        try {
+            var resp = JSON.parse(xhr.responseText);
+            if (resp.ok && resp.data) {
+                var allEl = document.getElementById('cache-all');
+                var promEl = document.getElementById('cache-promoted');
+                var allBtn = document.getElementById('ch-all');
+                var promBtn = document.getElementById('ch-promoted');
+                var registered = resp.data.registered === true;
+                if (allEl && resp.data.all) {
+                    allEl.textContent = resp.data.all.cached + '/' + resp.data.all.total;
+                }
+                if (promEl && resp.data.promoted) {
+                    promEl.textContent = resp.data.promoted.cached + '/' + resp.data.promoted.total;
+                }
+                if (allBtn) allBtn.disabled = !registered;
+                if (promBtn) promBtn.disabled = !registered;
+            }
+        } catch (e) { console.log('Channel stats parse error:', e); retry(); }
+    };
+    xhr.send();
+}
+function updateSelectedChannel(channelName) {
+    var buttons = document.querySelectorAll('.channel-btn');
+    buttons.forEach(function(btn) { btn.classList.remove('selected'); });
+    if (channelName === 'all') {
+        var allBtn = document.getElementById('ch-all');
+        if (allBtn) allBtn.classList.add('selected');
+    } else if (channelName === 'promoted') {
+        var promBtn = document.getElementById('ch-promoted');
+        if (promBtn) promBtn.classList.add('selected');
+    } else if (channelName === 'sdcard') {
+        var buttons = document.querySelectorAll('.channel-btn');
+        for (var i = 0; i < buttons.length; i++) {
+            if (buttons[i].textContent.indexOf('SD Card') !== -1) {
+                buttons[i].classList.add('selected');
+                break;
+            }
+        }
+    }
+}
+function loadCurrentChannel() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/channel', true);
+    xhr.timeout = 5000;
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+            try {
+                var resp = JSON.parse(xhr.responseText);
+                if (resp.ok && resp.data && resp.data.channel_name) {
+                    updateSelectedChannel(resp.data.channel_name);
+                }
+            } catch (e) {
+                console.log('Failed to parse channel response:', e);
+            }
+        }
+    };
+    xhr.send();
+}
+function toggleShuffle(checked) {
+    var newOrder = checked ? 2 : 1;
+    var xhr = new XMLHttpRequest();
+    xhr.open('PUT', '/settings/play_order', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            try {
+                var result = JSON.parse(xhr.responseText);
+                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
+                    showToast(checked ? 'Shuffle enabled' : 'Shuffle disabled', false);
+                } else {
+                    showToast('Failed to set shuffle: ' + (result.error || 'HTTP ' + xhr.status), true);
+                    document.getElementById('shuffle-toggle').checked = !checked;
+                }
+            } catch (e) {
+                showToast('Parse error: ' + e.message, true);
+                document.getElementById('shuffle-toggle').checked = !checked;
+            }
+        }
+    };
+    xhr.send(JSON.stringify({play_order: newOrder}));
+}
+function loadPlayOrder() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/settings/play_order', true);
+    xhr.timeout = 5000;
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+            try {
+                var resp = JSON.parse(xhr.responseText);
+                if (resp.ok && resp.data) {
+                    document.getElementById('shuffle-toggle').checked = (resp.data.play_order === 2);
+                }
+            } catch (e) {
+                console.log('Failed to parse play_order response:', e);
+            }
+        }
+    };
+    xhr.send();
+}
+checkForUpdates();
+loadChannelStats();
+loadCurrentChannel();
+loadPlayOrder();
+</script>
+</body>
+</html>

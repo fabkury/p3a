@@ -662,17 +662,36 @@ esp_err_t makapix_channel_count_cached(const char *channel_id,
     return ESP_OK;
 }
 
+// Struct for sorting entries by created_at
+typedef struct {
+    uint32_t entry_idx;
+    uint32_t created_at;
+} download_sort_item_t;
+
+// Comparator for qsort: descending by created_at (newest first)
+static int compare_download_items_desc(const void *a, const void *b)
+{
+    const download_sort_item_t *item_a = (const download_sort_item_t *)a;
+    const download_sort_item_t *item_b = (const download_sort_item_t *)b;
+
+    // Descending order: if b > a, return positive (b comes first)
+    if (item_b->created_at > item_a->created_at) return 1;
+    if (item_b->created_at < item_a->created_at) return -1;
+    return 0;
+}
+
 // Download callback: called by download manager to get next file
+// Downloads are prioritized by post creation date (newest first), regardless of play order
 static esp_err_t download_get_next_callback(download_request_t *out_request, void *user_ctx)
 {
     (void)user_ctx;
     makapix_channel_t *ch = s_download_channel;
-    
+
     if (!ch || !out_request) {
         ESP_LOGW(TAG, "download_get_next_callback: invalid args (ch=%p, req=%p)", ch, out_request);
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     // Safety check: validate critical pointers to prevent use-after-free
     // If the channel is being destroyed, these might be NULL or invalid
     // This is expected during channel switches and is handled gracefully
@@ -680,91 +699,109 @@ static esp_err_t download_get_next_callback(download_request_t *out_request, voi
         ESP_LOGD(TAG, "download_get_next_callback: channel is being destroyed/switched, returning");
         return ESP_ERR_INVALID_STATE;
     }
-    
+
     if (ch->entry_count == 0) {
         ESP_LOGD(TAG, "download_get_next_callback: channel %s has 0 entries", ch->channel_id);
         return ESP_ERR_NOT_FOUND;
     }
-    
-    ESP_LOGD(TAG, "download_get_next_callback: scanning %zu entries for channel %s", 
+
+    ESP_LOGD(TAG, "download_get_next_callback: scanning %zu entries for channel %s",
              ch->entry_count, ch->channel_id);
-    
-    // Determine if we use navigator or index order
-    bool use_navigator = ch->navigator_ready && 
-                         ch->navigator.order_indices && 
-                         ch->navigator.order_count > 0;
-    
-    uint32_t current_p = use_navigator ? ch->navigator.p : 0;
-    size_t order_count = use_navigator ? ch->navigator.order_count : ch->entry_count;
-    
-    // First pass: scan from current position forward (prioritize upcoming files)
-    for (size_t offset = 0; offset < order_count; offset++) {
-        uint32_t entry_idx;
-        if (use_navigator) {
-            uint32_t pos_in_order = (current_p + (uint32_t)offset) % (uint32_t)order_count;
-            entry_idx = ch->navigator.order_indices[pos_in_order];
-        } else {
-            entry_idx = (uint32_t)((current_p + offset) % order_count);
+
+    // Count artwork entries
+    size_t artwork_count = 0;
+    for (size_t i = 0; i < ch->entry_count; i++) {
+        if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+            artwork_count++;
         }
-        
-        if (entry_idx >= ch->entry_count) continue;
-        
+    }
+
+    if (artwork_count == 0) {
+        ESP_LOGD(TAG, "download_get_next_callback: no artwork entries in channel %s", ch->channel_id);
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    // Allocate array for sorting
+    download_sort_item_t *items = malloc(artwork_count * sizeof(download_sort_item_t));
+    if (!items) {
+        ESP_LOGE(TAG, "download_get_next_callback: failed to allocate sort array");
+        return ESP_ERR_NO_MEM;
+    }
+
+    // Populate with artwork entries
+    size_t item_count = 0;
+    for (size_t i = 0; i < ch->entry_count; i++) {
+        if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+            items[item_count].entry_idx = (uint32_t)i;
+            items[item_count].created_at = ch->entries[i].created_at;
+            item_count++;
+        }
+    }
+
+    // Sort by created_at descending (newest first)
+    qsort(items, item_count, sizeof(download_sort_item_t), compare_download_items_desc);
+
+    // Find first undownloaded artwork in sorted order
+    esp_err_t result = ESP_ERR_NOT_FOUND;
+    size_t downloaded_count = 0;
+
+    for (size_t i = 0; i < item_count; i++) {
+        uint32_t entry_idx = items[i].entry_idx;
         const makapix_channel_entry_t *entry = &ch->entries[entry_idx];
-        
-        if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) continue;
-        
+
         // Build vault path
         char vault_path[512];
         build_vault_path(ch, entry, vault_path, sizeof(vault_path));
-        
+
         // Check if already downloaded
         struct stat st;
         if (stat(vault_path, &st) == 0) {
+            downloaded_count++;
             continue;  // Already downloaded, check next
         }
-        
+
+        // Check for .404 marker (file permanently unavailable)
+        char marker_path[520];
+        snprintf(marker_path, sizeof(marker_path), "%s.404", vault_path);
+        if (stat(marker_path, &st) == 0) {
+            continue;  // Skip - server returned 404 previously
+        }
+
         // Found a file that needs downloading - fill out the request
         memset(out_request, 0, sizeof(*out_request));
         bytes_to_uuid(entry->storage_key_uuid, out_request->storage_key, sizeof(out_request->storage_key));
-        
+
         // Build art_url using SHA256 sharding
         uint8_t sha256[32];
         if (storage_key_sha256(out_request->storage_key, sha256) != ESP_OK) {
             ESP_LOGW(TAG, "Failed to compute SHA256 for %s, skipping", out_request->storage_key);
             continue;
         }
-        
-        snprintf(out_request->art_url, sizeof(out_request->art_url), 
+
+        snprintf(out_request->art_url, sizeof(out_request->art_url),
                  "https://%s/api/vault/%02x/%02x/%02x/%s%s",
                  CONFIG_MAKAPIX_CLUB_HOST,
                  (unsigned int)sha256[0], (unsigned int)sha256[1], (unsigned int)sha256[2],
-                 out_request->storage_key, 
+                 out_request->storage_key,
                  s_ext_strings[entry->extension]);
-        
+
         strlcpy(out_request->filepath, vault_path, sizeof(out_request->filepath));
         strlcpy(out_request->channel_id, ch->channel_id, sizeof(out_request->channel_id));
-        
-        ESP_LOGD(TAG, "Next download: %s (offset=%zu from p=%lu)", 
-                 out_request->storage_key, offset, (unsigned long)current_p);
-        
-        return ESP_OK;
+
+        ESP_LOGD(TAG, "Next download: %s (created_at=%lu, newest-first priority)",
+                 out_request->storage_key, (unsigned long)entry->created_at);
+
+        result = ESP_OK;
+        break;
     }
-    
-    // Scanned entire channel, all files are downloaded
-    // Count how many files we actually have
-    size_t downloaded_count = 0;
-    for (size_t i = 0; i < ch->entry_count; i++) {
-        if (ch->entries[i].kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) continue;
-        char vault_path[512];
-        build_vault_path(ch, &ch->entries[i], vault_path, sizeof(vault_path));
-        struct stat st;
-        if (stat(vault_path, &st) == 0) {
-            downloaded_count++;
-        }
+
+    if (result == ESP_ERR_NOT_FOUND) {
+        ESP_LOGD(TAG, "All files downloaded for channel %s: %zu/%zu artworks cached",
+                 ch->channel_id, downloaded_count, item_count);
     }
-    ESP_LOGD(TAG, "All files downloaded for channel %s: %zu/%zu artworks cached", 
-             ch->channel_id, downloaded_count, ch->entry_count);
-    return ESP_ERR_NOT_FOUND;
+
+    free(items);
+    return result;
 }
 
 esp_err_t makapix_channel_get_next_download(channel_handle_t channel,

@@ -578,9 +578,9 @@ bool config_store_get_view_ack(void)
 
 esp_err_t config_store_set_dwell_time(uint32_t dwell_time_ms)
 {
-    // 0 is allowed and means "global override disabled"
-    if (dwell_time_ms > 100000000) {  // Max ~27 hours
-        ESP_LOGE(TAG, "Invalid dwell time: %lu ms", dwell_time_ms);
+    // 0 is allowed and means "auto-swap disabled"
+    if (dwell_time_ms > 86400000) {  // Max 24 hours
+        ESP_LOGE(TAG, "Invalid dwell time: %lu ms (max 86400000)", dwell_time_ms);
         return ESP_ERR_INVALID_ARG;
     }
     
@@ -612,18 +612,18 @@ uint32_t config_store_get_dwell_time(void)
     cJSON *cfg = NULL;
     esp_err_t err = config_store_load(&cfg);
     if (err != ESP_OK) {
-        return 0;  // Default: disabled
+        return 30000;  // Default: 30 seconds
     }
-    
-    uint32_t dwell_time = 0;
+
+    uint32_t dwell_time = 30000;  // Default: 30 seconds
     cJSON *item = cJSON_GetObjectItem(cfg, "dwell_time_ms");
     if (item && cJSON_IsNumber(item)) {
         int value = (int)cJSON_GetNumberValue(item);
-        if (value >= 0 && value <= 100000000) {
+        if (value >= 0 && value <= 86400000) {  // 0 = disabled, max 24h
             dwell_time = (uint32_t)value;
         }
     }
-    
+
     cJSON_Delete(cfg);
     return dwell_time;
 }

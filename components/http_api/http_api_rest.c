@@ -181,6 +181,49 @@ esp_err_t h_post_debug(httpd_req_t *req)
 }
 #endif // CONFIG_OTA_DEV_MODE
 
+// ---------- UI Configuration Handler ----------
+
+/**
+ * GET /api/ui-config
+ * Returns configuration needed by web UI (LCD dimensions, feature flags)
+ */
+esp_err_t h_get_ui_config(httpd_req_t *req) {
+    cJSON *data = cJSON_CreateObject();
+    if (!data) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    cJSON_AddNumberToObject(data, "lcd_width", LCD_MAX_WIDTH);
+    cJSON_AddNumberToObject(data, "lcd_height", LCD_MAX_HEIGHT);
+#if CONFIG_P3A_PICO8_ENABLE
+    cJSON_AddBoolToObject(data, "pico8_enabled", true);
+#else
+    cJSON_AddBoolToObject(data, "pico8_enabled", false);
+#endif
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        cJSON_Delete(data);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    cJSON_AddBoolToObject(root, "ok", true);
+    cJSON_AddItemToObject(root, "data", data);
+
+    char *json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!json) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, json);
+    free(json);
+    return ESP_OK;
+}
+
 // ---------- Status Handlers ----------
 
 /**
@@ -435,13 +478,21 @@ esp_err_t h_put_config(httpd_req_t *req) {
     }
 
     esp_err_t e = config_store_save(o);
-    cJSON_Delete(o);
 
     if (e != ESP_OK) {
+        cJSON_Delete(o);
         send_json(req, 500, "{\"ok\":false,\"error\":\"CONFIG_SAVE_FAIL\",\"code\":\"CONFIG_SAVE_FAIL\"}");
         return ESP_OK;
     }
 
+    // Apply dwell_time_ms change at runtime (for auto-swap interval)
+    cJSON *dwell_item = cJSON_GetObjectItem(o, "dwell_time_ms");
+    if (dwell_item && cJSON_IsNumber(dwell_item)) {
+        uint32_t dwell_ms = (uint32_t)cJSON_GetNumberValue(dwell_item);
+        channel_player_set_dwell_time(dwell_ms / 1000);
+    }
+
+    cJSON_Delete(o);
     send_json(req, 200, "{\"ok\":true}");
     return ESP_OK;
 }

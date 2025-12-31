@@ -15,6 +15,8 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include <string.h>
+#include <stdio.h>
+#include <time.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -181,6 +183,16 @@ static void download_task(void *arg)
         } else {
             if (err == ESP_ERR_NOT_FOUND) {
                 ESP_LOGW(TAG, "Download not found (404): %s", req.storage_key);
+                // Create .404 marker with timestamp to prevent retry
+                char marker_path[520];
+                snprintf(marker_path, sizeof(marker_path), "%s.404", req.filepath);
+                FILE *f = fopen(marker_path, "w");
+                if (f) {
+                    time_t now = time(NULL);
+                    fprintf(f, "%ld\n", (long)now);
+                    fclose(f);
+                    ESP_LOGI(TAG, "Created 404 marker: %s (timestamp=%ld)", marker_path, (long)now);
+                }
             } else {
                 ESP_LOGW(TAG, "Download failed (%s): %s", esp_err_to_name(err), req.storage_key);
             }

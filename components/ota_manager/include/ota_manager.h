@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 /**
  * @file ota_manager.h
  * @brief OTA (Over-The-Air) Update Manager for p3a

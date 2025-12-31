@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 #include "sdcard_channel_impl.h"
 #include "playlist_manager.h"
 #include "play_navigator.h"

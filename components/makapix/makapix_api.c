@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 #include "makapix_api.h"
 #include "makapix_mqtt.h"
 #include "makapix_store.h"

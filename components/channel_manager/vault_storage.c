@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2025 p3a Contributors
+
 #include "vault_storage.h"
 #include "esp_log.h"
 #include <stdlib.h>

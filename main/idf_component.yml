@@ -4,7 +4,7 @@ dependencies:
   espressif/esp_lcd_touch: "^1.2.0"
   espressif/libpng: "^1.6.39~1"
   espressif/mdns: "^1.0.*"
-  espressif/esp_hosted: "*"
+  espressif/esp_hosted: "==2.7.0"  # Pinned exactly - see docs/slave-ota/ESP32-C6-OTA-COMPATIBILITY.md
   espressif/esp_wifi_remote: "*"
   espressif/esp_tinyusb: "^1.3.0"
   espressif/tinyusb: "^0.17.0~1"

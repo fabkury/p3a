@@ -249,6 +249,9 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     if (strcmp(uri, "/api/ui-config") == 0) {
         return h_get_ui_config(req);
     }
+    if (strcmp(uri, "/api/network-status") == 0) {
+        return h_get_network_status(req);
+    }
     if (strcmp(uri, "/api/state") == 0) {
         return h_get_api_state(req);
     }

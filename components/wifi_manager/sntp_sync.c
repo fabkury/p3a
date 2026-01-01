@@ -5,7 +5,6 @@
 #include "esp_sntp.h"
 #include "esp_log.h"
 #include "esp_netif_sntp.h"
-#include "config_store.h"
 #include <string.h>
 #include <time.h>
 
@@ -16,11 +15,6 @@ static void sntp_sync_time_cb(struct timeval *tv)
 {
     s_synchronized = true;
     ESP_LOGI(TAG, "Time synchronized: %s", ctime(&tv->tv_sec));
-    
-    // Switch to master seed for deterministic Live Mode behavior after NTP sync
-    uint32_t master_seed = config_store_get_global_seed();
-    config_store_set_effective_seed(master_seed);
-    ESP_LOGI(TAG, "Switched to master seed for deterministic Live Mode: 0x%08x", master_seed);
 }
 
 esp_err_t sntp_sync_init(void)

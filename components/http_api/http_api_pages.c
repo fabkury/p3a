@@ -3,23 +3,22 @@
 
 /**
  * @file http_api_pages.c
- * @brief HTTP API page routing and static file serving
+ * @brief HTTP API page handlers, routing, and static file serving
  *
  * Contains:
  * - serve_file(): Generic file server with gzip support
+ * - Page handlers: GET /, GET /settings, GET /config/network, POST /erase
  * - GET /favicon.ico handler
  * - GET /static/... static file serving
- * - Page routing (routes to handlers in http_api_page_*.c)
+ * - Page routing
  * - Handler registration
  *
- * Page handlers are in separate files:
- * - http_api_page_root.c: GET / (main control page)
- * - http_api_page_network.c: GET /config/network, POST /erase
- * - http_api_page_settings.c: GET /settings
- * - http_api_pico8.c: GET /pico8, WS /pico_stream
+ * PICO-8 handlers are in http_api_pico8.c: GET /pico8, WS /pico_stream
  */
 
 #include "http_api_internal.h"
+#include "app_wifi.h"
+#include "freertos/task.h"
 #include <sys/stat.h>
 
 // ---------- Generic File Server with Gzip Support ----------
@@ -111,6 +110,50 @@ esp_err_t serve_file(httpd_req_t *req, const char *filepath) {
 
     fclose(f);
     httpd_resp_send_chunk(req, NULL, 0); // End response
+
+    return ESP_OK;
+}
+
+// ---------- Page Handlers ----------
+
+/**
+ * GET /
+ * Serves the main control page from LittleFS
+ */
+esp_err_t h_get_root(httpd_req_t *req) {
+    return serve_file(req, "/spiffs/index.html");
+}
+
+/**
+ * GET /settings
+ * Serves the settings page from LittleFS
+ */
+esp_err_t h_get_settings(httpd_req_t *req) {
+    return serve_file(req, "/spiffs/settings.html");
+}
+
+/**
+ * GET /config/network
+ * Serves the network status page from LittleFS
+ */
+esp_err_t h_get_network_config(httpd_req_t *req) {
+    return serve_file(req, "/spiffs/config/network.html");
+}
+
+/**
+ * POST /erase
+ * Erases Wi-Fi credentials and reboots the device
+ */
+esp_err_t h_post_erase(httpd_req_t *req) {
+    ESP_LOGI(HTTP_API_TAG, "Erase credentials requested via web interface");
+    app_wifi_erase_credentials();
+
+    // Send simple JSON response since the JavaScript-based page handles it
+    send_json(req, 200, "{\"ok\":true,\"message\":\"WiFi credentials erased. Rebooting...\"}");
+
+    // Delay before reboot to allow response to be sent
+    vTaskDelay(pdMS_TO_TICKS(1200));
+    esp_restart();
 
     return ESP_OK;
 }

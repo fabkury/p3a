@@ -16,6 +16,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
+#include "freertos/semphr.h"
 
 static const char *TAG = "makapix_mqtt";
 
@@ -52,6 +53,16 @@ static char s_reassembly_topic[256] = {0};
 static bool s_reassembly_in_progress = false;
 static bool s_reassembly_drop = false;
 
+// Mutex and state machine to prevent race conditions on MQTT client operations
+static SemaphoreHandle_t s_mqtt_mutex = NULL;
+typedef enum {
+    MQTT_CLIENT_NONE,      // No client exists
+    MQTT_CLIENT_STOPPED,   // Client created but stopped
+    MQTT_CLIENT_RUNNING,   // Started (connecting or connected)
+    MQTT_CLIENT_STOPPING   // Stop in progress
+} mqtt_client_state_t;
+static mqtt_client_state_t s_mqtt_state = MQTT_CLIENT_NONE;
+
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
     esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)event_data;
@@ -60,15 +71,24 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "Connected to %s", s_mqtt_uri);
-        s_mqtt_connected = true;
-        s_response_subscribed = false;
-        s_pending_response_sub_msg_id = -1;
+        // Update state under mutex
+        if (s_mqtt_mutex) {
+            xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
+            s_mqtt_connected = true;
+            s_response_subscribed = false;
+            s_pending_response_sub_msg_id = -1;
+            xSemaphoreGive(s_mqtt_mutex);
+        }
         // Subscribe to command and response topics
         if (strlen(s_command_topic) > 0) {
             esp_mqtt_client_subscribe(client, s_command_topic, 1);
         }
         if (strlen(s_response_topic) > 0) {
-            s_pending_response_sub_msg_id = esp_mqtt_client_subscribe(client, s_response_topic, 1);
+            if (s_mqtt_mutex) {
+                xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
+                s_pending_response_sub_msg_id = esp_mqtt_client_subscribe(client, s_response_topic, 1);
+                xSemaphoreGive(s_mqtt_mutex);
+            }
         }
         if (strlen(s_view_ack_topic) > 0) {
             esp_mqtt_client_subscribe(client, s_view_ack_topic, 1);
@@ -81,9 +101,18 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGW(TAG, "Disconnected");
-        s_mqtt_connected = false;
-        s_response_subscribed = false;
-        s_pending_response_sub_msg_id = -1;
+        // Update state under mutex to prevent race with disconnect/deinit
+        if (s_mqtt_mutex) {
+            xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
+            // Only update state if we were running (not already stopping/stopped)
+            if (s_mqtt_state == MQTT_CLIENT_RUNNING) {
+                s_mqtt_state = MQTT_CLIENT_STOPPED;
+            }
+            s_mqtt_connected = false;
+            s_response_subscribed = false;
+            s_pending_response_sub_msg_id = -1;
+            xSemaphoreGive(s_mqtt_mutex);
+        }
         if (s_connection_callback) {
             s_connection_callback(false);
         }
@@ -341,12 +370,27 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
         return ESP_ERR_INVALID_ARG;
     }
 
-    // Clean up existing client if any
+    // Create mutex on first call
+    if (!s_mqtt_mutex) {
+        s_mqtt_mutex = xSemaphoreCreateMutex();
+        if (!s_mqtt_mutex) {
+            ESP_LOGE(TAG, "Failed to create MQTT mutex");
+            return ESP_ERR_NO_MEM;
+        }
+    }
+
+    xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
+
+    // Clean up existing client if any (with proper state transitions)
     if (s_mqtt_client) {
-        esp_mqtt_client_stop(s_mqtt_client);
+        if (s_mqtt_state == MQTT_CLIENT_RUNNING) {
+            s_mqtt_state = MQTT_CLIENT_STOPPING;
+            esp_mqtt_client_stop(s_mqtt_client);
+        }
         esp_mqtt_client_destroy(s_mqtt_client);
         s_mqtt_client = NULL;
         s_mqtt_connected = false;
+        s_mqtt_state = MQTT_CLIENT_NONE;
     }
 
     strncpy(s_player_key, player_key, sizeof(s_player_key) - 1);
@@ -404,43 +448,84 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
     s_mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
     if (!s_mqtt_client) {
         ESP_LOGE(TAG, "Failed to init MQTT client");
+        xSemaphoreGive(s_mqtt_mutex);
         return ESP_ERR_NO_MEM;
     }
 
     esp_mqtt_client_register_event(s_mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
+    s_mqtt_state = MQTT_CLIENT_STOPPED;
+    xSemaphoreGive(s_mqtt_mutex);
     return ESP_OK;
 }
 
 esp_err_t makapix_mqtt_connect(void)
 {
-    if (!s_mqtt_client) {
-        ESP_LOGE(TAG, "MQTT client not initialized");
+    if (!s_mqtt_mutex) {
+        ESP_LOGE(TAG, "MQTT not initialized (no mutex)");
         return ESP_ERR_INVALID_STATE;
     }
 
+    xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
+
+    if (!s_mqtt_client || s_mqtt_state != MQTT_CLIENT_STOPPED) {
+        ESP_LOGE(TAG, "MQTT client not ready (client=%p, state=%d)",
+                 (void*)s_mqtt_client, s_mqtt_state);
+        xSemaphoreGive(s_mqtt_mutex);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    s_mqtt_state = MQTT_CLIENT_RUNNING;
     esp_err_t err = esp_mqtt_client_start(s_mqtt_client);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start: %s", esp_err_to_name(err));
+        s_mqtt_state = MQTT_CLIENT_STOPPED;
     }
+
+    xSemaphoreGive(s_mqtt_mutex);
     return err;
 }
 
 void makapix_mqtt_disconnect(void)
 {
-    if (s_mqtt_client) {
-        esp_mqtt_client_stop(s_mqtt_client);
+    if (!s_mqtt_mutex) {
+        return;
     }
+
+    xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
+
+    if (s_mqtt_client && s_mqtt_state == MQTT_CLIENT_RUNNING) {
+        s_mqtt_state = MQTT_CLIENT_STOPPING;
+        esp_mqtt_client_stop(s_mqtt_client);
+        s_mqtt_state = MQTT_CLIENT_STOPPED;
+        s_mqtt_connected = false;
+    }
+
+    xSemaphoreGive(s_mqtt_mutex);
 }
 
 void makapix_mqtt_deinit(void)
 {
+    if (!s_mqtt_mutex) {
+        return;
+    }
+
+    xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
+
     if (s_mqtt_client) {
-        esp_mqtt_client_stop(s_mqtt_client);
-        esp_mqtt_client_destroy(s_mqtt_client);
-        s_mqtt_client = NULL;
+        // Only stop if running
+        if (s_mqtt_state == MQTT_CLIENT_RUNNING) {
+            s_mqtt_state = MQTT_CLIENT_STOPPING;
+            esp_mqtt_client_stop(s_mqtt_client);
+        }
+        // Destroy if not already destroyed
+        if (s_mqtt_state != MQTT_CLIENT_NONE) {
+            esp_mqtt_client_destroy(s_mqtt_client);
+            s_mqtt_client = NULL;
+            s_mqtt_state = MQTT_CLIENT_NONE;
+        }
         s_mqtt_connected = false;
     }
-    
+
     if (s_reassembly_buffer) {
         free(s_reassembly_buffer);
         s_reassembly_buffer = NULL;
@@ -450,6 +535,8 @@ void makapix_mqtt_deinit(void)
     s_reassembly_in_progress = false;
     s_reassembly_drop = false;
     s_reassembly_topic[0] = '\0';
+
+    xSemaphoreGive(s_mqtt_mutex);
 }
 
 bool makapix_mqtt_is_connected(void)

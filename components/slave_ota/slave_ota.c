@@ -18,8 +18,8 @@ static const char *TAG = "slave_ota";
 
 // Expected slave firmware version (must match the built slave firmware)
 static const uint32_t SLAVE_FW_VERSION_MAJOR = 2;
-static const uint32_t SLAVE_FW_VERSION_MINOR = 7;
-static const uint32_t SLAVE_FW_VERSION_PATCH = 0;
+static const uint32_t SLAVE_FW_VERSION_MINOR = 8;
+static const uint32_t SLAVE_FW_VERSION_PATCH = 5;
 
 // Partition label for slave firmware
 #define SLAVE_FW_PARTITION_LABEL "slave_fw"

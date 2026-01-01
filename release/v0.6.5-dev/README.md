@@ -7,7 +7,7 @@ After the initial flash, all future updates are installed wirelessly via `http:/
 
 ---
 
-## Option 1: p3a Flasher (Windows) — Recommended
+## Option 1: p3a Flasher (Windows) â€” Recommended
 
 The easiest way to flash your p3a on Windows.
 
@@ -17,7 +17,7 @@ The easiest way to flash your p3a on Windows.
 4. Wait ~2 minutes
 5. Done! Your device will automatically reboot into p3a.
 
-The flasher auto-detects your device and includes the firmware — no installation, configuration or Internet connection needed.
+The flasher auto-detects your device and includes the firmware â€” no installation, configuration or Internet connection needed.
 
 ---
 
@@ -78,13 +78,13 @@ The device will automatically reboot into p3a:
 
 | File | Description | Flash Address |
 |------|-------------|---------------|
-| `p3a-flasher.exe` | Windows flasher (recommended) | — |
+| `p3a-flasher.exe` | Windows flasher (recommended) | â€” |
 | `p3a.bin` | Main application firmware | 0x20000 |
 | `bootloader.bin` | ESP-IDF bootloader | 0x2000 |
 | `partition-table.bin` | Partition table | 0x8000 |
 | `ota_data_initial.bin` | OTA data (boot selection) | 0x10000 |
-| `storage.bin` | SPIFFS web UI assets | 0x1020000 |
-| `network_adapter.bin` | ESP32-C6 co-processor firmware | 0x1120000 |
+| `storage.bin` | LittleFS web UI assets (4 MB) | 0x1020000 |
+| `network_adapter.bin` | ESP32-C6 co-processor firmware | 0x1420000 |
 
 Each `.bin` file has a corresponding `.sha256` file containing its SHA256 checksum.
 

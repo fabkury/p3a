@@ -463,14 +463,10 @@ void app_main(void)
     tzset();
     ESP_LOGD(TAG, "Timezone set to UTC for Live Mode");
 
-    // Initialize effective seed with true random for pre-NTP behavior
-    // This will be replaced with master seed once NTP syncs
-    uint32_t true_random_seed = esp_random();
-    uint32_t master_seed = config_store_get_global_seed();
-    uint32_t effective_seed = master_seed ^ true_random_seed;
-    config_store_set_effective_seed(effective_seed);
-    ESP_LOGD(TAG, "Master seed: 0x%08x, True random: 0x%08x, Effective seed: 0x%08x (pre-NTP)", 
-             master_seed, true_random_seed, effective_seed);
+    // Initialize random seed from hardware RNG
+    uint32_t random_seed = esp_random();
+    config_store_set_effective_seed(random_seed);
+    ESP_LOGD(TAG, "Random seed initialized: 0x%08x", random_seed);
 
     // Initialize SDIO bus coordinator early
     // This provides mutual exclusion for SDIO operations (WiFi and SD card)

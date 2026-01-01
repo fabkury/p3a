@@ -115,6 +115,7 @@ bool api_enqueue_resume(void);
 // ---------- REST API Handlers (http_api_rest.c) ----------
 
 esp_err_t h_get_ui_config(httpd_req_t *req);
+esp_err_t h_get_network_status(httpd_req_t *req);
 esp_err_t h_get_status(httpd_req_t *req);
 esp_err_t h_get_api_state(httpd_req_t *req);
 esp_err_t h_get_channels_stats(httpd_req_t *req);

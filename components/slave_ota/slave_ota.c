@@ -17,9 +17,10 @@
 static const char *TAG = "slave_ota";
 
 // Expected slave firmware version (must match the built slave firmware)
+// Pinned to 2.7.0 exactly - see docs/slave-ota/ESP32-C6-OTA-COMPATIBILITY.md
 static const uint32_t SLAVE_FW_VERSION_MAJOR = 2;
-static const uint32_t SLAVE_FW_VERSION_MINOR = 8;
-static const uint32_t SLAVE_FW_VERSION_PATCH = 5;
+static const uint32_t SLAVE_FW_VERSION_MINOR = 7;
+static const uint32_t SLAVE_FW_VERSION_PATCH = 0;
 
 // Partition label for slave firmware
 #define SLAVE_FW_PARTITION_LABEL "slave_fw"

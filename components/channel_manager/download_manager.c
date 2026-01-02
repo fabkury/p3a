@@ -10,6 +10,7 @@
  */
 
 #include "download_manager.h"
+#include "play_scheduler.h"
 #include "makapix_artwork.h"
 #include "makapix_channel_events.h"
 #include "sdio_bus.h"
@@ -31,14 +32,14 @@ extern bool animation_player_is_sd_paused(void) __attribute__((weak));
 static TaskHandle_t s_task = NULL;
 static SemaphoreHandle_t s_mutex = NULL;
 
-// Callback for getting next file to download
+// Legacy callback (kept for backwards compatibility, but prefer Play Scheduler)
 static download_get_next_cb_t s_get_next_cb = NULL;
 static void *s_get_next_ctx = NULL;
 
 // Current download state
 static char s_active_channel[64] = {0};
 static bool s_busy = false;
-static bool s_playback_initiated = false;  // Track if we've started playback (don't show download messages after this)
+static bool s_playback_initiated = false;  // Track if we've started playback
 
 static bool file_exists(const char *path)
 {
@@ -94,26 +95,45 @@ static void download_task(void *arg)
             wait_count++;
         }
 
-        // Get next file to download from channel
-        if (!s_get_next_cb) {
+        // Get next file to download - try Play Scheduler first, then legacy callback
+        memset(&req, 0, sizeof(req));
+        esp_err_t get_err = ESP_ERR_NOT_SUPPORTED;
+
+        // Try Play Scheduler first (event-driven prefetch)
+        if (play_scheduler_is_initialized()) {
+            ps_prefetch_request_t ps_req;
+            get_err = play_scheduler_get_next_prefetch(&ps_req);
+            if (get_err == ESP_OK) {
+                // Copy prefetch request to download request
+                strlcpy(req.storage_key, ps_req.storage_key, sizeof(req.storage_key));
+                strlcpy(req.art_url, ps_req.art_url, sizeof(req.art_url));
+                strlcpy(req.filepath, ps_req.filepath, sizeof(req.filepath));
+                strlcpy(req.channel_id, ps_req.channel_id, sizeof(req.channel_id));
+            }
+        }
+
+        // Fall back to legacy callback if Play Scheduler didn't provide work
+        if (get_err != ESP_OK && s_get_next_cb) {
+            get_err = s_get_next_cb(&req, s_get_next_ctx);
+        }
+
+        // No source available - wait for signal
+        if (get_err == ESP_ERR_NOT_SUPPORTED && !s_get_next_cb) {
             makapix_channel_wait_for_downloads_needed(portMAX_DELAY);
             continue;
         }
 
-        memset(&req, 0, sizeof(req));
-        esp_err_t get_err = s_get_next_cb(&req, s_get_next_ctx);
-        
         if (get_err == ESP_ERR_NOT_FOUND) {
-            // All files in current channel are downloaded - wait for signal
-            ESP_LOGD(TAG, "All channel files downloaded, waiting for more work");
+            // All files downloaded - wait for signal
+            ESP_LOGD(TAG, "All files downloaded, waiting for more work");
             makapix_channel_wait_for_downloads_needed(portMAX_DELAY);
             continue;
         }
-        
+
         if (get_err != ESP_OK) {
             // Error getting next file (expected during channel switches)
             if (get_err == ESP_ERR_INVALID_STATE) {
-                ESP_LOGD(TAG, "Channel switching, download callback returning (expected)");
+                ESP_LOGD(TAG, "Channel switching, download returning (expected)");
             } else {
                 ESP_LOGW(TAG, "Error getting next download: %s", esp_err_to_name(get_err));
             }

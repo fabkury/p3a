@@ -30,6 +30,7 @@
 #include "ugfx_ui.h"
 #include "animation_player.h"  // For animation_player_is_ui_mode()
 #include "channel_player.h"
+#include "play_scheduler.h"
 #include "config_store.h"
 #include "ota_manager.h"       // For OTA boot validation
 #include "slave_ota.h"         // For ESP32-C6 co-processor OTA
@@ -141,7 +142,7 @@ static bool check_first_boot_after_update(void)
 
 uint32_t animation_player_get_dwell_time(void)
 {
-    return channel_player_get_dwell_time();
+    return play_scheduler_get_dwell_time();
 }
 
 esp_err_t animation_player_set_dwell_time(uint32_t dwell_time)
@@ -149,16 +150,17 @@ esp_err_t animation_player_set_dwell_time(uint32_t dwell_time)
     if (dwell_time > MAX_DWELL_TIME_SECONDS) {
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     // Store in config
     esp_err_t err = config_store_set_dwell_time(dwell_time * 1000u);
     if (err != ESP_OK) return err;
-    
-    // Update channel_player
-    return channel_player_set_dwell_time(dwell_time);
+
+    // Update play_scheduler
+    play_scheduler_set_dwell_time(dwell_time);
+    return ESP_OK;
 }
 
-// Phase 7: auto_swap_task removed - timer task now in channel_player
+// Phase 7: auto_swap_task removed - timer task now in play_scheduler
 
 #if CONFIG_P3A_MEMORY_REPORTING_ENABLE
 /**
@@ -487,6 +489,12 @@ void app_main(void)
     // if any early fallback or status paths touch it before animation_player finishes init.
     (void)channel_player_init();
 
+    // Initialize play_scheduler (the new deterministic playback engine)
+    esp_err_t ps_err = play_scheduler_init();
+    if (ps_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize play_scheduler: %s", esp_err_to_name(ps_err));
+    }
+
     // Validate OTA boot early - this must be done before any complex operations
     // If running a new OTA firmware, this marks it as valid to prevent rollback
     esp_err_t ota_err = ota_manager_validate_boot();
@@ -520,7 +528,7 @@ void app_main(void)
 
     ESP_ERROR_CHECK(app_usb_init());
 
-    // Phase 7: auto_swap_task removed - timer task now in channel_player
+    // Phase 7: auto_swap_task removed - timer task now in play_scheduler
 
 #if CONFIG_P3A_MEMORY_REPORTING_ENABLE
     // Create memory reporting task

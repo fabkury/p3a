@@ -32,6 +32,7 @@
 #include "makapix_channel_impl.h"
 #include "animation_player.h"
 #include "channel_player.h"
+#include "play_scheduler.h"
 #include "app_lcd.h"
 #include "version.h"
 #include "p3a_state.h"
@@ -568,7 +569,7 @@ esp_err_t h_put_config(httpd_req_t *req) {
     cJSON *dwell_item = cJSON_GetObjectItem(o, "dwell_time_ms");
     if (dwell_item && cJSON_IsNumber(dwell_item)) {
         uint32_t dwell_ms = (uint32_t)cJSON_GetNumberValue(dwell_item);
-        channel_player_set_dwell_time(dwell_ms / 1000);
+        play_scheduler_set_dwell_time(dwell_ms / 1000);
     }
 
     cJSON_Delete(o);
@@ -580,7 +581,7 @@ esp_err_t h_put_config(httpd_req_t *req) {
 
 /**
  * POST /channel
- * Switch to a channel
+ * Switch to a channel using Play Scheduler
  * Body: {"channel_name": "all"|"promoted"|"sdcard"} or {"hashtag": "..."} or {"user_sqid": "..."}
  */
 esp_err_t h_post_channel(httpd_req_t *req) {
@@ -610,66 +611,44 @@ esp_err_t h_post_channel(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    // Parse new format: exactly ONE of channel_name, hashtag, or user_sqid
+    // Parse: exactly ONE of channel_name, hashtag, or user_sqid
     cJSON *channel_name = cJSON_GetObjectItem(root, "channel_name");
     cJSON *hashtag = cJSON_GetObjectItem(root, "hashtag");
     cJSON *user_sqid = cJSON_GetObjectItem(root, "user_sqid");
 
-    const char *ch_name = NULL;
-    const char *identifier = NULL;
+    esp_err_t err = ESP_FAIL;
 
     if (channel_name && cJSON_IsString(channel_name)) {
-        ch_name = cJSON_GetStringValue(channel_name);
+        // Named channel: "all", "promoted", or "sdcard"
+        const char *name = cJSON_GetStringValue(channel_name);
+        err = play_scheduler_play_named_channel(name);
     } else if (hashtag && cJSON_IsString(hashtag)) {
-        ch_name = "hashtag";
-        identifier = cJSON_GetStringValue(hashtag);
+        // Hashtag channel
+        const char *tag = cJSON_GetStringValue(hashtag);
+        err = play_scheduler_play_hashtag_channel(tag);
     } else if (user_sqid && cJSON_IsString(user_sqid)) {
-        ch_name = "by_user";
-        identifier = cJSON_GetStringValue(user_sqid);
+        // User channel
+        const char *sqid = cJSON_GetStringValue(user_sqid);
+        err = play_scheduler_play_user_channel(sqid);
     } else {
         cJSON_Delete(root);
         send_json(req, 400, "{\"ok\":false,\"error\":\"Missing channel_name, hashtag, or user_sqid\",\"code\":\"INVALID_REQUEST\"}");
         return ESP_OK;
     }
 
-    esp_err_t err;
-    
-    // Handle sdcard channel separately
-    if (strcmp(ch_name, "sdcard") == 0) {
-        if (makapix_is_channel_loading(NULL, 0)) {
-            ESP_LOGI(HTTP_API_TAG, "Aborting Makapix channel load for SD card switch");
-            makapix_abort_channel_load();
-        }
-        
-        // Clear Makapix current channel state so switching back to same channel works
-        makapix_clear_current_channel();
-        
-        err = p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL);
-        if (err == ESP_OK) {
-            channel_player_switch_to_sdcard_channel();
-            channel_player_load_channel();
-            channel_player_swap_to(0, 0);  // Start playback at first item
-        }
-        cJSON_Delete(root);
-        if (err != ESP_OK) {
-            send_json(req, 500, "{\"ok\":false,\"error\":\"Channel switch failed\",\"code\":\"CHANNEL_SWITCH_FAILED\"}");
-            return ESP_OK;
-        }
-        send_json(req, 200, "{\"ok\":true}");
-        return ESP_OK;
-    }
-    
-    // Handle Makapix channels asynchronously
-    err = makapix_request_channel_switch(ch_name, identifier);
-    
     cJSON_Delete(root);
 
-    if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Channel switch request failed\",\"code\":\"CHANNEL_SWITCH_FAILED\"}");
+    if (err == ESP_ERR_INVALID_ARG) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid channel\",\"code\":\"INVALID_CHANNEL\"}");
         return ESP_OK;
     }
 
-    send_json(req, 202, "{\"ok\":true,\"message\":\"Channel switch initiated\"}");
+    if (err != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Channel switch failed\",\"code\":\"CHANNEL_SWITCH_FAILED\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, "{\"ok\":true}");
     return ESP_OK;
 }
 
@@ -980,8 +959,8 @@ esp_err_t h_post_swap_next(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    // Direct call to channel_player
-    esp_err_t err = channel_player_swap_next();
+    // Direct call to play_scheduler
+    esp_err_t err = play_scheduler_next(NULL);
     if (err == ESP_ERR_INVALID_STATE) {
         send_json(req, 409, "{\"ok\":false,\"error\":\"Command in progress\",\"code\":\"BUSY\"}");
     } else if (err != ESP_OK) {
@@ -989,7 +968,7 @@ esp_err_t h_post_swap_next(httpd_req_t *req) {
     } else {
         send_json(req, 200, "{\"ok\":true,\"data\":{\"action\":\"swap_next\"}}");
     }
-    
+
     return ESP_OK;
 }
 
@@ -1007,8 +986,8 @@ esp_err_t h_post_swap_back(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    // Direct call to channel_player
-    esp_err_t err = channel_player_swap_back();
+    // Direct call to play_scheduler
+    esp_err_t err = play_scheduler_prev(NULL);
     if (err == ESP_ERR_INVALID_STATE) {
         send_json(req, 409, "{\"ok\":false,\"error\":\"Command in progress\",\"code\":\"BUSY\"}");
     } else if (err != ESP_OK) {
@@ -1016,7 +995,7 @@ esp_err_t h_post_swap_back(httpd_req_t *req) {
     } else {
         send_json(req, 200, "{\"ok\":true,\"data\":{\"action\":\"swap_back\"}}");
     }
-    
+
     return ESP_OK;
 }
 

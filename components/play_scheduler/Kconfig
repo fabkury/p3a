@@ -1,0 +1,41 @@
+menu "Play Scheduler"
+
+    config PLAY_SCHEDULER_HISTORY_SIZE
+        int "History buffer size"
+        default 32
+        range 8 128
+        help
+            Number of previously played artworks to keep in history.
+            Allows navigation back through recently played items.
+
+    config PLAY_SCHEDULER_LOOKAHEAD_SIZE
+        int "Lookahead buffer size"
+        default 32
+        range 8 128
+        help
+            Number of upcoming artworks to pre-generate.
+            Larger values reduce generation overhead but use more memory.
+
+    config PLAY_SCHEDULER_NAE_POOL_SIZE
+        int "NAE pool size"
+        default 32
+        range 8 64
+        help
+            Maximum number of New Artwork Event entries.
+            NAE provides temporary boost for newly published artworks.
+
+    config PLAY_SCHEDULER_RANDOM_WINDOW
+        int "Random pick window size"
+        default 64
+        range 8 256
+        help
+            Number of most recent artworks to sample from in RandomPick mode.
+
+    config PLAY_SCHEDULER_MAX_CHANNELS
+        int "Maximum channels"
+        default 64
+        range 1 64
+        help
+            Maximum number of channels that can be active simultaneously.
+
+endmenu

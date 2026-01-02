@@ -13,6 +13,7 @@
 #include "sd_path.h"
 #include "esp_timer.h"
 #include "animation_player.h"
+#include "play_scheduler.h"
 #include <sys/stat.h>
 #include <dirent.h>
 #include <unistd.h>
@@ -426,8 +427,11 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     
     // Use the original filename (no suffix needed)
     const char *final_filename = filename;
-    
+
     ESP_LOGI(HTTP_API_TAG, "File uploaded successfully: %s", final_filename);
+
+    // Refresh SD card index for Play Scheduler
+    play_scheduler_refresh_sdcard_cache();
     
     // Get current playing index to insert after it
     // Returns SIZE_MAX if nothing is playing, which will cause insertion at index 0

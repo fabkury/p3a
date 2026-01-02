@@ -1,6 +1,6 @@
 # Play Scheduler — Implementation Plan
 
-**Status**: 🟡 Planning Complete, Implementation Pending  
+**Status**: 🔵 Revision 2 — Channel Architecture Clarified  
 **Last Updated**: 2026-01-01  
 **Author**: AI Assistant + Human Review
 
@@ -9,16 +9,19 @@
 ## Table of Contents
 
 1. [Overview](#1-overview)
-2. [Design Decisions](#2-design-decisions)
-3. [Architecture](#3-architecture)
-4. [Component Breakdown](#4-component-breakdown)
-5. [Data Structures](#5-data-structures)
-6. [API Design](#6-api-design)
-7. [Algorithm Details](#7-algorithm-details)
-8. [Migration Strategy](#8-migration-strategy)
-9. [Implementation Phases](#9-implementation-phases)
-10. [Testing Strategy](#10-testing-strategy)
-11. [Open Questions & Future Work](#11-open-questions--future-work)
+2. [Channel Architecture](#2-channel-architecture)
+3. [Design Decisions](#3-design-decisions)
+4. [Scheduler Commands](#4-scheduler-commands)
+5. [System Architecture](#5-system-architecture)
+6. [Data Structures](#6-data-structures)
+7. [API Design](#7-api-design)
+8. [Algorithm Details](#8-algorithm-details)
+9. [Cache Management](#9-cache-management)
+10. [Download Integration](#10-download-integration)
+11. [Migration Strategy](#11-migration-strategy)
+12. [Implementation Phases](#12-implementation-phases)
+13. [Testing Strategy](#13-testing-strategy)
+14. [Open Questions & Future Work](#14-open-questions--future-work)
 
 ---
 
@@ -26,7 +29,7 @@
 
 ### 1.1 Purpose
 
-The **Play Scheduler (PS)** is a deterministic playback engine that replaces the existing `channel_player.c` component. It selects artworks from multiple followed channels for presentation on the p3a player device.
+The **Play Scheduler (PS)** is a deterministic playback engine that replaces the existing `channel_player.c` component. It selects artworks from multiple channels for presentation on the p3a player device.
 
 ### 1.2 Key Design Principles
 
@@ -34,8 +37,9 @@ The **Play Scheduler (PS)** is a deterministic playback engine that replaces the
 - **Bounded memory**: History buffer (H) and Lookahead buffer (L)
 - **Multi-channel fairness**: Weighted exposure across channels via SWRR
 - **Responsiveness**: New Artwork Events (NAE) for newly published content
-- **Determinism**: Reversible PRNGs enable reproducible sequences
-- **Embedded-optimized**: Designed for SD + WiFi bus contention, PSRAM usage
+- **Immediate playback**: Use cached data immediately, refresh in background
+- **Lenient behavior**: Skip unavailable content, never block
+- **Event-driven downloads**: Lookahead-aware prefetching
 
 ### 1.3 What It Replaces
 
@@ -44,35 +48,203 @@ The Play Scheduler **completely replaces** `channel_player.c`, absorbing:
 - Auto-swap timer
 - Channel switching
 - Play order management
-- Live Mode integration (future)
+- Channel cache management
 
 ---
 
-## 2. Design Decisions
+## 2. Channel Architecture
 
-These decisions were made through Q&A discussion and are binding for implementation.
+### 2.1 Channel Types
 
-| # | Question | Decision |
-|---|----------|----------|
+There are **two kinds** of channels:
+
+| Type | Storage | Source | Cache File |
+|------|---------|--------|------------|
+| **SD Card Channel** | Local folder scan | SD card `/animations/` folder | `sdcard.bin` |
+| **Makapix Channels** | MQTT queries | Remote server | `{channel_id}.bin` |
+
+### 2.2 Makapix Channel Subtypes
+
+| Subtype | Name Field | Identifier Field | Cache File Name |
+|---------|------------|------------------|-----------------|
+| **Named** | `"all"`, `"featured"` | (none) | `all.bin`, `featured.bin` |
+| **User** | `"user"` | `user_sqid` (e.g., `"uvz"`) | `user_uvz.bin` |
+| **Hashtag** | `"hashtag"` | `hashtag` (e.g., `"sunset"`) | `hashtag_sunset.bin` |
+
+### 2.3 Channel Identification
+
+Every channel has a **unique string identifier** (max 32 characters):
+
+```
+Named:    "{name}"              → "all", "featured"
+User:     "user:{user_sqid}"    → "user:uvz"
+Hashtag:  "hashtag:{tag}"       → "hashtag:sunset"
+SD Card:  "sdcard"              → "sdcard"
+```
+
+**Sanitization**: User and hashtag identifiers must be sanitized for filesystem compatibility:
+- Replace non-alphanumeric characters with `_`
+- Accept risk of rare collisions (deferred)
+
+### 2.4 Channel Cache Files (Ei)
+
+Each channel has a local `.bin` cache file on SD card:
+
+```
+/sdcard/p3a/channel/
+├── all.bin              # Named channel: Recent
+├── featured.bin         # Named channel: Promoted
+├── user_uvz.bin         # User channel
+├── hashtag_sunset.bin   # Hashtag channel
+└── sdcard.bin           # SD card channel
+```
+
+**Format**: Uses existing `makapix_channel_entry_t` (64 bytes per entry).
+
+**SD Card Channel**: Gets a `.bin` index file just like Makapix channels. Refreshed by scanning the `/animations/` folder.
+
+### 2.5 Channel Lifecycle
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CHANNEL LIFECYCLE                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. SCHEDULER COMMAND RECEIVED                                  │
+│     └─► Lookahead flushed                                       │
+│     └─► History preserved                                       │
+│                                                                 │
+│  2. IMMEDIATE: Use cached data                                  │
+│     └─► Load .bin files that exist                              │
+│     └─► Channels without cache: weight=0 (skip)                 │
+│     └─► Begin playback immediately                              │
+│                                                                 │
+│  3. BACKGROUND: Refresh caches (sequential, one at a time)      │
+│     └─► For each channel in command:                            │
+│         ├─► If Makapix: MQTT query_posts                        │
+│         └─► If SD card: Scan /animations/ folder                │
+│     └─► As each cache completes: entries become eligible        │
+│                                                                 │
+│  4. ONGOING: Download artworks for lookahead                    │
+│     └─► Event-driven, not polling                               │
+│     └─► One download at a time                                  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. Design Decisions
+
+### Quick Reference Table (Decisions 1-24)
+
+| # | Topic | Decision |
+|---|-------|----------|
 | 1 | Relationship with `channel_player.c` | **Replace entirely** |
-| 2 | Local Channel Cache format | **Use existing `makapix_channel_entry_t`** |
-| 3 | Channel identification | **Use string identifiers** (`"all"`, `"promoted"`, `"sdcard"`) |
+| 2 | Local Cache format | **Use existing `makapix_channel_entry_t`** |
+| 3 | Channel identification | **String identifiers** (max 32 chars) |
 | 4 | NAE scope | **Global pool** across all channels |
 | 5 | NAE persistence | **In-memory only** (reset on reboot) |
-| 6 | MaE weights source | **Dummy/random weights** for now |
-| 7 | PrE counts source | **Server `query_posts` response** (total_count, recent_count) |
-| 8 | History on reset | **Preserved** across snapshot resets |
-| 9 | SD card in PrE mode | **recent_count = 0** (no recency bias) |
-| 10 | Playlist support | **Deferred** to later |
+| 6 | MaE weights source | **From scheduler command** (UI later) |
+| 7 | PrE counts source | **Server `query_posts` response** |
+| 8 | History on reset | **Preserved** across scheduler commands |
+| 9 | SD card in PrE mode | **recent_count = 0** |
+| 10 | Playlist support | **Deferred** |
 | 11 | Integration point | **Call `animation_player_request_swap()` directly** |
-| 12 | Auto-swap timer | **Part of Play Scheduler** component |
-| 13 | HTTP API | **Update `http_api.c`** to call new PS API |
+| 12 | Auto-swap timer | **Part of Play Scheduler** |
+| 13 | HTTP API | **Update to use new API** |
+| 14 | Channel ID format (Named) | `"{name}"` → `"all"`, `"featured"` |
+| 15 | Channel ID format (User) | `"user:{sqid}"` → `"user:uvz"` |
+| 16 | Channel ID format (Hashtag) | `"hashtag:{tag}"` → `"hashtag:sunset"` |
+| 17 | SD card channel caching | **Has `.bin` file** like Makapix |
+| 18 | Multi-channel refresh | **Sequential** (one at a time) |
+| 19 | Intermediate progress | **Entries become eligible** (no regen) |
+| 20 | Download trigger location | **download_manager** (PS signals) |
+| 21 | Channel switch: cancel downloads | **No** (let complete) |
+| 22 | Channel switch: keep caches | **Yes** (for future use) |
+| 23 | Channel switch: clear lookahead | **Yes** (flush on command) |
+| 24 | Skip behavior: no cache | **weight=0** until cache arrives |
+| 25 | Skip behavior: no local file | **Skip during playback**, keep in lookahead |
+| 26 | Skip behavior: 404 | **Remove permanently** (marker file) |
+| 27 | Cache eviction | **Best-effort LRU** |
+| 28 | SD card refresh triggers | **On switch, on upload** |
+| 29 | History across commands | **prev() can go back** to old items |
+| 30 | 404 tracking | **Marker file** (`{path}.404`) |
+| 31 | Scheduler command params | **Channel list + exposure mode + pick mode** |
 
 ---
 
-## 3. Architecture
+## 4. Scheduler Commands
 
-### 3.1 High-Level Component Diagram
+### 4.1 Concept
+
+A **Scheduler Command** is a single instruction containing all parameters needed to produce a play queue. When received, the scheduler:
+
+1. **Flushes** the lookahead buffer
+2. **Preserves** the history buffer
+3. **Begins** building a new play queue
+
+### 4.2 Command Parameters
+
+```c
+typedef struct {
+    // Channel list (1 to PS_MAX_CHANNELS)
+    ps_channel_spec_t channels[PS_MAX_CHANNELS];
+    size_t channel_count;
+    
+    // Exposure mode
+    ps_exposure_mode_t exposure_mode;  // EqE, MaE, or PrE
+    
+    // Pick mode
+    ps_pick_mode_t pick_mode;          // Recency or Random
+} ps_scheduler_command_t;
+```
+
+### 4.3 Channel Specification
+
+```c
+typedef enum {
+    PS_CHANNEL_TYPE_NAMED,    // "all", "featured"
+    PS_CHANNEL_TYPE_USER,     // "user" + user_sqid
+    PS_CHANNEL_TYPE_HASHTAG,  // "hashtag" + hashtag
+    PS_CHANNEL_TYPE_SDCARD,   // "sdcard"
+} ps_channel_type_t;
+
+typedef struct {
+    ps_channel_type_t type;
+    char name[33];            // Channel name (max 32 + null)
+    char identifier[33];      // For user/hashtag types
+    uint32_t weight;          // For MaE mode
+} ps_channel_spec_t;
+```
+
+### 4.4 Derived Channel ID
+
+```c
+// Build unique channel_id from spec
+void ps_build_channel_id(const ps_channel_spec_t *spec, char *out_id, size_t max_len) {
+    switch (spec->type) {
+        case PS_CHANNEL_TYPE_NAMED:
+            snprintf(out_id, max_len, "%s", spec->name);
+            break;
+        case PS_CHANNEL_TYPE_USER:
+            snprintf(out_id, max_len, "user:%s", sanitize(spec->identifier));
+            break;
+        case PS_CHANNEL_TYPE_HASHTAG:
+            snprintf(out_id, max_len, "hashtag:%s", sanitize(spec->identifier));
+            break;
+        case PS_CHANNEL_TYPE_SDCARD:
+            snprintf(out_id, max_len, "sdcard");
+            break;
+    }
+}
+```
+
+---
+
+## 5. System Architecture
+
+### 5.1 High-Level Component Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -82,7 +254,7 @@ These decisions were made through Q&A discussion and are binding for implementat
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                         http_api.c                              │
-│  POST /channel  →  play_scheduler_set_channels()                │
+│  POST /channel  →  play_scheduler_execute_command()             │
 │  POST /next     →  play_scheduler_next()                        │
 │  POST /back     →  play_scheduler_prev()                        │
 └─────────────────────────────┬───────────────────────────────────┘
@@ -91,264 +263,219 @@ These decisions were made through Q&A discussion and are binding for implementat
 ┌─────────────────────────────────────────────────────────────────┐
 │                      PLAY SCHEDULER                             │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
-│  │   History   │  │  Generator  │  │  Lookahead  │             │
-│  │  Buffer(H)  │◄─┤   Engine    ├─►│  Buffer(L)  │             │
-│  └─────────────┘  └──────┬──────┘  └─────────────┘             │
-│                          │                                      │
-│  ┌───────────────────────┼───────────────────────┐             │
-│  │                       ▼                       │             │
-│  │  ┌─────────┐   ┌──────────────┐   ┌────────┐ │             │
-│  │  │   NAE   │   │     SWRR     │   │  Pick  │ │             │
-│  │  │  Pool   │   │  Scheduler   │   │ Modes  │ │             │
-│  │  └─────────┘   └──────────────┘   └────────┘ │             │
-│  └───────────────────────────────────────────────┘             │
-│                          │                                      │
-│  ┌───────────────────────┼───────────────────────┐             │
-│  │            Per-Channel State (1..N)           │             │
-│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐       │             │
-│  │  │Channel 1│  │Channel 2│  │Channel N│       │             │
-│  │  │ cursor  │  │ cursor  │  │ cursor  │       │             │
-│  │  │ credit  │  │ credit  │  │ credit  │       │             │
-│  │  │   Ei    │  │   Ei    │  │   Ei    │       │             │
-│  │  └─────────┘  └─────────┘  └─────────┘       │             │
-│  └───────────────────────────────────────────────┘             │
-│                          │                                      │
-│  ┌───────────────────────┼───────────────────────┐             │
-│  │              Auto-Swap Timer Task             │             │
-│  └───────────────────────────────────────────────┘             │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
+│  │   History   │  │  Generator  │  │  Lookahead  │──────┐      │
+│  │  Buffer(H)  │◄─┤   Engine    ├─►│  Buffer(L)  │      │      │
+│  └─────────────┘  └──────┬──────┘  └─────────────┘      │      │
+│                          │                               │      │
+│  ┌───────────────────────┼───────────────────────┐      │      │
+│  │                       ▼                       │      │      │
+│  │  ┌─────────┐   ┌──────────────┐   ┌────────┐ │      │      │
+│  │  │   NAE   │   │     SWRR     │   │  Pick  │ │      │      │
+│  │  │  Pool   │   │  Scheduler   │   │ Modes  │ │      │      │
+│  │  └─────────┘   └──────────────┘   └────────┘ │      │      │
+│  └───────────────────────────────────────────────┘      │      │
+│                          │                               │      │
+│  ┌───────────────────────┼───────────────────────┐      │      │
+│  │     Per-Channel State + Cache (.bin files)    │      │      │
+│  └───────────────────────────────────────────────┘      │      │
+│                          │                               │      │
+│  ┌───────────────────────┴───────────────────────┐      │      │
+│  │         Background Cache Refresh Task         │      │      │
+│  │    (Sequential: MQTT queries / SD scan)       │      │      │
+│  └───────────────────────────────────────────────┘      │      │
+└─────────────────────────────┬───────────────────────────┼──────┘
+                              │                           │
+                              ▼                           │
+┌─────────────────────────────────────────────────────────┼──────┐
+│                    animation_player.c                   │      │
+│              animation_player_request_swap()            │      │
+└─────────────────────────────────────────────────────────┼──────┘
+                                                          │
+                              ┌────────────────────────────┘
+                              │ Signal: lookahead changed
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    animation_player.c                           │
-│              animation_player_request_swap()                    │
+│                     download_manager.c                          │
+│  Event triggers:                                                │
+│    1. Lookahead entries added (while no download active)        │
+│    2. Download completed                                        │
+│  Action: Find soonest lookahead item without local file,        │
+│          submit for download                                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 Data Flow
+### 5.2 Data Flow: Scheduler Command
+
+```
+Scheduler Command Received
+        │
+        ▼
+┌───────────────────────────────────┐
+│  1. Flush lookahead buffer        │
+│  2. Reset per-channel state       │
+│  3. Load existing .bin caches     │
+│  4. Set active=true for cached    │
+│  5. Set weight=0 for uncached     │
+│  6. Calculate SWRR weights        │
+│  7. Start background refresh task │
+└───────────────────────────────────┘
+        │
+        ├──────────────────────────────────┐
+        │                                  │
+        ▼                                  ▼
+┌─────────────────────┐      ┌─────────────────────────────┐
+│  Immediate playback │      │  Background: Refresh caches │
+│  from cached data   │      │  (one channel at a time)    │
+└─────────────────────┘      └─────────────────────────────┘
+```
+
+### 5.3 Data Flow: Navigation
 
 ```
 User Action (next/touch/timer)
         │
         ▼
-┌───────────────────┐
-│  PS: next()       │
-│  1. Check history │◄─── If walking forward through history, return cached
-│  2. Check L < min │
-│  3. Generate batch│◄─── If L low, generate L new items
-│  4. Pop from L    │
-│  5. Push to H     │
-│  6. Return artwork│
-└─────────┬─────────┘
-          │
-          ▼
-┌───────────────────┐
-│ animation_player  │
-│ _request_swap()   │
-└───────────────────┘
+┌───────────────────────────────────────────────────────┐
+│  PS: next()                                           │
+│  1. If walking forward in history → return cached     │
+│  2. If lookahead.count < L → generate_batch(L)        │
+│  3. Pop artwork from lookahead                        │
+│  4. If artwork.file_exists:                           │
+│       → Push to history, request swap                 │
+│     Else:                                             │
+│       → Skip (keep in lookahead for later)            │
+│       → Try next item                                 │
+│  5. Signal download_manager: lookahead_changed        │
+└───────────────────────────────────────────────────────┘
 ```
 
-### 3.3 File Layout
+### 5.4 File Layout
 
 ```
 components/
-└── play_scheduler/
-    ├── CMakeLists.txt
-    ├── Kconfig
-    ├── include/
-    │   ├── play_scheduler.h          # Public API
-    │   ├── play_scheduler_types.h    # Data structures
-    │   └── nae_pool.h                # NAE pool interface
-    ├── play_scheduler.c              # Main implementation
-    ├── play_scheduler_swrr.c         # SWRR algorithm
-    ├── play_scheduler_pick.c         # Pick modes (Recency, Random)
-    ├── play_scheduler_nae.c          # NAE pool management
-    ├── play_scheduler_buffers.c      # History & Lookahead
-    └── play_scheduler_timer.c        # Auto-swap timer task
+├── play_scheduler/
+│   ├── CMakeLists.txt
+│   ├── Kconfig
+│   ├── include/
+│   │   ├── play_scheduler.h              # Public API
+│   │   ├── play_scheduler_types.h        # Data structures
+│   │   └── play_scheduler_internal.h     # Internal APIs
+│   ├── play_scheduler.c                  # Core + command handling
+│   ├── play_scheduler_swrr.c             # SWRR algorithm
+│   ├── play_scheduler_pick.c             # Pick modes
+│   ├── play_scheduler_nae.c              # NAE pool
+│   ├── play_scheduler_buffers.c          # History & Lookahead
+│   ├── play_scheduler_cache.c            # Cache management (NEW)
+│   ├── play_scheduler_refresh.c          # Background refresh (NEW)
+│   └── play_scheduler_timer.c            # Auto-swap timer
+│
+└── channel_manager/
+    ├── sdcard_channel_cache.c            # SD card .bin builder (NEW)
+    └── ... (existing files)
 ```
 
 ---
 
-## 4. Component Breakdown
+## 6. Data Structures
 
-### 4.1 Core Scheduler (`play_scheduler.c`)
+### 6.1 Channel Specification (Input)
 
-**Responsibilities:**
-- Initialize/deinitialize scheduler
-- Manage channel set and weights
-- Coordinate generation engine
-- Expose public API: `next()`, `prev()`, `peek()`
-- Handle snapshot resets
-- Integrate with animation_player
-
-**Key Functions:**
 ```c
-esp_err_t play_scheduler_init(void);
-void play_scheduler_deinit(void);
-esp_err_t play_scheduler_set_channels(const ps_channel_config_t *channels, size_t count, ps_exposure_mode_t mode);
-esp_err_t play_scheduler_next(ps_artwork_t *out);
-esp_err_t play_scheduler_prev(ps_artwork_t *out);
-esp_err_t play_scheduler_peek(size_t n, ps_artwork_t *out, size_t *out_count);
-void play_scheduler_reset(void);
-```
+typedef enum {
+    PS_CHANNEL_TYPE_NAMED,
+    PS_CHANNEL_TYPE_USER,
+    PS_CHANNEL_TYPE_HASHTAG,
+    PS_CHANNEL_TYPE_SDCARD,
+} ps_channel_type_t;
 
-### 4.2 SWRR Scheduler (`play_scheduler_swrr.c`)
-
-**Responsibilities:**
-- Implement Smooth Weighted Round Robin algorithm
-- Maintain per-channel credit counters
-- Select next channel based on weights
-
-**Algorithm:**
-```
-Wsum = 65536
-credit[i] = 0 initially
-
-For each step:
-  1. credit[i] += W[i] for all i
-  2. j = argmax(credit[i]), tie-break: lowest channel ID
-  3. Emit channel j
-  4. credit[j] -= Wsum
-```
-
-### 4.3 Pick Modes (`play_scheduler_pick.c`)
-
-**Responsibilities:**
-- RecencyPick: cursor-based newest→older traversal
-- RandomPick: uniform sampling from newest R_eff records
-- Immediate repeat avoidance (per-mode rules)
-
-**RecencyPick:**
-- Cursor starts at newest record
-- Each pick: return at cursor, move toward older, wrap on exhaustion
-- On immediate repeat: skip up to 2 records
-
-**RandomPick:**
-- R_eff = min(R, Mi) where R is configurable window
-- Sample uniformly from newest R_eff records
-- Uses `PRNG_randompick` stream
-- On immediate repeat: up to 5 resample attempts
-
-### 4.4 NAE Pool (`play_scheduler_nae.c`)
-
-**Responsibilities:**
-- Maintain priority queue of new artwork events
-- Handle MQTT-triggered insertions
-- Selection probability calculation
-- Priority decay on selection
-
-**Data Structure:**
-```c
 typedef struct {
-    ps_artwork_t artwork;
-    float priority;           // (0, 1]
-    uint64_t insertion_time;  // For tie-breaking
-} nae_entry_t;
-
-#define NAE_POOL_SIZE 32
+    ps_channel_type_t type;
+    char name[33];              // "all", "featured", "user", "hashtag", "sdcard"
+    char identifier[33];        // user_sqid or hashtag (sanitized)
+    uint32_t weight;            // For MaE mode
+} ps_channel_spec_t;
 ```
 
-**Key Operations:**
-- `nae_insert()`: Add/merge entry, evict lowest if over capacity
-- `nae_select()`: Probabilistic selection based on Σpriorities
-- `nae_decay()`: Halve priority, remove if < 2%
-
-### 4.5 Buffers (`play_scheduler_buffers.c`)
-
-**Responsibilities:**
-- Manage History buffer (H) - ring buffer of committed items
-- Manage Lookahead buffer (L) - queue of pre-generated items
-- History navigation (prev/forward without mutation)
-
-**History Buffer (H):**
-- Default size: 32 items (configurable)
-- Ring buffer implementation
-- Tracks "current position" for prev/next within history
-
-**Lookahead Buffer (L):**
-- Default size: 32 items (configurable)
-- FIFO queue
-- Batch generation when size < L
-
-### 4.6 Timer Task (`play_scheduler_timer.c`)
-
-**Responsibilities:**
-- Monitor dwell time
-- Trigger auto-swap via `play_scheduler_next()`
-- Handle touch event flags
-- Reset on manual navigation
-
----
-
-## 5. Data Structures
-
-### 5.1 Artwork Reference
+### 6.2 Scheduler Command
 
 ```c
 typedef struct {
-    int32_t artwork_id;           // Globally unique artwork ID
-    int32_t post_id;              // Post ID for view tracking
-    char filepath[256];           // Local path to file
-    char storage_key[96];         // Vault storage key
-    uint32_t created_at;          // Unix timestamp
-    uint32_t dwell_time_ms;       // Per-artwork dwell (0 = use default)
-    asset_type_t type;            // WEBP, GIF, PNG, JPEG
-    uint8_t channel_index;        // Which channel this came from
-} ps_artwork_t;
+    ps_channel_spec_t channels[PS_MAX_CHANNELS];
+    size_t channel_count;
+    ps_exposure_mode_t exposure_mode;
+    ps_pick_mode_t pick_mode;
+} ps_scheduler_command_t;
 ```
 
-### 5.2 Channel Configuration
+### 6.3 Per-Channel State (Internal)
 
 ```c
 typedef struct {
-    char channel_id[64];          // "all", "promoted", "sdcard", etc.
-    uint32_t weight;              // For MaE mode (0 = auto-calculate)
-    uint32_t total_count;         // From server or local scan
-    uint32_t recent_count;        // From server (0 for SD card)
-} ps_channel_config_t;
-```
-
-### 5.3 Per-Channel State
-
-```c
-typedef struct {
-    char channel_id[64];
-    channel_handle_t handle;      // Existing channel_interface handle
+    // Identity
+    char channel_id[64];            // Derived: "all", "user:uvz", etc.
+    ps_channel_type_t type;
+    
+    // Cache state
+    bool cache_loaded;              // .bin file loaded into memory
+    bool cache_exists;              // .bin file exists on disk
+    size_t entry_count;             // Number of entries in cache
+    makapix_channel_entry_t *entries;  // Loaded entries (NULL if not loaded)
     
     // SWRR state
     int32_t credit;
-    uint32_t weight;              // Normalized weight (out of 65536)
+    uint32_t weight;                // Normalized (out of 65536)
+    bool active;                    // Has usable data (entry_count > 0)
     
     // Pick state
-    uint32_t cursor;              // For RecencyPick
-    pcg32_rng_t pick_rng;         // For RandomPick
+    uint32_t cursor;                // For RecencyPick
+    uint64_t pick_rng_state;        // For RandomPick
     
-    // Cache info
-    size_t entry_count;           // Mi: local cache size
-    bool active;                  // Has local data?
+    // Refresh state
+    bool refresh_pending;
+    bool refresh_in_progress;
+    uint32_t total_count;           // From server (for PrE)
+    uint32_t recent_count;          // From server (for PrE)
 } ps_channel_state_t;
 ```
 
-### 5.4 Scheduler State
+### 6.4 Artwork Reference
 
 ```c
 typedef struct {
-    // Configuration
-    ps_exposure_mode_t exposure_mode;
-    ps_pick_mode_t pick_mode;
-    uint32_t history_size;        // H
-    uint32_t lookahead_size;      // L
-    uint32_t random_window;       // R for RandomPick
+    int32_t artwork_id;             // Globally unique
+    int32_t post_id;                // For view tracking
+    char filepath[256];             // Local path
+    char storage_key[96];           // Vault key
+    uint32_t created_at;            // Unix timestamp
+    uint32_t dwell_time_ms;         // Per-artwork (0 = default)
+    asset_type_t type;              // WEBP, GIF, PNG, JPEG
+    uint8_t channel_index;          // Which channel
+    bool file_available;            // Local file exists?
+} ps_artwork_t;
+```
+
+### 6.5 Scheduler State
+
+```c
+typedef struct {
+    // Current command
+    ps_scheduler_command_t current_command;
     
     // Channels
     ps_channel_state_t channels[PS_MAX_CHANNELS];
     size_t channel_count;
     
+    // Configuration
+    ps_exposure_mode_t exposure_mode;
+    ps_pick_mode_t pick_mode;
+    uint32_t history_size;          // H (default 32)
+    uint32_t lookahead_size;        // L (default 32)
+    
     // Buffers
     ps_artwork_t *history;
     size_t history_head;
     size_t history_count;
-    int32_t history_position;     // -1 = at head, 0+ = steps back
+    int32_t history_position;       // For prev/next navigation
     
     ps_artwork_t *lookahead;
     size_t lookahead_head;
@@ -359,14 +486,15 @@ typedef struct {
     nae_entry_t nae_pool[NAE_POOL_SIZE];
     size_t nae_count;
     bool nae_enabled;
-    
-    // PRNGs
-    pcg32_rng_t prng_nae;
-    uint32_t global_seed;
-    uint32_t epoch_id;
+    uint64_t prng_nae_state;
     
     // Repeat avoidance
     int32_t last_played_id;
+    
+    // Background refresh
+    TaskHandle_t refresh_task;
+    size_t refresh_queue_head;      // Which channel to refresh next
+    volatile bool refresh_abort;
     
     // Timer
     TaskHandle_t timer_task;
@@ -374,263 +502,150 @@ typedef struct {
     volatile bool touch_next;
     volatile bool touch_back;
     
-    // Synchronization
+    // Sync
     SemaphoreHandle_t mutex;
+    uint32_t epoch_id;
     bool initialized;
 } ps_state_t;
 ```
 
 ---
 
-## 6. API Design
+## 7. API Design
 
-### 6.1 Public API (`play_scheduler.h`)
+### 7.1 Scheduler Commands
 
 ```c
-// ============================================================================
-// Initialization
-// ============================================================================
-
 /**
- * @brief Initialize the Play Scheduler
+ * @brief Execute a scheduler command
+ * 
+ * This is the primary API for changing what the scheduler plays.
+ * Flushes lookahead, preserves history, begins new play queue.
+ * 
+ * @param command Scheduler command parameters
  * @return ESP_OK on success
  */
-esp_err_t play_scheduler_init(void);
+esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command);
 
 /**
- * @brief Deinitialize and free all resources
- */
-void play_scheduler_deinit(void);
-
-// ============================================================================
-// Channel Configuration
-// ============================================================================
-
-/**
- * @brief Exposure modes for channel weighting
- */
-typedef enum {
-    PS_EXPOSURE_EQUAL,        // EqE: Equal exposure
-    PS_EXPOSURE_MANUAL,       // MaE: Manual weights
-    PS_EXPOSURE_PROPORTIONAL, // PrE: Proportional with recency bias
-} ps_exposure_mode_t;
-
-/**
- * @brief Pick modes for per-channel artwork selection
- */
-typedef enum {
-    PS_PICK_RECENCY,          // Newest → older cursor
-    PS_PICK_RANDOM,           // Random from window
-} ps_pick_mode_t;
-
-/**
- * @brief Set the active channel set and exposure mode
+ * @brief Convenience: Play a single named channel
  * 
- * This rebuilds the play queue. History is preserved.
+ * Creates a command with one channel in EqE mode.
  * 
- * @param channels Array of channel configurations
- * @param count Number of channels (1-64)
- * @param mode Exposure mode
+ * @param channel_name "all", "featured", "sdcard"
  * @return ESP_OK on success
  */
-esp_err_t play_scheduler_set_channels(
-    const ps_channel_config_t *channels,
-    size_t count,
-    ps_exposure_mode_t mode
-);
+esp_err_t play_scheduler_play_named_channel(const char *channel_name);
 
 /**
- * @brief Set pick mode for per-channel selection
- * @param mode Pick mode
+ * @brief Convenience: Play a user channel
+ * 
+ * @param user_sqid User's sqid
+ * @return ESP_OK on success
  */
-void play_scheduler_set_pick_mode(ps_pick_mode_t mode);
-
-// ============================================================================
-// Navigation
-// ============================================================================
+esp_err_t play_scheduler_play_user_channel(const char *user_sqid);
 
 /**
- * @brief Get the next artwork for playback
+ * @brief Convenience: Play a hashtag channel
  * 
- * Advances playback position. Triggers generation if lookahead low.
- * Also calls animation_player_request_swap().
+ * @param hashtag Hashtag (without #)
+ * @return ESP_OK on success
+ */
+esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag);
+```
+
+### 7.2 Navigation
+
+```c
+/**
+ * @brief Get next artwork for playback
  * 
- * @param out_artwork Artwork reference (can be NULL if only triggering swap)
- * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no artworks available
+ * Skips artworks without local files. Triggers generation if needed.
+ * Calls animation_player_request_swap().
  */
 esp_err_t play_scheduler_next(ps_artwork_t *out_artwork);
 
 /**
  * @brief Go back to previous artwork
  * 
- * Only navigates within history buffer.
- * 
- * @param out_artwork Artwork reference
- * @return ESP_OK on success, ESP_ERR_NOT_FOUND if at history start
+ * Navigates through history (including items from previous commands).
  */
 esp_err_t play_scheduler_prev(ps_artwork_t *out_artwork);
 
 /**
- * @brief Peek at upcoming artworks without advancing
+ * @brief Peek at upcoming artworks
  * 
- * Returns up to n items from lookahead. Does NOT trigger generation.
- * 
- * @param n Maximum items to return
- * @param out_artworks Array to receive artworks
- * @param out_count Actual count returned
- * @return ESP_OK on success
+ * Does NOT trigger generation. Returns what's in lookahead.
  */
-esp_err_t play_scheduler_peek(
-    size_t n,
-    ps_artwork_t *out_artworks,
-    size_t *out_count
-);
+esp_err_t play_scheduler_peek(size_t n, ps_artwork_t *out, size_t *count);
 
 /**
- * @brief Get current artwork without navigation
- * @param out_artwork Artwork reference
- * @return ESP_OK on success
+ * @brief Get current artwork
  */
 esp_err_t play_scheduler_current(ps_artwork_t *out_artwork);
-
-// ============================================================================
-// NAE (New Artwork Events)
-// ============================================================================
-
-/**
- * @brief Enable/disable NAE
- * @param enable true to enable
- */
-void play_scheduler_set_nae_enabled(bool enable);
-
-/**
- * @brief Insert a new artwork event (called from MQTT handler)
- * @param artwork Artwork reference
- */
-void play_scheduler_nae_insert(const ps_artwork_t *artwork);
-
-// ============================================================================
-// Timer & Dwell
-// ============================================================================
-
-/**
- * @brief Set dwell time for auto-swap
- * @param seconds Dwell time (0 = disable auto-swap)
- */
-void play_scheduler_set_dwell_time(uint32_t seconds);
-
-/**
- * @brief Get current dwell time
- * @return Dwell time in seconds
- */
-uint32_t play_scheduler_get_dwell_time(void);
-
-/**
- * @brief Reset the auto-swap timer (called after manual navigation)
- */
-void play_scheduler_reset_timer(void);
-
-// ============================================================================
-// Touch Events (lightweight signals from touch handler)
-// ============================================================================
-
-/**
- * @brief Signal touch-triggered next
- */
-void play_scheduler_touch_next(void);
-
-/**
- * @brief Signal touch-triggered back
- */
-void play_scheduler_touch_back(void);
-
-// ============================================================================
-// Status & Debugging
-// ============================================================================
-
-/**
- * @brief Get scheduler statistics
- */
-typedef struct {
-    size_t channel_count;
-    size_t history_count;
-    size_t lookahead_count;
-    size_t nae_pool_count;
-    uint32_t epoch_id;
-    const char *current_channel_id;
-} ps_stats_t;
-
-esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats);
 ```
 
-### 6.2 Convenience Functions
+### 7.3 Cache Management
 
 ```c
 /**
- * @brief Switch to a single channel (N=1 use case)
+ * @brief Trigger SD card channel refresh
  * 
- * Convenience wrapper for play_scheduler_set_channels() with count=1.
- * 
- * @param channel_id Channel identifier
- * @return ESP_OK on success
+ * Called when files are uploaded or user switches to SD card.
  */
-esp_err_t play_scheduler_play_channel(const char *channel_id);
+esp_err_t play_scheduler_refresh_sdcard_cache(void);
+
+/**
+ * @brief Get cache status for a channel
+ */
+esp_err_t play_scheduler_get_cache_status(
+    const char *channel_id,
+    bool *out_exists,
+    size_t *out_entry_count,
+    time_t *out_last_modified
+);
+```
+
+### 7.4 Download Integration
+
+```c
+/**
+ * @brief Signal that lookahead has changed
+ * 
+ * Called internally after generation or after skipping an item.
+ * download_manager listens for this to trigger prefetch.
+ */
+void play_scheduler_signal_lookahead_changed(void);
+
+/**
+ * @brief Get next artwork in lookahead that needs download
+ * 
+ * Called by download_manager.
+ * 
+ * @param out_request Download request to fill
+ * @return ESP_OK if found, ESP_ERR_NOT_FOUND if all downloaded
+ */
+esp_err_t play_scheduler_get_next_prefetch(download_request_t *out_request);
 ```
 
 ---
 
-## 7. Algorithm Details
+## 8. Algorithm Details
 
-### 7.1 Exposure Weight Calculation
+### 8.1 SWRR Channel Selection
 
-#### EqE (Equal Exposure)
-```
-For each active channel i:
-    weight[i] = 1
-For inactive channels:
-    weight[i] = 0
-Normalize: W[i] = weight[i] / Σweight * 65536
-```
-
-#### MaE (Manual Exposure)
-```
-weight[i] = max(0, manual_weight[i])
-For inactive channels: weight[i] = 0
-Normalize: W[i] = weight[i] / Σweight * 65536
-```
-
-#### PrE (Proportional Exposure with Recency Bias)
-```
-Parameters:
-    α = 0.35 (recency blend factor)
-    p_min = 0.02
-    p_max = 0.40
-
-1. Normalize totals:
-   p_total[i] = total_count[i] / Σtotal_count
-   p_recent[i] = recent_count[i] / Σrecent_count
-   (if Σrecent_count = 0, all p_recent[i] = 0)
-
-2. Blend:
-   p_raw[i] = (1 - α) * p_total[i] + α * p_recent[i]
-
-3. Clamp:
-   p_clamped[i] = clamp(p_raw[i], p_min, p_max)
-
-4. Normalize:
-   W[i] = p_clamped[i] / Σp_clamped * 65536
-```
-
-### 7.2 SWRR Channel Selection
+Same as before, but only considers channels with `active=true`:
 
 ```c
 int select_channel(void) {
-    // Add credits
+    // Add credits to active channels only
     for (int i = 0; i < channel_count; i++) {
-        channels[i].credit += channels[i].weight;
+        if (channels[i].active) {
+            channels[i].credit += channels[i].weight;
+        }
     }
     
-    // Find max credit (tie-break: lowest index)
+    // Find max credit among active channels
     int best = -1;
     int32_t best_credit = INT32_MIN;
     for (int i = 0; i < channel_count; i++) {
@@ -640,293 +655,376 @@ int select_channel(void) {
         }
     }
     
-    // Deduct
     if (best >= 0) {
-        channels[best].credit -= WSUM;  // 65536
+        channels[best].credit -= WSUM;
     }
     
-    return best;
+    return best;  // -1 if no active channels
 }
 ```
 
-### 7.3 NAE Selection
+### 8.2 Lenient Skip Behavior
 
 ```c
-bool try_nae_select(ps_artwork_t *out) {
-    if (!nae_enabled || nae_count == 0) return false;
-    
-    // Sum priorities
-    float P = 0;
-    for (int i = 0; i < nae_count; i++) {
-        P += nae_pool[i].priority;
+// During playback (next())
+while (true) {
+    ps_artwork_t *item = lookahead_peek();
+    if (!item) {
+        return ESP_ERR_NOT_FOUND;  // No items at all
     }
-    P = fminf(P, 1.0f);
     
-    // Random check
-    float r = pcg32_next_u32(&prng_nae) / (float)UINT32_MAX;
-    if (r >= P) return false;
+    if (file_exists(item->filepath)) {
+        // Good - play it
+        lookahead_pop();
+        history_push(item);
+        animation_player_request_swap(item);
+        return ESP_OK;
+    }
     
-    // Select highest priority (tie: oldest insertion)
-    int best = 0;
-    for (int i = 1; i < nae_count; i++) {
-        if (nae_pool[i].priority > nae_pool[best].priority ||
-            (nae_pool[i].priority == nae_pool[best].priority &&
-             nae_pool[i].insertion_time < nae_pool[best].insertion_time)) {
-            best = i;
+    if (has_404_marker(item->filepath)) {
+        // Permanently unavailable - remove from lookahead
+        lookahead_pop();
+        continue;
+    }
+    
+    // File not downloaded yet - skip but keep for later
+    // Move to next item in lookahead
+    lookahead_rotate();
+    
+    // Safety: don't loop forever
+    if (++skip_count >= lookahead_count) {
+        return ESP_ERR_NOT_FOUND;  // All items unavailable
+    }
+}
+```
+
+### 8.3 Background Refresh (Sequential)
+
+```c
+void refresh_task(void *arg) {
+    while (!refresh_abort) {
+        // Find next channel needing refresh
+        int ch = find_next_pending_refresh();
+        if (ch < 0) {
+            // All done, wait for signal
+            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+            continue;
         }
-    }
-    
-    *out = nae_pool[best].artwork;
-    
-    // Decay priority
-    nae_pool[best].priority /= 2;
-    if (nae_pool[best].priority < 0.02f) {
-        // Remove entry
-        nae_pool[best] = nae_pool[--nae_count];
-    }
-    
-    return true;
-}
-```
-
-### 7.4 Generation Batch
-
-```c
-void generate_batch(void) {
-    for (int b = 0; b < L; b++) {
-        ps_artwork_t candidate;
         
-        // 1. Try NAE
-        if (try_nae_select(&candidate)) {
-            // Check repeat
-            if (candidate.artwork_id == last_played_id) {
-                // Fallback to base scheduler
-                if (!select_from_base(&candidate)) {
-                    // Accept repeat
-                }
-            }
+        channels[ch].refresh_in_progress = true;
+        
+        if (channels[ch].type == PS_CHANNEL_TYPE_SDCARD) {
+            refresh_sdcard_cache(ch);
         } else {
-            // 2. Base scheduler
-            int ch = select_channel();
-            if (ch < 0) continue;  // No active channels
-            
-            pick_from_channel(ch, &candidate);
+            refresh_makapix_cache(ch);  // MQTT query
         }
         
-        // 3. Repeat avoidance
-        // (handled in pick_from_channel)
+        channels[ch].refresh_in_progress = false;
+        channels[ch].refresh_pending = false;
         
-        // 4. Commit to lookahead
-        lookahead_push(&candidate);
+        // Entries now eligible (no regeneration)
+        // Just update active flag and weights
+        update_channel_state(ch);
     }
 }
 ```
 
 ---
 
-## 8. Migration Strategy
+## 9. Cache Management
 
-### 8.1 Files to Modify
+### 9.1 Cache File Location
+
+All cache files stored in `/sdcard/p3a/channel/`:
+
+```
+/sdcard/p3a/channel/
+├── all.bin
+├── featured.bin
+├── user_uvz.bin
+├── hashtag_sunset.bin
+├── sdcard.bin
+└── .lru                # LRU metadata file
+```
+
+### 9.2 LRU Tracking (Best-Effort)
+
+Simple approach: Update file's mtime on access.
+
+```c
+void touch_cache_file(const char *channel_id) {
+    char path[256];
+    snprintf(path, sizeof(path), "/sdcard/p3a/channel/%s.bin", channel_id);
+    
+    // Update access time
+    struct utimbuf times = { time(NULL), time(NULL) };
+    utime(path, &times);
+}
+```
+
+### 9.3 SD Card Index Building
+
+```c
+esp_err_t build_sdcard_index(void) {
+    DIR *dir = opendir("/sdcard/p3a/animations");
+    if (!dir) return ESP_ERR_NOT_FOUND;
+    
+    // Scan for animation files
+    size_t count = 0;
+    makapix_channel_entry_t *entries = NULL;
+    
+    struct dirent *ent;
+    while ((ent = readdir(dir)) != NULL) {
+        if (is_animation_file(ent->d_name)) {
+            // Add to entries array
+            entries = realloc(entries, (count + 1) * sizeof(*entries));
+            fill_entry_from_file(&entries[count], ent->d_name);
+            count++;
+        }
+    }
+    closedir(dir);
+    
+    // Write to sdcard.bin
+    write_cache_file("sdcard", entries, count);
+    free(entries);
+    
+    return ESP_OK;
+}
+```
+
+### 9.4 SD Card Refresh Triggers
+
+- **User switches to SD card channel**: Refresh immediately
+- **File uploaded via HTTP**: Refresh after upload completes
+
+---
+
+## 10. Download Integration
+
+### 10.1 Event-Driven Prefetch
+
+The download_manager monitors two events:
+
+1. **Lookahead entries added** (while no download active)
+2. **Download completed**
+
+On either event:
+
+```c
+void on_download_event(void) {
+    if (download_in_progress) return;
+    
+    download_request_t req;
+    if (play_scheduler_get_next_prefetch(&req) == ESP_OK) {
+        start_download(&req);
+    }
+}
+```
+
+### 10.2 Prefetch Priority
+
+Find the **soonest-coming** artwork in lookahead without local file:
+
+```c
+esp_err_t play_scheduler_get_next_prefetch(download_request_t *out) {
+    xSemaphoreTake(mutex, portMAX_DELAY);
+    
+    for (size_t i = 0; i < lookahead_count; i++) {
+        ps_artwork_t *art = &lookahead[(lookahead_head + i) % lookahead_size];
+        
+        if (!file_exists(art->filepath) && !has_404_marker(art->filepath)) {
+            // Found one needing download
+            fill_download_request(out, art);
+            xSemaphoreGive(mutex);
+            return ESP_OK;
+        }
+    }
+    
+    xSemaphoreGive(mutex);
+    return ESP_ERR_NOT_FOUND;
+}
+```
+
+### 10.3 404 Handling
+
+When download fails with 404:
+
+```c
+void on_download_failed(const char *filepath, int http_status) {
+    if (http_status == 404) {
+        // Create marker file
+        char marker[280];
+        snprintf(marker, sizeof(marker), "%s.404", filepath);
+        FILE *f = fopen(marker, "w");
+        if (f) fclose(f);
+    }
+}
+```
+
+---
+
+## 11. Migration Strategy
+
+### 11.1 Files to Modify
 
 | File | Change |
 |------|--------|
-| `components/channel_manager/channel_player.c` | **DELETE** (replaced by play_scheduler) |
+| `components/channel_manager/channel_player.c` | **DELETE** (after migration complete) |
 | `components/channel_manager/channel_player.h` | **DELETE** |
-| `components/http_api/http_api.c` | Update to call play_scheduler APIs |
-| `main/p3a_main.c` | Replace channel_player_init() with play_scheduler_init() |
-| `main/animation_player.c` | Remove channel_player references |
-| `components/makapix/makapix.c` | Update channel switch to use play_scheduler |
+| `components/http_api/http_api_rest.c` | Use `play_scheduler_execute_command()` |
+| `main/p3a_main.c` | Use `play_scheduler_init()` only |
+| `components/makapix/makapix.c` | Remove channel_player calls |
+| `components/channel_manager/download_manager.c` | Add event-driven prefetch |
 
-### 8.2 Files to Create
+### 11.2 Files to Create/Modify
 
 | File | Purpose |
 |------|---------|
-| `components/play_scheduler/CMakeLists.txt` | Component build |
-| `components/play_scheduler/Kconfig` | Configuration options |
-| `components/play_scheduler/include/play_scheduler.h` | Public API |
-| `components/play_scheduler/include/play_scheduler_types.h` | Type definitions |
-| `components/play_scheduler/play_scheduler.c` | Core implementation |
-| `components/play_scheduler/play_scheduler_swrr.c` | SWRR algorithm |
-| `components/play_scheduler/play_scheduler_pick.c` | Pick modes |
-| `components/play_scheduler/play_scheduler_nae.c` | NAE pool |
-| `components/play_scheduler/play_scheduler_buffers.c` | History & Lookahead |
-| `components/play_scheduler/play_scheduler_timer.c` | Auto-swap timer |
-
-### 8.3 Backward Compatibility
-
-The following APIs must be preserved or have direct equivalents:
-
-| Old API | New API |
-|---------|---------|
-| `channel_player_init()` | `play_scheduler_init()` |
-| `channel_player_swap_next()` | `play_scheduler_next()` |
-| `channel_player_swap_back()` | `play_scheduler_prev()` |
-| `channel_player_set_dwell_time()` | `play_scheduler_set_dwell_time()` |
-| `channel_player_switch_channel()` | `play_scheduler_play_channel()` |
-| `auto_swap_reset_timer()` | `play_scheduler_reset_timer()` |
+| `play_scheduler_cache.c` | Cache file management |
+| `play_scheduler_refresh.c` | Background refresh task |
+| `sdcard_channel_cache.c` | SD card index building |
 
 ---
 
-## 9. Implementation Phases
+## 12. Implementation Phases
 
-### Phase 1: Core Infrastructure ✅ Planning
+### Phase 8: Channel Architecture Alignment
 
-**Goal**: Create component skeleton with basic types and initialization.
-
-**Tasks**:
-- [ ] Create `components/play_scheduler/` directory structure
-- [ ] Write CMakeLists.txt and Kconfig
-- [ ] Define all type definitions in `play_scheduler_types.h`
-- [ ] Implement `play_scheduler_init()` / `deinit()`
-- [ ] Add to main component dependencies
-
-**Deliverable**: Component compiles, init/deinit work, no functional changes yet.
-
-### Phase 2: Single-Channel Mode (N=1)
-
-**Goal**: Replace channel_player for single-channel use case.
+**Goal**: Align codebase with new channel architecture.
 
 **Tasks**:
-- [ ] Implement `play_scheduler_play_channel()` for N=1
-- [ ] Implement History buffer (H)
-- [ ] Implement Lookahead buffer (L)
-- [ ] Implement RecencyPick mode
-- [ ] Implement `next()`, `prev()`, `peek()`, `current()`
-- [ ] Integrate with animation_player_request_swap()
-- [ ] Update http_api.c to use play_scheduler
+- [ ] Implement `ps_channel_spec_t` and `ps_scheduler_command_t`
+- [ ] Implement `play_scheduler_execute_command()`
+- [ ] Implement channel ID derivation and sanitization
+- [ ] Implement cache file path building
+- [ ] Update `http_api_rest.c` POST /channel to build scheduler commands
+- [ ] Test: Single named channel command
+- [ ] Test: User channel command
+- [ ] Test: Hashtag channel command
 
-**Deliverable**: Web UI can switch channels, navigate artworks using PS.
+### Phase 9: SD Card Index Building
 
-### Phase 3: Multi-Channel Support
-
-**Goal**: Enable N > 1 with weighted scheduling.
-
-**Tasks**:
-- [ ] Implement SWRR scheduler
-- [ ] Implement EqE weight calculation
-- [ ] Implement MaE weight calculation (dummy weights)
-- [ ] Implement PrE weight calculation
-- [ ] Add `play_scheduler_set_channels()` API
-- [ ] Handle inactive channels (Mi = 0)
-
-**Deliverable**: PS can play from multiple channels with fair weighting.
-
-### Phase 4: NAE Integration
-
-**Goal**: Enable real-time new artwork events.
+**Goal**: SD card channel gets `.bin` cache file.
 
 **Tasks**:
-- [ ] Implement NAE pool data structure
-- [ ] Implement `nae_insert()` with merge logic
-- [ ] Implement NAE selection probability
-- [ ] Implement priority decay
-- [ ] Connect to MQTT handler
-- [ ] Add `play_scheduler_set_nae_enabled()`
+- [ ] Create `sdcard_channel_cache.c`
+- [ ] Implement `/animations/` folder scanning
+- [ ] Implement `sdcard.bin` writing
+- [ ] Add refresh trigger on channel switch
+- [ ] Add refresh trigger after HTTP upload
+- [ ] Test: SD card index built correctly
 
-**Deliverable**: New artworks from MQTT get probabilistic boost.
+### Phase 10: Background Refresh Task
 
-### Phase 5: Auto-Swap Timer
-
-**Goal**: Port timer functionality from channel_player.
+**Goal**: Sequential background cache refresh.
 
 **Tasks**:
-- [ ] Create timer task
-- [ ] Implement dwell-based auto-swap
-- [ ] Handle touch event flags
-- [ ] Implement timer reset on manual nav
+- [ ] Create `play_scheduler_refresh.c`
+- [ ] Implement refresh task (sequential, one at a time)
+- [ ] Implement Makapix channel refresh (MQTT query)
+- [ ] Implement "entries become eligible" notification
+- [ ] Test: Background refresh completes
+- [ ] Test: New entries become available
 
-**Deliverable**: Auto-swap works as before.
+### Phase 11: Lenient Skip Behavior
 
-### Phase 6: RandomPick Mode
-
-**Goal**: Add random sampling pick mode.
-
-**Tasks**:
-- [ ] Implement RandomPick with configurable window R
-- [ ] Add PRNG_randompick stream
-- [ ] Implement resample-on-repeat logic
-- [ ] Add `play_scheduler_set_pick_mode()`
-
-**Deliverable**: Users can choose random vs recency pick.
-
-### Phase 7: Cleanup & Polish
-
-**Goal**: Remove old code, optimize, document.
+**Goal**: Skip unavailable artworks gracefully.
 
 **Tasks**:
-- [ ] Delete channel_player.c/h
-- [ ] Remove all channel_player references
-- [ ] Update AGENTS.md / CLAUDE.md if needed
-- [ ] Performance profiling
-- [ ] Memory usage optimization
+- [ ] Implement skip logic in `next()`
+- [ ] Implement 404 marker file handling
+- [ ] Update weight=0 for channels without cache
+- [ ] Test: Skip works correctly
+- [ ] Test: 404 items removed permanently
 
-**Deliverable**: Clean codebase with only Play Scheduler.
+### Phase 12: Download Integration
+
+**Goal**: Event-driven lookahead prefetch.
+
+**Tasks**:
+- [ ] Add `play_scheduler_signal_lookahead_changed()`
+- [ ] Add `play_scheduler_get_next_prefetch()`
+- [ ] Update download_manager for event-driven triggering
+- [ ] Test: Downloads triggered on lookahead change
+- [ ] Test: Downloads triggered on completion
+
+### Phase 13: Cache LRU
+
+**Goal**: Best-effort LRU for cache files.
+
+**Tasks**:
+- [ ] Implement mtime-based LRU tracking
+- [ ] Document manual cleanup procedure
+- [ ] Test: LRU tracking works
+
+### Phase 14: Final Cleanup
+
+**Goal**: Remove legacy code, polish.
+
+**Tasks**:
+- [ ] Delete `channel_player.c/h`
+- [ ] Remove all `channel_player` references
+- [ ] Update documentation
+- [ ] Final integration testing
 
 ---
 
-## 10. Testing Strategy
+## 13. Testing Strategy
 
-### 10.1 Unit Tests (Host-based)
+### 13.1 Channel Command Tests
 
-Since ESP-IDF supports Unity, create test cases for:
+- Execute command with single named channel
+- Execute command with user channel
+- Execute command with hashtag channel
+- Execute command with SD card channel
+- Execute command with multiple channels
+- Command with nonexistent channel (should skip gracefully)
 
-- SWRR weight distribution
-- NAE pool insertion/eviction
-- History buffer wraparound
-- Lookahead generation batching
-- Repeat avoidance logic
+### 13.2 Cache Tests
 
-### 10.2 Integration Tests (On-device)
+- Cache file created on first access
+- Cache file loaded correctly
+- SD card scan produces correct index
+- LRU mtime updated on access
 
-- Single channel playback (SD card, Makapix)
-- Channel switching via Web UI
-- Multi-channel weighted playback
-- NAE injection via MQTT simulation
-- Auto-swap timer accuracy
-- Memory usage under various configurations
+### 13.3 Skip Behavior Tests
 
-### 10.3 Regression Tests
+- Artwork without file is skipped
+- 404 artwork removed permanently
+- Channel without cache gets weight=0
+- Eventually plays when file arrives
 
-- All existing Web UI functions still work
-- Touch navigation works
-- Dwell time setting persists
-- OTA update path unaffected
+### 13.4 Download Integration Tests
+
+- Download triggered after lookahead fill
+- Download triggered after completion
+- Correct priority (soonest first)
+- 404 creates marker file
 
 ---
 
-## 11. Open Questions & Future Work
+## 14. Open Questions & Future Work
 
-### 11.1 Deferred Features
+### 14.1 Deferred Features
 
 | Feature | Notes |
 |---------|-------|
-| Playlist support | Treat playlists as single units or flatten |
-| Live Mode | Synchronize playback across devices |
-| Per-channel settings | PE, dwell override, pick mode per channel |
-| Persistent history | Save/restore history across reboots |
-| Manual weight UI | Web UI for MaE configuration |
+| Playlist support | Treat as units or flatten |
+| Live Mode | Synchronized playback |
+| Cache eviction | Automatic cleanup when disk full |
+| Multi-channel weights UI | Web UI for MaE configuration |
 
-### 11.2 Performance Considerations
+### 14.2 Future Considerations
 
-- **SD I/O**: Batch reads, PSRAM caching
-- **Memory**: H + L buffers in PSRAM
-- **PRNG**: PCG32 is fast on RISC-V
-
-### 11.3 Future API Extensions
-
-```c
-// Potential future additions:
-esp_err_t play_scheduler_save_state(void);
-esp_err_t play_scheduler_restore_state(void);
-esp_err_t play_scheduler_set_channel_settings(const char *channel_id, const ps_channel_settings_t *settings);
-```
+- **Offline mode**: What if WiFi never connects?
+- **Cache corruption**: Recovery strategy?
+- **Large channels**: Paging for > 8K entries?
 
 ---
 
 ## Appendix A: Original Specification
 
-The original Play Scheduler specification is preserved in:
-`docs/play-scheduler/SPECIFICATION.md`
+See `docs/play-scheduler/SPECIFICATION.md`
 
 ---
 
@@ -935,8 +1033,9 @@ The original Play Scheduler specification is preserved in:
 | Date | Change |
 |------|--------|
 | 2026-01-01 | Initial plan created |
+| 2026-01-01 | Revision 2: Channel architecture clarified |
+| 2026-01-01 | Added scheduler commands, cache management, download integration |
 
 ---
 
 *This document is a living document. Update it as implementation progresses.*
-

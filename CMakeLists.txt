@@ -66,6 +66,13 @@ else()
 
     # Do not copy pico8/ directory at all
 
+    # Copy root-level files (index.html, settings.html, ota.html, favicon.ico)
+    file(GLOB ROOT_FILES "${CMAKE_SOURCE_DIR}/webui/*.html" "${CMAKE_SOURCE_DIR}/webui/*.ico")
+    file(COPY ${ROOT_FILES} DESTINATION "${WEBUI_STAGING_DIR}")
+
+    # Copy config directory
+    file(COPY "${CMAKE_SOURCE_DIR}/webui/config" DESTINATION "${WEBUI_STAGING_DIR}")
+
     littlefs_create_partition_image(storage "${WEBUI_STAGING_DIR}" FLASH_IN_PROJECT)
 endif()
 
@@ -91,6 +98,7 @@ import shutil
 build_dir = sys.argv[1] if len(sys.argv) > 1 else '.'
 project_dir = sys.argv[2] if len(sys.argv) > 2 else os.path.dirname(build_dir)
 release_subdir = '${RELEASE_SUBDIR}'
+is_dev_build = '${IS_DEV_BUILD}' != ''  # True if version contains -dev, -alpha, etc.
 release_dir = os.path.join(project_dir, release_subdir)
 version = '${PROJECT_VER}'
 
@@ -163,7 +171,7 @@ print(f'  OK: flash_args')
 # Generate flash command helper
 flash_cmd_path = os.path.join(release_dir, 'flash_command.txt')
 force_flag = ' --force' if has_force_files else ''
-flash_opts = '--flash-mode dio --flash-freq 80m --flash-size 32MB'
+flash_opts = '--flash_mode dio --flash_freq 80m --flash_size 32MB'
 with open(flash_cmd_path, 'w') as f:
     f.write('# Flash command for ESP32-P4\\n')
     f.write('# Run from this directory:\\n')
@@ -182,6 +190,30 @@ with open(flash_cmd_path, 'w') as f:
     f.write(f'python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args\\n')
 
 print(f'  OK: flash_command.txt')
+
+# Generate flash_command_app_only.txt for dev builds (flashes only the main app partition)
+if is_dev_build:
+    flash_cmd_app_only_path = os.path.join(release_dir, 'flash_command_app_only.txt')
+    # App-only flash: just p3a.bin at 0x20000
+    with open(flash_cmd_app_only_path, 'w') as f:
+        f.write('# Flash command for ESP32-P4 (APP ONLY - for faster dev builds)\\n')
+        f.write('# Only flashes the main application partition, not bootloader/partitions/storage\\n')
+        f.write('# Run from this directory:\\n')
+        f.write('\\n')
+        f.write('# Windows Command Prompt:\\n')
+        f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts} 0x20000 p3a.bin\\n')
+        f.write('\\n')
+        f.write('# Windows PowerShell:\\n')
+        f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts} 0x20000 p3a.bin\\n')
+        f.write('\\n')
+        f.write('# Linux/macOS:\\n')
+        f.write(f'python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts} 0x20000 p3a.bin\\n')
+        f.write('\\n')
+        f.write('\\n')
+        f.write('# Or with explicit port (replace COM5 or /dev/ttyUSB0 with your port)\\n')
+        f.write(f'python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts} 0x20000 p3a.bin\\n')
+
+    print(f'  OK: flash_command_app_only.txt (dev build)')
 
 # Generate README.md
 readme_path = os.path.join(release_dir, 'README.md')

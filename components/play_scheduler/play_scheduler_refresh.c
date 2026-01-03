@@ -11,6 +11,7 @@
  */
 
 #include "play_scheduler_internal.h"
+#include "play_scheduler.h"  // For play_scheduler_next()
 #include "makapix.h"
 #include "sd_path.h"
 #include "esp_log.h"
@@ -200,11 +201,30 @@ static void refresh_task(void *arg)
 
             // Recalculate weights now that this channel has data
             ps_swrr_calculate_weights(state);
-        } else {
-            ESP_LOGW(TAG, "Channel '%s' refresh failed: %s", channel_id, esp_err_to_name(err));
         }
 
+        // Check if we should trigger initial playback (no animation playing yet)
+        bool should_trigger_playback = (err == ESP_OK && ch->entry_count > 0);
+
         xSemaphoreGive(state->mutex);
+
+        if (should_trigger_playback) {
+            // Check if animation is playing (must be done outside mutex to avoid deadlock)
+            extern bool animation_player_is_animation_ready(void);
+            if (!animation_player_is_animation_ready()) {
+                ESP_LOGI(TAG, "No animation playing after refresh - triggering playback");
+                // Clear the loading message
+                extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail);
+                p3a_render_set_channel_message(NULL, 0 /* P3A_CHANNEL_MSG_NONE */, -1, NULL);
+
+                // Trigger playback
+                play_scheduler_next(NULL);
+            }
+        }
+
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Channel '%s' refresh failed: %s", channel_id, esp_err_to_name(err));
+        }
 
         // Brief delay between refreshes to avoid overloading
         vTaskDelay(pdMS_TO_TICKS(100));

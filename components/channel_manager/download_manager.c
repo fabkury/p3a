@@ -187,20 +187,19 @@ static void download_task(void *arg)
         if (err == ESP_OK) {
             makapix_channel_signal_downloads_needed();
             makapix_channel_signal_file_available();  // Wake tasks waiting for first file
-            
-            // Check if we should trigger playback (first file downloaded during boot)
+
+            // Check if we should trigger initial playback (first file downloaded during boot)
             extern bool animation_player_is_animation_ready(void);
             if (!animation_player_is_animation_ready() && !s_playback_initiated) {
-                // No animation playing yet - try to start playback
-                extern esp_err_t channel_player_swap_to(uint32_t p, uint32_t q);
-                esp_err_t swap_err = channel_player_swap_to(0, 0);
+                // No animation playing yet - try to start playback via play_scheduler
+                esp_err_t swap_err = play_scheduler_next(NULL);
                 if (swap_err == ESP_OK) {
-                    ESP_LOGI(TAG, "First download complete - triggered playback");
+                    ESP_LOGI(TAG, "First download complete - triggered playback via play_scheduler");
                     s_playback_initiated = true;  // Mark that we've initiated playback
                     // Clear the loading message since playback is starting
                     p3a_render_set_channel_message(NULL, 0 /* P3A_CHANNEL_MSG_NONE */, -1, NULL);
                 } else {
-                    ESP_LOGD(TAG, "swap_to(0,0) after download returned: %s", esp_err_to_name(swap_err));
+                    ESP_LOGD(TAG, "play_scheduler_next after download returned: %s", esp_err_to_name(swap_err));
                 }
             }
         } else {

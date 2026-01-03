@@ -451,8 +451,6 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     
     // Destroy existing channel if any
     if (s_current_channel) {
-        // Clear channel_player pointer BEFORE destroying to prevent race conditions
-        channel_player_clear_channel(s_current_channel);
         channel_destroy(s_current_channel);
         s_current_channel = NULL;
     }
@@ -481,9 +479,8 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
         // Serious error (e.g., refresh task couldn't start due to memory)
         ESP_LOGE(MAKAPIX_TAG, "Channel load failed: %s", esp_err_to_name(err));
-        p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_ERROR, -1, 
+        p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_ERROR, -1,
                                        "Failed to load channel");
-        channel_player_clear_channel(s_current_channel);
         channel_destroy(s_current_channel);
         s_current_channel = NULL;
         s_channel_loading = false;
@@ -635,7 +632,6 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         
         // Handle abort
         if (aborted) {
-            channel_player_clear_channel(s_current_channel);
             channel_destroy(s_current_channel);
             s_current_channel = NULL;
             s_channel_loading = false;
@@ -655,9 +651,8 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         // Handle timeout
         if (!got_artwork) {
             ESP_LOGW(MAKAPIX_TAG, "Timed out waiting for artwork");
-            
+
             // Clean up current channel
-            channel_player_clear_channel(s_current_channel);
             channel_destroy(s_current_channel);
             s_current_channel = NULL;
             s_channel_loading = false;
@@ -710,31 +705,28 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     err = channel_start_playback(s_current_channel, get_global_channel_order(), NULL);
     if (err != ESP_OK) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to start playback: %s", esp_err_to_name(err));
-        channel_player_clear_channel(s_current_channel);
         channel_destroy(s_current_channel);
         s_current_channel = NULL;
         s_channel_loading = false;
         s_loading_channel_id[0] = '\0';
         s_current_channel_id[0] = '\0';
-        p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_ERROR, -1, 
+        p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_ERROR, -1,
                                        "Failed to start playback");
         p3a_state_fallback_to_sdcard();
         return err;
     }
-    
-    // Switch the animation player's channel source to this Makapix channel
-    err = channel_player_switch_to_makapix_channel(s_current_channel);
-    if (err != ESP_OK) {
-        ESP_LOGE(MAKAPIX_TAG, "Failed to switch channel player source: %s", esp_err_to_name(err));
-        // Continue anyway - channel was created
+
+    // Switch play_scheduler to this channel and start playback
+    if (strcmp(channel, "by_user") == 0 && identifier) {
+        err = play_scheduler_play_user_channel(identifier);
+    } else if (strcmp(channel, "hashtag") == 0 && identifier) {
+        err = play_scheduler_play_hashtag_channel(identifier);
+    } else {
+        // "all", "promoted", or other named channels
+        err = play_scheduler_play_named_channel(channel);
     }
-    
-    // Start playback at position (0, 0) using the standard swap mechanism
-    // This goes through the proper flow: prepares swap request → loads to back buffer → swaps
-    // The auto-swap timer starts automatically after the first successful swap
-    err = channel_player_swap_to(0, 0);
     if (err != ESP_OK) {
-        ESP_LOGW(MAKAPIX_TAG, "Failed to initiate playback swap: %s", esp_err_to_name(err));
+        ESP_LOGW(MAKAPIX_TAG, "Failed to initiate play_scheduler: %s", esp_err_to_name(err));
     }
     
     ESP_LOGD(MAKAPIX_TAG, "Channel %s ready, playback initiated", channel_name);
@@ -766,23 +758,22 @@ esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const c
     if (!storage_key || !art_url) {
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     ESP_LOGD(MAKAPIX_TAG, "Showing artwork: post_id=%ld, storage_key=%s", post_id, storage_key);
-    
+
     // Destroy existing channel if any
     if (s_current_channel) {
-        channel_player_clear_channel(s_current_channel);
         channel_destroy(s_current_channel);
         s_current_channel = NULL;
     }
-    
+
     // Create transient in-memory single-item channel
     channel_handle_t single_ch = create_single_artwork_channel(storage_key, art_url);
     if (!single_ch) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to create transient artwork channel");
         return ESP_ERR_NO_MEM;
     }
-    
+
     esp_err_t err = channel_load(single_ch);
     if (err != ESP_OK) {
         ESP_LOGE(MAKAPIX_TAG, "Artwork channel load failed: %s", esp_err_to_name(err));
@@ -791,7 +782,7 @@ esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const c
         // TODO: optionally fallback to sdcard channel here
         return err;
     }
-    
+
     err = channel_start_playback(single_ch, get_global_channel_order(), NULL);
     if (err != ESP_OK) {
         ESP_LOGE(MAKAPIX_TAG, "Artwork channel start playback failed: %s", esp_err_to_name(err));
@@ -799,23 +790,18 @@ esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const c
         s_current_channel = NULL;
         return err;
     }
-    
+
     s_current_channel = single_ch;
     makapix_set_current_post_id(post_id);
     s_view_intent_intentional = true;  // Next buffer swap will submit intentional view
-    
-    // Switch the animation player's channel source to this transient channel
-    err = channel_player_switch_to_makapix_channel(s_current_channel);
-    if (err != ESP_OK) {
-        ESP_LOGE(MAKAPIX_TAG, "Failed to switch channel player source: %s", esp_err_to_name(err));
-    }
-    
-    // Start playback at position (0, 0) using the standard swap mechanism
-    err = channel_player_swap_to(0, 0);
+
+    // Start playback using play_scheduler
+    // Note: This is a transient single-artwork channel, use next() to trigger swap
+    err = play_scheduler_next(NULL);
     if (err != ESP_OK) {
         ESP_LOGW(MAKAPIX_TAG, "Failed to initiate artwork swap: %s", esp_err_to_name(err));
     }
-    
+
     ESP_LOGD(MAKAPIX_TAG, "Transient artwork channel created and started");
     return ESP_OK;
 }
@@ -826,7 +812,6 @@ void makapix_adopt_channel_handle(void *channel)
     // Ownership transfer: if a different channel is already owned, destroy it.
     channel_handle_t ch = (channel_handle_t)channel;
     if (s_current_channel && s_current_channel != ch) {
-        channel_player_clear_channel(s_current_channel);
         channel_destroy(s_current_channel);
     }
     s_current_channel = ch;

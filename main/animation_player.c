@@ -3,7 +3,7 @@
 
 #include "animation_player_priv.h"
 #include "sd_path.h"
-#include "channel_player.h"
+#include "play_scheduler.h"
 #include "sdcard_channel_impl.h"
 #include "playlist_manager.h"
 #include "download_manager.h"
@@ -211,17 +211,6 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         return err;
     }
 
-    err = channel_player_init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize channel player: %s", esp_err_to_name(err));
-        download_manager_deinit();
-        playlist_manager_deinit();
-        free(found_animations_dir);
-        playback_controller_deinit();
-        display_renderer_deinit();
-        return err;
-    }
-
     // Initialize swap_future system for Live Mode
     err = swap_future_init();
     if (err != ESP_OK) {
@@ -229,92 +218,30 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         // Non-fatal - continue without swap_future support
     }
 
-    // Create SD card channel handle using the discovered animations directory
-    channel_handle_t sd_ch = sdcard_channel_create("SD Card", found_animations_dir);
+    // SD card path is no longer needed here - play_scheduler handles SD card channel internally
     free(found_animations_dir);
-    if (!sd_ch) {
-        ESP_LOGE(TAG, "Failed to create SD card channel handle");
-        channel_player_deinit();
-        download_manager_deinit();
-        playlist_manager_deinit();
-        playback_controller_deinit();
-        display_renderer_deinit();
-        return ESP_ERR_NO_MEM;
-    }
+    found_animations_dir = NULL;
 
-    channel_player_set_sdcard_channel_handle(sd_ch);
-    // Restore last remembered channel BEFORE loading the first animation,
-    // so boot doesn't briefly show SD card content then switch later.
+    // Determine boot channel: restore from NVS or default to "promoted"
+    const char *boot_channel = "promoted";  // Default
     p3a_channel_info_t saved = {0};
-    bool want_makapix = false;
-    char mk_channel_id[128] = {0};
-    char mk_channel_name[128] = {0};
 
     if (p3a_state_get_channel_info(&saved) == ESP_OK) {
         if (saved.type == P3A_CHANNEL_MAKAPIX_ALL) {
-            snprintf(mk_channel_id, sizeof(mk_channel_id), "all");
-            snprintf(mk_channel_name, sizeof(mk_channel_name), "Recent");
-            want_makapix = true;
+            boot_channel = "all";
         } else if (saved.type == P3A_CHANNEL_MAKAPIX_PROMOTED) {
-            snprintf(mk_channel_id, sizeof(mk_channel_id), "promoted");
-            snprintf(mk_channel_name, sizeof(mk_channel_name), "Promoted");
-            want_makapix = true;
-        } else if (saved.type == P3A_CHANNEL_MAKAPIX_USER) {
-            snprintf(mk_channel_id, sizeof(mk_channel_id), "user");
-            snprintf(mk_channel_name, sizeof(mk_channel_name), "My Artworks");
-            want_makapix = true;
-        } else if (saved.type == P3A_CHANNEL_MAKAPIX_BY_USER && saved.identifier[0] != '\0') {
-            snprintf(mk_channel_id, sizeof(mk_channel_id), "by_user_%s", saved.identifier);
-            snprintf(mk_channel_name, sizeof(mk_channel_name), "@%s's Artworks", saved.identifier);
-            want_makapix = true;
-        } else if (saved.type == P3A_CHANNEL_MAKAPIX_HASHTAG && saved.identifier[0] != '\0') {
-            snprintf(mk_channel_id, sizeof(mk_channel_id), "hashtag_%s", saved.identifier);
-            snprintf(mk_channel_name, sizeof(mk_channel_name), "#%s", saved.identifier);
-            want_makapix = true;
+            boot_channel = "promoted";
+        } else if (saved.type == P3A_CHANNEL_SDCARD) {
+            boot_channel = "sdcard";
         }
+        // Note: user/hashtag channels use default "promoted" for now
     }
 
-    if (want_makapix) {
-        // Get dynamic paths
-        char vault_path[128], channel_path[128];
-        sd_path_get_vault(vault_path, sizeof(vault_path));
-        sd_path_get_channel(channel_path, sizeof(channel_path));
-        
-        channel_handle_t mk_ch = makapix_channel_create(mk_channel_id, mk_channel_name, vault_path, channel_path);
-        if (mk_ch) {
-            // Give ownership to makapix module so future switches clean up correctly.
-            makapix_adopt_channel_handle(mk_ch);
-            channel_player_switch_to_makapix_channel(mk_ch);
-        } else {
-            ESP_LOGW(TAG, "Failed to create Makapix channel for boot restore, falling back to SD card");
-            channel_player_switch_to_sdcard_channel();
-        }
-    } else {
-        channel_player_switch_to_sdcard_channel();
-    }
-
-    err = channel_player_load_channel();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to load channel: %s", esp_err_to_name(err));
-        channel_player_deinit();
-        download_manager_deinit();
-        playlist_manager_deinit();
-        playback_controller_deinit();
-        display_renderer_deinit();
-        return err;
-    }
-
-    if (channel_player_get_post_count() == 0) {
-        ESP_LOGD(TAG, "Channel empty, will populate from server");
-        // Don't fail - just continue with empty channel
-        // The p3a_render system will show appropriate message (Connecting... / Loading...)
-        // and playback will start once artworks are downloaded
-    }
+    ESP_LOGI(TAG, "Boot channel: %s", boot_channel);
 
     s_buffer_mutex = xSemaphoreCreateMutex();
     if (!s_buffer_mutex) {
         ESP_LOGE(TAG, "Failed to create buffer mutex");
-        channel_player_deinit();
         download_manager_deinit();
         playlist_manager_deinit();
         playback_controller_deinit();
@@ -327,7 +254,6 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         ESP_LOGE(TAG, "Failed to create loader semaphore");
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
-        channel_player_deinit();
         download_manager_deinit();
         playlist_manager_deinit();
         playback_controller_deinit();
@@ -342,7 +268,6 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         s_loader_sem = NULL;
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
-        channel_player_deinit();
         download_manager_deinit();
         playlist_manager_deinit();
         playback_controller_deinit();
@@ -359,27 +284,16 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     (void)p3a_render_init();
     display_renderer_set_frame_callback(animation_player_render_dispatch_cb, NULL);
 
-    // NOTE: We no longer call load_first_animation() here.
-    // Instead, we'll call swap_to(0, 0) after the loader task starts.
-    // This ensures the swap mechanism is properly used, which:
-    // 1. Goes through the proper swap flow (back buffer → prefetch → swap)
-    // 2. Starts the auto-swap timer correctly
-    // 3. Shows appropriate loading messages if no files available
-    
     // Show initial loading message based on channel type
-    channel_player_source_t src = channel_player_get_source_type();
-    if (src == CHANNEL_PLAYER_SOURCE_SDCARD) {
-        if (channel_player_get_post_count() == 0) {
-            // Empty SD card boot: show "no artworks" and hint for provisioning
-            p3a_render_set_channel_message("microSD card", P3A_CHANNEL_MSG_EMPTY, -1,
-                                           "No artworks found on microSD card.\nLong-press to configure Wi-Fi and register.");
-        }
+    // Note: play_scheduler will be started after loader task, this is just the initial message
+    if (strcmp(boot_channel, "sdcard") == 0) {
+        // SD card boot: show hint for provisioning if no local files
+        p3a_render_set_channel_message("microSD card", P3A_CHANNEL_MSG_LOADING, -1,
+                                       "Loading animations from SD card...");
     } else {
-        // Makapix boot: show connecting/loading (channel may be populated after MQTT connects)
-        if (channel_player_get_post_count() == 0) {
-            p3a_render_set_channel_message("Makapix Club", P3A_CHANNEL_MSG_LOADING, -1,
-                                           "Connecting to Makapix Club...");
-        }
+        // Makapix boot: show connecting/loading
+        p3a_render_set_channel_message("Makapix Club", P3A_CHANNEL_MSG_LOADING, -1,
+                                       "Connecting to Makapix Club...");
     }
     
     // Mark front buffer as not ready - will be loaded by swap_to(0, 0) after loader starts
@@ -399,7 +313,6 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         s_loader_sem = NULL;
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
-        channel_player_deinit();
         download_manager_deinit();
         playlist_manager_deinit();
         playback_controller_deinit();
@@ -407,16 +320,16 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         return ESP_FAIL;
     }
 
-    // Try to start playback at position (0, 0).
-    // If there are available files, this will load the first one.
-    // If no files available, this will fail but that's OK - the loading
-    // message is already displayed and files will load once available.
-    if (channel_player_get_post_count() > 0) {
-        esp_err_t swap_err = channel_player_swap_to(0, 0);
-        if (swap_err != ESP_OK) {
-            ESP_LOGW(TAG, "Initial swap_to(0,0) failed: %s (may need downloads)", 
-                     esp_err_to_name(swap_err));
-        }
+    // Start playback via play_scheduler.
+    // play_scheduler_play_named_channel() will:
+    // 1. Load the channel cache
+    // 2. Generate lookahead
+    // 3. Call play_scheduler_next() which triggers animation_player_request_swap()
+    esp_err_t ps_err = play_scheduler_play_named_channel(boot_channel);
+    if (ps_err != ESP_OK) {
+        ESP_LOGW(TAG, "play_scheduler_play_named_channel('%s') failed: %s (may need downloads)",
+                 boot_channel, esp_err_to_name(ps_err));
+        // Non-fatal - loading message is shown, playback will start once files are available
     }
 
     return ESP_OK;
@@ -468,9 +381,9 @@ void animation_player_cycle_animation(bool forward)
             return;
         }
 
-        // IMPORTANT: Do NOT call channel_player_advance/go_back in the touch task context.
-        // Those paths can build Live Mode schedules and overflow the 4KB touch task stack.
-        // Instead, defer channel navigation to the loader task (which has a larger stack).
+        // IMPORTANT: Do NOT call play_scheduler_next/prev in the touch task context.
+        // Those paths can be heavy and overflow the 4KB touch task stack.
+        // Instead, defer navigation to the loader task (which has a larger stack).
         s_cycle_pending = true;
         s_cycle_forward = forward;
         s_next_asset_index = forward ? 1 : 0;
@@ -485,41 +398,37 @@ void animation_player_cycle_animation(bool forward)
 
 esp_err_t animation_player_request_swap_current(void)
 {
-    // Get current item from channel player to build a proper swap request
-    channel_item_ref_t item = {0};
-    esp_err_t err = channel_player_get_current_item(&item);
+    // Get current artwork from play_scheduler
+    ps_artwork_t artwork = {0};
+    esp_err_t err = play_scheduler_current(&artwork);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "No current item to swap to: %s", esp_err_to_name(err));
+        ESP_LOGW(TAG, "No current artwork to swap to: %s", esp_err_to_name(err));
         return err;
     }
-    
-    if (item.filepath[0] == '\0') {
-        ESP_LOGW(TAG, "Current item has empty filepath");
+
+    if (artwork.filepath[0] == '\0') {
+        ESP_LOGW(TAG, "Current artwork has empty filepath");
         return ESP_ERR_NOT_FOUND;
     }
-    
-    // Build swap request with the current item's data
+
+    // Build swap request with the current artwork's data
     swap_request_t request = {0};
-    strlcpy(request.filepath, item.filepath, sizeof(request.filepath));
-    request.post_id = item.post_id;
-    request.type = ASSET_TYPE_WEBP;  // Default, will be determined by loader
-    
-    // Determine asset type from filepath extension
-    const char *ext = strrchr(item.filepath, '.');
-    if (ext) {
-        if (strcasecmp(ext, ".gif") == 0) request.type = ASSET_TYPE_GIF;
-        else if (strcasecmp(ext, ".png") == 0) request.type = ASSET_TYPE_PNG;
-        else if (strcasecmp(ext, ".jpg") == 0 || strcasecmp(ext, ".jpeg") == 0) request.type = ASSET_TYPE_JPEG;
+    strlcpy(request.filepath, artwork.filepath, sizeof(request.filepath));
+    request.post_id = artwork.post_id;
+    request.type = artwork.type;
+
+    // Get dwell time: use artwork dwell or config default
+    if (artwork.dwell_time_ms > 0) {
+        request.dwell_time_ms = artwork.dwell_time_ms;
+    } else {
+        request.dwell_time_ms = config_store_get_dwell_time() * 1000;
     }
-    
-    // Get dwell time from config
-    request.dwell_time_ms = config_store_get_dwell_time() * 1000;
     request.is_live_mode = false;
     request.start_frame = 0;
     request.start_time_ms = 0;
-    
-    ESP_LOGD(TAG, "Requested swap to current: '%s' (post_id=%d)", item.filepath, item.post_id);
-    
+
+    ESP_LOGD(TAG, "Requested swap to current: '%s' (post_id=%d)", artwork.filepath, artwork.post_id);
+
     // Use the new swap request API
     return animation_player_request_swap(&request);
 }
@@ -835,7 +744,6 @@ void animation_player_deinit(void)
     }
 
     free_sd_file_list();
-    channel_player_deinit();
     download_manager_deinit();
     playlist_manager_deinit();
     playback_controller_deinit();
@@ -849,7 +757,14 @@ void animation_player_deinit(void)
 
 size_t animation_player_get_current_index(void)
 {
-    return channel_player_get_current_position();
+    // Keep legacy semantics for /upload insertion:
+    // return the current SD file list index, or SIZE_MAX if unknown/not playing.
+    if (s_sd_file_list.count == 0) {
+        return SIZE_MAX;
+    }
+
+    // current_index is maintained by the SD list logic (loader/refresh)
+    return s_sd_file_list.current_index;
 }
 
 esp_err_t animation_player_swap_to_index(size_t index)
@@ -858,18 +773,9 @@ esp_err_t animation_player_swap_to_index(size_t index)
         return ESP_ERR_INVALID_STATE;
     }
 
-    size_t post_count = channel_player_get_post_count();
-    if (post_count == 0) {
-        ESP_LOGW(TAG, "No animations available to swap");
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    if (index >= post_count) {
-        ESP_LOGE(TAG, "Invalid index: %zu (max: %zu)", index, post_count - 1);
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    ESP_LOGW(TAG, "Direct index swap not yet supported with channel abstraction");
+    // play_scheduler uses virtual queue, direct index access is not supported
+    ESP_LOGW(TAG, "Direct index swap not supported by play_scheduler");
+    (void)index;
     return ESP_ERR_NOT_SUPPORTED;
 }
 

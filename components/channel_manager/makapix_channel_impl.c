@@ -2,6 +2,7 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "makapix_channel_internal.h"
+#include "makapix_channel_events.h"
 #include "makapix_api.h"
 #include "makapix_artwork.h"
 #include "play_navigator.h"
@@ -492,14 +493,31 @@ static void makapix_impl_destroy(channel_handle_t channel)
         ESP_LOGD(TAG, "Cleared download callback for destroyed channel");
     }
     
-    // Stop refresh task if running
+    // Stop refresh task if running (event-driven shutdown)
     if (ch->refreshing && ch->refresh_task) {
+        ESP_LOGI(TAG, "Stopping refresh task...");
         ch->refreshing = false;
-        vTaskDelay(pdMS_TO_TICKS(100));
-        if (ch->refresh_task) {
-            vTaskDelete(ch->refresh_task);
+
+        // Signal shutdown to wake any blocked waits
+        makapix_channel_signal_refresh_shutdown();
+
+        // Wait for task to exit gracefully (up to 5 seconds)
+        const int MAX_WAIT_ITERS = 50;  // 50 x 100ms = 5 seconds
+        for (int i = 0; i < MAX_WAIT_ITERS && ch->refresh_task != NULL; i++) {
+            vTaskDelay(pdMS_TO_TICKS(100));
         }
-        ch->refresh_task = NULL;
+
+        // Clear shutdown signal for next channel
+        makapix_channel_clear_refresh_shutdown();
+
+        // Only force delete if task didn't exit gracefully
+        if (ch->refresh_task) {
+            ESP_LOGW(TAG, "Refresh task did not exit gracefully, forcing delete");
+            vTaskDelete(ch->refresh_task);
+            ch->refresh_task = NULL;
+        } else {
+            ESP_LOGI(TAG, "Refresh task exited cleanly");
+        }
     }
     
     makapix_impl_unload(channel);

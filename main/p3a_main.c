@@ -24,12 +24,11 @@
 #include "app_usb.h"
 #include "app_wifi.h"
 #include "http_api.h"
-#include "p3a_board.h"  // For p3a_board_spiffs_mount()
+#include "p3a_board.h"  // For p3a_board_littlefs_mount()
 #include "makapix.h"
 #include "sntp_sync.h"
 #include "ugfx_ui.h"
 #include "animation_player.h"  // For animation_player_is_ui_mode()
-#include "channel_player.h"
 #include "play_scheduler.h"
 #include "config_store.h"
 #include "ota_manager.h"       // For OTA boot validation
@@ -131,8 +130,7 @@ static bool check_first_boot_after_update(void)
     return needs_reboot;
 }
 
-// Phase 7: Dwell time management moved to channel_player
-// These functions now delegate to channel_player
+// Dwell time management delegates to play_scheduler
 
 #define MAX_DWELL_TIME_SECONDS 100000
 
@@ -265,8 +263,6 @@ static void memory_report_task(void *arg)
     }
 }
 #endif // CONFIG_P3A_MEMORY_REPORTING_ENABLE
-
-// Phase 7: auto_swap_reset_timer removed - timer now in channel_player
 
 static void register_rest_action_handlers(void)
 {
@@ -485,11 +481,7 @@ void app_main(void)
         // Continue anyway - state machine will use defaults
     }
 
-    // Initialize channel_player early to avoid "Channel player not initialized" errors
-    // if any early fallback or status paths touch it before animation_player finishes init.
-    (void)channel_player_init();
-
-    // Initialize play_scheduler (the new deterministic playback engine)
+    // Initialize play_scheduler (the deterministic playback engine)
     esp_err_t ps_err = play_scheduler_init();
     if (ps_err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize play_scheduler: %s", esp_err_to_name(ps_err));
@@ -506,13 +498,13 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    // Initialize SPIFFS filesystem
-    esp_err_t fs_ret = p3a_board_spiffs_mount();
+    // Initialize LittleFS filesystem
+    esp_err_t fs_ret = p3a_board_littlefs_mount();
     if (fs_ret != ESP_OK) {
-        ESP_LOGW(TAG, "SPIFFS initialization failed: %s (continuing anyway)", esp_err_to_name(fs_ret));
+        ESP_LOGW(TAG, "LittleFS initialization failed: %s (continuing anyway)", esp_err_to_name(fs_ret));
     }
 
-    // Initialize Makapix module early (after SPIFFS mount, before animation player/channel load).
+    // Initialize Makapix module early (after LittleFS mount, before animation player/channel load).
     // This ensures Makapix API layer is ready before any Makapix channel refresh tasks may start.
     ESP_ERROR_CHECK(makapix_init());
 

@@ -776,8 +776,8 @@ void refresh_task_impl(void *pvParameters)
         return;
     }
     
-    // Wait for MQTT before first query
-    if (!makapix_channel_wait_for_mqtt(portMAX_DELAY)) {
+    // Wait for MQTT before first query (also wakes on shutdown signal)
+    if (!makapix_channel_wait_for_mqtt_or_shutdown(portMAX_DELAY)) {
         ch->refreshing = false;
         ch->refresh_task = NULL;
         vTaskDelete(NULL);
@@ -868,24 +868,36 @@ void refresh_task_impl(void *pvParameters)
         while (total_queried < TARGET_COUNT && ch->refreshing) {
             memset(resp, 0, sizeof(makapix_query_response_t));
             esp_err_t err = makapix_api_query_posts(&query_req, resp);
-            
+
+            // Check for shutdown after network call
+            if (!ch->refreshing) {
+                ESP_LOGI(TAG, "Shutdown requested during query, exiting");
+                break;
+            }
+
             if (err != ESP_OK || !resp->success) {
                 ESP_LOGW(TAG, "Query failed: %s", resp->error);
                 break;
             }
-            
+
             if (resp->post_count == 0) {
                 ESP_LOGD(TAG, "No more posts available");
                 break;
             }
-            
+
             // Collect post_ids for reconciliation
             for (size_t pi = 0; pi < resp->post_count && all_server_count < TARGET_COUNT; pi++) {
                 all_server_post_ids[all_server_count++] = resp->posts[pi].post_id;
             }
-            
+
             // Update channel index with new posts
             update_index_bin(ch, resp->posts, resp->post_count);
+
+            // Check for shutdown after index update
+            if (!ch->refreshing) {
+                ESP_LOGI(TAG, "Shutdown requested during index update, exiting");
+                break;
+            }
 
             // Signal download manager that new files may be available
             download_manager_signal_work_available();
@@ -935,22 +947,40 @@ void refresh_task_impl(void *pvParameters)
             reconcile_deletions(ch, all_server_post_ids, all_server_count);
         }
         free(all_server_post_ids);
-        
+
+        // Check for shutdown after reconciliation
+        if (!ch->refreshing) {
+            ESP_LOGI(TAG, "Shutdown requested during reconciliation, exiting");
+            break;
+        }
+
         // Storage-aware eviction: ensure minimum free space (10MB reserve)
         // NOTE: Only evicts from current channel per spec. Future consideration:
         // cross-channel eviction would require loading all channel indices simultaneously,
         // which may not be feasible with memory constraints.
         const size_t MIN_RESERVE_BYTES = 10 * 1024 * 1024;  // 10MB minimum free space
         evict_for_storage_pressure(ch, MIN_RESERVE_BYTES);
-        
+
+        // Check for shutdown after storage eviction
+        if (!ch->refreshing) {
+            ESP_LOGI(TAG, "Shutdown requested during eviction, exiting");
+            break;
+        }
+
         // Count-based eviction: ensure we don't exceed 1,024 artworks per channel
         evict_excess_artworks(ch, TARGET_COUNT);
-        
+
+        // Check for shutdown after count eviction
+        if (!ch->refreshing) break;
+
         // Save metadata
         time_t now = time(NULL);
         save_channel_metadata(ch, query_req.has_cursor ? query_req.cursor : "", now);
         ch->last_refresh_time = now;
-        
+
+        // Check for shutdown after metadata save
+        if (!ch->refreshing) break;
+
         // Count how many are artworks vs playlists
         size_t artwork_count = 0;
         size_t playlist_count = 0;
@@ -976,9 +1006,9 @@ void refresh_task_impl(void *pvParameters)
             break;
         }
         
-        // If MQTT disconnected, wait for reconnection
+        // If MQTT disconnected, wait for reconnection (also wakes on shutdown signal)
         if (!makapix_channel_is_mqtt_ready()) {
-            if (!makapix_channel_wait_for_mqtt(portMAX_DELAY)) {
+            if (!makapix_channel_wait_for_mqtt_or_shutdown(portMAX_DELAY)) {
                 break;
             }
         }

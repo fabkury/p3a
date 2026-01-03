@@ -4,11 +4,11 @@
 #include <string.h>
 
 static const char *TAG = "p3a_board_fs";
-static bool s_spiffs_mounted = false;
+static bool s_littlefs_mounted = false;
 
-esp_err_t p3a_board_spiffs_mount(void)
+esp_err_t p3a_board_littlefs_mount(void)
 {
-    if (s_spiffs_mounted) {
+    if (s_littlefs_mounted) {
         return ESP_OK;
     }
 
@@ -40,13 +40,13 @@ esp_err_t p3a_board_spiffs_mount(void)
         ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
     }
 
-    s_spiffs_mounted = true;
+    s_littlefs_mounted = true;
     ESP_LOGI(TAG, "LittleFS mounted successfully");
     return ESP_OK;
 }
 
-bool p3a_board_spiffs_is_mounted(void)
+bool p3a_board_littlefs_is_mounted(void)
 {
-    return s_spiffs_mounted;
+    return s_littlefs_mounted;
 }
 

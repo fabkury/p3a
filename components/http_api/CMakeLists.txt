@@ -1,5 +1,5 @@
 set(http_api_requires
-    esp_http_server mdns json app_state config_store freertos esp_wifi esp_timer esp_netif spiffs
+    esp_http_server mdns json app_state config_store freertos esp_wifi esp_timer esp_netif
     makapix ota_manager p3a_core channel_manager play_scheduler
 )
 

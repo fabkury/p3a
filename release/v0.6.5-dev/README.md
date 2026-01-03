@@ -7,7 +7,7 @@ After the initial flash, all future updates are installed wirelessly via `http:/
 
 ---
 
-## Option 1: p3a Flasher (Windows) — Recommended
+## Option 1: p3a Flasher (Windows) â€” Recommended
 
 The easiest way to flash your p3a on Windows.
 
@@ -17,7 +17,7 @@ The easiest way to flash your p3a on Windows.
 4. Wait ~2 minutes
 5. Done! Your device will automatically reboot into p3a.
 
-The flasher auto-detects your device and includes the firmware — no installation, configuration or Internet connection needed.
+The flasher auto-detects your device and includes the firmware â€” no installation, configuration or Internet connection needed.
 
 ---
 
@@ -42,13 +42,13 @@ Open a terminal in this folder and run:
 
 ```bash
 # Windows PowerShell (replace COM5 with your port)
-python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB --force "@flash_args"
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --after hard-reset write-flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force "@flash_args"
 
 # Windows Command Prompt (replace COM5 with your port)
-python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB --force @flash_args
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --after hard-reset write-flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force @flash_args
 
 # Linux/macOS (replace /dev/ttyUSB0 with your port)
-python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB --force @flash_args
+python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default-reset --after hard-reset write-flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force @flash_args
 ```
 
 ### Full Erase + Flash (if having issues)
@@ -60,7 +60,7 @@ If you're having issues or this is a fresh device, erase the flash first:
 python -m esptool --chip esp32p4 -p COM5 erase_flash
 
 # Then flash
-python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB --force @flash_args
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --after hard-reset write-flash --flash-mode dio --flash-freq 80m --flash-size 32MB --force @flash_args
 ```
 
 ---
@@ -78,7 +78,7 @@ The device will automatically reboot into p3a:
 
 | File | Description | Flash Address |
 |------|-------------|---------------|
-| `p3a-flasher.exe` | Windows flasher (recommended) | — |
+| `p3a-flasher.exe` | Windows flasher (recommended) | â€” |
 | `p3a.bin` | Main application firmware | 0x20000 |
 | `bootloader.bin` | ESP-IDF bootloader | 0x2000 |
 | `partition-table.bin` | Partition table | 0x8000 |

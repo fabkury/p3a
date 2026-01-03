@@ -93,6 +93,10 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             esp_mqtt_client_subscribe(client, s_view_ack_topic, 1);
             ESP_LOGI(TAG, "Subscribed to view acknowledgments: %s", s_view_ack_topic);
         }
+        // Signal Play Scheduler refresh task to retry any pending channel refreshes
+        extern void ps_refresh_signal_work(void);
+        ps_refresh_signal_work();
+
         if (s_connection_callback) {
             s_connection_callback(true);
         }

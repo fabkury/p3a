@@ -3,9 +3,9 @@
 
 /**
  * @file play_scheduler_buffers.c
- * @brief History and Lookahead buffer management
+ * @brief History buffer management
  *
- * Implements ring buffer for history and FIFO queue for lookahead.
+ * Implements ring buffer for history (back-navigation).
  */
 
 #include "play_scheduler.h"
@@ -134,124 +134,4 @@ bool ps_history_get_current(const ps_state_t *state, ps_artwork_t *out_artwork)
 bool ps_history_is_at_head(const ps_state_t *state)
 {
     return state->history_position < 0;
-}
-
-// ============================================================================
-// Lookahead Buffer Operations
-// ============================================================================
-
-void ps_lookahead_init(ps_state_t *state)
-{
-    state->lookahead_head = 0;
-    state->lookahead_tail = 0;
-    state->lookahead_count = 0;
-}
-
-void ps_lookahead_clear(ps_state_t *state)
-{
-    state->lookahead_head = 0;
-    state->lookahead_tail = 0;
-    state->lookahead_count = 0;
-}
-
-bool ps_lookahead_is_empty(const ps_state_t *state)
-{
-    return state->lookahead_count == 0;
-}
-
-bool ps_lookahead_is_low(const ps_state_t *state)
-{
-    return state->lookahead_count < PS_LOOKAHEAD_SIZE;
-}
-
-size_t ps_lookahead_count(const ps_state_t *state)
-{
-    return state->lookahead_count;
-}
-
-bool ps_lookahead_push(ps_state_t *state, const ps_artwork_t *artwork)
-{
-    if (!state->lookahead || !artwork) return false;
-
-    // Check if full
-    if (state->lookahead_count >= PS_LOOKAHEAD_SIZE) {
-        return false;
-    }
-
-    // Add at tail
-    memcpy(&state->lookahead[state->lookahead_tail], artwork, sizeof(ps_artwork_t));
-    state->lookahead_tail = (state->lookahead_tail + 1) % PS_LOOKAHEAD_SIZE;
-    state->lookahead_count++;
-
-    return true;
-}
-
-bool ps_lookahead_pop(ps_state_t *state, ps_artwork_t *out_artwork)
-{
-    if (state->lookahead_count == 0) {
-        return false;
-    }
-
-    // Get from head
-    if (out_artwork) {
-        memcpy(out_artwork, &state->lookahead[state->lookahead_head], sizeof(ps_artwork_t));
-    }
-
-    state->lookahead_head = (state->lookahead_head + 1) % PS_LOOKAHEAD_SIZE;
-    state->lookahead_count--;
-
-    return true;
-}
-
-bool ps_lookahead_peek(const ps_state_t *state, size_t index, ps_artwork_t *out_artwork)
-{
-    if (index >= state->lookahead_count || !out_artwork) {
-        return false;
-    }
-
-    size_t idx = (state->lookahead_head + index) % PS_LOOKAHEAD_SIZE;
-    memcpy(out_artwork, &state->lookahead[idx], sizeof(ps_artwork_t));
-
-    return true;
-}
-
-size_t ps_lookahead_peek_many(const ps_state_t *state, size_t max_count,
-                               ps_artwork_t *out_artworks)
-{
-    if (!out_artworks || state->lookahead_count == 0) {
-        return 0;
-    }
-
-    size_t count = (max_count < state->lookahead_count) ? max_count : state->lookahead_count;
-
-    for (size_t i = 0; i < count; i++) {
-        size_t idx = (state->lookahead_head + i) % PS_LOOKAHEAD_SIZE;
-        memcpy(&out_artworks[i], &state->lookahead[idx], sizeof(ps_artwork_t));
-    }
-
-    return count;
-}
-
-bool ps_lookahead_rotate(ps_state_t *state)
-{
-    if (state->lookahead_count <= 1) {
-        return false;
-    }
-
-    // Move head item to tail (skip without removing permanently)
-    // Items: [head, head+1, ..., tail-1] -> [head+1, ..., tail-1, head]
-
-    // Save head item
-    ps_artwork_t temp;
-    memcpy(&temp, &state->lookahead[state->lookahead_head], sizeof(ps_artwork_t));
-
-    // Put at current tail position
-    memcpy(&state->lookahead[state->lookahead_tail], &temp, sizeof(ps_artwork_t));
-
-    // Advance both head and tail
-    state->lookahead_head = (state->lookahead_head + 1) % PS_LOOKAHEAD_SIZE;
-    state->lookahead_tail = (state->lookahead_tail + 1) % PS_LOOKAHEAD_SIZE;
-
-    // Count stays the same
-    return true;
 }

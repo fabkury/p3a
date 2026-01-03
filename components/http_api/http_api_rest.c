@@ -44,8 +44,8 @@
 #include "playlist_manager.h"
 #include <sys/time.h>
 
-// External: wakes the auto_swap_task in main/p3a_main.c.
-extern void auto_swap_reset_timer(void);
+// Play Scheduler owns auto-swap timer now.
+// (Old auto_swap_task in main was removed during migration.)
 
 static uint64_t wall_clock_ms_http(void)
 {
@@ -96,13 +96,14 @@ esp_err_t h_post_debug(httpd_req_t *req)
 
     if (strcmp(op_s, "swap_future_cancel") == 0) {
         swap_future_cancel();
-        auto_swap_reset_timer();
+        play_scheduler_reset_timer();
         cJSON_AddStringToObject(resp, "result", "cancelled");
     } else if (strcmp(op_s, "live_mode_enter") == 0 || strcmp(op_s, "live_mode_exit") == 0) {
-        // Live mode debug endpoints - deprecated (channel_player retired)
+        // Live Mode is a deferred feature pending Play Scheduler migration completion.
+        // See play_scheduler.c for notes on re-implementing this feature.
         cJSON_Delete(root);
         cJSON_Delete(resp);
-        send_json(req, 410, "{\"ok\":false,\"error\":\"Live mode debug endpoints deprecated\",\"code\":\"DEPRECATED\"}");
+        send_json(req, 410, "{\"ok\":false,\"error\":\"Live Mode is a deferred feature\",\"code\":\"DEFERRED\"}");
         return ESP_OK;
     } else if (strcmp(op_s, "swap_future_test") == 0) {
         // Build swap_future targeting the current file.
@@ -154,7 +155,7 @@ esp_err_t h_post_debug(httpd_req_t *req)
 
         swap_future_cancel();
         esp_err_t e = swap_future_schedule(&sf);
-        auto_swap_reset_timer();
+        play_scheduler_reset_timer();
 
         cJSON_AddNumberToObject(resp, "esp_err", (double)e);
         cJSON_AddNumberToObject(resp, "now_ms", (double)now_ms);

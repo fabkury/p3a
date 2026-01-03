@@ -31,6 +31,7 @@ extern "C" {
 #define MAKAPIX_EVENT_DOWNLOADS_NEEDED  (1 << 7)
 #define MAKAPIX_EVENT_FILE_AVAILABLE    (1 << 8)
 #define MAKAPIX_EVENT_REFRESH_SHUTDOWN  (1 << 9)
+#define MAKAPIX_EVENT_PS_CHANNEL_REFRESH_DONE (1 << 10)  // Play Scheduler channel refresh complete
 
 /**
  * @brief Initialize the Makapix channel events system
@@ -244,10 +245,33 @@ bool makapix_channel_wait_for_file_available(uint32_t timeout_ms);
 
 /**
  * @brief Clear the file available flag
- * 
+ *
  * Called before starting to wait for a new file.
  */
 void makapix_channel_clear_file_available(void);
+
+/**
+ * @brief Signal that a Play Scheduler channel refresh has completed
+ *
+ * Called from makapix.c when a PS-registered refresh finishes.
+ * Wakes the Play Scheduler refresh task to check completion status.
+ *
+ * @param channel_id Channel ID that completed (for logging)
+ */
+void makapix_channel_signal_ps_refresh_done(const char *channel_id);
+
+/**
+ * @brief Wait for a Play Scheduler channel refresh to complete
+ *
+ * @param timeout_ms Timeout in milliseconds (0 for non-blocking poll)
+ * @return true if signaled, false if timeout
+ */
+bool makapix_channel_wait_for_ps_refresh_done(uint32_t timeout_ms);
+
+/**
+ * @brief Clear the PS refresh done flag
+ */
+void makapix_channel_clear_ps_refresh_done(void);
 
 #ifdef __cplusplus
 }

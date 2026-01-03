@@ -212,9 +212,51 @@ void makapix_clear_pending_channel(void);
 
 /**
  * @brief Clear the current Makapix channel state
- * 
+ *
  * Call this when switching away from Makapix (e.g., to SD card) to ensure
  * that switching back to the same Makapix channel works correctly.
  */
 void makapix_clear_current_channel(void);
+
+/**
+ * @brief Refresh a channel's index cache (no channel switching)
+ *
+ * Queries MQTT for posts and updates the channel's .bin cache file.
+ * Does NOT change the "current channel" or trigger navigation.
+ * This is called by Play Scheduler to refresh channels in the background.
+ *
+ * @param channel_type Channel type: "all", "promoted", "by_user", "hashtag"
+ * @param identifier User sqid for "by_user", hashtag for "hashtag", NULL otherwise
+ * @return ESP_OK on success
+ */
+esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *identifier);
+
+/**
+ * @brief Register a channel for Play Scheduler refresh tracking
+ *
+ * Called before triggering refresh to track completion status.
+ *
+ * @param channel_id Channel ID (e.g., "promoted", "all")
+ */
+void makapix_ps_refresh_register(const char *channel_id);
+
+/**
+ * @brief Mark a channel's refresh as complete
+ *
+ * Called from the background refresh task when refresh finishes.
+ * Signals Play Scheduler via event.
+ *
+ * @param channel_id Channel ID that completed refresh
+ */
+void makapix_ps_refresh_mark_complete(const char *channel_id);
+
+/**
+ * @brief Check if a channel's refresh completed and clear the entry
+ *
+ * Called by Play Scheduler to check completion status.
+ *
+ * @param channel_id Channel ID to check
+ * @return true if refresh completed, false otherwise
+ */
+bool makapix_ps_refresh_check_and_clear(const char *channel_id);
 

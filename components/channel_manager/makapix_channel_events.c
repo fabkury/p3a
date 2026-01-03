@@ -352,7 +352,7 @@ bool makapix_channel_wait_for_downloads_needed(uint32_t timeout_ms)
     EventBits_t bits = xEventGroupWaitBits(
         s_mqtt_event_group,
         MAKAPIX_EVENT_DOWNLOADS_NEEDED,
-        pdTRUE,   // Clear on exit (auto-reset)
+        pdFALSE,  // Don't clear on exit - caller must manually clear after consuming work
         pdFALSE,  // Wait for any bit
         timeout_ticks
     );
@@ -405,7 +405,45 @@ void makapix_channel_clear_file_available(void)
     if (!s_mqtt_event_group) {
         return;
     }
-    
+
     xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_FILE_AVAILABLE);
+}
+
+void makapix_channel_signal_ps_refresh_done(const char *channel_id)
+{
+    if (!s_mqtt_event_group) {
+        ESP_LOGW(TAG, "Event group not initialized");
+        return;
+    }
+
+    ESP_LOGD(TAG, "Signaling PS channel refresh done: %s", channel_id ? channel_id : "(null)");
+    xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_PS_CHANNEL_REFRESH_DONE);
+}
+
+bool makapix_channel_wait_for_ps_refresh_done(uint32_t timeout_ms)
+{
+    if (!s_mqtt_event_group) {
+        return false;
+    }
+
+    TickType_t timeout_ticks = (timeout_ms == 0) ? 0 : pdMS_TO_TICKS(timeout_ms);
+    EventBits_t bits = xEventGroupWaitBits(
+        s_mqtt_event_group,
+        MAKAPIX_EVENT_PS_CHANNEL_REFRESH_DONE,
+        pdTRUE,   // Clear on exit (auto-reset)
+        pdFALSE,
+        timeout_ticks
+    );
+
+    return (bits & MAKAPIX_EVENT_PS_CHANNEL_REFRESH_DONE) != 0;
+}
+
+void makapix_channel_clear_ps_refresh_done(void)
+{
+    if (!s_mqtt_event_group) {
+        return;
+    }
+
+    xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_PS_CHANNEL_REFRESH_DONE);
 }
 

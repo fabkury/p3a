@@ -109,31 +109,6 @@ esp_err_t makapix_channel_count_cached(const char *channel_id,
                                         size_t *out_total,
                                         size_t *out_cached);
 
-/**
- * @brief Get the next file that needs to be downloaded
- * 
- * Scans from current navigator position through the entire channel looking
- * for the first file that is not downloaded. Handles wrap-around safely.
- * 
- * @param channel Channel handle (must be a Makapix channel)
- * @param out_request Filled with download info if a file needs downloading
- * @return ESP_OK if a file needs downloading (out_request filled)
- *         ESP_ERR_NOT_FOUND if all files are downloaded (nothing to do)
- *         ESP_ERR_INVALID_ARG if channel is invalid
- */
-esp_err_t makapix_channel_get_next_download(channel_handle_t channel,
-                                             download_request_t *out_request);
-
-/**
- * @brief Setup the download manager callback for this channel
- * 
- * Registers the channel's get_next_download function with the download manager.
- * Call this after the channel is loaded and ready.
- * 
- * @param channel Channel handle (must be a Makapix channel)
- */
-void makapix_channel_setup_download_callback(channel_handle_t channel);
-
 #ifdef __cplusplus
 }
 #endif

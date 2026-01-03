@@ -84,12 +84,39 @@ bool download_manager_is_busy(void);
 
 /**
  * @brief Get the channel ID of the currently active download (if any)
- * 
+ *
  * @param out_channel_id Buffer to receive channel ID
  * @param max_len Size of buffer
  * @return true if there's an active download, false otherwise
  */
 bool download_manager_get_active_channel(char *out_channel_id, size_t max_len);
+
+/**
+ * @brief Set the channel list for downloads (decoupled from Play Scheduler)
+ *
+ * Called by Play Scheduler after execute_command() to configure which
+ * channels the download manager should work on. Downloads use round-robin
+ * across channels to find missing files.
+ *
+ * @param channel_ids Array of channel ID strings
+ * @param count Number of channels
+ */
+void download_manager_set_channels(const char **channel_ids, size_t count);
+
+/**
+ * @brief Reset download cursors for all channels
+ *
+ * Called when channel cache is refreshed to rescan from the beginning.
+ */
+void download_manager_reset_cursors(void);
+
+/**
+ * @brief Reset the playback_initiated flag
+ *
+ * Called when changing channels to allow the download manager to trigger
+ * initial playback when the first file becomes available for the new channel.
+ */
+void download_manager_reset_playback_initiated(void);
 
 #ifdef __cplusplus
 }

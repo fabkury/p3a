@@ -14,6 +14,7 @@
 #include "play_scheduler.h"
 #include "play_scheduler_types.h"
 #include "channel_interface.h"
+#include "makapix_channel_impl.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -47,11 +48,6 @@ typedef struct {
     size_t history_head;
     size_t history_count;
     int32_t history_position;     // -1 = at head, 0+ = steps back
-
-    ps_artwork_t *lookahead;
-    size_t lookahead_head;
-    size_t lookahead_tail;
-    size_t lookahead_count;
 
     // NAE
     ps_nae_entry_t nae_pool[PS_NAE_POOL_SIZE];
@@ -104,17 +100,6 @@ bool ps_history_go_forward(ps_state_t *state, ps_artwork_t *out_artwork);
 bool ps_history_get_current(const ps_state_t *state, ps_artwork_t *out_artwork);
 bool ps_history_is_at_head(const ps_state_t *state);
 
-void ps_lookahead_init(ps_state_t *state);
-void ps_lookahead_clear(ps_state_t *state);
-bool ps_lookahead_is_empty(const ps_state_t *state);
-bool ps_lookahead_is_low(const ps_state_t *state);
-size_t ps_lookahead_count(const ps_state_t *state);
-bool ps_lookahead_push(ps_state_t *state, const ps_artwork_t *artwork);
-bool ps_lookahead_pop(ps_state_t *state, ps_artwork_t *out_artwork);
-bool ps_lookahead_peek(const ps_state_t *state, size_t index, ps_artwork_t *out_artwork);
-size_t ps_lookahead_peek_many(const ps_state_t *state, size_t max_count, ps_artwork_t *out_artworks);
-bool ps_lookahead_rotate(ps_state_t *state);
-
 // ============================================================================
 // Pick Operations (play_scheduler_pick.c)
 // ============================================================================
@@ -133,6 +118,29 @@ bool ps_pick_artwork(ps_state_t *state, size_t channel_index, ps_artwork_t *out_
  * @brief Reset pick state for a channel (cursor, etc.)
  */
 void ps_pick_reset_channel(ps_state_t *state, size_t channel_index);
+
+/**
+ * @brief Pick next available artwork from all channels
+ *
+ * Uses SWRR to select channel, then iterates entries to find first
+ * with file_exists(). Returns false immediately if nothing available.
+ *
+ * @param state Scheduler state
+ * @param out_artwork Output artwork reference
+ * @return true if artwork found and returned
+ */
+bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork);
+
+/**
+ * @brief Peek next available artwork without advancing state
+ *
+ * Same logic as ps_pick_next_available but doesn't modify cursors.
+ *
+ * @param state Scheduler state
+ * @param out_artwork Output artwork reference
+ * @return true if artwork found
+ */
+bool ps_peek_next_available(const ps_state_t *state, ps_artwork_t *out_artwork);
 
 // ============================================================================
 // SWRR Operations (play_scheduler_swrr.c)
@@ -199,15 +207,6 @@ void ps_timer_stop(ps_state_t *state);
 void ps_timer_reset(ps_state_t *state);
 
 // ============================================================================
-// Generation (play_scheduler.c)
-// ============================================================================
-
-/**
- * @brief Generate a batch of artworks into lookahead
- */
-void ps_generate_batch(ps_state_t *state);
-
-// ============================================================================
 // Cache Operations (play_scheduler_cache.c)
 // ============================================================================
 
@@ -252,9 +251,28 @@ void ps_refresh_stop(void);
 void ps_refresh_signal_work(void);
 
 /**
+ * @brief Reset periodic refresh timer
+ *
+ * Called when a new scheduler command is executed to trigger
+ * immediate refresh and reset the 1-hour periodic timer.
+ */
+void ps_refresh_reset_timer(void);
+
+/**
  * @brief Build cache file path (internal helper)
  */
 void ps_build_cache_path_internal(const char *channel_id, char *out_path, size_t max_len);
+
+/**
+ * @brief Load cache file for a channel
+ *
+ * Loads .bin file if it exists and populates ch->entries.
+ * Sets entry_count, cache_loaded, and active flags.
+ *
+ * @param ch Channel state to load cache into
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t ps_load_channel_cache(ps_channel_state_t *ch);
 
 // ============================================================================
 // Utilities
@@ -269,6 +287,15 @@ uint32_t ps_prng_next(uint32_t *state);
  * @brief Seed PRNG
  */
 void ps_prng_seed(uint32_t *state, uint32_t seed);
+
+/**
+ * @brief Build vault filepath for an entry
+ *
+ * Uses SHA256 sharding: {vault}/{sha[0]}/{sha[1]}/{sha[2]}/{storage_key}.{ext}
+ * Implemented in play_scheduler_pick.c
+ */
+void ps_build_vault_filepath(const makapix_channel_entry_t *entry,
+                              char *out, size_t out_len);
 
 #ifdef __cplusplus
 }

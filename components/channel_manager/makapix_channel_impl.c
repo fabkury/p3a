@@ -5,13 +5,17 @@
 #include "makapix_channel_events.h"
 #include "makapix_api.h"
 #include "makapix_artwork.h"
-#include "play_navigator.h"
 #include "playlist_manager.h"
 #include "download_manager.h"
 #include "config_store.h"
 #include "channel_settings.h"
 #include "esp_log.h"
 #include "esp_random.h"
+
+// NOTE: play_navigator was removed as part of Play Scheduler migration.
+// Navigation is now handled by Play Scheduler directly.
+// The legacy navigation functions below return ESP_ERR_NOT_SUPPORTED.
+// See play_scheduler.c for Live Mode deferred feature notes.
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -23,9 +27,6 @@
 #include <unistd.h>
 
 static const char *TAG = "makapix_channel";
-
-// Current channel for download callback (only one channel can be active for downloads)
-static makapix_channel_t *s_download_channel = NULL;
 
 // Weak symbol for SD pause check
 extern bool animation_player_is_sd_paused(void) __attribute__((weak));
@@ -212,11 +213,6 @@ static void makapix_impl_unload(channel_handle_t channel)
 {
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch) return;
-    
-    if (ch->navigator_ready) {
-        play_navigator_deinit(&ch->navigator);
-        ch->navigator_ready = false;
-    }
 
     free(ch->entries);
     ch->entries = NULL;
@@ -225,14 +221,16 @@ static void makapix_impl_unload(channel_handle_t channel)
     ch->base.loaded = false;
 }
 
-static esp_err_t makapix_impl_start_playback(channel_handle_t channel, 
+static esp_err_t makapix_impl_start_playback(channel_handle_t channel,
                                               channel_order_mode_t order_mode,
                                               const channel_filter_config_t *filter)
 {
+    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
+    // This function is kept for interface compatibility but does nothing.
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch || !ch->base.loaded) return ESP_ERR_INVALID_STATE;
 
-    // Store settings
+    // Store settings for compatibility
     ch->base.current_order = order_mode;
     if (filter) {
         ch->base.current_filter = *filter;
@@ -240,152 +238,46 @@ static esp_err_t makapix_impl_start_playback(channel_handle_t channel,
         memset(&ch->base.current_filter, 0, sizeof(ch->base.current_filter));
     }
 
-    // (Re)initialize playlist-aware navigator
-    if (ch->navigator_ready) {
-        play_navigator_deinit(&ch->navigator);
-        ch->navigator_ready = false;
-    }
-
-    play_order_mode_t play_order = PLAY_ORDER_SERVER;
-    switch (order_mode) {
-        case CHANNEL_ORDER_CREATED: play_order = PLAY_ORDER_CREATED; break;
-        case CHANNEL_ORDER_RANDOM:  play_order = PLAY_ORDER_RANDOM;  break;
-        case CHANNEL_ORDER_ORIGINAL:
-        default:                   play_order = PLAY_ORDER_SERVER;  break;
-    }
-
-    uint32_t pe = config_store_get_pe();
+    // Load channel-specific dwell time if present
     channel_settings_t settings = {0};
-    if (channel_settings_load_for_channel_id(ch->channel_id, &settings) != ESP_OK) {
-        memset(&settings, 0, sizeof(settings));
+    if (channel_settings_load_for_channel_id(ch->channel_id, &settings) == ESP_OK) {
+        if (settings.channel_dwell_time_present) {
+            ch->channel_dwell_override_ms = settings.channel_dwell_time_ms;
+        }
     }
 
-    if (settings.pe_present) {
-        pe = settings.pe;
-    }
-
-    if (settings.channel_dwell_time_present) {
-        ch->channel_dwell_override_ms = settings.channel_dwell_time_ms;
-    } else {
-        ch->channel_dwell_override_ms = 0;
-    }
-
-    uint32_t global_seed = config_store_get_global_seed();
-
-    esp_err_t err = play_navigator_init(&ch->navigator, channel, ch->channel_id, play_order, pe, global_seed);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to init play navigator: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    play_navigator_set_channel_dwell_override_ms(&ch->navigator, ch->channel_dwell_override_ms);
-
-    // Apply per-channel settings
-    play_navigator_set_randomize_playlist(&ch->navigator,
-                                         settings.randomize_playlist_present ? settings.randomize_playlist
-                                                                             : config_store_get_randomize_playlist());
-    play_navigator_set_live_mode(&ch->navigator,
-                                 settings.live_mode_present ? settings.live_mode
-                                                           : config_store_get_live_mode());
-
-    ch->navigator_ready = true;
-    ESP_LOGD(TAG, "Started playback (navigator): posts=%zu order=%d pe=%lu",
-             channel_get_post_count(channel), order_mode, (unsigned long)pe);
-    
+    ESP_LOGD(TAG, "start_playback called but navigation now handled by Play Scheduler");
     return ESP_OK;
 }
 
 static esp_err_t makapix_impl_next_item(channel_handle_t channel, channel_item_ref_t *out_item)
 {
-    makapix_channel_t *ch = (makapix_channel_t *)channel;
-    if (!ch || !out_item || !ch->navigator_ready) return ESP_ERR_NOT_FOUND;
-    
-    artwork_ref_t art = {0};
-    esp_err_t err = play_navigator_next(&ch->navigator, &art);
-    if (err != ESP_OK) return err;
-
-    memset(out_item, 0, sizeof(*out_item));
-    strlcpy(out_item->filepath, art.filepath, sizeof(out_item->filepath));
-    strlcpy(out_item->storage_key, art.storage_key, sizeof(out_item->storage_key));
-    out_item->item_index = 0;
-    out_item->flags = CHANNEL_FILTER_FLAG_NONE;
-    out_item->dwell_time_ms = compute_effective_dwell_ms(config_store_get_dwell_time(),
-                                                         ch->channel_dwell_override_ms,
-                                                         art.dwell_time_ms);
-    switch (art.type) {
-        case ASSET_TYPE_GIF:  out_item->flags |= CHANNEL_FILTER_FLAG_GIF; break;
-        case ASSET_TYPE_WEBP: out_item->flags |= CHANNEL_FILTER_FLAG_WEBP; break;
-        case ASSET_TYPE_PNG:  out_item->flags |= CHANNEL_FILTER_FLAG_PNG; break;
-        case ASSET_TYPE_JPEG: out_item->flags |= CHANNEL_FILTER_FLAG_JPEG; break;
-        default: break;
-    }
-    
-    return ESP_OK;
+    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
+    (void)channel;
+    (void)out_item;
+    return ESP_ERR_NOT_SUPPORTED;
 }
 
 static esp_err_t makapix_impl_prev_item(channel_handle_t channel, channel_item_ref_t *out_item)
 {
-    makapix_channel_t *ch = (makapix_channel_t *)channel;
-    if (!ch || !out_item || !ch->navigator_ready) return ESP_ERR_NOT_FOUND;
-    
-    artwork_ref_t art = {0};
-    esp_err_t err = play_navigator_prev(&ch->navigator, &art);
-    if (err != ESP_OK) return err;
-
-    memset(out_item, 0, sizeof(*out_item));
-    strlcpy(out_item->filepath, art.filepath, sizeof(out_item->filepath));
-    strlcpy(out_item->storage_key, art.storage_key, sizeof(out_item->storage_key));
-    out_item->item_index = 0;
-    out_item->flags = CHANNEL_FILTER_FLAG_NONE;
-    out_item->dwell_time_ms = compute_effective_dwell_ms(config_store_get_dwell_time(),
-                                                         ch->channel_dwell_override_ms,
-                                                         art.dwell_time_ms);
-    switch (art.type) {
-        case ASSET_TYPE_GIF:  out_item->flags |= CHANNEL_FILTER_FLAG_GIF; break;
-        case ASSET_TYPE_WEBP: out_item->flags |= CHANNEL_FILTER_FLAG_WEBP; break;
-        case ASSET_TYPE_PNG:  out_item->flags |= CHANNEL_FILTER_FLAG_PNG; break;
-        case ASSET_TYPE_JPEG: out_item->flags |= CHANNEL_FILTER_FLAG_JPEG; break;
-        default: break;
-    }
-    
-    return ESP_OK;
+    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
+    (void)channel;
+    (void)out_item;
+    return ESP_ERR_NOT_SUPPORTED;
 }
 
 static esp_err_t makapix_impl_current_item(channel_handle_t channel, channel_item_ref_t *out_item)
 {
-    makapix_channel_t *ch = (makapix_channel_t *)channel;
-    if (!ch || !out_item || !ch->navigator_ready) return ESP_ERR_NOT_FOUND;
-
-    artwork_ref_t art = {0};
-    esp_err_t err = play_navigator_current(&ch->navigator, &art);
-    if (err != ESP_OK) return err;
-
-    memset(out_item, 0, sizeof(*out_item));
-    out_item->post_id = art.post_id;
-    strlcpy(out_item->filepath, art.filepath, sizeof(out_item->filepath));
-    strlcpy(out_item->storage_key, art.storage_key, sizeof(out_item->storage_key));
-    out_item->item_index = 0;
-    out_item->flags = CHANNEL_FILTER_FLAG_NONE;
-    out_item->dwell_time_ms = compute_effective_dwell_ms(config_store_get_dwell_time(),
-                                                         ch->channel_dwell_override_ms,
-                                                         art.dwell_time_ms);
-    switch (art.type) {
-        case ASSET_TYPE_GIF:  out_item->flags |= CHANNEL_FILTER_FLAG_GIF; break;
-        case ASSET_TYPE_WEBP: out_item->flags |= CHANNEL_FILTER_FLAG_WEBP; break;
-        case ASSET_TYPE_PNG:  out_item->flags |= CHANNEL_FILTER_FLAG_PNG; break;
-        case ASSET_TYPE_JPEG: out_item->flags |= CHANNEL_FILTER_FLAG_JPEG; break;
-        default: break;
-    }
-    return ESP_OK;
+    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
+    (void)channel;
+    (void)out_item;
+    return ESP_ERR_NOT_SUPPORTED;
 }
 
 static esp_err_t makapix_impl_request_reshuffle(channel_handle_t channel)
 {
-    makapix_channel_t *ch = (makapix_channel_t *)channel;
-    if (!ch || !ch->navigator_ready) return ESP_ERR_INVALID_STATE;
-    if (ch->base.current_order != CHANNEL_ORDER_RANDOM) return ESP_OK;
-    play_navigator_set_order(&ch->navigator, PLAY_ORDER_RANDOM);
-    ESP_LOGD(TAG, "Reshuffled (navigator)");
+    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
+    (void)channel;
     return ESP_OK;
 }
 
@@ -416,18 +308,11 @@ static esp_err_t makapix_impl_get_stats(channel_handle_t channel, channel_stats_
 {
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch || !out_stats) return ESP_ERR_INVALID_ARG;
-    
+
     out_stats->total_items = ch->entry_count;
     out_stats->filtered_items = ch->entry_count;
-    if (ch->navigator_ready) {
-        uint32_t p = 0, q = 0;
-        play_navigator_get_position(&ch->navigator, &p, &q);
-        (void)q;
-        out_stats->current_position = p;
-    } else {
-        out_stats->current_position = 0;
-    }
-    
+    out_stats->current_position = 0;  // Position tracking moved to Play Scheduler
+
     return ESP_OK;
 }
 
@@ -484,15 +369,7 @@ static void makapix_impl_destroy(channel_handle_t channel)
 {
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch) return;
-    
-    // Clear download callback if this channel is the download source
-    // This prevents the download task from accessing freed memory
-    if (s_download_channel == ch) {
-        download_manager_set_next_callback(NULL, NULL);
-        s_download_channel = NULL;
-        ESP_LOGD(TAG, "Cleared download callback for destroyed channel");
-    }
-    
+
     // Stop refresh task if running (event-driven shutdown)
     if (ch->refreshing && ch->refresh_task) {
         ESP_LOGI(TAG, "Stopping refresh task...");
@@ -536,9 +413,9 @@ static void makapix_impl_destroy(channel_handle_t channel)
 
 static void *makapix_impl_get_navigator(channel_handle_t channel)
 {
-    makapix_channel_t *ch = (makapix_channel_t *)channel;
-    if (!ch) return NULL;
-    return ch->navigator_ready ? (void *)&ch->navigator : NULL;
+    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
+    (void)channel;
+    return NULL;
 }
 
 // Public functions
@@ -678,173 +555,8 @@ esp_err_t makapix_channel_count_cached(const char *channel_id,
     }
     
     fclose(f);
-    
+
     if (out_cached) *out_cached = cached_count;
     return ESP_OK;
-}
-
-// Struct for sorting entries by created_at
-typedef struct {
-    uint32_t entry_idx;
-    uint32_t created_at;
-} download_sort_item_t;
-
-// Comparator for qsort: descending by created_at (newest first)
-static int compare_download_items_desc(const void *a, const void *b)
-{
-    const download_sort_item_t *item_a = (const download_sort_item_t *)a;
-    const download_sort_item_t *item_b = (const download_sort_item_t *)b;
-
-    // Descending order: if b > a, return positive (b comes first)
-    if (item_b->created_at > item_a->created_at) return 1;
-    if (item_b->created_at < item_a->created_at) return -1;
-    return 0;
-}
-
-// Download callback: called by download manager to get next file
-// Downloads are prioritized by post creation date (newest first), regardless of play order
-static esp_err_t download_get_next_callback(download_request_t *out_request, void *user_ctx)
-{
-    (void)user_ctx;
-    makapix_channel_t *ch = s_download_channel;
-
-    if (!ch || !out_request) {
-        ESP_LOGW(TAG, "download_get_next_callback: invalid args (ch=%p, req=%p)", ch, out_request);
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    // Safety check: validate critical pointers to prevent use-after-free
-    // If the channel is being destroyed, these might be NULL or invalid
-    // This is expected during channel switches and is handled gracefully
-    if (!ch->entries || !ch->channel_id) {
-        ESP_LOGD(TAG, "download_get_next_callback: channel is being destroyed/switched, returning");
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    if (ch->entry_count == 0) {
-        ESP_LOGD(TAG, "download_get_next_callback: channel %s has 0 entries", ch->channel_id);
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    ESP_LOGD(TAG, "download_get_next_callback: scanning %zu entries for channel %s",
-             ch->entry_count, ch->channel_id);
-
-    // Count artwork entries
-    size_t artwork_count = 0;
-    for (size_t i = 0; i < ch->entry_count; i++) {
-        if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
-            artwork_count++;
-        }
-    }
-
-    if (artwork_count == 0) {
-        ESP_LOGD(TAG, "download_get_next_callback: no artwork entries in channel %s", ch->channel_id);
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    // Allocate array for sorting
-    download_sort_item_t *items = malloc(artwork_count * sizeof(download_sort_item_t));
-    if (!items) {
-        ESP_LOGE(TAG, "download_get_next_callback: failed to allocate sort array");
-        return ESP_ERR_NO_MEM;
-    }
-
-    // Populate with artwork entries
-    size_t item_count = 0;
-    for (size_t i = 0; i < ch->entry_count; i++) {
-        if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
-            items[item_count].entry_idx = (uint32_t)i;
-            items[item_count].created_at = ch->entries[i].created_at;
-            item_count++;
-        }
-    }
-
-    // Sort by created_at descending (newest first)
-    qsort(items, item_count, sizeof(download_sort_item_t), compare_download_items_desc);
-
-    // Find first undownloaded artwork in sorted order
-    esp_err_t result = ESP_ERR_NOT_FOUND;
-    size_t downloaded_count = 0;
-
-    for (size_t i = 0; i < item_count; i++) {
-        uint32_t entry_idx = items[i].entry_idx;
-        const makapix_channel_entry_t *entry = &ch->entries[entry_idx];
-
-        // Build vault path
-        char vault_path[512];
-        build_vault_path(ch, entry, vault_path, sizeof(vault_path));
-
-        // Check if already downloaded
-        struct stat st;
-        if (stat(vault_path, &st) == 0) {
-            downloaded_count++;
-            continue;  // Already downloaded, check next
-        }
-
-        // Check for .404 marker (file permanently unavailable)
-        char marker_path[520];
-        snprintf(marker_path, sizeof(marker_path), "%s.404", vault_path);
-        if (stat(marker_path, &st) == 0) {
-            continue;  // Skip - server returned 404 previously
-        }
-
-        // Found a file that needs downloading - fill out the request
-        memset(out_request, 0, sizeof(*out_request));
-        bytes_to_uuid(entry->storage_key_uuid, out_request->storage_key, sizeof(out_request->storage_key));
-
-        // Build art_url using SHA256 sharding
-        uint8_t sha256[32];
-        if (storage_key_sha256(out_request->storage_key, sha256) != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to compute SHA256 for %s, skipping", out_request->storage_key);
-            continue;
-        }
-
-        snprintf(out_request->art_url, sizeof(out_request->art_url),
-                 "https://%s/api/vault/%02x/%02x/%02x/%s%s",
-                 CONFIG_MAKAPIX_CLUB_HOST,
-                 (unsigned int)sha256[0], (unsigned int)sha256[1], (unsigned int)sha256[2],
-                 out_request->storage_key,
-                 s_ext_strings[entry->extension]);
-
-        strlcpy(out_request->filepath, vault_path, sizeof(out_request->filepath));
-        strlcpy(out_request->channel_id, ch->channel_id, sizeof(out_request->channel_id));
-
-        ESP_LOGD(TAG, "Next download: %s (created_at=%lu, newest-first priority)",
-                 out_request->storage_key, (unsigned long)entry->created_at);
-
-        result = ESP_OK;
-        break;
-    }
-
-    if (result == ESP_ERR_NOT_FOUND) {
-        ESP_LOGD(TAG, "All files downloaded for channel %s: %zu/%zu artworks cached",
-                 ch->channel_id, downloaded_count, item_count);
-    }
-
-    free(items);
-    return result;
-}
-
-esp_err_t makapix_channel_get_next_download(channel_handle_t channel,
-                                             download_request_t *out_request)
-{
-    makapix_channel_t *ch = (makapix_channel_t *)channel;
-    return download_get_next_callback(out_request, ch);
-}
-
-void makapix_channel_setup_download_callback(channel_handle_t channel)
-{
-    makapix_channel_t *ch = (makapix_channel_t *)channel;
-    if (!ch) {
-        ESP_LOGW(TAG, "Cannot setup download callback: NULL channel");
-        return;
-    }
-    
-    s_download_channel = ch;
-    download_manager_set_next_callback(download_get_next_callback, NULL);
-    ESP_LOGD(TAG, "Download callback setup for channel %s", ch->channel_id);
-    
-    // Signal that downloads may be available
-    download_manager_signal_work_available();
 }
 

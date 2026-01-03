@@ -8,7 +8,6 @@ idf_component_register(
          "vault_storage.c"
          "animation_metadata.c"
          "playlist_manager.c"
-         "play_navigator.c"
          "download_manager.c"
          "channel_settings.c"
     INCLUDE_DIRS "include"

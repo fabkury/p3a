@@ -8,9 +8,11 @@
  * This file implements the main Play Scheduler logic including:
  * - Initialization and deinitialization
  * - Channel configuration and loading
- * - Navigation (next/prev/current)
- * - Generation of lookahead batches
+ * - Navigation (next/prev/current) with availability masking
  * - Integration with animation_player
+ *
+ * Availability Masking: The scheduler only sees files that exist locally.
+ * Entries without files are invisible - computed fresh on each pick.
  *
  * @see docs/play-scheduler/SPECIFICATION.md
  */
@@ -21,6 +23,7 @@
 #include "animation_swap_request.h"  // For swap_request_t
 #include "sdcard_channel_impl.h"
 #include "makapix_channel_impl.h"
+#include "makapix_channel_utils.h"
 #include "config_store.h"
 #include "p3a_state.h"
 #include "sd_path.h"
@@ -30,8 +33,37 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <utime.h>
+#include <time.h>
 
 static const char *TAG = "play_scheduler";
+
+// ============================================================================
+// DEFERRED: Live Mode Synchronized Playback
+// ============================================================================
+//
+// Live Mode was a feature for synchronized playback across multiple devices.
+// Key concepts that were in the deprecated play_navigator.c:
+//
+// - live_mode flag on navigator: Indicates synchronized playback is active
+// - live_p/live_q arrays: Flattened schedule of (post, artwork) indices
+// - live_count: Number of items in the flattened schedule
+// - live_ready: Whether the schedule has been built and is valid
+//
+// Key functions that existed:
+// - play_navigator_set_live_mode(): Enable/disable synchronized playback
+// - play_navigator_mark_live_dirty(): Signal schedule needs rebuild
+// - Schedule calculation based on SNTP-synchronized wall clock time
+//
+// When implementing Live Mode in Play Scheduler:
+// 1. Add live_mode flag to ps_state_t
+// 2. Use SNTP time sync for coordination (sntp_sync.h)
+// 3. Build flattened schedule from lookahead entries
+// 4. Calculate start_time_ms and start_frame for swap requests
+// 5. Wire into swap_future.c for scheduled swaps
+//
+// See docs/LIVE_MODE_ANALYSIS.md for full analysis.
+// ============================================================================
 
 // Forward declarations for animation_player functions (implemented in main)
 // Using weak symbols to avoid hard dependency on main component
@@ -237,49 +269,6 @@ static esp_err_t activate_channel(size_t channel_index)
 }
 
 // ============================================================================
-// Generation
-// ============================================================================
-
-void ps_generate_batch(ps_state_t *state)
-{
-    if (!state || state->channel_count == 0) {
-        return;
-    }
-
-    ESP_LOGD(TAG, "Generating batch of %d items", PS_LOOKAHEAD_SIZE);
-
-    for (int b = 0; b < PS_LOOKAHEAD_SIZE; b++) {
-        ps_artwork_t candidate;
-        bool found = false;
-
-        // For single-channel mode (N=1), just pick from the first active channel
-        // Multi-channel SWRR will be added in Phase 3
-        for (size_t i = 0; i < state->channel_count && !found; i++) {
-            if (!state->channels[i].active) continue;
-
-            found = ps_pick_artwork(state, i, &candidate);
-        }
-
-        if (found) {
-            // Check immediate repeat
-            if (candidate.artwork_id == state->last_played_id) {
-                // Try once more
-                for (size_t i = 0; i < state->channel_count; i++) {
-                    if (!state->channels[i].active) continue;
-                    if (ps_pick_artwork(state, i, &candidate)) {
-                        break;
-                    }
-                }
-            }
-
-            ps_lookahead_push(state, &candidate);
-        }
-    }
-
-    ESP_LOGD(TAG, "Generation complete, lookahead now has %zu items", state->lookahead_count);
-}
-
-// ============================================================================
 // Swap Request
 // ============================================================================
 
@@ -308,7 +297,14 @@ static esp_err_t prepare_and_request_swap(const ps_artwork_t *artwork)
     request.start_frame = 0;
 
     if (animation_player_request_swap) {
-        return animation_player_request_swap(&request);
+        esp_err_t err = animation_player_request_swap(&request);
+        if (err == ESP_OK) {
+            // Update file mtime for LRU tracking
+            time_t now = time(NULL);
+            struct utimbuf times = { now, now };
+            utime(artwork->filepath, &times);
+        }
+        return err;
     } else {
         ESP_LOGW(TAG, "animation_player_request_swap not available");
         return ESP_ERR_NOT_SUPPORTED;
@@ -326,8 +322,7 @@ esp_err_t play_scheduler_init(void)
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "Initializing Play Scheduler (H=%d, L=%d)",
-             PS_HISTORY_SIZE, PS_LOOKAHEAD_SIZE);
+    ESP_LOGI(TAG, "Initializing Play Scheduler (H=%d)", PS_HISTORY_SIZE);
 
     // Create mutex
     s_state.mutex = xSemaphoreCreateMutex();
@@ -345,20 +340,8 @@ esp_err_t play_scheduler_init(void)
         return ESP_ERR_NO_MEM;
     }
 
-    // Allocate lookahead buffer
-    s_state.lookahead = calloc(PS_LOOKAHEAD_SIZE, sizeof(ps_artwork_t));
-    if (!s_state.lookahead) {
-        ESP_LOGE(TAG, "Failed to allocate lookahead buffer");
-        free(s_state.history);
-        s_state.history = NULL;
-        vSemaphoreDelete(s_state.mutex);
-        s_state.mutex = NULL;
-        return ESP_ERR_NO_MEM;
-    }
-
-    // Initialize buffers
+    // Initialize history buffer
     ps_history_init(&s_state);
-    ps_lookahead_init(&s_state);
 
     // Initialize state
     s_state.nae_count = 0;
@@ -381,6 +364,13 @@ esp_err_t play_scheduler_init(void)
     ps_prng_seed(&s_state.prng_pick_state, s_state.global_seed ^ 0xA5A5A5A5);
 
     s_state.initialized = true;
+
+    // Start auto-swap timer task
+    esp_err_t timer_err = ps_timer_start(&s_state);
+    if (timer_err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to start timer task: %s", esp_err_to_name(timer_err));
+        // Continue anyway - auto-swap won't work but manual navigation will
+    }
 
     // Start background refresh task
     esp_err_t refresh_err = ps_refresh_start();
@@ -420,14 +410,10 @@ void play_scheduler_deinit(void)
         }
     }
 
-    // Free buffers
+    // Free history buffer
     if (s_state.history) {
         free(s_state.history);
         s_state.history = NULL;
-    }
-    if (s_state.lookahead) {
-        free(s_state.lookahead);
-        s_state.lookahead = NULL;
     }
 
     s_state.initialized = false;
@@ -495,7 +481,6 @@ esp_err_t play_scheduler_set_channels(
     }
 
     // Reset on snapshot change (but preserve history)
-    ps_lookahead_clear(&s_state);
     ps_nae_clear(&s_state);
     s_state.epoch_id++;
 
@@ -651,7 +636,7 @@ static void ps_build_cache_path(const char *channel_id, char *out_path, size_t m
  * Loads .bin file if it exists and sets entry_count and active flag.
  * Channels without cache get weight=0 until refresh completes.
  */
-static esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
+esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
 {
     char cache_path[512];
     ps_build_cache_path(ch->channel_id, cache_path, sizeof(cache_path));
@@ -742,6 +727,9 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         return ESP_ERR_INVALID_ARG;
     }
 
+    // Reset the periodic refresh timer so this command triggers immediate refresh
+    ps_refresh_reset_timer();
+
     xSemaphoreTake(s_state.mutex, portMAX_DELAY);
 
     ESP_LOGI(TAG, "Executing scheduler command: %zu channel(s), exposure=%d, pick=%d",
@@ -760,10 +748,7 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     s_state.pick_mode = command->pick_mode;
     s_state.channel_count = command->channel_count;
 
-    // Flush lookahead (but preserve history!)
-    ps_lookahead_clear(&s_state);
-
-    // Increment epoch
+    // Increment epoch (history is preserved)
     s_state.epoch_id++;
 
     // Initialize each channel
@@ -812,10 +797,37 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     // Signal background refresh task to process pending channels
     ps_refresh_signal_work();
 
+    // Update Download Manager with new channel list for round-robin downloading
+    extern void download_manager_set_channels(const char **channel_ids, size_t count);
+    extern void download_manager_reset_playback_initiated(void);
+    const char *channel_ids[PS_MAX_CHANNELS];
+    for (size_t i = 0; i < command->channel_count; i++) {
+        channel_ids[i] = s_state.channels[i].channel_id;
+    }
+    download_manager_set_channels(channel_ids, command->channel_count);
+
+    // Reset playback_initiated so download manager can trigger playback for new channel
+    download_manager_reset_playback_initiated();
+
+    // Check if any channel has entries we can play immediately
+    bool has_entries = false;
+    for (size_t i = 0; i < s_state.channel_count; i++) {
+        if (s_state.channels[i].active && s_state.channels[i].entry_count > 0) {
+            has_entries = true;
+            break;
+        }
+    }
+
     xSemaphoreGive(s_state.mutex);
 
-    // Trigger initial playback
-    return play_scheduler_next(NULL);
+    // Only trigger initial playback if we have entries
+    // Otherwise, let download manager trigger it when first file is available
+    if (has_entries) {
+        return play_scheduler_next(NULL);
+    } else {
+        ESP_LOGI(TAG, "No cached entries yet - waiting for refresh/download");
+        return ESP_OK;
+    }
 }
 
 esp_err_t play_scheduler_play_named_channel(const char *name)
@@ -917,78 +929,12 @@ esp_err_t play_scheduler_refresh_sdcard_cache(void)
 }
 
 // ============================================================================
-// Download Integration
+// Download Integration (decoupled - Download Manager owns its own state)
 // ============================================================================
 
-void play_scheduler_signal_lookahead_changed(void)
-{
-    // Signal download manager that lookahead has changed
-    extern void download_manager_signal_work_available(void);
-    download_manager_signal_work_available();
-}
-
-esp_err_t play_scheduler_get_next_prefetch(ps_prefetch_request_t *out_request)
-{
-    if (!s_state.initialized || !out_request) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
-
-    esp_err_t result = ESP_ERR_NOT_FOUND;
-    ps_artwork_t artwork;
-
-    // Scan lookahead for first item needing download
-    size_t count = ps_lookahead_count(&s_state);
-    for (size_t i = 0; i < count; i++) {
-        if (!ps_lookahead_peek(&s_state, i, &artwork)) {
-            continue;
-        }
-
-        // Skip if file exists
-        if (file_exists(artwork.filepath)) {
-            continue;
-        }
-
-        // Skip if 404 marker exists
-        if (has_404_marker(artwork.filepath)) {
-            continue;
-        }
-
-        // This item needs download
-        memset(out_request, 0, sizeof(*out_request));
-        strlcpy(out_request->storage_key, artwork.storage_key, sizeof(out_request->storage_key));
-        strlcpy(out_request->filepath, artwork.filepath, sizeof(out_request->filepath));
-
-        // Get channel ID from artwork
-        if (artwork.channel_index < s_state.channel_count) {
-            strlcpy(out_request->channel_id,
-                    s_state.channels[artwork.channel_index].channel_id,
-                    sizeof(out_request->channel_id));
-        }
-
-        // Build artwork URL from storage key
-        uint8_t sha256[32] = {0};
-        static const char *s_ext_strings[] = { ".webp", ".gif", ".png", ".jpg" };
-        if (ps_storage_key_sha256(out_request->storage_key, sha256) == ESP_OK) {
-            int ext = ps_ext_index_from_filepath(out_request->filepath);
-            snprintf(out_request->art_url, sizeof(out_request->art_url),
-                     "https://%s/api/vault/%02x/%02x/%02x/%s%s",
-                     CONFIG_MAKAPIX_CLUB_HOST,
-                     (unsigned int)sha256[0], (unsigned int)sha256[1], (unsigned int)sha256[2],
-                     out_request->storage_key,
-                     s_ext_strings[(ext >= 0 && ext <= 3) ? ext : 0]);
-        } else {
-            out_request->art_url[0] = '\0';
-        }
-
-        result = ESP_OK;
-        break;
-    }
-
-    xSemaphoreGive(s_state.mutex);
-    return result;
-}
+// Download Manager now has its own cursors and round-robin logic.
+// See download_manager_set_channels() for configuration.
+// No longer using lookahead-based prefetch.
 
 // ============================================================================
 // Navigation
@@ -1004,62 +950,25 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
 
     esp_err_t result = ESP_OK;
     ps_artwork_t artwork;
-    bool have_artwork = false;
+    bool found = false;
 
     // If walking forward through history, return from history
     if (ps_history_can_go_forward(&s_state)) {
-        if (ps_history_go_forward(&s_state, &artwork)) {
-            have_artwork = true;
+        found = ps_history_go_forward(&s_state, &artwork);
+    }
+
+    if (!found) {
+        // Compute fresh: pick next available artwork using availability masking
+        // This iterates through channel entries, skipping files that don't exist
+        found = ps_pick_next_available(&s_state, &artwork);
+        if (found) {
+            ps_history_push(&s_state, &artwork);
+            s_state.last_played_id = artwork.artwork_id;
         }
     }
 
-    if (!have_artwork) {
-        // Lenient skip loop: find a playable item in lookahead
-        size_t max_skip = PS_LOOKAHEAD_SIZE;
-        size_t skipped = 0;
-        bool generated = false;
-
-        while (!have_artwork && skipped < max_skip) {
-            // Generate more if needed
-            if (ps_lookahead_is_low(&s_state)) {
-                ps_generate_batch(&s_state);
-                generated = true;
-            }
-
-            // Peek at head item
-            if (!ps_lookahead_peek(&s_state, 0, &artwork)) {
-                // Lookahead empty
-                break;
-            }
-
-            // Check if file exists locally
-            if (file_exists(artwork.filepath)) {
-                // File is available - use it
-                ps_lookahead_pop(&s_state, &artwork);
-                ps_history_push(&s_state, &artwork);
-                s_state.last_played_id = artwork.artwork_id;
-                have_artwork = true;
-            } else if (has_404_marker(artwork.filepath)) {
-                // Permanently unavailable - remove from lookahead
-                ESP_LOGD(TAG, "Removing 404'd item: %s", artwork.filepath);
-                ps_lookahead_pop(&s_state, NULL);
-                // Don't increment skipped - this is a removal, not a skip
-            } else {
-                // File not downloaded yet - rotate to end and try next
-                ESP_LOGD(TAG, "Skipping not-yet-downloaded: %s", artwork.filepath);
-                ps_lookahead_rotate(&s_state);
-                skipped++;
-            }
-        }
-
-        // Signal download manager if we generated new items or skipped
-        if (generated || skipped > 0) {
-            play_scheduler_signal_lookahead_changed();
-        }
-    }
-
-    if (!have_artwork) {
-        ESP_LOGW(TAG, "No artwork available (skipped %zu)", PS_LOOKAHEAD_SIZE);
+    if (!found) {
+        ESP_LOGW(TAG, "No artwork available (cold start or all channels exhausted)");
         result = ESP_ERR_NOT_FOUND;
 
         // Display error message
@@ -1118,26 +1027,20 @@ esp_err_t play_scheduler_prev(ps_artwork_t *out_artwork)
     return result;
 }
 
-esp_err_t play_scheduler_peek(
-    size_t n,
-    ps_artwork_t *out_artworks,
-    size_t *out_count)
+esp_err_t play_scheduler_peek_next(ps_artwork_t *out_artwork)
 {
-    if (!s_state.initialized) {
-        if (out_count) *out_count = 0;
+    if (!s_state.initialized || !out_artwork) {
         return ESP_ERR_INVALID_STATE;
     }
 
     xSemaphoreTake(s_state.mutex, portMAX_DELAY);
 
-    // peek() does NOT trigger generation per spec
-    size_t count = ps_lookahead_peek_many(&s_state, n, out_artworks);
-
-    if (out_count) *out_count = count;
+    // Peek at what ps_pick_next_available would return without modifying state
+    bool found = ps_peek_next_available(&s_state, out_artwork);
 
     xSemaphoreGive(s_state.mutex);
 
-    return ESP_OK;
+    return found ? ESP_OK : ESP_ERR_NOT_FOUND;
 }
 
 esp_err_t play_scheduler_current(ps_artwork_t *out_artwork)
@@ -1234,7 +1137,7 @@ esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats)
 
     out_stats->channel_count = s_state.channel_count;
     out_stats->history_count = s_state.history_count;
-    out_stats->lookahead_count = s_state.lookahead_count;
+    out_stats->lookahead_count = 0;  // No longer using lookahead buffer
     out_stats->nae_pool_count = s_state.nae_count;
     out_stats->epoch_id = s_state.epoch_id;
     out_stats->current_channel_id = s_state.channel_count > 0
@@ -1244,6 +1147,29 @@ esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats)
     xSemaphoreGive(s_state.mutex);
 
     return ESP_OK;
+}
+
+size_t play_scheduler_get_active_channel_ids(const char **out_ids, size_t max_count)
+{
+    if (!s_state.initialized || !out_ids || max_count == 0) {
+        return 0;
+    }
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+
+    size_t count = s_state.channel_count;
+    if (count > max_count) {
+        count = max_count;
+    }
+
+    for (size_t i = 0; i < count; i++) {
+        // Return pointer to internal storage (stable until next execute_command)
+        out_ids[i] = s_state.channels[i].channel_id;
+    }
+
+    xSemaphoreGive(s_state.mutex);
+
+    return count;
 }
 
 void play_scheduler_reset(void)
@@ -1256,13 +1182,10 @@ void play_scheduler_reset(void)
              (unsigned long)s_state.epoch_id,
              (unsigned long)(s_state.epoch_id + 1));
 
-    // Clear lookahead
-    ps_lookahead_clear(&s_state);
-
     // Clear NAE pool
     ps_nae_clear(&s_state);
 
-    // Reset per-channel state
+    // Reset per-channel state (cursors, SWRR credits)
     for (size_t i = 0; i < s_state.channel_count; i++) {
         ps_pick_reset_channel(&s_state, i);
         s_state.channels[i].credit = 0;

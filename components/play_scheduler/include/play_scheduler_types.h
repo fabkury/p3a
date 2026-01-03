@@ -23,12 +23,6 @@ extern "C" {
 #define PS_HISTORY_SIZE 32
 #endif
 
-#ifdef CONFIG_PLAY_SCHEDULER_LOOKAHEAD_SIZE
-#define PS_LOOKAHEAD_SIZE CONFIG_PLAY_SCHEDULER_LOOKAHEAD_SIZE
-#else
-#define PS_LOOKAHEAD_SIZE 32
-#endif
-
 #ifdef CONFIG_PLAY_SCHEDULER_NAE_POOL_SIZE
 #define PS_NAE_POOL_SIZE CONFIG_PLAY_SCHEDULER_NAE_POOL_SIZE
 #else
@@ -181,10 +175,12 @@ typedef struct {
     void *entries;            // makapix_channel_entry_t* (NULL if not loaded)
 
     // Refresh state
-    bool refresh_pending;     // Queued for background refresh
-    bool refresh_in_progress; // Currently refreshing
-    uint32_t total_count;     // From server (for PrE)
-    uint32_t recent_count;    // From server (for PrE), 0 for SD card
+    bool refresh_pending;       // Queued for background refresh
+    bool refresh_in_progress;   // Currently refreshing
+    bool refresh_async_pending; // Waiting for Makapix async completion
+    uint32_t total_count;       // From server (for PrE)
+    uint32_t recent_count;      // From server (for PrE), 0 for SD card
+
 } ps_channel_state_t;
 
 #ifdef __cplusplus

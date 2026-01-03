@@ -7,7 +7,22 @@
 #include <stdbool.h>
 #include "esp_err.h"
 #include "playlist_manager.h"  // artwork_ref_t
-#include "play_navigator.h"    // play_navigator_t
+
+// ============================================================================
+// DEFERRED FEATURE: Live Mode Synchronized Playback
+// ============================================================================
+//
+// Live Mode is currently disabled pending Play Scheduler migration completion.
+// The swap_future system was designed for Live Mode synchronized swaps.
+//
+// When re-implementing Live Mode in Play Scheduler:
+// 1. Build flattened schedule from channel entries (on-demand computation)
+// 2. Use SNTP time for synchronization (sntp_sync.h)
+// 3. Calculate swap timing and start_frame for seamless transitions
+// 4. Use swap_future_schedule() to schedule synchronized swaps
+//
+// See play_scheduler.c for additional Live Mode notes.
+// ============================================================================
 
 #ifdef __cplusplus
 extern "C" {

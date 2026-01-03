@@ -8,8 +8,9 @@
  * The Play Scheduler is a streaming generator that selects artworks from multiple
  * followed channels for presentation. Key features:
  *
- * - Virtual play queue (not materialized in full)
- * - Bounded memory via History (H) and Lookahead (L) buffers
+ * - On-demand computation (no pre-built lookahead buffer)
+ * - Availability masking: only locally downloaded files are visible
+ * - History buffer for back-navigation
  * - Multi-channel fairness via Smooth Weighted Round Robin (SWRR)
  * - New Artwork Events (NAE) for responsive handling of new content
  * - Deterministic and reproducible via reversible PRNGs
@@ -98,7 +99,7 @@ esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag);
  * @brief Set the active channel set and exposure mode
  *
  * Rebuilds the play queue. History is preserved across this call.
- * Resets: lookahead, credits, cursors, NAE pool.
+ * Resets: cursors, SWRR credits, NAE pool.
  *
  * @param channels Array of channel configurations
  * @param count Number of channels (1-64)
@@ -155,37 +156,21 @@ esp_err_t play_scheduler_refresh_sdcard_cache(void);
 // Download Integration
 // ============================================================================
 
-/**
- * @brief Prefetch request for download manager
- */
-typedef struct {
-    char storage_key[96];
-    char art_url[256];
-    char filepath[256];
-    char channel_id[64];
-} ps_prefetch_request_t;
+// Download Manager is now decoupled and owns its own state.
+// Use download_manager_set_channels() to configure active channels.
+// No lookahead-based prefetch - downloads work independently.
 
 /**
- * @brief Get next item that needs prefetching
+ * @brief Get list of active channel IDs
  *
- * Scans lookahead for the first item that:
- * - Does not have a local file
- * - Does not have a .404 marker
+ * Returns the channel IDs for all channels in the current scheduler command.
+ * Used by LRU eviction to protect active channel files.
  *
- * Called by download_manager to determine what to download.
- *
- * @param out_request Output prefetch request
- * @return ESP_OK if found, ESP_ERR_NOT_FOUND if all downloaded
+ * @param out_ids Array of channel ID pointers (points to internal storage)
+ * @param max_count Maximum number of IDs to return
+ * @return Number of channel IDs returned
  */
-esp_err_t play_scheduler_get_next_prefetch(ps_prefetch_request_t *out_request);
-
-/**
- * @brief Signal that lookahead has changed
- *
- * Called internally after generation or skip rotation.
- * Wakes download_manager to check for new prefetch needs.
- */
-void play_scheduler_signal_lookahead_changed(void);
+size_t play_scheduler_get_active_channel_ids(const char **out_ids, size_t max_count);
 
 // ============================================================================
 // Navigation
@@ -194,7 +179,8 @@ void play_scheduler_signal_lookahead_changed(void);
 /**
  * @brief Get the next artwork for playback
  *
- * Advances playback position. Triggers generation if lookahead is low.
+ * Advances playback position. Computes next available artwork on-demand
+ * using availability masking (only locally downloaded files are visible).
  * Also calls animation_player_request_swap().
  *
  * @param out_artwork Artwork reference (can be NULL if only triggering swap)
@@ -213,20 +199,14 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork);
 esp_err_t play_scheduler_prev(ps_artwork_t *out_artwork);
 
 /**
- * @brief Peek at upcoming artworks without advancing
+ * @brief Peek at what play_scheduler_next() would return
  *
- * Returns up to n items from lookahead. Does NOT trigger generation.
+ * Simulates picking without modifying state. Useful for pre-caching.
  *
- * @param n Maximum items to return
- * @param out_artworks Array to receive artworks
- * @param out_count Actual count returned
- * @return ESP_OK on success
+ * @param out_artwork Artwork reference
+ * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no artworks available
  */
-esp_err_t play_scheduler_peek(
-    size_t n,
-    ps_artwork_t *out_artworks,
-    size_t *out_count
-);
+esp_err_t play_scheduler_peek_next(ps_artwork_t *out_artwork);
 
 /**
  * @brief Get current artwork without navigation
@@ -316,7 +296,7 @@ esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats);
 /**
  * @brief Reset the scheduler
  *
- * Clears lookahead, credits, cursors, NAE pool. Preserves history.
+ * Clears cursors, SWRR credits, and NAE pool. Preserves history.
  * Increments epoch_id.
  */
 void play_scheduler_reset(void);

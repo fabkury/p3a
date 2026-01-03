@@ -3,12 +3,16 @@
 
 #include "sdcard_channel_impl.h"
 #include "playlist_manager.h"
-#include "play_navigator.h"
 #include "channel_settings.h"
 #include "config_store.h"
 
 #include "cJSON.h"
 #include "esp_log.h"
+
+// NOTE: play_navigator was removed as part of Play Scheduler migration.
+// Navigation is now handled by Play Scheduler directly.
+// The legacy navigation functions below return ESP_ERR_NOT_SUPPORTED.
+// See play_scheduler.c for Live Mode deferred feature notes.
 
 #include <stdlib.h>
 #include <string.h>
@@ -44,6 +48,9 @@ typedef struct {
 
 /**
  * @brief Internal SD card channel state
+ *
+ * NOTE: play_navigator was removed as part of Play Scheduler migration.
+ * Navigation is now handled by Play Scheduler directly.
  */
 typedef struct {
     struct channel_s base;      // Base channel (must be first)
@@ -55,10 +62,7 @@ typedef struct {
     sdcard_entry_t *entries;
     size_t entry_count;
 
-    // Playback (playlist-aware)
-    play_navigator_t navigator;
-    bool navigator_ready;
-
+    // Legacy playback field (kept for compatibility, no longer used)
     uint32_t channel_dwell_override_ms;
 } sdcard_channel_t;
 
@@ -475,11 +479,6 @@ static void sdcard_impl_unload(channel_handle_t channel)
     sdcard_channel_t *ch = (sdcard_channel_t *)channel;
     if (!ch) return;
 
-    if (ch->navigator_ready) {
-        play_navigator_deinit(&ch->navigator);
-        ch->navigator_ready = false;
-    }
-
     if (ch->entries) {
         for (size_t i = 0; i < ch->entry_count; i++) {
             free(ch->entries[i].name);
@@ -539,131 +538,55 @@ static esp_err_t sdcard_impl_start_playback(channel_handle_t channel,
                                             channel_order_mode_t order_mode,
                                             const channel_filter_config_t *filter)
 {
+    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
+    // This function is kept for interface compatibility but does nothing.
     (void)filter;
 
     sdcard_channel_t *ch = (sdcard_channel_t *)channel;
     if (!ch || !ch->base.loaded) return ESP_ERR_INVALID_STATE;
 
-    if (ch->navigator_ready) {
-        play_navigator_deinit(&ch->navigator);
-        ch->navigator_ready = false;
-    }
-
+    // Load channel-specific dwell time if present
     channel_settings_t settings = {0};
-    if (channel_settings_load_for_sdcard(&settings) != ESP_OK) {
-        memset(&settings, 0, sizeof(settings));
+    if (channel_settings_load_for_sdcard(&settings) == ESP_OK) {
+        if (settings.channel_dwell_time_present) {
+            ch->channel_dwell_override_ms = settings.channel_dwell_time_ms;
+        }
     }
-
-    // Map channel_order_mode to play_order_mode
-    play_order_mode_t play_order = PLAY_ORDER_SERVER;
-    switch (order_mode) {
-        case CHANNEL_ORDER_ORIGINAL: play_order = PLAY_ORDER_SERVER; break;
-        case CHANNEL_ORDER_CREATED:  play_order = PLAY_ORDER_CREATED; break;
-        case CHANNEL_ORDER_RANDOM:   play_order = PLAY_ORDER_RANDOM; break;
-        default: break;
-    }
-
-    if (settings.play_order_present) {
-        play_order = (play_order_mode_t)settings.play_order;
-    } else {
-        play_order = (play_order_mode_t)config_store_get_play_order();
-    }
-
-    uint32_t pe = settings.pe_present ? settings.pe : config_store_get_pe();
-
-    if (settings.channel_dwell_time_present) {
-        ch->channel_dwell_override_ms = settings.channel_dwell_time_ms;
-    } else {
-        ch->channel_dwell_override_ms = 0;
-    }
-
-    uint32_t global_seed = config_store_get_global_seed();
-
-    esp_err_t err = play_navigator_init(&ch->navigator, channel, "sdcard", play_order, pe, global_seed);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to init play navigator: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    play_navigator_set_channel_dwell_override_ms(&ch->navigator, ch->channel_dwell_override_ms);
-
-    play_navigator_set_randomize_playlist(&ch->navigator,
-                                         settings.randomize_playlist_present ? settings.randomize_playlist
-                                                                             : config_store_get_randomize_playlist());
-    play_navigator_set_live_mode(&ch->navigator,
-                                 settings.live_mode_present ? settings.live_mode
-                                                           : config_store_get_live_mode());
 
     ch->base.current_order = order_mode;
-    ch->navigator_ready = true;
-    ESP_LOGI(TAG, "Started SD playback (navigator): posts=%zu order=%d pe=%lu", ch->entry_count, order_mode,
-             (unsigned long)pe);
-    return ESP_OK;
-}
-
-static esp_err_t fill_item_from_artwork(sdcard_channel_t *ch, const artwork_ref_t *art, channel_item_ref_t *out_item)
-{
-    if (!ch || !art || !out_item) return ESP_ERR_INVALID_ARG;
-
-    memset(out_item, 0, sizeof(*out_item));
-    out_item->post_id = art->post_id;  // Will be 0 for SD card items (not Makapix artworks)
-    strlcpy(out_item->filepath, art->filepath, sizeof(out_item->filepath));
-    strlcpy(out_item->storage_key, art->storage_key, sizeof(out_item->storage_key));
-    out_item->item_index = 0;
-    out_item->flags = CHANNEL_FILTER_FLAG_NONE;
-
-    switch (art->type) {
-        case ASSET_TYPE_GIF:  out_item->flags |= CHANNEL_FILTER_FLAG_GIF; break;
-        case ASSET_TYPE_WEBP: out_item->flags |= CHANNEL_FILTER_FLAG_WEBP; break;
-        case ASSET_TYPE_PNG:  out_item->flags |= CHANNEL_FILTER_FLAG_PNG; break;
-        case ASSET_TYPE_JPEG: out_item->flags |= CHANNEL_FILTER_FLAG_JPEG; break;
-        default: break;
-    }
-
-    out_item->dwell_time_ms = compute_effective_dwell_ms(config_store_get_dwell_time(),
-                                                         ch->channel_dwell_override_ms,
-                                                         art->dwell_time_ms);
+    ESP_LOGD(TAG, "start_playback called but navigation now handled by Play Scheduler");
     return ESP_OK;
 }
 
 static esp_err_t sdcard_impl_current_item(channel_handle_t channel, channel_item_ref_t *out_item)
 {
-    sdcard_channel_t *ch = (sdcard_channel_t *)channel;
-    if (!ch || !ch->navigator_ready) return ESP_ERR_INVALID_STATE;
-
-    artwork_ref_t art;
-    esp_err_t err = play_navigator_current(&ch->navigator, &art);
-    if (err != ESP_OK) return err;
-    return fill_item_from_artwork(ch, &art, out_item);
+    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
+    (void)channel;
+    (void)out_item;
+    return ESP_ERR_NOT_SUPPORTED;
 }
 
 static esp_err_t sdcard_impl_next_item(channel_handle_t channel, channel_item_ref_t *out_item)
 {
-    sdcard_channel_t *ch = (sdcard_channel_t *)channel;
-    if (!ch || !ch->navigator_ready) return ESP_ERR_INVALID_STATE;
-
-    artwork_ref_t art;
-    esp_err_t err = play_navigator_next(&ch->navigator, &art);
-    if (err != ESP_OK) return err;
-    return fill_item_from_artwork(ch, &art, out_item);
+    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
+    (void)channel;
+    (void)out_item;
+    return ESP_ERR_NOT_SUPPORTED;
 }
 
 static esp_err_t sdcard_impl_prev_item(channel_handle_t channel, channel_item_ref_t *out_item)
 {
-    sdcard_channel_t *ch = (sdcard_channel_t *)channel;
-    if (!ch || !ch->navigator_ready) return ESP_ERR_INVALID_STATE;
-
-    artwork_ref_t art;
-    esp_err_t err = play_navigator_prev(&ch->navigator, &art);
-    if (err != ESP_OK) return err;
-    return fill_item_from_artwork(ch, &art, out_item);
+    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
+    (void)channel;
+    (void)out_item;
+    return ESP_ERR_NOT_SUPPORTED;
 }
 
 static esp_err_t sdcard_impl_request_reshuffle(channel_handle_t channel)
 {
-    sdcard_channel_t *ch = (sdcard_channel_t *)channel;
-    if (!ch || !ch->navigator_ready) return ESP_ERR_INVALID_STATE;
-    return play_navigator_request_reshuffle(&ch->navigator);
+    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
+    (void)channel;
+    return ESP_OK;
 }
 
 static esp_err_t sdcard_impl_request_refresh(channel_handle_t channel)
@@ -690,14 +613,7 @@ static esp_err_t sdcard_impl_get_stats(channel_handle_t channel, channel_stats_t
 
     out_stats->total_items = ch->entry_count;
     out_stats->filtered_items = ch->entry_count;
-
-    uint32_t p = 0, q = 0;
-    if (ch->navigator_ready) {
-        play_navigator_get_position(&ch->navigator, &p, &q);
-        out_stats->current_position = p;
-    } else {
-        out_stats->current_position = 0;
-    }
+    out_stats->current_position = 0;  // Position tracking moved to Play Scheduler
 
     return ESP_OK;
 }
@@ -717,9 +633,9 @@ static void sdcard_impl_destroy(channel_handle_t channel)
 
 static void *sdcard_impl_get_navigator(channel_handle_t channel)
 {
-    sdcard_channel_t *ch = (sdcard_channel_t *)channel;
-    if (!ch) return NULL;
-    return ch->navigator_ready ? (void *)&ch->navigator : NULL;
+    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
+    (void)channel;
+    return NULL;
 }
 
 // Public creation function

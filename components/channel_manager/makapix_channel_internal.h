@@ -5,7 +5,6 @@
 
 #include "makapix_channel_impl.h"
 #include "makapix_api.h"
-#include "play_navigator.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -29,24 +28,26 @@ typedef enum {
 
 /**
  * @brief Internal Makapix channel state
+ *
+ * NOTE: play_navigator was removed as part of Play Scheduler migration.
+ * Navigation is now handled by Play Scheduler directly.
+ * See play_scheduler.c for Live Mode deferred feature notes.
  */
 typedef struct {
     struct channel_s base;           // Base channel (must be first)
-    
+
     // Configuration
     char *channel_id;                // UUID of channel
     char *vault_path;                // Base vault path
     char *channels_path;             // Base channels path
-    
+
     // Loaded entries
     makapix_channel_entry_t *entries;  // Array of entries from channel index file (<channel>.bin)
     size_t entry_count;              // Number of entries
-    
-    // Playback (playlist-aware)
-    play_navigator_t navigator;
-    bool navigator_ready;
+
+    // Legacy playback fields (kept for binary compatibility, no longer used)
     uint32_t channel_dwell_override_ms;
-    
+
     // Refresh state
     bool refreshing;                 // Background refresh in progress
     TaskHandle_t refresh_task;      // Background refresh task handle
@@ -54,7 +55,7 @@ typedef struct {
 
     // Serialize channel index load/write to avoid races during unlink+rename window
     SemaphoreHandle_t index_io_lock;
-    
+
 } makapix_channel_t;
 
 // Extension strings for building file paths

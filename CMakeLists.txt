@@ -160,7 +160,7 @@ for src_spec, dst_name, flash_addr, needs_force in files:
         has_force_files = True
 
 # Generate flash_args file (address/filename pairs only, NO flash options)
-# Flash options must be passed on command line because @flash_args is parsed AFTER write_flash
+# Flash options must be passed on command line because @flash_args is parsed AFTER write-flash
 flash_args_path = os.path.join(release_dir, 'flash_args')
 with open(flash_args_path, 'w') as f:
     for addr, name in flash_entries:
@@ -171,23 +171,23 @@ print(f'  OK: flash_args')
 # Generate flash command helper
 flash_cmd_path = os.path.join(release_dir, 'flash_command.txt')
 force_flag = ' --force' if has_force_files else ''
-flash_opts = '--flash_mode dio --flash_freq 80m --flash_size 32MB'
+flash_opts = '--flash-mode dio --flash-freq 80m --flash-size 32MB'
 with open(flash_cmd_path, 'w') as f:
     f.write('# Flash command for ESP32-P4\\n')
     f.write('# Run from this directory:\\n')
     f.write('\\n')
     f.write('# Windows Command Prompt:\\n')
-    f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args\\n')
+    f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts}{force_flag} @flash_args\\n')
     f.write('\\n')
     f.write('# Windows PowerShell:\\n')
-    f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} \"@flash_args\"\\n')
+    f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts}{force_flag} \"@flash_args\"\\n')
     f.write('\\n')
     f.write('# Linux/macOS:\\n')
-    f.write(f'python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args\\n')
+    f.write(f'python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts}{force_flag} @flash_args\\n')
     f.write('\\n')
     f.write('\\n')
     f.write('# Or with explicit port (replace COM5 or /dev/ttyUSB0 with your port)\\n')
-    f.write(f'python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args\\n')
+    f.write(f'python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts}{force_flag} @flash_args\\n')
 
 print(f'  OK: flash_command.txt')
 
@@ -201,17 +201,17 @@ if is_dev_build:
         f.write('# Run from this directory:\\n')
         f.write('\\n')
         f.write('# Windows Command Prompt:\\n')
-        f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts} 0x20000 p3a.bin\\n')
+        f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts} 0x20000 p3a.bin\\n')
         f.write('\\n')
         f.write('# Windows PowerShell:\\n')
-        f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts} 0x20000 p3a.bin\\n')
+        f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts} 0x20000 p3a.bin\\n')
         f.write('\\n')
         f.write('# Linux/macOS:\\n')
-        f.write(f'python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts} 0x20000 p3a.bin\\n')
+        f.write(f'python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts} 0x20000 p3a.bin\\n')
         f.write('\\n')
         f.write('\\n')
         f.write('# Or with explicit port (replace COM5 or /dev/ttyUSB0 with your port)\\n')
-        f.write(f'python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts} 0x20000 p3a.bin\\n')
+        f.write(f'python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts} 0x20000 p3a.bin\\n')
 
     print(f'  OK: flash_command_app_only.txt (dev build)')
 
@@ -262,13 +262,13 @@ Open a terminal in this folder and run:
 
 ```bash
 # Windows PowerShell (replace COM5 with your port)
-python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} \"@flash_args\"
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts}{force_flag} \"@flash_args\"
 
 # Windows Command Prompt (replace COM5 with your port)
-python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts}{force_flag} @flash_args
 
 # Linux/macOS (replace /dev/ttyUSB0 with your port)
-python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args
+python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts}{force_flag} @flash_args
 ```
 
 ### Full Erase + Flash (if having issues)
@@ -280,7 +280,7 @@ If you're having issues or this is a fresh device, erase the flash first:
 python -m esptool --chip esp32p4 -p COM5 erase_flash
 
 # Then flash
-python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts}{force_flag} @flash_args
+python -m esptool --chip esp32p4 -p COM5 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts}{force_flag} @flash_args
 ```
 
 ---

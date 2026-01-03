@@ -4,13 +4,17 @@
 #include "makapix_channel_internal.h"
 #include "makapix_api.h"
 #include "makapix_artwork.h"
+#include "makapix.h"  // For makapix_ps_refresh_mark_complete()
 #include "playlist_manager.h"
 #include "download_manager.h"
 #include "config_store.h"
-#include "play_navigator.h"
 #include "makapix_channel_events.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+
+// NOTE: play_navigator was removed as part of Play Scheduler migration.
+// Live Mode synchronization is now deferred.
+// See play_scheduler.c for Live Mode deferred feature notes.
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "cJSON.h"
@@ -902,10 +906,8 @@ void refresh_task_impl(void *pvParameters)
             // Signal download manager that new files may be available
             download_manager_signal_work_available();
 
-            // If Live Mode is active, mark schedule dirty
-            if (ch->navigator_ready && ch->navigator.live_mode) {
-                play_navigator_mark_live_dirty(&ch->navigator);
-            }
+            // NOTE: Live Mode schedule marking was here but has been removed.
+            // Live Mode is now deferred. See play_scheduler.c for notes.
 
             // Free any heap allocations inside parsed posts
             for (size_t pi = 0; pi < resp->post_count; pi++) {
@@ -993,10 +995,13 @@ void refresh_task_impl(void *pvParameters)
         }
         
         ESP_LOGD(TAG, "Channel %s: %zu entries (%zu artworks)", ch->channel_id, ch->entry_count, artwork_count);
-        
+
         // Signal that refresh has completed - this unblocks download manager
         makapix_channel_signal_refresh_done();
-        
+
+        // Signal Play Scheduler that this channel's refresh is complete
+        makapix_ps_refresh_mark_complete(ch->channel_id);
+
         // Wait for next refresh cycle
         for (uint32_t elapsed = 0; elapsed < refresh_interval_sec && ch->refreshing; elapsed++) {
             vTaskDelay(pdMS_TO_TICKS(1000));

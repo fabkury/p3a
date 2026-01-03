@@ -11,7 +11,7 @@
 #include "play_scheduler_internal.h"
 #include "channel_interface.h"
 #include "makapix_channel_impl.h"
-#include "makapix_channel_internal.h"
+#include "makapix_channel_utils.h"
 #include "sd_path.h"
 #include "esp_log.h"
 #include <string.h>
@@ -30,6 +30,15 @@ static bool file_exists(const char *path)
     return (stat(path, &st) == 0);
 }
 
+static bool has_404_marker(const char *filepath)
+{
+    if (!filepath || filepath[0] == '\0') return false;
+    char marker[264];
+    snprintf(marker, sizeof(marker), "%s.404", filepath);
+    struct stat st;
+    return (stat(marker, &st) == 0);
+}
+
 static asset_type_t get_asset_type_from_extension(uint8_t ext)
 {
     switch (ext) {
@@ -41,15 +50,13 @@ static asset_type_t get_asset_type_from_extension(uint8_t ext)
     }
 }
 
-static const char *s_ext_strings[] = { ".webp", ".gif", ".png", ".jpg" };
-
 /**
  * @brief Build vault filepath for an entry
  *
  * Uses SHA256 sharding: {vault}/{sha[0]}/{sha[1]}/{sha[2]}/{storage_key}.{ext}
  */
-static void ps_build_vault_filepath(const makapix_channel_entry_t *entry,
-                                     char *out, size_t out_len)
+void ps_build_vault_filepath(const makapix_channel_entry_t *entry,
+                              char *out, size_t out_len)
 {
     if (!entry || !out || out_len == 0) {
         if (out && out_len > 0) out[0] = '\0';
@@ -109,6 +116,13 @@ void ps_prng_seed(uint32_t *state, uint32_t seed)
 // RecencyPick Mode
 // ============================================================================
 
+/**
+ * @brief Pick artwork using recency mode with availability masking
+ *
+ * Iterates through channel entries starting from cursor, wrapping around.
+ * Skips entries without local files (availability masking).
+ * Returns false when full circle completed with no available artwork.
+ */
 static bool pick_recency(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
 {
     ps_channel_state_t *ch = &state->channels[channel_index];
@@ -118,21 +132,25 @@ static bool pick_recency(ps_state_t *state, size_t channel_index, ps_artwork_t *
         return false;
     }
 
-    // Maximum attempts to find available artwork (skip unavailable ones)
-    size_t max_attempts = ch->entry_count;
-    if (max_attempts > 10) max_attempts = 10;  // Limit retries
+    uint32_t start_cursor = ch->cursor;
+    bool wrapped = false;
 
-    for (size_t attempt = 0; attempt < max_attempts; attempt++) {
-        // Wrap cursor
+    while (true) {
+        // Wrap cursor at end
         if (ch->cursor >= ch->entry_count) {
+            if (wrapped) break;  // Full circle - nothing found
             ch->cursor = 0;
+            wrapped = true;
         }
 
-        makapix_channel_entry_t *entry = &entries[ch->cursor];
+        // Check if we've completed a full cycle
+        if (wrapped && ch->cursor >= start_cursor) break;
 
-        // Skip playlists for now (only handle artwork posts)
+        makapix_channel_entry_t *entry = &entries[ch->cursor];
+        ch->cursor++;  // Always advance cursor
+
+        // Skip non-artwork entries (playlists, etc.)
         if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
-            ch->cursor++;
             continue;
         }
 
@@ -140,16 +158,18 @@ static bool pick_recency(ps_state_t *state, size_t channel_index, ps_artwork_t *
         char filepath[256];
         ps_build_vault_filepath(entry, filepath, sizeof(filepath));
 
-        // Check if file exists
+        // AVAILABILITY MASKING: skip if not downloaded
         if (!file_exists(filepath)) {
-            ch->cursor++;
-            ESP_LOGD(TAG, "Skipping unavailable file: %s", filepath);
             continue;
         }
 
-        // Check immediate repeat
-        if (entry->post_id == state->last_played_id && attempt < 2) {
-            ch->cursor++;
+        // Skip 404'd entries
+        if (has_404_marker(filepath)) {
+            continue;
+        }
+
+        // Skip immediate repeat
+        if (entry->post_id == state->last_played_id) {
             continue;
         }
 
@@ -166,13 +186,11 @@ static bool pick_recency(ps_state_t *state, size_t channel_index, ps_artwork_t *
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
 
-        // Advance cursor for next pick
-        ch->cursor++;
-
         return true;
     }
 
-    ESP_LOGW(TAG, "RecencyPick: No available artwork found after %zu attempts", max_attempts);
+    // Channel exhausted - no available artwork found
+    ESP_LOGD(TAG, "RecencyPick: Channel %zu exhausted (no available files)", channel_index);
     return false;
 }
 
@@ -212,8 +230,13 @@ static bool pick_random(ps_state_t *state, size_t channel_index, ps_artwork_t *o
         char filepath[256];
         ps_build_vault_filepath(entry, filepath, sizeof(filepath));
 
-        // Check if file exists
+        // Check if file exists (availability masking)
         if (!file_exists(filepath)) {
+            continue;
+        }
+
+        // Skip 404'd entries
+        if (has_404_marker(filepath)) {
             continue;
         }
 
@@ -272,4 +295,59 @@ void ps_pick_reset_channel(ps_state_t *state, size_t channel_index)
 
     // Re-seed pick PRNG
     ps_prng_seed(&ch->pick_rng_state, state->global_seed ^ (uint32_t)channel_index ^ state->epoch_id);
+}
+
+// ============================================================================
+// Multi-Channel Pick (used by play_scheduler_next)
+// ============================================================================
+
+bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
+{
+    if (!state || !out_artwork || state->channel_count == 0) {
+        return false;
+    }
+
+    // Count active channels
+    size_t active_count = 0;
+    for (size_t i = 0; i < state->channel_count; i++) {
+        if (state->channels[i].active && state->channels[i].entry_count > 0) {
+            active_count++;
+        }
+    }
+
+    if (active_count == 0) {
+        ESP_LOGD(TAG, "No active channels with entries");
+        return false;
+    }
+
+    // Try each active channel via SWRR
+    for (size_t attempt = 0; attempt < active_count; attempt++) {
+        int ch_idx = ps_swrr_select_channel(state);
+        if (ch_idx < 0) {
+            break;
+        }
+
+        if (ps_pick_artwork(state, (size_t)ch_idx, out_artwork)) {
+            return true;
+        }
+        // Channel exhausted - SWRR will pick different one next iteration
+    }
+
+    ESP_LOGD(TAG, "No available artwork in any channel");
+    return false;
+}
+
+bool ps_peek_next_available(const ps_state_t *state, ps_artwork_t *out_artwork)
+{
+    if (!state || !out_artwork || state->channel_count == 0) {
+        return false;
+    }
+
+    // Create a temporary copy of mutable state to avoid modifying original
+    // We need to copy SWRR credits and channel cursors
+    ps_state_t temp;
+    memcpy(&temp, state, sizeof(ps_state_t));
+
+    // Use the temp copy for picking
+    return ps_pick_next_available(&temp, out_artwork);
 }

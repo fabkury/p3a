@@ -6,7 +6,9 @@
 
 #include "channel_interface.h"
 #include "sdcard_channel.h"
-#include "play_navigator.h"
+
+// NOTE: play_navigator was removed as part of Play Scheduler migration.
+// Navigation is now handled by Play Scheduler directly.
 
 #ifdef __cplusplus
 extern "C" {

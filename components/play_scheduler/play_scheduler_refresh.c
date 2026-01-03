@@ -13,6 +13,7 @@
 #include "play_scheduler_internal.h"
 #include "play_scheduler.h"  // For play_scheduler_next()
 #include "makapix.h"
+#include "makapix_channel_events.h"  // For async completion events
 #include "sd_path.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -20,6 +21,7 @@
 #include "freertos/event_groups.h"
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 static const char *TAG = "ps_refresh";
 
@@ -28,6 +30,9 @@ static const char *TAG = "ps_refresh";
 #define REFRESH_TASK_PRIORITY   5
 #define REFRESH_CHECK_INTERVAL_MS 1000
 
+// Periodic refresh configuration
+#define REFRESH_INTERVAL_SECONDS 3600  // 1 hour
+
 // Event bits
 #define REFRESH_EVENT_WORK_AVAILABLE   (1 << 0)
 #define REFRESH_EVENT_SHUTDOWN         (1 << 1)
@@ -35,19 +40,33 @@ static const char *TAG = "ps_refresh";
 static TaskHandle_t s_refresh_task = NULL;
 static EventGroupHandle_t s_refresh_events = NULL;
 static volatile bool s_task_running = false;
+static time_t s_last_full_refresh_complete = 0;
 
 /**
  * @brief Find next channel that needs refresh
+ *
+ * For Makapix channels, only returns them if MQTT is connected.
+ * This avoids repeatedly trying to refresh when MQTT is not ready.
  *
  * @param state Scheduler state
  * @return Channel index, or -1 if none pending
  */
 static int find_next_pending_refresh(ps_state_t *state)
 {
+    bool mqtt_ready = makapix_channel_is_mqtt_ready();
+
     for (size_t i = 0; i < state->channel_count; i++) {
-        if (state->channels[i].refresh_pending && !state->channels[i].refresh_in_progress) {
-            return (int)i;
+        ps_channel_state_t *ch = &state->channels[i];
+        if (!ch->refresh_pending || ch->refresh_in_progress) {
+            continue;
         }
+
+        // For Makapix channels, only proceed if MQTT is connected
+        if (ch->type != PS_CHANNEL_TYPE_SDCARD && !mqtt_ready) {
+            continue;  // Skip Makapix channels until MQTT is ready
+        }
+
+        return (int)i;
     }
     return -1;
 }
@@ -86,41 +105,48 @@ static esp_err_t refresh_sdcard_channel(ps_channel_state_t *ch)
 /**
  * @brief Refresh a Makapix channel
  *
- * For now, this triggers the Makapix refresh by switching to the channel.
- * In the future, we could call the makapix_api_query_posts directly.
+ * Uses the dedicated makapix_refresh_channel_index() API to trigger
+ * background refresh without channel switching or navigation.
  */
 static esp_err_t refresh_makapix_channel(ps_channel_state_t *ch)
 {
     ESP_LOGI(TAG, "Refreshing Makapix channel: %s", ch->channel_id);
 
-    // Parse channel_id to determine Makapix channel type
+    // Parse channel_id to determine Makapix channel type and identifier
     // Channel IDs: "all", "promoted", "user:{sqid}", "hashtag:{tag}"
 
+    esp_err_t err = ESP_OK;
     if (strcmp(ch->channel_id, "all") == 0) {
-        // Request channel switch which will trigger refresh
-        makapix_request_channel_switch("all", NULL);
+        err = makapix_refresh_channel_index("all", NULL);
     } else if (strcmp(ch->channel_id, "promoted") == 0) {
-        makapix_request_channel_switch("promoted", NULL);
+        err = makapix_refresh_channel_index("promoted", NULL);
     } else if (strncmp(ch->channel_id, "user:", 5) == 0) {
         const char *sqid = ch->channel_id + 5;
-        makapix_request_channel_switch("by_user", sqid);
+        err = makapix_refresh_channel_index("by_user", sqid);
     } else if (strncmp(ch->channel_id, "hashtag:", 8) == 0) {
         const char *tag = ch->channel_id + 8;
-        makapix_request_channel_switch("hashtag", tag);
+        err = makapix_refresh_channel_index("hashtag", tag);
     } else {
         ESP_LOGW(TAG, "Unknown Makapix channel type: %s", ch->channel_id);
         return ESP_ERR_NOT_SUPPORTED;
     }
 
+    if (err == ESP_ERR_INVALID_STATE) {
+        // MQTT not connected - return this error so caller can queue for retry
+        ESP_LOGD(TAG, "MQTT not connected, will retry when connected");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to trigger Makapix refresh: %s", esp_err_to_name(err));
+        return err;
+    }
+
     // The actual refresh happens asynchronously in Makapix
-    // We just mark it as no longer pending here
-    // The cache will be updated by the Makapix refresh task
+    // Mark channel as waiting for async completion
+    ch->refresh_async_pending = true;
 
-    // TODO: In a more complete implementation, we would:
-    // 1. Wait for Makapix refresh to complete
-    // 2. Reload the cache to get updated entry count
-    // For now, we'll reload the cache optimistically
-
+    // Optimistically load any existing cache (may have stale data)
     char cache_path[512];
     ps_build_cache_path_internal(ch->channel_id, cache_path, sizeof(cache_path));
 
@@ -131,7 +157,9 @@ static esp_err_t refresh_makapix_channel(ps_channel_state_t *ch)
         ch->active = (ch->entry_count > 0);
     }
 
-    return ESP_OK;
+    // Return special code to indicate async in progress
+    // The caller should NOT report completion until async finishes
+    return ESP_ERR_NOT_FINISHED;
 }
 
 /**
@@ -159,6 +187,54 @@ static void refresh_task(void *arg)
         if (bits & REFRESH_EVENT_SHUTDOWN) {
             ESP_LOGI(TAG, "Shutdown requested");
             break;
+        }
+
+        // Check for async Makapix refresh completions (non-blocking poll)
+        if (makapix_channel_wait_for_ps_refresh_done(0)) {
+            xSemaphoreTake(state->mutex, portMAX_DELAY);
+            for (size_t i = 0; i < state->channel_count; i++) {
+                ps_channel_state_t *ch = &state->channels[i];
+                if (ch->refresh_async_pending && makapix_ps_refresh_check_and_clear(ch->channel_id)) {
+                    // This channel's async refresh completed
+                    ch->refresh_async_pending = false;
+                    ch->refresh_in_progress = false;
+
+                    // Load the cache file into memory (sets entries, entry_count, cache_loaded, active)
+                    esp_err_t load_err = ps_load_channel_cache(ch);
+                    if (load_err != ESP_OK) {
+                        ESP_LOGW(TAG, "Failed to load cache for channel '%s': %s",
+                                 ch->channel_id, esp_err_to_name(load_err));
+                    }
+
+                    ESP_LOGI(TAG, "Channel '%s' async refresh complete: %zu entries, active=%d",
+                             ch->channel_id, ch->entry_count, ch->active);
+
+                    // Recalculate weights
+                    ps_swrr_calculate_weights(state);
+
+                    // Signal that refresh is done - this wakes download task
+                    // which may be waiting for initial refresh to complete
+                    makapix_channel_signal_refresh_done();
+
+                    // Reset download cursors so download manager rescans the new cache
+                    extern void download_manager_reset_cursors(void);
+                    download_manager_reset_cursors();
+
+                    // Check if we should trigger downloads
+                    if (ch->entry_count > 0) {
+                        extern bool animation_player_is_animation_ready(void);
+                        if (!animation_player_is_animation_ready()) {
+                            ESP_LOGI(TAG, "No animation playing after async refresh - signaling downloads");
+
+                            // Signal download manager that new index is available
+                            // Download manager will trigger playback when first file is ready
+                            extern void download_manager_signal_work_available(void);
+                            download_manager_signal_work_available();
+                        }
+                    }
+                }
+            }
+            xSemaphoreGive(state->mutex);
         }
 
         // Find next pending refresh
@@ -193,17 +269,37 @@ static void refresh_task(void *arg)
         // Update state after refresh
         xSemaphoreTake(state->mutex, portMAX_DELAY);
 
-        ch->refresh_in_progress = false;
-
-        if (err == ESP_OK) {
+        if (err == ESP_ERR_INVALID_STATE) {
+            // MQTT not connected - re-queue for retry when MQTT connects
+            ch->refresh_in_progress = false;
+            ch->refresh_pending = true;
+            ESP_LOGD(TAG, "Channel '%s' queued for retry (MQTT not connected)", channel_id);
+        } else if (err == ESP_ERR_NOT_FINISHED) {
+            // Makapix refresh started asynchronously - keep refresh_in_progress true
+            // The async completion handler will update state when done
+            ESP_LOGD(TAG, "Channel '%s' refresh started (async)", channel_id);
+            // Note: refresh_async_pending was set in refresh_makapix_channel()
+        } else if (err == ESP_OK) {
+            ch->refresh_in_progress = false;
             ESP_LOGI(TAG, "Channel '%s' refresh complete: %zu entries, active=%d",
                      channel_id, ch->entry_count, ch->active);
 
             // Recalculate weights now that this channel has data
             ps_swrr_calculate_weights(state);
+
+            // Reset download cursors so download manager rescans the new cache
+            extern void download_manager_reset_cursors(void);
+            download_manager_reset_cursors();
+
+            // Signal that refresh is done - this wakes download task
+            // which may be waiting for initial refresh to complete
+            makapix_channel_signal_refresh_done();
+        } else {
+            ch->refresh_in_progress = false;
         }
 
         // Check if we should trigger initial playback (no animation playing yet)
+        // Only for synchronous completion (SD card or cached Makapix)
         bool should_trigger_playback = (err == ESP_OK && ch->entry_count > 0);
 
         xSemaphoreGive(state->mutex);
@@ -222,9 +318,36 @@ static void refresh_task(void *arg)
             }
         }
 
-        if (err != ESP_OK) {
+        if (err != ESP_OK && err != ESP_ERR_NOT_FINISHED) {
             ESP_LOGW(TAG, "Channel '%s' refresh failed: %s", channel_id, esp_err_to_name(err));
         }
+
+        // Check if all channels have completed refresh (for periodic refresh timing)
+        xSemaphoreTake(state->mutex, portMAX_DELAY);
+        int pending_idx = find_next_pending_refresh(state);
+
+        if (pending_idx < 0 && state->channel_count > 0) {
+            // All channels done - check if we should schedule next cycle
+            time_t now = time(NULL);
+
+            if (s_last_full_refresh_complete == 0) {
+                // First time completing all refreshes
+                s_last_full_refresh_complete = now;
+                ESP_LOGI(TAG, "All channels refreshed. Next refresh in %d seconds.", REFRESH_INTERVAL_SECONDS);
+            } else if (now - s_last_full_refresh_complete >= REFRESH_INTERVAL_SECONDS) {
+                // Time for periodic refresh
+                ESP_LOGI(TAG, "Starting periodic refresh cycle (1 hour elapsed)");
+                for (size_t i = 0; i < state->channel_count; i++) {
+                    state->channels[i].refresh_pending = true;
+                }
+                s_last_full_refresh_complete = 0;  // Reset to track next completion
+                xSemaphoreGive(state->mutex);
+                ps_refresh_signal_work();
+                vTaskDelay(pdMS_TO_TICKS(100));
+                continue;  // Skip to next iteration
+            }
+        }
+        xSemaphoreGive(state->mutex);
 
         // Brief delay between refreshes to avoid overloading
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -301,6 +424,14 @@ void ps_refresh_signal_work(void)
     if (s_refresh_events) {
         xEventGroupSetBits(s_refresh_events, REFRESH_EVENT_WORK_AVAILABLE);
     }
+}
+
+void ps_refresh_reset_timer(void)
+{
+    // Reset the periodic refresh timer - called when a new scheduler command is executed
+    // This ensures immediate refresh happens and the 1-hour timer starts fresh
+    s_last_full_refresh_complete = 0;
+    ESP_LOGD(TAG, "Refresh timer reset");
 }
 
 // Helper to build cache path (exposed for use by refresh_task)

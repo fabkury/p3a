@@ -100,9 +100,57 @@ bool makapix_channel_is_mqtt_ready(void)
     if (!s_mqtt_event_group) {
         return false;
     }
-    
+
     EventBits_t bits = xEventGroupGetBits(s_mqtt_event_group);
     return (bits & MAKAPIX_EVENT_MQTT_CONNECTED) != 0;
+}
+
+bool makapix_channel_wait_for_mqtt_or_shutdown(uint32_t timeout_ms)
+{
+    if (!s_mqtt_event_group) {
+        ESP_LOGE(TAG, "Event group not initialized");
+        return false;
+    }
+
+    // Check if already connected or shutdown requested
+    EventBits_t bits = xEventGroupGetBits(s_mqtt_event_group);
+    if (bits & MAKAPIX_EVENT_MQTT_CONNECTED) {
+        return true;
+    }
+    if (bits & MAKAPIX_EVENT_REFRESH_SHUTDOWN) {
+        return false;  // Shutdown requested
+    }
+
+    // Wait for connected OR shutdown event
+    TickType_t timeout_ticks = (timeout_ms == portMAX_DELAY) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
+    bits = xEventGroupWaitBits(
+        s_mqtt_event_group,
+        MAKAPIX_EVENT_MQTT_CONNECTED | MAKAPIX_EVENT_REFRESH_SHUTDOWN,
+        pdFALSE,  // Don't clear on exit
+        pdFALSE,  // Wait for any bit
+        timeout_ticks
+    );
+
+    // Return true only if MQTT connected (not shutdown)
+    return (bits & MAKAPIX_EVENT_MQTT_CONNECTED) != 0 &&
+           (bits & MAKAPIX_EVENT_REFRESH_SHUTDOWN) == 0;
+}
+
+void makapix_channel_signal_refresh_shutdown(void)
+{
+    if (!s_mqtt_event_group) {
+        return;
+    }
+    ESP_LOGD(TAG, "Signaling refresh shutdown");
+    xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_REFRESH_SHUTDOWN);
+}
+
+void makapix_channel_clear_refresh_shutdown(void)
+{
+    if (!s_mqtt_event_group) {
+        return;
+    }
+    xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_REFRESH_SHUTDOWN);
 }
 
 void makapix_channel_signal_wifi_connected(void)

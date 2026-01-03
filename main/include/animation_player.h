@@ -9,14 +9,12 @@
 #include "esp_err.h"
 #include "esp_lcd_panel_ops.h"
 #include "display_renderer.h"
+#include "sdcard_channel.h"  // For asset_type_t
+#include "animation_swap_request.h"  // swap_request_t (shared with play_scheduler)
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-// Forward declaration - full definition in channel_player.h
-struct swap_request_s;
-typedef struct swap_request_s swap_request_t;
 
 /**
  * @brief Enter UI mode - animation task will call UI render function instead of animation
@@ -63,7 +61,7 @@ bool animation_player_is_paused(void);
  * that either succeeds in the transition or displays an error message.
  * NO navigation logic, NO auto-retry, NO skipping.
  * 
- * @param request Pre-validated swap request from channel_player
+ * @param request Pre-validated swap request from play_scheduler
  * @return ESP_OK if swap request accepted
  *         ESP_ERR_INVALID_STATE if swap already in progress
  */
@@ -85,12 +83,12 @@ void animation_player_display_message(const char *title, const char *body);
 // ============================================================================
 
 /**
- * @deprecated Use channel_player_swap_next/swap_back instead
+ * @deprecated Use play_scheduler_next/play_scheduler_prev instead
  */
 void animation_player_cycle_animation(bool forward);
 
 /**
- * @deprecated Use channel_player_switch_channel instead
+ * @deprecated Use play_scheduler_play_named_channel instead
  */
 esp_err_t animation_player_request_swap_current(void);
 

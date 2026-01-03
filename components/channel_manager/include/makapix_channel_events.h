@@ -30,6 +30,7 @@ extern "C" {
 #define MAKAPIX_EVENT_SD_UNAVAILABLE    (1 << 6)
 #define MAKAPIX_EVENT_DOWNLOADS_NEEDED  (1 << 7)
 #define MAKAPIX_EVENT_FILE_AVAILABLE    (1 << 8)
+#define MAKAPIX_EVENT_REFRESH_SHUTDOWN  (1 << 9)
 
 /**
  * @brief Initialize the Makapix channel events system
@@ -71,10 +72,35 @@ bool makapix_channel_wait_for_mqtt(uint32_t timeout_ms);
 
 /**
  * @brief Check if MQTT is currently ready (non-blocking)
- * 
+ *
  * @return true if MQTT is connected, false otherwise
  */
 bool makapix_channel_is_mqtt_ready(void);
+
+/**
+ * @brief Wait for MQTT connection OR shutdown signal
+ *
+ * Blocks until MQTT is connected, shutdown is signaled, or timeout expires.
+ * Used by refresh tasks to allow interruptible waits.
+ *
+ * @param timeout_ms Timeout in milliseconds (use portMAX_DELAY for infinite wait)
+ * @return true if MQTT connected, false if shutdown or timeout
+ */
+bool makapix_channel_wait_for_mqtt_or_shutdown(uint32_t timeout_ms);
+
+/**
+ * @brief Signal refresh tasks to shutdown
+ *
+ * Wakes all refresh tasks waiting on MQTT so they can check their shutdown flag.
+ */
+void makapix_channel_signal_refresh_shutdown(void);
+
+/**
+ * @brief Clear the shutdown signal
+ *
+ * Called after task has exited to reset for next channel.
+ */
+void makapix_channel_clear_refresh_shutdown(void);
 
 /**
  * @brief Signal that WiFi has connected and got IP

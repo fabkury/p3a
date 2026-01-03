@@ -659,10 +659,9 @@ esp_err_t p3a_state_show_artwork(const char *storage_key, const char *art_url, i
     return ESP_OK;
 }
 
-// Forward declarations for channel player functions
-extern esp_err_t channel_player_switch_to_sdcard_channel(void) __attribute__((weak));
-extern esp_err_t channel_player_load_channel(void) __attribute__((weak));
-extern esp_err_t channel_player_swap_to(uint32_t p, uint32_t q) __attribute__((weak));
+// Forward declarations for play_scheduler functions
+extern esp_err_t play_scheduler_play_named_channel(const char *name) __attribute__((weak));
+extern esp_err_t play_scheduler_refresh_sdcard_cache(void) __attribute__((weak));
 
 // External UI function declarations
 extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail) __attribute__((weak));
@@ -671,45 +670,40 @@ extern esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const ch
 esp_err_t p3a_state_fallback_to_sdcard(void)
 {
     ESP_LOGI(TAG, "Falling back to SD card channel");
-    
+
     esp_err_t err = p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL);
-    
-    // Switch animation player back to sdcard_channel source
-    if (channel_player_switch_to_sdcard_channel) {
-        channel_player_switch_to_sdcard_channel();
+
+    // Switch play_scheduler to sdcard channel
+    if (play_scheduler_play_named_channel) {
+        esp_err_t ps_err = play_scheduler_play_named_channel("sdcard");
+        if (ps_err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to switch play_scheduler to sdcard: %s", esp_err_to_name(ps_err));
+        }
     }
-    if (channel_player_load_channel) {
-        err = channel_player_load_channel();
+    if (play_scheduler_refresh_sdcard_cache) {
+        play_scheduler_refresh_sdcard_cache();
     }
-    
+
     // Check if SD card channel has any artworks
-    extern size_t channel_player_get_post_count(void) __attribute__((weak));
     extern bool animation_player_is_animation_ready(void) __attribute__((weak));
-    
+
     bool has_animations = false;
     if (animation_player_is_animation_ready) {
         has_animations = animation_player_is_animation_ready();
     }
-    if (!has_animations && channel_player_get_post_count) {
-        has_animations = (channel_player_get_post_count() > 0);
-    }
-    
+
     if (!has_animations) {
         // SD card is also empty - show persistent "no artworks" message
         ESP_LOGW(TAG, "No artworks available on SD card either - showing empty message");
         if (p3a_render_set_channel_message) {
-            p3a_render_set_channel_message("p3a", 4 /* P3A_CHANNEL_MSG_EMPTY */, -1, 
+            p3a_render_set_channel_message("p3a", 4 /* P3A_CHANNEL_MSG_EMPTY */, -1,
                                           "No artworks available.\nLong-press to register.");
         }
         if (ugfx_ui_show_channel_message) {
             ugfx_ui_show_channel_message("p3a", "No artworks available.\nLong-press to register.", -1);
         }
-    } else {
-        if (channel_player_swap_to) {
-            channel_player_swap_to(0, 0);  // Start playback at first item
-        }
     }
-    
+
     return err;
 }
 

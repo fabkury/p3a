@@ -41,6 +41,17 @@ enum {
 #endif
 };
 
+// Descriptor accessors for tinyusb_driver_install()
+#include "tusb.h"
+
+const tusb_desc_device_t *usb_desc_get_device(void);
+const uint8_t *usb_desc_get_fs_configuration(void);
+const char **usb_desc_get_string_table(size_t *count);
+#if TUD_OPT_HIGH_SPEED
+const uint8_t *usb_desc_get_hs_configuration(void);
+const tusb_desc_device_qualifier_t *usb_desc_get_qualifier(void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

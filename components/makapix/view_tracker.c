@@ -6,7 +6,6 @@
 #include "makapix_store.h"
 #include "config_store.h"
 #include "p3a_state.h"
-#include "channel_player.h"
 #include "makapix.h"
 #include "sntp_sync.h"
 #include "esp_log.h"
@@ -73,7 +72,7 @@ esp_err_t view_tracker_init(void)
     memset(&s_state, 0, sizeof(s_state));
     memset(&s_pending_swap, 0, sizeof(s_pending_swap));
     
-    // Create dedicated task for processing (6KB stack - enough for channel_player, MQTT/JSON/logging)
+    // Create dedicated task for processing (6KB stack - enough for MQTT/JSON/logging)
     BaseType_t task_created = xTaskCreate(
         view_tracker_task,
         "view_tracker",

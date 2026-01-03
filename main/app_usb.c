@@ -22,6 +22,7 @@
 
 #include "class/cdc/cdc_device.h"
 #include "class/msc/msc_device.h"
+#include "usb_descriptors.h"
 
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
 #include "pico8_stream.h"
@@ -66,17 +67,20 @@ esp_err_t app_usb_init(void)
     }
 #endif
 
+    size_t string_count = 0;
+    const char **string_table = usb_desc_get_string_table(&string_count);
+
     const tinyusb_config_t tusb_cfg = {
-        .device_descriptor = NULL,
-        .string_descriptor = NULL,
-        .string_descriptor_count = 0,
+        .device_descriptor = usb_desc_get_device(),
+        .string_descriptor = string_table,
+        .string_descriptor_count = string_count,
         .external_phy = false,
 #if TUD_OPT_HIGH_SPEED
-        .fs_configuration_descriptor = NULL,
-        .hs_configuration_descriptor = NULL,
-        .qualifier_descriptor = NULL,
+        .fs_configuration_descriptor = usb_desc_get_fs_configuration(),
+        .hs_configuration_descriptor = usb_desc_get_hs_configuration(),
+        .qualifier_descriptor = usb_desc_get_qualifier(),
 #else
-        .configuration_descriptor = NULL,
+        .configuration_descriptor = usb_desc_get_fs_configuration(),
 #endif
         .self_powered = true,
         .vbus_monitor_io = -1,

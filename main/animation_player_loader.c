@@ -3,7 +3,7 @@
 
 #include "animation_player_priv.h"
 #include "animation_player.h"
-#include "channel_player.h"
+#include "play_scheduler.h"
 #include "swap_future.h"
 #include "sdio_bus.h"
 #include "ota_manager.h"
@@ -55,8 +55,8 @@ void animation_loader_mark_swap_successful(void)
     s_last_swap_was_successful = true;
 }
 
-// Simplified discard (Phase 3): No auto-retry, no navigation.
-// Just clean up state and notify channel_player of failure.
+// Simplified discard: No auto-retry, no navigation.
+// Just clean up state and display error.
 static void discard_failed_swap_request(esp_err_t error, bool is_live_mode_swap)
 {
     bool had_swap_request = false;
@@ -75,14 +75,11 @@ static void discard_failed_swap_request(esp_err_t error, bool is_live_mode_swap)
 
     if (had_swap_request) {
         ESP_LOGW(TAG, "Swap failed (error: %s). Displaying error.", esp_err_to_name(error));
-        
+
         // Display error message
         char error_msg[128];
         snprintf(error_msg, sizeof(error_msg), "Failed to load artwork: %s", esp_err_to_name(error));
         p3a_render_set_channel_message("Playback Error", P3A_CHANNEL_MSG_ERROR, -1, error_msg);
-        
-        // Notify channel_player for Live Mode recovery if needed
-        channel_player_notify_swap_failed(error);
     }
 }
 
@@ -278,21 +275,24 @@ void animation_loader_task(void *arg)
                     discard_failed_swap_request(ESP_ERR_INVALID_STATE, false);
                     continue;
                 }
-                if (channel_player_get_post_count() == 0) {
-                    ESP_LOGW(TAG, "Deferred cycle ignored: no animations available");
-                    discard_failed_swap_request(ESP_ERR_NOT_FOUND, false);
-                    continue;
+                {
+                    ps_stats_t stats = {0};
+                    play_scheduler_get_stats(&stats);
+                    if (stats.lookahead_count == 0) {
+                        ESP_LOGW(TAG, "Deferred cycle ignored: no animations available");
+                        discard_failed_swap_request(ESP_ERR_NOT_FOUND, false);
+                        continue;
+                    }
                 }
 
-                // Phase 3: Deferred cycle logic removed - navigation now handled by channel_player
+                // Deferred cycle logic removed - navigation now handled by play_scheduler
                 // This code path is deprecated and should not be reached
-                ESP_LOGW(TAG, "Deferred cycle logic deprecated - navigation should use channel_player API");
+                ESP_LOGW(TAG, "Deferred cycle logic deprecated - navigation should use play_scheduler API");
                 discard_failed_swap_request(ESP_ERR_NOT_SUPPORTED, false);
                 continue;
             }
         }
 
-        const sdcard_post_t *post = NULL;
         const char *filepath = NULL;
         asset_type_t type = ASSET_TYPE_WEBP;
         const char *name_for_log = NULL;
@@ -312,19 +312,21 @@ void animation_loader_task(void *arg)
             ESP_LOGI(TAG, "Loader task: swap request: %s (type=%d start_frame=%u start_time_ms=%llu post_id=%d)",
                      filepath, (int)type, (unsigned)start_frame, (unsigned long long)start_time_ms, (int)post_id);
         } else if (swap_was_requested) {
-            // Get current post from channel player only if an actual swap was requested
-            esp_err_t err = channel_player_get_current_post(&post);
-            if (err != ESP_OK || !post) {
-                ESP_LOGE(TAG, "Loader task: No current post available");
+            // Get current artwork from play_scheduler only if an actual swap was requested
+            ps_artwork_t artwork = {0};
+            esp_err_t err = play_scheduler_current(&artwork);
+            if (err != ESP_OK || artwork.filepath[0] == '\0') {
+                ESP_LOGE(TAG, "Loader task: No current artwork available");
                 discard_failed_swap_request(ESP_ERR_NOT_FOUND, false);
                 continue;
             }
-            filepath = post->filepath;
-            type = post->type;
-            name_for_log = post->name;
-            // sdcard_post_t has no post_id (not from Makapix); set to 0
-            // View tracker will ignore non-vault paths anyway
-            post_id = 0;
+            // Use static buffer to hold filepath (play_scheduler_current returns by value)
+            static char s_current_filepath[256];
+            strlcpy(s_current_filepath, artwork.filepath, sizeof(s_current_filepath));
+            filepath = s_current_filepath;
+            type = artwork.type;
+            name_for_log = artwork.filepath;
+            post_id = artwork.post_id;
         } else {
             // No swap request and no override - nothing to do
             // This handles the case where we woke up due to timeout while waiting
@@ -391,7 +393,7 @@ void animation_loader_task(void *arg)
                 ESP_LOGW(TAG, "Decode failed: %s", filepath ? filepath : "(null)");
             }
             
-            // Clean up and notify channel_player
+            // Clean up and display error
             discard_failed_swap_request(err, ov.valid ? ov.is_live_mode_swap : false);
             continue;
         }
@@ -522,7 +524,7 @@ esp_err_t enumerate_animation_files(const char *dir_path)
 {
     esp_err_t err = sdcard_channel_refresh(dir_path);
     if (err == ESP_OK) {
-        channel_player_load_channel();
+        play_scheduler_refresh_sdcard_cache();
     }
     return err;
 }
@@ -669,11 +671,11 @@ esp_err_t refresh_animation_file_list(void)
     }
 
     esp_err_t enum_err = sdcard_channel_refresh(animations_dir);
-    
+
     if (enum_err == ESP_OK) {
-        channel_player_load_channel();
+        play_scheduler_refresh_sdcard_cache();
     }
-    
+
     return enum_err;
 }
 
@@ -967,7 +969,7 @@ esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, an
     buf->file_data = file_data;
     buf->file_size = file_size;
     buf->type = type;
-    buf->asset_index = channel_player_get_current_position();
+    buf->asset_index = 0;  // Position tracking now managed by play_scheduler
 
     // Store filepath
     buf->filepath = strdup(filepath);

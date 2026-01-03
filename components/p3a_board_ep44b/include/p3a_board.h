@@ -236,24 +236,24 @@ const char* p3a_board_sdcard_mount_point(void);
 #endif
 
 // ============================================================================
-// SPIFFS STORAGE (internal flash)
+// LITTLEFS STORAGE (internal flash)
 // ============================================================================
 
 /**
- * @brief Mount SPIFFS filesystem for config storage
- * 
- * Mounts the SPIFFS partition at /spiffs for application configuration.
- * 
+ * @brief Mount LittleFS filesystem for web UI assets
+ *
+ * Mounts the LittleFS partition at /spiffs for web UI and configuration.
+ *
  * @return ESP_OK on success
  */
-esp_err_t p3a_board_spiffs_mount(void);
+esp_err_t p3a_board_littlefs_mount(void);
 
 /**
- * @brief Check if SPIFFS is mounted
- * 
+ * @brief Check if LittleFS is mounted
+ *
  * @return true if mounted
  */
-bool p3a_board_spiffs_is_mounted(void);
+bool p3a_board_littlefs_is_mounted(void);
 
 // ============================================================================
 // LEGACY COMPATIBILITY MACROS

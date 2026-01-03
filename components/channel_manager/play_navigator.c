@@ -4,11 +4,11 @@
 /**
  * @file play_navigator.c
  * @brief Internal play navigator implementation for channel navigation
- * 
+ *
  * This module manages p/q indices for navigating through posts and playlists.
  * It is used internally by channel implementations (sdcard, makapix).
- * 
- * External code should use channel_player.h APIs for navigation.
+ *
+ * External code should use play_scheduler.h APIs for navigation.
  */
 
 #include "play_navigator.h"

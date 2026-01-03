@@ -18,7 +18,7 @@
 #include "play_scheduler.h"
 #include "play_scheduler_internal.h"
 #include "channel_interface.h"
-#include "channel_player.h"  // For swap_request_t
+#include "animation_swap_request.h"  // For swap_request_t
 #include "sdcard_channel_impl.h"
 #include "makapix_channel_impl.h"
 #include "config_store.h"
@@ -27,6 +27,7 @@
 #include "esp_log.h"
 #include "esp_random.h"
 #include "mbedtls/sha256.h"
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -411,6 +412,14 @@ void play_scheduler_deinit(void)
         xSemaphoreTake(s_state.mutex, portMAX_DELAY);
     }
 
+    // Free channel entries
+    for (size_t i = 0; i < s_state.channel_count; i++) {
+        if (s_state.channels[i].entries) {
+            free(s_state.channels[i].entries);
+            s_state.channels[i].entries = NULL;
+        }
+    }
+
     // Free buffers
     if (s_state.history) {
         free(s_state.history);
@@ -456,6 +465,14 @@ esp_err_t play_scheduler_set_channels(
     xSemaphoreTake(s_state.mutex, portMAX_DELAY);
 
     ESP_LOGI(TAG, "Setting %zu channel(s), mode=%d", count, mode);
+
+    // Free old channel entries before reconfiguring
+    for (size_t i = 0; i < s_state.channel_count; i++) {
+        if (s_state.channels[i].entries) {
+            free(s_state.channels[i].entries);
+            s_state.channels[i].entries = NULL;
+        }
+    }
 
     s_state.exposure_mode = mode;
     s_state.channel_count = count;
@@ -661,13 +678,57 @@ static esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
     }
 
     ch->entry_count = st.st_size / 64;
+
+    // Free any existing entries
+    if (ch->entries) {
+        free(ch->entries);
+        ch->entries = NULL;
+    }
+
+    // Allocate and load entries from file
+    ch->entries = malloc(ch->entry_count * sizeof(makapix_channel_entry_t));
+    if (!ch->entries) {
+        ESP_LOGE(TAG, "Channel '%s': failed to allocate %zu entries", ch->channel_id, ch->entry_count);
+        ch->cache_loaded = false;
+        ch->entry_count = 0;
+        ch->active = false;
+        ch->weight = 0;
+        return ESP_ERR_NO_MEM;
+    }
+
+    FILE *f = fopen(cache_path, "rb");
+    if (!f) {
+        ESP_LOGE(TAG, "Channel '%s': failed to open cache file", ch->channel_id);
+        free(ch->entries);
+        ch->entries = NULL;
+        ch->cache_loaded = false;
+        ch->entry_count = 0;
+        ch->active = false;
+        ch->weight = 0;
+        return ESP_FAIL;
+    }
+
+    size_t read_count = fread(ch->entries, sizeof(makapix_channel_entry_t), ch->entry_count, f);
+    fclose(f);
+
+    if (read_count != ch->entry_count) {
+        ESP_LOGE(TAG, "Channel '%s': read %zu/%zu entries", ch->channel_id, read_count, ch->entry_count);
+        free(ch->entries);
+        ch->entries = NULL;
+        ch->cache_loaded = false;
+        ch->entry_count = 0;
+        ch->active = false;
+        ch->weight = 0;
+        return ESP_FAIL;
+    }
+
     ch->cache_loaded = true;
     ch->active = (ch->entry_count > 0);
 
     // Touch cache file for LRU tracking
     ps_touch_cache_file(ch->channel_id);
 
-    ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries", ch->channel_id, ch->entry_count);
+    ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries into memory", ch->channel_id, ch->entry_count);
 
     return ESP_OK;
 }
@@ -685,6 +746,14 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
 
     ESP_LOGI(TAG, "Executing scheduler command: %zu channel(s), exposure=%d, pick=%d",
              command->channel_count, command->exposure_mode, command->pick_mode);
+
+    // Free old channel entries before reconfiguring
+    for (size_t i = 0; i < s_state.channel_count; i++) {
+        if (s_state.channels[i].entries) {
+            free(s_state.channels[i].entries);
+            s_state.channels[i].entries = NULL;
+        }
+    }
 
     // Store command parameters
     s_state.exposure_mode = command->exposure_mode;
@@ -757,22 +826,30 @@ esp_err_t play_scheduler_play_named_channel(const char *name)
 
     ESP_LOGI(TAG, "play_named_channel: %s", name);
 
-    ps_scheduler_command_t cmd = {0};
-    cmd.channel_count = 1;
-    cmd.exposure_mode = PS_EXPOSURE_EQUAL;
-    cmd.pick_mode = PS_PICK_RECENCY;
+    // Heap allocate to avoid ~4.6KB stack usage (called from 8KB stack tasks)
+    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
+    if (!cmd) {
+        ESP_LOGE(TAG, "Failed to allocate command struct");
+        return ESP_ERR_NO_MEM;
+    }
+
+    cmd->channel_count = 1;
+    cmd->exposure_mode = PS_EXPOSURE_EQUAL;
+    cmd->pick_mode = PS_PICK_RECENCY;
 
     // Determine channel type
     if (strcmp(name, "sdcard") == 0) {
-        cmd.channels[0].type = PS_CHANNEL_TYPE_SDCARD;
-        strlcpy(cmd.channels[0].name, "sdcard", sizeof(cmd.channels[0].name));
+        cmd->channels[0].type = PS_CHANNEL_TYPE_SDCARD;
+        strlcpy(cmd->channels[0].name, "sdcard", sizeof(cmd->channels[0].name));
     } else {
-        cmd.channels[0].type = PS_CHANNEL_TYPE_NAMED;
-        strlcpy(cmd.channels[0].name, name, sizeof(cmd.channels[0].name));
+        cmd->channels[0].type = PS_CHANNEL_TYPE_NAMED;
+        strlcpy(cmd->channels[0].name, name, sizeof(cmd->channels[0].name));
     }
-    cmd.channels[0].weight = 1;
+    cmd->channels[0].weight = 1;
 
-    return play_scheduler_execute_command(&cmd);
+    esp_err_t result = play_scheduler_execute_command(cmd);
+    free(cmd);
+    return result;
 }
 
 esp_err_t play_scheduler_play_user_channel(const char *user_sqid)
@@ -783,17 +860,25 @@ esp_err_t play_scheduler_play_user_channel(const char *user_sqid)
 
     ESP_LOGI(TAG, "play_user_channel: %s", user_sqid);
 
-    ps_scheduler_command_t cmd = {0};
-    cmd.channel_count = 1;
-    cmd.exposure_mode = PS_EXPOSURE_EQUAL;
-    cmd.pick_mode = PS_PICK_RECENCY;
+    // Heap allocate to avoid ~4.6KB stack usage (called from 8KB stack tasks)
+    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
+    if (!cmd) {
+        ESP_LOGE(TAG, "Failed to allocate command struct");
+        return ESP_ERR_NO_MEM;
+    }
 
-    cmd.channels[0].type = PS_CHANNEL_TYPE_USER;
-    strlcpy(cmd.channels[0].name, "user", sizeof(cmd.channels[0].name));
-    strlcpy(cmd.channels[0].identifier, user_sqid, sizeof(cmd.channels[0].identifier));
-    cmd.channels[0].weight = 1;
+    cmd->channel_count = 1;
+    cmd->exposure_mode = PS_EXPOSURE_EQUAL;
+    cmd->pick_mode = PS_PICK_RECENCY;
 
-    return play_scheduler_execute_command(&cmd);
+    cmd->channels[0].type = PS_CHANNEL_TYPE_USER;
+    strlcpy(cmd->channels[0].name, "user", sizeof(cmd->channels[0].name));
+    strlcpy(cmd->channels[0].identifier, user_sqid, sizeof(cmd->channels[0].identifier));
+    cmd->channels[0].weight = 1;
+
+    esp_err_t result = play_scheduler_execute_command(cmd);
+    free(cmd);
+    return result;
 }
 
 esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag)
@@ -804,17 +889,25 @@ esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag)
 
     ESP_LOGI(TAG, "play_hashtag_channel: %s", hashtag);
 
-    ps_scheduler_command_t cmd = {0};
-    cmd.channel_count = 1;
-    cmd.exposure_mode = PS_EXPOSURE_EQUAL;
-    cmd.pick_mode = PS_PICK_RECENCY;
+    // Heap allocate to avoid ~4.6KB stack usage (called from 8KB stack tasks)
+    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
+    if (!cmd) {
+        ESP_LOGE(TAG, "Failed to allocate command struct");
+        return ESP_ERR_NO_MEM;
+    }
 
-    cmd.channels[0].type = PS_CHANNEL_TYPE_HASHTAG;
-    strlcpy(cmd.channels[0].name, "hashtag", sizeof(cmd.channels[0].name));
-    strlcpy(cmd.channels[0].identifier, hashtag, sizeof(cmd.channels[0].identifier));
-    cmd.channels[0].weight = 1;
+    cmd->channel_count = 1;
+    cmd->exposure_mode = PS_EXPOSURE_EQUAL;
+    cmd->pick_mode = PS_PICK_RECENCY;
 
-    return play_scheduler_execute_command(&cmd);
+    cmd->channels[0].type = PS_CHANNEL_TYPE_HASHTAG;
+    strlcpy(cmd->channels[0].name, "hashtag", sizeof(cmd->channels[0].name));
+    strlcpy(cmd->channels[0].identifier, hashtag, sizeof(cmd->channels[0].identifier));
+    cmd->channels[0].weight = 1;
+
+    esp_err_t result = play_scheduler_execute_command(cmd);
+    free(cmd);
+    return result;
 }
 
 esp_err_t play_scheduler_refresh_sdcard_cache(void)

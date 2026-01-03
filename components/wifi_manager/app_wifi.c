@@ -654,155 +654,6 @@ static bool wifi_init_sta(const char *ssid, const char *password)
     }
 }
 
-// Shared UI style for all p3a web pages (including captive portal pages served by wifi_manager)
-#define P3A_UI_STYLE \
-"* { box-sizing: border-box; }" \
-"body {" \
-"  margin: 0;" \
-"  padding: 12px 10px 16px;" \
-"  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;" \
-"  background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);" \
-"  min-height: 100vh;" \
-"  display: flex;" \
-"  flex-direction: column;" \
-"  align-items: center;" \
-"  gap: 12px;" \
-"  color: #fff;" \
-"}" \
-"@supports (min-height: 100svh) { body { min-height: 100svh; } }" \
-"@supports (min-height: 100dvh) { body { min-height: 100dvh; } }" \
-".header { text-align: center; padding: 8px 0 4px; }" \
-".header h1 {" \
-"  margin: 0;" \
-"  font-size: clamp(2rem, 4vw, 2.4rem);" \
-"  font-weight: 300;" \
-"  letter-spacing: 0.1em;" \
-"  text-transform: lowercase;" \
-"}" \
-".subtitle { margin: 0; opacity: 0.9; font-size: 0.95rem; }" \
-".card {" \
-"  width: min(520px, 100%%);" \
-"  background: rgba(255,255,255,0.95);" \
-"  border-radius: 16px;" \
-"  padding: 14px;" \
-"  box-shadow: 0 4px 12px rgba(0,0,0,0.15);" \
-"  color: #111;" \
-"}" \
-".card h2 {" \
-"  margin: 0 0 10px;" \
-"  font-size: 0.85rem;" \
-"  font-weight: 600;" \
-"  color: #333;" \
-"  text-transform: uppercase;" \
-"  letter-spacing: 0.05em;" \
-"}" \
-".field { margin-bottom: 10px; }" \
-"label { display: block; font-size: 0.85rem; color: #444; margin-bottom: 6px; }" \
-"input[type=text], input[type=password] {" \
-"  width: 100%%;" \
-"  padding: 12px;" \
-"  border: 1px solid #ddd;" \
-"  border-radius: 10px;" \
-"  font-size: 1rem;" \
-"  outline: none;" \
-"}" \
-"input[type=text]:focus, input[type=password]:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.15); }" \
-".btn {" \
-"  width: 100%%;" \
-"  background: #667eea;" \
-"  color: white;" \
-"  padding: 13px 14px;" \
-"  border: none;" \
-"  border-radius: 12px;" \
-"  font-size: 0.98rem;" \
-"  font-weight: 600;" \
-"  cursor: pointer;" \
-"  transition: transform 0.2s;" \
-"  -webkit-tap-highlight-color: transparent;" \
-"}" \
-".btn:active { transform: scale(0.98); }" \
-".btn-secondary { background: #ff6b6b; box-shadow: 0 4px 12px rgba(255,107,107,0.25); }" \
-".btn-ghost {" \
-"  background: rgba(102,126,234,0.12);" \
-"  color: #3b4cca;" \
-"  border: 1px solid rgba(102,126,234,0.25);" \
-"}" \
-".help { margin: 10px 0 0; font-size: 0.85rem; color: #555; line-height: 1.35; }" \
-".help code { background: rgba(102,126,234,0.12); padding: 2px 6px; border-radius: 8px; }" \
-".divider { height: 1px; background: #eee; margin: 12px 0; }" \
-".pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: rgba(102,126,234,0.12); color: #334; font-weight: 600; }" \
-".list { margin: 10px 0 0; padding-left: 18px; color: #444; }" \
-".list li { margin: 6px 0; }" \
-".muted { color: #666; font-size: 0.85rem; }" \
-"a { color: #3b4cca; }" \
-"a:visited { color: #3b4cca; }"
-
-/* Captive Portal HTML */
-static const char* captive_portal_html =
-"<!DOCTYPE html>"
-"<html lang=\"en\">"
-"<head>"
-"<meta charset=\"UTF-8\">"
-"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">"
-"<title>p3a - Wi-Fi Setup</title>"
-"<style>" P3A_UI_STYLE "</style>"
-"</head>"
-"<body>"
-"  <div class=\"header\">"
-"    <h1>p3a</h1>"
-"    <p class=\"subtitle\">Wi-Fi setup</p>"
-"  </div>"
-"  <div class=\"card\">"
-"    <h2>Connect to Wi-Fi</h2>"
-"    <form action=\"/save\" method=\"POST\" autocomplete=\"on\">"
-"      <div class=\"field\">"
-"        <label for=\"ssid\">Network name (SSID)</label>"
-"        <input type=\"text\" id=\"ssid\" name=\"ssid\" required maxlength=\"32\" autocapitalize=\"none\" spellcheck=\"false\" placeholder=\"e.g. MyHomeWiFi\">"
-"      </div>"
-"      <div class=\"field\">"
-"        <label for=\"password\">Password (optional)</label>"
-"        <input type=\"password\" id=\"password\" name=\"password\" maxlength=\"64\" placeholder=\"Wi-Fi password\">"
-"      </div>"
-"      <button class=\"btn\" type=\"submit\">Save &amp; connect</button>"
-"    </form>"
-"    <p class=\"help\">After saving, p3a will reboot and join your Wi-Fi network. Then open <code>http://p3a.local/</code> to control your p3a.</p>"
-"    <div class=\"divider\"></div>"
-"    <form action=\"/erase\" method=\"POST\" onsubmit=\"return confirm('Erase saved Wi-Fi credentials? p3a will reboot into setup mode.');\">"
-"      <button class=\"btn btn-secondary\" type=\"submit\">Erase Wi-Fi credentials</button>"
-"    </form>"
-"  </div>"
-"</body>"
-"</html>";
-
-static void html_escape(const char *in, char *out, size_t out_len)
-{
-    if (!out || out_len == 0) return;
-    out[0] = '\0';
-    if (!in) return;
-
-    size_t o = 0;
-    for (size_t i = 0; in[i] != '\0' && o + 1 < out_len; i++) {
-        const char *rep = NULL;
-        switch (in[i]) {
-            case '&': rep = "&amp;"; break;
-            case '<': rep = "&lt;"; break;
-            case '>': rep = "&gt;"; break;
-            case '"': rep = "&quot;"; break;
-            case '\'': rep = "&#39;"; break;
-            default: rep = NULL; break;
-        }
-        if (rep) {
-            size_t rlen = strlen(rep);
-            if (o + rlen >= out_len) break;
-            memcpy(out + o, rep, rlen);
-            o += rlen;
-        } else {
-            out[o++] = in[i];
-        }
-    }
-    out[o] = '\0';
-}
-
 /* URL Decode Function - Decodes all %XX hex sequences and converts + to space */
 static void url_decode(char *str)
 {
@@ -834,19 +685,88 @@ static void url_decode(char *str)
     *dst = '\0';
 }
 
+/* URL Encode Function - Encodes unsafe characters for URL parameters */
+static void url_encode(const char *in, char *out, size_t out_len) {
+    static const char *hex = "0123456789ABCDEF";
+    size_t o = 0;
+    for (size_t i = 0; in[i] && o + 3 < out_len; i++) {
+        unsigned char c = (unsigned char)in[i];
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') {
+            out[o++] = c;
+        } else {
+            out[o++] = '%';
+            out[o++] = hex[c >> 4];
+            out[o++] = hex[c & 0xF];
+        }
+    }
+    out[o] = '\0';
+}
+
+/* Simple file server for captive portal - serves HTML from LittleFS */
+static esp_err_t serve_file_simple(httpd_req_t *req, const char *filepath) {
+    FILE *f = fopen(filepath, "r");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open %s", filepath);
+        // Minimal fallback HTML in case files are missing
+        httpd_resp_set_type(req, "text/html");
+        httpd_resp_send(req,
+            "<html><body style=\"font-family:sans-serif;text-align:center;padding:40px;\">"
+            "<h1>p3a Setup</h1>"
+            "<p>UI files not found. Please reflash the device.</p>"
+            "</body></html>",
+            HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
+    // Get file size
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (size <= 0 || size > 64 * 1024) { // Max 64KB for setup pages
+        fclose(f);
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "Invalid file", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    // Set content type
+    httpd_resp_set_type(req, "text/html");
+
+    // Stream file in chunks
+    char chunk[1024];
+    long remaining = size;
+
+    while (remaining > 0) {
+        size_t to_read = (remaining < sizeof(chunk)) ? remaining : sizeof(chunk);
+        size_t bytes_read = fread(chunk, 1, to_read, f);
+        if (bytes_read == 0) break;
+
+        esp_err_t ret = httpd_resp_send_chunk(req, chunk, bytes_read);
+        if (ret != ESP_OK) {
+            fclose(f);
+            return ret;
+        }
+        remaining -= bytes_read;
+    }
+
+    fclose(f);
+    httpd_resp_send_chunk(req, NULL, 0); // End response
+    return ESP_OK;
+}
+
 /* HTTP Server Handlers */
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
-    httpd_resp_set_type(req, "text/html");
-    httpd_resp_send(req, captive_portal_html, HTTPD_RESP_USE_STRLEN);
-    return ESP_OK;
+    return serve_file_simple(req, "/spiffs/setup/index.html");
 }
 
 static esp_err_t save_post_handler(httpd_req_t *req)
 {
     char content[200];
     size_t recv_size = sizeof(content) - 1;
-    
+
     int ret = httpd_req_recv(req, content, recv_size);
     if (ret <= 0) {
         if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
@@ -859,11 +779,11 @@ static esp_err_t save_post_handler(httpd_req_t *req)
     // Parse SSID and password from form data
     char ssid[MAX_SSID_LEN] = {0};
     char password[MAX_PASSWORD_LEN] = {0};
-    
+
     // Simple form parsing
     char *ssid_start = strstr(content, "ssid=");
     char *password_start = strstr(content, "password=");
-    
+
     if (ssid_start) {
         ssid_start += 5; // Skip "ssid="
         char *ssid_end = strchr(ssid_start, '&');
@@ -878,7 +798,7 @@ static esp_err_t save_post_handler(httpd_req_t *req)
         // Properly decode URL-encoded SSID
         url_decode(ssid);
     }
-    
+
     if (password_start) {
         password_start += 9; // Skip "password="
         char *password_end = strchr(password_start, '&');
@@ -896,110 +816,30 @@ static esp_err_t save_post_handler(httpd_req_t *req)
 
     if (strlen(ssid) > 0) {
         wifi_save_credentials(ssid, password);
-        ESP_LOGD(TAG, "Saved credentials, rebooting...");
-        char ssid_escaped[128] = {0};
-        html_escape(ssid, ssid_escaped, sizeof(ssid_escaped));
+        ESP_LOGD(TAG, "Saved credentials, redirecting and rebooting...");
 
-        // Post-setup page: keep UI styling, explain what happens next, and attempt to open p3a.local after a countdown.
-        // Allocate on heap to avoid stack overflow (httpd task has limited stack)
-        const size_t html_size = 6144;
-        char *html = malloc(html_size);
-        if (!html) {
-            httpd_resp_set_type(req, "text/html");
-            httpd_resp_send(req, "<html><body><h1>Saved. Rebooting...</h1></body></html>", HTTPD_RESP_USE_STRLEN);
-            vTaskDelay(pdMS_TO_TICKS(1200));
-            esp_restart();
-            return ESP_OK;
-        }
-        
-        int len = snprintf(
-            html,
-            html_size,
-            "<!DOCTYPE html>"
-            "<html lang=\"en\">"
-            "<head>"
-            "<meta charset=\"UTF-8\">"
-            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">"
-            "<title>p3a - Connecting</title>"
-            "<style>" P3A_UI_STYLE "</style>"
-            "</head>"
-            "<body>"
-            "  <div class=\"header\">"
-            "    <h1>p3a</h1>"
-            "    <p class=\"subtitle\">connecting to wi-fi</p>"
-            "  </div>"
-            "  <div class=\"card\">"
-            "    <h2>Saved! Rebooting now</h2>"
-            "    <p class=\"muted\">Connecting to:</p>"
-            "    <div class=\"pill\">%s</div>"
-            "    <p class=\"help\">p3a has saved your credentials and will now reboot. The <code>p3a-setup</code> network will cease to exist and p3a will connect to the Wi-Fi network you provided.</p>"
-            "    <ul class=\"list\">"
-            "      <li>After the device turns on, wait a few seconds for it to connect to Wi-Fi.</li>"
-            "      <li>Then open <code>http://p3a.local/</code> again to control your p3a.</li>"
-            "      <li>If p3a is unable to connect to the provided Wi-Fi, it will begin offering the <code>p3a-setup</code> network again for you to reconfigure.</li>"
-            "    </ul>"
-            "    <div class=\"divider\"></div>"
-            "    <p class=\"help\">This page will try to open <code>http://p3a.local/</code> in <span class=\"pill\"><span id=\"sec\">25</span>s</span>.</p>"
-            "    <button class=\"btn btn-ghost\" type=\"button\" onclick=\"window.location.href='http://p3a.local/';\">Open p3a.local now</button>"
-            "    <p class=\"help\"><strong>Troubleshooting (brief):</strong> If <code>p3a.local</code> doesn't work, make sure your phone/computer is on the same Wi-Fi network you chose. If needed, check your router's connected-devices list and open the device IP address in your browser.</p>"
-            "    <p class=\"help\"><strong>Makapix Club:</strong> To register at <a href=\"https://makapix.club/\">Makapix Club</a>, long-press on the screen and follow the instructions.</p>"
-            "  </div>"
-            "  <script>"
-            "  (function(){"
-            "    var remaining = 25;"
-            "    var el = document.getElementById('sec');"
-            "    function tick(){"
-            "      remaining--; if (el) el.textContent = String(remaining);"
-            "      if (remaining <= 0){ clearInterval(timer); window.location.href='http://p3a.local/'; }"
-            "    }"
-            "    var timer = setInterval(tick, 1000);"
-            "  })();"
-            "  </script>"
-            "</body>"
-            "</html>",
-            ssid_escaped
-        );
+        // URL-encode the SSID for the redirect
+        char ssid_encoded[128];
+        url_encode(ssid, ssid_encoded, sizeof(ssid_encoded));
 
-        httpd_resp_set_type(req, "text/html");
-        if (len < 0) {
-            httpd_resp_send(req, captive_portal_html, HTTPD_RESP_USE_STRLEN);
-        } else if ((size_t)len >= html_size) {
-            httpd_resp_send(req, "<html><body><h1>Saved. Rebooting...</h1></body></html>", HTTPD_RESP_USE_STRLEN);
-        } else {
-            httpd_resp_send(req, html, len);
-        }
-        free(html);
+        // Build redirect URL
+        char redirect_url[256];
+        snprintf(redirect_url, sizeof(redirect_url),
+                 "/setup/success.html?ssid=%s", ssid_encoded);
 
-        // Delay before reboot to allow the response to be sent and rendered.
+        // Send redirect response
+        httpd_resp_set_status(req, "302 Found");
+        httpd_resp_set_hdr(req, "Location", redirect_url);
+        httpd_resp_send(req, NULL, 0);
+
+        // Delay before reboot to allow the redirect to be processed
         vTaskDelay(pdMS_TO_TICKS(1200));
         esp_restart();
     } else {
-        const char *html =
-            "<!DOCTYPE html>"
-            "<html lang=\"en\">"
-            "<head>"
-            "<meta charset=\"UTF-8\">"
-            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">"
-            "<title>p3a - Wi-Fi Setup</title>"
-            "<style>" P3A_UI_STYLE "</style>"
-            "</head>"
-            "<body>"
-            "  <div class=\"header\">"
-            "    <h1>p3a</h1>"
-            "    <p class=\"subtitle\">wi-fi setup</p>"
-            "  </div>"
-            "  <div class=\"card\">"
-            "    <h2>SSID required</h2>"
-            "    <p class=\"help\">Please enter a network name (SSID) and try again.</p>"
-            "    <div class=\"divider\"></div>"
-            "    <button class=\"btn\" type=\"button\" onclick=\"window.location.href='/';\">Back</button>"
-            "  </div>"
-            "</body>"
-            "</html>";
-        httpd_resp_set_type(req, "text/html");
-        httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
+        // SSID required - serve error page
+        return serve_file_simple(req, "/spiffs/setup/error.html");
     }
-    
+
     return ESP_OK;
 }
 
@@ -1008,52 +848,32 @@ static esp_err_t erase_post_handler(httpd_req_t *req)
     app_wifi_erase_credentials();
     ESP_LOGD(TAG, "Erased credentials, rebooting...");
 
-    const char *html =
-        "<!DOCTYPE html>"
-        "<html lang=\"en\">"
-        "<head>"
-        "<meta charset=\"UTF-8\">"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">"
-        "<title>p3a - Reset Wi-Fi</title>"
-        "<style>" P3A_UI_STYLE "</style>"
-        "</head>"
-        "<body>"
-        "  <div class=\"header\">"
-        "    <h1>p3a</h1>"
-        "    <p class=\"subtitle\">resetting wi-fi</p>"
-        "  </div>"
-        "  <div class=\"card\">"
-        "    <h2>Wi-Fi erased. Rebooting now</h2>"
-        "    <p class=\"help\">Saved Wi-Fi credentials have been erased. p3a will reboot into setup mode and create the <code>p3a-setup</code> Wi-Fi network again.</p>"
-        "    <ul class=\"list\">"
-        "      <li>After reboot, connect to <code>p3a-setup</code>.</li>"
-        "      <li>Then open <code>http://p3a.local/</code> to set up Wi-Fi.</li>"
-        "    </ul>"
-        "    <div class=\"divider\"></div>"
-        "    <p class=\"help\">This page will auto-reload in <span class=\"pill\"><span id=\"sec\">10</span>s</span>.</p>"
-        "    <button class=\"btn btn-ghost\" type=\"button\" onclick=\"window.location.reload();\">Reload now</button>"
-        "  </div>"
-        "  <script>"
-        "  (function(){"
-        "    var remaining = 10;"
-        "    var el = document.getElementById('sec');"
-        "    function tick(){"
-        "      remaining--; if (el) el.textContent = String(remaining);"
-        "      if (remaining <= 0){ clearInterval(timer); window.location.reload(); }"
-        "    }"
-        "    var timer = setInterval(tick, 1000);"
-        "  })();"
-        "  </script>"
-        "</body>"
-        "</html>";
+    // Serve the erased confirmation page
+    esp_err_t ret = serve_file_simple(req, "/spiffs/setup/erased.html");
 
-    httpd_resp_set_type(req, "text/html");
-    httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
-
-    // Delay before reboot to allow the response to be sent and rendered.
+    // Delay before reboot to allow the response to be sent and rendered
     vTaskDelay(pdMS_TO_TICKS(1200));
     esp_restart();
-    return ESP_OK;
+    return ret;
+}
+
+// Handler for /setup/ wildcard routes - serves setup pages from LittleFS
+static esp_err_t setup_get_handler(httpd_req_t *req)
+{
+    const char *uri = req->uri;
+
+    // Security: prevent path traversal and limit URI length
+    if (strstr(uri, "..") != NULL || strlen(uri) > 64) {
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_send(req, "Invalid path", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    // Map /setup/X to /spiffs/setup/X
+    char filepath[128];
+    snprintf(filepath, sizeof(filepath), "/spiffs%.64s", uri);
+
+    return serve_file_simple(req, filepath);
 }
 
 static httpd_uri_t root = {
@@ -1074,6 +894,13 @@ static httpd_uri_t erase = {
     .uri       = "/erase",
     .method    = HTTP_POST,
     .handler   = erase_post_handler,
+    .user_ctx  = NULL
+};
+
+static httpd_uri_t setup_pages = {
+    .uri       = "/setup/*",
+    .method    = HTTP_GET,
+    .handler   = setup_get_handler,
     .user_ctx  = NULL
 };
 
@@ -1157,11 +984,13 @@ static void start_captive_portal(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
+    config.uri_match_fn = httpd_uri_match_wildcard;  // Enable wildcard URI matching
 
     if (httpd_start(&s_captive_portal_server, &config) == ESP_OK) {
         httpd_register_uri_handler(s_captive_portal_server, &root);
         httpd_register_uri_handler(s_captive_portal_server, &save);
         httpd_register_uri_handler(s_captive_portal_server, &erase);
+        httpd_register_uri_handler(s_captive_portal_server, &setup_pages);
         ESP_LOGD(TAG, "HTTP server started on port 80");
     } else {
         ESP_LOGE(TAG, "Failed to start HTTP server");
@@ -1175,11 +1004,13 @@ static void start_captive_portal(void)
 static esp_err_t start_mdns_ap(void)
 {
     esp_err_t err = mdns_init();
+    bool mdns_was_already_initialized = (err == ESP_ERR_INVALID_STATE);
+
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         ESP_LOGE(TAG, "mDNS init failed: %s", esp_err_to_name(err));
         return err;
     }
-    if (err == ESP_ERR_INVALID_STATE) {
+    if (mdns_was_already_initialized) {
         ESP_LOGW(TAG, "mDNS already initialized; reconfiguring for AP");
     }
 
@@ -1195,11 +1026,14 @@ static esp_err_t start_mdns_ap(void)
         return err;
     }
 
-    err = mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
-    // Some mdns versions return ESP_ERR_INVALID_ARG when the service already exists.
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE && err != ESP_ERR_INVALID_ARG) {
-        ESP_LOGE(TAG, "mDNS service add failed: %s", esp_err_to_name(err));
-        return err;
+    // Only add service if mDNS was freshly initialized
+    // (if already initialized from STA mode, service already exists)
+    if (!mdns_was_already_initialized) {
+        err = mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "mDNS service add failed: %s", esp_err_to_name(err));
+            return err;
+        }
     }
 
     ESP_LOGD(TAG, "mDNS started in AP mode: http://p3a.local/");

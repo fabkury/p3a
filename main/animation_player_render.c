@@ -6,7 +6,7 @@
 #include "pico8_render.h"
 #include "ugfx_ui.h"
 #include "view_tracker.h"
-#include "channel_player.h"
+#include "play_scheduler.h"
 #include "swap_future.h"
 #include "config_store.h"
 #include "debug_http_log.h"
@@ -509,10 +509,8 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
                 xSemaphoreGive(s_buffer_mutex);
             }
 
-            // Phase 3: No auto-retry or navigation on prefetch failure
-            // Just notify channel_player
+            // No auto-retry or navigation on prefetch failure
             ESP_LOGW(TAG, "Prefetch failed: %s", esp_err_to_name(prefetch_err));
-            channel_player_notify_swap_failed(prefetch_err);
         }
     }
 
@@ -565,8 +563,8 @@ skip_prefetch:
                 live_mode_notify_swap_succeeded(s_front_buffer.live_index);
             }
             
-            // Notify channel_player that swap succeeded (resets dwell timer)
-            channel_player_notify_swap_succeeded();
+            // Notify play_scheduler that swap succeeded (resets dwell timer)
+            play_scheduler_reset_timer();
             
             // Mark successful swap for auto-retry safeguard
             animation_loader_mark_swap_successful();

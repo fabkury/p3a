@@ -31,7 +31,6 @@
 #include "makapix_store.h"
 #include "makapix_channel_impl.h"
 #include "animation_player.h"
-#include "channel_player.h"
 #include "play_scheduler.h"
 #include "app_lcd.h"
 #include "version.h"
@@ -100,22 +99,18 @@ esp_err_t h_post_debug(httpd_req_t *req)
         auto_swap_reset_timer();
         cJSON_AddStringToObject(resp, "result", "cancelled");
     } else if (strcmp(op_s, "live_mode_enter") == 0 || strcmp(op_s, "live_mode_exit") == 0) {
-        void *nav = channel_player_get_navigator();
-        if (!nav) {
-            cJSON_Delete(root);
-            cJSON_Delete(resp);
-            send_json(req, 409, "{\"ok\":false,\"error\":\"No navigator\",\"code\":\"NO_NAV\"}");
-            return ESP_OK;
-        }
-        esp_err_t e = (strcmp(op_s, "live_mode_enter") == 0) ? live_mode_enter(nav) : (live_mode_exit(nav), ESP_OK);
-        cJSON_AddNumberToObject(resp, "esp_err", (double)e);
+        // Live mode debug endpoints - deprecated (channel_player retired)
+        cJSON_Delete(root);
+        cJSON_Delete(resp);
+        send_json(req, 410, "{\"ok\":false,\"error\":\"Live mode debug endpoints deprecated\",\"code\":\"DEPRECATED\"}");
+        return ESP_OK;
     } else if (strcmp(op_s, "swap_future_test") == 0) {
         // Build swap_future targeting the current file.
-        const sdcard_post_t *post = NULL;
-        if (channel_player_get_current_post(&post) != ESP_OK || !post || !post->filepath) {
+        ps_artwork_t artwork = {0};
+        if (play_scheduler_current(&artwork) != ESP_OK || artwork.filepath[0] == '\0') {
             cJSON_Delete(root);
             cJSON_Delete(resp);
-            send_json(req, 409, "{\"ok\":false,\"error\":\"No current post\",\"code\":\"NO_CURRENT\"}");
+            send_json(req, 409, "{\"ok\":false,\"error\":\"No current artwork\",\"code\":\"NO_CURRENT\"}");
             return ESP_OK;
         }
 
@@ -143,9 +138,9 @@ esp_err_t h_post_debug(httpd_req_t *req)
         uint64_t start_ms = (start_offset_ms <= delay_ms) ? (target_ms - (uint64_t)start_offset_ms) : target_ms;
 
         artwork_ref_t art = {0};
-        strlcpy(art.filepath, post->filepath, sizeof(art.filepath));
-        art.type = post->type;
-        art.dwell_time_ms = post->dwell_time_ms;
+        strlcpy(art.filepath, artwork.filepath, sizeof(art.filepath));
+        art.type = artwork.type;
+        art.dwell_time_ms = artwork.dwell_time_ms;
         art.downloaded = true;
 
         swap_future_t sf = {0};
@@ -166,7 +161,7 @@ esp_err_t h_post_debug(httpd_req_t *req)
         cJSON_AddNumberToObject(resp, "target_time_ms", (double)target_ms);
         cJSON_AddNumberToObject(resp, "start_time_ms", (double)start_ms);
         cJSON_AddNumberToObject(resp, "start_frame", (double)start_frame);
-        cJSON_AddStringToObject(resp, "filepath", post->filepath);
+        cJSON_AddStringToObject(resp, "filepath", artwork.filepath);
     } else {
         cJSON_Delete(root);
         cJSON_Delete(resp);
@@ -380,7 +375,7 @@ esp_err_t h_get_api_state(httpd_req_t *req)
     cJSON_AddStringToObject(data, "state", app_state_str(app_state_get()));
     cJSON_AddNumberToObject(data, "uptime_ms", (double)(esp_timer_get_time() / 1000ULL));
     cJSON_AddNumberToObject(data, "heap_free", (double)esp_get_free_heap_size());
-    cJSON_AddBoolToObject(data, "live_mode", channel_player_is_live_mode_active());
+    cJSON_AddBoolToObject(data, "live_mode", false);  // Live mode deprecated
 
     if (rssi_ok) {
         cJSON_AddNumberToObject(data, "rssi", ap.rssi);
@@ -914,12 +909,10 @@ esp_err_t h_put_play_order(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Hot-swap the order for the currently active channel
-    err = channel_player_set_play_order((uint8_t)order);
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-        // Log but don't fail - config was saved, hot-swap just couldn't happen
-        ESP_LOGW(HTTP_API_TAG, "Config saved but hot-swap failed: %s", esp_err_to_name(err));
-    }
+    // Hot-swap the pick mode for the play scheduler
+    // 0 = PS_PICK_RECENCY (sequential/newest first), 1 = PS_PICK_RANDOM
+    ps_pick_mode_t pick_mode = (order == 0) ? PS_PICK_RECENCY : PS_PICK_RANDOM;
+    play_scheduler_set_pick_mode(pick_mode);
 
     send_json(req, 200, "{\"ok\":true}");
     return ESP_OK;

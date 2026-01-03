@@ -10,6 +10,9 @@
 
 #include "play_scheduler_internal.h"
 #include "channel_interface.h"
+#include "makapix_channel_impl.h"
+#include "makapix_channel_internal.h"
+#include "sd_path.h"
 #include "esp_log.h"
 #include <string.h>
 #include <sys/stat.h>
@@ -27,19 +30,60 @@ static bool file_exists(const char *path)
     return (stat(path, &st) == 0);
 }
 
-static asset_type_t get_asset_type_from_filepath(const char *filepath)
+static asset_type_t get_asset_type_from_extension(uint8_t ext)
 {
-    if (!filepath) return ASSET_TYPE_WEBP;
+    switch (ext) {
+        case 0: return ASSET_TYPE_WEBP;
+        case 1: return ASSET_TYPE_GIF;
+        case 2: return ASSET_TYPE_PNG;
+        case 3: return ASSET_TYPE_JPEG;
+        default: return ASSET_TYPE_WEBP;
+    }
+}
 
-    const char *ext = strrchr(filepath, '.');
-    if (!ext) return ASSET_TYPE_WEBP;
+static const char *s_ext_strings[] = { ".webp", ".gif", ".png", ".jpg" };
 
-    if (strcasecmp(ext, ".webp") == 0) return ASSET_TYPE_WEBP;
-    if (strcasecmp(ext, ".gif") == 0) return ASSET_TYPE_GIF;
-    if (strcasecmp(ext, ".png") == 0) return ASSET_TYPE_PNG;
-    if (strcasecmp(ext, ".jpg") == 0 || strcasecmp(ext, ".jpeg") == 0) return ASSET_TYPE_JPEG;
+/**
+ * @brief Build vault filepath for an entry
+ *
+ * Uses SHA256 sharding: {vault}/{sha[0]}/{sha[1]}/{sha[2]}/{storage_key}.{ext}
+ */
+static void ps_build_vault_filepath(const makapix_channel_entry_t *entry,
+                                     char *out, size_t out_len)
+{
+    if (!entry || !out || out_len == 0) {
+        if (out && out_len > 0) out[0] = '\0';
+        return;
+    }
 
-    return ASSET_TYPE_WEBP;
+    // Get vault base path
+    char vault_base[128];
+    if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
+        strlcpy(vault_base, "/sdcard/p3a/vault", sizeof(vault_base));
+    }
+
+    // Convert UUID bytes to string
+    char storage_key[40];
+    bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
+
+    // Compute SHA256 for sharding
+    uint8_t sha256[32];
+    if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
+        // Fallback without sharding
+        int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
+        snprintf(out, out_len, "%s/%s%s", vault_base, storage_key, s_ext_strings[ext_idx]);
+        return;
+    }
+
+    // Build sharded path
+    int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
+    snprintf(out, out_len, "%s/%02x/%02x/%02x/%s%s",
+             vault_base,
+             (unsigned int)sha256[0],
+             (unsigned int)sha256[1],
+             (unsigned int)sha256[2],
+             storage_key,
+             s_ext_strings[ext_idx]);
 }
 
 // ============================================================================
@@ -68,15 +112,11 @@ void ps_prng_seed(uint32_t *state, uint32_t seed)
 static bool pick_recency(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
 {
     ps_channel_state_t *ch = &state->channels[channel_index];
-    channel_handle_t handle = (channel_handle_t)ch->handle;
+    makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
 
-    if (!handle || ch->entry_count == 0) {
+    if (!entries || ch->entry_count == 0) {
         return false;
     }
-
-    // Get item at current cursor position
-    channel_item_ref_t item;
-    esp_err_t err;
 
     // Maximum attempts to find available artwork (skip unavailable ones)
     size_t max_attempts = ch->entry_count;
@@ -88,46 +128,45 @@ static bool pick_recency(ps_state_t *state, size_t channel_index, ps_artwork_t *
             ch->cursor = 0;
         }
 
-        err = channel_current_item(handle, &item);
-        if (err != ESP_OK) {
-            // Try advancing
-            channel_next_item(handle, &item);
+        makapix_channel_entry_t *entry = &entries[ch->cursor];
+
+        // Skip playlists for now (only handle artwork posts)
+        if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
             ch->cursor++;
             continue;
         }
 
-        // Check if file exists
-        if (!file_exists(item.filepath)) {
-            // Skip to next
-            channel_next_item(handle, &item);
-            ch->cursor++;
+        // Build filepath for this entry
+        char filepath[256];
+        ps_build_vault_filepath(entry, filepath, sizeof(filepath));
 
-            // Count skips for repeat avoidance
-            if (attempt < 2) continue;  // Skip up to 2 records before accepting
-            ESP_LOGD(TAG, "Skipped %zu unavailable files", attempt);
+        // Check if file exists
+        if (!file_exists(filepath)) {
+            ch->cursor++;
+            ESP_LOGD(TAG, "Skipping unavailable file: %s", filepath);
             continue;
         }
 
         // Check immediate repeat
-        if (item.post_id == state->last_played_id && attempt < 2) {
-            // Skip on immediate repeat (up to 2 skips)
-            channel_next_item(handle, &item);
+        if (entry->post_id == state->last_played_id && attempt < 2) {
             ch->cursor++;
             continue;
         }
 
-        // Found valid artwork
-        out_artwork->artwork_id = item.post_id;
-        out_artwork->post_id = item.post_id;
-        strlcpy(out_artwork->filepath, item.filepath, sizeof(out_artwork->filepath));
-        strlcpy(out_artwork->storage_key, item.storage_key, sizeof(out_artwork->storage_key));
-        out_artwork->created_at = 0;  // Not available in channel_item_ref_t
-        out_artwork->dwell_time_ms = item.dwell_time_ms;
-        out_artwork->type = get_asset_type_from_filepath(item.filepath);
+        // Found valid artwork - build storage_key string
+        char storage_key[40];
+        bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
+
+        out_artwork->artwork_id = entry->post_id;
+        out_artwork->post_id = entry->post_id;
+        strlcpy(out_artwork->filepath, filepath, sizeof(out_artwork->filepath));
+        strlcpy(out_artwork->storage_key, storage_key, sizeof(out_artwork->storage_key));
+        out_artwork->created_at = entry->created_at;
+        out_artwork->dwell_time_ms = entry->dwell_time_ms;
+        out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
 
         // Advance cursor for next pick
-        channel_next_item(handle, &item);
         ch->cursor++;
 
         return true;
@@ -144,9 +183,9 @@ static bool pick_recency(ps_state_t *state, size_t channel_index, ps_artwork_t *
 static bool pick_random(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
 {
     ps_channel_state_t *ch = &state->channels[channel_index];
-    channel_handle_t handle = (channel_handle_t)ch->handle;
+    makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
 
-    if (!handle || ch->entry_count == 0) {
+    if (!entries || ch->entry_count == 0) {
         return false;
     }
 
@@ -162,36 +201,38 @@ static bool pick_random(ps_state_t *state, size_t channel_index, ps_artwork_t *o
         uint32_t r = ps_prng_next(&ch->pick_rng_state);
         size_t index = (size_t)(r % r_eff);
 
-        // Get post at this index
-        channel_post_t post;
-        esp_err_t err = channel_get_post(handle, index, &post);
-        if (err != ESP_OK) {
-            continue;
-        }
+        makapix_channel_entry_t *entry = &entries[index];
 
         // Only handle single artworks for now (not playlists)
-        if (post.kind != CHANNEL_POST_KIND_ARTWORK) {
+        if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
             continue;
         }
 
+        // Build filepath for this entry
+        char filepath[256];
+        ps_build_vault_filepath(entry, filepath, sizeof(filepath));
+
         // Check if file exists
-        if (!file_exists(post.u.artwork.filepath)) {
+        if (!file_exists(filepath)) {
             continue;
         }
 
         // Check immediate repeat
-        if (post.post_id == state->last_played_id && attempt < 4) {
+        if (entry->post_id == state->last_played_id && attempt < 4) {
             continue;  // Resample
         }
 
-        // Found valid artwork
-        out_artwork->artwork_id = post.post_id;
-        out_artwork->post_id = post.post_id;
-        strlcpy(out_artwork->filepath, post.u.artwork.filepath, sizeof(out_artwork->filepath));
-        strlcpy(out_artwork->storage_key, post.u.artwork.storage_key, sizeof(out_artwork->storage_key));
-        out_artwork->created_at = post.created_at;
-        out_artwork->dwell_time_ms = post.dwell_time_ms;
-        out_artwork->type = post.u.artwork.type;
+        // Found valid artwork - build storage_key string
+        char storage_key[40];
+        bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
+
+        out_artwork->artwork_id = entry->post_id;
+        out_artwork->post_id = entry->post_id;
+        strlcpy(out_artwork->filepath, filepath, sizeof(out_artwork->filepath));
+        strlcpy(out_artwork->storage_key, storage_key, sizeof(out_artwork->storage_key));
+        out_artwork->created_at = entry->created_at;
+        out_artwork->dwell_time_ms = entry->dwell_time_ms;
+        out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
 
         return true;

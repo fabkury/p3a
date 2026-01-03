@@ -153,7 +153,7 @@ extern SemaphoreHandle_t s_buffer_mutex;
 extern SemaphoreHandle_t s_prefetch_done_sem;  // Signaled when prefetch completes
 
 // Override for the next load triggered by swap_future_execute().
-// If valid, the loader will load this filepath/type instead of channel_player current item,
+// If valid, the loader will load this filepath/type instead of play_scheduler current item,
 // and will propagate start_time_ms/start_frame to the back buffer for prefetch alignment.
 typedef struct {
     bool valid;

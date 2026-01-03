@@ -39,7 +39,6 @@
 #include "freertos/semphr.h"
 #include "bsp/esp-bsp.h"
 #include "animation_player.h"
-#include "channel_player.h"
 #include "app_lcd.h"
 #include "version.h"
 #include "makapix.h"

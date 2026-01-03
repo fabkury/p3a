@@ -33,7 +33,7 @@ Build artifacts go to `build/`. Release binaries are copied to `release/v{VERSIO
 ## Architecture
 
 ### Entry Point and Core Flow
-- `main/p3a_main.c` - Boot sequence: NVS init → SPIFFS mount → LCD/touch/USB/WiFi init → HTTP server → Makapix connection
+- `main/p3a_main.c` - Boot sequence: NVS init → LittleFS mount → LCD/touch/USB/WiFi init → HTTP server → Makapix connection
 - `main/display_renderer.c` - Frame buffer management with triple buffering and VSYNC
 - `main/animation_player.c` + `animation_player_render.c` + `animation_player_loader.c` - Animation decode/render pipeline
 - `main/playback_controller.c` - Switches between animation, PICO-8, and UI render sources
@@ -54,14 +54,14 @@ Build artifacts go to `build/`. Release binaries are copied to `release/v{VERSIO
 | `p3a_board_ep44b` | Hardware abstraction layer |
 
 ### Storage Layout
-- **SPIFFS** `/spiffs` (1MB) - Web UI assets
+- **LittleFS** `/spiffs` (4MB) - Web UI assets
 - **SD Card** `/sdcard` - Artwork storage
   - `/sdcard/p3a/animations/` - Local files
   - `/sdcard/p3a/vault/` - Cached Makapix artwork
 - **NVS** (24KB) - Wi-Fi credentials, settings, state
 
 ### Flash Partitions (`partitions.csv`)
-Dual OTA slots (8MB each), NVS, SPIFFS, and a 2MB partition for ESP32-C6 firmware.
+Dual OTA slots (8MB each), NVS, LittleFS (4MB), and a 2MB partition for ESP32-C6 firmware.
 
 ## Configuration
 

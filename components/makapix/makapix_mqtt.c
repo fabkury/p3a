@@ -12,7 +12,6 @@
 #include "esp_netif.h"
 #include "esp_heap_caps.h"
 #include "lwip/inet.h"
-#include "channel_player.h"
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
@@ -587,7 +586,7 @@ esp_err_t makapix_mqtt_publish_status(int32_t current_post_id)
 
     cJSON_AddStringToObject(status, "player_key", s_player_key);
     cJSON_AddStringToObject(status, "status", "online");
-    cJSON_AddBoolToObject(status, "live_mode", channel_player_is_live_mode_active());
+    cJSON_AddBoolToObject(status, "live_mode", false);  // Live mode deprecated
     
     if (current_post_id > 0) {
         cJSON_AddNumberToObject(status, "current_post_id", current_post_id);

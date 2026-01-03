@@ -4,9 +4,9 @@
 /**
  * @file play_navigator.h
  * @brief Internal play navigator for channel implementations
- * 
+ *
  * NOTE: This is an internal implementation detail. External code should use
- * channel_player.h APIs (channel_player_swap_next, etc.) for navigation.
+ * play_scheduler.h APIs (play_scheduler_next, etc.) for navigation.
  */
 #ifndef PLAY_NAVIGATOR_H
 #define PLAY_NAVIGATOR_H

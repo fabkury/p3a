@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>p3a - Wi-Fi Setup</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 12px 10px 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+}
+@supports (min-height: 100svh) { body { min-height: 100svh; } }
+@supports (min-height: 100dvh) { body { min-height: 100dvh; } }
+.header { text-align: center; padding: 8px 0 4px; }
+.header h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 2.4rem);
+  font-weight: 300;
+  letter-spacing: 0.1em;
+  text-transform: lowercase;
+}
+.subtitle { margin: 0; opacity: 0.9; font-size: 0.95rem; }
+.card {
+  width: min(520px, 100%);
+  background: rgba(255,255,255,0.95);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  color: #111;
+}
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.field { margin-bottom: 10px; }
+label { display: block; font-size: 0.85rem; color: #444; margin-bottom: 6px; }
+input[type=text], input[type=password] {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  font-size: 1rem;
+  outline: none;
+}
+input[type=text]:focus, input[type=password]:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.15); }
+.btn {
+  width: 100%;
+  background: #667eea;
+  color: white;
+  padding: 13px 14px;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.98rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:active { transform: scale(0.98); }
+.btn-secondary { background: #ff6b6b; box-shadow: 0 4px 12px rgba(255,107,107,0.25); }
+.help { margin: 10px 0 0; font-size: 0.85rem; color: #555; line-height: 1.35; }
+.help code { background: rgba(102,126,234,0.12); padding: 2px 6px; border-radius: 8px; }
+.divider { height: 1px; background: #eee; margin: 12px 0; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>p3a</h1>
+    <p class="subtitle">Wi-Fi setup</p>
+  </div>
+  <div class="card">
+    <h2>Connect to Wi-Fi</h2>
+    <form action="/save" method="POST" autocomplete="on">
+      <div class="field">
+        <label for="ssid">Network name (SSID)</label>
+        <input type="text" id="ssid" name="ssid" required maxlength="32" autocapitalize="none" spellcheck="false" placeholder="e.g. MyHomeWiFi">
+      </div>
+      <div class="field">
+        <label for="password">Password (optional)</label>
+        <input type="password" id="password" name="password" maxlength="64" placeholder="Wi-Fi password">
+      </div>
+      <button class="btn" type="submit">Save &amp; connect</button>
+    </form>
+    <p class="help">After saving, p3a will reboot and join your Wi-Fi network. Then open <code>http://p3a.local/</code> to control your p3a.</p>
+    <div class="divider"></div>
+    <form action="/erase" method="POST" onsubmit="return confirm('Erase saved Wi-Fi credentials? p3a will reboot into setup mode.');">
+      <button class="btn btn-secondary" type="submit">Erase Wi-Fi credentials</button>
+    </form>
+  </div>
+</body>
+</html>

@@ -35,14 +35,14 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 ### Seamless Playback
 
 - **Freeze-free, gapless playback**: Robust multi-buffer rendering handles animations smoothly, even with corrupt or problematic files
-- **Full format support**: Animated WebP and GIF, and still PNG all with transparency and alpha channel support, plus full JPEG support 
+- **Full format support**: Animated WebP and GIF, and still PNG all with transparency and alpha channel support, plus hardware-accelerated JPEG support
 - **Aspect ratio preservation**: Non-square artworks display without distortion, properly centered with configurable background color
 
 ### Control & Customization
 
 - **Touch controls**: Tap to change artwork, swipe to adjust brightness, rotate with two fingers
 - **Screen rotation**: Rotate the display 0°, 90°, 180°, or 270° via touch gesture or web API
-- **Web interface**: Full device control from any browser at `http://p3a.local/`
+- **Web interface**: Full device control from any browser at `http://p3a.local/` (only accessible in LAN, not Internet)
 - **Over-the-Air updates**: After initial USB flash, update firmware wirelessly via the web UI with automatic rollback protection
 
 ### Hardware & Connectivity

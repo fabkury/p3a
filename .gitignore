@@ -1,23 +1,4 @@
-build/*
-!build/*.bin
-!build/bootloader/bootloader.bin
-!build/partition_table/
-!build/partition_table/partition-table.bin
-!build/flash_args
-!build/flasher_args.json
-# Exclude build cache files
-build/**/.ninja_log
-build/**/.ninja_deps
-build/**/.bin_timestamp
-build/**/CMakeCache.txt
-build/**/build.ninja
-build/**/compile_commands.json
-build/**/cmake_install.cmake
-build/**/CMakeFiles/
-build/**/*.obj
-build/**/*.a
-build/**/*.elf
-build/**/*.map
+build/
 node_modules/
 docs/web-flasher/node_modules/
 .vscode/

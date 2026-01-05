@@ -1,142 +1,1030 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>p3a Web Flasher — Not Available</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="p3a web flasher - currently unavailable for ESP32-P4" />
-    <link rel="icon" href="favicon.png" type="image/png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <style>
-      :root {
-        --bg-deep: #0d1117;
-        --bg-card: #161b22;
-        --text: #e6edf3;
-        --text-secondary: #8b949e;
-        --text-muted: #6e7681;
-        --accent: #58a6ff;
-        --border: #30363d;
-        --warning: #d29922;
-      }
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>p3a Web Flasher</title>
+<meta name="description" content="Flash p3a firmware to your ESP32-P4 device from your browser">
+<link rel="icon" href="favicon.png" type="image/png">
+<style>
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    padding: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+@supports (min-height: 100svh) { body { min-height: 100svh; } }
+@supports (min-height: 100dvh) { body { min-height: 100dvh; } }
 
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
+.container {
+    width: min(520px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
 
-      body {
-        font-family: "Noto Sans", -apple-system, BlinkMacSystemFont, sans-serif;
-        background: var(--bg-deep);
-        color: var(--text);
-        min-height: 100vh;
-        line-height: 1.6;
-      }
+.header {
+    text-align: center;
+    padding: 8px 0 4px;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
 
-      .container {
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 3rem 1.5rem;
-        text-align: center;
-      }
+.logo {
+    width: 64px;
+    height: 64px;
+    image-rendering: pixelated;
+}
 
-      .logo-container {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 1rem;
-        margin-bottom: 2rem;
-      }
+.header h1 {
+    margin: 0;
+    font-size: clamp(1.8rem, 4vw, 2.2rem);
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    text-transform: lowercase;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
 
-      .logo-img {
-        width: 64px;
-        height: 64px;
-        image-rendering: pixelated;
-      }
+.card {
+    background: rgba(255,255,255,0.95);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
 
-      .logo-text {
-        font-family: "Noto Sans Mono", monospace;
-        font-size: 2.5rem;
-        font-weight: 700;
-      }
+.card h2 {
+    margin: 0 0 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #333;
+}
 
-      .status-card {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 2rem;
-        margin-bottom: 1.5rem;
-      }
+.card .hint {
+    font-size: 0.8rem;
+    color: #666;
+    margin: 0 0 12px;
+}
 
-      h1 {
-        color: var(--warning);
-        font-size: 1.5rem;
-        margin-bottom: 1rem;
-      }
+.warning-card {
+    background: #ffebee;
+    border: 1px solid #ef9a9a;
+}
 
-      p {
-        color: var(--text-secondary);
-        margin-bottom: 1rem;
-      }
+.warning-card h3 {
+    color: #c62828;
+    margin: 0 0 8px;
+    font-size: 0.95rem;
+}
 
-      .btn {
-        display: inline-block;
-        background: var(--accent);
-        color: var(--bg-deep);
-        font-weight: 600;
-        padding: 0.75rem 1.5rem;
-        border-radius: 8px;
-        text-decoration: none;
-        margin-top: 1rem;
-      }
+.warning-card p {
+    margin: 0 0 8px;
+    color: #333;
+    font-size: 0.85rem;
+}
 
-      .btn:hover {
-        opacity: 0.9;
-      }
+.warning-card ul {
+    margin: 0;
+    padding-left: 20px;
+    color: #333;
+    font-size: 0.85rem;
+}
 
-      .technical-note {
-        font-size: 0.85rem;
-        color: var(--text-muted);
-        margin-top: 2rem;
-      }
+select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    background: white;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+}
 
-      .technical-note a {
-        color: var(--accent);
-        text-decoration: none;
-      }
+select:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102,126,234,0.15);
+}
 
-      .technical-note a:hover {
-        text-decoration: underline;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="logo-container">
-        <img src="p3a-logo.png" alt="p3a" class="logo-img" />
-        <span class="logo-text">p3a</span>
-      </div>
+select:disabled {
+    background-color: #f5f5f5;
+    cursor: not-allowed;
+}
 
-      <div class="status-card">
-        <h1>⚠️ Web Flasher Not Available</h1>
-        <p>
-          Browser-based flashing is not currently functional for ESP32-P4 devices
-          due to a bug in Espressif's esptool-js library.
-        </p>
-        <p>
-          Please use the command-line tool instead — it takes about 5 minutes to set up
-          and works reliably.
-        </p>
-        <a href="https://github.com/fabkury/p3a/blob/main/docs/flash-p3a.md" class="btn">
-          → View Flashing Guide
-        </a>
-      </div>
+.btn-primary {
+    width: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 14px;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(102,126,234,0.4);
+    transition: all 0.2s;
+}
 
-      <p class="technical-note">
-        Technical details: <a href="https://github.com/espressif/esptool-js/issues/229" target="_blank">esptool-js Issue #229</a>
-      </p>
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(102,126,234,0.5);
+}
+
+.btn-primary:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+.btn-primary:disabled {
+    background: #ccc;
+    color: #888;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.btn-secondary {
+    width: 100%;
+    background: #f5f5f5;
+    color: #333;
+    border: 1px solid #ddd;
+    padding: 14px;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: #eee;
+}
+
+.btn-secondary:disabled {
+    color: #aaa;
+    cursor: not-allowed;
+}
+
+.connection-status {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 0.85rem;
+}
+
+.status-connected {
+    color: #2e7d32;
+    font-weight: 500;
+}
+
+.status-disconnected {
+    color: #666;
+}
+
+.release-info {
+    margin-top: 12px;
+}
+
+.release-meta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 8px;
+}
+
+.badge-prerelease {
+    background: #ff9800;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.release-notes {
+    font-size: 0.8rem;
+    color: #555;
+    white-space: pre-wrap;
+    background: #f5f5f5;
+    padding: 10px;
+    border-radius: 8px;
+    max-height: 100px;
+    overflow-y: auto;
+}
+
+/* Progress styles */
+.file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.file-item {
+    background: #f9f9f9;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.file-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.file-name {
+    font-weight: 500;
+    font-size: 0.85rem;
+    color: #333;
+}
+
+.file-address {
+    font-family: monospace;
+    font-size: 0.75rem;
+    color: #666;
+    background: #eee;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.file-bar {
+    height: 6px;
+    background: #e0e0e0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.file-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    width: 0%;
+    transition: width 0.2s;
+}
+
+.file-fill.complete {
+    background: #4CAF50;
+}
+
+.file-status {
+    font-size: 0.75rem;
+    color: #888;
+    margin-top: 4px;
+    text-align: right;
+}
+
+.file-status.complete {
+    color: #2e7d32;
+}
+
+.file-status.error {
+    color: #c62828;
+}
+
+.overall-progress {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #eee;
+}
+
+.progress-bar {
+    height: 10px;
+    background: #e0e0e0;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    width: 0%;
+    transition: width 0.3s;
+}
+
+.progress-text {
+    text-align: center;
+    margin-top: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #333;
+}
+
+/* Log console */
+details.card {
+    cursor: pointer;
+}
+
+details.card summary {
+    font-weight: 500;
+    color: #333;
+    outline: none;
+    font-size: 0.9rem;
+}
+
+details.card summary::-webkit-details-marker {
+    margin-right: 8px;
+}
+
+#log-output {
+    margin-top: 12px;
+    padding: 12px;
+    background: #1a1a2e;
+    color: #00ff88;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 0.7rem;
+    border-radius: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.4;
+}
+
+/* Toast notification */
+.toast {
+    position: fixed;
+    top: clamp(48px, 12vh, 80px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    display: none;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    max-width: 90%;
+    text-align: center;
+}
+
+.toast.success { background: #4CAF50; color: white; }
+.toast.error { background: #f44336; color: white; }
+.toast.info { background: #2196F3; color: white; }
+
+/* Footer */
+.footer {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    padding: 12px 0;
+}
+
+.footer-link {
+    color: rgba(255,255,255,0.8);
+    text-decoration: none;
+    font-size: 0.85rem;
+    transition: color 0.2s;
+}
+
+.footer-link:hover {
+    color: white;
+}
+
+/* Troubleshooting */
+.troubleshooting-list {
+    margin: 12px 0 0;
+    padding-left: 20px;
+    font-size: 0.8rem;
+    color: #555;
+}
+
+.troubleshooting-list li {
+    margin-bottom: 8px;
+}
+
+.troubleshooting-list strong {
+    color: #333;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    body { padding: 12px 8px; }
+    .card { padding: 14px; }
+    .btn-primary, .btn-secondary { padding: 12px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <img src="p3a-logo.png" alt="p3a" class="logo">
+        <h1>web flasher</h1>
     </div>
-  </body>
+
+    <!-- Browser Warning -->
+    <div class="card warning-card" id="browser-warning" style="display:none">
+        <h3>Browser Not Supported</h3>
+        <p>WebSerial API is required for flashing. Please use:</p>
+        <ul>
+            <li>Google Chrome 89+</li>
+            <li>Microsoft Edge 89+</li>
+        </ul>
+        <p>Safari and Firefox are not supported.</p>
+    </div>
+
+    <!-- Step 1: Release Selection -->
+    <div class="card" id="release-card">
+        <h2>1. Select Firmware</h2>
+        <select id="release-select">
+            <option value="">Loading releases...</option>
+        </select>
+        <div class="release-info" id="release-info"></div>
+    </div>
+
+    <!-- Step 2: Connect Device -->
+    <div class="card" id="connect-card">
+        <h2>2. Connect Device</h2>
+        <p class="hint">Use a USB-C data cable connected to the USB-OTG port (not the UART port)</p>
+        <button class="btn-primary" id="connect-btn">Connect</button>
+        <div class="connection-status" id="connection-status">
+            <span class="status-disconnected">Not connected</span>
+        </div>
+    </div>
+
+    <!-- Step 3: Flash -->
+    <div class="card" id="flash-card">
+        <h2>3. Flash Firmware</h2>
+        <button class="btn-primary" id="flash-btn" disabled>Flash Device</button>
+    </div>
+
+    <!-- Progress Section -->
+    <div class="card" id="progress-card" style="display:none">
+        <h2>Flashing Progress</h2>
+        <div class="file-list" id="file-list"></div>
+        <div class="overall-progress">
+            <div class="progress-bar">
+                <div class="progress-fill" id="overall-fill"></div>
+            </div>
+            <div class="progress-text" id="overall-text">0%</div>
+        </div>
+    </div>
+
+    <!-- Log Console -->
+    <details class="card" id="log-card">
+        <summary>Console Log</summary>
+        <pre id="log-output"></pre>
+    </details>
+
+    <!-- Troubleshooting -->
+    <details class="card">
+        <summary>Troubleshooting</summary>
+        <ul class="troubleshooting-list">
+            <li><strong>No device found:</strong> Use a USB-C data cable (not charge-only). Try a different cable.</li>
+            <li><strong>Connection fails:</strong> Hold the BOOT button on the device while clicking Connect, then release after connecting.</li>
+            <li><strong>Flash fails midway:</strong> Try a lower baud rate or use the command-line esptool.</li>
+            <li><strong>Device not booting:</strong> Try flashing again. If issues persist, use the <a href="https://github.com/fabkury/p3a/blob/main/docs/flash-p3a.md">manual flash guide</a>.</li>
+        </ul>
+    </details>
+
+    <!-- Footer -->
+    <div class="footer">
+        <a href="https://github.com/fabkury/p3a" class="footer-link">GitHub</a>
+        <a href="https://github.com/fabkury/p3a/blob/main/docs/flash-p3a.md" class="footer-link">Manual Flash Guide</a>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { ESPLoader, Transport } from './esptool-bundle.js';
+
+// ============================================
+// CONFIGURATION
+// ============================================
+const CONFIG = {
+    GITHUB_REPO: 'fabkury/p3a',
+    CHIP: 'esp32p4',
+    BAUD_RATE: 460800,
+    FLASH_MODE: 'dio',
+    FLASH_FREQ: '80m',
+    FLASH_SIZE: '32MB'
+};
+
+// ============================================
+// STATE
+// ============================================
+const state = {
+    releases: [],
+    selectedRelease: null,
+    transport: null,
+    esploader: null,
+    isConnected: false,
+    isFlashing: false,
+    port: null
+};
+
+// ============================================
+// DOM ELEMENTS
+// ============================================
+const elements = {
+    releaseSelect: document.getElementById('release-select'),
+    releaseInfo: document.getElementById('release-info'),
+    connectBtn: document.getElementById('connect-btn'),
+    connectionStatus: document.getElementById('connection-status'),
+    flashBtn: document.getElementById('flash-btn'),
+    progressCard: document.getElementById('progress-card'),
+    fileList: document.getElementById('file-list'),
+    overallFill: document.getElementById('overall-fill'),
+    overallText: document.getElementById('overall-text'),
+    logOutput: document.getElementById('log-output'),
+    toast: document.getElementById('toast'),
+    browserWarning: document.getElementById('browser-warning')
+};
+
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
+function log(message) {
+    const timestamp = new Date().toLocaleTimeString();
+    elements.logOutput.textContent += `[${timestamp}] ${message}\n`;
+    elements.logOutput.scrollTop = elements.logOutput.scrollHeight;
+    console.log(`[p3a-flasher] ${message}`);
+}
+
+function showToast(message, type = 'info') {
+    elements.toast.textContent = message;
+    elements.toast.className = `toast ${type}`;
+    elements.toast.style.display = 'block';
+    setTimeout(() => {
+        elements.toast.style.display = 'none';
+    }, 6000);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ============================================
+// GITHUB API
+// ============================================
+async function fetchReleases() {
+    // Check cache first
+    const cached = sessionStorage.getItem('p3a-releases');
+    if (cached) {
+        try {
+            const { data, timestamp } = JSON.parse(cached);
+            if (Date.now() - timestamp < 5 * 60 * 1000) { // 5 minutes
+                log('Using cached releases');
+                return data;
+            }
+        } catch (e) {
+            // Invalid cache, ignore
+        }
+    }
+
+    const response = await fetch(`https://api.github.com/repos/${CONFIG.GITHUB_REPO}/releases`);
+
+    // Check rate limit
+    const remaining = response.headers.get('X-RateLimit-Remaining');
+    if (remaining && parseInt(remaining) < 10) {
+        log(`Warning: GitHub API rate limit low (${remaining} remaining)`);
+    }
+
+    if (response.status === 403) {
+        throw new Error('GitHub API rate limit exceeded. Try again in an hour.');
+    }
+
+    if (!response.ok) {
+        throw new Error(`GitHub API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Cache result
+    sessionStorage.setItem('p3a-releases', JSON.stringify({
+        data,
+        timestamp: Date.now()
+    }));
+
+    return data;
+}
+
+async function fetchFlashArgs(release) {
+    const flashArgsAsset = release.assets.find(a => a.name === 'flash_args');
+    if (!flashArgsAsset) {
+        throw new Error('flash_args file not found in release');
+    }
+
+    const response = await fetch(flashArgsAsset.browser_download_url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch flash_args: ${response.status}`);
+    }
+
+    const text = await response.text();
+    return parseFlashArgs(text);
+}
+
+function parseFlashArgs(text) {
+    const files = [];
+    const lines = text.trim().split('\n');
+
+    for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 2) {
+            const address = parseInt(parts[0], 16);
+            const filename = parts[1];
+            files.push({ address, filename });
+        }
+    }
+
+    // Sort by address for sequential flashing
+    return files.sort((a, b) => a.address - b.address);
+}
+
+async function fetchBinary(release, filename) {
+    const asset = release.assets.find(a => a.name === filename);
+    if (!asset) {
+        throw new Error(`Asset not found: ${filename}`);
+    }
+
+    const response = await fetch(asset.browser_download_url);
+    if (!response.ok) {
+        throw new Error(`Failed to download ${filename}: ${response.status}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return new Uint8Array(arrayBuffer);
+}
+
+// ============================================
+// UI FUNCTIONS
+// ============================================
+function checkBrowserSupport() {
+    if (!('serial' in navigator)) {
+        elements.browserWarning.style.display = 'block';
+        elements.connectBtn.disabled = true;
+        elements.flashBtn.disabled = true;
+        return false;
+    }
+    return true;
+}
+
+function populateReleases(releases) {
+    elements.releaseSelect.innerHTML = '';
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '-- Select a version --';
+    elements.releaseSelect.appendChild(placeholder);
+
+    for (const release of releases) {
+        const option = document.createElement('option');
+        option.value = release.tag_name;
+        option.textContent = release.tag_name + (release.prerelease ? ' (pre-release)' : '');
+        elements.releaseSelect.appendChild(option);
+    }
+}
+
+function showReleaseInfo(release) {
+    if (!release) {
+        elements.releaseInfo.innerHTML = '';
+        return;
+    }
+
+    const date = new Date(release.published_at).toLocaleDateString();
+    let html = `<div class="release-meta">
+        <span>Published: ${date}</span>
+        ${release.prerelease ? '<span class="badge-prerelease">Pre-release</span>' : ''}
+    </div>`;
+
+    if (release.body) {
+        // Truncate long release notes
+        const notes = release.body.length > 500
+            ? release.body.substring(0, 500) + '...'
+            : release.body;
+        html += `<div class="release-notes">${escapeHtml(notes)}</div>`;
+    }
+
+    elements.releaseInfo.innerHTML = html;
+}
+
+function setConnected(isConnected, chipName = '') {
+    elements.connectBtn.textContent = isConnected ? 'Disconnect' : 'Connect';
+    elements.connectionStatus.innerHTML = isConnected
+        ? `<span class="status-connected">Connected: ${chipName}</span>`
+        : '<span class="status-disconnected">Not connected</span>';
+    elements.flashBtn.disabled = !isConnected || !state.selectedRelease;
+}
+
+function initializeFileProgress(files) {
+    elements.progressCard.style.display = 'block';
+    elements.fileList.innerHTML = files.map((file, index) => `
+        <div class="file-item" id="file-item-${index}">
+            <div class="file-header">
+                <span class="file-name">${file.filename}</span>
+                <span class="file-address">0x${file.address.toString(16).padStart(6, '0')}</span>
+            </div>
+            <div class="file-bar">
+                <div class="file-fill" id="file-fill-${index}"></div>
+            </div>
+            <div class="file-status" id="file-status-${index}">Pending</div>
+        </div>
+    `).join('');
+}
+
+function updateFileProgress(fileIndex, percent, status, isComplete = false, isError = false) {
+    const fill = document.getElementById(`file-fill-${fileIndex}`);
+    const statusEl = document.getElementById(`file-status-${fileIndex}`);
+    if (fill) {
+        fill.style.width = `${percent}%`;
+        if (isComplete) fill.classList.add('complete');
+    }
+    if (statusEl) {
+        statusEl.textContent = status;
+        statusEl.className = 'file-status';
+        if (isComplete) statusEl.classList.add('complete');
+        if (isError) statusEl.classList.add('error');
+    }
+}
+
+function updateOverallProgress(percent) {
+    elements.overallFill.style.width = `${percent}%`;
+    elements.overallText.textContent = `${Math.round(percent)}%`;
+}
+
+function setFlashing(isFlashing) {
+    state.isFlashing = isFlashing;
+    elements.flashBtn.disabled = isFlashing || !state.isConnected;
+    elements.flashBtn.textContent = isFlashing ? 'Flashing...' : 'Flash Device';
+    elements.connectBtn.disabled = isFlashing;
+    elements.releaseSelect.disabled = isFlashing;
+}
+
+// ============================================
+// FLASH MANAGER
+// ============================================
+function createTerminal() {
+    return {
+        clean: () => {},
+        writeLine: (data) => log(data),
+        write: (data) => {
+            // Append without newline for progress updates
+            if (data.trim()) log(data.trim());
+        }
+    };
+}
+
+async function connect() {
+    if (!('serial' in navigator)) {
+        throw new Error('WebSerial not supported. Use Chrome or Edge 89+.');
+    }
+
+    // Request port
+    state.port = await navigator.serial.requestPort();
+
+    // Create transport
+    state.transport = new Transport(state.port, true);
+
+    // Create terminal for logging
+    const terminal = createTerminal();
+
+    // Create loader
+    state.esploader = new ESPLoader({
+        transport: state.transport,
+        baudrate: CONFIG.BAUD_RATE,
+        terminal: terminal,
+        romBaudrate: 115200,
+        enableTracing: false
+    });
+
+    // Connect to device
+    const chip = await state.esploader.main();
+
+    log(`Detected chip: ${chip}`);
+
+    // Verify chip type (be flexible with naming)
+    const chipLower = chip.toLowerCase();
+    if (!chipLower.includes('esp32-p4') && !chipLower.includes('esp32p4') && !chipLower.includes('p4')) {
+        log(`Warning: Expected ESP32-P4, detected "${chip}"`);
+        showToast(`Warning: Detected ${chip}, expected ESP32-P4`, 'info');
+    }
+
+    return chip;
+}
+
+async function disconnect() {
+    if (state.transport) {
+        await state.transport.disconnect();
+        state.transport = null;
+        state.esploader = null;
+        state.port = null;
+    }
+}
+
+async function flash(fileArray, progressCallback) {
+    if (!state.esploader) {
+        throw new Error('Not connected');
+    }
+
+    const flashOptions = {
+        fileArray: fileArray,
+        flashSize: CONFIG.FLASH_SIZE,
+        flashMode: CONFIG.FLASH_MODE,
+        flashFreq: CONFIG.FLASH_FREQ,
+        eraseAll: false,
+        compress: true,
+        reportProgress: (fileIndex, written, total) => {
+            progressCallback(fileIndex, written, total);
+        }
+    };
+
+    await state.esploader.writeFlash(flashOptions);
+}
+
+async function hardReset() {
+    if (state.esploader) {
+        await state.esploader.hardReset();
+    }
+}
+
+// ============================================
+// EVENT HANDLERS
+// ============================================
+elements.releaseSelect.addEventListener('change', (e) => {
+    const tagName = e.target.value;
+    state.selectedRelease = state.releases.find(r => r.tag_name === tagName) || null;
+    showReleaseInfo(state.selectedRelease);
+    elements.flashBtn.disabled = !state.isConnected || !state.selectedRelease;
+});
+
+elements.connectBtn.addEventListener('click', async () => {
+    if (state.isConnected) {
+        // Disconnect
+        try {
+            await disconnect();
+            state.isConnected = false;
+            setConnected(false);
+            log('Disconnected');
+            showToast('Disconnected', 'info');
+        } catch (error) {
+            log(`Disconnect error: ${error.message}`);
+            showToast('Disconnect failed: ' + error.message, 'error');
+        }
+    } else {
+        // Connect
+        try {
+            log('Connecting to device...');
+            const chip = await connect();
+            state.isConnected = true;
+            setConnected(true, chip);
+            showToast('Connected to ' + chip, 'success');
+        } catch (error) {
+            log(`Connection error: ${error.message}`);
+            if (error.name === 'NotFoundError') {
+                showToast('No device selected', 'error');
+            } else {
+                showToast('Connection failed: ' + error.message, 'error');
+            }
+        }
+    }
+});
+
+elements.flashBtn.addEventListener('click', async () => {
+    if (!state.selectedRelease) {
+        showToast('Please select a firmware version', 'error');
+        return;
+    }
+
+    if (!state.isConnected) {
+        showToast('Please connect to device first', 'error');
+        return;
+    }
+
+    setFlashing(true);
+
+    try {
+        // Fetch flash_args to get file list
+        log('Fetching flash configuration...');
+        const flashFiles = await fetchFlashArgs(state.selectedRelease);
+        log(`Will flash ${flashFiles.length} files`);
+
+        // Initialize progress UI
+        initializeFileProgress(flashFiles);
+
+        // Download all binaries
+        const fileArray = [];
+        for (let i = 0; i < flashFiles.length; i++) {
+            const file = flashFiles[i];
+            log(`Downloading ${file.filename}...`);
+            updateFileProgress(i, 0, 'Downloading...');
+
+            const data = await fetchBinary(state.selectedRelease, file.filename);
+            log(`Downloaded ${file.filename}: ${data.length} bytes`);
+
+            // Verify magic byte for app images
+            if (file.filename.endsWith('.bin') &&
+                (file.filename === 'bootloader.bin' || file.filename === 'p3a.bin' || file.filename === 'network_adapter.bin')) {
+                if (data[0] === 0xE9) {
+                    log(`  Magic byte OK (0xE9)`);
+                } else {
+                    log(`  Warning: Unexpected magic byte 0x${data[0].toString(16)}`);
+                }
+            }
+
+            fileArray.push({
+                data: data,
+                address: file.address
+            });
+
+            updateFileProgress(i, 100, 'Ready');
+        }
+
+        // Flash all files
+        log('Starting flash...');
+        let currentFileIndex = 0;
+        const totalBytes = fileArray.reduce((sum, f) => sum + f.data.length, 0);
+        let completedBytes = 0;
+
+        await flash(fileArray, (fileIndex, written, total) => {
+            // Update per-file progress
+            const percent = (written / total) * 100;
+            updateFileProgress(fileIndex, percent, `${Math.round(percent)}%`);
+
+            // Calculate overall progress
+            if (fileIndex !== currentFileIndex) {
+                // Completed previous file(s)
+                for (let i = currentFileIndex; i < fileIndex; i++) {
+                    completedBytes += fileArray[i].data.length;
+                    updateFileProgress(i, 100, 'Complete', true);
+                }
+                currentFileIndex = fileIndex;
+            }
+
+            const overallPercent = ((completedBytes + written) / totalBytes) * 100;
+            updateOverallProgress(overallPercent);
+        });
+
+        // Mark all files complete
+        for (let i = 0; i < flashFiles.length; i++) {
+            updateFileProgress(i, 100, 'Complete', true);
+        }
+        updateOverallProgress(100);
+
+        // Hard reset device
+        log('Resetting device...');
+        await hardReset();
+
+        showToast('Flash complete! Device is rebooting.', 'success');
+        log('Flash complete!');
+
+    } catch (error) {
+        log(`Flash error: ${error.message}`);
+        showToast('Flash failed: ' + error.message, 'error');
+
+        // Try to mark current file as error
+        const fileItems = document.querySelectorAll('.file-item');
+        fileItems.forEach((item, index) => {
+            const statusEl = item.querySelector('.file-status');
+            if (statusEl && !statusEl.classList.contains('complete')) {
+                updateFileProgress(index, 0, 'Failed', false, true);
+            }
+        });
+    } finally {
+        setFlashing(false);
+    }
+});
+
+// ============================================
+// INITIALIZATION
+// ============================================
+async function init() {
+    log('p3a Web Flasher initialized');
+
+    // Check browser support
+    if (!checkBrowserSupport()) {
+        log('WebSerial not supported in this browser');
+        return;
+    }
+
+    log('WebSerial supported');
+
+    // Load releases
+    try {
+        log('Fetching releases from GitHub...');
+        state.releases = await fetchReleases();
+        populateReleases(state.releases);
+        log(`Found ${state.releases.length} releases`);
+    } catch (error) {
+        log(`Failed to load releases: ${error.message}`);
+        showToast('Failed to load releases: ' + error.message, 'error');
+        elements.releaseSelect.innerHTML = '<option value="">Failed to load releases</option>';
+    }
+}
+
+// Start
+init();
+</script>
+</body>
 </html>

@@ -611,19 +611,56 @@ async function fetchReleases() {
     return data;
 }
 
+async function fetchAssetViaApi(asset) {
+    // Use GitHub API to download asset (has proper CORS headers)
+    const apiUrl = asset.url;
+    log(`Fetching via API: ${apiUrl}`);
+
+    const response = await fetch(apiUrl, {
+        headers: {
+            'Accept': 'application/octet-stream'
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`API fetch failed: HTTP ${response.status}`);
+    }
+
+    return response;
+}
+
 async function fetchFlashArgs(release) {
     const flashArgsAsset = release.assets.find(a => a.name === 'flash_args');
     if (!flashArgsAsset) {
-        throw new Error('flash_args file not found in release');
+        throw new Error('flash_args file not found in release. Make sure the release includes flash_args as an asset.');
     }
 
-    const response = await fetch(flashArgsAsset.browser_download_url);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch flash_args: ${response.status}`);
-    }
+    // Try direct browser_download_url first
+    const url = flashArgsAsset.browser_download_url;
+    log(`Fetching flash_args from: ${url}`);
 
-    const text = await response.text();
-    return parseFlashArgs(text);
+    try {
+        const response = await fetch(url, {
+            mode: 'cors',
+            redirect: 'follow'
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const text = await response.text();
+        return parseFlashArgs(text);
+    } catch (error) {
+        log(`Direct fetch failed: ${error.message}. Trying GitHub API...`);
+
+        // Fallback: Use GitHub API with Accept: application/octet-stream
+        try {
+            const response = await fetchAssetViaApi(flashArgsAsset);
+            const text = await response.text();
+            return parseFlashArgs(text);
+        } catch (apiError) {
+            throw new Error(`Failed to fetch flash_args: ${error.message} (API: ${apiError.message})`);
+        }
+    }
 }
 
 function parseFlashArgs(text) {
@@ -646,16 +683,35 @@ function parseFlashArgs(text) {
 async function fetchBinary(release, filename) {
     const asset = release.assets.find(a => a.name === filename);
     if (!asset) {
-        throw new Error(`Asset not found: ${filename}`);
+        throw new Error(`Asset not found in release: ${filename}`);
     }
 
-    const response = await fetch(asset.browser_download_url);
-    if (!response.ok) {
-        throw new Error(`Failed to download ${filename}: ${response.status}`);
-    }
+    const url = asset.browser_download_url;
+    log(`Downloading: ${url}`);
 
-    const arrayBuffer = await response.arrayBuffer();
-    return new Uint8Array(arrayBuffer);
+    try {
+        const response = await fetch(url, {
+            mode: 'cors',
+            redirect: 'follow'
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        return new Uint8Array(arrayBuffer);
+    } catch (error) {
+        log(`Direct download failed: ${error.message}. Trying GitHub API...`);
+
+        // Fallback: Use GitHub API with Accept: application/octet-stream
+        try {
+            const response = await fetchAssetViaApi(asset);
+            const arrayBuffer = await response.arrayBuffer();
+            return new Uint8Array(arrayBuffer);
+        } catch (apiError) {
+            throw new Error(`Failed to download ${filename}: ${error.message} (API: ${apiError.message})`);
+        }
+    }
 }
 
 // ============================================
@@ -857,6 +913,15 @@ elements.releaseSelect.addEventListener('change', (e) => {
     state.selectedRelease = state.releases.find(r => r.tag_name === tagName) || null;
     showReleaseInfo(state.selectedRelease);
     elements.flashBtn.disabled = !state.isConnected || !state.selectedRelease;
+
+    // Log available assets for debugging
+    if (state.selectedRelease) {
+        const assetNames = state.selectedRelease.assets.map(a => a.name);
+        log(`Selected ${tagName} - Assets: ${assetNames.join(', ')}`);
+        if (!assetNames.includes('flash_args')) {
+            log('WARNING: flash_args not found in release assets!');
+        }
+    }
 });
 
 elements.connectBtn.addEventListener('click', async () => {
@@ -1001,6 +1066,13 @@ elements.flashBtn.addEventListener('click', async () => {
 // ============================================
 async function init() {
     log('p3a Web Flasher initialized');
+
+    // Check if running from file:// protocol (CORS will block GitHub API)
+    if (window.location.protocol === 'file:') {
+        log('WARNING: Running from local file - CORS will block GitHub downloads!');
+        log('Please serve this page via a web server or use GitHub Pages.');
+        showToast('Local file mode - downloads may fail. Use a web server.', 'error');
+    }
 
     // Check browser support
     if (!checkBrowserSupport()) {

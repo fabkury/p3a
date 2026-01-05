@@ -856,7 +856,19 @@ async function flash(fileArray, progressCallback) {
 
 async function hardReset() {
     if (state.esploader) {
-        await state.esploader.hardReset();
+        // Try different method names (API varies between versions)
+        if (typeof state.esploader.hardReset === 'function') {
+            await state.esploader.hardReset();
+        } else if (typeof state.esploader.hard_reset === 'function') {
+            await state.esploader.hard_reset();
+        } else if (state.transport && typeof state.transport.setDTR === 'function') {
+            // Manual reset via DTR/RTS
+            await state.transport.setDTR(false);
+            await new Promise(r => setTimeout(r, 100));
+            await state.transport.setDTR(true);
+        } else {
+            log('Hard reset not available - please reset device manually');
+        }
     }
 }
 
@@ -994,10 +1006,15 @@ elements.flashBtn.addEventListener('click', async () => {
 
         // Hard reset device
         log('Resetting device...');
-        await hardReset();
-
-        showToast('Flash complete! Device is rebooting.', 'success');
-        log('Flash complete!');
+        try {
+            await hardReset();
+            showToast('Flash complete! Device is rebooting.', 'success');
+            log('Flash complete!');
+        } catch (resetError) {
+            log(`Reset warning: ${resetError.message}`);
+            showToast('Flash complete! Please reset device manually.', 'success');
+            log('Flash complete! Press the reset button on your device.');
+        }
 
     } catch (error) {
         log(`Flash error: ${error.message}`);

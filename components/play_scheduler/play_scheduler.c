@@ -24,6 +24,7 @@
 #include "sdcard_channel_impl.h"
 #include "makapix_channel_impl.h"
 #include "makapix_channel_utils.h"
+#include "view_tracker.h"  // For view_tracker_stop()
 #include "config_store.h"
 #include "p3a_state.h"
 #include "sd_path.h"
@@ -730,6 +731,10 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     // Reset the periodic refresh timer so this command triggers immediate refresh
     ps_refresh_reset_timer();
 
+    // Stop view tracking for the old channel before switching
+    // This prevents view events from being sent for the wrong channel
+    view_tracker_stop();
+
     xSemaphoreTake(s_state.mutex, portMAX_DELAY);
 
     ESP_LOGI(TAG, "Executing scheduler command: %zu channel(s), exposure=%d, pick=%d",
@@ -792,6 +797,22 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     if (command->channel_count > 0) {
         strlcpy(s_state.current_channel_id, s_state.channels[0].channel_id,
                 sizeof(s_state.current_channel_id));
+
+        // Update p3a_state with the new channel for view tracker and status API
+        const ps_channel_spec_t *spec = &command->channels[0];
+        if (spec->type == PS_CHANNEL_TYPE_SDCARD) {
+            p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL);
+        } else if (spec->type == PS_CHANNEL_TYPE_NAMED) {
+            if (strcmp(spec->name, "all") == 0) {
+                p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_ALL, NULL);
+            } else if (strcmp(spec->name, "promoted") == 0) {
+                p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_PROMOTED, NULL);
+            }
+        } else if (spec->type == PS_CHANNEL_TYPE_USER) {
+            p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_BY_USER, spec->identifier);
+        } else if (spec->type == PS_CHANNEL_TYPE_HASHTAG) {
+            p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_HASHTAG, spec->identifier);
+        }
     }
 
     // Signal background refresh task to process pending channels
@@ -826,6 +847,12 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         return play_scheduler_next(NULL);
     } else {
         ESP_LOGI(TAG, "No cached entries yet - waiting for refresh/download");
+
+        // Show loading state to user while waiting for refresh/download
+        extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
+                                                   int progress_percent, const char *detail);
+        p3a_render_set_channel_message("Makapix Club", 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
+                                        "Loading channel...");
         return ESP_OK;
     }
 }
@@ -971,9 +998,35 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
         ESP_LOGW(TAG, "No artwork available (cold start or all channels exhausted)");
         result = ESP_ERR_NOT_FOUND;
 
-        // Display error message
-        if (animation_player_display_message) {
-            animation_player_display_message("No Artworks", "No playable files available");
+        // Display appropriate message based on state
+        // Priority: refresh in progress > downloading > no files
+        bool any_refreshing = false;
+        for (size_t i = 0; i < s_state.channel_count; i++) {
+            if (s_state.channels[i].refresh_async_pending || s_state.channels[i].refresh_in_progress) {
+                any_refreshing = true;
+                break;
+            }
+        }
+
+        extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
+                                                   int progress_percent, const char *detail);
+
+        if (any_refreshing) {
+            // Channel is still refreshing - show loading message
+            p3a_render_set_channel_message("Makapix Club", 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
+                                            "Updating channel index...");
+        } else {
+            // Check if download manager is actively downloading
+            extern bool download_manager_is_busy(void);
+            if (download_manager_is_busy()) {
+                p3a_render_set_channel_message("Makapix Club", 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1,
+                                                "Downloading artwork...");
+            } else {
+                // No refresh, no download - truly no files available
+                if (animation_player_display_message) {
+                    animation_player_display_message("No Artworks", "No playable files available");
+                }
+            }
         }
     } else {
         // Request swap

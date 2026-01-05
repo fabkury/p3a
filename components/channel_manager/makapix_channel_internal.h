@@ -53,6 +53,13 @@ typedef struct {
     TaskHandle_t refresh_task;      // Background refresh task handle
     time_t last_refresh_time;        // Last successful refresh timestamp
 
+    // Static task resources for refresh task (fragmentation mitigation)
+    // Pre-allocated at channel creation to avoid heap fragmentation issues
+    // after long operation periods
+    StackType_t *refresh_stack;          // Pre-allocated stack buffer
+    StaticTask_t refresh_task_buffer;    // Static task control block
+    bool refresh_stack_allocated;        // Track if we own the stack buffer
+
     // Serialize channel index load/write to avoid races during unlink+rename window
     SemaphoreHandle_t index_io_lock;
 

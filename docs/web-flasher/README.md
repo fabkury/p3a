@@ -58,6 +58,16 @@ The `esptool-bundle.js` was built from:
 
 This branch provides native Uint8Array support which fixes the data corruption that affected ESP32-P4 flashing.
 
+### How Firmware Files Are Fetched
+
+GitHub release assets don't support CORS, so the flasher fetches firmware files from `raw.githubusercontent.com` using the `release/{tag}/` directory structure in the repo:
+
+```
+https://raw.githubusercontent.com/fabkury/p3a/main/release/{tag}/{filename}
+```
+
+This requires release files to be committed to the repo (not just uploaded as GitHub release assets).
+
 ---
 
 ## Troubleshooting

@@ -611,55 +611,26 @@ async function fetchReleases() {
     return data;
 }
 
-async function fetchAssetViaApi(asset) {
-    // Use GitHub API to download asset (has proper CORS headers)
-    const apiUrl = asset.url;
-    log(`Fetching via API: ${apiUrl}`);
-
-    const response = await fetch(apiUrl, {
-        headers: {
-            'Accept': 'application/octet-stream'
-        }
-    });
-
-    if (!response.ok) {
-        throw new Error(`API fetch failed: HTTP ${response.status}`);
-    }
-
-    return response;
+function getRawUrl(tag, filename) {
+    // Use raw.githubusercontent.com which supports CORS
+    // Files are stored in release/{tag}/ directory in the repo
+    return `https://raw.githubusercontent.com/${CONFIG.GITHUB_REPO}/main/release/${tag}/${filename}`;
 }
 
 async function fetchFlashArgs(release) {
-    const flashArgsAsset = release.assets.find(a => a.name === 'flash_args');
-    if (!flashArgsAsset) {
-        throw new Error('flash_args file not found in release. Make sure the release includes flash_args as an asset.');
-    }
-
-    // Try direct browser_download_url first
-    const url = flashArgsAsset.browser_download_url;
+    const tag = release.tag_name;
+    const url = getRawUrl(tag, 'flash_args');
     log(`Fetching flash_args from: ${url}`);
 
     try {
-        const response = await fetch(url, {
-            mode: 'cors',
-            redirect: 'follow'
-        });
+        const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         const text = await response.text();
         return parseFlashArgs(text);
     } catch (error) {
-        log(`Direct fetch failed: ${error.message}. Trying GitHub API...`);
-
-        // Fallback: Use GitHub API with Accept: application/octet-stream
-        try {
-            const response = await fetchAssetViaApi(flashArgsAsset);
-            const text = await response.text();
-            return parseFlashArgs(text);
-        } catch (apiError) {
-            throw new Error(`Failed to fetch flash_args: ${error.message} (API: ${apiError.message})`);
-        }
+        throw new Error(`Failed to fetch flash_args: ${error.message}`);
     }
 }
 
@@ -681,19 +652,12 @@ function parseFlashArgs(text) {
 }
 
 async function fetchBinary(release, filename) {
-    const asset = release.assets.find(a => a.name === filename);
-    if (!asset) {
-        throw new Error(`Asset not found in release: ${filename}`);
-    }
-
-    const url = asset.browser_download_url;
+    const tag = release.tag_name;
+    const url = getRawUrl(tag, filename);
     log(`Downloading: ${url}`);
 
     try {
-        const response = await fetch(url, {
-            mode: 'cors',
-            redirect: 'follow'
-        });
+        const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -701,16 +665,7 @@ async function fetchBinary(release, filename) {
         const arrayBuffer = await response.arrayBuffer();
         return new Uint8Array(arrayBuffer);
     } catch (error) {
-        log(`Direct download failed: ${error.message}. Trying GitHub API...`);
-
-        // Fallback: Use GitHub API with Accept: application/octet-stream
-        try {
-            const response = await fetchAssetViaApi(asset);
-            const arrayBuffer = await response.arrayBuffer();
-            return new Uint8Array(arrayBuffer);
-        } catch (apiError) {
-            throw new Error(`Failed to download ${filename}: ${error.message} (API: ${apiError.message})`);
-        }
+        throw new Error(`Failed to download ${filename}: ${error.message}`);
     }
 }
 

@@ -389,22 +389,6 @@ details.card summary::-webkit-details-marker {
     color: white;
 }
 
-/* Troubleshooting */
-.troubleshooting-list {
-    margin: 12px 0 0;
-    padding-left: 20px;
-    font-size: 0.8rem;
-    color: #555;
-}
-
-.troubleshooting-list li {
-    margin-bottom: 8px;
-}
-
-.troubleshooting-list strong {
-    color: #333;
-}
-
 /* Responsive */
 @media (max-width: 480px) {
     body { padding: 12px 8px; }
@@ -472,17 +456,6 @@ details.card summary::-webkit-details-marker {
     <details class="card" id="log-card">
         <summary>Console Log</summary>
         <pre id="log-output"></pre>
-    </details>
-
-    <!-- Troubleshooting -->
-    <details class="card">
-        <summary>Troubleshooting</summary>
-        <ul class="troubleshooting-list">
-            <li><strong>No device found:</strong> Use a USB-C data cable (not charge-only). Try a different cable.</li>
-            <li><strong>Connection fails:</strong> Hold the BOOT button on the device while clicking Connect, then release after connecting.</li>
-            <li><strong>Flash fails midway:</strong> Try a lower baud rate or use the command-line esptool.</li>
-            <li><strong>Device not booting:</strong> Try flashing again. If issues persist, use the <a href="https://github.com/fabkury/p3a/blob/main/docs/flash-p3a.md">manual flash guide</a>.</li>
-        </ul>
     </details>
 
     <!-- Footer -->
@@ -685,16 +658,19 @@ function checkBrowserSupport() {
 function populateReleases(releases) {
     elements.releaseSelect.innerHTML = '';
 
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = '-- Select a version --';
-    elements.releaseSelect.appendChild(placeholder);
-
     for (const release of releases) {
         const option = document.createElement('option');
         option.value = release.tag_name;
         option.textContent = release.tag_name + (release.prerelease ? ' (pre-release)' : '');
         elements.releaseSelect.appendChild(option);
+    }
+
+    // Auto-select the most recent release (first in list)
+    if (releases.length > 0) {
+        elements.releaseSelect.value = releases[0].tag_name;
+        state.selectedRelease = releases[0];
+        showReleaseInfo(releases[0]);
+        log(`Auto-selected ${releases[0].tag_name}`);
     }
 }
 

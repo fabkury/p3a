@@ -1,68 +1,29 @@
-# p3a Web Flasher — Technical Investigation
+# p3a Web Flasher
 
-## Status: ❌ Not Functional (December 2025)
+## Status: Working (January 2026)
 
-Browser-based flashing for ESP32-P4 devices **does not work** due to bugs in Espressif's esptool-js library. This document preserves the full technical investigation for future reference.
+Browser-based flashing for ESP32-P4 devices is now functional using esptool-js from the `enhance/write-flash-array-buffer` branch, which fixes the data corruption issues that affected earlier versions.
 
----
-
-## Summary
-
-We attempted to implement a GitHub Pages-based web flasher using [esptool-js](https://github.com/espressif/esptool-js). Despite multiple approaches including using an unreleased PR with Uint8Array support, all attempts resulted in corrupted firmware data being written to the device.
-
-**Root cause:** esptool-js corrupts binary data during the compressed write operation for ESP32-P4 devices. The corruption occurs inside the library, after our code hands off the data.
+**Live URL:** https://fabkury.github.io/p3a/web-flasher/
 
 ---
 
-## Investigation Timeline
+## Features
 
-### Attempt 1: Official esptool-js (v0.5.7) with Binary Strings
+- Select firmware version from GitHub Releases
+- Flash all firmware files in a single operation
+- Real-time progress tracking per file
+- Works in Chrome 89+ and Edge 89+
 
-**Approach:** Use the official npm release with binary string data.
+---
 
-**Result:** ❌ Failed
-```
-Warning: Image file at 0x2000 doesn't look like an image file, so not changing any flash settings.
-```
-The library couldn't parse the ESP32-P4 bootloader header. Device failed to boot.
+## How It Works
 
-### Attempt 2: ISO-8859-1 String Encoding
+1. **Select Firmware:** Choose a release version from the dropdown
+2. **Connect Device:** Click "Connect" and select your ESP32-P4 from the port picker
+3. **Flash:** Click "Flash Device" to begin the flashing process
 
-**Approach:** Convert Uint8Array to binary string using ISO-8859-1 (Latin-1) encoding for 1:1 byte mapping.
-
-**Result:** ❌ Failed
-```
-Checksum failure. Calculated 0xc6 stored 0xcc
-```
-Bootloader data was corrupted during the flash process.
-
-### Attempt 3: PR #226 with Native Uint8Array Support
-
-**Approach:** Build esptool-js from [PR #226](https://github.com/espressif/esptool-js/pull/226) which adds native Uint8Array support.
-
-**Result:** ❌ Failed
-
-We verified the data was correct **before** calling `writeFlash()`:
-```
-p3a.bin: 1807904 bytes, first 8: [e9 07 02 5f 0e 04 f0 4f], magic: 0xe9 ✓
-```
-
-But the device failed to boot **after** flashing:
-```
-E (119) esp_image: image at 0x20000 has invalid magic byte (nothing flashed here?)
-```
-
-The corruption occurs inside esptool-js during the compressed write.
-
-### Attempt 4: Disable Compression
-
-**Approach:** Set `compress: false` in flash options.
-
-**Result:** ❌ Not supported
-```
-Flash failed: Yet to handle Non Compressed writes
-```
-PR #226 only implements Uint8Array support for compressed writes.
+The flasher downloads all required files from the selected GitHub Release and flashes them to the device using the addresses specified in `flash_args`.
 
 ---
 
@@ -78,60 +39,35 @@ PR #226 only implements Uint8Array support for compressed writes.
 | Flash Size | 32 MB |
 | Baud Rate | 460800 |
 
-### Flash Addresses
-
-| File | Address | Purpose |
-|------|---------|---------|
-| bootloader.bin | 0x2000 | Second stage bootloader |
-| partition-table.bin | 0x8000 | Flash partition layout |
-| ota_data_initial.bin | 0x10000 | OTA boot selection |
-| p3a.bin | 0x20000 | Main application |
-| storage.bin | 0x1020000 | Persistent storage |
-| network_adapter.bin | 0x1120000 | ESP32-C6 Wi-Fi co-processor firmware |
-
-### Working Alternative
-
-The same firmware flashes correctly with Python esptool:
-```bash
-python -m esptool --chip esp32p4 -p COM5 -b 460800 \
-  --before default_reset --after hard_reset write_flash \
-  --flash-mode dio --flash-freq 80m --flash-size 32MB --force @flash_args
-```
-
----
-
-## Files in This Directory
+### Files in This Directory
 
 | File | Purpose |
 |------|---------|
-| `index.html` | Web flasher UI (non-functional) |
-| `flasher.js` | JavaScript flashing logic |
-| `lib/esptool-bundle.js` | Custom build from PR #226 |
-| `lib/README.md` | Build instructions for esptool-js |
-| `manifest.json` | Firmware metadata |
-| `ESPRESSIF_REPORT.md` | Report to post on GitHub issues |
+| `index.html` | Web flasher UI and logic |
+| `esptool-bundle.js` | esptool-js library (from `enhance/write-flash-array-buffer` branch) |
 | `p3a-logo.png` | UI asset |
 | `favicon.png` | UI asset |
+| `ESPRESSIF_REPORT.md` | Historical: bug report from December 2025 investigation |
+
+### esptool-js Source
+
+The `esptool-bundle.js` was built from:
+- Repository: https://github.com/espressif/esptool-js
+- Branch: `enhance/write-flash-array-buffer`
+- PR: https://github.com/espressif/esptool-js/pull/226
+
+This branch provides native Uint8Array support which fixes the data corruption that affected ESP32-P4 flashing.
 
 ---
 
-## Issue Tracking
+## Troubleshooting
 
-- **Issue #229:** [ESP32-P4 Flash Settings Not Applied](https://github.com/espressif/esptool-js/issues/229)
-- **PR #226:** [use uint8array instead of string for write flash command](https://github.com/espressif/esptool-js/pull/226)
+- **No device found:** Use a USB-C data cable (not charge-only). Connect to the USB-OTG port.
+- **Connection fails:** Hold the BOOT button while clicking Connect.
+- **Browser not supported:** Use Chrome or Edge (Firefox and Safari don't support WebSerial).
 
----
-
-## Future
-
-If Espressif fixes the data corruption in esptool-js for ESP32-P4, the web flasher can be re-enabled by:
-
-1. Updating `lib/esptool-bundle.js` to a fixed version
-2. Testing that firmware data survives the write process
-3. Re-adding web flasher references to `docs/flash-p3a.md`
-
-The implementation is complete and ready — it just needs the underlying library to work correctly.
+For persistent issues, use the [command-line flash guide](../flash-p3a.md).
 
 ---
 
-*Last updated: December 20, 2025*
+*Last updated: January 2026*

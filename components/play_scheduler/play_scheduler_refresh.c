@@ -220,17 +220,29 @@ static void refresh_task(void *arg)
                     extern void download_manager_reset_cursors(void);
                     download_manager_reset_cursors();
 
-                    // Check if we should trigger downloads
+                    // Always trigger playback after async refresh completes with entries.
+                    // Note: We can't rely on animation_player_is_animation_ready() because
+                    // it returns true when a message (like "No playable files available")
+                    // is being displayed, which would prevent playback from starting.
                     if (ch->entry_count > 0) {
-                        extern bool animation_player_is_animation_ready(void);
-                        if (!animation_player_is_animation_ready()) {
-                            ESP_LOGI(TAG, "No animation playing after async refresh - signaling downloads");
+                        ESP_LOGI(TAG, "Async refresh complete - triggering playback");
 
-                            // Signal download manager that new index is available
-                            // Download manager will trigger playback when first file is ready
-                            extern void download_manager_signal_work_available(void);
-                            download_manager_signal_work_available();
-                        }
+                        // Clear any loading/error message
+                        extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail);
+                        p3a_render_set_channel_message(NULL, 0 /* P3A_CHANNEL_MSG_NONE */, -1, NULL);
+
+                        // Signal download manager for any missing files
+                        extern void download_manager_signal_work_available(void);
+                        download_manager_signal_work_available();
+
+                        // Release mutex before calling play_scheduler_next to avoid deadlock
+                        xSemaphoreGive(state->mutex);
+
+                        // Trigger playback - this will pick an available artwork
+                        play_scheduler_next(NULL);
+
+                        // Re-acquire mutex for the rest of the loop
+                        xSemaphoreTake(state->mutex, portMAX_DELAY);
                     }
                 }
             }
@@ -326,8 +338,17 @@ static void refresh_task(void *arg)
         xSemaphoreTake(state->mutex, portMAX_DELAY);
         int pending_idx = find_next_pending_refresh(state);
 
-        if (pending_idx < 0 && state->channel_count > 0) {
-            // All channels done - check if we should schedule next cycle
+        // Also check if any channel is still in async refresh
+        bool any_async_pending = false;
+        for (size_t i = 0; i < state->channel_count; i++) {
+            if (state->channels[i].refresh_async_pending || state->channels[i].refresh_in_progress) {
+                any_async_pending = true;
+                break;
+            }
+        }
+
+        if (pending_idx < 0 && !any_async_pending && state->channel_count > 0) {
+            // All channels done (no pending AND no async in progress)
             time_t now = time(NULL);
 
             if (s_last_full_refresh_complete == 0) {

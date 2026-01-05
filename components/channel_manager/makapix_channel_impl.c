@@ -11,6 +11,7 @@
 #include "channel_settings.h"
 #include "esp_log.h"
 #include "esp_random.h"
+#include "esp_heap_caps.h"
 
 // NOTE: play_navigator was removed as part of Play Scheduler migration.
 // Navigation is now handled by Play Scheduler directly.
@@ -27,6 +28,11 @@
 #include <unistd.h>
 
 static const char *TAG = "makapix_channel";
+
+// Stack size for refresh task (reduced from 24KB to 12KB after analysis)
+// This is sufficient for cJSON parsing, file I/O, and MQTT waits with
+// heap-allocated response buffers.
+#define MAKAPIX_REFRESH_TASK_STACK_SIZE 12288
 
 // Weak symbol for SD pause check
 extern bool animation_player_is_sd_paused(void) __attribute__((weak));
@@ -119,11 +125,10 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
             ESP_LOGD(TAG, "Starting refresh to populate empty channel");
             esp_err_t refresh_err = makapix_impl_request_refresh(channel);
             if (refresh_err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to start refresh for empty channel");
-                if (ch->index_io_lock) {
-                    xSemaphoreGive(ch->index_io_lock);
-                }
-                return refresh_err;
+                // Don't fail the load - return success with 0 entries.
+                // Play Scheduler will show loading state and retry later.
+                // This prevents cascade failures when memory is fragmented.
+                ESP_LOGW(TAG, "Could not start refresh for empty channel (err=%d), will retry later", refresh_err);
             }
         }
         if (ch->index_io_lock) {
@@ -145,10 +150,11 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
         ch->entry_count = 0;
         ch->base.loaded = true;
         if (!ch->refreshing) {
-            if (ch->index_io_lock) {
-                xSemaphoreGive(ch->index_io_lock);
+            esp_err_t refresh_err = makapix_impl_request_refresh(channel);
+            if (refresh_err != ESP_OK) {
+                // Don't fail - return success with 0 entries, will retry later
+                ESP_LOGW(TAG, "Could not start refresh after deleting invalid index (err=%d)", refresh_err);
             }
-            return makapix_impl_request_refresh(channel);
         }
         if (ch->index_io_lock) {
             xSemaphoreGive(ch->index_io_lock);
@@ -285,23 +291,63 @@ static esp_err_t makapix_impl_request_refresh(channel_handle_t channel)
 {
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch) return ESP_ERR_INVALID_ARG;
-    
+
     if (ch->refreshing) {
         ESP_LOGW(TAG, "Refresh already in progress");
         return ESP_OK;
     }
-    
-    // Start background refresh task
+
     ch->refreshing = true;
-    BaseType_t ret = xTaskCreate(refresh_task_impl, "makapix_refresh", 24576, ch, 5, &ch->refresh_task);
-    if (ret != pdPASS) {
-        ch->refreshing = false;
-        ESP_LOGE(TAG, "Failed to create refresh task");
-        return ESP_ERR_NO_MEM;
+
+    // Try static stack allocation first (fragmentation-resistant)
+    if (ch->refresh_stack && ch->refresh_stack_allocated) {
+        ch->refresh_task = xTaskCreateStatic(
+            refresh_task_impl,
+            "makapix_refresh",
+            MAKAPIX_REFRESH_TASK_STACK_SIZE,
+            ch,
+            5,
+            ch->refresh_stack,
+            &ch->refresh_task_buffer
+        );
+        if (ch->refresh_task != NULL) {
+            ESP_LOGD(TAG, "Refresh task started (static) for channel %s", ch->channel_id);
+            return ESP_OK;
+        }
+        ESP_LOGW(TAG, "Static task creation failed, trying dynamic allocation");
     }
-    
-    ESP_LOGD(TAG, "Refresh task started for channel %s", ch->channel_id);
-    return ESP_OK;
+
+    // Fallback: try dynamic allocation with progressively smaller stacks
+    // This provides graceful degradation if memory is fragmented
+    static const size_t stack_sizes[] = {
+        MAKAPIX_REFRESH_TASK_STACK_SIZE,  // 12KB - normal
+        8192,                              // 8KB - reduced
+        6144                               // 6KB - minimum viable
+    };
+
+    for (size_t i = 0; i < sizeof(stack_sizes) / sizeof(stack_sizes[0]); i++) {
+        BaseType_t ret = xTaskCreate(
+            refresh_task_impl,
+            "makapix_refresh",
+            stack_sizes[i],
+            ch,
+            5,
+            &ch->refresh_task
+        );
+        if (ret == pdPASS) {
+            if (i > 0) {
+                ESP_LOGW(TAG, "Refresh task created with reduced stack: %zu bytes", stack_sizes[i]);
+            } else {
+                ESP_LOGD(TAG, "Refresh task started (dynamic) for channel %s", ch->channel_id);
+            }
+            return ESP_OK;
+        }
+    }
+
+    // All attempts failed
+    ch->refreshing = false;
+    ESP_LOGE(TAG, "Failed to create refresh task - memory exhausted");
+    return ESP_ERR_NO_MEM;
 }
 
 static esp_err_t makapix_impl_get_stats(channel_handle_t channel, channel_stats_t *out_stats)
@@ -402,12 +448,20 @@ static void makapix_impl_destroy(channel_handle_t channel)
         vSemaphoreDelete(ch->index_io_lock);
         ch->index_io_lock = NULL;
     }
+
+    // Free pre-allocated refresh task stack
+    if (ch->refresh_stack_allocated && ch->refresh_stack) {
+        free(ch->refresh_stack);
+        ch->refresh_stack = NULL;
+        ch->refresh_stack_allocated = false;
+    }
+
     free(ch->channel_id);
     free(ch->vault_path);
     free(ch->channels_path);
     free(ch->base.name);
     free(ch);
-    
+
     ESP_LOGD(TAG, "Channel destroyed");
 }
 
@@ -452,7 +506,7 @@ channel_handle_t makapix_channel_create(const char *channel_id,
         free(ch);
         return NULL;
     }
-    
+
     if (!ch->base.name || !ch->channel_id || !ch->vault_path || !ch->channels_path) {
         vSemaphoreDelete(ch->index_io_lock);
         ch->index_io_lock = NULL;
@@ -463,7 +517,23 @@ channel_handle_t makapix_channel_create(const char *channel_id,
         free(ch);
         return NULL;
     }
-    
+
+    // Pre-allocate static stack buffer for refresh task (fragmentation mitigation)
+    // This is allocated once at channel creation to avoid heap fragmentation
+    // issues after long operation periods (42+ hours).
+    // Try SPIRAM first to preserve internal RAM for other allocations.
+    ch->refresh_stack = heap_caps_malloc(MAKAPIX_REFRESH_TASK_STACK_SIZE * sizeof(StackType_t),
+                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!ch->refresh_stack) {
+        // Fallback to internal RAM if SPIRAM not available or full
+        ch->refresh_stack = heap_caps_malloc(MAKAPIX_REFRESH_TASK_STACK_SIZE * sizeof(StackType_t),
+                                              MALLOC_CAP_8BIT);
+    }
+    ch->refresh_stack_allocated = (ch->refresh_stack != NULL);
+    if (!ch->refresh_stack_allocated) {
+        ESP_LOGW(TAG, "Could not pre-allocate refresh task stack - will use dynamic allocation");
+    }
+
     ESP_LOGD(TAG, "Created channel: %s (id=%s)", ch->base.name, ch->channel_id);
     return (channel_handle_t)ch;
 }

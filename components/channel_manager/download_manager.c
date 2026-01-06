@@ -52,6 +52,18 @@ typedef struct {
     bool channel_complete;       // All entries scanned this epoch
 } dl_channel_state_t;
 
+/**
+ * @brief Snapshot of channel state for thread-safe operation
+ *
+ * Used by dl_get_next_download() to operate on a consistent copy of
+ * channel state without holding the mutex during file operations.
+ */
+typedef struct {
+    dl_channel_state_t channels[DL_MAX_CHANNELS];
+    size_t channel_count;
+    size_t round_robin_idx;
+} dl_snapshot_t;
+
 static dl_channel_state_t s_dl_channels[DL_MAX_CHANNELS];
 static size_t s_dl_channel_count = 0;
 static size_t s_dl_round_robin_idx = 0;
@@ -160,27 +172,97 @@ static void dl_build_vault_filepath(const makapix_channel_entry_t *entry,
              s_ext_strings[ext_idx]);
 }
 
+// ============================================================================
+// Snapshot Functions for Thread-Safe Channel Access
+// ============================================================================
+
+/**
+ * @brief Take snapshot of channel state under mutex
+ *
+ * Creates a local copy of channel state to avoid holding mutex during
+ * file operations. This prevents race conditions with download_manager_set_channels().
+ *
+ * @param out_snapshot Output snapshot structure
+ * @return true if snapshot was taken successfully, false if no channels or error
+ */
+static bool dl_take_snapshot(dl_snapshot_t *out_snapshot)
+{
+    if (!out_snapshot) return false;
+
+    bool success = false;
+    if (s_mutex && xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        if (s_dl_channel_count > 0) {
+            out_snapshot->channel_count = s_dl_channel_count;
+            out_snapshot->round_robin_idx = s_dl_round_robin_idx;
+            memcpy(out_snapshot->channels, s_dl_channels,
+                   s_dl_channel_count * sizeof(dl_channel_state_t));
+            success = true;
+        }
+        xSemaphoreGive(s_mutex);
+    }
+
+    return success;
+}
+
+/**
+ * @brief Commit round-robin index and cursor changes back to shared state
+ *
+ * Only commits if the channel list hasn't changed since snapshot was taken.
+ * If channels changed, the new channel list takes precedence and our changes
+ * are discarded (the new channel switch reset everything anyway).
+ *
+ * @param snapshot The snapshot used for the current operation (with updated cursors)
+ * @param new_round_robin_idx The new round-robin index to commit
+ */
+static void dl_commit_state(const dl_snapshot_t *snapshot, size_t new_round_robin_idx)
+{
+    if (!snapshot) return;
+
+    if (s_mutex && xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        // Only commit if channel count hasn't changed
+        // This indicates no channel switch occurred during our operation
+        if (s_dl_channel_count == snapshot->channel_count) {
+            s_dl_round_robin_idx = new_round_robin_idx;
+
+            // Also update cursor positions for channels we scanned
+            for (size_t i = 0; i < snapshot->channel_count; i++) {
+                // Find matching channel by ID and update its state
+                for (size_t j = 0; j < s_dl_channel_count; j++) {
+                    if (strcmp(s_dl_channels[j].channel_id, snapshot->channels[i].channel_id) == 0) {
+                        s_dl_channels[j].dl_cursor = snapshot->channels[i].dl_cursor;
+                        s_dl_channels[j].channel_complete = snapshot->channels[i].channel_complete;
+                        break;
+                    }
+                }
+            }
+        }
+        xSemaphoreGive(s_mutex);
+    }
+}
+
 /**
  * @brief Get next download using round-robin across channels
  *
+ * Operates on a snapshot of channel state to avoid race conditions.
  * Scans channels in round-robin order, finding the first entry that:
  * - Is an artwork (not playlist)
  * - Does not have a local file
  * - Does not have a .404 marker
  *
  * @param out_request Output download request
+ * @param snapshot Snapshot of channel state (will be modified with cursor updates)
  * @return ESP_OK if found, ESP_ERR_NOT_FOUND if all files downloaded
  */
-static esp_err_t dl_get_next_download(download_request_t *out_request)
+static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapshot_t *snapshot)
 {
-    if (s_dl_channel_count == 0 || !out_request) {
+    if (!snapshot || snapshot->channel_count == 0 || !out_request) {
         return ESP_ERR_NOT_FOUND;
     }
 
     // Try each channel in round-robin order
-    for (size_t attempt = 0; attempt < s_dl_channel_count; attempt++) {
-        size_t ch_idx = (s_dl_round_robin_idx + attempt) % s_dl_channel_count;
-        dl_channel_state_t *ch = &s_dl_channels[ch_idx];
+    for (size_t attempt = 0; attempt < snapshot->channel_count; attempt++) {
+        size_t ch_idx = (snapshot->round_robin_idx + attempt) % snapshot->channel_count;
+        dl_channel_state_t *ch = &snapshot->channels[ch_idx];
 
         // Skip SD card channel (no downloads needed)
         if (strcmp(ch->channel_id, "sdcard") == 0) {
@@ -277,18 +359,20 @@ static esp_err_t dl_get_next_download(download_request_t *out_request)
         fclose(f);
 
         if (found) {
-            // Advance round-robin to next channel for fairness
-            s_dl_round_robin_idx = (ch_idx + 1) % s_dl_channel_count;
+            // Advance round-robin to next channel for fairness and commit to shared state
+            size_t new_rr_idx = (ch_idx + 1) % snapshot->channel_count;
+            dl_commit_state(snapshot, new_rr_idx);
             ESP_LOGD(TAG, "Download: ch=%s key=%s", ch->channel_id, out_request->storage_key);
             return ESP_OK;
         }
 
-        // This channel is exhausted
+        // This channel is exhausted (cursor state already updated in snapshot)
         ch->channel_complete = true;
         ESP_LOGI(TAG, "Channel '%s' download scan complete", ch->channel_id);
     }
 
-    // All channels complete
+    // All channels complete - commit the completion state
+    dl_commit_state(snapshot, snapshot->round_robin_idx);
     return ESP_ERR_NOT_FOUND;
 }
 
@@ -333,11 +417,13 @@ static void download_task(void *arg)
         }
 
         // Get next file to download using own round-robin logic
+        // Take a snapshot of channel state under mutex to avoid race conditions
         memset(&req, 0, sizeof(req));
         esp_err_t get_err = ESP_ERR_NOT_FOUND;
 
-        if (s_dl_channel_count > 0) {
-            get_err = dl_get_next_download(&req);
+        dl_snapshot_t snapshot = {0};
+        if (dl_take_snapshot(&snapshot)) {
+            get_err = dl_get_next_download(&req, &snapshot);
             if (get_err == ESP_OK) {
                 // Clear the signal since we have work - prevents race condition where
                 // signal is set while we're busy and gets cleared before we see it

@@ -86,17 +86,10 @@ static esp_err_t refresh_sdcard_channel(ps_channel_state_t *ch)
         return err;
     }
 
-    // Reload the cache to get new entry count
-    // The cache was just built, so ps_load_channel_cache should find it
-    // We need to re-read the cache stats
-    char channel_path[256];
-    ps_build_cache_path_internal(ch->channel_id, channel_path, sizeof(channel_path));
-
-    struct stat st;
-    if (stat(channel_path, &st) == 0 && st.st_size > 0) {
-        ch->entry_count = st.st_size / 64;
-        ch->cache_loaded = true;
-        ch->active = (ch->entry_count > 0);
+    // Load the cache file into memory (160-byte sdcard_index_entry_t format)
+    esp_err_t load_err = ps_load_channel_cache(ch);
+    if (load_err != ESP_OK && load_err != ESP_ERR_NOT_FOUND) {
+        ESP_LOGW(TAG, "Failed to load SD card cache: %s", esp_err_to_name(load_err));
     }
 
     return ESP_OK;
@@ -147,14 +140,10 @@ static esp_err_t refresh_makapix_channel(ps_channel_state_t *ch)
     ch->refresh_async_pending = true;
 
     // Optimistically load any existing cache (may have stale data)
-    char cache_path[512];
-    ps_build_cache_path_internal(ch->channel_id, cache_path, sizeof(cache_path));
-
-    struct stat st;
-    if (stat(cache_path, &st) == 0 && st.st_size > 0) {
-        ch->entry_count = st.st_size / 64;
-        ch->cache_loaded = true;
-        ch->active = (ch->entry_count > 0);
+    // This uses ps_load_channel_cache which handles the 64-byte Makapix format
+    esp_err_t cache_err = ps_load_channel_cache(ch);
+    if (cache_err != ESP_OK && cache_err != ESP_ERR_NOT_FOUND) {
+        ESP_LOGD(TAG, "No existing cache for '%s': %s", ch->channel_id, esp_err_to_name(cache_err));
     }
 
     // Return special code to indicate async in progress

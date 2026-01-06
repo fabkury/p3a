@@ -382,3 +382,47 @@ esp_err_t sdcard_channel_get_post(size_t post_index, const sdcard_post_t **out_p
     return ESP_OK;
 }
 
+/**
+ * @brief Compute DJB2 hash of a string
+ *
+ * Same algorithm as used in play_scheduler_cache.c for generating post_id
+ */
+static uint32_t hash_djb2(const char *s)
+{
+    uint32_t hash = 5381u;
+    unsigned char c;
+    while (s && (c = (unsigned char)*s++)) {
+        hash = ((hash << 5) + hash) + (uint32_t)c;
+    }
+    return hash;
+}
+
+esp_err_t sdcard_channel_get_filepath_by_post_id(int32_t post_id, char *out_filepath, size_t max_len)
+{
+    if (!s_channel.initialized || !out_filepath || max_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Search through all posts to find matching post_id
+    for (size_t i = 0; i < s_channel.count; i++) {
+        const sdcard_post_t *post = &s_channel.posts[i];
+        if (!post->name || !post->filepath) {
+            continue;
+        }
+
+        // Compute post_id the same way as ps_build_sdcard_index():
+        // post_id = -(int32_t)(hash_djb2(name) & 0x7FFFFFFF)
+        uint32_t h = hash_djb2(post->name);
+        int32_t computed_id = -(int32_t)(h & 0x7FFFFFFF);
+        if (computed_id == 0) computed_id = -1;  // Avoid 0
+
+        if (computed_id == post_id) {
+            strlcpy(out_filepath, post->filepath, max_len);
+            return ESP_OK;
+        }
+    }
+
+    ESP_LOGD(TAG, "Post with id=%ld not found", (long)post_id);
+    return ESP_ERR_NOT_FOUND;
+}
+

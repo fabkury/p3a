@@ -19,7 +19,7 @@ p3a is a Wi-Fi pixel art player that connects to [Makapix Club](https://makapix.
 5. **Register it at Makapix Club**: Long press on the screen and follow the instructions
 6. **Send art to it**: Browse https://dev.makapix.club/ and securely send artworks to your p3a
 
-> **Note:** The initial flash requires USB. After that, all updates are wireless via the web UI.
+> **Note:** The initial flash requires USB and a laptop or desktop (does not work on a smartphone). After that, all updates are wireless via the web UI.
 
 For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 

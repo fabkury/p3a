@@ -72,9 +72,41 @@ typedef enum {
     PS_CHANNEL_TYPE_SDCARD,   // "sdcard"
 } ps_channel_type_t;
 
+/**
+ * @brief Entry format types for channel cache
+ *
+ * Different channels use different binary formats for their cache files.
+ */
+typedef enum {
+    PS_ENTRY_FORMAT_NONE,     // No entries loaded
+    PS_ENTRY_FORMAT_MAKAPIX,  // makapix_channel_entry_t (64 bytes)
+    PS_ENTRY_FORMAT_SDCARD,   // sdcard_index_entry_t (160 bytes)
+} ps_entry_format_t;
+
 // ============================================================================
 // Data Structures
 // ============================================================================
+
+/**
+ * @brief SD card index entry (160 bytes)
+ *
+ * Optimized format for local SD card files. Unlike Makapix entries, this
+ * stores the full filename directly since local files are identified by
+ * their names, not UUIDs.
+ *
+ * Used in: /sdcard/p3a/channel/sdcard.bin
+ */
+typedef struct __attribute__((packed)) {
+    int32_t post_id;              // Sequential negative ID (-1, -2, ...)
+    uint8_t extension;            // 0=webp, 1=gif, 2=png, 3=jpg
+    uint8_t kind;                 // Always 0 (artwork) for now
+    uint8_t reserved1[2];         // Padding for alignment
+    uint32_t created_at;          // File mtime (Unix timestamp)
+    uint32_t dwell_time_ms;       // 0 = use default
+    char filename[144];           // Null-terminated filename (max 143 chars + null)
+} sdcard_index_entry_t;
+
+_Static_assert(sizeof(sdcard_index_entry_t) == 160, "SD card index entry must be 160 bytes");
 
 /**
  * @brief Artwork reference for playback
@@ -172,7 +204,8 @@ typedef struct {
     size_t entry_count;       // Mi: local cache size
     bool active;              // Has local data (entry_count > 0)?
     bool cache_loaded;        // .bin file loaded into memory?
-    void *entries;            // makapix_channel_entry_t* (NULL if not loaded)
+    ps_entry_format_t entry_format;  // Format of loaded entries
+    void *entries;            // Entry array (format depends on entry_format)
 
     // Refresh state
     bool refresh_pending;       // Queued for background refresh

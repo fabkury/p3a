@@ -348,7 +348,7 @@ esp_err_t play_scheduler_init(void)
     s_state.nae_count = 0;
     s_state.nae_enabled = true;
     s_state.epoch_id = 0;
-    s_state.last_played_id = -1;
+    s_state.last_played_id = 0;  // 0 won't match any valid post_id (Makapix=positive, SDcard=negative)
     s_state.exposure_mode = PS_EXPOSURE_EQUAL;
     s_state.pick_mode = PS_PICK_RECENCY;
     s_state.channel_count = 0;
@@ -636,6 +636,9 @@ static void ps_build_cache_path(const char *channel_id, char *out_path, size_t m
  *
  * Loads .bin file if it exists and sets entry_count and active flag.
  * Channels without cache get weight=0 until refresh completes.
+ *
+ * SD card channels use sdcard_index_entry_t (160 bytes per entry).
+ * Makapix channels use makapix_channel_entry_t (64 bytes per entry).
  */
 esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
 {
@@ -649,21 +652,35 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
         ch->entry_count = 0;
         ch->active = false;
         ch->weight = 0;  // weight=0 until cache arrives
+        ch->entry_format = PS_ENTRY_FORMAT_NONE;
         ESP_LOGD(TAG, "Channel '%s': no cache file", ch->channel_id);
         return ESP_ERR_NOT_FOUND;
     }
 
+    // Determine entry size based on channel type
+    size_t entry_size;
+    ps_entry_format_t format;
+    if (ch->type == PS_CHANNEL_TYPE_SDCARD) {
+        entry_size = sizeof(sdcard_index_entry_t);  // 160 bytes
+        format = PS_ENTRY_FORMAT_SDCARD;
+    } else {
+        entry_size = sizeof(makapix_channel_entry_t);  // 64 bytes
+        format = PS_ENTRY_FORMAT_MAKAPIX;
+    }
+
     // Validate file size
-    if (st.st_size <= 0 || st.st_size % 64 != 0) {
-        ESP_LOGW(TAG, "Channel '%s': invalid cache file size %ld", ch->channel_id, (long)st.st_size);
+    if (st.st_size <= 0 || st.st_size % entry_size != 0) {
+        ESP_LOGW(TAG, "Channel '%s': invalid cache file size %ld (expected multiple of %zu)",
+                 ch->channel_id, (long)st.st_size, entry_size);
         ch->cache_loaded = false;
         ch->entry_count = 0;
         ch->active = false;
         ch->weight = 0;
+        ch->entry_format = PS_ENTRY_FORMAT_NONE;
         return ESP_ERR_INVALID_SIZE;
     }
 
-    ch->entry_count = st.st_size / 64;
+    ch->entry_count = st.st_size / entry_size;
 
     // Free any existing entries
     if (ch->entries) {
@@ -672,13 +689,14 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
     }
 
     // Allocate and load entries from file
-    ch->entries = malloc(ch->entry_count * sizeof(makapix_channel_entry_t));
+    ch->entries = malloc(ch->entry_count * entry_size);
     if (!ch->entries) {
         ESP_LOGE(TAG, "Channel '%s': failed to allocate %zu entries", ch->channel_id, ch->entry_count);
         ch->cache_loaded = false;
         ch->entry_count = 0;
         ch->active = false;
         ch->weight = 0;
+        ch->entry_format = PS_ENTRY_FORMAT_NONE;
         return ESP_ERR_NO_MEM;
     }
 
@@ -691,10 +709,11 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
         ch->entry_count = 0;
         ch->active = false;
         ch->weight = 0;
+        ch->entry_format = PS_ENTRY_FORMAT_NONE;
         return ESP_FAIL;
     }
 
-    size_t read_count = fread(ch->entries, sizeof(makapix_channel_entry_t), ch->entry_count, f);
+    size_t read_count = fread(ch->entries, entry_size, ch->entry_count, f);
     fclose(f);
 
     if (read_count != ch->entry_count) {
@@ -705,16 +724,27 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
         ch->entry_count = 0;
         ch->active = false;
         ch->weight = 0;
+        ch->entry_format = PS_ENTRY_FORMAT_NONE;
         return ESP_FAIL;
     }
 
     ch->cache_loaded = true;
     ch->active = (ch->entry_count > 0);
+    ch->entry_format = format;
 
     // Touch cache file for LRU tracking
     ps_touch_cache_file(ch->channel_id);
 
-    ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries into memory", ch->channel_id, ch->entry_count);
+    ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries (%s format) into memory",
+             ch->channel_id, ch->entry_count,
+             format == PS_ENTRY_FORMAT_SDCARD ? "sdcard" : "makapix");
+
+    // Debug: dump first SD card entry to verify data
+    if (format == PS_ENTRY_FORMAT_SDCARD && ch->entry_count > 0) {
+        sdcard_index_entry_t *entries = (sdcard_index_entry_t *)ch->entries;
+        ESP_LOGI(TAG, "First SD card entry: post_id=%ld, ext=%d, filename='%s'",
+                 (long)entries[0].post_id, entries[0].extension, entries[0].filename);
+    }
 
     return ESP_OK;
 }
@@ -998,33 +1028,46 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
         ESP_LOGW(TAG, "No artwork available (cold start or all channels exhausted)");
         result = ESP_ERR_NOT_FOUND;
 
-        // Display appropriate message based on state
-        // Priority: refresh in progress > downloading > no files
-        bool any_refreshing = false;
-        for (size_t i = 0; i < s_state.channel_count; i++) {
-            if (s_state.channels[i].refresh_async_pending || s_state.channels[i].refresh_in_progress) {
-                any_refreshing = true;
-                break;
-            }
-        }
+        // Check if we should display an error message
+        // Don't show messages if PICO-8 mode is active or animation is already playing
+        extern bool playback_controller_is_pico8_active(void) __attribute__((weak));
+        extern bool animation_player_is_animation_ready(void) __attribute__((weak));
 
-        extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
-                                                   int progress_percent, const char *detail);
+        bool pico8_active = playback_controller_is_pico8_active && playback_controller_is_pico8_active();
+        bool animation_playing = animation_player_is_animation_ready && animation_player_is_animation_ready();
 
-        if (any_refreshing) {
-            // Channel is still refreshing - show loading message
-            p3a_render_set_channel_message("Makapix Club", 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
-                                            "Updating channel index...");
+        if (pico8_active || animation_playing) {
+            // Don't show error message - something else is displaying content
+            ESP_LOGD(TAG, "Skipping error message: pico8=%d, animation=%d", pico8_active, animation_playing);
         } else {
-            // Check if download manager is actively downloading
-            extern bool download_manager_is_busy(void);
-            if (download_manager_is_busy()) {
-                p3a_render_set_channel_message("Makapix Club", 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1,
-                                                "Downloading artwork...");
+            // Display appropriate message based on state
+            // Priority: refresh in progress > downloading > no files
+            bool any_refreshing = false;
+            for (size_t i = 0; i < s_state.channel_count; i++) {
+                if (s_state.channels[i].refresh_async_pending || s_state.channels[i].refresh_in_progress) {
+                    any_refreshing = true;
+                    break;
+                }
+            }
+
+            extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
+                                                       int progress_percent, const char *detail);
+
+            if (any_refreshing) {
+                // Channel is still refreshing - show loading message
+                p3a_render_set_channel_message("Makapix Club", 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
+                                                "Updating channel index...");
             } else {
-                // No refresh, no download - truly no files available
-                if (animation_player_display_message) {
-                    animation_player_display_message("No Artworks", "No playable files available");
+                // Check if download manager is actively downloading
+                extern bool download_manager_is_busy(void);
+                if (download_manager_is_busy()) {
+                    p3a_render_set_channel_message("Makapix Club", 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1,
+                                                    "Downloading artwork...");
+                } else {
+                    // No refresh, no download - truly no files available
+                    if (animation_player_display_message) {
+                        animation_player_display_message("No Artworks", "No playable files available");
+                    }
                 }
             }
         }

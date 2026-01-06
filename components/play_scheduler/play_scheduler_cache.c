@@ -6,7 +6,8 @@
  * @brief SD card index building for Play Scheduler
  *
  * Scans /sdcard/p3a/animations/ and builds a binary index file at
- * /sdcard/p3a/channel/sdcard.bin using the same format as Makapix channels.
+ * /sdcard/p3a/channel/sdcard.bin using the sdcard_index_entry_t format
+ * (160 bytes per entry with 144-byte filename field).
  */
 
 #include "play_scheduler_internal.h"
@@ -25,18 +26,7 @@
 
 static const char *TAG = "ps_cache";
 
-// DJB2 hash for stable post_id generation
-static uint32_t hash_djb2(const char *s)
-{
-    uint32_t hash = 5381u;
-    unsigned char c;
-    while (s && (c = (unsigned char)*s++)) {
-        hash = ((hash << 5) + hash) + (uint32_t)c;
-    }
-    return hash;
-}
-
-// Detect asset type from filename extension, returns extension enum (matches makapix_channel_internal.h)
+// Detect asset type from filename extension, returns extension enum
 static int detect_extension_from_name(const char *name, bool *out_ok)
 {
     if (out_ok) *out_ok = false;
@@ -128,8 +118,8 @@ esp_err_t ps_build_sdcard_index(void)
         return ESP_OK;
     }
 
-    // Allocate entries array
-    makapix_channel_entry_t *entries = calloc(count, sizeof(makapix_channel_entry_t));
+    // Allocate entries array using sdcard_index_entry_t (160 bytes per entry)
+    sdcard_index_entry_t *entries = calloc(count, sizeof(sdcard_index_entry_t));
     if (!entries) {
         closedir(dir);
         ESP_LOGE(TAG, "Failed to allocate %zu entries", count);
@@ -154,24 +144,27 @@ esp_err_t ps_build_sdcard_index(void)
         struct stat st;
         if (stat(full_path, &st) != 0 || !S_ISREG(st.st_mode)) continue;
 
-        makapix_channel_entry_t *e = &entries[idx];
+        // Check filename length (max 143 chars + null terminator)
+        size_t name_len = strlen(entry->d_name);
+        if (name_len >= sizeof(entries[0].filename)) {
+            ESP_LOGW(TAG, "Filename '%s' too long (%zu chars), skipping", entry->d_name, name_len);
+            continue;
+        }
+
+        sdcard_index_entry_t *e = &entries[idx];
         memset(e, 0, sizeof(*e));
 
-        // Use negative post_id to avoid collision with server IDs
-        // The DJB2 hash is cast to int32_t and made negative
-        uint32_t h = hash_djb2(entry->d_name);
-        e->post_id = -(int32_t)(h & 0x7FFFFFFF);
-        if (e->post_id == 0) e->post_id = -1; // Avoid 0
+        // Use negative post_id to identify SD card entries (vs positive for Makapix)
+        // Sequential negative IDs: -1, -2, -3, ...
+        e->post_id = -((int32_t)idx + 1);
 
-        e->kind = 0; // MAKAPIX_INDEX_POST_KIND_ARTWORK
         e->extension = (uint8_t)ext;
-        e->filter_flags = 0;
+        e->kind = 0;  // Artwork
         e->created_at = (uint32_t)st.st_mtime;
-        e->metadata_modified_at = (uint32_t)st.st_mtime;
-        e->artwork_modified_at = (uint32_t)st.st_mtime;
-        e->dwell_time_ms = 0; // Use default
-        e->total_artworks = 0;
-        // storage_key_uuid stays all zeros (local file indicator)
+        e->dwell_time_ms = 0;  // Use default
+
+        // Store the full filename (up to 143 chars + null)
+        strlcpy(e->filename, entry->d_name, sizeof(e->filename));
 
         idx++;
     }
@@ -207,7 +200,7 @@ esp_err_t ps_build_sdcard_index(void)
         return ESP_FAIL;
     }
 
-    size_t written = fwrite(entries, sizeof(makapix_channel_entry_t), idx, f);
+    size_t written = fwrite(entries, sizeof(sdcard_index_entry_t), idx, f);
     fflush(f);
     fsync(fileno(f));
     fclose(f);

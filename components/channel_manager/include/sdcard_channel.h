@@ -144,12 +144,27 @@ void sdcard_channel_mark_unhealthy(size_t post_index);
 
 /**
  * @brief Get a post by index (for direct access after query)
- * 
+ *
  * @param post_index Index of the post
  * @param out_post Pointer to receive post pointer (NULL if invalid index)
  * @return ESP_OK on success, ESP_ERR_INVALID_ARG if invalid index
  */
 esp_err_t sdcard_channel_get_post(size_t post_index, const sdcard_post_t **out_post);
+
+/**
+ * @brief Find SD card post by post_id and get its filepath
+ *
+ * Used by play_scheduler to resolve local file paths for SD card entries.
+ * SD card entries in the scheduler cache have all-zero storage_key_uuid,
+ * so this function is needed to look up the actual file path using the
+ * post_id (which is a negative DJB2 hash of the filename).
+ *
+ * @param post_id The post_id to search for (typically a negative DJB2 hash)
+ * @param out_filepath Buffer to receive the filepath
+ * @param max_len Maximum length of out_filepath buffer
+ * @return ESP_OK if found, ESP_ERR_NOT_FOUND if no matching post
+ */
+esp_err_t sdcard_channel_get_filepath_by_post_id(int32_t post_id, char *out_filepath, size_t max_len);
 
 #ifdef __cplusplus
 }

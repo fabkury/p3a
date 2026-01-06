@@ -430,40 +430,29 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
 
     ESP_LOGI(HTTP_API_TAG, "File uploaded successfully: %s", final_filename);
 
-    // Refresh SD card index for Play Scheduler
+    // Refresh the play_scheduler SD card cache (builds sdcard.bin with filenames stored in entries)
     play_scheduler_refresh_sdcard_cache();
-    
-    // Get current playing index to insert after it
-    // Returns SIZE_MAX if nothing is playing, which will cause insertion at index 0
-    size_t current_index = animation_player_get_current_index();
-    
-    // Add file to animation list immediately after currently playing artwork
-    // If nothing is playing (current_index == SIZE_MAX), insert at index 0
-    size_t new_index = 0;
-    esp_err_t add_err = animation_player_add_file(final_filename, ANIMATIONS_DIR, current_index, &new_index);
-    if (add_err != ESP_OK) {
-        ESP_LOGE(HTTP_API_TAG, "Failed to add file to animation list: %s", esp_err_to_name(add_err));
-        // File is saved, but couldn't add to list - still return success
+
+    // Switch to SD card channel - this triggers playback automatically if entries exist
+    // (play_scheduler_execute_command calls play_scheduler_next internally when has_entries=true)
+    esp_err_t play_err = play_scheduler_play_named_channel("sdcard");
+
+    if (play_err != ESP_OK) {
+        ESP_LOGW(HTTP_API_TAG, "Failed to trigger playback: %s", esp_err_to_name(play_err));
+        // File is saved, but couldn't trigger playback - still return success
         char json_resp[512];
-        snprintf(json_resp, sizeof(json_resp), "{\"ok\":true,\"data\":{\"filename\":\"%s\",\"warning\":\"File saved but not added to list\"}}", final_filename);
+        snprintf(json_resp, sizeof(json_resp),
+                 "{\"ok\":true,\"data\":{\"filename\":\"%s\",\"warning\":\"File saved but playback not started\"}}",
+                 final_filename);
         send_json(req, 200, json_resp);
         return ESP_OK;
     }
-    
-    // Swap to the newly added file
-    esp_err_t swap_err = animation_player_swap_to_index(new_index);
-    if (swap_err != ESP_OK) {
-        ESP_LOGW(HTTP_API_TAG, "Failed to swap to new file (index %zu): %s", new_index, esp_err_to_name(swap_err));
-        // File is added but couldn't swap - still return success
-        char json_resp[512];
-        snprintf(json_resp, sizeof(json_resp), "{\"ok\":true,\"data\":{\"filename\":\"%s\",\"index\":%zu,\"message\":\"File uploaded and added to animation list\"}}", final_filename, new_index);
-        send_json(req, 200, json_resp);
-        return ESP_OK;
-    }
-    
-    ESP_LOGI(HTTP_API_TAG, "Successfully uploaded, added, and swapped to file %s at index %zu", final_filename, new_index);
+
+    ESP_LOGI(HTTP_API_TAG, "Successfully uploaded and triggered playback for: %s", final_filename);
     char json_resp[512];
-    snprintf(json_resp, sizeof(json_resp), "{\"ok\":true,\"data\":{\"filename\":\"%s\",\"index\":%zu,\"message\":\"File uploaded, added to list, and displayed\"}}", final_filename, new_index);
+    snprintf(json_resp, sizeof(json_resp),
+             "{\"ok\":true,\"data\":{\"filename\":\"%s\",\"message\":\"File uploaded and playing\"}}",
+             final_filename);
     send_json(req, 200, json_resp);
     return ESP_OK;
 }

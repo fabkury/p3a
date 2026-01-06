@@ -51,7 +51,42 @@ static asset_type_t get_asset_type_from_extension(uint8_t ext)
 }
 
 /**
- * @brief Build vault filepath for an entry
+ * @brief Build filepath for an SD card entry
+ *
+ * Uses the filename field from sdcard_index_entry_t (144 bytes) to build
+ * the full path: {animations_dir}/{filename}
+ */
+static void ps_build_sdcard_filepath(const sdcard_index_entry_t *entry,
+                                      char *out, size_t out_len)
+{
+    if (!entry || !out || out_len == 0) {
+        if (out && out_len > 0) out[0] = '\0';
+        return;
+    }
+
+    // Get animations directory path
+    char animations_path[128];
+    if (sd_path_get_animations(animations_path, sizeof(animations_path)) != ESP_OK) {
+        strlcpy(animations_path, "/sdcard/p3a/animations", sizeof(animations_path));
+    }
+
+    if (entry->filename[0] == '\0') {
+        ESP_LOGD(TAG, "SD card entry has empty filename");
+        out[0] = '\0';
+        return;
+    }
+
+    // Build full path: animations_path + "/" + filename
+    // Note: filename is max 143 chars, animations_path is max 127 chars
+    // Total max: 127 + 1 + 143 + 1 = 272 bytes, but out_len is typically 256
+    int written = snprintf(out, out_len, "%s/%s", animations_path, entry->filename);
+    if (written < 0 || (size_t)written >= out_len) {
+        ESP_LOGW(TAG, "SD card filepath truncated: %s", entry->filename);
+    }
+}
+
+/**
+ * @brief Build filepath for a Makapix entry
  *
  * Uses SHA256 sharding: {vault}/{sha[0]}/{sha[1]}/{sha[2]}/{storage_key}.{ext}
  */
@@ -63,7 +98,7 @@ void ps_build_vault_filepath(const makapix_channel_entry_t *entry,
         return;
     }
 
-    // Get vault base path
+    // Makapix entry - build vault path
     char vault_base[128];
     if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
         strlcpy(vault_base, "/sdcard/p3a/vault", sizeof(vault_base));
@@ -117,13 +152,81 @@ void ps_prng_seed(uint32_t *state, uint32_t seed)
 // ============================================================================
 
 /**
- * @brief Pick artwork using recency mode with availability masking
- *
- * Iterates through channel entries starting from cursor, wrapping around.
- * Skips entries without local files (availability masking).
- * Returns false when full circle completed with no available artwork.
+ * @brief Pick artwork from SD card channel using recency mode
  */
-static bool pick_recency(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
+static bool pick_recency_sdcard(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
+{
+    ps_channel_state_t *ch = &state->channels[channel_index];
+    sdcard_index_entry_t *entries = (sdcard_index_entry_t *)ch->entries;
+
+    if (!entries || ch->entry_count == 0) {
+        ESP_LOGD(TAG, "pick_recency_sdcard: no entries (entries=%p, count=%zu)",
+                 (void*)entries, ch->entry_count);
+        return false;
+    }
+
+    ESP_LOGD(TAG, "pick_recency_sdcard: checking %zu entries, cursor=%lu",
+             ch->entry_count, (unsigned long)ch->cursor);
+
+    uint32_t start_cursor = ch->cursor;
+    bool wrapped = false;
+
+    while (true) {
+        if (ch->cursor >= ch->entry_count) {
+            if (wrapped) break;
+            ch->cursor = 0;
+            wrapped = true;
+        }
+
+        if (wrapped && ch->cursor >= start_cursor) break;
+
+        sdcard_index_entry_t *entry = &entries[ch->cursor];
+        ch->cursor++;
+
+        // Build filepath for this entry
+        char filepath[256];
+        ps_build_sdcard_filepath(entry, filepath, sizeof(filepath));
+
+        ESP_LOGI(TAG, "SD card entry[%lu]: filename='%s', path='%s'",
+                 (unsigned long)(ch->cursor - 1), entry->filename, filepath);
+
+        // AVAILABILITY MASKING: skip if file doesn't exist
+        if (!file_exists(filepath)) {
+            ESP_LOGW(TAG, "SD card file not found: %s", filepath);
+            continue;
+        }
+
+        // Skip immediate repeat (but allow if only 1 entry in channel)
+        if (entry->post_id == state->last_played_id && ch->entry_count > 1) {
+            ESP_LOGD(TAG, "Skipping repeat: post_id=%ld == last_played_id=%ld",
+                     (long)entry->post_id, (long)state->last_played_id);
+            continue;
+        }
+
+        ESP_LOGI(TAG, "Found SD card artwork: post_id=%ld, path=%s",
+                 (long)entry->post_id, filepath);
+
+        // Found valid artwork
+        out_artwork->artwork_id = entry->post_id;
+        out_artwork->post_id = entry->post_id;
+        strlcpy(out_artwork->filepath, filepath, sizeof(out_artwork->filepath));
+        out_artwork->storage_key[0] = '\0';  // No storage key for local files
+        out_artwork->created_at = entry->created_at;
+        out_artwork->dwell_time_ms = entry->dwell_time_ms;
+        out_artwork->type = get_asset_type_from_extension(entry->extension);
+        out_artwork->channel_index = (uint8_t)channel_index;
+
+        return true;
+    }
+
+    ESP_LOGD(TAG, "RecencyPick: SD card channel %zu exhausted", channel_index);
+    return false;
+}
+
+/**
+ * @brief Pick artwork from Makapix channel using recency mode
+ */
+static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
 {
     ps_channel_state_t *ch = &state->channels[channel_index];
     makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
@@ -136,18 +239,16 @@ static bool pick_recency(ps_state_t *state, size_t channel_index, ps_artwork_t *
     bool wrapped = false;
 
     while (true) {
-        // Wrap cursor at end
         if (ch->cursor >= ch->entry_count) {
-            if (wrapped) break;  // Full circle - nothing found
+            if (wrapped) break;
             ch->cursor = 0;
             wrapped = true;
         }
 
-        // Check if we've completed a full cycle
         if (wrapped && ch->cursor >= start_cursor) break;
 
         makapix_channel_entry_t *entry = &entries[ch->cursor];
-        ch->cursor++;  // Always advance cursor
+        ch->cursor++;
 
         // Skip non-artwork entries (playlists, etc.)
         if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
@@ -168,8 +269,8 @@ static bool pick_recency(ps_state_t *state, size_t channel_index, ps_artwork_t *
             continue;
         }
 
-        // Skip immediate repeat
-        if (entry->post_id == state->last_played_id) {
+        // Skip immediate repeat (but allow if only 1 entry in channel)
+        if (entry->post_id == state->last_played_id && ch->entry_count > 1) {
             continue;
         }
 
@@ -189,16 +290,85 @@ static bool pick_recency(ps_state_t *state, size_t channel_index, ps_artwork_t *
         return true;
     }
 
-    // Channel exhausted - no available artwork found
-    ESP_LOGD(TAG, "RecencyPick: Channel %zu exhausted (no available files)", channel_index);
+    ESP_LOGD(TAG, "RecencyPick: Makapix channel %zu exhausted", channel_index);
     return false;
+}
+
+/**
+ * @brief Pick artwork using recency mode with availability masking
+ *
+ * Dispatches to format-specific implementation based on entry_format.
+ */
+static bool pick_recency(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
+{
+    ps_channel_state_t *ch = &state->channels[channel_index];
+
+    if (ch->entry_format == PS_ENTRY_FORMAT_SDCARD) {
+        return pick_recency_sdcard(state, channel_index, out_artwork);
+    } else {
+        return pick_recency_makapix(state, channel_index, out_artwork);
+    }
 }
 
 // ============================================================================
 // RandomPick Mode
 // ============================================================================
 
-static bool pick_random(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
+/**
+ * @brief Pick random artwork from SD card channel
+ */
+static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
+{
+    ps_channel_state_t *ch = &state->channels[channel_index];
+    sdcard_index_entry_t *entries = (sdcard_index_entry_t *)ch->entries;
+
+    if (!entries || ch->entry_count == 0) {
+        return false;
+    }
+
+    size_t r_eff = PS_RANDOM_WINDOW;
+    if (r_eff > ch->entry_count) {
+        r_eff = ch->entry_count;
+    }
+
+    for (int attempt = 0; attempt < 5; attempt++) {
+        uint32_t r = ps_prng_next(&ch->pick_rng_state);
+        size_t index = (size_t)(r % r_eff);
+
+        sdcard_index_entry_t *entry = &entries[index];
+
+        char filepath[256];
+        ps_build_sdcard_filepath(entry, filepath, sizeof(filepath));
+
+        if (!file_exists(filepath)) {
+            continue;
+        }
+
+        // Skip immediate repeat (but allow if only 1 entry or after several attempts)
+        if (entry->post_id == state->last_played_id && ch->entry_count > 1 && attempt < 4) {
+            continue;
+        }
+
+        out_artwork->artwork_id = entry->post_id;
+        out_artwork->post_id = entry->post_id;
+        strlcpy(out_artwork->filepath, filepath, sizeof(out_artwork->filepath));
+        out_artwork->storage_key[0] = '\0';
+        out_artwork->created_at = entry->created_at;
+        out_artwork->dwell_time_ms = entry->dwell_time_ms;
+        out_artwork->type = get_asset_type_from_extension(entry->extension);
+        out_artwork->channel_index = (uint8_t)channel_index;
+
+        return true;
+    }
+
+    ESP_LOGW(TAG, "RandomPick: SD card - no artwork after 5 attempts");
+    return pick_recency_sdcard(state, channel_index, out_artwork);
+}
+
+/**
+ * @brief Pick random artwork from Makapix channel
+ */
+static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
 {
     ps_channel_state_t *ch = &state->channels[channel_index];
     makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
@@ -207,45 +377,37 @@ static bool pick_random(ps_state_t *state, size_t channel_index, ps_artwork_t *o
         return false;
     }
 
-    // R_eff = min(R, Mi)
     size_t r_eff = PS_RANDOM_WINDOW;
     if (r_eff > ch->entry_count) {
         r_eff = ch->entry_count;
     }
 
-    // Try up to 5 resample attempts for repeat avoidance
     for (int attempt = 0; attempt < 5; attempt++) {
-        // Sample uniformly from newest r_eff records
         uint32_t r = ps_prng_next(&ch->pick_rng_state);
         size_t index = (size_t)(r % r_eff);
 
         makapix_channel_entry_t *entry = &entries[index];
 
-        // Only handle single artworks for now (not playlists)
         if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
             continue;
         }
 
-        // Build filepath for this entry
         char filepath[256];
         ps_build_vault_filepath(entry, filepath, sizeof(filepath));
 
-        // Check if file exists (availability masking)
         if (!file_exists(filepath)) {
             continue;
         }
 
-        // Skip 404'd entries
         if (has_404_marker(filepath)) {
             continue;
         }
 
-        // Check immediate repeat
-        if (entry->post_id == state->last_played_id && attempt < 4) {
-            continue;  // Resample
+        // Skip immediate repeat (but allow if only 1 entry or after several attempts)
+        if (entry->post_id == state->last_played_id && ch->entry_count > 1 && attempt < 4) {
+            continue;
         }
 
-        // Found valid artwork - build storage_key string
         char storage_key[40];
         bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
 
@@ -261,10 +423,22 @@ static bool pick_random(ps_state_t *state, size_t channel_index, ps_artwork_t *o
         return true;
     }
 
-    ESP_LOGW(TAG, "RandomPick: No available artwork found after 5 attempts");
+    ESP_LOGW(TAG, "RandomPick: Makapix - no artwork after 5 attempts");
+    return pick_recency_makapix(state, channel_index, out_artwork);
+}
 
-    // Fall back to recency pick
-    return pick_recency(state, channel_index, out_artwork);
+/**
+ * @brief Pick random artwork, dispatches based on entry format
+ */
+static bool pick_random(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
+{
+    ps_channel_state_t *ch = &state->channels[channel_index];
+
+    if (ch->entry_format == PS_ENTRY_FORMAT_SDCARD) {
+        return pick_random_sdcard(state, channel_index, out_artwork);
+    } else {
+        return pick_random_makapix(state, channel_index, out_artwork);
+    }
 }
 
 // ============================================================================

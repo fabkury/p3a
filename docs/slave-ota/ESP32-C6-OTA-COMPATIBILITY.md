@@ -1,8 +1,8 @@
 # ESP32-C6 Slave OTA Compatibility Issue
 
 > **Status:** ✅ Resolved  
-> **Last Updated:** 2026-01-01  
-> **Resolution:** Pinned to esp_hosted 2.7.4 (see [Solution](#solution) below)
+> **Last Updated:** 2026-01-08  
+> **Resolution:** Pinned to esp_hosted 2.7.0 (see [Solution](#solution) below)
 
 ## Current Configuration
 
@@ -43,6 +43,7 @@ The ESP32-C6 co-processor firmware cannot be upgraded from version **2.7.0** to 
 | 2.7.0 | 2.7.4 | ❌ Fail | `ESP_ERR_OTA_VALIDATE_FAILED` |
 | 2.7.0 | 2.8.4 | ❌ Fail | `ESP_ERR_OTA_VALIDATE_FAILED` |
 | 2.7.0 | 2.8.5 | ❌ Fail | `ESP_ERR_OTA_VALIDATE_FAILED` |
+| 2.7.0 | 2.9.1 | ❌ Fail | `ESP_ERR_OTA_VALIDATE_FAILED` |
 
 **Conclusion:** Once a device is running 2.7.0, it cannot be OTA updated to ANY other version.
 
@@ -131,17 +132,34 @@ This means:
 
 | File | Change |
 |------|--------|
-| `main/idf_component.yml` | Pin esp_hosted to ~2.7.4 |
-| `components/slave_ota/slave_ota.c` | Update version constants |
-| `components/slave_ota/firmware/network_adapter.bin` | Replace with 2.7.4 build |
+| `main/idf_component.yml` | Pin esp_hosted to ==2.7.0 |
+| `components/slave_ota/slave_ota.c` | Update version constants to 2.7.0 |
+| `components/slave_ota/firmware/network_adapter.bin` | Replace with 2.7.0 build |
+
+## Upgrade Attempts
+
+### 2.9.1 Attempt (2026-01-08)
+
+Attempted to upgrade from 2.7.0 to 2.9.1. Result: **Failed** with `ESP_ERR_OTA_VALIDATE_FAILED`.
+
+The upgrade was performed by:
+1. Updating `main/idf_component.yml` to `==2.9.1`
+2. Building the host project to download esp_hosted 2.9.1
+3. Building the slave firmware from `managed_components/espressif__esp_hosted/slave/`
+4. Flashing to ESP32-P4
+
+On boot, the P4 detected version mismatch and attempted OTA update to the C6. Transfer completed 100%, but validation failed on the slave side - same error as all previous upgrade attempts.
 
 ## Future Considerations
 
-### If 2.8.x Features Are Needed Later
+### Upgrading esp_hosted is Not Currently Possible
 
-1. **Two-step upgrade**: First upgrade 2.7.0 → 2.7.4, then test if 2.7.4 → 2.8.x works
-2. **Report bug to Espressif**: This appears to be a legitimate compatibility issue
+All tested versions (2.7.4, 2.8.4, 2.8.5, 2.9.1) fail with the same `ESP_ERR_OTA_VALIDATE_FAILED` error when attempting to OTA update from 2.7.0. This appears to be a fundamental limitation of the slave's OTA validation logic.
+
+Options if newer features are needed:
+1. **Report bug to Espressif** - This appears to be a legitimate compatibility issue
    - GitHub: https://github.com/espressif/esp-hosted-mcu/issues
+2. **Direct UART flashing** - Not viable for end-user devices (requires opening enclosure and connecting to C6 debug port)
 
 ### Related esp_hosted Changelog Entries
 

@@ -12,6 +12,9 @@ p3a is an ESP32-P4 Wi-Fi pixel art player that displays animated WebP/GIF/PNG/JP
 # Activate ESP-IDF (Windows PowerShell)
 C:\Users\Fab\esp\v5.5.1\esp-idf\export.ps1
 
+# IMPORTANT: Set PYTHONUTF8 to avoid Unicode encoding errors on Windows
+$env:PYTHONUTF8="1"
+
 # Set target (first time only)
 idf.py set-target esp32p4
 

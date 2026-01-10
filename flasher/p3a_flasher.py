@@ -70,7 +70,7 @@ CONFIG = {
         'ota_data_initial.bin': 0x10000,
         'p3a.bin': 0x20000,
         'storage.bin': 0x1020000,
-        'network_adapter.bin': 0x1120000,
+        'network_adapter.bin': 0x1420000,  # Must match slave_fw partition in partitions.csv
     },
     'required_files': [
         'bootloader.bin',

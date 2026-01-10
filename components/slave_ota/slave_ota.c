@@ -17,10 +17,16 @@
 static const char *TAG = "slave_ota";
 
 // Expected slave firmware version (must match the built slave firmware)
-// Pinned to 2.7.0 exactly - see docs/slave-ota/ESP32-C6-OTA-COMPATIBILITY.md
+// Dual-version support - see docs/slave-ota/DUAL-VERSION-SUPPORT-PLAN.md
 static const uint32_t SLAVE_FW_VERSION_MAJOR = 2;
-static const uint32_t SLAVE_FW_VERSION_MINOR = 7;
-static const uint32_t SLAVE_FW_VERSION_PATCH = 0;
+static const uint32_t SLAVE_FW_VERSION_MINOR = 9;
+static const uint32_t SLAVE_FW_VERSION_PATCH = 1;
+
+// Version 2.7.0 has a known OTA bug that prevents upgrading
+// See: https://github.com/espressif/esp-hosted-mcu/issues/143
+static const uint32_t LOCKED_VERSION_MAJOR = 2;
+static const uint32_t LOCKED_VERSION_MINOR = 7;
+static const uint32_t LOCKED_VERSION_PATCH = 0;
 
 // Partition label for slave firmware
 #define SLAVE_FW_PARTITION_LABEL "slave_fw"
@@ -51,11 +57,22 @@ esp_err_t slave_ota_check_and_update(void)
         current_ver.patch1 = 0;
     }
     
-    ESP_LOGI(TAG, "Current co-processor firmware: %lu.%lu.%lu", 
+    ESP_LOGI(TAG, "Current co-processor firmware: %lu.%lu.%lu",
              current_ver.major1, current_ver.minor1, current_ver.patch1);
-    ESP_LOGI(TAG, "Embedded slave firmware: %d.%d.%d",
+    ESP_LOGI(TAG, "Embedded slave firmware: %lu.%lu.%lu",
              SLAVE_FW_VERSION_MAJOR, SLAVE_FW_VERSION_MINOR, SLAVE_FW_VERSION_PATCH);
-    
+
+    // Check for version 2.7.0 which cannot be OTA upgraded (known esp_hosted bug)
+    if (current_ver.major1 == LOCKED_VERSION_MAJOR &&
+        current_ver.minor1 == LOCKED_VERSION_MINOR &&
+        current_ver.patch1 == LOCKED_VERSION_PATCH) {
+        ESP_LOGW(TAG, "Detected esp_hosted 2.7.0 - OTA not possible (known issue)");
+        ESP_LOGW(TAG, "See: https://github.com/espressif/esp-hosted-mcu/issues/143");
+        ESP_LOGW(TAG, "Device will continue operating with 2.7.0 slave firmware");
+        ESP_LOGI(TAG, "Proceeding without co-processor update");
+        return ESP_OK;
+    }
+
     // Check if update is needed
     bool needs_update = false;
     if (current_ver.major1 < SLAVE_FW_VERSION_MAJOR) {

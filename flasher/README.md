@@ -95,8 +95,8 @@ flasher/
 | partition-table.bin | 0x8000 | Flash partition layout |
 | ota_data_initial.bin | 0x10000 | OTA boot selection |
 | p3a.bin | 0x20000 | Main application |
-| storage.bin | 0x1020000 | SPIFFS web assets |
-| network_adapter.bin | 0x1120000 | ESP32-C6 Wi-Fi firmware |
+| storage.bin | 0x1020000 | LittleFS web assets |
+| network_adapter.bin | 0x1420000 | ESP32-C6 Wi-Fi firmware (slave_fw partition) |
 
 ### Dependencies
 

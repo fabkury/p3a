@@ -1,18 +1,19 @@
 # ESP32-C6 Slave OTA Compatibility Issue
 
-> **Status:** ✅ Resolved  
-> **Last Updated:** 2026-01-08  
-> **Resolution:** Pinned to esp_hosted 2.7.0 (see [Solution](#solution) below)
+> **Status:** ✅ Implemented (Dual-Version Support)
+> **Last Updated:** 2026-01-10
+> **Resolution:** Dual-version support — see [New Strategy](#new-strategy-dual-version-support) below
 
 ## Current Configuration
 
 | Component | Version | File |
 |-----------|---------|------|
-| **esp_hosted (host)** | 2.7.0 | `main/idf_component.yml` |
-| **network_adapter.bin (slave)** | 2.7.0 | `components/slave_ota/firmware/` |
-| **Version constants** | 2.7.0 | `components/slave_ota/slave_ota.c` |
+| **esp_hosted (host)** | ≥2.9.1 | `main/idf_component.yml` |
+| **network_adapter.bin (slave)** | 2.9.1 | `components/slave_ota/firmware/` |
+| **Version constants** | 2.9.1 | `components/slave_ota/slave_ota.c` |
+| **Locked version detection** | 2.7.0 | `components/slave_ota/slave_ota.c` |
 
-> ⚠️ **Note:** We are pinned to 2.7.0 exactly because OTA updates to ANY other version fail. See bug report: `docs/slave-ota/ESPRESSIF-BUG-REPORT.md`
+> ✅ **Dual-Version Support Active:** The host library (2.9.1+) works with both legacy 2.7.0 slaves (with warnings) and newer slaves. Devices running 2.7.0 will skip OTA and continue operating. New factory devices (0.0.0) will be upgraded to the latest firmware.
 
 ## Problem Summary
 
@@ -104,21 +105,71 @@ This was a significant architectural change that may have introduced incompatibi
 
 ## Solution
 
-### Chosen Approach: Pin to esp_hosted 2.7.0 Exactly
+### Previous Approach: Pin to esp_hosted 2.7.0 Exactly (Superseded)
 
-Since OTA updates from 2.7.0 to ANY other version fail, we must match the version exactly:
+The initial workaround was to pin everything to 2.7.0 exactly:
 
 | Component | Version |
 |-----------|---------|
 | esp_hosted (host library) | 2.7.0 |
 | network_adapter.bin (slave firmware) | 2.7.0 |
 
-This means:
-- No OTA update is needed (versions already match)
-- We cannot upgrade the C6 firmware via this mechanism
-- A bug report has been filed with Espressif (see `ESPRESSIF-BUG-REPORT.md`)
+**Limitation:** This prevented new devices from receiving bug fixes and new features available in newer esp_hosted versions.
 
-### Implementation Steps
+---
+
+## New Strategy: Dual-Version Support
+
+> **Decision Date:** 2026-01-10  
+> **Rationale:** Espressif confirmed the 2.7.0 OTA bug is unrecoverable ([GitHub Issue #143](https://github.com/espressif/esp-hosted-mcu/issues/143#issuecomment-3732692355)). Rather than locking all devices to 2.7.0 forever, we will support both versions simultaneously.
+
+### Key Insight
+
+- **Devices with 2.7.0 slave:** Cannot be upgraded, but CAN still operate with a newer host library (backward compatible)
+- **New factory devices (0.0.0):** Can be flashed directly with newer firmware, bypassing the issue entirely
+
+### Target Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      ESP32-P4 (Host)                        │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  esp_hosted host library (2.9.1 or newer)             │  │
+│  │  ├── Works with slave 2.7.0 (backward compatible)     │  │
+│  │  └── Works with slave 2.9.1+ (native)                 │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  Runtime OTA Decision Logic                           │  │
+│  │  ├── If slave == 0.0.0  → Flash newest firmware ✅    │  │
+│  │  ├── If slave == 2.7.0  → SKIP OTA, use as-is ⚠️      │  │
+│  │  └── If slave >= target → Already up to date ✅       │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Expected Behavior by Device State
+
+| Slave Version | OTA Action | Result |
+|---------------|------------|--------|
+| 0.0.0 (factory) | Flash newest | ✅ Gets latest firmware |
+| 2.7.0 (locked) | Skip OTA | ⚠️ Works with warnings, no upgrade |
+| ≥ target version | No action | ✅ Already up to date |
+
+### Version Mismatch Warnings
+
+When the host (2.9.1+) communicates with a 2.7.0 slave, esp_hosted will emit:
+```
+W (XXXX) transport: Version mismatch: Host [2.9.1] > Co-proc [2.7.0] ==> Upgrade co-proc to avoid RPC timeouts
+```
+
+**Decision:** Leave these warnings enabled as informational — they help operators identify legacy devices in the field.
+
+### Implementation Plan
+
+See **[DUAL-VERSION-SUPPORT-PLAN.md](DUAL-VERSION-SUPPORT-PLAN.md)** for detailed implementation steps.
+
+### Previous Implementation Steps (for 2.7.0 pin, now superseded)
 
 1. [x] Document the problem (this file)
 2. [x] Pin `esp_hosted` to `==2.7.0` in `main/idf_component.yml`
@@ -152,14 +203,19 @@ On boot, the P4 detected version mismatch and attempted OTA update to the C6. Tr
 
 ## Future Considerations
 
-### Upgrading esp_hosted is Not Currently Possible
+### Espressif Bug Report Status
 
-All tested versions (2.7.4, 2.8.4, 2.8.5, 2.9.1) fail with the same `ESP_ERR_OTA_VALIDATE_FAILED` error when attempting to OTA update from 2.7.0. This appears to be a fundamental limitation of the slave's OTA validation logic.
+Bug reported: [GitHub Issue #143](https://github.com/espressif/esp-hosted-mcu/issues/143)
 
-Options if newer features are needed:
-1. **Report bug to Espressif** - This appears to be a legitimate compatibility issue
-   - GitHub: https://github.com/espressif/esp-hosted-mcu/issues
-2. **Direct UART flashing** - Not viable for end-user devices (requires opening enclosure and connecting to C6 debug port)
+**Espressif's response:** Confirmed as unrecoverable. Devices running 2.7.0 cannot be OTA-upgraded to any other version. This is a fundamental limitation of the 2.7.0 slave firmware's OTA validation logic.
+
+### Long-Term Outlook
+
+1. **Legacy 2.7.0 devices** - Will continue operating with basic WiFi functionality. May miss some newer features (DPP, WiFi Enterprise, etc.) but core functionality is preserved.
+
+2. **New devices** - Will receive the latest firmware and all new features.
+
+3. **Potential future fix** - If Espressif releases a fix that somehow allows 2.7.0 upgrades (unlikely), the dual-version architecture can be updated to attempt OTA on those devices.
 
 ### Related esp_hosted Changelog Entries
 

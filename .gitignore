@@ -8,3 +8,4 @@ components/makapix/certs/*.pem
 !components/makapix/certs/*.inc
 !components/makapix/certs/convert_cert.py
 !components/makapix/certs/get_certificates.*
+nul

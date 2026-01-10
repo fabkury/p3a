@@ -40,6 +40,7 @@ def main():
     flasher_dir = project_dir / 'flasher'
     flasher_py = flasher_dir / 'p3a_flasher.py'
     logo_file = flasher_dir / 'p3a_logo.png'
+    icon_file = flasher_dir / 'favicon.ico'
     
     print(f"\n{'='*60}")
     print(f"  Building p3a Flasher v{version}")
@@ -56,6 +57,10 @@ def main():
     
     if not logo_file.exists():
         print(f"ERROR: Logo not found: {logo_file}")
+        sys.exit(1)
+
+    if not icon_file.exists():
+        print(f"ERROR: Icon not found: {icon_file}")
         sys.exit(1)
         
     if not release_dir.exists():
@@ -103,9 +108,11 @@ def main():
             size_kb = dst.stat().st_size / 1024
             print(f"  ✓ {f} ({size_kb:.1f} KB)")
         
-        # Copy logo
+        # Copy logo and icon
         shutil.copy2(logo_file, build_dir / 'p3a_logo.png')
         print(f"  ✓ p3a_logo.png")
+        shutil.copy2(icon_file, build_dir / 'favicon.ico')
+        print(f"  ✓ favicon.ico")
         
         # Create modified flasher script with embedded version
         print(f"\nSetting embedded version to: {version}")
@@ -130,6 +137,7 @@ def main():
             '--name', 'p3a-flasher',
             '--onefile',
             '--windowed',
+            '--icon', 'favicon.ico',
             '--add-data', f'p3a_logo.png{os.pathsep}.',
             '--add-data', f'firmware{os.pathsep}firmware',
             '--collect-data', 'esptool',

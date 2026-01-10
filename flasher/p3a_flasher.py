@@ -194,8 +194,8 @@ class P3AFlasher(tk.Tk):
         super().__init__()
         
         self.title("p3a Flasher")
-        self.geometry("520x580")
-        self.minsize(480, 520)
+        self.geometry("540x700")
+        self.minsize(500, 640)
         self.configure(bg='#1a1a2e')
         
         # State
@@ -209,6 +209,7 @@ class P3AFlasher(tk.Tk):
         self.flash_thread = None
         self.device_connected = False
         self.ports_map = {}
+        self.detected_port = None
         
         # Message queue for thread communication
         self.msg_queue = queue.Queue()
@@ -253,9 +254,9 @@ class P3AFlasher(tk.Tk):
         style.configure('Dark.TLabel', background=bg, foreground=fg, font=('Segoe UI', 10))
         style.configure('Title.TLabel', background=bg, foreground=fg, font=('Segoe UI', 18, 'bold'))
         style.configure('Subtitle.TLabel', background=bg, foreground=accent, font=('Segoe UI', 9))
-        style.configure('Status.TLabel', background=bg, foreground=fg_muted, font=('Segoe UI', 11))
-        style.configure('StatusReady.TLabel', background=bg, foreground=success, font=('Segoe UI', 11, 'bold'))
-        style.configure('StatusWaiting.TLabel', background=bg, foreground=warning, font=('Segoe UI', 11))
+        style.configure('Status.TLabel', background=bg_card, foreground=fg_muted, font=('Segoe UI', 10))
+        style.configure('StatusReady.TLabel', background=bg_card, foreground=success, font=('Segoe UI', 10, 'bold'))
+        style.configure('StatusWaiting.TLabel', background=bg_card, foreground=warning, font=('Segoe UI', 10))
         style.configure('Card.TLabel', background=bg_card, foreground=fg, font=('Segoe UI', 10))
         style.configure('CardMuted.TLabel', background=bg_card, foreground=fg_muted, font=('Segoe UI', 9))
         style.configure('Footer.TLabel', background=bg, foreground=fg_muted, font=('Segoe UI', 9))
@@ -269,11 +270,18 @@ class P3AFlasher(tk.Tk):
         style.configure('Small.TButton', font=('Segoe UI', 9), padding=(8, 4))
         
         # Combobox - remove hover highlight issue
-        style.configure('Dark.TCombobox', padding=5)
+        style.configure('Dark.TCombobox', padding=5, foreground=fg)
         style.map('Dark.TCombobox',
                   fieldbackground=[('readonly', bg_card)],
                   selectbackground=[('readonly', bg_card)],
-                  selectforeground=[('readonly', fg)])
+                  selectforeground=[('readonly', fg)],
+                  foreground=[('readonly', fg)])
+
+        # Configure the Combobox dropdown list colors (uses Tk option database)
+        self.option_add('*TCombobox*Listbox.background', bg_card)
+        self.option_add('*TCombobox*Listbox.foreground', fg)
+        self.option_add('*TCombobox*Listbox.selectBackground', accent)
+        self.option_add('*TCombobox*Listbox.selectForeground', fg)
         
         # Radiobutton - fix hover highlight
         style.configure('Card.TRadiobutton', background=bg_card, foreground=fg, font=('Segoe UI', 10))
@@ -315,25 +323,9 @@ class P3AFlasher(tk.Tk):
         github_label.pack(pady=(2, 0))
         github_label.bind('<Button-1>', lambda e: self._open_url('https://github.com/fabkury/p3a'))
         
-        # Status section
-        status_frame = ttk.Frame(main_frame, style='Dark.TFrame')
-        status_frame.pack(fill='x', pady=(15, 10))
-        
-        self.status_var = tk.StringVar(value="Looking for p3a device...")
-        self.status_label = ttk.Label(status_frame, textvariable=self.status_var, 
-                                      style='StatusWaiting.TLabel')
-        self.status_label.pack()
-        
-        # Flash button
-        self.flash_btn = ttk.Button(main_frame, text="⚡  Flash Device", 
-                                   command=self._start_flash, style='Accent.TButton',
-                                   width=22)
-        self.flash_btn.pack(pady=(10, 15))
-        self.flash_btn.configure(state='disabled')
-        
         # Options frame
         options_frame = ttk.Frame(main_frame, style='Card.TFrame', padding=12)
-        options_frame.pack(fill='x', pady=(0, 10))
+        options_frame.pack(fill='x', pady=(15, 10))
         
         # Serial Port row
         port_row = ttk.Frame(options_frame, style='Card.TFrame')
@@ -345,7 +337,18 @@ class P3AFlasher(tk.Tk):
         self.port_combo.pack(side='left', padx=(0, 8))
         ttk.Button(port_row, text="↻", style='Small.TButton', width=3,
                   command=self._scan_ports).pack(side='left')
-        
+
+        # Status section (device detected message)
+        status_frame = ttk.Frame(options_frame, style='Card.TFrame')
+        status_frame.pack(fill='x', pady=(0, 8))
+
+        # Empty label for alignment with "Port:" label
+        ttk.Label(status_frame, text="", style='Card.TLabel', width=12).pack(side='left')
+        self.status_var = tk.StringVar(value="Looking for p3a device...")
+        self.status_label = ttk.Label(status_frame, textvariable=self.status_var,
+                                      style='StatusWaiting.TLabel')
+        self.status_label.pack(side='left')
+
         # Firmware Source row
         source_row = ttk.Frame(options_frame, style='Card.TFrame')
         source_row.pack(fill='x', pady=(0, 5))
@@ -398,7 +401,36 @@ class P3AFlasher(tk.Tk):
         
         # Show appropriate sub-frame
         self._on_source_change()
-        
+
+        # Flash button (below firmware selection)
+        flash_frame = ttk.Frame(options_frame, style='Card.TFrame')
+        flash_frame.pack(fill='x', pady=(10, 0))
+
+        # Empty label for alignment
+        ttk.Label(flash_frame, text="", style='Card.TLabel', width=12).pack(side='left')
+        self.flash_btn = ttk.Button(flash_frame, text="⚡  Flash Device",
+                                   command=self._start_flash, style='Accent.TButton',
+                                   width=22)
+        self.flash_btn.pack(side='left')
+        self.flash_btn.configure(state='disabled')
+
+        # Info text area before console
+        info_frame = ttk.Frame(main_frame, style='Dark.TFrame')
+        info_frame.pack(fill='x', pady=(10, 5))
+
+        info_text1 = ttk.Label(info_frame,
+            text="The flashing process takes about 2 minutes. At the end, the device will automatically",
+            style='Footer.TLabel')
+        info_text1.pack(anchor='w')
+        info_text2 = ttk.Label(info_frame,
+            text="reboot two times. The two reboots are necessary to update the two chips inside p3a.",
+            style='Footer.TLabel')
+        info_text2.pack(anchor='w')
+        info_text3 = ttk.Label(info_frame,
+            text="Flashing does not alter the SD card. You can re-flash p3a at any time.",
+            style='Footer.TLabel', padding=(0, 5, 0, 0))
+        info_text3.pack(anchor='w')
+
         # Console section
         console_frame = ttk.Frame(main_frame, style='Card.TFrame', padding=10)
         console_frame.pack(fill='both', expand=True, pady=(5, 10))
@@ -411,7 +443,7 @@ class P3AFlasher(tk.Tk):
         
         self.console = tk.Text(console_inner, bg='#0d0d1a', fg='#aaaaaa',
                               font=('Consolas', 9), wrap='word', state='disabled',
-                              relief='flat', padx=8, pady=8)
+                              relief='flat', padx=8, pady=8, height=10)
         scrollbar = ttk.Scrollbar(console_inner, orient='vertical', command=self.console.yview)
         self.console.configure(yscrollcommand=scrollbar.set)
         
@@ -461,6 +493,7 @@ class P3AFlasher(tk.Tk):
             
             if port.vid in CONFIG['known_vids']:
                 esp_found = True
+                self.detected_port = port.device
                 self.selected_port.set(desc)
         
         if ports:
@@ -484,7 +517,8 @@ class P3AFlasher(tk.Tk):
         self.device_connected = connected
         
         if connected:
-            self.status_var.set("✓ p3a device detected — Ready to flash")
+            port_name = self.detected_port if self.detected_port else "unknown"
+            self.status_var.set(f"✓ p3a device detected on {port_name}")
             self.status_label.configure(style='StatusReady.TLabel')
             self.flash_btn.configure(state='normal')
         else:

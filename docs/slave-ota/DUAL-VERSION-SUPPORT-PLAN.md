@@ -1,12 +1,21 @@
 # Dual-Version esp_hosted Support Implementation Plan
 
-> **Created:** 2026-01-10
-> **Status:** ✅ Implemented
-> **Related:** [ESP32-C6-OTA-COMPATIBILITY.md](ESP32-C6-OTA-COMPATIBILITY.md)
+> **Created:** 2026-01-10  
+> **Updated:** 2026-01-11  
+> **Status:** ✅ Implemented & Verified  
+> **Related:** [ESP32-C6-OTA-COMPATIBILITY.md](ESP32-C6-OTA-COMPATIBILITY.md), [OTA-FAILURE-INVESTIGATION.md](OTA-FAILURE-INVESTIGATION.md)
 
 ## Executive Summary
 
-This document outlines the plan to support both esp_hosted 2.7.0 and newer versions (2.9.1+) simultaneously in the p3a codebase. This allows new devices to receive the latest firmware while legacy devices locked on 2.7.0 continue operating.
+This document outlines the plan to support both esp_hosted 2.7.0 and newer versions (2.9.3+) simultaneously in the p3a codebase. This allows new devices to receive the latest firmware while legacy devices locked on 2.7.0 continue operating.
+
+### Implementation Status
+
+| Update Path | Status | Notes |
+|-------------|--------|-------|
+| 0.0.0 → 2.9.3 | ✅ Working | Fixed firmware size calculation |
+| 2.7.0 → 2.9.3 | ❌ Blocked | Confirmed Espressif bug (slave-side) |
+| 2.9.3 (no update) | ✅ Working | Already up to date |
 
 ---
 
@@ -256,11 +265,11 @@ I (XXXX) slave_ota: Co-processor firmware is up to date
 
 ## Success Criteria
 
-- [ ] Factory devices (0.0.0) successfully upgrade to newest firmware
-- [ ] Legacy devices (2.7.0) skip OTA gracefully and continue working
-- [ ] Already-updated devices (2.9.1+) operate normally
-- [ ] No regressions in WiFi functionality on any device type
-- [ ] Clear log messages for all scenarios
+- [x] Factory devices (0.0.0) successfully upgrade to newest firmware ✅ (verified 2026-01-11)
+- [x] Legacy devices (2.7.0) skip OTA gracefully and continue working ✅ (verified 2026-01-11)
+- [x] Already-updated devices (2.9.3+) operate normally ✅ (verified 2026-01-11)
+- [x] No regressions in WiFi functionality on any device type ✅
+- [x] Clear log messages for all scenarios ✅
 
 ---
 

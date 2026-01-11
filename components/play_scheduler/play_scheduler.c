@@ -904,7 +904,7 @@ esp_err_t play_scheduler_play_named_channel(const char *name)
 
     cmd->channel_count = 1;
     cmd->exposure_mode = PS_EXPOSURE_EQUAL;
-    cmd->pick_mode = PS_PICK_RECENCY;
+    cmd->pick_mode = (config_store_get_play_order() == 2) ? PS_PICK_RANDOM : PS_PICK_RECENCY;
 
     // Determine channel type
     if (strcmp(name, "sdcard") == 0) {
@@ -938,7 +938,7 @@ esp_err_t play_scheduler_play_user_channel(const char *user_sqid)
 
     cmd->channel_count = 1;
     cmd->exposure_mode = PS_EXPOSURE_EQUAL;
-    cmd->pick_mode = PS_PICK_RECENCY;
+    cmd->pick_mode = (config_store_get_play_order() == 2) ? PS_PICK_RANDOM : PS_PICK_RECENCY;
 
     cmd->channels[0].type = PS_CHANNEL_TYPE_USER;
     strlcpy(cmd->channels[0].name, "user", sizeof(cmd->channels[0].name));
@@ -967,7 +967,7 @@ esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag)
 
     cmd->channel_count = 1;
     cmd->exposure_mode = PS_EXPOSURE_EQUAL;
-    cmd->pick_mode = PS_PICK_RECENCY;
+    cmd->pick_mode = (config_store_get_play_order() == 2) ? PS_PICK_RANDOM : PS_PICK_RECENCY;
 
     cmd->channels[0].type = PS_CHANNEL_TYPE_HASHTAG;
     strlcpy(cmd->channels[0].name, "hashtag", sizeof(cmd->channels[0].name));
@@ -1029,7 +1029,15 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
         result = ESP_ERR_NOT_FOUND;
 
         // Check if we should display an error message
-        // Don't show messages if PICO-8 mode is active or animation is already playing
+        // Don't show messages if:
+        // - Not in animation playback state (provisioning, OTA, PICO-8 streaming)
+        // - PICO-8 mode is active
+        // - Animation is already playing
+        p3a_state_t current_state = p3a_state_get();
+        if (current_state != P3A_STATE_ANIMATION_PLAYBACK) {
+            // Not in animation playback mode - skip message display
+            ESP_LOGD(TAG, "Skipping error message: not in animation playback state (state=%d)", current_state);
+        } else {
         extern bool playback_controller_is_pico8_active(void) __attribute__((weak));
         extern bool animation_player_is_animation_ready(void) __attribute__((weak));
 
@@ -1071,6 +1079,7 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
                 }
             }
         }
+        }  // Close the "if (current_state == P3A_STATE_ANIMATION_PLAYBACK)" else block
     } else {
         // Request swap
         result = prepare_and_request_swap(&artwork);

@@ -156,6 +156,10 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
     }
 }
 
+// UI mode handlers for synchronous cleanup (from app_lcd.c via weak symbols)
+extern esp_err_t app_lcd_exit_ui_mode(void) __attribute__((weak));
+extern void ugfx_ui_hide_registration(void) __attribute__((weak));
+
 /**
  * @brief Handle touch events in PROVISIONING state
  */
@@ -165,12 +169,26 @@ static esp_err_t handle_provisioning(const p3a_touch_event_t *event)
         case P3A_TOUCH_EVENT_LONG_PRESS:
             // Cancel provisioning and return to playback
             ESP_LOGI(TAG, "Long press during provisioning - cancelling");
+
+            // Step 1: Cancel provisioning (sets makapix state to IDLE)
             if (makapix_cancel_provisioning) {
                 makapix_cancel_provisioning();
             }
+
+            // Step 2: Exit UI mode SYNCHRONOUSLY before state transition
+            // This ensures no black frame between UI hide and animation resume
+            if (app_lcd_exit_ui_mode) {
+                app_lcd_exit_ui_mode();
+            }
+            if (ugfx_ui_hide_registration) {
+                ugfx_ui_hide_registration();
+            }
+
+            // Step 3: Transition state
             p3a_state_exit_to_playback();
+
             return ESP_OK;
-            
+
         default:
             // All other gestures ignored during provisioning
             return ESP_ERR_NOT_SUPPORTED;

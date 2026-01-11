@@ -529,15 +529,30 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         if (s_captive_portal_server != NULL) {
             httpd_stop(s_captive_portal_server);
             s_captive_portal_server = NULL;
+            // Allow socket cleanup time before starting new server on same port
+            // See: https://github.com/espressif/esp-idf/issues/3381
+            vTaskDelay(pdMS_TO_TICKS(100));
         }
-        
+
         // Initialize app services once
         if (!s_services_initialized) {
             sntp_sync_init();
             app_state_init();
-            esp_err_t api_err = http_api_start();
+
+            // Start HTTP API with retry logic for transient port binding failures
+            esp_err_t api_err = ESP_FAIL;
+            const int max_retries = 3;
+            for (int attempt = 0; attempt < max_retries && api_err != ESP_OK; attempt++) {
+                if (attempt > 0) {
+                    ESP_LOGW(TAG, "HTTP API start retry %d/%d", attempt + 1, max_retries);
+                    vTaskDelay(pdMS_TO_TICKS(200 * attempt));
+                }
+                api_err = http_api_start();
+            }
+
             if (api_err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to start HTTP API: %s", esp_err_to_name(api_err));
+                ESP_LOGE(TAG, "Failed to start HTTP API after %d attempts: %s",
+                         max_retries, esp_err_to_name(api_err));
                 app_state_enter_error();
             } else {
                 if (s_rest_start_callback) {
@@ -545,8 +560,8 @@ static void event_handler(void* arg, esp_event_base_t event_base,
                 }
                 app_state_enter_ready();
                 ESP_LOGD(TAG, "HTTP ready at http://p3a.local/");
-                s_services_initialized = true;
             }
+            s_services_initialized = true;
         }
         
         s_initial_connection_done = true;

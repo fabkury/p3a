@@ -879,8 +879,15 @@ void refresh_task_impl(void *pvParameters)
                 break;
             }
 
-            if (err != ESP_OK || !resp->success) {
-                ESP_LOGW(TAG, "Query failed: %s", resp->error);
+            if (err != ESP_OK) {
+                ESP_LOGW(TAG, "Query transport error: %s (0x%x) - check MQTT connection and server availability",
+                         esp_err_to_name(err), err);
+                break;
+            }
+            if (!resp->success) {
+                ESP_LOGW(TAG, "Query server error: %s (code: %s)",
+                         resp->error[0] ? resp->error : "(no message)",
+                         resp->error_code[0] ? resp->error_code : "(none)");
                 break;
             }
 

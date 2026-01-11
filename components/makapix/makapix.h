@@ -16,7 +16,8 @@ typedef enum {
     MAKAPIX_STATE_SHOW_CODE,      // Displaying registration code
     MAKAPIX_STATE_CONNECTING,     // MQTT connecting
     MAKAPIX_STATE_CONNECTED,      // Normal operation
-    MAKAPIX_STATE_DISCONNECTED    // MQTT lost, reconnecting
+    MAKAPIX_STATE_DISCONNECTED,   // MQTT lost, reconnecting
+    MAKAPIX_STATE_REGISTRATION_INVALID  // Credentials exist but server rejects them
 } makapix_state_t;
 
 /**

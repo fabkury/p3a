@@ -326,10 +326,8 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
         return false;
     }
 
-    size_t r_eff = PS_RANDOM_WINDOW;
-    if (r_eff > ch->entry_count) {
-        r_eff = ch->entry_count;
-    }
+    // Sample from all entries for true shuffle
+    size_t r_eff = ch->entry_count;
 
     for (int attempt = 0; attempt < 5; attempt++) {
         uint32_t r = ps_prng_next(&ch->pick_rng_state);
@@ -377,10 +375,8 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
         return false;
     }
 
-    size_t r_eff = PS_RANDOM_WINDOW;
-    if (r_eff > ch->entry_count) {
-        r_eff = ch->entry_count;
-    }
+    // Sample from all entries for true shuffle
+    size_t r_eff = ch->entry_count;
 
     for (int attempt = 0; attempt < 5; attempt++) {
         uint32_t r = ps_prng_next(&ch->pick_rng_state);

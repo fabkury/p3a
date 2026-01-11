@@ -1,19 +1,27 @@
 # ESP32-C6 Slave OTA Compatibility Issue
 
-> **Status:** ✅ Implemented (Dual-Version Support)
-> **Last Updated:** 2026-01-10
+> **Status:** ✅ Implemented & Verified (Dual-Version Support)  
+> **Last Updated:** 2026-01-11  
 > **Resolution:** Dual-version support — see [New Strategy](#new-strategy-dual-version-support) below
 
 ## Current Configuration
 
 | Component | Version | File |
 |-----------|---------|------|
-| **esp_hosted (host)** | ≥2.9.1 | `main/idf_component.yml` |
-| **network_adapter.bin (slave)** | 2.9.1 | `components/slave_ota/firmware/` |
-| **Version constants** | 2.9.1 | `components/slave_ota/slave_ota.c` |
+| **esp_hosted (host)** | ≥2.9.3 | `main/idf_component.yml` |
+| **network_adapter.bin (slave)** | 2.9.3 | `components/slave_ota/firmware/` |
+| **Version constants** | 2.9.3 | `components/slave_ota/slave_ota.c` |
 | **Locked version detection** | 2.7.0 | `components/slave_ota/slave_ota.c` |
 
-> ✅ **Dual-Version Support Active:** The host library (2.9.1+) works with both legacy 2.7.0 slaves (with warnings) and newer slaves. Devices running 2.7.0 will skip OTA and continue operating. New factory devices (0.0.0) will be upgraded to the latest firmware.
+> ✅ **Dual-Version Support Active:** The host library (2.9.3+) works with both legacy 2.7.0 slaves (with warnings) and newer slaves. Devices running 2.7.0 will skip OTA and continue operating. New factory devices (0.0.0) will be upgraded to 2.9.3.
+
+## Verified OTA Paths (2026-01-11)
+
+| From Version | To Version | Result | Notes |
+|--------------|------------|--------|-------|
+| 0.0.0 (factory) | 2.9.3 | ✅ **Success** | Fixed firmware size calculation |
+| 2.7.0 | 2.9.3 | ❌ **Blocked** | Confirmed bug in 2.7.0 slave firmware |
+| 2.9.3 | 2.9.3 | ✅ **Skip** | Already up to date |
 
 ## Problem Summary
 
@@ -33,9 +41,10 @@ The ESP32-C6 co-processor firmware cannot be upgraded from version **2.7.0** to 
 
 ### What Works ✅
 
-| From Version | To Version | Result |
-|--------------|------------|--------|
-| 0.0.0 (factory) | 2.7.0 | ✅ Success |
+| From Version | To Version | Result | Notes |
+|--------------|------------|--------|-------|
+| 0.0.0 (factory) | 2.7.0 | ✅ Success | Original implementation |
+| 0.0.0 (factory) | 2.9.3 | ✅ Success | After size calculation fix (2026-01-11) |
 
 ### What Fails ❌
 
@@ -45,8 +54,9 @@ The ESP32-C6 co-processor firmware cannot be upgraded from version **2.7.0** to 
 | 2.7.0 | 2.8.4 | ❌ Fail | `ESP_ERR_OTA_VALIDATE_FAILED` |
 | 2.7.0 | 2.8.5 | ❌ Fail | `ESP_ERR_OTA_VALIDATE_FAILED` |
 | 2.7.0 | 2.9.1 | ❌ Fail | `ESP_ERR_OTA_VALIDATE_FAILED` |
+| 2.7.0 | 2.9.3 | ❌ Fail | `ESP_ERR_OTA_VALIDATE_FAILED` (tested with official ota-test too) |
 
-**Conclusion:** Once a device is running 2.7.0, it cannot be OTA updated to ANY other version.
+**Conclusion:** Once a device is running 2.7.0, it cannot be OTA updated to ANY other version. This was verified using both p3a and the official ESP-Hosted `host_performs_slave_ota` example.
 
 ## Error Details
 
@@ -121,12 +131,18 @@ The initial workaround was to pin everything to 2.7.0 exactly:
 ## New Strategy: Dual-Version Support
 
 > **Decision Date:** 2026-01-10  
-> **Rationale:** Espressif confirmed the 2.7.0 OTA bug is unrecoverable ([GitHub Issue #143](https://github.com/espressif/esp-hosted-mcu/issues/143#issuecomment-3732692355)). Rather than locking all devices to 2.7.0 forever, we will support both versions simultaneously.
+> **Verified:** 2026-01-11  
+> **Rationale:** Espressif confirmed the 2.7.0 OTA bug is unrecoverable ([GitHub Issue #143](https://github.com/espressif/esp-hosted-mcu/issues/143#issuecomment-3732692355)). Rather than locking all devices to 2.7.0 forever, we support both versions simultaneously.
+
+### Key Findings (2026-01-11)
+
+1. **0.0.0 → 2.9.3 works** ✅ - After fixing a firmware size calculation bug in `slave_ota.c`, factory devices successfully upgrade.
+2. **2.7.0 → anything fails** ❌ - This was verified using BOTH p3a AND the official `host_performs_slave_ota` example. The bug is in the 2.7.0 slave firmware's OTA validation logic.
 
 ### Key Insight
 
 - **Devices with 2.7.0 slave:** Cannot be upgraded, but CAN still operate with a newer host library (backward compatible)
-- **New factory devices (0.0.0):** Can be flashed directly with newer firmware, bypassing the issue entirely
+- **New factory devices (0.0.0):** Successfully upgrade to 2.9.3 with the fixed size calculation
 
 ### Target Architecture
 
@@ -209,11 +225,32 @@ Bug reported: [GitHub Issue #143](https://github.com/espressif/esp-hosted-mcu/is
 
 **Espressif's response:** Confirmed as unrecoverable. Devices running 2.7.0 cannot be OTA-upgraded to any other version. This is a fundamental limitation of the 2.7.0 slave firmware's OTA validation logic.
 
+### Technical Fix: Firmware Size Calculation
+
+The initial 0.0.0 → 2.9.3 failure was caused by incorrect firmware size calculation. The fix was:
+
+```c
+// BEFORE (incorrect - 15 bytes short):
+size_t padding = (16 - (fw_size % 16)) % 16;
+fw_size += padding + 1;  // checksum
+if (img_header.hash_appended == 1) {
+    fw_size += 32;
+}
+
+// AFTER (correct):
+fw_size = ((fw_size + 1) + 15) & ~15;  // Content + padding + checksum, aligned
+if (img_header.hash_appended == 1) {
+    fw_size += 32;
+}
+```
+
+The ESP-IDF image format requires SHA256 hash to start at a 16-byte aligned address. The old formula incorrectly calculated padding, resulting in 15 fewer bytes being transferred. See [OTA-FAILURE-INVESTIGATION.md](OTA-FAILURE-INVESTIGATION.md) for detailed analysis.
+
 ### Long-Term Outlook
 
 1. **Legacy 2.7.0 devices** - Will continue operating with basic WiFi functionality. May miss some newer features (DPP, WiFi Enterprise, etc.) but core functionality is preserved.
 
-2. **New devices** - Will receive the latest firmware and all new features.
+2. **New devices** - Will receive the latest firmware (2.9.3) and all new features.
 
 3. **Potential future fix** - If Espressif releases a fix that somehow allows 2.7.0 upgrades (unlikely), the dual-version architecture can be updated to attempt OTA on those devices.
 

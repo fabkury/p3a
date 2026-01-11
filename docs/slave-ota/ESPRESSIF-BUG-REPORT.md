@@ -3,12 +3,20 @@
 **Repository:** https://github.com/espressif/esp-hosted-mcu  
 **Component:** esp_hosted (ESP Component Registry)  
 **Severity:** Critical - Blocks firmware updates  
+**Status:** Confirmed by Espressif - 2.7.0 is unrecoverable  
+**Last Updated:** 2026-01-11
 
 ---
 
 ## Summary
 
-ESP-Hosted slave firmware running version **2.7.0** rejects OTA updates to **any other version** (including 2.7.4 and 2.8.x) with `ESP_ERR_OTA_VALIDATE_FAILED`. The firmware transfer completes 100% successfully, but validation fails on the slave side.
+ESP-Hosted slave firmware running version **2.7.0** rejects OTA updates to **any other version** (including 2.7.4, 2.8.x, and 2.9.x) with `ESP_ERR_OTA_VALIDATE_FAILED`. The firmware transfer completes 100% successfully, but validation fails on the slave side.
+
+### Update (2026-01-11)
+
+This bug was verified using **both** our custom implementation AND the official `host_performs_slave_ota` example from ESP-Hosted. Both fail identically when attempting to upgrade from 2.7.0.
+
+**Note:** OTA updates FROM 0.0.0 (factory) TO 2.9.3 work correctly after fixing a separate firmware size calculation issue in the host code. The 2.7.0 issue is specifically in the 2.7.0 slave firmware's OTA validation logic.
 
 ---
 
@@ -66,14 +74,18 @@ OTA update succeeds; ESP32-C6 reboots with new firmware.
 
 ## Tested Version Combinations
 
-| From (Slave) | To (New Firmware) | Result |
-|--------------|-------------------|--------|
-| 0.0.0 (factory) | 2.7.0 | ✅ **Success** |
-| 2.7.0 | 2.7.4 | ❌ **Fail** - `ESP_ERR_OTA_VALIDATE_FAILED` |
-| 2.7.0 | 2.8.4 | ❌ **Fail** - `ESP_ERR_OTA_VALIDATE_FAILED` |
-| 2.7.0 | 2.8.5 | ❌ **Fail** - `ESP_ERR_OTA_VALIDATE_FAILED` |
+| From (Slave) | To (New Firmware) | Result | Test Method |
+|--------------|-------------------|--------|-------------|
+| 0.0.0 (factory) | 2.7.0 | ✅ **Success** | p3a |
+| 0.0.0 (factory) | 2.9.3 | ✅ **Success** | p3a (after size calc fix) |
+| 0.0.0 (factory) | 2.9.3 | ✅ **Success** | Official ota-test example |
+| 2.7.0 | 2.7.4 | ❌ **Fail** | p3a |
+| 2.7.0 | 2.8.4 | ❌ **Fail** | p3a |
+| 2.7.0 | 2.8.5 | ❌ **Fail** | p3a |
+| 2.7.0 | 2.9.3 | ❌ **Fail** | p3a |
+| 2.7.0 | 2.9.3 | ❌ **Fail** | Official ota-test example (LittleFS) |
 
-**Key observation:** The same OTA mechanism that successfully updated from 0.0.0 → 2.7.0 fails when trying to update FROM 2.7.0 to any other version.
+**Key observation:** The 2.7.0 → any version failure was verified using BOTH our custom implementation AND the official ESP-Hosted example. This confirms the bug is in the 2.7.0 slave firmware, not in host-side code.
 
 ---
 
@@ -221,7 +233,19 @@ This bug **completely blocks OTA updates** for devices running esp_hosted 2.7.0.
 
 ## Workaround
 
-Currently pinning to esp_hosted 2.7.0 exactly for both host and slave, so no OTA update is needed (versions already match).
+### Current Solution: Dual-Version Support
+
+We've implemented dual-version support in p3a:
+
+1. **Factory devices (0.0.0)** → Automatically upgraded to 2.9.3 ✅
+2. **Legacy devices (2.7.0)** → Detected and skipped; continue operating with 2.7.0 ⚠️
+3. **Up-to-date devices (2.9.3)** → No action needed ✅
+
+The host library (2.9.3) is backward compatible with 2.7.0 slaves, so legacy devices continue working normally (with version mismatch warnings in logs).
+
+### Previous Workaround (Superseded)
+
+Previously pinning to esp_hosted 2.7.0 exactly for both host and slave.
 
 ---
 

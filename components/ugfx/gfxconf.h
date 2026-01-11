@@ -16,6 +16,7 @@
 // GDISP                                                                 //
 ///////////////////////////////////////////////////////////////////////////
 #define GFX_USE_GDISP                    GFXON
+#define GDISP_NEED_STARTUP_LOGO          GFXOFF  // Disable μGFX splash logo
 
 #define GDISP_NEED_VALIDATION            GFXON
 #define GDISP_NEED_CLIP                  GFXON

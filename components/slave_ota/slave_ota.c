@@ -17,13 +17,14 @@
 static const char *TAG = "slave_ota";
 
 // Expected slave firmware version (must match the built slave firmware)
-// Dual-version support - see docs/slave-ota/DUAL-VERSION-SUPPORT-PLAN.md
 static const uint32_t SLAVE_FW_VERSION_MAJOR = 2;
 static const uint32_t SLAVE_FW_VERSION_MINOR = 9;
-static const uint32_t SLAVE_FW_VERSION_PATCH = 1;
+static const uint32_t SLAVE_FW_VERSION_PATCH = 3;
 
-// Version 2.7.0 has a known OTA bug that prevents upgrading
+// Version 2.7.0 has a confirmed OTA bug that prevents ANY upgrade
+// This was verified by testing both p3a and official esp_hosted examples.
 // See: https://github.com/espressif/esp-hosted-mcu/issues/143
+// Note: 0.0.0 -> 2.9.3 works fine; only 2.7.0 is affected.
 static const uint32_t LOCKED_VERSION_MAJOR = 2;
 static const uint32_t LOCKED_VERSION_MINOR = 7;
 static const uint32_t LOCKED_VERSION_PATCH = 0;
@@ -62,11 +63,14 @@ esp_err_t slave_ota_check_and_update(void)
     ESP_LOGI(TAG, "Embedded slave firmware: %lu.%lu.%lu",
              SLAVE_FW_VERSION_MAJOR, SLAVE_FW_VERSION_MINOR, SLAVE_FW_VERSION_PATCH);
 
-    // Check for version 2.7.0 which cannot be OTA upgraded (known esp_hosted bug)
+    // Check for version 2.7.0 which has a confirmed OTA bug preventing ANY upgrade.
+    // This was verified by testing both p3a AND official esp_hosted examples - both fail.
+    // The bug is in the slave firmware's OTA validation, not in the host code.
+    // Devices with 2.7.0 will continue operating with that version.
     if (current_ver.major1 == LOCKED_VERSION_MAJOR &&
         current_ver.minor1 == LOCKED_VERSION_MINOR &&
         current_ver.patch1 == LOCKED_VERSION_PATCH) {
-        ESP_LOGW(TAG, "Detected esp_hosted 2.7.0 - OTA not possible (known issue)");
+        ESP_LOGW(TAG, "Detected esp_hosted 2.7.0 - OTA not possible (confirmed bug)");
         ESP_LOGW(TAG, "See: https://github.com/espressif/esp-hosted-mcu/issues/143");
         ESP_LOGW(TAG, "Device will continue operating with 2.7.0 slave firmware");
         ESP_LOGI(TAG, "Proceeding without co-processor update");
@@ -154,12 +158,10 @@ esp_err_t slave_ota_check_and_update(void)
         offset += sizeof(seg_header) + seg_header.data_len;
     }
     
-    // Add padding to align to 16 bytes
-    size_t padding = (16 - (fw_size % 16)) % 16;
-    fw_size += padding;
-    
-    // Add checksum byte (always present)
-    fw_size += 1;
+    // ESP-IDF image format: SHA256 must start at 16-byte aligned address
+    // Padding is added between content and checksum to achieve this alignment
+    // Formula: align (content + checksum) to 16 bytes, then add SHA256
+    fw_size = ((fw_size + 1) + 15) & ~15;  // Content + padding + checksum, aligned
     
     // Add SHA256 hash if appended
     if (img_header.hash_appended == 1) {
@@ -230,13 +232,25 @@ esp_err_t slave_ota_check_and_update(void)
         return err;
     }
     
-    ESP_LOGI(TAG, "Activating new co-processor firmware...");
+    ESP_LOGI(TAG, "OTA transfer completed successfully!");
     
-    // Activate new firmware (triggers co-processor reboot)
-    err = esp_hosted_slave_ota_activate();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_hosted_slave_ota_activate failed: %s", esp_err_to_name(err));
-        return err;
+    // Only call activate if current slave firmware >= 2.6.0
+    // The activate API is only supported by slave firmware versions >= 2.6.0
+    // For older versions (like 0.0.0 factory), we skip activate and just restart
+    bool activate_supported = (current_ver.major1 > 2) || 
+                              (current_ver.major1 == 2 && current_ver.minor1 >= 6);
+    
+    if (activate_supported) {
+        ESP_LOGI(TAG, "Activating new co-processor firmware...");
+        err = esp_hosted_slave_ota_activate();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_hosted_slave_ota_activate failed: %s", esp_err_to_name(err));
+            // Don't return error - OTA transfer was successful
+            // The new firmware will be active after restart anyway
+        }
+    } else {
+        ESP_LOGI(TAG, "Activate API not supported (requires v2.6.0+)");
+        ESP_LOGI(TAG, "New firmware will be active after restart");
     }
     
     ESP_LOGI(TAG, "Co-processor firmware updated successfully!");

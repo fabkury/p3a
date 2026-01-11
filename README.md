@@ -12,7 +12,7 @@ p3a is a Wi-Fi pixel art player that connects to [Makapix Club](https://makapix.
 
 ## Quick start
 
-1. **Get the hardware**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) + [microSD card](https://www.waveshare.com/micro-sd-card-16gb-kawau.htm?sku=18191)
+1. **Get the hardware**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) + [microSD card](https://www.waveshare.com/micro-sd-card-16gb-kawau.htm?sku=18191) + a small screwdriver
 2. **Insert the microSD card**: This requires unscrewing the back plate
 3. **Flash the firmware**: Visit the [p3a Web Flasher](https://fabkury.github.io/p3a/web-flasher/) — just connect your device and click to flash. No software installation needed. See the [flashing guide](docs/flash-p3a.md) for alternative methods.
 4. **Connect to Wi-Fi**: On first boot, connect to the `p3a-setup` network and visit http://p3a.local/ to configure your Wi-Fi

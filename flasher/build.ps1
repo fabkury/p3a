@@ -51,8 +51,9 @@ pyinstaller `
     --name "p3a-flasher" `
     --onefile `
     --windowed `
-    --icon "p3a_logo.png" `
+    --icon "p3a_icon.ico" `
     --add-data "p3a_logo.png;." `
+    --add-data "p3a_icon.ico;." `
     --collect-data "esptool" `
     --hidden-import "serial.tools.list_ports" `
     --hidden-import "serial.tools.list_ports_windows" `

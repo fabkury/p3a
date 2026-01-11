@@ -197,6 +197,20 @@ class P3AFlasher(tk.Tk):
         self.geometry("540x700")
         self.minsize(500, 640)
         self.configure(bg='#1a1a2e')
+
+        # Set window icon
+        try:
+            from PIL import Image, ImageTk
+            icon_path = resource_path('p3a_icon.ico')
+            if os.path.exists(icon_path):
+                # Load ICO with PIL and convert to PhotoImage
+                icon_img = Image.open(icon_path)
+                # Create multiple sizes for better display
+                self._icon_photo_32 = ImageTk.PhotoImage(icon_img.resize((32, 32), Image.Resampling.LANCZOS))
+                self._icon_photo_16 = ImageTk.PhotoImage(icon_img.resize((16, 16), Image.Resampling.LANCZOS))
+                self.iconphoto(True, self._icon_photo_32, self._icon_photo_16)
+        except Exception:
+            pass  # Ignore icon errors
         
         # State
         self.firmware_dir = None
@@ -419,7 +433,7 @@ class P3AFlasher(tk.Tk):
         info_frame.pack(fill='x', pady=(10, 5))
 
         info_text1 = ttk.Label(info_frame,
-            text="The flashing process takes about 2 minutes. At the end, the device will automatically",
+            text="The flashing process takes about 3 minutes. At the end, the device will automatically",
             style='Footer.TLabel')
         info_text1.pack(anchor='w')
         info_text2 = ttk.Label(info_frame,
@@ -534,14 +548,19 @@ class P3AFlasher(tk.Tk):
                 response = requests.get(url, timeout=10)
                 if response.status_code == 200:
                     releases = response.json()
-                    valid_releases = [r for r in releases 
-                                     if any(a['name'].endswith('.zip') for a in r.get('assets', []))]
+                    # Filter to releases that have all required firmware files
+                    valid_releases = []
+                    for r in releases:
+                        asset_names = [a['name'] for a in r.get('assets', [])]
+                        # Check if all required .bin files are present
+                        if all(f in asset_names for f in CONFIG['required_files']):
+                            valid_releases.append(r)
                     self.msg_queue.put(('releases', valid_releases))
                 else:
                     self.msg_queue.put(('releases_error', f"HTTP {response.status_code}"))
             except Exception as e:
                 self.msg_queue.put(('releases_error', str(e)))
-        
+
         threading.Thread(target=fetch, daemon=True).start()
         
     def _browse_file(self):
@@ -672,38 +691,40 @@ class P3AFlasher(tk.Tk):
         self.status_label.configure(style='Status.TLabel')
         self.status_var.set("Downloading firmware...")
         self._log(f"\nDownloading {release['tag_name']}...")
-        
+
         def download():
             try:
-                zip_asset = None
-                for asset in release.get('assets', []):
-                    if asset['name'].endswith('.zip'):
-                        zip_asset = asset
-                        break
-                        
-                if not zip_asset:
-                    self.msg_queue.put(('done', (False, "No firmware ZIP found in release")))
-                    return
-                    
-                self.msg_queue.put(('log', f"Downloading {zip_asset['name']}..."))
-                response = requests.get(zip_asset['browser_download_url'], timeout=120)
-                
-                if response.status_code != 200:
-                    self.msg_queue.put(('done', (False, f"Download failed: HTTP {response.status_code}")))
-                    return
-                    
-                self.msg_queue.put(('log', "Extracting..."))
-                
-                firmware_dir = self._extract_zip(io.BytesIO(response.content))
-                if not firmware_dir:
-                    self.msg_queue.put(('done', (False, "Failed to extract firmware files")))
-                    return
-                    
-                self._do_flash(port, firmware_dir)
-                
+                # Create temp directory for firmware files
+                temp_dir = tempfile.mkdtemp(prefix='p3a_firmware_')
+                self.firmware_dir = temp_dir
+
+                # Build a map of asset names to download URLs
+                assets_map = {a['name']: a['browser_download_url']
+                              for a in release.get('assets', [])}
+
+                # Download each required firmware file
+                for filename in CONFIG['required_files']:
+                    if filename not in assets_map:
+                        self.msg_queue.put(('done', (False, f"Missing file in release: {filename}")))
+                        return
+
+                    self.msg_queue.put(('log', f"Downloading {filename}..."))
+                    response = requests.get(assets_map[filename], timeout=120)
+
+                    if response.status_code != 200:
+                        self.msg_queue.put(('done', (False, f"Download failed for {filename}: HTTP {response.status_code}")))
+                        return
+
+                    out_path = os.path.join(temp_dir, filename)
+                    with open(out_path, 'wb') as f:
+                        f.write(response.content)
+                    self.msg_queue.put(('log', f"  ✓ {filename} ({len(response.content):,} bytes)"))
+
+                self._do_flash(port, temp_dir)
+
             except Exception as e:
                 self.msg_queue.put(('done', (False, str(e))))
-                
+
         threading.Thread(target=download, daemon=True).start()
         
     def _load_local_and_flash(self, port, zip_path):

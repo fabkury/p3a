@@ -156,6 +156,13 @@ bool makapix_get_and_clear_view_intent(void)
 
 esp_err_t makapix_start_provisioning(void)
 {
+    // If registration was marked invalid, clear it so provisioning can proceed
+    if (s_makapix_state == MAKAPIX_STATE_REGISTRATION_INVALID) {
+        ESP_LOGI(MAKAPIX_TAG, "Clearing invalid registration state for fresh provisioning");
+        s_makapix_state = MAKAPIX_STATE_IDLE;
+        makapix_mqtt_reset_auth_failure_count();
+    }
+
     // If already in provisioning/show_code, cancel first
     if (s_makapix_state == MAKAPIX_STATE_PROVISIONING || s_makapix_state == MAKAPIX_STATE_SHOW_CODE) {
         ESP_LOGD(MAKAPIX_TAG, "Cancelling existing provisioning before starting new one");
@@ -274,6 +281,12 @@ esp_err_t makapix_get_provisioning_status(char *out_status, size_t max_len)
 
 esp_err_t makapix_connect_if_registered(void)
 {
+    if (s_makapix_state == MAKAPIX_STATE_REGISTRATION_INVALID) {
+        ESP_LOGW(MAKAPIX_TAG, "Registration is invalid, not attempting MQTT connection");
+        ESP_LOGW(MAKAPIX_TAG, "Re-provision device to restore Makapix Club connectivity");
+        return ESP_ERR_INVALID_STATE;
+    }
+
     if (s_makapix_state == MAKAPIX_STATE_CONNECTED || s_makapix_state == MAKAPIX_STATE_CONNECTING) {
         ESP_LOGW(MAKAPIX_TAG, "MQTT already connected or connecting");
         return ESP_OK;

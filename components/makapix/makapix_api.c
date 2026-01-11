@@ -270,12 +270,15 @@ static esp_err_t publish_and_wait(cJSON *request_obj, cJSON **out_response)
 
     for (int attempt = 0; attempt < MAKAPIX_MAX_RETRIES; attempt++) {
         if (!makapix_mqtt_is_ready()) {
+            ESP_LOGW(TAG, "Request attempt %d/%d: MQTT not ready", attempt + 1, MAKAPIX_MAX_RETRIES);
             result = ESP_ERR_INVALID_STATE;
             break;
         }
-        
+
+        ESP_LOGI(TAG, "Publishing request (attempt %d/%d): %s", attempt + 1, MAKAPIX_MAX_RETRIES, request_id);
         esp_err_t pub_err = makapix_mqtt_publish_raw(topic, payload, 1);
         if (pub_err != ESP_OK) {
+            ESP_LOGW(TAG, "Publish failed: %s", esp_err_to_name(pub_err));
             if (pub_err == ESP_ERR_INVALID_STATE) {
                 result = pub_err;
                 break;
@@ -283,12 +286,17 @@ static esp_err_t publish_and_wait(cJSON *request_obj, cJSON **out_response)
         } else {
             BaseType_t sem_result = xSemaphoreTake(pending->done_sem, pdMS_TO_TICKS(MAKAPIX_REQUEST_TIMEOUT_MS));
             if (sem_result == pdTRUE) {
+                ESP_LOGD(TAG, "Response received for request: %s", request_id);
                 result = ESP_OK;
                 break;
+            } else {
+                ESP_LOGW(TAG, "Request timeout (attempt %d/%d, waited %dms): %s",
+                         attempt + 1, MAKAPIX_MAX_RETRIES, MAKAPIX_REQUEST_TIMEOUT_MS, request_id);
             }
         }
         // Backoff before retry
         if (attempt < MAKAPIX_MAX_RETRIES - 1) {
+            ESP_LOGD(TAG, "Waiting %lums before retry", (unsigned long)delay_ms);
             vTaskDelay(pdMS_TO_TICKS(delay_ms));
             delay_ms = (delay_ms * 2 > 60000) ? 60000 : delay_ms * 2;
         }

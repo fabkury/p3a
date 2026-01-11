@@ -144,8 +144,25 @@ esp_err_t makapix_mqtt_subscribe(const char *topic, int qos);
  * @param request_ack Whether to request acknowledgment
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t makapix_mqtt_publish_view(int32_t post_id, const char *intent, 
+esp_err_t makapix_mqtt_publish_view(int32_t post_id, const char *intent,
                                      uint8_t play_order, const char *channel_name,
                                      const char *player_key, const char *channel_user_sqid,
                                      const char *channel_hashtag, bool request_ack);
+
+/**
+ * @brief Get count of consecutive TLS authentication failures
+ *
+ * Used to detect when server is persistently rejecting client certificate,
+ * indicating invalid/revoked registration.
+ *
+ * @return Number of consecutive TLS auth failures since last success
+ */
+int makapix_mqtt_get_auth_failure_count(void);
+
+/**
+ * @brief Reset TLS authentication failure counter
+ *
+ * Call when starting fresh provisioning to clear previous failure state.
+ */
+void makapix_mqtt_reset_auth_failure_count(void);
 

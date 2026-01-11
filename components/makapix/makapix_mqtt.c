@@ -62,6 +62,9 @@ typedef enum {
 } mqtt_client_state_t;
 static mqtt_client_state_t s_mqtt_state = MQTT_CLIENT_NONE;
 
+// Track consecutive TLS authentication failures to detect invalid registration
+static int s_consecutive_auth_failures = 0;
+
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
     esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)event_data;
@@ -70,6 +73,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "Connected to %s", s_mqtt_uri);
+        // Reset auth failure counter on successful connection
+        s_consecutive_auth_failures = 0;
         // Update state under mutex
         if (s_mqtt_mutex) {
             xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
@@ -86,6 +91,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             if (s_mqtt_mutex) {
                 xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
                 s_pending_response_sub_msg_id = esp_mqtt_client_subscribe(client, s_response_topic, 1);
+                ESP_LOGI(TAG, "Subscribing to response topic: %s (msg_id=%d)", s_response_topic, s_pending_response_sub_msg_id);
                 xSemaphoreGive(s_mqtt_mutex);
             }
         }
@@ -125,7 +131,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         if (event->msg_id == s_pending_response_sub_msg_id) {
             s_response_subscribed = true;
             s_pending_response_sub_msg_id = -1;
-            ESP_LOGD(TAG, "Response subscription confirmed");
+            ESP_LOGI(TAG, "Response subscription confirmed (ready for API requests)");
         }
         break;
 
@@ -298,7 +304,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 }
                 // Response topic: do NOT parse here. Hand the owned string to makapix_api (single parse there).
                 else if (strncmp(s_reassembly_topic, s_response_prefix, strlen(s_response_prefix)) == 0) {
-                    ESP_LOGD(TAG, "Routing response to callback");
+                    ESP_LOGI(TAG, "Received API response on topic: %s (%zu bytes)", s_reassembly_topic, s_reassembly_len);
                     if (s_response_callback) {
                         // Transfer ownership of a right-sized buffer to the callback.
                         char *owned = (char *)heap_caps_malloc(s_reassembly_len + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -341,9 +347,16 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             ESP_LOGE(TAG, "Error type: %d", event->error_handle->error_type);
             ESP_LOGE(TAG, "Connect return code: %d", event->error_handle->connect_return_code);
             if (event->error_handle->esp_tls_last_esp_err) {
-                ESP_LOGE(TAG, "TLS error: 0x%x (%s)", 
+                ESP_LOGE(TAG, "TLS error: 0x%x (%s)",
                          event->error_handle->esp_tls_last_esp_err,
                          esp_err_to_name(event->error_handle->esp_tls_last_esp_err));
+                // Track TLS handshake failures - indicates server rejecting client certificate
+                // Error 0x801a (ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED) typically means invalid/revoked cert
+                if (event->error_handle->esp_tls_last_esp_err == 0x801a) {  // ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED
+                    s_consecutive_auth_failures++;
+                    ESP_LOGW(TAG, "TLS auth failure #%d (server rejected client certificate)",
+                             s_consecutive_auth_failures);
+                }
             }
             if (event->error_handle->esp_transport_sock_errno) {
                 ESP_LOGE(TAG, "Socket error: %d", event->error_handle->esp_transport_sock_errno);
@@ -771,8 +784,19 @@ esp_err_t makapix_mqtt_publish_view(int32_t post_id, const char *intent,
 
 void makapix_mqtt_log_state(void)
 {
-    ESP_LOGI(TAG, "State: %s, URI: %s", 
+    ESP_LOGI(TAG, "State: %s, URI: %s",
              s_mqtt_connected ? "connected" : "disconnected",
              strlen(s_mqtt_uri) > 0 ? s_mqtt_uri : "(not set)");
+}
+
+int makapix_mqtt_get_auth_failure_count(void)
+{
+    return s_consecutive_auth_failures;
+}
+
+void makapix_mqtt_reset_auth_failure_count(void)
+{
+    s_consecutive_auth_failures = 0;
+    ESP_LOGD(TAG, "Auth failure counter reset");
 }
 

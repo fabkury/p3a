@@ -911,8 +911,8 @@ esp_err_t h_put_play_order(httpd_req_t *req)
     }
 
     // Hot-swap the pick mode for the play scheduler
-    // 0 = PS_PICK_RECENCY (sequential/newest first), 1 = PS_PICK_RANDOM
-    ps_pick_mode_t pick_mode = (order == 0) ? PS_PICK_RECENCY : PS_PICK_RANDOM;
+    // play_order: 0=server, 1=created, 2=random → only 2 is random
+    ps_pick_mode_t pick_mode = (order == 2) ? PS_PICK_RANDOM : PS_PICK_RECENCY;
     play_scheduler_set_pick_mode(pick_mode);
 
     send_json(req, 200, "{\"ok\":true}");

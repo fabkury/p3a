@@ -144,6 +144,9 @@ void makapix_mqtt_connection_callback(bool connected)
     }
 }
 
+// Maximum consecutive TLS auth failures before marking registration invalid
+#define MAX_AUTH_FAILURES 3
+
 /**
  * @brief MQTT reconnection task
  */
@@ -158,8 +161,17 @@ void makapix_mqtt_reconnect_task(void *pvParameters)
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(5000));
 
+        // Check if too many auth failures - registration is likely invalid
+        if (makapix_mqtt_get_auth_failure_count() >= MAX_AUTH_FAILURES) {
+            ESP_LOGE(MAKAPIX_TAG, "Too many TLS auth failures (%d) - registration appears invalid",
+                     makapix_mqtt_get_auth_failure_count());
+            ESP_LOGE(MAKAPIX_TAG, "Stopping reconnection attempts. Re-provision device to fix.");
+            s_makapix_state = MAKAPIX_STATE_REGISTRATION_INVALID;
+            break;  // Exit reconnect loop
+        }
+
         // Check if WiFi has a valid IP
-        if (app_wifi_get_local_ip(wifi_ip, sizeof(wifi_ip)) != ESP_OK || 
+        if (app_wifi_get_local_ip(wifi_ip, sizeof(wifi_ip)) != ESP_OK ||
             strcmp(wifi_ip, "0.0.0.0") == 0) {
             continue;  // No WiFi, wait silently
         }

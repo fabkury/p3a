@@ -355,9 +355,12 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
                 progress.progress_cb(progress.total_received, progress.content_length, progress.progress_ctx);
             }
         }
-        
-        ESP_LOGD(TAG, "Chunk: %zu bytes, Total: %zu / %zu bytes", 
+
+        ESP_LOGD(TAG, "Chunk: %zu bytes, Total: %zu / %zu bytes",
                  chunk_received, progress.total_received, progress.content_length);
+
+        // Yield to higher-priority tasks (animation rendering) between chunks
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 
     // Cleanup HTTP client

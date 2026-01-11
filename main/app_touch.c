@@ -243,17 +243,24 @@ static void app_touch_task(void *arg)
                 
                 // Check if rotation threshold exceeded
                 if (!rotation_triggered && fabsf(rotation_cumulative) >= ROTATION_ANGLE_THRESHOLD_RAD) {
-                    // Route rotation through state-aware handler
-                    p3a_touch_event_t touch_event = {
-                        .type = (rotation_cumulative > 0) ? P3A_TOUCH_EVENT_ROTATION_CW : P3A_TOUCH_EVENT_ROTATION_CCW
-                    };
-                    
-                    ESP_LOGI(TAG, "rotation gesture: %s, cumulative=%.2f deg", 
-                             (rotation_cumulative > 0) ? "CW" : "CCW",
-                                 rotation_cumulative * 180.0f / MATH_PI);
-                    
-                    if (p3a_touch_router_handle_event(&touch_event) == ESP_OK) {
-                        rotation_triggered = true;
+                    // Determine rotation type
+                    p3a_touch_event_type_t rot_type = (rotation_cumulative > 0) ?
+                        P3A_TOUCH_EVENT_ROTATION_CW : P3A_TOUCH_EVENT_ROTATION_CCW;
+
+                    // Check if rotation gestures are enabled in current state
+                    if (!p3a_touch_router_is_gesture_enabled(rot_type)) {
+                        ESP_LOGD(TAG, "rotation gesture ignored - not enabled in current state");
+                        rotation_triggered = true;  // Prevent repeated log spam
+                    } else {
+                        p3a_touch_event_t touch_event = { .type = rot_type };
+
+                        ESP_LOGI(TAG, "rotation gesture: %s, cumulative=%.2f deg",
+                                 (rotation_cumulative > 0) ? "CW" : "CCW",
+                                     rotation_cumulative * 180.0f / MATH_PI);
+
+                        if (p3a_touch_router_handle_event(&touch_event) == ESP_OK) {
+                            rotation_triggered = true;
+                        }
                     }
                 }
             }
@@ -421,13 +428,19 @@ static void app_touch_task(void *arg)
                     uint16_t tap_x = touch_start_x;
                     uint16_t tap_y = touch_start_y;
                     transform_touch_coordinates(&tap_x, &tap_y, app_get_screen_rotation());
-                    
+
                     const uint16_t screen_midpoint = P3A_DISPLAY_WIDTH / 2;
-                    p3a_touch_event_t touch_event = {
-                        .type = (tap_x < screen_midpoint) ? P3A_TOUCH_EVENT_TAP_LEFT : P3A_TOUCH_EVENT_TAP_RIGHT
-                    };
-                    p3a_touch_router_handle_event(&touch_event);
-                    ESP_LOGD(TAG, "tap gesture: routed to state handler (tap_x=%u)", tap_x);
+                    p3a_touch_event_type_t tap_type = (tap_x < screen_midpoint) ?
+                        P3A_TOUCH_EVENT_TAP_LEFT : P3A_TOUCH_EVENT_TAP_RIGHT;
+
+                    // Check if tap gestures are enabled in current state
+                    if (!p3a_touch_router_is_gesture_enabled(tap_type)) {
+                        ESP_LOGD(TAG, "tap gesture ignored - not enabled in current state");
+                    } else {
+                        p3a_touch_event_t touch_event = { .type = tap_type };
+                        p3a_touch_router_handle_event(&touch_event);
+                        ESP_LOGD(TAG, "tap gesture: routed to state handler (tap_x=%u)", tap_x);
+                    }
                 } else if (gesture_state == GESTURE_STATE_ROTATION) {
                     // Rotation gesture ended (action already taken if threshold was reached)
                     ESP_LOGD(TAG, "rotation gesture ended");

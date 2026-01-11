@@ -11,6 +11,7 @@
 
 #include "play_scheduler_internal.h"
 #include "play_scheduler.h"
+#include "p3a_state.h"
 #include "esp_log.h"
 
 static const char *TAG = "ps_timer";
@@ -29,6 +30,15 @@ static void timer_task(void *arg)
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     while (true) {
+        // Skip all swap operations if not in animation playback state
+        // This prevents the scheduler from interfering with provisioning, OTA, or PICO-8 modes
+        p3a_state_t current_state = p3a_state_get();
+        if (current_state != P3A_STATE_ANIMATION_PLAYBACK) {
+            // Not in animation playback - just wait and check again
+            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(500));
+            continue;
+        }
+
         // Check for touch events
         if (state->touch_next) {
             state->touch_next = false;

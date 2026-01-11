@@ -19,7 +19,7 @@ set(PROJECT_VER "0.7.0-dev")
 # =============================================================================
 # Set P3A_BUILD_FLASHER to OFF to skip flasher build (faster dev builds)
 # Set to ON for release builds that need the flasher executable
-set(P3A_BUILD_FLASHER OFF)
+set(P3A_BUILD_FLASHER ON)
 # =============================================================================
 
 # Parse PROJECT_VER to extract major, minor, patch components
@@ -201,13 +201,13 @@ if is_dev_build:
         f.write('# Run from this directory:\\n')
         f.write('\\n')
         f.write('# Windows Command Prompt:\\n')
-        f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts} 0x20000 p3a.bin\\n')
+        f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts} 0x20000 p3a.bin\\n')
         f.write('\\n')
         f.write('# Windows PowerShell:\\n')
-        f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts} 0x20000 p3a.bin\\n')
+        f.write(f'python -m esptool --chip esp32p4 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts} 0x20000 p3a.bin\\n')
         f.write('\\n')
         f.write('# Linux/macOS:\\n')
-        f.write(f'python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default-reset --after hard-reset write-flash {flash_opts} 0x20000 p3a.bin\\n')
+        f.write(f'python -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 --before default_reset --after hard_reset write_flash {flash_opts} 0x20000 p3a.bin\\n')
         f.write('\\n')
         f.write('\\n')
         f.write('# Or with explicit port (replace COM5 or /dev/ttyUSB0 with your port)\\n')

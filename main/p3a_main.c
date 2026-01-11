@@ -350,16 +350,23 @@ static void makapix_state_monitor_task(void *arg)
                     ESP_LOGI(TAG, "============================================");
                 }
                 
-            } else if ((last_makapix_state == MAKAPIX_STATE_PROVISIONING || last_makapix_state == MAKAPIX_STATE_SHOW_CODE) && 
+            } else if ((last_makapix_state == MAKAPIX_STATE_PROVISIONING || last_makapix_state == MAKAPIX_STATE_SHOW_CODE) &&
                        current_makapix_state != MAKAPIX_STATE_PROVISIONING && current_makapix_state != MAKAPIX_STATE_SHOW_CODE) {
-                // Transition back to animation playback
-                p3a_state_exit_to_playback();
-                
-                // Exit UI mode FIRST, then hide registration
-                // This ensures animation takes over immediately without an intermediate black frame
-                app_lcd_exit_ui_mode();
-                ugfx_ui_hide_registration();
-                ESP_LOGD(TAG, "Registration mode exited");
+                // Check if cleanup was already done synchronously by touch router
+                // (when user long-pressed to cancel provisioning)
+                bool still_in_ui = app_lcd_is_ui_mode();
+
+                if (still_in_ui) {
+                    // Touch router didn't clean up (e.g., credentials received vs cancelled by user)
+                    // Transition back to animation playback
+                    p3a_state_exit_to_playback();
+
+                    // Exit UI mode FIRST, then hide registration
+                    // This ensures animation takes over immediately without an intermediate black frame
+                    app_lcd_exit_ui_mode();
+                    ugfx_ui_hide_registration();
+                }
+                ESP_LOGD(TAG, "Registration mode exited (cleanup was %s)", still_in_ui ? "needed" : "already done");
             }
 
             last_makapix_state = current_makapix_state;

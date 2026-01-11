@@ -54,10 +54,12 @@ bool ps_history_can_go_back(const ps_state_t *state)
 {
     if (state->history_count == 0) return false;
 
-    // history_position: -1 means at head, 0..N means steps back from head
-    // Can go back if we haven't reached the oldest entry
-    int32_t steps_back = state->history_position + 1;
-    return (size_t)(steps_back + 1) <= state->history_count;
+    // history_position: -1 means at head (viewing current), 0+ means steps back
+    // After going back, we'll be at position+1 viewing entry at steps_from_head = position+2
+    // Need that entry to exist: (position + 2) < history_count, i.e., position + 3 <= count
+    // Equivalently: need at least 2 entries when at head, 3 when at pos 0, etc.
+    int32_t new_steps_from_head = state->history_position + 2;
+    return (size_t)(new_steps_from_head + 1) <= state->history_count;
 }
 
 bool ps_history_can_go_forward(const ps_state_t *state)
@@ -75,8 +77,10 @@ bool ps_history_go_back(ps_state_t *state, ps_artwork_t *out_artwork)
     // Move position back
     state->history_position++;
 
-    // Calculate index: head is at history_head-1, going back means lower indices
-    size_t steps_from_head = (size_t)(state->history_position + 1);
+    // Calculate index: history_head-1 is current, history_head-2 is previous, etc.
+    // At position 0, we want the previous artwork (steps_from_head = 2)
+    // At position 1, we want one before that (steps_from_head = 3)
+    size_t steps_from_head = (size_t)(state->history_position + 2);
     size_t idx = (state->history_head + PS_HISTORY_SIZE - steps_from_head) % PS_HISTORY_SIZE;
 
     if (out_artwork) {
@@ -95,14 +99,15 @@ bool ps_history_go_forward(ps_state_t *state, ps_artwork_t *out_artwork)
     // Move position forward (toward head)
     state->history_position--;
 
+    size_t idx;
     if (state->history_position < 0) {
-        // At head - no artwork to return from history (need to use lookahead)
-        return false;
+        // Back at head - return the most recent entry (current artwork)
+        idx = (state->history_head + PS_HISTORY_SIZE - 1) % PS_HISTORY_SIZE;
+    } else {
+        // Still in history - calculate index (same scheme as go_back: position + 2)
+        size_t steps_from_head = (size_t)(state->history_position + 2);
+        idx = (state->history_head + PS_HISTORY_SIZE - steps_from_head) % PS_HISTORY_SIZE;
     }
-
-    // Calculate index
-    size_t steps_from_head = (size_t)(state->history_position + 1);
-    size_t idx = (state->history_head + PS_HISTORY_SIZE - steps_from_head) % PS_HISTORY_SIZE;
 
     if (out_artwork) {
         memcpy(out_artwork, &state->history[idx], sizeof(ps_artwork_t));
@@ -118,12 +123,12 @@ bool ps_history_get_current(const ps_state_t *state, ps_artwork_t *out_artwork)
     }
 
     if (state->history_position < 0) {
-        // At head - get most recent entry
+        // At head - get most recent entry (current artwork)
         size_t idx = (state->history_head + PS_HISTORY_SIZE - 1) % PS_HISTORY_SIZE;
         memcpy(out_artwork, &state->history[idx], sizeof(ps_artwork_t));
     } else {
-        // In history - get entry at current position
-        size_t steps_from_head = (size_t)(state->history_position + 1);
+        // In history - get entry at current position (same scheme: position + 2)
+        size_t steps_from_head = (size_t)(state->history_position + 2);
         size_t idx = (state->history_head + PS_HISTORY_SIZE - steps_from_head) % PS_HISTORY_SIZE;
         memcpy(out_artwork, &state->history[idx], sizeof(ps_artwork_t));
     }

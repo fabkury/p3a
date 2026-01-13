@@ -53,7 +53,7 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 
 - **USB access**: Connect via USB-C to access the microSD card as a storage device. Copy you own private, offline files to p3a
 - **Auto co-processor updates**: p3a automatically flashes the ESP32-C6 Wi-Fi 6 co-processor firmware when needed
-- **PICO-8 Monitor** (optional): Stream PICO-8 games to the display—disabled by default to reduce firmware size, can be enabled at compile time
+- **PICO-8 Monitor**: Stream PICO-8 games to the display via Wi-Fi
 
 <p align="center">
   <img src="images/p3a_10fps.gif" alt="p3a video">

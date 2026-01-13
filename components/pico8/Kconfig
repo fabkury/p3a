@@ -7,8 +7,7 @@ menu "PICO-8 Streaming"
         default y
         help
             Enable PICO-8 pixel art streaming over USB/WebSocket.
-            When disabled, PICO-8 streaming functions are stubbed out
-            to reduce firmware size.
+            When disabled, PICO-8 streaming functions are stubbed out.
 
     if P3A_PICO8_ENABLE
 

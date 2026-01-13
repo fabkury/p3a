@@ -315,11 +315,9 @@ From the Makapix Club website, you can:
 
 ---
 
-## PICO-8 Monitor (Optional)
+## PICO-8 Monitor
 
-> **Note:** The PICO-8 monitor feature is **disabled by default** in prebuilt firmware to reduce binary size. If you build from source, you can enable it via `idf.py menuconfig` → "Physical Player of Pixel Art (P3A)" → "PICO-8 Monitor" → "Enable PICO-8 monitor feature".
-
-When enabled, p3a can act as a dedicated PICO-8 game display:
+p3a can act as a dedicated PICO-8 game display:
 
 ### How it works
 

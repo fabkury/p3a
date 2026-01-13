@@ -180,7 +180,7 @@ The following components are maintained by Espressif Systems and licensed under 
   - These are pre-compiled WebAssembly and JavaScript files
   - Original Fake-08 project is MIT licensed
   - License headers not present in the compiled/minified files included in p3a
-  - **Recommendation**: Add attribution notice in documentation or keep disabled by default
+  - **Recommendation**: Add attribution notice in documentation
   - Optional component: Can be excluded by disabling `CONFIG_P3A_PICO8_ENABLE` during build
 
 ### 5. Python Dependencies (Flasher Tool)
@@ -276,7 +276,6 @@ To maintain full compliance with all licenses in the p3a project:
 ⚠️ **Recommended Actions:**
 - [ ] Add explicit attribution in documentation stating Fake-08 is used under MIT license
 - [ ] Consider fetching from source during build instead of including pre-compiled files
-- [ ] Or keep PICO-8 feature disabled by default (`CONFIG_P3A_PICO8_ENABLE=OFF`)
 
 ### 8. Python Flasher Dependencies
 

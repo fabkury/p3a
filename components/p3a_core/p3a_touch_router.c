@@ -8,6 +8,7 @@
 
 #include "p3a_touch_router.h"
 #include "p3a_state.h"
+#include "connectivity_state.h"
 #include "esp_log.h"
 #include <string.h>
 #include <stdbool.h>
@@ -112,8 +113,23 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
                     if (ugfx_ui_show_captive_ap_info) ugfx_ui_show_captive_ap_info();
                 }
             } else {
-                // Start provisioning
+                // Start provisioning - but only if we have internet
                 ESP_LOGI(TAG, "Long press detected - attempting to start provisioning");
+                
+                // Check for internet connectivity before provisioning
+                if (!connectivity_state_has_internet()) {
+                    ESP_LOGW(TAG, "Cannot start provisioning - no internet connectivity");
+                    // Show error message to user
+                    extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
+                                                               int progress_percent, const char *detail) __attribute__((weak));
+                    if (p3a_render_set_channel_message) {
+                        const char *conn_detail = connectivity_state_get_detail();
+                        p3a_render_set_channel_message("Provisioning Unavailable", 6 /* P3A_CHANNEL_MSG_ERROR */, -1, 
+                                                       conn_detail ? conn_detail : "No internet connection");
+                    }
+                    return ESP_ERR_NOT_FINISHED;
+                }
+                
                 if (!makapix_start_provisioning) {
                     ESP_LOGW(TAG, "Provisioning not available (makapix_start_provisioning is NULL)");
                 } else {

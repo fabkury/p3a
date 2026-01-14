@@ -20,12 +20,15 @@
 #include "play_scheduler.h"
 #include "play_scheduler_internal.h"
 #include "channel_interface.h"
+#include "channel_cache.h"
+#include "load_tracker.h"
 #include "animation_swap_request.h"  // For swap_request_t
 #include "sdcard_channel_impl.h"
 #include "makapix_channel_impl.h"
 #include "makapix_channel_utils.h"
 #include "view_tracker.h"  // For view_tracker_stop()
 #include "config_store.h"
+#include "connectivity_state.h"
 #include "p3a_state.h"
 #include "sd_path.h"
 #include "esp_log.h"
@@ -36,6 +39,7 @@
 #include <sys/stat.h>
 #include <utime.h>
 #include <time.h>
+#include <unistd.h>
 
 static const char *TAG = "play_scheduler";
 
@@ -70,6 +74,43 @@ static const char *TAG = "play_scheduler";
 // Using weak symbols to avoid hard dependency on main component
 extern esp_err_t animation_player_request_swap(const swap_request_t *request) __attribute__((weak));
 extern void animation_player_display_message(const char *title, const char *body) __attribute__((weak));
+
+// ============================================================================
+// Helpers - Display Name
+// ============================================================================
+
+/**
+ * @brief Get user-friendly display name from channel_id
+ */
+static void ps_get_display_name(const char *channel_id, char *out_name, size_t max_len)
+{
+    if (!channel_id || !out_name || max_len == 0) return;
+    
+    if (strcmp(channel_id, "all") == 0) {
+        snprintf(out_name, max_len, "All Artworks");
+    } else if (strcmp(channel_id, "promoted") == 0) {
+        snprintf(out_name, max_len, "Promoted");
+    } else if (strcmp(channel_id, "user") == 0) {
+        snprintf(out_name, max_len, "My Channel");
+    } else if (strcmp(channel_id, "sdcard") == 0) {
+        snprintf(out_name, max_len, "microSD Card");
+    } else if (strncmp(channel_id, "by_user_", 8) == 0) {
+        // Truncate user ID to fit in output buffer with "User: " prefix
+        char truncated[48];
+        strncpy(truncated, channel_id + 8, sizeof(truncated) - 1);
+        truncated[sizeof(truncated) - 1] = '\0';
+        snprintf(out_name, max_len, "User: %.48s", truncated);
+    } else if (strncmp(channel_id, "hashtag_", 8) == 0) {
+        // Truncate hashtag to fit in output buffer with "#" prefix
+        char truncated[56];
+        strncpy(truncated, channel_id + 8, sizeof(truncated) - 1);
+        truncated[sizeof(truncated) - 1] = '\0';
+        snprintf(out_name, max_len, "#%.56s", truncated);
+    } else {
+        // Truncate channel_id to fit in output buffer
+        snprintf(out_name, max_len, "%.63s", channel_id);
+    }
+}
 
 // ============================================================================
 // Global State
@@ -735,6 +776,51 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
     // Touch cache file for LRU tracking
     ps_touch_cache_file(ch->channel_id);
 
+    // For Makapix channels, rebuild LAi (available_indices) by scanning vault
+    if (format == PS_ENTRY_FORMAT_MAKAPIX && ch->entry_count > 0) {
+        // Free any existing LAi
+        if (ch->available_indices) {
+            free(ch->available_indices);
+            ch->available_indices = NULL;
+            ch->available_count = 0;
+        }
+
+        // Allocate LAi array (worst case: all entries available)
+        ch->available_indices = malloc(ch->entry_count * sizeof(uint32_t));
+        if (ch->available_indices) {
+            // Get vault path
+            char vault_base[128];
+            if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
+                strlcpy(vault_base, "/sdcard/p3a/vault", sizeof(vault_base));
+            }
+
+            // Scan entries to rebuild LAi
+            makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
+            ch->available_count = 0;
+
+            for (size_t i = 0; i < ch->entry_count; i++) {
+                if (entries[i].kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+                    continue;
+                }
+
+                // Build vault filepath
+                char filepath[256];
+                ps_build_vault_filepath(&entries[i], filepath, sizeof(filepath));
+
+                // Check if file exists
+                struct stat st;
+                if (stat(filepath, &st) == 0) {
+                    ch->available_indices[ch->available_count++] = (uint32_t)i;
+                }
+            }
+
+            ESP_LOGI(TAG, "Channel '%s': rebuilt LAi with %zu available (out of %zu entries)",
+                     ch->channel_id, ch->available_count, ch->entry_count);
+        } else {
+            ESP_LOGW(TAG, "Channel '%s': failed to allocate LAi array", ch->channel_id);
+        }
+    }
+
     ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries (%s format) into memory",
              ch->channel_id, ch->entry_count,
              format == PS_ENTRY_FORMAT_SDCARD ? "sdcard" : "makapix");
@@ -862,11 +948,16 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
 
     // Check if any channel has entries we can play immediately
     bool has_entries = false;
+    char first_channel_display_name[64] = "Channel";
     for (size_t i = 0; i < s_state.channel_count; i++) {
         if (s_state.channels[i].active && s_state.channels[i].entry_count > 0) {
             has_entries = true;
             break;
         }
+    }
+    // Get first channel's display name for UI
+    if (s_state.channel_count > 0) {
+        ps_get_display_name(s_state.channels[0].channel_id, first_channel_display_name, sizeof(first_channel_display_name));
     }
 
     xSemaphoreGive(s_state.mutex);
@@ -879,10 +970,13 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         ESP_LOGI(TAG, "No cached entries yet - waiting for refresh/download");
 
         // Show loading state to user while waiting for refresh/download
-        extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
-                                                   int progress_percent, const char *detail);
-        p3a_render_set_channel_message("Makapix Club", 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
-                                        "Loading channel...");
+        // But only if we have WiFi connectivity (no point showing loading in AP mode)
+        if (connectivity_state_has_wifi()) {
+            extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
+                                                       int progress_percent, const char *detail);
+            p3a_render_set_channel_message(first_channel_display_name, 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
+                                            "Loading channel...");
+        }
         return ESP_OK;
     }
 }
@@ -1061,21 +1155,35 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
             extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
                                                        int progress_percent, const char *detail);
 
-            if (any_refreshing) {
-                // Channel is still refreshing - show loading message
-                p3a_render_set_channel_message("Makapix Club", 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
-                                                "Updating channel index...");
-            } else {
-                // Check if download manager is actively downloading
-                extern bool download_manager_is_busy(void);
-                if (download_manager_is_busy()) {
-                    p3a_render_set_channel_message("Makapix Club", 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1,
-                                                    "Downloading artwork...");
+            // Get display name for first channel
+            char display_name[64] = "Channel";
+            if (s_state.channel_count > 0) {
+                ps_get_display_name(s_state.channels[0].channel_id, display_name, sizeof(display_name));
+            }
+
+            // Only show loading/downloading messages if we have WiFi connectivity
+            if (connectivity_state_has_wifi()) {
+                if (any_refreshing) {
+                    // Channel is still refreshing - show loading message
+                    p3a_render_set_channel_message(display_name, 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
+                                                    "Updating channel index...");
                 } else {
-                    // No refresh, no download - truly no files available
-                    if (animation_player_display_message) {
-                        animation_player_display_message("No Artworks", "No playable files available");
+                    // Check if download manager is actively downloading
+                    extern bool download_manager_is_busy(void);
+                    if (download_manager_is_busy()) {
+                        p3a_render_set_channel_message(display_name, 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1,
+                                                        "Downloading artwork...");
+                    } else {
+                        // No refresh, no download - truly no files available
+                        if (animation_player_display_message) {
+                            animation_player_display_message("No Artworks", "No playable files available");
+                        }
                     }
+                }
+            } else {
+                // No WiFi - can't load channels from Makapix
+                if (animation_player_display_message) {
+                    animation_player_display_message("No Artworks", "No playable files available");
                 }
             }
         }
@@ -1300,6 +1408,324 @@ void play_scheduler_reset(void)
     s_state.epoch_id++;
 
     // Note: History is preserved across resets
+
+    xSemaphoreGive(s_state.mutex);
+}
+
+// ============================================================================
+// LAi (Locally Available index) Integration
+// ============================================================================
+
+/**
+ * @brief Find channel index by channel_id
+ */
+static int ps_find_channel_index(const char *channel_id)
+{
+    if (!channel_id) return -1;
+
+    for (size_t i = 0; i < s_state.channel_count; i++) {
+        if (strcmp(s_state.channels[i].channel_id, channel_id) == 0) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+/**
+ * @brief Find Ci index by storage_key (UUID string)
+ */
+static uint32_t ps_find_ci_by_storage_key(ps_channel_state_t *ch, const char *storage_key)
+{
+    if (!ch || !storage_key || !ch->entries || ch->entry_count == 0) {
+        return UINT32_MAX;
+    }
+
+    // Only Makapix entries have storage_key
+    if (ch->entry_format != PS_ENTRY_FORMAT_MAKAPIX) {
+        return UINT32_MAX;
+    }
+
+    // Convert storage_key to UUID bytes
+    uint8_t uuid_bytes[16];
+    if (!uuid_to_bytes(storage_key, uuid_bytes)) {
+        return UINT32_MAX;
+    }
+
+    makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
+    for (size_t i = 0; i < ch->entry_count; i++) {
+        if (memcmp(entries[i].storage_key_uuid, uuid_bytes, 16) == 0) {
+            return (uint32_t)i;
+        }
+    }
+
+    return UINT32_MAX;
+}
+
+/**
+ * @brief Check if a Ci index is already in LAi
+ */
+static bool ps_lai_contains(ps_channel_state_t *ch, uint32_t ci_index)
+{
+    if (!ch->available_indices) return false;
+
+    for (size_t i = 0; i < ch->available_count; i++) {
+        if (ch->available_indices[i] == ci_index) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * @brief Add a Ci index to LAi
+ */
+static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
+{
+    if (ci_index >= ch->entry_count) return false;
+
+    // Check if already present
+    if (ps_lai_contains(ch, ci_index)) return false;
+
+    // Ensure LAi array is allocated
+    if (!ch->available_indices) {
+        ch->available_indices = malloc(ch->entry_count * sizeof(uint32_t));
+        if (!ch->available_indices) return false;
+        ch->available_count = 0;
+    }
+
+    // Add to end
+    ch->available_indices[ch->available_count++] = ci_index;
+    return true;
+}
+
+/**
+ * @brief Remove a Ci index from LAi (swap-and-pop for O(1))
+ */
+static bool ps_lai_remove(ps_channel_state_t *ch, uint32_t ci_index)
+{
+    if (!ch->available_indices || ch->available_count == 0) return false;
+
+    for (size_t i = 0; i < ch->available_count; i++) {
+        if (ch->available_indices[i] == ci_index) {
+            // Swap with last
+            ch->available_indices[i] = ch->available_indices[ch->available_count - 1];
+            ch->available_count--;
+            return true;
+        }
+    }
+    return false;
+}
+
+void play_scheduler_on_download_complete(const char *channel_id, const char *storage_key)
+{
+    if (!s_state.initialized || !channel_id || !storage_key) {
+        return;
+    }
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+
+    int ch_idx = ps_find_channel_index(channel_id);
+    if (ch_idx < 0) {
+        ESP_LOGD(TAG, "Download complete for unknown channel: %s", channel_id);
+        xSemaphoreGive(s_state.mutex);
+        return;
+    }
+
+    ps_channel_state_t *ch = &s_state.channels[ch_idx];
+
+    // Find the Ci index for this storage_key
+    uint32_t ci_index = ps_find_ci_by_storage_key(ch, storage_key);
+    if (ci_index == UINT32_MAX) {
+        // Entry not found in current in-memory cache - the cache file may have been
+        // updated by the refresh task. Reload the cache from disk and try again.
+        ESP_LOGI(TAG, "Entry not in cache, reloading channel '%s' from disk", channel_id);
+        esp_err_t reload_err = ps_load_channel_cache(ch);
+        if (reload_err == ESP_OK) {
+            // Recalculate SWRR weights after cache reload
+            ps_swrr_calculate_weights(&s_state);
+            ci_index = ps_find_ci_by_storage_key(ch, storage_key);
+        }
+        
+        if (ci_index == UINT32_MAX) {
+            ESP_LOGD(TAG, "Downloaded file still not in Ci after reload: %s", storage_key);
+            xSemaphoreGive(s_state.mutex);
+            return;
+        }
+        
+        // After reload, LAi is already rebuilt with currently-available files
+        // So the downloaded file should already be in LAi
+        ESP_LOGI(TAG, "Cache reloaded, entry found at ci=%lu, LAi has %zu entries",
+                 (unsigned long)ci_index, ch->available_count);
+        
+        // Check for zero-to-one transition and trigger playback if needed
+        size_t total_available = 0;
+        for (size_t i = 0; i < s_state.channel_count; i++) {
+            total_available += s_state.channels[i].available_count;
+        }
+        
+        if (total_available > 0) {
+            ESP_LOGI(TAG, "After cache reload - triggering playback (%zu total available)", total_available);
+            xSemaphoreGive(s_state.mutex);
+            play_scheduler_next(NULL);
+            return;
+        }
+        
+        xSemaphoreGive(s_state.mutex);
+        return;
+    }
+
+    // Track if this is a zero-to-one transition
+    size_t prev_total_available = 0;
+    for (size_t i = 0; i < s_state.channel_count; i++) {
+        prev_total_available += s_state.channels[i].available_count;
+    }
+
+    // Add to LAi
+    if (ps_lai_add(ch, ci_index)) {
+        ESP_LOGI(TAG, "LAi add: ch='%s' ci=%lu, now %zu available",
+                 channel_id, (unsigned long)ci_index, ch->available_count);
+
+        // Check for zero-to-one transition
+        if (prev_total_available == 0 && ch->available_count > 0) {
+            ESP_LOGI(TAG, "Zero-to-one transition - triggering playback");
+            xSemaphoreGive(s_state.mutex);
+
+            // Trigger playback outside mutex to avoid deadlock
+            play_scheduler_next(NULL);
+            return;
+        }
+    }
+
+    xSemaphoreGive(s_state.mutex);
+}
+
+void play_scheduler_on_load_failed(const char *storage_key, const char *channel_id, const char *reason)
+{
+    if (!s_state.initialized || !storage_key) {
+        return;
+    }
+
+    // Get vault path for LTF
+    char vault_path[128];
+    if (sd_path_get_vault(vault_path, sizeof(vault_path)) != ESP_OK) {
+        strlcpy(vault_path, "/sdcard/p3a/vault", sizeof(vault_path));
+    }
+
+    // Record failure in LTF
+    ltf_record_failure(storage_key, vault_path, reason ? reason : "unknown");
+
+    // Build filepath and delete the corrupted file
+    uint8_t sha256[32];
+    if (ps_storage_key_sha256(storage_key, sha256) == ESP_OK) {
+        // Build path: {vault}/{sha[0:2]}/{sha[2:4]}/{sha[4:6]}/{storage_key}.{ext}
+        // We need to try all extensions since we don't know which one it is
+        const char *exts[] = {".webp", ".gif", ".png", ".jpg"};
+        for (int i = 0; i < 4; i++) {
+            char filepath[256];
+            snprintf(filepath, sizeof(filepath), "%s/%02x/%02x/%02x/%s%s",
+                     vault_path,
+                     sha256[0], sha256[1], sha256[2],
+                     storage_key, exts[i]);
+
+            struct stat st;
+            if (stat(filepath, &st) == 0) {
+                unlink(filepath);
+                ESP_LOGI(TAG, "Deleted corrupted file: %s", filepath);
+                break;
+            }
+        }
+    }
+
+    // Remove from LAi if channel is known
+    if (channel_id) {
+        xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+
+        int ch_idx = ps_find_channel_index(channel_id);
+        if (ch_idx >= 0) {
+            ps_channel_state_t *ch = &s_state.channels[ch_idx];
+            uint32_t ci_index = ps_find_ci_by_storage_key(ch, storage_key);
+            if (ci_index != UINT32_MAX && ps_lai_remove(ch, ci_index)) {
+                ESP_LOGI(TAG, "LAi remove: ch='%s' ci=%lu, now %zu available",
+                         channel_id, (unsigned long)ci_index, ch->available_count);
+            }
+        }
+
+        // Check if we need to try another artwork
+        size_t total_available = 0;
+        for (size_t i = 0; i < s_state.channel_count; i++) {
+            total_available += s_state.channels[i].available_count;
+        }
+
+        xSemaphoreGive(s_state.mutex);
+
+        // Try to pick another artwork if any available
+        if (total_available > 0) {
+            ESP_LOGI(TAG, "Trying another artwork after load failure");
+            play_scheduler_next(NULL);
+        } else {
+            ESP_LOGW(TAG, "No artworks available after load failure");
+            // Show appropriate message (only if we have WiFi)
+            if (connectivity_state_has_wifi()) {
+                extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
+                                                           int progress_percent, const char *detail);
+                extern bool download_manager_is_busy(void);
+                
+                // Get display name for first channel
+                char ch_display_name[64] = "Channel";
+                xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+                if (s_state.channel_count > 0) {
+                    ps_get_display_name(s_state.channels[0].channel_id, ch_display_name, sizeof(ch_display_name));
+                }
+                xSemaphoreGive(s_state.mutex);
+                
+                if (download_manager_is_busy()) {
+                    p3a_render_set_channel_message(ch_display_name, 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1,
+                                                    "Downloading artwork...");
+                } else {
+                    p3a_render_set_channel_message(NULL, 0, -1, NULL);
+                }
+            }
+        }
+    }
+}
+
+size_t play_scheduler_get_total_available(void)
+{
+    if (!s_state.initialized) {
+        return 0;
+    }
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+
+    size_t total = 0;
+    for (size_t i = 0; i < s_state.channel_count; i++) {
+        total += s_state.channels[i].available_count;
+    }
+
+    xSemaphoreGive(s_state.mutex);
+
+    return total;
+}
+
+void play_scheduler_get_channel_stats(const char *channel_id, size_t *out_total, size_t *out_cached)
+{
+    if (out_total) *out_total = 0;
+    if (out_cached) *out_cached = 0;
+
+    if (!channel_id || !s_state.initialized) {
+        return;
+    }
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+
+    // Find channel by ID
+    for (size_t i = 0; i < s_state.channel_count; i++) {
+        if (strcmp(s_state.channels[i].channel_id, channel_id) == 0) {
+            if (out_total) *out_total = s_state.channels[i].entry_count;
+            if (out_cached) *out_cached = s_state.channels[i].available_count;
+            break;
+        }
+    }
 
     xSemaphoreGive(s_state.mutex);
 }

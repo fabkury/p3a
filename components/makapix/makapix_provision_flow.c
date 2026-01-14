@@ -10,6 +10,7 @@
  */
 
 #include "makapix_internal.h"
+#include "connectivity_state.h"
 
 /**
  * @brief Provisioning task
@@ -168,6 +169,9 @@ void makapix_credentials_poll_task(void *pvParameters)
                 
                 ESP_LOGD(MAKAPIX_TAG, "Certificates saved successfully, initiating MQTT connection");
                 s_makapix_state = MAKAPIX_STATE_CONNECTING;
+                
+                // Update connectivity state - device is now registered
+                connectivity_state_on_registration_changed(true);
                 
                 // Initiate MQTT connection using the determined broker info
                 char mqtt_host[64];

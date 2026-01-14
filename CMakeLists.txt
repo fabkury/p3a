@@ -11,7 +11,7 @@ cmake_minimum_required(VERSION 3.16)
 # - Increment MINOR for new features (backward compatible)
 # - Increment PATCH for bug fixes
 # For testing OTA, use pre-release versions on GitHub
-set(PROJECT_VER "0.7.0-dev")
+set(PROJECT_VER "0.7.2-dev")
 # =============================================================================
 
 # =============================================================================
@@ -19,7 +19,7 @@ set(PROJECT_VER "0.7.0-dev")
 # =============================================================================
 # Set P3A_BUILD_FLASHER to OFF to skip flasher build (faster dev builds)
 # Set to ON for release builds that need the flasher executable
-set(P3A_BUILD_FLASHER ON)
+set(P3A_BUILD_FLASHER OFF)
 # =============================================================================
 
 # Parse PROJECT_VER to extract major, minor, patch components
@@ -192,6 +192,7 @@ with open(flash_cmd_path, 'w') as f:
 print(f'  OK: flash_command.txt')
 
 # Generate flash_command_app_only.txt for dev builds (flashes only the main app partition)
+flash_opts = '--flash_mode dio --flash_freq 80m --flash_size 32MB'
 if is_dev_build:
     flash_cmd_app_only_path = os.path.join(release_dir, 'flash_command_app_only.txt')
     # App-only flash: just p3a.bin at 0x20000

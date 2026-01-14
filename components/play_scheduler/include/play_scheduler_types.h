@@ -175,6 +175,10 @@ typedef struct {
 // Internal Types (used by implementation files)
 // ============================================================================
 
+// Forward declaration for channel_cache_t (defined in channel_cache.h)
+struct channel_cache_s;
+typedef struct channel_cache_s channel_cache_t;
+
 /**
  * @brief NAE pool entry
  */
@@ -206,6 +210,10 @@ typedef struct {
     bool cache_loaded;        // .bin file loaded into memory?
     ps_entry_format_t entry_format;  // Format of loaded entries
     void *entries;            // Entry array (format depends on entry_format)
+
+    // LAi (Locally Available index) - indices into entries of available artworks
+    uint32_t *available_indices;  // LAi array (NULL if not loaded)
+    size_t available_count;       // Number of available artworks
 
     // Refresh state
     bool refresh_pending;       // Queued for background refresh

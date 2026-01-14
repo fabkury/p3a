@@ -417,55 +417,22 @@ esp_err_t h_get_api_state(httpd_req_t *req)
 /**
  * GET /channels/stats
  * Get cached artwork counts for each Makapix channel
+ *
+ * Uses LAi (Locally Available index) for O(1) stats lookup.
+ * No filesystem scanning - returns cached counts from Play Scheduler.
  */
 esp_err_t h_get_channels_stats(httpd_req_t *req) {
-    // Cache + serialize stats computation
-    static SemaphoreHandle_t s_stats_mu = NULL;
-    static int64_t s_last_us = 0;
-    static size_t s_all_total = 0, s_all_cached = 0;
-    static size_t s_promoted_total = 0, s_promoted_cached = 0;
+    // Get stats from Play Scheduler (O(1) lookup from LAi)
+    size_t all_total = 0, all_cached = 0;
+    size_t promoted_total = 0, promoted_cached = 0;
 
-    if (!s_stats_mu) {
-        s_stats_mu = xSemaphoreCreateMutex();
-    }
-
-    const int64_t now_us = esp_timer_get_time();
-    const bool should_refresh = (s_last_us == 0) || ((now_us - s_last_us) > 2 * 1000 * 1000);
-
-    size_t all_total = s_all_total, all_cached = s_all_cached;
-    size_t promoted_total = s_promoted_total, promoted_cached = s_promoted_cached;
-
-    bool have_lock = false;
-    if (s_stats_mu) {
-        have_lock = (xSemaphoreTake(s_stats_mu, pdMS_TO_TICKS(250)) == pdTRUE);
-    }
-
-    if (have_lock || !s_stats_mu) {
-        if (should_refresh) {
-            char channel_path[128], vault_path[128];
-            sd_path_get_channel(channel_path, sizeof(channel_path));
-            sd_path_get_vault(vault_path, sizeof(vault_path));
-            
-            makapix_channel_count_cached("all", channel_path, vault_path, &all_total, &all_cached);
-            makapix_channel_count_cached("promoted", channel_path, vault_path, &promoted_total, &promoted_cached);
-
-            s_all_total = all_total;
-            s_all_cached = all_cached;
-            s_promoted_total = promoted_total;
-            s_promoted_cached = promoted_cached;
-            s_last_us = now_us;
-        }
-        if (have_lock) xSemaphoreGive(s_stats_mu);
-    } else {
-        all_total = s_all_total;
-        all_cached = s_all_cached;
-        promoted_total = s_promoted_total;
-        promoted_cached = s_promoted_cached;
-    }
+    // Use new LAi-based API for instant stats
+    play_scheduler_get_channel_stats("all", &all_total, &all_cached);
+    play_scheduler_get_channel_stats("promoted", &promoted_total, &promoted_cached);
 
     // Check if Makapix is registered (has player_key)
     bool is_registered = makapix_store_has_player_key();
-    
+
     char response[300];
     snprintf(response, sizeof(response),
              "{\"ok\":true,\"data\":{"

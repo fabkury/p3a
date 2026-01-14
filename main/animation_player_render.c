@@ -559,6 +559,13 @@ skip_prefetch:
             ESP_LOGI(TAG, "Buffers swapped: now playing %s", 
                      s_front_buffer.filepath ? s_front_buffer.filepath : "(unknown)");
 
+            // Clear any "Loading channel" or "Updating index" message now that playback has started
+            extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
+                                                       int progress_percent, const char *detail) __attribute__((weak));
+            if (p3a_render_set_channel_message) {
+                p3a_render_set_channel_message(NULL, 0 /* P3A_CHANNEL_MSG_NONE */, -1, NULL);
+            }
+
             if (s_front_buffer.is_live_mode_swap) {
                 live_mode_notify_swap_succeeded(s_front_buffer.live_index);
             }

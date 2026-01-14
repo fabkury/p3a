@@ -12,6 +12,7 @@
 #include "makapix_internal.h"
 #include "makapix_channel_events.h"
 #include "makapix_api.h"
+#include "connectivity_state.h"
 
 /**
  * @brief Timer callback for periodic status publishing
@@ -97,6 +98,9 @@ void makapix_mqtt_connection_callback(bool connected)
         // Signal waiting refresh tasks
         makapix_channel_signal_mqtt_connected();
         
+        // Update connectivity state
+        connectivity_state_on_mqtt_connected();
+        
         // Publish initial status
         makapix_mqtt_publish_status(makapix_get_current_post_id());
 
@@ -121,6 +125,9 @@ void makapix_mqtt_connection_callback(bool connected)
         ESP_LOGW(MAKAPIX_TAG, "MQTT disconnected");
         
         makapix_channel_signal_mqtt_disconnected();
+        
+        // Update connectivity state
+        connectivity_state_on_mqtt_disconnected();
         
         if (s_status_timer) {
             xTimerStop(s_status_timer, 0);

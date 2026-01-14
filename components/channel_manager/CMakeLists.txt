@@ -10,6 +10,8 @@ idf_component_register(
          "playlist_manager.c"
          "download_manager.c"
          "channel_settings.c"
+         "channel_cache.c"
+         "load_tracker.c"
     INCLUDE_DIRS "include"
     REQUIRES esp_common json makapix sdio_bus config_store sync_playlist wifi_manager live_mode p3a_core play_scheduler
 )

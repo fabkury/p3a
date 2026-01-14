@@ -19,6 +19,36 @@ static const char *TAG = "ps_swrr";
 #define WSUM 65536
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * @brief Get effective count for a channel (available for Makapix, entry for SD)
+ *
+ * For Makapix channels, uses available_count (LAi) since those are the only
+ * artworks that can actually be picked. For SD card channels (no LAi yet),
+ * uses entry_count.
+ */
+static inline size_t get_effective_count(const ps_channel_state_t *ch)
+{
+    if (ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX) {
+        return ch->available_count;
+    }
+    return ch->entry_count;
+}
+
+/**
+ * @brief Check if channel has available artwork
+ */
+static inline bool has_available_artwork(const ps_channel_state_t *ch)
+{
+    if (!ch->active || ch->entry_count == 0) {
+        return false;
+    }
+    return get_effective_count(ch) > 0;
+}
+
+// ============================================================================
 // Weight Calculation
 // ============================================================================
 
@@ -29,9 +59,9 @@ static void calculate_weights_equal(ps_state_t *state)
 {
     size_t active_count = 0;
 
-    // Count active channels
+    // Count active channels with available artwork
     for (size_t i = 0; i < state->channel_count; i++) {
-        if (state->channels[i].active && state->channels[i].entry_count > 0) {
+        if (has_available_artwork(&state->channels[i])) {
             active_count++;
         }
     }
@@ -40,11 +70,11 @@ static void calculate_weights_equal(ps_state_t *state)
         return;
     }
 
-    // Equal weight for each active channel
+    // Equal weight for each active channel with available artwork
     uint32_t weight_per_channel = WSUM / active_count;
 
     for (size_t i = 0; i < state->channel_count; i++) {
-        if (state->channels[i].active && state->channels[i].entry_count > 0) {
+        if (has_available_artwork(&state->channels[i])) {
             state->channels[i].weight = weight_per_channel;
         } else {
             state->channels[i].weight = 0;
@@ -59,9 +89,9 @@ static void calculate_weights_manual(ps_state_t *state)
 {
     uint32_t total_weight = 0;
 
-    // Sum manual weights for active channels
+    // Sum manual weights for active channels with available artwork
     for (size_t i = 0; i < state->channel_count; i++) {
-        if (state->channels[i].active && state->channels[i].entry_count > 0) {
+        if (has_available_artwork(&state->channels[i])) {
             total_weight += state->channels[i].weight;
         }
     }
@@ -74,7 +104,7 @@ static void calculate_weights_manual(ps_state_t *state)
 
     // Normalize to WSUM
     for (size_t i = 0; i < state->channel_count; i++) {
-        if (state->channels[i].active && state->channels[i].entry_count > 0) {
+        if (has_available_artwork(&state->channels[i])) {
             state->channels[i].weight =
                 (uint32_t)((uint64_t)state->channels[i].weight * WSUM / total_weight);
         } else {
@@ -90,6 +120,9 @@ static void calculate_weights_manual(ps_state_t *state)
  * - α = 0.35 (recency blend factor)
  * - p_min = 0.02
  * - p_max = 0.40
+ *
+ * Uses available_count (LAi) for Makapix channels to ensure weights
+ * reflect what can actually be played.
  */
 static void calculate_weights_proportional(ps_state_t *state)
 {
@@ -97,16 +130,17 @@ static void calculate_weights_proportional(ps_state_t *state)
     const float p_min = 0.02f;
     const float p_max = 0.40f;
 
-    // Calculate totals
+    // Calculate totals using effective counts (available for Makapix)
     uint64_t sum_total = 0;
     uint64_t sum_recent = 0;
 
     for (size_t i = 0; i < state->channel_count; i++) {
-        if (state->channels[i].active) {
-            sum_total += state->channels[i].entry_count;
-            // For now, use entry_count as recent_count approximation
+        if (has_available_artwork(&state->channels[i])) {
+            size_t eff_count = get_effective_count(&state->channels[i]);
+            sum_total += eff_count;
+            // For now, use eff_count as recent_count approximation
             // In future, this should come from server data
-            sum_recent += state->channels[i].entry_count / 4;  // Assume 25% is recent
+            sum_recent += eff_count / 4;  // Assume 25% is recent
         }
     }
 
@@ -118,15 +152,17 @@ static void calculate_weights_proportional(ps_state_t *state)
     float sum_clamped = 0;
 
     for (size_t i = 0; i < state->channel_count; i++) {
-        if (!state->channels[i].active || state->channels[i].entry_count == 0) {
+        if (!has_available_artwork(&state->channels[i])) {
             weights[i] = 0;
             continue;
         }
 
-        // Normalize
-        float p_total = (float)state->channels[i].entry_count / (float)sum_total;
+        size_t eff_count = get_effective_count(&state->channels[i]);
+
+        // Normalize using effective counts
+        float p_total = (float)eff_count / (float)sum_total;
         float p_recent = (sum_recent > 0)
-            ? (float)(state->channels[i].entry_count / 4) / (float)sum_recent
+            ? (float)(eff_count / 4) / (float)sum_recent
             : 0;
 
         // Blend
@@ -143,7 +179,11 @@ static void calculate_weights_proportional(ps_state_t *state)
     // Renormalize and convert to integer weights
     if (sum_clamped > 0) {
         for (size_t i = 0; i < state->channel_count; i++) {
-            state->channels[i].weight = (uint32_t)(weights[i] / sum_clamped * WSUM);
+            if (has_available_artwork(&state->channels[i])) {
+                state->channels[i].weight = (uint32_t)(weights[i] / sum_clamped * WSUM);
+            } else {
+                state->channels[i].weight = 0;
+            }
         }
     }
 }
@@ -171,11 +211,21 @@ void ps_swrr_calculate_weights(ps_state_t *state)
 
     // Log weights
     for (size_t i = 0; i < state->channel_count; i++) {
-        ESP_LOGD(TAG, "Channel '%s': weight=%lu, active=%d, entries=%zu",
-                 state->channels[i].channel_id,
-                 (unsigned long)state->channels[i].weight,
-                 state->channels[i].active,
-                 state->channels[i].entry_count);
+        ps_channel_state_t *ch = &state->channels[i];
+        if (ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX) {
+            ESP_LOGD(TAG, "Channel '%s': weight=%lu, active=%d, entries=%zu, available=%zu",
+                     ch->channel_id,
+                     (unsigned long)ch->weight,
+                     ch->active,
+                     ch->entry_count,
+                     ch->available_count);
+        } else {
+            ESP_LOGD(TAG, "Channel '%s': weight=%lu, active=%d, entries=%zu (SD card)",
+                     ch->channel_id,
+                     (unsigned long)ch->weight,
+                     ch->active,
+                     ch->entry_count);
+        }
     }
 }
 

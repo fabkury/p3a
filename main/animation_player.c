@@ -21,6 +21,7 @@
 #include "display_renderer.h"
 #include "makapix_channel_events.h"
 #include "fresh_boot.h"
+#include "connectivity_state.h"
 
 // Animation player state
 animation_buffer_t s_front_buffer = {0};
@@ -286,14 +287,29 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
 
     // Show initial loading message based on channel type
     // Note: play_scheduler will be started after loader task, this is just the initial message
-    if (strcmp(boot_channel, "sdcard") == 0) {
-        // SD card boot: show hint for provisioning if no local files
-        p3a_render_set_channel_message("microSD card", P3A_CHANNEL_MSG_LOADING, -1,
-                                       "Loading animations from SD card...");
-    } else {
-        // Makapix boot: show connecting/loading
-        p3a_render_set_channel_message("Makapix Club", P3A_CHANNEL_MSG_LOADING, -1,
-                                       "Connecting to Makapix Club...");
+    // Only show if we have WiFi connectivity (no point in AP mode)
+    if (connectivity_state_has_wifi()) {
+        // Get display name from boot channel
+        char display_name[64];
+        if (strcmp(boot_channel, "sdcard") == 0) {
+            snprintf(display_name, sizeof(display_name), "microSD Card");
+        } else if (strcmp(boot_channel, "all") == 0) {
+            snprintf(display_name, sizeof(display_name), "All Artworks");
+        } else if (strcmp(boot_channel, "promoted") == 0) {
+            snprintf(display_name, sizeof(display_name), "Promoted");
+        } else {
+            snprintf(display_name, sizeof(display_name), "%s", boot_channel);
+        }
+        
+        if (strcmp(boot_channel, "sdcard") == 0) {
+            // SD card boot: show hint for provisioning if no local files
+            p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_LOADING, -1,
+                                           "Loading animations from SD card...");
+        } else {
+            // Makapix boot: show connecting/loading
+            p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_LOADING, -1,
+                                           "Connecting to Makapix Club...");
+        }
     }
     
     // Mark front buffer as not ready - will be loaded by swap_to(0, 0) after loader starts

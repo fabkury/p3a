@@ -37,6 +37,7 @@
 #include "makapix_mqtt.h"
 #include "makapix_channel_events.h"
 #include "mdns.h"
+#include "connectivity_state.h"
 
 #define EXAMPLE_ESP_WIFI_SSID      CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
@@ -98,6 +99,7 @@ static bool s_initial_connection_done = false;  // Track if we've ever successfu
 static bool s_services_initialized = false;     // Track if app services have been initialized
 static int s_consecutive_wifi_errors = 0;
 static const int s_max_consecutive_wifi_errors = 10;
+static bool s_mdns_service_added = false;       // Track if mDNS HTTP service has been registered
 
 // Register WiFi/IP event handlers once; repeated registration causes duplicate callbacks.
 static bool s_event_handlers_registered = false;
@@ -477,6 +479,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         // Signal WiFi disconnection to pause downloads and refresh tasks
         makapix_channel_signal_wifi_disconnected();
         
+        // Update connectivity state
+        connectivity_state_on_wifi_disconnected();
+        
         // Stop MQTT client when WiFi disconnects to prevent futile reconnection attempts
         if (s_initial_connection_done) {
             ESP_LOGD(TAG, "Stopping MQTT client due to WiFi disconnect");
@@ -515,6 +520,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
         
         makapix_channel_signal_wifi_connected();
+        
+        // Update connectivity state (will check for internet availability)
+        connectivity_state_on_wifi_connected();
 
         // Ensure mDNS is announced
         {
@@ -583,7 +591,22 @@ static esp_err_t start_mdns_sta(void)
 
     mdns_hostname_set("p3a");
     mdns_instance_name_set("p3a");
-    mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+    
+    // Only add service if not already added
+    if (!s_mdns_service_added) {
+        err = mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+        if (err == ESP_OK) {
+            s_mdns_service_added = true;
+        } else if (err == ESP_ERR_INVALID_ARG) {
+            // Service might already exist - not fatal
+            ESP_LOGW(TAG, "mDNS service may already exist, continuing");
+            s_mdns_service_added = true;
+        } else {
+            ESP_LOGE(TAG, "mDNS service add failed: %s", esp_err_to_name(err));
+            return err;
+        }
+    }
+    
     return ESP_OK;
 }
 
@@ -847,8 +870,10 @@ static esp_err_t save_post_handler(httpd_req_t *req)
         httpd_resp_set_hdr(req, "Location", redirect_url);
         httpd_resp_send(req, NULL, 0);
 
-        // Delay before reboot to allow the redirect to be processed
-        vTaskDelay(pdMS_TO_TICKS(1200));
+        // Delay before reboot to allow the redirect to be processed, the success
+        // page to be fetched, rendered, and read by the user. 
+        // The success page has a 5-second countdown before redirecting.
+        vTaskDelay(pdMS_TO_TICKS(6000));
         esp_restart();
     } else {
         // SSID required - serve error page
@@ -891,6 +916,39 @@ static esp_err_t setup_get_handler(httpd_req_t *req)
     return serve_file_simple(req, filepath);
 }
 
+// Captive portal detection handlers for various OS platforms
+// Android connectivity check
+static esp_err_t generate_204_handler(httpd_req_t *req)
+{
+    httpd_resp_set_status(req, "204 No Content");
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
+// iOS/macOS captive portal check
+static esp_err_t hotspot_detect_handler(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(req, "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>", HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
+// Windows connectivity check
+static esp_err_t connecttest_handler(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_send(req, "Microsoft Connect Test", HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
+// Firefox captive portal check
+static esp_err_t canonical_handler(httpd_req_t *req)
+{
+    httpd_resp_set_status(req, "200 OK");
+    httpd_resp_send(req, "success\n", HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
 static httpd_uri_t root = {
     .uri       = "/",
     .method    = HTTP_GET,
@@ -916,6 +974,35 @@ static httpd_uri_t setup_pages = {
     .uri       = "/setup/*",
     .method    = HTTP_GET,
     .handler   = setup_get_handler,
+    .user_ctx  = NULL
+};
+
+// Captive portal detection URIs
+static httpd_uri_t generate_204 = {
+    .uri       = "/generate_204",
+    .method    = HTTP_GET,
+    .handler   = generate_204_handler,
+    .user_ctx  = NULL
+};
+
+static httpd_uri_t hotspot_detect = {
+    .uri       = "/hotspot-detect.html",
+    .method    = HTTP_GET,
+    .handler   = hotspot_detect_handler,
+    .user_ctx  = NULL
+};
+
+static httpd_uri_t connecttest = {
+    .uri       = "/connecttest.txt",
+    .method    = HTTP_GET,
+    .handler   = connecttest_handler,
+    .user_ctx  = NULL
+};
+
+static httpd_uri_t canonical = {
+    .uri       = "/canonical.html",
+    .method    = HTTP_GET,
+    .handler   = canonical_handler,
     .user_ctx  = NULL
 };
 
@@ -1002,6 +1089,13 @@ static void start_captive_portal(void)
     config.uri_match_fn = httpd_uri_match_wildcard;  // Enable wildcard URI matching
 
     if (httpd_start(&s_captive_portal_server, &config) == ESP_OK) {
+        // Register captive portal detection handlers first (various OS platforms)
+        httpd_register_uri_handler(s_captive_portal_server, &generate_204);     // Android
+        httpd_register_uri_handler(s_captive_portal_server, &hotspot_detect);   // iOS/macOS
+        httpd_register_uri_handler(s_captive_portal_server, &connecttest);      // Windows
+        httpd_register_uri_handler(s_captive_portal_server, &canonical);        // Firefox
+        
+        // Register setup page handlers
         httpd_register_uri_handler(s_captive_portal_server, &root);
         httpd_register_uri_handler(s_captive_portal_server, &save);
         httpd_register_uri_handler(s_captive_portal_server, &erase);
@@ -1041,11 +1135,16 @@ static esp_err_t start_mdns_ap(void)
         return err;
     }
 
-    // Only add service if mDNS was freshly initialized
-    // (if already initialized from STA mode, service already exists)
-    if (!mdns_was_already_initialized) {
+    // Only add service if not already added (using global flag for idempotency)
+    if (!s_mdns_service_added) {
         err = mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
-        if (err != ESP_OK) {
+        if (err == ESP_OK) {
+            s_mdns_service_added = true;
+        } else if (err == ESP_ERR_INVALID_ARG) {
+            // Service might already exist - not fatal
+            ESP_LOGW(TAG, "mDNS service may already exist, continuing");
+            s_mdns_service_added = true;
+        } else {
             ESP_LOGE(TAG, "mDNS service add failed: %s", esp_err_to_name(err));
             return err;
         }
@@ -1148,6 +1247,15 @@ static void wifi_init_softap(void)
     esp_err_t mdns_err = start_mdns_ap();
     if (mdns_err != ESP_OK) {
         ESP_LOGW(TAG, "mDNS start failed (captive portal still works via IP): %s", esp_err_to_name(mdns_err));
+    }
+
+    // Auto-display AP setup instructions on screen
+    extern esp_err_t app_lcd_enter_ui_mode(void) __attribute__((weak));
+    extern esp_err_t ugfx_ui_show_captive_ap_info(void) __attribute__((weak));
+    if (app_lcd_enter_ui_mode && ugfx_ui_show_captive_ap_info) {
+        ESP_LOGI(TAG, "Automatically displaying AP setup screen");
+        app_lcd_enter_ui_mode();
+        ugfx_ui_show_captive_ap_info();
     }
 }
 

@@ -788,13 +788,32 @@ void refresh_task_impl(void *pvParameters)
         return;
     }
     
+    // Build a user-friendly channel name from channel_id for UI display
+    char display_name[64];
+    if (strcmp(ch->channel_id, "all") == 0) {
+        snprintf(display_name, sizeof(display_name), "All Artworks");
+    } else if (strcmp(ch->channel_id, "promoted") == 0) {
+        snprintf(display_name, sizeof(display_name), "Promoted");
+    } else if (strcmp(ch->channel_id, "user") == 0) {
+        snprintf(display_name, sizeof(display_name), "My Channel");
+    } else if (strncmp(ch->channel_id, "by_user_", 8) == 0) {
+        // Truncate user ID to fit in display buffer
+        snprintf(display_name, sizeof(display_name), "User: %.48s", ch->channel_id + 8);
+    } else if (strncmp(ch->channel_id, "hashtag_", 8) == 0) {
+        // Truncate hashtag to fit in display buffer
+        snprintf(display_name, sizeof(display_name), "#%.56s", ch->channel_id + 8);
+    } else {
+        // Truncate channel_id to fit in display buffer
+        snprintf(display_name, sizeof(display_name), "Channel: %.52s", ch->channel_id);
+    }
+    
     // Update UI message to indicate we're updating the index
     // This is called during boot when no animation is loaded yet
     extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail);
     extern bool animation_player_is_animation_ready(void);
     if (!animation_player_is_animation_ready()) {
-        // Still in boot loading phase - update the message
-        p3a_render_set_channel_message("Makapix Club", 1 /* P3A_CHANNEL_MSG_LOADING */, -1, "Updating channel index...");
+        // Still in boot loading phase - update the message with channel name
+        p3a_render_set_channel_message(display_name, 1 /* P3A_CHANNEL_MSG_LOADING */, -1, "Updating channel index...");
     }
     
     bool first_query_completed = false;  // Track if we've completed the first query

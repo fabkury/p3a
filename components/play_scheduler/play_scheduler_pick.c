@@ -224,7 +224,10 @@ static bool pick_recency_sdcard(ps_state_t *state, size_t channel_index, ps_artw
 }
 
 /**
- * @brief Pick artwork from Makapix channel using recency mode
+ * @brief Pick artwork from Makapix channel using recency mode (LAi-based)
+ *
+ * Uses LAi (available_indices) for O(1) availability checking.
+ * Iterates through locally available artworks only.
  */
 static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
 {
@@ -235,11 +238,18 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
         return false;
     }
 
+    // Use LAi for availability masking - no filesystem I/O
+    if (!ch->available_indices || ch->available_count == 0) {
+        ESP_LOGD(TAG, "RecencyPick: Makapix channel %zu has no available artworks", channel_index);
+        return false;
+    }
+
+    // Cursor operates over available_indices (LAi), not full Ci
     uint32_t start_cursor = ch->cursor;
     bool wrapped = false;
 
     while (true) {
-        if (ch->cursor >= ch->entry_count) {
+        if (ch->cursor >= ch->available_count) {
             if (wrapped) break;
             ch->cursor = 0;
             wrapped = true;
@@ -247,32 +257,32 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
 
         if (wrapped && ch->cursor >= start_cursor) break;
 
-        makapix_channel_entry_t *entry = &entries[ch->cursor];
+        // Get Ci index from LAi
+        uint32_t ci_index = ch->available_indices[ch->cursor];
         ch->cursor++;
+
+        // Validate Ci index
+        if (ci_index >= ch->entry_count) {
+            ESP_LOGW(TAG, "Invalid LAi entry: ci_index=%lu >= entry_count=%zu",
+                     (unsigned long)ci_index, ch->entry_count);
+            continue;
+        }
+
+        makapix_channel_entry_t *entry = &entries[ci_index];
 
         // Skip non-artwork entries (playlists, etc.)
         if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
             continue;
         }
 
+        // Skip immediate repeat (but allow if only 1 available entry)
+        if (entry->post_id == state->last_played_id && ch->available_count > 1) {
+            continue;
+        }
+
         // Build filepath for this entry
         char filepath[256];
         ps_build_vault_filepath(entry, filepath, sizeof(filepath));
-
-        // AVAILABILITY MASKING: skip if not downloaded
-        if (!file_exists(filepath)) {
-            continue;
-        }
-
-        // Skip 404'd entries
-        if (has_404_marker(filepath)) {
-            continue;
-        }
-
-        // Skip immediate repeat (but allow if only 1 entry in channel)
-        if (entry->post_id == state->last_played_id && ch->entry_count > 1) {
-            continue;
-        }
 
         // Found valid artwork - build storage_key string
         char storage_key[40];
@@ -290,7 +300,8 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
         return true;
     }
 
-    ESP_LOGD(TAG, "RecencyPick: Makapix channel %zu exhausted", channel_index);
+    ESP_LOGD(TAG, "RecencyPick: Makapix channel %zu exhausted (available=%zu)",
+             channel_index, ch->available_count);
     return false;
 }
 
@@ -364,7 +375,10 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
 }
 
 /**
- * @brief Pick random artwork from Makapix channel
+ * @brief Pick random artwork from Makapix channel (LAi-based)
+ *
+ * Uses LAi (available_indices) for O(1) random picks.
+ * Samples directly from locally available artworks.
  */
 static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
 {
@@ -375,34 +389,38 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
         return false;
     }
 
-    // Sample from all entries for true shuffle
-    size_t r_eff = ch->entry_count;
+    // Use LAi for O(1) random picks - no filesystem I/O
+    if (!ch->available_indices || ch->available_count == 0) {
+        ESP_LOGD(TAG, "RandomPick: Makapix channel %zu has no available artworks", channel_index);
+        return false;
+    }
 
+    // Sample from available_indices (LAi) directly
     for (int attempt = 0; attempt < 5; attempt++) {
         uint32_t r = ps_prng_next(&ch->pick_rng_state);
-        size_t index = (size_t)(r % r_eff);
+        size_t lai_index = (size_t)(r % ch->available_count);
+        uint32_t ci_index = ch->available_indices[lai_index];
 
-        makapix_channel_entry_t *entry = &entries[index];
+        // Validate Ci index
+        if (ci_index >= ch->entry_count) {
+            ESP_LOGW(TAG, "Invalid LAi entry: ci_index=%lu >= entry_count=%zu",
+                     (unsigned long)ci_index, ch->entry_count);
+            continue;
+        }
+
+        makapix_channel_entry_t *entry = &entries[ci_index];
 
         if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
             continue;
         }
 
+        // Skip immediate repeat (but allow if only 1 available or after several attempts)
+        if (entry->post_id == state->last_played_id && ch->available_count > 1 && attempt < 4) {
+            continue;
+        }
+
         char filepath[256];
         ps_build_vault_filepath(entry, filepath, sizeof(filepath));
-
-        if (!file_exists(filepath)) {
-            continue;
-        }
-
-        if (has_404_marker(filepath)) {
-            continue;
-        }
-
-        // Skip immediate repeat (but allow if only 1 entry or after several attempts)
-        if (entry->post_id == state->last_played_id && ch->entry_count > 1 && attempt < 4) {
-            continue;
-        }
 
         char storage_key[40];
         bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
@@ -419,7 +437,8 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
         return true;
     }
 
-    ESP_LOGW(TAG, "RandomPick: Makapix - no artwork after 5 attempts");
+    ESP_LOGW(TAG, "RandomPick: Makapix - no artwork after 5 attempts (available=%zu)",
+             ch->available_count);
     return pick_recency_makapix(state, channel_index, out_artwork);
 }
 
@@ -477,16 +496,27 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
         return false;
     }
 
-    // Count active channels
+    // Count active channels with available artwork
     size_t active_count = 0;
     for (size_t i = 0; i < state->channel_count; i++) {
-        if (state->channels[i].active && state->channels[i].entry_count > 0) {
+        ps_channel_state_t *ch = &state->channels[i];
+        if (!ch->active || ch->entry_count == 0) {
+            continue;
+        }
+        // For Makapix channels, check available_count (LAi)
+        // For SD card channels, check entry_count (no LAi yet)
+        if (ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX) {
+            if (ch->available_count > 0) {
+                active_count++;
+            }
+        } else {
+            // SD card - no LAi, count as active if has entries
             active_count++;
         }
     }
 
     if (active_count == 0) {
-        ESP_LOGD(TAG, "No active channels with entries");
+        ESP_LOGD(TAG, "No active channels with available artwork");
         return false;
     }
 

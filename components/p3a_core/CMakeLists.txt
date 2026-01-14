@@ -7,6 +7,7 @@ idf_component_register(
         "p3a_boot_logo.c"
         "sd_path.c"
         "fresh_boot.c"
+        "connectivity_state.c"
     INCLUDE_DIRS
         "include"
     REQUIRES
@@ -16,6 +17,8 @@ idf_component_register(
         esp_timer
         config_store
         p3a_board_ep44b
+        esp_netif
+        lwip
     PRIV_REQUIRES
         json
 )

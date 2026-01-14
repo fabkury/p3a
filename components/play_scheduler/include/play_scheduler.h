@@ -173,6 +173,56 @@ esp_err_t play_scheduler_refresh_sdcard_cache(void);
 size_t play_scheduler_get_active_channel_ids(const char **out_ids, size_t max_count);
 
 // ============================================================================
+// LAi (Locally Available index) Integration
+// ============================================================================
+
+/**
+ * @brief Notify scheduler that a download completed
+ *
+ * Called by download_manager when a file is successfully downloaded.
+ * Updates the LAi to include the newly available artwork.
+ * May trigger playback if this is the first available artwork (zero-to-one transition).
+ *
+ * @param channel_id Channel the artwork belongs to
+ * @param storage_key Storage key of the downloaded artwork (UUID string)
+ */
+void play_scheduler_on_download_complete(const char *channel_id, const char *storage_key);
+
+/**
+ * @brief Notify scheduler that a load failed
+ *
+ * Called by animation_player when a file fails to load.
+ * Records failure in LTF, deletes the file, removes from LAi.
+ * May trigger picking another artwork if LAi is non-empty.
+ *
+ * @param storage_key Storage key of the failed artwork (UUID string)
+ * @param channel_id Channel the artwork belongs to
+ * @param reason Failure reason (e.g., "decode_error", "file_missing")
+ */
+void play_scheduler_on_load_failed(const char *storage_key, const char *channel_id, const char *reason);
+
+/**
+ * @brief Get total available artwork count across all channels
+ *
+ * Returns the sum of LAi sizes for all active channels.
+ *
+ * @return Total number of available artworks
+ */
+size_t play_scheduler_get_total_available(void);
+
+/**
+ * @brief Get channel stats for a specific channel
+ *
+ * Returns entry_count (total) and available_count (cached/LAi) for a channel.
+ * Uses O(1) lookup from in-memory LAi - no filesystem scanning.
+ *
+ * @param channel_id Channel ID ("all", "promoted", etc.)
+ * @param out_total Output total entries (may be NULL)
+ * @param out_cached Output available/cached entries (may be NULL)
+ */
+void play_scheduler_get_channel_stats(const char *channel_id, size_t *out_total, size_t *out_cached);
+
+// ============================================================================
 // Navigation
 // ============================================================================
 

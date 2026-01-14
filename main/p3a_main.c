@@ -39,6 +39,7 @@
 #include "swap_future.h"       // Live Mode swap_future
 #include "live_mode.h"         // Live Mode time helpers
 #include "fresh_boot.h"        // Fresh boot debug helpers
+#include "connectivity_state.h" // Hierarchical connectivity state machine
 #include "freertos/task.h"
 
 // NVS namespace and keys for tracking firmware versions across boots
@@ -486,6 +487,12 @@ void app_main(void)
     if (state_err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize p3a state machine: %s", esp_err_to_name(state_err));
         // Continue anyway - state machine will use defaults
+    }
+
+    // Initialize connectivity state tracking (hierarchical WiFi→Internet→Registration→MQTT)
+    esp_err_t conn_err = connectivity_state_init();
+    if (conn_err != ESP_OK) {
+        ESP_LOGW(TAG, "connectivity_state_init failed: %s", esp_err_to_name(conn_err));
     }
 
     // Initialize play_scheduler (the deterministic playback engine)

@@ -9,6 +9,7 @@
 #include "makapix_internal.h"
 #include "mbedtls/sha256.h"
 #include "config_store.h"
+#include "connectivity_state.h"
 
 // Helper to map global play_order setting to channel_order_mode
 static channel_order_mode_t get_global_channel_order(void)
@@ -428,6 +429,12 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     
     // Check if we're already on this channel
     if (s_current_channel_id[0] && strcmp(s_current_channel_id, channel_id) == 0 && s_current_channel) {
+        ESP_LOGI(MAKAPIX_TAG, "Already on channel %s, restarting playback without refresh", channel_id);
+        // Restart playback but don't re-trigger refresh
+        esp_err_t err = channel_start_playback(s_current_channel, get_global_channel_order(), NULL);
+        if (err != ESP_OK) {
+            ESP_LOGW(MAKAPIX_TAG, "Failed to restart playback: %s", esp_err_to_name(err));
+        }
         return ESP_OK;
     }
     
@@ -505,7 +512,8 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     
     // Show "Connecting..." message if MQTT not yet connected
     // The refresh task is waiting for MQTT, so let the user know what's happening
-    if (!makapix_mqtt_is_connected()) {
+    // But only if we have WiFi connectivity (no point in AP mode)
+    if (!makapix_mqtt_is_connected() && connectivity_state_has_wifi()) {
         ESP_LOGD(MAKAPIX_TAG, "MQTT not connected, showing 'Connecting...' message");
         p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_LOADING, -1, 
                                        "Connecting to Makapix Club...");
@@ -550,18 +558,21 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         // Set up loading message UI based on channel state
         // IMPORTANT: Do NOT switch display render mode here. We keep the display in animation mode
         // and rely on p3a_render to draw the message reliably (avoids blank screen if UI mode fails).
-        const char *loading_message;
-        if (stats.total_items == 0) {
-            // Empty index - waiting for refresh to populate
-            loading_message = "Updating channel index...";
-            ugfx_ui_show_channel_message(ui_title, loading_message, -1);
-            p3a_render_set_channel_message(ui_title, P3A_CHANNEL_MSG_LOADING, -1, loading_message);
-        } else {
-            // Has index but no downloaded files yet - show "Waiting for download..."
-            // The actual "Downloading artwork..." will be shown when download starts
-            loading_message = "Waiting for download...";
-            ugfx_ui_show_channel_message(ui_title, loading_message, -1);
-            p3a_render_set_channel_message(ui_title, P3A_CHANNEL_MSG_DOWNLOADING, -1, loading_message);
+        // Only show loading messages if we have WiFi connectivity (no point in AP mode)
+        if (connectivity_state_has_wifi()) {
+            const char *loading_message;
+            if (stats.total_items == 0) {
+                // Empty index - waiting for refresh to populate
+                loading_message = "Updating channel index...";
+                ugfx_ui_show_channel_message(ui_title, loading_message, -1);
+                p3a_render_set_channel_message(ui_title, P3A_CHANNEL_MSG_LOADING, -1, loading_message);
+            } else {
+                // Has index but no downloaded files yet - show "Waiting for download..."
+                // The actual "Downloading artwork..." will be shown when download starts
+                loading_message = "Waiting for download...";
+                ugfx_ui_show_channel_message(ui_title, loading_message, -1);
+                p3a_render_set_channel_message(ui_title, P3A_CHANNEL_MSG_DOWNLOADING, -1, loading_message);
+            }
         }
         
         // Wait for FIRST artwork to become available using polling approach
@@ -581,6 +592,14 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
             // Check timeout
             if (elapsed_ms >= MAX_WAIT_MS) {
                 ESP_LOGW(MAKAPIX_TAG, "Timed out waiting for first artwork after %lld ms", (long long)elapsed_ms);
+                break;
+            }
+            
+            // Check if playback has already started (play_scheduler may have triggered it)
+            extern bool animation_player_is_animation_ready(void) __attribute__((weak));
+            if (animation_player_is_animation_ready && animation_player_is_animation_ready()) {
+                ESP_LOGI(MAKAPIX_TAG, "Playback already started, exiting wait loop");
+                got_artwork = true;  // Don't show any more messages
                 break;
             }
             

@@ -22,6 +22,8 @@
 #include "makapix_channel_utils.h"
 #include "makapix_artwork.h"
 #include "makapix_channel_events.h"
+#include "channel_cache.h"
+#include "load_tracker.h"
 #include "sd_path.h"
 #include "sdio_bus.h"
 #include "esp_log.h"
@@ -39,6 +41,37 @@ static const char *TAG = "dl_mgr";
 
 // External: check if SD is paused for OTA
 extern bool animation_player_is_sd_paused(void) __attribute__((weak));
+
+// ============================================================================
+// Helpers - Display Name
+// ============================================================================
+
+/**
+ * @brief Get user-friendly display name from channel_id
+ */
+static void dl_get_display_name(const char *channel_id, char *out_name, size_t max_len)
+{
+    if (!channel_id || !out_name || max_len == 0) return;
+    
+    if (strcmp(channel_id, "all") == 0) {
+        snprintf(out_name, max_len, "All Artworks");
+    } else if (strcmp(channel_id, "promoted") == 0) {
+        snprintf(out_name, max_len, "Promoted");
+    } else if (strcmp(channel_id, "user") == 0) {
+        snprintf(out_name, max_len, "My Channel");
+    } else if (strcmp(channel_id, "sdcard") == 0) {
+        snprintf(out_name, max_len, "microSD Card");
+    } else if (strncmp(channel_id, "by_user_", 8) == 0) {
+        // Truncate user ID to fit in output buffer with "User: " prefix
+        snprintf(out_name, max_len, "User: %.48s", channel_id + 8);
+    } else if (strncmp(channel_id, "hashtag_", 8) == 0) {
+        // Truncate hashtag to fit in output buffer with "#" prefix
+        snprintf(out_name, max_len, "#%.56s", channel_id + 8);
+    } else {
+        // Truncate channel_id to fit in output buffer
+        snprintf(out_name, max_len, "%.63s", channel_id);
+    }
+}
 
 // ============================================================================
 // Download Manager State (decoupled from Play Scheduler)
@@ -332,6 +365,18 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                 continue;
             }
 
+            // Skip if LTF is terminal (3 load failures)
+            char vault_base[128];
+            if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
+                strlcpy(vault_base, "/sdcard/p3a/vault", sizeof(vault_base));
+            }
+            char storage_key_check[40];
+            bytes_to_uuid(entry.storage_key_uuid, storage_key_check, sizeof(storage_key_check));
+            if (!ltf_can_download(storage_key_check, vault_base)) {
+                ESP_LOGD(TAG, "Skipping terminal LTF: %s", storage_key_check);
+                continue;
+            }
+
             // Found entry needing download
             char storage_key[40];
             bytes_to_uuid(entry.storage_key_uuid, storage_key, sizeof(storage_key));
@@ -384,17 +429,14 @@ static void download_task(void *arg)
     ESP_LOGI(TAG, "Download task started");
 
     while (true) {
-        // Wait for prerequisites
+        // Wait for prerequisites - WiFi and SD card must be available
+        // NOTE: We no longer wait for full refresh completion. The refresh task
+        // signals downloads_needed after each batch, allowing early downloads
+        // as soon as the first batch of index entries arrives.
         if (!makapix_channel_is_wifi_ready()) {
             ESP_LOGI(TAG, "Waiting for WiFi...");
             makapix_channel_wait_for_wifi(portMAX_DELAY);
             ESP_LOGI(TAG, "WiFi ready");
-        }
-
-        if (!makapix_channel_is_refresh_done()) {
-            ESP_LOGI(TAG, "Waiting for channel refresh...");
-            makapix_channel_wait_for_refresh(portMAX_DELAY);
-            ESP_LOGI(TAG, "Channel refresh done");
         }
 
         if (!makapix_channel_is_sd_available()) {
@@ -487,12 +529,19 @@ static void download_task(void *arg)
         // Start download
         set_busy(true, req.channel_id);
 
-        // Update UI message if no animation is playing yet AND we haven't initiated playback
-        // This ensures the message only shows during initial boot, not on subsequent downloads
+        // Update UI message if:
+        // - No animation is playing yet
+        // - We haven't initiated playback
+        // - The initial refresh has completed (so we don't override "Updating channel index...")
+        // During initial refresh, let the refresh task control the message
         extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail);
         extern bool animation_player_is_animation_ready(void);
-        if (!s_playback_initiated && !animation_player_is_animation_ready()) {
-            p3a_render_set_channel_message("Makapix Club", 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1, "Downloading artwork...");
+        bool refresh_done = makapix_channel_is_refresh_done();
+        if (!s_playback_initiated && !animation_player_is_animation_ready() && refresh_done) {
+            // Get display name from channel_id in the request
+            char display_name[64];
+            dl_get_display_name(req.channel_id, display_name, sizeof(display_name));
+            p3a_render_set_channel_message(display_name, 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1, "Downloading artwork...");
         }
 
         char out_path[256] = {0};
@@ -501,6 +550,17 @@ static void download_task(void *arg)
         set_busy(false, NULL);
 
         if (err == ESP_OK) {
+            // Clear any previous LTF failures for this file
+            char vault_base[128];
+            if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
+                strlcpy(vault_base, "/sdcard/p3a/vault", sizeof(vault_base));
+            }
+            ltf_clear(req.storage_key, vault_base);
+
+            // Signal play_scheduler to update LAi
+            // The play_scheduler will find the ci_index and add to LAi
+            play_scheduler_on_download_complete(req.channel_id, req.storage_key);
+
             makapix_channel_signal_downloads_needed();
             makapix_channel_signal_file_available();  // Wake tasks waiting for first file
 

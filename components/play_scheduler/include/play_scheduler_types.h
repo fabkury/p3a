@@ -215,6 +215,9 @@ typedef struct {
     uint32_t *available_indices;  // LAi array (NULL if not loaded)
     size_t available_count;       // Number of available artworks
 
+    // Channel cache (owns entries/LAi for Makapix channels)
+    channel_cache_t *cache;       // NULL for SD card channels
+
     // Refresh state
     bool refresh_pending;       // Queued for background refresh
     bool refresh_in_progress;   // Currently refreshing

@@ -40,6 +40,7 @@
 #include "live_mode.h"         // Live Mode time helpers
 #include "fresh_boot.h"        // Fresh boot debug helpers
 #include "connectivity_state.h" // Hierarchical connectivity state machine
+#include "channel_cache.h"       // LAi persistence for channel caches
 #include "freertos/task.h"
 
 // NVS namespace and keys for tracking firmware versions across boots
@@ -493,6 +494,12 @@ void app_main(void)
     esp_err_t conn_err = connectivity_state_init();
     if (conn_err != ESP_OK) {
         ESP_LOGW(TAG, "connectivity_state_init failed: %s", esp_err_to_name(conn_err));
+    }
+
+    // Initialize channel cache subsystem (LAi persistence, debounced saves)
+    esp_err_t cache_err = channel_cache_init();
+    if (cache_err != ESP_OK) {
+        ESP_LOGW(TAG, "channel_cache_init failed: %s", esp_err_to_name(cache_err));
     }
 
     // Initialize play_scheduler (the deterministic playback engine)

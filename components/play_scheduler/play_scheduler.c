@@ -649,6 +649,10 @@ static void ps_build_channel_id(const ps_channel_spec_t *spec, char *out_id, siz
     }
 }
 
+// Forward declarations for cache loading functions
+static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch);
+static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch);
+
 /**
  * @brief Build cache file path for a channel
  */
@@ -683,33 +687,36 @@ static void ps_build_cache_path(const char *channel_id, char *out_path, size_t m
  */
 esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
 {
+    // SD card channels use raw binary format (no LAi needed - files are always local)
+    if (ch->type == PS_CHANNEL_TYPE_SDCARD) {
+        return ps_load_sdcard_cache(ch);
+    }
+
+    // Makapix channels use channel_cache module for LAi persistence
+    return ps_load_makapix_cache(ch);
+}
+
+/**
+ * @brief Load SD card channel cache (raw binary format)
+ */
+static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
+{
     char cache_path[512];
     ps_build_cache_path(ch->channel_id, cache_path, sizeof(cache_path));
 
     struct stat st;
     if (stat(cache_path, &st) != 0) {
-        // Cache doesn't exist yet
         ch->cache_loaded = false;
         ch->entry_count = 0;
         ch->active = false;
-        ch->weight = 0;  // weight=0 until cache arrives
+        ch->weight = 0;
         ch->entry_format = PS_ENTRY_FORMAT_NONE;
         ESP_LOGD(TAG, "Channel '%s': no cache file", ch->channel_id);
         return ESP_ERR_NOT_FOUND;
     }
 
-    // Determine entry size based on channel type
-    size_t entry_size;
-    ps_entry_format_t format;
-    if (ch->type == PS_CHANNEL_TYPE_SDCARD) {
-        entry_size = sizeof(sdcard_index_entry_t);  // 160 bytes
-        format = PS_ENTRY_FORMAT_SDCARD;
-    } else {
-        entry_size = sizeof(makapix_channel_entry_t);  // 64 bytes
-        format = PS_ENTRY_FORMAT_MAKAPIX;
-    }
+    size_t entry_size = sizeof(sdcard_index_entry_t);  // 160 bytes
 
-    // Validate file size
     if (st.st_size <= 0 || st.st_size % entry_size != 0) {
         ESP_LOGW(TAG, "Channel '%s': invalid cache file size %ld (expected multiple of %zu)",
                  ch->channel_id, (long)st.st_size, entry_size);
@@ -723,13 +730,11 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
 
     ch->entry_count = st.st_size / entry_size;
 
-    // Free any existing entries
     if (ch->entries) {
         free(ch->entries);
         ch->entries = NULL;
     }
 
-    // Allocate and load entries from file
     ch->entries = malloc(ch->entry_count * entry_size);
     if (!ch->entries) {
         ESP_LOGE(TAG, "Channel '%s': failed to allocate %zu entries", ch->channel_id, ch->entry_count);
@@ -771,66 +776,102 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
 
     ch->cache_loaded = true;
     ch->active = (ch->entry_count > 0);
-    ch->entry_format = format;
+    ch->entry_format = PS_ENTRY_FORMAT_SDCARD;
 
-    // Touch cache file for LRU tracking
     ps_touch_cache_file(ch->channel_id);
 
-    // For Makapix channels, rebuild LAi (available_indices) by scanning vault
-    if (format == PS_ENTRY_FORMAT_MAKAPIX && ch->entry_count > 0) {
-        // Free any existing LAi
-        if (ch->available_indices) {
-            free(ch->available_indices);
-            ch->available_indices = NULL;
-            ch->available_count = 0;
-        }
+    ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries (sdcard format) into memory",
+             ch->channel_id, ch->entry_count);
 
-        // Allocate LAi array (worst case: all entries available)
-        ch->available_indices = malloc(ch->entry_count * sizeof(uint32_t));
-        if (ch->available_indices) {
-            // Get vault path
-            char vault_base[128];
-            if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
-                strlcpy(vault_base, "/sdcard/p3a/vault", sizeof(vault_base));
-            }
-
-            // Scan entries to rebuild LAi
-            makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
-            ch->available_count = 0;
-
-            for (size_t i = 0; i < ch->entry_count; i++) {
-                if (entries[i].kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
-                    continue;
-                }
-
-                // Build vault filepath
-                char filepath[256];
-                ps_build_vault_filepath(&entries[i], filepath, sizeof(filepath));
-
-                // Check if file exists
-                struct stat st;
-                if (stat(filepath, &st) == 0) {
-                    ch->available_indices[ch->available_count++] = (uint32_t)i;
-                }
-            }
-
-            ESP_LOGI(TAG, "Channel '%s': rebuilt LAi with %zu available (out of %zu entries)",
-                     ch->channel_id, ch->available_count, ch->entry_count);
-        } else {
-            ESP_LOGW(TAG, "Channel '%s': failed to allocate LAi array", ch->channel_id);
-        }
-    }
-
-    ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries (%s format) into memory",
-             ch->channel_id, ch->entry_count,
-             format == PS_ENTRY_FORMAT_SDCARD ? "sdcard" : "makapix");
-
-    // Debug: dump first SD card entry to verify data
-    if (format == PS_ENTRY_FORMAT_SDCARD && ch->entry_count > 0) {
+    if (ch->entry_count > 0) {
         sdcard_index_entry_t *entries = (sdcard_index_entry_t *)ch->entries;
         ESP_LOGI(TAG, "First SD card entry: post_id=%ld, ext=%d, filename='%s'",
                  (long)entries[0].post_id, entries[0].extension, entries[0].filename);
     }
+
+    return ESP_OK;
+}
+
+/**
+ * @brief Load Makapix channel cache using channel_cache module
+ *
+ * Uses the unified cache file format with LAi persistence. On first load after
+ * firmware upgrade (legacy format), LAi is rebuilt once and saved in new format.
+ */
+static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
+{
+    // Get paths
+    char channels_path[128];
+    char vault_path[128];
+    if (sd_path_get_channel(channels_path, sizeof(channels_path)) != ESP_OK) {
+        strlcpy(channels_path, "/sdcard/p3a/channel", sizeof(channels_path));
+    }
+    if (sd_path_get_vault(vault_path, sizeof(vault_path)) != ESP_OK) {
+        strlcpy(vault_path, "/sdcard/p3a/vault", sizeof(vault_path));
+    }
+
+    // Free existing cache if any (handles channel switch)
+    if (ch->cache) {
+        channel_cache_unregister(ch->cache);
+        channel_cache_free(ch->cache);
+        free(ch->cache);
+        ch->cache = NULL;
+        ch->entries = NULL;
+        ch->available_indices = NULL;
+    }
+
+    // Allocate new cache structure
+    ch->cache = malloc(sizeof(channel_cache_t));
+    if (!ch->cache) {
+        ESP_LOGE(TAG, "Channel '%s': failed to allocate cache structure", ch->channel_id);
+        ch->cache_loaded = false;
+        ch->entry_count = 0;
+        ch->available_count = 0;
+        ch->active = false;
+        ch->weight = 0;
+        ch->entry_format = PS_ENTRY_FORMAT_NONE;
+        return ESP_ERR_NO_MEM;
+    }
+
+    // Load cache (handles legacy format migration, CRC validation, LAi persistence)
+    esp_err_t err = channel_cache_load(ch->channel_id, channels_path, vault_path, ch->cache);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Channel '%s': channel_cache_load failed: %s",
+                 ch->channel_id, esp_err_to_name(err));
+        free(ch->cache);
+        ch->cache = NULL;
+        ch->cache_loaded = false;
+        ch->entry_count = 0;
+        ch->available_count = 0;
+        ch->active = false;
+        ch->weight = 0;
+        ch->entry_format = PS_ENTRY_FORMAT_NONE;
+        return err;
+    }
+
+    // Register for debounced persistence
+    channel_cache_register(ch->cache);
+
+    // If cache was migrated from legacy format (dirty flag set), schedule save in new format
+    if (ch->cache->dirty) {
+        ESP_LOGI(TAG, "Channel '%s': migrated from legacy format, scheduling save", ch->channel_id);
+        channel_cache_schedule_save(ch->cache);
+    }
+
+    // Alias data from cache into channel state (for compatibility with existing code)
+    ch->entries = ch->cache->entries;
+    ch->entry_count = ch->cache->entry_count;
+    ch->available_indices = ch->cache->available_indices;
+    ch->available_count = ch->cache->available_count;
+
+    ch->cache_loaded = true;
+    ch->active = (ch->available_count > 0);
+    ch->entry_format = PS_ENTRY_FORMAT_MAKAPIX;
+
+    ps_touch_cache_file(ch->channel_id);
+
+    ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries, %zu available (makapix format)",
+             ch->channel_id, ch->entry_count, ch->available_count);
 
     return ESP_OK;
 }
@@ -1478,36 +1519,64 @@ static bool ps_lai_contains(ps_channel_state_t *ch, uint32_t ci_index)
 
 /**
  * @brief Add a Ci index to LAi
+ *
+ * For Makapix channels, delegates to channel_cache module which handles
+ * dirty tracking and debounced persistence.
  */
 static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
 {
     if (ci_index >= ch->entry_count) return false;
 
-    // Check if already present
+    // For Makapix channels with cache, use channel_cache module
+    if (ch->cache) {
+        bool added = lai_add_entry(ch->cache, ci_index);
+        if (added) {
+            // Update aliased count (entries/indices are aliased, count needs sync)
+            ch->available_count = ch->cache->available_count;
+            // Schedule debounced save
+            channel_cache_schedule_save(ch->cache);
+        }
+        return added;
+    }
+
+    // Fallback for SD card channels (shouldn't have LAi, but keep for safety)
     if (ps_lai_contains(ch, ci_index)) return false;
 
-    // Ensure LAi array is allocated
     if (!ch->available_indices) {
         ch->available_indices = malloc(ch->entry_count * sizeof(uint32_t));
         if (!ch->available_indices) return false;
         ch->available_count = 0;
     }
 
-    // Add to end
     ch->available_indices[ch->available_count++] = ci_index;
     return true;
 }
 
 /**
  * @brief Remove a Ci index from LAi (swap-and-pop for O(1))
+ *
+ * For Makapix channels, delegates to channel_cache module which handles
+ * dirty tracking and debounced persistence.
  */
 static bool ps_lai_remove(ps_channel_state_t *ch, uint32_t ci_index)
 {
+    // For Makapix channels with cache, use channel_cache module
+    if (ch->cache) {
+        bool removed = lai_remove_entry(ch->cache, ci_index);
+        if (removed) {
+            // Update aliased count
+            ch->available_count = ch->cache->available_count;
+            // Schedule debounced save
+            channel_cache_schedule_save(ch->cache);
+        }
+        return removed;
+    }
+
+    // Fallback for SD card channels
     if (!ch->available_indices || ch->available_count == 0) return false;
 
     for (size_t i = 0; i < ch->available_count; i++) {
         if (ch->available_indices[i] == ci_index) {
-            // Swap with last
             ch->available_indices[i] = ch->available_indices[ch->available_count - 1];
             ch->available_count--;
             return true;

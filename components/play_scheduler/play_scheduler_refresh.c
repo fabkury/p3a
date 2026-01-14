@@ -12,6 +12,7 @@
 
 #include "play_scheduler_internal.h"
 #include "play_scheduler.h"  // For play_scheduler_next()
+#include "channel_cache.h"   // For channel_cache_save()
 #include "makapix.h"
 #include "makapix_channel_events.h"  // For async completion events
 #include "sd_path.h"
@@ -189,10 +190,24 @@ static void refresh_task(void *arg)
                     ch->refresh_in_progress = false;
 
                     // Load the cache file into memory (sets entries, entry_count, cache_loaded, active)
+                    // Note: The Makapix refresh task writes raw binary format. channel_cache_load()
+                    // will detect this as legacy format and rebuild LAi by scanning the vault.
                     esp_err_t load_err = ps_load_channel_cache(ch);
                     if (load_err != ESP_OK) {
                         ESP_LOGW(TAG, "Failed to load cache for channel '%s': %s",
                                  ch->channel_id, esp_err_to_name(load_err));
+                    } else if (ch->cache && ch->cache->dirty) {
+                        // Refresh wrote raw binary format which was migrated. Save in new format
+                        // immediately to prevent repeated LAi rebuilds on next load.
+                        char channels_path[128];
+                        if (sd_path_get_channel(channels_path, sizeof(channels_path)) == ESP_OK) {
+                            esp_err_t save_err = channel_cache_save(ch->cache, channels_path);
+                            if (save_err == ESP_OK) {
+                                ch->cache->dirty = false;
+                                ESP_LOGI(TAG, "Channel '%s': saved cache in new format after refresh",
+                                         ch->channel_id);
+                            }
+                        }
                     }
 
                     ESP_LOGI(TAG, "Channel '%s' async refresh complete: %zu entries, active=%d",

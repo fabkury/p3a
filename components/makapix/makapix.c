@@ -10,6 +10,11 @@
 #include "mbedtls/sha256.h"
 #include "config_store.h"
 #include "connectivity_state.h"
+#include "animation_player.h"
+#include "animation_swap_request.h"
+#include "makapix_artwork.h"
+#include "p3a_render.h"
+#include <sys/stat.h>
 
 // Helper to map global play_order setting to channel_order_mode
 static channel_order_mode_t get_global_channel_order(void)
@@ -61,10 +66,27 @@ volatile bool s_has_pending_channel = false;      // True if a new channel was r
 SemaphoreHandle_t s_channel_switch_sem = NULL;    // Semaphore to wake channel switch task
 
 // --------------------------------------------------------------------------
+// Show-artwork async task state
+// --------------------------------------------------------------------------
+
+typedef struct {
+    TaskHandle_t task_handle;
+    volatile bool abort_requested;
+    volatile bool task_running;
+    int32_t post_id;
+    char storage_key[64];
+    char art_url[256];
+    char filepath[256];
+} show_artwork_state_t;
+
+static show_artwork_state_t s_show_artwork = {0};
+
+// --------------------------------------------------------------------------
 // Forward declarations
 // --------------------------------------------------------------------------
 
 static channel_handle_t create_single_artwork_channel(const char *storage_key, const char *art_url);
+static void show_artwork_task(void *arg);
 
 // --------------------------------------------------------------------------
 // Public API - Initialization
@@ -782,56 +804,235 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     return ESP_OK;
 }
 
+// --------------------------------------------------------------------------
+// Show-artwork helper functions
+// --------------------------------------------------------------------------
+
+/**
+ * @brief Detect asset type from file path extension
+ */
+static asset_type_t detect_asset_type_from_path(const char *filepath)
+{
+    if (!filepath) return ASSET_TYPE_WEBP;
+
+    size_t len = strlen(filepath);
+    if (len >= 5 && strcasecmp(filepath + len - 5, ".webp") == 0) return ASSET_TYPE_WEBP;
+    if (len >= 4 && strcasecmp(filepath + len - 4, ".gif") == 0)  return ASSET_TYPE_GIF;
+    if (len >= 4 && strcasecmp(filepath + len - 4, ".png") == 0)  return ASSET_TYPE_PNG;
+    if (len >= 4 && strcasecmp(filepath + len - 4, ".jpg") == 0)  return ASSET_TYPE_JPEG;
+    if (len >= 5 && strcasecmp(filepath + len - 5, ".jpeg") == 0) return ASSET_TYPE_JPEG;
+
+    return ASSET_TYPE_WEBP;  // Default
+}
+
+/**
+ * @brief Progress callback for show_artwork download
+ */
+static void show_artwork_download_progress_cb(size_t bytes_read, size_t content_length, void *user_ctx)
+{
+    (void)user_ctx;
+
+    // Check for abort - don't update UI if aborting
+    if (s_show_artwork.abort_requested) {
+        return;
+    }
+
+    // Calculate progress percentage
+    int percent = (content_length > 0) ? (int)((bytes_read * 100) / content_length) : -1;
+    p3a_render_set_channel_message("Artwork", P3A_CHANNEL_MSG_DOWNLOADING, percent, NULL);
+}
+
+/**
+ * @brief Async task to download and display single artwork
+ */
+static void show_artwork_task(void *arg)
+{
+    (void)arg;
+
+    s_show_artwork.task_running = true;
+    ESP_LOGI(MAKAPIX_TAG, "show_artwork_task started: %s", s_show_artwork.storage_key);
+
+    bool file_exists = false;
+
+    // Check if file already exists in vault
+    struct stat st;
+    if (stat(s_show_artwork.filepath, &st) == 0 && st.st_size > 0) {
+        ESP_LOGD(MAKAPIX_TAG, "Artwork already in vault: %s", s_show_artwork.filepath);
+        file_exists = true;
+    }
+
+    // Download if needed (unless aborted)
+    if (!file_exists && !s_show_artwork.abort_requested) {
+        // Show downloading message
+        p3a_render_set_channel_message("Artwork", P3A_CHANNEL_MSG_DOWNLOADING, 0, NULL);
+
+        // Download with progress callback
+        char downloaded_path[256] = {0};
+        esp_err_t result = makapix_artwork_download_with_progress(
+            s_show_artwork.art_url,
+            s_show_artwork.storage_key,
+            downloaded_path,
+            sizeof(downloaded_path),
+            show_artwork_download_progress_cb,
+            NULL
+        );
+
+        // Check if aborted during download
+        if (s_show_artwork.abort_requested) {
+            ESP_LOGD(MAKAPIX_TAG, "show_artwork aborted during download");
+            p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
+            goto cleanup;
+        }
+
+        if (result != ESP_OK) {
+            ESP_LOGE(MAKAPIX_TAG, "Artwork download failed: %s", esp_err_to_name(result));
+            p3a_render_set_channel_message("Artwork", P3A_CHANNEL_MSG_ERROR, -1,
+                                           esp_err_to_name(result));
+            // Keep error message visible for 3 seconds
+            vTaskDelay(pdMS_TO_TICKS(3000));
+            p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
+            goto cleanup;
+        }
+
+        // Update filepath to the actual downloaded path
+        strlcpy(s_show_artwork.filepath, downloaded_path, sizeof(s_show_artwork.filepath));
+    }
+
+    // Final abort check before swap
+    if (s_show_artwork.abort_requested) {
+        ESP_LOGD(MAKAPIX_TAG, "show_artwork aborted before swap");
+        p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
+        goto cleanup;
+    }
+
+    // Clear any downloading message
+    p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
+
+    // Build swap request
+    swap_request_t request = {0};
+    strlcpy(request.filepath, s_show_artwork.filepath, sizeof(request.filepath));
+    request.type = detect_asset_type_from_path(s_show_artwork.filepath);
+    request.post_id = s_show_artwork.post_id;
+    request.dwell_time_ms = 0;  // No auto-swap for single artwork
+    request.start_time_ms = 0;
+    request.start_frame = 0;
+    request.is_live_mode = false;
+
+    // Set intentional view flag BEFORE swap request
+    s_view_intent_intentional = true;
+    makapix_set_current_post_id(s_show_artwork.post_id);
+
+    // Directly request swap - BYPASS play_scheduler
+    esp_err_t swap_result = animation_player_request_swap(&request);
+    if (swap_result != ESP_OK) {
+        ESP_LOGW(MAKAPIX_TAG, "animation_player_request_swap failed: %s", esp_err_to_name(swap_result));
+        // Don't show error for INVALID_STATE (swap in progress) - just log
+        if (swap_result != ESP_ERR_INVALID_STATE) {
+            p3a_render_set_channel_message("Artwork", P3A_CHANNEL_MSG_ERROR, -1,
+                                           "Failed to display");
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
+        }
+    } else {
+        ESP_LOGI(MAKAPIX_TAG, "show_artwork swap requested: %s (post_id=%ld)",
+                 s_show_artwork.filepath, (long)s_show_artwork.post_id);
+    }
+
+cleanup:
+    s_show_artwork.task_running = false;
+    s_show_artwork.task_handle = NULL;
+    vTaskDelete(NULL);
+}
+
+/**
+ * @brief Show a single artwork by storage_key
+ *
+ * Downloads the artwork if not cached, then displays it.
+ * This bypasses the play_scheduler and directly swaps to the artwork.
+ */
 esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const char *art_url)
 {
     if (!storage_key || !art_url) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    ESP_LOGD(MAKAPIX_TAG, "Showing artwork: post_id=%ld, storage_key=%s", post_id, storage_key);
+    ESP_LOGI(MAKAPIX_TAG, "show_artwork requested: post_id=%ld, storage_key=%s", (long)post_id, storage_key);
 
-    // Destroy existing channel if any
+    // Cancel any existing show_artwork operation
+    if (s_show_artwork.task_running) {
+        ESP_LOGD(MAKAPIX_TAG, "Cancelling previous show_artwork operation");
+        s_show_artwork.abort_requested = true;
+
+        // Wait for task to exit (max 3 seconds)
+        int wait_count = 0;
+        while (s_show_artwork.task_running && wait_count < 30) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            wait_count++;
+        }
+
+        if (s_show_artwork.task_running) {
+            ESP_LOGW(MAKAPIX_TAG, "Previous show_artwork task did not exit in time");
+        }
+    }
+
+    // Store request parameters
+    s_show_artwork.abort_requested = false;
+    s_show_artwork.post_id = post_id;
+    strlcpy(s_show_artwork.storage_key, storage_key, sizeof(s_show_artwork.storage_key));
+    strlcpy(s_show_artwork.art_url, art_url, sizeof(s_show_artwork.art_url));
+
+    // Mark that we're now on a single-artwork "channel" - this ensures that
+    // subsequent channel switch requests (e.g., back to "promoted") will trigger
+    // an actual switch instead of being ignored as "already on this channel"
+    strlcpy(s_current_channel_id, "artwork", sizeof(s_current_channel_id));
     if (s_current_channel) {
         channel_destroy(s_current_channel);
         s_current_channel = NULL;
     }
 
-    // Create transient in-memory single-item channel
-    channel_handle_t single_ch = create_single_artwork_channel(storage_key, art_url);
-    if (!single_ch) {
-        ESP_LOGE(MAKAPIX_TAG, "Failed to create transient artwork channel");
+    // Compute vault filepath using the existing helper
+    // Note: build_vault_path_from_storage_key_simple is defined later in this file
+    // We'll use makapix_artwork_download's path logic by passing empty path initially
+    // The download function will compute the correct path
+    memset(s_show_artwork.filepath, 0, sizeof(s_show_artwork.filepath));
+
+    // Build the expected vault path for checking if file exists
+    // Using the same logic as the download function
+    char vault_base[128];
+    if (sd_path_get_vault(vault_base, sizeof(vault_base)) == ESP_OK) {
+        uint8_t sha256[32];
+        if (mbedtls_sha256((const unsigned char *)storage_key, strlen(storage_key), sha256, 0) == 0) {
+            // Detect extension from URL
+            const char *ext = ".webp";
+            size_t url_len = strlen(art_url);
+            if (url_len >= 4) {
+                if (strcasecmp(art_url + url_len - 4, ".gif") == 0) ext = ".gif";
+                else if (strcasecmp(art_url + url_len - 4, ".png") == 0) ext = ".png";
+                else if (strcasecmp(art_url + url_len - 4, ".jpg") == 0) ext = ".jpg";
+                else if (url_len >= 5 && strcasecmp(art_url + url_len - 5, ".jpeg") == 0) ext = ".jpg";
+                else if (url_len >= 5 && strcasecmp(art_url + url_len - 5, ".webp") == 0) ext = ".webp";
+            }
+            snprintf(s_show_artwork.filepath, sizeof(s_show_artwork.filepath),
+                     "%s/%02x/%02x/%02x/%s%s",
+                     vault_base, sha256[0], sha256[1], sha256[2], storage_key, ext);
+        }
+    }
+
+    // Spawn async task
+    BaseType_t ret = xTaskCreate(
+        show_artwork_task,
+        "show_art",
+        6144,  // Stack size
+        NULL,
+        5,     // Priority (same as channel_switch_task)
+        &s_show_artwork.task_handle
+    );
+
+    if (ret != pdPASS) {
+        ESP_LOGE(MAKAPIX_TAG, "Failed to create show_artwork task");
         return ESP_ERR_NO_MEM;
     }
 
-    esp_err_t err = channel_load(single_ch);
-    if (err != ESP_OK) {
-        ESP_LOGE(MAKAPIX_TAG, "Artwork channel load failed: %s", esp_err_to_name(err));
-        channel_destroy(single_ch);
-        s_current_channel = NULL;
-        // TODO: optionally fallback to sdcard channel here
-        return err;
-    }
-
-    err = channel_start_playback(single_ch, get_global_channel_order(), NULL);
-    if (err != ESP_OK) {
-        ESP_LOGE(MAKAPIX_TAG, "Artwork channel start playback failed: %s", esp_err_to_name(err));
-        channel_destroy(single_ch);
-        s_current_channel = NULL;
-        return err;
-    }
-
-    s_current_channel = single_ch;
-    makapix_set_current_post_id(post_id);
-    s_view_intent_intentional = true;  // Next buffer swap will submit intentional view
-
-    // Start playback using play_scheduler
-    // Note: This is a transient single-artwork channel, use next() to trigger swap
-    err = play_scheduler_next(NULL);
-    if (err != ESP_OK) {
-        ESP_LOGW(MAKAPIX_TAG, "Failed to initiate artwork swap: %s", esp_err_to_name(err));
-    }
-
-    ESP_LOGD(MAKAPIX_TAG, "Transient artwork channel created and started");
     return ESP_OK;
 }
 

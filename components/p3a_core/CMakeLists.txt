@@ -18,6 +18,7 @@ idf_component_register(
         p3a_board_ep44b
         esp_netif
         lwip
+        event_bus
     PRIV_REQUIRES
         json
 )

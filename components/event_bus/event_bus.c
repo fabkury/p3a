@@ -40,8 +40,11 @@ static uint16_t event_type_to_category(uint16_t type)
         case P3A_EVENT_MQTT_CONNECTED:
         case P3A_EVENT_MQTT_DISCONNECTED:
         case P3A_EVENT_REGISTRATION_CHANGED:
+        case P3A_EVENT_INTERNET_CHECK:
         case P3A_EVENT_MAKAPIX_STATE_CHANGED:
             return P3A_EVENT_CATEGORY_SYSTEM;
+        case P3A_EVENT_CACHE_FLUSH:
+            return P3A_EVENT_CATEGORY_CONTENT;
         case P3A_EVENT_SWAP_NEXT:
         case P3A_EVENT_SWAP_BACK:
         case P3A_EVENT_PAUSE:

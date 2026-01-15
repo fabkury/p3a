@@ -140,11 +140,17 @@ static esp_err_t refresh_makapix_channel(ps_channel_state_t *ch)
     // Mark channel as waiting for async completion
     ch->refresh_async_pending = true;
 
-    // Optimistically load any existing cache (may have stale data)
-    // This uses ps_load_channel_cache which handles the 64-byte Makapix format
-    esp_err_t cache_err = ps_load_channel_cache(ch);
-    if (cache_err != ESP_OK && cache_err != ESP_ERR_NOT_FOUND) {
-        ESP_LOGD(TAG, "No existing cache for '%s': %s", ch->channel_id, esp_err_to_name(cache_err));
+    // Only load cache if not already loaded (avoid double-load during channel switch)
+    // When switching channels, ps_load_channel_cache is called first, then refresh is triggered.
+    // Reloading here would free the cache that was just loaded, causing heap corruption.
+    if (!ch->cache_loaded) {
+        // Optimistically load any existing cache (may have stale data)
+        esp_err_t cache_err = ps_load_channel_cache(ch);
+        if (cache_err != ESP_OK && cache_err != ESP_ERR_NOT_FOUND) {
+            ESP_LOGD(TAG, "No existing cache for '%s': %s", ch->channel_id, esp_err_to_name(cache_err));
+        }
+    } else {
+        ESP_LOGD(TAG, "Cache already loaded for '%s', skipping reload", ch->channel_id);
     }
 
     // Return special code to indicate async in progress

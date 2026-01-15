@@ -422,21 +422,19 @@ esp_err_t channel_cache_load(const char *channel_id,
     channel_cache_build_path(channel_id, channels_path, cache_path, sizeof(cache_path));
     build_legacy_index_path(channel_id, channels_path, index_path, sizeof(index_path));
 
-    // Check modification times to detect if index was updated after cache
+    // Check if files exist
     struct stat cache_st = {0}, index_st = {0};
     bool have_cache = (stat(cache_path, &cache_st) == 0);
     bool have_index = (stat(index_path, &index_st) == 0);
-    bool index_newer = have_cache && have_index && (index_st.st_mtime > cache_st.st_mtime);
 
-    // If index is newer than cache, we need to reload from index (refresh updated it)
-    if (index_newer) {
-        ESP_LOGI(TAG, "Index newer than cache for '%s', reloading from index", channel_id);
-        have_cache = false;  // Force reload from index
-    }
+    // NOTE: We do NOT compare mtimes here. The cache file (.cache) is authoritative once it exists.
+    // The refresh completion handler updates the cache entries and saves it, so we don't need
+    // to reload from the raw index (.bin) just because it's newer. This prevents repeated
+    // LAi rebuilds which are expensive.
 
     // Try to open the new format cache file first (.cache)
     FILE *f = NULL;
-    if (have_cache && !index_newer) {
+    if (have_cache) {
         f = fopen(cache_path, "rb");
     }
 

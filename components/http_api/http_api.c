@@ -31,7 +31,6 @@
 #include "lwip/sockets.h"
 #include "lwip/netdb.h"
 #include "lwip/inet.h"
-#include "app_state.h"
 #include "config_store.h"
 #include "app_wifi.h"
 #include "makapix.h"
@@ -39,7 +38,6 @@
 #include "freertos/semphr.h"
 #include "bsp/esp-bsp.h"
 #include "animation_player.h"
-#include "app_lcd.h"
 #include "version.h"
 #include "makapix.h"
 #include "makapix_mqtt.h"
@@ -47,16 +45,13 @@
 #include "makapix_channel_impl.h"
 #include "ota_manager.h"
 #include "p3a_state.h"
+#include "event_bus.h"
 #include "esp_heap_caps.h"
 #if CONFIG_P3A_PICO8_ENABLE
 #include "pico8_stream.h"
 #endif
 
 // ---------- Shared State ----------
-
-// Action callback function pointers
-static action_callback_t s_swap_next_callback = NULL;
-static action_callback_t s_swap_back_callback = NULL;
 
 QueueHandle_t s_cmdq = NULL;
 httpd_handle_t s_server = NULL;
@@ -75,43 +70,55 @@ static void api_worker_task(void *arg) {
     for(;;) {
         command_t cmd;
         if (xQueueReceive(s_cmdq, &cmd, portMAX_DELAY) == pdTRUE) {
-            app_state_enter_processing();
+            p3a_state_enter_processing();
 
             switch(cmd.type) {
                 case CMD_REBOOT:
                     do_reboot();
                     break;
 
-                case CMD_SWAP_NEXT:
-                    if (s_swap_next_callback) {
-                        s_swap_next_callback();
-                        app_state_enter_ready();
+                case CMD_SWAP_NEXT: {
+                    esp_err_t ev = event_bus_emit_simple(P3A_EVENT_SWAP_NEXT);
+                    if (ev == ESP_OK) {
+                        p3a_state_enter_ready();
                     } else {
-                        app_state_enter_error();
+                        p3a_state_enter_app_error();
                     }
                     break;
+                }
 
-                case CMD_SWAP_BACK:
-                    if (s_swap_back_callback) {
-                        s_swap_back_callback();
-                        app_state_enter_ready();
+                case CMD_SWAP_BACK: {
+                    esp_err_t ev = event_bus_emit_simple(P3A_EVENT_SWAP_BACK);
+                    if (ev == ESP_OK) {
+                        p3a_state_enter_ready();
                     } else {
-                        app_state_enter_error();
+                        p3a_state_enter_app_error();
                     }
                     break;
+                }
 
-                case CMD_PAUSE:
-                    app_lcd_set_animation_paused(true);
-                    app_state_enter_ready();
+                case CMD_PAUSE: {
+                    esp_err_t ev = event_bus_emit_simple(P3A_EVENT_PAUSE);
+                    if (ev == ESP_OK) {
+                        p3a_state_enter_ready();
+                    } else {
+                        p3a_state_enter_app_error();
+                    }
                     break;
+                }
 
-                case CMD_RESUME:
-                    app_lcd_set_animation_paused(false);
-                    app_state_enter_ready();
+                case CMD_RESUME: {
+                    esp_err_t ev = event_bus_emit_simple(P3A_EVENT_RESUME);
+                    if (ev == ESP_OK) {
+                        p3a_state_enter_ready();
+                    } else {
+                        p3a_state_enter_app_error();
+                    }
                     break;
+                }
 
                 default:
-                    app_state_enter_error();
+                    p3a_state_enter_app_error();
                     break;
             }
         }
@@ -229,9 +236,8 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
 
 // ---------- Callback Registration ----------
 
-void http_api_set_action_handlers(action_callback_t swap_next, action_callback_t swap_back) {
-    s_swap_next_callback = swap_next;
-    s_swap_back_callback = swap_back;
+static void http_api_register_mqtt_handlers(void)
+{
     makapix_mqtt_set_command_callback(makapix_command_handler);
 }
 
@@ -370,15 +376,15 @@ static esp_err_t h_put_router(httpd_req_t *req) {
 
 // ---------- Network Diagnostics ----------
 
-static void log_all_netifs(void) {
+static __attribute__((unused)) void log_all_netifs(void) {
     // Network diagnostics disabled for cleaner boot - use http_api_log_netifs() for debug
 }
 
-static void verify_server_listening(void) {
+static __attribute__((unused)) void verify_server_listening(void) {
     // Server verification disabled for cleaner boot
 }
 
-static void format_sockaddr(const struct sockaddr *sa, char *out, size_t out_len) {
+static __attribute__((unused)) void format_sockaddr(const struct sockaddr *sa, char *out, size_t out_len) {
     if (!out || out_len == 0) return;
     out[0] = '\0';
 
@@ -412,6 +418,7 @@ static void http_close_fn(httpd_handle_t hd, int sockfd) {
 // ---------- Start/Stop ----------
 
 esp_err_t http_api_start(void) {
+    http_api_register_mqtt_handlers();
     // Create command queue if not exists
     if (!s_cmdq) {
         s_cmdq = xQueueCreate(QUEUE_LEN, sizeof(command_t));
@@ -467,7 +474,7 @@ esp_err_t http_api_start(void) {
     {
         // Print all network interfaces
         esp_netif_t *netif = NULL;
-        while ((netif = esp_netif_next(netif)) != NULL) {
+        while ((netif = esp_netif_next_unsafe(netif)) != NULL) {
             esp_netif_ip_info_t ip_info;
             if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
                 ESP_LOGI(HTTP_API_TAG, "DIAG: netif '%s' IP=" IPSTR " mask=" IPSTR " gw=" IPSTR,

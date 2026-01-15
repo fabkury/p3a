@@ -639,6 +639,10 @@ void display_renderer_parallel_upscale(const uint8_t *src_rgba, int src_w, int s
                  src_rgba, dst_buffer, lookup_x, lookup_y);
         return;
     }
+    if (display_renderer_ensure_upscale_workers() != ESP_OK) {
+        ESP_LOGE(DISPLAY_TAG, "Upscale: failed to start worker tasks");
+        return;
+    }
     if (src_w <= 0 || src_h <= 0 || scaled_w <= 0 || scaled_h <= 0) {
         ESP_LOGE(DISPLAY_TAG, "Upscale: Invalid dimensions (src %dx%d, scaled %dx%d)",
                  src_w, src_h, scaled_w, scaled_h);
@@ -725,6 +729,10 @@ void display_renderer_parallel_upscale_rgb(const uint8_t *src_rgb, int src_w, in
     if (!src_rgb || !dst_buffer || !lookup_x || !lookup_y) {
         ESP_LOGE(DISPLAY_TAG, "Upscale RGB: NULL pointer (src=%p dst=%p lx=%p ly=%p)",
                  src_rgb, dst_buffer, lookup_x, lookup_y);
+        return;
+    }
+    if (display_renderer_ensure_upscale_workers() != ESP_OK) {
+        ESP_LOGE(DISPLAY_TAG, "Upscale RGB: failed to start worker tasks");
         return;
     }
     if (src_w <= 0 || src_h <= 0 || scaled_w <= 0 || scaled_h <= 0) {

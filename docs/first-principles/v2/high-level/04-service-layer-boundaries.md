@@ -7,6 +7,22 @@
 
 Define explicit service boundaries with clear interfaces, enforcing unidirectional dependencies and making the architecture self-documenting.
 
+## Status
+
+Completed (dependency lint deferred).
+
+## Progress Checklist
+
+- [x] Add service facades (playback/content/connectivity)
+- [x] Route app calls through service APIs
+- [x] Enforce dependency rules with CMake `PRIV_REQUIRES`
+- [x] Thin `main/p3a_main.c` to orchestrator
+- [ ] Add dependency linting or compile-time guards
+
+## Final Decisions (Deferred Items)
+
+- **Dependency linting / compile-time guards**: Deferred because this requires new tooling or CI integration, which is outside the current migration scope and would need agreement on the target environment and enforcement level.
+
 ## Current State (v2 Assessment)
 
 Dependencies are implicit and often circular:

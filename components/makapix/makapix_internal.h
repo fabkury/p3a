@@ -92,6 +92,11 @@ extern char s_pending_user_handle[64];
 extern volatile bool s_has_pending_channel;
 extern SemaphoreHandle_t s_channel_switch_sem;
 
+/**
+ * @brief Update Makapix state and emit event
+ */
+void makapix_set_state(makapix_state_t new_state);
+
 // --------------------------------------------------------------------------
 // Internal functions (provisioning flow)
 // --------------------------------------------------------------------------

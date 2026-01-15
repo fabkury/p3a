@@ -27,6 +27,7 @@ idf_component_register(
         channel_manager
         p3a_core
         sdio_bus
+        event_bus
     PRIV_REQUIRES
         wifi_manager
     WHOLE_ARCHIVE

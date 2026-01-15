@@ -10,7 +10,7 @@
  */
 
 #include "makapix_internal.h"
-#include "connectivity_state.h"
+#include "event_bus.h"
 
 /**
  * @brief Provisioning task
@@ -52,7 +52,7 @@ void makapix_provisioning_task(void *pvParameters)
                 snprintf(s_registration_code, sizeof(s_registration_code), "%s", result.registration_code);
                 snprintf(s_registration_expires, sizeof(s_registration_expires), "%s", result.expires_at);
                 
-                s_makapix_state = MAKAPIX_STATE_SHOW_CODE;
+                makapix_set_state(MAKAPIX_STATE_SHOW_CODE);
                 ESP_LOGD(MAKAPIX_TAG, "Provisioning successful, registration code: %s", s_registration_code);
                 ESP_LOGD(MAKAPIX_TAG, "Starting credential polling task...");
                 
@@ -61,7 +61,7 @@ void makapix_provisioning_task(void *pvParameters)
                 BaseType_t poll_ret = xTaskCreate(makapix_credentials_poll_task, "cred_poll", 16384, NULL, 5, &s_poll_task_handle);
                 if (poll_ret != pdPASS) {
                     ESP_LOGE(MAKAPIX_TAG, "Failed to create credential polling task");
-                    s_makapix_state = MAKAPIX_STATE_IDLE;
+                    makapix_set_state(MAKAPIX_STATE_IDLE);
                     s_poll_task_handle = NULL;
                 }
             } else {
@@ -70,12 +70,12 @@ void makapix_provisioning_task(void *pvParameters)
             }
         } else {
             ESP_LOGE(MAKAPIX_TAG, "Failed to save credentials: %s", esp_err_to_name(err));
-            s_makapix_state = MAKAPIX_STATE_IDLE;
+            makapix_set_state(MAKAPIX_STATE_IDLE);
         }
     } else {
         ESP_LOGE(MAKAPIX_TAG, "Provisioning failed: %s", esp_err_to_name(err));
         if (!s_provisioning_cancelled) {
-            s_makapix_state = MAKAPIX_STATE_IDLE;
+            makapix_set_state(MAKAPIX_STATE_IDLE);
         }
     }
 
@@ -168,10 +168,10 @@ void makapix_credentials_poll_task(void *pvParameters)
                 makapix_store_save_credentials(player_key, mqtt_host_to_save, mqtt_port_to_save);
                 
                 ESP_LOGD(MAKAPIX_TAG, "Certificates saved successfully, initiating MQTT connection");
-                s_makapix_state = MAKAPIX_STATE_CONNECTING;
+                makapix_set_state(MAKAPIX_STATE_CONNECTING);
                 
                 // Update connectivity state - device is now registered
-                connectivity_state_on_registration_changed(true);
+                event_bus_emit_i32(P3A_EVENT_REGISTRATION_CHANGED, 1);
                 
                 // Initiate MQTT connection using the determined broker info
                 char mqtt_host[64];
@@ -186,11 +186,11 @@ void makapix_credentials_poll_task(void *pvParameters)
                     err = makapix_mqtt_connect();
                     if (err != ESP_OK) {
                         ESP_LOGE(MAKAPIX_TAG, "MQTT connect failed: %s", esp_err_to_name(err));
-                        s_makapix_state = MAKAPIX_STATE_DISCONNECTED;
+                        makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
                     }
                 } else {
                     ESP_LOGE(MAKAPIX_TAG, "MQTT init failed: %s", esp_err_to_name(err));
-                    s_makapix_state = MAKAPIX_STATE_DISCONNECTED;
+                    makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
                 }
                 
                 break; // Exit polling task
@@ -209,7 +209,7 @@ void makapix_credentials_poll_task(void *pvParameters)
 
     if (poll_count >= max_polls) {
         ESP_LOGW(MAKAPIX_TAG, "Credential polling timed out after %d attempts", max_polls);
-        s_makapix_state = MAKAPIX_STATE_IDLE;
+        makapix_set_state(MAKAPIX_STATE_IDLE);
     }
 
     ESP_LOGD(MAKAPIX_TAG, "Credential polling task exiting");

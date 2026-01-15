@@ -147,9 +147,9 @@ static asset_type_t asset_type_from_name(const char *name, bool *out_ok)
     return ASSET_TYPE_WEBP;
 }
 
-static uint32_t compute_effective_dwell_ms(uint32_t global_override_ms,
-                                           uint32_t channel_override_ms,
-                                           uint32_t playlist_or_artwork_ms)
+static __attribute__((unused)) uint32_t compute_effective_dwell_ms(uint32_t global_override_ms,
+                                                                   uint32_t channel_override_ms,
+                                                                   uint32_t playlist_or_artwork_ms)
 {
     uint32_t eff = playlist_or_artwork_ms;
     if (channel_override_ms != 0) eff = channel_override_ms;

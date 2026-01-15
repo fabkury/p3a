@@ -7,6 +7,23 @@
 
 Audit FreeRTOS tasks, consolidate where possible, and reduce overall task count to improve system determinism and reduce stack memory usage.
 
+## Status
+
+Completed (audit and IO merge deferred).
+
+## Progress Checklist
+
+- [ ] Audit current tasks and baseline stack usage
+- [x] Replace polling tasks with event handlers
+- [x] Convert dwell timing to FreeRTOS software timers
+- [ ] Merge download/refresh into unified I/O task
+- [x] Add lazy creation for upscale workers
+
+## Final Decisions (Deferred Items)
+
+- **Task audit + stack baseline**: Deferred because it needs runtime instrumentation or a build-time audit pass, which requires running on target hardware and is outside this code-only migration.
+- **Merge download/refresh into unified I/O task**: Deferred because it would require a larger behavioral change across `download_manager` and `play_scheduler_refresh`, which risks regressions without a focused validation plan.
+
 ## Current State (v2 Assessment)
 
 The codebase creates numerous FreeRTOS tasks:
@@ -14,9 +31,7 @@ The codebase creates numerous FreeRTOS tasks:
 | Task | Location | Purpose | Stack |
 |------|----------|---------|-------|
 | `animation_loader` | `animation_player.c` | Load assets from SD | 8KB+ |
-| `makapix_state_monitor` | `p3a_main.c` | Poll Makapix state | 4KB |
 | `memory_report` | `p3a_main.c` | Debug memory stats | 3KB |
-| `play_timer` | `play_scheduler_timer.c` | Dwell timeout | ~2KB |
 | `refresh_task` | `play_scheduler_refresh.c` | Background refresh | 4KB |
 | `download_task` | `download_manager.c` | Fetch from network | 8KB+ |
 | `http_worker` | `http_api.c` | Command processing | 4KB |
@@ -34,7 +49,7 @@ The codebase creates numerous FreeRTOS tasks:
 
 ### 1. Polling Tasks
 
-`makapix_state_monitor_task` polls every 500ms:
+`makapix_state_monitor_task` polled every 500ms:
 
 ```c
 while (true) {
@@ -44,11 +59,11 @@ while (true) {
 }
 ```
 
-This should be event-driven.
+Replaced by event-driven handlers (task removed).
 
 ### 2. Single-Purpose Timer Tasks
 
-`play_scheduler_timer.c` creates a task just for dwell timeouts:
+`play_scheduler_timer.c` created a task just for dwell timeouts:
 
 ```c
 static void timer_task(void* arg) {
@@ -61,7 +76,7 @@ static void timer_task(void* arg) {
 }
 ```
 
-This could use FreeRTOS software timers.
+Converted to a FreeRTOS software timer.
 
 ### 3. Parallel Workers Always Running
 

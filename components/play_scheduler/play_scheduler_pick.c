@@ -30,7 +30,7 @@ static bool file_exists(const char *path)
     return (stat(path, &st) == 0);
 }
 
-static bool has_404_marker(const char *filepath)
+static __attribute__((unused)) bool has_404_marker(const char *filepath)
 {
     if (!filepath || filepath[0] == '\0') return false;
     char marker[264];

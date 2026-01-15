@@ -28,9 +28,9 @@
 #include "makapix_channel_utils.h"
 #include "view_tracker.h"  // For view_tracker_stop()
 #include "config_store.h"
-#include "connectivity_state.h"
 #include "p3a_state.h"
 #include "sd_path.h"
+#include "content_cache.h"
 #include "esp_log.h"
 #include "esp_random.h"
 #include "mbedtls/sha256.h"
@@ -134,7 +134,7 @@ static bool file_exists(const char *path)
     return (stat(path, &st) == 0);
 }
 
-static bool has_404_marker(const char *filepath)
+static __attribute__((unused)) bool has_404_marker(const char *filepath)
 {
     if (!filepath || filepath[0] == '\0') return false;
 
@@ -149,7 +149,7 @@ static bool has_404_marker(const char *filepath)
     return (stat(marker_path, &st) == 0);
 }
 
-static asset_type_t get_asset_type_from_filepath(const char *filepath)
+static __attribute__((unused)) asset_type_t get_asset_type_from_filepath(const char *filepath)
 {
     if (!filepath) return ASSET_TYPE_WEBP;
 
@@ -164,7 +164,7 @@ static asset_type_t get_asset_type_from_filepath(const char *filepath)
     return ASSET_TYPE_WEBP;
 }
 
-static int ps_ext_index_from_filepath(const char *filepath)
+static __attribute__((unused)) int ps_ext_index_from_filepath(const char *filepath)
 {
     if (!filepath) return 0;
     const char *ext = strrchr(filepath, '.');
@@ -975,17 +975,15 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     // Signal background refresh task to process pending channels
     ps_refresh_signal_work();
 
-    // Update Download Manager with new channel list for round-robin downloading
-    extern void download_manager_set_channels(const char **channel_ids, size_t count);
-    extern void download_manager_reset_playback_initiated(void);
+    // Update content cache with new channel list for round-robin downloading
     const char *channel_ids[PS_MAX_CHANNELS];
     for (size_t i = 0; i < command->channel_count; i++) {
         channel_ids[i] = s_state.channels[i].channel_id;
     }
-    download_manager_set_channels(channel_ids, command->channel_count);
+    content_cache_set_channels(channel_ids, command->channel_count);
 
-    // Reset playback_initiated so download manager can trigger playback for new channel
-    download_manager_reset_playback_initiated();
+    // Reset playback_initiated so cache can trigger playback for new channel
+    content_cache_reset_playback_initiated();
 
     // Check if any channel has entries we can play immediately
     bool has_entries = false;
@@ -1012,7 +1010,7 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
 
         // Show loading state to user while waiting for refresh/download
         // But only if we have WiFi connectivity (no point showing loading in AP mode)
-        if (connectivity_state_has_wifi()) {
+        if (p3a_state_has_wifi()) {
             extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
                                                        int progress_percent, const char *detail);
             p3a_render_set_channel_message(first_channel_display_name, 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
@@ -1203,15 +1201,14 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
             }
 
             // Only show loading/downloading messages if we have WiFi connectivity
-            if (connectivity_state_has_wifi()) {
+            if (p3a_state_has_wifi()) {
                 if (any_refreshing) {
                     // Channel is still refreshing - show loading message
                     p3a_render_set_channel_message(display_name, 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
                                                     "Updating channel index...");
                 } else {
                     // Check if download manager is actively downloading
-                    extern bool download_manager_is_busy(void);
-                    if (download_manager_is_busy()) {
+                    if (content_cache_is_busy()) {
                         p3a_render_set_channel_message(display_name, 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1,
                                                         "Downloading artwork...");
                     } else {
@@ -1369,12 +1366,14 @@ void play_scheduler_reset_timer(void)
 
 void play_scheduler_touch_next(void)
 {
-    s_state.touch_next = true;
+    if (!s_state.initialized) return;
+    play_scheduler_next(NULL);
 }
 
 void play_scheduler_touch_back(void)
 {
-    s_state.touch_back = true;
+    if (!s_state.initialized) return;
+    play_scheduler_prev(NULL);
 }
 
 // ============================================================================
@@ -1734,10 +1733,10 @@ void play_scheduler_on_load_failed(const char *storage_key, const char *channel_
         } else {
             ESP_LOGW(TAG, "No artworks available after load failure");
             // Show appropriate message (only if we have WiFi)
-            if (connectivity_state_has_wifi()) {
+            if (p3a_state_has_wifi()) {
                 extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
                                                            int progress_percent, const char *detail);
-                extern bool download_manager_is_busy(void);
+                bool cache_busy = content_cache_is_busy();
                 
                 // Get display name for first channel
                 char ch_display_name[64] = "Channel";
@@ -1747,7 +1746,7 @@ void play_scheduler_on_load_failed(const char *storage_key, const char *channel_
                 }
                 xSemaphoreGive(s_state.mutex);
                 
-                if (download_manager_is_busy()) {
+                if (cache_busy) {
                     p3a_render_set_channel_message(ch_display_name, 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1,
                                                     "Downloading artwork...");
                 } else {

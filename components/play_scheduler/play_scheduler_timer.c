@@ -11,6 +11,7 @@
 #include "play_scheduler_internal.h"
 #include "play_scheduler.h"
 #include "p3a_state.h"
+#include "event_bus.h"
 #include "esp_log.h"
 
 static const char *TAG = "ps_timer";
@@ -34,8 +35,7 @@ static void dwell_timer_callback(TimerHandle_t timer)
         return;
     }
 
-    ESP_LOGD(TAG, "Auto-swap timer elapsed, advancing");
-    play_scheduler_next(NULL);
+    event_bus_emit_simple(P3A_EVENT_SWAP_NEXT);
 }
 
 // ============================================================================

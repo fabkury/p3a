@@ -312,6 +312,9 @@ static void handle_system_event(const p3a_event_t *event, void *ctx)
         case P3A_EVENT_REGISTRATION_CHANGED:
             p3a_state_on_registration_changed(event->payload.i32 != 0);
             break;
+        case P3A_EVENT_INTERNET_CHECK:
+            p3a_state_check_internet();
+            break;
         default:
             break;
     }
@@ -523,6 +526,7 @@ void app_main(void)
         event_bus_subscribe(P3A_EVENT_MQTT_CONNECTED, handle_system_event, NULL);
         event_bus_subscribe(P3A_EVENT_MQTT_DISCONNECTED, handle_system_event, NULL);
         event_bus_subscribe(P3A_EVENT_REGISTRATION_CHANGED, handle_system_event, NULL);
+        event_bus_subscribe(P3A_EVENT_INTERNET_CHECK, handle_system_event, NULL);
 
         event_bus_subscribe(P3A_EVENT_MAKAPIX_STATE_CHANGED, handle_makapix_state_event, NULL);
         event_bus_subscribe(P3A_EVENT_PROVISIONING_STATUS_CHANGED, handle_provisioning_status_event, NULL);

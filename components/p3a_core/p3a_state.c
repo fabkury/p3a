@@ -8,6 +8,7 @@
 
 #include "p3a_state.h"
 #include "esp_log.h"
+#include "event_bus.h"
 #include "esp_netif.h"
 #include "nvs_flash.h"
 #include "nvs.h"
@@ -264,7 +265,7 @@ static void internet_check_timer_cb(TimerHandle_t timer)
     xSemaphoreGive(s_state.mutex);
 
     if (should_check) {
-        p3a_state_check_internet();
+        event_bus_emit_simple(P3A_EVENT_INTERNET_CHECK);
     }
 }
 

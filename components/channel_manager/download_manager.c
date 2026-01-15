@@ -617,7 +617,8 @@ esp_err_t download_manager_init(void)
     s_playback_initiated = false;  // Reset on init
 
     // Priority 3: Below render (5) and loader (4) to prevent animation stuttering during downloads
-    if (xTaskCreate(download_task, "download_mgr", 16384, NULL, 3, &s_task) != pdPASS) {
+    // Stack size 20KB: snprintf/vfprintf can use significant stack for formatting
+    if (xTaskCreate(download_task, "download_mgr", 20480, NULL, 3, &s_task) != pdPASS) {
         vSemaphoreDelete(s_mutex);
         s_mutex = NULL;
         return ESP_ERR_NO_MEM;

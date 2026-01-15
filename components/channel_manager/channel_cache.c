@@ -2,6 +2,7 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "channel_cache.h"
+#include "event_bus.h"
 #include "makapix_channel_internal.h"
 #include "vault_storage.h"
 #include "esp_log.h"
@@ -9,6 +10,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <errno.h>
 
 static const char *TAG = "channel_cache";
 
@@ -83,7 +85,10 @@ void channel_cache_build_path(const char *channel_id,
     }
     safe_id[j] = '\0';
 
-    snprintf(out, out_len, "%s/%s.bin", channels_path, safe_id);
+    // Use .cache extension to avoid conflict with raw index .bin files
+    // written by the refresh task. This allows the cache (with header + LAi)
+    // to persist independently of the index file updates.
+    snprintf(out, out_len, "%s/%s.cache", channels_path, safe_id);
 }
 
 // ============================================================================
@@ -286,14 +291,23 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
 // Cache Lifecycle
 // ============================================================================
 
+static void cache_flush_event_handler(const p3a_event_t *event, void *ctx)
+{
+    (void)event;
+    (void)ctx;
+
+    if (!s_cache_state.initialized) return;
+
+    channel_cache_flush_all(s_cache_state.channels_path);
+}
+
 static void save_timer_callback(TimerHandle_t xTimer)
 {
     (void)xTimer;
 
     if (!s_cache_state.initialized) return;
 
-    // Save all dirty caches
-    channel_cache_flush_all(s_cache_state.channels_path);
+    event_bus_emit_simple(P3A_EVENT_CACHE_FLUSH);
 }
 
 esp_err_t channel_cache_init(void)
@@ -323,6 +337,7 @@ esp_err_t channel_cache_init(void)
     }
 
     s_cache_state.initialized = true;
+    event_bus_subscribe(P3A_EVENT_CACHE_FLUSH, cache_flush_event_handler, NULL);
     ESP_LOGI(TAG, "Channel cache subsystem initialized");
     return ESP_OK;
 }
@@ -349,6 +364,29 @@ void channel_cache_deinit(void)
     ESP_LOGI(TAG, "Channel cache subsystem deinitialized");
 }
 
+/**
+ * @brief Build legacy index file path ({channel_id}.bin)
+ * Used for migration from old format to new .cache format.
+ */
+static void build_legacy_index_path(const char *channel_id,
+                                    const char *channels_path,
+                                    char *out, size_t out_len)
+{
+    // Sanitize channel_id (same as cache path)
+    char safe_id[64];
+    size_t j = 0;
+    for (size_t i = 0; channel_id[i] && j < sizeof(safe_id) - 1; i++) {
+        char c = channel_id[i];
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_') {
+            safe_id[j++] = c;
+        }
+    }
+    safe_id[j] = '\0';
+
+    snprintf(out, out_len, "%s/%s.bin", channels_path, safe_id);
+}
+
 esp_err_t channel_cache_load(const char *channel_id,
                              const char *channels_path,
                              const char *vault_path,
@@ -357,6 +395,12 @@ esp_err_t channel_cache_load(const char *channel_id,
     if (!channel_id || !channels_path || !cache) {
         return ESP_ERR_INVALID_ARG;
     }
+
+    // NOTE: Caller is responsible for freeing any existing cache data before calling this.
+    // This function assumes cache points to either:
+    // 1. A freshly allocated (uninitialized) structure, OR
+    // 2. A zeroed structure
+    // Do NOT call this on an already-loaded cache without freeing it first.
 
     // Initialize cache structure
     memset(cache, 0, sizeof(*cache));
@@ -372,30 +416,79 @@ esp_err_t channel_cache_load(const char *channel_id,
     strncpy(s_cache_state.channels_path, channels_path,
             sizeof(s_cache_state.channels_path) - 1);
 
-    // Build file path
-    char path[256];
-    channel_cache_build_path(channel_id, channels_path, path, sizeof(path));
+    // Build file paths
+    char cache_path[256];
+    char index_path[256];
+    channel_cache_build_path(channel_id, channels_path, cache_path, sizeof(cache_path));
+    build_legacy_index_path(channel_id, channels_path, index_path, sizeof(index_path));
 
-    // Try to open cache file
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        ESP_LOGI(TAG, "No cache file for '%s', starting empty", channel_id);
+    // Check modification times to detect if index was updated after cache
+    struct stat cache_st = {0}, index_st = {0};
+    bool have_cache = (stat(cache_path, &cache_st) == 0);
+    bool have_index = (stat(index_path, &index_st) == 0);
+    bool index_newer = have_cache && have_index && (index_st.st_mtime > cache_st.st_mtime);
+
+    // If index is newer than cache, we need to reload from index (refresh updated it)
+    if (index_newer) {
+        ESP_LOGI(TAG, "Index newer than cache for '%s', reloading from index", channel_id);
+        have_cache = false;  // Force reload from index
+    }
+
+    // Try to open the new format cache file first (.cache)
+    FILE *f = NULL;
+    if (have_cache && !index_newer) {
+        f = fopen(cache_path, "rb");
+    }
+
+    if (f) {
+        // Cache file exists - check if it's valid new format
+        if (!is_legacy_format(f)) {
+            ESP_LOGI(TAG, "Loading cache (new format) for '%s'", channel_id);
+            esp_err_t err = load_new_format(f, cache);
+            fclose(f);
+            
+            if (err == ESP_OK) {
+                ESP_LOGI(TAG, "Loaded cache '%s': %zu entries, %zu available",
+                         channel_id, cache->entry_count, cache->available_count);
+                return ESP_OK;
+            }
+            
+            ESP_LOGW(TAG, "Cache file corrupt for '%s': %s, will try index",
+                     channel_id, esp_err_to_name(err));
+            // Fall through to try index file
+        } else {
+            // Shouldn't happen with .cache files, but handle gracefully
+            ESP_LOGW(TAG, "Cache file '%s' has legacy format, migrating", cache_path);
+            esp_err_t err = load_legacy_format(f, cache, vault_path);
+            fclose(f);
+            
+            if (err == ESP_OK) {
+                ESP_LOGI(TAG, "Loaded cache '%s': %zu entries, %zu available (migrated)",
+                         channel_id, cache->entry_count, cache->available_count);
+                return ESP_OK;
+            }
+            // Fall through to try index file
+        }
+    }
+
+    // No .cache file, cache corrupt, or index is newer - load from .bin index file
+    if (!have_index) {
+        ESP_LOGI(TAG, "No cache or index for '%s', starting empty", channel_id);
         return ESP_OK;  // Empty cache is valid
     }
 
-    esp_err_t err;
-    if (is_legacy_format(f)) {
-        ESP_LOGI(TAG, "Loading legacy format for '%s'", channel_id);
-        err = load_legacy_format(f, cache, vault_path);
-    } else {
-        ESP_LOGD(TAG, "Loading new format for '%s'", channel_id);
-        err = load_new_format(f, cache);
+    f = fopen(index_path, "rb");
+    if (!f) {
+        ESP_LOGI(TAG, "Cannot open index for '%s', starting empty", channel_id);
+        return ESP_OK;  // Empty cache is valid
     }
 
+    ESP_LOGI(TAG, "Loading from index for '%s' (will rebuild LAi)", channel_id);
+    esp_err_t err = load_legacy_format(f, cache, vault_path);
     fclose(f);
 
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to load cache for '%s': %s, starting empty",
+        ESP_LOGW(TAG, "Failed to load index for '%s': %s, starting empty",
                  channel_id, esp_err_to_name(err));
         // Clean up partial state
         free(cache->entries);
@@ -408,7 +501,7 @@ esp_err_t channel_cache_load(const char *channel_id,
         return ESP_OK;  // Return success with empty cache
     }
 
-    ESP_LOGI(TAG, "Loaded cache '%s': %zu entries, %zu available",
+    ESP_LOGI(TAG, "Loaded cache '%s': %zu entries, %zu available (from index)",
              channel_id, cache->entry_count, cache->available_count);
     return ESP_OK;
 }
@@ -417,6 +510,16 @@ esp_err_t channel_cache_save(const channel_cache_t *cache, const char *channels_
 {
     if (!cache || !channels_path) {
         return ESP_ERR_INVALID_ARG;
+    }
+
+    // Ensure channels directory exists
+    struct stat st;
+    if (stat(channels_path, &st) != 0) {
+        if (mkdir(channels_path, 0755) != 0) {
+            ESP_LOGE(TAG, "Failed to create channels directory: %s (errno=%d)", channels_path, errno);
+            return ESP_FAIL;
+        }
+        ESP_LOGI(TAG, "Created channels directory: %s", channels_path);
     }
 
     // Build paths
@@ -465,10 +568,13 @@ esp_err_t channel_cache_save(const channel_cache_t *cache, const char *channels_
     header->checksum = 0;
     header->checksum = channel_cache_crc32(buffer, total_size);
 
+    // Clean up any orphan temp file from previous interrupted save
+    unlink(temp_path);
+
     // Write to temp file
     FILE *f = fopen(temp_path, "wb");
     if (!f) {
-        ESP_LOGE(TAG, "Failed to create temp file: %s", temp_path);
+        ESP_LOGE(TAG, "Failed to create temp file: %s (errno=%d)", temp_path, errno);
         free(buffer);
         return ESP_FAIL;
     }
@@ -488,14 +594,23 @@ esp_err_t channel_cache_save(const channel_cache_t *cache, const char *channels_
     fsync(fileno(f));
     fclose(f);
 
-    // Atomic rename
+    // On FAT filesystems (SD card), rename() fails if destination exists.
+    // Delete the destination first, then rename.
+    if (stat(path, &st) == 0) {
+        if (unlink(path) != 0) {
+            ESP_LOGW(TAG, "Failed to remove old cache file: %s (errno=%d)", path, errno);
+            // Continue anyway - rename might still work on some filesystems
+        }
+    }
+
+    // Atomic rename (after deleting destination on FAT)
     if (rename(temp_path, path) != 0) {
-        ESP_LOGE(TAG, "Rename failed: %s -> %s", temp_path, path);
+        ESP_LOGE(TAG, "Rename failed: %s -> %s (errno=%d)", temp_path, path, errno);
         unlink(temp_path);
         return ESP_FAIL;
     }
 
-    ESP_LOGD(TAG, "Saved cache '%s': %zu entries, %zu available",
+    ESP_LOGI(TAG, "Saved cache '%s': %zu entries, %zu available",
              cache->channel_id, cache->entry_count, cache->available_count);
     return ESP_OK;
 }
@@ -644,6 +759,9 @@ size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
     size_t checked = 0;
     size_t found = 0;
 
+    // Extension strings WITH leading dot (matches actual vault storage)
+    static const char *ext_strings[] = {".webp", ".gif", ".png", ".jpg"};
+
     for (size_t i = 0; i < cache->entry_count; i++) {
         const makapix_channel_entry_t *entry = &cache->entries[i];
 
@@ -653,7 +771,8 @@ size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
         }
 
         // Build vault path for this entry
-        // Format: {vault_path}/{hash[0:2]}/{hash[2:4]}/{storage_key}.{ext}
+        // Format: {vault_path}/{sha256[0]:02x}/{sha256[1]:02x}/{sha256[2]:02x}/{storage_key}.{ext}
+        // This matches makapix_artwork_download() path format exactly
         char uuid_str[37];
         bytes_to_uuid(entry->storage_key_uuid, uuid_str, sizeof(uuid_str));
 
@@ -662,26 +781,23 @@ size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
             continue;
         }
 
-        const char *ext_strings[] = {"webp", "gif", "png", "jpg"};
-        const char *ext = (entry->extension < 4) ? ext_strings[entry->extension] : "webp";
+        // Build 3-level directory path (matches actual download paths)
+        char dir1[3], dir2[3], dir3[3];
+        snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
+        snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
+        snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
 
-        char sha_hex[65];
-        for (int j = 0; j < 32; j++) {
-            sprintf(sha_hex + j * 2, "%02x", sha256[j]);
-        }
+        int ext_idx = (entry->extension < 4) ? entry->extension : 0;
 
         char file_path[256];
-        snprintf(file_path, sizeof(file_path), "%s/%c%c/%c%c/%s.%s",
-                 vault_path,
-                 sha_hex[0], sha_hex[1],
-                 sha_hex[2], sha_hex[3],
-                 uuid_str, ext);
+        snprintf(file_path, sizeof(file_path), "%s/%s/%s/%s/%s%s",
+                 vault_path, dir1, dir2, dir3, uuid_str, ext_strings[ext_idx]);
 
         checked++;
 
         // Check if file exists
         struct stat st;
-        if (stat(file_path, &st) == 0) {
+        if (stat(file_path, &st) == 0 && S_ISREG(st.st_mode)) {
             // Also check for .404 marker
             char marker_path[264];
             snprintf(marker_path, sizeof(marker_path), "%s.404", file_path);

@@ -6,8 +6,6 @@
 #include <sys/time.h>
 #include "esp_log.h"
 
-static const char *TAG = "live_mode";
-
 uint64_t live_mode_get_wall_clock_ms(void)
 {
     struct timeval tv;

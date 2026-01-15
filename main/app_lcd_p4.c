@@ -95,7 +95,6 @@ esp_err_t app_lcd_init(void)
 
 void app_lcd_set_animation_paused(bool paused)
 {
-    bool was_paused = animation_player_is_paused();
     animation_player_set_paused(paused);
 }
 

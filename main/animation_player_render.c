@@ -466,8 +466,6 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
         }
         
         esp_err_t prefetch_err = prefetch_first_frame(&s_back_buffer);
-        bool was_live = false;
-        uint32_t failed_live_idx = 0;
         char failed_path[256] = {0};
 
         if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
@@ -477,8 +475,6 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
             swap_requested = s_swap_requested;
             back_buffer_ready = s_back_buffer.ready;
 
-            was_live = s_back_buffer.is_live_mode_swap;
-            failed_live_idx = s_back_buffer.live_index;
             if (s_back_buffer.filepath) {
                 strlcpy(failed_path, s_back_buffer.filepath, sizeof(failed_path));
             }

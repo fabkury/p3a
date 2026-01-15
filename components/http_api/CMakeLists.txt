@@ -1,6 +1,6 @@
 set(http_api_requires
-    esp_http_server mdns json app_state config_store freertos esp_wifi esp_timer esp_netif
-    makapix ota_manager p3a_core channel_manager play_scheduler
+    esp_http_server mdns json config_store freertos esp_wifi esp_timer esp_netif p3a_core
+    makapix ota_manager p3a_core channel_manager play_scheduler event_bus
 )
 
 if(CONFIG_OTA_DEV_MODE)

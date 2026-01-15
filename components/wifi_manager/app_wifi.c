@@ -29,7 +29,6 @@
 #include "lwip/sockets.h"
 #include "lwip/dns.h"
 #include "lwip/inet.h"
-#include "app_state.h"
 #include "http_api.h"
 #include "app_wifi.h"
 #include "sntp_sync.h"
@@ -37,7 +36,8 @@
 #include "makapix_mqtt.h"
 #include "makapix_channel_events.h"
 #include "mdns.h"
-#include "connectivity_state.h"
+#include "p3a_state.h"
+#include "event_bus.h"
 
 #define EXAMPLE_ESP_WIFI_SSID      CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
@@ -111,9 +111,6 @@ static TaskHandle_t s_wifi_health_task = NULL;
 static TaskHandle_t s_wifi_recovery_task = NULL;
 static bool s_reinit_in_progress = false;
 static const uint32_t s_wifi_health_interval_ms = 120000; // 120 seconds
-
-// Callback for when REST API should be started (to register action handlers)
-static app_wifi_rest_callback_t s_rest_start_callback = NULL;
 
 // Forward declaration (event_handler referenced before definition)
 static void event_handler(void* arg, esp_event_base_t event_base,
@@ -479,8 +476,8 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         // Signal WiFi disconnection to pause downloads and refresh tasks
         makapix_channel_signal_wifi_disconnected();
         
-        // Update connectivity state
-        connectivity_state_on_wifi_disconnected();
+        // Emit WiFi disconnect event
+        event_bus_emit_simple(P3A_EVENT_WIFI_DISCONNECTED);
         
         // Stop MQTT client when WiFi disconnects to prevent futile reconnection attempts
         if (s_initial_connection_done) {
@@ -521,8 +518,8 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         
         makapix_channel_signal_wifi_connected();
         
-        // Update connectivity state (will check for internet availability)
-        connectivity_state_on_wifi_connected();
+        // Emit WiFi connected event (will trigger connectivity tracking)
+        event_bus_emit_simple(P3A_EVENT_WIFI_CONNECTED);
 
         // Ensure mDNS is announced
         {
@@ -545,8 +542,6 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         // Initialize app services once
         if (!s_services_initialized) {
             sntp_sync_init();
-            app_state_init();
-
             // Start HTTP API with retry logic for transient port binding failures
             esp_err_t api_err = ESP_FAIL;
             const int max_retries = 3;
@@ -561,12 +556,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             if (api_err != ESP_OK) {
                 ESP_LOGE(TAG, "Failed to start HTTP API after %d attempts: %s",
                          max_retries, esp_err_to_name(api_err));
-                app_state_enter_error();
+                p3a_state_enter_app_error();
             } else {
-                if (s_rest_start_callback) {
-                    s_rest_start_callback();
-                }
-                app_state_enter_ready();
+                p3a_state_enter_ready();
                 ESP_LOGD(TAG, "HTTP ready at http://p3a.local/");
             }
             s_services_initialized = true;
@@ -1259,10 +1251,8 @@ static void wifi_init_softap(void)
     }
 }
 
-esp_err_t app_wifi_init(app_wifi_rest_callback_t rest_callback)
+esp_err_t app_wifi_init(void)
 {
-    s_rest_start_callback = rest_callback;
-
     // Initialize Wi-Fi remote module (ESP32-C6 via SDIO)
     wifi_remote_init();
 

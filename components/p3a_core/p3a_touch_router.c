@@ -8,7 +8,6 @@
 
 #include "p3a_touch_router.h"
 #include "p3a_state.h"
-#include "connectivity_state.h"
 #include "esp_log.h"
 #include <string.h>
 #include <stdbool.h>
@@ -117,13 +116,13 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
                 ESP_LOGI(TAG, "Long press detected - attempting to start provisioning");
                 
                 // Check for internet connectivity before provisioning
-                if (!connectivity_state_has_internet()) {
+                if (!p3a_state_has_internet()) {
                     ESP_LOGW(TAG, "Cannot start provisioning - no internet connectivity");
                     // Show error message to user
                     extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
                                                                int progress_percent, const char *detail) __attribute__((weak));
                     if (p3a_render_set_channel_message) {
-                        const char *conn_detail = connectivity_state_get_detail();
+                        const char *conn_detail = p3a_state_get_connectivity_detail();
                         p3a_render_set_channel_message("Provisioning Unavailable", 6 /* P3A_CHANNEL_MSG_ERROR */, -1, 
                                                        conn_detail ? conn_detail : "No internet connection");
                     }

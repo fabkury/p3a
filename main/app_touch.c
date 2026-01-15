@@ -78,7 +78,7 @@ static float normalize_angle(float angle)
 /**
  * @brief Get next rotation value (clockwise: 0→90→180→270→0)
  */
-static screen_rotation_t get_next_rotation_cw(screen_rotation_t current)
+static __attribute__((unused)) screen_rotation_t get_next_rotation_cw(screen_rotation_t current)
 {
     switch (current) {
         case ROTATION_0:   return ROTATION_90;
@@ -92,7 +92,7 @@ static screen_rotation_t get_next_rotation_cw(screen_rotation_t current)
 /**
  * @brief Get next rotation value (counter-clockwise: 0→270→180→90→0)
  */
-static screen_rotation_t get_next_rotation_ccw(screen_rotation_t current)
+static __attribute__((unused)) screen_rotation_t get_next_rotation_ccw(screen_rotation_t current)
 {
     switch (current) {
         case ROTATION_0:   return ROTATION_270;
@@ -184,6 +184,7 @@ static void app_touch_task(void *arg)
     uint16_t x[CONFIG_ESP_LCD_TOUCH_MAX_POINTS];
     uint16_t y[CONFIG_ESP_LCD_TOUCH_MAX_POINTS];
     uint16_t strength[CONFIG_ESP_LCD_TOUCH_MAX_POINTS];
+    esp_lcd_touch_point_data_t points[CONFIG_ESP_LCD_TOUCH_MAX_POINTS];
     uint8_t touch_count = 0;
     
     gesture_state_t gesture_state = GESTURE_STATE_IDLE;
@@ -214,8 +215,18 @@ static void app_touch_task(void *arg)
 
     while (true) {
         esp_lcd_touch_read_data(tp);
-        bool pressed = esp_lcd_touch_get_coordinates(tp, x, y, strength, &touch_count,
+        esp_err_t touch_err = esp_lcd_touch_get_data(tp, points, &touch_count,
                                                      CONFIG_ESP_LCD_TOUCH_MAX_POINTS);
+        bool pressed = (touch_err == ESP_OK && touch_count > 0);
+        if (pressed) {
+            for (uint8_t i = 0; i < touch_count; i++) {
+                x[i] = points[i].x;
+                y[i] = points[i].y;
+                strength[i] = points[i].strength;
+            }
+        } else {
+            touch_count = 0;
+        }
 
         // NOTE: We use RAW (untransformed) coordinates for gesture detection
         // (swipe direction, brightness control) because gestures should work

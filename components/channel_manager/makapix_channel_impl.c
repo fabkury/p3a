@@ -72,7 +72,7 @@ static const channel_ops_t s_makapix_ops = {
 };
 
 // Helper: get filter flags from entry
-static channel_filter_flags_t get_entry_flags(const makapix_channel_entry_t *entry)
+static __attribute__((unused)) channel_filter_flags_t get_entry_flags(const makapix_channel_entry_t *entry)
 {
     channel_filter_flags_t flags = entry->filter_flags;
     

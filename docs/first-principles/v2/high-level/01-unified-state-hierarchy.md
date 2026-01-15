@@ -7,6 +7,18 @@
 
 Merge the existing multiple state machines (`p3a_state`, `connectivity_state`, `makapix_state`, `app_state`) into a single hierarchical state machine that is the sole authority for "what is the device doing right now."
 
+## Status
+
+Completed.
+
+## Progress Checklist
+
+- [x] Consolidate state definitions into unified header/API
+- [x] Merge connectivity state into unified context
+- [x] Replace Makapix internal state with event-driven transitions
+- [x] Deprecate/remove `app_state` and `connectivity_state` usage
+- [x] Route UI/rendering decisions through unified state
+
 ## Current State (v2 Assessment)
 
 The codebase has **4+ independent state machines**:

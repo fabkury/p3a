@@ -7,6 +7,18 @@
 
 Establish a clear, linear content pipeline: **Source → Cache → Queue → Decode → Render → Display**. Each stage has a single responsibility and explicit interfaces.
 
+## Status
+
+Completed.
+
+## Progress Checklist
+
+- [x] Define pipeline interfaces (source, cache, queue, loader, render)
+- [x] Extract loader service from `animation_player.c`
+- [x] Consolidate cache/download/prefetch into `content_cache`
+- [x] Simplify `animation_player.c` to orchestration only
+- [x] Validate data flow types across pipeline
+
 ## Current State (v2 Assessment)
 
 The current content flow is interleaved across multiple files:

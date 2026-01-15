@@ -9,11 +9,12 @@
 #include "makapix_internal.h"
 #include "mbedtls/sha256.h"
 #include "config_store.h"
-#include "connectivity_state.h"
+#include "p3a_state.h"
 #include "animation_player.h"
 #include "animation_swap_request.h"
 #include "makapix_artwork.h"
 #include "p3a_render.h"
+#include "event_bus.h"
 #include <sys/stat.h>
 
 // Helper to map global play_order setting to channel_order_mode
@@ -58,6 +59,22 @@ volatile bool s_channel_load_abort = false;       // Signal to abort current loa
 char s_loading_channel_id[128] = {0};             // Channel ID currently being loaded
 char s_current_channel_id[128] = {0};             // Channel ID currently active (for download cancellation)
 char s_previous_channel_id[128] = {0};            // Previous channel ID (for error fallback)
+
+void makapix_set_state(makapix_state_t new_state)
+{
+    if (s_makapix_state == new_state) {
+        return;
+    }
+
+    makapix_state_t old_state = s_makapix_state;
+    s_makapix_state = new_state;
+    ESP_LOGI(MAKAPIX_TAG, "Makapix state: %d -> %d", old_state, new_state);
+
+    esp_err_t err = event_bus_emit_i32(P3A_EVENT_MAKAPIX_STATE_CHANGED, (int32_t)new_state);
+    if (err != ESP_OK) {
+        ESP_LOGW(MAKAPIX_TAG, "Failed to emit Makapix state event: %s", esp_err_to_name(err));
+    }
+}
 
 // Pending channel request (set by handlers, processed by channel switch task)
 char s_pending_channel[64] = {0};                 // Requested channel name
@@ -116,9 +133,9 @@ esp_err_t makapix_init(void)
 
     if (makapix_store_has_player_key() && makapix_store_has_certificates()) {
         ESP_LOGD(MAKAPIX_TAG, "Credentials found, will connect after WiFi");
-        s_makapix_state = MAKAPIX_STATE_IDLE;
+        makapix_set_state(MAKAPIX_STATE_IDLE);
     } else {
-        s_makapix_state = MAKAPIX_STATE_IDLE;
+        makapix_set_state(MAKAPIX_STATE_IDLE);
     }
 
     s_current_post_id = 0;
@@ -182,7 +199,7 @@ esp_err_t makapix_start_provisioning(void)
     // If registration was marked invalid, clear it so provisioning can proceed
     if (s_makapix_state == MAKAPIX_STATE_REGISTRATION_INVALID) {
         ESP_LOGI(MAKAPIX_TAG, "Clearing invalid registration state for fresh provisioning");
-        s_makapix_state = MAKAPIX_STATE_IDLE;
+        makapix_set_state(MAKAPIX_STATE_IDLE);
         makapix_mqtt_reset_auth_failure_count();
     }
 
@@ -211,7 +228,7 @@ esp_err_t makapix_start_provisioning(void)
     
     // Set state to PROVISIONING BEFORE disconnecting MQTT
     // This prevents the disconnect callback from starting a reconnection task
-    s_makapix_state = MAKAPIX_STATE_PROVISIONING;
+    makapix_set_state(MAKAPIX_STATE_PROVISIONING);
     s_provisioning_cancelled = false;  // Reset cancellation flag
 
     // Stop MQTT client to free network resources for provisioning
@@ -225,7 +242,7 @@ esp_err_t makapix_start_provisioning(void)
     BaseType_t ret = xTaskCreate(makapix_provisioning_task, "makapix_prov", 8192, NULL, 5, NULL);
     if (ret != pdPASS) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to create provisioning task");
-        s_makapix_state = MAKAPIX_STATE_IDLE;
+        makapix_set_state(MAKAPIX_STATE_IDLE);
         return ESP_ERR_NO_MEM;
     }
 
@@ -237,7 +254,7 @@ void makapix_cancel_provisioning(void)
     if (s_makapix_state == MAKAPIX_STATE_PROVISIONING || s_makapix_state == MAKAPIX_STATE_SHOW_CODE) {
         ESP_LOGD(MAKAPIX_TAG, "Cancelling provisioning");
         s_provisioning_cancelled = true;  // Set flag to abort provisioning task
-        s_makapix_state = MAKAPIX_STATE_IDLE;
+        makapix_set_state(MAKAPIX_STATE_IDLE);
         memset(s_registration_code, 0, sizeof(s_registration_code));
         memset(s_registration_expires, 0, sizeof(s_registration_expires));
         memset(s_provisioning_status, 0, sizeof(s_provisioning_status));
@@ -280,6 +297,7 @@ void makapix_set_provisioning_status(const char *status_message)
         strncpy(s_provisioning_status, status_message, sizeof(s_provisioning_status) - 1);
         s_provisioning_status[sizeof(s_provisioning_status) - 1] = '\0';
         ESP_LOGD(MAKAPIX_TAG, "Provisioning status: %s", s_provisioning_status);
+        event_bus_emit_ptr(P3A_EVENT_PROVISIONING_STATUS_CHANGED, s_provisioning_status);
     }
 }
 
@@ -347,7 +365,7 @@ esp_err_t makapix_connect_if_registered(void)
     }
 
     ESP_LOGD(MAKAPIX_TAG, "Connecting to %s:%d", mqtt_host, mqtt_port);
-    s_makapix_state = MAKAPIX_STATE_CONNECTING;
+    makapix_set_state(MAKAPIX_STATE_CONNECTING);
 
     // Load certificates from SPIFFS (allocate dynamically to avoid stack overflow)
     char *ca_cert = malloc(4096);
@@ -359,7 +377,7 @@ esp_err_t makapix_connect_if_registered(void)
         free(ca_cert);
         free(client_cert);
         free(client_key);
-        s_makapix_state = MAKAPIX_STATE_DISCONNECTED;
+        makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
         return ESP_ERR_NO_MEM;
     }
     
@@ -369,7 +387,7 @@ esp_err_t makapix_connect_if_registered(void)
         free(ca_cert);
         free(client_cert);
         free(client_key);
-        s_makapix_state = MAKAPIX_STATE_DISCONNECTED;
+        makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
         return err;
     }
     
@@ -379,7 +397,7 @@ esp_err_t makapix_connect_if_registered(void)
         free(ca_cert);
         free(client_cert);
         free(client_key);
-        s_makapix_state = MAKAPIX_STATE_DISCONNECTED;
+        makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
         return err;
     }
     
@@ -389,7 +407,7 @@ esp_err_t makapix_connect_if_registered(void)
         free(ca_cert);
         free(client_cert);
         free(client_key);
-        s_makapix_state = MAKAPIX_STATE_DISCONNECTED;
+        makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
         return err;
     }
 
@@ -402,14 +420,14 @@ esp_err_t makapix_connect_if_registered(void)
     
     if (err != ESP_OK) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to initialize MQTT: %s (%d)", esp_err_to_name(err), err);
-        s_makapix_state = MAKAPIX_STATE_DISCONNECTED;
+        makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
         return err;
     }
 
     err = makapix_mqtt_connect();
     if (err != ESP_OK) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to connect: %s", esp_err_to_name(err));
-        s_makapix_state = MAKAPIX_STATE_DISCONNECTED;
+        makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
         if (s_reconnect_task_handle == NULL) {
             if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", 16384, NULL, 5, &s_reconnect_task_handle) != pdPASS) {
                 s_reconnect_task_handle = NULL;
@@ -535,7 +553,7 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     // Show "Connecting..." message if MQTT not yet connected
     // The refresh task is waiting for MQTT, so let the user know what's happening
     // But only if we have WiFi connectivity (no point in AP mode)
-    if (!makapix_mqtt_is_connected() && connectivity_state_has_wifi()) {
+    if (!makapix_mqtt_is_connected() && p3a_state_has_wifi()) {
         ESP_LOGD(MAKAPIX_TAG, "MQTT not connected, showing 'Connecting...' message");
         p3a_render_set_channel_message(channel_name, P3A_CHANNEL_MSG_LOADING, -1, 
                                        "Connecting to Makapix Club...");
@@ -581,7 +599,7 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         // IMPORTANT: Do NOT switch display render mode here. We keep the display in animation mode
         // and rely on p3a_render to draw the message reliably (avoids blank screen if UI mode fails).
         // Only show loading messages if we have WiFi connectivity (no point in AP mode)
-        if (connectivity_state_has_wifi()) {
+        if (p3a_state_has_wifi()) {
             const char *loading_message;
             if (stats.total_items == 0) {
                 // Empty index - waiting for refresh to populate
@@ -1537,7 +1555,7 @@ static const channel_ops_t s_single_ops = {
     .destroy = single_ch_destroy,
 };
 
-static channel_handle_t create_single_artwork_channel(const char *storage_key, const char *art_url)
+static __attribute__((unused)) channel_handle_t create_single_artwork_channel(const char *storage_key, const char *art_url)
 {
     single_artwork_channel_t *ch = calloc(1, sizeof(single_artwork_channel_t));
     if (!ch) return NULL;

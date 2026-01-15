@@ -11,7 +11,14 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/timers.h"
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#endif
 #include "freertos/atomic.h"
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 #include <string.h>
 #include <inttypes.h>
 

@@ -8,20 +8,56 @@
 
 #include "p3a_state.h"
 #include "esp_log.h"
+#include "esp_netif.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
+#include "freertos/timers.h"
+#include "freertos/event_groups.h"
+#include "lwip/dns.h"
+#include "lwip/ip_addr.h"
+#include "esp_random.h"
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 static const char *TAG = "p3a_state";
+
+static const char *s_connectivity_short_messages[] = {
+    [P3A_CONNECTIVITY_NO_WIFI] = "No Wi-Fi",
+    [P3A_CONNECTIVITY_NO_INTERNET] = "No Internet",
+    [P3A_CONNECTIVITY_NO_REGISTRATION] = "Not Registered",
+    [P3A_CONNECTIVITY_NO_MQTT] = "Connecting...",
+    [P3A_CONNECTIVITY_ONLINE] = "Online",
+};
+
+static const char *s_connectivity_detail_messages[] = {
+    [P3A_CONNECTIVITY_NO_WIFI] = "Connect to Wi-Fi network",
+    [P3A_CONNECTIVITY_NO_INTERNET] = "Wi-Fi connected but no internet access",
+    [P3A_CONNECTIVITY_NO_REGISTRATION] = "Long-press to register with Makapix Club",
+    [P3A_CONNECTIVITY_NO_MQTT] = "Connecting to Makapix Cloud",
+    [P3A_CONNECTIVITY_ONLINE] = "Connected to Makapix Club",
+};
 
 // NVS storage
 #define NVS_NAMESPACE "p3a_state"
 #define NVS_KEY_CHANNEL_TYPE "ch_type"
 #define NVS_KEY_CHANNEL_IDENT "ch_ident"
 #define NVS_KEY_LAST_STATE "last_state"
+
+// Connectivity configuration
+#define INTERNET_CHECK_INTERVAL_MS 60000
+#define DNS_LOOKUP_TIMEOUT_MS 5000
+#define MQTT_BACKOFF_MIN_MS 5000
+#define MQTT_BACKOFF_MAX_MS 300000
+#define MQTT_BACKOFF_JITTER_PERCENT 25
+
+// Event group bits for connectivity
+#define EG_BIT_ONLINE       (1 << 0)
+#define EG_BIT_INTERNET     (1 << 1)
+#define EG_BIT_WIFI         (1 << 2)
 
 // Maximum callbacks
 #define MAX_CALLBACKS 8
@@ -34,6 +70,9 @@ typedef struct {
     // Global state
     p3a_state_t current_state;
     p3a_state_t previous_state;
+
+    // App-level status (legacy app_state)
+    p3a_app_status_t app_status;
     
     // Sub-states
     p3a_playback_substate_t playback_substate;
@@ -56,6 +95,15 @@ typedef struct {
     char provisioning_status[128];
     char provisioning_code[16];
     char provisioning_expires[32];
+
+    // Connectivity (orthogonal)
+    p3a_connectivity_level_t connectivity;
+    EventGroupHandle_t connectivity_event_group;
+    TimerHandle_t internet_check_timer;
+    time_t last_internet_check;
+    bool internet_check_in_progress;
+    uint32_t mqtt_backoff_ms;
+    bool has_registration;
     
     // Callbacks
     struct {
@@ -139,6 +187,84 @@ static void update_channel_display_name(p3a_channel_info_t *info)
         default:
             snprintf(info->display_name, sizeof(info->display_name), "Unknown");
             break;
+    }
+}
+
+static void update_connectivity_event_group_locked(void)
+{
+    if (!s_state.connectivity_event_group) {
+        return;
+    }
+
+    EventBits_t bits = 0;
+    switch (s_state.connectivity) {
+        case P3A_CONNECTIVITY_ONLINE:
+            bits = EG_BIT_ONLINE | EG_BIT_INTERNET | EG_BIT_WIFI;
+            break;
+        case P3A_CONNECTIVITY_NO_MQTT:
+        case P3A_CONNECTIVITY_NO_REGISTRATION:
+            bits = EG_BIT_INTERNET | EG_BIT_WIFI;
+            break;
+        case P3A_CONNECTIVITY_NO_INTERNET:
+            bits = EG_BIT_WIFI;
+            break;
+        case P3A_CONNECTIVITY_NO_WIFI:
+        default:
+            bits = 0;
+            break;
+    }
+
+    xEventGroupClearBits(s_state.connectivity_event_group,
+                         EG_BIT_ONLINE | EG_BIT_INTERNET | EG_BIT_WIFI);
+    if (bits) {
+        xEventGroupSetBits(s_state.connectivity_event_group, bits);
+    }
+}
+
+static void set_connectivity_locked(p3a_connectivity_level_t new_level)
+{
+    if (s_state.connectivity == new_level) {
+        return;
+    }
+
+    ESP_LOGI(TAG, "Connectivity: %s -> %s",
+             s_connectivity_short_messages[s_state.connectivity],
+             s_connectivity_short_messages[new_level]);
+
+    s_state.connectivity = new_level;
+    update_connectivity_event_group_locked();
+}
+
+static bool check_registration(void)
+{
+    extern bool makapix_store_has_player_key(void) __attribute__((weak));
+    if (makapix_store_has_player_key) {
+        return makapix_store_has_player_key();
+    }
+    return false;
+}
+
+static void dns_callback(const char *name, const ip_addr_t *ipaddr, void *arg)
+{
+    (void)name;
+    bool *result = (bool *)arg;
+    *result = (ipaddr != NULL);
+}
+
+static void internet_check_timer_cb(TimerHandle_t timer)
+{
+    (void)timer;
+    if (!s_state.initialized) {
+        return;
+    }
+
+    bool should_check = false;
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    should_check = (s_state.connectivity == P3A_CONNECTIVITY_NO_INTERNET);
+    xSemaphoreGive(s_state.mutex);
+
+    if (should_check) {
+        p3a_state_check_internet();
     }
 }
 
@@ -293,6 +419,12 @@ esp_err_t p3a_state_init(void)
         ESP_LOGE(TAG, "Failed to create mutex");
         return ESP_ERR_NO_MEM;
     }
+
+    // Initialize connectivity tracking
+    esp_err_t conn_err = p3a_state_connectivity_init();
+    if (conn_err != ESP_OK) {
+        ESP_LOGW(TAG, "Connectivity init failed: %s", esp_err_to_name(conn_err));
+    }
     
     // Load persisted channel
     p3a_state_load_channel(&s_state.current_channel);
@@ -301,6 +433,7 @@ esp_err_t p3a_state_init(void)
     s_state.current_state = P3A_STATE_ANIMATION_PLAYBACK;
     s_state.previous_state = P3A_STATE_ANIMATION_PLAYBACK;
     s_state.playback_substate = P3A_PLAYBACK_PLAYING;
+    s_state.app_status = P3A_APP_STATUS_READY;
     s_state.callback_count = 0;
     
     s_state.initialized = true;
@@ -315,6 +448,8 @@ void p3a_state_deinit(void)
 {
     if (!s_state.initialized) return;
     
+    p3a_state_connectivity_deinit();
+
     if (s_state.mutex) {
         vSemaphoreDelete(s_state.mutex);
         s_state.mutex = NULL;
@@ -342,12 +477,79 @@ p3a_state_t p3a_state_get(void)
 const char *p3a_state_get_name(p3a_state_t state)
 {
     switch (state) {
+        case P3A_STATE_BOOT: return "BOOT";
         case P3A_STATE_ANIMATION_PLAYBACK: return "ANIMATION_PLAYBACK";
         case P3A_STATE_PROVISIONING: return "PROVISIONING";
         case P3A_STATE_OTA: return "OTA";
         case P3A_STATE_PICO8_STREAMING: return "PICO8_STREAMING";
+        case P3A_STATE_ERROR: return "ERROR";
         default: return "UNKNOWN";
     }
+}
+
+p3a_app_status_t p3a_state_get_app_status(void)
+{
+    if (!s_state.initialized) return P3A_APP_STATUS_READY;
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    p3a_app_status_t status = s_state.app_status;
+    xSemaphoreGive(s_state.mutex);
+
+    return status;
+}
+
+const char *p3a_state_get_app_status_name(p3a_app_status_t status)
+{
+    switch (status) {
+        case P3A_APP_STATUS_READY: return "READY";
+        case P3A_APP_STATUS_PROCESSING: return "PROCESSING";
+        case P3A_APP_STATUS_ERROR: return "ERROR";
+        default: return "UNKNOWN";
+    }
+}
+
+p3a_connectivity_level_t p3a_state_get_connectivity(void)
+{
+    if (!s_state.initialized) return P3A_CONNECTIVITY_NO_WIFI;
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    p3a_connectivity_level_t level = s_state.connectivity;
+    xSemaphoreGive(s_state.mutex);
+
+    return level;
+}
+
+const char *p3a_state_get_connectivity_message(void)
+{
+    p3a_connectivity_level_t level = p3a_state_get_connectivity();
+    if (level < (sizeof(s_connectivity_short_messages) / sizeof(s_connectivity_short_messages[0]))) {
+        return s_connectivity_short_messages[level];
+    }
+    return "Unknown";
+}
+
+const char *p3a_state_get_connectivity_detail(void)
+{
+    p3a_connectivity_level_t level = p3a_state_get_connectivity();
+    if (level < (sizeof(s_connectivity_detail_messages) / sizeof(s_connectivity_detail_messages[0]))) {
+        return s_connectivity_detail_messages[level];
+    }
+    return "Unknown state";
+}
+
+bool p3a_state_has_wifi(void)
+{
+    return p3a_state_get_connectivity() >= P3A_CONNECTIVITY_NO_INTERNET;
+}
+
+bool p3a_state_has_internet(void)
+{
+    return p3a_state_get_connectivity() >= P3A_CONNECTIVITY_NO_REGISTRATION;
+}
+
+bool p3a_state_is_online(void)
+{
+    return p3a_state_get_connectivity() == P3A_CONNECTIVITY_ONLINE;
 }
 
 p3a_playback_substate_t p3a_state_get_playback_substate(void)
@@ -531,6 +733,24 @@ esp_err_t p3a_state_exit_to_playback(void)
     return p3a_state_enter_animation_playback();
 }
 
+esp_err_t p3a_state_enter_error(void)
+{
+    if (!s_state.initialized) return ESP_ERR_INVALID_STATE;
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+
+    p3a_state_t old_state = s_state.current_state;
+    s_state.previous_state = old_state;
+    s_state.current_state = P3A_STATE_ERROR;
+
+    xSemaphoreGive(s_state.mutex);
+
+    ESP_LOGI(TAG, "State transition: %s -> ERROR", p3a_state_get_name(old_state));
+    notify_callbacks(old_state, P3A_STATE_ERROR);
+
+    return ESP_OK;
+}
+
 // ============================================================================
 // Sub-state Updates
 // ============================================================================
@@ -596,6 +816,315 @@ void p3a_state_set_ota_progress(int percent, const char *status_text)
         snprintf(s_state.ota_status_text, sizeof(s_state.ota_status_text), "%s", status_text);
     }
     xSemaphoreGive(s_state.mutex);
+}
+
+// ============================================================================
+// App Status
+// ============================================================================
+
+void p3a_state_set_app_status(p3a_app_status_t status)
+{
+    if (!s_state.initialized) return;
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    p3a_app_status_t old_status = s_state.app_status;
+    s_state.app_status = status;
+    xSemaphoreGive(s_state.mutex);
+
+    if (old_status != status) {
+        ESP_LOGI(TAG, "App status: %s -> %s",
+                 p3a_state_get_app_status_name(old_status),
+                 p3a_state_get_app_status_name(status));
+    }
+}
+
+void p3a_state_enter_ready(void)
+{
+    p3a_state_set_app_status(P3A_APP_STATUS_READY);
+}
+
+void p3a_state_enter_processing(void)
+{
+    p3a_state_set_app_status(P3A_APP_STATUS_PROCESSING);
+}
+
+void p3a_state_enter_app_error(void)
+{
+    p3a_state_set_app_status(P3A_APP_STATUS_ERROR);
+}
+
+// ============================================================================
+// Connectivity (orthogonal)
+// ============================================================================
+
+esp_err_t p3a_state_connectivity_init(void)
+{
+    if (s_state.connectivity_event_group || s_state.internet_check_timer) {
+        return ESP_OK;
+    }
+
+    s_state.connectivity_event_group = xEventGroupCreate();
+    if (!s_state.connectivity_event_group) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    s_state.internet_check_timer = xTimerCreate(
+        "inet_check",
+        pdMS_TO_TICKS(INTERNET_CHECK_INTERVAL_MS),
+        pdTRUE,
+        NULL,
+        internet_check_timer_cb
+    );
+    if (!s_state.internet_check_timer) {
+        vEventGroupDelete(s_state.connectivity_event_group);
+        s_state.connectivity_event_group = NULL;
+        return ESP_ERR_NO_MEM;
+    }
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    s_state.connectivity = P3A_CONNECTIVITY_NO_WIFI;
+    s_state.last_internet_check = 0;
+    s_state.internet_check_in_progress = false;
+    s_state.mqtt_backoff_ms = MQTT_BACKOFF_MIN_MS;
+    s_state.has_registration = check_registration();
+    update_connectivity_event_group_locked();
+    xSemaphoreGive(s_state.mutex);
+
+    ESP_LOGI(TAG, "Connectivity initialized (registration=%d)", s_state.has_registration);
+    return ESP_OK;
+}
+
+void p3a_state_connectivity_deinit(void)
+{
+    if (s_state.internet_check_timer) {
+        xTimerStop(s_state.internet_check_timer, portMAX_DELAY);
+        xTimerDelete(s_state.internet_check_timer, portMAX_DELAY);
+        s_state.internet_check_timer = NULL;
+    }
+    if (s_state.connectivity_event_group) {
+        vEventGroupDelete(s_state.connectivity_event_group);
+        s_state.connectivity_event_group = NULL;
+    }
+}
+
+void p3a_state_on_wifi_connected(void)
+{
+    if (!s_state.initialized) return;
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    set_connectivity_locked(P3A_CONNECTIVITY_NO_INTERNET);
+    if (s_state.internet_check_timer) {
+        xTimerStart(s_state.internet_check_timer, 0);
+    }
+    xSemaphoreGive(s_state.mutex);
+
+    p3a_state_check_internet();
+}
+
+void p3a_state_on_wifi_disconnected(void)
+{
+    if (!s_state.initialized) return;
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    if (s_state.internet_check_timer) {
+        xTimerStop(s_state.internet_check_timer, 0);
+    }
+    set_connectivity_locked(P3A_CONNECTIVITY_NO_WIFI);
+    s_state.mqtt_backoff_ms = MQTT_BACKOFF_MIN_MS;
+    xSemaphoreGive(s_state.mutex);
+}
+
+void p3a_state_on_mqtt_connected(void)
+{
+    if (!s_state.initialized) return;
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    set_connectivity_locked(P3A_CONNECTIVITY_ONLINE);
+    s_state.mqtt_backoff_ms = MQTT_BACKOFF_MIN_MS;
+    xSemaphoreGive(s_state.mutex);
+}
+
+void p3a_state_on_mqtt_disconnected(void)
+{
+    if (!s_state.initialized) return;
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+
+    if (s_state.connectivity >= P3A_CONNECTIVITY_NO_MQTT) {
+        s_state.has_registration = check_registration();
+        if (s_state.has_registration) {
+            set_connectivity_locked(P3A_CONNECTIVITY_NO_MQTT);
+        } else {
+            set_connectivity_locked(P3A_CONNECTIVITY_NO_REGISTRATION);
+        }
+
+        s_state.mqtt_backoff_ms = s_state.mqtt_backoff_ms * 2;
+        if (s_state.mqtt_backoff_ms > MQTT_BACKOFF_MAX_MS) {
+            s_state.mqtt_backoff_ms = MQTT_BACKOFF_MAX_MS;
+        }
+
+        uint32_t jitter = (s_state.mqtt_backoff_ms * MQTT_BACKOFF_JITTER_PERCENT) / 100;
+        uint32_t rand_val = esp_random() % (jitter * 2);
+        s_state.mqtt_backoff_ms = s_state.mqtt_backoff_ms - jitter + rand_val;
+    }
+
+    xSemaphoreGive(s_state.mutex);
+}
+
+void p3a_state_on_registration_changed(bool has_registration)
+{
+    if (!s_state.initialized) return;
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    s_state.has_registration = has_registration;
+
+    if (s_state.connectivity == P3A_CONNECTIVITY_NO_REGISTRATION && has_registration) {
+        set_connectivity_locked(P3A_CONNECTIVITY_NO_MQTT);
+    } else if (s_state.connectivity >= P3A_CONNECTIVITY_NO_MQTT && !has_registration) {
+        set_connectivity_locked(P3A_CONNECTIVITY_NO_REGISTRATION);
+    }
+
+    xSemaphoreGive(s_state.mutex);
+}
+
+bool p3a_state_check_internet(void)
+{
+    if (!s_state.initialized) return false;
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    if (s_state.internet_check_in_progress) {
+        xSemaphoreGive(s_state.mutex);
+        return s_state.connectivity >= P3A_CONNECTIVITY_NO_REGISTRATION;
+    }
+    s_state.internet_check_in_progress = true;
+    xSemaphoreGive(s_state.mutex);
+
+    ESP_LOGD(TAG, "Checking internet via DNS lookup...");
+    ip_addr_t addr;
+    volatile bool dns_done = false;
+    volatile bool dns_success = false;
+
+    err_t err = dns_gethostbyname("example.com", &addr,
+                                   (dns_found_callback)dns_callback,
+                                   (void *)&dns_success);
+
+    if (err == ERR_OK) {
+        dns_success = true;
+        dns_done = true;
+    } else if (err == ERR_INPROGRESS) {
+        TickType_t start = xTaskGetTickCount();
+        while (!dns_done &&
+               (xTaskGetTickCount() - start) < pdMS_TO_TICKS(DNS_LOOKUP_TIMEOUT_MS)) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            if (dns_success) {
+                dns_done = true;
+                break;
+            }
+        }
+    }
+
+    if (!dns_success) {
+        esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        if (netif) {
+            esp_netif_ip_info_t ip_info;
+            if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
+                if (ip_info.ip.addr != 0 && ip_info.gw.addr != 0) {
+                    dns_success = true;
+                    ESP_LOGD(TAG, "DNS failed but have IP - assuming internet OK");
+                }
+            }
+        }
+    }
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    s_state.internet_check_in_progress = false;
+
+    if (dns_success) {
+        s_state.last_internet_check = time(NULL);
+        if (s_state.connectivity == P3A_CONNECTIVITY_NO_INTERNET) {
+            s_state.has_registration = check_registration();
+            if (s_state.has_registration) {
+                set_connectivity_locked(P3A_CONNECTIVITY_NO_MQTT);
+            } else {
+                set_connectivity_locked(P3A_CONNECTIVITY_NO_REGISTRATION);
+            }
+        }
+        ESP_LOGI(TAG, "Internet check: OK");
+    } else {
+        if (s_state.connectivity > P3A_CONNECTIVITY_NO_INTERNET) {
+            set_connectivity_locked(P3A_CONNECTIVITY_NO_INTERNET);
+        }
+        ESP_LOGW(TAG, "Internet check: FAILED");
+    }
+
+    bool result = (s_state.connectivity >= P3A_CONNECTIVITY_NO_REGISTRATION);
+    xSemaphoreGive(s_state.mutex);
+    return result;
+}
+
+uint32_t p3a_state_get_last_internet_check_age(void)
+{
+    if (!s_state.initialized || s_state.last_internet_check == 0) {
+        return UINT32_MAX;
+    }
+
+    time_t now = time(NULL);
+    if (now < s_state.last_internet_check) {
+        return 0;
+    }
+
+    return (uint32_t)(now - s_state.last_internet_check);
+}
+
+esp_err_t p3a_state_wait_for_online(TickType_t timeout_ms)
+{
+    if (!s_state.initialized || !s_state.connectivity_event_group) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    EventBits_t bits = xEventGroupWaitBits(
+        s_state.connectivity_event_group,
+        EG_BIT_ONLINE,
+        pdFALSE,
+        pdTRUE,
+        timeout_ms
+    );
+
+    return (bits & EG_BIT_ONLINE) ? ESP_OK : ESP_ERR_TIMEOUT;
+}
+
+esp_err_t p3a_state_wait_for_internet(TickType_t timeout_ms)
+{
+    if (!s_state.initialized || !s_state.connectivity_event_group) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    EventBits_t bits = xEventGroupWaitBits(
+        s_state.connectivity_event_group,
+        EG_BIT_INTERNET,
+        pdFALSE,
+        pdTRUE,
+        timeout_ms
+    );
+
+    return (bits & EG_BIT_INTERNET) ? ESP_OK : ESP_ERR_TIMEOUT;
+}
+
+esp_err_t p3a_state_wait_for_wifi(TickType_t timeout_ms)
+{
+    if (!s_state.initialized || !s_state.connectivity_event_group) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    EventBits_t bits = xEventGroupWaitBits(
+        s_state.connectivity_event_group,
+        EG_BIT_WIFI,
+        pdFALSE,
+        pdTRUE,
+        timeout_ms
+    );
+
+    return (bits & EG_BIT_WIFI) ? ESP_OK : ESP_ERR_TIMEOUT;
 }
 
 // ============================================================================

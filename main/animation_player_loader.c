@@ -4,11 +4,13 @@
 #include "animation_player_priv.h"
 #include "animation_player.h"
 #include "play_scheduler.h"
+#include "playback_queue.h"
 #include "swap_future.h"
 #include "sdio_bus.h"
 #include "ota_manager.h"
 #include "p3a_render.h"
 #include "p3a_state.h"
+#include "loader_service.h"
 #include <unistd.h>
 #include <errno.h>
 #include <sys/stat.h>
@@ -247,6 +249,7 @@ void animation_loader_task(void *arg)
                 s_cycle_pending = false;
                 xSemaphoreGive(s_buffer_mutex);
             }
+            (void)cycle_forward;
             if (do_cycle) {
                 // Re-run "swap request ignored" checks here (moved from touch path).
                 if (display_renderer_is_ui_mode()) {
@@ -313,20 +316,20 @@ void animation_loader_task(void *arg)
                      filepath, (int)type, (unsigned)start_frame, (unsigned long long)start_time_ms, (int)post_id);
         } else if (swap_was_requested) {
             // Get current artwork from play_scheduler only if an actual swap was requested
-            ps_artwork_t artwork = {0};
-            esp_err_t err = play_scheduler_current(&artwork);
-            if (err != ESP_OK || artwork.filepath[0] == '\0') {
+            queued_item_t current = {0};
+            esp_err_t err = playback_queue_current(&current);
+            if (err != ESP_OK || current.request.filepath[0] == '\0') {
                 ESP_LOGE(TAG, "Loader task: No current artwork available");
                 discard_failed_swap_request(ESP_ERR_NOT_FOUND, false);
                 continue;
             }
             // Use static buffer to hold filepath (play_scheduler_current returns by value)
             static char s_current_filepath[256];
-            strlcpy(s_current_filepath, artwork.filepath, sizeof(s_current_filepath));
+            strlcpy(s_current_filepath, current.request.filepath, sizeof(s_current_filepath));
             filepath = s_current_filepath;
-            type = artwork.type;
-            name_for_log = artwork.filepath;
-            post_id = artwork.post_id;
+            type = current.request.type;
+            name_for_log = current.request.filepath;
+            post_id = current.request.post_id;
         } else {
             // No swap request and no override - nothing to do
             // This handles the case where we woke up due to timeout while waiting
@@ -529,134 +532,6 @@ esp_err_t enumerate_animation_files(const char *dir_path)
     return err;
 }
 
-/**
- * @brief Chunk size for SD card reads
- * 
- * SDIO Bus Contention Avoidance:
- * ==============================
- * The ESP32-P4 shares the SDMMC controller between SD card (Slot 0) and 
- * WiFi (SDIO Slot 1 via ESP-Hosted). Reading large files in one blocking 
- * fread() can starve WiFi traffic and cause "not enough mem" errors or 
- * SDIO slave unresponsive crashes.
- * 
- * Solution: Read in smaller chunks with brief yields between chunks.
- * This allows WiFi SDIO traffic to interleave with SD card access.
- * 
- * 64KB provides a good balance:
- * - Large enough for efficient SD card throughput
- * - Small enough to yield frequently for WiFi traffic
- */
-#define SD_READ_CHUNK_SIZE (64 * 1024)
-
-/**
- * @brief Maximum retries for SD card read operations
- * 
- * When SDIO bus contention causes read failures, we retry with backoff.
- */
-#define SD_READ_MAX_RETRIES 3
-
-/**
- * @brief Delay between retry attempts (ms)
- */
-#define SD_READ_RETRY_DELAY_MS 50
-
-static esp_err_t load_animation_file_from_sd(const char *filepath, uint8_t **data_out, size_t *size_out)
-{
-    FILE *f = fopen(filepath, "rb");
-    if (!f) {
-        ESP_LOGE(TAG, "Failed to open file: %s", filepath);
-        return ESP_FAIL;
-    }
-
-    fseek(f, 0, SEEK_END);
-    long file_size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if (file_size <= 0) {
-        ESP_LOGE(TAG, "Invalid file size: %ld", file_size);
-        fclose(f);
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    uint8_t *buffer = (uint8_t *)heap_caps_malloc((size_t)file_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!buffer) {
-        buffer = (uint8_t *)malloc((size_t)file_size);
-        if (!buffer) {
-            ESP_LOGE(TAG, "Failed to allocate %ld bytes for animation file", file_size);
-            fclose(f);
-            return ESP_ERR_NO_MEM;
-        }
-    }
-
-    // =========================================================================
-    // CHUNKED READ WITH YIELDS - SDIO Bus Contention Avoidance
-    // =========================================================================
-    // Read in smaller chunks with brief yields between chunks to allow
-    // WiFi SDIO traffic to interleave with SD card access. This prevents
-    // "not enough mem" errors from DMA buffer exhaustion.
-    // =========================================================================
-    
-    size_t total_read = 0;
-    size_t remaining = (size_t)file_size;
-    int retry_count = 0;
-    
-    while (remaining > 0) {
-        size_t chunk_size = (remaining < SD_READ_CHUNK_SIZE) ? remaining : SD_READ_CHUNK_SIZE;
-        
-        size_t bytes_read = fread(buffer + total_read, 1, chunk_size, f);
-        
-        if (bytes_read == 0) {
-            // Check for read error vs EOF
-            if (ferror(f)) {
-                if (retry_count < SD_READ_MAX_RETRIES) {
-                    // Retry with backoff - SDIO bus may be congested
-                    retry_count++;
-                    ESP_LOGW(TAG, "SD read error at offset %zu, retry %d/%d", 
-                             total_read, retry_count, SD_READ_MAX_RETRIES);
-                    clearerr(f);
-                    vTaskDelay(pdMS_TO_TICKS(SD_READ_RETRY_DELAY_MS * retry_count));
-                    continue;
-                }
-                ESP_LOGE(TAG, "SD read failed after %d retries at offset %zu", 
-                         SD_READ_MAX_RETRIES, total_read);
-                fclose(f);
-                free(buffer);
-                return ESP_ERR_INVALID_SIZE;
-            }
-            // Unexpected EOF
-            ESP_LOGE(TAG, "Unexpected EOF: read %zu of %ld bytes", total_read, file_size);
-            fclose(f);
-            free(buffer);
-            return ESP_ERR_INVALID_SIZE;
-        }
-        
-        total_read += bytes_read;
-        remaining -= bytes_read;
-        retry_count = 0;  // Reset retry count on successful read
-        
-        // Yield briefly between chunks to allow WiFi SDIO traffic
-        // Only yield if there's more data to read and we've read a full chunk
-        if (remaining > 0 && bytes_read == chunk_size) {
-            // Brief yield (1 tick) to allow SDIO traffic to proceed
-            // This prevents bus starvation without significantly impacting throughput
-            taskYIELD();
-        }
-    }
-    
-    fclose(f);
-
-    if (total_read != (size_t)file_size) {
-        ESP_LOGE(TAG, "Failed to read complete file: read %zu of %ld bytes", total_read, file_size);
-        free(buffer);
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    *data_out = buffer;
-    *size_out = (size_t)file_size;
-
-    return ESP_OK;
-}
-
 esp_err_t refresh_animation_file_list(void)
 {
     if (!s_sd_mounted) {
@@ -685,13 +560,16 @@ void unload_animation_buffer(animation_buffer_t *buf)
         return;
     }
 
-    animation_decoder_unload(&buf->decoder);
-
-    if (buf->file_data) {
-        free((void *)buf->file_data);
-        buf->file_data = NULL;
-        buf->file_size = 0;
-    }
+    loaded_animation_t loaded = {
+        .decoder = buf->decoder,
+        .file_data = (uint8_t *)buf->file_data,
+        .file_size = buf->file_size,
+        .info = buf->decoder_info,
+    };
+    loader_service_unload(&loaded);
+    buf->decoder = NULL;
+    buf->file_data = NULL;
+    buf->file_size = 0;
 
     free(buf->native_frame_b1);
     free(buf->native_frame_b2);
@@ -869,37 +747,19 @@ esp_err_t animation_loader_rebuild_upscale_maps(animation_buffer_t *buf, display
     return build_upscale_maps_for_buffer(buf, canvas_w, canvas_h, rotation);
 }
 
-static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf, asset_type_t type, const uint8_t *data, size_t size)
+static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf,
+                                                   animation_decoder_t *decoder,
+                                                   const animation_decoder_info_t *info)
 {
     if (!buf) {
         return ESP_ERR_INVALID_ARG;
     }
-
-    animation_decoder_type_t decoder_type;
-    if (type == ASSET_TYPE_WEBP) {
-        decoder_type = ANIMATION_DECODER_TYPE_WEBP;
-    } else if (type == ASSET_TYPE_GIF) {
-        decoder_type = ANIMATION_DECODER_TYPE_GIF;
-    } else if (type == ASSET_TYPE_PNG) {
-        decoder_type = ANIMATION_DECODER_TYPE_PNG;
-    } else if (type == ASSET_TYPE_JPEG) {
-        decoder_type = ANIMATION_DECODER_TYPE_JPEG;
-    } else {
+    if (!decoder || !info) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t err = animation_decoder_init(&buf->decoder, decoder_type, data, size);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize decoder");
-        return err;
-    }
-
-    err = animation_decoder_get_info(buf->decoder, &buf->decoder_info);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to get decoder info");
-        animation_decoder_unload(&buf->decoder);
-        return err;
-    }
+    buf->decoder = decoder;
+    buf->decoder_info = *info;
 
     // One-time diagnostic (DEBUG): how this asset flows through the pipeline.
     {
@@ -958,16 +818,28 @@ esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, an
 
     unload_animation_buffer(buf);
 
-    uint8_t *file_data = NULL;
-    size_t file_size = 0;
-    esp_err_t err = load_animation_file_from_sd(filepath, &file_data, &file_size);
+    animation_decoder_type_t decoder_type;
+    if (type == ASSET_TYPE_WEBP) {
+        decoder_type = ANIMATION_DECODER_TYPE_WEBP;
+    } else if (type == ASSET_TYPE_GIF) {
+        decoder_type = ANIMATION_DECODER_TYPE_GIF;
+    } else if (type == ASSET_TYPE_PNG) {
+        decoder_type = ANIMATION_DECODER_TYPE_PNG;
+    } else if (type == ASSET_TYPE_JPEG) {
+        decoder_type = ANIMATION_DECODER_TYPE_JPEG;
+    } else {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    loaded_animation_t loaded = {0};
+    esp_err_t err = loader_service_load(filepath, decoder_type, &loaded);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to load file from SD: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Failed to load file: %s", esp_err_to_name(err));
         return err;
     }
 
-    buf->file_data = file_data;
-    buf->file_size = file_size;
+    buf->file_data = loaded.file_data;
+    buf->file_size = loaded.file_size;
     buf->type = type;
     buf->asset_index = 0;  // Position tracking now managed by play_scheduler
 
@@ -975,22 +847,25 @@ esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, an
     buf->filepath = strdup(filepath);
     if (!buf->filepath) {
         ESP_LOGE(TAG, "Failed to duplicate filepath");
-        free(file_data);
+        loader_service_unload(&loaded);
         buf->file_data = NULL;
         buf->file_size = 0;
         return ESP_ERR_NO_MEM;
     }
 
-    err = init_animation_decoder_for_buffer(buf, type, file_data, file_size);
+    err = init_animation_decoder_for_buffer(buf, loaded.decoder, &loaded.info);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize animation decoder '%s': %s", filepath, esp_err_to_name(err));
-        free(file_data);
+        loader_service_unload(&loaded);
         buf->file_data = NULL;
         buf->file_size = 0;
         free(buf->filepath);
         buf->filepath = NULL;
         return err;
     }
+
+    loaded.decoder = NULL;
+    loaded.file_data = NULL;
 
     // No separate prefetch buffer needed - the first frame is decoded to native_frame_b1
     // during prefetch, then upscaled directly to the display back buffer when displayed

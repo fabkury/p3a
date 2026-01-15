@@ -9,5 +9,5 @@ idf_component_register(
          "play_scheduler_refresh.c"
          "play_scheduler_compat.c"
     INCLUDE_DIRS "include"
-    REQUIRES esp_common channel_manager config_store p3a_core freertos esp_timer makapix
+    REQUIRES esp_common channel_manager config_store p3a_core freertos esp_timer makapix content_cache
 )

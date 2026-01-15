@@ -116,6 +116,7 @@ bool display_panel_refresh_done_cb(esp_lcd_panel_handle_t panel,
 void display_render_task(void *arg);
 void display_upscale_worker_top_task(void *arg);
 void display_upscale_worker_bottom_task(void *arg);
+esp_err_t display_renderer_ensure_upscale_workers(void);
 
 // FPS overlay (display_fps_overlay.c)
 void fps_update_and_draw(uint8_t *buffer);

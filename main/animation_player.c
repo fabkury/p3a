@@ -6,7 +6,7 @@
 #include "play_scheduler.h"
 #include "sdcard_channel_impl.h"
 #include "playlist_manager.h"
-#include "download_manager.h"
+#include "content_cache.h"
 #include "ugfx_ui.h"
 #include "config_store.h"
 #include "ota_manager.h"
@@ -21,7 +21,8 @@
 #include "display_renderer.h"
 #include "makapix_channel_events.h"
 #include "fresh_boot.h"
-#include "connectivity_state.h"
+#include "render_engine.h"
+#include "playback_queue.h"
 
 // Animation player state
 animation_buffer_t s_front_buffer = {0};
@@ -202,7 +203,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         return err;
     }
 
-    err = download_manager_init();
+    err = content_cache_init();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize download manager: %s", esp_err_to_name(err));
         playlist_manager_deinit();
@@ -243,7 +244,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     s_buffer_mutex = xSemaphoreCreateMutex();
     if (!s_buffer_mutex) {
         ESP_LOGE(TAG, "Failed to create buffer mutex");
-        download_manager_deinit();
+        content_cache_deinit();
         playlist_manager_deinit();
         playback_controller_deinit();
         display_renderer_deinit();
@@ -255,7 +256,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         ESP_LOGE(TAG, "Failed to create loader semaphore");
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
-        download_manager_deinit();
+        content_cache_deinit();
         playlist_manager_deinit();
         playback_controller_deinit();
         display_renderer_deinit();
@@ -269,7 +270,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         s_loader_sem = NULL;
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
-        download_manager_deinit();
+        content_cache_deinit();
         playlist_manager_deinit();
         playback_controller_deinit();
         display_renderer_deinit();
@@ -288,7 +289,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     // Show initial loading message based on channel type
     // Note: play_scheduler will be started after loader task, this is just the initial message
     // Only show if we have WiFi connectivity (no point in AP mode)
-    if (connectivity_state_has_wifi()) {
+    if (p3a_state_has_wifi()) {
         // Get display name from boot channel
         char display_name[64];
         if (strcmp(boot_channel, "sdcard") == 0) {
@@ -329,7 +330,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         s_loader_sem = NULL;
         vSemaphoreDelete(s_buffer_mutex);
         s_buffer_mutex = NULL;
-        download_manager_deinit();
+        content_cache_deinit();
         playlist_manager_deinit();
         playback_controller_deinit();
         display_renderer_deinit();
@@ -415,35 +416,22 @@ void animation_player_cycle_animation(bool forward)
 esp_err_t animation_player_request_swap_current(void)
 {
     // Get current artwork from play_scheduler
-    ps_artwork_t artwork = {0};
-    esp_err_t err = play_scheduler_current(&artwork);
+    queued_item_t current = {0};
+    esp_err_t err = playback_queue_current(&current);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "No current artwork to swap to: %s", esp_err_to_name(err));
         return err;
     }
 
-    if (artwork.filepath[0] == '\0') {
+    if (current.request.filepath[0] == '\0') {
         ESP_LOGW(TAG, "Current artwork has empty filepath");
         return ESP_ERR_NOT_FOUND;
     }
 
     // Build swap request with the current artwork's data
-    swap_request_t request = {0};
-    strlcpy(request.filepath, artwork.filepath, sizeof(request.filepath));
-    request.post_id = artwork.post_id;
-    request.type = artwork.type;
+    swap_request_t request = current.request;
 
-    // Get dwell time: use artwork dwell or config default
-    if (artwork.dwell_time_ms > 0) {
-        request.dwell_time_ms = artwork.dwell_time_ms;
-    } else {
-        request.dwell_time_ms = config_store_get_dwell_time() * 1000;
-    }
-    request.is_live_mode = false;
-    request.start_frame = 0;
-    request.start_time_ms = 0;
-
-    ESP_LOGD(TAG, "Requested swap to current: '%s' (post_id=%d)", artwork.filepath, artwork.post_id);
+    ESP_LOGD(TAG, "Requested swap to current: '%s' (post_id=%d)", request.filepath, request.post_id);
 
     // Use the new swap request API
     return animation_player_request_swap(&request);
@@ -760,7 +748,7 @@ void animation_player_deinit(void)
     }
 
     free_sd_file_list();
-    download_manager_deinit();
+    content_cache_deinit();
     playlist_manager_deinit();
     playback_controller_deinit();
     display_renderer_deinit();
@@ -868,7 +856,7 @@ esp_err_t animation_player_submit_pico8_frame(const uint8_t *palette_rgb, size_t
 
 esp_err_t app_set_screen_rotation(screen_rotation_t rotation)
 {
-    esp_err_t err = display_renderer_set_rotation(rotation);
+    esp_err_t err = render_engine_set_rotation(rotation);
     if (err == ESP_OK) {
         animation_player_render_on_rotation_changed(rotation);
     }

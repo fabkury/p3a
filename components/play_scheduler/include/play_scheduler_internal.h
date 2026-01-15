@@ -17,7 +17,7 @@
 #include "makapix_channel_impl.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
-#include "freertos/task.h"
+#include "freertos/timers.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -67,9 +67,7 @@ typedef struct {
     uint32_t dwell_time_seconds;
 
     // Timer
-    TaskHandle_t timer_task;
-    volatile bool touch_next;
-    volatile bool touch_back;
+    TimerHandle_t dwell_timer;
 
     // Command gating
     SemaphoreHandle_t mutex;

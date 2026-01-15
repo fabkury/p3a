@@ -7,6 +7,18 @@
 
 Replace scattered callbacks and direct cross-module calls with a centralized event bus, making control flow explicit and components decoupled.
 
+## Status
+
+Completed.
+
+## Progress Checklist
+
+- [x] Implement event bus core (queue, subscribers, dispatch task)
+- [x] Define event taxonomy enums and categories
+- [x] Migrate direct callbacks to event emit/subscribe
+- [x] Replace polling/monitor tasks with event handlers
+- [x] Remove deprecated callback APIs
+
 ## Current State (v2 Assessment)
 
 The codebase uses multiple communication patterns:

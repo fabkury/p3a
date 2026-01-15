@@ -76,6 +76,7 @@ volatile bool g_rotation_in_progress = false;
 // Forward declarations
 static esp_err_t prepare_vsync(void);
 static void wait_for_render_mode(display_render_mode_t target_mode);
+static esp_err_t create_upscale_workers(void);
 
 // ============================================================================
 // Initialization
@@ -108,8 +109,30 @@ esp_err_t display_renderer_init(esp_lcd_panel_handle_t panel,
         return ESP_ERR_NO_MEM;
     }
 
-    // Create upscale worker tasks
-    if (g_upscale_worker_top == NULL) {
+    // Load saved rotation
+    display_rotation_t saved_rotation = (display_rotation_t)config_store_get_rotation();
+    if (saved_rotation != DISPLAY_ROTATION_0) {
+        ESP_LOGI(DISPLAY_TAG, "Restoring saved rotation: %d degrees", saved_rotation);
+        g_screen_rotation = saved_rotation;
+        ugfx_ui_set_rotation(saved_rotation);
+    }
+
+    ESP_LOGI(DISPLAY_TAG, "Display renderer initialized");
+    return ESP_OK;
+}
+
+esp_err_t display_renderer_ensure_upscale_workers(void)
+{
+    if (g_upscale_worker_top && g_upscale_worker_bottom) {
+        return ESP_OK;
+    }
+
+    return create_upscale_workers();
+}
+
+static esp_err_t create_upscale_workers(void)
+{
+    if (!g_upscale_worker_top) {
         if (xTaskCreatePinnedToCore(display_upscale_worker_top_task,
                                     "upscale_top",
                                     2048,
@@ -118,13 +141,11 @@ esp_err_t display_renderer_init(esp_lcd_panel_handle_t panel,
                                     &g_upscale_worker_top,
                                     0) != pdPASS) {
             ESP_LOGE(DISPLAY_TAG, "Failed to create top upscale worker task");
-            vSemaphoreDelete(g_display_mutex);
-            g_display_mutex = NULL;
             return ESP_FAIL;
         }
     }
 
-    if (g_upscale_worker_bottom == NULL) {
+    if (!g_upscale_worker_bottom) {
         if (xTaskCreatePinnedToCore(display_upscale_worker_bottom_task,
                                     "upscale_bottom",
                                     2048,
@@ -137,21 +158,10 @@ esp_err_t display_renderer_init(esp_lcd_panel_handle_t panel,
                 vTaskDelete(g_upscale_worker_top);
                 g_upscale_worker_top = NULL;
             }
-            vSemaphoreDelete(g_display_mutex);
-            g_display_mutex = NULL;
             return ESP_FAIL;
         }
     }
 
-    // Load saved rotation
-    display_rotation_t saved_rotation = (display_rotation_t)config_store_get_rotation();
-    if (saved_rotation != DISPLAY_ROTATION_0) {
-        ESP_LOGI(DISPLAY_TAG, "Restoring saved rotation: %d degrees", saved_rotation);
-        g_screen_rotation = saved_rotation;
-        ugfx_ui_set_rotation(saved_rotation);
-    }
-
-    ESP_LOGI(DISPLAY_TAG, "Display renderer initialized");
     return ESP_OK;
 }
 

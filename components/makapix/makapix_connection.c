@@ -12,7 +12,7 @@
 #include "makapix_internal.h"
 #include "makapix_channel_events.h"
 #include "makapix_api.h"
-#include "connectivity_state.h"
+#include "event_bus.h"
 
 /**
  * @brief Timer callback for periodic status publishing
@@ -87,7 +87,7 @@ void makapix_channel_switch_task(void *pvParameters)
 void makapix_mqtt_connection_callback(bool connected)
 {
     if (connected) {
-        s_makapix_state = MAKAPIX_STATE_CONNECTED;
+        makapix_set_state(MAKAPIX_STATE_CONNECTED);
         
         // Reinitialize API to load player_key (especially important after fresh registration)
         esp_err_t api_init_err = makapix_api_init();
@@ -99,7 +99,7 @@ void makapix_mqtt_connection_callback(bool connected)
         makapix_channel_signal_mqtt_connected();
         
         // Update connectivity state
-        connectivity_state_on_mqtt_connected();
+        event_bus_emit_simple(P3A_EVENT_MQTT_CONNECTED);
         
         // Publish initial status
         makapix_mqtt_publish_status(makapix_get_current_post_id());
@@ -127,7 +127,7 @@ void makapix_mqtt_connection_callback(bool connected)
         makapix_channel_signal_mqtt_disconnected();
         
         // Update connectivity state
-        connectivity_state_on_mqtt_disconnected();
+        event_bus_emit_simple(P3A_EVENT_MQTT_DISCONNECTED);
         
         if (s_status_timer) {
             xTimerStop(s_status_timer, 0);
@@ -140,7 +140,7 @@ void makapix_mqtt_connection_callback(bool connected)
         
         // Start reconnection if we were connected
         if (s_makapix_state == MAKAPIX_STATE_CONNECTED || s_makapix_state == MAKAPIX_STATE_CONNECTING) {
-            s_makapix_state = MAKAPIX_STATE_DISCONNECTED;
+            makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
             
             if (s_reconnect_task_handle == NULL) {
                 if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", 16384, NULL, 5, &s_reconnect_task_handle) != pdPASS) {
@@ -173,7 +173,7 @@ void makapix_mqtt_reconnect_task(void *pvParameters)
             ESP_LOGE(MAKAPIX_TAG, "Too many TLS auth failures (%d) - registration appears invalid",
                      makapix_mqtt_get_auth_failure_count());
             ESP_LOGE(MAKAPIX_TAG, "Stopping reconnection attempts. Re-provision device to fix.");
-            s_makapix_state = MAKAPIX_STATE_REGISTRATION_INVALID;
+            makapix_set_state(MAKAPIX_STATE_REGISTRATION_INVALID);
             break;  // Exit reconnect loop
         }
 
@@ -195,7 +195,7 @@ void makapix_mqtt_reconnect_task(void *pvParameters)
 
             if (!makapix_mqtt_is_connected()) {
                 ESP_LOGI(MAKAPIX_TAG, "Reconnecting to MQTT...");
-                s_makapix_state = MAKAPIX_STATE_CONNECTING;
+                makapix_set_state(MAKAPIX_STATE_CONNECTING);
                 
                 char ca_cert[4096];
                 char client_cert[4096];
@@ -205,7 +205,7 @@ void makapix_mqtt_reconnect_task(void *pvParameters)
                     makapix_store_get_client_cert(client_cert, sizeof(client_cert)) != ESP_OK ||
                     makapix_store_get_client_key(client_key, sizeof(client_key)) != ESP_OK) {
                     ESP_LOGE(MAKAPIX_TAG, "Failed to load certificates");
-                    s_makapix_state = MAKAPIX_STATE_DISCONNECTED;
+                    makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
                     continue;
                 }
                 
@@ -215,10 +215,10 @@ void makapix_mqtt_reconnect_task(void *pvParameters)
                 if (err == ESP_OK) {
                     err = makapix_mqtt_connect();
                     if (err != ESP_OK) {
-                        s_makapix_state = MAKAPIX_STATE_DISCONNECTED;
+                        makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
                     }
                 } else {
-                    s_makapix_state = MAKAPIX_STATE_DISCONNECTED;
+                    makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
                 }
             } else {
                 break;  // Already connected

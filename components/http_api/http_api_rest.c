@@ -25,13 +25,13 @@
 #include "esp_wifi_remote.h"
 #include "esp_netif.h"
 #include "app_wifi.h"
-#include "app_state.h"
 #include "config_store.h"
 #include "makapix.h"
 #include "makapix_store.h"
 #include "makapix_channel_impl.h"
 #include "animation_player.h"
 #include "play_scheduler.h"
+#include "playback_service.h"
 #include "app_lcd.h"
 #include "version.h"
 #include "p3a_state.h"
@@ -316,7 +316,7 @@ esp_err_t h_get_status(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    cJSON_AddStringToObject(data, "state", app_state_str(app_state_get()));
+    cJSON_AddStringToObject(data, "state", p3a_state_get_app_status_name(p3a_state_get_app_status()));
     cJSON_AddNumberToObject(data, "uptime_ms", (double)(esp_timer_get_time() / 1000ULL));
     cJSON_AddNumberToObject(data, "heap_free", (double)esp_get_free_heap_size());
     
@@ -373,7 +373,7 @@ esp_err_t h_get_api_state(httpd_req_t *req)
         return ESP_OK;
     }
 
-    cJSON_AddStringToObject(data, "state", app_state_str(app_state_get()));
+    cJSON_AddStringToObject(data, "state", p3a_state_get_app_status_name(p3a_state_get_app_status()));
     cJSON_AddNumberToObject(data, "uptime_ms", (double)(esp_timer_get_time() / 1000ULL));
     cJSON_AddNumberToObject(data, "heap_free", (double)esp_get_free_heap_size());
     cJSON_AddBoolToObject(data, "live_mode", false);  // Live mode deprecated
@@ -584,15 +584,15 @@ esp_err_t h_post_channel(httpd_req_t *req) {
     if (channel_name && cJSON_IsString(channel_name)) {
         // Named channel: "all", "promoted", or "sdcard"
         const char *name = cJSON_GetStringValue(channel_name);
-        err = play_scheduler_play_named_channel(name);
+        err = playback_service_play_channel(name);
     } else if (hashtag && cJSON_IsString(hashtag)) {
         // Hashtag channel
         const char *tag = cJSON_GetStringValue(hashtag);
-        err = play_scheduler_play_hashtag_channel(tag);
+        err = playback_service_play_hashtag_channel(tag);
     } else if (user_sqid && cJSON_IsString(user_sqid)) {
         // User channel
         const char *sqid = cJSON_GetStringValue(user_sqid);
-        err = play_scheduler_play_user_channel(sqid);
+        err = playback_service_play_user_channel(sqid);
     } else {
         cJSON_Delete(root);
         send_json(req, 400, "{\"ok\":false,\"error\":\"Missing channel_name, hashtag, or user_sqid\",\"code\":\"INVALID_REQUEST\"}");
@@ -907,56 +907,36 @@ esp_err_t h_post_reboot(httpd_req_t *req) {
 }
 
 /**
- * POST /action/swap_next (Phase 4: Direct call, no queue)
+ * POST /action/swap_next
  */
 esp_err_t h_post_swap_next(httpd_req_t *req) {
-    if (app_state_get() == STATE_ERROR) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"Bad state\",\"code\":\"BAD_STATE\"}");
-        return ESP_OK;
-    }
-
     if (req->content_len > 0 && !ensure_json_content(req)) {
         send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
         return ESP_OK;
     }
-
-    // Direct call to play_scheduler
-    esp_err_t err = play_scheduler_next(NULL);
-    if (err == ESP_ERR_INVALID_STATE) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"Command in progress\",\"code\":\"BUSY\"}");
-    } else if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Navigation failed\",\"code\":\"NAV_ERROR\"}");
-    } else {
-        send_json(req, 200, "{\"ok\":true,\"data\":{\"action\":\"swap_next\"}}");
+    if (!api_enqueue_swap_next()) {
+        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
+        return ESP_OK;
     }
 
+    send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"swap_next\"}}");
     return ESP_OK;
 }
 
 /**
- * POST /action/swap_back (Phase 4: Direct call, no queue)
+ * POST /action/swap_back
  */
 esp_err_t h_post_swap_back(httpd_req_t *req) {
-    if (app_state_get() == STATE_ERROR) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"Bad state\",\"code\":\"BAD_STATE\"}");
-        return ESP_OK;
-    }
-
     if (req->content_len > 0 && !ensure_json_content(req)) {
         send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
         return ESP_OK;
     }
-
-    // Direct call to play_scheduler
-    esp_err_t err = play_scheduler_prev(NULL);
-    if (err == ESP_ERR_INVALID_STATE) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"Command in progress\",\"code\":\"BUSY\"}");
-    } else if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Navigation failed\",\"code\":\"NAV_ERROR\"}");
-    } else {
-        send_json(req, 200, "{\"ok\":true,\"data\":{\"action\":\"swap_back\"}}");
+    if (!api_enqueue_swap_back()) {
+        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
+        return ESP_OK;
     }
 
+    send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"swap_back\"}}");
     return ESP_OK;
 }
 

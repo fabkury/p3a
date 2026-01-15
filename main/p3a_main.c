@@ -23,7 +23,6 @@
 #include "app_touch.h"
 #include "app_usb.h"
 #include "app_wifi.h"
-#include "http_api.h"
 #include "p3a_board.h"  // For p3a_board_littlefs_mount()
 #include "makapix.h"
 #include "sntp_sync.h"
@@ -36,10 +35,13 @@
 #include "sdio_bus.h"          // SDIO bus coordination
 #include "p3a_state.h"         // Unified p3a state machine
 #include "p3a_render.h"        // State-aware rendering
+#include "event_bus.h"
+#include "content_service.h"
+#include "playback_service.h"
+#include "connectivity_service.h"
 #include "swap_future.h"       // Live Mode swap_future
 #include "live_mode.h"         // Live Mode time helpers
 #include "fresh_boot.h"        // Fresh boot debug helpers
-#include "connectivity_state.h" // Hierarchical connectivity state machine
 #include "channel_cache.h"       // LAi persistence for channel caches
 #include "freertos/task.h"
 
@@ -266,125 +268,141 @@ static void memory_report_task(void *arg)
 }
 #endif // CONFIG_P3A_MEMORY_REPORTING_ENABLE
 
-static void register_rest_action_handlers(void)
+static void handle_playback_event(const p3a_event_t *event, void *ctx)
 {
-    // Register action handlers for HTTP API swap commands
-    http_api_set_action_handlers(
-        app_lcd_cycle_animation,           // swap_next callback
-        app_lcd_cycle_animation_backward   // swap_back callback
-    );
-    ESP_LOGD(TAG, "REST action handlers registered");
+    (void)ctx;
+    if (!event) return;
+
+    switch (event->type) {
+        case P3A_EVENT_SWAP_NEXT:
+            app_lcd_cycle_animation();
+            break;
+        case P3A_EVENT_SWAP_BACK:
+            app_lcd_cycle_animation_backward();
+            break;
+        case P3A_EVENT_PAUSE:
+            app_lcd_set_animation_paused(true);
+            break;
+        case P3A_EVENT_RESUME:
+            app_lcd_set_animation_paused(false);
+            break;
+        default:
+            break;
+    }
 }
 
-#if !DEBUG_PROVISIONING_ENABLED
-/**
- * @brief Monitor task that bridges makapix module states to unified p3a state machine
- * 
- * This task watches the makapix module's internal state and updates the unified
- * p3a state machine accordingly. It also handles the UI transitions for provisioning.
- */
-static void makapix_state_monitor_task(void *arg)
+static void handle_system_event(const p3a_event_t *event, void *ctx)
 {
-    (void)arg;
-    makapix_state_t last_makapix_state = MAKAPIX_STATE_IDLE;
+    (void)ctx;
+    if (!event) return;
 
-    esp_err_t err = ugfx_ui_init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize µGFX UI: %s", esp_err_to_name(err));
+    switch (event->type) {
+        case P3A_EVENT_WIFI_CONNECTED:
+            p3a_state_on_wifi_connected();
+            break;
+        case P3A_EVENT_WIFI_DISCONNECTED:
+            p3a_state_on_wifi_disconnected();
+            break;
+        case P3A_EVENT_MQTT_CONNECTED:
+            p3a_state_on_mqtt_connected();
+            break;
+        case P3A_EVENT_MQTT_DISCONNECTED:
+            p3a_state_on_mqtt_disconnected();
+            break;
+        case P3A_EVENT_REGISTRATION_CHANGED:
+            p3a_state_on_registration_changed(event->payload.i32 != 0);
+            break;
+        default:
+            break;
+    }
+}
+
+static void handle_makapix_state_event(const p3a_event_t *event, void *ctx)
+{
+    (void)ctx;
+    static bool s_ui_ready = false;
+    static makapix_state_t last_makapix_state = MAKAPIX_STATE_IDLE;
+
+    if (!event) return;
+
+    makapix_state_t current_makapix_state = (makapix_state_t)event->payload.i32;
+    if (current_makapix_state == last_makapix_state) {
         return;
     }
 
-    while (true) {
-        makapix_state_t current_makapix_state = makapix_get_state();
+    ESP_LOGD(TAG, "Makapix state changed: %d -> %d", last_makapix_state, current_makapix_state);
 
-        if (current_makapix_state != last_makapix_state) {
-            ESP_LOGD(TAG, "Makapix state changed: %d -> %d", last_makapix_state, current_makapix_state);
-
-            // Handle state transitions - sync with unified p3a state machine
-            if (current_makapix_state == MAKAPIX_STATE_PROVISIONING) {
-                // Transition p3a to provisioning state if allowed
-                if (p3a_state_get() == P3A_STATE_ANIMATION_PLAYBACK) {
-                    p3a_state_enter_provisioning();
-                }
-                p3a_state_set_provisioning_substate(P3A_PROV_STATUS);
-                
-                // Enter UI mode immediately and show status message
-                app_lcd_enter_ui_mode();
-
-                char status[128];
-                if (makapix_get_provisioning_status(status, sizeof(status)) == ESP_OK) {
-                    p3a_render_set_provisioning_status(status);
-                    esp_err_t show_err = ugfx_ui_show_provisioning_status(status);
-                    if (show_err != ESP_OK) {
-                        ESP_LOGE(TAG, "Failed to show provisioning status UI: %s", esp_err_to_name(show_err));
-                    }
-                } else {
-                    // Default status message
-                    p3a_render_set_provisioning_status("Starting...");
-                    esp_err_t show_err = ugfx_ui_show_provisioning_status("Starting...");
-                    if (show_err != ESP_OK) {
-                        ESP_LOGE(TAG, "Failed to show provisioning status UI: %s", esp_err_to_name(show_err));
-                    }
-                }
-                ESP_LOGD(TAG, "Provisioning UI displayed");
-                
-            } else if (current_makapix_state == MAKAPIX_STATE_SHOW_CODE) {
-                // Update p3a provisioning sub-state
-                p3a_state_set_provisioning_substate(P3A_PROV_SHOW_CODE);
-                
-                // Already in UI mode from PROVISIONING, just update to show code
-                char code[8];
-                char expires[64];
-                if (makapix_get_registration_code(code, sizeof(code)) == ESP_OK &&
-                    makapix_get_registration_expires(expires, sizeof(expires)) == ESP_OK) {
-                    // Update render state
-                    p3a_render_set_provisioning_code(code, expires);
-                    
-                    // Show µGFX registration UI
-                    esp_err_t show_err = ugfx_ui_show_registration(code, expires);
-                    if (show_err != ESP_OK) {
-                        ESP_LOGE(TAG, "Failed to show registration UI: %s", esp_err_to_name(show_err));
-                    }
-                    ESP_LOGI(TAG, "============================================");
-                    ESP_LOGI(TAG, "   REGISTRATION CODE: %s", code);
-                    ESP_LOGI(TAG, "   Expires: %s", expires);
-                    ESP_LOGI(TAG, "   Enter at makapix.club");
-                    ESP_LOGI(TAG, "============================================");
-                }
-                
-            } else if ((last_makapix_state == MAKAPIX_STATE_PROVISIONING || last_makapix_state == MAKAPIX_STATE_SHOW_CODE) &&
-                       current_makapix_state != MAKAPIX_STATE_PROVISIONING && current_makapix_state != MAKAPIX_STATE_SHOW_CODE) {
-                // Check if cleanup was already done synchronously by touch router
-                // (when user long-pressed to cancel provisioning)
-                bool still_in_ui = app_lcd_is_ui_mode();
-
-                if (still_in_ui) {
-                    // Touch router didn't clean up (e.g., credentials received vs cancelled by user)
-                    // Transition back to animation playback
-                    p3a_state_exit_to_playback();
-
-                    // Exit UI mode FIRST, then hide registration
-                    // This ensures animation takes over immediately without an intermediate black frame
-                    app_lcd_exit_ui_mode();
-                    ugfx_ui_hide_registration();
-                }
-                ESP_LOGD(TAG, "Registration mode exited (cleanup was %s)", still_in_ui ? "needed" : "already done");
-            }
-
-            last_makapix_state = current_makapix_state;
-        } else if (current_makapix_state == MAKAPIX_STATE_PROVISIONING) {
-            // Update status message during provisioning
-            char status[128];
-            if (makapix_get_provisioning_status(status, sizeof(status)) == ESP_OK) {
-                p3a_render_set_provisioning_status(status);
-                ugfx_ui_show_provisioning_status(status);
-            }
+    if (!s_ui_ready) {
+        esp_err_t err = ugfx_ui_init();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize µGFX UI: %s", esp_err_to_name(err));
+        } else {
+            s_ui_ready = true;
         }
-
-        vTaskDelay(pdMS_TO_TICKS(500)); // Check every 500ms
     }
+
+    if (current_makapix_state == MAKAPIX_STATE_PROVISIONING) {
+        if (p3a_state_get() == P3A_STATE_ANIMATION_PLAYBACK) {
+            p3a_state_enter_provisioning();
+        }
+        p3a_state_set_provisioning_substate(P3A_PROV_STATUS);
+
+        app_lcd_enter_ui_mode();
+
+        char status[128];
+        if (makapix_get_provisioning_status(status, sizeof(status)) == ESP_OK) {
+            p3a_render_set_provisioning_status(status);
+            ugfx_ui_show_provisioning_status(status);
+        } else {
+            p3a_render_set_provisioning_status("Starting...");
+            ugfx_ui_show_provisioning_status("Starting...");
+        }
+        ESP_LOGD(TAG, "Provisioning UI displayed");
+    } else if (current_makapix_state == MAKAPIX_STATE_SHOW_CODE) {
+        p3a_state_set_provisioning_substate(P3A_PROV_SHOW_CODE);
+
+        char code[8];
+        char expires[64];
+        if (makapix_get_registration_code(code, sizeof(code)) == ESP_OK &&
+            makapix_get_registration_expires(expires, sizeof(expires)) == ESP_OK) {
+            p3a_render_set_provisioning_code(code, expires);
+            esp_err_t show_err = ugfx_ui_show_registration(code, expires);
+            if (show_err != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to show registration UI: %s", esp_err_to_name(show_err));
+            }
+            ESP_LOGI(TAG, "============================================");
+            ESP_LOGI(TAG, "   REGISTRATION CODE: %s", code);
+            ESP_LOGI(TAG, "   Expires: %s", expires);
+            ESP_LOGI(TAG, "   Enter at makapix.club");
+            ESP_LOGI(TAG, "============================================");
+        }
+    } else if ((last_makapix_state == MAKAPIX_STATE_PROVISIONING || last_makapix_state == MAKAPIX_STATE_SHOW_CODE) &&
+               current_makapix_state != MAKAPIX_STATE_PROVISIONING && current_makapix_state != MAKAPIX_STATE_SHOW_CODE) {
+        bool still_in_ui = app_lcd_is_ui_mode();
+        if (still_in_ui) {
+            p3a_state_exit_to_playback();
+            app_lcd_exit_ui_mode();
+            ugfx_ui_hide_registration();
+        }
+        ESP_LOGD(TAG, "Registration mode exited (cleanup was %s)", still_in_ui ? "needed" : "already done");
+    }
+
+    last_makapix_state = current_makapix_state;
 }
-#endif
+
+static void handle_provisioning_status_event(const p3a_event_t *event, void *ctx)
+{
+    (void)ctx;
+    if (!event) return;
+
+    const char *status = (const char *)event->payload.ptr;
+    if (!status || status[0] == '\0') {
+        return;
+    }
+
+    p3a_render_set_provisioning_status(status);
+    ugfx_ui_show_provisioning_status(status);
+}
 
 #if DEBUG_PROVISIONING_ENABLED
 /**
@@ -490,22 +508,36 @@ void app_main(void)
         // Continue anyway - state machine will use defaults
     }
 
-    // Initialize connectivity state tracking (hierarchical WiFi→Internet→Registration→MQTT)
-    esp_err_t conn_err = connectivity_state_init();
-    if (conn_err != ESP_OK) {
-        ESP_LOGW(TAG, "connectivity_state_init failed: %s", esp_err_to_name(conn_err));
+    // Initialize event bus (core decoupling mechanism)
+    esp_err_t bus_err = event_bus_init();
+    if (bus_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize event bus: %s", esp_err_to_name(bus_err));
+    } else {
+        event_bus_subscribe(P3A_EVENT_SWAP_NEXT, handle_playback_event, NULL);
+        event_bus_subscribe(P3A_EVENT_SWAP_BACK, handle_playback_event, NULL);
+        event_bus_subscribe(P3A_EVENT_PAUSE, handle_playback_event, NULL);
+        event_bus_subscribe(P3A_EVENT_RESUME, handle_playback_event, NULL);
+
+        event_bus_subscribe(P3A_EVENT_WIFI_CONNECTED, handle_system_event, NULL);
+        event_bus_subscribe(P3A_EVENT_WIFI_DISCONNECTED, handle_system_event, NULL);
+        event_bus_subscribe(P3A_EVENT_MQTT_CONNECTED, handle_system_event, NULL);
+        event_bus_subscribe(P3A_EVENT_MQTT_DISCONNECTED, handle_system_event, NULL);
+        event_bus_subscribe(P3A_EVENT_REGISTRATION_CHANGED, handle_system_event, NULL);
+
+        event_bus_subscribe(P3A_EVENT_MAKAPIX_STATE_CHANGED, handle_makapix_state_event, NULL);
+        event_bus_subscribe(P3A_EVENT_PROVISIONING_STATUS_CHANGED, handle_provisioning_status_event, NULL);
     }
 
     // Initialize channel cache subsystem (LAi persistence, debounced saves)
-    esp_err_t cache_err = channel_cache_init();
+    esp_err_t cache_err = content_service_init();
     if (cache_err != ESP_OK) {
-        ESP_LOGW(TAG, "channel_cache_init failed: %s", esp_err_to_name(cache_err));
+        ESP_LOGW(TAG, "content_service_init failed: %s", esp_err_to_name(cache_err));
     }
 
     // Initialize play_scheduler (the deterministic playback engine)
-    esp_err_t ps_err = play_scheduler_init();
+    esp_err_t ps_err = playback_service_init();
     if (ps_err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize play_scheduler: %s", esp_err_to_name(ps_err));
+        ESP_LOGE(TAG, "Failed to initialize playback service: %s", esp_err_to_name(ps_err));
     }
 
     // Validate OTA boot early - this must be done before any complex operations
@@ -563,7 +595,7 @@ void app_main(void)
 #endif
     
     // Initialize Wi-Fi (will start captive portal if needed, or connect to saved network)
-    ESP_ERROR_CHECK(app_wifi_init(register_rest_action_handlers));
+    ESP_ERROR_CHECK(connectivity_service_init());
 
     // Check and update ESP32-C6 co-processor firmware if needed
     // This uses the ESP-Hosted OTA feature to update the WiFi chip
@@ -597,8 +629,7 @@ void app_main(void)
     ESP_LOGW(TAG, "DEBUG PROVISIONING MODE ENABLED - toggling every %d ms", DEBUG_PROVISIONING_TOGGLE_MS);
     xTaskCreate(debug_provisioning_task, "debug_prov", 4096, NULL, 5, NULL);
 #else
-    // Production: monitor real Makapix state and handle UI transitions
-    xTaskCreate(makapix_state_monitor_task, "makapix_mon", 4096, NULL, 5, NULL);
+    // Production: Makapix UI transitions are event-driven (event bus)
 #endif
 
     ESP_LOGI(TAG, "p3a ready: tap the display to cycle animations (auto-swap enabled)");

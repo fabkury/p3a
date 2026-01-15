@@ -48,6 +48,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "esp_err.h"
+#include "freertos/FreeRTOS.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -61,11 +62,24 @@ extern "C" {
  * @brief Global p3a states
  */
 typedef enum {
+    P3A_STATE_BOOT,                 ///< Boot sequence (initializing subsystems)
     P3A_STATE_ANIMATION_PLAYBACK,   ///< Normal animation playback from channels
     P3A_STATE_PROVISIONING,         ///< Makapix device registration
     P3A_STATE_OTA,                  ///< Firmware update in progress
     P3A_STATE_PICO8_STREAMING,      ///< Real-time PICO-8 streaming
+    P3A_STATE_ERROR,                ///< Critical error state
 } p3a_state_t;
+
+/**
+ * @brief Connectivity level (orthogonal to global state)
+ */
+typedef enum {
+    P3A_CONNECTIVITY_NO_WIFI = 0,   ///< WiFi not connected
+    P3A_CONNECTIVITY_NO_INTERNET,   ///< WiFi connected, but no internet
+    P3A_CONNECTIVITY_NO_REGISTRATION, ///< Internet available, no Makapix registration
+    P3A_CONNECTIVITY_NO_MQTT,       ///< Registered, but MQTT not connected
+    P3A_CONNECTIVITY_ONLINE,        ///< Fully connected to Makapix Cloud
+} p3a_connectivity_level_t;
 
 /**
  * @brief Animation playback sub-states
@@ -107,6 +121,15 @@ typedef enum {
     P3A_OTA_FLASHING,               ///< Writing to flash
     P3A_OTA_PENDING_REBOOT,         ///< Waiting for reboot
 } p3a_ota_substate_t;
+
+/**
+ * @brief Application-level status (legacy app_state replacement)
+ */
+typedef enum {
+    P3A_APP_STATUS_READY = 0,       ///< Normal operation/idle state
+    P3A_APP_STATUS_PROCESSING,      ///< Executing a command
+    P3A_APP_STATUS_ERROR            ///< Unrecoverable error state
+} p3a_app_status_t;
 
 /**
  * @brief Channel types
@@ -173,6 +196,46 @@ p3a_state_t p3a_state_get(void);
  * @brief Get state name string
  */
 const char *p3a_state_get_name(p3a_state_t state);
+
+/**
+ * @brief Get current application status (READY/PROCESSING/ERROR)
+ */
+p3a_app_status_t p3a_state_get_app_status(void);
+
+/**
+ * @brief Get string representation of application status
+ */
+const char *p3a_state_get_app_status_name(p3a_app_status_t status);
+
+/**
+ * @brief Get current connectivity level
+ */
+p3a_connectivity_level_t p3a_state_get_connectivity(void);
+
+/**
+ * @brief Get short connectivity message
+ */
+const char *p3a_state_get_connectivity_message(void);
+
+/**
+ * @brief Get detailed connectivity message
+ */
+const char *p3a_state_get_connectivity_detail(void);
+
+/**
+ * @brief Check if WiFi is connected
+ */
+bool p3a_state_has_wifi(void);
+
+/**
+ * @brief Check if internet is reachable
+ */
+bool p3a_state_has_internet(void);
+
+/**
+ * @brief Check if fully online
+ */
+bool p3a_state_is_online(void);
 
 /**
  * @brief Get current playback sub-state
@@ -258,6 +321,11 @@ esp_err_t p3a_state_enter_pico8_streaming(void);
  */
 esp_err_t p3a_state_exit_to_playback(void);
 
+/**
+ * @brief Enter error state
+ */
+esp_err_t p3a_state_enter_error(void);
+
 // ============================================================================
 // SUB-STATE UPDATES
 // ============================================================================
@@ -286,6 +354,78 @@ void p3a_state_set_ota_substate(p3a_ota_substate_t substate);
  * @brief Update OTA progress
  */
 void p3a_state_set_ota_progress(int percent, const char *status_text);
+
+// ============================================================================
+// APP STATUS (legacy app_state replacement)
+// ============================================================================
+
+/**
+ * @brief Set application status to READY
+ */
+void p3a_state_enter_ready(void);
+
+/**
+ * @brief Set application status to PROCESSING
+ */
+void p3a_state_enter_processing(void);
+
+/**
+ * @brief Set application status to ERROR
+ */
+void p3a_state_enter_app_error(void);
+
+/**
+ * @brief Set application status explicitly
+ */
+void p3a_state_set_app_status(p3a_app_status_t status);
+
+// ============================================================================
+// CONNECTIVITY (orthogonal state)
+// ============================================================================
+
+/**
+ * @brief Initialize connectivity tracking (internal use)
+ */
+esp_err_t p3a_state_connectivity_init(void);
+
+/**
+ * @brief Deinitialize connectivity tracking (internal use)
+ */
+void p3a_state_connectivity_deinit(void);
+
+/**
+ * @brief Event handlers called by WiFi/MQTT components
+ */
+void p3a_state_on_wifi_connected(void);
+void p3a_state_on_wifi_disconnected(void);
+void p3a_state_on_mqtt_connected(void);
+void p3a_state_on_mqtt_disconnected(void);
+void p3a_state_on_registration_changed(bool has_registration);
+
+/**
+ * @brief Force an internet connectivity check
+ */
+bool p3a_state_check_internet(void);
+
+/**
+ * @brief Get time since last successful internet check (seconds)
+ */
+uint32_t p3a_state_get_last_internet_check_age(void);
+
+/**
+ * @brief Wait for connectivity to reach ONLINE state
+ */
+esp_err_t p3a_state_wait_for_online(TickType_t timeout_ms);
+
+/**
+ * @brief Wait for internet connectivity
+ */
+esp_err_t p3a_state_wait_for_internet(TickType_t timeout_ms);
+
+/**
+ * @brief Wait for WiFi connection
+ */
+esp_err_t p3a_state_wait_for_wifi(TickType_t timeout_ms);
 
 // ============================================================================
 // CHANNEL MANAGEMENT

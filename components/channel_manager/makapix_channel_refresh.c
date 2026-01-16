@@ -393,6 +393,9 @@ esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *posts, s
             }
             memcpy(tmp.storage_key_uuid, uuid_bytes, sizeof(tmp.storage_key_uuid));
             tmp.extension = detect_file_type(post->art_url);
+            // Log server-provided art_url to compare with reconstructed URL
+            // ESP_LOGI(TAG, "Server art_url: %s (storage_key=%s, ext=%d)",
+            //          post->art_url, post->storage_key, (int)tmp.extension);
             tmp.artwork_modified_at = (uint32_t)parse_iso8601_utc(post->artwork_modified_at);
             tmp.dwell_time_ms = post->dwell_time_ms;
             tmp.total_artworks = 0;

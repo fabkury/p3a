@@ -12,7 +12,7 @@
  * Architecture:
  * - Receives channel list via download_manager_set_channels()
  * - Round-robin across channels to find next missing file
- * - Reads cache files directly to find entries needing download
+ * - Uses channel_cache APIs to find entries needing download
  * - Sleeps when nothing to download
  */
 
@@ -142,27 +142,6 @@ static bool has_404_marker(const char *filepath)
 }
 
 /**
- * @brief Build cache file path for a channel
- */
-static void dl_build_cache_path(const char *channel_id, char *out_path, size_t max_len)
-{
-    char channel_dir[256];
-    if (sd_path_get_channel(channel_dir, sizeof(channel_dir)) != ESP_OK) {
-        strlcpy(channel_dir, "/sdcard/p3a/channel", sizeof(channel_dir));
-    }
-
-    // Replace : with _ in filename
-    char safe_id[64];
-    size_t j = 0;
-    for (size_t i = 0; channel_id[i] && j < sizeof(safe_id) - 1; i++) {
-        safe_id[j++] = (channel_id[i] == ':') ? '_' : channel_id[i];
-    }
-    safe_id[j] = '\0';
-
-    snprintf(out_path, max_len, "%s/%s.bin", channel_dir, safe_id);
-}
-
-/**
  * @brief Build vault filepath for an entry
  *
  * Uses SHA256 sharding: {vault}/{sha[0]}/{sha[1]}/{sha[2]}/{storage_key}.{ext}
@@ -277,10 +256,11 @@ static void dl_commit_state(const dl_snapshot_t *snapshot, size_t new_round_robi
  * @brief Get next download using round-robin across channels
  *
  * Operates on a snapshot of channel state to avoid race conditions.
+ * Uses channel_cache APIs to find entries not yet in LAi (Locally Available index).
  * Scans channels in round-robin order, finding the first entry that:
- * - Is an artwork (not playlist)
- * - Does not have a local file
+ * - Is an artwork (not playlist) and not in LAi
  * - Does not have a .404 marker
+ * - Is not blocked by LTF (load-to-failure tracking)
  *
  * @param out_request Output download request
  * @param snapshot Snapshot of channel state (will be modified with cursor updates)
@@ -307,58 +287,21 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             continue;
         }
 
-        // Build cache path and open file
-        char cache_path[512];
-        dl_build_cache_path(ch->channel_id, cache_path, sizeof(cache_path));
-
-        struct stat st;
-        if (stat(cache_path, &st) != 0) {
-            // No cache file yet
+        // Get channel cache from registry
+        channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
+        if (!cache) {
+            // Cache not loaded yet - skip this channel for now
             continue;
         }
 
-        if (st.st_size <= 0 || st.st_size % 64 != 0) {
-            // Invalid cache file
-            continue;
-        }
-
-        size_t entry_count = st.st_size / 64;
-
-        // Open and seek to cursor position
-        FILE *f = fopen(cache_path, "rb");
-        if (!f) {
-            continue;
-        }
-
-        // Scan from cursor position
+        // Find entries needing download (artwork not in LAi)
         makapix_channel_entry_t entry;
         bool found = false;
 
-        while (ch->dl_cursor < entry_count) {
-            // Seek to cursor position
-            if (fseek(f, ch->dl_cursor * sizeof(makapix_channel_entry_t), SEEK_SET) != 0) {
-                break;
-            }
-
-            if (fread(&entry, sizeof(entry), 1, f) != 1) {
-                break;
-            }
-
-            ch->dl_cursor++;
-
-            // Skip non-artwork entries
-            if (entry.kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
-                continue;
-            }
-
+        while (channel_cache_get_next_missing(cache, &ch->dl_cursor, &entry) == ESP_OK) {
             // Build filepath
             char filepath[256];
             dl_build_vault_filepath(&entry, filepath, sizeof(filepath));
-
-            // Skip if file exists
-            if (file_exists(filepath)) {
-                continue;
-            }
 
             // Skip if 404 marker exists
             if (has_404_marker(filepath)) {
@@ -395,13 +338,12 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                          CONFIG_MAKAPIX_CLUB_HOST,
                          (unsigned int)sha256[0], (unsigned int)sha256[1], (unsigned int)sha256[2],
                          storage_key, s_ext_strings[ext_idx]);
+                // ESP_LOGI(TAG, "Download URL: %s (ext_idx=%d)", out_request->art_url, ext_idx);
             }
 
             found = true;
             break;
         }
-
-        fclose(f);
 
         if (found) {
             // Advance round-robin to next channel for fairness and commit to shared state
@@ -411,7 +353,7 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             return ESP_OK;
         }
 
-        // This channel is exhausted (cursor state already updated in snapshot)
+        // This channel is exhausted
         ch->channel_complete = true;
         ESP_LOGI(TAG, "Channel '%s' download scan complete", ch->channel_id);
     }

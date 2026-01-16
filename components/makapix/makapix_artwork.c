@@ -262,7 +262,7 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
     int status_code = esp_http_client_get_status_code(client);
     
     if (status_code != 200) {
-        ESP_LOGE(TAG, "HTTP request failed with status %d", status_code);
+        ESP_LOGE(TAG, "HTTP request failed with status %d for URL: %s", status_code, full_url);
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         free(chunk_buffer);

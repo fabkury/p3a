@@ -24,6 +24,29 @@ extern "C" {
 #endif
 
 // ============================================================================
+// Pick State Snapshot (for ps_peek_next_available)
+// ============================================================================
+
+/**
+ * @brief Lightweight snapshot of mutable pick state
+ *
+ * Used by ps_peek_next_available() to save/restore only the fields that
+ * ps_pick_next_available() might modify, instead of copying the entire
+ * ps_state_t (~21KB) onto the stack.
+ *
+ * Size: ~1KB instead of ~21KB
+ */
+typedef struct {
+    struct {
+        int32_t credit;           // SWRR credit
+        uint32_t cursor;          // RecencyPick cursor
+        uint64_t pick_rng_state;  // RandomPick RNG state
+    } channels[PS_MAX_CHANNELS];
+    uint32_t epoch_id;
+    int32_t last_played_id;
+} ps_pick_snapshot_t;
+
+// ============================================================================
 // Internal State Structure
 // ============================================================================
 
@@ -54,9 +77,9 @@ typedef struct {
     size_t nae_count;
     bool nae_enabled;
 
-    // PRNG state
-    uint32_t prng_nae_state;
-    uint32_t prng_pick_state;
+    // PRNG state (64-bit for proper PCG32)
+    uint64_t prng_nae_state;
+    uint64_t prng_pick_state;
     uint32_t global_seed;
     uint32_t epoch_id;
 
@@ -132,13 +155,16 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork);
 /**
  * @brief Peek next available artwork without advancing state
  *
- * Same logic as ps_pick_next_available but doesn't modify cursors.
+ * Temporarily calls ps_pick_next_available and then restores
+ * the mutable pick state (credits, cursors, RNG) so the caller's
+ * state is unchanged. Uses a lightweight snapshot (~1KB) instead
+ * of copying the entire ps_state_t (~21KB).
  *
- * @param state Scheduler state
+ * @param state Scheduler state (modified then restored)
  * @param out_artwork Output artwork reference
  * @return true if artwork found
  */
-bool ps_peek_next_available(const ps_state_t *state, ps_artwork_t *out_artwork);
+bool ps_peek_next_available(ps_state_t *state, ps_artwork_t *out_artwork);
 
 // ============================================================================
 // SWRR Operations (play_scheduler_swrr.c)
@@ -277,14 +303,14 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch);
 // ============================================================================
 
 /**
- * @brief Simple PCG32 PRNG next value
+ * @brief PCG32 PRNG next value (requires 64-bit state)
  */
-uint32_t ps_prng_next(uint32_t *state);
+uint32_t ps_prng_next(uint64_t *state);
 
 /**
- * @brief Seed PRNG
+ * @brief Seed PRNG (64-bit state, seed can be any value)
  */
-void ps_prng_seed(uint32_t *state, uint32_t seed);
+void ps_prng_seed(uint64_t *state, uint64_t seed);
 
 /**
  * @brief Build vault filepath for an entry

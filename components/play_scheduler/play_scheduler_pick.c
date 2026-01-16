@@ -132,19 +132,20 @@ void ps_build_vault_filepath(const makapix_channel_entry_t *entry,
 // PRNG (Simple PCG32)
 // ============================================================================
 
-uint32_t ps_prng_next(uint32_t *state)
+uint32_t ps_prng_next(uint64_t *state)
 {
+    // PCG32 (Permuted Congruential Generator) - requires 64-bit state
     uint64_t oldstate = *state;
-    *state = (uint32_t)((oldstate * 6364136223846793005ULL + 1) & 0xFFFFFFFF);
+    *state = oldstate * 6364136223846793005ULL + 1;
     uint32_t xorshifted = (uint32_t)(((oldstate >> 18u) ^ oldstate) >> 27u);
     uint32_t rot = (uint32_t)(oldstate >> 59u);
     return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
 }
 
-void ps_prng_seed(uint32_t *state, uint32_t seed)
+void ps_prng_seed(uint64_t *state, uint64_t seed)
 {
     *state = seed;
-    ps_prng_next(state);  // Advance once
+    ps_prng_next(state);  // Advance once to mix in the seed
 }
 
 // ============================================================================
@@ -537,17 +538,52 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
     return false;
 }
 
-bool ps_peek_next_available(const ps_state_t *state, ps_artwork_t *out_artwork)
+/**
+ * @brief Save mutable pick state to snapshot
+ *
+ * Saves only the fields that ps_pick_next_available() might modify.
+ * This is ~1KB instead of copying the entire ps_state_t (~21KB).
+ */
+static void ps_save_pick_state(const ps_state_t *state, ps_pick_snapshot_t *snapshot)
+{
+    for (size_t i = 0; i < state->channel_count && i < PS_MAX_CHANNELS; i++) {
+        snapshot->channels[i].credit = state->channels[i].credit;
+        snapshot->channels[i].cursor = state->channels[i].cursor;
+        snapshot->channels[i].pick_rng_state = state->channels[i].pick_rng_state;
+    }
+    snapshot->epoch_id = state->epoch_id;
+    snapshot->last_played_id = state->last_played_id;
+}
+
+/**
+ * @brief Restore mutable pick state from snapshot
+ */
+static void ps_restore_pick_state(ps_state_t *state, const ps_pick_snapshot_t *snapshot)
+{
+    for (size_t i = 0; i < state->channel_count && i < PS_MAX_CHANNELS; i++) {
+        state->channels[i].credit = snapshot->channels[i].credit;
+        state->channels[i].cursor = snapshot->channels[i].cursor;
+        state->channels[i].pick_rng_state = snapshot->channels[i].pick_rng_state;
+    }
+    state->epoch_id = snapshot->epoch_id;
+    state->last_played_id = snapshot->last_played_id;
+}
+
+bool ps_peek_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
 {
     if (!state || !out_artwork || state->channel_count == 0) {
         return false;
     }
 
-    // Create a temporary copy of mutable state to avoid modifying original
-    // We need to copy SWRR credits and channel cursors
-    ps_state_t temp;
-    memcpy(&temp, state, sizeof(ps_state_t));
+    // Save mutable pick state to lightweight snapshot (~1KB vs ~21KB for full copy)
+    ps_pick_snapshot_t snapshot;
+    ps_save_pick_state(state, &snapshot);
 
-    // Use the temp copy for picking
-    return ps_pick_next_available(&temp, out_artwork);
+    // Perform pick (modifies state)
+    bool result = ps_pick_next_available(state, out_artwork);
+
+    // Restore state so it appears unchanged to caller
+    ps_restore_pick_state(state, &snapshot);
+
+    return result;
 }

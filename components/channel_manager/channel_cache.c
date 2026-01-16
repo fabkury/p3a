@@ -257,6 +257,7 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
 
     // Allocate and copy LAi indices
     if (header.lai_count > 0) {
+        // Note: validation above ensures lai_count <= ci_count
         cache->available_indices = malloc(header.ci_count * sizeof(uint32_t));
         if (!cache->available_indices) {
             free(cache->entries);

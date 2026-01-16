@@ -202,7 +202,7 @@ typedef struct {
 
     // Pick state
     uint32_t cursor;          // For RecencyPick
-    uint32_t pick_rng_state;  // For RandomPick
+    uint64_t pick_rng_state;  // For RandomPick (64-bit state for proper PCG32)
 
     // Cache info
     size_t entry_count;       // Mi: local cache size

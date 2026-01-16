@@ -292,6 +292,34 @@ void channel_cache_unregister(channel_cache_t *cache);
  */
 size_t channel_cache_get_total_available(void);
 
+/**
+ * @brief Find a registered cache by channel ID
+ *
+ * Thread-safe lookup in the registry.
+ *
+ * @param channel_id Channel identifier to find
+ * @return Pointer to cache if found, NULL otherwise
+ */
+channel_cache_t *channel_cache_registry_find(const char *channel_id);
+
+/**
+ * @brief Get next Ci entry that needs downloading (artwork, not in LAi)
+ *
+ * Iterates from cursor position to find the next artwork entry that is not
+ * yet in the Locally Available index. The cursor is advanced past the
+ * returned entry (or to end if none found).
+ *
+ * Thread-safe (takes cache mutex).
+ *
+ * @param cache The cache instance
+ * @param cursor In/out cursor position (start at 0, updated on each call)
+ * @param out_entry Output entry if found (copied, caller-owned)
+ * @return ESP_OK if entry found, ESP_ERR_NOT_FOUND if no more missing entries
+ */
+esp_err_t channel_cache_get_next_missing(channel_cache_t *cache,
+                                         uint32_t *cursor,
+                                         makapix_channel_entry_t *out_entry);
+
 // ============================================================================
 // Utility Functions
 // ============================================================================

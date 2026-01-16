@@ -973,3 +973,70 @@ size_t channel_cache_get_total_available(void)
 
     return total;
 }
+
+channel_cache_t *channel_cache_registry_find(const char *channel_id)
+{
+    if (!channel_id || !s_cache_state.registry_mutex) {
+        return NULL;
+    }
+
+    channel_cache_t *found = NULL;
+
+    xSemaphoreTake(s_cache_state.registry_mutex, portMAX_DELAY);
+
+    for (size_t i = 0; i < s_cache_state.registered_count; i++) {
+        channel_cache_t *cache = s_cache_state.registered[i];
+        if (cache && strcmp(cache->channel_id, channel_id) == 0) {
+            found = cache;
+            break;
+        }
+    }
+
+    xSemaphoreGive(s_cache_state.registry_mutex);
+
+    return found;
+}
+
+esp_err_t channel_cache_get_next_missing(channel_cache_t *cache,
+                                         uint32_t *cursor,
+                                         makapix_channel_entry_t *out_entry)
+{
+    if (!cache || !cursor || !out_entry) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    xSemaphoreTake(cache->mutex, portMAX_DELAY);
+
+    // Iterate from cursor through entries
+    while (*cursor < cache->entry_count) {
+        const makapix_channel_entry_t *entry = &cache->entries[*cursor];
+        uint32_t ci_index = *cursor;
+        (*cursor)++;
+
+        // Skip non-artwork entries
+        if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+            continue;
+        }
+
+        // Check if already in LAi (inline to avoid mutex deadlock)
+        bool in_lai = false;
+        for (size_t i = 0; i < cache->available_count; i++) {
+            if (cache->available_indices[i] == ci_index) {
+                in_lai = true;
+                break;
+            }
+        }
+
+        if (in_lai) {
+            continue;  // Already downloaded
+        }
+
+        // Found a missing entry - copy it out
+        memcpy(out_entry, entry, sizeof(*out_entry));
+        xSemaphoreGive(cache->mutex);
+        return ESP_OK;
+    }
+
+    xSemaphoreGive(cache->mutex);
+    return ESP_ERR_NOT_FOUND;
+}

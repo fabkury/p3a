@@ -1530,7 +1530,8 @@ static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
     if (ch->cache) {
         bool added = lai_add_entry(ch->cache, ci_index);
         if (added) {
-            // Update aliased count (entries/indices are aliased, count needs sync)
+            // Update aliased pointer and count (pointer may have been allocated on first add)
+            ch->available_indices = ch->cache->available_indices;
             ch->available_count = ch->cache->available_count;
             // Schedule debounced save
             channel_cache_schedule_save(ch->cache);

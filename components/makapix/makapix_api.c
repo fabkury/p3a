@@ -275,7 +275,10 @@ static esp_err_t publish_and_wait(cJSON *request_obj, cJSON **out_response)
             break;
         }
 
-        ESP_LOGI(TAG, "Publishing request (attempt %d/%d): %s", attempt + 1, MAKAPIX_MAX_RETRIES, request_id);
+        if (attempt > 1) {
+            ESP_LOGI(TAG, "Publishing request (attempt %d/%d): %s", attempt + 1, MAKAPIX_MAX_RETRIES, request_id);
+        }
+        
         esp_err_t pub_err = makapix_mqtt_publish_raw(topic, payload, 1);
         if (pub_err != ESP_OK) {
             ESP_LOGW(TAG, "Publish failed: %s", esp_err_to_name(pub_err));

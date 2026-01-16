@@ -131,14 +131,16 @@ static void set_busy(bool busy, const char *channel_id)
     }
 }
 
+// Static buffer for 404 marker check (single-threaded access from download task)
+static char s_marker_path[264];
+
 static bool has_404_marker(const char *filepath)
 {
     if (!filepath || filepath[0] == '\0') return false;
-    char marker_path[264];
-    int ret = snprintf(marker_path, sizeof(marker_path), "%s.404", filepath);
-    if (ret < 0 || ret >= (int)sizeof(marker_path)) return false;
+    int ret = snprintf(s_marker_path, sizeof(s_marker_path), "%s.404", filepath);
+    if (ret < 0 || ret >= (int)sizeof(s_marker_path)) return false;
     struct stat st;
-    return (stat(marker_path, &st) == 0);
+    return (stat(s_marker_path, &st) == 0);
 }
 
 /**
@@ -155,32 +157,29 @@ static void dl_build_vault_filepath(const makapix_channel_entry_t *entry,
     }
 
     // Get vault base path
-    char vault_base[128];
-    if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
-        strlcpy(vault_base, "/sdcard/p3a/vault", sizeof(vault_base));
+    if (sd_path_get_vault(s_build_vault_base, sizeof(s_build_vault_base)) != ESP_OK) {
+        strlcpy(s_build_vault_base, "/sdcard/p3a/vault", sizeof(s_build_vault_base));
     }
 
     // Convert UUID bytes to string
-    char storage_key[40];
-    bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
+    bytes_to_uuid(entry->storage_key_uuid, s_build_storage_key, sizeof(s_build_storage_key));
 
     // Compute SHA256 for sharding
-    uint8_t sha256[32];
-    if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
+    if (storage_key_sha256(s_build_storage_key, s_build_sha256) != ESP_OK) {
         // Fallback without sharding
         int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
-        snprintf(out, out_len, "%s/%s%s", vault_base, storage_key, s_ext_strings[ext_idx]);
+        snprintf(out, out_len, "%s/%s%s", s_build_vault_base, s_build_storage_key, s_ext_strings[ext_idx]);
         return;
     }
 
     // Build sharded path
     int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
     snprintf(out, out_len, "%s/%02x/%02x/%02x/%s%s",
-             vault_base,
-             (unsigned int)sha256[0],
-             (unsigned int)sha256[1],
-             (unsigned int)sha256[2],
-             storage_key,
+             s_build_vault_base,
+             (unsigned int)s_build_sha256[0],
+             (unsigned int)s_build_sha256[1],
+             (unsigned int)s_build_sha256[2],
+             s_build_storage_key,
              s_ext_strings[ext_idx]);
 }
 
@@ -252,6 +251,14 @@ static void dl_commit_state(const dl_snapshot_t *snapshot, size_t new_round_robi
     }
 }
 
+// Static buffers for dl_get_next_download to reduce stack usage
+// Safe because only one download task exists (single-threaded access)
+static char s_dl_filepath[256];
+static char s_dl_vault_base[128];
+static char s_dl_storage_key[40];
+static uint8_t s_dl_sha256[32];
+static makapix_channel_entry_t s_dl_entry;
+
 /**
  * @brief Get next download using round-robin across channels
  *
@@ -277,8 +284,8 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
         size_t ch_idx = (snapshot->round_robin_idx + attempt) % snapshot->channel_count;
         dl_channel_state_t *ch = &snapshot->channels[ch_idx];
 
-        // Skip SD card channel (no downloads needed)
-        if (strcmp(ch->channel_id, "sdcard") == 0) {
+        // Skip non-Makapix channels (e.g., SD card - no downloads needed)
+        if (!play_scheduler_is_makapix_channel(ch->channel_id)) {
             continue;
         }
 
@@ -304,35 +311,34 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             dl_build_vault_filepath(&entry, filepath, sizeof(filepath));
 
             // Skip if 404 marker exists
-            if (has_404_marker(filepath)) {
+            if (has_404_marker(s_dl_filepath)) {
                 continue;
             }
 
-            // Skip if LTF is terminal (3 load failures)
-            char vault_base[128];
-            if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
-                strlcpy(vault_base, "/sdcard/p3a/vault", sizeof(vault_base));
+            // Get vault base path for LTF check
+            if (sd_path_get_vault(s_dl_vault_base, sizeof(s_dl_vault_base)) != ESP_OK) {
+                strlcpy(s_dl_vault_base, "/sdcard/p3a/vault", sizeof(s_dl_vault_base));
             }
-            char storage_key_check[40];
-            bytes_to_uuid(entry.storage_key_uuid, storage_key_check, sizeof(storage_key_check));
-            if (!ltf_can_download(storage_key_check, vault_base)) {
-                ESP_LOGD(TAG, "Skipping terminal LTF: %s", storage_key_check);
+
+            // Convert UUID to string
+            bytes_to_uuid(s_dl_entry.storage_key_uuid, s_dl_storage_key, sizeof(s_dl_storage_key));
+
+            // Skip if LTF is terminal (3 load failures)
+            if (!ltf_can_download(s_dl_storage_key, s_dl_vault_base)) {
+                ESP_LOGD(TAG, "Skipping terminal LTF: %s", s_dl_storage_key);
                 continue;
             }
 
             // Found entry needing download
-            char storage_key[40];
-            bytes_to_uuid(entry.storage_key_uuid, storage_key, sizeof(storage_key));
-
             memset(out_request, 0, sizeof(*out_request));
-            strlcpy(out_request->storage_key, storage_key, sizeof(out_request->storage_key));
-            strlcpy(out_request->filepath, filepath, sizeof(out_request->filepath));
+            strlcpy(out_request->storage_key, s_dl_storage_key, sizeof(out_request->storage_key));
+            strlcpy(out_request->filepath, s_dl_filepath, sizeof(out_request->filepath));
             strlcpy(out_request->channel_id, ch->channel_id, sizeof(out_request->channel_id));
 
-            // Build artwork URL
-            uint8_t sha256[32] = {0};
-            if (storage_key_sha256(storage_key, sha256) == ESP_OK) {
-                int ext_idx = (entry.extension <= 3) ? entry.extension : 0;
+            // Build artwork URL (using static sha256 buffer)
+            memset(s_dl_sha256, 0, sizeof(s_dl_sha256));
+            if (storage_key_sha256(s_dl_storage_key, s_dl_sha256) == ESP_OK) {
+                int ext_idx = (s_dl_entry.extension <= 3) ? s_dl_entry.extension : 0;
                 snprintf(out_request->art_url, sizeof(out_request->art_url),
                          "https://%s/api/vault/%02x/%02x/%02x/%s%s",
                          CONFIG_MAKAPIX_CLUB_HOST,
@@ -363,10 +369,19 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
     return ESP_ERR_NOT_FOUND;
 }
 
+// Static buffers to reduce stack usage in download_task
+// These are safe because only one download task instance exists
+static download_request_t s_dl_req;
+static dl_snapshot_t s_dl_snapshot;
+static char s_task_temp_path[264];    // For temp file checks
+static char s_task_out_path[256];     // For download output path
+static char s_task_vault_base[128];   // For LTF operations
+static char s_task_marker_path[264];  // For 404 marker creation
+static char s_task_display_name[64];  // For UI display name
+
 static void download_task(void *arg)
 {
     (void)arg;
-    download_request_t req;
 
     ESP_LOGI(TAG, "Download task started");
 
@@ -402,12 +417,13 @@ static void download_task(void *arg)
 
         // Get next file to download using own round-robin logic
         // Take a snapshot of channel state under mutex to avoid race conditions
-        memset(&req, 0, sizeof(req));
+        // Note: Using static buffers (s_dl_req, s_dl_snapshot) to reduce stack usage
+        memset(&s_dl_req, 0, sizeof(s_dl_req));
         esp_err_t get_err = ESP_ERR_NOT_FOUND;
 
-        dl_snapshot_t snapshot = {0};
-        if (dl_take_snapshot(&snapshot)) {
-            get_err = dl_get_next_download(&req, &snapshot);
+        memset(&s_dl_snapshot, 0, sizeof(s_dl_snapshot));
+        if (dl_take_snapshot(&s_dl_snapshot)) {
+            get_err = dl_get_next_download(&s_dl_req, &s_dl_snapshot);
             if (get_err == ESP_OK) {
                 // Clear the signal since we have work - prevents race condition where
                 // signal is set while we're busy and gets cleared before we see it
@@ -437,29 +453,28 @@ static void download_task(void *arg)
         }
 
         // Validate request
-        if (req.storage_key[0] == '\0' || req.art_url[0] == '\0') {
+        if (s_dl_req.storage_key[0] == '\0' || s_dl_req.art_url[0] == '\0') {
             ESP_LOGW(TAG, "Invalid download request (empty storage_key or url)");
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
         }
 
         // Check if file already exists (race condition protection)
-        if (file_exists(req.filepath)) {
-            ESP_LOGD(TAG, "File already exists: %s", req.storage_key);
+        if (file_exists(s_dl_req.filepath)) {
+            ESP_LOGD(TAG, "File already exists: %s", s_dl_req.storage_key);
             // Signal that we should check for next file immediately
             makapix_channel_signal_downloads_needed();
             vTaskDelay(pdMS_TO_TICKS(50));
             continue;
         }
 
-        // Delete any existing temp file
-        if (req.filepath[0]) {
-            char temp_path[260];
-            snprintf(temp_path, sizeof(temp_path), "%s.tmp", req.filepath);
+        // Delete any existing temp file (using static buffer)
+        if (s_dl_req.filepath[0]) {
+            snprintf(s_task_temp_path, sizeof(s_task_temp_path), "%s.tmp", s_dl_req.filepath);
             struct stat tmp_st;
-            if (stat(temp_path, &tmp_st) == 0) {
-                ESP_LOGD(TAG, "Removing orphan temp file: %s", temp_path);
-                unlink(temp_path);
+            if (stat(s_task_temp_path, &tmp_st) == 0) {
+                ESP_LOGD(TAG, "Removing orphan temp file: %s", s_task_temp_path);
+                unlink(s_task_temp_path);
             }
         }
 
@@ -469,7 +484,7 @@ static void download_task(void *arg)
         makapix_artwork_ensure_cache_limit(1000);
 
         // Start download
-        set_busy(true, req.channel_id);
+        set_busy(true, s_dl_req.channel_id);
 
         // Update UI message if:
         // - No animation is playing yet
@@ -480,28 +495,26 @@ static void download_task(void *arg)
         extern bool animation_player_is_animation_ready(void);
         bool refresh_done = makapix_channel_is_refresh_done();
         if (!s_playback_initiated && !animation_player_is_animation_ready() && refresh_done) {
-            // Get display name from channel_id in the request
-            char display_name[64];
-            dl_get_display_name(req.channel_id, display_name, sizeof(display_name));
-            p3a_render_set_channel_message(display_name, 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1, "Downloading artwork...");
+            // Get display name from channel_id in the request (using static buffer)
+            dl_get_display_name(s_dl_req.channel_id, s_task_display_name, sizeof(s_task_display_name));
+            p3a_render_set_channel_message(s_task_display_name, 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1, "Downloading artwork...");
         }
 
-        char out_path[256] = {0};
-        esp_err_t err = makapix_artwork_download(req.art_url, req.storage_key, out_path, sizeof(out_path));
+        memset(s_task_out_path, 0, sizeof(s_task_out_path));
+        esp_err_t err = makapix_artwork_download(s_dl_req.art_url, s_dl_req.storage_key, s_task_out_path, sizeof(s_task_out_path));
         
         set_busy(false, NULL);
 
         if (err == ESP_OK) {
-            // Clear any previous LTF failures for this file
-            char vault_base[128];
-            if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
-                strlcpy(vault_base, "/sdcard/p3a/vault", sizeof(vault_base));
+            // Clear any previous LTF failures for this file (using static buffer)
+            if (sd_path_get_vault(s_task_vault_base, sizeof(s_task_vault_base)) != ESP_OK) {
+                strlcpy(s_task_vault_base, "/sdcard/p3a/vault", sizeof(s_task_vault_base));
             }
-            ltf_clear(req.storage_key, vault_base);
+            ltf_clear(s_dl_req.storage_key, s_task_vault_base);
 
             // Signal play_scheduler to update LAi
             // The play_scheduler will find the ci_index and add to LAi
-            play_scheduler_on_download_complete(req.channel_id, req.storage_key);
+            play_scheduler_on_download_complete(s_dl_req.channel_id, s_dl_req.storage_key);
 
             makapix_channel_signal_downloads_needed();
             makapix_channel_signal_file_available();  // Wake tasks waiting for first file
@@ -522,19 +535,18 @@ static void download_task(void *arg)
             }
         } else {
             if (err == ESP_ERR_NOT_FOUND) {
-                ESP_LOGW(TAG, "Download not found (404): %s", req.storage_key);
-                // Create .404 marker with timestamp to prevent retry
-                char marker_path[520];
-                snprintf(marker_path, sizeof(marker_path), "%s.404", req.filepath);
-                FILE *f = fopen(marker_path, "w");
+                ESP_LOGW(TAG, "Download not found (404): %s", s_dl_req.storage_key);
+                // Create .404 marker with timestamp to prevent retry (using static buffer)
+                snprintf(s_task_marker_path, sizeof(s_task_marker_path), "%s.404", s_dl_req.filepath);
+                FILE *f = fopen(s_task_marker_path, "w");
                 if (f) {
                     time_t now = time(NULL);
                     fprintf(f, "%ld\n", (long)now);
                     fclose(f);
-                    ESP_LOGI(TAG, "Created 404 marker: %s (timestamp=%ld)", marker_path, (long)now);
+                    ESP_LOGI(TAG, "Created 404 marker: %s (timestamp=%ld)", s_task_marker_path, (long)now);
                 }
             } else {
-                ESP_LOGW(TAG, "Download failed (%s): %s", esp_err_to_name(err), req.storage_key);
+                ESP_LOGW(TAG, "Download failed (%s): %s", esp_err_to_name(err), s_dl_req.storage_key);
             }
             // Wait a bit before trying next file
             vTaskDelay(pdMS_TO_TICKS(1000));
@@ -559,8 +571,13 @@ esp_err_t download_manager_init(void)
     s_playback_initiated = false;  // Reset on init
 
     // Priority 3: Below render (5) and loader (4) to prevent animation stuttering during downloads
-    // Stack size 24KB: Task uses large path buffers (up to 520 bytes) + vfprintf for logging
-    if (xTaskCreate(download_task, "download_mgr", 24576, NULL, 3, &s_task) != pdPASS) {
+    // Stack size 40KB: Newlib's snprintf/vfprintf uses ~1-2KB internal buffers.
+    // Combined with nested call chains (dl_get_next_download -> has_404_marker -> snprintf,
+    // Stack usage includes deep call chains through ltf_can_download, storage_key_sha256,
+    // mbedtls_sha256, and newlib vfprintf. Most local buffers have been moved to static,
+    // but mbedtls (SHA256 context ~300B) and newlib printf internals still require
+    // significant stack. 80KB provides safe headroom for ESP32-P4's RISC-V call conventions.
+    if (xTaskCreate(download_task, "download_mgr", 81920, NULL, 3, &s_task) != pdPASS) {
         vSemaphoreDelete(s_mutex);
         s_mutex = NULL;
         return ESP_ERR_NO_MEM;

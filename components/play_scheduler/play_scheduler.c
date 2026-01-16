@@ -445,10 +445,23 @@ void play_scheduler_deinit(void)
     }
 
     // Free channel entries
+    // IMPORTANT: For Makapix channels, ch->entries is an ALIAS to ch->cache->entries
+    // and must NOT be freed directly. The cache owns the memory.
     for (size_t i = 0; i < s_state.channel_count; i++) {
-        if (s_state.channels[i].entries) {
-            free(s_state.channels[i].entries);
-            s_state.channels[i].entries = NULL;
+        ps_channel_state_t *ch = &s_state.channels[i];
+        if (ch->cache) {
+            // Makapix channel - cache owns entries/available_indices
+            channel_cache_unregister(ch->cache);
+            channel_cache_free(ch->cache);
+            free(ch->cache);
+            ch->cache = NULL;
+            ch->entries = NULL;
+            ch->available_indices = NULL;
+            ch->available_count = 0;
+        } else if (ch->entries) {
+            // SD card channel - entries owned directly
+            free(ch->entries);
+            ch->entries = NULL;
         }
     }
 
@@ -495,10 +508,23 @@ esp_err_t play_scheduler_set_channels(
     ESP_LOGI(TAG, "Setting %zu channel(s), mode=%d", count, mode);
 
     // Free old channel entries before reconfiguring
+    // IMPORTANT: For Makapix channels, ch->entries is an ALIAS to ch->cache->entries
+    // and must NOT be freed directly. The cache owns the memory.
     for (size_t i = 0; i < s_state.channel_count; i++) {
-        if (s_state.channels[i].entries) {
-            free(s_state.channels[i].entries);
-            s_state.channels[i].entries = NULL;
+        ps_channel_state_t *ch = &s_state.channels[i];
+        if (ch->cache) {
+            // Makapix channel - cache owns entries/available_indices
+            channel_cache_unregister(ch->cache);
+            channel_cache_free(ch->cache);
+            free(ch->cache);
+            ch->cache = NULL;
+            ch->entries = NULL;
+            ch->available_indices = NULL;
+            ch->available_count = 0;
+        } else if (ch->entries) {
+            // SD card channel - entries owned directly
+            free(ch->entries);
+            ch->entries = NULL;
         }
     }
 
@@ -898,10 +924,23 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
              command->channel_count, command->exposure_mode, command->pick_mode);
 
     // Free old channel entries before reconfiguring
+    // IMPORTANT: For Makapix channels, ch->entries is an ALIAS to ch->cache->entries
+    // and must NOT be freed directly. The cache owns the memory.
     for (size_t i = 0; i < s_state.channel_count; i++) {
-        if (s_state.channels[i].entries) {
-            free(s_state.channels[i].entries);
-            s_state.channels[i].entries = NULL;
+        ps_channel_state_t *ch = &s_state.channels[i];
+        if (ch->cache) {
+            // Makapix channel - cache owns entries/available_indices
+            channel_cache_unregister(ch->cache);
+            channel_cache_free(ch->cache);
+            free(ch->cache);
+            ch->cache = NULL;
+            ch->entries = NULL;
+            ch->available_indices = NULL;
+            ch->available_count = 0;
+        } else if (ch->entries) {
+            // SD card channel - entries owned directly
+            free(ch->entries);
+            ch->entries = NULL;
         }
     }
 
@@ -1796,5 +1835,83 @@ void play_scheduler_get_channel_stats(const char *channel_id, size_t *out_total,
     }
 
     xSemaphoreGive(s_state.mutex);
+}
+
+// ============================================================================
+// Download Manager Integration
+// ============================================================================
+
+size_t play_scheduler_get_channel_entry_count(const char *channel_id)
+{
+    if (!channel_id || !s_state.initialized) {
+        return 0;
+    }
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+
+    size_t count = 0;
+    for (size_t i = 0; i < s_state.channel_count; i++) {
+        if (strcmp(s_state.channels[i].channel_id, channel_id) == 0) {
+            count = s_state.channels[i].entry_count;
+            break;
+        }
+    }
+
+    xSemaphoreGive(s_state.mutex);
+    return count;
+}
+
+esp_err_t play_scheduler_get_channel_entry(const char *channel_id, size_t index,
+                                            makapix_channel_entry_t *out_entry)
+{
+    if (!channel_id || !out_entry || !s_state.initialized) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+
+    esp_err_t result = ESP_ERR_NOT_FOUND;
+
+    for (size_t i = 0; i < s_state.channel_count; i++) {
+        ps_channel_state_t *ch = &s_state.channels[i];
+        if (strcmp(ch->channel_id, channel_id) == 0) {
+            // Found channel - check index bounds
+            if (index >= ch->entry_count || !ch->entries) {
+                result = ESP_ERR_NOT_FOUND;
+                break;
+            }
+
+            // Only Makapix channels have makapix_channel_entry_t format
+            if (ch->entry_format != PS_ENTRY_FORMAT_MAKAPIX) {
+                result = ESP_ERR_NOT_SUPPORTED;
+                break;
+            }
+
+            // Copy entry to caller's buffer
+            // Must cast from void* to get correct pointer arithmetic
+            makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
+            memcpy(out_entry, &entries[index], sizeof(makapix_channel_entry_t));
+            result = ESP_OK;
+            break;
+        }
+    }
+
+    xSemaphoreGive(s_state.mutex);
+    return result;
+}
+
+bool play_scheduler_is_makapix_channel(const char *channel_id)
+{
+    if (!channel_id || !s_state.initialized) {
+        return false;
+    }
+
+    // SD card channel is the only non-Makapix channel
+    if (strcmp(channel_id, "sdcard") == 0) {
+        return false;
+    }
+
+    // All other channels (all, promoted, user, by_user_*, hashtag_*) are Makapix channels
+    return true;
 }
 

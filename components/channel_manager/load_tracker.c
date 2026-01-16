@@ -19,6 +19,29 @@ static const char *TAG = "load_tracker";
 void ltf_build_path(const char *storage_key, const char *vault_path,
                     char *out, size_t out_len)
 {
+    // Validate inputs
+    if (!storage_key || !vault_path || !out || out_len == 0) {
+        ESP_LOGE(TAG, "ltf_build_path: invalid args");
+        if (out && out_len > 0) out[0] = '\0';
+        return;
+    }
+    
+    // Validate storage_key length (UUID is 36 chars + null)
+    size_t sk_len = strnlen(storage_key, 128);
+    if (sk_len == 0 || sk_len >= 128) {
+        ESP_LOGE(TAG, "ltf_build_path: invalid storage_key length: %zu", sk_len);
+        out[0] = '\0';
+        return;
+    }
+    
+    // Validate vault_path length
+    size_t vp_len = strnlen(vault_path, 256);
+    if (vp_len == 0 || vp_len >= 256) {
+        ESP_LOGE(TAG, "ltf_build_path: invalid vault_path length: %zu", vp_len);
+        out[0] = '\0';
+        return;
+    }
+
     // Compute SHA256 of storage_key for vault sharding
     uint8_t sha256[32];
     if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
@@ -138,13 +161,19 @@ esp_err_t ltf_load(const char *storage_key, const char *vault_path, load_tracker
         return ESP_ERR_INVALID_ARG;
     }
 
-    char path[256];
-    ltf_build_path(storage_key, vault_path, path, sizeof(path));
+    // Allocate path on heap to reduce stack usage (this function is called in deep call chains)
+    char *path = malloc(256);
+    if (!path) {
+        return ESP_ERR_NO_MEM;
+    }
+    ltf_build_path(storage_key, vault_path, path, 256);
 
     FILE *f = fopen(path, "r");
     if (!f) {
+        free(path);
         return ESP_ERR_NOT_FOUND;
     }
+    free(path);  // No longer needed after fopen
 
     // Read file content
     fseek(f, 0, SEEK_END);

@@ -26,6 +26,7 @@
 #include <stdint.h>
 #include "esp_err.h"
 #include "play_scheduler_types.h"
+#include "makapix_channel_impl.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -357,6 +358,46 @@ void play_scheduler_reset(void);
  * @return true if initialized
  */
 bool play_scheduler_is_initialized(void);
+
+// ============================================================================
+// Download Manager Integration
+// ============================================================================
+
+/**
+ * @brief Get entry count for a channel (for download scanning)
+ *
+ * Returns the total number of Ci entries for the specified channel.
+ * Thread-safe - takes internal mutex.
+ *
+ * @param channel_id Channel ID ("all", "promoted", etc.)
+ * @return Entry count, or 0 if channel not found
+ */
+size_t play_scheduler_get_channel_entry_count(const char *channel_id);
+
+/**
+ * @brief Get a channel entry by index (for download scanning)
+ *
+ * Copies the entry at the given index to the caller's buffer.
+ * Thread-safe - takes internal mutex.
+ *
+ * @param channel_id Channel ID
+ * @param index Entry index (0 to entry_count-1)
+ * @param out_entry Output buffer for the entry
+ * @return ESP_OK on success, ESP_ERR_NOT_FOUND if channel/index not found
+ */
+esp_err_t play_scheduler_get_channel_entry(const char *channel_id, size_t index,
+                                            makapix_channel_entry_t *out_entry);
+
+/**
+ * @brief Check if a channel is a Makapix channel (not SD card)
+ *
+ * SD card channels don't need downloads. This allows download_manager
+ * to skip SD card channels without hardcoding channel type checks.
+ *
+ * @param channel_id Channel ID
+ * @return true if this is a Makapix channel that may need downloads
+ */
+bool play_scheduler_is_makapix_channel(const char *channel_id);
 
 #ifdef __cplusplus
 }

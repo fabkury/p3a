@@ -454,6 +454,11 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
             .keep_alive_count = 5,      // 5 failed probes = connection dead
         },
         .session.disable_clean_session = false,
+        // MQTT task stack: 16KB to handle TLS operations + cJSON parsing in event handler.
+        // Default 6KB is insufficient when parsing large API responses (~15KB JSON).
+        // The event handler calls response_callback which does cJSON_Parse synchronously.
+        .task.stack_size = 16384,
+        .task.priority = 5,
     };
 
     // Set mTLS certificates

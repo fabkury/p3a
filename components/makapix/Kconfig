@@ -2,10 +2,9 @@ menu "Makapix Configuration"
 
     config MAKAPIX_CLUB_HOST
         string "Makapix Club Host"
-        default "dev.makapix.club"
+        default "makapix.club"
         help
             Hostname of the Makapix Club server for provisioning and API calls.
-            Use "dev.makapix.club" for development or "makapix.club" for production.
 
     config MAKAPIX_CLUB_MQTT_PORT
         int "Makapix Club MQTT Port"

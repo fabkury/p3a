@@ -54,11 +54,8 @@ Player                           MQTT Broker
   |<----- MQTT CONNACK ---------------|
 ```
 
-## Environments
+## Connection Details
 
-| Environment | API Host | MQTT Host | Port |
-|-------------|----------|-----------|------|
-| Development | dev.makapix.club | dev.makapix.club | 8883 |
-| Production | makapix.club | makapix.club | 8883 |
-
-Both environments use the same CA certificate.
+| API Host | MQTT Host | Port |
+|----------|-----------|------|
+| makapix.club | makapix.club | 8883 |

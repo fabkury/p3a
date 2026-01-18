@@ -446,15 +446,10 @@ def report_status(status):
 
 ## 9. Testing
 
-### Test Endpoints
+### Endpoints
 
-- **Production:** `https://makapix.club/api/`
-- **Development:** `https://dev.makapix.club/api/`
-
-### MQTT Brokers
-
-- **Production:** `makapix.club:8883` (TLS)
-- **Development:** `dev.makapix.club:8883` (TLS)
+- **API:** `https://makapix.club/api/`
+- **MQTT Broker:** `makapix.club:8883` (TLS)
 
 ### Manual Testing Flow
 
@@ -502,12 +497,12 @@ The player firmware should be designed to easily accommodate these future featur
 
 ### API Endpoint
 ```
-POST https://dev.makapix.club/api/player/provision
+POST https://makapix.club/api/player/provision
 ```
 
 ### MQTT Connection
 ```
-Host: dev.makapix.club (or makapix.club for production)
+Host: makapix.club
 Port: 8883 (TLS)
 Username: {player_key}
 Password: (empty)

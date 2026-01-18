@@ -130,7 +130,7 @@ The web interface provides:
 - **Configuration** — brightness, screen rotation, settings
 - **PICO-8 button** (if the feature is enabled in firmware)
 
-> **Note:** The web interface is only accessible on your local network, not over the internet. For remote control, register your device at [dev.makapix.club](https://dev.makapix.club/).
+> **Note:** The web interface is only accessible on your local network, not over the internet. For remote control, register your device at [makapix.club](https://makapix.club/).
 
 ---
 
@@ -267,7 +267,7 @@ curl -X POST http://p3a.local/ota/rollback
 
 ## Device Registration
 
-Register your p3a at [dev.makapix.club](https://dev.makapix.club/) to enable cloud features:
+Register your p3a at [makapix.club](https://makapix.club/) to enable cloud features:
 
 - **Send artworks directly** — browse artworks on the website and send them straight to your p3a
 - **Remote control** — change artwork, adjust brightness from anywhere
@@ -278,7 +278,7 @@ Register your p3a at [dev.makapix.club](https://dev.makapix.club/) to enable clo
 
 1. **Long-press the touchscreen** to start registration mode
 2. **A registration code appears** on the display (6 characters)
-3. **Go to [dev.makapix.club](https://dev.makapix.club/)** on your phone or computer
+3. **Go to [makapix.club](https://makapix.club/)** on your phone or computer
 4. **Enter the registration code** and link it to your account
 5. **The device connects automatically** via secure TLS MQTT
 
@@ -294,11 +294,11 @@ The registration code expires after 15 minutes. If it expires, long-press again 
 
 ## Makapix Club Features
 
-Once your device is registered at [dev.makapix.club](https://dev.makapix.club/), you can use these cloud features:
+Once your device is registered at [makapix.club](https://makapix.club/), you can use these cloud features:
 
 ### Sending artworks to your p3a
 
-1. Browse artworks on [dev.makapix.club](https://dev.makapix.club/)
+1. Browse artworks on [makapix.club](https://makapix.club/)
 2. Click on any artwork to view it
 3. Click the **"Send to p3a"** button
 4. The artwork is sent directly to your device and displayed immediately

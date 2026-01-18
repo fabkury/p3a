@@ -2,7 +2,7 @@
 
 # p3a — Physical Pixel Art Player
 
-p3a is a Wi-Fi pixel art player that connects to [Makapix Club](https://makapix.club/), a pixel art social network. Built on the ESP32-P4, it's a 4-inch smart art frame you can control from anywhere—via touchscreen, web browser, REST API, or securely through Makapix Club's MQTTS backend. Register your p3a at [dev.makapix.club](https://dev.makapix.club/) and play artworks and channels from the website directly on the device, or copy your own directly to the device.  
+p3a is a Wi-Fi pixel art player that connects to [Makapix Club](https://makapix.club/), a pixel art social network. Built on the ESP32-P4, it's a 4-inch smart art frame you can control from anywhere—via touchscreen, web browser, REST API, or securely through Makapix Club's MQTTS backend. Register your p3a at [makapix.club](https://makapix.club/) and play artworks and channels from the website directly on the device, or copy your own directly to the device.  
 
 ## Hardware photos
 <p>
@@ -21,7 +21,7 @@ p3a is a Wi-Fi pixel art player that connects to [Makapix Club](https://makapix.
 4. **Flash the firmware**: Visit the [p3a Web Flasher](https://fabkury.github.io/p3a/web-flasher/) — just connect your device and click to flash. No software installation needed. See the [flashing guide](docs/flash-p3a.md) for alternative methods.
 5. **Connect to Wi-Fi**: On first boot, connect to the `p3a-setup` network and visit http://p3a.local/ to configure your Wi-Fi
 6. **Register it at Makapix Club**: Long press on the screen and follow the instructions
-7. **Send art to it**: Browse https://dev.makapix.club/ and securely send artworks to your p3a
+7. **Send art to it**: Browse https://makapix.club/ and securely send artworks to your p3a
 
 > **Note:** The initial flash requires USB and a laptop or desktop (does not work on a smartphone). After that, all updates are wireless via the web UI.
 
@@ -33,7 +33,7 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 
 - **Play artworks and channels**: Play individual artworks or entire channels (e.g., "Promoted Artworks", "Recent Artworks") directly from [Makapix Club](https://makapix.club/) to your p3a
 - **4 ways to control**: Touchscreen, local web UI at `http://p3a.local/`, REST API, or remotely via Makapix Club's secure MQTTS (MQTT over TLS) backend
-- **Cloud connectivity**: Register your device at [dev.makapix.club](https://dev.makapix.club/) to unlock remote control from anywhere
+- **Cloud connectivity**: Register your device at [makapix.club](https://makapix.club/) to unlock remote control from anywhere
 - **Coming soon**: Send a "like" to the artwork by touching the screen, swipe up to view artwork comments from the Makapix community
 
 ### Seamless Playback
@@ -109,7 +109,7 @@ p3a is in active development. The following features are implemented:
 - Screen rotation (0°, 90°, 180°, 270°) with persistence
 - Wi-Fi provisioning with captive portal and mDNS (http://p3a.local/)
 - Local web UI and REST API, also with mDNS
-- **Makapix Club integration** — play individual artworks and entire channels from [dev.makapix.club](https://dev.makapix.club/)
+- **Makapix Club integration** — play individual artworks and entire channels from [makapix.club](https://makapix.club/)
 - **Secure mTLS MQTT client** for device registration and remote control
 - **Over-the-Air (OTA) updates** — install firmware updates wirelessly via web UI with integrity verification and full rollback support 
 - **Automatic ESP32-C6 firmware updates** for the Wi-Fi co-processor
@@ -141,7 +141,7 @@ See [ROADMAP.md](docs/ROADMAP.md) for the full development plan.
 
 ## Makapix Club integration
 
-[Makapix Club](https://makapix.club/) is a pixel-art social network where artists share their creations. Register your p3a at [dev.makapix.club](https://dev.makapix.club/) to:
+[Makapix Club](https://makapix.club/) is a pixel-art social network where artists share their creations. Register your p3a at [makapix.club](https://makapix.club/) to:
 
 - **Play artworks and channels**: Stream individual artworks or entire channels (like "Promoted Artworks" or "Recent Artworks") directly to your p3a
 - **Remote control**: Control your device from anywhere via secure MQTTS (MQTT over TLS) connection

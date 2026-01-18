@@ -16,7 +16,7 @@ This folder contains certificates that **physical players** need to connect to M
 Players use the CA certificate to verify the MQTT broker's server certificate during TLS handshake.
 
 **Connection details:**
-- **Host:** `dev.makapix.club` (development) or `makapix.club` (production)
+- **Host:** `makapix.club`
 - **Port:** `8883` (TLS)
 - **CA Certificate:** Use `makapix_ca.crt` or `makapix_ca.inc`
 
@@ -33,8 +33,7 @@ const char* MAKAPIX_CA_CERT =
 ### For HTTPS API Calls
 
 The same CA certificate can be used to verify HTTPS connections to the API:
-- `https://dev.makapix.club/api/` (development)
-- `https://makapix.club/api/` (production)
+- `https://makapix.club/api/`
 
 ## Regenerating Certificates
 

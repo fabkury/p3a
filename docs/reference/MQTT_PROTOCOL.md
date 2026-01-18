@@ -145,7 +145,7 @@ Makapix Club MQTT broker supports three connection methods:
 
 **Configuration**:
 ```
-Host: dev.makapix.club (or production host)
+Host: makapix.club (or production host)
 Port: 8883
 Protocol: MQTT v5
 TLS: Required
@@ -191,7 +191,7 @@ Password: Configured in password file
 
 **Configuration**:
 ```
-URL: ws://dev.makapix.club:9001 (or wss:// for TLS)
+URL: ws://makapix.club:9001 (or wss:// for TLS)
 Protocol: MQTT over WebSocket
 Username: user_id
 Password: Authentication token (from REST API)
@@ -201,7 +201,7 @@ Password: Authentication token (from REST API)
 ```javascript
 import mqtt from 'mqtt';
 
-const client = mqtt.connect('ws://dev.makapix.club:9001', {
+const client = mqtt.connect('ws://makapix.club:9001', {
   clientId: `web-client-${userId}`,
   username: userId,
   password: authToken,
@@ -238,7 +238,7 @@ Content-Type: application/json
   "registration_code": "ABC123",
   "registration_code_expires_at": "2025-12-09T02:00:00Z",
   "mqtt_broker": {
-    "host": "dev.makapix.club",
+    "host": "makapix.club",
     "port": 8883
   }
 }
@@ -291,7 +291,7 @@ GET /player/{player_key}/credentials
   "cert_pem": "-----BEGIN CERTIFICATE-----\n...",
   "key_pem": "-----BEGIN PRIVATE KEY-----\n...",
   "broker": {
-    "host": "dev.makapix.club",
+    "host": "makapix.club",
     "port": 8883
   }
 }
@@ -315,7 +315,7 @@ client.tls_set(
     keyfile="client.key"
 )
 
-client.connect("dev.makapix.club", 8883, keepalive=60)
+client.connect("makapix.club", 8883, keepalive=60)
 ```
 
 ### Web Client Authentication
@@ -1010,7 +1010,7 @@ class MakapixWebClient {
   private userId: string;
   private callbacks: Map<string, (notification: PostNotification) => void>;
 
-  constructor(userId: string, authToken: string, brokerUrl: string = 'ws://dev.makapix.club:9001') {
+  constructor(userId: string, authToken: string, brokerUrl: string = 'ws://makapix.club:9001') {
     this.userId = userId;
     this.callbacks = new Map();
 

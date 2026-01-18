@@ -95,13 +95,13 @@
 **6.1 Client** ✅ IMPLEMENTED
 - ESP-IDF `esp-mqtt` with TLS
 - Config from NVS: broker, port, client_id, cert/key/token, topics
-- **Status**: Device registration at dev.makapix.club, mTLS authentication, status publishing every 30s
+- **Status**: Device registration at makapix.club, mTLS authentication, status publishing every 30s
 
 **6.2 Topics & Payloads** ✅ IMPLEMENTED
 - Subscribe: `makapix/player/{player_key}/command` ✅
 - Publish: `makapix/player/{player_key}/status` ✅
 - **Implemented**: Status messages, commands (swap_next, swap_back, etc.)
-- **Artwork sending** from dev.makapix.club directly to device ✅
+- **Artwork sending** from makapix.club directly to device ✅
 - Payload schema (JSON): `{post_id, artist, playlist?, assets:[{url, sha256, w,h,format,frame_delay?}], expires_at}`
 - **AC**: Message triggers display, download support ✅
 
@@ -264,9 +264,9 @@ Completed:
 - Screen rotation (0°, 90°, 180°, 270°) with touch gesture and API
 - Wi-Fi provisioning with captive portal
 - Local web UI and REST API
-- Device registration at dev.makapix.club
+- Device registration at makapix.club
 - TLS MQTT client with mTLS authentication
-- **Makapix Club integration** — send artworks directly from dev.makapix.club
+- **Makapix Club integration** — send artworks directly from makapix.club
 - Remote control from website (commands via MQTT)
 - USB composite device (serial + mass storage)
 - **OTA firmware updates** from GitHub Releases with automatic rollback

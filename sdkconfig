@@ -2531,7 +2531,7 @@ CONFIG_CHANNEL_DEFAULT_ANIMATIONS_DIR="/sdcard/p3a/animations"
 #
 # Makapix Configuration
 #
-CONFIG_MAKAPIX_CLUB_HOST="dev.makapix.club"
+CONFIG_MAKAPIX_CLUB_HOST="makapix.club"
 CONFIG_MAKAPIX_CLUB_MQTT_PORT=8883
 # end of Makapix Configuration
 

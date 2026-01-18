@@ -357,7 +357,7 @@ import json
 import uuid
 
 # Configuration
-BROKER_HOST = "dev.makapix.club"
+BROKER_HOST = "makapix.club"
 BROKER_PORT = 8883
 PLAYER_KEY = "your-player-uuid"
 
@@ -430,7 +430,7 @@ python3 scripts/validate_mqtt_player_api.py \
 # Full validation including view/reaction/comment tests
 python3 scripts/validate_mqtt_player_api.py \
     --player-key "your-player-uuid" \
-    --host "dev.makapix.club" \
+    --host "makapix.club" \
     --port 8883 \
     --tls \
     --post-id 123

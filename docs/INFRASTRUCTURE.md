@@ -39,7 +39,7 @@ This document provides a comprehensive overview of the p3a (Pixel Pea) firmware 
 - **Aspect ratio preservation** for non-square artworks
 - Touch gestures for navigation and brightness control
 - Web-based control panel at `http://p3a.local/`
-- **Makapix Club integration** — send artworks directly from [dev.makapix.club](https://dev.makapix.club/)
+- **Makapix Club integration** — send artworks directly from [makapix.club](https://makapix.club/)
 - **Over-the-Air updates** — install firmware updates wirelessly via web UI
 - **ESP32-C6 auto-flash** — co-processor firmware is updated automatically when needed
 - PICO-8 game monitor mode with WebSocket streaming
@@ -369,7 +369,7 @@ idf.py flash monitor
 - **Features**:
   - Device provisioning via HTTPS
   - TLS MQTT with mTLS authentication
-  - **Artwork sending** — receive artworks directly from dev.makapix.club
+  - **Artwork sending** — receive artworks directly from makapix.club
   - Remote command receiving (swap_next, swap_back, etc.)
   - Status publishing every 30 seconds
 - **Files**: `makapix.c`, `makapix_mqtt.c`, `makapix_provision.c`, `makapix_store.c`

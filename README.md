@@ -1,6 +1,6 @@
 <img src="images/p3a-alpha-x2-128p.png" alt="p3a" align="left" width="128" height="128" />
 
-# p3a — Physical Pixel Art Player
+# p3a — Pixel Art Player
 
 p3a is a Wi-Fi pixel art player that connects to [Makapix Club](https://makapix.club/), a pixel art social network. Built on the ESP32-P4, it's a 4-inch smart art frame you can control from anywhere—via touchscreen, web browser, REST API, or securely through Makapix Club's MQTTS backend. Register your p3a at [makapix.club](https://makapix.club/) and play artworks and channels from the website directly on the device, or copy your own directly to the device.  
 

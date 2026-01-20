@@ -277,7 +277,7 @@ void play_scheduler_on_load_failed(const char *storage_key, const char *channel_
     // Build filepath and delete the corrupted file
     uint8_t sha256[32];
     if (ps_storage_key_sha256(storage_key, sha256) == ESP_OK) {
-        // Build path: {vault}/{sha[0:2]}/{sha[2:4]}/{sha[4:6]}/{storage_key}.{ext}
+        // Build path: {vault}/{sha[0]:02x}/{sha[1]:02x}/{sha[2]:02x}/{storage_key}.{ext}
         // We need to try all extensions since we don't know which one it is
         const char *exts[] = {".webp", ".gif", ".png", ".jpg"};
         for (int i = 0; i < 4; i++) {

@@ -430,7 +430,7 @@ esp_err_t http_api_start(void) {
 
     // Create worker task if not exists
     if (!s_worker) {
-        BaseType_t ret = xTaskCreate(api_worker_task, "api_worker", 8192, NULL, 5, &s_worker);
+        BaseType_t ret = xTaskCreate(api_worker_task, "api_worker", 4096, NULL, 5, &s_worker);
         if (ret != pdPASS) {
             ESP_LOGE(HTTP_API_TAG, "Failed to create worker task");
             return ESP_ERR_NO_MEM;
@@ -446,7 +446,7 @@ esp_err_t http_api_start(void) {
 
     // Start HTTP server
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
-    cfg.stack_size = 16384;
+    cfg.stack_size = 8192;
     cfg.server_port = 80;
     cfg.lru_purge_enable = true;
     cfg.max_open_sockets = 6;

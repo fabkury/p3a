@@ -430,10 +430,17 @@ esp_err_t p3a_state_init(void)
     // Load persisted channel
     p3a_state_load_channel(&s_state.current_channel);
     
-    // Initialize to animation playback state
+    // Initialize to animation playback state with "Starting..." message
+    // This prevents blank screen gap between boot logo and first content
     s_state.current_state = P3A_STATE_ANIMATION_PLAYBACK;
     s_state.previous_state = P3A_STATE_ANIMATION_PLAYBACK;
-    s_state.playback_substate = P3A_PLAYBACK_PLAYING;
+    s_state.playback_substate = P3A_PLAYBACK_CHANNEL_MESSAGE;
+    s_state.channel_message.type = P3A_CHANNEL_MSG_LOADING;
+    snprintf(s_state.channel_message.channel_name,
+             sizeof(s_state.channel_message.channel_name), "p3a");
+    snprintf(s_state.channel_message.detail,
+             sizeof(s_state.channel_message.detail), "Starting...");
+    s_state.channel_message.progress_percent = -1;
     s_state.app_status = P3A_APP_STATUS_READY;
     s_state.callback_count = 0;
     

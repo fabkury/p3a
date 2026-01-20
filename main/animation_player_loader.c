@@ -802,7 +802,19 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf,
     // If rotation changes later, the maps must be rebuilt.
     esp_err_t map_err = build_upscale_maps_for_buffer(buf, canvas_w, canvas_h, display_renderer_get_rotation());
     if (map_err != ESP_OK) {
-        unload_animation_buffer(buf);
+        // Clean up resources allocated by THIS function only.
+        // Don't free decoder or file_data - caller will do that via loader_service_unload()
+        free(buf->native_frame_b1);
+        free(buf->native_frame_b2);
+        buf->native_frame_b1 = NULL;
+        buf->native_frame_b2 = NULL;
+        heap_caps_free(buf->upscale_lookup_x);
+        heap_caps_free(buf->upscale_lookup_y);
+        buf->upscale_lookup_x = NULL;
+        buf->upscale_lookup_y = NULL;
+        // Clear our references but don't free - ownership returns to caller
+        buf->decoder = NULL;
+        buf->file_data = NULL;
         return map_err;
     }
 

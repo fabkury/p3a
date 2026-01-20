@@ -143,6 +143,12 @@ static bool has_404_marker(const char *filepath)
     return (stat(s_marker_path, &st) == 0);
 }
 
+// Static buffers for dl_build_vault_filepath to reduce stack usage
+// Safe because only one download task exists (single-threaded access)
+static char s_build_vault_base[128];
+static char s_build_storage_key[40];
+static uint8_t s_build_sha256[32];
+
 /**
  * @brief Build vault filepath for an entry
  *
@@ -257,7 +263,6 @@ static char s_dl_filepath[256];
 static char s_dl_vault_base[128];
 static char s_dl_storage_key[40];
 static uint8_t s_dl_sha256[32];
-static makapix_channel_entry_t s_dl_entry;
 
 /**
  * @brief Get next download using round-robin across channels
@@ -306,9 +311,8 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
         bool found = false;
 
         while (channel_cache_get_next_missing(cache, &ch->dl_cursor, &entry) == ESP_OK) {
-            // Build filepath
-            char filepath[256];
-            dl_build_vault_filepath(&entry, filepath, sizeof(filepath));
+            // Build filepath into static buffer (used by has_404_marker and output)
+            dl_build_vault_filepath(&entry, s_dl_filepath, sizeof(s_dl_filepath));
 
             // Skip if 404 marker exists
             if (has_404_marker(s_dl_filepath)) {
@@ -320,8 +324,8 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                 strlcpy(s_dl_vault_base, "/sdcard/p3a/vault", sizeof(s_dl_vault_base));
             }
 
-            // Convert UUID to string
-            bytes_to_uuid(s_dl_entry.storage_key_uuid, s_dl_storage_key, sizeof(s_dl_storage_key));
+            // Convert UUID to string (use local entry, not stale static)
+            bytes_to_uuid(entry.storage_key_uuid, s_dl_storage_key, sizeof(s_dl_storage_key));
 
             // Skip if LTF is terminal (3 load failures)
             if (!ltf_can_download(s_dl_storage_key, s_dl_vault_base)) {
@@ -338,12 +342,12 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             // Build artwork URL (using static sha256 buffer)
             memset(s_dl_sha256, 0, sizeof(s_dl_sha256));
             if (storage_key_sha256(s_dl_storage_key, s_dl_sha256) == ESP_OK) {
-                int ext_idx = (s_dl_entry.extension <= 3) ? s_dl_entry.extension : 0;
+                int ext_idx = (entry.extension <= 3) ? entry.extension : 0;
                 snprintf(out_request->art_url, sizeof(out_request->art_url),
                          "https://%s/api/vault/%02x/%02x/%02x/%s%s",
                          CONFIG_MAKAPIX_CLUB_HOST,
-                         (unsigned int)sha256[0], (unsigned int)sha256[1], (unsigned int)sha256[2],
-                         storage_key, s_ext_strings[ext_idx]);
+                         (unsigned int)s_dl_sha256[0], (unsigned int)s_dl_sha256[1], (unsigned int)s_dl_sha256[2],
+                         s_dl_storage_key, s_ext_strings[ext_idx]);
                 // ESP_LOGI(TAG, "Download URL: %s (ext_idx=%d)", out_request->art_url, ext_idx);
             }
 

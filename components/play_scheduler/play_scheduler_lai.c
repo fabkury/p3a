@@ -20,6 +20,7 @@
 #include "p3a_state.h"
 #include "sd_path.h"
 #include "content_cache.h"
+#include "event_bus.h"
 #include "esp_log.h"
 #include <string.h>
 #include <sys/stat.h>
@@ -108,6 +109,8 @@ static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
             // Update aliased pointer and count (pointer may have been allocated on first add)
             ch->available_indices = ch->cache->available_indices;
             ch->available_count = ch->cache->available_count;
+            // Mark channel as active now that it has available content
+            ch->active = true;
             // Schedule debounced save
             channel_cache_schedule_save(ch->cache);
         }
@@ -124,6 +127,7 @@ static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
     }
 
     ch->available_indices[ch->available_count++] = ci_index;
+    ch->active = true;
     return true;
 }
 
@@ -216,7 +220,7 @@ void play_scheduler_on_download_complete(const char *channel_id, const char *sto
         if (total_available > 0) {
             ESP_LOGI(TAG, "After cache reload - triggering playback (%zu total available)", total_available);
             xSemaphoreGive(s_state->mutex);
-            play_scheduler_next(NULL);
+            event_bus_emit_simple(P3A_EVENT_SWAP_NEXT);
             return;
         }
         
@@ -240,8 +244,8 @@ void play_scheduler_on_download_complete(const char *channel_id, const char *sto
             ESP_LOGI(TAG, "Zero-to-one transition - triggering playback");
             xSemaphoreGive(s_state->mutex);
 
-            // Trigger playback outside mutex to avoid deadlock
-            play_scheduler_next(NULL);
+            // Trigger playback via event bus to avoid race condition
+            event_bus_emit_simple(P3A_EVENT_SWAP_NEXT);
             return;
         }
     }

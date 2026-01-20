@@ -321,6 +321,28 @@ void ps_prng_seed(uint64_t *state, uint64_t seed);
 void ps_build_vault_filepath(const makapix_channel_entry_t *entry,
                               char *out, size_t out_len);
 
+/**
+ * @brief Check if a file exists
+ */
+bool ps_file_exists(const char *path);
+
+/**
+ * @brief Get user-friendly display name from channel_id
+ */
+void ps_get_display_name(const char *channel_id, char *out_name, size_t max_len);
+
+/**
+ * @brief Compute SHA256 of a storage key
+ */
+esp_err_t ps_storage_key_sha256(const char *storage_key, uint8_t out_sha256[32]);
+
+/**
+ * @brief Build cache file path for a channel
+ *
+ * Builds path like: {channel_dir}/{safe_channel_id}.bin
+ */
+void ps_build_cache_path(const char *channel_id, char *out_path, size_t max_len);
+
 #ifdef __cplusplus
 }
 #endif

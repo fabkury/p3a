@@ -50,14 +50,13 @@ void ltf_build_path(const char *storage_key, const char *vault_path,
         return;
     }
 
-    // Format path: {vault_path}/{sha[0:2]}/{sha[2:4]}/{storage_key}.ltf
-    char sha_hex[5];
-    snprintf(sha_hex, sizeof(sha_hex), "%02x%02x", sha256[0], sha256[1]);
-
-    snprintf(out, out_len, "%s/%c%c/%c%c/%s.ltf",
+    // Format path: {vault_path}/{sha[0]:02x}/{sha[1]:02x}/{sha[2]:02x}/{storage_key}.ltf
+    // This matches the pattern used by artwork files (makapix_artwork.c, download_manager.c, etc.)
+    snprintf(out, out_len, "%s/%02x/%02x/%02x/%s.ltf",
              vault_path,
-             sha_hex[0], sha_hex[1],
-             sha_hex[2], sha_hex[3],
+             (unsigned int)sha256[0],
+             (unsigned int)sha256[1],
+             (unsigned int)sha256[2],
              storage_key);
 }
 

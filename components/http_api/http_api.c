@@ -470,60 +470,6 @@ esp_err_t http_api_start(void) {
     }
     ESP_LOGI(HTTP_API_TAG, "HTTP server started on port 80");
 
-    // Diagnostic: Print network interface info and test socket binding
-    {
-        // Print all network interfaces
-        esp_netif_t *netif = NULL;
-        while ((netif = esp_netif_next_unsafe(netif)) != NULL) {
-            esp_netif_ip_info_t ip_info;
-            if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
-                ESP_LOGI(HTTP_API_TAG, "DIAG: netif '%s' IP=" IPSTR " mask=" IPSTR " gw=" IPSTR,
-                         esp_netif_get_desc(netif),
-                         IP2STR(&ip_info.ip), IP2STR(&ip_info.netmask), IP2STR(&ip_info.gw));
-            }
-        }
-
-        // Try to bind a test socket to port 81 to verify binding works
-        int test_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        if (test_sock >= 0) {
-            struct sockaddr_in bind_addr = {
-                .sin_family = AF_INET,
-                .sin_port = htons(81),
-                .sin_addr.s_addr = htonl(INADDR_ANY)
-            };
-            int bind_result = bind(test_sock, (struct sockaddr *)&bind_addr, sizeof(bind_addr));
-            if (bind_result == 0) {
-                ESP_LOGI(HTTP_API_TAG, "DIAG: Test bind to port 81 succeeded");
-                int listen_result = listen(test_sock, 1);
-                if (listen_result == 0) {
-                    ESP_LOGI(HTTP_API_TAG, "DIAG: Test listen on port 81 succeeded");
-                } else {
-                    ESP_LOGW(HTTP_API_TAG, "DIAG: Test listen FAILED: errno=%d (%s)", errno, strerror(errno));
-                }
-            } else {
-                ESP_LOGW(HTTP_API_TAG, "DIAG: Test bind to port 81 FAILED: errno=%d (%s)", errno, strerror(errno));
-            }
-            close(test_sock);
-        }
-
-        // Try to connect to localhost:80 to verify server is listening
-        test_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        if (test_sock >= 0) {
-            struct sockaddr_in test_addr = {
-                .sin_family = AF_INET,
-                .sin_port = htons(80),
-                .sin_addr.s_addr = htonl(INADDR_LOOPBACK)
-            };
-            int connect_result = connect(test_sock, (struct sockaddr *)&test_addr, sizeof(test_addr));
-            if (connect_result == 0) {
-                ESP_LOGI(HTTP_API_TAG, "DIAG: Localhost connection to port 80 succeeded");
-            } else {
-                ESP_LOGW(HTTP_API_TAG, "DIAG: Localhost connection to port 80 FAILED: errno=%d (%s)", errno, strerror(errno));
-            }
-            close(test_sock);
-        }
-    }
-
     // Register dedicated handlers first
     httpd_uri_t u = {0};
 

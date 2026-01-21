@@ -73,7 +73,7 @@ uint32_t channel_cache_crc32(const void *data, size_t len)
 // ============================================================================
 
 /**
- * @brief Free Ci hash tables
+ * @brief Free Ci hash table
  */
 static void ci_hash_free(channel_cache_t *cache)
 {
@@ -86,18 +86,10 @@ static void ci_hash_free(channel_cache_t *cache)
         free(node);
     }
     cache->post_id_hash = NULL;
-
-    // Free storage_key hash
-    ci_storage_key_node_t *sk_node, *sk_tmp;
-    HASH_ITER(hh, cache->storage_key_hash, sk_node, sk_tmp) {
-        HASH_DEL(cache->storage_key_hash, sk_node);
-        free(sk_node);
-    }
-    cache->storage_key_hash = NULL;
 }
 
 /**
- * @brief Add single entry to Ci hash tables
+ * @brief Add single entry to Ci hash table
  */
 static void ci_hash_add_entry(channel_cache_t *cache, uint32_t ci_index)
 {
@@ -112,18 +104,10 @@ static void ci_hash_add_entry(channel_cache_t *cache, uint32_t ci_index)
         pid_node->ci_index = ci_index;
         HASH_ADD_INT(cache->post_id_hash, post_id, pid_node);
     }
-
-    // Add to storage_key hash
-    ci_storage_key_node_t *sk_node = malloc(sizeof(ci_storage_key_node_t));
-    if (sk_node) {
-        memcpy(sk_node->storage_key_uuid, entry->storage_key_uuid, 16);
-        sk_node->ci_index = ci_index;
-        HASH_ADD(hh, cache->storage_key_hash, storage_key_uuid, 16, sk_node);
-    }
 }
 
 /**
- * @brief Rebuild both Ci hash tables from entries array
+ * @brief Rebuild Ci hash table from entries array
  */
 static void ci_rebuild_hash_tables(channel_cache_t *cache)
 {
@@ -139,7 +123,7 @@ static void ci_rebuild_hash_tables(channel_cache_t *cache)
         ci_hash_add_entry(cache, (uint32_t)i);
     }
 
-    ESP_LOGD(TAG, "Ci hash tables rebuilt: %zu entries", cache->entry_count);
+    ESP_LOGD(TAG, "Ci hash table rebuilt: %zu entries", cache->entry_count);
 }
 
 // ============================================================================
@@ -275,7 +259,7 @@ static esp_err_t load_legacy_format(FILE *f, channel_cache_t *cache, const char 
 
     cache->entry_count = entry_count;
 
-    // Build Ci hash tables
+    // Build Ci hash table
     ci_rebuild_hash_tables(cache);
 
     // Allocate LAi (will be populated by lai_rebuild)
@@ -387,7 +371,7 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
         cache->entry_count = 0;
     }
 
-    // Build Ci hash tables
+    // Build Ci hash table
     ci_rebuild_hash_tables(cache);
 
     // Allocate and copy LAi post_ids (v20+ stores post_ids, not ci_indices)
@@ -764,7 +748,7 @@ void channel_cache_free(channel_cache_t *cache)
         xSemaphoreTake(cache->mutex, portMAX_DELAY);
     }
 
-    // Free Ci hash tables
+    // Free Ci hash table
     ci_hash_free(cache);
 
     free(cache->entries);
@@ -976,18 +960,6 @@ size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
 // ============================================================================
 // Ci Operations
 // ============================================================================
-
-uint32_t ci_find_by_storage_key(const channel_cache_t *cache, const uint8_t *storage_key_uuid)
-{
-    if (!cache || !storage_key_uuid) {
-        return UINT32_MAX;
-    }
-
-    // Use hash table for O(1) lookup
-    ci_storage_key_node_t *node;
-    HASH_FIND(hh, cache->storage_key_hash, storage_key_uuid, 16, node);
-    return node ? node->ci_index : UINT32_MAX;
-}
 
 uint32_t ci_find_by_post_id(const channel_cache_t *cache, int32_t post_id)
 {
@@ -1509,7 +1481,7 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
     cache->entries = all_entries;
     cache->entry_count = all_count;
 
-    // Rebuild hash tables
+    // Rebuild hash table
     ci_rebuild_hash_tables(cache);
 
     // Mark dirty for LAi persistence

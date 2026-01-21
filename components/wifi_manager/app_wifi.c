@@ -733,6 +733,118 @@ static void url_encode(const char *in, char *out, size_t out_len) {
     out[o] = '\0';
 }
 
+/* HTML Escape Function - Escapes special characters for safe HTML display */
+static void html_escape_ssid(const char *in, char *out, size_t out_len) {
+    size_t o = 0;
+    for (size_t i = 0; in[i] && o + 6 < out_len; i++) {
+        unsigned char c = (unsigned char)in[i];
+        switch (c) {
+            case '&':
+                memcpy(out + o, "&amp;", 5);
+                o += 5;
+                break;
+            case '<':
+                memcpy(out + o, "&lt;", 4);
+                o += 4;
+                break;
+            case '>':
+                memcpy(out + o, "&gt;", 4);
+                o += 4;
+                break;
+            case '"':
+                memcpy(out + o, "&quot;", 6);
+                o += 6;
+                break;
+            case '\'':
+                memcpy(out + o, "&#39;", 5);
+                o += 5;
+                break;
+            default:
+                out[o++] = c;
+                break;
+        }
+    }
+    out[o] = '\0';
+}
+
+/* Serve success page with SSID injected - serves HTML directly instead of redirect */
+static esp_err_t serve_success_page_with_ssid(httpd_req_t *req, const char *ssid) {
+    const char *filepath = "/spiffs/setup/success.html";
+    const char *placeholder = "{SSID}";
+
+    FILE *f = fopen(filepath, "r");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open %s", filepath);
+        httpd_resp_set_type(req, "text/html");
+        httpd_resp_send(req,
+            "<html><body style=\"font-family:sans-serif;text-align:center;padding:40px;\">"
+            "<h1>p3a Setup</h1>"
+            "<p>Credentials saved! Device will reboot now.</p>"
+            "</body></html>",
+            HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
+    // Get file size
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (size <= 0 || size > 64 * 1024) {
+        fclose(f);
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "Invalid file", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    // Allocate buffer for file content
+    char *html = malloc(size + 1);
+    if (!html) {
+        fclose(f);
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "Memory error", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    size_t bytes_read = fread(html, 1, size, f);
+    fclose(f);
+    html[bytes_read] = '\0';
+
+    // HTML-escape the SSID
+    char ssid_escaped[128];
+    html_escape_ssid(ssid, ssid_escaped, sizeof(ssid_escaped));
+
+    // Find and replace {SSID} placeholder
+    char *placeholder_pos = strstr(html, placeholder);
+    if (placeholder_pos) {
+        size_t placeholder_len = strlen(placeholder);
+        size_t ssid_len = strlen(ssid_escaped);
+        size_t before_len = placeholder_pos - html;
+        size_t after_len = bytes_read - before_len - placeholder_len;
+
+        // Allocate new buffer for modified HTML
+        size_t new_size = before_len + ssid_len + after_len + 1;
+        char *new_html = malloc(new_size);
+        if (new_html) {
+            memcpy(new_html, html, before_len);
+            memcpy(new_html + before_len, ssid_escaped, ssid_len);
+            memcpy(new_html + before_len + ssid_len, placeholder_pos + placeholder_len, after_len);
+            new_html[new_size - 1] = '\0';
+
+            free(html);
+            html = new_html;
+            bytes_read = new_size - 1;
+        }
+    }
+
+    // Send the HTML response
+    httpd_resp_set_type(req, "text/html");
+    esp_err_t ret = httpd_resp_send(req, html, bytes_read);
+
+    free(html);
+    return ret;
+}
+
 /* Simple file server for captive portal - serves HTML from LittleFS */
 static esp_err_t serve_file_simple(httpd_req_t *req, const char *filepath) {
     FILE *f = fopen(filepath, "r");
@@ -846,27 +958,15 @@ static esp_err_t save_post_handler(httpd_req_t *req)
 
     if (strlen(ssid) > 0) {
         wifi_save_credentials(ssid, password);
-        ESP_LOGD(TAG, "Saved credentials, redirecting and rebooting...");
+        ESP_LOGD(TAG, "Saved credentials, serving success page and rebooting...");
 
-        // URL-encode the SSID for the redirect
-        char ssid_encoded[128];
-        url_encode(ssid, ssid_encoded, sizeof(ssid_encoded));
+        // Serve success page directly with SSID injected
+        esp_err_t ret = serve_success_page_with_ssid(req, ssid);
 
-        // Build redirect URL
-        char redirect_url[256];
-        snprintf(redirect_url, sizeof(redirect_url),
-                 "/setup/success.html?ssid=%s", ssid_encoded);
-
-        // Send redirect response
-        httpd_resp_set_status(req, "302 Found");
-        httpd_resp_set_hdr(req, "Location", redirect_url);
-        httpd_resp_send(req, NULL, 0);
-
-        // Delay before reboot to allow the redirect to be processed, the success
-        // page to be fetched, rendered, and read by the user. 
-        // The success page has a 5-second countdown before redirecting.
-        vTaskDelay(pdMS_TO_TICKS(6000));
+        // Short delay to ensure response is transmitted before reboot
+        vTaskDelay(pdMS_TO_TICKS(1500));
         esp_restart();
+        return ret;
     } else {
         // SSID required - serve error page
         return serve_file_simple(req, "/spiffs/setup/error.html");

@@ -10,6 +10,7 @@
 
 #include "play_scheduler_internal.h"
 #include "channel_interface.h"
+#include "channel_cache.h"
 #include "makapix_channel_impl.h"
 #include "makapix_channel_utils.h"
 #include "sd_path.h"
@@ -227,7 +228,7 @@ static bool pick_recency_sdcard(ps_state_t *state, size_t channel_index, ps_artw
 /**
  * @brief Pick artwork from Makapix channel using recency mode (LAi-based)
  *
- * Uses LAi (available_indices) for O(1) availability checking.
+ * Uses LAi (available_post_ids) for O(1) availability checking.
  * Iterates through locally available artworks only.
  */
 static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
@@ -240,12 +241,12 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
     }
 
     // Use LAi for availability masking - no filesystem I/O
-    if (!ch->available_indices || ch->available_count == 0) {
+    if (!ch->available_post_ids || ch->available_count == 0) {
         ESP_LOGD(TAG, "RecencyPick: Makapix channel %zu has no available artworks", channel_index);
         return false;
     }
 
-    // Cursor operates over available_indices (LAi), not full Ci
+    // Cursor operates over available_post_ids (LAi), not full Ci
     uint32_t start_cursor = ch->cursor;
     bool wrapped = false;
 
@@ -258,14 +259,13 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
 
         if (wrapped && ch->cursor >= start_cursor) break;
 
-        // Get Ci index from LAi
-        uint32_t ci_index = ch->available_indices[ch->cursor];
+        // Get post_id from LAi, then lookup Ci index
+        int32_t post_id = ch->available_post_ids[ch->cursor];
         ch->cursor++;
 
-        // Validate Ci index
-        if (ci_index >= ch->entry_count) {
-            ESP_LOGW(TAG, "Invalid LAi entry: ci_index=%lu >= entry_count=%zu",
-                     (unsigned long)ci_index, ch->entry_count);
+        uint32_t ci_index = ci_find_by_post_id(ch->cache, post_id);
+        if (ci_index == UINT32_MAX) {
+            ESP_LOGW(TAG, "LAi post_id=%ld not found in Ci", (long)post_id);
             continue;
         }
 
@@ -378,7 +378,7 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
 /**
  * @brief Pick random artwork from Makapix channel (LAi-based)
  *
- * Uses LAi (available_indices) for O(1) random picks.
+ * Uses LAi (available_post_ids) for O(1) random picks.
  * Samples directly from locally available artworks.
  */
 static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
@@ -391,21 +391,20 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
     }
 
     // Use LAi for O(1) random picks - no filesystem I/O
-    if (!ch->available_indices || ch->available_count == 0) {
+    if (!ch->available_post_ids || ch->available_count == 0) {
         ESP_LOGD(TAG, "RandomPick: Makapix channel %zu has no available artworks", channel_index);
         return false;
     }
 
-    // Sample from available_indices (LAi) directly
+    // Sample from available_post_ids (LAi) directly
     for (int attempt = 0; attempt < 5; attempt++) {
         uint32_t r = ps_prng_next(&ch->pick_rng_state);
         size_t lai_index = (size_t)(r % ch->available_count);
-        uint32_t ci_index = ch->available_indices[lai_index];
+        int32_t post_id = ch->available_post_ids[lai_index];
 
-        // Validate Ci index
-        if (ci_index >= ch->entry_count) {
-            ESP_LOGW(TAG, "Invalid LAi entry: ci_index=%lu >= entry_count=%zu",
-                     (unsigned long)ci_index, ch->entry_count);
+        uint32_t ci_index = ci_find_by_post_id(ch->cache, post_id);
+        if (ci_index == UINT32_MAX) {
+            ESP_LOGW(TAG, "LAi post_id=%ld not found in Ci", (long)post_id);
             continue;
         }
 

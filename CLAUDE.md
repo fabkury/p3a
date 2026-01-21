@@ -76,14 +76,6 @@ Dual OTA slots (8MB each), NVS, LittleFS (4MB), and a 2MB partition for ESP32-C6
 - **Kconfig**: `main/Kconfig.projbuild` for main options, component-specific Kconfig in each component
 - Key options: `P3A_AUTO_SWAP_INTERVAL_SECONDS`, `P3A_PICO8_ENABLE`, `P3A_USB_MSC_ENABLE`
 
-## HTTP API (at `http://p3a.local/`)
-
-- `GET /status` - Device status JSON
-- `POST /action/swap_next`, `/action/swap_back` - Navigation
-- `GET /config`, `POST /config` - Settings
-- `GET /files/list`, `POST /files/upload` - File management
-- `WebSocket /ws/pico8` - PICO-8 binary stream
-
 ## Adding a New Component
 
 1. Create directory under `components/`
@@ -97,3 +89,7 @@ Dual OTA slots (8MB each), NVS, LittleFS (4MB), and a 2MB partition for ESP32-C6
 - `docs/HOW-TO-USE.md` - User guide
 - `docs/flash-p3a.md` - Flashing instructions
 - `docs/ROADMAP.md` - Development plan
+
+## Additional comments
+
+Clarifying questions are always welcome.

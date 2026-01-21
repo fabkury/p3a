@@ -66,6 +66,123 @@ uint32_t channel_cache_crc32(const void *data, size_t len)
 }
 
 // ============================================================================
+// Ci Hash Table Management
+// ============================================================================
+
+/**
+ * @brief Free Ci hash tables
+ */
+static void ci_hash_free(channel_cache_t *cache)
+{
+    if (!cache) return;
+
+    // Free post_id hash
+    ci_post_id_node_t *node, *tmp;
+    HASH_ITER(hh, cache->post_id_hash, node, tmp) {
+        HASH_DEL(cache->post_id_hash, node);
+        free(node);
+    }
+    cache->post_id_hash = NULL;
+
+    // Free storage_key hash
+    ci_storage_key_node_t *sk_node, *sk_tmp;
+    HASH_ITER(hh, cache->storage_key_hash, sk_node, sk_tmp) {
+        HASH_DEL(cache->storage_key_hash, sk_node);
+        free(sk_node);
+    }
+    cache->storage_key_hash = NULL;
+}
+
+/**
+ * @brief Add single entry to Ci hash tables
+ */
+static void ci_hash_add_entry(channel_cache_t *cache, uint32_t ci_index)
+{
+    if (!cache || !cache->entries || ci_index >= cache->entry_count) return;
+
+    const makapix_channel_entry_t *entry = &cache->entries[ci_index];
+
+    // Add to post_id hash
+    ci_post_id_node_t *pid_node = malloc(sizeof(ci_post_id_node_t));
+    if (pid_node) {
+        pid_node->post_id = entry->post_id;
+        pid_node->ci_index = ci_index;
+        HASH_ADD_INT(cache->post_id_hash, post_id, pid_node);
+    }
+
+    // Add to storage_key hash
+    ci_storage_key_node_t *sk_node = malloc(sizeof(ci_storage_key_node_t));
+    if (sk_node) {
+        memcpy(sk_node->storage_key_uuid, entry->storage_key_uuid, 16);
+        sk_node->ci_index = ci_index;
+        HASH_ADD(hh, cache->storage_key_hash, storage_key_uuid, 16, sk_node);
+    }
+}
+
+/**
+ * @brief Rebuild both Ci hash tables from entries array
+ */
+static void ci_rebuild_hash_tables(channel_cache_t *cache)
+{
+    if (!cache) return;
+
+    // Free existing hash tables
+    ci_hash_free(cache);
+
+    if (!cache->entries || cache->entry_count == 0) return;
+
+    // Build hash tables
+    for (size_t i = 0; i < cache->entry_count; i++) {
+        ci_hash_add_entry(cache, (uint32_t)i);
+    }
+
+    ESP_LOGD(TAG, "Ci hash tables rebuilt: %zu entries", cache->entry_count);
+}
+
+// ============================================================================
+// LAi Hash Table Management
+// ============================================================================
+
+/**
+ * @brief Free LAi hash table
+ */
+static void lai_hash_free(channel_cache_t *cache)
+{
+    if (!cache) return;
+
+    lai_post_id_node_t *node, *tmp;
+    HASH_ITER(hh, cache->lai_hash, node, tmp) {
+        HASH_DEL(cache->lai_hash, node);
+        free(node);
+    }
+    cache->lai_hash = NULL;
+}
+
+/**
+ * @brief Rebuild LAi hash from available_post_ids array
+ */
+static void lai_rebuild_hash(channel_cache_t *cache)
+{
+    if (!cache) return;
+
+    // Free existing hash
+    lai_hash_free(cache);
+
+    if (!cache->available_post_ids || cache->available_count == 0) return;
+
+    // Build hash from array
+    for (size_t i = 0; i < cache->available_count; i++) {
+        lai_post_id_node_t *node = malloc(sizeof(lai_post_id_node_t));
+        if (node) {
+            node->post_id = cache->available_post_ids[i];
+            HASH_ADD_INT(cache->lai_hash, post_id, node);
+        }
+    }
+
+    ESP_LOGD(TAG, "LAi hash rebuilt: %zu entries", cache->available_count);
+}
+
+// ============================================================================
 // Path Building
 // ============================================================================
 
@@ -134,7 +251,7 @@ static esp_err_t load_legacy_format(FILE *f, channel_cache_t *cache, const char 
     if (entry_count == 0) {
         cache->entries = NULL;
         cache->entry_count = 0;
-        cache->available_indices = NULL;
+        cache->available_post_ids = NULL;
         cache->available_count = 0;
         return ESP_OK;
     }
@@ -155,16 +272,20 @@ static esp_err_t load_legacy_format(FILE *f, channel_cache_t *cache, const char 
 
     cache->entry_count = entry_count;
 
+    // Build Ci hash tables
+    ci_rebuild_hash_tables(cache);
+
     // Allocate LAi (will be populated by lai_rebuild)
-    cache->available_indices = malloc(entry_count * sizeof(uint32_t));
-    if (!cache->available_indices) {
+    cache->available_post_ids = malloc(entry_count * sizeof(int32_t));
+    if (!cache->available_post_ids) {
+        ci_hash_free(cache);
         free(cache->entries);
         cache->entries = NULL;
         return ESP_ERR_NO_MEM;
     }
     cache->available_count = 0;
 
-    // Rebuild LAi from filesystem
+    // Rebuild LAi from filesystem (now stores post_ids and builds hash)
     ESP_LOGI(TAG, "Migrating legacy cache, rebuilding LAi for %zu entries", entry_count);
     size_t available = lai_rebuild(cache, vault_path);
     ESP_LOGI(TAG, "LAi rebuild complete: %zu available", available);
@@ -177,6 +298,9 @@ static esp_err_t load_legacy_format(FILE *f, channel_cache_t *cache, const char 
 
 /**
  * @brief Load new format with header
+ *
+ * For version < 20: Return error to trigger LAi rebuild via legacy path
+ * For version >= 20: Load LAi as post_ids and rebuild hash tables
  */
 static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
 {
@@ -192,7 +316,12 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
         return ESP_ERR_INVALID_STATE;
     }
 
-    // Validate version
+    // Validate version - reject old versions to force LAi rebuild
+    if (header.version < 20) {
+        ESP_LOGI(TAG, "Cache version %u < 20, will rebuild LAi", header.version);
+        return ESP_ERR_NOT_SUPPORTED;  // Triggers legacy path with rebuild
+    }
+
     if (header.version > CHANNEL_CACHE_VERSION) {
         ESP_LOGE(TAG, "Unsupported version: %u", header.version);
         return ESP_ERR_NOT_SUPPORTED;
@@ -255,34 +384,42 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
         cache->entry_count = 0;
     }
 
-    // Allocate and copy LAi indices
+    // Build Ci hash tables
+    ci_rebuild_hash_tables(cache);
+
+    // Allocate and copy LAi post_ids (v20+ stores post_ids, not ci_indices)
     if (header.lai_count > 0) {
         // Note: validation above ensures lai_count <= ci_count
-        cache->available_indices = malloc(header.ci_count * sizeof(uint32_t));
-        if (!cache->available_indices) {
+        cache->available_post_ids = malloc(header.ci_count * sizeof(int32_t));
+        if (!cache->available_post_ids) {
+            ci_hash_free(cache);
             free(cache->entries);
             cache->entries = NULL;
             free(file_data);
             return ESP_ERR_NO_MEM;
         }
-        memcpy(cache->available_indices, file_data + header.lai_offset,
-               header.lai_count * sizeof(uint32_t));
+        memcpy(cache->available_post_ids, file_data + header.lai_offset,
+               header.lai_count * sizeof(int32_t));
         cache->available_count = header.lai_count;
     } else {
         // Allocate space for future additions
         if (header.ci_count > 0) {
-            cache->available_indices = malloc(header.ci_count * sizeof(uint32_t));
-            if (!cache->available_indices) {
+            cache->available_post_ids = malloc(header.ci_count * sizeof(int32_t));
+            if (!cache->available_post_ids) {
+                ci_hash_free(cache);
                 free(cache->entries);
                 cache->entries = NULL;
                 free(file_data);
                 return ESP_ERR_NO_MEM;
             }
         } else {
-            cache->available_indices = NULL;
+            cache->available_post_ids = NULL;
         }
         cache->available_count = 0;
     }
+
+    // Build LAi hash table
+    lai_rebuild_hash(cache);
 
     free(file_data);
     return ESP_OK;
@@ -489,11 +626,13 @@ esp_err_t channel_cache_load(const char *channel_id,
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to load index for '%s': %s, starting empty",
                  channel_id, esp_err_to_name(err));
-        // Clean up partial state
+        // Clean up partial state (including hash tables)
+        ci_hash_free(cache);
+        lai_hash_free(cache);
         free(cache->entries);
-        free(cache->available_indices);
+        free(cache->available_post_ids);
         cache->entries = NULL;
-        cache->available_indices = NULL;
+        cache->available_post_ids = NULL;
         cache->entry_count = 0;
         cache->available_count = 0;
         cache->dirty = false;
@@ -527,9 +666,9 @@ esp_err_t channel_cache_save(const channel_cache_t *cache, const char *channels_
     channel_cache_build_path(cache->channel_id, channels_path, path, sizeof(path));
     snprintf(temp_path, sizeof(temp_path), "%s.tmp", path);
 
-    // Calculate sizes
+    // Calculate sizes (LAi now stores int32_t post_ids)
     size_t ci_size = cache->entry_count * sizeof(makapix_channel_entry_t);
-    size_t lai_size = cache->available_count * sizeof(uint32_t);
+    size_t lai_size = cache->available_count * sizeof(int32_t);
     size_t total_size = sizeof(channel_cache_header_t) + ci_size + lai_size;
 
     // Allocate buffer for atomic write
@@ -559,8 +698,8 @@ esp_err_t channel_cache_save(const channel_cache_t *cache, const char *channels_
     if (cache->entries && ci_size > 0) {
         memcpy(buffer + header->ci_offset, cache->entries, ci_size);
     }
-    if (cache->available_indices && lai_size > 0) {
-        memcpy(buffer + header->lai_offset, cache->available_indices, lai_size);
+    if (cache->available_post_ids && lai_size > 0) {
+        memcpy(buffer + header->lai_offset, cache->available_post_ids, lai_size);
     }
 
     // Compute checksum (with checksum field zeroed)
@@ -622,12 +761,18 @@ void channel_cache_free(channel_cache_t *cache)
         xSemaphoreTake(cache->mutex, portMAX_DELAY);
     }
 
+    // Free Ci hash tables
+    ci_hash_free(cache);
+
     free(cache->entries);
     cache->entries = NULL;
     cache->entry_count = 0;
 
-    free(cache->available_indices);
-    cache->available_indices = NULL;
+    // Free LAi hash table
+    lai_hash_free(cache);
+
+    free(cache->available_post_ids);
+    cache->available_post_ids = NULL;
     cache->available_count = 0;
 
     if (cache->mutex) {
@@ -642,102 +787,103 @@ void channel_cache_free(channel_cache_t *cache)
 // LAi Operations
 // ============================================================================
 
-bool lai_add_entry(channel_cache_t *cache, uint32_t ci_index)
+bool lai_add_entry(channel_cache_t *cache, int32_t post_id)
 {
-    if (!cache || ci_index >= cache->entry_count) {
+    if (!cache) {
         return false;
     }
 
     xSemaphoreTake(cache->mutex, portMAX_DELAY);
 
-    // Check if already present
-    for (size_t i = 0; i < cache->available_count; i++) {
-        if (cache->available_indices[i] == ci_index) {
-            xSemaphoreGive(cache->mutex);
-            return false;  // Already in LAi
-        }
+    // Check membership via hash O(1)
+    lai_post_id_node_t *existing;
+    HASH_FIND_INT(cache->lai_hash, &post_id, existing);
+    if (existing) {
+        xSemaphoreGive(cache->mutex);
+        return false;  // Already in LAi
     }
 
     // Ensure we have space
-    if (!cache->available_indices) {
-        cache->available_indices = malloc(cache->entry_count * sizeof(uint32_t));
-        if (!cache->available_indices) {
+    if (!cache->available_post_ids) {
+        size_t alloc_count = (cache->entry_count > 0) ? cache->entry_count : CHANNEL_CACHE_MAX_ENTRIES;
+        cache->available_post_ids = malloc(alloc_count * sizeof(int32_t));
+        if (!cache->available_post_ids) {
             xSemaphoreGive(cache->mutex);
             return false;
         }
     }
 
-    // Add to end
-    cache->available_indices[cache->available_count++] = ci_index;
+    // Add to array
+    cache->available_post_ids[cache->available_count++] = post_id;
+
+    // Add to hash
+    lai_post_id_node_t *node = malloc(sizeof(lai_post_id_node_t));
+    if (node) {
+        node->post_id = post_id;
+        HASH_ADD_INT(cache->lai_hash, post_id, node);
+    }
+
     cache->dirty = true;
 
     xSemaphoreGive(cache->mutex);
 
-    ESP_LOGD(TAG, "LAi add: ci_index=%lu, count=%zu",
-             (unsigned long)ci_index, cache->available_count);
+    ESP_LOGD(TAG, "LAi add: post_id=%ld, count=%zu",
+             (long)post_id, cache->available_count);
     return true;
 }
 
-bool lai_remove_entry(channel_cache_t *cache, uint32_t ci_index)
+bool lai_remove_entry(channel_cache_t *cache, int32_t post_id)
 {
-    if (!cache || !cache->available_indices) {
+    if (!cache) {
         return false;
     }
 
     xSemaphoreTake(cache->mutex, portMAX_DELAY);
 
-    // Find the entry
-    for (size_t i = 0; i < cache->available_count; i++) {
-        if (cache->available_indices[i] == ci_index) {
-            // Swap with last (O(1) removal)
-            cache->available_indices[i] = cache->available_indices[cache->available_count - 1];
-            cache->available_count--;
-            cache->dirty = true;
+    // Find in hash O(1)
+    lai_post_id_node_t *node;
+    HASH_FIND_INT(cache->lai_hash, &post_id, node);
+    if (!node) {
+        xSemaphoreGive(cache->mutex);
+        return false;  // Not found
+    }
 
-            xSemaphoreGive(cache->mutex);
+    // Remove from hash
+    HASH_DEL(cache->lai_hash, node);
+    free(node);
 
-            ESP_LOGD(TAG, "LAi remove: ci_index=%lu, count=%zu",
-                     (unsigned long)ci_index, cache->available_count);
-            return true;
+    // Find and swap-and-pop from array
+    if (cache->available_post_ids) {
+        for (size_t i = 0; i < cache->available_count; i++) {
+            if (cache->available_post_ids[i] == post_id) {
+                cache->available_post_ids[i] = cache->available_post_ids[--cache->available_count];
+                break;
+            }
         }
     }
 
+    cache->dirty = true;
+
     xSemaphoreGive(cache->mutex);
-    return false;  // Not found
+
+    ESP_LOGD(TAG, "LAi remove: post_id=%ld, count=%zu",
+             (long)post_id, cache->available_count);
+    return true;
 }
 
-bool lai_contains(const channel_cache_t *cache, uint32_t ci_index)
+bool lai_contains(const channel_cache_t *cache, int32_t post_id)
 {
-    if (!cache || !cache->available_indices) {
+    if (!cache) {
         return false;
     }
 
     xSemaphoreTake(cache->mutex, portMAX_DELAY);
 
-    for (size_t i = 0; i < cache->available_count; i++) {
-        if (cache->available_indices[i] == ci_index) {
-            xSemaphoreGive(cache->mutex);
-            return true;
-        }
-    }
+    lai_post_id_node_t *node;
+    HASH_FIND_INT(cache->lai_hash, &post_id, node);
 
     xSemaphoreGive(cache->mutex);
-    return false;
-}
-
-uint32_t lai_find_slot(const channel_cache_t *cache, uint32_t ci_index)
-{
-    if (!cache || !cache->available_indices) {
-        return UINT32_MAX;
-    }
-
-    for (size_t i = 0; i < cache->available_count; i++) {
-        if (cache->available_indices[i] == ci_index) {
-            return (uint32_t)i;
-        }
-    }
-
-    return UINT32_MAX;
+    return node != NULL;
 }
 
 size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
@@ -746,10 +892,13 @@ size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
         return 0;
     }
 
+    // Free existing LAi hash
+    lai_hash_free(cache);
+
     // Ensure LAi array is allocated
-    if (!cache->available_indices) {
-        cache->available_indices = malloc(cache->entry_count * sizeof(uint32_t));
-        if (!cache->available_indices) {
+    if (!cache->available_post_ids) {
+        cache->available_post_ids = malloc(cache->entry_count * sizeof(int32_t));
+        if (!cache->available_post_ids) {
             return 0;
         }
     }
@@ -801,8 +950,8 @@ size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
             char marker_path[264];
             snprintf(marker_path, sizeof(marker_path), "%s.404", file_path);
             if (stat(marker_path, &st) != 0) {
-                // File exists and no 404 marker
-                cache->available_indices[cache->available_count++] = i;
+                // File exists and no 404 marker - store post_id (not ci_index)
+                cache->available_post_ids[cache->available_count++] = entry->post_id;
                 found++;
             }
         }
@@ -812,6 +961,9 @@ size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
             taskYIELD();
         }
     }
+
+    // Build LAi hash from array
+    lai_rebuild_hash(cache);
 
     cache->dirty = true;
     ESP_LOGI(TAG, "LAi rebuild: checked %zu, found %zu available", checked, found);
@@ -824,32 +976,26 @@ size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
 
 uint32_t ci_find_by_storage_key(const channel_cache_t *cache, const uint8_t *storage_key_uuid)
 {
-    if (!cache || !cache->entries || !storage_key_uuid) {
+    if (!cache || !storage_key_uuid) {
         return UINT32_MAX;
     }
 
-    for (size_t i = 0; i < cache->entry_count; i++) {
-        if (memcmp(cache->entries[i].storage_key_uuid, storage_key_uuid, 16) == 0) {
-            return (uint32_t)i;
-        }
-    }
-
-    return UINT32_MAX;
+    // Use hash table for O(1) lookup
+    ci_storage_key_node_t *node;
+    HASH_FIND(hh, cache->storage_key_hash, storage_key_uuid, 16, node);
+    return node ? node->ci_index : UINT32_MAX;
 }
 
 uint32_t ci_find_by_post_id(const channel_cache_t *cache, int32_t post_id)
 {
-    if (!cache || !cache->entries) {
+    if (!cache) {
         return UINT32_MAX;
     }
 
-    for (size_t i = 0; i < cache->entry_count; i++) {
-        if (cache->entries[i].post_id == post_id) {
-            return (uint32_t)i;
-        }
-    }
-
-    return UINT32_MAX;
+    // Use hash table for O(1) lookup
+    ci_post_id_node_t *node;
+    HASH_FIND_INT(cache->post_id_hash, &post_id, node);
+    return node ? node->ci_index : UINT32_MAX;
 }
 
 const makapix_channel_entry_t *ci_get_entry(const channel_cache_t *cache, uint32_t ci_index)
@@ -1011,7 +1157,6 @@ esp_err_t channel_cache_get_next_missing(channel_cache_t *cache,
     // Iterate from cursor through entries
     while (*cursor < cache->entry_count) {
         const makapix_channel_entry_t *entry = &cache->entries[*cursor];
-        uint32_t ci_index = *cursor;
         (*cursor)++;
 
         // Skip non-artwork entries
@@ -1019,16 +1164,10 @@ esp_err_t channel_cache_get_next_missing(channel_cache_t *cache,
             continue;
         }
 
-        // Check if already in LAi (inline to avoid mutex deadlock)
-        bool in_lai = false;
-        for (size_t i = 0; i < cache->available_count; i++) {
-            if (cache->available_indices[i] == ci_index) {
-                in_lai = true;
-                break;
-            }
-        }
-
-        if (in_lai) {
+        // Check if already in LAi using hash table (O(1) lookup, no mutex issue)
+        lai_post_id_node_t *node;
+        HASH_FIND_INT(cache->lai_hash, &entry->post_id, node);
+        if (node) {
             continue;  // Already downloaded
         }
 

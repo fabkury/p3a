@@ -4,9 +4,12 @@
 #include "channel_cache.h"
 #include "event_bus.h"
 #include "makapix_channel_internal.h"
+#include "makapix_channel_utils.h"
 #include "vault_storage.h"
+#include "playlist_manager.h"
 #include "esp_log.h"
 #include <string.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -1179,4 +1182,434 @@ esp_err_t channel_cache_get_next_missing(channel_cache_t *cache,
 
     xSemaphoreGive(cache->mutex);
     return ESP_ERR_NOT_FOUND;
+}
+
+// ============================================================================
+// Batch Operations (for Makapix refresh)
+// ============================================================================
+
+/**
+ * @brief Build vault path from entry without needing makapix_channel_t
+ */
+static void build_vault_path_from_entry(const makapix_channel_entry_t *entry,
+                                        const char *vault_path,
+                                        char *out, size_t out_len)
+{
+    // Convert stored bytes back to UUID string
+    char storage_key[40];
+    bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
+
+    uint8_t sha256[32];
+    if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
+        // Best-effort fallback (should never happen)
+        snprintf(out, out_len, "%s/%s%s", vault_path, storage_key, s_ext_strings[0]);
+        return;
+    }
+
+    char dir1[3], dir2[3], dir3[3];
+    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
+    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
+    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
+
+    int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
+    snprintf(out, out_len, "%s/%s/%s/%s/%s%s",
+             vault_path, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
+}
+
+/**
+ * @brief Build channel index path from cache
+ */
+static void build_index_path_from_cache(const channel_cache_t *cache,
+                                        const char *channels_path,
+                                        char *out, size_t out_len)
+{
+    snprintf(out, out_len, "%s/%s.bin", channels_path, cache->channel_id);
+}
+
+/**
+ * @brief Helper: comparison function for qsort (entries by created_at, oldest first)
+ */
+static int compare_entries_by_created_at(const void *a, const void *b)
+{
+    const makapix_channel_entry_t *ea = (const makapix_channel_entry_t *)a;
+    const makapix_channel_entry_t *eb = (const makapix_channel_entry_t *)b;
+    if (ea->created_at < eb->created_at) return -1;
+    if (ea->created_at > eb->created_at) return 1;
+    return 0;
+}
+
+/**
+ * @brief Parse ISO8601 UTC timestamp to Unix time
+ * (Already defined in makapix_channel_utils.c, forward declare here)
+ */
+extern time_t parse_iso8601_utc(const char *s);
+
+/**
+ * @brief Detect file extension from URL
+ * (Already defined in makapix_channel_utils.c, forward declare here)
+ */
+extern file_extension_t detect_file_type(const char *url);
+
+esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
+                                    const makapix_post_t *posts,
+                                    size_t count,
+                                    const char *channels_path,
+                                    const char *vault_path)
+{
+    if (!cache || !posts || count == 0 || !channels_path || !vault_path) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    xSemaphoreTake(cache->mutex, portMAX_DELAY);
+
+    esp_err_t ret = ESP_OK;
+
+    // Allocate combined array for existing + new entries
+    size_t max_count = cache->entry_count + count;
+    makapix_channel_entry_t *all_entries = malloc(max_count * sizeof(makapix_channel_entry_t));
+    if (!all_entries) {
+        xSemaphoreGive(cache->mutex);
+        return ESP_ERR_NO_MEM;
+    }
+
+    // Copy existing entries
+    size_t all_count = cache->entry_count;
+    if (cache->entries && cache->entry_count > 0) {
+        memcpy(all_entries, cache->entries, cache->entry_count * sizeof(makapix_channel_entry_t));
+    } else {
+        all_count = 0;
+    }
+
+    // Process each new post
+    for (size_t i = 0; i < count; i++) {
+        const makapix_post_t *post = &posts[i];
+
+        // Find existing entry by (post_id, kind)
+        int found_idx = -1;
+        uint8_t entry_kind = (post->kind == MAKAPIX_POST_KIND_PLAYLIST) ?
+                             MAKAPIX_INDEX_POST_KIND_PLAYLIST :
+                             MAKAPIX_INDEX_POST_KIND_ARTWORK;
+
+        for (size_t j = 0; j < all_count; j++) {
+            if (all_entries[j].post_id == post->post_id && all_entries[j].kind == entry_kind) {
+                found_idx = (int)j;
+                break;
+            }
+        }
+
+        // Build new entry
+        makapix_channel_entry_t tmp = {0};
+        tmp.post_id = post->post_id;
+        tmp.kind = entry_kind;
+        tmp.created_at = (uint32_t)parse_iso8601_utc(post->created_at);
+        tmp.metadata_modified_at = (uint32_t)parse_iso8601_utc(post->metadata_modified_at);
+        tmp.filter_flags = 0;
+
+        if (post->kind == MAKAPIX_POST_KIND_ARTWORK) {
+            uint8_t uuid_bytes[16] = {0};
+            if (!uuid_to_bytes(post->storage_key, uuid_bytes)) {
+                ESP_LOGW(TAG, "Failed to parse storage_key UUID: %s", post->storage_key);
+                continue;
+            }
+            memcpy(tmp.storage_key_uuid, uuid_bytes, sizeof(tmp.storage_key_uuid));
+            tmp.extension = detect_file_type(post->art_url);
+            tmp.artwork_modified_at = (uint32_t)parse_iso8601_utc(post->artwork_modified_at);
+            tmp.dwell_time_ms = post->dwell_time_ms;
+            tmp.total_artworks = 0;
+        } else if (post->kind == MAKAPIX_POST_KIND_PLAYLIST) {
+            tmp.extension = 0;
+            tmp.artwork_modified_at = 0;
+            tmp.dwell_time_ms = post->playlist_dwell_time_ms;
+            tmp.total_artworks = post->total_artworks;
+            memset(tmp.storage_key_uuid, 0, sizeof(tmp.storage_key_uuid));
+
+            // Best-effort: write/update playlist cache on disk
+            playlist_metadata_t playlist = {0};
+            playlist.post_id = post->post_id;
+            playlist.total_artworks = post->total_artworks;
+            playlist.loaded_artworks = 0;
+            playlist.available_artworks = 0;
+            playlist.dwell_time_ms = post->playlist_dwell_time_ms;
+            playlist.metadata_modified_at = parse_iso8601_utc(post->metadata_modified_at);
+
+            if (post->artworks_count > 0 && post->artworks) {
+                playlist.artworks = calloc(post->artworks_count, sizeof(artwork_ref_t));
+                if (playlist.artworks) {
+                    playlist.loaded_artworks = (int32_t)post->artworks_count;
+                    for (size_t ai = 0; ai < post->artworks_count; ai++) {
+                        const makapix_artwork_t *src = &post->artworks[ai];
+                        artwork_ref_t *dst = &playlist.artworks[ai];
+                        memset(dst, 0, sizeof(*dst));
+                        dst->post_id = src->post_id;
+                        strncpy(dst->storage_key, src->storage_key, sizeof(dst->storage_key) - 1);
+                        strlcpy(dst->art_url, src->art_url, sizeof(dst->art_url));
+                        dst->dwell_time_ms = src->dwell_time_ms;
+                        dst->metadata_modified_at = parse_iso8601_utc(src->metadata_modified_at);
+                        dst->artwork_modified_at = parse_iso8601_utc(src->artwork_modified_at);
+                        dst->width = (uint16_t)src->width;
+                        dst->height = (uint16_t)src->height;
+                        dst->frame_count = (uint16_t)src->frame_count;
+                        dst->has_transparency = src->has_transparency;
+
+                        // Determine type from URL extension
+                        switch (detect_file_type(src->art_url)) {
+                            case EXT_WEBP: dst->type = ASSET_TYPE_WEBP; break;
+                            case EXT_GIF:  dst->type = ASSET_TYPE_GIF;  break;
+                            case EXT_PNG:  dst->type = ASSET_TYPE_PNG;  break;
+                            case EXT_JPEG: dst->type = ASSET_TYPE_JPEG; break;
+                            default:       dst->type = ASSET_TYPE_WEBP; break;
+                        }
+
+                        // Build vault path for the artwork
+                        uint8_t art_uuid[16];
+                        if (uuid_to_bytes(src->storage_key, art_uuid)) {
+                            makapix_channel_entry_t art_entry = {0};
+                            memcpy(art_entry.storage_key_uuid, art_uuid, 16);
+                            art_entry.extension = detect_file_type(src->art_url);
+                            build_vault_path_from_entry(&art_entry, vault_path, dst->filepath, sizeof(dst->filepath));
+
+                            struct stat st;
+                            dst->downloaded = (stat(dst->filepath, &st) == 0);
+                        }
+                    }
+
+                    // Count available artworks
+                    int32_t cnt = 0;
+                    for (int32_t j = 0; j < playlist.loaded_artworks; j++) {
+                        if (playlist.artworks[j].downloaded) cnt++;
+                    }
+                    playlist.available_artworks = cnt;
+                }
+            }
+
+            // Save and free temporary playlist structure
+            playlist_save_to_disk(&playlist);
+            free(playlist.artworks);
+        } else {
+            continue;  // Unknown kind
+        }
+
+        if (found_idx >= 0) {
+            // Existing entry - check for artwork file updates
+            if (post->kind == MAKAPIX_POST_KIND_ARTWORK) {
+                uint32_t old_artwork_modified = all_entries[(size_t)found_idx].artwork_modified_at;
+                uint32_t new_artwork_modified = tmp.artwork_modified_at;
+
+                // If artwork file timestamp changed, delete local file to trigger re-download
+                if (old_artwork_modified != 0 && new_artwork_modified != 0 &&
+                    old_artwork_modified != new_artwork_modified) {
+
+                    char file_path[512];
+                    build_vault_path_from_entry(&all_entries[(size_t)found_idx], vault_path,
+                                                file_path, sizeof(file_path));
+
+                    struct stat st;
+                    if (stat(file_path, &st) == 0) {
+                        ESP_LOGD(TAG, "Artwork file updated on server (post_id=%ld), deleting local copy",
+                                (long)post->post_id);
+                        if (unlink(file_path) == 0) {
+                            // Also remove from LAi
+                            lai_post_id_node_t *node;
+                            HASH_FIND_INT(cache->lai_hash, &post->post_id, node);
+                            if (node) {
+                                HASH_DEL(cache->lai_hash, node);
+                                free(node);
+                                // Also remove from array
+                                for (size_t k = 0; k < cache->available_count; k++) {
+                                    if (cache->available_post_ids[k] == post->post_id) {
+                                        cache->available_post_ids[k] = cache->available_post_ids[--cache->available_count];
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Update the entry with new metadata
+            all_entries[(size_t)found_idx] = tmp;
+        } else {
+            // New entry - add it
+            all_entries[all_count++] = tmp;
+        }
+    }
+
+    // Build index path and write to disk atomically
+    char index_path[256];
+    build_index_path_from_cache(cache, channels_path, index_path, sizeof(index_path));
+
+    // Ensure directory exists
+    char dir_path[256];
+    strncpy(dir_path, index_path, sizeof(dir_path) - 1);
+    dir_path[sizeof(dir_path) - 1] = '\0';
+    char *dir_sep = strrchr(dir_path, '/');
+    if (dir_sep) {
+        *dir_sep = '\0';
+        struct stat st;
+        if (stat(dir_path, &st) != 0) {
+            if (mkdir(dir_path, 0755) != 0 && errno != EEXIST) {
+                ESP_LOGW(TAG, "Failed to create directory %s: %d", dir_path, errno);
+            }
+        }
+    }
+
+    // Write to temp file
+    char temp_path[260];
+    snprintf(temp_path, sizeof(temp_path), "%s.tmp", index_path);
+
+    FILE *f = fopen(temp_path, "wb");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open %s for writing: %d", temp_path, errno);
+        free(all_entries);
+        xSemaphoreGive(cache->mutex);
+        return ESP_FAIL;
+    }
+
+    size_t written = fwrite(all_entries, sizeof(makapix_channel_entry_t), all_count, f);
+    fflush(f);
+    fsync(fileno(f));
+    fclose(f);
+
+    if (written != all_count) {
+        ESP_LOGE(TAG, "Failed to write channel index: %zu/%zu", written, all_count);
+        unlink(temp_path);
+        free(all_entries);
+        xSemaphoreGive(cache->mutex);
+        return ESP_FAIL;
+    }
+
+    // FATFS rename() won't overwrite an existing destination: remove old index first
+    if (unlink(index_path) != 0 && errno != ENOENT) {
+        ESP_LOGW(TAG, "Failed to unlink old index before rename: %s (errno=%d)", index_path, errno);
+    }
+
+    if (rename(temp_path, index_path) != 0) {
+        const int rename_errno = errno;
+        if (rename_errno == EEXIST) {
+            (void)unlink(index_path);
+            if (rename(temp_path, index_path) != 0) {
+                ESP_LOGE(TAG, "Failed to rename index temp file: %d", errno);
+                unlink(temp_path);
+                free(all_entries);
+                xSemaphoreGive(cache->mutex);
+                return ESP_FAIL;
+            }
+        } else {
+            ESP_LOGE(TAG, "Failed to rename index temp file: %d", rename_errno);
+            unlink(temp_path);
+            free(all_entries);
+            xSemaphoreGive(cache->mutex);
+            return ESP_FAIL;
+        }
+    }
+
+    // Update cache entries
+    free(cache->entries);
+    cache->entries = all_entries;
+    cache->entry_count = all_count;
+
+    // Rebuild hash tables
+    ci_rebuild_hash_tables(cache);
+
+    // Mark dirty for LAi persistence
+    cache->dirty = true;
+
+    ESP_LOGD(TAG, "Merged %zu posts into cache '%s': total %zu entries",
+             count, cache->channel_id, all_count);
+
+    xSemaphoreGive(cache->mutex);
+    return ret;
+}
+
+size_t channel_cache_evict_excess(channel_cache_t *cache,
+                                  size_t max_count,
+                                  const char *vault_path)
+{
+    if (!cache || !vault_path) {
+        return 0;
+    }
+
+    xSemaphoreTake(cache->mutex, portMAX_DELAY);
+
+    // Use LAi to determine downloaded count (O(1) lookup vs filesystem I/O)
+    size_t downloaded_count = cache->available_count;
+
+    if (downloaded_count <= max_count) {
+        xSemaphoreGive(cache->mutex);
+        return 0;
+    }
+
+    ESP_LOGD(TAG, "Eviction needed: %zu downloaded files exceed limit of %zu",
+             downloaded_count, max_count);
+
+    // Collect entries that are in LAi (downloaded)
+    makapix_channel_entry_t *downloaded = malloc(downloaded_count * sizeof(makapix_channel_entry_t));
+    if (!downloaded) {
+        xSemaphoreGive(cache->mutex);
+        return 0;
+    }
+
+    size_t di = 0;
+    for (size_t i = 0; i < cache->entry_count && di < downloaded_count; i++) {
+        if (cache->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+            // Check if this post_id is in LAi using the hash table (O(1) lookup)
+            int32_t post_id = cache->entries[i].post_id;
+            lai_post_id_node_t *node;
+            HASH_FIND_INT(cache->lai_hash, &post_id, node);
+            if (node) {
+                downloaded[di++] = cache->entries[i];
+            }
+        }
+    }
+
+    // Sort by created_at (oldest first)
+    qsort(downloaded, downloaded_count, sizeof(makapix_channel_entry_t), compare_entries_by_created_at);
+
+    // Evict in batches of 32
+    const size_t EVICTION_BATCH = 32;
+    size_t excess = downloaded_count - max_count;
+    size_t to_delete = ((excess + EVICTION_BATCH - 1) / EVICTION_BATCH) * EVICTION_BATCH;
+    if (to_delete > downloaded_count) {
+        to_delete = downloaded_count;
+    }
+
+    // Delete oldest artwork FILES (but keep their Ci entries)
+    // Also synchronously update LAi to maintain consistency
+    size_t actually_deleted = 0;
+    for (size_t i = 0; i < to_delete; i++) {
+        char file_path[512];
+        build_vault_path_from_entry(&downloaded[i], vault_path, file_path, sizeof(file_path));
+        if (unlink(file_path) == 0) {
+            actually_deleted++;
+
+            // Remove from LAi
+            int32_t post_id = downloaded[i].post_id;
+            lai_post_id_node_t *node;
+            HASH_FIND_INT(cache->lai_hash, &post_id, node);
+            if (node) {
+                HASH_DEL(cache->lai_hash, node);
+                free(node);
+                // Also remove from array
+                for (size_t k = 0; k < cache->available_count; k++) {
+                    if (cache->available_post_ids[k] == post_id) {
+                        cache->available_post_ids[k] = cache->available_post_ids[--cache->available_count];
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    free(downloaded);
+
+    if (actually_deleted > 0) {
+        cache->dirty = true;
+    }
+
+    ESP_LOGI(TAG, "Evicted %zu artwork files to stay within limit of %zu",
+             actually_deleted, max_count);
+
+    xSemaphoreGive(cache->mutex);
+    return actually_deleted;
 }

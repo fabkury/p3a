@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include "esp_err.h"
 #include "makapix_channel_impl.h"
+#include "makapix_api.h"  // For makapix_post_t
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/timers.h"
@@ -350,6 +351,48 @@ channel_cache_t *channel_cache_registry_find(const char *channel_id);
 esp_err_t channel_cache_get_next_missing(channel_cache_t *cache,
                                          uint32_t *cursor,
                                          makapix_channel_entry_t *out_entry);
+
+// ============================================================================
+// Batch Operations (for Makapix refresh)
+// ============================================================================
+
+/**
+ * @brief Merge new entries into cache (for batch refresh)
+ *
+ * Merges new entries with existing entries, deduplicating by post_id+kind.
+ * Updates artwork file timestamps if changed on server (deletes local file
+ * to trigger re-download).
+ * Writes merged entries to disk atomically (raw .bin format for compatibility).
+ * Thread-safe.
+ *
+ * @param cache Cache to update
+ * @param posts Array of posts from server
+ * @param count Number of posts
+ * @param channels_path Base path for channel files
+ * @param vault_path Base path for vault files (for deleting outdated artwork files)
+ * @return ESP_OK on success
+ */
+esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
+                                    const makapix_post_t *posts,
+                                    size_t count,
+                                    const char *channels_path,
+                                    const char *vault_path);
+
+/**
+ * @brief Evict oldest downloaded artworks to stay within limit
+ *
+ * Finds downloaded artworks (by checking file existence), sorts by
+ * created_at, and deletes oldest files until count <= max_count.
+ * Updates LAi synchronously for each evicted file.
+ *
+ * @param cache Cache to update
+ * @param max_count Maximum allowed downloaded artworks
+ * @param vault_path Base path for vault files
+ * @return Number of files evicted
+ */
+size_t channel_cache_evict_excess(channel_cache_t *cache,
+                                  size_t max_count,
+                                  const char *vault_path);
 
 // ============================================================================
 // Utility Functions

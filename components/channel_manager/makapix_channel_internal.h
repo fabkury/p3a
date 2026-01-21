@@ -32,6 +32,11 @@ typedef enum {
  * NOTE: play_navigator was removed as part of Play Scheduler migration.
  * Navigation is now handled by Play Scheduler directly.
  * See play_scheduler.c for Live Mode deferred feature notes.
+ *
+ * NOTE: entries/entry_count fields were removed as part of channel cache unification.
+ * All entry data is now stored in channel_cache_t and accessed via
+ * channel_cache_registry_find(). This allows downloads to start immediately
+ * after the first refresh batch rather than waiting for the full refresh.
  */
 typedef struct {
     struct channel_s base;           // Base channel (must be first)
@@ -40,10 +45,6 @@ typedef struct {
     char *channel_id;                // UUID of channel
     char *vault_path;                // Base vault path
     char *channels_path;             // Base channels path
-
-    // Loaded entries
-    makapix_channel_entry_t *entries;  // Array of entries from channel index file (<channel>.bin)
-    size_t entry_count;              // Number of entries
 
     // Legacy playback fields (kept for binary compatibility, no longer used)
     uint32_t channel_dwell_override_ms;

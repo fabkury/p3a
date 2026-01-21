@@ -29,7 +29,7 @@ extern "C" {
  * ## LTF File Format
  *
  * LTF files are small JSON files stored alongside the artwork in the vault:
- *   /vault/{sha[0:2]}/{sha[2:4]}/{storage_key}.ltf
+ *   /vault/{sha[0]:02x}/{sha[1]:02x}/{sha[2]:02x}/{storage_key}.ltf
  *
  * Example:
  * ```json

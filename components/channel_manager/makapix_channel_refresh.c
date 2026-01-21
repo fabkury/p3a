@@ -9,6 +9,7 @@
 #include "download_manager.h"
 #include "config_store.h"
 #include "makapix_channel_events.h"
+#include "channel_cache.h"  // For LAi synchronous cleanup on eviction
 #include "esp_log.h"
 #include "esp_timer.h"
 
@@ -109,6 +110,37 @@ static int compare_entries_by_created(const void *a, const void *b)
 }
 
 /**
+ * @brief Remove an entry from LAi when evicting a file
+ *
+ * Synchronously updates the LAi (Locally Available Index) when a file is
+ * deleted due to eviction. This ensures LAi stays consistent with the
+ * actual files on disk.
+ *
+ * @param channel_id Channel identifier (e.g., "all", "promoted")
+ * @param post_id Post ID of the evicted entry
+ */
+static void lai_cleanup_on_eviction(const char *channel_id, int32_t post_id)
+{
+    if (!channel_id) return;
+
+    channel_cache_t *cache = channel_cache_registry_find(channel_id);
+    if (!cache) {
+        // Channel cache not loaded/registered - this is normal during early boot
+        // or when channel is not currently active in play scheduler
+        ESP_LOGD(TAG, "LAi cleanup: cache not found for channel '%s' (post_id=%ld)",
+                 channel_id, (long)post_id);
+        return;
+    }
+
+    if (lai_remove_entry(cache, post_id)) {
+        ESP_LOGD(TAG, "LAi cleanup: removed post_id=%ld from channel '%s'",
+                 (long)post_id, channel_id);
+        // Schedule debounced save to persist LAi changes
+        channel_cache_schedule_save(cache);
+    }
+}
+
+/**
  * @brief Reconcile local index with server data by detecting and removing deleted artworks
  * 
  * Full reconciliation approach (Option B): Compare local index against server response.
@@ -158,24 +190,30 @@ static esp_err_t reconcile_deletions(makapix_channel_t *ch,
         } else {
             // Entry deleted on server - remove local file if it exists
             deleted_count++;
-            
+
             if (entry->kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
                 char vault_path[512];
                 build_vault_path(ch, entry, vault_path, sizeof(vault_path));
-                
+
                 struct stat st;
                 if (stat(vault_path, &st) == 0) {
                     if (unlink(vault_path) == 0) {
-                        ESP_LOGD(TAG, "Deleted local file for removed artwork: post_id=%ld", 
+                        ESP_LOGD(TAG, "Deleted local file for removed artwork: post_id=%ld",
                                 (long)entry->post_id);
+                        // Synchronously update LAi to remove the evicted entry
+                        lai_cleanup_on_eviction(ch->channel_id, entry->post_id);
                     } else {
-                        ESP_LOGW(TAG, "Failed to delete file for removed artwork: post_id=%ld, path=%s", 
+                        ESP_LOGW(TAG, "Failed to delete file for removed artwork: post_id=%ld, path=%s",
                                 (long)entry->post_id, vault_path);
                     }
+                } else {
+                    // File doesn't exist locally, but still remove from LAi if present
+                    // (handles case where LAi has stale entry)
+                    lai_cleanup_on_eviction(ch->channel_id, entry->post_id);
                 }
             }
-            
-            ESP_LOGD(TAG, "Reconciliation: removed post_id=%ld (not on server)", 
+
+            ESP_LOGD(TAG, "Reconciliation: removed post_id=%ld (not on server)",
                     (long)entry->post_id);
         }
     }
@@ -685,12 +723,14 @@ static esp_err_t evict_for_storage_pressure(makapix_channel_t *ch, size_t min_re
             batch_end = downloaded_count;
         }
         
-        // Delete this batch
+        // Delete this batch and synchronously update LAi
         for (size_t i = batch_start; i < batch_end; i++) {
             char vault_path[512];
             build_vault_path(ch, &downloaded[i], vault_path, sizeof(vault_path));
             if (unlink(vault_path) == 0) {
                 actually_deleted++;
+                // Synchronously update LAi to remove the evicted entry
+                lai_cleanup_on_eviction(ch->channel_id, downloaded[i].post_id);
             }
         }
         
@@ -757,21 +797,24 @@ esp_err_t evict_excess_artworks(makapix_channel_t *ch, size_t max_count)
         to_delete = downloaded_count;
     }
 
-    // Delete oldest artwork FILES (but keep their index entries)
+    // Delete oldest artwork FILES (but keep their Ci entries)
+    // Also synchronously update LAi to maintain consistency
     size_t actually_deleted = 0;
     for (size_t i = 0; i < to_delete; i++) {
         char vault_path[512];
         build_vault_path(ch, &downloaded[i], vault_path, sizeof(vault_path));
         if (unlink(vault_path) == 0) {
             actually_deleted++;
+            // Synchronously update LAi to remove the evicted entry
+            lai_cleanup_on_eviction(ch->channel_id, downloaded[i].post_id);
         }
     }
 
     free(downloaded);
 
-    ESP_LOGD(TAG, "Evicted %zu artwork files to stay within limit of %zu", 
+    ESP_LOGI(TAG, "Evicted %zu artwork files to stay within limit of %zu",
              actually_deleted, max_count);
-    
+
     return ESP_OK;
 }
 
@@ -925,6 +968,15 @@ void refresh_task_impl(void *pvParameters)
 
             // Update channel index with new posts
             update_index_bin(ch, resp->posts, resp->post_count);
+
+            // Per-batch eviction: if Ci exceeds limit after adding this batch,
+            // evict oldest files immediately to maintain invariant.
+            // This ensures Ci transitions from one valid state to another.
+            if (ch->entry_count > TARGET_COUNT) {
+                ESP_LOGD(TAG, "Per-batch eviction: entry_count=%zu exceeds limit=%zu",
+                         ch->entry_count, TARGET_COUNT);
+                evict_excess_artworks(ch, TARGET_COUNT);
+            }
 
             // Check for shutdown after index update
             if (!ch->refreshing) {

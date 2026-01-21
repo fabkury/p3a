@@ -211,8 +211,8 @@ typedef struct {
     ps_entry_format_t entry_format;  // Format of loaded entries
     void *entries;            // Entry array (format depends on entry_format)
 
-    // LAi (Locally Available index) - indices into entries of available artworks
-    uint32_t *available_indices;  // LAi array (NULL if not loaded)
+    // LAi (Locally Available index) - post_ids of available artworks
+    int32_t *available_post_ids;  // LAi array of post_ids (NULL if not loaded)
     size_t available_count;       // Number of available artworks
 
     // Channel cache (owns entries/LAi for Makapix channels)

@@ -78,14 +78,14 @@ static uint32_t ps_find_ci_by_storage_key(ps_channel_state_t *ch, const char *st
 }
 
 /**
- * @brief Check if a Ci index is already in LAi
+ * @brief Check if a post_id is already in LAi
  */
-static bool ps_lai_contains(ps_channel_state_t *ch, uint32_t ci_index)
+static bool ps_lai_contains(ps_channel_state_t *ch, int32_t post_id)
 {
-    if (!ch->available_indices) return false;
+    if (!ch->available_post_ids) return false;
 
     for (size_t i = 0; i < ch->available_count; i++) {
-        if (ch->available_indices[i] == ci_index) {
+        if (ch->available_post_ids[i] == post_id) {
             return true;
         }
     }
@@ -93,10 +93,10 @@ static bool ps_lai_contains(ps_channel_state_t *ch, uint32_t ci_index)
 }
 
 /**
- * @brief Add a Ci index to LAi
+ * @brief Add an entry to LAi by ci_index
  *
  * For Makapix channels, delegates to channel_cache module which handles
- * dirty tracking and debounced persistence.
+ * dirty tracking and debounced persistence. The cache API now uses post_id.
  */
 static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
 {
@@ -104,10 +104,12 @@ static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
 
     // For Makapix channels with cache, use channel_cache module
     if (ch->cache) {
-        bool added = lai_add_entry(ch->cache, ci_index);
+        // Get post_id from entry to pass to new LAi API
+        int32_t post_id = ch->cache->entries[ci_index].post_id;
+        bool added = lai_add_entry(ch->cache, post_id);
         if (added) {
             // Update aliased pointer and count (pointer may have been allocated on first add)
-            ch->available_indices = ch->cache->available_indices;
+            ch->available_post_ids = ch->cache->available_post_ids;
             ch->available_count = ch->cache->available_count;
             // Mark channel as active now that it has available content
             ch->active = true;
@@ -118,30 +120,34 @@ static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
     }
 
     // Fallback for SD card channels (shouldn't have LAi, but keep for safety)
-    if (ps_lai_contains(ch, ci_index)) return false;
+    makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
+    int32_t post_id = entries[ci_index].post_id;
+    if (ps_lai_contains(ch, post_id)) return false;
 
-    if (!ch->available_indices) {
-        ch->available_indices = malloc(ch->entry_count * sizeof(uint32_t));
-        if (!ch->available_indices) return false;
+    if (!ch->available_post_ids) {
+        ch->available_post_ids = malloc(ch->entry_count * sizeof(int32_t));
+        if (!ch->available_post_ids) return false;
         ch->available_count = 0;
     }
 
-    ch->available_indices[ch->available_count++] = ci_index;
+    ch->available_post_ids[ch->available_count++] = post_id;
     ch->active = true;
     return true;
 }
 
 /**
- * @brief Remove a Ci index from LAi (swap-and-pop for O(1))
+ * @brief Remove an entry from LAi by ci_index (swap-and-pop for O(1))
  *
  * For Makapix channels, delegates to channel_cache module which handles
- * dirty tracking and debounced persistence.
+ * dirty tracking and debounced persistence. The cache API now uses post_id.
  */
 static bool ps_lai_remove(ps_channel_state_t *ch, uint32_t ci_index)
 {
     // For Makapix channels with cache, use channel_cache module
     if (ch->cache) {
-        bool removed = lai_remove_entry(ch->cache, ci_index);
+        // Get post_id from entry to pass to new LAi API
+        int32_t post_id = ch->cache->entries[ci_index].post_id;
+        bool removed = lai_remove_entry(ch->cache, post_id);
         if (removed) {
             // Update aliased count
             ch->available_count = ch->cache->available_count;
@@ -152,11 +158,13 @@ static bool ps_lai_remove(ps_channel_state_t *ch, uint32_t ci_index)
     }
 
     // Fallback for SD card channels
-    if (!ch->available_indices || ch->available_count == 0) return false;
+    if (!ch->available_post_ids || ch->available_count == 0) return false;
 
+    makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
+    int32_t post_id = entries[ci_index].post_id;
     for (size_t i = 0; i < ch->available_count; i++) {
-        if (ch->available_indices[i] == ci_index) {
-            ch->available_indices[i] = ch->available_indices[ch->available_count - 1];
+        if (ch->available_post_ids[i] == post_id) {
+            ch->available_post_ids[i] = ch->available_post_ids[ch->available_count - 1];
             ch->available_count--;
             return true;
         }

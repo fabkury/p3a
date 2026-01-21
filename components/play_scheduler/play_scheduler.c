@@ -348,13 +348,13 @@ void play_scheduler_deinit(void)
     for (size_t i = 0; i < s_state.channel_count; i++) {
         ps_channel_state_t *ch = &s_state.channels[i];
         if (ch->cache) {
-            // Makapix channel - cache owns entries/available_indices
+            // Makapix channel - cache owns entries/available_post_ids
             channel_cache_unregister(ch->cache);
             channel_cache_free(ch->cache);
             free(ch->cache);
             ch->cache = NULL;
             ch->entries = NULL;
-            ch->available_indices = NULL;
+            ch->available_post_ids = NULL;
             ch->available_count = 0;
         } else if (ch->entries) {
             // SD card channel - entries owned directly
@@ -411,13 +411,13 @@ esp_err_t play_scheduler_set_channels(
     for (size_t i = 0; i < s_state.channel_count; i++) {
         ps_channel_state_t *ch = &s_state.channels[i];
         if (ch->cache) {
-            // Makapix channel - cache owns entries/available_indices
+            // Makapix channel - cache owns entries/available_post_ids
             channel_cache_unregister(ch->cache);
             channel_cache_free(ch->cache);
             free(ch->cache);
             ch->cache = NULL;
             ch->entries = NULL;
-            ch->available_indices = NULL;
+            ch->available_post_ids = NULL;
             ch->available_count = 0;
         } else if (ch->entries) {
             // SD card channel - entries owned directly

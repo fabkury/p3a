@@ -240,7 +240,7 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
         free(ch->cache);
         ch->cache = NULL;
         ch->entries = NULL;
-        ch->available_indices = NULL;
+        ch->available_post_ids = NULL;
     }
 
     // Allocate new cache structure
@@ -284,7 +284,7 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
     // Alias data from cache into channel state (for compatibility with existing code)
     ch->entries = ch->cache->entries;
     ch->entry_count = ch->cache->entry_count;
-    ch->available_indices = ch->cache->available_indices;
+    ch->available_post_ids = ch->cache->available_post_ids;
     ch->available_count = ch->cache->available_count;
 
     ch->cache_loaded = true;
@@ -352,13 +352,13 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     for (size_t i = 0; i < s_state->channel_count; i++) {
         ps_channel_state_t *ch = &s_state->channels[i];
         if (ch->cache) {
-            // Makapix channel - cache owns entries/available_indices
+            // Makapix channel - cache owns entries/available_post_ids
             channel_cache_unregister(ch->cache);
             channel_cache_free(ch->cache);
             free(ch->cache);
             ch->cache = NULL;
             ch->entries = NULL;
-            ch->available_indices = NULL;
+            ch->available_post_ids = NULL;
             ch->available_count = 0;
         } else if (ch->entries) {
             // SD card channel - entries owned directly

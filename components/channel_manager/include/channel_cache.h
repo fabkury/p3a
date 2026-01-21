@@ -12,10 +12,41 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/timers.h"
+#include "uthash.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// ============================================================================
+// Hash Node Structures (for O(1) lookups)
+// ============================================================================
+
+/**
+ * @brief Hash node: post_id -> ci_index
+ */
+typedef struct {
+    int32_t post_id;
+    uint32_t ci_index;
+    UT_hash_handle hh;
+} ci_post_id_node_t;
+
+/**
+ * @brief Hash node: storage_key_uuid -> ci_index
+ */
+typedef struct {
+    uint8_t storage_key_uuid[16];
+    uint32_t ci_index;
+    UT_hash_handle hh;
+} ci_storage_key_node_t;
+
+/**
+ * @brief Hash node: LAi membership (post_id set)
+ */
+typedef struct {
+    int32_t post_id;
+    UT_hash_handle hh;
+} lai_post_id_node_t;
 
 /**
  * @file channel_cache.h
@@ -25,21 +56,23 @@ extern "C" {
  * availability tracking. Key features:
  *
  * - **Ci (Channel Index)**: Array of all known artworks from the channel
- * - **LAi (Locally Available index)**: Subset of Ci containing indices of
- *   downloaded artworks, enabling O(1) random picks without filesystem I/O
+ *   - Hash tables for O(1) lookup by post_id and storage_key (rebuilt on load)
+ * - **LAi (Locally Available index)**: Stores post_ids of downloaded artworks
+ *   - Hash set for O(1) membership checking (rebuilt on load)
+ *   - Enables O(1) random picks without filesystem I/O
  * - **Atomic persistence**: Write to .tmp file, compute CRC32, rename
- * - **Legacy migration**: Detect old format (no magic header), migrate to new
+ * - **Legacy migration**: Detect old format (version < 20), rebuild LAi
  * - **15-second debounce**: Dirty caches saved after 15s of inactivity
  *
- * File format (binary, little-endian):
+ * File format v20 (binary, little-endian):
  *   [header: 44 bytes]
  *   [Ci entries: ci_count * 64 bytes]
- *   [LAi indices: lai_count * 4 bytes]
+ *   [LAi post_ids: lai_count * 4 bytes (int32_t)]
  */
 
 // Magic number: 'P3AC' (p3a Cache)
 #define CHANNEL_CACHE_MAGIC     0x50334143
-#define CHANNEL_CACHE_VERSION   1
+#define CHANNEL_CACHE_VERSION   20  // Bumped to 20 for LAi post_id format + hash tables
 
 // Maximum entries per channel (1024 artworks)
 #define CHANNEL_CACHE_MAX_ENTRIES 1024
@@ -77,9 +110,16 @@ typedef struct channel_cache_s {
     makapix_channel_entry_t *entries;   // Array of entries (NULL if empty)
     size_t entry_count;                 // Number of entries in Ci
 
-    // LAi - Locally Available index (indices into Ci)
-    uint32_t *available_indices;        // Array of Ci indices (NULL if empty)
+    // Ci hash tables (rebuilt on load, not persisted)
+    ci_post_id_node_t *post_id_hash;          // Hash: post_id -> ci_index
+    ci_storage_key_node_t *storage_key_hash;  // Hash: storage_key_uuid -> ci_index
+
+    // LAi - Locally Available index (stores post_ids, not ci_indices)
+    int32_t *available_post_ids;        // Array of post_ids (NULL if empty)
     size_t available_count;             // Number of available artworks
+
+    // LAi hash set (rebuilt on load, not persisted)
+    lai_post_id_node_t *lai_hash;       // Hash set for O(1) membership check
 
     // Metadata
     char channel_id[64];                // Full channel ID
@@ -145,7 +185,7 @@ esp_err_t channel_cache_save(const channel_cache_t *cache, const char *channels_
 /**
  * @brief Free cache resources
  *
- * Releases memory for entries and available_indices. Does NOT save.
+ * Releases memory for entries, available_post_ids, and hash tables. Does NOT save.
  *
  * @param cache Cache to free
  */
@@ -161,10 +201,10 @@ void channel_cache_free(channel_cache_t *cache);
  * Called when a download completes. Thread-safe (takes mutex).
  *
  * @param cache Cache to modify
- * @param ci_index Index into Ci of the now-available artwork
- * @return true if added, false if already present or invalid index
+ * @param post_id Post ID of the now-available artwork
+ * @return true if added, false if already present
  */
-bool lai_add_entry(channel_cache_t *cache, uint32_t ci_index);
+bool lai_add_entry(channel_cache_t *cache, int32_t post_id);
 
 /**
  * @brief Remove an entry from LAi
@@ -173,30 +213,21 @@ bool lai_add_entry(channel_cache_t *cache, uint32_t ci_index);
  * Thread-safe (takes mutex).
  *
  * @param cache Cache to modify
- * @param ci_index Index into Ci of the artwork to remove
+ * @param post_id Post ID of the artwork to remove
  * @return true if removed, false if not present
  */
-bool lai_remove_entry(channel_cache_t *cache, uint32_t ci_index);
+bool lai_remove_entry(channel_cache_t *cache, int32_t post_id);
 
 /**
  * @brief Check if an entry is in LAi
  *
- * Thread-safe (takes mutex).
+ * Thread-safe (takes mutex). Uses hash table for O(1) lookup.
  *
  * @param cache Cache to check
- * @param ci_index Index into Ci
+ * @param post_id Post ID to check
  * @return true if present in LAi
  */
-bool lai_contains(const channel_cache_t *cache, uint32_t ci_index);
-
-/**
- * @brief Find the LAi slot index for a Ci index
- *
- * @param cache Cache to search
- * @param ci_index Index into Ci
- * @return LAi slot index, or UINT32_MAX if not found
- */
-uint32_t lai_find_slot(const channel_cache_t *cache, uint32_t ci_index);
+bool lai_contains(const channel_cache_t *cache, int32_t post_id);
 
 /**
  * @brief Rebuild LAi by scanning vault for existing files

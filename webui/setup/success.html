@@ -83,7 +83,7 @@ a:visited { color: #3b4cca; }
   <div class="card">
     <h2>Saved! Rebooting now</h2>
     <p class="muted">Connecting to:</p>
-    <div class="pill" id="ssid-display">...</div>
+    <div class="pill">{SSID}</div>
     <p class="help">p3a has saved your credentials and will now reboot. The <code>p3a-setup</code> network will cease to exist and p3a will connect to the Wi-Fi network you provided.</p>
     <ul class="list">
       <li>After the device turns on, wait a few seconds for it to connect to Wi-Fi.</li>
@@ -98,14 +98,7 @@ a:visited { color: #3b4cca; }
   </div>
   <script>
   (function(){
-    // Parse SSID from URL query parameter
-    var params = new URLSearchParams(window.location.search);
-    var ssid = params.get('ssid');
-    if (ssid) {
-      document.getElementById('ssid-display').textContent = decodeURIComponent(ssid);
-    }
-
-    // Countdown timer
+    // Countdown timer - SSID is injected server-side via {SSID} placeholder
     var remaining = 25;
     var el = document.getElementById('sec');
     function tick(){

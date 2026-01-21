@@ -481,11 +481,6 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
 
 esp_err_t makapix_mqtt_connect(void)
 {
-    // DEBUG: Delay MQTT connect to test SDIO bus conflict hypothesis
-    ESP_LOGW(TAG, "DEBUG: Delaying MQTT connect by 20 seconds to test SDIO bus conflict...");
-    vTaskDelay(pdMS_TO_TICKS(20000));
-    ESP_LOGW(TAG, "DEBUG: MQTT connect delay complete, proceeding...");
-
     if (!s_mqtt_mutex) {
         ESP_LOGE(TAG, "MQTT not initialized (no mutex)");
         return ESP_ERR_INVALID_STATE;

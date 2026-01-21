@@ -451,7 +451,7 @@ void refresh_task_impl(void *pvParameters)
         vTaskDelete(NULL);
         return;
     }
-    
+
     // Wait for MQTT before first query (also wakes on shutdown signal)
     if (!makapix_channel_wait_for_mqtt_or_shutdown(portMAX_DELAY)) {
         ch->refreshing = false;

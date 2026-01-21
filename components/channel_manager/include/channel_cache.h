@@ -33,15 +33,6 @@ typedef struct {
 } ci_post_id_node_t;
 
 /**
- * @brief Hash node: storage_key_uuid -> ci_index
- */
-typedef struct {
-    uint8_t storage_key_uuid[16];
-    uint32_t ci_index;
-    UT_hash_handle hh;
-} ci_storage_key_node_t;
-
-/**
  * @brief Hash node: LAi membership (post_id set)
  */
 typedef struct {
@@ -57,7 +48,7 @@ typedef struct {
  * availability tracking. Key features:
  *
  * - **Ci (Channel Index)**: Array of all known artworks from the channel
- *   - Hash tables for O(1) lookup by post_id and storage_key (rebuilt on load)
+ *   - Hash table for O(1) lookup by post_id (rebuilt on load)
  * - **LAi (Locally Available index)**: Stores post_ids of downloaded artworks
  *   - Hash set for O(1) membership checking (rebuilt on load)
  *   - Enables O(1) random picks without filesystem I/O
@@ -111,9 +102,8 @@ typedef struct channel_cache_s {
     makapix_channel_entry_t *entries;   // Array of entries (NULL if empty)
     size_t entry_count;                 // Number of entries in Ci
 
-    // Ci hash tables (rebuilt on load, not persisted)
+    // Ci hash table (rebuilt on load, not persisted)
     ci_post_id_node_t *post_id_hash;          // Hash: post_id -> ci_index
-    ci_storage_key_node_t *storage_key_hash;  // Hash: storage_key_uuid -> ci_index
 
     // LAi - Locally Available index (stores post_ids, not ci_indices)
     int32_t *available_post_ids;        // Array of post_ids (NULL if empty)
@@ -245,15 +235,6 @@ size_t lai_rebuild(channel_cache_t *cache, const char *vault_path);
 // ============================================================================
 // Ci Operations
 // ============================================================================
-
-/**
- * @brief Find Ci index by storage_key (UUID)
- *
- * @param cache Cache to search
- * @param storage_key_uuid 16-byte UUID
- * @return Ci index, or UINT32_MAX if not found
- */
-uint32_t ci_find_by_storage_key(const channel_cache_t *cache, const uint8_t *storage_key_uuid);
 
 /**
  * @brief Find Ci index by post_id

@@ -3,12 +3,14 @@
 
 #include "makapix_channel_internal.h"
 #include "makapix_channel_events.h"
+#include "makapix_channel_utils.h"
 #include "makapix_api.h"
 #include "makapix_artwork.h"
 #include "playlist_manager.h"
 #include "download_manager.h"
 #include "config_store.h"
 #include "channel_settings.h"
+#include "channel_cache.h"
 #include "esp_log.h"
 #include "esp_random.h"
 #include "esp_heap_caps.h"
@@ -95,12 +97,12 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
 {
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch) return ESP_ERR_INVALID_ARG;
-    
+
     if (ch->base.loaded) {
         ESP_LOGW(TAG, "Channel already loaded");
         makapix_impl_unload(channel);
     }
-    
+
     char index_path[256];
     build_index_path(ch, index_path, sizeof(index_path));
 
@@ -109,109 +111,36 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
         xSemaphoreTake(ch->index_io_lock, portMAX_DELAY);
     }
     makapix_index_recover_and_cleanup(index_path);
-    
-    ESP_LOGD(TAG, "Loading channel from: %s", index_path);
-    
-    // Try to open index file
-    FILE *f = fopen(index_path, "rb");
-    if (!f) {
-        ESP_LOGW(TAG, "Index file not found: %s (errno=%d)", index_path, errno);
-        ch->entries = NULL;
-        ch->entry_count = 0;
-        ch->base.loaded = true;
-        
-        // Start refresh to fetch channel data from server
-        if (!ch->refreshing) {
-            ESP_LOGD(TAG, "Starting refresh to populate empty channel");
-            esp_err_t refresh_err = makapix_impl_request_refresh(channel);
-            if (refresh_err != ESP_OK) {
-                // Don't fail the load - return success with 0 entries.
-                // Play Scheduler will show loading state and retry later.
-                // This prevents cascade failures when memory is fragmented.
-                ESP_LOGW(TAG, "Could not start refresh for empty channel (err=%d), will retry later", refresh_err);
-            }
-        }
-        if (ch->index_io_lock) {
-            xSemaphoreGive(ch->index_io_lock);
-        }
-        return ESP_OK;
-    }
-    
-    // Get file size
-    fseek(f, 0, SEEK_END);
-    long file_size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    
-    if (file_size <= 0 || file_size % sizeof(makapix_channel_entry_t) != 0) {
-        ESP_LOGW(TAG, "Invalid/stale channel index size (%ld). Deleting and refreshing: %s", file_size, index_path);
-        fclose(f);
-        unlink(index_path);
-        ch->entries = NULL;
-        ch->entry_count = 0;
-        ch->base.loaded = true;
-        if (!ch->refreshing) {
-            esp_err_t refresh_err = makapix_impl_request_refresh(channel);
-            if (refresh_err != ESP_OK) {
-                // Don't fail - return success with 0 entries, will retry later
-                ESP_LOGW(TAG, "Could not start refresh after deleting invalid index (err=%d)", refresh_err);
-            }
-        }
-        if (ch->index_io_lock) {
-            xSemaphoreGive(ch->index_io_lock);
-        }
-        return ESP_OK;
-    }
-    
-    size_t entry_count = file_size / sizeof(makapix_channel_entry_t);
-    
-    // Allocate entries array
-    ch->entries = malloc(entry_count * sizeof(makapix_channel_entry_t));
-    if (!ch->entries) {
-        fclose(f);
-        if (ch->index_io_lock) {
-            xSemaphoreGive(ch->index_io_lock);
-        }
-        return ESP_ERR_NO_MEM;
-    }
-    
-    // Read entries in chunks
-    const size_t CHUNK_SIZE = 100;
-    size_t read_count = 0;
-    while (read_count < entry_count) {
-        size_t to_read = (entry_count - read_count > CHUNK_SIZE) ? 
-                          CHUNK_SIZE : (entry_count - read_count);
-        size_t read = fread(&ch->entries[read_count], 
-                            sizeof(makapix_channel_entry_t), to_read, f);
-        if (read != to_read) {
-            ESP_LOGE(TAG, "Failed to read index entries");
-            free(ch->entries);
-            ch->entries = NULL;
-            fclose(f);
-            if (ch->index_io_lock) {
-                xSemaphoreGive(ch->index_io_lock);
-            }
-            return ESP_FAIL;
-        }
-        read_count += read;
-        taskYIELD();
-    }
-    
-    fclose(f);
-    
-    ch->entry_count = entry_count;
-    ch->base.loaded = true;
-    
-    ESP_LOGD(TAG, "Loaded %zu entries", ch->entry_count);
-    
-    // Start refresh if not already refreshing
-    if (!ch->refreshing) {
-        makapix_impl_request_refresh(channel);
-    }
+
+    ESP_LOGD(TAG, "Loading channel: %s", ch->channel_id);
+
+    // NOTE: Entry data is now managed by channel_cache_t (loaded by Play Scheduler).
+    // This function just marks the channel as loaded and starts the refresh task.
+    // The refresh task updates the registered cache via channel_cache_merge_posts().
+
+    // Check if index file exists to determine if we need a refresh
+    struct stat st;
+    bool need_refresh = (stat(index_path, &st) != 0);
 
     if (ch->index_io_lock) {
         xSemaphoreGive(ch->index_io_lock);
     }
-    
+
+    ch->base.loaded = true;
+
+    // Start refresh if not already refreshing
+    if (!ch->refreshing) {
+        if (need_refresh) {
+            ESP_LOGD(TAG, "Starting refresh to populate empty channel");
+        }
+        esp_err_t refresh_err = makapix_impl_request_refresh(channel);
+        if (refresh_err != ESP_OK && need_refresh) {
+            // Don't fail the load - return success, Play Scheduler will retry later.
+            // This prevents cascade failures when memory is fragmented.
+            ESP_LOGW(TAG, "Could not start refresh for empty channel (err=%d), will retry later", refresh_err);
+        }
+    }
+
     return ESP_OK;
 }
 
@@ -220,10 +149,7 @@ static void makapix_impl_unload(channel_handle_t channel)
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch) return;
 
-    free(ch->entries);
-    ch->entries = NULL;
-
-    ch->entry_count = 0;
+    // NOTE: Entry data is now managed by channel_cache_t, nothing to free here.
     ch->base.loaded = false;
 }
 
@@ -355,8 +281,12 @@ static esp_err_t makapix_impl_get_stats(channel_handle_t channel, channel_stats_
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch || !out_stats) return ESP_ERR_INVALID_ARG;
 
-    out_stats->total_items = ch->entry_count;
-    out_stats->filtered_items = ch->entry_count;
+    // Look up entry count from registered cache
+    channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
+    size_t entry_count = cache ? cache->entry_count : 0;
+
+    out_stats->total_items = entry_count;
+    out_stats->filtered_items = entry_count;
     out_stats->current_position = 0;  // Position tracking moved to Play Scheduler
 
     return ESP_OK;
@@ -366,7 +296,37 @@ static size_t makapix_impl_get_post_count(channel_handle_t channel)
 {
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch) return 0;
-    return ch->entry_count;
+
+    // Look up entry count from registered cache
+    channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
+    return cache ? cache->entry_count : 0;
+}
+
+/**
+ * @brief Build vault path from entry without needing makapix_channel_t
+ * (Local helper for makapix_impl_get_post)
+ */
+static void build_vault_path_from_entry_impl(const makapix_channel_entry_t *entry,
+                                              const char *vault_path,
+                                              char *out, size_t out_len)
+{
+    char storage_key[40];
+    bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
+
+    uint8_t sha256[32];
+    if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
+        snprintf(out, out_len, "%s/%s%s", vault_path, storage_key, s_ext_strings[0]);
+        return;
+    }
+
+    char dir1[3], dir2[3], dir3[3];
+    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
+    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
+    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
+
+    int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
+    snprintf(out, out_len, "%s/%s/%s/%s/%s%s",
+             vault_path, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
 }
 
 static esp_err_t makapix_impl_get_post(channel_handle_t channel, size_t post_index, channel_post_t *out_post)
@@ -374,9 +334,14 @@ static esp_err_t makapix_impl_get_post(channel_handle_t channel, size_t post_ind
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch || !out_post) return ESP_ERR_INVALID_ARG;
     if (!ch->base.loaded) return ESP_ERR_INVALID_STATE;
-    if (post_index >= ch->entry_count) return ESP_ERR_INVALID_ARG;
 
-    const makapix_channel_entry_t *entry = &ch->entries[post_index];
+    // Look up entry from registered cache
+    channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
+    if (!cache || !cache->entries || post_index >= cache->entry_count) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const makapix_channel_entry_t *entry = &cache->entries[post_index];
     memset(out_post, 0, sizeof(*out_post));
 
     out_post->post_id = entry->post_id;
@@ -389,7 +354,8 @@ static esp_err_t makapix_impl_get_post(channel_handle_t channel, size_t post_ind
         out_post->u.playlist.total_artworks = entry->total_artworks;
     } else {
         // Fill artwork fields
-        build_vault_path(ch, entry, out_post->u.artwork.filepath, sizeof(out_post->u.artwork.filepath));
+        build_vault_path_from_entry_impl(entry, ch->vault_path,
+                                         out_post->u.artwork.filepath, sizeof(out_post->u.artwork.filepath));
         bytes_to_uuid(entry->storage_key_uuid, out_post->u.artwork.storage_key, sizeof(out_post->u.artwork.storage_key));
         out_post->u.artwork.art_url[0] = '\0';
 

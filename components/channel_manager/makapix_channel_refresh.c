@@ -140,97 +140,6 @@ static void lai_cleanup_on_eviction(const char *channel_id, int32_t post_id)
     }
 }
 
-/**
- * @brief Reconcile local index with server data by detecting and removing deleted artworks
- * 
- * Full reconciliation approach (Option B): Compare local index against server response.
- * Any local entries not present in server data are considered deleted.
- * 
- * @param ch Channel handle
- * @param server_post_ids Array of post_ids from server
- * @param server_count Number of post_ids in array
- * @return ESP_OK on success
- */
-static esp_err_t reconcile_deletions(makapix_channel_t *ch, 
-                                      const int32_t *server_post_ids, 
-                                      size_t server_count)
-{
-    if (!ch || !server_post_ids || server_count == 0) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    if (ch->entry_count == 0) {
-        return ESP_OK;  // Nothing to reconcile
-    }
-    
-    size_t deleted_count = 0;
-    size_t kept_count = 0;
-    makapix_channel_entry_t *kept_entries = malloc(ch->entry_count * sizeof(makapix_channel_entry_t));
-    if (!kept_entries) {
-        ESP_LOGE(TAG, "Failed to allocate memory for reconciliation");
-        return ESP_ERR_NO_MEM;
-    }
-    
-    // Scan local entries and check if they exist in server data
-    for (size_t i = 0; i < ch->entry_count; i++) {
-        const makapix_channel_entry_t *entry = &ch->entries[i];
-        bool found_on_server = false;
-        
-        // Linear search in server_post_ids (acceptable for small batches)
-        for (size_t j = 0; j < server_count; j++) {
-            if (entry->post_id == server_post_ids[j]) {
-                found_on_server = true;
-                break;
-            }
-        }
-        
-        if (found_on_server) {
-            // Keep this entry
-            kept_entries[kept_count++] = *entry;
-        } else {
-            // Entry deleted on server - remove local file if it exists
-            deleted_count++;
-
-            if (entry->kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
-                char vault_path[512];
-                build_vault_path(ch, entry, vault_path, sizeof(vault_path));
-
-                struct stat st;
-                if (stat(vault_path, &st) == 0) {
-                    if (unlink(vault_path) == 0) {
-                        ESP_LOGD(TAG, "Deleted local file for removed artwork: post_id=%ld",
-                                (long)entry->post_id);
-                        // Synchronously update LAi to remove the evicted entry
-                        lai_cleanup_on_eviction(ch->channel_id, entry->post_id);
-                    } else {
-                        ESP_LOGW(TAG, "Failed to delete file for removed artwork: post_id=%ld, path=%s",
-                                (long)entry->post_id, vault_path);
-                    }
-                } else {
-                    // File doesn't exist locally, but still remove from LAi if present
-                    // (handles case where LAi has stale entry)
-                    lai_cleanup_on_eviction(ch->channel_id, entry->post_id);
-                }
-            }
-
-            ESP_LOGD(TAG, "Reconciliation: removed post_id=%ld (not on server)",
-                    (long)entry->post_id);
-        }
-    }
-    
-    // Update channel entries with kept entries only
-    if (deleted_count > 0) {
-        free(ch->entries);
-        ch->entries = kept_entries;
-        ch->entry_count = kept_count;
-        ESP_LOGD(TAG, "Reconciled: %zu deleted", deleted_count);
-    } else {
-        free(kept_entries);
-    }
-    
-    return ESP_OK;
-}
-
 esp_err_t save_channel_metadata(makapix_channel_t *ch, const char *cursor, time_t refresh_time)
 {
     char meta_path[256];
@@ -347,270 +256,16 @@ esp_err_t load_channel_metadata(makapix_channel_t *ch, char *out_cursor, time_t 
 
 esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *posts, size_t count)
 {
-    if (!ch || !posts) return ESP_ERR_INVALID_ARG;
+    if (!ch || !posts || count == 0) return ESP_ERR_INVALID_ARG;
 
-    char index_path[256];
-    build_index_path(ch, index_path, sizeof(index_path));
-
-    const bool have_lock = (ch->index_io_lock != NULL);
-    if (have_lock) {
-        xSemaphoreTake(ch->index_io_lock, portMAX_DELAY);
-    }
-    esp_err_t ret = ESP_OK;
-
-    // Ensure directory exists - create recursively
-    char dir_path[256];
-    strncpy(dir_path, index_path, sizeof(dir_path) - 1);
-    dir_path[sizeof(dir_path) - 1] = '\0';
-    char *dir_sep = strrchr(dir_path, '/');
-    if (dir_sep) {
-        *dir_sep = '\0';
-        for (char *p = dir_path + 1; *p; p++) {
-            if (*p == '/') {
-                *p = '\0';
-                struct stat st;
-                if (stat(dir_path, &st) != 0) {
-                    if (mkdir(dir_path, 0755) != 0 && errno != EEXIST) {
-                        ESP_LOGE(TAG, "Failed to create directory %s: %d", dir_path, errno);
-                    }
-                }
-                *p = '/';
-            }
-        }
-        struct stat st;
-        if (stat(dir_path, &st) != 0) {
-            if (mkdir(dir_path, 0755) != 0 && errno != EEXIST) {
-                ESP_LOGE(TAG, "Failed to create directory %s: %d", dir_path, errno);
-            }
-        }
+    // Find the registered Play Scheduler cache
+    channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
+    if (!cache) {
+        ESP_LOGW(TAG, "Cache not registered for channel '%s', skipping batch", ch->channel_id);
+        return ESP_ERR_NOT_FOUND;
     }
 
-    // Copy existing entries
-    makapix_channel_entry_t *all_entries = NULL;
-    size_t all_count = ch->entry_count;
-    if (ch->entries && ch->entry_count > 0) {
-        all_entries = malloc((all_count + count) * sizeof(makapix_channel_entry_t));
-        if (!all_entries) {
-            ret = ESP_ERR_NO_MEM;
-            goto out;
-        }
-        memcpy(all_entries, ch->entries, all_count * sizeof(makapix_channel_entry_t));
-    } else {
-        all_entries = malloc(count * sizeof(makapix_channel_entry_t));
-        if (!all_entries) {
-            ret = ESP_ERR_NO_MEM;
-            goto out;
-        }
-        all_count = 0;
-    }
-
-    for (size_t i = 0; i < count; i++) {
-        const makapix_post_t *post = &posts[i];
-
-        // Find existing entry by (post_id, kind)
-        int found_idx = -1;
-        for (size_t j = 0; j < all_count; j++) {
-            if (all_entries[j].post_id == post->post_id && all_entries[j].kind == (uint8_t)post->kind) {
-                found_idx = (int)j;
-                break;
-            }
-        }
-
-        makapix_channel_entry_t tmp = {0};
-        tmp.post_id = post->post_id;
-        tmp.kind = (uint8_t)post->kind;
-        tmp.created_at = (uint32_t)parse_iso8601_utc(post->created_at);
-        tmp.metadata_modified_at = (uint32_t)parse_iso8601_utc(post->metadata_modified_at);
-        tmp.filter_flags = 0;
-
-        if (post->kind == MAKAPIX_POST_KIND_ARTWORK) {
-            uint8_t uuid_bytes[16] = {0};
-            if (!uuid_to_bytes(post->storage_key, uuid_bytes)) {
-                ESP_LOGW(TAG, "Failed to parse storage_key UUID: %s", post->storage_key);
-                continue;
-            }
-            memcpy(tmp.storage_key_uuid, uuid_bytes, sizeof(tmp.storage_key_uuid));
-            tmp.extension = detect_file_type(post->art_url);
-            // Log server-provided art_url to compare with reconstructed URL
-            // ESP_LOGI(TAG, "Server art_url: %s (storage_key=%s, ext=%d)",
-            //          post->art_url, post->storage_key, (int)tmp.extension);
-            tmp.artwork_modified_at = (uint32_t)parse_iso8601_utc(post->artwork_modified_at);
-            tmp.dwell_time_ms = post->dwell_time_ms;
-            tmp.total_artworks = 0;
-        } else if (post->kind == MAKAPIX_POST_KIND_PLAYLIST) {
-            tmp.extension = 0;
-            tmp.artwork_modified_at = 0;
-            tmp.dwell_time_ms = post->playlist_dwell_time_ms;
-            tmp.total_artworks = post->total_artworks;
-            memset(tmp.storage_key_uuid, 0, sizeof(tmp.storage_key_uuid));
-
-            // Best-effort: write/update playlist cache on disk
-            playlist_metadata_t playlist = {0};
-            playlist.post_id = post->post_id;
-            playlist.total_artworks = post->total_artworks;
-            playlist.loaded_artworks = 0;
-            playlist.available_artworks = 0;
-            playlist.dwell_time_ms = post->playlist_dwell_time_ms;
-            playlist.metadata_modified_at = parse_iso8601_utc(post->metadata_modified_at);
-
-            if (post->artworks_count > 0 && post->artworks) {
-                playlist.artworks = calloc(post->artworks_count, sizeof(artwork_ref_t));
-                if (playlist.artworks) {
-                    playlist.loaded_artworks = (int32_t)post->artworks_count;
-                    for (size_t ai = 0; ai < post->artworks_count; ai++) {
-                        const makapix_artwork_t *src = &post->artworks[ai];
-                        artwork_ref_t *dst = &playlist.artworks[ai];
-                        memset(dst, 0, sizeof(*dst));
-                        dst->post_id = src->post_id;
-                        strncpy(dst->storage_key, src->storage_key, sizeof(dst->storage_key) - 1);
-                        strlcpy(dst->art_url, src->art_url, sizeof(dst->art_url));
-                        dst->dwell_time_ms = src->dwell_time_ms;
-                        dst->metadata_modified_at = parse_iso8601_utc(src->metadata_modified_at);
-                        dst->artwork_modified_at = parse_iso8601_utc(src->artwork_modified_at);
-                        dst->width = (uint16_t)src->width;
-                        dst->height = (uint16_t)src->height;
-                        dst->frame_count = (uint16_t)src->frame_count;
-                        dst->has_transparency = src->has_transparency;
-
-                        // Determine type from URL extension
-                        switch (detect_file_type(src->art_url)) {
-                            case EXT_WEBP: dst->type = ASSET_TYPE_WEBP; break;
-                            case EXT_GIF:  dst->type = ASSET_TYPE_GIF;  break;
-                            case EXT_PNG:  dst->type = ASSET_TYPE_PNG;  break;
-                            case EXT_JPEG: dst->type = ASSET_TYPE_JPEG; break;
-                            default:       dst->type = ASSET_TYPE_WEBP; break;
-                        }
-
-                        // Downloaded? (file exists in vault)
-                        char vault_file[512];
-                        build_vault_path_from_storage_key(ch, src->storage_key, detect_file_type(src->art_url), vault_file, sizeof(vault_file));
-                        struct stat st;
-                        dst->downloaded = (stat(vault_file, &st) == 0);
-                        strlcpy(dst->filepath, vault_file, sizeof(dst->filepath));
-                        // Note: Downloads are handled automatically by download_manager's single-download-at-a-time approach
-                    }
-
-                    // available_artworks is informational only
-                    int32_t cnt = 0;
-                    for (int32_t j = 0; j < playlist.loaded_artworks; j++) {
-                        if (playlist.artworks[j].downloaded) cnt++;
-                    }
-                    playlist.available_artworks = cnt;
-                }
-            }
-
-            // Save and free temporary playlist structure
-            if (playlist.artworks) {
-                playlist_save_to_disk(&playlist);
-                free(playlist.artworks);
-                playlist.artworks = NULL;
-            } else {
-                playlist_save_to_disk(&playlist);
-            }
-        } else {
-            continue;
-        }
-
-        if (found_idx >= 0) {
-            // Existing entry - check for artwork file updates
-            if (post->kind == MAKAPIX_POST_KIND_ARTWORK) {
-                uint32_t old_artwork_modified = all_entries[(size_t)found_idx].artwork_modified_at;
-                uint32_t new_artwork_modified = tmp.artwork_modified_at;
-                
-                // If artwork file timestamp changed, delete local file to trigger re-download
-                if (old_artwork_modified != 0 && new_artwork_modified != 0 && 
-                    old_artwork_modified != new_artwork_modified) {
-                    
-                    char vault_path[512];
-                    build_vault_path(ch, &all_entries[(size_t)found_idx], vault_path, sizeof(vault_path));
-                    
-                    struct stat st;
-                    if (stat(vault_path, &st) == 0) {
-                        ESP_LOGD(TAG, "Artwork file updated on server (post_id=%ld), deleting local copy for re-download", 
-                                (long)post->post_id);
-                        if (unlink(vault_path) != 0) {
-                            ESP_LOGW(TAG, "Failed to delete outdated artwork file: %s", vault_path);
-                        }
-                    }
-                }
-            }
-            
-            // Update the entry with new metadata
-            all_entries[(size_t)found_idx] = tmp;
-        } else {
-            all_entries[all_count++] = tmp;
-        }
-    }
-
-    // Atomic write channel index (.bin)
-    char temp_path[260];
-    size_t path_len = strlen(index_path);
-    if (path_len + 4 >= sizeof(temp_path)) {
-        ESP_LOGE(TAG, "Index path too long for temp file");
-        ret = ESP_ERR_INVALID_ARG;
-        goto out;
-    }
-    snprintf(temp_path, sizeof(temp_path), "%s.tmp", index_path);
-
-    FILE *f = fopen(temp_path, "wb");
-    if (!f) {
-        ESP_LOGE(TAG, "Failed to open %s for writing: %d", temp_path, errno);
-        ret = ESP_FAIL;
-        goto out;
-    }
-    size_t written = fwrite(all_entries, sizeof(makapix_channel_entry_t), all_count, f);
-    fflush(f);
-    fsync(fileno(f));
-    fclose(f);
-
-    if (written != all_count) {
-        ESP_LOGE(TAG, "Failed to write channel index: %zu/%zu", written, all_count);
-        unlink(temp_path);
-        ret = ESP_FAIL;
-        goto out;
-    }
-
-    // FATFS rename() won't overwrite an existing destination: remove old index first
-    if (unlink(index_path) != 0) {
-        if (errno != ENOENT) {
-            ESP_LOGW(TAG, "Failed to unlink old index before rename: %s (errno=%d)", index_path, errno);
-        }
-    }
-
-    if (rename(temp_path, index_path) != 0) {
-        const int rename_errno = errno;
-#if MAKAPIX_TEMP_DEBUG_RENAME_FAIL
-        makapix_temp_debug_log_rename_failure(temp_path, index_path, rename_errno);
-#endif
-        if (rename_errno == EEXIST) {
-            (void)unlink(index_path);
-            if (rename(temp_path, index_path) == 0) {
-                goto rename_ok;
-            }
-        }
-
-        ESP_LOGE(TAG, "Failed to rename index temp file: %d", rename_errno);
-        ret = ESP_FAIL;
-        goto out;
-    }
-
-rename_ok:
-    free(ch->entries);
-    ch->entries = all_entries;
-    ch->entry_count = all_count;
-
-    ESP_LOGD(TAG, "Index updated: %zu entries", all_count);
-    ret = ESP_OK;
-    all_entries = NULL; // ownership transferred to ch
-
-out:
-    if (ret != ESP_OK) {
-        free(all_entries);
-    }
-    if (have_lock) {
-        xSemaphoreGive(ch->index_io_lock);
-    }
-    return ret;
+    return channel_cache_merge_posts(cache, posts, count, ch->channels_path, ch->vault_path);
 }
 
 /**
@@ -649,11 +304,39 @@ static esp_err_t get_storage_free_space(const char *path, uint64_t *out_free_byt
 }
 
 /**
+ * @brief Build vault path from entry without needing makapix_channel_t
+ * (Local helper - duplicates logic from channel_cache.c for encapsulation)
+ */
+static void build_vault_path_from_entry_local(const makapix_channel_entry_t *entry,
+                                              const char *vault_path,
+                                              char *out, size_t out_len)
+{
+    char storage_key[40];
+    bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
+
+    uint8_t sha256[32];
+    if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
+        snprintf(out, out_len, "%s/%s%s", vault_path, storage_key, s_ext_strings[0]);
+        return;
+    }
+
+    char dir1[3], dir2[3], dir3[3];
+    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
+    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
+    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
+
+    int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
+    snprintf(out, out_len, "%s/%s/%s/%s/%s%s",
+             vault_path, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
+}
+
+/**
  * @brief Evict artworks when storage is critically low
- * 
+ *
  * Per spec: Check available storage and evict oldest files until minimum reserve is met.
  * Only evict from current channel (future: may consider cross-channel eviction).
- * 
+ * Uses channel_cache for entries lookup.
+ *
  * @param ch Channel handle
  * @param min_reserve_bytes Minimum free space to maintain (e.g., 10MB)
  * @return ESP_OK on success
@@ -661,79 +344,78 @@ static esp_err_t get_storage_free_space(const char *path, uint64_t *out_free_byt
 static esp_err_t evict_for_storage_pressure(makapix_channel_t *ch, size_t min_reserve_bytes)
 {
     if (!ch) return ESP_ERR_INVALID_ARG;
-    
+
     uint64_t free_bytes = 0;
     esp_err_t err = get_storage_free_space("/sdcard", &free_bytes);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Could not determine free storage space");
         return ESP_OK;  // Skip storage-based eviction if we can't measure it
     }
-    
+
     // If we have enough free space, no action needed
     if (free_bytes == UINT64_MAX || free_bytes >= (uint64_t)min_reserve_bytes) {
         return ESP_OK;
     }
-    
+
     ESP_LOGD(TAG, "Storage pressure detected: %llu bytes free, %zu bytes required",
              (unsigned long long)free_bytes, min_reserve_bytes);
-    
-    // Collect all downloaded artwork files from this channel
-    size_t downloaded_count = 0;
-    for (size_t i = 0; i < ch->entry_count; i++) {
-        if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
-            char vault_path[512];
-            build_vault_path(ch, &ch->entries[i], vault_path, sizeof(vault_path));
-            struct stat st;
-            if (stat(vault_path, &st) == 0) {
-                downloaded_count++;
-            }
-        }
+
+    // Look up channel cache
+    channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
+    if (!cache || !cache->entries || cache->entry_count == 0) {
+        ESP_LOGW(TAG, "No cache or entries to evict for storage pressure");
+        return ESP_OK;
     }
-    
+
+    // Use LAi to determine downloaded count (O(1) vs filesystem I/O)
+    size_t downloaded_count = cache->available_count;
+
     if (downloaded_count == 0) {
         ESP_LOGW(TAG, "No files to evict for storage pressure");
         return ESP_OK;
     }
-    
+
     makapix_channel_entry_t *downloaded = malloc(downloaded_count * sizeof(makapix_channel_entry_t));
     if (!downloaded) return ESP_ERR_NO_MEM;
-    
+
+    // Collect entries that are in LAi (downloaded)
     size_t di = 0;
-    for (size_t i = 0; i < ch->entry_count; i++) {
-        if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
-            char vault_path[512];
-            build_vault_path(ch, &ch->entries[i], vault_path, sizeof(vault_path));
-            struct stat st;
-            if (stat(vault_path, &st) == 0) {
-                downloaded[di++] = ch->entries[i];
+    for (size_t i = 0; i < cache->entry_count && di < downloaded_count; i++) {
+        if (cache->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+            // Check if this post_id is in LAi using the hash table (O(1) lookup)
+            int32_t post_id = cache->entries[i].post_id;
+            lai_post_id_node_t *node;
+            HASH_FIND_INT(cache->lai_hash, &post_id, node);
+            if (node) {
+                downloaded[di++] = cache->entries[i];
             }
         }
     }
-    
+
     // Sort by created_at (oldest first)
     qsort(downloaded, downloaded_count, sizeof(makapix_channel_entry_t), compare_entries_by_created);
-    
+
     // Evict oldest files in batches until we have enough space
     const size_t EVICTION_BATCH = 16;  // Smaller batches for storage pressure
     size_t actually_deleted = 0;
-    
+
     for (size_t batch_start = 0; batch_start < downloaded_count; batch_start += EVICTION_BATCH) {
         size_t batch_end = batch_start + EVICTION_BATCH;
         if (batch_end > downloaded_count) {
             batch_end = downloaded_count;
         }
-        
+
         // Delete this batch and synchronously update LAi
         for (size_t i = batch_start; i < batch_end; i++) {
-            char vault_path[512];
-            build_vault_path(ch, &downloaded[i], vault_path, sizeof(vault_path));
-            if (unlink(vault_path) == 0) {
+            char file_path[512];
+            build_vault_path_from_entry_local(&downloaded[i], ch->vault_path, file_path, sizeof(file_path));
+            if (unlink(file_path) == 0) {
                 actually_deleted++;
                 // Synchronously update LAi to remove the evicted entry
                 lai_cleanup_on_eviction(ch->channel_id, downloaded[i].post_id);
             }
         }
-        
+
         // Re-check free space
         err = get_storage_free_space("/sdcard", &free_bytes);
         if (err == ESP_OK && (free_bytes == UINT64_MAX || free_bytes >= (uint64_t)min_reserve_bytes)) {
@@ -741,9 +423,9 @@ static esp_err_t evict_for_storage_pressure(makapix_channel_t *ch, size_t min_re
             break;
         }
     }
-    
+
     free(downloaded);
-    
+
     ESP_LOGD(TAG, "Storage-based eviction: deleted %zu files", actually_deleted);
     return ESP_OK;
 }
@@ -752,69 +434,13 @@ esp_err_t evict_excess_artworks(makapix_channel_t *ch, size_t max_count)
 {
     if (!ch) return ESP_ERR_INVALID_ARG;
 
-    // Count artwork entries that actually have files downloaded
-    size_t downloaded_count = 0;
-    for (size_t i = 0; i < ch->entry_count; i++) {
-        if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
-            char vault_path[512];
-            build_vault_path(ch, &ch->entries[i], vault_path, sizeof(vault_path));
-            struct stat st;
-            if (stat(vault_path, &st) == 0) {
-                downloaded_count++;
-            }
-        }
+    channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
+    if (!cache) return ESP_OK;
+
+    size_t evicted = channel_cache_evict_excess(cache, max_count, ch->vault_path);
+    if (evicted > 0) {
+        ESP_LOGI(TAG, "Evicted %zu artwork files (limit: %zu)", evicted, max_count);
     }
-
-    if (downloaded_count <= max_count) return ESP_OK;
-
-    ESP_LOGD(TAG, "Eviction needed: %zu downloaded files exceed limit of %zu", 
-             downloaded_count, max_count);
-
-    // Collect only artwork entries that have files
-    makapix_channel_entry_t *downloaded = malloc(downloaded_count * sizeof(makapix_channel_entry_t));
-    if (!downloaded) return ESP_ERR_NO_MEM;
-
-    size_t di = 0;
-    for (size_t i = 0; i < ch->entry_count; i++) {
-        if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
-            char vault_path[512];
-            build_vault_path(ch, &ch->entries[i], vault_path, sizeof(vault_path));
-            struct stat st;
-            if (stat(vault_path, &st) == 0) {
-                downloaded[di++] = ch->entries[i];
-            }
-        }
-    }
-
-    // Sort by created_at (oldest first)
-    qsort(downloaded, downloaded_count, sizeof(makapix_channel_entry_t), compare_entries_by_created);
-
-    // Evict in batches of 32
-    const size_t EVICTION_BATCH = 32;
-    size_t excess = downloaded_count - max_count;
-    size_t to_delete = ((excess + EVICTION_BATCH - 1) / EVICTION_BATCH) * EVICTION_BATCH;
-    if (to_delete > downloaded_count) {
-        to_delete = downloaded_count;
-    }
-
-    // Delete oldest artwork FILES (but keep their Ci entries)
-    // Also synchronously update LAi to maintain consistency
-    size_t actually_deleted = 0;
-    for (size_t i = 0; i < to_delete; i++) {
-        char vault_path[512];
-        build_vault_path(ch, &downloaded[i], vault_path, sizeof(vault_path));
-        if (unlink(vault_path) == 0) {
-            actually_deleted++;
-            // Synchronously update LAi to remove the evicted entry
-            lai_cleanup_on_eviction(ch->channel_id, downloaded[i].post_id);
-        }
-    }
-
-    free(downloaded);
-
-    ESP_LOGI(TAG, "Evicted %zu artwork files to stay within limit of %zu",
-             actually_deleted, max_count);
-
     return ESP_OK;
 }
 
@@ -923,16 +549,7 @@ void refresh_task_impl(void *pvParameters)
             ESP_LOGE(TAG, "Failed to allocate response buffer");
             break;
         }
-        
-        // Allocate array to track all server post_ids for reconciliation
-        int32_t *all_server_post_ids = malloc(TARGET_COUNT * sizeof(int32_t));
-        size_t all_server_count = 0;
-        if (!all_server_post_ids) {
-            ESP_LOGE(TAG, "Failed to allocate reconciliation buffer");
-            free(resp);
-            break;
-        }
-        
+
         // Query posts until we have TARGET_COUNT or no more available
         while (total_queried < TARGET_COUNT && ch->refreshing) {
             memset(resp, 0, sizeof(makapix_query_response_t));
@@ -961,21 +578,20 @@ void refresh_task_impl(void *pvParameters)
                 break;
             }
 
-            // Collect post_ids for reconciliation
-            for (size_t pi = 0; pi < resp->post_count && all_server_count < TARGET_COUNT; pi++) {
-                all_server_post_ids[all_server_count++] = resp->posts[pi].post_id;
-            }
-
             // Update channel index with new posts
             update_index_bin(ch, resp->posts, resp->post_count);
 
             // Per-batch eviction: if Ci exceeds limit after adding this batch,
             // evict oldest files immediately to maintain invariant.
             // This ensures Ci transitions from one valid state to another.
-            if (ch->entry_count > TARGET_COUNT) {
-                ESP_LOGD(TAG, "Per-batch eviction: entry_count=%zu exceeds limit=%zu",
-                         ch->entry_count, TARGET_COUNT);
-                evict_excess_artworks(ch, TARGET_COUNT);
+            {
+                channel_cache_t *batch_cache = channel_cache_registry_find(ch->channel_id);
+                size_t entry_count = batch_cache ? batch_cache->entry_count : 0;
+                if (entry_count > TARGET_COUNT) {
+                    ESP_LOGD(TAG, "Per-batch eviction: entry_count=%zu exceeds limit=%zu",
+                             entry_count, TARGET_COUNT);
+                    evict_excess_artworks(ch, TARGET_COUNT);
+                }
             }
 
             // Check for shutdown after index update
@@ -1024,18 +640,6 @@ void refresh_task_impl(void *pvParameters)
         }
         
         free(resp);
-        
-        // Reconcile deletions: remove local entries not present on server
-        if (all_server_count > 0) {
-            reconcile_deletions(ch, all_server_post_ids, all_server_count);
-        }
-        free(all_server_post_ids);
-
-        // Check for shutdown after reconciliation
-        if (!ch->refreshing) {
-            ESP_LOGI(TAG, "Shutdown requested during reconciliation, exiting");
-            break;
-        }
 
         // Storage-aware eviction: ensure minimum free space (10MB reserve)
         // NOTE: Only evicts from current channel per spec. Future consideration:
@@ -1064,18 +668,20 @@ void refresh_task_impl(void *pvParameters)
         // Check for shutdown after metadata save
         if (!ch->refreshing) break;
 
-        // Count how many are artworks vs playlists
-        size_t artwork_count = 0;
-        size_t playlist_count = 0;
-        for (size_t i = 0; i < ch->entry_count; i++) {
-            if (ch->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
-                artwork_count++;
-            } else {
-                playlist_count++;
+        // Count how many are artworks vs playlists using cache lookup
+        {
+            channel_cache_t *stats_cache = channel_cache_registry_find(ch->channel_id);
+            size_t entry_count = stats_cache ? stats_cache->entry_count : 0;
+            size_t artwork_count = 0;
+            if (stats_cache && stats_cache->entries) {
+                for (size_t i = 0; i < stats_cache->entry_count; i++) {
+                    if (stats_cache->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+                        artwork_count++;
+                    }
+                }
             }
+            ESP_LOGD(TAG, "Channel %s: %zu entries (%zu artworks)", ch->channel_id, entry_count, artwork_count);
         }
-        
-        ESP_LOGD(TAG, "Channel %s: %zu entries (%zu artworks)", ch->channel_id, ch->entry_count, artwork_count);
 
         // Signal that refresh has completed - this unblocks download manager
         makapix_channel_signal_refresh_done();

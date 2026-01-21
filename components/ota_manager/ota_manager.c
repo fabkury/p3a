@@ -430,8 +430,8 @@ static void ota_check_task(void *arg)
     
     // Wait for SDIO bus to fully settle
     // The ESP Hosted driver needs time to flush any pending operations
-    ESP_LOGI(TAG, "Waiting for SDIO bus to settle (3s)...");
-    vTaskDelay(pdMS_TO_TICKS(3000));
+    ESP_LOGI(TAG, "Waiting for SDIO bus to settle (5s)...");
+    vTaskDelay(pdMS_TO_TICKS(5000));
     
     set_state(OTA_STATE_CHECKING);
     

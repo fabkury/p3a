@@ -114,33 +114,33 @@ static void ugfx_ui_draw_captive_ap_info(void)
     gdispClear(GFX_BLACK);
 
     // Title
-    gdispFillStringBox(0, 60, gdispGetWidth(), 30, "WiFi Setup Instructions",
+    gdispFillStringBox(0, 60, gdispGetWidth(), 36, "WiFi Setup Instructions",
                      gdispOpenFont("* DejaVu Sans 24"), GFX_WHITE, GFX_BLACK, gJustifyCenter);
 
     // Instructions (multi-line, smaller font)
     int y_pos = 120;
-    gdispFillStringBox(0, y_pos, gdispGetWidth(), 30, "1. Connect to the WiFi network:",
+    gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, "1. Connect to the WiFi network:",
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
-    
-    y_pos += 40;
+
+    y_pos += 45;
     // Using CONFIG_ESP_AP_SSID directly (EXAMPLE_ESP_AP_SSID wrapper is local to app_wifi.c)
-    gdispFillStringBox(0, y_pos, gdispGetWidth(), 30, CONFIG_ESP_AP_SSID,
+    gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, CONFIG_ESP_AP_SSID,
                      gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0x00FF00), GFX_BLACK, gJustifyCenter);
-    
+
     y_pos += 50;
-    gdispFillStringBox(0, y_pos, gdispGetWidth(), 30, "2. Open your web browser",
+    gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, "2. Open your web browser",
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
-    
-    y_pos += 40;
-    gdispFillStringBox(0, y_pos, gdispGetWidth(), 30, "3. Go to: http://p3a.local",
+
+    y_pos += 45;
+    gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, "3. Go to: http://p3a.local",
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
-    
-    y_pos += 40;
-    gdispFillStringBox(0, y_pos, gdispGetWidth(), 30, "or http://192.168.4.1",
+
+    y_pos += 45;
+    gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, "or http://192.168.4.1",
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
-    
+
     y_pos += 50;
-    gdispFillStringBox(0, y_pos, gdispGetWidth(), 30, "4. Enter your WiFi credentials",
+    gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, "4. Enter your WiFi credentials",
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
 }
 

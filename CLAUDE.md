@@ -6,10 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 p3a is an ESP32-P4 Wi-Fi pixel art player that displays animated WebP/GIF/PNG/JPEG files. It connects to Makapix Club (a pixel art social network) and runs on the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board (720×720 IPS + GT911 touch + ESP32-C6 Wi-Fi 6 co-processor).
 
+## Build Management
+
+The build commands are listed below for your information, but you must NOT build the project unless directly and explicitly requested to do so by the user. The user will be doing the building and testing.
+
 ## Build Commands
 
 ```powershell
-# IMPORTANT: Set PYTHONUTF8 to avoid Unicode encoding errors on Windows
+# Set PYTHONUTF8 to avoid Unicode encoding errors on Windows
 $env:PYTHONUTF8="1"
 
 # Activate ESP-IDF (Windows PowerShell): avoid running this command multiple times because you don't want to leave open sessions behind. Instead, run the export command once, and reuse the environment on subsequent commands

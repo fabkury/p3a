@@ -134,20 +134,21 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
     // This prevents artwork downloads from conflicting with critical WiFi operations
     if (sdio_bus_is_locked()) {
         const char *holder = sdio_bus_get_holder();
-        ESP_LOGD(TAG, "SDIO bus locked by %s, waiting before download...", holder ? holder : "unknown");
-        
+        ESP_LOGI(TAG, "SDIO bus locked by %s, waiting before download...", holder ? holder : "unknown");
+
         int wait_count = 0;
-        const int max_wait = 60;  // Wait up to 60 seconds
+        const int max_wait = 120;  // Wait up to 120 seconds (OTA can take time)
         while (sdio_bus_is_locked() && wait_count < max_wait) {
             vTaskDelay(pdMS_TO_TICKS(1000));
             wait_count++;
         }
-        
+
         if (wait_count >= max_wait) {
-            ESP_LOGW(TAG, "Timed out waiting for SDIO bus, proceeding anyway");
-        } else {
-            ESP_LOGD(TAG, "SDIO bus available after %d seconds", wait_count);
+            ESP_LOGE(TAG, "SDIO bus still locked after %d seconds, aborting download",
+                     max_wait);
+            return ESP_ERR_TIMEOUT;  // Return error instead of proceeding
         }
+        ESP_LOGI(TAG, "SDIO bus available after %d seconds", wait_count);
     }
 
     // Get vault base path

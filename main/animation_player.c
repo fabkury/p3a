@@ -668,20 +668,26 @@ bool animation_player_is_loader_busy(void)
 
 void animation_player_pause_sd_access(void)
 {
-    int wait_count = 0;
-    while (animation_player_is_loader_busy() && wait_count < 100) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-        wait_count++;
-    }
-    
+    // First set the paused flag to prevent NEW operations from starting
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
         s_sd_access_paused = true;
         xSemaphoreGive(s_buffer_mutex);
     } else {
         s_sd_access_paused = true;
     }
-    
-    ESP_LOGD(TAG, "SD card access paused for external operation");
+
+    // Then wait for loader to become idle
+    int wait_count = 0;
+    while (animation_player_is_loader_busy() && wait_count < 100) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        wait_count++;
+    }
+
+    if (wait_count >= 100) {
+        ESP_LOGW(TAG, "Animation loader still busy after 10s");
+    }
+
+    ESP_LOGI(TAG, "SD card access paused for external operation");
 }
 
 void animation_player_resume_sd_access(void)

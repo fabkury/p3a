@@ -408,7 +408,7 @@ static void download_task(void *arg)
 
         // Wait if SDIO bus is locked or SD access is paused
         int wait_count = 0;
-        const int max_wait = 30;
+        const int max_wait = 120;  // Wait up to 120 seconds
         while (wait_count < max_wait) {
             bool should_wait = sdio_bus_is_locked();
             if (!should_wait && animation_player_is_sd_paused) {
@@ -417,6 +417,14 @@ static void download_task(void *arg)
             if (!should_wait) break;
             vTaskDelay(pdMS_TO_TICKS(1000));
             wait_count++;
+        }
+
+        if (wait_count >= max_wait) {
+            const char *holder = sdio_bus_get_holder();
+            ESP_LOGW(TAG, "SDIO bus still locked by %s after %d seconds, skipping download cycle",
+                     holder ? holder : "unknown", max_wait);
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            continue;  // Skip this cycle
         }
 
         // Get next file to download using own round-robin logic

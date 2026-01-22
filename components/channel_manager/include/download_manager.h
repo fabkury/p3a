@@ -23,6 +23,7 @@ typedef struct {
     char art_url[256];
     char filepath[256];           // Expected local path (vault)
     char channel_id[64];          // Channel this download belongs to
+    int32_t post_id;              // Post ID for O(1) LAi lookup after download
 } download_request_t;
 
 /**

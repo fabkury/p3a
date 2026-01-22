@@ -48,63 +48,6 @@ static int ps_find_channel_index(ps_state_t *state, const char *channel_id)
 }
 
 /**
- * @brief Find Ci index by storage_key (UUID string)
- *
- * Uses registry lookup for thread-safe access to current cache data.
- * Takes cache mutex to avoid race conditions with merge operations.
- */
-static uint32_t ps_find_ci_by_storage_key(ps_channel_state_t *ch, const char *storage_key)
-{
-    if (!ch || !storage_key) {
-        return UINT32_MAX;
-    }
-
-    // Only Makapix entries have storage_key
-    if (ch->entry_format != PS_ENTRY_FORMAT_MAKAPIX) {
-        return UINT32_MAX;
-    }
-
-    // Look up cache from registry to ensure we have current data
-    // This avoids race conditions with merge operations
-    channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
-    if (!cache) {
-        // Fall back to ch->cache if not in registry
-        cache = ch->cache;
-    }
-
-    if (!cache) {
-        return UINT32_MAX;
-    }
-
-    // Convert storage_key to UUID bytes before taking mutex
-    uint8_t uuid_bytes[16];
-    if (!uuid_to_bytes(storage_key, uuid_bytes)) {
-        return UINT32_MAX;
-    }
-
-    // Take mutex for thread-safe access during search
-    xSemaphoreTake(cache->mutex, portMAX_DELAY);
-
-    // Check entries under mutex (may have been updated by merge)
-    if (!cache->entries || cache->entry_count == 0) {
-        xSemaphoreGive(cache->mutex);
-        return UINT32_MAX;
-    }
-
-    uint32_t result = UINT32_MAX;
-    makapix_channel_entry_t *entries = cache->entries;
-    for (size_t i = 0; i < cache->entry_count; i++) {
-        if (memcmp(entries[i].storage_key_uuid, uuid_bytes, 16) == 0) {
-            result = (uint32_t)i;
-            break;
-        }
-    }
-
-    xSemaphoreGive(cache->mutex);
-    return result;
-}
-
-/**
  * @brief Check if a post_id is already in LAi
  */
 static bool ps_lai_contains(ps_channel_state_t *ch, int32_t post_id)
@@ -235,11 +178,11 @@ static bool ps_lai_remove(ps_channel_state_t *ch, uint32_t ci_index)
 // Download Completion Callback
 // ============================================================================
 
-void play_scheduler_on_download_complete(const char *channel_id, const char *storage_key)
+void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id)
 {
     ps_state_t *s_state = ps_get_state();
 
-    if (!s_state->initialized || !channel_id || !storage_key) {
+    if (!s_state->initialized || !channel_id || post_id == 0) {
         return;
     }
 
@@ -254,8 +197,18 @@ void play_scheduler_on_download_complete(const char *channel_id, const char *sto
 
     ps_channel_state_t *ch = &s_state->channels[ch_idx];
 
-    // Find the Ci index for this storage_key
-    uint32_t ci_index = ps_find_ci_by_storage_key(ch, storage_key);
+    // Look up cache from registry to ensure we have current data
+    channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
+    if (!cache) {
+        cache = ch->cache;
+    }
+
+    // Find the Ci index for this post_id using O(1) hash lookup
+    uint32_t ci_index = UINT32_MAX;
+    if (cache) {
+        ci_index = ci_find_by_post_id(cache, post_id);
+    }
+
     if (ci_index == UINT32_MAX) {
         // Entry not found in current in-memory cache - the cache file may have been
         // updated by the refresh task. Reload the cache from disk and try again.
@@ -264,11 +217,18 @@ void play_scheduler_on_download_complete(const char *channel_id, const char *sto
         if (reload_err == ESP_OK) {
             // Recalculate SWRR weights after cache reload
             ps_swrr_calculate_weights(s_state);
-            ci_index = ps_find_ci_by_storage_key(ch, storage_key);
+            // Refresh cache pointer after reload
+            cache = channel_cache_registry_find(ch->channel_id);
+            if (!cache) {
+                cache = ch->cache;
+            }
+            if (cache) {
+                ci_index = ci_find_by_post_id(cache, post_id);
+            }
         }
         
         if (ci_index == UINT32_MAX) {
-            ESP_LOGD(TAG, "Downloaded file still not in Ci after reload: %s", storage_key);
+            ESP_LOGD(TAG, "Downloaded file still not in Ci after reload: post_id=%ld", (long)post_id);
             xSemaphoreGive(s_state->mutex);
             return;
         }
@@ -324,7 +284,7 @@ void play_scheduler_on_download_complete(const char *channel_id, const char *sto
 // Load Failure Handling
 // ============================================================================
 
-void play_scheduler_on_load_failed(const char *storage_key, const char *channel_id, const char *reason)
+void play_scheduler_on_load_failed(const char *storage_key, const char *channel_id, int32_t post_id, const char *reason)
 {
     ps_state_t *s_state = ps_get_state();
 
@@ -363,17 +323,26 @@ void play_scheduler_on_load_failed(const char *storage_key, const char *channel_
         }
     }
 
-    // Remove from LAi if channel is known
-    if (channel_id) {
+    // Remove from LAi if channel is known and we have a valid post_id
+    if (channel_id && post_id != 0) {
         xSemaphoreTake(s_state->mutex, portMAX_DELAY);
 
         int ch_idx = ps_find_channel_index(s_state, channel_id);
         if (ch_idx >= 0) {
             ps_channel_state_t *ch = &s_state->channels[ch_idx];
-            uint32_t ci_index = ps_find_ci_by_storage_key(ch, storage_key);
-            if (ci_index != UINT32_MAX && ps_lai_remove(ch, ci_index)) {
-                ESP_LOGI(TAG, "LAi remove: ch='%s' ci=%lu, now %zu available",
-                         channel_id, (unsigned long)ci_index, ch->available_count);
+            
+            // Look up cache for O(1) ci_index lookup
+            channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
+            if (!cache) {
+                cache = ch->cache;
+            }
+            
+            if (cache) {
+                uint32_t ci_index = ci_find_by_post_id(cache, post_id);
+                if (ci_index != UINT32_MAX && ps_lai_remove(ch, ci_index)) {
+                    ESP_LOGI(TAG, "LAi remove: ch='%s' ci=%lu, now %zu available",
+                             channel_id, (unsigned long)ci_index, ch->available_count);
+                }
             }
         }
 

@@ -11,6 +11,11 @@
 
 #include "makapix_internal.h"
 #include "event_bus.h"
+#include "esp_heap_caps.h"
+
+// PSRAM-backed stack for credential polling task
+static StackType_t *s_cred_poll_stack = NULL;
+static StaticTask_t s_cred_poll_task_buffer;
 
 /**
  * @brief Provisioning task
@@ -58,7 +63,23 @@ void makapix_provisioning_task(void *pvParameters)
                 
                 // Start credential polling task
                 // Stack size needs to be large enough for makapix_credentials_result_t (3x 4096 byte arrays = ~12KB)
-                BaseType_t poll_ret = xTaskCreate(makapix_credentials_poll_task, "cred_poll", 16384, NULL, 5, &s_poll_task_handle);
+                const size_t cred_poll_stack_size = 16384;
+                if (!s_cred_poll_stack) {
+                    s_cred_poll_stack = heap_caps_malloc(cred_poll_stack_size * sizeof(StackType_t),
+                                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+                }
+
+                BaseType_t poll_ret = pdFAIL;
+                if (s_cred_poll_stack) {
+                    s_poll_task_handle = xTaskCreateStatic(makapix_credentials_poll_task, "cred_poll",
+                                                            cred_poll_stack_size, NULL, 5,
+                                                            s_cred_poll_stack, &s_cred_poll_task_buffer);
+                    poll_ret = (s_poll_task_handle != NULL) ? pdPASS : pdFAIL;
+                }
+                if (poll_ret != pdPASS) {
+                    poll_ret = xTaskCreate(makapix_credentials_poll_task, "cred_poll",
+                                           cred_poll_stack_size, NULL, 5, &s_poll_task_handle);
+                }
                 if (poll_ret != pdPASS) {
                     ESP_LOGE(MAKAPIX_TAG, "Failed to create credential polling task");
                     makapix_set_state(MAKAPIX_STATE_IDLE);

@@ -9,6 +9,7 @@
 #include "AnimatedGIF.h"
 #include "esp_log.h"
 #include "esp_err.h"
+#include "esp_heap_caps.h"
 #include "config_store.h"
 #include "esp_task_wdt.h"
 #include "freertos/FreeRTOS.h"
@@ -230,9 +231,13 @@ esp_err_t gif_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
 
     // Allocate RGB canvas buffer for full canvas
     impl->canvas_rgb_size = (size_t)impl->canvas_width * (size_t)impl->canvas_height * 3U;
-    impl->canvas_rgb = (uint8_t *)malloc(impl->canvas_rgb_size);
+    impl->canvas_rgb = (uint8_t *)heap_caps_malloc(impl->canvas_rgb_size,
+                                                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!impl->canvas_rgb) {
-        ESP_LOGE(TAG, "Failed to allocate RGB canvas buffer");
+        impl->canvas_rgb = (uint8_t *)malloc(impl->canvas_rgb_size);
+    }
+    if (!impl->canvas_rgb) {
+        ESP_LOGE(TAG, "Failed to allocate RGB canvas buffer (%zu bytes)", impl->canvas_rgb_size);
         impl->gif->close();
         delete impl->gif;
         free(impl);

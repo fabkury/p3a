@@ -7,6 +7,7 @@
  */
 
 #include "makapix_internal.h"
+#include "esp_heap_caps.h"
 #include "mbedtls/sha256.h"
 #include "config_store.h"
 #include "p3a_state.h"
@@ -49,6 +50,10 @@ bool s_provisioning_cancelled = false;  // Flag to prevent race condition
 TaskHandle_t s_poll_task_handle = NULL;  // Handle for credential polling task
 TaskHandle_t s_reconnect_task_handle = NULL;  // Handle for MQTT reconnection task
 TaskHandle_t s_status_publish_task_handle = NULL;  // Handle for status publish task
+
+// PSRAM-backed stack for MQTT reconnection task
+static StackType_t *s_mqtt_reconn_stack = NULL;
+static StaticTask_t s_mqtt_reconn_task_buffer;
 TaskHandle_t s_channel_switch_task_handle = NULL;  // Handle for channel switch task
 
 TimerHandle_t s_status_timer = NULL;
@@ -429,8 +434,25 @@ esp_err_t makapix_connect_if_registered(void)
         ESP_LOGE(MAKAPIX_TAG, "Failed to connect: %s", esp_err_to_name(err));
         makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
         if (s_reconnect_task_handle == NULL) {
-            if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", 16384, NULL, 5, &s_reconnect_task_handle) != pdPASS) {
-                s_reconnect_task_handle = NULL;
+            const size_t mqtt_reconn_stack_size = 16384;
+            if (!s_mqtt_reconn_stack) {
+                s_mqtt_reconn_stack = heap_caps_malloc(mqtt_reconn_stack_size * sizeof(StackType_t),
+                                                        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            }
+
+            bool task_created = false;
+            if (s_mqtt_reconn_stack) {
+                s_reconnect_task_handle = xTaskCreateStatic(makapix_mqtt_reconnect_task, "mqtt_reconn",
+                                                             mqtt_reconn_stack_size, NULL, 5,
+                                                             s_mqtt_reconn_stack, &s_mqtt_reconn_task_buffer);
+                task_created = (s_reconnect_task_handle != NULL);
+            }
+
+            if (!task_created) {
+                if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn",
+                                mqtt_reconn_stack_size, NULL, 5, &s_reconnect_task_handle) != pdPASS) {
+                    s_reconnect_task_handle = NULL;
+                }
             }
         }
         return err;

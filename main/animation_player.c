@@ -2,6 +2,7 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "animation_player_priv.h"
+#include "esp_heap_caps.h"
 #include "sd_path.h"
 #include "play_scheduler.h"
 #include "sdcard_channel_impl.h"
@@ -47,6 +48,11 @@ bool s_sd_mounted = false;
 bool s_sd_export_active = false;
 bool s_sd_access_paused = false;
 
+// PSRAM-backed stack for SD refresh task
+static StackType_t *s_sd_refresh_stack = NULL;
+static StaticTask_t s_sd_refresh_task_buffer;
+static volatile bool s_sd_refresh_task_running = false;
+
 typedef struct {
     TaskHandle_t requester;
     esp_err_t result;
@@ -63,6 +69,7 @@ static void animation_player_sd_refresh_task(void *arg)
             xTaskNotifyGive(req->requester);
         }
     }
+    s_sd_refresh_task_running = false;
     vTaskDelete(NULL);
 }
 
@@ -612,16 +619,39 @@ esp_err_t animation_player_end_sd_export(void)
         .requester = xTaskGetCurrentTaskHandle(),
         .result = ESP_OK,
     };
+    // Allocate PSRAM stack if not already allocated
+    if (!s_sd_refresh_stack) {
+        s_sd_refresh_stack = heap_caps_malloc(ANIMATION_SD_REFRESH_STACK * sizeof(StackType_t),
+                                               MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    }
+
+    TaskHandle_t task_handle = NULL;
     esp_err_t refresh_err = ESP_OK;
-    if (xTaskCreate(animation_player_sd_refresh_task,
-                    "anim_sd_refresh",
-                    ANIMATION_SD_REFRESH_STACK,
-                    &request,
-                    CONFIG_P3A_RENDER_TASK_PRIORITY - 1,
-                    NULL) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create SD refresh task");
-        refresh_err = ESP_ERR_NO_MEM;
-    } else {
+    if (s_sd_refresh_stack && !s_sd_refresh_task_running) {
+        s_sd_refresh_task_running = true;
+        task_handle = xTaskCreateStatic(animation_player_sd_refresh_task,
+                                        "anim_sd_refresh",
+                                        ANIMATION_SD_REFRESH_STACK,
+                                        &request,
+                                        CONFIG_P3A_RENDER_TASK_PRIORITY - 1,
+                                        s_sd_refresh_stack,
+                                        &s_sd_refresh_task_buffer);
+    }
+
+    if (!task_handle) {
+        s_sd_refresh_task_running = false;
+        if (xTaskCreate(animation_player_sd_refresh_task,
+                        "anim_sd_refresh",
+                        ANIMATION_SD_REFRESH_STACK,
+                        &request,
+                        CONFIG_P3A_RENDER_TASK_PRIORITY - 1,
+                        NULL) != pdPASS) {
+            ESP_LOGE(TAG, "Failed to create SD refresh task");
+            refresh_err = ESP_ERR_NO_MEM;
+        }
+    }
+
+    if (refresh_err == ESP_OK) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         refresh_err = request.result;
         if (refresh_err != ESP_OK) {

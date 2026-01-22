@@ -185,9 +185,9 @@ size_t play_scheduler_get_active_channel_ids(const char **out_ids, size_t max_co
  * May trigger playback if this is the first available artwork (zero-to-one transition).
  *
  * @param channel_id Channel the artwork belongs to
- * @param storage_key Storage key of the downloaded artwork (UUID string)
+ * @param post_id Post ID of the downloaded artwork (for O(1) LAi lookup)
  */
-void play_scheduler_on_download_complete(const char *channel_id, const char *storage_key);
+void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id);
 
 /**
  * @brief Notify scheduler that a load failed
@@ -196,11 +196,12 @@ void play_scheduler_on_download_complete(const char *channel_id, const char *sto
  * Records failure in LTF, deletes the file, removes from LAi.
  * May trigger picking another artwork if LAi is non-empty.
  *
- * @param storage_key Storage key of the failed artwork (UUID string)
+ * @param storage_key Storage key of the failed artwork (UUID string, needed for file deletion/LTF)
  * @param channel_id Channel the artwork belongs to
+ * @param post_id Post ID of the failed artwork (for O(1) LAi removal, use 0 if unknown)
  * @param reason Failure reason (e.g., "decode_error", "file_missing")
  */
-void play_scheduler_on_load_failed(const char *storage_key, const char *channel_id, const char *reason);
+void play_scheduler_on_load_failed(const char *storage_key, const char *channel_id, int32_t post_id, const char *reason);
 
 /**
  * @brief Get total available artwork count across all channels

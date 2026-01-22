@@ -346,6 +346,7 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             strlcpy(out_request->storage_key, s_dl_storage_key, sizeof(out_request->storage_key));
             strlcpy(out_request->filepath, s_dl_filepath, sizeof(out_request->filepath));
             strlcpy(out_request->channel_id, ch->channel_id, sizeof(out_request->channel_id));
+            out_request->post_id = entry.post_id;  // Capture post_id for O(1) LAi lookup
 
             // Build artwork URL (using static sha256 buffer)
             memset(s_dl_sha256, 0, sizeof(s_dl_sha256));
@@ -532,9 +533,8 @@ static void download_task(void *arg)
             }
             ltf_clear(s_dl_req.storage_key, s_task_vault_base);
 
-            // Signal play_scheduler to update LAi
-            // The play_scheduler will find the ci_index and add to LAi
-            play_scheduler_on_download_complete(s_dl_req.channel_id, s_dl_req.storage_key);
+            // Signal play_scheduler to update LAi using O(1) post_id lookup
+            play_scheduler_on_download_complete(s_dl_req.channel_id, s_dl_req.post_id);
 
             makapix_channel_signal_downloads_needed();
             makapix_channel_signal_file_available();  // Wake tasks waiting for first file

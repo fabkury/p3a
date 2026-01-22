@@ -1225,6 +1225,19 @@ static int compare_entries_by_created_at(const void *a, const void *b)
 }
 
 /**
+ * @brief Helper: comparison function for qsort (entries by created_at, newest first)
+ */
+static int compare_entries_by_created_at_desc(const void *a, const void *b)
+{
+    const makapix_channel_entry_t *ea = (const makapix_channel_entry_t *)a;
+    const makapix_channel_entry_t *eb = (const makapix_channel_entry_t *)b;
+    // Descending: newer entries first
+    if (ea->created_at > eb->created_at) return -1;
+    if (ea->created_at < eb->created_at) return 1;
+    return 0;
+}
+
+/**
  * @brief Parse ISO8601 UTC timestamp to Unix time
  * (Already defined in makapix_channel_utils.c, forward declare here)
  */
@@ -1419,6 +1432,45 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
             // New entry - add it
             all_entries[all_count++] = tmp;
         }
+    }
+
+    // Enforce CHANNEL_CACHE_MAX_ENTRIES limit after deduplication
+    if (all_count > CHANNEL_CACHE_MAX_ENTRIES) {
+        ESP_LOGI(TAG, "Ci exceeds limit (%zu > %zu), truncating oldest entries",
+                 all_count, (size_t)CHANNEL_CACHE_MAX_ENTRIES);
+
+        // Sort by created_at descending (newest first)
+        qsort(all_entries, all_count, sizeof(makapix_channel_entry_t),
+              compare_entries_by_created_at_desc);
+
+        // Evict entries beyond the limit (oldest ones, now at the end)
+        for (size_t i = CHANNEL_CACHE_MAX_ENTRIES; i < all_count; i++) {
+            int32_t post_id = all_entries[i].post_id;
+
+            // Check if file is downloaded (in LAi)
+            lai_post_id_node_t *node;
+            HASH_FIND_INT(cache->lai_hash, &post_id, node);
+            if (node) {
+                // File exists - delete it
+                char file_path[512];
+                build_vault_path_from_entry(&all_entries[i], vault_path, file_path, sizeof(file_path));
+                unlink(file_path);
+
+                // Remove from LAi hash
+                HASH_DEL(cache->lai_hash, node);
+                free(node);
+
+                // Remove from LAi array
+                for (size_t k = 0; k < cache->available_count; k++) {
+                    if (cache->available_post_ids[k] == post_id) {
+                        cache->available_post_ids[k] = cache->available_post_ids[--cache->available_count];
+                        break;
+                    }
+                }
+            }
+        }
+
+        all_count = CHANNEL_CACHE_MAX_ENTRIES;
     }
 
     // Build index path and write to disk atomically

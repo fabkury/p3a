@@ -268,7 +268,7 @@ esp_err_t ota_manager_init(void)
         .name = "ota_initial",
     };
     if (esp_timer_create(&initial_args, &initial_check_timer) == ESP_OK) {
-        esp_timer_start_once(initial_check_timer, 60 * 1000000);  // 60 seconds after boot (more time for WiFi to stabilize)
+        esp_timer_start_once(initial_check_timer, 300 * 1000000);  // 5 minutes after boot
     }
     
     return ESP_OK;

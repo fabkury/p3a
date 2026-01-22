@@ -82,7 +82,7 @@ esp_err_t h_ws_pico_stream(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    uint8_t stack_buf[WS_MAX_FRAME_SIZE] = {0};
+    uint8_t stack_buf[512] = {0};  // Small stack buffer; larger payloads use heap
 
     httpd_ws_frame_t frame = {
         .type = HTTPD_WS_TYPE_BINARY,

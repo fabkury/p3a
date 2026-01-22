@@ -50,8 +50,8 @@ static int ps_find_channel_index(ps_state_t *state, const char *channel_id)
 /**
  * @brief Find Ci index by storage_key (UUID string)
  *
- * Uses cache pointer directly to avoid stale alias issue. After merge operations,
- * ch->entries may point to freed memory while ch->cache->entries has current data.
+ * Uses registry lookup for thread-safe access to current cache data.
+ * Takes cache mutex to avoid race conditions with merge operations.
  */
 static uint32_t ps_find_ci_by_storage_key(ps_channel_state_t *ch, const char *storage_key)
 {
@@ -64,25 +64,44 @@ static uint32_t ps_find_ci_by_storage_key(ps_channel_state_t *ch, const char *st
         return UINT32_MAX;
     }
 
-    // Use cache pointer directly to avoid stale alias issue
-    if (!ch->cache || !ch->cache->entries || ch->cache->entry_count == 0) {
+    // Look up cache from registry to ensure we have current data
+    // This avoids race conditions with merge operations
+    channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
+    if (!cache) {
+        // Fall back to ch->cache if not in registry
+        cache = ch->cache;
+    }
+
+    if (!cache) {
         return UINT32_MAX;
     }
 
-    // Convert storage_key to UUID bytes
+    // Convert storage_key to UUID bytes before taking mutex
     uint8_t uuid_bytes[16];
     if (!uuid_to_bytes(storage_key, uuid_bytes)) {
         return UINT32_MAX;
     }
 
-    makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->cache->entries;
-    for (size_t i = 0; i < ch->cache->entry_count; i++) {
+    // Take mutex for thread-safe access during search
+    xSemaphoreTake(cache->mutex, portMAX_DELAY);
+
+    // Check entries under mutex (may have been updated by merge)
+    if (!cache->entries || cache->entry_count == 0) {
+        xSemaphoreGive(cache->mutex);
+        return UINT32_MAX;
+    }
+
+    uint32_t result = UINT32_MAX;
+    makapix_channel_entry_t *entries = cache->entries;
+    for (size_t i = 0; i < cache->entry_count; i++) {
         if (memcmp(entries[i].storage_key_uuid, uuid_bytes, 16) == 0) {
-            return (uint32_t)i;
+            result = (uint32_t)i;
+            break;
         }
     }
 
-    return UINT32_MAX;
+    xSemaphoreGive(cache->mutex);
+    return result;
 }
 
 /**
@@ -105,15 +124,29 @@ static bool ps_lai_contains(ps_channel_state_t *ch, int32_t post_id)
  *
  * For Makapix channels, delegates to channel_cache module which handles
  * dirty tracking and debounced persistence. The cache API now uses post_id.
+ *
+ * Thread-safety: Takes cache mutex to validate ci_index and get post_id,
+ * as the cache may be reallocated during merge operations.
  */
 static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
 {
-    if (ci_index >= ch->entry_count) return false;
-
     // For Makapix channels with cache, use channel_cache module
     if (ch->cache) {
-        // Get post_id from entry to pass to new LAi API
+        // Take mutex to safely validate ci_index and get post_id
+        // (cache entries may be reallocated during merge operations)
+        xSemaphoreTake(ch->cache->mutex, portMAX_DELAY);
+
+        // Validate ci_index against current cache size (not ch->entry_count which may be stale)
+        if (ci_index >= ch->cache->entry_count) {
+            xSemaphoreGive(ch->cache->mutex);
+            return false;
+        }
+
+        // Get post_id under mutex
         int32_t post_id = ch->cache->entries[ci_index].post_id;
+        xSemaphoreGive(ch->cache->mutex);
+
+        // lai_add_entry takes its own mutex, so we release ours first
         bool added = lai_add_entry(ch->cache, post_id);
         if (added) {
             // Update aliased pointer and count (pointer may have been allocated on first add)
@@ -128,6 +161,8 @@ static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
     }
 
     // Fallback for SD card channels (shouldn't have LAi, but keep for safety)
+    if (ci_index >= ch->entry_count) return false;
+
     makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
     int32_t post_id = entries[ci_index].post_id;
     if (ps_lai_contains(ch, post_id)) return false;
@@ -148,13 +183,28 @@ static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
  *
  * For Makapix channels, delegates to channel_cache module which handles
  * dirty tracking and debounced persistence. The cache API now uses post_id.
+ *
+ * Thread-safety: Takes cache mutex to validate ci_index and get post_id,
+ * as the cache may be reallocated during merge operations.
  */
 static bool ps_lai_remove(ps_channel_state_t *ch, uint32_t ci_index)
 {
     // For Makapix channels with cache, use channel_cache module
     if (ch->cache) {
-        // Get post_id from entry to pass to new LAi API
+        // Take mutex to safely validate ci_index and get post_id
+        xSemaphoreTake(ch->cache->mutex, portMAX_DELAY);
+
+        // Validate ci_index against current cache size
+        if (ci_index >= ch->cache->entry_count) {
+            xSemaphoreGive(ch->cache->mutex);
+            return false;
+        }
+
+        // Get post_id under mutex
         int32_t post_id = ch->cache->entries[ci_index].post_id;
+        xSemaphoreGive(ch->cache->mutex);
+
+        // lai_remove_entry takes its own mutex
         bool removed = lai_remove_entry(ch->cache, post_id);
         if (removed) {
             // Update aliased count
@@ -167,6 +217,7 @@ static bool ps_lai_remove(ps_channel_state_t *ch, uint32_t ci_index)
 
     // Fallback for SD card channels
     if (!ch->available_post_ids || ch->available_count == 0) return false;
+    if (ci_index >= ch->entry_count) return false;
 
     makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
     int32_t post_id = entries[ci_index].post_id;

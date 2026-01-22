@@ -579,7 +579,17 @@ void refresh_task_impl(void *pvParameters)
             }
 
             // Update channel index with new posts
-            update_index_bin(ch, resp->posts, resp->post_count);
+            esp_err_t merge_err = update_index_bin(ch, resp->posts, resp->post_count);
+            if (merge_err == ESP_OK) {
+                channel_cache_t *diag_cache = channel_cache_registry_find(ch->channel_id);
+                ESP_LOGI(TAG, "Batch merged: ch='%s' entry_count=%zu available=%zu",
+                         ch->channel_id,
+                         diag_cache ? diag_cache->entry_count : 0,
+                         diag_cache ? diag_cache->available_count : 0);
+            } else {
+                ESP_LOGW(TAG, "Batch merge failed: ch='%s' err=%s",
+                         ch->channel_id, esp_err_to_name(merge_err));
+            }
 
             // Per-batch eviction: if Ci exceeds limit after adding this batch,
             // evict oldest files immediately to maintain invariant.

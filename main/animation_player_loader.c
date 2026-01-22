@@ -3,6 +3,7 @@
 
 #include "animation_player_priv.h"
 #include "animation_player.h"
+#include "esp_heap_caps.h"
 #include "play_scheduler.h"
 #include "playback_queue.h"
 #include "swap_future.h"
@@ -780,16 +781,25 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf,
     buf->native_bytes_per_pixel = (buf->decoder_info.pixel_format == ANIMATION_PIXEL_FORMAT_RGB888) ? 3 : 4;
     buf->native_frame_size = (size_t)canvas_w * canvas_h * (size_t)buf->native_bytes_per_pixel;
 
-    buf->native_frame_b1 = (uint8_t *)malloc(buf->native_frame_size);
+    // Allocate native frame buffers, preferring PSRAM for large buffers
+    buf->native_frame_b1 = (uint8_t *)heap_caps_malloc(buf->native_frame_size,
+                                                        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!buf->native_frame_b1) {
-        ESP_LOGE(TAG, "Failed to allocate native frame buffer B1");
+        buf->native_frame_b1 = (uint8_t *)malloc(buf->native_frame_size);
+    }
+    if (!buf->native_frame_b1) {
+        ESP_LOGE(TAG, "Failed to allocate native frame buffer B1 (%zu bytes)", buf->native_frame_size);
         animation_decoder_unload(&buf->decoder);
         return ESP_ERR_NO_MEM;
     }
 
-    buf->native_frame_b2 = (uint8_t *)malloc(buf->native_frame_size);
+    buf->native_frame_b2 = (uint8_t *)heap_caps_malloc(buf->native_frame_size,
+                                                        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!buf->native_frame_b2) {
-        ESP_LOGE(TAG, "Failed to allocate native frame buffer B2");
+        buf->native_frame_b2 = (uint8_t *)malloc(buf->native_frame_size);
+    }
+    if (!buf->native_frame_b2) {
+        ESP_LOGE(TAG, "Failed to allocate native frame buffer B2 (%zu bytes)", buf->native_frame_size);
         free(buf->native_frame_b1);
         buf->native_frame_b1 = NULL;
         animation_decoder_unload(&buf->decoder);

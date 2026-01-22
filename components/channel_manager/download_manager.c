@@ -18,6 +18,7 @@
 
 #include "download_manager.h"
 #include "play_scheduler.h"
+#include "esp_heap_caps.h"
 #include "makapix_channel_impl.h"
 #include "makapix_channel_utils.h"
 #include "makapix_artwork.h"
@@ -108,6 +109,11 @@ static SemaphoreHandle_t s_mutex = NULL;
 static char s_active_channel[64] = {0};
 static bool s_busy = false;
 static bool s_playback_initiated = false;  // Track if we've started playback
+
+// PSRAM-backed static task stack for reduced internal RAM usage
+static StackType_t *s_download_stack = NULL;
+static StaticTask_t s_download_task_buffer;
+static bool s_download_stack_allocated = false;
 
 static bool file_exists(const char *path)
 {
@@ -302,9 +308,11 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
         // Get channel cache from registry
         channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
         if (!cache) {
-            // Cache not loaded yet - skip this channel for now
+            ESP_LOGD(TAG, "Cache not found for '%s'", ch->channel_id);
             continue;
         }
+        ESP_LOGD(TAG, "Checking cache '%s': entry_count=%zu available=%zu",
+                 ch->channel_id, cache->entry_count, cache->available_count);
 
         // Find entries needing download (artwork not in LAi)
         makapix_channel_entry_t entry;
@@ -579,17 +587,31 @@ esp_err_t download_manager_init(void)
     if (!s_mutex) {
         return ESP_ERR_NO_MEM;
     }
-    
-    s_playback_initiated = false;  // Reset on init
 
-    // Priority 3: Below render (5) and loader (4) to prevent animation stuttering during downloads
-    // Stack size 40KB: Newlib's snprintf/vfprintf uses ~1-2KB internal buffers.
-    // Combined with nested call chains (dl_get_next_download -> has_404_marker -> snprintf,
-    // Stack usage includes deep call chains through ltf_can_download, storage_key_sha256,
-    // mbedtls_sha256, and newlib vfprintf. Most local buffers have been moved to static,
-    // but mbedtls (SHA256 context ~300B) and newlib printf internals still require
-    // significant stack. 80KB provides safe headroom for ESP32-P4's RISC-V call conventions.
-    if (xTaskCreate(download_task, "download_mgr", 81920, NULL, 3, &s_task) != pdPASS) {
+    s_playback_initiated = false;
+
+    const size_t stack_size = 81920;
+
+    // Try PSRAM first for the 80KB stack
+    s_download_stack = heap_caps_malloc(stack_size * sizeof(StackType_t),
+                                         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (s_download_stack) {
+        s_download_stack_allocated = true;
+        s_task = xTaskCreateStatic(download_task, "download_mgr",
+                                   stack_size, NULL, 3,
+                                   s_download_stack, &s_download_task_buffer);
+        if (s_task) {
+            ESP_LOGI(TAG, "Download manager task using PSRAM stack");
+            return ESP_OK;
+        }
+        heap_caps_free(s_download_stack);
+        s_download_stack = NULL;
+        s_download_stack_allocated = false;
+    }
+
+    // Fallback to dynamic allocation (internal RAM)
+    ESP_LOGW(TAG, "PSRAM stack unavailable, using internal RAM");
+    if (xTaskCreate(download_task, "download_mgr", stack_size, NULL, 3, &s_task) != pdPASS) {
         vSemaphoreDelete(s_mutex);
         s_mutex = NULL;
         return ESP_ERR_NO_MEM;
@@ -603,6 +625,11 @@ void download_manager_deinit(void)
     if (s_task) {
         vTaskDelete(s_task);
         s_task = NULL;
+    }
+    if (s_download_stack_allocated && s_download_stack) {
+        heap_caps_free(s_download_stack);
+        s_download_stack = NULL;
+        s_download_stack_allocated = false;
     }
     if (s_mutex) {
         vSemaphoreDelete(s_mutex);
@@ -625,6 +652,15 @@ void download_manager_set_next_callback(download_get_next_cb_t cb, void *user_ct
 
 void download_manager_signal_work_available(void)
 {
+    // Reset channel_complete flags so download manager will re-scan
+    // This is needed because channels may be marked complete before batches arrive
+    if (s_mutex && xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        for (size_t i = 0; i < s_dl_channel_count; i++) {
+            s_dl_channels[i].channel_complete = false;
+        }
+        xSemaphoreGive(s_mutex);
+    }
+
     makapix_channel_signal_downloads_needed();
 }
 

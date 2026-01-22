@@ -2,6 +2,7 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "channel_cache.h"
+#include "esp_heap_caps.h"
 #include "event_bus.h"
 #include "makapix_channel_internal.h"
 #include "makapix_channel_utils.h"
@@ -16,6 +17,13 @@
 #include <errno.h>
 
 static const char *TAG = "channel_cache";
+
+// PSRAM-first allocation with internal RAM fallback
+static inline void *psram_malloc(size_t size) {
+    void *p = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!p) p = malloc(size);
+    return p;
+}
 
 // ============================================================================
 // Global State
@@ -244,7 +252,7 @@ static esp_err_t load_legacy_format(FILE *f, channel_cache_t *cache, const char 
     }
 
     // Allocate entries
-    cache->entries = malloc(entry_count * sizeof(makapix_channel_entry_t));
+    cache->entries = psram_malloc(entry_count * sizeof(makapix_channel_entry_t));
     if (!cache->entries) {
         return ESP_ERR_NO_MEM;
     }
@@ -263,7 +271,7 @@ static esp_err_t load_legacy_format(FILE *f, channel_cache_t *cache, const char 
     ci_rebuild_hash_tables(cache);
 
     // Allocate LAi (will be populated by lai_rebuild)
-    cache->available_post_ids = malloc(entry_count * sizeof(int32_t));
+    cache->available_post_ids = psram_malloc(entry_count * sizeof(int32_t));
     if (!cache->available_post_ids) {
         ci_hash_free(cache);
         free(cache->entries);
@@ -333,7 +341,7 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
         return ESP_ERR_INVALID_SIZE;
     }
 
-    uint8_t *file_data = malloc(file_size);
+    uint8_t *file_data = psram_malloc(file_size);
     if (!file_data) {
         return ESP_ERR_NO_MEM;
     }
@@ -358,7 +366,7 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
 
     // Allocate and copy Ci entries
     if (header.ci_count > 0) {
-        cache->entries = malloc(header.ci_count * sizeof(makapix_channel_entry_t));
+        cache->entries = psram_malloc(header.ci_count * sizeof(makapix_channel_entry_t));
         if (!cache->entries) {
             free(file_data);
             return ESP_ERR_NO_MEM;
@@ -377,7 +385,7 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
     // Allocate and copy LAi post_ids (v20+ stores post_ids, not ci_indices)
     if (header.lai_count > 0) {
         // Note: validation above ensures lai_count <= ci_count
-        cache->available_post_ids = malloc(header.ci_count * sizeof(int32_t));
+        cache->available_post_ids = psram_malloc(header.ci_count * sizeof(int32_t));
         if (!cache->available_post_ids) {
             ci_hash_free(cache);
             free(cache->entries);
@@ -391,7 +399,7 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
     } else {
         // Allocate space for future additions
         if (header.ci_count > 0) {
-            cache->available_post_ids = malloc(header.ci_count * sizeof(int32_t));
+            cache->available_post_ids = psram_malloc(header.ci_count * sizeof(int32_t));
             if (!cache->available_post_ids) {
                 ci_hash_free(cache);
                 free(cache->entries);
@@ -597,6 +605,12 @@ esp_err_t channel_cache_load(const char *channel_id,
     // No .cache file, cache corrupt, or index is newer - load from .bin index file
     if (!have_index) {
         ESP_LOGI(TAG, "No cache or index for '%s', starting empty", channel_id);
+
+        // Pre-allocate LAi array to support incremental batch updates
+        // This allows channel_cache_merge_posts() to work correctly on empty cache
+        cache->available_post_ids = psram_malloc(1024 * sizeof(int32_t));  // Match target count
+        cache->available_count = 0;
+
         return ESP_OK;  // Empty cache is valid
     }
 
@@ -659,7 +673,7 @@ esp_err_t channel_cache_save(const channel_cache_t *cache, const char *channels_
     size_t total_size = sizeof(channel_cache_header_t) + ci_size + lai_size;
 
     // Allocate buffer for atomic write
-    uint8_t *buffer = malloc(total_size);
+    uint8_t *buffer = psram_malloc(total_size);
     if (!buffer) {
         return ESP_ERR_NO_MEM;
     }
@@ -793,7 +807,7 @@ bool lai_add_entry(channel_cache_t *cache, int32_t post_id)
     // Ensure we have space
     if (!cache->available_post_ids) {
         size_t alloc_count = (cache->entry_count > 0) ? cache->entry_count : CHANNEL_CACHE_MAX_ENTRIES;
-        cache->available_post_ids = malloc(alloc_count * sizeof(int32_t));
+        cache->available_post_ids = psram_malloc(alloc_count * sizeof(int32_t));
         if (!cache->available_post_ids) {
             xSemaphoreGive(cache->mutex);
             return false;
@@ -884,7 +898,7 @@ size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
 
     // Ensure LAi array is allocated
     if (!cache->available_post_ids) {
-        cache->available_post_ids = malloc(cache->entry_count * sizeof(int32_t));
+        cache->available_post_ids = psram_malloc(cache->entry_count * sizeof(int32_t));
         if (!cache->available_post_ids) {
             return 0;
         }
@@ -1238,7 +1252,7 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
 
     // Allocate combined array for existing + new entries
     size_t max_count = cache->entry_count + count;
-    makapix_channel_entry_t *all_entries = malloc(max_count * sizeof(makapix_channel_entry_t));
+    makapix_channel_entry_t *all_entries = psram_malloc(max_count * sizeof(makapix_channel_entry_t));
     if (!all_entries) {
         xSemaphoreGive(cache->mutex);
         return ESP_ERR_NO_MEM;
@@ -1484,6 +1498,17 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
     // Rebuild hash table
     ci_rebuild_hash_tables(cache);
 
+    // Ensure available_post_ids array exists for LAi operations
+    // This is needed when merging into an initially empty cache
+    if (!cache->available_post_ids && cache->entry_count > 0) {
+        cache->available_post_ids = psram_malloc(cache->entry_count * sizeof(int32_t));
+        if (cache->available_post_ids) {
+            cache->available_count = 0;  // Stays 0 until files are downloaded
+            ESP_LOGD(TAG, "Allocated available_post_ids for '%s' (capacity: %zu)",
+                     cache->channel_id, cache->entry_count);
+        }
+    }
+
     // Mark dirty for LAi persistence
     cache->dirty = true;
 
@@ -1516,7 +1541,7 @@ size_t channel_cache_evict_excess(channel_cache_t *cache,
              downloaded_count, max_count);
 
     // Collect entries that are in LAi (downloaded)
-    makapix_channel_entry_t *downloaded = malloc(downloaded_count * sizeof(makapix_channel_entry_t));
+    makapix_channel_entry_t *downloaded = psram_malloc(downloaded_count * sizeof(makapix_channel_entry_t));
     if (!downloaded) {
         xSemaphoreGive(cache->mutex);
         return 0;

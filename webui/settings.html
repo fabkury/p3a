@@ -222,6 +222,27 @@ body {
     background: #f44336;
     color: white;
 }
+.danger-zone {
+    border: 1px solid #e74c3c;
+}
+.danger-zone h3 {
+    color: #c0392b;
+}
+.danger-btn {
+    background: #e74c3c;
+    width: 100%;
+}
+.danger-btn:active:not(:disabled) {
+    background: #c0392b;
+}
+.danger-btn.confirm {
+    background: #c0392b;
+    animation: pulse 0.5s ease-in-out infinite alternate;
+}
+@keyframes pulse {
+    from { opacity: 1; }
+    to { opacity: 0.7; }
+}
 </style>
 </head>
 <body>
@@ -229,7 +250,7 @@ body {
     <h1>settings</h1>
 </div>
 <div class="section">
-    <h3>Background</h3>
+    <h3>Display</h3>
     <div class="bg-row">
         <div class="bg-preview" id="bg-preview"></div>
         <input class="bg-input" id="bg-r" type="number" min="0" max="255" placeholder="R" oninput="updateColorPreview()">
@@ -237,10 +258,7 @@ body {
         <input class="bg-input" id="bg-b" type="number" min="0" max="255" placeholder="B" oninput="updateColorPreview()">
         <button class="upload-btn bg-save" id="bg-save" type="button" onclick="saveBackgroundColor()">Save</button>
     </div>
-    <div class="file-name" id="bg-hint">Applies to transparent artwork (GIF/WebP/PNG)</div>
-</div>
-<div class="section">
-    <h3>Display</h3>
+    <div class="file-name" id="bg-hint" style="margin-bottom:8px;">Background color for transparent artwork</div>
     <div class="toggle-row">
         <label for="fps-toggle" class="toggle-label">Show FPS</label>
         <label class="toggle-switch">
@@ -255,13 +273,6 @@ body {
             <span class="toggle-slider"></span>
         </label>
     </div>
-    <div class="toggle-row">
-        <label for="viewack-toggle" class="toggle-label">Request View Acknowledgment</label>
-        <label class="toggle-switch">
-            <input type="checkbox" id="viewack-toggle" onchange="toggleViewAck(this.checked)">
-            <span class="toggle-slider"></span>
-        </label>
-    </div>
     <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
         <label class="toggle-label">Auto-swap interval</label>
         <div style="display:flex;gap:8px;align-items:center;">
@@ -272,14 +283,6 @@ body {
     </div>
 </div>
 <div class="section">
-    <h3>Storage</h3>
-    <div class="bg-row">
-        <input class="bg-input" id="sd-root" type="text" style="flex:1;max-width:none;" placeholder="/p3a">
-        <button class="upload-btn bg-save" id="sd-save" type="button" onclick="saveSdRoot()">Save</button>
-    </div>
-    <div class="file-name" id="sd-hint">Folder path on SD card (e.g., /p3a, /data). Reboot required. Existing files will not be moved.</div>
-</div>
-<div class="section">
     <h3>Global Seed</h3>
     <div class="seed-row">
         <input class="seed-input" id="seed" type="number" min="0" step="1" placeholder="Seed (uint32)">
@@ -287,9 +290,17 @@ body {
     </div>
     <div class="file-name">Persisted, takes effect after reboot</div>
 </div>
+<div class="section danger-zone">
+    <h3>Danger Zone</h3>
+    <div class="bg-row">
+        <input class="bg-input" id="sd-root" type="text" style="flex:1;max-width:none;" placeholder="/p3a">
+        <button class="upload-btn bg-save" id="sd-save" type="button" onclick="saveSdRoot()">Save</button>
+    </div>
+    <div class="file-name" id="sd-hint" style="margin-bottom:12px;">Storage path on SD card. Reboot required. Existing files will not be moved.</div>
+    <button class="btn danger-btn" id="reboot-btn" onclick="reboot()">Reboot</button>
+</div>
 <div class="footer">
     <button class="footer-btn" onclick="window.location.href='/'">Home</button>
-    <button class="footer-btn" onclick="reboot()">Reboot</button>
 </div>
 <div class="status" id="status"></div>
 <script>
@@ -457,52 +468,6 @@ function toggleMaxSpeedPlayback(enable) {
                     } else {
                         showToast('Save failed (HTTP ' + xhrPut.status + ')', true);
                         document.getElementById('maxspeed-toggle').checked = !enable;
-                    }
-                }
-            };
-            xhrPut.send(JSON.stringify(cfg));
-        }
-    };
-    xhrGet.send();
-}
-function loadViewAck() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/config', true);
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            try {
-                var resp = JSON.parse(xhr.responseText || '{}');
-                var cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-                var viewAck = (typeof cfg.view_ack === 'boolean') ? cfg.view_ack : false;
-                document.getElementById('viewack-toggle').checked = viewAck;
-            } catch (e) {
-                document.getElementById('viewack-toggle').checked = false;
-            }
-        }
-    };
-    xhr.send();
-}
-function toggleViewAck(enable) {
-    var xhrGet = new XMLHttpRequest();
-    xhrGet.open('GET', '/config', true);
-    xhrGet.onreadystatechange = function() {
-        if (xhrGet.readyState === 4) {
-            var cfg = {};
-            try {
-                var resp = JSON.parse(xhrGet.responseText || '{}');
-                cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-            } catch (e) { cfg = {}; }
-            cfg.view_ack = enable;
-            var xhrPut = new XMLHttpRequest();
-            xhrPut.open('PUT', '/config', true);
-            xhrPut.setRequestHeader('Content-Type', 'application/json');
-            xhrPut.onreadystatechange = function() {
-                if (xhrPut.readyState === 4) {
-                    if (xhrPut.status >= 200 && xhrPut.status < 300) {
-                        showToast('View acknowledgment ' + (enable ? 'enabled' : 'disabled'), false);
-                    } else {
-                        showToast('Save failed (HTTP ' + xhrPut.status + ')', true);
-                        document.getElementById('viewack-toggle').checked = !enable;
                     }
                 }
             };
@@ -681,17 +646,34 @@ function saveAutoSwap() {
     };
     xhrGet.send();
 }
+var rebootPending = false;
+var rebootTimeout = null;
 function reboot() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/action/reboot', true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.send('{}');
-    showToast('Reboot queued', false);
+    var btn = document.getElementById('reboot-btn');
+    if (!rebootPending) {
+        rebootPending = true;
+        btn.textContent = 'Click again to confirm';
+        btn.classList.add('confirm');
+        rebootTimeout = setTimeout(function() {
+            rebootPending = false;
+            btn.textContent = 'Reboot';
+            btn.classList.remove('confirm');
+        }, 2000);
+    } else {
+        clearTimeout(rebootTimeout);
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/action/reboot', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send('{}');
+        showToast('Reboot queued', false);
+        rebootPending = false;
+        btn.textContent = 'Reboot';
+        btn.classList.remove('confirm');
+    }
 }
 loadBackgroundColor();
 loadShowFps();
 loadMaxSpeedPlayback();
-loadViewAck();
 loadAutoSwap();
 loadSdRoot();
 loadSeed();

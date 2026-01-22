@@ -49,15 +49,23 @@ static int ps_find_channel_index(ps_state_t *state, const char *channel_id)
 
 /**
  * @brief Find Ci index by storage_key (UUID string)
+ *
+ * Uses cache pointer directly to avoid stale alias issue. After merge operations,
+ * ch->entries may point to freed memory while ch->cache->entries has current data.
  */
 static uint32_t ps_find_ci_by_storage_key(ps_channel_state_t *ch, const char *storage_key)
 {
-    if (!ch || !storage_key || !ch->entries || ch->entry_count == 0) {
+    if (!ch || !storage_key) {
         return UINT32_MAX;
     }
 
     // Only Makapix entries have storage_key
     if (ch->entry_format != PS_ENTRY_FORMAT_MAKAPIX) {
+        return UINT32_MAX;
+    }
+
+    // Use cache pointer directly to avoid stale alias issue
+    if (!ch->cache || !ch->cache->entries || ch->cache->entry_count == 0) {
         return UINT32_MAX;
     }
 
@@ -67,8 +75,8 @@ static uint32_t ps_find_ci_by_storage_key(ps_channel_state_t *ch, const char *st
         return UINT32_MAX;
     }
 
-    makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
-    for (size_t i = 0; i < ch->entry_count; i++) {
+    makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->cache->entries;
+    for (size_t i = 0; i < ch->cache->entry_count; i++) {
         if (memcmp(entries[i].storage_key_uuid, uuid_bytes, 16) == 0) {
             return (uint32_t)i;
         }

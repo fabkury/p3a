@@ -11,6 +11,7 @@
 #include "png.h"
 #include "esp_log.h"
 #include "esp_err.h"
+#include "esp_heap_caps.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -160,7 +161,11 @@ esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
 
     if (png_data->has_transparency) {
         png_data->rgba_buffer_size = (size_t)rowbytes * (size_t)height;
-        png_data->rgba_buffer = (uint8_t *)malloc(png_data->rgba_buffer_size);
+        png_data->rgba_buffer = (uint8_t *)heap_caps_malloc(png_data->rgba_buffer_size,
+                                                             MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!png_data->rgba_buffer) {
+            png_data->rgba_buffer = (uint8_t *)malloc(png_data->rgba_buffer_size);
+        }
         if (!png_data->rgba_buffer) {
             ESP_LOGE(TAG, "Failed to allocate RGBA buffer (%zu bytes)", png_data->rgba_buffer_size);
             png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
@@ -169,7 +174,11 @@ esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
         }
     } else {
         png_data->rgb_buffer_size = (size_t)rowbytes * (size_t)height;
-        png_data->rgb_buffer = (uint8_t *)malloc(png_data->rgb_buffer_size);
+        png_data->rgb_buffer = (uint8_t *)heap_caps_malloc(png_data->rgb_buffer_size,
+                                                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!png_data->rgb_buffer) {
+            png_data->rgb_buffer = (uint8_t *)malloc(png_data->rgb_buffer_size);
+        }
         if (!png_data->rgb_buffer) {
             ESP_LOGE(TAG, "Failed to allocate RGB buffer (%zu bytes)", png_data->rgb_buffer_size);
             png_destroy_read_struct(&png_ptr, &info_ptr, NULL);

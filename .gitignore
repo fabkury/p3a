@@ -1,5 +1,6 @@
 build/
 node_modules/
+webui/version.txt
 docs/web-flasher/node_modules/
 .vscode/
 managed_components/

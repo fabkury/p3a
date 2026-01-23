@@ -7,7 +7,7 @@
  *
  * Downloads files one at a time using round-robin across channels.
  * Owns its own channel list and download cursors - fully decoupled from
- * Play Scheduler (no lookahead dependency).
+ * Play Scheduler.
  *
  * Architecture:
  * - Receives channel list via download_manager_set_channels()
@@ -324,6 +324,10 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
 
             // Skip if 404 marker exists
             if (has_404_marker(s_dl_filepath)) {
+                // Convert UUID to string for logging
+                char skip_key[40];
+                bytes_to_uuid(entry.storage_key_uuid, skip_key, sizeof(skip_key));
+                ESP_LOGI(TAG, "SKIP post_id=%d: has 404 marker (key=%.8s...)", entry.post_id, skip_key);
                 continue;
             }
 
@@ -337,7 +341,7 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
 
             // Skip if LTF is terminal (3 load failures)
             if (!ltf_can_download(s_dl_storage_key, s_dl_vault_base)) {
-                ESP_LOGD(TAG, "Skipping terminal LTF: %s", s_dl_storage_key);
+                ESP_LOGI(TAG, "SKIP post_id=%d: terminal LTF (key=%.8s...)", entry.post_id, s_dl_storage_key);
                 continue;
             }
 

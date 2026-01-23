@@ -10,6 +10,7 @@
  */
 
 #include "play_scheduler_internal.h"
+#include "channel_cache.h"
 #include "esp_log.h"
 #include <limits.h>
 #include <math.h>
@@ -26,13 +27,12 @@ static const char *TAG = "ps_swrr";
  * @brief Get effective count for a channel (available for Makapix, entry for SD)
  *
  * For Makapix channels, uses available_count (LAi) since those are the only
- * artworks that can actually be picked. For SD card channels (no LAi yet),
- * uses entry_count.
+ * artworks that can actually be picked. For SD card channels, uses entry_count.
  */
 static inline size_t get_effective_count(const ps_channel_state_t *ch)
 {
-    if (ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX) {
-        return ch->available_count;
+    if (ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX && ch->cache) {
+        return ch->cache->available_count;
     }
     return ch->entry_count;
 }
@@ -42,7 +42,14 @@ static inline size_t get_effective_count(const ps_channel_state_t *ch)
  */
 static inline bool has_available_artwork(const ps_channel_state_t *ch)
 {
-    if (!ch->active || ch->entry_count == 0) {
+    if (!ch->active) {
+        return false;
+    }
+    // Makapix: check cache directly; SD card: check entry_count
+    size_t entry_count = (ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX && ch->cache)
+                         ? ch->cache->entry_count
+                         : ch->entry_count;
+    if (entry_count == 0) {
         return false;
     }
     return get_effective_count(ch) > 0;
@@ -212,13 +219,13 @@ void ps_swrr_calculate_weights(ps_state_t *state)
     // Log weights
     for (size_t i = 0; i < state->channel_count; i++) {
         ps_channel_state_t *ch = &state->channels[i];
-        if (ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX) {
+        if (ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX && ch->cache) {
             ESP_LOGD(TAG, "Channel '%s': weight=%lu, active=%d, entries=%zu, available=%zu",
                      ch->channel_id,
                      (unsigned long)ch->weight,
                      ch->active,
-                     ch->entry_count,
-                     ch->available_count);
+                     ch->cache->entry_count,
+                     ch->cache->available_count);
         } else {
             ESP_LOGD(TAG, "Channel '%s': weight=%lu, active=%d, entries=%zu (SD card)",
                      ch->channel_id,
@@ -265,6 +272,22 @@ int ps_swrr_select_channel(ps_state_t *state)
     // Deduct WSUM from selected channel
     if (best >= 0) {
         state->channels[best].credit -= WSUM;
+
+        // Log SWRR selection with all channel credits
+        ESP_LOGI(TAG, "SWRR selected channel[%d] '%s' (credit was %ld, now %ld)",
+                 best, state->channels[best].channel_id,
+                 (long)(best_credit), (long)state->channels[best].credit);
+
+        // Log all channel credits for debugging
+        for (size_t i = 0; i < state->channel_count; i++) {
+            ps_channel_state_t *ch = &state->channels[i];
+            if (ch->active && ch->weight > 0) {
+                size_t eff_count = get_effective_count(ch);
+                ESP_LOGD(TAG, "  SWRR ch[%zu] '%s': credit=%ld, weight=%lu, eff_count=%zu",
+                         i, ch->channel_id, (long)ch->credit,
+                         (unsigned long)ch->weight, eff_count);
+            }
+        }
     }
 
     return best;

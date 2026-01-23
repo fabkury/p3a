@@ -148,9 +148,13 @@ button {
 <h1>Firmware Update<span class="dev-badge" id="dev-badge" style="display:none">DEV</span></h1>
 <div class="status-message" id="status-msg"></div>
 <div class="card">
-<div class="version-row"><span class="version-label">Current Version</span><span class="version-value" id="current-ver">-</span></div>
+<div class="version-row"><span class="version-label">Firmware Version</span><span class="version-value" id="current-ver">-</span></div>
 <div class="version-row"><span class="version-label">Available</span><span class="version-value" id="available-ver">-</span></div>
 <div class="version-row"><span class="version-label">Status</span><span class="version-value" id="state">-</span></div>
+</div>
+<div class="card">
+<div class="version-row"><span class="version-label">Web UI Version</span><span class="version-value" id="webui-ver">-</span></div>
+<div class="version-row"><span class="version-label">Status</span><span class="version-value" id="webui-status">-</span></div>
 </div>
 <div class="progress-container" id="progress">
 <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
@@ -226,6 +230,26 @@ function fetchStatus() {
     fetch('/ota/status').then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok) updateUI(d.data);
     }).catch(function(e) { console.error('Status fetch error:', e); });
+    fetch('/ota/webui/status').then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok && d.data) updateWebuiUI(d.data);
+    }).catch(function(e) { console.error('WebUI status fetch error:', e); });
+}
+function updateWebuiUI(data) {
+    document.getElementById('webui-ver').textContent = data.current_version || 'Unknown';
+    var statusEl = document.getElementById('webui-status');
+    if (!data.partition_valid || data.needs_recovery) {
+        statusEl.textContent = 'Recovery needed';
+        statusEl.style.color = '#c62828';
+    } else if (data.update_available) {
+        statusEl.textContent = 'Update available: ' + data.available_version;
+        statusEl.className = 'version-value update-available';
+    } else if (data.auto_update_disabled) {
+        statusEl.textContent = 'Auto-update disabled (failures: ' + data.failure_count + ')';
+        statusEl.style.color = '#ff9800';
+    } else {
+        statusEl.textContent = 'Up to date';
+        statusEl.style.color = '#4CAF50';
+    }
 }
 function checkUpdate() {
     showStatus('Checking for updates...', 'info');

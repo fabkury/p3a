@@ -114,9 +114,11 @@ void build_vault_path_from_storage_key(const makapix_channel_t *ch,
                                         char *out, size_t out_len);
 
 /**
- * @brief Recover/cleanup channel index (.bin) and its temp (.bin.tmp)
+ * @brief Recover/cleanup channel cache (.cache) and its temp (.cache.tmp)
+ *
+ * Validates files by checking for CHANNEL_CACHE_MAGIC header.
  */
-void makapix_index_recover_and_cleanup(const char *index_path);
+void makapix_cache_recover_and_cleanup(const char *cache_path);
 
 /**
  * @brief Detect file type from URL
@@ -131,11 +133,6 @@ file_extension_t detect_file_type(const char *url);
  * @brief Background refresh task implementation
  */
 void refresh_task_impl(void *pvParameters);
-
-/**
- * @brief Update channel index (.bin) with new posts
- */
-esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *posts, size_t count);
 
 /**
  * @brief Evict excess artworks beyond limit

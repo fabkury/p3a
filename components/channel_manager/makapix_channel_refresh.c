@@ -254,7 +254,13 @@ esp_err_t load_channel_metadata(makapix_channel_t *ch, char *out_cursor, time_t 
     return ESP_OK;
 }
 
-esp_err_t update_index_bin(makapix_channel_t *ch, const makapix_post_t *posts, size_t count)
+/**
+ * @brief Merge a batch of posts from refresh into the channel cache
+ *
+ * Finds the registered cache for the channel and merges the new posts.
+ * This is called for each batch received during channel refresh.
+ */
+static esp_err_t merge_refresh_batch(makapix_channel_t *ch, const makapix_post_t *posts, size_t count)
 {
     if (!ch || !posts || count == 0) return ESP_ERR_INVALID_ARG;
 
@@ -578,8 +584,8 @@ void refresh_task_impl(void *pvParameters)
                 break;
             }
 
-            // Update channel index with new posts
-            esp_err_t merge_err = update_index_bin(ch, resp->posts, resp->post_count);
+            // Merge batch into channel cache
+            esp_err_t merge_err = merge_refresh_batch(ch, resp->posts, resp->post_count);
             if (merge_err == ESP_OK) {
                 channel_cache_t *diag_cache = channel_cache_registry_find(ch->channel_id);
                 ESP_LOGI(TAG, "Batch merged: ch='%s' entry_count=%zu available=%zu",

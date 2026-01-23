@@ -1,5 +1,17 @@
 menu "OTA Manager Configuration"
 
+config OTA_WEBUI_ENABLE
+    bool "Enable Web UI OTA updates"
+    default y
+    help
+        Enable automatic over-the-air updates for the web UI partition.
+        When enabled, the device will check for web UI updates alongside
+        firmware updates and install them automatically.
+
+        The web UI version is independent of the firmware version.
+        Updates are downloaded from GitHub Releases (storage.bin) and
+        written directly to the LittleFS partition.
+
 config OTA_DEV_MODE
     bool "Enable OTA development mode"
     default n
@@ -7,7 +19,7 @@ config OTA_DEV_MODE
         When enabled, the device will also check for and install pre-release
         versions from GitHub. This is useful for testing OTA updates before
         publishing them to all users.
-        
+
         Testing workflow:
         1. Enable this option during development
         2. Create pre-releases on GitHub for testing

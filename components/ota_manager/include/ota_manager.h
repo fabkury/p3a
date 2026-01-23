@@ -52,6 +52,19 @@ typedef struct {
 } ota_status_t;
 
 /**
+ * @brief Web UI OTA status information
+ */
+typedef struct {
+    char current_version[16];       ///< Current web UI version (X.Y format)
+    char available_version[16];     ///< Available web UI version (if any)
+    bool update_available;          ///< True if a newer version is available
+    bool partition_valid;           ///< True if storage partition is valid
+    bool needs_recovery;            ///< True if auto-recovery is pending
+    bool auto_update_disabled;      ///< True if too many failures disabled auto-update
+    uint8_t failure_count;          ///< Consecutive OTA failure count
+} webui_ota_status_t;
+
+/**
  * @brief Progress callback function type
  * 
  * @param percent Progress percentage (0-100)
@@ -166,11 +179,80 @@ bool ota_manager_is_checking(void);
 
 /**
  * @brief Get string representation of OTA state
- * 
+ *
  * @param state OTA state
  * @return State name string
  */
 const char *ota_state_to_string(ota_state_t state);
+
+// =============================================================================
+// Web UI OTA Functions (storage partition updates)
+// =============================================================================
+
+/**
+ * @brief Get current web UI version
+ *
+ * Reads version from /spiffs/version.txt
+ *
+ * @param[out] version Buffer to store version string (at least 16 bytes)
+ * @param buf_size Size of version buffer
+ * @return ESP_OK on success, ESP_ERR_NOT_FOUND if version.txt missing
+ */
+esp_err_t webui_ota_get_current_version(char *version, size_t buf_size);
+
+/**
+ * @brief Get web UI OTA status
+ *
+ * @param[out] status Pointer to status structure to fill
+ * @return ESP_OK on success
+ */
+esp_err_t webui_ota_get_status(webui_ota_status_t *status);
+
+/**
+ * @brief Check if web UI partition is healthy
+ *
+ * Checks NVS flag and verifies version.txt exists.
+ *
+ * @return true if partition is healthy, false if recovery needed
+ */
+bool webui_ota_is_partition_healthy(void);
+
+/**
+ * @brief Set storage partition needs recovery flag
+ *
+ * Called when partition corruption is detected.
+ */
+void webui_ota_set_needs_recovery(void);
+
+/**
+ * @brief Trigger web UI repair (force re-download)
+ *
+ * Forces a re-download of storage.bin regardless of version.
+ * Used for manual recovery when web UI is broken.
+ *
+ * @return ESP_OK if repair started, error code otherwise
+ */
+esp_err_t webui_ota_trigger_repair(void);
+
+/**
+ * @brief Install web UI update
+ *
+ * Downloads and writes storage.bin to the LittleFS partition.
+ * This function handles:
+ * - SHA256 verification of download
+ * - Defensive NVS flag management
+ * - Partition erase and write
+ * - Post-write verification
+ * - LittleFS remount
+ *
+ * @param download_url URL to download storage.bin from
+ * @param expected_sha256 Expected SHA256 hash (64-char hex string)
+ * @param progress_cb Optional progress callback
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t webui_ota_install_update(const char *download_url,
+                                    const char *expected_sha256,
+                                    ota_progress_cb_t progress_cb);
 
 #ifdef __cplusplus
 }

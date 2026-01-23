@@ -11,7 +11,15 @@ cmake_minimum_required(VERSION 3.16)
 # - Increment MINOR for new features (backward compatible)
 # - Increment PATCH for bug fixes
 # For testing OTA, use pre-release versions on GitHub
-set(PROJECT_VER "0.7.4-dev")
+set(PROJECT_VER "0.7.5-dev")
+# =============================================================================
+
+# =============================================================================
+# Web UI Version (Independent from firmware)
+# =============================================================================
+# Web UI version uses X.Y format (not X.Y.Z). Updates are independent of
+# firmware updates and are checked/installed automatically during OTA checks.
+set(WEBUI_VERSION "0.6")
 # =============================================================================
 
 # =============================================================================
@@ -39,6 +47,14 @@ set(RELEASE_SUBDIR "release/v${PROJECT_VER}")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 add_compile_options(-Wno-ignored-qualifiers)
 project(p3a)
+
+# =============================================================================
+# Generate version.txt for Web UI OTA
+# =============================================================================
+# Write the WEBUI_VERSION to webui/version.txt so it's included in the LittleFS image
+# This allows runtime detection of the current web UI version
+file(WRITE "${CMAKE_SOURCE_DIR}/webui/version.txt" "${WEBUI_VERSION}")
+message(STATUS "Generated webui/version.txt with version ${WEBUI_VERSION}")
 
 # Create LittleFS image from webui directory
 # When PICO-8 is disabled, filter out PICO-8 related assets to reduce binary size
@@ -101,6 +117,7 @@ release_subdir = '${RELEASE_SUBDIR}'
 is_dev_build = '${IS_DEV_BUILD}' != ''  # True if version contains -dev, -alpha, etc.
 release_dir = os.path.join(project_dir, release_subdir)
 version = '${PROJECT_VER}'
+webui_version = '${WEBUI_VERSION}'
 
 # Create release directory
 os.makedirs(release_dir, exist_ok=True)
@@ -342,6 +359,43 @@ Compare with contents of `p3a.bin.sha256`.
 ''')
 
 print(f'  OK: README.md')
+
+# Generate manifest.json for OTA updates
+# This file contains version info and SHA256 hashes for both firmware and web UI
+import json
+
+manifest = {
+    'firmware': {
+        'version': version,
+        'file': 'p3a.bin',
+        'sha256': None  # Will be filled below
+    },
+    'webui': {
+        'version': webui_version,
+        'file': 'storage.bin',
+        'sha256': None  # Will be filled below
+    }
+}
+
+# Read SHA256 from the .sha256 files we already generated
+p3a_sha_path = os.path.join(release_dir, 'p3a.bin.sha256')
+storage_sha_path = os.path.join(release_dir, 'storage.bin.sha256')
+
+if os.path.exists(p3a_sha_path):
+    with open(p3a_sha_path, 'r') as f:
+        manifest['firmware']['sha256'] = f.read().strip()
+
+if os.path.exists(storage_sha_path):
+    with open(storage_sha_path, 'r') as f:
+        manifest['webui']['sha256'] = f.read().strip()
+
+manifest_path = os.path.join(release_dir, 'manifest.json')
+with open(manifest_path, 'w') as f:
+    json.dump(manifest, f, indent=2)
+
+print(f'  OK: manifest.json')
+print(f'      Firmware: {version} (SHA256: {manifest[\"firmware\"][\"sha256\"][:16] if manifest[\"firmware\"][\"sha256\"] else \"N/A\"}...)')
+print(f'      Web UI:   {webui_version} (SHA256: {manifest[\"webui\"][\"sha256\"][:16] if manifest[\"webui\"][\"sha256\"] else \"N/A\"}...)')
 
 print(f'\\n========== Release files ready ==========\\n')
 ")

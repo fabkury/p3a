@@ -8,14 +8,6 @@ menu "Play Scheduler"
             Number of previously played artworks to keep in history.
             Allows navigation back through recently played items.
 
-    config PLAY_SCHEDULER_LOOKAHEAD_SIZE
-        int "Lookahead buffer size"
-        default 32
-        range 8 128
-        help
-            Number of upcoming artworks to pre-generate.
-            Larger values reduce generation overhead but use more memory.
-
     config PLAY_SCHEDULER_NAE_POOL_SIZE
         int "NAE pool size"
         default 32

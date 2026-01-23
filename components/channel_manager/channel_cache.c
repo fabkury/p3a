@@ -197,9 +197,7 @@ void channel_cache_build_path(const char *channel_id,
     }
     safe_id[j] = '\0';
 
-    // Use .cache extension to avoid conflict with raw index .bin files
-    // written by the refresh task. This allows the cache (with header + LAi)
-    // to persist independently of the index file updates.
+    // Use .cache extension - this is the unified persistence format with header + Ci + LAi
     snprintf(out, out_len, "%s/%s.cache", channels_path, safe_id);
 }
 
@@ -497,29 +495,6 @@ void channel_cache_deinit(void)
     ESP_LOGI(TAG, "Channel cache subsystem deinitialized");
 }
 
-/**
- * @brief Build legacy index file path ({channel_id}.bin)
- * Used for migration from old format to new .cache format.
- */
-static void build_legacy_index_path(const char *channel_id,
-                                    const char *channels_path,
-                                    char *out, size_t out_len)
-{
-    // Sanitize channel_id (same as cache path)
-    char safe_id[64];
-    size_t j = 0;
-    for (size_t i = 0; channel_id[i] && j < sizeof(safe_id) - 1; i++) {
-        char c = channel_id[i];
-        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-            (c >= '0' && c <= '9') || c == '-' || c == '_') {
-            safe_id[j++] = c;
-        }
-    }
-    safe_id[j] = '\0';
-
-    snprintf(out, out_len, "%s/%s.bin", channels_path, safe_id);
-}
-
 esp_err_t channel_cache_load(const char *channel_id,
                              const char *channels_path,
                              const char *vault_path,
@@ -549,62 +524,14 @@ esp_err_t channel_cache_load(const char *channel_id,
     strncpy(s_cache_state.channels_path, channels_path,
             sizeof(s_cache_state.channels_path) - 1);
 
-    // Build file paths
+    // Build cache file path (.cache is the only persistence format)
     char cache_path[256];
-    char index_path[256];
     channel_cache_build_path(channel_id, channels_path, cache_path, sizeof(cache_path));
-    build_legacy_index_path(channel_id, channels_path, index_path, sizeof(index_path));
 
-    // Check if files exist
-    struct stat cache_st = {0}, index_st = {0};
-    bool have_cache = (stat(cache_path, &cache_st) == 0);
-    bool have_index = (stat(index_path, &index_st) == 0);
-
-    // NOTE: We do NOT compare mtimes here. The cache file (.cache) is authoritative once it exists.
-    // The refresh completion handler updates the cache entries and saves it, so we don't need
-    // to reload from the raw index (.bin) just because it's newer. This prevents repeated
-    // LAi rebuilds which are expensive.
-
-    // Try to open the new format cache file first (.cache)
-    FILE *f = NULL;
-    if (have_cache) {
-        f = fopen(cache_path, "rb");
-    }
-
-    if (f) {
-        // Cache file exists - check if it's valid new format
-        if (!is_legacy_format(f)) {
-            ESP_LOGI(TAG, "Loading cache (new format) for '%s'", channel_id);
-            esp_err_t err = load_new_format(f, cache);
-            fclose(f);
-            
-            if (err == ESP_OK) {
-                ESP_LOGI(TAG, "Loaded cache '%s': %zu entries, %zu available",
-                         channel_id, cache->entry_count, cache->available_count);
-                return ESP_OK;
-            }
-            
-            ESP_LOGW(TAG, "Cache file corrupt for '%s': %s, will try index",
-                     channel_id, esp_err_to_name(err));
-            // Fall through to try index file
-        } else {
-            // Shouldn't happen with .cache files, but handle gracefully
-            ESP_LOGW(TAG, "Cache file '%s' has legacy format, migrating", cache_path);
-            esp_err_t err = load_legacy_format(f, cache, vault_path);
-            fclose(f);
-            
-            if (err == ESP_OK) {
-                ESP_LOGI(TAG, "Loaded cache '%s': %zu entries, %zu available (migrated)",
-                         channel_id, cache->entry_count, cache->available_count);
-                return ESP_OK;
-            }
-            // Fall through to try index file
-        }
-    }
-
-    // No .cache file, cache corrupt, or index is newer - load from .bin index file
-    if (!have_index) {
-        ESP_LOGI(TAG, "No cache or index for '%s', starting empty", channel_id);
+    // Try to open cache file
+    FILE *f = fopen(cache_path, "rb");
+    if (!f) {
+        ESP_LOGI(TAG, "No cache for '%s', starting empty (server refresh will populate)", channel_id);
 
         // Pre-allocate LAi array to support incremental batch updates
         // This allows channel_cache_merge_posts() to work correctly on empty cache
@@ -614,35 +541,42 @@ esp_err_t channel_cache_load(const char *channel_id,
         return ESP_OK;  // Empty cache is valid
     }
 
-    f = fopen(index_path, "rb");
-    if (!f) {
-        ESP_LOGI(TAG, "Cannot open index for '%s', starting empty", channel_id);
-        return ESP_OK;  // Empty cache is valid
-    }
+    // Cache file exists - check if it's valid new format
+    if (!is_legacy_format(f)) {
+        ESP_LOGI(TAG, "Loading cache for '%s'", channel_id);
+        esp_err_t err = load_new_format(f, cache);
+        fclose(f);
 
-    ESP_LOGI(TAG, "Loading from index for '%s' (will rebuild LAi)", channel_id);
-    esp_err_t err = load_legacy_format(f, cache, vault_path);
-    fclose(f);
+        if (err == ESP_OK) {
+            ESP_LOGI(TAG, "Loaded cache '%s': %zu entries, %zu available",
+                     channel_id, cache->entry_count, cache->available_count);
+            return ESP_OK;
+        }
 
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to load index for '%s': %s, starting empty",
+        ESP_LOGW(TAG, "Cache file corrupt for '%s': %s, starting empty",
                  channel_id, esp_err_to_name(err));
-        // Clean up partial state (including hash tables)
-        ci_hash_free(cache);
-        lai_hash_free(cache);
-        free(cache->entries);
-        free(cache->available_post_ids);
-        cache->entries = NULL;
-        cache->available_post_ids = NULL;
-        cache->entry_count = 0;
-        cache->available_count = 0;
-        cache->dirty = false;
-        return ESP_OK;  // Return success with empty cache
+    } else {
+        // Legacy format in .cache file - migrate it
+        ESP_LOGW(TAG, "Cache file '%s' has legacy format, migrating", cache_path);
+        esp_err_t err = load_legacy_format(f, cache, vault_path);
+        fclose(f);
+
+        if (err == ESP_OK) {
+            ESP_LOGI(TAG, "Loaded cache '%s': %zu entries, %zu available (migrated)",
+                     channel_id, cache->entry_count, cache->available_count);
+            return ESP_OK;
+        }
+
+        ESP_LOGW(TAG, "Failed to migrate legacy cache '%s': %s, starting empty",
+                 channel_id, esp_err_to_name(err));
     }
 
-    ESP_LOGI(TAG, "Loaded cache '%s': %zu entries, %zu available (from index)",
-             channel_id, cache->entry_count, cache->available_count);
-    return ESP_OK;
+    // Cache corrupt or migration failed - start empty
+    // Pre-allocate LAi array for batch updates
+    cache->available_post_ids = psram_malloc(1024 * sizeof(int32_t));
+    cache->available_count = 0;
+
+    return ESP_OK;  // Empty cache is valid
 }
 
 esp_err_t channel_cache_save(const channel_cache_t *cache, const char *channels_path)
@@ -911,6 +845,10 @@ size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
     // Extension strings WITH leading dot (matches actual vault storage)
     static const char *ext_strings[] = {".webp", ".gif", ".png", ".jpg"};
 
+    // Reusable path buffers - declared outside loop to reduce peak stack usage
+    char file_path[256];
+    char marker_path[264];
+
     for (size_t i = 0; i < cache->entry_count; i++) {
         const makapix_channel_entry_t *entry = &cache->entries[i];
 
@@ -938,7 +876,6 @@ size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
 
         int ext_idx = (entry->extension < 4) ? entry->extension : 0;
 
-        char file_path[256];
         snprintf(file_path, sizeof(file_path), "%s/%s/%s/%s/%s%s",
                  vault_path, dir1, dir2, dir3, uuid_str, ext_strings[ext_idx]);
 
@@ -948,7 +885,6 @@ size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
         struct stat st;
         if (stat(file_path, &st) == 0 && S_ISREG(st.st_mode)) {
             // Also check for .404 marker
-            char marker_path[264];
             snprintf(marker_path, sizeof(marker_path), "%s.404", file_path);
             if (stat(marker_path, &st) != 0) {
                 // File exists and no 404 marker - store post_id (not ci_index)
@@ -1072,6 +1008,19 @@ void channel_cache_unregister(channel_cache_t *cache)
         return;
     }
 
+    // Flush dirty cache before unregistering to prevent data loss on channel switch.
+    // Done outside registry mutex to avoid holding it during SD card I/O.
+    if (cache->dirty && s_cache_state.channels_path[0] != '\0') {
+        esp_err_t err = channel_cache_save(cache, s_cache_state.channels_path);
+        if (err == ESP_OK) {
+            cache->dirty = false;
+            ESP_LOGD(TAG, "Flushed dirty cache '%s' before unregister", cache->channel_id);
+        } else {
+            ESP_LOGW(TAG, "Failed to flush cache '%s' before unregister: %s",
+                     cache->channel_id, esp_err_to_name(err));
+        }
+    }
+
     xSemaphoreTake(s_cache_state.registry_mutex, portMAX_DELAY);
 
     for (size_t i = 0; i < s_cache_state.registered_count; i++) {
@@ -1150,6 +1099,7 @@ esp_err_t channel_cache_get_next_missing(channel_cache_t *cache,
 
         // Skip non-artwork entries
         if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+            ESP_LOGI(TAG, "SKIP post_id=%d: non-artwork (kind=%d)", entry->post_id, entry->kind);
             continue;
         }
 
@@ -1200,16 +1150,6 @@ static void build_vault_path_from_entry(const makapix_channel_entry_t *entry,
     int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
     snprintf(out, out_len, "%s/%s/%s/%s/%s%s",
              vault_path, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
-}
-
-/**
- * @brief Build channel index path from cache
- */
-static void build_index_path_from_cache(const channel_cache_t *cache,
-                                        const char *channels_path,
-                                        char *out, size_t out_len)
-{
-    snprintf(out, out_len, "%s/%s.bin", channels_path, cache->channel_id);
 }
 
 /**
@@ -1473,75 +1413,6 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
         all_count = CHANNEL_CACHE_MAX_ENTRIES;
     }
 
-    // Build index path and write to disk atomically
-    char index_path[256];
-    build_index_path_from_cache(cache, channels_path, index_path, sizeof(index_path));
-
-    // Ensure directory exists
-    char dir_path[256];
-    strncpy(dir_path, index_path, sizeof(dir_path) - 1);
-    dir_path[sizeof(dir_path) - 1] = '\0';
-    char *dir_sep = strrchr(dir_path, '/');
-    if (dir_sep) {
-        *dir_sep = '\0';
-        struct stat st;
-        if (stat(dir_path, &st) != 0) {
-            if (mkdir(dir_path, 0755) != 0 && errno != EEXIST) {
-                ESP_LOGW(TAG, "Failed to create directory %s: %d", dir_path, errno);
-            }
-        }
-    }
-
-    // Write to temp file
-    char temp_path[260];
-    snprintf(temp_path, sizeof(temp_path), "%s.tmp", index_path);
-
-    FILE *f = fopen(temp_path, "wb");
-    if (!f) {
-        ESP_LOGE(TAG, "Failed to open %s for writing: %d", temp_path, errno);
-        free(all_entries);
-        xSemaphoreGive(cache->mutex);
-        return ESP_FAIL;
-    }
-
-    size_t written = fwrite(all_entries, sizeof(makapix_channel_entry_t), all_count, f);
-    fflush(f);
-    fsync(fileno(f));
-    fclose(f);
-
-    if (written != all_count) {
-        ESP_LOGE(TAG, "Failed to write channel index: %zu/%zu", written, all_count);
-        unlink(temp_path);
-        free(all_entries);
-        xSemaphoreGive(cache->mutex);
-        return ESP_FAIL;
-    }
-
-    // FATFS rename() won't overwrite an existing destination: remove old index first
-    if (unlink(index_path) != 0 && errno != ENOENT) {
-        ESP_LOGW(TAG, "Failed to unlink old index before rename: %s (errno=%d)", index_path, errno);
-    }
-
-    if (rename(temp_path, index_path) != 0) {
-        const int rename_errno = errno;
-        if (rename_errno == EEXIST) {
-            (void)unlink(index_path);
-            if (rename(temp_path, index_path) != 0) {
-                ESP_LOGE(TAG, "Failed to rename index temp file: %d", errno);
-                unlink(temp_path);
-                free(all_entries);
-                xSemaphoreGive(cache->mutex);
-                return ESP_FAIL;
-            }
-        } else {
-            ESP_LOGE(TAG, "Failed to rename index temp file: %d", rename_errno);
-            unlink(temp_path);
-            free(all_entries);
-            xSemaphoreGive(cache->mutex);
-            return ESP_FAIL;
-        }
-    }
-
     // Update cache entries
     free(cache->entries);
     cache->entries = all_entries;
@@ -1561,13 +1432,21 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
         }
     }
 
-    // Mark dirty for LAi persistence
-    cache->dirty = true;
-
     ESP_LOGD(TAG, "Merged %zu posts into cache '%s': total %zu entries",
              count, cache->channel_id, all_count);
 
+    // Release mutex before I/O to avoid blocking other threads
     xSemaphoreGive(cache->mutex);
+
+    // Save immediately to persist Ci changes (unified .cache file)
+    esp_err_t save_err = channel_cache_save(cache, channels_path);
+    if (save_err == ESP_OK) {
+        cache->dirty = false;
+    } else {
+        ESP_LOGW(TAG, "Failed to save cache after merge: %s", esp_err_to_name(save_err));
+        cache->dirty = true;  // Mark dirty for later retry via debounce
+    }
+
     return ret;
 }
 

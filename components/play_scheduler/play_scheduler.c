@@ -58,7 +58,7 @@ static const char *TAG = "play_scheduler";
 // When implementing Live Mode in Play Scheduler:
 // 1. Add live_mode flag to ps_state_t
 // 2. Use SNTP time sync for coordination (sntp_sync.h)
-// 3. Build flattened schedule from lookahead entries
+// 3. Build flattened schedule from channel entries
 // 4. Calculate start_time_ms and start_frame for swap requests
 // 5. Wire into swap_future.c for scheduled swaps
 //
@@ -343,12 +343,10 @@ void play_scheduler_deinit(void)
     }
 
     // Free channel entries
-    // IMPORTANT: For Makapix channels, ch->entries is an ALIAS to ch->cache->entries
-    // and must NOT be freed directly. The cache owns the memory.
     for (size_t i = 0; i < s_state.channel_count; i++) {
         ps_channel_state_t *ch = &s_state.channels[i];
         if (ch->cache) {
-            // Makapix channel - cache owns entries/available_post_ids
+            // Makapix channel - cache owns all memory
             channel_cache_unregister(ch->cache);
             channel_cache_free(ch->cache);
             free(ch->cache);
@@ -406,12 +404,10 @@ esp_err_t play_scheduler_set_channels(
     ESP_LOGI(TAG, "Setting %zu channel(s), mode=%d", count, mode);
 
     // Free old channel entries before reconfiguring
-    // IMPORTANT: For Makapix channels, ch->entries is an ALIAS to ch->cache->entries
-    // and must NOT be freed directly. The cache owns the memory.
     for (size_t i = 0; i < s_state.channel_count; i++) {
         ps_channel_state_t *ch = &s_state.channels[i];
         if (ch->cache) {
-            // Makapix channel - cache owns entries/available_post_ids
+            // Makapix channel - cache owns all memory
             channel_cache_unregister(ch->cache);
             channel_cache_free(ch->cache);
             free(ch->cache);
@@ -522,7 +518,6 @@ esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats)
 
     out_stats->channel_count = s_state.channel_count;
     out_stats->history_count = s_state.history_count;
-    out_stats->lookahead_count = 0;  // No longer using lookahead buffer
     out_stats->nae_pool_count = s_state.nae_count;
     out_stats->epoch_id = s_state.epoch_id;
     out_stats->current_channel_id = s_state.channel_count > 0

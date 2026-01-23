@@ -343,7 +343,7 @@ esp_err_t channel_cache_get_next_missing(channel_cache_t *cache,
  * Merges new entries with existing entries, deduplicating by post_id+kind.
  * Updates artwork file timestamps if changed on server (deletes local file
  * to trigger re-download).
- * Writes merged entries to disk atomically (raw .bin format for compatibility).
+ * Saves merged entries to the unified .cache file atomically.
  * Thread-safe.
  *
  * @param cache Cache to update

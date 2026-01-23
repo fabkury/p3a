@@ -166,6 +166,14 @@ esp_err_t h_get_settings(httpd_req_t *req);
 // ---------- Handler Registration Functions ----------
 
 /**
+ * @brief Initialize web UI health check
+ *
+ * Call this after LittleFS is mounted to check partition health.
+ * If unhealthy, HTML pages will serve the surrogate UI.
+ */
+void http_api_pages_init_health_check(void);
+
+/**
  * @brief Register page handlers (root, config/network, erase, favicon, static files, pico8, pico_stream)
  */
 void http_api_register_page_handlers(httpd_handle_t server);
@@ -214,4 +222,11 @@ esp_err_t h_get_pico8(httpd_req_t *req);
  * @brief WebSocket /pico_stream - Handle PICO-8 streaming
  */
 esp_err_t h_ws_pico_stream(httpd_req_t *req);
+
+/**
+ * @brief POST /pico8/exit - Exit PICO-8 mode immediately
+ *
+ * Called by browser on page navigation/unload to ensure immediate exit.
+ */
+esp_err_t h_post_pico8_exit(httpd_req_t *req);
 #endif

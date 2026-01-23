@@ -255,6 +255,26 @@ esp_err_t p3a_board_littlefs_mount(void);
  */
 bool p3a_board_littlefs_is_mounted(void);
 
+/**
+ * @brief Check if web UI partition is healthy
+ *
+ * Call after mounting to verify partition integrity.
+ * If unhealthy, the web UI surrogate will be served.
+ *
+ * @return true if web UI is usable
+ */
+bool p3a_board_webui_is_healthy(void);
+
+/**
+ * @brief Perform health check on LittleFS partition
+ *
+ * Checks NVS flags and verifies version.txt exists.
+ * Sets needs_recovery flag if partition is unhealthy.
+ *
+ * @return ESP_OK if healthy, ESP_ERR_NOT_FOUND if unhealthy
+ */
+esp_err_t p3a_board_littlefs_check_health(void);
+
 // ============================================================================
 // LEGACY COMPATIBILITY MACROS
 // These provide backward compatibility during migration

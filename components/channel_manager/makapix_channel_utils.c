@@ -2,6 +2,7 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "makapix_channel_internal.h"
+#include "channel_cache.h"
 #include "esp_log.h"
 #include "mbedtls/sha256.h"
 #include <stdlib.h>
@@ -18,64 +19,69 @@ static const char *TAG = "makapix_channel_utils";
 // Extension strings for building file paths
 const char *s_ext_strings[] = { ".webp", ".gif", ".png", ".jpg" };
 
-// Cheap validation for index files
-#define MAKAPIX_INDEX_MAX_ENTRIES 8192  // 8192 * 64 = 512KB max index size
-
-static bool makapix_index_file_stat_is_valid(const struct stat *st)
+/**
+ * @brief Validate a cache file by checking its header magic
+ *
+ * @param path Path to the cache file
+ * @return true if file has valid CHANNEL_CACHE_MAGIC header
+ */
+static bool makapix_cache_file_is_valid(const char *path)
 {
-    if (!st) return false;
-    if (!S_ISREG(st->st_mode)) return false;
-    if (st->st_size <= 0) return false;
-    if ((st->st_size % (long)sizeof(makapix_channel_entry_t)) != 0) return false;
-    if (st->st_size > (long)(MAKAPIX_INDEX_MAX_ENTRIES * sizeof(makapix_channel_entry_t))) return false;
-    return true;
+    FILE *f = fopen(path, "rb");
+    if (!f) return false;
+
+    uint32_t magic = 0;
+    size_t read = fread(&magic, sizeof(magic), 1, f);
+    fclose(f);
+
+    return (read == 1 && magic == CHANNEL_CACHE_MAGIC);
 }
 
-void makapix_index_recover_and_cleanup(const char *index_path)
+void makapix_cache_recover_and_cleanup(const char *cache_path)
 {
-    if (!index_path) return;
+    if (!cache_path) return;
 
     char tmp_path[260];
-    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", index_path);
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", cache_path);
 
-    struct stat st_bin = {0};
+    struct stat st_cache = {0};
     struct stat st_tmp = {0};
-    const bool have_bin = (stat(index_path, &st_bin) == 0);
+    const bool have_cache = (stat(cache_path, &st_cache) == 0);
     const bool have_tmp = (stat(tmp_path, &st_tmp) == 0);
 
     if (!have_tmp) return;
 
-    const bool tmp_valid = makapix_index_file_stat_is_valid(&st_tmp);
-    const bool bin_valid = have_bin ? makapix_index_file_stat_is_valid(&st_bin) : false;
+    const bool tmp_valid = makapix_cache_file_is_valid(tmp_path);
+    const bool cache_valid = have_cache ? makapix_cache_file_is_valid(cache_path) : false;
 
     if (!tmp_valid) {
-        ESP_LOGW(TAG, "Index temp file invalid; removing: %s (size=%ld)", tmp_path, (long)st_tmp.st_size);
+        ESP_LOGW(TAG, "Cache temp file invalid; removing: %s (size=%ld)", tmp_path, (long)st_tmp.st_size);
         unlink(tmp_path);
         return;
     }
 
-    if (!have_bin) {
-        // Index missing but temp exists and looks valid -> promote temp.
-        ESP_LOGW(TAG, "Recovering missing channel index from temp: %s -> %s", tmp_path, index_path);
-        if (rename(tmp_path, index_path) != 0) {
-            ESP_LOGE(TAG, "Failed to recover index from temp: errno=%d (%s)", errno, strerror(errno));
+    if (!have_cache) {
+        // Cache missing but temp exists and looks valid -> promote temp.
+        ESP_LOGW(TAG, "Recovering missing channel cache from temp: %s -> %s", tmp_path, cache_path);
+        if (rename(tmp_path, cache_path) != 0) {
+            ESP_LOGE(TAG, "Failed to recover cache from temp: errno=%d (%s)", errno, strerror(errno));
         }
         return;
     }
 
     // Both exist. Choose which to keep.
-    if (!bin_valid || st_tmp.st_mtime >= st_bin.st_mtime) {
-        ESP_LOGW(TAG, "Promoting index temp over existing channel index (bin_valid=%d): %s -> %s",
-                 (int)bin_valid, tmp_path, index_path);
-        (void)unlink(index_path); // required on FATFS: rename() won't overwrite
-        if (rename(tmp_path, index_path) != 0) {
-            ESP_LOGE(TAG, "Failed to promote index temp: errno=%d (%s)", errno, strerror(errno));
+    if (!cache_valid || st_tmp.st_mtime >= st_cache.st_mtime) {
+        ESP_LOGW(TAG, "Promoting cache temp over existing channel cache (cache_valid=%d): %s -> %s",
+                 (int)cache_valid, tmp_path, cache_path);
+        (void)unlink(cache_path); // required on FATFS: rename() won't overwrite
+        if (rename(tmp_path, cache_path) != 0) {
+            ESP_LOGE(TAG, "Failed to promote cache temp: errno=%d (%s)", errno, strerror(errno));
         }
         return;
     }
 
-    // Existing index appears valid and newer than temp -> discard temp.
-    ESP_LOGW(TAG, "Discarding stale index temp file: %s", tmp_path);
+    // Existing cache appears valid and newer than temp -> discard temp.
+    ESP_LOGW(TAG, "Discarding stale cache temp file: %s", tmp_path);
     unlink(tmp_path);
 }
 

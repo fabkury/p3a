@@ -103,14 +103,15 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
         makapix_impl_unload(channel);
     }
 
-    char index_path[256];
-    build_index_path(ch, index_path, sizeof(index_path));
+    // Build .cache path (unified persistence format)
+    char cache_path[256];
+    channel_cache_build_path(ch->channel_id, ch->channels_path, cache_path, sizeof(cache_path));
 
-    // Recover/cleanup channel index before attempting to load
+    // Recover/cleanup cache file before attempting to load
     if (ch->index_io_lock) {
         xSemaphoreTake(ch->index_io_lock, portMAX_DELAY);
     }
-    makapix_index_recover_and_cleanup(index_path);
+    makapix_cache_recover_and_cleanup(cache_path);
 
     ESP_LOGD(TAG, "Loading channel: %s", ch->channel_id);
 
@@ -118,9 +119,9 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
     // This function just marks the channel as loaded and starts the refresh task.
     // The refresh task updates the registered cache via channel_cache_merge_posts().
 
-    // Check if index file exists to determine if we need a refresh
+    // Check if cache file exists to determine if we need a refresh
     struct stat st;
-    bool need_refresh = (stat(index_path, &st) != 0);
+    bool need_refresh = (stat(cache_path, &st) != 0);
 
     if (ch->index_io_lock) {
         xSemaphoreGive(ch->index_io_lock);
@@ -516,83 +517,92 @@ bool makapix_channel_is_refreshing(channel_handle_t channel)
     return ch ? ch->refreshing : false;
 }
 
+esp_err_t makapix_channel_stop_refresh(channel_handle_t channel)
+{
+    makapix_channel_t *ch = (makapix_channel_t *)channel;
+    if (!ch) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!ch->refreshing) {
+        return ESP_OK;  // Not refreshing, nothing to stop
+    }
+
+    ESP_LOGI(TAG, "Stopping refresh for channel: %s", ch->channel_id ? ch->channel_id : "(unknown)");
+    ch->refreshing = false;
+
+    // Signal shutdown to wake any blocked waits
+    makapix_channel_signal_refresh_shutdown();
+
+    // Wait for graceful exit (up to 5 seconds)
+    const int MAX_WAIT_ITERS = 50;  // 50 x 100ms = 5 seconds
+    for (int i = 0; i < MAX_WAIT_ITERS && ch->refresh_task != NULL; i++) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
+    // Clear shutdown signal for next operation
+    makapix_channel_clear_refresh_shutdown();
+
+    if (ch->refresh_task != NULL) {
+        ESP_LOGW(TAG, "Refresh task for %s did not exit gracefully",
+                 ch->channel_id ? ch->channel_id : "(unknown)");
+        return ESP_ERR_TIMEOUT;
+    }
+
+    ESP_LOGD(TAG, "Refresh task stopped successfully");
+    return ESP_OK;
+}
+
 esp_err_t makapix_channel_count_cached(const char *channel_id,
                                         const char *channels_path,
                                         const char *vault_path,
                                         size_t *out_total,
                                         size_t *out_cached)
 {
-    if (!channel_id || !channels_path || !vault_path) {
+    if (!channel_id || !channels_path) {
         return ESP_ERR_INVALID_ARG;
     }
-    
-    // Build index path
-    char index_path[256];
-    snprintf(index_path, sizeof(index_path), "%s/%s.bin", channels_path, channel_id);
-    
-    // Try to open index file
-    FILE *f = fopen(index_path, "rb");
+    (void)vault_path;  // No longer needed - LAi has the count
+
+    // Try in-memory cache first (fast path)
+    channel_cache_t *cache = channel_cache_registry_find(channel_id);
+    if (cache) {
+        if (out_total) *out_total = cache->entry_count;
+        if (out_cached) *out_cached = cache->available_count;
+        return ESP_OK;
+    }
+
+    // Fall back to reading .cache file header
+    char cache_path[256];
+    channel_cache_build_path(channel_id, channels_path, cache_path, sizeof(cache_path));
+
+    FILE *f = fopen(cache_path, "rb");
     if (!f) {
         if (out_total) *out_total = 0;
         if (out_cached) *out_cached = 0;
         return ESP_ERR_NOT_FOUND;
     }
-    
-    // Get file size
-    fseek(f, 0, SEEK_END);
-    long file_size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    
-    if (file_size <= 0 || file_size % sizeof(makapix_channel_entry_t) != 0) {
+
+    // Read and validate header
+    channel_cache_header_t header;
+    if (fread(&header, sizeof(header), 1, f) != 1) {
         fclose(f);
         if (out_total) *out_total = 0;
         if (out_cached) *out_cached = 0;
         return ESP_OK;
     }
-    
-    size_t entry_count = (size_t)(file_size / sizeof(makapix_channel_entry_t));
-    if (out_total) *out_total = entry_count;
-    
-    // Count cached artworks
-    size_t cached_count = 0;
-    makapix_channel_entry_t entry;
-    
-    for (size_t i = 0; i < entry_count; i++) {
-        if (fread(&entry, sizeof(entry), 1, f) != 1) {
-            break;
-        }
-        
-        if (entry.kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
-            continue;
-        }
-        
-        // Build vault path from storage_key_uuid
-        char storage_key[37];
-        bytes_to_uuid(entry.storage_key_uuid, storage_key, sizeof(storage_key));
-        
-        uint8_t sha256[32];
-        if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
-            continue;
-        }
-        char dir1[3], dir2[3], dir3[3];
-        snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
-        snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
-        snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
-        
-        int ext_idx = (entry.extension <= EXT_JPEG) ? entry.extension : EXT_WEBP;
-        char file_path[256];
-        snprintf(file_path, sizeof(file_path), "%s/%s/%s/%s/%s%s",
-                 vault_path, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
-        
-        struct stat st;
-        if (stat(file_path, &st) == 0) {
-            cached_count++;
-        }
-    }
-    
+
     fclose(f);
 
-    if (out_cached) *out_cached = cached_count;
+    // Validate magic
+    if (header.magic != CHANNEL_CACHE_MAGIC) {
+        if (out_total) *out_total = 0;
+        if (out_cached) *out_cached = 0;
+        return ESP_OK;
+    }
+
+    if (out_total) *out_total = header.ci_count;
+    if (out_cached) *out_cached = header.lai_count;
     return ESP_OK;
 }
 

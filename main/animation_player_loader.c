@@ -280,9 +280,8 @@ void animation_loader_task(void *arg)
                     continue;
                 }
                 {
-                    ps_stats_t stats = {0};
-                    play_scheduler_get_stats(&stats);
-                    if (stats.lookahead_count == 0) {
+                    size_t total_available = play_scheduler_get_total_available();
+                    if (total_available == 0) {
                         ESP_LOGW(TAG, "Deferred cycle ignored: no animations available");
                         discard_failed_swap_request(ESP_ERR_NOT_FOUND, false);
                         continue;

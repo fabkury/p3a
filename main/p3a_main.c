@@ -559,6 +559,9 @@ void app_main(void)
     esp_err_t fs_ret = p3a_board_littlefs_mount();
     if (fs_ret != ESP_OK) {
         ESP_LOGW(TAG, "LittleFS initialization failed: %s (continuing anyway)", esp_err_to_name(fs_ret));
+    } else {
+        // Check web UI partition health (sets s_webui_healthy flag)
+        p3a_board_littlefs_check_health();
     }
 
     // Initialize Makapix module early (after LittleFS mount, before animation player/channel load).

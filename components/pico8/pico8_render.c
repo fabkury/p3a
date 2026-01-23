@@ -438,14 +438,28 @@ void pico8_render_mark_consumed(void)
 int64_t pico8_render_get_last_frame_time(void)
 {
     int64_t time = 0;
-    
+
     if (s_pico8.mutex && xSemaphoreTake(s_pico8.mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
         time = s_pico8.last_frame_time_us;
         xSemaphoreGive(s_pico8.mutex);
     } else {
         time = s_pico8.last_frame_time_us;
     }
-    
+
     return time;
+}
+
+void pico8_render_reset_frame_state(void)
+{
+    if (s_pico8.mutex && xSemaphoreTake(s_pico8.mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        s_pico8.frame_ready = false;
+        s_pico8.last_frame_time_us = 0;
+        xSemaphoreGive(s_pico8.mutex);
+    } else {
+        // Fallback without mutex (race condition possible but acceptable for this reset)
+        s_pico8.frame_ready = false;
+        s_pico8.last_frame_time_us = 0;
+    }
+    ESP_LOGD(TAG, "Frame state reset");
 }
 

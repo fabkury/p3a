@@ -479,6 +479,9 @@ esp_err_t http_api_start(void) {
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
 
+    // Initialize web UI health check (for surrogate UI fallback)
+    http_api_pages_init_health_check();
+
     // Register handlers from other modules
     http_api_register_page_handlers(s_server);
     http_api_register_ota_handlers(s_server);

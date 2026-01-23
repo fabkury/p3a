@@ -18,8 +18,36 @@
 
 #include "http_api_internal.h"
 #include "app_wifi.h"
+#include "p3a_board.h"
+#include "surrogate_ui.h"
 #include "freertos/task.h"
 #include <sys/stat.h>
+
+// Track web UI health status (cached at startup)
+static bool s_webui_healthy = true;
+
+/**
+ * @brief Initialize web UI health check
+ *
+ * Call this after LittleFS is mounted to check partition health.
+ */
+void http_api_pages_init_health_check(void)
+{
+    s_webui_healthy = p3a_board_webui_is_healthy();
+    if (!s_webui_healthy) {
+        ESP_LOGW(HTTP_API_TAG, "Web UI partition unhealthy - surrogate UI will be served");
+    }
+}
+
+/**
+ * @brief Serve the surrogate UI HTML
+ */
+static esp_err_t serve_surrogate_ui(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    return httpd_resp_send(req, SURROGATE_UI_HTML, HTTPD_RESP_USE_STRLEN);
+}
 
 // ---------- Generic File Server with Gzip Support ----------
 
@@ -39,6 +67,12 @@ esp_err_t serve_file(httpd_req_t *req, const char *filepath) {
     bool is_gzipped = false;
     FILE *f = NULL;
 
+    // If web UI is unhealthy and this is an HTML page, serve surrogate
+    if (!s_webui_healthy && strstr(filepath, ".html")) {
+        ESP_LOGW(HTTP_API_TAG, "Web UI unhealthy, serving surrogate for %s", filepath);
+        return serve_surrogate_ui(req);
+    }
+
     // Try gzipped version first
     if (strlen(filepath) + 3 < sizeof(gz_path)) {
         snprintf(gz_path, sizeof(gz_path), "%s.gz", filepath);
@@ -54,6 +88,11 @@ esp_err_t serve_file(httpd_req_t *req, const char *filepath) {
         f = fopen(filepath, "r");
         if (!f) {
             ESP_LOGE(HTTP_API_TAG, "Failed to open %s", filepath);
+            // If this is an HTML file, serve surrogate instead of 404
+            if (strstr(filepath, ".html")) {
+                ESP_LOGW(HTTP_API_TAG, "HTML file missing, serving surrogate UI");
+                return serve_surrogate_ui(req);
+            }
             httpd_resp_set_status(req, "404 Not Found");
             httpd_resp_send(req, "File not found", HTTPD_RESP_USE_STRLEN);
             return ESP_FAIL;
@@ -232,6 +271,12 @@ esp_err_t http_api_pages_route_post(httpd_req_t *req) {
     if (strcmp(uri, "/erase") == 0) {
         return h_post_erase(req);
     }
+
+#if CONFIG_P3A_PICO8_ENABLE
+    if (strcmp(uri, "/pico8/exit") == 0) {
+        return h_post_pico8_exit(req);
+    }
+#endif
 
     return ESP_ERR_NOT_FOUND;
 }

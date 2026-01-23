@@ -163,6 +163,10 @@ void pico8_stream_enter_mode(void)
     }
 
     ESP_LOGI(TAG, "Entering PICO-8 mode");
+
+    // Reset frame state to ensure logo is shown (not stale frame from previous session)
+    pico8_render_reset_frame_state();
+
     s_pico8_mode_active = true;
     s_last_frame_time_us = esp_timer_get_time();
 

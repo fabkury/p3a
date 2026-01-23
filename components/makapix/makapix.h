@@ -261,3 +261,18 @@ void makapix_ps_refresh_mark_complete(const char *channel_id);
  */
 bool makapix_ps_refresh_check_and_clear(const char *channel_id);
 
+/**
+ * @brief Cancel all active Makapix refresh tasks
+ *
+ * Stops all running channel refresh tasks gracefully. This includes:
+ * - The "all" channel refresh
+ * - The "promoted" channel refresh
+ * - Any user/hashtag channel refreshes
+ *
+ * Called by Play Scheduler before switching to a new channel to ensure
+ * old refresh tasks don't continue wasting MQTT queries.
+ *
+ * @return ESP_OK on success
+ */
+esp_err_t makapix_cancel_all_refreshes(void);
+

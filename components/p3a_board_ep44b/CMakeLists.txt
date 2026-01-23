@@ -3,5 +3,5 @@ idf_component_register(
          "p3a_board_fs.c"
     INCLUDE_DIRS "include"
     REQUIRES driver esp_lcd littlefs espressif__esp_lcd_touch
-    PRIV_REQUIRES waveshare__esp32_p4_wifi6_touch_lcd_4b
+    PRIV_REQUIRES waveshare__esp32_p4_wifi6_touch_lcd_4b nvs_flash
 )

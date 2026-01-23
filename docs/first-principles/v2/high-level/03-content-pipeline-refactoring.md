@@ -46,7 +46,7 @@ The current content flow is interleaved across multiple files:
 │  │   SOURCE     │    │    CACHE     │    │    QUEUE     │             │
 │  │              │    │              │    │              │             │
 │  │ - SD card    │    │ - Vault      │    │ - History    │             │
-│  │ - Makapix    │    │ - Prefetch   │    │ - Lookahead  │             │
+│  │ - Makapix    │    │ - Prefetch   │    │ - next/peek  │             │
 │  │ - Artwork    │    │ - LRU evict  │    │ - SWRR       │             │
 │  └──────────────┘    └──────────────┘    └──────────────┘             │
 │         │                   │                   │                      │

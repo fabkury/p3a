@@ -19,6 +19,7 @@
 #include "p3a_state.h"
 #include "sd_path.h"
 #include "content_cache.h"
+#include "makapix.h"
 #include "esp_log.h"
 #include <stdio.h>
 #include <string.h>
@@ -281,20 +282,21 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
         channel_cache_schedule_save(ch->cache);
     }
 
-    // Alias data from cache into channel state (for compatibility with existing code)
-    ch->entries = ch->cache->entries;
-    ch->entry_count = ch->cache->entry_count;
-    ch->available_post_ids = ch->cache->available_post_ids;
-    ch->available_count = ch->cache->available_count;
+    // For Makapix channels, all code accesses ch->cache->* directly to avoid stale
+    // pointers when cache arrays are reallocated during batch merges.
+    ch->entries = NULL;
+    ch->entry_count = 0;
+    ch->available_post_ids = NULL;
+    ch->available_count = 0;
 
     ch->cache_loaded = true;
-    ch->active = (ch->available_count > 0);
+    ch->active = (ch->cache->available_count > 0);
     ch->entry_format = PS_ENTRY_FORMAT_MAKAPIX;
 
     ps_touch_cache_file(ch->channel_id);
 
     ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries, %zu available (makapix format)",
-             ch->channel_id, ch->entry_count, ch->available_count);
+             ch->channel_id, ch->cache->entry_count, ch->cache->available_count);
 
     return ESP_OK;
 }
@@ -334,6 +336,10 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         return ESP_ERR_INVALID_ARG;
     }
 
+    // Cancel all active Makapix refresh tasks before setting up new channels
+    // This prevents old refresh tasks from wasting MQTT queries when switching channels
+    makapix_cancel_all_refreshes();
+
     // Reset the periodic refresh timer so this command triggers immediate refresh
     ps_refresh_reset_timer();
 
@@ -347,12 +353,10 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
              command->channel_count, command->exposure_mode, command->pick_mode);
 
     // Free old channel entries before reconfiguring
-    // IMPORTANT: For Makapix channels, ch->entries is an ALIAS to ch->cache->entries
-    // and must NOT be freed directly. The cache owns the memory.
     for (size_t i = 0; i < s_state->channel_count; i++) {
         ps_channel_state_t *ch = &s_state->channels[i];
         if (ch->cache) {
-            // Makapix channel - cache owns entries/available_post_ids
+            // Makapix channel - cache owns all memory
             channel_cache_unregister(ch->cache);
             channel_cache_free(ch->cache);
             free(ch->cache);
@@ -404,9 +408,10 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         // Load existing cache if available
         ps_load_channel_cache(ch);
 
+        size_t entries_count = (ch->cache ? ch->cache->entry_count : ch->entry_count);
         ESP_LOGD(TAG, "Channel[%zu]: id='%s', type=%d, weight=%lu, active=%d, entries=%zu",
                  i, ch->channel_id, ch->type, (unsigned long)ch->weight,
-                 ch->active, ch->entry_count);
+                 ch->active, entries_count);
     }
 
     // Calculate SWRR weights
@@ -451,7 +456,9 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     bool has_entries = false;
     char first_channel_display_name[64] = "Channel";
     for (size_t i = 0; i < s_state->channel_count; i++) {
-        if (s_state->channels[i].active && s_state->channels[i].entry_count > 0) {
+        ps_channel_state_t *ch = &s_state->channels[i];
+        size_t entry_count = (ch->cache ? ch->cache->entry_count : ch->entry_count);
+        if (ch->active && entry_count > 0) {
             has_entries = true;
             break;
         }

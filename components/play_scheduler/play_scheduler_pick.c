@@ -162,26 +162,30 @@ static bool pick_recency_sdcard(ps_state_t *state, size_t channel_index, ps_artw
     sdcard_index_entry_t *entries = (sdcard_index_entry_t *)ch->entries;
 
     if (!entries || ch->entry_count == 0) {
-        ESP_LOGD(TAG, "pick_recency_sdcard: no entries (entries=%p, count=%zu)",
-                 (void*)entries, ch->entry_count);
+        ESP_LOGW(TAG, "RecencyPick SD[%zu]: FAIL - no entries (entries=%p, count=%zu)",
+                 channel_index, (void*)entries, ch->entry_count);
         return false;
     }
 
-    ESP_LOGD(TAG, "pick_recency_sdcard: checking %zu entries, cursor=%lu",
-             ch->entry_count, (unsigned long)ch->cursor);
+    ESP_LOGI(TAG, "RecencyPick SD[%zu] '%s': pool_size=%zu, start_cursor=%lu",
+             channel_index, ch->channel_id, ch->entry_count, (unsigned long)ch->cursor);
 
     uint32_t start_cursor = ch->cursor;
     bool wrapped = false;
+    int skipped_missing = 0;
+    int skipped_repeat = 0;
 
     while (true) {
         if (ch->cursor >= ch->entry_count) {
             if (wrapped) break;
             ch->cursor = 0;
             wrapped = true;
+            ESP_LOGD(TAG, "  RecencyPick SD: cursor wrapped to 0");
         }
 
         if (wrapped && ch->cursor >= start_cursor) break;
 
+        uint32_t current_index = ch->cursor;
         sdcard_index_entry_t *entry = &entries[ch->cursor];
         ch->cursor++;
 
@@ -189,24 +193,25 @@ static bool pick_recency_sdcard(ps_state_t *state, size_t channel_index, ps_artw
         char filepath[256];
         ps_build_sdcard_filepath(entry, filepath, sizeof(filepath));
 
-        ESP_LOGI(TAG, "SD card entry[%lu]: filename='%s', path='%s'",
-                 (unsigned long)(ch->cursor - 1), entry->filename, filepath);
-
         // AVAILABILITY MASKING: skip if file doesn't exist
         if (!file_exists(filepath)) {
-            ESP_LOGW(TAG, "SD card file not found: %s", filepath);
+            ESP_LOGD(TAG, "  RecencyPick SD: index[%lu] '%s' missing", (unsigned long)current_index, entry->filename);
+            skipped_missing++;
             continue;
         }
 
         // Skip immediate repeat (but allow if only 1 entry in channel)
         if (entry->post_id == state->last_played_id && ch->entry_count > 1) {
-            ESP_LOGD(TAG, "Skipping repeat: post_id=%ld == last_played_id=%ld",
-                     (long)entry->post_id, (long)state->last_played_id);
+            ESP_LOGD(TAG, "  RecencyPick SD: index[%lu] post_id=%ld skipped (repeat)",
+                     (unsigned long)current_index, (long)entry->post_id);
+            skipped_repeat++;
             continue;
         }
 
-        ESP_LOGI(TAG, "Found SD card artwork: post_id=%ld, path=%s",
-                 (long)entry->post_id, filepath);
+        ESP_LOGI(TAG, ">>> PICKED (RecencyPick SD): index=%lu, post_id=%ld, pool_size=%zu, "
+                 "skipped_missing=%d, skipped_repeat=%d, file=%s",
+                 (unsigned long)current_index, (long)entry->post_id, ch->entry_count,
+                 skipped_missing, skipped_repeat, entry->filename);
 
         // Found valid artwork
         out_artwork->artwork_id = entry->post_id;
@@ -221,7 +226,8 @@ static bool pick_recency_sdcard(ps_state_t *state, size_t channel_index, ps_artw
         return true;
     }
 
-    ESP_LOGD(TAG, "RecencyPick: SD card channel %zu exhausted", channel_index);
+    ESP_LOGW(TAG, "RecencyPick SD[%zu]: EXHAUSTED (entries=%zu, skipped_missing=%d, skipped_repeat=%d)",
+             channel_index, ch->entry_count, skipped_missing, skipped_repeat);
     return false;
 }
 
@@ -230,42 +236,64 @@ static bool pick_recency_sdcard(ps_state_t *state, size_t channel_index, ps_artw
  *
  * Uses LAi (available_post_ids) for O(1) availability checking.
  * Iterates through locally available artworks only.
+ * Accesses ch->cache->* directly since cache arrays may be reallocated during merges.
  */
 static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
 {
     ps_channel_state_t *ch = &state->channels[channel_index];
-    makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
 
-    if (!entries || ch->entry_count == 0) {
+    // Makapix channels must have a cache
+    if (!ch->cache) {
+        ESP_LOGW(TAG, "RecencyPick Makapix[%zu]: FAIL - no cache", channel_index);
+        return false;
+    }
+
+    // Access cache directly to avoid stale alias pointers after merge
+    makapix_channel_entry_t *entries = ch->cache->entries;
+    size_t entry_count = ch->cache->entry_count;
+    int32_t *available_post_ids = ch->cache->available_post_ids;
+    size_t available_count = ch->cache->available_count;
+
+    if (!entries || entry_count == 0) {
+        ESP_LOGW(TAG, "RecencyPick Makapix[%zu]: FAIL - no entries", channel_index);
         return false;
     }
 
     // Use LAi for availability masking - no filesystem I/O
-    if (!ch->available_post_ids || ch->available_count == 0) {
-        ESP_LOGD(TAG, "RecencyPick: Makapix channel %zu has no available artworks", channel_index);
+    if (!available_post_ids || available_count == 0) {
+        ESP_LOGW(TAG, "RecencyPick Makapix[%zu] '%s': FAIL - Ci=%zu but LAi=0 (no downloaded files)",
+                 channel_index, ch->channel_id, entry_count);
         return false;
     }
+
+    ESP_LOGI(TAG, "RecencyPick Makapix[%zu] '%s': pool_size(LAi)=%zu, Ci=%zu, start_cursor=%lu",
+             channel_index, ch->channel_id, available_count, entry_count, (unsigned long)ch->cursor);
 
     // Cursor operates over available_post_ids (LAi), not full Ci
     uint32_t start_cursor = ch->cursor;
     bool wrapped = false;
+    int skipped_count = 0;
 
     while (true) {
-        if (ch->cursor >= ch->available_count) {
+        if (ch->cursor >= available_count) {
             if (wrapped) break;
             ch->cursor = 0;
             wrapped = true;
+            ESP_LOGD(TAG, "  RecencyPick: cursor wrapped to 0");
         }
 
         if (wrapped && ch->cursor >= start_cursor) break;
 
         // Get post_id from LAi, then lookup Ci index
-        int32_t post_id = ch->available_post_ids[ch->cursor];
+        uint32_t lai_index = ch->cursor;
+        int32_t post_id = available_post_ids[ch->cursor];
         ch->cursor++;
 
         uint32_t ci_index = ci_find_by_post_id(ch->cache, post_id);
         if (ci_index == UINT32_MAX) {
-            ESP_LOGW(TAG, "LAi post_id=%ld not found in Ci", (long)post_id);
+            ESP_LOGW(TAG, "  RecencyPick: LAi[%lu] post_id=%ld NOT FOUND in Ci (hash miss)",
+                     (unsigned long)lai_index, (long)post_id);
+            skipped_count++;
             continue;
         }
 
@@ -273,11 +301,17 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
 
         // Skip non-artwork entries (playlists, etc.)
         if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+            ESP_LOGD(TAG, "  RecencyPick: LAi[%lu] post_id=%ld skipped (kind=%d, not artwork)",
+                     (unsigned long)lai_index, (long)post_id, entry->kind);
+            skipped_count++;
             continue;
         }
 
         // Skip immediate repeat (but allow if only 1 available entry)
-        if (entry->post_id == state->last_played_id && ch->available_count > 1) {
+        if (entry->post_id == state->last_played_id && available_count > 1) {
+            ESP_LOGD(TAG, "  RecencyPick: LAi[%lu] post_id=%ld skipped (repeat of last_played)",
+                     (unsigned long)lai_index, (long)post_id);
+            skipped_count++;
             continue;
         }
 
@@ -288,6 +322,11 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
         // Found valid artwork - build storage_key string
         char storage_key[40];
         bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
+
+        ESP_LOGI(TAG, ">>> PICKED (RecencyPick Makapix): LAi_index=%lu, Ci_index=%lu, post_id=%ld, "
+                 "pool_size=%zu, skipped=%d, storage_key=%.8s...",
+                 (unsigned long)lai_index, (unsigned long)ci_index, (long)post_id,
+                 available_count, skipped_count, storage_key);
 
         out_artwork->artwork_id = entry->post_id;
         out_artwork->post_id = entry->post_id;
@@ -301,8 +340,8 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
         return true;
     }
 
-    ESP_LOGD(TAG, "RecencyPick: Makapix channel %zu exhausted (available=%zu)",
-             channel_index, ch->available_count);
+    ESP_LOGW(TAG, "RecencyPick Makapix[%zu]: EXHAUSTED after scanning %zu entries (skipped=%d)",
+             channel_index, available_count, skipped_count);
     return false;
 }
 
@@ -335,8 +374,12 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
     sdcard_index_entry_t *entries = (sdcard_index_entry_t *)ch->entries;
 
     if (!entries || ch->entry_count == 0) {
+        ESP_LOGW(TAG, "RandomPick SD[%zu]: FAIL - no entries", channel_index);
         return false;
     }
+
+    ESP_LOGI(TAG, "RandomPick SD[%zu] '%s': pool_size=%zu, rng_state=%llu",
+             channel_index, ch->channel_id, ch->entry_count, (unsigned long long)ch->pick_rng_state);
 
     // Sample from all entries for true shuffle
     size_t r_eff = ch->entry_count;
@@ -350,14 +393,22 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
         char filepath[256];
         ps_build_sdcard_filepath(entry, filepath, sizeof(filepath));
 
+        ESP_LOGD(TAG, "  RandomPick SD attempt %d: r=%lu, index=%zu (mod %zu), file=%s",
+                 attempt + 1, (unsigned long)r, index, r_eff, entry->filename);
+
         if (!file_exists(filepath)) {
+            ESP_LOGD(TAG, "  RandomPick SD: index[%zu] file missing", index);
             continue;
         }
 
         // Skip immediate repeat (but allow if only 1 entry or after several attempts)
         if (entry->post_id == state->last_played_id && ch->entry_count > 1 && attempt < 4) {
+            ESP_LOGD(TAG, "  RandomPick SD: index[%zu] post_id=%ld skipped (repeat)", index, (long)entry->post_id);
             continue;
         }
+
+        ESP_LOGI(TAG, ">>> PICKED (RandomPick SD): index=%zu, post_id=%ld, pool_size=%zu, attempt=%d, file=%s",
+                 index, (long)entry->post_id, ch->entry_count, attempt + 1, entry->filename);
 
         out_artwork->artwork_id = entry->post_id;
         out_artwork->post_id = entry->post_id;
@@ -371,7 +422,7 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
         return true;
     }
 
-    ESP_LOGW(TAG, "RandomPick: SD card - no artwork after 5 attempts");
+    ESP_LOGW(TAG, "RandomPick SD[%zu]: FAILED after 5 attempts, falling back to RecencyPick", channel_index);
     return pick_recency_sdcard(state, channel_index, out_artwork);
 }
 
@@ -380,42 +431,65 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
  *
  * Uses LAi (available_post_ids) for O(1) random picks.
  * Samples directly from locally available artworks.
+ * Accesses ch->cache->* directly since cache arrays may be reallocated during merges.
  */
 static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
 {
     ps_channel_state_t *ch = &state->channels[channel_index];
-    makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
 
-    if (!entries || ch->entry_count == 0) {
+    // Makapix channels must have a cache
+    if (!ch->cache) {
+        ESP_LOGW(TAG, "RandomPick Makapix[%zu]: FAIL - no cache", channel_index);
+        return false;
+    }
+
+    // Access cache directly to avoid stale alias pointers after merge
+    makapix_channel_entry_t *entries = ch->cache->entries;
+    size_t entry_count = ch->cache->entry_count;
+    int32_t *available_post_ids = ch->cache->available_post_ids;
+    size_t available_count = ch->cache->available_count;
+
+    if (!entries || entry_count == 0) {
+        ESP_LOGW(TAG, "RandomPick Makapix[%zu]: FAIL - no entries", channel_index);
         return false;
     }
 
     // Use LAi for O(1) random picks - no filesystem I/O
-    if (!ch->available_post_ids || ch->available_count == 0) {
-        ESP_LOGD(TAG, "RandomPick: Makapix channel %zu has no available artworks", channel_index);
+    if (!available_post_ids || available_count == 0) {
+        ESP_LOGW(TAG, "RandomPick Makapix[%zu] '%s': FAIL - Ci=%zu but LAi=0 (no downloaded files)",
+                 channel_index, ch->channel_id, entry_count);
         return false;
     }
+
+    ESP_LOGI(TAG, "RandomPick Makapix[%zu] '%s': pool_size(LAi)=%zu, Ci=%zu, rng_state=%llu",
+             channel_index, ch->channel_id, available_count, entry_count,
+             (unsigned long long)ch->pick_rng_state);
 
     // Sample from available_post_ids (LAi) directly
     for (int attempt = 0; attempt < 5; attempt++) {
         uint32_t r = ps_prng_next(&ch->pick_rng_state);
-        size_t lai_index = (size_t)(r % ch->available_count);
-        int32_t post_id = ch->available_post_ids[lai_index];
+        size_t lai_index = (size_t)(r % available_count);
+        int32_t post_id = available_post_ids[lai_index];
+
+        ESP_LOGD(TAG, "  RandomPick attempt %d: r=%lu, LAi_index=%zu (mod %zu), post_id=%ld",
+                 attempt + 1, (unsigned long)r, lai_index, available_count, (long)post_id);
 
         uint32_t ci_index = ci_find_by_post_id(ch->cache, post_id);
         if (ci_index == UINT32_MAX) {
-            ESP_LOGW(TAG, "LAi post_id=%ld not found in Ci", (long)post_id);
+            ESP_LOGW(TAG, "  RandomPick: LAi[%zu] post_id=%ld NOT FOUND in Ci", lai_index, (long)post_id);
             continue;
         }
 
         makapix_channel_entry_t *entry = &entries[ci_index];
 
         if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+            ESP_LOGD(TAG, "  RandomPick: LAi[%zu] post_id=%ld skipped (kind=%d)", lai_index, (long)post_id, entry->kind);
             continue;
         }
 
         // Skip immediate repeat (but allow if only 1 available or after several attempts)
-        if (entry->post_id == state->last_played_id && ch->available_count > 1 && attempt < 4) {
+        if (entry->post_id == state->last_played_id && available_count > 1 && attempt < 4) {
+            ESP_LOGD(TAG, "  RandomPick: LAi[%zu] post_id=%ld skipped (repeat)", lai_index, (long)post_id);
             continue;
         }
 
@@ -424,6 +498,11 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
 
         char storage_key[40];
         bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
+
+        ESP_LOGI(TAG, ">>> PICKED (RandomPick Makapix): LAi_index=%zu, Ci_index=%lu, post_id=%ld, "
+                 "pool_size=%zu, attempt=%d, storage_key=%.8s...",
+                 lai_index, (unsigned long)ci_index, (long)post_id,
+                 available_count, attempt + 1, storage_key);
 
         out_artwork->artwork_id = entry->post_id;
         out_artwork->post_id = entry->post_id;
@@ -437,8 +516,8 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
         return true;
     }
 
-    ESP_LOGW(TAG, "RandomPick: Makapix - no artwork after 5 attempts (available=%zu)",
-             ch->available_count);
+    ESP_LOGW(TAG, "RandomPick Makapix[%zu]: FAILED after 5 attempts (available=%zu), falling back to RecencyPick",
+             channel_index, available_count);
     return pick_recency_makapix(state, channel_index, out_artwork);
 }
 
@@ -496,27 +575,55 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
         return false;
     }
 
-    // Count active channels with available artwork
+    // Count active channels with available artwork and log pool sizes
     size_t active_count = 0;
+    size_t total_ci = 0;
+    size_t total_lai = 0;
+
+    ESP_LOGI(TAG, "=== PICK DEBUG: ps_pick_next_available() ===");
+    ESP_LOGI(TAG, "Pick mode: %s, Exposure mode: %d, Channels: %zu",
+             state->pick_mode == PS_PICK_RANDOM ? "RANDOM" : "RECENCY",
+             state->exposure_mode, state->channel_count);
+
     for (size_t i = 0; i < state->channel_count; i++) {
         ps_channel_state_t *ch = &state->channels[i];
-        if (!ch->active || ch->entry_count == 0) {
-            continue;
-        }
-        // For Makapix channels, check available_count (LAi)
-        // For SD card channels, check entry_count (no LAi yet)
-        if (ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX) {
-            if (ch->available_count > 0) {
+
+        if (ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX && ch->cache) {
+            size_t ci_count = ch->cache->entry_count;
+            size_t lai_count = ch->cache->available_count;
+            ESP_LOGI(TAG, "  Ch[%zu] '%s': Ci=%zu, LAi=%zu, cursor=%lu, active=%d, weight=%lu",
+                     i, ch->channel_id, ci_count, lai_count,
+                     (unsigned long)ch->cursor, ch->active, (unsigned long)ch->weight);
+            total_ci += ci_count;
+            total_lai += lai_count;
+
+            if (!ch->active || ci_count == 0) {
+                continue;
+            }
+            if (lai_count > 0) {
                 active_count++;
             }
         } else {
+            // SD card channel or Makapix without cache
+            ESP_LOGI(TAG, "  Ch[%zu] '%s' (SD): entries=%zu, cursor=%lu, active=%d, weight=%lu",
+                     i, ch->channel_id, ch->entry_count,
+                     (unsigned long)ch->cursor, ch->active, (unsigned long)ch->weight);
+            total_ci += ch->entry_count;
+            total_lai += ch->entry_count;  // SD card has no LAi distinction
+
+            if (!ch->active || ch->entry_count == 0) {
+                continue;
+            }
             // SD card - no LAi, count as active if has entries
             active_count++;
         }
     }
 
+    ESP_LOGI(TAG, "TOTALS: active_channels=%zu, total_Ci=%zu, total_LAi=%zu",
+             active_count, total_ci, total_lai);
+
     if (active_count == 0) {
-        ESP_LOGD(TAG, "No active channels with available artwork");
+        ESP_LOGW(TAG, "PICK FAILED: No active channels with available artwork");
         return false;
     }
 
@@ -524,16 +631,21 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
     for (size_t attempt = 0; attempt < active_count; attempt++) {
         int ch_idx = ps_swrr_select_channel(state);
         if (ch_idx < 0) {
+            ESP_LOGW(TAG, "SWRR returned -1 on attempt %zu", attempt);
             break;
         }
+
+        ESP_LOGI(TAG, "SWRR selected channel[%d] '%s' (attempt %zu/%zu)",
+                 ch_idx, state->channels[ch_idx].channel_id, attempt + 1, active_count);
 
         if (ps_pick_artwork(state, (size_t)ch_idx, out_artwork)) {
             return true;
         }
+        ESP_LOGW(TAG, "Channel[%d] exhausted, trying next", ch_idx);
         // Channel exhausted - SWRR will pick different one next iteration
     }
 
-    ESP_LOGD(TAG, "No available artwork in any channel");
+    ESP_LOGW(TAG, "PICK FAILED: No available artwork in any channel after %zu attempts", active_count);
     return false;
 }
 

@@ -1,0 +1,12 @@
+{
+  "firmware": {
+    "version": "0.7.5-dev",
+    "file": "p3a.bin",
+    "sha256": "aca8cbc0ecee0e3c494bde1ca5c8a66f45f52d1f62e3d08cdd24673d8445ff08"
+  },
+  "webui": {
+    "version": "0.6",
+    "file": "storage.bin",
+    "sha256": "47c6b77e987b67be0d46452bddca188946950f09da387902d1089775045378e9"
+  }
+}

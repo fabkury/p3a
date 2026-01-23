@@ -347,8 +347,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     // Start playback via play_scheduler.
     // play_scheduler_play_named_channel() will:
     // 1. Load the channel cache
-    // 2. Generate lookahead
-    // 3. Call play_scheduler_next() which triggers animation_player_request_swap()
+    // 2. Call play_scheduler_next() which triggers animation_player_request_swap()
     esp_err_t ps_err = play_scheduler_play_named_channel(boot_channel);
     if (ps_err != ESP_OK) {
         ESP_LOGW(TAG, "play_scheduler_play_named_channel('%s') failed: %s (may need downloads)",

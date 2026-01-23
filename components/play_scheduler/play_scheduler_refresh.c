@@ -27,7 +27,7 @@
 static const char *TAG = "ps_refresh";
 
 // Task configuration
-#define REFRESH_TASK_STACK_SIZE 4096
+#define REFRESH_TASK_STACK_SIZE 8192
 #define REFRESH_TASK_PRIORITY   5
 #define REFRESH_CHECK_INTERVAL_MS 1000
 
@@ -195,29 +195,26 @@ static void refresh_task(void *arg)
                     ch->refresh_async_pending = false;
                     ch->refresh_in_progress = false;
 
-                    // Load the cache file into memory (sets entries, entry_count, cache_loaded, active)
-                    // Note: The Makapix refresh task writes raw binary format. channel_cache_load()
-                    // will detect this as legacy format and rebuild LAi by scanning the vault.
-                    esp_err_t load_err = ps_load_channel_cache(ch);
-                    if (load_err != ESP_OK) {
-                        ESP_LOGW(TAG, "Failed to load cache for channel '%s': %s",
-                                 ch->channel_id, esp_err_to_name(load_err));
-                    } else if (ch->cache && ch->cache->dirty) {
-                        // Refresh wrote raw binary format which was migrated. Save in new format
-                        // immediately to prevent repeated LAi rebuilds on next load.
-                        char channels_path[128];
-                        if (sd_path_get_channel(channels_path, sizeof(channels_path)) == ESP_OK) {
-                            esp_err_t save_err = channel_cache_save(ch->cache, channels_path);
-                            if (save_err == ESP_OK) {
-                                ch->cache->dirty = false;
-                                ESP_LOGI(TAG, "Channel '%s': saved cache in new format after refresh",
-                                         ch->channel_id);
-                            }
+                    // Keep in-memory state - don't reload from disk.
+                    // The cache was populated during batch merges and already has the correct state.
+                    // Reloading would replace it with stale disk data (race with debounced save).
+                    if (ch->cache) {
+                        ch->cache_loaded = true;
+                        ch->active = (ch->cache->available_count > 0);
+                        ESP_LOGI(TAG, "Channel '%s': keeping in-memory cache (%zu entries, %zu available)",
+                                 ch->channel_id, ch->cache->entry_count, ch->cache->available_count);
+
+                        // Mark dirty to ensure eventual persistence
+                        if (!ch->cache->dirty) {
+                            ch->cache->dirty = true;
                         }
+                    } else {
+                        ESP_LOGW(TAG, "Channel '%s': no in-memory cache after refresh", ch->channel_id);
                     }
 
+                    size_t entry_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
                     ESP_LOGI(TAG, "Channel '%s' async refresh complete: %zu entries, active=%d",
-                             ch->channel_id, ch->entry_count, ch->active);
+                             ch->channel_id, entry_count, ch->active);
 
                     // Recalculate weights
                     ps_swrr_calculate_weights(state);
@@ -234,7 +231,7 @@ static void refresh_task(void *arg)
                     // Note: We can't rely on animation_player_is_animation_ready() because
                     // it returns true when a message (like "No playable files available")
                     // is being displayed, which would prevent playback from starting.
-                    if (ch->entry_count > 0) {
+                    if (entry_count > 0) {
                         ESP_LOGI(TAG, "Async refresh complete - triggering playback");
 
                         // Clear any loading/error message
@@ -291,6 +288,7 @@ static void refresh_task(void *arg)
         // Update state after refresh
         xSemaphoreTake(state->mutex, portMAX_DELAY);
 
+        size_t sync_entry_count = 0;
         if (err == ESP_ERR_INVALID_STATE) {
             // MQTT not connected - re-queue for retry when MQTT connects
             ch->refresh_in_progress = false;
@@ -303,8 +301,9 @@ static void refresh_task(void *arg)
             // Note: refresh_async_pending was set in refresh_makapix_channel()
         } else if (err == ESP_OK) {
             ch->refresh_in_progress = false;
+            sync_entry_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
             ESP_LOGI(TAG, "Channel '%s' refresh complete: %zu entries, active=%d",
-                     channel_id, ch->entry_count, ch->active);
+                     channel_id, sync_entry_count, ch->active);
 
             // Recalculate weights now that this channel has data
             ps_swrr_calculate_weights(state);
@@ -322,7 +321,7 @@ static void refresh_task(void *arg)
 
         // Check if we should trigger initial playback (no animation playing yet)
         // Only for synchronous completion (SD card or cached Makapix)
-        bool should_trigger_playback = (err == ESP_OK && ch->entry_count > 0);
+        bool should_trigger_playback = (err == ESP_OK && sync_entry_count > 0);
 
         xSemaphoreGive(state->mutex);
 

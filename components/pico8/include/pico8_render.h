@@ -86,10 +86,18 @@ int pico8_render_logo(uint8_t *dest_buffer, size_t row_stride);
 
 /**
  * @brief Get timestamp of last frame
- * 
+ *
  * @return Timestamp in microseconds, or 0 if no frame received
  */
 int64_t pico8_render_get_last_frame_time(void);
+
+/**
+ * @brief Reset frame state to show logo on next render
+ *
+ * Clears frame_ready and last_frame_time to ensure the logo is displayed
+ * when re-entering PICO-8 mode instead of showing a stale frame.
+ */
+void pico8_render_reset_frame_state(void);
 
 #ifdef __cplusplus
 }

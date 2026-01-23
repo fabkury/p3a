@@ -140,7 +140,7 @@ typedef struct {
  * @brief Scheduler command
  *
  * Contains all parameters needed to produce a play queue.
- * Executing a command flushes lookahead but preserves history.
+ * Executing a command resets channel state but preserves history.
  */
 typedef struct {
     ps_channel_spec_t channels[PS_MAX_CHANNELS];
@@ -165,7 +165,6 @@ typedef struct {
 typedef struct {
     size_t channel_count;
     size_t history_count;
-    size_t lookahead_count;
     size_t nae_pool_count;
     uint32_t epoch_id;
     const char *current_channel_id;
@@ -205,18 +204,22 @@ typedef struct {
     uint64_t pick_rng_state;  // For RandomPick (64-bit state for proper PCG32)
 
     // Cache info
-    size_t entry_count;       // Mi: local cache size
-    bool active;              // Has local data (entry_count > 0)?
+    // For SD card channels: entries/entry_count/available_* are used directly
+    // For Makapix channels: access ch->cache->* instead (cache may reallocate during merges)
+    size_t entry_count;       // Mi: local cache size (SD card only)
+    bool active;              // Has playable content?
     bool cache_loaded;        // .bin file loaded into memory?
     ps_entry_format_t entry_format;  // Format of loaded entries
-    void *entries;            // Entry array (format depends on entry_format)
+    void *entries;            // Entry array (SD card only)
 
-    // LAi (Locally Available index) - post_ids of available artworks
-    int32_t *available_post_ids;  // LAi array of post_ids (NULL if not loaded)
-    size_t available_count;       // Number of available artworks
+    // LAi (Locally Available index) - post_ids of downloaded artworks (SD card only)
+    int32_t *available_post_ids;
+    size_t available_count;
 
-    // Channel cache (owns entries/LAi for Makapix channels)
-    channel_cache_t *cache;       // NULL for SD card channels
+    // Channel cache for Makapix channels (NULL for SD card)
+    // Access ch->cache->entries, ch->cache->entry_count, ch->cache->available_post_ids,
+    // ch->cache->available_count directly to avoid stale pointers after batch merges.
+    channel_cache_t *cache;
 
     // Refresh state
     bool refresh_pending;       // Queued for background refresh

@@ -199,5 +199,19 @@ esp_err_t h_ws_pico_stream(httpd_req_t *req) {
     return ESP_OK;
 }
 
+/**
+ * POST /pico8/exit
+ * Explicitly exits PICO-8 mode. Called by browser on navigation/unload.
+ */
+esp_err_t h_post_pico8_exit(httpd_req_t *req) {
+    ESP_LOGI(HTTP_API_TAG, "PICO-8 exit requested via POST");
+    pico8_stream_exit_mode();
+    s_ws_client_connected = false;
+
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_send(req, "OK", 2);
+    return ESP_OK;
+}
+
 #endif // CONFIG_P3A_PICO8_ENABLE
 

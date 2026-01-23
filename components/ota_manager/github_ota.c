@@ -483,3 +483,338 @@ esp_err_t github_ota_download_sha256(const char *sha256_url, char *sha256_hex, s
     return ESP_OK;
 }
 
+uint16_t github_ota_parse_webui_version(const char *version_str)
+{
+    if (!version_str || strlen(version_str) == 0) {
+        return 0;
+    }
+
+    unsigned int major = 0, minor = 0;
+    int parsed = sscanf(version_str, "%u.%u", &major, &minor);
+
+    if (parsed < 1) {
+        ESP_LOGW(TAG, "Failed to parse web UI version: %s", version_str);
+        return 0;
+    }
+
+    // Validate ranges (0-255 each)
+    if (major > 255 || minor > 255) {
+        ESP_LOGW(TAG, "Web UI version component out of range: %s", version_str);
+        return 0;
+    }
+
+    return (major << 8) | minor;
+}
+
+int github_ota_compare_webui_versions(const char *v1, const char *v2)
+{
+    uint16_t ver1 = github_ota_parse_webui_version(v1);
+    uint16_t ver2 = github_ota_parse_webui_version(v2);
+
+    if (ver1 == 0 || ver2 == 0) {
+        return 0;  // Parse error, treat as equal
+    }
+
+    if (ver1 > ver2) return 1;
+    if (ver1 < ver2) return -1;
+    return 0;
+}
+
+/**
+ * @brief Helper to find and parse manifest.json from release assets
+ */
+static esp_err_t parse_manifest_from_release(cJSON *release, github_release_manifest_t *manifest)
+{
+    // Extract basic release info
+    cJSON *tag_name = cJSON_GetObjectItem(release, "tag_name");
+    if (tag_name && cJSON_IsString(tag_name)) {
+        strncpy(manifest->tag_name, cJSON_GetStringValue(tag_name), sizeof(manifest->tag_name) - 1);
+    }
+
+    cJSON *prerelease = cJSON_GetObjectItem(release, "prerelease");
+    manifest->is_prerelease = prerelease && cJSON_IsTrue(prerelease);
+
+    cJSON *body = cJSON_GetObjectItem(release, "body");
+    if (body && cJSON_IsString(body)) {
+        const char *notes = cJSON_GetStringValue(body);
+        if (notes) {
+            strncpy(manifest->release_notes, notes, sizeof(manifest->release_notes) - 1);
+        }
+    }
+
+    // Find manifest.json and asset download URLs
+    cJSON *assets = cJSON_GetObjectItem(release, "assets");
+    if (!assets || !cJSON_IsArray(assets)) {
+        ESP_LOGW(TAG, "No assets in release");
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    char manifest_url[256] = {0};
+    char firmware_url[256] = {0};
+    char webui_url[256] = {0};
+
+    cJSON *asset;
+    cJSON_ArrayForEach(asset, assets) {
+        cJSON *name = cJSON_GetObjectItem(asset, "name");
+        cJSON *download_url = cJSON_GetObjectItem(asset, "browser_download_url");
+
+        if (!name || !cJSON_IsString(name) || !download_url || !cJSON_IsString(download_url)) {
+            continue;
+        }
+
+        const char *asset_name = cJSON_GetStringValue(name);
+        const char *asset_url = cJSON_GetStringValue(download_url);
+
+        if (strcmp(asset_name, "manifest.json") == 0) {
+            strncpy(manifest_url, asset_url, sizeof(manifest_url) - 1);
+        } else if (strcmp(asset_name, CONFIG_OTA_FIRMWARE_ASSET_NAME) == 0) {
+            strncpy(firmware_url, asset_url, sizeof(firmware_url) - 1);
+        } else if (strcmp(asset_name, "storage.bin") == 0) {
+            strncpy(webui_url, asset_url, sizeof(webui_url) - 1);
+        }
+    }
+
+    // Copy download URLs to manifest struct
+    snprintf(manifest->firmware.download_url, sizeof(manifest->firmware.download_url), "%s", firmware_url);
+    snprintf(manifest->webui.download_url, sizeof(manifest->webui.download_url), "%s", webui_url);
+
+    // If no manifest.json found, return error
+    if (strlen(manifest_url) == 0) {
+        ESP_LOGW(TAG, "manifest.json not found in release assets");
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    // Download and parse manifest.json
+    char *manifest_buffer = (char *)heap_caps_malloc(4096, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!manifest_buffer) {
+        manifest_buffer = (char *)malloc(4096);
+    }
+    if (!manifest_buffer) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    http_response_buffer_t resp = {
+        .buffer = manifest_buffer,
+        .buffer_size = 4096,
+        .received = 0
+    };
+
+    esp_http_client_config_t config = {
+        .url = manifest_url,
+        .method = HTTP_METHOD_GET,
+        .timeout_ms = 30000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .event_handler = http_event_handler,
+        .user_data = &resp,
+        .max_redirection_count = 5,
+        .buffer_size = 4096,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (!client) {
+        free(manifest_buffer);
+        return ESP_ERR_NO_MEM;
+    }
+
+    esp_http_client_set_header(client, "User-Agent", GITHUB_USER_AGENT);
+
+    ESP_LOGI(TAG, "Downloading manifest.json from: %s", manifest_url);
+
+    esp_err_t err = esp_http_client_perform(client);
+    int status_code = esp_http_client_get_status_code(client);
+    esp_http_client_cleanup(client);
+
+    if (err != ESP_OK || status_code != 200) {
+        ESP_LOGE(TAG, "Failed to download manifest.json: err=%s, status=%d",
+                 esp_err_to_name(err), status_code);
+        free(manifest_buffer);
+        return ESP_FAIL;
+    }
+
+    // Parse manifest.json
+    cJSON *manifest_json = cJSON_Parse(manifest_buffer);
+    free(manifest_buffer);
+
+    if (!manifest_json) {
+        ESP_LOGE(TAG, "Failed to parse manifest.json");
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+
+    // Extract firmware info
+    cJSON *firmware = cJSON_GetObjectItem(manifest_json, "firmware");
+    if (firmware && cJSON_IsObject(firmware)) {
+        cJSON *ver = cJSON_GetObjectItem(firmware, "version");
+        cJSON *file = cJSON_GetObjectItem(firmware, "file");
+        cJSON *sha = cJSON_GetObjectItem(firmware, "sha256");
+
+        if (ver && cJSON_IsString(ver)) {
+            strncpy(manifest->firmware.version, cJSON_GetStringValue(ver),
+                    sizeof(manifest->firmware.version) - 1);
+        }
+        if (file && cJSON_IsString(file)) {
+            strncpy(manifest->firmware.file, cJSON_GetStringValue(file),
+                    sizeof(manifest->firmware.file) - 1);
+        }
+        if (sha && cJSON_IsString(sha)) {
+            strncpy(manifest->firmware.sha256, cJSON_GetStringValue(sha),
+                    sizeof(manifest->firmware.sha256) - 1);
+        }
+    }
+
+    // Extract webui info
+    cJSON *webui = cJSON_GetObjectItem(manifest_json, "webui");
+    if (webui && cJSON_IsObject(webui)) {
+        cJSON *ver = cJSON_GetObjectItem(webui, "version");
+        cJSON *file = cJSON_GetObjectItem(webui, "file");
+        cJSON *sha = cJSON_GetObjectItem(webui, "sha256");
+
+        if (ver && cJSON_IsString(ver)) {
+            strncpy(manifest->webui.version, cJSON_GetStringValue(ver),
+                    sizeof(manifest->webui.version) - 1);
+        }
+        if (file && cJSON_IsString(file)) {
+            strncpy(manifest->webui.file, cJSON_GetStringValue(file),
+                    sizeof(manifest->webui.file) - 1);
+        }
+        if (sha && cJSON_IsString(sha)) {
+            strncpy(manifest->webui.sha256, cJSON_GetStringValue(sha),
+                    sizeof(manifest->webui.sha256) - 1);
+        }
+    }
+
+    cJSON_Delete(manifest_json);
+
+    ESP_LOGI(TAG, "Manifest parsed: firmware=%s, webui=%s",
+             manifest->firmware.version, manifest->webui.version);
+
+    return ESP_OK;
+}
+
+esp_err_t github_ota_get_release_manifest(github_release_manifest_t *manifest)
+{
+    if (!manifest) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memset(manifest, 0, sizeof(github_release_manifest_t));
+
+    // Allocate response buffer
+    char *response_buffer = (char *)heap_caps_malloc(MAX_API_RESPONSE_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!response_buffer) {
+        response_buffer = (char *)malloc(MAX_API_RESPONSE_SIZE);
+    }
+    if (!response_buffer) {
+        ESP_LOGE(TAG, "Failed to allocate response buffer");
+        return ESP_ERR_NO_MEM;
+    }
+
+    http_response_buffer_t resp = {
+        .buffer = response_buffer,
+        .buffer_size = MAX_API_RESPONSE_SIZE,
+        .received = 0
+    };
+
+    // Configure HTTP client
+    esp_http_client_config_t config = {
+        .url = GITHUB_API_URL,
+        .method = HTTP_METHOD_GET,
+        .timeout_ms = 30000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .event_handler = http_event_handler,
+        .user_data = &resp,
+        .buffer_size = CONFIG_OTA_HTTP_BUFFER_SIZE,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (!client) {
+        free(response_buffer);
+        return ESP_ERR_NO_MEM;
+    }
+
+    esp_http_client_set_header(client, "Accept", "application/vnd.github+json");
+    esp_http_client_set_header(client, "User-Agent", GITHUB_USER_AGENT);
+
+    ESP_LOGI(TAG, "Fetching releases from GitHub for manifest...");
+
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    esp_err_t err = esp_http_client_perform(client);
+    int status_code = esp_http_client_get_status_code(client);
+
+    esp_http_client_cleanup(client);
+
+    if (err != ESP_OK || status_code != 200) {
+        ESP_LOGE(TAG, "HTTP request failed: err=%s, status=%d", esp_err_to_name(err), status_code);
+        free(response_buffer);
+        return ESP_ERR_HTTP_CONNECT;
+    }
+
+    // Parse JSON response
+    cJSON *releases_array = cJSON_Parse(response_buffer);
+    free(response_buffer);
+
+    if (!releases_array || !cJSON_IsArray(releases_array)) {
+        ESP_LOGE(TAG, "Failed to parse releases JSON");
+        if (releases_array) cJSON_Delete(releases_array);
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+
+    int array_size = cJSON_GetArraySize(releases_array);
+    if (array_size == 0) {
+        ESP_LOGW(TAG, "No releases found");
+        cJSON_Delete(releases_array);
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    // Determine what type of release we're looking for
+#if CONFIG_OTA_DEV_MODE
+    bool want_prerelease = true;
+#else
+    bool want_prerelease = false;
+#endif
+
+    cJSON *selected_release = NULL;
+    cJSON *fallback_release = NULL;
+
+    cJSON *release;
+    cJSON_ArrayForEach(release, releases_array) {
+        cJSON *prerelease_flag = cJSON_GetObjectItem(release, "prerelease");
+        cJSON *draft_flag = cJSON_GetObjectItem(release, "draft");
+
+        if (draft_flag && cJSON_IsTrue(draft_flag)) {
+            continue;
+        }
+
+        bool is_prerelease = prerelease_flag && cJSON_IsTrue(prerelease_flag);
+
+        if (want_prerelease) {
+            if (is_prerelease && !selected_release) {
+                selected_release = release;
+            } else if (!is_prerelease && !fallback_release) {
+                fallback_release = release;
+            }
+        } else {
+            if (!is_prerelease) {
+                selected_release = release;
+                break;
+            }
+        }
+    }
+
+    if (want_prerelease && !selected_release && fallback_release) {
+        selected_release = fallback_release;
+    }
+
+    if (!selected_release) {
+        ESP_LOGW(TAG, "No suitable release found");
+        cJSON_Delete(releases_array);
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    // Parse manifest from the selected release
+    err = parse_manifest_from_release(selected_release, manifest);
+    cJSON_Delete(releases_array);
+
+    return err;
+}
+

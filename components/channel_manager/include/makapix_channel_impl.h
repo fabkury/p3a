@@ -13,15 +13,15 @@ extern "C" {
 
 /**
  * @brief Makapix Channel - implements channel_interface
- * 
+ *
  * This channel connects to the Makapix Club server via MQTT to discover
  * and cache artworks. Artworks are stored locally in a vault with SHA256-
  * based naming for deduplication.
- * 
+ *
  * Key features:
  * - Paginated queries to remote server
  * - Local caching of artwork files and metadata
- * - Binary channel index file (<channel_id>.bin) for fast loading
+ * - Unified cache file (<channel_id>.cache) with Ci + LAi for fast loading
  * - Background refresh via MQTT
  * - Power-loss safe file operations
  */
@@ -35,8 +35,9 @@ typedef enum {
 } makapix_index_post_kind_t;
 
 /**
- * @brief Channel post entry stored in the channel index .bin file (fixed size, packed)
+ * @brief Channel post entry stored in the channel cache (fixed size, packed)
  *
+ * Entries are persisted as part of the unified .cache file (Ci array).
  * Breaking change: this replaces the old artwork-only entry format.
  * No migration/versioning is provided by design (SD card is expected to be wiped).
  */
@@ -84,24 +85,35 @@ const char *makapix_channel_get_id(channel_handle_t channel);
 
 /**
  * @brief Check if a background refresh is in progress
- * 
+ *
  * @param channel Channel handle
  * @return true if refresh is ongoing
  */
 bool makapix_channel_is_refreshing(channel_handle_t channel);
 
 /**
- * @brief Count cached artworks for a channel by reading its index file
- * 
- * This function reads the channel index file directly from disk and counts
- * how many artwork entries have their files locally available.
- * 
+ * @brief Stop a channel's background refresh task gracefully
+ *
+ * Signals the refresh task to stop and waits up to 5 seconds for graceful exit.
+ * The channel handle remains valid after this call (not destroyed).
+ *
+ * @param channel Channel handle
+ * @return ESP_OK if stopped successfully, ESP_ERR_TIMEOUT if task didn't exit gracefully
+ */
+esp_err_t makapix_channel_stop_refresh(channel_handle_t channel);
+
+/**
+ * @brief Count cached artworks for a channel
+ *
+ * This function first checks the in-memory cache registry (fast path).
+ * If the channel isn't loaded, it reads the .cache file header to get counts.
+ *
  * @param channel_id Channel ID (e.g., "all", "promoted")
  * @param channels_path Path to channels directory (e.g., "/sdcard/p3a/channel" or custom)
- * @param vault_path Path to vault directory (e.g., "/sdcard/p3a/vault" or custom)
- * @param out_total If not NULL, receives total index entries
- * @param out_cached If not NULL, receives count of locally cached artworks
- * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no index exists
+ * @param vault_path Path to vault directory (unused, kept for API compatibility)
+ * @param out_total If not NULL, receives total index entries (Ci count)
+ * @param out_cached If not NULL, receives count of locally cached artworks (LAi count)
+ * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no cache exists
  */
 esp_err_t makapix_channel_count_cached(const char *channel_id,
                                         const char *channels_path,

@@ -8,7 +8,7 @@
  * The Play Scheduler is a streaming generator that selects artworks from multiple
  * followed channels for presentation. Key features:
  *
- * - On-demand computation (no pre-built lookahead buffer)
+ * - On-demand computation via next()/peek() API
  * - Availability masking: only locally downloaded files are visible
  * - History buffer for back-navigation
  * - Multi-channel fairness via Smooth Weighted Round Robin (SWRR)
@@ -59,7 +59,7 @@ void play_scheduler_deinit(void);
  * @brief Execute a scheduler command
  *
  * This is the primary API for changing what the scheduler plays.
- * Flushes lookahead, preserves history, begins new play queue.
+ * Resets channel state, preserves history, begins new play queue.
  *
  * @param command Scheduler command parameters
  * @return ESP_OK on success
@@ -157,9 +157,8 @@ esp_err_t play_scheduler_refresh_sdcard_cache(void);
 // Download Integration
 // ============================================================================
 
-// Download Manager is now decoupled and owns its own state.
+// Download Manager is decoupled and owns its own state.
 // Use download_manager_set_channels() to configure active channels.
-// No lookahead-based prefetch - downloads work independently.
 
 /**
  * @brief Get list of active channel IDs

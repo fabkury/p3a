@@ -22,6 +22,7 @@ let currentFps = 0;
 let palettePtr = 0;
 let paletteView = null;
 let currentPalette = PICO8_PALETTE.map(color => color.slice());
+let streamFrameToggle = false; // Toggle for 30fps streaming (send every other frame)
 
 // DOM elements
 const canvas = document.getElementById('pico-canvas');
@@ -377,8 +378,9 @@ function startEmulation() {
         // Draw to canvas
         ctx.putImageData(imageData, 0, 0);
 
-        // Stream to ESP32 via WebSocket
-        if (ws && ws.readyState === WebSocket.OPEN) {
+        // Stream to ESP32 via WebSocket at 30fps (every other frame)
+        streamFrameToggle = !streamFrameToggle;
+        if (streamFrameToggle && ws && ws.readyState === WebSocket.OPEN) {
             streamFrame(fbView, currentPalette);
         }
 
@@ -434,8 +436,25 @@ function streamFrame(fbView, palette) {
     // Framebuffer
     packet.set(fbView, offset);
 
-    if (ws.bufferedAmount < 100000) { // Backpressure check
+    if (ws.bufferedAmount < 20000) { // Backpressure check (~2-3 frames max queued)
         ws.send(packet.buffer);
+    }
+}
+
+// Signal exit to ESP32 (fire-and-forget)
+function signalExit() {
+    try {
+        // Use sendBeacon for reliable delivery during page unload
+        navigator.sendBeacon('/pico8/exit');
+    } catch (e) {
+        // Fallback to sync XHR if sendBeacon unavailable
+        try {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/pico8/exit', false); // sync
+            xhr.send();
+        } catch (e2) {
+            // Ignore errors during unload
+        }
     }
 }
 
@@ -450,6 +469,7 @@ function stopEmulation() {
         ws.close();
         ws = null;
     }
+    signalExit();
 }
 
 // Event listeners
@@ -481,5 +501,22 @@ window.addEventListener('load', () => {
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
     stopEmulation();
+});
+
+// More reliable unload event for mobile browsers
+window.addEventListener('pagehide', () => {
+    signalExit();
+});
+
+// Intercept navigation link clicks to signal exit immediately
+document.addEventListener('click', (e) => {
+    const link = e.target.closest('a[href]');
+    if (link && link.href && !link.href.startsWith('javascript:')) {
+        // Check if it's an internal navigation (not external link)
+        const url = new URL(link.href, window.location.origin);
+        if (url.origin === window.location.origin) {
+            signalExit();
+        }
+    }
 });
 

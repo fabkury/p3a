@@ -52,6 +52,20 @@ static int ps_find_channel_index(ps_state_t *state, const char *channel_id)
  */
 static bool ps_lai_contains(ps_channel_state_t *ch, int32_t post_id)
 {
+    // Makapix channels: use cache directly (cache may reallocate during merges)
+    if (ch->cache) {
+        int32_t *available_post_ids = ch->cache->available_post_ids;
+        size_t available_count = ch->cache->available_count;
+        if (!available_post_ids) return false;
+        for (size_t i = 0; i < available_count; i++) {
+            if (available_post_ids[i] == post_id) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // SD card channels: use direct fields
     if (!ch->available_post_ids) return false;
 
     for (size_t i = 0; i < ch->available_count; i++) {
@@ -92,12 +106,7 @@ static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
         // lai_add_entry takes its own mutex, so we release ours first
         bool added = lai_add_entry(ch->cache, post_id);
         if (added) {
-            // Update aliased pointer and count (pointer may have been allocated on first add)
-            ch->available_post_ids = ch->cache->available_post_ids;
-            ch->available_count = ch->cache->available_count;
-            // Mark channel as active now that it has available content
             ch->active = true;
-            // Schedule debounced save
             channel_cache_schedule_save(ch->cache);
         }
         return added;
@@ -150,9 +159,6 @@ static bool ps_lai_remove(ps_channel_state_t *ch, uint32_t ci_index)
         // lai_remove_entry takes its own mutex
         bool removed = lai_remove_entry(ch->cache, post_id);
         if (removed) {
-            // Update aliased count
-            ch->available_count = ch->cache->available_count;
-            // Schedule debounced save
             channel_cache_schedule_save(ch->cache);
         }
         return removed;
@@ -235,13 +241,15 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
         
         // After reload, LAi is already rebuilt with currently-available files
         // So the downloaded file should already be in LAi
+        size_t lai_count = ch->cache ? ch->cache->available_count : ch->available_count;
         ESP_LOGI(TAG, "Cache reloaded, entry found at ci=%lu, LAi has %zu entries",
-                 (unsigned long)ci_index, ch->available_count);
-        
+                 (unsigned long)ci_index, lai_count);
+
         // Check for zero-to-one transition and trigger playback if needed
         size_t total_available = 0;
         for (size_t i = 0; i < s_state->channel_count; i++) {
-            total_available += s_state->channels[i].available_count;
+            ps_channel_state_t *c = &s_state->channels[i];
+            total_available += (c->cache ? c->cache->available_count : c->available_count);
         }
         
         if (total_available > 0) {
@@ -258,16 +266,21 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
     // Track if this is a zero-to-one transition
     size_t prev_total_available = 0;
     for (size_t i = 0; i < s_state->channel_count; i++) {
-        prev_total_available += s_state->channels[i].available_count;
+        ps_channel_state_t *c = &s_state->channels[i];
+        prev_total_available += (c->cache ? c->cache->available_count : c->available_count);
     }
 
     // Add to LAi
+    size_t prev_channel_available = ch->cache ? ch->cache->available_count : ch->available_count;
     if (ps_lai_add(ch, ci_index)) {
-        ESP_LOGI(TAG, "LAi add: ch='%s' ci=%lu, now %zu available",
-                 channel_id, (unsigned long)ci_index, ch->available_count);
+        size_t new_channel_available = ch->cache ? ch->cache->available_count : ch->available_count;
+        size_t ci_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
+        ESP_LOGI(TAG, ">>> LAi ADD: ch='%s' post_id=%ld ci=%lu, LAi: %zu -> %zu (Ci=%zu)",
+                 channel_id, (long)post_id, (unsigned long)ci_index,
+                 prev_channel_available, new_channel_available, ci_count);
 
         // Check for zero-to-one transition
-        if (prev_total_available == 0 && ch->available_count > 0) {
+        if (prev_total_available == 0 && new_channel_available > 0) {
             ESP_LOGI(TAG, "Zero-to-one transition - triggering playback");
             xSemaphoreGive(s_state->mutex);
 
@@ -275,6 +288,9 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
             event_bus_emit_simple(P3A_EVENT_SWAP_NEXT);
             return;
         }
+    } else {
+        ESP_LOGD(TAG, "LAi add skipped (already present?): ch='%s' post_id=%ld ci=%lu",
+                 channel_id, (long)post_id, (unsigned long)ci_index);
     }
 
     xSemaphoreGive(s_state->mutex);
@@ -339,9 +355,13 @@ void play_scheduler_on_load_failed(const char *storage_key, const char *channel_
             
             if (cache) {
                 uint32_t ci_index = ci_find_by_post_id(cache, post_id);
+                size_t prev_available = ch->cache ? ch->cache->available_count : ch->available_count;
                 if (ci_index != UINT32_MAX && ps_lai_remove(ch, ci_index)) {
-                    ESP_LOGI(TAG, "LAi remove: ch='%s' ci=%lu, now %zu available",
-                             channel_id, (unsigned long)ci_index, ch->available_count);
+                    size_t new_available = ch->cache ? ch->cache->available_count : ch->available_count;
+                    size_t ci_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
+                    ESP_LOGI(TAG, ">>> LAi REMOVE: ch='%s' post_id=%ld ci=%lu, LAi: %zu -> %zu (Ci=%zu)",
+                             channel_id, (long)post_id, (unsigned long)ci_index,
+                             prev_available, new_available, ci_count);
                 }
             }
         }
@@ -349,7 +369,8 @@ void play_scheduler_on_load_failed(const char *storage_key, const char *channel_
         // Check if we need to try another artwork
         size_t total_available = 0;
         for (size_t i = 0; i < s_state->channel_count; i++) {
-            total_available += s_state->channels[i].available_count;
+            ps_channel_state_t *c = &s_state->channels[i];
+            total_available += (c->cache ? c->cache->available_count : c->available_count);
         }
 
         xSemaphoreGive(s_state->mutex);
@@ -401,7 +422,8 @@ size_t play_scheduler_get_total_available(void)
 
     size_t total = 0;
     for (size_t i = 0; i < s_state->channel_count; i++) {
-        total += s_state->channels[i].available_count;
+        ps_channel_state_t *ch = &s_state->channels[i];
+        total += (ch->cache ? ch->cache->available_count : ch->available_count);
     }
 
     xSemaphoreGive(s_state->mutex);
@@ -424,9 +446,10 @@ void play_scheduler_get_channel_stats(const char *channel_id, size_t *out_total,
 
     // Find channel by ID
     for (size_t i = 0; i < s_state->channel_count; i++) {
-        if (strcmp(s_state->channels[i].channel_id, channel_id) == 0) {
-            if (out_total) *out_total = s_state->channels[i].entry_count;
-            if (out_cached) *out_cached = s_state->channels[i].available_count;
+        ps_channel_state_t *ch = &s_state->channels[i];
+        if (strcmp(ch->channel_id, channel_id) == 0) {
+            if (out_total) *out_total = (ch->cache ? ch->cache->entry_count : ch->entry_count);
+            if (out_cached) *out_cached = (ch->cache ? ch->cache->available_count : ch->available_count);
             break;
         }
     }
@@ -450,8 +473,9 @@ size_t play_scheduler_get_channel_entry_count(const char *channel_id)
 
     size_t count = 0;
     for (size_t i = 0; i < s_state->channel_count; i++) {
-        if (strcmp(s_state->channels[i].channel_id, channel_id) == 0) {
-            count = s_state->channels[i].entry_count;
+        ps_channel_state_t *ch = &s_state->channels[i];
+        if (strcmp(ch->channel_id, channel_id) == 0) {
+            count = (ch->cache ? ch->cache->entry_count : ch->entry_count);
             break;
         }
     }
@@ -476,22 +500,26 @@ esp_err_t play_scheduler_get_channel_entry(const char *channel_id, size_t index,
     for (size_t i = 0; i < s_state->channel_count; i++) {
         ps_channel_state_t *ch = &s_state->channels[i];
         if (strcmp(ch->channel_id, channel_id) == 0) {
-            // Found channel - check index bounds
-            if (index >= ch->entry_count || !ch->entries) {
-                result = ESP_ERR_NOT_FOUND;
-                break;
-            }
-
             // Only Makapix channels have makapix_channel_entry_t format
             if (ch->entry_format != PS_ENTRY_FORMAT_MAKAPIX) {
                 result = ESP_ERR_NOT_SUPPORTED;
                 break;
             }
 
+            // For Makapix channels, access cache directly to avoid stale pointers
+            if (!ch->cache) {
+                result = ESP_ERR_NOT_FOUND;
+                break;
+            }
+
+            // Found channel - check index bounds using current cache values
+            if (index >= ch->cache->entry_count || !ch->cache->entries) {
+                result = ESP_ERR_NOT_FOUND;
+                break;
+            }
+
             // Copy entry to caller's buffer
-            // Must cast from void* to get correct pointer arithmetic
-            makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
-            memcpy(out_entry, &entries[index], sizeof(makapix_channel_entry_t));
+            memcpy(out_entry, &ch->cache->entries[index], sizeof(makapix_channel_entry_t));
             result = ESP_OK;
             break;
         }

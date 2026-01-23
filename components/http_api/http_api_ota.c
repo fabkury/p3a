@@ -225,6 +225,91 @@ static esp_err_t h_post_ota_rollback(httpd_req_t *req) {
     return ESP_OK;
 }
 
+// ---------- Web UI OTA Handlers ----------
+
+/**
+ * GET /ota/webui/status
+ * Returns current web UI OTA status
+ */
+static esp_err_t h_get_webui_ota_status(httpd_req_t *req) {
+    webui_ota_status_t status;
+    esp_err_t err = webui_ota_get_status(&status);
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON *data = cJSON_CreateObject();
+    if (!root || !data) {
+        if (root) cJSON_Delete(root);
+        if (data) cJSON_Delete(data);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    cJSON_AddBoolToObject(root, "ok", err == ESP_OK);
+
+    if (err == ESP_OK) {
+        cJSON_AddStringToObject(data, "current_version",
+                                strlen(status.current_version) > 0 ? status.current_version : "unknown");
+
+        if (status.update_available && strlen(status.available_version) > 0) {
+            cJSON_AddStringToObject(data, "available_version", status.available_version);
+        } else {
+            cJSON_AddNullToObject(data, "available_version");
+        }
+
+        cJSON_AddBoolToObject(data, "update_available", status.update_available);
+        cJSON_AddBoolToObject(data, "partition_valid", status.partition_valid);
+        cJSON_AddBoolToObject(data, "needs_recovery", status.needs_recovery);
+        cJSON_AddBoolToObject(data, "auto_update_disabled", status.auto_update_disabled);
+        cJSON_AddNumberToObject(data, "failure_count", status.failure_count);
+    } else if (err == ESP_ERR_NOT_SUPPORTED) {
+        cJSON_AddStringToObject(data, "message", "Web UI OTA is disabled");
+    }
+
+    cJSON_AddItemToObject(root, "data", data);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (!json_str) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, json_str);
+    free(json_str);
+    return ESP_OK;
+}
+
+/**
+ * POST /ota/webui/repair
+ * Triggers a forced re-download of the web UI
+ */
+static esp_err_t h_post_webui_ota_repair(httpd_req_t *req) {
+    esp_err_t err = webui_ota_trigger_repair();
+
+    if (err == ESP_ERR_NOT_SUPPORTED) {
+        send_json(req, 501, "{\"ok\":false,\"error\":\"Web UI OTA is disabled\",\"code\":\"NOT_SUPPORTED\"}");
+        return ESP_OK;
+    }
+
+    if (err == ESP_ERR_INVALID_STATE) {
+        send_json(req, 409, "{\"ok\":false,\"error\":\"Repair already in progress\",\"code\":\"REPAIR_IN_PROGRESS\"}");
+        return ESP_OK;
+    }
+
+    if (err != ESP_OK) {
+        char response[128];
+        snprintf(response, sizeof(response),
+                 "{\"ok\":false,\"error\":\"Failed to start repair: %s\",\"code\":\"REPAIR_FAIL\"}",
+                 esp_err_to_name(err));
+        send_json(req, 500, response);
+        return ESP_OK;
+    }
+
+    send_json(req, 202, "{\"ok\":true,\"data\":{\"repairing\":true,\"message\":\"Web UI repair started\"}}");
+    return ESP_OK;
+}
+
 // ---------- OTA Page Handler ----------
 
 /**
@@ -249,6 +334,9 @@ esp_err_t http_api_ota_route_get(httpd_req_t *req) {
     if (strcmp(uri, "/ota/status") == 0) {
         return h_get_ota_status(req);
     }
+    if (strcmp(uri, "/ota/webui/status") == 0) {
+        return h_get_webui_ota_status(req);
+    }
 
     return ESP_ERR_NOT_FOUND;
 }
@@ -267,6 +355,9 @@ esp_err_t http_api_ota_route_post(httpd_req_t *req) {
     }
     if (strcmp(uri, "/ota/rollback") == 0) {
         return h_post_ota_rollback(req);
+    }
+    if (strcmp(uri, "/ota/webui/repair") == 0) {
+        return h_post_webui_ota_repair(req);
     }
 
     return ESP_ERR_NOT_FOUND;

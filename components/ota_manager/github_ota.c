@@ -607,7 +607,8 @@ static esp_err_t parse_manifest_from_release(cJSON *release, github_release_mani
         .event_handler = http_event_handler,
         .user_data = &resp,
         .max_redirection_count = 5,
-        .buffer_size = 4096,
+        .buffer_size = 8192,
+        .buffer_size_tx = 1024,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);

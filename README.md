@@ -72,6 +72,9 @@ After the initial firmware flash via USB-C cable, all subsequent updates can be 
 - **Manual rollback** to previous version via web UI
 - **SHA256 verification** ensures firmware integrity
 - **ESP32-C6 auto-update** — the Wi-Fi co-processor firmware is updated automatically when needed
+- **Web UI updates** — starting with v0.7.5, the web interface can also be updated over-the-air
+
+> **Note:** Version 0.7.5 requires a full flash (use the [web flasher](https://fabkury.github.io/p3a/web-flasher/) or see [alternative methods](docs/flash-p3a.md)). This version adds OTA updates for the web UI, so future updates should rarely—if ever—require a full flash.
 
 <p align="center">
   <a href="images/PXL_20251206_184110573_red.mp4">
@@ -120,6 +123,10 @@ p3a is in active development. The following features are implemented:
 - Swipe up to view artwork comments from the Makapix community
 
 See [ROADMAP.md](docs/ROADMAP.md) for the full development plan.
+
+## Troubleshooting
+
+If your device is crashing or behaving unexpectedly, try changing the **root directory** in the web UI settings. The default is `/p3a`. Changing this creates a fresh directory with new index files, which can resolve issues caused by corrupted data. You can always switch back to the original directory later.
 
 ## Documentation
 

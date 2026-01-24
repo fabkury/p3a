@@ -43,7 +43,6 @@ typedef struct {
 
     // Playlist kind
     uint32_t playlist_total_artworks;
-    uint32_t playlist_dwell_time_ms;
 } sdcard_entry_t;
 
 /**
@@ -147,17 +146,6 @@ static asset_type_t asset_type_from_name(const char *name, bool *out_ok)
     return ASSET_TYPE_WEBP;
 }
 
-static __attribute__((unused)) uint32_t compute_effective_dwell_ms(uint32_t global_override_ms,
-                                                                   uint32_t channel_override_ms,
-                                                                   uint32_t playlist_or_artwork_ms)
-{
-    uint32_t eff = playlist_or_artwork_ms;
-    if (channel_override_ms != 0) eff = channel_override_ms;
-    if (global_override_ms != 0) eff = global_override_ms;
-    if (eff == 0) eff = 30000;
-    return eff;
-}
-
 static esp_err_t read_file_to_buf(const char *path, char **out_buf, size_t *out_len)
 {
     if (!path || !out_buf || !out_len) return ESP_ERR_INVALID_ARG;
@@ -193,11 +181,9 @@ static esp_err_t read_file_to_buf(const char *path, char **out_buf, size_t *out_
 static bool parse_sd_playlist_file(const char *playlist_path,
                                   const char *animations_dir,
                                   int32_t playlist_post_id,
-                                  uint32_t *out_total_artworks,
-                                  uint32_t *out_playlist_dwell_ms)
+                                  uint32_t *out_total_artworks)
 {
     if (out_total_artworks) *out_total_artworks = 0;
-    if (out_playlist_dwell_ms) *out_playlist_dwell_ms = 0;
 
     char *buf = NULL;
     size_t len = 0;
@@ -218,15 +204,6 @@ static bool parse_sd_playlist_file(const char *playlist_path,
         return false;
     }
 
-    uint32_t playlist_dwell_ms = 0;
-    cJSON *dwell = cJSON_GetObjectItem(root, "dwell_time_ms");
-    if (dwell && cJSON_IsNumber(dwell)) {
-        double v = cJSON_GetNumberValue(dwell);
-        if (v >= 0 && v <= 100000000) {
-            playlist_dwell_ms = (uint32_t)v;
-        }
-    }
-
     int total = cJSON_GetArraySize(arr);
     if (total <= 0) {
         cJSON_Delete(root);
@@ -236,11 +213,9 @@ static bool parse_sd_playlist_file(const char *playlist_path,
     playlist_metadata_t pl;
     memset(&pl, 0, sizeof(pl));
     pl.post_id = playlist_post_id;
-    pl.metadata_modified_at = 0;
     pl.total_artworks = total;
     pl.loaded_artworks = total;
     pl.available_artworks = 0;
-    pl.dwell_time_ms = playlist_dwell_ms;
 
     pl.artworks = (artwork_ref_t *)calloc((size_t)total, sizeof(artwork_ref_t));
     if (!pl.artworks) {
@@ -254,7 +229,6 @@ static bool parse_sd_playlist_file(const char *playlist_path,
     for (int i = 0; i < total; i++) {
         cJSON *it = cJSON_GetArrayItem(arr, i);
         const char *file = NULL;
-        uint32_t item_dwell_ms = 0;
 
         if (cJSON_IsString(it)) {
             file = cJSON_GetStringValue(it);
@@ -263,13 +237,7 @@ static bool parse_sd_playlist_file(const char *playlist_path,
             if (cJSON_IsString(f)) {
                 file = cJSON_GetStringValue(f);
             }
-            cJSON *dt = cJSON_GetObjectItem(it, "dwell_time_ms");
-            if (dt && cJSON_IsNumber(dt)) {
-                double v = cJSON_GetNumberValue(dt);
-                if (v >= 0 && v <= 100000000) {
-                    item_dwell_ms = (uint32_t)v;
-                }
-            }
+            // dwell_time_ms per artwork no longer supported
         }
 
         if (!file || !*file) {
@@ -295,7 +263,6 @@ static bool parse_sd_playlist_file(const char *playlist_path,
         memset(a, 0, sizeof(*a));
         a->post_id = (int32_t)hash_string_djb2(file);
         a->type = type;
-        a->dwell_time_ms = item_dwell_ms;
         a->downloaded = file_exists(full);
         if (a->downloaded) downloaded_count++;
 
@@ -319,7 +286,6 @@ static bool parse_sd_playlist_file(const char *playlist_path,
     }
 
     if (out_total_artworks) *out_total_artworks = (uint32_t)total;
-    if (out_playlist_dwell_ms) *out_playlist_dwell_ms = playlist_dwell_ms;
     return true;
 }
 
@@ -432,9 +398,8 @@ static esp_err_t sdcard_impl_load(channel_handle_t channel)
         if (is_json) {
             int32_t playlist_post_id = (int32_t)hash_string_djb2(entry->d_name);
             uint32_t total_artworks = 0;
-            uint32_t playlist_dwell_ms = 0;
 
-            if (!parse_sd_playlist_file(full_path, dir_path, playlist_post_id, &total_artworks, &playlist_dwell_ms)) {
+            if (!parse_sd_playlist_file(full_path, dir_path, playlist_post_id, &total_artworks)) {
                 // Invalid playlist: ignore cleanly
                 free(e->name);
                 free(e->filepath);
@@ -445,7 +410,6 @@ static esp_err_t sdcard_impl_load(channel_handle_t channel)
             e->kind = SDCARD_ENTRY_KIND_PLAYLIST;
             e->post_id = playlist_post_id;
             e->playlist_total_artworks = total_artworks;
-            e->playlist_dwell_time_ms = playlist_dwell_ms;
             idx++;
             continue;
         }
@@ -511,23 +475,16 @@ static esp_err_t sdcard_impl_get_post(channel_handle_t channel, size_t post_inde
     memset(out_post, 0, sizeof(*out_post));
     out_post->post_id = e->post_id;
     out_post->created_at = (uint32_t)e->created_at;
-    out_post->metadata_modified_at = 0;
 
     if (e->kind == SDCARD_ENTRY_KIND_PLAYLIST) {
         out_post->kind = CHANNEL_POST_KIND_PLAYLIST;
-        out_post->dwell_time_ms = e->playlist_dwell_time_ms;
         out_post->u.playlist.total_artworks = e->playlist_total_artworks;
     } else {
         out_post->kind = CHANNEL_POST_KIND_ARTWORK;
-        out_post->dwell_time_ms = 0;
         strlcpy(out_post->u.artwork.filepath, e->filepath, sizeof(out_post->u.artwork.filepath));
         strlcpy(out_post->u.artwork.storage_key, e->name, sizeof(out_post->u.artwork.storage_key));
         out_post->u.artwork.art_url[0] = '\0';
         out_post->u.artwork.type = e->type;
-        out_post->u.artwork.width = 0;
-        out_post->u.artwork.height = 0;
-        out_post->u.artwork.frame_count = 0;
-        out_post->u.artwork.has_transparency = false;
         out_post->u.artwork.artwork_modified_at = 0;
     }
 

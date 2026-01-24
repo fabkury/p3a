@@ -348,8 +348,6 @@ static esp_err_t makapix_impl_get_post(channel_handle_t channel, size_t post_ind
     out_post->post_id = entry->post_id;
     out_post->kind = (entry->kind == MAKAPIX_INDEX_POST_KIND_PLAYLIST) ? CHANNEL_POST_KIND_PLAYLIST : CHANNEL_POST_KIND_ARTWORK;
     out_post->created_at = entry->created_at;
-    out_post->metadata_modified_at = (time_t)entry->metadata_modified_at;
-    out_post->dwell_time_ms = entry->dwell_time_ms;
 
     if (out_post->kind == CHANNEL_POST_KIND_PLAYLIST) {
         out_post->u.playlist.total_artworks = entry->total_artworks;
@@ -368,10 +366,6 @@ static esp_err_t makapix_impl_get_post(channel_handle_t channel, size_t post_ind
             default:       out_post->u.artwork.type = ASSET_TYPE_WEBP; break;
         }
 
-        out_post->u.artwork.width = 0;
-        out_post->u.artwork.height = 0;
-        out_post->u.artwork.frame_count = 0;
-        out_post->u.artwork.has_transparency = false;
         out_post->u.artwork.artwork_modified_at = (time_t)entry->artwork_modified_at;
     }
 

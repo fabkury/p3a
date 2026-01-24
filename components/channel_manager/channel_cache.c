@@ -309,14 +309,10 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
         return ESP_ERR_INVALID_STATE;
     }
 
-    // Validate version - reject old versions to force LAi rebuild
-    if (header.version < 20) {
-        ESP_LOGI(TAG, "Cache version %u < 20, will rebuild LAi", header.version);
-        return ESP_ERR_NOT_SUPPORTED;  // Triggers legacy path with rebuild
-    }
-
-    if (header.version > CHANNEL_CACHE_VERSION) {
-        ESP_LOGE(TAG, "Unsupported version: %u", header.version);
+    // Validate version - reject old versions to force complete rebuild (no migration)
+    if (header.version != CHANNEL_CACHE_VERSION) {
+        ESP_LOGI(TAG, "Cache version %u != %u, discarding and rebuilding from scratch",
+                 header.version, CHANNEL_CACHE_VERSION);
         return ESP_ERR_NOT_SUPPORTED;
     }
 
@@ -1280,7 +1276,6 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
         tmp.post_id = post->post_id;
         tmp.kind = entry_kind;
         tmp.created_at = (uint32_t)parse_iso8601_utc(post->created_at);
-        tmp.metadata_modified_at = (uint32_t)parse_iso8601_utc(post->metadata_modified_at);
         tmp.filter_flags = 0;
 
         if (post->kind == MAKAPIX_POST_KIND_ARTWORK) {
@@ -1292,12 +1287,10 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
             memcpy(tmp.storage_key_uuid, uuid_bytes, sizeof(tmp.storage_key_uuid));
             tmp.extension = detect_file_type(post->art_url);
             tmp.artwork_modified_at = (uint32_t)parse_iso8601_utc(post->artwork_modified_at);
-            tmp.dwell_time_ms = post->dwell_time_ms;
             tmp.total_artworks = 0;
         } else if (post->kind == MAKAPIX_POST_KIND_PLAYLIST) {
             tmp.extension = 0;
             tmp.artwork_modified_at = 0;
-            tmp.dwell_time_ms = post->playlist_dwell_time_ms;
             tmp.total_artworks = post->total_artworks;
             memset(tmp.storage_key_uuid, 0, sizeof(tmp.storage_key_uuid));
 
@@ -1307,8 +1300,6 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
             playlist.total_artworks = post->total_artworks;
             playlist.loaded_artworks = 0;
             playlist.available_artworks = 0;
-            playlist.dwell_time_ms = post->playlist_dwell_time_ms;
-            playlist.metadata_modified_at = parse_iso8601_utc(post->metadata_modified_at);
 
             if (post->artworks_count > 0 && post->artworks) {
                 playlist.artworks = calloc(post->artworks_count, sizeof(artwork_ref_t));
@@ -1321,13 +1312,7 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
                         dst->post_id = src->post_id;
                         strncpy(dst->storage_key, src->storage_key, sizeof(dst->storage_key) - 1);
                         strlcpy(dst->art_url, src->art_url, sizeof(dst->art_url));
-                        dst->dwell_time_ms = src->dwell_time_ms;
-                        dst->metadata_modified_at = parse_iso8601_utc(src->metadata_modified_at);
                         dst->artwork_modified_at = parse_iso8601_utc(src->artwork_modified_at);
-                        dst->width = (uint16_t)src->width;
-                        dst->height = (uint16_t)src->height;
-                        dst->frame_count = (uint16_t)src->frame_count;
-                        dst->has_transparency = src->has_transparency;
 
                         // Determine type from URL extension
                         switch (detect_file_type(src->art_url)) {

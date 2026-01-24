@@ -219,7 +219,7 @@ static bool pick_recency_sdcard(ps_state_t *state, size_t channel_index, ps_artw
         strlcpy(out_artwork->filepath, filepath, sizeof(out_artwork->filepath));
         out_artwork->storage_key[0] = '\0';  // No storage key for local files
         out_artwork->created_at = entry->created_at;
-        out_artwork->dwell_time_ms = entry->dwell_time_ms;
+        out_artwork->dwell_time_ms = 0;  // Use global config default
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
 
@@ -333,7 +333,7 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
         strlcpy(out_artwork->filepath, filepath, sizeof(out_artwork->filepath));
         strlcpy(out_artwork->storage_key, storage_key, sizeof(out_artwork->storage_key));
         out_artwork->created_at = entry->created_at;
-        out_artwork->dwell_time_ms = entry->dwell_time_ms;
+        out_artwork->dwell_time_ms = 0;  // Use global config default
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
 
@@ -378,8 +378,8 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
         return false;
     }
 
-    ESP_LOGI(TAG, "RandomPick SD[%zu] '%s': pool_size=%zu, rng_state=%llu",
-             channel_index, ch->channel_id, ch->entry_count, (unsigned long long)ch->pick_rng_state);
+    ESP_LOGI(TAG, "RandomPick SD[%zu] '%s': pool_size=%zu",
+             channel_index, ch->channel_id, ch->entry_count);
 
     // Sample from all entries for true shuffle
     size_t r_eff = ch->entry_count;
@@ -415,7 +415,7 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
         strlcpy(out_artwork->filepath, filepath, sizeof(out_artwork->filepath));
         out_artwork->storage_key[0] = '\0';
         out_artwork->created_at = entry->created_at;
-        out_artwork->dwell_time_ms = entry->dwell_time_ms;
+        out_artwork->dwell_time_ms = 0;  // Use global config default
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
 
@@ -461,9 +461,8 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
         return false;
     }
 
-    ESP_LOGI(TAG, "RandomPick Makapix[%zu] '%s': pool_size(LAi)=%zu, Ci=%zu, rng_state=%llu",
-             channel_index, ch->channel_id, available_count, entry_count,
-             (unsigned long long)ch->pick_rng_state);
+    ESP_LOGI(TAG, "RandomPick Makapix[%zu] '%s': pool_size(LAi)=%zu, Ci=%zu",
+             channel_index, ch->channel_id, available_count, entry_count);
 
     // Sample from available_post_ids (LAi) directly
     for (int attempt = 0; attempt < 5; attempt++) {
@@ -509,7 +508,7 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
         strlcpy(out_artwork->filepath, filepath, sizeof(out_artwork->filepath));
         strlcpy(out_artwork->storage_key, storage_key, sizeof(out_artwork->storage_key));
         out_artwork->created_at = entry->created_at;
-        out_artwork->dwell_time_ms = entry->dwell_time_ms;
+        out_artwork->dwell_time_ms = 0;  // Use global config default
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
 

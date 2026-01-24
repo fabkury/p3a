@@ -60,16 +60,9 @@ typedef struct {
     int post_id;
     char storage_key[64];
     char art_url[256];
-    char canvas[16];
-    int width;
-    int height;
-    int frame_count;
-    bool has_transparency;
     char owner_handle[64];
     char created_at[40];
-    char metadata_modified_at[40];
     char artwork_modified_at[40];
-    uint32_t dwell_time_ms;  // 0 = use playlist/channel default
 } makapix_artwork_t;
 
 /**
@@ -80,24 +73,16 @@ typedef struct {
     makapix_post_kind_t kind;
     char owner_handle[64];
     char created_at[40];
-    char metadata_modified_at[40];
-    
+
     // For artwork posts:
     char storage_key[64];
     char art_url[256];
-    char canvas[16];
-    int width;
-    int height;
-    int frame_count;
-    bool has_transparency;
     char artwork_modified_at[40];
-    uint32_t dwell_time_ms;
-    
+
     // For playlist posts:
     int total_artworks;              // Total artworks in playlist
     makapix_artwork_t *artworks;     // Array of artworks (up to PE count)
     size_t artworks_count;           // Number of artworks in array
-    uint32_t playlist_dwell_time_ms; // Default dwell time for playlist artworks
 } makapix_post_t;
 
 #define MAKAPIX_MAX_POSTS_PER_RESPONSE 50

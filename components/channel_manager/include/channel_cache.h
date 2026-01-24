@@ -64,7 +64,7 @@ typedef struct {
 
 // Magic number: 'P3AC' (p3a Cache)
 #define CHANNEL_CACHE_MAGIC     0x50334143
-#define CHANNEL_CACHE_VERSION   20  // Bumped to 20 for LAi post_id format + hash tables
+#define CHANNEL_CACHE_VERSION   21  // Bumped to 21: removed dwell_time_ms and metadata_modified_at from entries
 
 // Maximum entries per channel (1024 artworks)
 #define CHANNEL_CACHE_MAX_ENTRIES 1024

@@ -48,15 +48,13 @@ typedef struct __attribute__((packed)) {
     uint16_t filter_flags;           // Filter flags (NSFW, etc.) - 0 if unknown/not applicable
 
     uint32_t created_at;             // Unix timestamp (0 if unknown)
-    uint32_t metadata_modified_at;   // Unix timestamp (0 if unknown)
     uint32_t artwork_modified_at;    // Unix timestamp (0 if unknown, artwork posts only)
-    uint32_t dwell_time_ms;          // 0 = use channel default
 
     int32_t total_artworks;          // Playlist posts: total artworks (0 if unknown)
 
     uint8_t storage_key_uuid[16];    // Artwork posts: UUID bytes (0 if unknown)
 
-    uint8_t reserved[20];            // Reserved for future use (keeps struct 64 bytes)
+    uint8_t reserved[28];            // Reserved for future use (keeps struct 64 bytes)
 } makapix_channel_entry_t;
 
 _Static_assert(sizeof(makapix_channel_entry_t) == 64, "Makapix channel entry must be 64 bytes");

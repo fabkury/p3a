@@ -331,20 +331,19 @@ void playlist_release(playlist_metadata_t *playlist)
 
 bool playlist_needs_update(int32_t post_id, time_t server_modified_at)
 {
+    (void)server_modified_at;  // No longer used - always refresh if not cached
     playlist_metadata_t *playlist = NULL;
     esp_err_t err = playlist_load_from_disk(post_id, &playlist);
-    
+
     if (err != ESP_OK || !playlist) {
         return true;  // Not cached, needs fetch
     }
-    
-    bool needs_update = difftime(server_modified_at, playlist->metadata_modified_at) > 0;
-    
+
     if (playlist != s_current_playlist) {
         playlist_free(playlist);
     }
-    
-    return needs_update;
+
+    return false;  // Cached, no per-playlist update tracking
 }
 
 esp_err_t playlist_queue_update(int32_t post_id)
@@ -515,8 +514,6 @@ esp_err_t playlist_fetch_from_server(int32_t post_id, uint32_t pe, playlist_meta
     playlist->total_artworks = post.total_artworks;
     playlist->loaded_artworks = (int32_t)post.artworks_count;
     playlist->available_artworks = 0;
-    playlist->dwell_time_ms = post.playlist_dwell_time_ms;
-    playlist->metadata_modified_at = parse_iso8601_utc(post.metadata_modified_at);
 
     if (post.artworks_count > 0 && post.artworks) {
         playlist->artworks = (artwork_ref_t *)calloc(post.artworks_count, sizeof(artwork_ref_t));
@@ -535,12 +532,6 @@ esp_err_t playlist_fetch_from_server(int32_t post_id, uint32_t pe, playlist_meta
             strncpy(dst->storage_key, src->storage_key, sizeof(dst->storage_key) - 1);
             strlcpy(dst->art_url, src->art_url, sizeof(dst->art_url));
             dst->type = asset_type_from_url(src->art_url);
-            dst->dwell_time_ms = src->dwell_time_ms;
-            dst->width = (uint16_t)src->width;
-            dst->height = (uint16_t)src->height;
-            dst->frame_count = (uint16_t)src->frame_count;
-            dst->has_transparency = src->has_transparency;
-            dst->metadata_modified_at = parse_iso8601_utc(src->metadata_modified_at);
             dst->artwork_modified_at = parse_iso8601_utc(src->artwork_modified_at);
 
             char vault_path[512];
@@ -617,45 +608,12 @@ static esp_err_t parse_artwork_from_json(cJSON *artwork_json, artwork_ref_t *out
     strncpy(out_artwork->art_url, cJSON_GetStringValue(art_url), 
             sizeof(out_artwork->art_url) - 1);
     
-    // Optional fields
-    cJSON *dwell_time = cJSON_GetObjectItem(artwork_json, "dwell_time_ms");
-    if (dwell_time && cJSON_IsNumber(dwell_time)) {
-        out_artwork->dwell_time_ms = (uint32_t)cJSON_GetNumberValue(dwell_time);
-    }
-    
-    cJSON *width = cJSON_GetObjectItem(artwork_json, "width");
-    if (width && cJSON_IsNumber(width)) {
-        out_artwork->width = (uint16_t)cJSON_GetNumberValue(width);
-    }
-    
-    cJSON *height = cJSON_GetObjectItem(artwork_json, "height");
-    if (height && cJSON_IsNumber(height)) {
-        out_artwork->height = (uint16_t)cJSON_GetNumberValue(height);
-    }
-    
-    cJSON *frame_count = cJSON_GetObjectItem(artwork_json, "frame_count");
-    if (frame_count && cJSON_IsNumber(frame_count)) {
-        out_artwork->frame_count = (uint16_t)cJSON_GetNumberValue(frame_count);
-    }
-    
-    cJSON *has_transparency = cJSON_GetObjectItem(artwork_json, "has_transparency");
-    if (has_transparency && cJSON_IsBool(has_transparency)) {
-        out_artwork->has_transparency = cJSON_IsTrue(has_transparency);
-    }
-    
-    // Parse timestamps
-    cJSON *metadata_modified = cJSON_GetObjectItem(artwork_json, "metadata_modified_at");
-    if (metadata_modified && cJSON_IsString(metadata_modified)) {
-        // TODO: Parse ISO 8601 timestamp to time_t
-        // For now, just set to current time
-        out_artwork->metadata_modified_at = time(NULL);
-    }
-    
+    // Parse artwork_modified_at timestamp
     cJSON *artwork_modified = cJSON_GetObjectItem(artwork_json, "artwork_modified_at");
     if (artwork_modified && cJSON_IsString(artwork_modified)) {
         out_artwork->artwork_modified_at = time(NULL);
     }
-    
+
     // Download status (persisted by writer)
     cJSON *downloaded = cJSON_GetObjectItem(artwork_json, "downloaded");
     out_artwork->downloaded = cJSON_IsBool(downloaded) ? cJSON_IsTrue(downloaded) : false;
@@ -699,17 +657,6 @@ static esp_err_t parse_playlist_from_json(cJSON *json, playlist_metadata_t **out
     
     playlist->post_id = (int32_t)cJSON_GetNumberValue(post_id);
     playlist->total_artworks = (int32_t)cJSON_GetNumberValue(total_artworks);
-    
-    // Optional fields
-    cJSON *dwell_time = cJSON_GetObjectItem(json, "dwell_time_ms");
-    if (dwell_time && cJSON_IsNumber(dwell_time)) {
-        playlist->dwell_time_ms = (uint32_t)cJSON_GetNumberValue(dwell_time);
-    }
-    
-    cJSON *metadata_modified = cJSON_GetObjectItem(json, "metadata_modified_at");
-    if (metadata_modified && cJSON_IsString(metadata_modified)) {
-        playlist->metadata_modified_at = time(NULL);  // TODO: Parse ISO 8601
-    }
     
     // Parse artworks array
     cJSON *artworks = cJSON_GetObjectItem(json, "artworks");
@@ -765,7 +712,6 @@ static esp_err_t save_playlist_json(playlist_metadata_t *playlist, const char *f
     cJSON_AddNumberToObject(root, "total_artworks", playlist->total_artworks);
     cJSON_AddNumberToObject(root, "loaded_artworks", playlist->loaded_artworks);
     cJSON_AddNumberToObject(root, "available_artworks", playlist->available_artworks);
-    cJSON_AddNumberToObject(root, "dwell_time_ms", playlist->dwell_time_ms);
     
     // Add artworks array
     cJSON *artworks = cJSON_AddArrayToObject(root, "artworks");
@@ -780,11 +726,6 @@ static esp_err_t save_playlist_json(playlist_metadata_t *playlist, const char *f
             }
             cJSON_AddStringToObject(artwork_json, "storage_key", artwork->storage_key);
             cJSON_AddStringToObject(artwork_json, "art_url", artwork->art_url);
-            cJSON_AddNumberToObject(artwork_json, "dwell_time_ms", artwork->dwell_time_ms);
-            cJSON_AddNumberToObject(artwork_json, "width", artwork->width);
-            cJSON_AddNumberToObject(artwork_json, "height", artwork->height);
-            cJSON_AddNumberToObject(artwork_json, "frame_count", artwork->frame_count);
-            cJSON_AddBoolToObject(artwork_json, "has_transparency", artwork->has_transparency);
             cJSON_AddBoolToObject(artwork_json, "downloaded", artwork->downloaded);
             
             cJSON_AddItemToArray(artworks, artwork_json);

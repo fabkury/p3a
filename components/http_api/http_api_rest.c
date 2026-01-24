@@ -141,7 +141,6 @@ esp_err_t h_post_debug(httpd_req_t *req)
         artwork_ref_t art = {0};
         strlcpy(art.filepath, artwork.filepath, sizeof(art.filepath));
         art.type = artwork.type;
-        art.dwell_time_ms = artwork.dwell_time_ms;
         art.downloaded = true;
 
         swap_future_t sf = {0};

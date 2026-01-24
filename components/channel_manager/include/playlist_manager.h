@@ -22,7 +22,7 @@ extern "C" {
 
 /**
  * @brief Artwork reference within a playlist
- * 
+ *
  * Contains metadata and download status for a single artwork in a playlist.
  */
 typedef struct {
@@ -31,19 +31,13 @@ typedef struct {
     char storage_key[96];      // SHA256-based key in vault
     char art_url[256];         // Download URL
     asset_type_t type;         // File type (WebP, GIF, etc)
-    uint32_t dwell_time_ms;    // 0 = use playlist default
-    time_t metadata_modified_at;
     time_t artwork_modified_at;
     bool downloaded;           // Is artwork file in vault?
-    uint16_t width;
-    uint16_t height;
-    uint16_t frame_count;
-    bool has_transparency;
 } artwork_ref_t;
 
 /**
  * @brief Playlist metadata
- * 
+ *
  * Represents a playlist post with its collection of artworks.
  * Cached in memory for current playlist, stored on disk for others.
  */
@@ -52,8 +46,6 @@ typedef struct {
     int32_t total_artworks;      // Server's total count
     int32_t loaded_artworks;     // How many we have metadata for
     int32_t available_artworks;  // How many are fully downloaded
-    uint32_t dwell_time_ms;      // Default for artworks in this playlist
-    time_t metadata_modified_at;
     artwork_ref_t *artworks;     // Array of artwork references (dynamically allocated)
 } playlist_metadata_t;
 
@@ -95,11 +87,11 @@ esp_err_t playlist_get(int32_t post_id, uint32_t pe, playlist_metadata_t **out_p
 void playlist_release(playlist_metadata_t *playlist);
 
 /**
- * @brief Check if playlist needs update from server
- * 
+ * @brief Check if playlist needs fetch from server
+ *
  * @param post_id Playlist post ID
- * @param server_modified_at Server's metadata_modified_at timestamp
- * @return true if local cache is stale
+ * @param server_modified_at Unused (kept for API compatibility)
+ * @return true if not cached locally, false otherwise
  */
 bool playlist_needs_update(int32_t post_id, time_t server_modified_at);
 

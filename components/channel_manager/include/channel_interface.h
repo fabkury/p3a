@@ -47,7 +47,7 @@ typedef struct {
 
 /**
  * @brief Reference to a channel item for playback
- * 
+ *
  * Contains everything needed to load and display an artwork.
  */
 typedef struct {
@@ -56,7 +56,6 @@ typedef struct {
     char storage_key[96];     // Vault storage key (SHA256 hex prefix + extension)
     uint32_t item_index;      // Index within the channel
     channel_filter_flags_t flags;  // Cached filter flags
-    uint32_t dwell_time_ms;   // Effective dwell time for this item (0 = default)
 } channel_item_ref_t;
 
 /**
@@ -82,8 +81,6 @@ typedef struct {
 
     // Common fields
     uint32_t created_at;            // Unix timestamp (0 if unknown)
-    time_t metadata_modified_at;    // 0 if unknown
-    uint32_t dwell_time_ms;         // 0 = use channel default
 
     union {
         struct {
@@ -91,10 +88,6 @@ typedef struct {
             char storage_key[96];   // Vault storage key (UUID for Makapix, filename for SD)
             char art_url[256];      // Empty for SD card sources
             asset_type_t type;
-            uint16_t width;
-            uint16_t height;
-            uint16_t frame_count;
-            bool has_transparency;
             time_t artwork_modified_at; // 0 if unknown
         } artwork;
 

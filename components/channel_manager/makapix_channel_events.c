@@ -468,4 +468,3 @@ bool makapix_channel_check_and_clear_refresh_immediate(void)
     EventBits_t bits = xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_REFRESH_IMMEDIATE);
     return (bits & MAKAPIX_EVENT_REFRESH_IMMEDIATE) != 0;
 }
-

@@ -282,14 +282,6 @@ body {
         </div>
     </div>
 </div>
-<div class="section">
-    <h3>Global Seed</h3>
-    <div class="seed-row">
-        <input class="seed-input" id="seed" type="number" min="0" step="1" placeholder="Seed (uint32)">
-        <button class="btn" id="seed-save" onclick="saveSeed()">Save</button>
-    </div>
-    <div class="file-name">Persisted, takes effect after reboot</div>
-</div>
 <div class="section danger-zone">
     <h3>Danger Zone</h3>
     <div class="bg-row">
@@ -298,6 +290,14 @@ body {
     </div>
     <div class="file-name" id="sd-hint" style="margin-bottom:12px;">Storage path on SD card. Reboot required. Existing files will not be moved.</div>
     <button class="btn danger-btn" id="reboot-btn" onclick="reboot()">Reboot</button>
+</div>
+<div class="section">
+    <h3>Global Seed</h3>
+    <div class="seed-row">
+        <input class="seed-input" id="seed" type="number" min="0" step="1" placeholder="Seed (uint32)">
+        <button class="btn" id="seed-save" onclick="saveSeed()">Save</button>
+    </div>
+    <div class="file-name">Persisted, takes effect after reboot</div>
 </div>
 <div class="footer">
     <button class="footer-btn" onclick="window.location.href='/'">Home</button>

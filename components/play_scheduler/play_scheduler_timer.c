@@ -98,3 +98,25 @@ void ps_timer_reset(ps_state_t *state)
     xTimerChangePeriod(state->dwell_timer, pdMS_TO_TICKS(dwell_ms), 0);
     xTimerStart(state->dwell_timer, 0);
 }
+
+void play_scheduler_pause_auto_swap(void)
+{
+    ps_state_t *state = ps_get_state();
+    if (!state || !state->dwell_timer) {
+        return;
+    }
+
+    ESP_LOGI(TAG, "Pausing auto-swap timer (PICO-8 mode)");
+    xTimerStop(state->dwell_timer, 0);
+}
+
+void play_scheduler_resume_auto_swap(void)
+{
+    ps_state_t *state = ps_get_state();
+    if (!state || !state->dwell_timer) {
+        return;
+    }
+
+    ESP_LOGI(TAG, "Resuming auto-swap timer");
+    ps_timer_reset(state);
+}

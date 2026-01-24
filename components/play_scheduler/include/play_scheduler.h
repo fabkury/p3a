@@ -318,6 +318,20 @@ uint32_t play_scheduler_get_dwell_time(void);
  */
 void play_scheduler_reset_timer(void);
 
+/**
+ * @brief Pause the auto-swap timer (for PICO-8 mode)
+ *
+ * Stops the dwell timer so no swap events fire during PICO-8 streaming.
+ */
+void play_scheduler_pause_auto_swap(void);
+
+/**
+ * @brief Resume the auto-swap timer (after PICO-8 mode)
+ *
+ * Restarts the dwell timer with the current dwell time.
+ */
+void play_scheduler_resume_auto_swap(void);
+
 // ============================================================================
 // Touch Events (lightweight signals from touch handler)
 // ============================================================================

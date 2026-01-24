@@ -10,6 +10,7 @@
 #include "config_store.h"
 #include "makapix_channel_events.h"
 #include "channel_cache.h"  // For LAi synchronous cleanup on eviction
+#include "p3a_state.h"      // For PICO-8 mode check
 #include "esp_log.h"
 #include "esp_timer.h"
 
@@ -533,10 +534,16 @@ void refresh_task_impl(void *pvParameters)
     uint32_t refresh_interval_sec = config_store_get_refresh_interval_sec();
     
     while (ch->refreshing) {
+        // Check for PICO-8 mode - exit refresh cycle cleanly
+        if (p3a_state_get() == P3A_STATE_PICO8_STREAMING) {
+            ESP_LOGI(TAG, "PICO-8 mode active, exiting refresh cycle");
+            break;
+        }
+
         size_t total_queried = 0;
         query_req.has_cursor = false;
         query_req.cursor[0] = '\0';
-        
+
         // Load saved cursor if exists
         char saved_cursor[64] = {0};
         time_t last_refresh_time = 0;
@@ -561,9 +568,13 @@ void refresh_task_impl(void *pvParameters)
             memset(resp, 0, sizeof(makapix_query_response_t));
             esp_err_t err = makapix_api_query_posts(&query_req, resp);
 
-            // Check for shutdown after network call
+            // Check for shutdown or PICO-8 mode after network call
             if (!ch->refreshing) {
                 ESP_LOGI(TAG, "Shutdown requested during query, exiting");
+                break;
+            }
+            if (p3a_state_get() == P3A_STATE_PICO8_STREAMING) {
+                ESP_LOGI(TAG, "PICO-8 mode activated during query, exiting");
                 break;
             }
 
@@ -705,9 +716,16 @@ void refresh_task_impl(void *pvParameters)
         // Signal Play Scheduler that this channel's refresh is complete
         makapix_ps_refresh_mark_complete(ch->channel_id);
 
-        // Wait for next refresh cycle
-        for (uint32_t elapsed = 0; elapsed < refresh_interval_sec && ch->refreshing; elapsed++) {
+        // Wait for next refresh cycle - can be woken by REFRESH_IMMEDIATE signal
+        uint32_t elapsed = 0;
+        while (elapsed < refresh_interval_sec && ch->refreshing) {
+            // Check for immediate refresh request (e.g., after PICO-8 exit)
+            if (makapix_channel_check_and_clear_refresh_immediate()) {
+                ESP_LOGI(TAG, "Immediate refresh requested, starting now");
+                break;
+            }
             vTaskDelay(pdMS_TO_TICKS(1000));
+            elapsed++;
         }
         
         if (!ch->refreshing) {

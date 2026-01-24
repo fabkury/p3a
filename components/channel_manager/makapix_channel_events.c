@@ -447,3 +447,25 @@ void makapix_channel_clear_ps_refresh_done(void)
     xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_PS_CHANNEL_REFRESH_DONE);
 }
 
+void makapix_channel_signal_refresh_immediate(void)
+{
+    if (!s_mqtt_event_group) {
+        ESP_LOGW(TAG, "Event group not initialized");
+        return;
+    }
+
+    ESP_LOGI(TAG, "Signaling immediate channel refresh requested");
+    xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_REFRESH_IMMEDIATE);
+}
+
+bool makapix_channel_check_and_clear_refresh_immediate(void)
+{
+    if (!s_mqtt_event_group) {
+        return false;
+    }
+
+    // Get current bits and clear the immediate flag atomically
+    EventBits_t bits = xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_REFRESH_IMMEDIATE);
+    return (bits & MAKAPIX_EVENT_REFRESH_IMMEDIATE) != 0;
+}
+

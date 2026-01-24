@@ -372,6 +372,41 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
         memcpy(cache->entries, file_data + header.ci_offset,
                header.ci_count * sizeof(makapix_channel_entry_t));
         cache->entry_count = header.ci_count;
+
+        // Validate loaded entries for corruption
+        for (size_t i = 0; i < cache->entry_count; i++) {
+            makapix_channel_entry_t *e = &cache->entries[i];
+
+            // Validate post_id is reasonable (positive, not garbage)
+            if (e->post_id <= 0) {
+                ESP_LOGW(TAG, "Corrupt entry[%zu]: invalid post_id=%ld", i, (long)e->post_id);
+                free(cache->entries);
+                cache->entries = NULL;
+                cache->entry_count = 0;
+                free(file_data);
+                return ESP_ERR_INVALID_STATE;
+            }
+
+            // Validate kind is in valid range (0=ARTWORK, 1=PLAYLIST)
+            if (e->kind > 1) {
+                ESP_LOGW(TAG, "Corrupt entry[%zu]: invalid kind=%d", i, e->kind);
+                free(cache->entries);
+                cache->entries = NULL;
+                cache->entry_count = 0;
+                free(file_data);
+                return ESP_ERR_INVALID_STATE;
+            }
+
+            // Validate extension is in valid range (0-4 are valid)
+            if (e->extension > 4) {
+                ESP_LOGW(TAG, "Corrupt entry[%zu]: invalid extension=%d", i, e->extension);
+                free(cache->entries);
+                cache->entries = NULL;
+                cache->entry_count = 0;
+                free(file_data);
+                return ESP_ERR_INVALID_STATE;
+            }
+        }
     } else {
         cache->entries = NULL;
         cache->entry_count = 0;
@@ -553,8 +588,10 @@ esp_err_t channel_cache_load(const char *channel_id,
             return ESP_OK;
         }
 
-        ESP_LOGW(TAG, "Cache file corrupt for '%s': %s, starting empty",
+        ESP_LOGW(TAG, "Cache file corrupt for '%s': %s, deleting and starting empty",
                  channel_id, esp_err_to_name(err));
+        // Delete the corrupt cache file to prevent repeated crashes on boot
+        unlink(cache_path);
     } else {
         // Legacy format in .cache file - migrate it
         ESP_LOGW(TAG, "Cache file '%s' has legacy format, migrating", cache_path);
@@ -567,8 +604,10 @@ esp_err_t channel_cache_load(const char *channel_id,
             return ESP_OK;
         }
 
-        ESP_LOGW(TAG, "Failed to migrate legacy cache '%s': %s, starting empty",
+        ESP_LOGW(TAG, "Failed to migrate legacy cache '%s': %s, deleting and starting empty",
                  channel_id, esp_err_to_name(err));
+        // Delete the corrupt/unmigrateable cache file to prevent repeated issues
+        unlink(cache_path);
     }
 
     // Cache corrupt or migration failed - start empty

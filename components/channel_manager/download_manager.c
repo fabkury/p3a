@@ -518,14 +518,14 @@ static void download_task(void *arg)
         if (get_err != ESP_OK) {
             // Error getting next file
             ESP_LOGW(TAG, "Error getting next download: %s", esp_err_to_name(get_err));
-            vTaskDelay(pdMS_TO_TICKS(5000));
+            vTaskDelay(pdMS_TO_TICKS(500));
             continue;
         }
 
         // Validate request
         if (s_dl_req.storage_key[0] == '\0' || s_dl_req.art_url[0] == '\0') {
             ESP_LOGW(TAG, "Invalid download request (empty storage_key or url)");
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            vTaskDelay(pdMS_TO_TICKS(500));
             continue;
         }
 
@@ -569,11 +569,6 @@ static void download_task(void *arg)
                 unlink(s_task_temp_path);
             }
         }
-
-        // Ensure cache doesn't grow unbounded - evict old files if needed
-        // Files from active channels are protected by recent mtime (touched on play)
-        // Use limit of 1000 items (~200MB at 200KB average per artwork)
-        makapix_artwork_ensure_cache_limit(1000);
 
         // Start download
         set_busy(true, s_dl_req.channel_id);

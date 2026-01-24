@@ -152,6 +152,7 @@ button {
 <div class="version-row"><span class="version-label">Available</span><span class="version-value" id="available-ver">-</span></div>
 <div class="version-row"><span class="version-label">Status</span><span class="version-value" id="state">-</span></div>
 </div>
+<button class="btn-danger" id="rollback-btn" onclick="rollback()" style="display:none">Rollback to Previous</button>
 <div class="card">
 <div class="version-row"><span class="version-label">Web UI Version</span><span class="version-value" id="webui-ver">-</span></div>
 <div class="version-row"><span class="version-label">Status</span><span class="version-value" id="webui-status">-</span></div>
@@ -162,7 +163,6 @@ button {
 </div>
 <button class="btn-primary" id="check-btn" onclick="checkUpdate()">Check for Updates</button>
 <button class="btn-primary" id="install-btn" onclick="installUpdate()" disabled>Install Update</button>
-<button class="btn-danger" id="rollback-btn" onclick="rollback()" style="display:none">Rollback to Previous</button>
 <div class="release-notes" id="release-notes"></div>
 <a href="/" class="back-link">&#8592; Back to Home</a>
 </div>
@@ -186,9 +186,12 @@ function updateUI(data) {
     if (data.available_version && data.is_prerelease) verText += ' (pre-release)';
     availVerEl.textContent = verText;
     availVerEl.className = 'version-value' + (data.available_version ? ' update-available' : '');
+    var stateEl = document.getElementById('state');
     var stateText = data.state.replace('_', ' ');
     if (data.state === 'checking') stateText = 'Checking...';
-    document.getElementById('state').textContent = stateText;
+    else if (data.state === 'idle' && !data.available_version) stateText = 'Up to date';
+    stateEl.textContent = stateText;
+    stateEl.style.color = (data.state === 'idle' && !data.available_version) ? '#4CAF50' : '';
     document.getElementById('dev-badge').style.display = data.dev_mode ? 'inline-block' : 'none';
     var checkBtn = document.getElementById('check-btn');
     var installBtn = document.getElementById('install-btn');
@@ -216,9 +219,7 @@ function updateUI(data) {
     }
     if (lastState === 'checking' && data.state !== 'checking') {
         hideStatus();
-        if (data.state === 'idle' && !data.available_version) {
-            showStatus('Firmware is up to date', 'success');
-        } else if (data.state === 'update_available') {
+        if (data.state === 'update_available') {
             showStatus('Update available!', 'success');
         }
         if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }

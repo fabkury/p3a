@@ -10,6 +10,8 @@
 
 #include "pico8_render.h"
 #include "app_lcd.h"
+#include "play_scheduler.h"
+#include "makapix_channel_events.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -173,6 +175,9 @@ void pico8_stream_enter_mode(void)
     // Pause animation playback
     app_lcd_set_animation_paused(true);
 
+    // Stop auto-swap timer
+    play_scheduler_pause_auto_swap();
+
     // Start timeout timer (timer should already be created during init)
     if (s_timeout_timer) {
         esp_timer_stop(s_timeout_timer);
@@ -180,6 +185,9 @@ void pico8_stream_enter_mode(void)
     } else {
         ESP_LOGW(TAG, "Timeout timer not available");
     }
+
+    // Note: Channel refresh and download tasks will notice P3A_STATE_PICO8_STREAMING
+    // on their next iteration and stop cleanly
 }
 
 void pico8_stream_exit_mode(void)
@@ -198,6 +206,15 @@ void pico8_stream_exit_mode(void)
 
     // Resume animation playback
     app_lcd_set_animation_paused(false);
+
+    // Resume auto-swap timer
+    play_scheduler_resume_auto_swap();
+
+    // Trigger immediate channel refresh (wakes refresh task from wait interval)
+    makapix_channel_signal_refresh_immediate();
+
+    // Signal downloads may be needed (wakes download task)
+    makapix_channel_signal_downloads_needed();
 }
 
 bool pico8_stream_is_active(void)

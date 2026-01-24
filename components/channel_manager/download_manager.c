@@ -27,6 +27,7 @@
 #include "load_tracker.h"
 #include "sd_path.h"
 #include "sdio_bus.h"
+#include "p3a_state.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -42,6 +43,10 @@ static const char *TAG = "dl_mgr";
 
 // External: check if SD is paused for OTA
 extern bool animation_player_is_sd_paused(void) __attribute__((weak));
+
+// External: animation player and render functions
+extern bool animation_player_is_animation_ready(void);
+extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail);
 
 // ============================================================================
 // Helpers - Display Name
@@ -220,8 +225,12 @@ static bool dl_take_snapshot(dl_snapshot_t *out_snapshot)
             memcpy(out_snapshot->channels, s_dl_channels,
                    s_dl_channel_count * sizeof(dl_channel_state_t));
             success = true;
+        } else {
+            ESP_LOGI(TAG, "DEBUG: dl_take_snapshot: no channels configured");
         }
         xSemaphoreGive(s_mutex);
+    } else {
+        ESP_LOGW(TAG, "DEBUG: dl_take_snapshot: mutex take failed (s_mutex=%p)", s_mutex);
     }
 
     return success;
@@ -287,6 +296,8 @@ static uint8_t s_dl_sha256[32];
 static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapshot_t *snapshot)
 {
     if (!snapshot || snapshot->channel_count == 0 || !out_request) {
+        ESP_LOGI(TAG, "DEBUG: dl_get_next_download invalid args (snapshot=%p, count=%zu)",
+                 snapshot, snapshot ? snapshot->channel_count : 0);
         return ESP_ERR_NOT_FOUND;
     }
 
@@ -297,28 +308,33 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
 
         // Skip non-Makapix channels (e.g., SD card - no downloads needed)
         if (!play_scheduler_is_makapix_channel(ch->channel_id)) {
+            ESP_LOGI(TAG, "DEBUG: Skipping non-Makapix channel '%s'", ch->channel_id);
             continue;
         }
 
         // Skip completed channels
         if (ch->channel_complete) {
+            ESP_LOGI(TAG, "DEBUG: Skipping completed channel '%s'", ch->channel_id);
             continue;
         }
 
         // Get channel cache from registry
         channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
         if (!cache) {
-            ESP_LOGD(TAG, "Cache not found for '%s'", ch->channel_id);
+            ESP_LOGI(TAG, "DEBUG: Cache not found for '%s'", ch->channel_id);
             continue;
         }
-        ESP_LOGD(TAG, "Checking cache '%s': entry_count=%zu available=%zu",
-                 ch->channel_id, cache->entry_count, cache->available_count);
+        ESP_LOGI(TAG, "DEBUG: Checking cache '%s': entry_count=%zu available=%zu cursor=%lu",
+                 ch->channel_id, cache->entry_count, cache->available_count, (unsigned long)ch->dl_cursor);
 
         // Find entries needing download (artwork not in LAi)
         makapix_channel_entry_t entry;
         bool found = false;
+        uint32_t start_cursor = ch->dl_cursor;
+        int scan_count = 0;
 
         while (channel_cache_get_next_missing(cache, &ch->dl_cursor, &entry) == ESP_OK) {
+            scan_count++;
             // Build filepath into static buffer (used by has_404_marker and output)
             dl_build_vault_filepath(&entry, s_dl_filepath, sizeof(s_dl_filepath));
 
@@ -372,13 +388,15 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             // Advance round-robin to next channel for fairness and commit to shared state
             size_t new_rr_idx = (ch_idx + 1) % snapshot->channel_count;
             dl_commit_state(snapshot, new_rr_idx);
-            ESP_LOGD(TAG, "Download: ch=%s key=%s", ch->channel_id, out_request->storage_key);
+            ESP_LOGI(TAG, "DEBUG: Found download: ch=%s key=%s (scanned %d entries from cursor %lu)",
+                     ch->channel_id, out_request->storage_key, scan_count, (unsigned long)start_cursor);
             return ESP_OK;
         }
 
         // This channel is exhausted
         ch->channel_complete = true;
-        ESP_LOGI(TAG, "Channel '%s' download scan complete", ch->channel_id);
+        ESP_LOGI(TAG, "Channel '%s' download scan complete (scanned %d entries, cursor %lu -> %lu, entry_count=%zu)",
+                 ch->channel_id, scan_count, (unsigned long)start_cursor, (unsigned long)ch->dl_cursor, cache->entry_count);
     }
 
     // All channels complete - commit the completion state
@@ -402,7 +420,25 @@ static void download_task(void *arg)
 
     ESP_LOGI(TAG, "Download task started");
 
+    int loop_count = 0;
+
     while (true) {
+        // Every 100 iterations, log stack high water mark
+        if (++loop_count % 100 == 0) {
+            UBaseType_t hwm = uxTaskGetStackHighWaterMark(NULL);
+            if (hwm < 4096) {  // Warn if less than 16KB free (4096 * 4 bytes on ESP32)
+                ESP_LOGW(TAG, "Stack HWM low: %lu words free (~%lu bytes)",
+                         (unsigned long)hwm, (unsigned long)(hwm * sizeof(StackType_t)));
+            }
+        }
+
+        // Skip download cycle if PICO-8 mode is active
+        if (p3a_state_get() == P3A_STATE_PICO8_STREAMING) {
+            ESP_LOGD(TAG, "PICO-8 mode active, skipping download cycle");
+            makapix_channel_wait_for_downloads_needed(pdMS_TO_TICKS(5000));
+            continue;
+        }
+
         // Wait for prerequisites - WiFi and SD card must be available
         // NOTE: We no longer wait for full refresh completion. The refresh task
         // signals downloads_needed after each batch, allowing early downloads
@@ -422,6 +458,11 @@ static void download_task(void *arg)
         // Wait if SDIO bus is locked or SD access is paused
         int wait_count = 0;
         const int max_wait = 120;  // Wait up to 120 seconds
+        bool sdio_locked = sdio_bus_is_locked();
+        bool sd_paused = (animation_player_is_sd_paused && animation_player_is_sd_paused());
+        if (sdio_locked || sd_paused) {
+            ESP_LOGI(TAG, "DEBUG: Waiting for bus/SD (sdio_locked=%d, sd_paused=%d)", sdio_locked, sd_paused);
+        }
         while (wait_count < max_wait) {
             bool should_wait = sdio_bus_is_locked();
             if (!should_wait && animation_player_is_sd_paused) {
@@ -447,8 +488,12 @@ static void download_task(void *arg)
         esp_err_t get_err = ESP_ERR_NOT_FOUND;
 
         memset(&s_dl_snapshot, 0, sizeof(s_dl_snapshot));
-        if (dl_take_snapshot(&s_dl_snapshot)) {
+        bool snapshot_ok = dl_take_snapshot(&s_dl_snapshot);
+        ESP_LOGI(TAG, "DEBUG: snapshot_ok=%d, channel_count=%zu", snapshot_ok, s_dl_channel_count);
+        if (snapshot_ok) {
             get_err = dl_get_next_download(&s_dl_req, &s_dl_snapshot);
+            ESP_LOGI(TAG, "DEBUG: dl_get_next_download returned %s (post_id=%ld)",
+                     esp_err_to_name(get_err), (long)s_dl_req.post_id);
             if (get_err == ESP_OK) {
                 // Clear the signal since we have work - prevents race condition where
                 // signal is set while we're busy and gets cleared before we see it
@@ -460,9 +505,9 @@ static void download_task(void *arg)
             // All files downloaded OR no channels configured - wait for signal
             // Clear signal before waiting so we only wake on NEW signals
             if (s_dl_channel_count == 0) {
-                ESP_LOGD(TAG, "No channels configured, waiting for signal...");
+                ESP_LOGI(TAG, "DEBUG: No channels configured, waiting for signal...");
             } else {
-                ESP_LOGI(TAG, "All files downloaded, waiting for signal...");
+                ESP_LOGI(TAG, "All files downloaded (ch_count=%zu), waiting for signal...", s_dl_channel_count);
             }
             makapix_channel_clear_downloads_needed();
             makapix_channel_wait_for_downloads_needed(portMAX_DELAY);
@@ -484,12 +529,34 @@ static void download_task(void *arg)
             continue;
         }
 
-        // Check if file already exists (race condition protection)
+        // Check if file already exists (e.g., from previous session before LAi was rebuilt)
+        // Treat this the same as a successful download - update LAi and signal availability
         if (file_exists(s_dl_req.filepath)) {
-            ESP_LOGD(TAG, "File already exists: %s", s_dl_req.storage_key);
-            // Signal that we should check for next file immediately
-            makapix_channel_signal_downloads_needed();
-            vTaskDelay(pdMS_TO_TICKS(50));
+            ESP_LOGI(TAG, "File already exists, updating LAi: %s", s_dl_req.storage_key);
+
+            // Clear any previous LTF failures since file is valid
+            if (sd_path_get_vault(s_task_vault_base, sizeof(s_task_vault_base)) != ESP_OK) {
+                strlcpy(s_task_vault_base, "/sdcard/p3a/vault", sizeof(s_task_vault_base));
+            }
+            ltf_clear(s_dl_req.storage_key, s_task_vault_base);
+
+            // Update LAi via play_scheduler (same as successful download)
+            play_scheduler_on_download_complete(s_dl_req.channel_id, s_dl_req.post_id);
+
+            // Signal that a file is available (wakes tasks waiting for first playable file)
+            makapix_channel_signal_file_available();
+
+            // Check if we should trigger initial playback (same logic as successful download)
+            if (!animation_player_is_animation_ready() && !s_playback_initiated) {
+                esp_err_t swap_err = play_scheduler_next(NULL);
+                if (swap_err == ESP_OK) {
+                    ESP_LOGI(TAG, "Existing file found - triggered playback via play_scheduler");
+                    s_playback_initiated = true;
+                    p3a_render_set_channel_message(NULL, 0 /* P3A_CHANNEL_MSG_NONE */, -1, NULL);
+                }
+            }
+
+            vTaskDelay(pdMS_TO_TICKS(10));  // Brief delay, then check next file
             continue;
         }
 
@@ -516,8 +583,6 @@ static void download_task(void *arg)
         // - We haven't initiated playback
         // - The initial refresh has completed (so we don't override "Updating channel index...")
         // During initial refresh, let the refresh task control the message
-        extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail);
-        extern bool animation_player_is_animation_ready(void);
         bool refresh_done = makapix_channel_is_refresh_done();
         if (!s_playback_initiated && !animation_player_is_animation_ready() && refresh_done) {
             // Get display name from channel_id in the request (using static buffer)
@@ -526,6 +591,7 @@ static void download_task(void *arg)
         }
 
         memset(s_task_out_path, 0, sizeof(s_task_out_path));
+        ESP_LOGI(TAG, "Downloading: %s", s_dl_req.art_url);
         esp_err_t err = makapix_artwork_download(s_dl_req.art_url, s_dl_req.storage_key, s_task_out_path, sizeof(s_task_out_path));
         
         set_busy(false, NULL);
@@ -544,7 +610,6 @@ static void download_task(void *arg)
             makapix_channel_signal_file_available();  // Wake tasks waiting for first file
 
             // Check if we should trigger initial playback (first file downloaded during boot)
-            extern bool animation_player_is_animation_ready(void);
             if (!animation_player_is_animation_ready() && !s_playback_initiated) {
                 // No animation playing yet - try to start playback via play_scheduler
                 esp_err_t swap_err = play_scheduler_next(NULL);
@@ -659,6 +724,7 @@ void download_manager_signal_work_available(void)
     // Reset channel_complete flags so download manager will re-scan
     // This is needed because channels may be marked complete before batches arrive
     if (s_mutex && xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        ESP_LOGI(TAG, "DEBUG: signal_work_available called, resetting %zu channel(s)", s_dl_channel_count);
         for (size_t i = 0; i < s_dl_channel_count; i++) {
             s_dl_channels[i].channel_complete = false;
         }

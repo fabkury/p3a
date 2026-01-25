@@ -19,7 +19,7 @@ set(PROJECT_VER "0.7.6-dev")
 # =============================================================================
 # Web UI version uses X.Y format (not X.Y.Z). Updates are independent of
 # firmware updates and are checked/installed automatically during OTA checks.
-set(WEBUI_VERSION "0.6")
+set(WEBUI_VERSION "0.7")
 # =============================================================================
 
 # =============================================================================
@@ -27,7 +27,7 @@ set(WEBUI_VERSION "0.6")
 # =============================================================================
 # Set P3A_BUILD_FLASHER to OFF to skip flasher build (faster dev builds)
 # Set to ON for release builds that need the flasher executable
-set(P3A_BUILD_FLASHER OFF)
+set(P3A_BUILD_FLASHER ON)
 # =============================================================================
 
 # Parse PROJECT_VER to extract major, minor, patch components

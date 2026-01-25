@@ -107,17 +107,17 @@ static esp_err_t refresh_makapix_channel(ps_channel_state_t *ch)
     ESP_LOGI(TAG, "Refreshing Makapix channel: %s", ch->channel_id);
 
     // Parse channel_id to determine Makapix channel type and identifier
-    // Channel IDs: "all", "promoted", "user:{sqid}", "hashtag:{tag}"
+    // Channel IDs: "all", "promoted", "by_user_{sqid}", "hashtag_{tag}"
 
     esp_err_t err = ESP_OK;
     if (strcmp(ch->channel_id, "all") == 0) {
         err = makapix_refresh_channel_index("all", NULL);
     } else if (strcmp(ch->channel_id, "promoted") == 0) {
         err = makapix_refresh_channel_index("promoted", NULL);
-    } else if (strncmp(ch->channel_id, "user:", 5) == 0) {
-        const char *sqid = ch->channel_id + 5;
+    } else if (strncmp(ch->channel_id, "by_user_", 8) == 0) {
+        const char *sqid = ch->channel_id + 8;
         err = makapix_refresh_channel_index("by_user", sqid);
-    } else if (strncmp(ch->channel_id, "hashtag:", 8) == 0) {
+    } else if (strncmp(ch->channel_id, "hashtag_", 8) == 0) {
         const char *tag = ch->channel_id + 8;
         err = makapix_refresh_channel_index("hashtag", tag);
     } else {

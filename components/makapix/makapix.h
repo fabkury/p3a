@@ -131,14 +131,15 @@ esp_err_t makapix_get_provisioning_status(char *out_status, size_t max_len);
 
 /**
  * @brief Switch to a remote channel
- * 
+ *
  * Creates or switches to a Makapix remote channel (all, promoted, user, by_user).
- * 
- * @param channel Channel name ("all", "promoted", "user", or "by_user")
- * @param user_handle User handle (required when channel is "by_user")
+ *
+ * @param channel Channel name ("all", "promoted", "user", "by_user", or "hashtag")
+ * @param identifier User sqid (for "by_user") or hashtag (for "hashtag"), NULL otherwise
+ * @param display_handle Display name for UI (e.g., user's display name), NULL to use identifier
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t makapix_switch_to_channel(const char *channel, const char *user_handle);
+esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier, const char *display_handle);
 
 /**
  * @brief Show a specific artwork (creates artwork-channel)
@@ -182,19 +183,20 @@ void makapix_abort_channel_load(void);
 
 /**
  * @brief Request a channel switch (non-blocking)
- * 
+ *
  * If a channel is currently loading, this sets the new channel as "pending"
  * and signals abort. When the current load exits (due to abort or timeout),
  * it will automatically switch to the pending channel.
- * 
+ *
  * If no channel is loading, this triggers an immediate switch via the
  * command queue.
- * 
- * @param channel Channel name ("all", "promoted", "user", or "by_user")
- * @param user_handle User handle (required when channel is "by_user")
+ *
+ * @param channel Channel name ("all", "promoted", "user", "by_user", or "hashtag")
+ * @param identifier User sqid (for "by_user") or hashtag (for "hashtag"), NULL otherwise
+ * @param display_handle Display name for UI (e.g., user's display name), NULL to use identifier
  * @return ESP_OK on success
  */
-esp_err_t makapix_request_channel_switch(const char *channel, const char *identifier);
+esp_err_t makapix_request_channel_switch(const char *channel, const char *identifier, const char *display_handle);
 
 /**
  * @brief Check if there's a pending channel request
@@ -203,8 +205,18 @@ bool makapix_has_pending_channel(void);
 
 /**
  * @brief Get the pending channel details
+ *
+ * @param out_channel Buffer for channel name
+ * @param channel_len Size of out_channel buffer
+ * @param out_identifier Buffer for identifier (user_sqid or hashtag)
+ * @param id_len Size of out_identifier buffer
+ * @param out_display_handle Buffer for display handle (optional, can be NULL)
+ * @param handle_len Size of out_display_handle buffer
+ * @return true if there is a pending channel, false otherwise
  */
-bool makapix_get_pending_channel(char *out_channel, size_t channel_len, char *out_user_handle, size_t user_len);
+bool makapix_get_pending_channel(char *out_channel, size_t channel_len,
+                                  char *out_identifier, size_t id_len,
+                                  char *out_display_handle, size_t handle_len);
 
 /**
  * @brief Clear the pending channel request

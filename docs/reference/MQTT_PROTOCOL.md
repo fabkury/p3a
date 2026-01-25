@@ -442,6 +442,7 @@ For complete details on player-to-server request/response protocol, please refer
 3. **Submit Reaction** (`submit_reaction`): Add emoji reactions to posts
 4. **Revoke Reaction** (`revoke_reaction`): Remove emoji reactions
 5. **Get Comments** (`get_comments`): Retrieve comments with pagination
+6. **Get Playset** (`get_playset`): Retrieve a named playset configuration
 
 All operations require:
 - `request_id`: Unique identifier for correlation
@@ -535,6 +536,205 @@ Move to previous artwork in playlist/queue.
 1. Move to previous post in local queue
 2. Display previous artwork
 3. Update status
+
+##### 4. Play Playset
+
+Configure the player to play a multi-channel playset. A "playset" is a declarative
+configuration specifying which channels to include, how to balance exposure across
+them, and how to pick artwork within each channel.
+
+**Command Type**: `play_playset`
+
+**Payload**:
+```json
+{
+  "channels": [
+    {
+      "type": "named",
+      "name": "promoted"
+    },
+    {
+      "type": "user",
+      "identifier": "uvz",
+      "display_name": "ArtistName"
+    },
+    {
+      "type": "hashtag",
+      "identifier": "pixelart",
+      "display_name": "#pixelart"
+    }
+  ],
+  "exposure_mode": "equal",
+  "pick_mode": "recency"
+}
+```
+
+**Fields**:
+
+`channels` (required, array, 1-64 items):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Channel type: `"named"`, `"user"`, `"hashtag"`, or `"sdcard"` |
+| `name` | string | Conditional | For `named` type only: `"all"` or `"promoted"` |
+| `identifier` | string | Conditional | For `user`: sqid. For `hashtag`: tag (without #) |
+| `display_name` | string | No | Friendly display name for UI (e.g., user handle, hashtag with #) |
+| `weight` | integer | No | Weight for `manual` exposure mode (0 = auto-calculate). Default: 0 |
+
+Channel type requirements:
+- `"named"`: Requires `name` field (`"all"` or `"promoted"`)
+- `"user"`: Requires `identifier` field (user's sqid)
+- `"hashtag"`: Requires `identifier` field (hashtag without #)
+- `"sdcard"`: No additional fields required (plays local SD card files)
+
+`exposure_mode` (optional, string):
+
+| Value | Description |
+|-------|-------------|
+| `"equal"` | (Default) Equal exposure across all channels |
+| `"manual"` | Use the `weight` values from each channel |
+| `"proportional"` | Proportional to content count with recency bias |
+
+`pick_mode` (optional, string):
+
+| Value | Description |
+|-------|-------------|
+| `"recency"` | (Default) Newest first, cursor moves toward older |
+| `"random"` | Random selection from a sliding window |
+
+**Examples**:
+
+Single channel (equivalent to `play_channel`):
+```json
+{
+  "channels": [
+    { "type": "named", "name": "promoted" }
+  ]
+}
+```
+
+Multi-channel with equal exposure:
+```json
+{
+  "channels": [
+    { "type": "named", "name": "all" },
+    { "type": "user", "identifier": "uvz", "display_name": "ArtistName" },
+    { "type": "hashtag", "identifier": "pixelart", "display_name": "#pixelart" }
+  ],
+  "exposure_mode": "equal",
+  "pick_mode": "random"
+}
+```
+
+Weighted multi-channel:
+```json
+{
+  "channels": [
+    { "type": "named", "name": "promoted", "weight": 50 },
+    { "type": "user", "identifier": "uvz", "weight": 30 },
+    { "type": "hashtag", "identifier": "sunset", "weight": 20 }
+  ],
+  "exposure_mode": "manual"
+}
+```
+
+**Expected Player Behavior**:
+1. Parse and validate playset configuration
+2. Reset channel state (cursors, SWRR credits)
+3. Load or refresh caches for each channel
+4. Begin playback from the first available artwork
+5. Update status with new channel information
+
+**Note on Dwell Time**: Playsets do NOT include dwell time settings. The player
+uses its globally-configured dwell time for auto-swap. Per-playset dwell time
+control may be added in a future protocol version.
+
+---
+
+### Get Playset (Player-to-Server Request)
+
+Players can request named playsets from the server using the `get_playset` request.
+
+#### Request Format
+
+**Topic**: `makapix/player/{player_key}/request/{request_id}`
+
+```json
+{
+    "request_type": "get_playset",
+    "playset_name": "followed_artists",
+    "request_id": "...",
+    "player_key": "..."
+}
+```
+
+**Fields**:
+- `request_type`: Must be `"get_playset"`
+- `playset_name`: String, name of the playset to retrieve (e.g., `"followed_artists"`)
+- `request_id`: UUID, unique request identifier for correlation
+- `player_key`: UUID, player's authentication key
+
+#### Response Format
+
+**Topic**: `makapix/player/{player_key}/response/{request_id}`
+
+**Success Response**:
+```json
+{
+    "request_id": "...",
+    "success": true,
+    "channels": [
+        {
+            "type": "user",
+            "identifier": "uvz",
+            "display_name": "@PixelMaster",
+            "weight": 0
+        },
+        {
+            "type": "user",
+            "identifier": "abc",
+            "display_name": "@AnotherArtist",
+            "weight": 0
+        }
+    ],
+    "exposure_mode": "equal",
+    "pick_mode": "recency"
+}
+```
+
+**Error Response**:
+```json
+{
+    "request_id": "...",
+    "success": false,
+    "error": "Playset not found",
+    "error_code": "playset_not_found"
+}
+```
+
+**Response Fields**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `request_id` | string | Correlated with request |
+| `success` | boolean | Whether the request succeeded |
+| `channels` | array | Array of channel configurations (same format as `play_playset`) |
+| `exposure_mode` | string | `"equal"`, `"manual"`, or `"proportional"` |
+| `pick_mode` | string | `"recency"` or `"random"` |
+| `error` | string | Error message (only if `success` is false) |
+| `error_code` | string | Machine-readable error code |
+
+**Available Playsets**:
+
+| Playset Name | Description |
+|--------------|-------------|
+| `followed_artists` | Channels for all artists the player's owner follows |
+
+**Expected Player Behavior**:
+1. Send request with playset name
+2. Wait for response (with timeout)
+3. On success: cache playset to SD card, execute with `play_scheduler_execute_command()`
+4. On failure: fall back to cached version if available
 
 ---
 

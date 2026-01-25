@@ -83,7 +83,8 @@ void makapix_set_state(makapix_state_t new_state)
 
 // Pending channel request (set by handlers, processed by channel switch task)
 char s_pending_channel[64] = {0};                 // Requested channel name
-char s_pending_user_handle[64] = {0};             // User handle for by_user channel
+char s_pending_identifier[64] = {0};              // User sqid for by_user, hashtag for hashtag
+char s_pending_display_handle[64] = {0};          // Display name for UI (e.g., user's display name)
 volatile bool s_has_pending_channel = false;      // True if a new channel was requested
 SemaphoreHandle_t s_channel_switch_sem = NULL;    // Semaphore to wake channel switch task
 
@@ -465,12 +466,12 @@ esp_err_t makapix_connect_if_registered(void)
 // Public API - Channel switching
 // --------------------------------------------------------------------------
 
-esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
+esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier, const char *display_handle)
 {
     if (!channel) {
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     // Build channel ID
     char channel_id[128] = {0};
     if (strcmp(channel, "by_user") == 0) {
@@ -488,7 +489,7 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     } else {
         strncpy(channel_id, channel, sizeof(channel_id) - 1);
     }
-    
+
     // Check if we're already on this channel
     if (s_current_channel_id[0] && strcmp(s_current_channel_id, channel_id) == 0 && s_current_channel) {
         ESP_LOGI(MAKAPIX_TAG, "Already on channel %s, restarting playback without refresh", channel_id);
@@ -499,8 +500,9 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
         }
         return ESP_OK;
     }
-    
-    // Build channel name
+
+    // Build channel name for UI display
+    // For by_user: use display_handle if provided, otherwise fall back to identifier
     char channel_name[128] = {0};
     if (strcmp(channel, "all") == 0) {
         strcpy(channel_name, "Recent");
@@ -509,7 +511,8 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
     } else if (strcmp(channel, "user") == 0) {
         strcpy(channel_name, "My Artworks");
     } else if (strcmp(channel, "by_user") == 0) {
-        snprintf(channel_name, sizeof(channel_name), "@%s's Artworks", identifier);
+        const char *display = (display_handle && display_handle[0]) ? display_handle : identifier;
+        snprintf(channel_name, sizeof(channel_name), "@%s's Artworks", display);
     } else if (strcmp(channel, "hashtag") == 0) {
         snprintf(channel_name, sizeof(channel_name), "#%s", identifier);
     } else {
@@ -731,14 +734,19 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
             s_channel_load_abort = false;
             
             char pending_ch[64] = {0};
-            char pending_user[64] = {0};
-            if (makapix_get_pending_channel(pending_ch, sizeof(pending_ch), pending_user, sizeof(pending_user))) {
+            char pending_id[64] = {0};
+            char pending_disp[64] = {0};
+            if (makapix_get_pending_channel(pending_ch, sizeof(pending_ch),
+                                             pending_id, sizeof(pending_id),
+                                             pending_disp, sizeof(pending_disp))) {
                 makapix_clear_pending_channel();
-                return makapix_switch_to_channel(pending_ch, pending_user[0] ? pending_user : NULL);
+                return makapix_switch_to_channel(pending_ch,
+                                                  pending_id[0] ? pending_id : NULL,
+                                                  pending_disp[0] ? pending_disp : NULL);
             }
             return ESP_ERR_INVALID_STATE;
         }
-        
+
         // Handle timeout
         if (!got_artwork) {
             ESP_LOGW(MAKAPIX_TAG, "Timed out waiting for artwork");
@@ -749,24 +757,30 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
             s_channel_loading = false;
             s_loading_channel_id[0] = '\0';
             s_current_channel_id[0] = '\0';
-            
+
             // Check for pending channel first
             char pending_ch[64] = {0};
-            char pending_user[64] = {0};
-            if (makapix_get_pending_channel(pending_ch, sizeof(pending_ch), pending_user, sizeof(pending_user))) {
+            char pending_id[64] = {0};
+            char pending_disp[64] = {0};
+            if (makapix_get_pending_channel(pending_ch, sizeof(pending_ch),
+                                             pending_id, sizeof(pending_id),
+                                             pending_disp, sizeof(pending_disp))) {
                 makapix_clear_pending_channel();
                 // Clear loading message before switching
                 ugfx_ui_hide_channel_message();
                 p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
-                return makapix_switch_to_channel(pending_ch, pending_user[0] ? pending_user : NULL);
+                return makapix_switch_to_channel(pending_ch,
+                                                  pending_id[0] ? pending_id : NULL,
+                                                  pending_disp[0] ? pending_disp : NULL);
             }
-            
+
             // Fall back to previous channel if available
             if (s_previous_channel_id[0] != '\0') {
                 // Clear loading message before switching
                 ugfx_ui_hide_channel_message();
                 p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
                 // Parse previous channel to extract channel type and identifier
+                // Note: We don't have display_handle for previous channel, so pass NULL
                 char prev_channel[64] = {0};
                 char prev_identifier[64] = {0};
                 if (strncmp(s_previous_channel_id, "by_user_", 8) == 0) {
@@ -778,7 +792,9 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier)
                 } else {
                     snprintf(prev_channel, sizeof(prev_channel), "%.63s", s_previous_channel_id);
                 }
-                return makapix_switch_to_channel(prev_channel, prev_identifier[0] ? prev_identifier : NULL);
+                return makapix_switch_to_channel(prev_channel,
+                                                  prev_identifier[0] ? prev_identifier : NULL,
+                                                  NULL);
             }
             
             // No previous channel - fall back to SD card
@@ -1114,12 +1130,12 @@ void makapix_abort_channel_load(void)
     }
 }
 
-esp_err_t makapix_request_channel_switch(const char *channel, const char *identifier)
+esp_err_t makapix_request_channel_switch(const char *channel, const char *identifier, const char *display_handle)
 {
     if (!channel) {
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     // Build channel_id for comparison
     char new_channel_id[128] = {0};
     if (strcmp(channel, "by_user") == 0 && identifier) {
@@ -1129,25 +1145,32 @@ esp_err_t makapix_request_channel_switch(const char *channel, const char *identi
     } else {
         strncpy(new_channel_id, channel, sizeof(new_channel_id) - 1);
     }
-    
+
     // Check if this is the same channel already loading
     if (s_channel_loading && strcmp(s_loading_channel_id, new_channel_id) == 0) {
         return ESP_OK;
     }
-    
+
     // Store as pending channel
     strncpy(s_pending_channel, channel, sizeof(s_pending_channel) - 1);
     s_pending_channel[sizeof(s_pending_channel) - 1] = '\0';
-    
+
     if (identifier) {
-        strncpy(s_pending_user_handle, identifier, sizeof(s_pending_user_handle) - 1);
-        s_pending_user_handle[sizeof(s_pending_user_handle) - 1] = '\0';
+        strncpy(s_pending_identifier, identifier, sizeof(s_pending_identifier) - 1);
+        s_pending_identifier[sizeof(s_pending_identifier) - 1] = '\0';
     } else {
-        s_pending_user_handle[0] = '\0';
+        s_pending_identifier[0] = '\0';
     }
-    
+
+    if (display_handle) {
+        strncpy(s_pending_display_handle, display_handle, sizeof(s_pending_display_handle) - 1);
+        s_pending_display_handle[sizeof(s_pending_display_handle) - 1] = '\0';
+    } else {
+        s_pending_display_handle[0] = '\0';
+    }
+
     s_has_pending_channel = true;
-    
+
     if (s_channel_loading) {
         s_channel_load_abort = true;
     } else {
@@ -1156,7 +1179,7 @@ esp_err_t makapix_request_channel_switch(const char *channel, const char *identi
             xSemaphoreGive(s_channel_switch_sem);
         }
     }
-    
+
     return ESP_OK;
 }
 
@@ -1165,20 +1188,26 @@ bool makapix_has_pending_channel(void)
     return s_has_pending_channel;
 }
 
-bool makapix_get_pending_channel(char *out_channel, size_t channel_len, char *out_user_handle, size_t user_len)
+bool makapix_get_pending_channel(char *out_channel, size_t channel_len,
+                                  char *out_identifier, size_t id_len,
+                                  char *out_display_handle, size_t handle_len)
 {
     if (!s_has_pending_channel) {
         return false;
     }
-    
+
     if (out_channel && channel_len > 0) {
         snprintf(out_channel, channel_len, "%s", s_pending_channel);
     }
-    
-    if (out_user_handle && user_len > 0) {
-        snprintf(out_user_handle, user_len, "%s", s_pending_user_handle);
+
+    if (out_identifier && id_len > 0) {
+        snprintf(out_identifier, id_len, "%s", s_pending_identifier);
     }
-    
+
+    if (out_display_handle && handle_len > 0) {
+        snprintf(out_display_handle, handle_len, "%s", s_pending_display_handle);
+    }
+
     return true;
 }
 
@@ -1186,7 +1215,8 @@ void makapix_clear_pending_channel(void)
 {
     s_has_pending_channel = false;
     s_pending_channel[0] = '\0';
-    s_pending_user_handle[0] = '\0';
+    s_pending_identifier[0] = '\0';
+    s_pending_display_handle[0] = '\0';
 }
 
 void makapix_clear_current_channel(void)

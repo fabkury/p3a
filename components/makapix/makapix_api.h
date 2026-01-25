@@ -7,6 +7,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "play_scheduler_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -134,6 +136,20 @@ esp_err_t makapix_api_revoke_reaction(int32_t post_id, const char *emoji);
  * @brief Stub: get comments
  */
 esp_err_t makapix_api_get_comments(int32_t post_id, const char *cursor, uint8_t limit);
+
+/**
+ * @brief Fetch a named playset from the server
+ *
+ * Sends a get_playset request via MQTT and parses the response into a
+ * scheduler command. The returned command can be executed with
+ * play_scheduler_execute_command().
+ *
+ * @param playset_name Name of the playset (e.g., "followed_artists")
+ * @param out_command Output scheduler command
+ * @return ESP_OK on success, ESP_ERR_INVALID_STATE if MQTT not connected,
+ *         ESP_ERR_TIMEOUT on timeout, ESP_FAIL on server error
+ */
+esp_err_t makapix_api_get_playset(const char *playset_name, ps_scheduler_command_t *out_command);
 
 #ifdef __cplusplus
 }

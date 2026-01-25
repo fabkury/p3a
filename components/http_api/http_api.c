@@ -197,26 +197,44 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
             ESP_LOGE(HTTP_API_TAG, "Failed to set background color: %s", esp_err_to_name(err));
         }
     } else if (strcmp(command_type, "play_channel") == 0) {
+        // Debug: print the payload to see what the server is sending
+        char *payload_str = cJSON_PrintUnformatted(payload);
+        if (payload_str) {
+            ESP_LOGI(HTTP_API_TAG, "play_channel payload: %s", payload_str);
+            cJSON_free(payload_str);
+        }
+
         cJSON *channel_name = cJSON_GetObjectItem(payload, "channel_name");
-        cJSON *hashtag = cJSON_GetObjectItem(payload, "hashtag");
-        cJSON *user_sqid = cJSON_GetObjectItem(payload, "user_sqid");
-        
-        const char *channel = NULL;
-        const char *identifier = NULL;
-        
-        if (channel_name && cJSON_IsString(channel_name)) {
-            channel = cJSON_GetStringValue(channel_name);
-        } else if (hashtag && cJSON_IsString(hashtag)) {
-            channel = "hashtag";
-            identifier = cJSON_GetStringValue(hashtag);
-        } else if (user_sqid && cJSON_IsString(user_sqid)) {
-            channel = "by_user";
-            identifier = cJSON_GetStringValue(user_sqid);
-        } else {
+        if (!channel_name || !cJSON_IsString(channel_name)) {
+            ESP_LOGE(HTTP_API_TAG, "play_channel: missing channel_name");
             return;
         }
-        
-        makapix_request_channel_switch(channel, identifier);
+
+        const char *channel = cJSON_GetStringValue(channel_name);
+        const char *identifier = NULL;
+        const char *display_handle = NULL;
+
+        if (strcmp(channel, "by_user") == 0) {
+            cJSON *user_sqid = cJSON_GetObjectItem(payload, "user_sqid");
+            cJSON *user_handle = cJSON_GetObjectItem(payload, "user_handle");
+            if (!user_sqid || !cJSON_IsString(user_sqid)) {
+                ESP_LOGE(HTTP_API_TAG, "play_channel by_user: missing user_sqid");
+                return;
+            }
+            identifier = cJSON_GetStringValue(user_sqid);
+            if (user_handle && cJSON_IsString(user_handle)) {
+                display_handle = cJSON_GetStringValue(user_handle);
+            }
+        } else if (strcmp(channel, "hashtag") == 0) {
+            cJSON *hashtag = cJSON_GetObjectItem(payload, "hashtag");
+            if (!hashtag || !cJSON_IsString(hashtag)) {
+                ESP_LOGE(HTTP_API_TAG, "play_channel hashtag: missing hashtag");
+                return;
+            }
+            identifier = cJSON_GetStringValue(hashtag);
+        }
+
+        makapix_request_channel_switch(channel, identifier, display_handle);
     } else if (strcmp(command_type, "show_artwork") == 0) {
         cJSON *art_url = cJSON_GetObjectItem(payload, "art_url");
         cJSON *storage_key = cJSON_GetObjectItem(payload, "storage_key");
@@ -326,6 +344,10 @@ static esp_err_t h_post_router(httpd_req_t *req) {
     }
     if (strcmp(uri, "/channel") == 0) {
         return h_post_channel(req);
+    }
+    // Playset endpoint: /playset/{name}
+    if (strncmp(uri, "/playset/", 9) == 0) {
+        return h_post_playset(req);
     }
 
     // UI/pages module

@@ -49,6 +49,7 @@ Build artifacts go to `build/`. Release binaries are copied to `release/v{VERSIO
 | Component | Purpose |
 |-----------|---------|
 | `p3a_core` | Unified state machine and lifecycle management |
+| `play_scheduler` | Playback engine that executes playsets (scheduler commands) to select artwork |
 | `channel_manager` | Playlist/channel handling, vault storage (SHA256-sharded `/sdcard/p3a/vault/`) |
 | `animation_decoder` | WebP/PNG/JPEG decoders with transparency support |
 | `animated_gif_decoder` | GIF decoder (C++ wrapper) |
@@ -82,6 +83,14 @@ Dual OTA slots (8MB each), NVS, LittleFS (4MB), and a 2MB partition for ESP32-C6
 2. Add `CMakeLists.txt` with `idf_component_register()`
 3. Add `Kconfig` if configuration needed
 4. Add component name to `REQUIRES` in `main/CMakeLists.txt`
+
+## Terminology
+
+- **Playset**: A scheduler command (`ps_scheduler_command_t`) that tells the Play Scheduler what to play. It specifies which channels to include, how to balance exposure across them, and how to pick artwork within each channel. "Playset" and "scheduler command" are interchangeable.
+
+## Deferred Features
+
+- **Dwell Time Granularity**: Currently p3a only supports a single globally-configured dwell time (auto-swap interval) set via `config_store`. Per-playset, per-channel, and per-artwork dwell times are intentionally NOT implemented. The `dwell_time_ms` field exists in some structs but is ignored. This decision is deferred until a future design review determines the best approach for dwell time control. Do not add dwell time parameters to playsets or MQTT commands.
 
 ## Documentation
 

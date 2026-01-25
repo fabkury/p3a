@@ -421,7 +421,7 @@ static void ota_check_task(void *arg)
     // The ESP32-P4 shares SDMMC controller between WiFi (SDIO Slot 1) and SD card (Slot 0)
     // High-bandwidth WiFi operations can conflict with SD card access
     ESP_LOGI(TAG, "Acquiring SDIO bus for OTA check...");
-    esp_err_t bus_err = sdio_bus_acquire(30000, "OTA_CHECK");  // 30s timeout
+    esp_err_t bus_err = sdio_bus_acquire(10000, "OTA_CHECK");  // 10s timeout
     if (bus_err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to acquire SDIO bus, skipping OTA check");
         s_ota.check_task = NULL;
@@ -434,8 +434,8 @@ static void ota_check_task(void *arg)
     
     // Wait for SDIO bus to fully settle
     // The ESP Hosted driver needs time to flush any pending operations
-    ESP_LOGI(TAG, "Waiting for SDIO bus to settle (5s)...");
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    ESP_LOGI(TAG, "Waiting for SDIO bus to settle (0.5s)...");
+    vTaskDelay(pdMS_TO_TICKS(500));
     
     set_state(OTA_STATE_CHECKING);
     

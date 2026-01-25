@@ -136,6 +136,7 @@ esp_err_t h_post_pause(httpd_req_t *req);
 esp_err_t h_post_resume(httpd_req_t *req);
 esp_err_t h_get_rotation(httpd_req_t *req);
 esp_err_t h_post_rotation(httpd_req_t *req);
+esp_err_t h_post_playset(httpd_req_t *req);
 
 #if CONFIG_OTA_DEV_MODE
 esp_err_t h_post_debug(httpd_req_t *req);

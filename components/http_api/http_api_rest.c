@@ -29,8 +29,11 @@
 #include "makapix.h"
 #include "makapix_store.h"
 #include "makapix_channel_impl.h"
+#include "makapix_api.h"
+#include "makapix_mqtt.h"
 #include "animation_player.h"
 #include "play_scheduler.h"
+#include "playset_store.h"
 #include "playback_service.h"
 #include "app_lcd.h"
 #include "version.h"
@@ -1063,6 +1066,130 @@ esp_err_t h_post_rotation(httpd_req_t *req) {
     }
     
     send_json(req, 200, "{\"ok\":true,\"data\":{\"rotation\":null}}");
+    return ESP_OK;
+}
+
+// ---------- Playset Handler ----------
+
+/**
+ * POST /playset/{name}
+ * Load and execute a named playset
+ *
+ * Flow:
+ * 1. If MQTT connected: fetch from server, save to SD, execute
+ * 2. If not connected: load from SD cache if exists
+ * 3. Execute via play_scheduler_execute_command()
+ */
+esp_err_t h_post_playset(httpd_req_t *req)
+{
+    // Extract playset name from URI: /playset/{name}
+    const char *uri = req->uri;
+    const char *prefix = "/playset/";
+    size_t prefix_len = strlen(prefix);
+
+    if (strncmp(uri, prefix, prefix_len) != 0) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset path\",\"code\":\"INVALID_PATH\"}");
+        return ESP_OK;
+    }
+
+    const char *playset_name = uri + prefix_len;
+    if (strlen(playset_name) == 0 || strlen(playset_name) > PLAYSET_MAX_NAME_LEN) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset name\",\"code\":\"INVALID_NAME\"}");
+        return ESP_OK;
+    }
+
+    // Make a copy of the name (in case URI buffer is reused)
+    char name[PLAYSET_MAX_NAME_LEN + 1];
+    strncpy(name, playset_name, sizeof(name) - 1);
+    name[sizeof(name) - 1] = '\0';
+
+    // Allocate on heap - struct is ~9KB, too large for httpd stack (8KB)
+    ps_scheduler_command_t *command = calloc(1, sizeof(ps_scheduler_command_t));
+    if (!command) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    esp_err_t err;
+    bool from_cache = false;
+
+    // Try to fetch from server if MQTT is connected
+    if (makapix_mqtt_is_connected()) {
+        err = makapix_api_get_playset(name, command);
+        if (err == ESP_OK) {
+            // Save to cache for offline use
+            esp_err_t save_err = playset_store_save(name, command);
+            if (save_err != ESP_OK) {
+                ESP_LOGW("http_api", "Failed to cache playset '%s': %s", name, esp_err_to_name(save_err));
+            }
+        } else if (err == ESP_ERR_TIMEOUT) {
+            free(command);
+            send_json(req, 504, "{\"ok\":false,\"error\":\"Request timed out\",\"code\":\"MQTT_TIMEOUT\"}");
+            return ESP_OK;
+        } else {
+            // Server error or playset not found - try cache as fallback
+            err = playset_store_load(name, command);
+            if (err == ESP_OK) {
+                from_cache = true;
+            } else {
+                free(command);
+                send_json(req, 404, "{\"ok\":false,\"error\":\"Playset not found\",\"code\":\"PLAYSET_NOT_FOUND\"}");
+                return ESP_OK;
+            }
+        }
+    } else {
+        // MQTT not connected - try loading from cache
+        err = playset_store_load(name, command);
+        if (err == ESP_OK) {
+            from_cache = true;
+        } else if (err == ESP_ERR_NOT_FOUND) {
+            free(command);
+            send_json(req, 503, "{\"ok\":false,\"error\":\"Not connected and no cached playset\",\"code\":\"NOT_CONNECTED\"}");
+            return ESP_OK;
+        } else {
+            free(command);
+            send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to load cached playset\",\"code\":\"CACHE_ERROR\"}");
+            return ESP_OK;
+        }
+    }
+
+    // Execute the playset
+    err = play_scheduler_execute_command(command);
+    if (err != ESP_OK) {
+        free(command);
+        char error_msg[128];
+        snprintf(error_msg, sizeof(error_msg),
+                 "{\"ok\":false,\"error\":\"Failed to execute playset: %s\",\"code\":\"EXECUTE_ERROR\"}",
+                 esp_err_to_name(err));
+        send_json(req, 500, error_msg);
+        return ESP_OK;
+    }
+
+    // Build response
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        free(command);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    cJSON_AddBoolToObject(root, "ok", true);
+    cJSON_AddStringToObject(root, "playset", name);
+    cJSON_AddNumberToObject(root, "channel_count", (double)command->channel_count);
+    cJSON_AddBoolToObject(root, "from_cache", from_cache);
+
+    char *out = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (!out) {
+        free(command);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    free(command);
+    send_json(req, 200, out);
+    free(out);
     return ESP_OK;
 }
 

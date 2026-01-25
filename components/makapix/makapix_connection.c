@@ -63,16 +63,20 @@ void makapix_channel_switch_task(void *pvParameters)
 {
     (void)pvParameters;
     char channel[64];
-    char user_handle[64];
-    
+    char identifier[64];
+    char display_handle[64];
+
     while (1) {
         if (xSemaphoreTake(s_channel_switch_sem, portMAX_DELAY) == pdTRUE) {
-            if (makapix_get_pending_channel(channel, sizeof(channel), user_handle, sizeof(user_handle))) {
+            if (makapix_get_pending_channel(channel, sizeof(channel),
+                                             identifier, sizeof(identifier),
+                                             display_handle, sizeof(display_handle))) {
                 makapix_clear_pending_channel();
-                
-                const char *user = user_handle[0] ? user_handle : NULL;
-                esp_err_t err = makapix_switch_to_channel(channel, user);
-                
+
+                const char *id = identifier[0] ? identifier : NULL;
+                const char *disp = display_handle[0] ? display_handle : NULL;
+                esp_err_t err = makapix_switch_to_channel(channel, id, disp);
+
                 if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
                     ESP_LOGE(MAKAPIX_TAG, "Channel switch to %s failed: %s", channel, esp_err_to_name(err));
                 }

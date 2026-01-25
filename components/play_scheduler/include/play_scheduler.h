@@ -15,6 +15,10 @@
  * - New Artwork Events (NAE) for responsive handling of new content
  * - Deterministic and reproducible via reversible PRNGs
  *
+ * Terminology: A "playset" is the preferred term for a scheduler command
+ * (ps_scheduler_command_t). It describes what to play: which channels, how to
+ * balance exposure, and how to pick artwork within channels.
+ *
  * @see docs/play-scheduler/SPECIFICATION.md for full details
  */
 
@@ -52,16 +56,19 @@ esp_err_t play_scheduler_init(void);
 void play_scheduler_deinit(void);
 
 // ============================================================================
-// Scheduler Commands
+// Scheduler Commands (Playsets)
 // ============================================================================
 
 /**
- * @brief Execute a scheduler command
+ * @brief Execute a scheduler command (playset)
  *
- * This is the primary API for changing what the scheduler plays.
+ * This is the primary API for changing what the scheduler plays. A "playset"
+ * is the preferred term for a scheduler command - it describes a declarative
+ * configuration of channels, exposure mode, and pick mode.
+ *
  * Resets channel state, preserves history, begins new play queue.
  *
- * @param command Scheduler command parameters
+ * @param command Playset (scheduler command) parameters
  * @return ESP_OK on success
  */
 esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command);

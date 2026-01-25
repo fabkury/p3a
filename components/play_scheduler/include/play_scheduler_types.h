@@ -67,8 +67,8 @@ typedef enum {
  */
 typedef enum {
     PS_CHANNEL_TYPE_NAMED,    // "all", "promoted"
-    PS_CHANNEL_TYPE_USER,     // "user:{sqid}"
-    PS_CHANNEL_TYPE_HASHTAG,  // "hashtag:{tag}"
+    PS_CHANNEL_TYPE_USER,     // "by_user_{sqid}"
+    PS_CHANNEL_TYPE_HASHTAG,  // "hashtag_{tag}"
     PS_CHANNEL_TYPE_SDCARD,   // "sdcard"
 } ps_channel_type_t;
 
@@ -119,28 +119,44 @@ typedef struct {
     char filepath[256];           // Local path to file
     char storage_key[96];         // Vault storage key
     uint32_t created_at;          // Unix timestamp
-    uint32_t dwell_time_ms;       // Per-artwork dwell (0 = use default)
+    uint32_t dwell_time_ms;       // Per-artwork dwell (0 = use default) - CURRENTLY IGNORED, see note on ps_scheduler_command_t
     asset_type_t type;            // WEBP, GIF, PNG, JPEG
     uint8_t channel_index;        // Which channel this came from
 } ps_artwork_t;
 
 /**
- * @brief Channel specification for scheduler commands
+ * @brief Channel specification for playsets
  *
- * Specifies a channel to include in a scheduler command.
+ * Specifies a channel to include in a playset (scheduler command).
  */
 typedef struct {
     ps_channel_type_t type;       // NAMED, USER, HASHTAG, SDCARD
     char name[33];                // "all", "promoted", "user", "hashtag", "sdcard"
     char identifier[33];          // For USER: sqid, for HASHTAG: tag
+    char display_name[65];        // Optional: friendly display name (e.g., user handle, hashtag)
     uint32_t weight;              // For MaE mode (0 = auto-calculate)
 } ps_channel_spec_t;
 
 /**
- * @brief Scheduler command
+ * @brief Scheduler command (also known as "playset")
  *
- * Contains all parameters needed to produce a play queue.
- * Executing a command resets channel state but preserves history.
+ * A playset is a declarative configuration that tells the Play Scheduler what
+ * to play. It contains all parameters needed to produce a play queue:
+ * - Which channels to include (up to PS_MAX_CHANNELS)
+ * - How to balance exposure across channels (exposure_mode)
+ * - How to pick artwork within each channel (pick_mode)
+ *
+ * Executing a playset resets channel state (cursors, SWRR credits) but
+ * preserves playback history for back-navigation.
+ *
+ * The terms "scheduler command" and "playset" are interchangeable throughout
+ * the codebase.
+ *
+ * NOTE ON DWELL TIME: Playsets intentionally do NOT include dwell time settings.
+ * Currently p3a only supports a single globally-configured dwell time (set via
+ * config_store). Per-playset, per-channel, and per-artwork dwell times are
+ * deferred until a future design decision is made about dwell time handling.
+ * See config_store_get_dwell_time() for the current implementation.
  */
 typedef struct {
     ps_channel_spec_t channels[PS_MAX_CHANNELS];
@@ -191,7 +207,7 @@ typedef struct {
  * @brief Per-channel state
  */
 typedef struct {
-    char channel_id[64];      // Derived: "all", "user:uvz", etc.
+    char channel_id[64];      // Derived: "all", "by_user_uvz", "hashtag_sunset", etc.
     ps_channel_type_t type;   // Channel type
     void *handle;             // channel_handle_t (legacy)
 

@@ -88,7 +88,8 @@ extern char s_previous_channel_id[128];
 
 // Pending channel request
 extern char s_pending_channel[64];
-extern char s_pending_user_handle[64];
+extern char s_pending_identifier[64];      // User sqid for by_user, hashtag for hashtag
+extern char s_pending_display_handle[64];  // Display name for UI (e.g., user's display name)
 extern volatile bool s_has_pending_channel;
 extern SemaphoreHandle_t s_channel_switch_sem;
 

@@ -321,7 +321,8 @@ body {
     <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
         <button class="channel-btn" id="ch-all" onclick="switchChannel('all')">Recent Artworks <span id="cache-all" class="cache-badge"></span></button>
         <button class="channel-btn" id="ch-promoted" onclick="switchChannel('promoted')">Promoted <span id="cache-promoted" class="cache-badge"></span></button>
-        <button class="channel-btn" onclick="switchChannel('sdcard')">SD Card</button>
+        <button class="channel-btn" id="ch-followed" onclick="playPlayset('followed_artists')">Followed Artists</button>
+        <button class="channel-btn" id="ch-sdcard" onclick="switchChannel('sdcard')">SD Card</button>
     </div>
     <div class="shuffle-row">
         <span class="shuffle-label">Shuffle</span>
@@ -483,6 +484,35 @@ function switchChannel(channel) {
         }
     };
     xhr.send(JSON.stringify({channel_name: channel}));
+}
+function playPlayset(name) {
+    console.log('Playing playset:', name);
+    var status = document.getElementById('status');
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/playset/' + name, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            try {
+                var result = JSON.parse(xhr.responseText);
+                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
+                    var displayName = name === 'followed_artists' ? 'Followed Artists' : name;
+                    status.textContent = 'Switched to ' + displayName;
+                    status.className = 'status success';
+                    updateSelectedChannel(name);
+                } else {
+                    status.textContent = result.error || 'Failed to load playset';
+                    status.className = 'status error';
+                }
+            } catch (e) {
+                status.textContent = 'Parse error: ' + e.message;
+                status.className = 'status error';
+            }
+            status.style.display = 'block';
+            setTimeout(function() { status.style.display = 'none'; }, 6000);
+        }
+    };
+    xhr.send('{}');
 }
 var fileInput = document.getElementById('file-input');
 var fileInfo = document.getElementById('file-info');
@@ -721,6 +751,7 @@ function loadChannelStats(attempt) {
                 var promEl = document.getElementById('cache-promoted');
                 var allBtn = document.getElementById('ch-all');
                 var promBtn = document.getElementById('ch-promoted');
+                var followedBtn = document.getElementById('ch-followed');
                 var registered = resp.data.registered === true;
                 if (allEl && resp.data.all) {
                     allEl.textContent = resp.data.all.cached + '/' + resp.data.all.total;
@@ -730,6 +761,7 @@ function loadChannelStats(attempt) {
                 }
                 if (allBtn) allBtn.disabled = !registered;
                 if (promBtn) promBtn.disabled = !registered;
+                if (followedBtn) followedBtn.disabled = !registered;
             }
         } catch (e) { console.log('Channel stats parse error:', e); retry(); }
     };
@@ -744,14 +776,12 @@ function updateSelectedChannel(channelName) {
     } else if (channelName === 'promoted') {
         var promBtn = document.getElementById('ch-promoted');
         if (promBtn) promBtn.classList.add('selected');
+    } else if (channelName === 'followed_artists') {
+        var followedBtn = document.getElementById('ch-followed');
+        if (followedBtn) followedBtn.classList.add('selected');
     } else if (channelName === 'sdcard') {
-        var buttons = document.querySelectorAll('.channel-btn');
-        for (var i = 0; i < buttons.length; i++) {
-            if (buttons[i].textContent.indexOf('SD Card') !== -1) {
-                buttons[i].classList.add('selected');
-                break;
-            }
-        }
+        var sdBtn = document.getElementById('ch-sdcard');
+        if (sdBtn) sdBtn.classList.add('selected');
     }
 }
 function loadCurrentChannel() {

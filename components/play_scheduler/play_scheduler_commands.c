@@ -3,12 +3,15 @@
 
 /**
  * @file play_scheduler_commands.c
- * @brief Play Scheduler - Command execution and cache loading
+ * @brief Play Scheduler - Playset execution and cache loading
  *
- * This file implements scheduler command execution including:
+ * This file implements playset (scheduler command) execution including:
  * - Channel cache loading (SD card and Makapix formats)
- * - execute_command() for multi-channel setup
+ * - execute_command() for multi-channel playset setup
  * - Convenience functions for named/user/hashtag channels
+ *
+ * A "playset" is the preferred term for a scheduler command - see
+ * play_scheduler_types.h for the full definition.
  */
 
 #include "play_scheduler.h"
@@ -59,8 +62,8 @@ static void ps_sanitize_identifier(const char *input, char *output, size_t max_l
  *
  * Format:
  * - NAMED: "{name}" -> "all", "promoted"
- * - USER: "user:{sqid}" -> "user:uvz"
- * - HASHTAG: "hashtag:{tag}" -> "hashtag:sunset"
+ * - USER: "by_user_{sqid}" -> "by_user_uvz"
+ * - HASHTAG: "hashtag_{tag}" -> "hashtag_sunset"
  * - SDCARD: "sdcard"
  */
 static void ps_build_channel_id(const ps_channel_spec_t *spec, char *out_id, size_t max_len)
@@ -74,12 +77,12 @@ static void ps_build_channel_id(const ps_channel_spec_t *spec, char *out_id, siz
 
         case PS_CHANNEL_TYPE_USER:
             ps_sanitize_identifier(spec->identifier, sanitized, sizeof(sanitized));
-            snprintf(out_id, max_len, "user:%s", sanitized);
+            snprintf(out_id, max_len, "by_user_%s", sanitized);
             break;
 
         case PS_CHANNEL_TYPE_HASHTAG:
             ps_sanitize_identifier(spec->identifier, sanitized, sizeof(sanitized));
-            snprintf(out_id, max_len, "hashtag:%s", sanitized);
+            snprintf(out_id, max_len, "hashtag_%s", sanitized);
             break;
 
         case PS_CHANNEL_TYPE_SDCARD:

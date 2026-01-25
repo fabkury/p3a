@@ -14,7 +14,7 @@ idf_component_register(
         "."
     PRIV_INCLUDE_DIRS
         "${CMAKE_CURRENT_SOURCE_DIR}/../../main/include"
-    REQUIRES 
+    REQUIRES
         nvs_flash
         esp_http_client
         mqtt

@@ -716,11 +716,14 @@ void download_manager_set_next_callback(download_get_next_cb_t cb, void *user_ct
 
 void download_manager_signal_work_available(void)
 {
-    // Reset channel_complete flags so download manager will re-scan
-    // This is needed because channels may be marked complete before batches arrive
+    // Reset channel_complete flags AND cursors so download manager will re-scan from beginning
+    // This is needed because:
+    // - Channels may be marked complete before batches arrive
+    // - Files may have been evicted from LAi, requiring a full re-scan
     if (s_mutex && xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         ESP_LOGI(TAG, "DEBUG: signal_work_available called, resetting %zu channel(s)", s_dl_channel_count);
         for (size_t i = 0; i < s_dl_channel_count; i++) {
+            s_dl_channels[i].dl_cursor = 0;
             s_dl_channels[i].channel_complete = false;
         }
         xSemaphoreGive(s_mutex);

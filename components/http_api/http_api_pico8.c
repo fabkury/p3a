@@ -12,6 +12,7 @@
 
 #if CONFIG_P3A_PICO8_ENABLE
 #include "pico8_stream.h"
+#include "playback_controller.h"
 #include <sys/stat.h>
 
 static bool s_ws_client_connected = false;
@@ -62,7 +63,7 @@ esp_err_t h_get_pico8(httpd_req_t *req) {
     }
     
     // Enter PICO-8 mode when page is visited
-    pico8_stream_enter_mode();
+    playback_controller_enter_pico8_mode();
     
     httpd_resp_set_type(req, "text/html");
     httpd_resp_send(req, buf, size);
@@ -77,7 +78,7 @@ esp_err_t h_get_pico8(httpd_req_t *req) {
 esp_err_t h_ws_pico_stream(httpd_req_t *req) {
     if (req->method == HTTP_GET) {
         ESP_LOGI(HTTP_API_TAG, "WebSocket connection request");
-        pico8_stream_enter_mode();
+        playback_controller_enter_pico8_mode();
         s_ws_client_connected = true;
         return ESP_OK;
     }
@@ -96,7 +97,7 @@ esp_err_t h_ws_pico_stream(httpd_req_t *req) {
         if (ret != ESP_ERR_NOT_FOUND) {
             ESP_LOGE(HTTP_API_TAG, "Failed to read WebSocket header: %s", esp_err_to_name(ret));
             if (s_ws_client_connected) {
-                pico8_stream_exit_mode();
+                playback_controller_exit_pico8_mode();
                 s_ws_client_connected = false;
             }
         }
@@ -130,7 +131,7 @@ esp_err_t h_ws_pico_stream(httpd_req_t *req) {
                 free(payload_buf);
             }
             if (s_ws_client_connected) {
-                pico8_stream_exit_mode();
+                playback_controller_exit_pico8_mode();
                 s_ws_client_connected = false;
             }
             return ret;
@@ -142,7 +143,7 @@ esp_err_t h_ws_pico_stream(httpd_req_t *req) {
     if (frame.type == HTTPD_WS_TYPE_CLOSE) {
         ESP_LOGI(HTTP_API_TAG, "WebSocket close frame");
         s_ws_client_connected = false;
-        pico8_stream_exit_mode();
+        playback_controller_exit_pico8_mode();
         if (payload_allocated) {
             free(payload_buf);
         }
@@ -205,7 +206,7 @@ esp_err_t h_ws_pico_stream(httpd_req_t *req) {
  */
 esp_err_t h_post_pico8_exit(httpd_req_t *req) {
     ESP_LOGI(HTTP_API_TAG, "PICO-8 exit requested via POST");
-    pico8_stream_exit_mode();
+    playback_controller_exit_pico8_mode();
     s_ws_client_connected = false;
 
     httpd_resp_set_type(req, "text/plain");

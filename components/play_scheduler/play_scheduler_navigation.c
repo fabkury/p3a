@@ -19,6 +19,8 @@
 #include "config_store.h"
 #include "p3a_state.h"
 #include "content_cache.h"
+#include "channel_cache.h"
+#include "download_manager.h"
 #include "esp_log.h"
 #include <string.h>
 #include <sys/stat.h>
@@ -32,13 +34,58 @@ static const char *TAG = "ps_navigation";
 extern esp_err_t animation_player_request_swap(const swap_request_t *request) __attribute__((weak));
 extern void animation_player_display_message(const char *title, const char *body) __attribute__((weak));
 
+// Maximum retries when picking files that turn out to be missing from disk
+#define PS_MAX_MISSING_FILE_RETRIES 10
+
+/**
+ * @brief Handle case where a file in LAi is missing from disk
+ *
+ * Evicts the entry from LAi and signals download manager to re-download.
+ * Thread-safety: Caller must hold s_state->mutex
+ */
+static void ps_handle_missing_file(ps_state_t *state, const ps_artwork_t *artwork)
+{
+    if (!state || !artwork || artwork->post_id == 0) {
+        return;
+    }
+
+    if (artwork->channel_index >= state->channel_count) {
+        return;
+    }
+
+    ps_channel_state_t *ch = &state->channels[artwork->channel_index];
+
+    // Only Makapix channels have cache-based LAi
+    if (!ch->cache) {
+        return;
+    }
+
+    // Remove from LAi (lai_remove_entry is thread-safe, takes its own mutex)
+    bool removed = lai_remove_entry(ch->cache, artwork->post_id);
+
+    if (removed) {
+        ESP_LOGW(TAG, "Evicted missing file from LAi: post_id=%ld, file=%s",
+                 (long)artwork->post_id, artwork->filepath);
+        channel_cache_schedule_save(ch->cache);
+    }
+
+    // Signal download manager to re-download (entry is in Ci but not LAi now)
+    download_manager_signal_work_available();
+}
+
 // ============================================================================
 // Swap Request
 // ============================================================================
 
 static esp_err_t prepare_and_request_swap(ps_state_t *state, const ps_artwork_t *artwork)
 {
-    if (!artwork || !ps_file_exists(artwork->filepath)) {
+    if (!artwork) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!ps_file_exists(artwork->filepath)) {
+        // File is in LAi but missing from disk - evict and signal for re-download
+        ps_handle_missing_file(state, artwork);
         return ESP_ERR_NOT_FOUND;
     }
 
@@ -92,27 +139,62 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
     esp_err_t result = ESP_OK;
     ps_artwork_t artwork;
     bool found = false;
+    int missing_retries = 0;
 
     // If walking forward through history, return from history
     if (ps_history_can_go_forward(s_state)) {
         found = ps_history_go_forward(s_state, &artwork);
     }
 
-    if (!found) {
-        // Compute fresh: pick next available artwork using availability masking
-        // This iterates through channel entries, skipping files that don't exist
-        found = ps_pick_next_available(s_state, &artwork);
-        if (found) {
-            ps_history_push(s_state, &artwork);
-            s_state->last_played_id = artwork.artwork_id;
+    // Retry loop: handles missing files by evicting and picking again
+    while (missing_retries < PS_MAX_MISSING_FILE_RETRIES) {
+        if (!found) {
+            // Compute fresh: pick next available artwork using availability masking
+            // This iterates through channel entries, skipping files that don't exist
+            found = ps_pick_next_available(s_state, &artwork);
+            if (found) {
+                ps_history_push(s_state, &artwork);
+                s_state->last_played_id = artwork.artwork_id;
 
-            // Log summary of successful pick
-            ESP_LOGI(TAG, "=== PICK RESULT: post_id=%ld, ch_idx=%d ('%s'), file=%s",
-                     (long)artwork.post_id, artwork.channel_index,
-                     (artwork.channel_index < s_state->channel_count)
-                         ? s_state->channels[artwork.channel_index].channel_id : "?",
-                     artwork.filepath);
+                // Log summary of successful pick
+                ESP_LOGI(TAG, "=== PICK RESULT: post_id=%ld, ch_idx=%d ('%s'), file=%s",
+                         (long)artwork.post_id, artwork.channel_index,
+                         (artwork.channel_index < s_state->channel_count)
+                             ? s_state->channels[artwork.channel_index].channel_id : "?",
+                         artwork.filepath);
+            }
         }
+
+        if (!found) {
+            // No artwork available at all
+            break;
+        }
+
+        // Try to swap
+        result = prepare_and_request_swap(s_state, &artwork);
+
+        if (result == ESP_OK) {
+            // Success
+            break;
+        }
+
+        if (result == ESP_ERR_NOT_FOUND) {
+            // File missing - already evicted by prepare_and_request_swap, retry
+            missing_retries++;
+            found = false;  // Force fresh pick
+            ESP_LOGW(TAG, "File missing, retrying pick (%d/%d)",
+                     missing_retries, PS_MAX_MISSING_FILE_RETRIES);
+            continue;
+        }
+
+        // Other error (ESP_ERR_INVALID_STATE, etc.) - don't retry
+        break;
+    }
+
+    if (missing_retries >= PS_MAX_MISSING_FILE_RETRIES) {
+        ESP_LOGE(TAG, "Too many missing files (%d), giving up", missing_retries);
+        result = ESP_ERR_NOT_FOUND;
+        found = false;
     }
 
     if (!found) {
@@ -184,17 +266,12 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
             }
         }
         }  // Close the "if (current_state == P3A_STATE_ANIMATION_PLAYBACK)" else block
-    } else {
-        // Request swap
-        result = prepare_and_request_swap(s_state, &artwork);
+    } else if (result != ESP_OK) {
+        ESP_LOGW(TAG, "Swap request failed: %s", esp_err_to_name(result));
+    }
 
-        if (result != ESP_OK) {
-            ESP_LOGW(TAG, "Swap request failed: %s", esp_err_to_name(result));
-        }
-
-        if (out_artwork) {
-            memcpy(out_artwork, &artwork, sizeof(ps_artwork_t));
-        }
+    if (found && out_artwork) {
+        memcpy(out_artwork, &artwork, sizeof(ps_artwork_t));
     }
 
     xSemaphoreGive(s_state->mutex);
@@ -214,23 +291,48 @@ esp_err_t play_scheduler_prev(ps_artwork_t *out_artwork)
 
     esp_err_t result = ESP_OK;
     ps_artwork_t artwork;
+    int missing_retries = 0;
 
-    if (!ps_history_can_go_back(s_state)) {
-        ESP_LOGD(TAG, "Cannot go back - at history start");
-        result = ESP_ERR_NOT_FOUND;
-    } else if (!ps_history_go_back(s_state, &artwork)) {
-        result = ESP_ERR_NOT_FOUND;
-    } else {
-        // Request swap
+    // Retry loop: skip missing files in history
+    while (missing_retries < PS_MAX_MISSING_FILE_RETRIES) {
+        if (!ps_history_can_go_back(s_state)) {
+            ESP_LOGD(TAG, "Cannot go back - at history start");
+            result = ESP_ERR_NOT_FOUND;
+            break;
+        }
+
+        if (!ps_history_go_back(s_state, &artwork)) {
+            result = ESP_ERR_NOT_FOUND;
+            break;
+        }
+
         result = prepare_and_request_swap(s_state, &artwork);
 
-        if (result != ESP_OK) {
-            ESP_LOGW(TAG, "Swap request failed: %s", esp_err_to_name(result));
+        if (result == ESP_OK) {
+            break;
         }
 
-        if (out_artwork) {
-            memcpy(out_artwork, &artwork, sizeof(ps_artwork_t));
+        if (result == ESP_ERR_NOT_FOUND) {
+            // File missing - already evicted, skip to previous
+            missing_retries++;
+            ESP_LOGW(TAG, "History file missing, skipping (%d/%d)",
+                     missing_retries, PS_MAX_MISSING_FILE_RETRIES);
+            continue;
         }
+
+        // Other error - don't retry
+        break;
+    }
+
+    if (missing_retries >= PS_MAX_MISSING_FILE_RETRIES) {
+        ESP_LOGE(TAG, "Too many missing files in history (%d)", missing_retries);
+        result = ESP_ERR_NOT_FOUND;
+    }
+
+    if (result == ESP_OK && out_artwork) {
+        memcpy(out_artwork, &artwork, sizeof(ps_artwork_t));
+    } else if (result != ESP_OK) {
+        ESP_LOGW(TAG, "Swap request failed: %s", esp_err_to_name(result));
     }
 
     xSemaphoreGive(s_state->mutex);

@@ -216,6 +216,26 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
     }
 
     if (ci_index == UINT32_MAX) {
+        // Check if cache is dirty (unsaved changes) - if so, in-memory state is
+        // authoritative and we must NOT reload from disk (which would lose data).
+        // This can happen when a merge operation modified the cache but the save
+        // failed or is still pending.
+        bool cache_dirty = false;
+        if (cache && cache->mutex) {
+            xSemaphoreTake(cache->mutex, portMAX_DELAY);
+            cache_dirty = cache->dirty;
+            xSemaphoreGive(cache->mutex);
+        }
+
+        if (cache_dirty) {
+            // Cache has unsaved changes - DO NOT reload from disk!
+            // The downloaded file's entry will be picked up on the next refresh cycle.
+            ESP_LOGW(TAG, "Entry not in cache, but cache '%s' is dirty - skipping reload to preserve in-memory state (post_id=%ld)",
+                     channel_id, (long)post_id);
+            xSemaphoreGive(s_state->mutex);
+            return;
+        }
+
         // Entry not found in current in-memory cache - the cache file may have been
         // updated by the refresh task. Reload the cache from disk and try again.
         ESP_LOGI(TAG, "Entry not in cache, reloading channel '%s' from disk", channel_id);

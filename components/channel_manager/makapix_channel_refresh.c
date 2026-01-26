@@ -627,8 +627,8 @@ void refresh_task_impl(void *pvParameters)
                 break;
             }
 
-            // Signal download manager that new files may be available
-            download_manager_signal_work_available();
+            // Signal download manager to rescan - new index entries arrived
+            download_manager_rescan();
 
             // NOTE: Live Mode schedule marking was here but has been removed.
             // Live Mode is now deferred. See play_scheduler.c for notes.

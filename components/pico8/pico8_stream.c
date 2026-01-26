@@ -12,6 +12,7 @@
 #include "app_lcd.h"
 #include "play_scheduler.h"
 #include "makapix_channel_events.h"
+#include "download_manager.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -213,8 +214,8 @@ void pico8_stream_exit_mode(void)
     // Trigger immediate channel refresh (wakes refresh task from wait interval)
     makapix_channel_signal_refresh_immediate();
 
-    // Signal downloads may be needed (wakes download task)
-    makapix_channel_signal_downloads_needed();
+    // Wake download task to resume downloads
+    download_manager_wake();
 }
 
 bool pico8_stream_is_active(void)

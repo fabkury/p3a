@@ -69,8 +69,8 @@ static void ps_handle_missing_file(ps_state_t *state, const ps_artwork_t *artwor
         channel_cache_schedule_save(ch->cache);
     }
 
-    // Signal download manager to re-download (entry is in Ci but not LAi now)
-    download_manager_signal_work_available();
+    // Wake download manager to re-download this file (no cursor reset needed)
+    download_manager_wake();
 }
 
 // ============================================================================

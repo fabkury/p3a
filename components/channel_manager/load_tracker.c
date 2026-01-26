@@ -66,6 +66,8 @@ void ltf_build_path(const char *storage_key, const char *vault_path,
 
 /**
  * @brief Parse LTF JSON content
+ *
+ * Backward compatible - new fields default to 0 if missing.
  */
 static esp_err_t parse_ltf_json(const char *json_str, load_tracker_t *out)
 {
@@ -76,6 +78,7 @@ static esp_err_t parse_ltf_json(const char *json_str, load_tracker_t *out)
 
     memset(out, 0, sizeof(*out));
 
+    // Existing fields
     cJSON *attempts = cJSON_GetObjectItem(root, "attempts");
     if (cJSON_IsNumber(attempts)) {
         out->attempts = (uint8_t)attempts->valueint;
@@ -96,12 +99,30 @@ static esp_err_t parse_ltf_json(const char *json_str, load_tracker_t *out)
         strncpy(out->reason, reason->valuestring, sizeof(out->reason) - 1);
     }
 
+    // New fields (backward compatible - default to 0)
+    cJSON *download_attempts = cJSON_GetObjectItem(root, "download_attempts");
+    if (cJSON_IsNumber(download_attempts)) {
+        out->download_attempts = (uint8_t)download_attempts->valueint;
+    }
+
+    cJSON *retry_after = cJSON_GetObjectItem(root, "retry_after");
+    if (cJSON_IsNumber(retry_after)) {
+        out->retry_after = (time_t)retry_after->valuedouble;
+    }
+
+    cJSON *error_class = cJSON_GetObjectItem(root, "error_class");
+    if (cJSON_IsNumber(error_class)) {
+        out->error_class = (ltf_error_class_t)error_class->valueint;
+    }
+
     cJSON_Delete(root);
     return ESP_OK;
 }
 
 /**
  * @brief Generate LTF JSON content
+ *
+ * Includes both existing and new fields.
  */
 static char *generate_ltf_json(const load_tracker_t *ltf)
 {
@@ -110,10 +131,16 @@ static char *generate_ltf_json(const load_tracker_t *ltf)
         return NULL;
     }
 
+    // Existing fields
     cJSON_AddNumberToObject(root, "attempts", ltf->attempts);
     cJSON_AddBoolToObject(root, "terminal", ltf->terminal);
     cJSON_AddNumberToObject(root, "last_failure", (double)ltf->last_failure);
     cJSON_AddStringToObject(root, "reason", ltf->reason);
+
+    // New fields for download failure tracking
+    cJSON_AddNumberToObject(root, "download_attempts", ltf->download_attempts);
+    cJSON_AddNumberToObject(root, "retry_after", (double)ltf->retry_after);
+    cJSON_AddNumberToObject(root, "error_class", (int)ltf->error_class);
 
     char *json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -348,4 +375,231 @@ esp_err_t ltf_clear(const char *storage_key, const char *vault_path)
     // Ignore errors - file may not exist
 
     return ESP_OK;
+}
+
+// ============================================================================
+// Internal: Save LTF to file
+// ============================================================================
+
+/**
+ * @brief Save LTF state to file
+ */
+static esp_err_t ltf_save(const char *storage_key, const char *vault_path, const load_tracker_t *ltf)
+{
+    if (!storage_key || !vault_path || !ltf) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Generate JSON
+    char *json_str = generate_ltf_json(ltf);
+    if (!json_str) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    // Build path
+    char path[256];
+    ltf_build_path(storage_key, vault_path, path, sizeof(path));
+
+    // Ensure parent directories exist
+    ensure_parent_dirs(path);
+
+    // Write atomically via temp file
+    char temp_path[260];
+    snprintf(temp_path, sizeof(temp_path), "%s.tmp", path);
+
+    FILE *f = fopen(temp_path, "w");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to create LTF temp file: %s", temp_path);
+        free(json_str);
+        return ESP_FAIL;
+    }
+
+    size_t written = fwrite(json_str, 1, strlen(json_str), f);
+    free(json_str);
+
+    if (written == 0) {
+        fclose(f);
+        unlink(temp_path);
+        return ESP_FAIL;
+    }
+
+    fflush(f);
+    fsync(fileno(f));
+    fclose(f);
+
+    // Atomic rename
+    if (rename(temp_path, path) != 0) {
+        unlink(temp_path);
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+// ============================================================================
+// Download Failure Tracking API
+// ============================================================================
+
+ltf_error_class_t ltf_classify_error(esp_err_t err, int http_status)
+{
+    // HTTP status takes precedence
+    if (http_status == 404 || http_status == 403 || http_status == 410) {
+        return LTF_ERROR_CLASS_PERMANENT;
+    }
+    if (http_status >= 500 && http_status < 600) {
+        return LTF_ERROR_CLASS_TRANSIENT;
+    }
+
+    // ESP error codes
+    switch (err) {
+        case ESP_ERR_NOT_FOUND:
+        case ESP_ERR_NO_MEM:
+            return LTF_ERROR_CLASS_PERMANENT;
+
+        case ESP_ERR_HTTP_CONNECT:
+        case ESP_ERR_TIMEOUT:
+        case ESP_FAIL:
+        case ESP_ERR_INVALID_SIZE:
+            return LTF_ERROR_CLASS_TRANSIENT;
+
+        default:
+            // Conservative: treat unknown errors as transient
+            return LTF_ERROR_CLASS_TRANSIENT;
+    }
+}
+
+bool ltf_can_download_now(const char *storage_key, const char *vault_path)
+{
+    load_tracker_t ltf;
+    esp_err_t err = ltf_load(storage_key, vault_path, &ltf);
+
+    if (err == ESP_ERR_NOT_FOUND) {
+        return true;  // No LTF = allowed
+    }
+
+    if (err != ESP_OK) {
+        return true;  // Error reading LTF = allow (conservative)
+    }
+
+    if (ltf.terminal) {
+        return false;  // Permanent failure
+    }
+
+    if (ltf.retry_after > 0) {
+        time_t now = time(NULL);
+        if (now < ltf.retry_after) {
+            return false;  // Still in backoff
+        }
+    }
+
+    return true;
+}
+
+uint32_t ltf_get_retry_delay(const char *storage_key, const char *vault_path)
+{
+    load_tracker_t ltf;
+    esp_err_t err = ltf_load(storage_key, vault_path, &ltf);
+
+    if (err != ESP_OK || ltf.terminal) {
+        return 0;  // No LTF, error, or terminal = no delay concept
+    }
+
+    if (ltf.retry_after == 0) {
+        return 0;  // No backoff set
+    }
+
+    time_t now = time(NULL);
+    if (now >= ltf.retry_after) {
+        return 0;  // Backoff expired
+    }
+
+    return (uint32_t)(ltf.retry_after - now);
+}
+
+esp_err_t ltf_record_download_failure(const char *storage_key, const char *vault_path,
+                                       esp_err_t err, int http_status)
+{
+    if (!storage_key || !vault_path) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ltf_error_class_t cls = ltf_classify_error(err, http_status);
+
+    // Load existing LTF or create new
+    load_tracker_t ltf;
+    esp_err_t load_err = ltf_load(storage_key, vault_path, &ltf);
+    if (load_err != ESP_OK) {
+        memset(&ltf, 0, sizeof(ltf));
+    }
+
+    // Update common fields
+    ltf.last_failure = time(NULL);
+    ltf.error_class = cls;
+    snprintf(ltf.reason, sizeof(ltf.reason), "%s:%d",
+             esp_err_to_name(err), http_status);
+
+    if (cls == LTF_ERROR_CLASS_PERMANENT) {
+        // Permanent failure - mark terminal immediately
+        ltf.terminal = true;
+        ltf.retry_after = 0;
+        ESP_LOGW(TAG, "Download PERMANENT failure for '%s': %s (http=%d)",
+                 storage_key, esp_err_to_name(err), http_status);
+    } else {
+        // Transient failure - exponential backoff
+        ltf.download_attempts++;
+
+        // Calculate backoff: 1, 2, 4, 8, 16, 30 seconds (capped)
+        uint32_t backoff = LTF_BACKOFF_INITIAL_SEC;
+        for (int i = 1; i < ltf.download_attempts && i < 10; i++) {
+            backoff *= LTF_BACKOFF_MULTIPLIER;
+            if (backoff > LTF_BACKOFF_MAX_SEC) {
+                backoff = LTF_BACKOFF_MAX_SEC;
+                break;
+            }
+        }
+
+        // After max transient failures, use long cooldown
+        if (ltf.download_attempts >= LTF_MAX_DOWNLOAD_ATTEMPTS) {
+            backoff = LTF_COOLDOWN_SEC;
+            ESP_LOGW(TAG, "Download failure #%d for '%s' - %ds cooldown",
+                     ltf.download_attempts, storage_key, LTF_COOLDOWN_SEC);
+        } else {
+            ESP_LOGI(TAG, "Download failure #%d/%d for '%s': %s - backoff %lds",
+                     ltf.download_attempts, LTF_MAX_DOWNLOAD_ATTEMPTS,
+                     storage_key, esp_err_to_name(err), (long)backoff);
+        }
+
+        ltf.retry_after = ltf.last_failure + backoff;
+    }
+
+    return ltf_save(storage_key, vault_path, &ltf);
+}
+
+esp_err_t ltf_clear_download_failures(const char *storage_key, const char *vault_path)
+{
+    if (!storage_key || !vault_path) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    load_tracker_t ltf;
+    esp_err_t err = ltf_load(storage_key, vault_path, &ltf);
+
+    if (err == ESP_ERR_NOT_FOUND) {
+        return ESP_OK;  // Nothing to clear
+    }
+
+    if (err != ESP_OK) {
+        return err;  // Error reading
+    }
+
+    // Only clear download-related fields, preserve load failure tracking
+    if (ltf.download_attempts > 0 || ltf.retry_after > 0) {
+        ltf.download_attempts = 0;
+        ltf.retry_after = 0;
+        ltf.error_class = LTF_ERROR_CLASS_NONE;
+        // Keep: attempts, terminal (for load failures), last_failure, reason
+        return ltf_save(storage_key, vault_path, &ltf);
+    }
+
+    return ESP_OK;  // No download failures to clear
 }

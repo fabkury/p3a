@@ -238,9 +238,9 @@ static void refresh_task(void *arg)
                         extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail);
                         p3a_render_set_channel_message(NULL, 0 /* P3A_CHANNEL_MSG_NONE */, -1, NULL);
 
-                        // Signal download manager for any missing files
-                        extern void download_manager_signal_work_available(void);
-                        download_manager_signal_work_available();
+                        // Signal download manager to rescan for any missing files
+                        extern void download_manager_rescan(void);
+                        download_manager_rescan();
 
                         // Release mutex before calling play_scheduler_next to avoid deadlock
                         xSemaphoreGive(state->mutex);

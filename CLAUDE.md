@@ -88,10 +88,6 @@ Dual OTA slots (8MB each), NVS, LittleFS (4MB), and a 2MB partition for ESP32-C6
 
 - **Playset**: A scheduler command (`ps_scheduler_command_t`) that tells the Play Scheduler what to play. It specifies which channels to include, how to balance exposure across them, and how to pick artwork within each channel. "Playset" and "scheduler command" are interchangeable.
 
-## Deferred Features
-
-- **Dwell Time Granularity**: Currently p3a only supports a single globally-configured dwell time (auto-swap interval) set via `config_store`. Per-playset, per-channel, and per-artwork dwell times are intentionally NOT implemented. The `dwell_time_ms` field exists in some structs but is ignored. This decision is deferred until a future design review determines the best approach for dwell time control. Do not add dwell time parameters to playsets or MQTT commands.
-
 ## Documentation
 
 - `docs/INFRASTRUCTURE.md` - Comprehensive technical architecture

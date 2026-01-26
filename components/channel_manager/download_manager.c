@@ -355,9 +355,9 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             // Convert UUID to string (use local entry, not stale static)
             bytes_to_uuid(entry.storage_key_uuid, s_dl_storage_key, sizeof(s_dl_storage_key));
 
-            // Skip if LTF is terminal (3 load failures)
-            if (!ltf_can_download(s_dl_storage_key, s_dl_vault_base)) {
-                ESP_LOGI(TAG, "SKIP post_id=%d: terminal LTF (key=%.8s...)", entry.post_id, s_dl_storage_key);
+            // Skip if LTF is terminal or in backoff
+            if (!ltf_can_download_now(s_dl_storage_key, s_dl_vault_base)) {
+                ESP_LOGD(TAG, "SKIP post_id=%d: LTF terminal or in backoff (key=%.8s...)", entry.post_id, s_dl_storage_key);
                 continue;
             }
 
@@ -529,15 +529,17 @@ static void download_task(void *arg)
             continue;
         }
 
+        // Get vault base path for LTF operations (used by both existing file check and download)
+        if (sd_path_get_vault(s_task_vault_base, sizeof(s_task_vault_base)) != ESP_OK) {
+            strlcpy(s_task_vault_base, "/sdcard/p3a/vault", sizeof(s_task_vault_base));
+        }
+
         // Check if file already exists (e.g., from previous session before LAi was rebuilt)
         // Treat this the same as a successful download - update LAi and signal availability
         if (file_exists(s_dl_req.filepath)) {
             ESP_LOGI(TAG, "File already exists, updating LAi: %s", s_dl_req.storage_key);
 
             // Clear any previous LTF failures since file is valid
-            if (sd_path_get_vault(s_task_vault_base, sizeof(s_task_vault_base)) != ESP_OK) {
-                strlcpy(s_task_vault_base, "/sdcard/p3a/vault", sizeof(s_task_vault_base));
-            }
             ltf_clear(s_dl_req.storage_key, s_task_vault_base);
 
             // Update LAi via play_scheduler (same as successful download)
@@ -592,10 +594,7 @@ static void download_task(void *arg)
         set_busy(false, NULL);
 
         if (err == ESP_OK) {
-            // Clear any previous LTF failures for this file (using static buffer)
-            if (sd_path_get_vault(s_task_vault_base, sizeof(s_task_vault_base)) != ESP_OK) {
-                strlcpy(s_task_vault_base, "/sdcard/p3a/vault", sizeof(s_task_vault_base));
-            }
+            // Clear any previous LTF failures for this file
             ltf_clear(s_dl_req.storage_key, s_task_vault_base);
 
             // Signal play_scheduler to update LAi using O(1) post_id lookup
@@ -618,23 +617,29 @@ static void download_task(void *arg)
                 }
             }
         } else {
+            // Record failure with error classification for backoff
+            int http_status = 0;
             if (err == ESP_ERR_NOT_FOUND) {
-                ESP_LOGW(TAG, "Download not found (404): %s", s_dl_req.storage_key);
-                // Create .404 marker with timestamp to prevent retry (using static buffer)
+                http_status = 404;
+            }
+
+            // Record in LTF for exponential backoff
+            ltf_record_download_failure(s_dl_req.storage_key, s_task_vault_base, err, http_status);
+
+            if (err == ESP_ERR_NOT_FOUND) {
+                // Keep .404 marker for fast stat() checks (avoids LTF file read)
                 snprintf(s_task_marker_path, sizeof(s_task_marker_path), "%s.404", s_dl_req.filepath);
                 FILE *f = fopen(s_task_marker_path, "w");
                 if (f) {
                     time_t now = time(NULL);
                     fprintf(f, "%ld\n", (long)now);
                     fclose(f);
-                    ESP_LOGI(TAG, "Created 404 marker: %s (timestamp=%ld)", s_task_marker_path, (long)now);
+                    ESP_LOGD(TAG, "Created 404 marker: %s", s_task_marker_path);
                 }
-            } else {
-                ESP_LOGW(TAG, "Download failed (%s): %s", esp_err_to_name(err), s_dl_req.storage_key);
             }
-            // Wait a bit before trying next file
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            // Still signal to check for next file
+
+            // Don't wait - backoff is handled by ltf_can_download_now()
+            // Signal to check for next file immediately
             makapix_channel_signal_downloads_needed();
         }
 
@@ -714,14 +719,19 @@ void download_manager_set_next_callback(download_get_next_cb_t cb, void *user_ct
     }
 }
 
-void download_manager_signal_work_available(void)
+void download_manager_wake(void)
 {
-    // Reset channel_complete flags AND cursors so download manager will re-scan from beginning
-    // This is needed because:
-    // - Channels may be marked complete before batches arrive
-    // - Files may have been evicted from LAi, requiring a full re-scan
+    // Just wake the download task without resetting any state.
+    // Use this for single file re-downloads or retry after failures.
+    makapix_channel_signal_downloads_needed();
+}
+
+void download_manager_rescan(void)
+{
+    // Reset cursors AND wake the download task to rescan from beginning.
+    // Use this ONLY when new content has been added to the channel index.
     if (s_mutex && xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        ESP_LOGI(TAG, "DEBUG: signal_work_available called, resetting %zu channel(s)", s_dl_channel_count);
+        ESP_LOGD(TAG, "rescan: resetting cursors for %zu channel(s)", s_dl_channel_count);
         for (size_t i = 0; i < s_dl_channel_count; i++) {
             s_dl_channels[i].dl_cursor = 0;
             s_dl_channels[i].channel_complete = false;

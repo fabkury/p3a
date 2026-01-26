@@ -39,7 +39,7 @@ void content_cache_reset_playback_initiated(void)
     download_manager_reset_playback_initiated();
 }
 
-void content_cache_signal_work_available(void)
+void content_cache_rescan(void)
 {
-    download_manager_signal_work_available();
+    download_manager_rescan();
 }

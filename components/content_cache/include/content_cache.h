@@ -26,7 +26,7 @@ bool content_cache_get_active_channel(char *out_channel_id, size_t max_len);
 void content_cache_set_channels(const char **channel_ids, size_t count);
 void content_cache_reset_cursors(void);
 void content_cache_reset_playback_initiated(void);
-void content_cache_signal_work_available(void);
+void content_cache_rescan(void);
 
 #ifdef __cplusplus
 }

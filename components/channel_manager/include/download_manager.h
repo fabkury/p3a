@@ -66,15 +66,35 @@ void download_manager_deinit(void);
 void download_manager_set_next_callback(download_get_next_cb_t cb, void *user_ctx);
 
 /**
- * @brief Signal that downloads may be needed
- * 
- * Wakes the download task to check for new files to download.
- * Call this after:
- * - Channel refresh completes
- * - A download completes (automatically called internally)
- * - Navigator position changes significantly
+ * @brief Wake the download task to check for pending downloads
+ *
+ * Lightweight signal that just wakes the download task without resetting
+ * any state. Use this when:
+ * - A single file needs re-download (e.g., after eviction from LAi)
+ * - Download failures need retry (LTF backoff controls timing)
+ * - You want to wake the task without losing scan progress
+ *
+ * @see download_manager_rescan() when new content requires full rescan
  */
-void download_manager_signal_work_available(void);
+void download_manager_wake(void);
+
+/**
+ * @brief Reset cursors and rescan all channels from the beginning
+ *
+ * Resets download cursors to 0 and wakes the download task. This ensures
+ * newly added index entries (which may appear before the current cursor
+ * position) are discovered.
+ *
+ * USE THIS ONLY when new content has been added to the channel index:
+ * - After channel refresh receives new index entries
+ * - After async refresh completes with new content
+ *
+ * DO NOT use this for single file re-downloads or failures - use
+ * download_manager_wake() instead.
+ *
+ * @see download_manager_wake() for lightweight wake without reset
+ */
+void download_manager_rescan(void);
 
 /**
  * @brief Check if a download is currently in progress

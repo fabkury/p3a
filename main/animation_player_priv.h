@@ -94,7 +94,6 @@ typedef struct {
     uint8_t *native_frame_b1;           // Native decoded frame buffer 1
     uint8_t *native_frame_b2;           // Native decoded frame buffer 2
     uint8_t native_buffer_active;       // Which native buffer is active (0 or 1)
-    uint8_t native_bytes_per_pixel;     // 3 (RGB888) or 4 (RGBA8888)
     size_t native_frame_size;
     uint16_t *upscale_lookup_x;
     uint16_t *upscale_lookup_y;

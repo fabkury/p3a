@@ -36,10 +36,8 @@ static inline esp_err_t decode_next_native(animation_buffer_t *buf, uint8_t *dst
     if (!buf || !buf->decoder || !dst) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (buf->native_bytes_per_pixel == 3) {
-        return animation_decoder_decode_next_rgb(buf->decoder, dst);
-    }
-    return animation_decoder_decode_next(buf->decoder, dst);
+    // All decoders output RGB888; alpha is pre-composited against background at decode time
+    return animation_decoder_decode_next_rgb(buf->decoder, dst);
 }
 
 static uint64_t wall_clock_ms(void)
@@ -170,23 +168,13 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
     // No intermediate buffer or memcpy needed - the decode was done during prefetch,
     // now we just upscale directly to the display back buffer
     if (use_prefetched && buf->first_frame_ready && buf->native_frame_b1) {
-        if (buf->native_bytes_per_pixel == 3) {
-            display_renderer_parallel_upscale_rgb(buf->native_frame_b1, buf->upscale_src_w, buf->upscale_src_h,
-                                                  dest_buffer,
-                                                  buf->upscale_lookup_x, buf->upscale_lookup_y,
-                                                  buf->upscale_offset_x, buf->upscale_offset_y,
-                                                  buf->upscale_scaled_w, buf->upscale_scaled_h,
-                                                  buf->upscale_has_borders,
-                                                  display_renderer_get_rotation());
-        } else {
-            display_renderer_parallel_upscale(buf->native_frame_b1, buf->upscale_src_w, buf->upscale_src_h,
+        display_renderer_parallel_upscale_rgb(buf->native_frame_b1, buf->upscale_src_w, buf->upscale_src_h,
                                               dest_buffer,
                                               buf->upscale_lookup_x, buf->upscale_lookup_y,
                                               buf->upscale_offset_x, buf->upscale_offset_y,
                                               buf->upscale_scaled_w, buf->upscale_scaled_h,
                                               buf->upscale_has_borders,
                                               display_renderer_get_rotation());
-        }
         buf->first_frame_ready = false;
         // Static images: keep using native_frame_b1 without re-decoding each tick
         if (buf->decoder_info.frame_count <= 1) {
@@ -229,23 +217,13 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
             }
         }
 
-        if (buf->native_bytes_per_pixel == 3) {
-            display_renderer_parallel_upscale_rgb(buf->native_frame_b1, buf->upscale_src_w, buf->upscale_src_h,
-                                                  dest_buffer,
-                                                  buf->upscale_lookup_x, buf->upscale_lookup_y,
-                                                  buf->upscale_offset_x, buf->upscale_offset_y,
-                                                  buf->upscale_scaled_w, buf->upscale_scaled_h,
-                                                  buf->upscale_has_borders,
-                                                  display_renderer_get_rotation());
-        } else {
-            display_renderer_parallel_upscale(buf->native_frame_b1, buf->upscale_src_w, buf->upscale_src_h,
+        display_renderer_parallel_upscale_rgb(buf->native_frame_b1, buf->upscale_src_w, buf->upscale_src_h,
                                               dest_buffer,
                                               buf->upscale_lookup_x, buf->upscale_lookup_y,
                                               buf->upscale_offset_x, buf->upscale_offset_y,
                                               buf->upscale_scaled_w, buf->upscale_scaled_h,
                                               buf->upscale_has_borders,
                                               display_renderer_get_rotation());
-        }
         return (int)buf->prefetched_first_frame_delay_ms;
     }
 
@@ -288,23 +266,13 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
 #endif
 
     // Use display_renderer for parallel upscaling with rotation
-    if (buf->native_bytes_per_pixel == 3) {
-        display_renderer_parallel_upscale_rgb(decode_buffer, buf->upscale_src_w, buf->upscale_src_h,
-                                              dest_buffer,
-                                              buf->upscale_lookup_x, buf->upscale_lookup_y,
-                                              buf->upscale_offset_x, buf->upscale_offset_y,
-                                              buf->upscale_scaled_w, buf->upscale_scaled_h,
-                                              buf->upscale_has_borders,
-                                              display_renderer_get_rotation());
-    } else {
-        display_renderer_parallel_upscale(decode_buffer, buf->upscale_src_w, buf->upscale_src_h,
+    display_renderer_parallel_upscale_rgb(decode_buffer, buf->upscale_src_w, buf->upscale_src_h,
                                           dest_buffer,
                                           buf->upscale_lookup_x, buf->upscale_lookup_y,
                                           buf->upscale_offset_x, buf->upscale_offset_y,
                                           buf->upscale_scaled_w, buf->upscale_scaled_h,
                                           buf->upscale_has_borders,
                                           display_renderer_get_rotation());
-    }
 
 #if CONFIG_P3A_PERF_DEBUG
     int64_t t_upscale_end = debug_timer_now_us();
@@ -532,13 +500,13 @@ skip_prefetch:
                 ESP_LOGI(TAG, "PERF: Target animation loaded (sonic_animation)");
             }
             // Log animation dimensions for analysis
-            ESP_LOGI(TAG, "PERF_DIM: native=%dx%d upscale_src=%dx%d scaled=%dx%d offset=%d,%d bpp=%d",
-                     s_front_buffer.decoder_info.canvas_width, 
+            ESP_LOGI(TAG, "PERF_DIM: native=%dx%d upscale_src=%dx%d scaled=%dx%d offset=%d,%d transp=%d",
+                     s_front_buffer.decoder_info.canvas_width,
                      s_front_buffer.decoder_info.canvas_height,
                      s_front_buffer.upscale_src_w, s_front_buffer.upscale_src_h,
                      s_front_buffer.upscale_scaled_w, s_front_buffer.upscale_scaled_h,
                      s_front_buffer.upscale_offset_x, s_front_buffer.upscale_offset_y,
-                     s_front_buffer.native_bytes_per_pixel);
+                     s_front_buffer.decoder_info.has_transparency);
 #endif
             
             // Check if newly-swapped front buffer was built for a different rotation than current.
@@ -555,12 +523,11 @@ skip_prefetch:
             ESP_LOGI(TAG, "Buffers swapped: now playing %s",
                      s_front_buffer.filepath ? s_front_buffer.filepath : "(unknown)");
 
-            // DEBUG: Log alpha code path for each artwork (remove this block when done investigating)
+            // DEBUG: Log decode path for each artwork (remove this block when done investigating)
 #if 1
-            ESP_LOGI(TAG, "DEBUG_ALPHA_PATH: bpp=%d (%s), has_transparency=%d, file=%s",
-                     s_front_buffer.native_bytes_per_pixel,
-                     (s_front_buffer.native_bytes_per_pixel == 3) ? "RGB-no-alpha-blit" : "RGBA-alpha-blit",
+            ESP_LOGI(TAG, "DEBUG_DECODE_PATH: has_transparency=%d (%s), file=%s",
                      s_front_buffer.decoder_info.has_transparency,
+                     s_front_buffer.decoder_info.has_transparency ? "alpha-blend-at-decode" : "rgb-copy",
                      s_front_buffer.filepath ? s_front_buffer.filepath : "(unknown)");
 #endif
 

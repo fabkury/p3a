@@ -552,8 +552,17 @@ skip_prefetch:
             }
             xSemaphoreGive(s_buffer_mutex);
             
-            ESP_LOGI(TAG, "Buffers swapped: now playing %s", 
+            ESP_LOGI(TAG, "Buffers swapped: now playing %s",
                      s_front_buffer.filepath ? s_front_buffer.filepath : "(unknown)");
+
+            // DEBUG: Log alpha code path for each artwork (remove this block when done investigating)
+#if 1
+            ESP_LOGI(TAG, "DEBUG_ALPHA_PATH: bpp=%d (%s), has_transparency=%d, file=%s",
+                     s_front_buffer.native_bytes_per_pixel,
+                     (s_front_buffer.native_bytes_per_pixel == 3) ? "RGB-no-alpha-blit" : "RGBA-alpha-blit",
+                     s_front_buffer.decoder_info.has_transparency,
+                     s_front_buffer.filepath ? s_front_buffer.filepath : "(unknown)");
+#endif
 
             // Clear any "Loading channel" or "Updating index" message now that playback has started
             extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,

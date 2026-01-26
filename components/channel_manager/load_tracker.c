@@ -5,6 +5,7 @@
 #include "makapix_channel_internal.h"
 #include "cJSON.h"
 #include "esp_log.h"
+#include "esp_http_client.h"
 #include <string.h>
 #include <stdio.h>
 #include <sys/stat.h>

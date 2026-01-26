@@ -576,7 +576,6 @@ void unload_animation_buffer(animation_buffer_t *buf)
     buf->native_frame_b1 = NULL;
     buf->native_frame_b2 = NULL;
     buf->native_buffer_active = 0;
-    buf->native_bytes_per_pixel = 0;
     buf->native_frame_size = 0;
 
     heap_caps_free(buf->upscale_lookup_x);
@@ -765,20 +764,18 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf,
     {
         uint8_t br = 0, bg = 0, bb = 0;
         config_store_get_background_color(&br, &bg, &bb);
-        const char *pf = (buf->decoder_info.pixel_format == ANIMATION_PIXEL_FORMAT_RGB888) ? "RGB888" : "RGBA8888";
-        ESP_LOGD(TAG, "Decoder: %ux%u frames=%u transp=%d fmt=%s bg=(%u,%u,%u)",
+        ESP_LOGD(TAG, "Decoder: %ux%u frames=%u transp=%d bg=(%u,%u,%u)",
                  (unsigned)buf->decoder_info.canvas_width,
                  (unsigned)buf->decoder_info.canvas_height,
                  (unsigned)buf->decoder_info.frame_count,
                  (int)buf->decoder_info.has_transparency,
-                 pf,
                  (unsigned)br, (unsigned)bg, (unsigned)bb);
     }
 
     const int canvas_w = (int)buf->decoder_info.canvas_width;
     const int canvas_h = (int)buf->decoder_info.canvas_height;
-    buf->native_bytes_per_pixel = (buf->decoder_info.pixel_format == ANIMATION_PIXEL_FORMAT_RGB888) ? 3 : 4;
-    buf->native_frame_size = (size_t)canvas_w * canvas_h * (size_t)buf->native_bytes_per_pixel;
+    // All decoders output RGB888 (3 bytes per pixel), with alpha pre-composited against background
+    buf->native_frame_size = (size_t)canvas_w * canvas_h * 3;
 
     // Allocate native frame buffers, preferring PSRAM for large buffers
     buf->native_frame_b1 = (uint8_t *)heap_caps_malloc(buf->native_frame_size,

@@ -34,6 +34,7 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 - **Play artworks and channels**: Play individual artworks or entire channels (e.g., "Promoted Artworks", "Recent Artworks") directly from [Makapix Club](https://makapix.club/) to your p3a
 - **4 ways to control**: Touchscreen, local web UI at `http://p3a.local/`, REST API, or remotely via Makapix Club's secure MQTTS (MQTT over TLS) backend
 - **Cloud connectivity**: Register your device at [makapix.club](https://makapix.club/) to unlock remote control from anywhere
+- **Join the community**: Connect with other p3a users and discuss pixel art players on the [Makapix Club Discord](https://discord.gg/xk9umcujXV)
 - **Coming soon**: Send a "like" to the artwork by touching the screen, swipe up to view artwork comments from the Makapix community
 
 ### Seamless Playback
@@ -154,6 +155,8 @@ If your device is crashing or behaving unexpectedly, try changing the **root dir
 - **Remote control**: Control your device from anywhere via secure MQTTS (MQTT over TLS) connection
 - **Real-time updates**: Receive artwork notifications instantly
 - **Coming soon**: Send "likes" to artworks with a long-press, swipe up to view community comments
+
+**Join the discussion**: Visit the [Makapix Club Discord](https://discord.gg/xk9umcujXV) to connect with other p3a users, share tips, and discuss pixel art players integrated with Makapix Club.
 
 ## License
 

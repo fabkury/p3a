@@ -2,6 +2,7 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "channel_cache.h"
+#include "config_store.h"
 #include "esp_heap_caps.h"
 #include "event_bus.h"
 #include "makapix_channel_internal.h"
@@ -23,6 +24,15 @@ static inline void *psram_malloc(size_t size) {
     void *p = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!p) p = malloc(size);
     return p;
+}
+
+// ============================================================================
+// Configurable Max Entries
+// ============================================================================
+
+uint32_t channel_cache_get_max_entries(void)
+{
+    return config_store_get_channel_cache_size();
 }
 
 // ============================================================================

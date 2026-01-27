@@ -1000,3 +1000,74 @@ esp_err_t config_store_get_sdcard_root(char **out_path)
     return ESP_ERR_NOT_FOUND;
 }
 
+// ============================================================================
+// Channel Cache Size (persisted, with in-memory caching)
+// ============================================================================
+
+#define CHANNEL_CACHE_SIZE_DEFAULT 1024
+#define CHANNEL_CACHE_SIZE_MIN     32
+#define CHANNEL_CACHE_SIZE_MAX     4096
+
+static uint32_t s_channel_cache_size = CHANNEL_CACHE_SIZE_DEFAULT;
+static bool s_channel_cache_size_loaded = false;
+
+esp_err_t config_store_set_channel_cache_size(uint32_t size)
+{
+    // Validate range
+    if (size < CHANNEL_CACHE_SIZE_MIN || size > CHANNEL_CACHE_SIZE_MAX) {
+        ESP_LOGE(TAG, "Invalid channel cache size: %lu (must be %d-%d)",
+                 (unsigned long)size, CHANNEL_CACHE_SIZE_MIN, CHANNEL_CACHE_SIZE_MAX);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "channel_cache_size");
+    if (item) {
+        cJSON_SetNumberValue(item, (double)size);
+    } else {
+        cJSON_AddNumberToObject(cfg, "channel_cache_size", (double)size);
+    }
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+
+    if (err == ESP_OK) {
+        s_channel_cache_size = size;
+        s_channel_cache_size_loaded = true;
+        ESP_LOGI(TAG, "Channel cache size saved: %lu", (unsigned long)size);
+    }
+
+    return err;
+}
+
+uint32_t config_store_get_channel_cache_size(void)
+{
+    if (s_channel_cache_size_loaded) {
+        return s_channel_cache_size;
+    }
+
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        s_channel_cache_size_loaded = true;
+        return s_channel_cache_size;  // Return default
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "channel_cache_size");
+    if (item && cJSON_IsNumber(item)) {
+        double value = cJSON_GetNumberValue(item);
+        if (value >= CHANNEL_CACHE_SIZE_MIN && value <= CHANNEL_CACHE_SIZE_MAX) {
+            s_channel_cache_size = (uint32_t)value;
+        }
+    }
+
+    s_channel_cache_size_loaded = true;
+    cJSON_Delete(cfg);
+    return s_channel_cache_size;
+}
+

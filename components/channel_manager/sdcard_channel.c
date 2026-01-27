@@ -2,6 +2,7 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "sdcard_channel.h"
+#include "config_store.h"
 #include "esp_log.h"
 #include "esp_random.h"
 #include <stdlib.h>
@@ -164,10 +165,13 @@ esp_err_t sdcard_channel_refresh(const char *animations_dir)
         return ESP_FAIL;
     }
 
-    // First pass: count animation files (up to MAX_POSTS)
+    // Get configurable cache size limit
+    const size_t max_posts = config_store_get_channel_cache_size();
+
+    // First pass: count animation files (up to max_posts)
     struct dirent *entry;
     size_t file_count = 0;
-    while ((entry = readdir(dir)) != NULL && file_count < SDCARD_CHANNEL_MAX_POSTS) {
+    while ((entry = readdir(dir)) != NULL && file_count < max_posts) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }
@@ -195,7 +199,7 @@ esp_err_t sdcard_channel_refresh(const char *animations_dir)
     // Second pass: collect file metadata
     rewinddir(dir);
     size_t idx = 0;
-    while ((entry = readdir(dir)) != NULL && idx < SDCARD_CHANNEL_MAX_POSTS) {
+    while ((entry = readdir(dir)) != NULL && idx < max_posts) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }

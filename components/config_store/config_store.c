@@ -1071,3 +1071,126 @@ uint32_t config_store_get_channel_cache_size(void)
     return s_channel_cache_size;
 }
 
+// ============================================================================
+// Processing Notification Settings (persisted, with in-memory caching)
+// ============================================================================
+
+#define PROC_NOTIF_SIZE_DEFAULT 32
+#define PROC_NOTIF_SIZE_MIN     8
+#define PROC_NOTIF_SIZE_MAX     128
+
+static bool s_proc_notif_enabled = true;  // Default: ON
+static bool s_proc_notif_enabled_loaded = false;
+static uint8_t s_proc_notif_size = PROC_NOTIF_SIZE_DEFAULT;
+static bool s_proc_notif_size_loaded = false;
+
+esp_err_t config_store_set_proc_notif_enabled(bool enable)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "proc_notif_enabled");
+    if (item) {
+        cJSON_DeleteItemFromObject(cfg, "proc_notif_enabled");
+    }
+    cJSON_AddBoolToObject(cfg, "proc_notif_enabled", enable);
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+
+    if (err == ESP_OK) {
+        s_proc_notif_enabled = enable;
+        s_proc_notif_enabled_loaded = true;
+        ESP_LOGI(TAG, "Processing notification enabled: %s", enable ? "ON" : "OFF");
+    }
+
+    return err;
+}
+
+bool config_store_get_proc_notif_enabled(void)
+{
+    if (s_proc_notif_enabled_loaded) {
+        return s_proc_notif_enabled;
+    }
+
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        s_proc_notif_enabled_loaded = true;
+        return s_proc_notif_enabled;  // Return default (true)
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "proc_notif_enabled");
+    if (item && cJSON_IsBool(item)) {
+        s_proc_notif_enabled = cJSON_IsTrue(item);
+    }
+    // If not present in config, default is true (s_proc_notif_enabled already initialized to true)
+
+    s_proc_notif_enabled_loaded = true;
+    cJSON_Delete(cfg);
+    return s_proc_notif_enabled;
+}
+
+esp_err_t config_store_set_proc_notif_size(uint8_t size)
+{
+    // Validate range
+    if (size < PROC_NOTIF_SIZE_MIN || size > PROC_NOTIF_SIZE_MAX) {
+        ESP_LOGE(TAG, "Invalid processing notification size: %u (must be %d-%d)",
+                 (unsigned)size, PROC_NOTIF_SIZE_MIN, PROC_NOTIF_SIZE_MAX);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "proc_notif_size");
+    if (item) {
+        cJSON_SetNumberValue(item, (double)size);
+    } else {
+        cJSON_AddNumberToObject(cfg, "proc_notif_size", (double)size);
+    }
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+
+    if (err == ESP_OK) {
+        s_proc_notif_size = size;
+        s_proc_notif_size_loaded = true;
+        ESP_LOGI(TAG, "Processing notification size saved: %u", (unsigned)size);
+    }
+
+    return err;
+}
+
+uint8_t config_store_get_proc_notif_size(void)
+{
+    if (s_proc_notif_size_loaded) {
+        return s_proc_notif_size;
+    }
+
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        s_proc_notif_size_loaded = true;
+        return s_proc_notif_size;  // Return default
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "proc_notif_size");
+    if (item && cJSON_IsNumber(item)) {
+        double value = cJSON_GetNumberValue(item);
+        if (value >= PROC_NOTIF_SIZE_MIN && value <= PROC_NOTIF_SIZE_MAX) {
+            s_proc_notif_size = (uint8_t)value;
+        }
+    }
+
+    s_proc_notif_size_loaded = true;
+    cJSON_Delete(cfg);
+    return s_proc_notif_size;
+}
+

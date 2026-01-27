@@ -4,6 +4,7 @@ set(srcs
     "p3a_main.c"
     "display_renderer.c"
     "display_fps_overlay.c"
+    "display_processing_notification.c"
     "display_upscaler.c"
     "render_engine.c"
     "content_service.c"

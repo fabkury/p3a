@@ -73,6 +73,11 @@ uint32_t g_target_frame_delay_ms = 0;
 display_rotation_t g_screen_rotation = DISPLAY_ROTATION_0;
 volatile bool g_rotation_in_progress = false;
 
+// Processing notification state
+volatile proc_notif_state_t g_proc_notif_state = PROC_NOTIF_STATE_IDLE;
+volatile int64_t g_proc_notif_start_time_us = 0;
+volatile int64_t g_proc_notif_fail_time_us = 0;
+
 // Forward declarations
 static esp_err_t prepare_vsync(void);
 static void wait_for_render_mode(display_render_mode_t target_mode);
@@ -474,6 +479,11 @@ void display_render_task(void *arg)
 
         // FPS overlay (from display_fps_overlay.c)
         fps_update_and_draw(back_buffer);
+
+        // Processing notification overlay (only in animation mode)
+        if (!ui_mode) {
+            processing_notification_update_and_draw(back_buffer);
+        }
 
 #if DISPLAY_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
         esp_cache_msync(back_buffer, g_display_buffer_bytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);

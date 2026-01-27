@@ -24,8 +24,10 @@
 #include "content_cache.h"
 #include "makapix.h"
 #include "esp_log.h"
+#include "mbedtls/sha256.h"
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 
 static const char *TAG = "ps_commands";
@@ -87,6 +89,10 @@ static void ps_build_channel_id(const ps_channel_spec_t *spec, char *out_id, siz
 
         case PS_CHANNEL_TYPE_SDCARD:
             snprintf(out_id, max_len, "sdcard");
+            break;
+
+        case PS_CHANNEL_TYPE_ARTWORK:
+            snprintf(out_id, max_len, "artwork");
             break;
 
         default:
@@ -315,6 +321,15 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
  */
 esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
 {
+    // Artwork channels are in-memory only - no cache file
+    if (ch->type == PS_CHANNEL_TYPE_ARTWORK) {
+        ch->cache_loaded = true;  // Mark as "loaded" (single entry from spec)
+        ch->entry_count = 1;
+        ch->active = false;  // Will become active after download check/completion
+        ch->entry_format = PS_ENTRY_FORMAT_NONE;  // No standard entry format
+        return ESP_OK;
+    }
+
     // SD card channels use raw binary format (no LAi needed - files are always local)
     if (ch->type == PS_CHANNEL_TYPE_SDCARD) {
         return ps_load_sdcard_cache(ch);
@@ -408,6 +423,17 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         ch->total_count = 0;
         ch->recent_count = 0;
 
+        // Initialize artwork-specific state if this is an artwork channel
+        if (spec->type == PS_CHANNEL_TYPE_ARTWORK) {
+            ch->artwork_state.post_id = spec->artwork.post_id;
+            strlcpy(ch->artwork_state.storage_key, spec->artwork.storage_key, sizeof(ch->artwork_state.storage_key));
+            strlcpy(ch->artwork_state.art_url, spec->artwork.art_url, sizeof(ch->artwork_state.art_url));
+            strlcpy(ch->artwork_state.filepath, spec->artwork.filepath, sizeof(ch->artwork_state.filepath));
+            ch->artwork_state.download_pending = true;  // Will check/download in refresh
+            ch->artwork_state.download_in_progress = false;
+            ch->refresh_pending = true;  // Trigger refresh to check/download
+        }
+
         // Load existing cache if available
         ps_load_channel_cache(ch);
 
@@ -439,6 +465,8 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
             p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_BY_USER, spec->identifier);
         } else if (spec->type == PS_CHANNEL_TYPE_HASHTAG) {
             p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_HASHTAG, spec->identifier);
+        } else if (spec->type == PS_CHANNEL_TYPE_ARTWORK) {
+            p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_ARTWORK, NULL);
         }
     }
 
@@ -592,4 +620,131 @@ esp_err_t play_scheduler_refresh_sdcard_cache(void)
 {
     ESP_LOGI(TAG, "Refreshing SD card cache");
     return ps_build_sdcard_index();
+}
+
+// ============================================================================
+// Artwork Channel Functions
+// ============================================================================
+
+/**
+ * @brief Build vault filepath from storage_key and art_url
+ *
+ * Computes the sharded vault path: {vault}/{sha[0]}/{sha[1]}/{sha[2]}/{storage_key}.{ext}
+ */
+static void ps_build_artwork_filepath(const char *storage_key, const char *art_url,
+                                       char *out_path, size_t max_len)
+{
+    if (!storage_key || !out_path || max_len == 0) {
+        if (out_path && max_len > 0) out_path[0] = '\0';
+        return;
+    }
+
+    char vault_base[128];
+    if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
+        strlcpy(vault_base, "/sdcard/p3a/vault", sizeof(vault_base));
+    }
+
+    // Compute SHA256 for sharding
+    uint8_t sha256[32];
+    if (mbedtls_sha256((const unsigned char *)storage_key, strlen(storage_key), sha256, 0) != 0) {
+        // Fallback without sharding
+        snprintf(out_path, max_len, "%s/%s.webp", vault_base, storage_key);
+        return;
+    }
+
+    // Detect extension from URL
+    const char *ext = ".webp";
+    if (art_url) {
+        size_t url_len = strlen(art_url);
+        if (url_len >= 4) {
+            if (strcasecmp(art_url + url_len - 4, ".gif") == 0) ext = ".gif";
+            else if (strcasecmp(art_url + url_len - 4, ".png") == 0) ext = ".png";
+            else if (strcasecmp(art_url + url_len - 4, ".jpg") == 0) ext = ".jpg";
+            else if (url_len >= 5 && strcasecmp(art_url + url_len - 5, ".jpeg") == 0) ext = ".jpg";
+            else if (url_len >= 5 && strcasecmp(art_url + url_len - 5, ".webp") == 0) ext = ".webp";
+        }
+    }
+
+    snprintf(out_path, max_len, "%s/%02x/%02x/%02x/%s%s",
+             vault_base,
+             (unsigned int)sha256[0],
+             (unsigned int)sha256[1],
+             (unsigned int)sha256[2],
+             storage_key, ext);
+}
+
+esp_err_t play_scheduler_play_artwork(int32_t post_id, const char *storage_key, const char *art_url)
+{
+    if (!storage_key || !art_url) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(TAG, "play_artwork: post_id=%ld, storage_key=%s", (long)post_id, storage_key);
+
+    // Set view intent BEFORE execute_command (for view tracking)
+    extern void makapix_set_view_intent_intentional(bool intentional);
+    makapix_set_view_intent_intentional(true);
+
+    // Heap allocate to avoid ~4.6KB stack usage
+    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
+    if (!cmd) {
+        ESP_LOGE(TAG, "Failed to allocate command struct");
+        return ESP_ERR_NO_MEM;
+    }
+
+    cmd->channel_count = 1;
+    cmd->exposure_mode = PS_EXPOSURE_EQUAL;
+    cmd->pick_mode = PS_PICK_RECENCY;
+
+    cmd->channels[0].type = PS_CHANNEL_TYPE_ARTWORK;
+    strlcpy(cmd->channels[0].name, "artwork", sizeof(cmd->channels[0].name));
+    cmd->channels[0].weight = 1;
+
+    // Set artwork-specific fields
+    cmd->channels[0].artwork.post_id = post_id;
+    strlcpy(cmd->channels[0].artwork.storage_key, storage_key, sizeof(cmd->channels[0].artwork.storage_key));
+    strlcpy(cmd->channels[0].artwork.art_url, art_url, sizeof(cmd->channels[0].artwork.art_url));
+
+    // Compute vault filepath from storage_key
+    ps_build_artwork_filepath(storage_key, art_url,
+                               cmd->channels[0].artwork.filepath,
+                               sizeof(cmd->channels[0].artwork.filepath));
+
+    esp_err_t result = play_scheduler_execute_command(cmd);
+    free(cmd);
+    return result;
+}
+
+esp_err_t play_scheduler_play_local_file(const char *filepath)
+{
+    if (!filepath) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(TAG, "play_local_file: %s", filepath);
+
+    // Heap allocate to avoid ~4.6KB stack usage
+    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
+    if (!cmd) {
+        ESP_LOGE(TAG, "Failed to allocate command struct");
+        return ESP_ERR_NO_MEM;
+    }
+
+    cmd->channel_count = 1;
+    cmd->exposure_mode = PS_EXPOSURE_EQUAL;
+    cmd->pick_mode = PS_PICK_RECENCY;
+
+    cmd->channels[0].type = PS_CHANNEL_TYPE_ARTWORK;
+    strlcpy(cmd->channels[0].name, "artwork", sizeof(cmd->channels[0].name));
+    cmd->channels[0].weight = 1;
+
+    // Local files: no view tracking (post_id = 0), storage_key and art_url empty
+    cmd->channels[0].artwork.post_id = 0;
+    cmd->channels[0].artwork.storage_key[0] = '\0';
+    cmd->channels[0].artwork.art_url[0] = '\0';
+    strlcpy(cmd->channels[0].artwork.filepath, filepath, sizeof(cmd->channels[0].artwork.filepath));
+
+    esp_err_t result = play_scheduler_execute_command(cmd);
+    free(cmd);
+    return result;
 }

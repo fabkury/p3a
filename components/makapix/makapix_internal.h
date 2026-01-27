@@ -43,10 +43,10 @@ void app_lcd_exit_ui_mode(void);
 esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *message, int progress_percent);
 void ugfx_ui_hide_channel_message(void);
 // play_scheduler forward declarations
+// Note: For full declarations with proper types, include play_scheduler.h
 esp_err_t play_scheduler_play_named_channel(const char *name);
 esp_err_t play_scheduler_play_user_channel(const char *user_sqid);
 esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag);
-esp_err_t play_scheduler_next(void *out_artwork);  // out_artwork can be NULL
 
 // Shared TAG for logging
 extern const char *MAKAPIX_TAG;

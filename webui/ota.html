@@ -157,6 +157,10 @@ button {
 <div class="version-row"><span class="version-label">Web UI Version</span><span class="version-value" id="webui-ver">-</span></div>
 <div class="version-row"><span class="version-label">Status</span><span class="version-value" id="webui-status">-</span></div>
 </div>
+<div class="progress-container" id="webui-progress">
+<div class="progress-bar"><div class="progress-fill" id="webui-progress-fill"></div></div>
+<div class="progress-text" id="webui-progress-text">0%</div>
+</div>
 <div class="progress-container" id="progress">
 <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
 <div class="progress-text" id="progress-text">0%</div>
@@ -232,24 +236,103 @@ function fetchStatus() {
         if (d.ok) updateUI(d.data);
     }).catch(function(e) { console.error('Status fetch error:', e); });
     fetch('/ota/webui/status').then(function(r) { return r.json(); }).then(function(d) {
-        if (d.ok && d.data) updateWebuiUI(d.data);
+        if (d.ok && d.data) {
+            updateWebuiUI(d.data);
+            // Start fast polling if update is active
+            if (isWebuiActiveState(d.data.state) && !webuiPollInterval) {
+                startWebuiPolling();
+            }
+        }
     }).catch(function(e) { console.error('WebUI status fetch error:', e); });
 }
+var webuiPollInterval = null;
+var webuiPollStartTime = null;
+var lastWebuiState = null;
+
+function isWebuiActiveState(state) {
+    return state === 'downloading' || state === 'unmounting' || state === 'erasing' ||
+           state === 'writing' || state === 'verifying' || state === 'remounting';
+}
+
 function updateWebuiUI(data) {
     document.getElementById('webui-ver').textContent = data.current_version || 'Unknown';
     var statusEl = document.getElementById('webui-status');
-    if (!data.partition_valid || data.needs_recovery) {
-        statusEl.textContent = 'Recovery needed';
-        statusEl.style.color = '#c62828';
-    } else if (data.update_available) {
-        statusEl.textContent = 'Update available: ' + data.available_version;
-        statusEl.className = 'version-value update-available';
-    } else if (data.auto_update_disabled) {
-        statusEl.textContent = 'Auto-update disabled (failures: ' + data.failure_count + ')';
-        statusEl.style.color = '#ff9800';
-    } else {
-        statusEl.textContent = 'Up to date';
+    var progressEl = document.getElementById('webui-progress');
+    var progressFill = document.getElementById('webui-progress-fill');
+    var progressText = document.getElementById('webui-progress-text');
+
+    // Handle active update states
+    if (isWebuiActiveState(data.state)) {
+        progressEl.style.display = 'block';
+        progressFill.style.width = data.progress + '%';
+        progressText.textContent = data.status_message || (data.progress + '%');
+        statusEl.textContent = data.status_message || data.state;
+        statusEl.style.color = '#1565c0';
+        statusEl.className = 'version-value';
+
+        // Start fast polling if not already running
+        if (!webuiPollInterval) {
+            startWebuiPolling();
+        }
+    } else if (data.state === 'complete') {
+        progressEl.style.display = 'block';
+        progressFill.style.width = '100%';
+        progressText.textContent = 'Update complete!';
+        statusEl.textContent = 'Update complete!';
         statusEl.style.color = '#4CAF50';
+        statusEl.className = 'version-value';
+    } else if (data.state === 'error') {
+        progressEl.style.display = 'none';
+        statusEl.textContent = data.error_message || 'Update failed';
+        statusEl.style.color = '#c62828';
+        statusEl.className = 'version-value';
+        if (webuiPollInterval) { stopWebuiPolling(); }
+    } else {
+        // Idle state
+        progressEl.style.display = 'none';
+        if (!data.partition_valid || data.needs_recovery) {
+            statusEl.textContent = 'Recovery needed';
+            statusEl.style.color = '#c62828';
+        } else if (data.update_available) {
+            statusEl.textContent = 'Update available: ' + data.available_version;
+            statusEl.className = 'version-value update-available';
+        } else if (data.auto_update_disabled) {
+            statusEl.textContent = 'Auto-update disabled (failures: ' + data.failure_count + ')';
+            statusEl.style.color = '#ff9800';
+        } else {
+            statusEl.textContent = 'Up to date';
+            statusEl.style.color = '#4CAF50';
+        }
+        statusEl.className = 'version-value';
+
+        // Stop fast polling when update completes
+        if (lastWebuiState && isWebuiActiveState(lastWebuiState) && webuiPollInterval) {
+            stopWebuiPolling();
+        }
+    }
+
+    lastWebuiState = data.state;
+}
+
+function startWebuiPolling() {
+    if (webuiPollInterval) return;
+    webuiPollStartTime = Date.now();
+    webuiPollInterval = setInterval(function() {
+        fetch('/ota/webui/status').then(function(r) { return r.json(); }).then(function(d) {
+            if (d.ok && d.data) updateWebuiUI(d.data);
+        }).catch(function(e) { console.error('WebUI status fetch error:', e); });
+
+        // Auto-stop after 10 minutes
+        if (Date.now() - webuiPollStartTime > 600000) {
+            stopWebuiPolling();
+        }
+    }, 500);
+}
+
+function stopWebuiPolling() {
+    if (webuiPollInterval) {
+        clearInterval(webuiPollInterval);
+        webuiPollInterval = null;
     }
 }
 function checkUpdate() {

@@ -85,7 +85,7 @@ esp_err_t view_tracker_init(void)
         "view_tracker",
         6144,
         NULL,
-        5,
+        CONFIG_P3A_NETWORK_TASK_PRIORITY,
         &s_state.task
     );
     

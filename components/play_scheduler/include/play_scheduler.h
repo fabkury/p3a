@@ -99,6 +99,27 @@ esp_err_t play_scheduler_play_user_channel(const char *user_sqid);
  */
 esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag);
 
+/**
+ * @brief Play a single Makapix artwork via the scheduler
+ *
+ * Creates a playset with one PS_CHANNEL_TYPE_ARTWORK channel.
+ * Downloads if not cached. View tracking enabled if post_id > 0.
+ *
+ * @param post_id Post ID for view tracking (0 for no tracking)
+ * @param storage_key UUID storage key
+ * @param art_url Download URL for the artwork
+ * @return ESP_OK on success
+ */
+esp_err_t play_scheduler_play_artwork(int32_t post_id, const char *storage_key, const char *art_url);
+
+/**
+ * @brief Play a local file via the scheduler (no view tracking)
+ *
+ * @param filepath Full path to the local file
+ * @return ESP_OK on success
+ */
+esp_err_t play_scheduler_play_local_file(const char *filepath);
+
 // ============================================================================
 // Channel Configuration (Legacy)
 // ============================================================================

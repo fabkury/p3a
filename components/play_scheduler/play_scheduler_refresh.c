@@ -14,8 +14,11 @@
 #include "play_scheduler.h"  // For play_scheduler_next()
 #include "channel_cache.h"   // For channel_cache_save()
 #include "makapix.h"
+#include "makapix_artwork.h"  // For makapix_artwork_download_with_progress()
 #include "makapix_channel_events.h"  // For async completion events
 #include "sd_path.h"
+#include "p3a_state.h"   // For P3A_CHANNEL_MSG_* constants
+#include "p3a_render.h"  // For p3a_render_set_channel_message()
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -28,7 +31,6 @@ static const char *TAG = "ps_refresh";
 
 // Task configuration
 #define REFRESH_TASK_STACK_SIZE 8192
-#define REFRESH_TASK_PRIORITY   5
 #define REFRESH_CHECK_INTERVAL_MS 1000
 
 // Periodic refresh configuration
@@ -47,6 +49,7 @@ static time_t s_last_full_refresh_complete = 0;
  * @brief Find next channel that needs refresh
  *
  * For Makapix channels, only returns them if MQTT is connected.
+ * Artwork channels don't need MQTT - they download directly.
  * This avoids repeatedly trying to refresh when MQTT is not ready.
  *
  * @param state Scheduler state
@@ -62,6 +65,11 @@ static int find_next_pending_refresh(ps_state_t *state)
             continue;
         }
 
+        // Artwork channels don't need MQTT - they download directly
+        if (ch->type == PS_CHANNEL_TYPE_ARTWORK) {
+            return (int)i;  // Always ready to process
+        }
+
         // For Makapix channels, only proceed if MQTT is connected
         if (ch->type != PS_CHANNEL_TYPE_SDCARD && !mqtt_ready) {
             continue;  // Skip Makapix channels until MQTT is ready
@@ -70,6 +78,90 @@ static int find_next_pending_refresh(ps_state_t *state)
         return (int)i;
     }
     return -1;
+}
+
+/**
+ * @brief Progress callback for artwork downloads
+ *
+ * Updates the UI with download progress percentage.
+ */
+static void artwork_download_progress_cb(size_t bytes_read, size_t content_length, void *user_ctx)
+{
+    (void)user_ctx;  // Unused
+
+    int percent = 0;
+    if (content_length > 0) {
+        percent = (int)((bytes_read * 100) / content_length);
+        if (percent > 100) percent = 100;
+    }
+
+    p3a_render_set_channel_message("Artwork", P3A_CHANNEL_MSG_DOWNLOADING, percent, NULL);
+}
+
+/**
+ * @brief Refresh an artwork channel (download if needed)
+ *
+ * Checks if file already exists, otherwise downloads it.
+ * Sets ch->active = true when file is ready for playback.
+ */
+static esp_err_t refresh_artwork_channel(ps_channel_state_t *ch)
+{
+    ESP_LOGI(TAG, "Refreshing artwork channel: %s", ch->artwork_state.storage_key);
+
+    // Check if file already exists
+    struct stat st;
+    if (stat(ch->artwork_state.filepath, &st) == 0 && st.st_size > 0) {
+        ESP_LOGI(TAG, "Artwork already in vault: %s", ch->artwork_state.filepath);
+        ch->active = true;
+        ch->artwork_state.download_pending = false;
+        return ESP_OK;
+    }
+
+    // Need to download - check if we have URL
+    if (ch->artwork_state.art_url[0] == '\0') {
+        // Local file that doesn't exist
+        ESP_LOGE(TAG, "Artwork file not found and no URL to download: %s", ch->artwork_state.filepath);
+        ch->active = false;
+        ch->artwork_state.download_pending = false;
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    // Download the artwork
+    ch->artwork_state.download_in_progress = true;
+    p3a_render_set_channel_message("Artwork", P3A_CHANNEL_MSG_DOWNLOADING, 0, NULL);
+
+    ESP_LOGI(TAG, "Downloading artwork: %s", ch->artwork_state.art_url);
+
+    char downloaded_path[256] = {0};
+    esp_err_t err = makapix_artwork_download_with_progress(
+        ch->artwork_state.art_url,
+        ch->artwork_state.storage_key,
+        downloaded_path, sizeof(downloaded_path),
+        artwork_download_progress_cb, NULL
+    );
+
+    ch->artwork_state.download_in_progress = false;
+
+    if (err == ESP_OK) {
+        // Update filepath to actual downloaded path (in case it differs)
+        strlcpy(ch->artwork_state.filepath, downloaded_path, sizeof(ch->artwork_state.filepath));
+        ch->active = true;
+        ch->artwork_state.download_pending = false;
+        // Don't clear the message here - the animation player will clear it
+        // after the buffer swap completes for seamless transition (no flash)
+        ESP_LOGI(TAG, "Artwork download complete: %s", downloaded_path);
+    } else {
+        ESP_LOGE(TAG, "Artwork download failed: %s", esp_err_to_name(err));
+        p3a_render_set_channel_message("Artwork", P3A_CHANNEL_MSG_ERROR, -1,
+                                        esp_err_to_name(err));
+        // Keep error message visible briefly
+        vTaskDelay(pdMS_TO_TICKS(3000));
+        p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
+        ch->active = false;
+        ch->artwork_state.download_pending = false;
+    }
+
+    return err;
 }
 
 /**
@@ -281,6 +373,8 @@ static void refresh_task(void *arg)
 
         if (type == PS_CHANNEL_TYPE_SDCARD) {
             err = refresh_sdcard_channel(ch);
+        } else if (type == PS_CHANNEL_TYPE_ARTWORK) {
+            err = refresh_artwork_channel(ch);
         } else {
             err = refresh_makapix_channel(ch);
         }
@@ -319,20 +413,29 @@ static void refresh_task(void *arg)
             ch->refresh_in_progress = false;
         }
 
-        // Check if we should trigger initial playback (no animation playing yet)
-        // Only for synchronous completion (SD card or cached Makapix)
+        // Check if we should trigger playback after refresh
+        // For artwork channels: ALWAYS trigger (show_artwork should immediately display)
+        // For other channels: only trigger if no animation is currently playing
         bool should_trigger_playback = (err == ESP_OK && sync_entry_count > 0);
+        bool is_artwork_channel = (type == PS_CHANNEL_TYPE_ARTWORK);
 
         xSemaphoreGive(state->mutex);
 
         if (should_trigger_playback) {
-            // Check if animation is playing (must be done outside mutex to avoid deadlock)
+            // For artwork channels, always trigger playback immediately
+            // For other channels, only trigger if nothing is playing yet
             extern bool animation_player_is_animation_ready(void);
-            if (!animation_player_is_animation_ready()) {
-                ESP_LOGI(TAG, "No animation playing after refresh - triggering playback");
-                // Clear the loading message
-                extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail);
-                p3a_render_set_channel_message(NULL, 0 /* P3A_CHANNEL_MSG_NONE */, -1, NULL);
+            if (is_artwork_channel || !animation_player_is_animation_ready()) {
+                ESP_LOGI(TAG, "%s - triggering playback",
+                         is_artwork_channel ? "Artwork channel ready" : "No animation playing after refresh");
+
+                // For artwork channels: DON'T clear the message here.
+                // The animation player will clear it AFTER the buffer swap completes,
+                // ensuring seamless UI → new animation transition (no flash).
+                // For other channels: clear immediately since no animation is playing.
+                if (!is_artwork_channel) {
+                    p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
+                }
 
                 // Trigger playback
                 play_scheduler_next(NULL);
@@ -412,7 +515,7 @@ esp_err_t ps_refresh_start(void)
         "ps_refresh",
         REFRESH_TASK_STACK_SIZE,
         NULL,
-        REFRESH_TASK_PRIORITY,
+        CONFIG_P3A_APP_TASK_PRIORITY,
         &s_refresh_task
     );
 

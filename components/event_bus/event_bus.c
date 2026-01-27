@@ -97,7 +97,7 @@ esp_err_t event_bus_init(void)
         return ESP_ERR_NO_MEM;
     }
 
-    BaseType_t ok = xTaskCreate(event_bus_dispatch_task, "event_bus", 4096, NULL, 5, &s_bus.dispatch_task);
+    BaseType_t ok = xTaskCreate(event_bus_dispatch_task, "event_bus", 4096, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_bus.dispatch_task);
     if (ok != pdPASS) {
         vSemaphoreDelete(s_bus.mutex);
         s_bus.mutex = NULL;

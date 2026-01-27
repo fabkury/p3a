@@ -233,7 +233,7 @@ static esp_err_t makapix_impl_request_refresh(channel_handle_t channel)
             "makapix_refresh",
             MAKAPIX_REFRESH_TASK_STACK_SIZE,
             ch,
-            5,
+            CONFIG_P3A_NETWORK_TASK_PRIORITY,
             ch->refresh_stack,
             &ch->refresh_task_buffer
         );
@@ -258,7 +258,7 @@ static esp_err_t makapix_impl_request_refresh(channel_handle_t channel)
             "makapix_refresh",
             stack_sizes[i],
             ch,
-            5,
+            CONFIG_P3A_NETWORK_TASK_PRIORITY,
             &ch->refresh_task
         );
         if (ret == pdPASS) {

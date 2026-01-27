@@ -75,13 +75,23 @@ void makapix_set_current_post_id(int32_t post_id);
 
 /**
  * @brief Get and clear view intent flag
- * 
+ *
  * Returns whether the next view should be marked as intentional.
  * Clears the flag after reading.
- * 
+ *
  * @return true if intentional, false if automated
  */
 bool makapix_get_and_clear_view_intent(void);
+
+/**
+ * @brief Set view intent flag
+ *
+ * Called by play_scheduler before executing artwork command
+ * to mark the next view as intentional (user-triggered).
+ *
+ * @param intentional true for user-triggered, false for automated
+ */
+void makapix_set_view_intent_intentional(bool intentional);
 
 /**
  * @brief Connect to MQTT if credentials are available

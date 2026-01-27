@@ -82,8 +82,8 @@ else()
 
     # Do not copy pico8/ directory at all
 
-    # Copy root-level files (index.html, settings.html, ota.html, favicon.ico)
-    file(GLOB ROOT_FILES "${CMAKE_SOURCE_DIR}/webui/*.html" "${CMAKE_SOURCE_DIR}/webui/*.ico")
+    # Copy root-level files (index.html, settings.html, ota.html, favicon.ico, version.txt)
+    file(GLOB ROOT_FILES "${CMAKE_SOURCE_DIR}/webui/*.html" "${CMAKE_SOURCE_DIR}/webui/*.ico" "${CMAKE_SOURCE_DIR}/webui/*.txt")
     file(COPY ${ROOT_FILES} DESTINATION "${WEBUI_STAGING_DIR}")
 
     # Copy config directory

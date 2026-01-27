@@ -452,7 +452,7 @@ esp_err_t http_api_start(void) {
 
     // Create worker task if not exists
     if (!s_worker) {
-        BaseType_t ret = xTaskCreate(api_worker_task, "api_worker", 4096, NULL, 5, &s_worker);
+        BaseType_t ret = xTaskCreate(api_worker_task, "api_worker", 4096, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_worker);
         if (ret != pdPASS) {
             ESP_LOGE(HTTP_API_TAG, "Failed to create worker task");
             return ESP_ERR_NO_MEM;

@@ -528,7 +528,7 @@ void refresh_task_impl(void *pvParameters)
     query_req.pe_present = true;
     query_req.pe = (uint16_t)config_store_get_pe();
     
-    const size_t TARGET_COUNT = 1024;
+    const size_t TARGET_COUNT = config_store_get_channel_cache_size();
     
     // Get refresh interval from NVS (defaults to 3600 = 1 hour)
     uint32_t refresh_interval_sec = config_store_get_refresh_interval_sec();

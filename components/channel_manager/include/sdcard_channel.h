@@ -25,10 +25,14 @@ typedef enum {
     ASSET_TYPE_JPEG,
 } asset_type_t;
 
+// Default max posts per channel (configurable via config_store at runtime)
+// Legacy macro kept for backward compatibility - actual limit comes from config_store
+#define SDCARD_CHANNEL_DEFAULT_MAX_POSTS 1024
+
 #ifdef CONFIG_CHANNEL_MANAGER_MAX_POSTS
 #define SDCARD_CHANNEL_MAX_POSTS CONFIG_CHANNEL_MANAGER_MAX_POSTS
 #else
-#define SDCARD_CHANNEL_MAX_POSTS 1024
+#define SDCARD_CHANNEL_MAX_POSTS SDCARD_CHANNEL_DEFAULT_MAX_POSTS
 #endif
 
 #ifdef CONFIG_CHANNEL_MANAGER_PAGE_SIZE
@@ -100,8 +104,9 @@ void sdcard_channel_deinit(void);
 /**
  * @brief Refresh the channel by enumerating files from animations directory
  * 
- * Enumerates up to SDCARD_CHANNEL_MAX_POSTS files from the specified directory.
- * Only the first 1000 files found (in no particular order) are loaded.
+ * Enumerates files from the specified directory up to the configured channel
+ * cache size limit (default: 1024, configurable via settings).
+ * Files are loaded in no particular order.
  * 
  * @param animations_dir Directory path to scan (NULL uses default)
  * @return ESP_OK on success, error code otherwise

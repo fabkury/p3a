@@ -12,6 +12,7 @@
 
 #include "play_scheduler_internal.h"
 #include "makapix_channel_impl.h"
+#include "config_store.h"
 #include "sd_path.h"
 #include "esp_log.h"
 
@@ -97,7 +98,7 @@ esp_err_t ps_build_sdcard_index(void)
     // Pass 1: count eligible files
     struct dirent *entry;
     size_t count = 0;
-    const size_t MAX_ENTRIES = 1024;
+    const size_t MAX_ENTRIES = config_store_get_channel_cache_size();
 
     while ((entry = readdir(dir)) != NULL && count < MAX_ENTRIES) {
         if (entry->d_name[0] == '.') continue;

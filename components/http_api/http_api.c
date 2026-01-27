@@ -167,15 +167,19 @@ bool api_enqueue_resume(void) {
 static void makapix_command_handler(const char *command_type, cJSON *payload)
 {
     if (strcmp(command_type, "swap_next") == 0) {
-        if (proc_notif_start) {
-            proc_notif_start();
+        if (api_enqueue_swap_next()) {
+            // Start processing notification after confirming swap was queued
+            if (proc_notif_start) {
+                proc_notif_start();
+            }
         }
-        api_enqueue_swap_next();
     } else if (strcmp(command_type, "swap_back") == 0) {
-        if (proc_notif_start) {
-            proc_notif_start();
+        if (api_enqueue_swap_back()) {
+            // Start processing notification after confirming swap was queued
+            if (proc_notif_start) {
+                proc_notif_start();
+            }
         }
-        api_enqueue_swap_back();
     } else if (strcmp(command_type, "set_background_color") == 0) {
         if (!payload || !cJSON_IsObject(payload)) {
             ESP_LOGE(HTTP_API_TAG, "Invalid set_background_color payload (expected object)");

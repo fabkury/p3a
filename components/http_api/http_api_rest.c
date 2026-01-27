@@ -919,12 +919,13 @@ esp_err_t h_post_swap_next(httpd_req_t *req) {
         send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
         return ESP_OK;
     }
-    if (proc_notif_start) {
-        proc_notif_start();
-    }
     if (!api_enqueue_swap_next()) {
         send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
         return ESP_OK;
+    }
+    // Start processing notification after confirming swap was queued
+    if (proc_notif_start) {
+        proc_notif_start();
     }
 
     send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"swap_next\"}}");
@@ -939,12 +940,13 @@ esp_err_t h_post_swap_back(httpd_req_t *req) {
         send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
         return ESP_OK;
     }
-    if (proc_notif_start) {
-        proc_notif_start();
-    }
     if (!api_enqueue_swap_back()) {
         send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
         return ESP_OK;
+    }
+    // Start processing notification after confirming swap was queued
+    if (proc_notif_start) {
+        proc_notif_start();
     }
 
     send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"swap_back\"}}");

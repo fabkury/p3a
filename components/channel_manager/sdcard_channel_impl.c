@@ -313,10 +313,13 @@ static esp_err_t sdcard_impl_load(channel_handle_t channel)
         return ESP_OK;
     }
 
+    // Get configurable cache size limit
+    const size_t max_posts = config_store_get_channel_cache_size();
+
     // Pass 1: count eligible files
     struct dirent *entry;
     size_t count = 0;
-    while ((entry = readdir(dir)) != NULL && count < SDCARD_CHANNEL_MAX_POSTS) {
+    while ((entry = readdir(dir)) != NULL && count < max_posts) {
         if (entry->d_name[0] == '.') continue;
 
         size_t len = strlen(entry->d_name);

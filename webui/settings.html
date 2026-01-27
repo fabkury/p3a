@@ -282,6 +282,18 @@ body {
         </div>
     </div>
 </div>
+<div class="section">
+    <h3>Storage</h3>
+    <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
+        <label class="toggle-label" for="cache-size">Channel cache size</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <input class="bg-input" id="cache-size" type="number" min="32" max="4096" style="max-width:90px;" aria-label="Channel cache size">
+            <span style="color:#666;font-size:0.8rem;">artworks</span>
+            <button class="btn" onclick="saveCacheSize()">Save</button>
+        </div>
+    </div>
+    <div class="file-name" id="cache-hint">Max artworks per channel (32-4096). Reboot recommended after change.</div>
+</div>
 <div class="section danger-zone">
     <h3>Danger Zone</h3>
     <div class="bg-row">
@@ -671,10 +683,61 @@ function reboot() {
         btn.classList.remove('confirm');
     }
 }
+function loadCacheSize() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/config', true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            try {
+                var resp = JSON.parse(xhr.responseText || '{}');
+                var cfg = (resp && resp.ok && resp.data) ? resp.data : {};
+                var size = (typeof cfg.channel_cache_size === 'number') ? cfg.channel_cache_size : 1024;
+                document.getElementById('cache-size').value = size;
+            } catch (e) {
+                document.getElementById('cache-size').value = 1024;
+            }
+        }
+    };
+    xhr.send();
+}
+function saveCacheSize() {
+    var size = parseInt(document.getElementById('cache-size').value, 10);
+    if (isNaN(size) || size < 32 || size > 4096) {
+        showToast('Invalid size (32-4096)', true);
+        return;
+    }
+    var xhrGet = new XMLHttpRequest();
+    xhrGet.open('GET', '/config', true);
+    xhrGet.onreadystatechange = function() {
+        if (xhrGet.readyState === 4) {
+            var cfg = {};
+            try {
+                var resp = JSON.parse(xhrGet.responseText || '{}');
+                cfg = (resp && resp.ok && resp.data) ? resp.data : {};
+            } catch (e) { cfg = {}; }
+            cfg.channel_cache_size = size;
+            var xhrPut = new XMLHttpRequest();
+            xhrPut.open('PUT', '/config', true);
+            xhrPut.setRequestHeader('Content-Type', 'application/json');
+            xhrPut.onreadystatechange = function() {
+                if (xhrPut.readyState === 4) {
+                    if (xhrPut.status >= 200 && xhrPut.status < 300) {
+                        showToast('Cache size: ' + size + ' (reboot recommended)', false);
+                    } else {
+                        showToast('Save failed', true);
+                    }
+                }
+            };
+            xhrPut.send(JSON.stringify(cfg));
+        }
+    };
+    xhrGet.send();
+}
 loadBackgroundColor();
 loadShowFps();
 loadMaxSpeedPlayback();
 loadAutoSwap();
+loadCacheSize();
 loadSdRoot();
 loadSeed();
 </script>

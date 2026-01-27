@@ -207,12 +207,14 @@ void display_renderer_deinit(void)
 esp_err_t display_renderer_start(void)
 {
     if (g_display_render_task == NULL) {
-        if (xTaskCreate(display_render_task,
-                        "display_render",
-                        4096,
-                        NULL,
-                        CONFIG_P3A_RENDER_TASK_PRIORITY,
-                        &g_display_render_task) != pdPASS) {
+        // Pin to core 1 for cache locality with bottom upscale worker
+        if (xTaskCreatePinnedToCore(display_render_task,
+                                    "display_render",
+                                    4096,
+                                    NULL,
+                                    CONFIG_P3A_RENDER_TASK_PRIORITY,
+                                    &g_display_render_task,
+                                    1) != pdPASS) {
             ESP_LOGE(DISPLAY_TAG, "Failed to start display render task");
             return ESP_FAIL;
         }

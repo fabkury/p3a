@@ -87,20 +87,22 @@ menu "Physical Player of Pixel Art (P3A)"
                 original WebP delays.
 
         config P3A_RENDER_TASK_PRIORITY
-            int "Animation task priority"
-            default 5
+            int "Display render task priority"
+            default 8
             range 1 15
             help
-                FreeRTOS priority assigned to the animation render task.
+                FreeRTOS priority assigned to the display render task and upscale workers.
+                Higher priority ensures smooth, jitter-free animation playback.
     endmenu
 
     menu "Touch"
         config P3A_TOUCH_TASK_PRIORITY
             int "Touch task priority"
-            default 5
+            default 6
             range 1 15
             help
                 FreeRTOS priority assigned to the touch controller polling task.
+                Slightly lower than render to avoid preempting frame-critical work.
 
         config P3A_TOUCH_POLL_INTERVAL_MS
             int "Touch poll interval (ms)"
@@ -124,6 +126,26 @@ menu "Physical Player of Pixel Art (P3A)"
             help
                 Maximum brightness change (in percentage points) when performing a full
                 vertical swipe from one edge to the opposite edge of the screen.
+    endmenu
+
+    menu "Task Priorities"
+        config P3A_APP_TASK_PRIORITY
+            int "Application logic task priority"
+            default 4
+            range 1 15
+            help
+                FreeRTOS priority for application-level tasks (WiFi recovery,
+                HTTP API worker, play scheduler refresh, event bus dispatch).
+                Lower than display tasks but higher than background network tasks.
+
+        config P3A_NETWORK_TASK_PRIORITY
+            int "Background network task priority"
+            default 3
+            range 1 15
+            help
+                FreeRTOS priority for background network tasks (DNS server,
+                WiFi health monitor, Makapix tasks, OTA check, view tracker).
+                Lowest priority for non-critical background operations.
     endmenu
 
     menu "Wi-Fi"

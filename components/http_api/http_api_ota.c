@@ -261,6 +261,22 @@ static esp_err_t h_get_webui_ota_status(httpd_req_t *req) {
         cJSON_AddBoolToObject(data, "needs_recovery", status.needs_recovery);
         cJSON_AddBoolToObject(data, "auto_update_disabled", status.auto_update_disabled);
         cJSON_AddNumberToObject(data, "failure_count", status.failure_count);
+
+        // Add state and progress fields
+        cJSON_AddStringToObject(data, "state", webui_ota_state_to_string(status.state));
+        cJSON_AddNumberToObject(data, "progress", status.progress);
+
+        if (strlen(status.status_message) > 0) {
+            cJSON_AddStringToObject(data, "status_message", status.status_message);
+        } else {
+            cJSON_AddNullToObject(data, "status_message");
+        }
+
+        if (status.state == WEBUI_OTA_STATE_ERROR && strlen(status.error_message) > 0) {
+            cJSON_AddStringToObject(data, "error_message", status.error_message);
+        } else {
+            cJSON_AddNullToObject(data, "error_message");
+        }
     } else if (err == ESP_ERR_NOT_SUPPORTED) {
         cJSON_AddStringToObject(data, "message", "Web UI OTA is disabled");
     }

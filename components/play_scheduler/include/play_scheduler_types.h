@@ -70,6 +70,7 @@ typedef enum {
     PS_CHANNEL_TYPE_USER,     // "by_user_{sqid}"
     PS_CHANNEL_TYPE_HASHTAG,  // "hashtag_{tag}"
     PS_CHANNEL_TYPE_SDCARD,   // "sdcard"
+    PS_CHANNEL_TYPE_ARTWORK,  // Single artwork (in-memory only)
 } ps_channel_type_t;
 
 /**
@@ -130,11 +131,19 @@ typedef struct {
  * Specifies a channel to include in a playset (scheduler command).
  */
 typedef struct {
-    ps_channel_type_t type;       // NAMED, USER, HASHTAG, SDCARD
-    char name[33];                // "all", "promoted", "user", "hashtag", "sdcard"
+    ps_channel_type_t type;       // NAMED, USER, HASHTAG, SDCARD, ARTWORK
+    char name[33];                // "all", "promoted", "user", "hashtag", "sdcard", "artwork"
     char identifier[33];          // For USER: sqid, for HASHTAG: tag
     char display_name[65];        // Optional: friendly display name (e.g., user handle, hashtag)
     uint32_t weight;              // For MaE mode (0 = auto-calculate)
+
+    // Artwork-specific fields (only when type == PS_CHANNEL_TYPE_ARTWORK)
+    struct {
+        int32_t post_id;          // Post ID for view tracking (0 = local file)
+        char storage_key[64];     // UUID storage key (empty for local files)
+        char art_url[256];        // Download URL (empty if cached or local)
+        char filepath[256];       // Full path (computed or provided directly)
+    } artwork;
 } ps_channel_spec_t;
 
 /**
@@ -243,6 +252,16 @@ typedef struct {
     bool refresh_async_pending; // Waiting for Makapix async completion
     uint32_t total_count;       // From server (for PrE)
     uint32_t recent_count;      // From server (for PrE), 0 for SD card
+
+    // Artwork channel state (only when type == PS_CHANNEL_TYPE_ARTWORK)
+    struct {
+        int32_t post_id;
+        char storage_key[64];
+        char art_url[256];
+        char filepath[256];
+        bool download_pending;
+        bool download_in_progress;
+    } artwork_state;
 
 } ps_channel_state_t;
 

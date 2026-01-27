@@ -72,13 +72,13 @@ void makapix_provisioning_task(void *pvParameters)
                 BaseType_t poll_ret = pdFAIL;
                 if (s_cred_poll_stack) {
                     s_poll_task_handle = xTaskCreateStatic(makapix_credentials_poll_task, "cred_poll",
-                                                            cred_poll_stack_size, NULL, 5,
+                                                            cred_poll_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
                                                             s_cred_poll_stack, &s_cred_poll_task_buffer);
                     poll_ret = (s_poll_task_handle != NULL) ? pdPASS : pdFAIL;
                 }
                 if (poll_ret != pdPASS) {
                     poll_ret = xTaskCreate(makapix_credentials_poll_task, "cred_poll",
-                                           cred_poll_stack_size, NULL, 5, &s_poll_task_handle);
+                                           cred_poll_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_poll_task_handle);
                 }
                 if (poll_ret != pdPASS) {
                     ESP_LOGE(MAKAPIX_TAG, "Failed to create credential polling task");

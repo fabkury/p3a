@@ -16,6 +16,7 @@
 #include "sd_path.h"
 #include "esp_log.h"
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 
 static const char *TAG = "ps_pick";
@@ -542,6 +543,43 @@ bool ps_pick_artwork(ps_state_t *state, size_t channel_index, ps_artwork_t *out_
 {
     if (!state || !out_artwork || channel_index >= state->channel_count) {
         return false;
+    }
+
+    ps_channel_state_t *ch = &state->channels[channel_index];
+
+    // Artwork channels: return the single artwork directly
+    if (ch->type == PS_CHANNEL_TYPE_ARTWORK) {
+        // Only return if active (file exists or download completed)
+        if (!ch->active) {
+            ESP_LOGD(TAG, "Pick artwork channel: not active yet (download pending)");
+            return false;
+        }
+
+        out_artwork->artwork_id = ch->artwork_state.post_id;
+        out_artwork->post_id = ch->artwork_state.post_id;
+        strlcpy(out_artwork->filepath, ch->artwork_state.filepath, sizeof(out_artwork->filepath));
+        strlcpy(out_artwork->storage_key, ch->artwork_state.storage_key, sizeof(out_artwork->storage_key));
+        out_artwork->created_at = 0;
+        out_artwork->dwell_time_ms = 0;  // No auto-swap for single artwork
+        out_artwork->type = get_asset_type_from_extension(0);  // Default to WEBP, will be detected on load
+        out_artwork->channel_index = (uint8_t)channel_index;
+
+        // Detect asset type from filepath
+        size_t path_len = strlen(out_artwork->filepath);
+        if (path_len >= 4) {
+            if (strcasecmp(out_artwork->filepath + path_len - 4, ".gif") == 0)
+                out_artwork->type = ASSET_TYPE_GIF;
+            else if (strcasecmp(out_artwork->filepath + path_len - 4, ".png") == 0)
+                out_artwork->type = ASSET_TYPE_PNG;
+            else if (strcasecmp(out_artwork->filepath + path_len - 4, ".jpg") == 0)
+                out_artwork->type = ASSET_TYPE_JPEG;
+            else if (path_len >= 5 && strcasecmp(out_artwork->filepath + path_len - 5, ".jpeg") == 0)
+                out_artwork->type = ASSET_TYPE_JPEG;
+        }
+
+        ESP_LOGI(TAG, ">>> PICKED (Artwork channel): post_id=%ld, filepath=%s",
+                 (long)out_artwork->post_id, out_artwork->filepath);
+        return true;
     }
 
     if (state->pick_mode == PS_PICK_RANDOM) {

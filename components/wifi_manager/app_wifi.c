@@ -1198,7 +1198,7 @@ static void start_captive_portal(void)
     }
 
     // Start DNS server task
-    xTaskCreate(dns_server_task, "dns_server", 4096, NULL, 5, NULL);
+    xTaskCreate(dns_server_task, "dns_server", 4096, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, NULL);
 }
 
 /* Start mDNS in AP mode so p3a.local works during WiFi setup */
@@ -1358,12 +1358,12 @@ esp_err_t app_wifi_init(void)
 
     // Start recovery worker once (used by Recommendation 3)
     if (!s_wifi_recovery_task) {
-        xTaskCreate(wifi_recovery_task, "wifi_recovery", 4096, NULL, 6, &s_wifi_recovery_task);
+        xTaskCreate(wifi_recovery_task, "wifi_recovery", 4096, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_wifi_recovery_task);
     }
 
     // Start WiFi health monitor once (Recommendation 2)
     if (!s_wifi_health_task) {
-        xTaskCreate(wifi_health_monitor_task, "wifi_health", 4096, NULL, 5, &s_wifi_health_task);
+        xTaskCreate(wifi_health_monitor_task, "wifi_health", 4096, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_wifi_health_task);
     }
 
     // Try to load saved credentials

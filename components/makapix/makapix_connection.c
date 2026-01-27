@@ -110,7 +110,7 @@ void makapix_mqtt_connection_callback(bool connected)
 
         // Create status publish task if needed
         if (s_status_publish_task_handle == NULL) {
-            if (xTaskCreate(makapix_status_publish_task, "status_pub", 4096, NULL, 5, &s_status_publish_task_handle) != pdPASS) {
+            if (xTaskCreate(makapix_status_publish_task, "status_pub", 4096, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_status_publish_task_handle) != pdPASS) {
                 s_status_publish_task_handle = NULL;
             }
         }
@@ -147,7 +147,7 @@ void makapix_mqtt_connection_callback(bool connected)
             makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
             
             if (s_reconnect_task_handle == NULL) {
-                if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", 16384, NULL, 5, &s_reconnect_task_handle) != pdPASS) {
+                if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", 16384, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_reconnect_task_handle) != pdPASS) {
                     s_reconnect_task_handle = NULL;
                 }
             }

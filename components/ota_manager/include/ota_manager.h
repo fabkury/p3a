@@ -34,6 +34,21 @@ typedef enum {
 } ota_state_t;
 
 /**
+ * @brief Web UI OTA state machine states
+ */
+typedef enum {
+    WEBUI_OTA_STATE_IDLE,        ///< No web UI update activity
+    WEBUI_OTA_STATE_DOWNLOADING, ///< Downloading storage.bin
+    WEBUI_OTA_STATE_UNMOUNTING,  ///< Unmounting LittleFS
+    WEBUI_OTA_STATE_ERASING,     ///< Erasing storage partition
+    WEBUI_OTA_STATE_WRITING,     ///< Writing to storage partition
+    WEBUI_OTA_STATE_VERIFYING,   ///< Verifying written data
+    WEBUI_OTA_STATE_REMOUNTING,  ///< Remounting LittleFS
+    WEBUI_OTA_STATE_COMPLETE,    ///< Update complete
+    WEBUI_OTA_STATE_ERROR,       ///< Error occurred
+} webui_ota_state_t;
+
+/**
  * @brief OTA status information
  */
 typedef struct {
@@ -62,6 +77,10 @@ typedef struct {
     bool needs_recovery;            ///< True if auto-recovery is pending
     bool auto_update_disabled;      ///< True if too many failures disabled auto-update
     uint8_t failure_count;          ///< Consecutive OTA failure count
+    webui_ota_state_t state;        ///< Current web UI OTA state
+    int progress;                   ///< Progress percentage (0-100)
+    char status_message[64];        ///< Human-readable status message
+    char error_message[128];        ///< Error message if state is ERROR
 } webui_ota_status_t;
 
 /**
@@ -188,6 +207,14 @@ const char *ota_state_to_string(ota_state_t state);
 // =============================================================================
 // Web UI OTA Functions (storage partition updates)
 // =============================================================================
+
+/**
+ * @brief Get string representation of web UI OTA state
+ *
+ * @param state Web UI OTA state
+ * @return State name string
+ */
+const char *webui_ota_state_to_string(webui_ota_state_t state);
 
 /**
  * @brief Get current web UI version

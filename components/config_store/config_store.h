@@ -329,6 +329,45 @@ esp_err_t config_store_set_channel_cache_size(uint32_t size);
  */
 uint32_t config_store_get_channel_cache_size(void);
 
+// ============================================================================
+// Processing Notification Settings (persisted)
+// ============================================================================
+
+/**
+ * @brief Set whether processing notification is enabled
+ *
+ * When enabled, a checkerboard triangle appears in the bottom-right corner
+ * when user initiates an animation swap. Blue during processing, red on failure.
+ *
+ * @param enable True to show processing notification, false to hide
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_proc_notif_enabled(bool enable);
+
+/**
+ * @brief Get whether processing notification is enabled
+ *
+ * @return True if processing notification enabled (defaults to true)
+ */
+bool config_store_get_proc_notif_enabled(void);
+
+/**
+ * @brief Set processing notification size
+ *
+ * Controls the size of the triangle indicator in pixels.
+ *
+ * @param size Size in pixels (8-128, default 32)
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG if out of range
+ */
+esp_err_t config_store_set_proc_notif_size(uint8_t size);
+
+/**
+ * @brief Get processing notification size
+ *
+ * @return Size in pixels (defaults to 32 if not set)
+ */
+uint8_t config_store_get_proc_notif_size(void);
+
 #ifdef __cplusplus
 }
 #endif

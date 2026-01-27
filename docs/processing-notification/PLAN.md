@@ -8,14 +8,14 @@ This document outlines the implementation plan for **processing-notification**, 
 
 - [x] Plan document created
 - [x] Plan updated with new requirements (triangle shape, NVS settings, failure handling)
-- [ ] Step 1: Add config_store functions for notification settings
-- [ ] Step 2: Add processing-notification state variables
-- [ ] Step 3: Create display_processing_notification.c with triangle rendering
-- [ ] Step 4: Integrate into render loop
-- [ ] Step 5: Set flags at user-initiated entry points
-- [ ] Step 6: Clear flags on successful swap
-- [ ] Step 7: Handle failed swaps (red indicator for 3 seconds)
-- [ ] Step 8: Update CMakeLists.txt
+- [x] Step 1: Add config_store functions for notification settings
+- [x] Step 2: Add processing-notification state variables
+- [x] Step 3: Create display_processing_notification.c with triangle rendering
+- [x] Step 4: Integrate into render loop
+- [x] Step 5: Set flags at user-initiated entry points
+- [x] Step 6: Clear flags on successful swap
+- [x] Step 7: Handle failed swaps (red indicator for 3 seconds) - integrated into state machine
+- [x] Step 8: Update CMakeLists.txt
 - [ ] Testing and verification
 
 ## Feature Definition

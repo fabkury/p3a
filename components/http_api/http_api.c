@@ -51,6 +51,9 @@
 #include "pico8_stream.h"
 #endif
 
+// Processing notification (from display_renderer_priv.h via weak symbol)
+extern void proc_notif_start(void) __attribute__((weak));
+
 // ---------- Shared State ----------
 
 QueueHandle_t s_cmdq = NULL;
@@ -164,8 +167,14 @@ bool api_enqueue_resume(void) {
 static void makapix_command_handler(const char *command_type, cJSON *payload)
 {
     if (strcmp(command_type, "swap_next") == 0) {
+        if (proc_notif_start) {
+            proc_notif_start();
+        }
         api_enqueue_swap_next();
     } else if (strcmp(command_type, "swap_back") == 0) {
+        if (proc_notif_start) {
+            proc_notif_start();
+        }
         api_enqueue_swap_back();
     } else if (strcmp(command_type, "set_background_color") == 0) {
         if (!payload || !cJSON_IsObject(payload)) {

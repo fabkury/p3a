@@ -66,11 +66,24 @@ typedef struct {
 #define CHANNEL_CACHE_MAGIC     0x50334143
 #define CHANNEL_CACHE_VERSION   21  // Bumped to 21: removed dwell_time_ms and metadata_modified_at from entries
 
-// Maximum entries per channel (1024 artworks)
-#define CHANNEL_CACHE_MAX_ENTRIES 1024
+// Default maximum entries per channel (configurable via config_store)
+#define CHANNEL_CACHE_DEFAULT_MAX_ENTRIES 1024
+
+// Legacy macro for backward compatibility - prefer channel_cache_get_max_entries()
+#define CHANNEL_CACHE_MAX_ENTRIES channel_cache_get_max_entries()
 
 // Debounce interval for dirty cache persistence (15 seconds)
 #define CHANNEL_CACHE_SAVE_DEBOUNCE_MS 15000
+
+/**
+ * @brief Get the configured maximum entries per channel
+ *
+ * Returns the runtime-configured maximum number of entries per channel cache.
+ * This value is read from NVS once and cached in memory.
+ *
+ * @return Maximum entries (defaults to 1024)
+ */
+uint32_t channel_cache_get_max_entries(void);
 
 /**
  * @brief Cache file header (44 bytes, packed)

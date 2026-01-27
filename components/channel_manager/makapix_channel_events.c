@@ -456,9 +456,7 @@ void makapix_channel_signal_refresh_immediate(void)
 
     ESP_LOGI(TAG, "Signaling immediate channel refresh requested");
     xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_REFRESH_IMMEDIATE);
-}
-
-bool makapix_channel_check_and_clear_refresh_immediate(void)
+}bool makapix_channel_check_and_clear_refresh_immediate(void)
 {
     if (!s_mqtt_event_group) {
         return false;

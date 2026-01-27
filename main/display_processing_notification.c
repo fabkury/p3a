@@ -92,10 +92,12 @@ void proc_notif_start(void)
 
 void proc_notif_success(void)
 {
-    // Clear immediately on successful swap
-    if (g_proc_notif_state == PROC_NOTIF_STATE_PROCESSING) {
+    // Clear immediately on successful swap - regardless of current state
+    // This handles race conditions where timeout fires just before success
+    if (g_proc_notif_state != PROC_NOTIF_STATE_IDLE) {
         g_proc_notif_state = PROC_NOTIF_STATE_IDLE;
         g_proc_notif_start_time_us = 0;
+        g_proc_notif_fail_time_us = 0;
         ESP_LOGD(TAG, "Processing notification cleared (success)");
     }
 }
@@ -110,11 +112,19 @@ void processing_notification_update_and_draw(uint8_t *buffer)
     if (now_us - s_config_check_time_us > 1000000) {
         s_enabled_cached = config_store_get_proc_notif_enabled();
         s_size_cached = config_store_get_proc_notif_size();
+        // Defensive bounds check on size (config_store validates, but be safe)
+        if (s_size_cached < 8) s_size_cached = 8;
+        if (s_size_cached > 128) s_size_cached = 128;
         s_config_check_time_us = now_us;
     }
     
-    // Check if feature is enabled
+    // Check if feature is enabled - if disabled, reset state
     if (!s_enabled_cached) {
+        if (g_proc_notif_state != PROC_NOTIF_STATE_IDLE) {
+            g_proc_notif_state = PROC_NOTIF_STATE_IDLE;
+            g_proc_notif_start_time_us = 0;
+            g_proc_notif_fail_time_us = 0;
+        }
         return;
     }
     

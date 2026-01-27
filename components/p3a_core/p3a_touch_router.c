@@ -12,6 +12,9 @@
 #include <string.h>
 #include <stdbool.h>
 
+// Processing notification (from display_renderer_priv.h via weak symbol)
+extern void proc_notif_start(void) __attribute__((weak));
+
 // Forward declaration for gBool type (from µGFX)
 typedef int gBool;
 
@@ -68,12 +71,18 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
 {
     switch (event->type) {
         case P3A_TOUCH_EVENT_TAP_LEFT:
+            if (proc_notif_start) {
+                proc_notif_start();
+            }
             if (app_lcd_cycle_animation_backward) {
                 app_lcd_cycle_animation_backward();
             }
             return ESP_OK;
             
         case P3A_TOUCH_EVENT_TAP_RIGHT:
+            if (proc_notif_start) {
+                proc_notif_start();
+            }
             if (app_lcd_cycle_animation) {
                 app_lcd_cycle_animation();
             }

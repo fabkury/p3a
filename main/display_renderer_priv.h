@@ -121,6 +121,44 @@ esp_err_t display_renderer_ensure_upscale_workers(void);
 // FPS overlay (display_fps_overlay.c)
 void fps_update_and_draw(uint8_t *buffer);
 
+// ============================================================================
+// Processing Notification (display_processing_notification.c)
+// ============================================================================
+
+/**
+ * @brief Processing notification state
+ */
+typedef enum {
+    PROC_NOTIF_STATE_IDLE,       ///< Not showing
+    PROC_NOTIF_STATE_PROCESSING, ///< Blue triangle - swap in progress
+    PROC_NOTIF_STATE_FAILED      ///< Red triangle - swap failed, showing for 3 seconds
+} proc_notif_state_t;
+
+// State variables (defined in display_renderer.c)
+extern volatile proc_notif_state_t g_proc_notif_state;
+extern volatile int64_t g_proc_notif_start_time_us;
+extern volatile int64_t g_proc_notif_fail_time_us;
+
+/**
+ * @brief Start processing notification (call when user initiates swap)
+ */
+void proc_notif_start(void);
+
+/**
+ * @brief Signal successful swap (clears notification immediately)
+ */
+void proc_notif_success(void);
+
+/**
+ * @brief Update and draw processing notification overlay
+ * 
+ * Called each frame from display_render_task. Handles state machine
+ * transitions and draws the triangle if active.
+ * 
+ * @param buffer Frame buffer to draw into
+ */
+void processing_notification_update_and_draw(uint8_t *buffer);
+
 // RGB565 conversion helper (shared between files)
 static inline uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b)
 {

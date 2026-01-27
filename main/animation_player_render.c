@@ -12,6 +12,9 @@
 #include "debug_http_log.h"
 #include <sys/time.h>
 
+// Processing notification (from display_renderer_priv.h via weak symbol)
+extern void proc_notif_success(void) __attribute__((weak));
+
 // Frame rendering state
 static bool s_use_prefetched = false;
 static uint32_t s_target_frame_delay_ms = 100;
@@ -522,6 +525,11 @@ skip_prefetch:
             
             ESP_LOGI(TAG, "Buffers swapped: now playing %s",
                      s_front_buffer.filepath ? s_front_buffer.filepath : "(unknown)");
+
+            // Clear processing notification - successful swap
+            if (proc_notif_success) {
+                proc_notif_success();
+            }
 
             // DEBUG: Log decode path for each artwork (remove this block when done investigating)
 #if 1

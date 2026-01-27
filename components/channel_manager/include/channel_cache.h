@@ -70,6 +70,8 @@ typedef struct {
 #define CHANNEL_CACHE_DEFAULT_MAX_ENTRIES 1024
 
 // Legacy macro for backward compatibility - prefer channel_cache_get_max_entries()
+// NOTE: This macro calls a function, but the function uses in-memory caching
+// so repeated calls are fast (single integer return after first load).
 #define CHANNEL_CACHE_MAX_ENTRIES channel_cache_get_max_entries()
 
 // Debounce interval for dirty cache persistence (15 seconds)
@@ -79,7 +81,8 @@ typedef struct {
  * @brief Get the configured maximum entries per channel
  *
  * Returns the runtime-configured maximum number of entries per channel cache.
- * This value is read from NVS once and cached in memory.
+ * This value is read from NVS once and cached in memory, so subsequent calls
+ * are fast (single integer return).
  *
  * @return Maximum entries (defaults to 1024)
  */

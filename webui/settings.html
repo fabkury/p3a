@@ -285,9 +285,9 @@ body {
 <div class="section">
     <h3>Storage</h3>
     <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
-        <label class="toggle-label">Channel cache size</label>
+        <label class="toggle-label" for="cache-size">Channel cache size</label>
         <div style="display:flex;gap:8px;align-items:center;">
-            <input class="bg-input" id="cache-size" type="number" min="32" max="4096" style="max-width:90px;">
+            <input class="bg-input" id="cache-size" type="number" min="32" max="4096" style="max-width:90px;" aria-label="Channel cache size">
             <span style="color:#666;font-size:0.8rem;">artworks</span>
             <button class="btn" onclick="saveCacheSize()">Save</button>
         </div>

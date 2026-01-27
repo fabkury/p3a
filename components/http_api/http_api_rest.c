@@ -40,6 +40,9 @@
 #include "p3a_state.h"
 #include "freertos/semphr.h"
 
+// Processing notification (from display_renderer_priv.h via weak symbol)
+extern void proc_notif_start(void) __attribute__((weak));
+
 // ---------- Debug Handler (Dev Mode) ----------
 
 #if CONFIG_OTA_DEV_MODE
@@ -920,6 +923,10 @@ esp_err_t h_post_swap_next(httpd_req_t *req) {
         send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
         return ESP_OK;
     }
+    // Start processing notification after confirming swap was queued
+    if (proc_notif_start) {
+        proc_notif_start();
+    }
 
     send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"swap_next\"}}");
     return ESP_OK;
@@ -936,6 +943,10 @@ esp_err_t h_post_swap_back(httpd_req_t *req) {
     if (!api_enqueue_swap_back()) {
         send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
         return ESP_OK;
+    }
+    // Start processing notification after confirming swap was queued
+    if (proc_notif_start) {
+        proc_notif_start();
     }
 
     send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"swap_back\"}}");

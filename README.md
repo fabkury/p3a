@@ -170,3 +170,7 @@ For detailed information about all dependencies and their licenses, see [LICENSI
 Contributions are welcome! By contributing to p3a, you agree that your contributions will be licensed under the Apache License 2.0.
 
 See the [INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) for technical details about the codebase.
+
+## Acknowledgements
+
+Thanks to ByteWelder from the *Espressif MCUs* Discord channel for advice very early in the p3a project.

@@ -12,6 +12,7 @@
 #include "webp/decode.h"
 #include "esp_log.h"
 #include "esp_err.h"
+#include "esp_heap_caps.h"
 #include "debug_http_log.h"
 #include <stdlib.h>
 #include <string.h>
@@ -136,7 +137,13 @@ esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decode
         } else {
             if (webp_data->has_alpha_any) {
                 const size_t frame_size = (size_t)features.width * features.height * 4;
-                webp_data->still_rgba = (uint8_t *)malloc(frame_size);
+
+                webp_data->still_rgba = (uint8_t *)heap_caps_malloc(frame_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+                
+                if (!webp_data->still_rgba) {
+                    webp_data->still_rgba = (uint8_t *)malloc(frame_size);
+                }
+
                 if (!webp_data->still_rgba) {
                     ESP_LOGE(TAG, "Failed to allocate buffer for still WebP RGBA frame (%zu bytes)", frame_size);
                     free(webp_data);

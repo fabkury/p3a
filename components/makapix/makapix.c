@@ -55,6 +55,10 @@ TaskHandle_t s_status_publish_task_handle = NULL;  // Handle for status publish 
 // PSRAM-backed stack for MQTT reconnection task
 static StackType_t *s_mqtt_reconn_stack = NULL;
 static StaticTask_t s_mqtt_reconn_task_buffer;
+
+// PSRAM-backed stack for channel switch task
+static StackType_t *s_ch_switch_stack = NULL;
+static StaticTask_t s_ch_switch_task_buffer;
 TaskHandle_t s_channel_switch_task_handle = NULL;  // Handle for channel switch task
 
 TimerHandle_t s_status_timer = NULL;
@@ -143,11 +147,27 @@ esp_err_t makapix_init(void)
     }
     
     if (s_channel_switch_task_handle == NULL) {
-        BaseType_t task_ret = xTaskCreate(makapix_channel_switch_task, "ch_switch", 8192, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_channel_switch_task_handle);
-        if (task_ret != pdPASS) {
-            ESP_LOGE(MAKAPIX_TAG, "Failed to create channel switch task");
-            s_channel_switch_task_handle = NULL;
-            return ESP_ERR_NO_MEM;
+        const size_t ch_switch_stack_size = 8192;
+        if (!s_ch_switch_stack) {
+            s_ch_switch_stack = heap_caps_malloc(ch_switch_stack_size * sizeof(StackType_t),
+                                                  MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        }
+
+        bool task_created = false;
+        if (s_ch_switch_stack) {
+            s_channel_switch_task_handle = xTaskCreateStatic(makapix_channel_switch_task, "ch_switch",
+                                                              ch_switch_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
+                                                              s_ch_switch_stack, &s_ch_switch_task_buffer);
+            task_created = (s_channel_switch_task_handle != NULL);
+        }
+
+        if (!task_created) {
+            if (xTaskCreate(makapix_channel_switch_task, "ch_switch",
+                            ch_switch_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_channel_switch_task_handle) != pdPASS) {
+                ESP_LOGE(MAKAPIX_TAG, "Failed to create channel switch task");
+                s_channel_switch_task_handle = NULL;
+                return ESP_ERR_NO_MEM;
+            }
         }
     }
 

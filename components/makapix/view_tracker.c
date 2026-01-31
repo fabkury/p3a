@@ -9,6 +9,7 @@
 #include "makapix.h"
 #include "sntp_sync.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/timers.h"
 #if defined(__GNUC__)
@@ -61,6 +62,10 @@ typedef struct {
 
 static view_tracker_state_t s_state = {0};
 
+// PSRAM-backed stack for view tracker task
+static StackType_t *s_view_tracker_stack = NULL;
+static StaticTask_t s_view_tracker_task_buffer;
+
 // Forward declarations
 static void timer_callback(TimerHandle_t timer);
 static void view_tracker_task(void *pvParameters);
@@ -78,20 +83,29 @@ esp_err_t view_tracker_init(void)
     
     memset(&s_state, 0, sizeof(s_state));
     memset(&s_pending_swap, 0, sizeof(s_pending_swap));
-    
+
     // Create dedicated task for processing (6KB stack - enough for MQTT/JSON/logging)
-    BaseType_t task_created = xTaskCreate(
-        view_tracker_task,
-        "view_tracker",
-        6144,
-        NULL,
-        CONFIG_P3A_NETWORK_TASK_PRIORITY,
-        &s_state.task
-    );
-    
-    if (task_created != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create view tracker task");
-        return ESP_ERR_NO_MEM;
+    // Use SPIRAM-backed stack to free internal RAM
+    const size_t view_tracker_stack_size = 6144;
+    if (!s_view_tracker_stack) {
+        s_view_tracker_stack = heap_caps_malloc(view_tracker_stack_size * sizeof(StackType_t),
+                                                 MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    }
+
+    bool task_created = false;
+    if (s_view_tracker_stack) {
+        s_state.task = xTaskCreateStatic(view_tracker_task, "view_tracker",
+                                          view_tracker_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
+                                          s_view_tracker_stack, &s_view_tracker_task_buffer);
+        task_created = (s_state.task != NULL);
+    }
+
+    if (!task_created) {
+        if (xTaskCreate(view_tracker_task, "view_tracker",
+                        view_tracker_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_state.task) != pdPASS) {
+            ESP_LOGE(TAG, "Failed to create view tracker task");
+            return ESP_ERR_NO_MEM;
+        }
     }
     
     // Create FreeRTOS timer (auto-reload, 1-second period)

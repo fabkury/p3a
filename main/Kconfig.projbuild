@@ -13,7 +13,7 @@ menu "Physical Player of Pixel Art (P3A)"
             bool "Enable memory status reporting"
             default n
             help
-                When enabled, the device will log detailed memory statistics every 15 seconds,
+                When enabled, the device will log detailed memory statistics every 8 seconds,
                 including heap usage broken down by memory type (internal RAM, SPIRAM, DMA, etc.).
                 Useful for debugging memory issues but adds overhead.
 

@@ -32,6 +32,10 @@
 
 static const char *TAG = "ota_manager";
 
+// PSRAM-backed stack for OTA check task
+static StackType_t *s_ota_check_stack = NULL;
+static StaticTask_t s_ota_check_task_buffer;
+
 // Check interval in microseconds (hours to us)
 #define CHECK_INTERVAL_US (CONFIG_OTA_CHECK_INTERVAL_HOURS * 60ULL * 60ULL * 1000000ULL)
 
@@ -627,11 +631,27 @@ esp_err_t ota_manager_check_for_update(void)
     // Clear previous error
     s_ota.error_message[0] = '\0';
     
-    // Start check task
-    BaseType_t ret = xTaskCreate(ota_check_task, "ota_check", 8192, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_ota.check_task);
-    if (ret != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create check task");
-        return ESP_ERR_NO_MEM;
+    // Start check task with SPIRAM-backed stack
+    const size_t ota_check_stack_size = 8192;
+    if (!s_ota_check_stack) {
+        s_ota_check_stack = heap_caps_malloc(ota_check_stack_size * sizeof(StackType_t),
+                                              MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    }
+
+    bool task_created = false;
+    if (s_ota_check_stack) {
+        s_ota.check_task = xTaskCreateStatic(ota_check_task, "ota_check",
+                                              ota_check_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
+                                              s_ota_check_stack, &s_ota_check_task_buffer);
+        task_created = (s_ota.check_task != NULL);
+    }
+
+    if (!task_created) {
+        if (xTaskCreate(ota_check_task, "ota_check",
+                        ota_check_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_ota.check_task) != pdPASS) {
+            ESP_LOGE(TAG, "Failed to create check task");
+            return ESP_ERR_NO_MEM;
+        }
     }
     
     return ESP_OK;

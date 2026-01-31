@@ -20,6 +20,7 @@
 #include "p3a_state.h"   // For P3A_CHANNEL_MSG_* constants
 #include "p3a_render.h"  // For p3a_render_set_channel_message()
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -44,6 +45,10 @@ static TaskHandle_t s_refresh_task = NULL;
 static EventGroupHandle_t s_refresh_events = NULL;
 static volatile bool s_task_running = false;
 static time_t s_last_full_refresh_complete = 0;
+
+// PSRAM-backed stack for refresh task
+static StackType_t *s_refresh_stack = NULL;
+static StaticTask_t s_refresh_task_buffer;
 
 /**
  * @brief Find next channel that needs refresh
@@ -510,18 +515,26 @@ esp_err_t ps_refresh_start(void)
         }
     }
 
-    BaseType_t ret = xTaskCreate(
-        refresh_task,
-        "ps_refresh",
-        REFRESH_TASK_STACK_SIZE,
-        NULL,
-        CONFIG_P3A_APP_TASK_PRIORITY,
-        &s_refresh_task
-    );
+    // Create refresh task with SPIRAM-backed stack
+    if (!s_refresh_stack) {
+        s_refresh_stack = heap_caps_malloc(REFRESH_TASK_STACK_SIZE * sizeof(StackType_t),
+                                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    }
 
-    if (ret != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create refresh task");
-        return ESP_ERR_NO_MEM;
+    bool task_created = false;
+    if (s_refresh_stack) {
+        s_refresh_task = xTaskCreateStatic(refresh_task, "ps_refresh",
+                                            REFRESH_TASK_STACK_SIZE, NULL, CONFIG_P3A_APP_TASK_PRIORITY,
+                                            s_refresh_stack, &s_refresh_task_buffer);
+        task_created = (s_refresh_task != NULL);
+    }
+
+    if (!task_created) {
+        if (xTaskCreate(refresh_task, "ps_refresh",
+                        REFRESH_TASK_STACK_SIZE, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_refresh_task) != pdPASS) {
+            ESP_LOGE(TAG, "Failed to create refresh task");
+            return ESP_ERR_NO_MEM;
+        }
     }
 
     ESP_LOGI(TAG, "Refresh task created");

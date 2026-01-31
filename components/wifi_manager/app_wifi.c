@@ -38,6 +38,7 @@
 #include "mdns.h"
 #include "p3a_state.h"
 #include "event_bus.h"
+#include "esp_heap_caps.h"
 
 #define EXAMPLE_ESP_WIFI_SSID      CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
@@ -111,6 +112,12 @@ static TaskHandle_t s_wifi_health_task = NULL;
 static TaskHandle_t s_wifi_recovery_task = NULL;
 static bool s_reinit_in_progress = false;
 static const uint32_t s_wifi_health_interval_ms = 120000; // 120 seconds
+
+// PSRAM-backed stacks for WiFi tasks
+static StackType_t *s_wifi_recovery_stack = NULL;
+static StaticTask_t s_wifi_recovery_task_buffer;
+static StackType_t *s_wifi_health_stack = NULL;
+static StaticTask_t s_wifi_health_task_buffer;
 
 // Forward declaration (event_handler referenced before definition)
 static void event_handler(void* arg, esp_event_base_t event_base,
@@ -1356,14 +1363,48 @@ esp_err_t app_wifi_init(void)
     // Initialize Wi-Fi remote module (ESP32-C6 via SDIO)
     wifi_remote_init();
 
-    // Start recovery worker once (used by Recommendation 3)
+    // Start recovery worker once (used by Recommendation 3) with SPIRAM-backed stack
     if (!s_wifi_recovery_task) {
-        xTaskCreate(wifi_recovery_task, "wifi_recovery", 4096, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_wifi_recovery_task);
+        const size_t wifi_recovery_stack_size = 4096;
+        if (!s_wifi_recovery_stack) {
+            s_wifi_recovery_stack = heap_caps_malloc(wifi_recovery_stack_size * sizeof(StackType_t),
+                                                      MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        }
+
+        bool task_created = false;
+        if (s_wifi_recovery_stack) {
+            s_wifi_recovery_task = xTaskCreateStatic(wifi_recovery_task, "wifi_recovery",
+                                                      wifi_recovery_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY,
+                                                      s_wifi_recovery_stack, &s_wifi_recovery_task_buffer);
+            task_created = (s_wifi_recovery_task != NULL);
+        }
+
+        if (!task_created) {
+            xTaskCreate(wifi_recovery_task, "wifi_recovery",
+                        wifi_recovery_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_wifi_recovery_task);
+        }
     }
 
-    // Start WiFi health monitor once (Recommendation 2)
+    // Start WiFi health monitor once (Recommendation 2) with SPIRAM-backed stack
     if (!s_wifi_health_task) {
-        xTaskCreate(wifi_health_monitor_task, "wifi_health", 4096, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_wifi_health_task);
+        const size_t wifi_health_stack_size = 4096;
+        if (!s_wifi_health_stack) {
+            s_wifi_health_stack = heap_caps_malloc(wifi_health_stack_size * sizeof(StackType_t),
+                                                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        }
+
+        bool task_created = false;
+        if (s_wifi_health_stack) {
+            s_wifi_health_task = xTaskCreateStatic(wifi_health_monitor_task, "wifi_health",
+                                                    wifi_health_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
+                                                    s_wifi_health_stack, &s_wifi_health_task_buffer);
+            task_created = (s_wifi_health_task != NULL);
+        }
+
+        if (!task_created) {
+            xTaskCreate(wifi_health_monitor_task, "wifi_health",
+                        wifi_health_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_wifi_health_task);
+        }
     }
 
     // Try to load saved credentials

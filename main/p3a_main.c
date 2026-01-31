@@ -56,7 +56,7 @@ static const char *TAG = "p3a";
 #define MAX_DWELL_TIME_SECONDS 100000
 
 #if CONFIG_P3A_MEMORY_REPORTING_ENABLE
-#define MEMORY_REPORT_INTERVAL_SECONDS 15
+#define MEMORY_REPORT_INTERVAL_SECONDS 8
 #endif
 
 uint32_t animation_player_get_dwell_time(void)
@@ -96,7 +96,7 @@ static void memory_report_task(void *arg)
     (void)arg;
     const TickType_t delay_ticks = pdMS_TO_TICKS(MEMORY_REPORT_INTERVAL_SECONDS * 1000);
     
-    ESP_LOGD(TAG, "Memory reporting task started: will report every %d seconds", MEMORY_REPORT_INTERVAL_SECONDS);
+    ESP_LOGI(TAG, "Memory reporting task started: will report every %d seconds", MEMORY_REPORT_INTERVAL_SECONDS);
     
     // Wait a bit for system to initialize before first report
     vTaskDelay(pdMS_TO_TICKS(2000));
@@ -127,58 +127,58 @@ static void memory_report_task(void *arg)
         // Get task count
         UBaseType_t num_tasks = uxTaskGetNumberOfTasks();
         
-        // Log memory report (debug level - periodic monitoring)
-        ESP_LOGD(TAG, "=== Memory Status Report ===");
-        ESP_LOGD(TAG, "Overall Heap:");
-        ESP_LOGD(TAG, "  Free: %zu bytes (%.2f KB)", free_heap, free_heap / 1024.0f);
-        ESP_LOGD(TAG, "  Min Free (since boot): %zu bytes (%.2f KB)", min_free_heap, min_free_heap / 1024.0f);
-        ESP_LOGD(TAG, "  Largest Free Block: %zu bytes (%.2f KB)", largest_free_block, largest_free_block / 1024.0f);
-        ESP_LOGD(TAG, "");
-        ESP_LOGD(TAG, "Memory by Type:");
-        ESP_LOGD(TAG, "  Internal RAM:");
-        ESP_LOGD(TAG, "    Total: %zu bytes (%.2f KB)", total_internal, total_internal / 1024.0f);
-        ESP_LOGD(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
-                 used_internal, used_internal / 1024.0f, 
+        // Log memory report (info level for visibility during debugging)
+        ESP_LOGI(TAG, "=== Memory Status Report ===");
+        ESP_LOGI(TAG, "Overall Heap:");
+        ESP_LOGI(TAG, "  Free: %zu bytes (%.2f KB)", free_heap, free_heap / 1024.0f);
+        ESP_LOGI(TAG, "  Min Free (since boot): %zu bytes (%.2f KB)", min_free_heap, min_free_heap / 1024.0f);
+        ESP_LOGI(TAG, "  Largest Free Block: %zu bytes (%.2f KB)", largest_free_block, largest_free_block / 1024.0f);
+        ESP_LOGI(TAG, "");
+        ESP_LOGI(TAG, "Memory by Type:");
+        ESP_LOGI(TAG, "  Internal RAM:");
+        ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_internal, total_internal / 1024.0f);
+        ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)",
+                 used_internal, used_internal / 1024.0f,
                  total_internal > 0 ? (100.0f * used_internal / total_internal) : 0.0f);
-        ESP_LOGD(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
+        ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)",
                  free_internal, free_internal / 1024.0f,
                  total_internal > 0 ? (100.0f * free_internal / total_internal) : 0.0f);
-        
+
         if (total_spiram > 0) {
-            ESP_LOGD(TAG, "  SPIRAM:");
-            ESP_LOGD(TAG, "    Total: %zu bytes (%.2f KB)", total_spiram, total_spiram / 1024.0f);
-            ESP_LOGD(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
+            ESP_LOGI(TAG, "  SPIRAM:");
+            ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_spiram, total_spiram / 1024.0f);
+            ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)",
                      used_spiram, used_spiram / 1024.0f,
                      total_spiram > 0 ? (100.0f * used_spiram / total_spiram) : 0.0f);
-            ESP_LOGD(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
+            ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)",
                      free_spiram, free_spiram / 1024.0f,
                      total_spiram > 0 ? (100.0f * free_spiram / total_spiram) : 0.0f);
         }
-        
+
         if (total_dma > 0) {
-            ESP_LOGD(TAG, "  DMA-Capable:");
-            ESP_LOGD(TAG, "    Total: %zu bytes (%.2f KB)", total_dma, total_dma / 1024.0f);
-            ESP_LOGD(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
+            ESP_LOGI(TAG, "  DMA-Capable:");
+            ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_dma, total_dma / 1024.0f);
+            ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)",
                      used_dma, used_dma / 1024.0f,
                      total_dma > 0 ? (100.0f * used_dma / total_dma) : 0.0f);
-            ESP_LOGD(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
+            ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)",
                      free_dma, free_dma / 1024.0f,
                      total_dma > 0 ? (100.0f * free_dma / total_dma) : 0.0f);
         }
-        
-        ESP_LOGD(TAG, "  8-bit Accessible:");
-        ESP_LOGD(TAG, "    Total: %zu bytes (%.2f KB)", total_8bit, total_8bit / 1024.0f);
-        ESP_LOGD(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)", 
+
+        ESP_LOGI(TAG, "  8-bit Accessible:");
+        ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_8bit, total_8bit / 1024.0f);
+        ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)",
                  used_8bit, used_8bit / 1024.0f,
                  total_8bit > 0 ? (100.0f * used_8bit / total_8bit) : 0.0f);
-        ESP_LOGD(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)", 
+        ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)",
                  free_8bit, free_8bit / 1024.0f,
                  total_8bit > 0 ? (100.0f * free_8bit / total_8bit) : 0.0f);
-        
-        ESP_LOGD(TAG, "");
-        ESP_LOGD(TAG, "System:");
-        ESP_LOGD(TAG, "  FreeRTOS Tasks: %u", num_tasks);
-        ESP_LOGD(TAG, "============================");
+
+        ESP_LOGI(TAG, "");
+        ESP_LOGI(TAG, "System:");
+        ESP_LOGI(TAG, "  FreeRTOS Tasks: %u", num_tasks);
+        ESP_LOGI(TAG, "============================");
         
         vTaskDelay(delay_ticks);
     }

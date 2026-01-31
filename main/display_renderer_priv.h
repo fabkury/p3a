@@ -101,6 +101,23 @@ extern volatile bool g_upscale_worker_bottom_done;
 extern uint8_t g_render_buffer_index;
 extern uint8_t g_last_display_buffer;
 
+// Triple buffering state tracking
+typedef enum {
+    BUFFER_STATE_FREE,       // Safe to write
+    BUFFER_STATE_RENDERING,  // Being rendered to
+    BUFFER_STATE_PENDING,    // Submitted, waiting for DMA
+    BUFFER_STATE_DISPLAYING  // Currently scanned by DMA
+} buffer_state_t;
+
+typedef struct {
+    volatile buffer_state_t state;
+} buffer_info_t;
+
+extern buffer_info_t g_buffer_info[3];
+extern volatile int8_t g_displaying_idx;
+extern volatile int8_t g_last_submitted_idx;
+extern SemaphoreHandle_t g_buffer_free_sem;
+
 // Timing
 extern int64_t g_last_frame_present_us;
 extern uint32_t g_target_frame_delay_ms;

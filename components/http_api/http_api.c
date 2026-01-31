@@ -61,6 +61,10 @@ httpd_handle_t s_server = NULL;
 static TaskHandle_t s_worker = NULL;
 static uint32_t s_cmd_id = 0;
 
+// PSRAM-backed stack for API worker task
+static StackType_t *s_api_worker_stack = NULL;
+static StaticTask_t s_api_worker_task_buffer;
+
 // ---------- Worker Task ----------
 
 static void do_reboot(void) {
@@ -463,12 +467,28 @@ esp_err_t http_api_start(void) {
         }
     }
 
-    // Create worker task if not exists
+    // Create worker task if not exists with SPIRAM-backed stack
     if (!s_worker) {
-        BaseType_t ret = xTaskCreate(api_worker_task, "api_worker", 4096, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_worker);
-        if (ret != pdPASS) {
-            ESP_LOGE(HTTP_API_TAG, "Failed to create worker task");
-            return ESP_ERR_NO_MEM;
+        const size_t api_worker_stack_size = 4096;
+        if (!s_api_worker_stack) {
+            s_api_worker_stack = heap_caps_malloc(api_worker_stack_size * sizeof(StackType_t),
+                                                   MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        }
+
+        bool task_created = false;
+        if (s_api_worker_stack) {
+            s_worker = xTaskCreateStatic(api_worker_task, "api_worker",
+                                          api_worker_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY,
+                                          s_api_worker_stack, &s_api_worker_task_buffer);
+            task_created = (s_worker != NULL);
+        }
+
+        if (!task_created) {
+            if (xTaskCreate(api_worker_task, "api_worker",
+                            api_worker_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_worker) != pdPASS) {
+                ESP_LOGE(HTTP_API_TAG, "Failed to create worker task");
+                return ESP_ERR_NO_MEM;
+            }
         }
     }
 

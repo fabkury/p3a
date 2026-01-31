@@ -8,6 +8,7 @@
 #include "freertos/semphr.h"
 #include "esp_timer.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 
 #define EVENT_QUEUE_SIZE 32
 #define MAX_SUBSCRIBERS 48
@@ -31,6 +32,10 @@ typedef struct {
 
 static const char *TAG = "event_bus";
 static event_bus_state_t s_bus = {0};
+
+// PSRAM-backed stack for event bus dispatch task
+static StackType_t *s_event_bus_stack = NULL;
+static StaticTask_t s_event_bus_task_buffer;
 
 static uint16_t event_type_to_category(uint16_t type)
 {
@@ -97,13 +102,30 @@ esp_err_t event_bus_init(void)
         return ESP_ERR_NO_MEM;
     }
 
-    BaseType_t ok = xTaskCreate(event_bus_dispatch_task, "event_bus", 4096, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_bus.dispatch_task);
-    if (ok != pdPASS) {
-        vSemaphoreDelete(s_bus.mutex);
-        s_bus.mutex = NULL;
-        vQueueDelete(s_bus.queue);
-        s_bus.queue = NULL;
-        return ESP_ERR_NO_MEM;
+    // Create dispatch task with SPIRAM-backed stack
+    const size_t event_bus_stack_size = 4096;
+    if (!s_event_bus_stack) {
+        s_event_bus_stack = heap_caps_malloc(event_bus_stack_size * sizeof(StackType_t),
+                                              MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    }
+
+    bool task_created = false;
+    if (s_event_bus_stack) {
+        s_bus.dispatch_task = xTaskCreateStatic(event_bus_dispatch_task, "event_bus",
+                                                 event_bus_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY,
+                                                 s_event_bus_stack, &s_event_bus_task_buffer);
+        task_created = (s_bus.dispatch_task != NULL);
+    }
+
+    if (!task_created) {
+        if (xTaskCreate(event_bus_dispatch_task, "event_bus",
+                        event_bus_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_bus.dispatch_task) != pdPASS) {
+            vSemaphoreDelete(s_bus.mutex);
+            s_bus.mutex = NULL;
+            vQueueDelete(s_bus.queue);
+            s_bus.queue = NULL;
+            return ESP_ERR_NO_MEM;
+        }
     }
 
     s_bus.subscriber_count = 0;

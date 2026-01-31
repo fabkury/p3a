@@ -2,6 +2,7 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "vault_storage.h"
+#include "psram_alloc.h"
 #include "esp_log.h"
 #include <stdlib.h>
 #include <string.h>
@@ -167,12 +168,12 @@ esp_err_t vault_init(const char *base_path, vault_handle_t *out_handle)
         return ESP_ERR_INVALID_ARG;
     }
     
-    struct vault_storage_s *vault = calloc(1, sizeof(struct vault_storage_s));
+    struct vault_storage_s *vault = psram_calloc(1, sizeof(struct vault_storage_s));
     if (!vault) {
         return ESP_ERR_NO_MEM;
     }
-    
-    vault->base_path = strdup(base_path);
+
+    vault->base_path = psram_strdup(base_path);
     if (!vault->base_path) {
         free(vault);
         return ESP_ERR_NO_MEM;

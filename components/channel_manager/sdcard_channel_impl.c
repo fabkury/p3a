@@ -5,6 +5,7 @@
 #include "playlist_manager.h"
 #include "channel_settings.h"
 #include "config_store.h"
+#include "psram_alloc.h"
 
 #include "cJSON.h"
 #include "esp_log.h"
@@ -217,7 +218,7 @@ static bool parse_sd_playlist_file(const char *playlist_path,
     pl.loaded_artworks = total;
     pl.available_artworks = 0;
 
-    pl.artworks = (artwork_ref_t *)calloc((size_t)total, sizeof(artwork_ref_t));
+    pl.artworks = (artwork_ref_t *)psram_calloc((size_t)total, sizeof(artwork_ref_t));
     if (!pl.artworks) {
         cJSON_Delete(root);
         return false;
@@ -350,7 +351,7 @@ static esp_err_t sdcard_impl_load(channel_handle_t channel)
         return ESP_OK;
     }
 
-    ch->entries = (sdcard_entry_t *)calloc(count, sizeof(sdcard_entry_t));
+    ch->entries = (sdcard_entry_t *)psram_calloc(count, sizeof(sdcard_entry_t));
     if (!ch->entries) {
         closedir(dir);
         return ESP_ERR_NO_MEM;
@@ -382,8 +383,8 @@ static esp_err_t sdcard_impl_load(channel_handle_t channel)
         sdcard_entry_t *e = &ch->entries[idx];
         memset(e, 0, sizeof(*e));
         e->created_at = st.st_mtime;
-        e->name = strdup(entry->d_name);
-        e->filepath = strdup(full_path);
+        e->name = psram_strdup(entry->d_name);
+        e->filepath = psram_strdup(full_path);
         if (!e->name || !e->filepath) {
             free(e->name);
             free(e->filepath);
@@ -602,15 +603,15 @@ static void *sdcard_impl_get_navigator(channel_handle_t channel)
 
 channel_handle_t sdcard_channel_create(const char *name, const char *animations_dir)
 {
-    sdcard_channel_t *ch = (sdcard_channel_t *)calloc(1, sizeof(sdcard_channel_t));
+    sdcard_channel_t *ch = (sdcard_channel_t *)psram_calloc(1, sizeof(sdcard_channel_t));
     if (!ch) {
         ESP_LOGE(TAG, "Failed to allocate channel");
         return NULL;
     }
 
     ch->base.ops = &s_sdcard_ops;
-    ch->base.name = name ? strdup(name) : strdup("SD Card");
-    ch->animations_dir = animations_dir ? strdup(animations_dir) : NULL;
+    ch->base.name = name ? psram_strdup(name) : psram_strdup("SD Card");
+    ch->animations_dir = animations_dir ? psram_strdup(animations_dir) : NULL;
     ch->base.current_order = CHANNEL_ORDER_ORIGINAL;
 
     if (!ch->base.name) {

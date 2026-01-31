@@ -5,6 +5,7 @@
 #include "vault_storage.h"
 #include "makapix_api.h"
 #include "sd_path.h"
+#include "psram_alloc.h"
 #include "esp_log.h"
 #include "cJSON.h"
 #include "mbedtls/sha256.h"
@@ -504,7 +505,7 @@ esp_err_t playlist_fetch_from_server(int32_t post_id, uint32_t pe, playlist_meta
         return ESP_ERR_INVALID_RESPONSE;
     }
 
-    playlist_metadata_t *playlist = (playlist_metadata_t *)calloc(1, sizeof(playlist_metadata_t));
+    playlist_metadata_t *playlist = (playlist_metadata_t *)psram_calloc(1, sizeof(playlist_metadata_t));
     if (!playlist) {
         if (post.artworks) free(post.artworks);
         return ESP_ERR_NO_MEM;
@@ -516,7 +517,7 @@ esp_err_t playlist_fetch_from_server(int32_t post_id, uint32_t pe, playlist_meta
     playlist->available_artworks = 0;
 
     if (post.artworks_count > 0 && post.artworks) {
-        playlist->artworks = (artwork_ref_t *)calloc(post.artworks_count, sizeof(artwork_ref_t));
+        playlist->artworks = (artwork_ref_t *)psram_calloc(post.artworks_count, sizeof(artwork_ref_t));
         if (!playlist->artworks) {
             free(playlist);
             free(post.artworks);
@@ -650,20 +651,20 @@ static esp_err_t parse_playlist_from_json(cJSON *json, playlist_metadata_t **out
     }
     
     // Allocate playlist
-    playlist_metadata_t *playlist = (playlist_metadata_t *)calloc(1, sizeof(playlist_metadata_t));
+    playlist_metadata_t *playlist = (playlist_metadata_t *)psram_calloc(1, sizeof(playlist_metadata_t));
     if (!playlist) {
         return ESP_ERR_NO_MEM;
     }
-    
+
     playlist->post_id = (int32_t)cJSON_GetNumberValue(post_id);
     playlist->total_artworks = (int32_t)cJSON_GetNumberValue(total_artworks);
-    
+
     // Parse artworks array
     cJSON *artworks = cJSON_GetObjectItem(json, "artworks");
     if (artworks && cJSON_IsArray(artworks)) {
         int artwork_count = cJSON_GetArraySize(artworks);
         if (artwork_count > 0) {
-            playlist->artworks = (artwork_ref_t *)calloc(artwork_count, sizeof(artwork_ref_t));
+            playlist->artworks = (artwork_ref_t *)psram_calloc(artwork_count, sizeof(artwork_ref_t));
             if (!playlist->artworks) {
                 free(playlist);
                 return ESP_ERR_NO_MEM;

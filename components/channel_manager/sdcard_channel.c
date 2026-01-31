@@ -3,6 +3,7 @@
 
 #include "sdcard_channel.h"
 #include "config_store.h"
+#include "psram_alloc.h"
 #include "esp_log.h"
 #include "esp_random.h"
 #include <stdlib.h>
@@ -189,7 +190,7 @@ esp_err_t sdcard_channel_refresh(const char *animations_dir)
 
     // Allocate posts array
     s_channel.capacity = file_count;
-    s_channel.posts = (sdcard_post_t *)calloc(file_count, sizeof(sdcard_post_t));
+    s_channel.posts = (sdcard_post_t *)psram_calloc(file_count, sizeof(sdcard_post_t));
     if (!s_channel.posts) {
         ESP_LOGE(TAG, "Failed to allocate posts array");
         closedir(dir);

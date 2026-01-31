@@ -3,7 +3,6 @@
 
 #include "channel_cache.h"
 #include "config_store.h"
-#include "esp_heap_caps.h"
 #include "event_bus.h"
 #include "makapix_channel_internal.h"
 #include "makapix_channel_utils.h"
@@ -19,12 +18,8 @@
 
 static const char *TAG = "channel_cache";
 
-// PSRAM-first allocation with internal RAM fallback
-static inline void *psram_malloc(size_t size) {
-    void *p = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!p) p = malloc(size);
-    return p;
-}
+// Note: psram_malloc, psram_calloc, psram_strdup are provided by psram_alloc.h
+// (included via channel_cache.h)
 
 // ============================================================================
 // Configurable Max Entries
@@ -115,8 +110,8 @@ static void ci_hash_add_entry(channel_cache_t *cache, uint32_t ci_index)
 
     const makapix_channel_entry_t *entry = &cache->entries[ci_index];
 
-    // Add to post_id hash
-    ci_post_id_node_t *pid_node = malloc(sizeof(ci_post_id_node_t));
+    // Add to post_id hash (use PSRAM to preserve internal/DMA memory)
+    ci_post_id_node_t *pid_node = psram_malloc(sizeof(ci_post_id_node_t));
     if (pid_node) {
         pid_node->post_id = entry->post_id;
         pid_node->ci_index = ci_index;
@@ -175,9 +170,9 @@ static void lai_rebuild_hash(channel_cache_t *cache)
 
     if (!cache->available_post_ids || cache->available_count == 0) return;
 
-    // Build hash from array
+    // Build hash from array (use PSRAM to preserve internal/DMA memory)
     for (size_t i = 0; i < cache->available_count; i++) {
-        lai_post_id_node_t *node = malloc(sizeof(lai_post_id_node_t));
+        lai_post_id_node_t *node = psram_malloc(sizeof(lai_post_id_node_t));
         if (node) {
             node->post_id = cache->available_post_ids[i];
             HASH_ADD_INT(cache->lai_hash, post_id, node);
@@ -796,8 +791,8 @@ bool lai_add_entry(channel_cache_t *cache, int32_t post_id)
     // Add to array
     cache->available_post_ids[cache->available_count++] = post_id;
 
-    // Add to hash
-    lai_post_id_node_t *node = malloc(sizeof(lai_post_id_node_t));
+    // Add to hash (use PSRAM to preserve internal/DMA memory)
+    lai_post_id_node_t *node = psram_malloc(sizeof(lai_post_id_node_t));
     if (node) {
         node->post_id = post_id;
         HASH_ADD_INT(cache->lai_hash, post_id, node);
@@ -1312,7 +1307,7 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
             playlist.available_artworks = 0;
 
             if (post->artworks_count > 0 && post->artworks) {
-                playlist.artworks = calloc(post->artworks_count, sizeof(artwork_ref_t));
+                playlist.artworks = psram_calloc(post->artworks_count, sizeof(artwork_ref_t));
                 if (playlist.artworks) {
                     playlist.loaded_artworks = (int32_t)post->artworks_count;
                     for (size_t ai = 0; ai < post->artworks_count; ai++) {

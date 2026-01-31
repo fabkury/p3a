@@ -4,6 +4,7 @@
 #include "makapix_api.h"
 #include "makapix_mqtt.h"
 #include "makapix_store.h"
+#include "psram_alloc.h"
 #include "cJSON.h"
 #include "esp_log.h"
 #include "esp_random.h"
@@ -364,7 +365,7 @@ static void parse_post_object(cJSON *post_obj, makapix_post_t *out_post)
         if (cJSON_IsArray(artworks)) {
             size_t count = cJSON_GetArraySize(artworks);
             if (count > 0) {
-                out_post->artworks = (makapix_artwork_t *)calloc(count, sizeof(makapix_artwork_t));
+                out_post->artworks = (makapix_artwork_t *)psram_calloc(count, sizeof(makapix_artwork_t));
                 if (out_post->artworks) {
                     out_post->artworks_count = 0;
                     for (size_t i = 0; i < count; i++) {

@@ -7,6 +7,7 @@
  */
 
 #include "makapix_internal.h"
+#include "psram_alloc.h"
 #include "esp_heap_caps.h"
 #include "mbedtls/sha256.h"
 #include "config_store.h"
@@ -1498,15 +1499,15 @@ static const channel_ops_t s_single_ops = {
 
 static __attribute__((unused)) channel_handle_t create_single_artwork_channel(const char *storage_key, const char *art_url)
 {
-    single_artwork_channel_t *ch = calloc(1, sizeof(single_artwork_channel_t));
+    single_artwork_channel_t *ch = psram_calloc(1, sizeof(single_artwork_channel_t));
     if (!ch) return NULL;
-    
+
     ch->base.ops = &s_single_ops;
     ch->base.loaded = false;
     ch->base.current_order = CHANNEL_ORDER_ORIGINAL;
     ch->base.current_filter.required_flags = CHANNEL_FILTER_FLAG_NONE;
     ch->base.current_filter.excluded_flags = CHANNEL_FILTER_FLAG_NONE;
-    ch->base.name = strdup("Artwork");
+    ch->base.name = psram_strdup("Artwork");
     
     // Build filepath from storage_key (includes extension from art_url)
     build_vault_path_from_storage_key_simple(storage_key, art_url, ch->item.filepath, sizeof(ch->item.filepath));

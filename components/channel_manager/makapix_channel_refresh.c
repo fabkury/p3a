@@ -369,8 +369,18 @@ static esp_err_t evict_for_storage_pressure(makapix_channel_t *ch, size_t min_re
 
     // Look up channel cache
     channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
-    if (!cache || !cache->entries || cache->entry_count == 0) {
-        ESP_LOGW(TAG, "No cache or entries to evict for storage pressure");
+    if (!cache) {
+        ESP_LOGW(TAG, "No cache to evict for storage pressure");
+        return ESP_OK;
+    }
+
+    // Take mutex to safely read cache fields (entries, lai_hash, available_count)
+    // This prevents race conditions with download manager's lai_add_entry
+    xSemaphoreTake(cache->mutex, portMAX_DELAY);
+
+    if (!cache->entries || cache->entry_count == 0) {
+        xSemaphoreGive(cache->mutex);
+        ESP_LOGW(TAG, "No entries to evict for storage pressure");
         return ESP_OK;
     }
 
@@ -378,14 +388,18 @@ static esp_err_t evict_for_storage_pressure(makapix_channel_t *ch, size_t min_re
     size_t downloaded_count = cache->available_count;
 
     if (downloaded_count == 0) {
+        xSemaphoreGive(cache->mutex);
         ESP_LOGW(TAG, "No files to evict for storage pressure");
         return ESP_OK;
     }
 
     makapix_channel_entry_t *downloaded = malloc(downloaded_count * sizeof(makapix_channel_entry_t));
-    if (!downloaded) return ESP_ERR_NO_MEM;
+    if (!downloaded) {
+        xSemaphoreGive(cache->mutex);
+        return ESP_ERR_NO_MEM;
+    }
 
-    // Collect entries that are in LAi (downloaded)
+    // Collect entries that are in LAi (downloaded) - must hold mutex while accessing lai_hash
     size_t di = 0;
     for (size_t i = 0; i < cache->entry_count && di < downloaded_count; i++) {
         if (cache->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
@@ -397,6 +411,18 @@ static esp_err_t evict_for_storage_pressure(makapix_channel_t *ch, size_t min_re
                 downloaded[di++] = cache->entries[i];
             }
         }
+    }
+
+    // Release mutex before file I/O operations (lai_cleanup_on_eviction takes its own mutex)
+    xSemaphoreGive(cache->mutex);
+
+    // Update downloaded_count to actual count collected (may differ if entries weren't all artworks)
+    downloaded_count = di;
+
+    if (downloaded_count == 0) {
+        free(downloaded);
+        ESP_LOGW(TAG, "No downloaded artwork files to evict for storage pressure");
+        return ESP_OK;
     }
 
     // Sort by created_at (oldest first)

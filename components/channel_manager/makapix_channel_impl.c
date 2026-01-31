@@ -11,6 +11,7 @@
 #include "config_store.h"
 #include "channel_settings.h"
 #include "channel_cache.h"
+#include "psram_alloc.h"
 #include "esp_log.h"
 #include "esp_random.h"
 #include "esp_heap_caps.h"
@@ -445,17 +446,17 @@ channel_handle_t makapix_channel_create(const char *channel_id,
         return NULL;
     }
     
-    makapix_channel_t *ch = calloc(1, sizeof(makapix_channel_t));
+    makapix_channel_t *ch = psram_calloc(1, sizeof(makapix_channel_t));
     if (!ch) {
         ESP_LOGE(TAG, "Failed to allocate channel");
         return NULL;
     }
-    
+
     ch->base.ops = &s_makapix_ops;
-    ch->base.name = name ? strdup(name) : strdup("Makapix");
-    ch->channel_id = strdup(channel_id);
-    ch->vault_path = strdup(vault_path);
-    ch->channels_path = strdup(channels_path);
+    ch->base.name = name ? psram_strdup(name) : psram_strdup("Makapix");
+    ch->channel_id = psram_strdup(channel_id);
+    ch->vault_path = psram_strdup(vault_path);
+    ch->channels_path = psram_strdup(channels_path);
     ch->base.current_order = CHANNEL_ORDER_ORIGINAL;
 
     ch->index_io_lock = xSemaphoreCreateMutex();

@@ -13,6 +13,15 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/timers.h"
+
+// Include PSRAM allocation utilities for uthash custom allocator
+#include "psram_alloc.h"
+
+// Configure uthash to use SPIRAM-preferring allocator
+// This must be defined BEFORE including uthash.h
+#define uthash_malloc(sz) psram_malloc(sz)
+#define uthash_free(ptr, sz) free(ptr)
+
 #include "uthash.h"
 
 #ifdef __cplusplus

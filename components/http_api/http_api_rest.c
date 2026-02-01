@@ -622,65 +622,78 @@ esp_err_t h_post_channel(httpd_req_t *req) {
 
 /**
  * GET /channel
- * Get current channel information
- * Returns: {"ok": true, "data": {"channel_name": "all"|"promoted"|"sdcard"|"other"}}
+ * Get current channel/playset information
+ * Returns: {"ok": true, "data": {"playset": "channel_recent"|"channel_promoted"|"channel_sdcard"|"followed_artists"|...}}
+ *
+ * For backwards compatibility, also includes "channel_name" mapped from playset.
  */
 esp_err_t h_get_channel(httpd_req_t *req) {
+    // Get the active playset name (primary source of truth)
+    const char *playset = p3a_state_get_active_playset();
+
+    // For backwards compatibility, also get channel info
     p3a_channel_info_t channel_info;
     esp_err_t err = p3a_state_get_channel_info(&channel_info);
-    
-    if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to get channel info\",\"code\":\"GET_CHANNEL_FAILED\"}");
-        return ESP_OK;
-    }
-    
-    // Map channel type to channel_name string for Web UI
+
+    // Map playset to channel_name for backwards compatibility
     const char *channel_name = "other";
-    switch (channel_info.type) {
-        case P3A_CHANNEL_SDCARD:
-            channel_name = "sdcard";
-            break;
-        case P3A_CHANNEL_MAKAPIX_ALL:
+    if (playset && playset[0] != '\0') {
+        if (strcmp(playset, "channel_recent") == 0) {
             channel_name = "all";
-            break;
-        case P3A_CHANNEL_MAKAPIX_PROMOTED:
+        } else if (strcmp(playset, "channel_promoted") == 0) {
             channel_name = "promoted";
-            break;
-        case P3A_CHANNEL_MAKAPIX_USER:
-        case P3A_CHANNEL_MAKAPIX_BY_USER:
-        case P3A_CHANNEL_MAKAPIX_HASHTAG:
-        case P3A_CHANNEL_MAKAPIX_ARTWORK:
-        default:
-            channel_name = "other";
-            break;
+        } else if (strcmp(playset, "channel_sdcard") == 0) {
+            channel_name = "sdcard";
+        } else if (strcmp(playset, "followed_artists") == 0) {
+            channel_name = "followed_artists";
+        }
+    } else if (err == ESP_OK) {
+        // Fallback to channel type if no playset set (legacy)
+        switch (channel_info.type) {
+            case P3A_CHANNEL_SDCARD:
+                channel_name = "sdcard";
+                break;
+            case P3A_CHANNEL_MAKAPIX_ALL:
+                channel_name = "all";
+                break;
+            case P3A_CHANNEL_MAKAPIX_PROMOTED:
+                channel_name = "promoted";
+                break;
+            default:
+                channel_name = "other";
+                break;
+        }
     }
-    
+
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
-    
+
     cJSON_AddBoolToObject(root, "ok", true);
-    
+
     cJSON *data = cJSON_CreateObject();
     if (!data) {
         cJSON_Delete(root);
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
-    
+
+    // Primary: playset name
+    cJSON_AddStringToObject(data, "playset", playset ? playset : "");
+    // Backwards compatibility: channel_name
     cJSON_AddStringToObject(data, "channel_name", channel_name);
     cJSON_AddItemToObject(root, "data", data);
-    
+
     char *out = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
-    
+
     if (!out) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
-    
+
     send_json(req, 200, out);
     free(out);
     return ESP_OK;
@@ -1087,9 +1100,11 @@ esp_err_t h_post_rotation(httpd_req_t *req) {
  * Load and execute a named playset
  *
  * Flow:
- * 1. If MQTT connected: fetch from server, save to SD, execute
- * 2. If not connected: load from SD cache if exists
- * 3. Execute via play_scheduler_execute_command()
+ * 1. Check if it's a built-in playset (channel_recent, channel_promoted, channel_sdcard)
+ * 2. If MQTT connected: fetch from server, save to SD, execute
+ * 3. If not connected: load from SD cache if exists
+ * 4. Execute via play_scheduler_execute_command()
+ * 5. Persist playset name to NVS for boot restore
  */
 esp_err_t h_post_playset(httpd_req_t *req)
 {
@@ -1123,44 +1138,54 @@ esp_err_t h_post_playset(httpd_req_t *req)
 
     esp_err_t err;
     bool from_cache = false;
+    bool is_builtin = false;
 
-    // Try to fetch from server if MQTT is connected
-    if (makapix_mqtt_is_connected()) {
-        err = makapix_api_get_playset(name, command);
-        if (err == ESP_OK) {
-            // Save to cache for offline use
-            esp_err_t save_err = playset_store_save(name, command);
-            if (save_err != ESP_OK) {
-                ESP_LOGW("http_api", "Failed to cache playset '%s': %s", name, esp_err_to_name(save_err));
+    // Check for built-in playsets first (no server fetch needed)
+    err = ps_create_channel_playset(name, command);
+    if (err == ESP_OK) {
+        is_builtin = true;
+        ESP_LOGI("http_api", "Using built-in playset: %s", name);
+    } else {
+        // Not a built-in playset - try server or cache
+
+        // Try to fetch from server if MQTT is connected
+        if (makapix_mqtt_is_connected()) {
+            err = makapix_api_get_playset(name, command);
+            if (err == ESP_OK) {
+                // Save to cache for offline use
+                esp_err_t save_err = playset_store_save(name, command);
+                if (save_err != ESP_OK) {
+                    ESP_LOGW("http_api", "Failed to cache playset '%s': %s", name, esp_err_to_name(save_err));
+                }
+            } else if (err == ESP_ERR_TIMEOUT) {
+                free(command);
+                send_json(req, 504, "{\"ok\":false,\"error\":\"Request timed out\",\"code\":\"MQTT_TIMEOUT\"}");
+                return ESP_OK;
+            } else {
+                // Server error or playset not found - try cache as fallback
+                err = playset_store_load(name, command);
+                if (err == ESP_OK) {
+                    from_cache = true;
+                } else {
+                    free(command);
+                    send_json(req, 404, "{\"ok\":false,\"error\":\"Playset not found\",\"code\":\"PLAYSET_NOT_FOUND\"}");
+                    return ESP_OK;
+                }
             }
-        } else if (err == ESP_ERR_TIMEOUT) {
-            free(command);
-            send_json(req, 504, "{\"ok\":false,\"error\":\"Request timed out\",\"code\":\"MQTT_TIMEOUT\"}");
-            return ESP_OK;
         } else {
-            // Server error or playset not found - try cache as fallback
+            // MQTT not connected - try loading from cache
             err = playset_store_load(name, command);
             if (err == ESP_OK) {
                 from_cache = true;
+            } else if (err == ESP_ERR_NOT_FOUND) {
+                free(command);
+                send_json(req, 503, "{\"ok\":false,\"error\":\"Not connected and no cached playset\",\"code\":\"NOT_CONNECTED\"}");
+                return ESP_OK;
             } else {
                 free(command);
-                send_json(req, 404, "{\"ok\":false,\"error\":\"Playset not found\",\"code\":\"PLAYSET_NOT_FOUND\"}");
+                send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to load cached playset\",\"code\":\"CACHE_ERROR\"}");
                 return ESP_OK;
             }
-        }
-    } else {
-        // MQTT not connected - try loading from cache
-        err = playset_store_load(name, command);
-        if (err == ESP_OK) {
-            from_cache = true;
-        } else if (err == ESP_ERR_NOT_FOUND) {
-            free(command);
-            send_json(req, 503, "{\"ok\":false,\"error\":\"Not connected and no cached playset\",\"code\":\"NOT_CONNECTED\"}");
-            return ESP_OK;
-        } else {
-            free(command);
-            send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to load cached playset\",\"code\":\"CACHE_ERROR\"}");
-            return ESP_OK;
         }
     }
 
@@ -1176,6 +1201,12 @@ esp_err_t h_post_playset(httpd_req_t *req)
         return ESP_OK;
     }
 
+    // Persist playset name to NVS for boot restore
+    esp_err_t persist_err = p3a_state_set_active_playset(name);
+    if (persist_err != ESP_OK) {
+        ESP_LOGW("http_api", "Failed to persist playset name: %s", esp_err_to_name(persist_err));
+    }
+
     // Build response
     cJSON *root = cJSON_CreateObject();
     if (!root) {
@@ -1188,6 +1219,7 @@ esp_err_t h_post_playset(httpd_req_t *req)
     cJSON_AddStringToObject(root, "playset", name);
     cJSON_AddNumberToObject(root, "channel_count", (double)command->channel_count);
     cJSON_AddBoolToObject(root, "from_cache", from_cache);
+    cJSON_AddBoolToObject(root, "builtin", is_builtin);
 
     char *out = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);

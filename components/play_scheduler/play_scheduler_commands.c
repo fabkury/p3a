@@ -521,6 +521,41 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
 }
 
 // ============================================================================
+// Built-in Playset Creation
+// ============================================================================
+
+esp_err_t ps_create_channel_playset(const char *playset_name, ps_scheduler_command_t *out_cmd)
+{
+    if (!playset_name || !out_cmd) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memset(out_cmd, 0, sizeof(*out_cmd));
+    out_cmd->channel_count = 1;
+    out_cmd->exposure_mode = PS_EXPOSURE_EQUAL;
+    out_cmd->pick_mode = (config_store_get_play_order() == 2) ? PS_PICK_RANDOM : PS_PICK_RECENCY;
+
+    if (strcmp(playset_name, "channel_recent") == 0) {
+        out_cmd->channels[0].type = PS_CHANNEL_TYPE_NAMED;
+        strlcpy(out_cmd->channels[0].name, "all", sizeof(out_cmd->channels[0].name));
+        out_cmd->channels[0].weight = 1;
+        return ESP_OK;
+    } else if (strcmp(playset_name, "channel_promoted") == 0) {
+        out_cmd->channels[0].type = PS_CHANNEL_TYPE_NAMED;
+        strlcpy(out_cmd->channels[0].name, "promoted", sizeof(out_cmd->channels[0].name));
+        out_cmd->channels[0].weight = 1;
+        return ESP_OK;
+    } else if (strcmp(playset_name, "channel_sdcard") == 0) {
+        out_cmd->channels[0].type = PS_CHANNEL_TYPE_SDCARD;
+        strlcpy(out_cmd->channels[0].name, "sdcard", sizeof(out_cmd->channels[0].name));
+        out_cmd->channels[0].weight = 1;
+        return ESP_OK;
+    }
+
+    return ESP_ERR_NOT_FOUND;  // Not a built-in playset
+}
+
+// ============================================================================
 // Convenience Functions
 // ============================================================================
 

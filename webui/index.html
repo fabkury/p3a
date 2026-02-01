@@ -319,10 +319,10 @@ body {
 </div>
 <div class="controls" style="margin-top: 0;">
     <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
-        <button class="channel-btn" id="ch-all" onclick="switchChannel('all')">Recent Artworks <span id="cache-all" class="cache-badge"></span></button>
-        <button class="channel-btn" id="ch-promoted" onclick="switchChannel('promoted')">Promoted <span id="cache-promoted" class="cache-badge"></span></button>
-        <button class="channel-btn" id="ch-followed" onclick="playPlayset('followed_artists')">Followed Artists</button>
-        <button class="channel-btn" id="ch-sdcard" onclick="switchChannel('sdcard')">SD Card</button>
+        <button class="channel-btn" id="ch-channel_recent" onclick="playPlayset('channel_recent')">Recent Artworks <span id="cache-all" class="cache-badge"></span></button>
+        <button class="channel-btn" id="ch-channel_promoted" onclick="playPlayset('channel_promoted')">Promoted <span id="cache-promoted" class="cache-badge"></span></button>
+        <button class="channel-btn" id="ch-followed_artists" onclick="playPlayset('followed_artists')">Followed Artists</button>
+        <button class="channel-btn" id="ch-channel_sdcard" onclick="playPlayset('channel_sdcard')">SD Card</button>
     </div>
     <div class="shuffle-row">
         <span class="shuffle-label">Shuffle</span>
@@ -456,34 +456,15 @@ function sendCommand(action) {
     };
     xhr.send('{}');
 }
+// switchChannel() is deprecated - all buttons now use playPlayset()
+// Keeping for backwards compatibility with external scripts
 function switchChannel(channel) {
-    console.log('Switching to channel:', channel);
-    var status = document.getElementById('status');
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/channel', true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            try {
-                var result = JSON.parse(xhr.responseText);
-                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
-                    var channelName = channel === 'all' ? 'Recent Artworks' : (channel === 'promoted' ? 'Promoted' : 'SD Card');
-                    status.textContent = 'Switched to ' + channelName;
-                    status.className = 'status success';
-                    updateSelectedChannel(channel);
-                } else {
-                    status.textContent = 'Channel switch failed: ' + (result.error || 'HTTP ' + xhr.status);
-                    status.className = 'status error';
-                }
-            } catch (e) {
-                status.textContent = 'Parse error: ' + e.message;
-                status.className = 'status error';
-            }
-            status.style.display = 'block';
-            setTimeout(function() { status.style.display = 'none'; }, 6000);
-        }
-    };
-    xhr.send(JSON.stringify({channel_name: channel}));
+    // Map legacy channel names to playset names
+    var playset = channel;
+    if (channel === 'all') playset = 'channel_recent';
+    else if (channel === 'promoted') playset = 'channel_promoted';
+    else if (channel === 'sdcard') playset = 'channel_sdcard';
+    playPlayset(playset);
 }
 function playPlayset(name) {
     console.log('Playing playset:', name);
@@ -496,7 +477,12 @@ function playPlayset(name) {
             try {
                 var result = JSON.parse(xhr.responseText);
                 if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
-                    var displayName = name === 'followed_artists' ? 'Followed Artists' : name;
+                    // Map playset names to friendly display names
+                    var displayName = name;
+                    if (name === 'channel_recent') displayName = 'Recent Artworks';
+                    else if (name === 'channel_promoted') displayName = 'Promoted';
+                    else if (name === 'channel_sdcard') displayName = 'SD Card';
+                    else if (name === 'followed_artists') displayName = 'Followed Artists';
                     status.textContent = 'Switched to ' + displayName;
                     status.className = 'status success';
                     updateSelectedChannel(name);
@@ -749,9 +735,9 @@ function loadChannelStats(attempt) {
             if (resp.ok && resp.data) {
                 var allEl = document.getElementById('cache-all');
                 var promEl = document.getElementById('cache-promoted');
-                var allBtn = document.getElementById('ch-all');
-                var promBtn = document.getElementById('ch-promoted');
-                var followedBtn = document.getElementById('ch-followed');
+                var recentBtn = document.getElementById('ch-channel_recent');
+                var promBtn = document.getElementById('ch-channel_promoted');
+                var followedBtn = document.getElementById('ch-followed_artists');
                 var registered = resp.data.registered === true;
                 if (allEl && resp.data.all) {
                     allEl.textContent = resp.data.all.cached + '/' + resp.data.all.total;
@@ -759,7 +745,7 @@ function loadChannelStats(attempt) {
                 if (promEl && resp.data.promoted) {
                     promEl.textContent = resp.data.promoted.cached + '/' + resp.data.promoted.total;
                 }
-                if (allBtn) allBtn.disabled = !registered;
+                if (recentBtn) recentBtn.disabled = !registered;
                 if (promBtn) promBtn.disabled = !registered;
                 if (followedBtn) followedBtn.disabled = !registered;
             }
@@ -767,22 +753,19 @@ function loadChannelStats(attempt) {
     };
     xhr.send();
 }
-function updateSelectedChannel(channelName) {
+function updateSelectedChannel(playsetOrChannel) {
     var buttons = document.querySelectorAll('.channel-btn');
     buttons.forEach(function(btn) { btn.classList.remove('selected'); });
-    if (channelName === 'all') {
-        var allBtn = document.getElementById('ch-all');
-        if (allBtn) allBtn.classList.add('selected');
-    } else if (channelName === 'promoted') {
-        var promBtn = document.getElementById('ch-promoted');
-        if (promBtn) promBtn.classList.add('selected');
-    } else if (channelName === 'followed_artists') {
-        var followedBtn = document.getElementById('ch-followed');
-        if (followedBtn) followedBtn.classList.add('selected');
-    } else if (channelName === 'sdcard') {
-        var sdBtn = document.getElementById('ch-sdcard');
-        if (sdBtn) sdBtn.classList.add('selected');
-    }
+
+    // Map legacy channel names to playset names for backwards compatibility
+    var playset = playsetOrChannel;
+    if (playsetOrChannel === 'all') playset = 'channel_recent';
+    else if (playsetOrChannel === 'promoted') playset = 'channel_promoted';
+    else if (playsetOrChannel === 'sdcard') playset = 'channel_sdcard';
+
+    // Find button by playset name
+    var btn = document.getElementById('ch-' + playset);
+    if (btn) btn.classList.add('selected');
 }
 function loadCurrentChannel() {
     var xhr = new XMLHttpRequest();
@@ -792,8 +775,12 @@ function loadCurrentChannel() {
         if (xhr.readyState === 4 && xhr.status === 200) {
             try {
                 var resp = JSON.parse(xhr.responseText);
-                if (resp.ok && resp.data && resp.data.channel_name) {
-                    updateSelectedChannel(resp.data.channel_name);
+                if (resp.ok && resp.data) {
+                    // Prefer playset name, fall back to channel_name for backwards compatibility
+                    var selected = resp.data.playset || resp.data.channel_name;
+                    if (selected) {
+                        updateSelectedChannel(selected);
+                    }
                 }
             } catch (e) {
                 console.log('Failed to parse channel response:', e);

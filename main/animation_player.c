@@ -5,6 +5,7 @@
 #include "esp_heap_caps.h"
 #include "sd_path.h"
 #include "play_scheduler.h"
+#include "playset_store.h"
 #include "sdcard_channel_impl.h"
 #include "playlist_manager.h"
 #include "content_cache.h"
@@ -231,22 +232,39 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     free(found_animations_dir);
     found_animations_dir = NULL;
 
-    // Determine boot channel: restore from NVS or default to "promoted"
-    const char *boot_channel = "promoted";  // Default
-    p3a_channel_info_t saved = {0};
+    // Determine boot playset: restore from NVS or default to "channel_recent"
+    const char *active_playset = p3a_state_get_active_playset();
+    const char *boot_channel = "all";  // Default display name mapping
 
-    if (p3a_state_get_channel_info(&saved) == ESP_OK) {
-        if (saved.type == P3A_CHANNEL_MAKAPIX_ALL) {
+    // Map playset to boot_channel for display name purposes
+    if (active_playset && active_playset[0] != '\0') {
+        if (strcmp(active_playset, "channel_recent") == 0) {
             boot_channel = "all";
-        } else if (saved.type == P3A_CHANNEL_MAKAPIX_PROMOTED) {
+        } else if (strcmp(active_playset, "channel_promoted") == 0) {
             boot_channel = "promoted";
-        } else if (saved.type == P3A_CHANNEL_SDCARD) {
+        } else if (strcmp(active_playset, "channel_sdcard") == 0) {
             boot_channel = "sdcard";
+        } else if (strcmp(active_playset, "followed_artists") == 0) {
+            boot_channel = "followed";  // Display "Followed Artists"
+        } else {
+            // Custom playset - use generic name
+            boot_channel = "channel";
         }
-        // Note: user/hashtag channels use default "promoted" for now
+        ESP_LOGI(TAG, "Boot playset: %s (display: %s)", active_playset, boot_channel);
+    } else {
+        // Fallback: check legacy channel info from p3a_state
+        p3a_channel_info_t saved = {0};
+        if (p3a_state_get_channel_info(&saved) == ESP_OK) {
+            if (saved.type == P3A_CHANNEL_MAKAPIX_ALL) {
+                boot_channel = "all";
+            } else if (saved.type == P3A_CHANNEL_MAKAPIX_PROMOTED) {
+                boot_channel = "promoted";
+            } else if (saved.type == P3A_CHANNEL_SDCARD) {
+                boot_channel = "sdcard";
+            }
+        }
+        ESP_LOGI(TAG, "Boot channel (legacy): %s", boot_channel);
     }
-
-    ESP_LOGI(TAG, "Boot channel: %s", boot_channel);
 
     s_buffer_mutex = xSemaphoreCreateMutex();
     if (!s_buffer_mutex) {
@@ -305,10 +323,12 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
             snprintf(display_name, sizeof(display_name), "All Artworks");
         } else if (strcmp(boot_channel, "promoted") == 0) {
             snprintf(display_name, sizeof(display_name), "Promoted");
+        } else if (strcmp(boot_channel, "followed") == 0) {
+            snprintf(display_name, sizeof(display_name), "Followed Artists");
         } else {
             snprintf(display_name, sizeof(display_name), "%s", boot_channel);
         }
-        
+
         if (strcmp(boot_channel, "sdcard") == 0) {
             // SD card boot: show hint for provisioning if no local files
             p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_LOADING, -1,
@@ -344,14 +364,56 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         return ESP_FAIL;
     }
 
-    // Start playback via play_scheduler.
-    // play_scheduler_play_named_channel() will:
-    // 1. Load the channel cache
-    // 2. Call play_scheduler_next() which triggers animation_player_request_swap()
-    esp_err_t ps_err = play_scheduler_play_named_channel(boot_channel);
+    // Start playback via play_scheduler using saved playset.
+    // This will:
+    // 1. Create/load the playset (built-in or from cache)
+    // 2. Execute the scheduler command
+    // 3. Call play_scheduler_next() which triggers animation_player_request_swap()
+    esp_err_t ps_err = ESP_FAIL;
+
+    // Heap allocate command struct (~9KB)
+    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
+    if (cmd) {
+        if (active_playset && active_playset[0] != '\0') {
+            // Try built-in playset first
+            ps_err = ps_create_channel_playset(active_playset, cmd);
+            if (ps_err == ESP_OK) {
+                ESP_LOGI(TAG, "Restoring built-in playset: %s", active_playset);
+                ps_err = play_scheduler_execute_command(cmd);
+            } else {
+                // Not a built-in - try loading from cache (for server playsets like followed_artists)
+                ps_err = playset_store_load(active_playset, cmd);
+                if (ps_err == ESP_OK) {
+                    ESP_LOGI(TAG, "Restoring cached playset: %s", active_playset);
+                    ps_err = play_scheduler_execute_command(cmd);
+                } else {
+                    ESP_LOGW(TAG, "Failed to load playset '%s': %s, falling back to default",
+                             active_playset, esp_err_to_name(ps_err));
+                }
+            }
+        }
+
+        // If playset restore failed, fall back to channel_recent (all)
+        if (ps_err != ESP_OK) {
+            ESP_LOGI(TAG, "Falling back to default playset: channel_recent");
+            ps_err = ps_create_channel_playset("channel_recent", cmd);
+            if (ps_err == ESP_OK) {
+                ps_err = play_scheduler_execute_command(cmd);
+                // Update NVS to reflect the fallback
+                p3a_state_set_active_playset("channel_recent");
+            }
+        }
+
+        free(cmd);
+    } else {
+        ESP_LOGE(TAG, "Failed to allocate playset command struct");
+        // Last resort fallback using legacy API
+        ps_err = play_scheduler_play_named_channel("all");
+    }
+
     if (ps_err != ESP_OK) {
-        ESP_LOGW(TAG, "play_scheduler_play_named_channel('%s') failed: %s (may need downloads)",
-                 boot_channel, esp_err_to_name(ps_err));
+        ESP_LOGW(TAG, "Playset restore failed: %s (may need downloads)",
+                 esp_err_to_name(ps_err));
         // Non-fatal - loading message is shown, playback will start once files are available
     }
 

@@ -44,9 +44,10 @@ static const char *s_connectivity_detail_messages[] = {
 
 // NVS storage
 #define NVS_NAMESPACE "p3a_state"
-#define NVS_KEY_CHANNEL_TYPE "ch_type"
-#define NVS_KEY_CHANNEL_IDENT "ch_ident"
+#define NVS_KEY_CHANNEL_TYPE "ch_type"      // Deprecated: use playset instead
+#define NVS_KEY_CHANNEL_IDENT "ch_ident"    // Deprecated: use playset instead
 #define NVS_KEY_LAST_STATE "last_state"
+#define NVS_KEY_ACTIVE_PLAYSET "playset"    // Active playset name (e.g., "channel_recent")
 
 // Connectivity configuration
 #define INTERNET_CHECK_INTERVAL_MS 60000
@@ -74,12 +75,15 @@ typedef struct {
 
     // App-level status (legacy app_state)
     p3a_app_status_t app_status;
-    
+
     // Sub-states
     p3a_playback_substate_t playback_substate;
     p3a_provisioning_substate_t provisioning_substate;
     p3a_ota_substate_t ota_substate;
-    
+
+    // Active playset name (persisted to NVS)
+    char active_playset[P3A_PLAYSET_MAX_NAME_LEN + 1];
+
     // Channel info
     p3a_channel_info_t current_channel;
     
@@ -359,7 +363,7 @@ esp_err_t p3a_state_persist_channel(void)
 esp_err_t p3a_state_load_channel(p3a_channel_info_t *out_info)
 {
     if (!out_info) return ESP_ERR_INVALID_ARG;
-    
+
     nvs_handle_t handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
     if (err != ESP_OK) {
@@ -371,7 +375,7 @@ esp_err_t p3a_state_load_channel(p3a_channel_info_t *out_info)
         update_channel_display_name(out_info);
         return ESP_OK;
     }
-    
+
     char type_str[32] = {0};
     size_t len = sizeof(type_str);
     err = nvs_get_str(handle, NVS_KEY_CHANNEL_TYPE, type_str, &len);
@@ -380,8 +384,8 @@ esp_err_t p3a_state_load_channel(p3a_channel_info_t *out_info)
     } else {
         out_info->type = P3A_CHANNEL_SDCARD;
     }
-    
-    if (out_info->type == P3A_CHANNEL_MAKAPIX_BY_USER || 
+
+    if (out_info->type == P3A_CHANNEL_MAKAPIX_BY_USER ||
         out_info->type == P3A_CHANNEL_MAKAPIX_HASHTAG) {
         len = sizeof(out_info->identifier);
         err = nvs_get_str(handle, NVS_KEY_CHANNEL_IDENT, out_info->identifier, &len);
@@ -393,14 +397,82 @@ esp_err_t p3a_state_load_channel(p3a_channel_info_t *out_info)
     } else {
         memset(out_info->identifier, 0, sizeof(out_info->identifier));
     }
-    
+
     memset(out_info->storage_key, 0, sizeof(out_info->storage_key));
     update_channel_display_name(out_info);
-    
+
     nvs_close(handle);
-    
+
     ESP_LOGI(TAG, "Loaded channel: %s", out_info->display_name);
     return ESP_OK;
+}
+
+// ============================================================================
+// Playset Persistence (new)
+// ============================================================================
+
+esp_err_t p3a_state_set_active_playset(const char *name)
+{
+    if (!s_state.initialized || !s_state.mutex) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!name) {
+        name = "";  // Allow clearing the playset
+    }
+
+    // Validate name length
+    size_t name_len = strlen(name);
+    if (name_len > P3A_PLAYSET_MAX_NAME_LEN) {
+        ESP_LOGW(TAG, "Playset name too long: %zu (max %d)", name_len, P3A_PLAYSET_MAX_NAME_LEN);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Update in-memory state
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    strlcpy(s_state.active_playset, name, sizeof(s_state.active_playset));
+    xSemaphoreGive(s_state.mutex);
+
+    // Persist to NVS
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to open NVS for writing playset: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    if (name_len > 0) {
+        err = nvs_set_str(handle, NVS_KEY_ACTIVE_PLAYSET, name);
+    } else {
+        // Clear the key if name is empty
+        err = nvs_erase_key(handle, NVS_KEY_ACTIVE_PLAYSET);
+        if (err == ESP_ERR_NVS_NOT_FOUND) {
+            err = ESP_OK;  // Key didn't exist, that's fine
+        }
+    }
+
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Persisted active playset: '%s'", name);
+    } else {
+        ESP_LOGW(TAG, "Failed to persist playset: %s", esp_err_to_name(err));
+    }
+
+    return err;
+}
+
+const char *p3a_state_get_active_playset(void)
+{
+    if (!s_state.initialized) {
+        return "";
+    }
+
+    // Return pointer to internal buffer (thread-safe for reading)
+    return s_state.active_playset;
 }
 
 // ============================================================================
@@ -426,8 +498,22 @@ esp_err_t p3a_state_init(void)
     if (conn_err != ESP_OK) {
         ESP_LOGW(TAG, "Connectivity init failed: %s", esp_err_to_name(conn_err));
     }
-    
-    // Load persisted channel
+
+    // Load persisted playset from NVS
+    memset(s_state.active_playset, 0, sizeof(s_state.active_playset));
+    nvs_handle_t handle;
+    esp_err_t nvs_err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (nvs_err == ESP_OK) {
+        size_t len = sizeof(s_state.active_playset);
+        nvs_err = nvs_get_str(handle, NVS_KEY_ACTIVE_PLAYSET, s_state.active_playset, &len);
+        if (nvs_err != ESP_OK && nvs_err != ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGW(TAG, "Failed to load playset from NVS: %s", esp_err_to_name(nvs_err));
+        }
+        nvs_close(handle);
+    }
+    ESP_LOGI(TAG, "Loaded active playset: '%s'", s_state.active_playset);
+
+    // Load persisted channel (legacy, for backwards compatibility)
     p3a_state_load_channel(&s_state.current_channel);
     
     // Initialize to animation playback state with "Starting..." message

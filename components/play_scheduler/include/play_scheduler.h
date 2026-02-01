@@ -74,6 +74,22 @@ void play_scheduler_deinit(void);
 esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command);
 
 /**
+ * @brief Create a built-in single-channel playset
+ *
+ * Generates a scheduler command for built-in playset names:
+ * - "channel_recent": Single channel with "all" (Recent Artworks)
+ * - "channel_promoted": Single channel with "promoted"
+ * - "channel_sdcard": Single channel with sdcard
+ *
+ * These playsets are created locally without requiring server fetch.
+ *
+ * @param playset_name Name of the built-in playset
+ * @param out_cmd Output scheduler command (caller must allocate)
+ * @return ESP_OK if playset was created, ESP_ERR_NOT_FOUND if not a built-in playset
+ */
+esp_err_t ps_create_channel_playset(const char *playset_name, ps_scheduler_command_t *out_cmd);
+
+/**
  * @brief Convenience: Play a single named channel
  *
  * Creates a command with one channel in EqE mode with RecencyPick.

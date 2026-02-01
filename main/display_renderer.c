@@ -646,7 +646,21 @@ void display_render_task(void *arg)
         g_last_display_buffer = (uint8_t)back_buffer_idx;
 
         if (use_triple_buffering && !ui_mode) {
-            // Triple buffering: mark buffer as pending and track submission
+            // Check if there's already a pending buffer - if so, wait for VSYNC
+            bool has_pending = false;
+            for (int i = 0; i < g_display_buffer_count; i++) {
+                if (g_buffer_info[i].state == BUFFER_STATE_PENDING) {
+                    has_pending = true;
+                    break;
+                }
+            }
+
+            if (has_pending) {
+                // Wait for VSYNC to promote the pending buffer to displaying
+                xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
+            }
+
+            // Now safe to submit - at most 1 buffer will be PENDING
             g_buffer_info[back_buffer_idx].state = BUFFER_STATE_PENDING;
             g_last_submitted_idx = back_buffer_idx;
         } else {
@@ -660,8 +674,8 @@ void display_render_task(void *arg)
         // 7. Post-submit handling
         // ================================================================
         if (use_triple_buffering && !ui_mode) {
-            // Triple buffering: yield and continue immediately (don't block on VSYNC)
-            taskYIELD();
+            // Clear any VSYNC signal that arrived during our submission
+            xSemaphoreTake(g_display_vsync_sem, 0);
         } else {
             // Legacy 2-buffer mode: wait for VSYNC
 #if CONFIG_P3A_DISPLAY_WAIT_AFTER_DRAW

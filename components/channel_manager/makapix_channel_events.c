@@ -460,9 +460,7 @@ void makapix_channel_signal_refresh_immediate(void)
 {
     if (!s_mqtt_event_group) {
         return false;
-    }
-
-    // Get current bits and clear the immediate flag atomically
+    }    // Get current bits and clear the immediate flag atomically
     EventBits_t bits = xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_REFRESH_IMMEDIATE);
     return (bits & MAKAPIX_EVENT_REFRESH_IMMEDIATE) != 0;
 }

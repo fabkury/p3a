@@ -50,19 +50,25 @@ esp_err_t p3a_board_display_init(void)
     }
 #endif
 
-    // Get framebuffers from DPI panel
-#if P3A_DISPLAY_BUFFERS == 1
-    err = esp_lcd_dpi_panel_get_frame_buffer(s_panel, 1, (void **)&s_buffers[0]);
-#elif P3A_DISPLAY_BUFFERS == 2
-    err = esp_lcd_dpi_panel_get_frame_buffer(s_panel, 2, 
-                                              (void **)&s_buffers[0], 
-                                              (void **)&s_buffers[1]);
-#else
-    err = esp_lcd_dpi_panel_get_frame_buffer(s_panel, 3,
-                                              (void **)&s_buffers[0],
-                                              (void **)&s_buffers[1],
-                                              (void **)&s_buffers[2]);
-#endif
+    // Get framebuffers from DPI panel (variadic API requires compile-time switch)
+    switch (P3A_DISPLAY_BUFFERS) {
+        case 1:
+            err = esp_lcd_dpi_panel_get_frame_buffer(s_panel, 1,
+                (void **)&s_buffers[0]);
+            break;
+        case 2:
+            err = esp_lcd_dpi_panel_get_frame_buffer(s_panel, 2,
+                (void **)&s_buffers[0], (void **)&s_buffers[1]);
+            break;
+        case 3:
+            err = esp_lcd_dpi_panel_get_frame_buffer(s_panel, 3,
+                (void **)&s_buffers[0], (void **)&s_buffers[1],
+                (void **)&s_buffers[2]);
+            break;
+        default:
+            ESP_LOGE(TAG, "Unsupported buffer count: %d", P3A_DISPLAY_BUFFERS);
+            return ESP_ERR_NOT_SUPPORTED;
+    }
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to get framebuffers: %s", esp_err_to_name(err));
         return err;

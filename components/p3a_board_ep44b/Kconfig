@@ -24,13 +24,6 @@ menu "P3A Board Configuration (EP44B)"
     config BSP_LCD_COLOR_FORMAT_RGB565
         default y if P3A_PIXEL_FORMAT_RGB565
 
-    config P3A_DISPLAY_BUFFER_COUNT
-        int "Number of display buffers"
-        default 2
-        range 1 3
-        help
-            Number of framebuffers for display. 2 enables double-buffering.
-
     # ============ BOARD CAPABILITIES ============
     # These define what hardware features are available
 

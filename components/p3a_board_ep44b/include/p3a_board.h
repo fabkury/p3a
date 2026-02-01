@@ -52,8 +52,8 @@ extern "C" {
 #define P3A_PIXEL_RGB565        1
 #endif
 
-/** Number of display framebuffers */
-#define P3A_DISPLAY_BUFFERS     CONFIG_P3A_DISPLAY_BUFFER_COUNT
+/** Number of display framebuffers (from BSP config) */
+#define P3A_DISPLAY_BUFFERS     CONFIG_BSP_LCD_DPI_BUFFER_NUMS
 
 /** Row stride in bytes (may be >= width * bpp/8 due to alignment) */
 #define P3A_ROW_STRIDE          (P3A_DISPLAY_WIDTH * P3A_DISPLAY_BPP / 8)

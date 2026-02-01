@@ -101,7 +101,7 @@ extern volatile bool g_upscale_worker_bottom_done;
 extern uint8_t g_render_buffer_index;
 extern uint8_t g_last_display_buffer;
 
-// Triple buffering state tracking
+// Multi-buffering state tracking (supports 3+ buffers)
 typedef enum {
     BUFFER_STATE_FREE,       // Safe to write
     BUFFER_STATE_RENDERING,  // Being rendered to
@@ -113,7 +113,10 @@ typedef struct {
     volatile buffer_state_t state;
 } buffer_info_t;
 
-extern buffer_info_t g_buffer_info[3];
+// Maximum supported buffer count (actual count set via CONFIG_BSP_LCD_DPI_BUFFER_NUMS)
+#define P3A_MAX_DISPLAY_BUFFERS 3
+
+extern buffer_info_t g_buffer_info[P3A_MAX_DISPLAY_BUFFERS];
 extern volatile int8_t g_displaying_idx;
 extern volatile int8_t g_last_submitted_idx;
 extern SemaphoreHandle_t g_buffer_free_sem;

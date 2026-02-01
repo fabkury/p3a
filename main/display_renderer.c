@@ -65,8 +65,8 @@ volatile bool g_upscale_worker_bottom_done = false;
 uint8_t g_render_buffer_index = 0;
 uint8_t g_last_display_buffer = 0;
 
-// Triple buffering state tracking
-buffer_info_t g_buffer_info[3] = {
+// Multi-buffering state tracking (supports up to 3 buffers)
+buffer_info_t g_buffer_info[P3A_MAX_DISPLAY_BUFFERS] = {
     { .state = BUFFER_STATE_FREE },
     { .state = BUFFER_STATE_FREE },
     { .state = BUFFER_STATE_FREE }
@@ -114,7 +114,7 @@ esp_err_t display_renderer_init(esp_lcd_panel_handle_t panel,
     g_display_row_stride = row_stride;
 
     // Initialize buffer state tracking
-    for (int i = 0; i < buffer_count && i < 3; i++) {
+    for (int i = 0; i < buffer_count && i < P3A_MAX_DISPLAY_BUFFERS; i++) {
         g_buffer_info[i].state = BUFFER_STATE_FREE;
     }
     g_displaying_idx = -1;
@@ -235,7 +235,7 @@ void display_renderer_deinit(void)
         vSemaphoreDelete(g_buffer_free_sem);
         g_buffer_free_sem = NULL;
     }
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < P3A_MAX_DISPLAY_BUFFERS; i++) {
         g_buffer_info[i].state = BUFFER_STATE_FREE;
     }
     g_displaying_idx = -1;

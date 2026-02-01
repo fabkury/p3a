@@ -23,6 +23,14 @@ set(WEBUI_VERSION "0.8")
 # =============================================================================
 
 # =============================================================================
+# API Version (Breaking API changes only)
+# =============================================================================
+# Bump ONLY when making breaking changes to HTTP API endpoints.
+# New firmware MUST remain backwards-compatible with old Web UI at same api_version.
+set(P3A_API_VERSION 1)
+# =============================================================================
+
+# =============================================================================
 # Flasher Tool Build (Windows executable with embedded firmware)
 # =============================================================================
 # Set P3A_BUILD_FLASHER to OFF to skip flasher build (faster dev builds)
@@ -41,6 +49,7 @@ set(PROJECT_VER "${PROJECT_VER}" CACHE STRING "Project version" FORCE)
 set(FW_VERSION_MAJOR "${FW_VERSION_MAJOR}" CACHE STRING "Firmware major version" FORCE)
 set(FW_VERSION_MINOR "${FW_VERSION_MINOR}" CACHE STRING "Firmware minor version" FORCE)
 set(FW_VERSION_PATCH "${FW_VERSION_PATCH}" CACHE STRING "Firmware patch version" FORCE)
+set(P3A_API_VERSION "${P3A_API_VERSION}" CACHE STRING "API version" FORCE)
 
 set(RELEASE_SUBDIR "release/v${PROJECT_VER}")
 
@@ -55,6 +64,11 @@ project(p3a)
 # This allows runtime detection of the current web UI version
 file(WRITE "${CMAKE_SOURCE_DIR}/webui/version.txt" "${WEBUI_VERSION}")
 message(STATUS "Generated webui/version.txt with version ${WEBUI_VERSION}")
+
+# Generate metadata.json for Web UI compatibility checking
+file(WRITE "${CMAKE_SOURCE_DIR}/webui/metadata.json"
+    "{\"requires_api_version\":${P3A_API_VERSION},\"version\":\"${WEBUI_VERSION}\"}\n")
+message(STATUS "Generated webui/metadata.json (requires_api_version: ${P3A_API_VERSION})")
 
 # Create LittleFS image from webui directory
 # When PICO-8 is disabled, filter out PICO-8 related assets to reduce binary size
@@ -118,6 +132,7 @@ is_dev_build = '${IS_DEV_BUILD}' != ''  # True if version contains -dev, -alpha,
 release_dir = os.path.join(project_dir, release_subdir)
 version = '${PROJECT_VER}'
 webui_version = '${WEBUI_VERSION}'
+api_version = ${P3A_API_VERSION}
 
 # Create release directory
 os.makedirs(release_dir, exist_ok=True)
@@ -365,6 +380,7 @@ print(f'  OK: README.md')
 import json
 
 manifest = {
+    'api_version': api_version,
     'firmware': {
         'version': version,
         'file': 'p3a.bin',
@@ -372,6 +388,7 @@ manifest = {
     },
     'webui': {
         'version': webui_version,
+        'requires_api_version': api_version,
         'file': 'storage.bin',
         'sha256': None  # Will be filled below
     }

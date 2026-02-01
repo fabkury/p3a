@@ -341,6 +341,13 @@ esp_err_t h_get_status(httpd_req_t *req) {
     uint32_t queue_depth = s_cmdq ? uxQueueMessagesWaiting(s_cmdq) : 0;
     cJSON_AddNumberToObject(data, "queue_depth", (double)queue_depth);
 
+    // API version for compatibility checking
+#ifdef P3A_API_VERSION
+    cJSON_AddNumberToObject(data, "api_version", P3A_API_VERSION);
+#else
+    cJSON_AddNumberToObject(data, "api_version", 1);
+#endif
+
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         cJSON_Delete(data);

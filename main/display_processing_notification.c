@@ -20,7 +20,7 @@ static const char *TAG = "proc_notif";
 
 // Cached config values (re-read periodically)
 static bool s_enabled_cached = true;
-static uint8_t s_size_cached = 32;
+static uint16_t s_size_cached = 64;
 static int64_t s_config_check_time_us = 0;
 
 // Draw a single pixel at (x, y) with color (r, g, b)
@@ -55,9 +55,9 @@ static inline void pn_draw_pixel(uint8_t *buffer, int x, int y, uint8_t r, uint8
  * @param b Blue component (0-255)
  * @param size Triangle size in pixels
  */
-static void draw_checkerboard_triangle(uint8_t *buffer, uint8_t r, uint8_t g, uint8_t b, uint8_t size)
+static void draw_checkerboard_triangle(uint8_t *buffer, uint8_t r, uint8_t g, uint8_t b, uint16_t size)
 {
-    if (!buffer || size < 8) return;
+    if (!buffer || size < 16) return;
     
     // Calculate top-left corner of the bounding box in screen coordinates
     int base_x = EXAMPLE_LCD_H_RES - size;
@@ -113,13 +113,16 @@ void processing_notification_update_and_draw(uint8_t *buffer)
         s_enabled_cached = config_store_get_proc_notif_enabled();
         s_size_cached = config_store_get_proc_notif_size();
         // Defensive bounds check on size (config_store validates, but be safe)
-        if (s_size_cached < 8) s_size_cached = 8;
-        if (s_size_cached > 128) s_size_cached = 128;
+        // Size 0 is valid (disabled), otherwise clamp to 16-256
+        if (s_size_cached != 0) {
+            if (s_size_cached < 16) s_size_cached = 16;
+            if (s_size_cached > 256) s_size_cached = 256;
+        }
         s_config_check_time_us = now_us;
     }
     
-    // Check if feature is enabled - if disabled, reset state
-    if (!s_enabled_cached) {
+    // Check if feature is enabled - if disabled or size is 0, reset state
+    if (!s_enabled_cached || s_size_cached == 0) {
         if (g_proc_notif_state != PROC_NOTIF_STATE_IDLE) {
             g_proc_notif_state = PROC_NOTIF_STATE_IDLE;
             g_proc_notif_start_time_us = 0;

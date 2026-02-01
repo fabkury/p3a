@@ -35,6 +35,13 @@ static void dwell_timer_callback(TimerHandle_t timer)
         return;
     }
 
+    // Skip auto-swap if only one artwork available (nothing to swap to)
+    if (play_scheduler_get_total_available() <= 1) {
+        ESP_LOGD(TAG, "Auto-swap skipped: only %zu artwork(s) available",
+                 play_scheduler_get_total_available());
+        return;
+    }
+
     event_bus_emit_simple(P3A_EVENT_SWAP_NEXT);
 }
 

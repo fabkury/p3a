@@ -1160,6 +1160,49 @@ esp_err_t channel_cache_get_next_missing(channel_cache_t *cache,
     return ESP_ERR_NOT_FOUND;
 }
 
+esp_err_t channel_cache_get_missing_batch(channel_cache_t *cache,
+                                          uint32_t *cursor,
+                                          makapix_channel_entry_t *out_entries,
+                                          size_t max_batch,
+                                          size_t *out_count)
+{
+    if (!cache || !cursor || !out_entries || !out_count || max_batch == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *out_count = 0;
+    xSemaphoreTake(cache->mutex, portMAX_DELAY);
+
+    // Scan entries and collect up to max_batch missing ones
+    while (*cursor < cache->entry_count && *out_count < max_batch) {
+        const makapix_channel_entry_t *entry = &cache->entries[*cursor];
+        (*cursor)++;
+
+        // Skip non-artwork entries
+        if (entry->kind != MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+            continue;
+        }
+
+        // Check if already in LAi using hash table (O(1) lookup)
+        lai_post_id_node_t *node;
+        HASH_FIND_INT(cache->lai_hash, &entry->post_id, node);
+        if (node) {
+            continue;  // Already downloaded
+        }
+
+        // Found a missing entry - copy to output array
+        memcpy(&out_entries[*out_count], entry, sizeof(makapix_channel_entry_t));
+        (*out_count)++;
+    }
+
+    xSemaphoreGive(cache->mutex);
+
+    // Yield to allow other tasks (especially animation rendering) to run
+    taskYIELD();
+
+    return (*out_count > 0) ? ESP_OK : ESP_ERR_NOT_FOUND;
+}
+
 // ============================================================================
 // Batch Operations (for Makapix refresh)
 // ============================================================================

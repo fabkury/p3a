@@ -228,18 +228,20 @@ static esp_err_t makapix_impl_request_refresh(channel_handle_t channel)
     ch->refreshing = true;
 
     // Try static stack allocation first (fragmentation-resistant)
+    // Pin to Core 0 to avoid interfering with animation rendering on Core 1
     if (ch->refresh_stack && ch->refresh_stack_allocated) {
-        ch->refresh_task = xTaskCreateStatic(
+        ch->refresh_task = xTaskCreateStaticPinnedToCore(
             refresh_task_impl,
             "makapix_refresh",
             MAKAPIX_REFRESH_TASK_STACK_SIZE,
             ch,
             CONFIG_P3A_NETWORK_TASK_PRIORITY,
             ch->refresh_stack,
-            &ch->refresh_task_buffer
+            &ch->refresh_task_buffer,
+            0  // Core 0
         );
         if (ch->refresh_task != NULL) {
-            ESP_LOGD(TAG, "Refresh task started (static) for channel %s", ch->channel_id);
+            ESP_LOGD(TAG, "Refresh task started (static, Core 0) for channel %s", ch->channel_id);
             return ESP_OK;
         }
         ESP_LOGW(TAG, "Static task creation failed, trying dynamic allocation");
@@ -253,20 +255,22 @@ static esp_err_t makapix_impl_request_refresh(channel_handle_t channel)
         6144                               // 6KB - minimum viable
     };
 
+    // Pin to Core 0 to avoid interfering with animation rendering on Core 1
     for (size_t i = 0; i < sizeof(stack_sizes) / sizeof(stack_sizes[0]); i++) {
-        BaseType_t ret = xTaskCreate(
+        BaseType_t ret = xTaskCreatePinnedToCore(
             refresh_task_impl,
             "makapix_refresh",
             stack_sizes[i],
             ch,
             CONFIG_P3A_NETWORK_TASK_PRIORITY,
-            &ch->refresh_task
+            &ch->refresh_task,
+            0  // Core 0
         );
         if (ret == pdPASS) {
             if (i > 0) {
-                ESP_LOGW(TAG, "Refresh task created with reduced stack: %zu bytes", stack_sizes[i]);
+                ESP_LOGW(TAG, "Refresh task created with reduced stack: %zu bytes (Core 0)", stack_sizes[i]);
             } else {
-                ESP_LOGD(TAG, "Refresh task started (dynamic) for channel %s", ch->channel_id);
+                ESP_LOGD(TAG, "Refresh task started (dynamic, Core 0) for channel %s", ch->channel_id);
             }
             return ESP_OK;
         }

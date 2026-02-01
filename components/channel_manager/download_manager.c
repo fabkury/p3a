@@ -279,6 +279,11 @@ static char s_dl_vault_base[128];
 static char s_dl_storage_key[40];
 static uint8_t s_dl_sha256[32];
 
+// Batch buffer for reducing mutex contention during download scan
+// Fetches multiple missing entries at once instead of per-entry mutex
+#define DL_BATCH_SIZE 32
+static makapix_channel_entry_t s_batch_entries[DL_BATCH_SIZE];
+
 /**
  * @brief Get next download using round-robin across channels
  *
@@ -327,23 +332,36 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
         ESP_LOGI(TAG, "DEBUG: Checking cache '%s': entry_count=%zu available=%zu cursor=%lu",
                  ch->channel_id, cache->entry_count, cache->available_count, (unsigned long)ch->dl_cursor);
 
-        // Find entries needing download (artwork not in LAi)
-        makapix_channel_entry_t entry;
+        // Find entries needing download using batch API (reduces mutex contention)
         bool found = false;
         uint32_t start_cursor = ch->dl_cursor;
         int scan_count = 0;
+        size_t batch_idx = 0;
+        size_t batch_count = 0;
 
-        while (channel_cache_get_next_missing(cache, &ch->dl_cursor, &entry) == ESP_OK) {
-            scan_count++;
+        while (!found) {
+            // Fetch next batch if current exhausted
+            if (batch_idx >= batch_count) {
+                if (channel_cache_get_missing_batch(cache, &ch->dl_cursor,
+                        s_batch_entries, DL_BATCH_SIZE, &batch_count) != ESP_OK) {
+                    break;  // No more missing entries
+                }
+                batch_idx = 0;
+                scan_count += batch_count;
+            }
+
+            // Process current batch entry (mutex NOT held during this processing)
+            makapix_channel_entry_t *entry = &s_batch_entries[batch_idx++];
+
             // Build filepath into static buffer (used by has_404_marker and output)
-            dl_build_vault_filepath(&entry, s_dl_filepath, sizeof(s_dl_filepath));
+            dl_build_vault_filepath(entry, s_dl_filepath, sizeof(s_dl_filepath));
 
             // Skip if 404 marker exists
             if (has_404_marker(s_dl_filepath)) {
                 // Convert UUID to string for logging
                 char skip_key[40];
-                bytes_to_uuid(entry.storage_key_uuid, skip_key, sizeof(skip_key));
-                ESP_LOGI(TAG, "SKIP post_id=%d: has 404 marker (key=%.8s...)", entry.post_id, skip_key);
+                bytes_to_uuid(entry->storage_key_uuid, skip_key, sizeof(skip_key));
+                ESP_LOGI(TAG, "SKIP post_id=%d: has 404 marker (key=%.8s...)", entry->post_id, skip_key);
                 continue;
             }
 
@@ -352,12 +370,12 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                 strlcpy(s_dl_vault_base, "/sdcard/p3a/vault", sizeof(s_dl_vault_base));
             }
 
-            // Convert UUID to string (use local entry, not stale static)
-            bytes_to_uuid(entry.storage_key_uuid, s_dl_storage_key, sizeof(s_dl_storage_key));
+            // Convert UUID to string
+            bytes_to_uuid(entry->storage_key_uuid, s_dl_storage_key, sizeof(s_dl_storage_key));
 
             // Skip if LTF is terminal or in backoff
             if (!ltf_can_download_now(s_dl_storage_key, s_dl_vault_base)) {
-                ESP_LOGD(TAG, "SKIP post_id=%d: LTF terminal or in backoff (key=%.8s...)", entry.post_id, s_dl_storage_key);
+                ESP_LOGD(TAG, "SKIP post_id=%d: LTF terminal or in backoff (key=%.8s...)", entry->post_id, s_dl_storage_key);
                 continue;
             }
 
@@ -366,22 +384,20 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             strlcpy(out_request->storage_key, s_dl_storage_key, sizeof(out_request->storage_key));
             strlcpy(out_request->filepath, s_dl_filepath, sizeof(out_request->filepath));
             strlcpy(out_request->channel_id, ch->channel_id, sizeof(out_request->channel_id));
-            out_request->post_id = entry.post_id;  // Capture post_id for O(1) LAi lookup
+            out_request->post_id = entry->post_id;  // Capture post_id for O(1) LAi lookup
 
             // Build artwork URL (using static sha256 buffer)
             memset(s_dl_sha256, 0, sizeof(s_dl_sha256));
             if (storage_key_sha256(s_dl_storage_key, s_dl_sha256) == ESP_OK) {
-                int ext_idx = (entry.extension <= 3) ? entry.extension : 0;
+                int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
                 snprintf(out_request->art_url, sizeof(out_request->art_url),
                          "https://%s/api/vault/%02x/%02x/%02x/%s%s",
                          CONFIG_MAKAPIX_CLUB_HOST,
                          (unsigned int)s_dl_sha256[0], (unsigned int)s_dl_sha256[1], (unsigned int)s_dl_sha256[2],
                          s_dl_storage_key, s_ext_strings[ext_idx]);
-                // ESP_LOGI(TAG, "Download URL: %s (ext_idx=%d)", out_request->art_url, ext_idx);
             }
 
             found = true;
-            break;
         }
 
         if (found) {
@@ -666,11 +682,12 @@ esp_err_t download_manager_init(void)
                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (s_download_stack) {
         s_download_stack_allocated = true;
-        s_task = xTaskCreateStatic(download_task, "download_mgr",
+        // Pin to Core 0 to avoid interfering with animation rendering on Core 1
+        s_task = xTaskCreateStaticPinnedToCore(download_task, "download_mgr",
                                    stack_size, NULL, 3,
-                                   s_download_stack, &s_download_task_buffer);
+                                   s_download_stack, &s_download_task_buffer, 0);
         if (s_task) {
-            ESP_LOGI(TAG, "Download manager task using PSRAM stack");
+            ESP_LOGI(TAG, "Download manager task using PSRAM stack (Core 0)");
             return ESP_OK;
         }
         heap_caps_free(s_download_stack);
@@ -679,8 +696,9 @@ esp_err_t download_manager_init(void)
     }
 
     // Fallback to dynamic allocation (internal RAM)
+    // Pin to Core 0 to avoid interfering with animation rendering on Core 1
     ESP_LOGW(TAG, "PSRAM stack unavailable, using internal RAM");
-    if (xTaskCreate(download_task, "download_mgr", stack_size, NULL, 3, &s_task) != pdPASS) {
+    if (xTaskCreatePinnedToCore(download_task, "download_mgr", stack_size, NULL, 3, &s_task, 0) != pdPASS) {
         vSemaphoreDelete(s_mutex);
         s_mutex = NULL;
         return ESP_ERR_NO_MEM;

@@ -45,6 +45,7 @@
 #include "makapix_channel_impl.h"
 #include "ota_manager.h"
 #include "p3a_state.h"
+#include "play_scheduler.h"
 #include "event_bus.h"
 #include "esp_heap_caps.h"
 #if CONFIG_P3A_PICO8_ENABLE
@@ -214,7 +215,6 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
             ESP_LOGE(HTTP_API_TAG, "Failed to set background color: %s", esp_err_to_name(err));
         }
     } else if (strcmp(command_type, "play_channel") == 0) {
-        // Debug: print the payload to see what the server is sending
         char *payload_str = cJSON_PrintUnformatted(payload);
         if (payload_str) {
             ESP_LOGI(HTTP_API_TAG, "play_channel payload: %s", payload_str);
@@ -228,30 +228,55 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
         }
 
         const char *channel = cJSON_GetStringValue(channel_name);
-        const char *identifier = NULL;
-        const char *display_handle = NULL;
+        esp_err_t err = ESP_OK;
+        char playset_name[128] = {0};
 
-        if (strcmp(channel, "by_user") == 0) {
+        if (strcmp(channel, "all") == 0) {
+            err = play_scheduler_play_named_channel("all");
+            strlcpy(playset_name, "channel_recent", sizeof(playset_name));
+        } else if (strcmp(channel, "promoted") == 0) {
+            err = play_scheduler_play_named_channel("promoted");
+            strlcpy(playset_name, "channel_promoted", sizeof(playset_name));
+        } else if (strcmp(channel, "sdcard") == 0) {
+            err = play_scheduler_play_named_channel("sdcard");
+            strlcpy(playset_name, "channel_sdcard", sizeof(playset_name));
+        } else if (strcmp(channel, "by_user") == 0) {
             cJSON *user_sqid = cJSON_GetObjectItem(payload, "user_sqid");
-            cJSON *user_handle = cJSON_GetObjectItem(payload, "user_handle");
             if (!user_sqid || !cJSON_IsString(user_sqid)) {
                 ESP_LOGE(HTTP_API_TAG, "play_channel by_user: missing user_sqid");
                 return;
             }
-            identifier = cJSON_GetStringValue(user_sqid);
-            if (user_handle && cJSON_IsString(user_handle)) {
-                display_handle = cJSON_GetStringValue(user_handle);
-            }
+            const char *sqid = cJSON_GetStringValue(user_sqid);
+            err = play_scheduler_play_user_channel(sqid);
+            snprintf(playset_name, sizeof(playset_name), "by_user_%s", sqid);
         } else if (strcmp(channel, "hashtag") == 0) {
             cJSON *hashtag = cJSON_GetObjectItem(payload, "hashtag");
             if (!hashtag || !cJSON_IsString(hashtag)) {
                 ESP_LOGE(HTTP_API_TAG, "play_channel hashtag: missing hashtag");
                 return;
             }
-            identifier = cJSON_GetStringValue(hashtag);
+            const char *tag = cJSON_GetStringValue(hashtag);
+            err = play_scheduler_play_hashtag_channel(tag);
+            snprintf(playset_name, sizeof(playset_name), "hashtag_%s", tag);
+        } else {
+            ESP_LOGW(HTTP_API_TAG, "play_channel: unknown channel '%s'", channel);
+            return;
         }
 
-        makapix_request_channel_switch(channel, identifier, display_handle);
+        if (err != ESP_OK) {
+            ESP_LOGE(HTTP_API_TAG, "play_channel failed: %s", esp_err_to_name(err));
+            return;
+        }
+
+        // Persist playset selection (like web UI does)
+        if (playset_name[0] != '\0') {
+            esp_err_t persist_err = p3a_state_set_active_playset(playset_name);
+            if (persist_err != ESP_OK) {
+                ESP_LOGW(HTTP_API_TAG, "Failed to persist playset: %s", esp_err_to_name(persist_err));
+            }
+        }
+
+        ESP_LOGI(HTTP_API_TAG, "play_channel: switched to %s (playset=%s)", channel, playset_name);
     } else if (strcmp(command_type, "show_artwork") == 0) {
         cJSON *art_url = cJSON_GetObjectItem(payload, "art_url");
         cJSON *storage_key = cJSON_GetObjectItem(payload, "storage_key");

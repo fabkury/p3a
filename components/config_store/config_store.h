@@ -355,18 +355,22 @@ bool config_store_get_proc_notif_enabled(void);
  * @brief Set processing notification size
  *
  * Controls the size of the triangle indicator in pixels.
+ * - Size 0: Disables the processing notification indicator
+ * - Sizes 1-15: Auto-corrected to 16
+ * - Sizes 16-256: Used as-is
+ * - Sizes >256: Capped at 256
  *
- * @param size Size in pixels (8-128, default 32)
- * @return ESP_OK on success, ESP_ERR_INVALID_ARG if out of range
+ * @param size Size in pixels (0=disabled, 16-256, default 64)
+ * @return ESP_OK on success
  */
-esp_err_t config_store_set_proc_notif_size(uint8_t size);
+esp_err_t config_store_set_proc_notif_size(uint16_t size);
 
 /**
  * @brief Get processing notification size
  *
- * @return Size in pixels (defaults to 32 if not set)
+ * @return Size in pixels (0=disabled, 16-256, defaults to 64 if not set)
  */
-uint8_t config_store_get_proc_notif_size(void);
+uint16_t config_store_get_proc_notif_size(void);
 
 #ifdef __cplusplus
 }

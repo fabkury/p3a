@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="/static/compat.js"></script>
 <title>p3a - Settings</title>
 <style>
 * { box-sizing: border-box; }
@@ -259,6 +260,14 @@ body {
         <button class="upload-btn bg-save" id="bg-save" type="button" onclick="saveBackgroundColor()">Save</button>
     </div>
     <div class="file-name" id="bg-hint" style="margin-bottom:8px;">Background color for transparent artwork</div>
+    <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
+        <label class="toggle-label">Processing indicator size</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <input class="bg-input" id="proc-notif-size" type="number" min="0" max="256" style="max-width:90px;">
+            <span style="color:#666;font-size:0.8rem;">px (0=off)</span>
+            <button class="btn" onclick="saveProcNotifSize()">Save</button>
+        </div>
+    </div>
     <div class="toggle-row">
         <label for="fps-toggle" class="toggle-label">Show FPS</label>
         <label class="toggle-switch">
@@ -658,6 +667,57 @@ function saveAutoSwap() {
     };
     xhrGet.send();
 }
+function loadProcNotifSize() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/config', true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            try {
+                var resp = JSON.parse(xhr.responseText || '{}');
+                var cfg = (resp && resp.ok && resp.data) ? resp.data : {};
+                var size = (typeof cfg.proc_notif_size === 'number') ? cfg.proc_notif_size : 64;
+                document.getElementById('proc-notif-size').value = size;
+            } catch (e) {
+                document.getElementById('proc-notif-size').value = 64;
+            }
+        }
+    };
+    xhr.send();
+}
+function saveProcNotifSize() {
+    var size = parseInt(document.getElementById('proc-notif-size').value, 10);
+    if (isNaN(size) || size < 0) size = 0;
+    // Clamp: 0 = disabled, 1-15 -> 16, >256 -> 256
+    if (size > 0 && size < 16) size = 16;
+    if (size > 256) size = 256;
+    document.getElementById('proc-notif-size').value = size;
+    var xhrGet = new XMLHttpRequest();
+    xhrGet.open('GET', '/config', true);
+    xhrGet.onreadystatechange = function() {
+        if (xhrGet.readyState === 4) {
+            var cfg = {};
+            try {
+                var resp = JSON.parse(xhrGet.responseText || '{}');
+                cfg = (resp && resp.ok && resp.data) ? resp.data : {};
+            } catch (e) { cfg = {}; }
+            cfg.proc_notif_size = size;
+            var xhrPut = new XMLHttpRequest();
+            xhrPut.open('PUT', '/config', true);
+            xhrPut.setRequestHeader('Content-Type', 'application/json');
+            xhrPut.onreadystatechange = function() {
+                if (xhrPut.readyState === 4) {
+                    if (xhrPut.status >= 200 && xhrPut.status < 300) {
+                        showToast(size === 0 ? 'Indicator disabled' : 'Indicator size: ' + size + 'px', false);
+                    } else {
+                        showToast('Save failed', true);
+                    }
+                }
+            };
+            xhrPut.send(JSON.stringify(cfg));
+        }
+    };
+    xhrGet.send();
+}
 var rebootPending = false;
 var rebootTimeout = null;
 function reboot() {
@@ -734,6 +794,7 @@ function saveCacheSize() {
     xhrGet.send();
 }
 loadBackgroundColor();
+loadProcNotifSize();
 loadShowFps();
 loadMaxSpeedPlayback();
 loadAutoSwap();

@@ -358,6 +358,28 @@ esp_err_t channel_cache_get_next_missing(channel_cache_t *cache,
                                          uint32_t *cursor,
                                          makapix_channel_entry_t *out_entry);
 
+/**
+ * @brief Get batch of Ci entries that need downloading (artwork, not in LAi)
+ *
+ * Batch version of channel_cache_get_next_missing that reduces mutex contention
+ * by fetching multiple missing entries in a single mutex acquisition. Yields
+ * after releasing mutex to allow other tasks to run.
+ *
+ * Thread-safe (takes cache mutex once per batch).
+ *
+ * @param cache The cache instance
+ * @param cursor In/out cursor position (start at 0, updated on each call)
+ * @param out_entries Output array (caller-provided, must hold max_batch entries)
+ * @param max_batch Maximum number of entries to return per call
+ * @param out_count Number of entries actually returned
+ * @return ESP_OK if entries found, ESP_ERR_NOT_FOUND if no more missing entries
+ */
+esp_err_t channel_cache_get_missing_batch(channel_cache_t *cache,
+                                          uint32_t *cursor,
+                                          makapix_channel_entry_t *out_entries,
+                                          size_t max_batch,
+                                          size_t *out_count);
+
 // ============================================================================
 // Batch Operations (for Makapix refresh)
 // ============================================================================

@@ -521,17 +521,18 @@ esp_err_t ps_refresh_start(void)
                                             MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     }
 
+    // Pin to Core 0 to avoid interfering with animation rendering on Core 1
     bool task_created = false;
     if (s_refresh_stack) {
-        s_refresh_task = xTaskCreateStatic(refresh_task, "ps_refresh",
+        s_refresh_task = xTaskCreateStaticPinnedToCore(refresh_task, "ps_refresh",
                                             REFRESH_TASK_STACK_SIZE, NULL, CONFIG_P3A_APP_TASK_PRIORITY,
-                                            s_refresh_stack, &s_refresh_task_buffer);
+                                            s_refresh_stack, &s_refresh_task_buffer, 0);
         task_created = (s_refresh_task != NULL);
     }
 
     if (!task_created) {
-        if (xTaskCreate(refresh_task, "ps_refresh",
-                        REFRESH_TASK_STACK_SIZE, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_refresh_task) != pdPASS) {
+        if (xTaskCreatePinnedToCore(refresh_task, "ps_refresh",
+                        REFRESH_TASK_STACK_SIZE, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_refresh_task, 0) != pdPASS) {
             ESP_LOGE(TAG, "Failed to create refresh task");
             return ESP_ERR_NO_MEM;
         }

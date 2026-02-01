@@ -1075,13 +1075,13 @@ uint32_t config_store_get_channel_cache_size(void)
 // Processing Notification Settings (persisted, with in-memory caching)
 // ============================================================================
 
-#define PROC_NOTIF_SIZE_DEFAULT 32
-#define PROC_NOTIF_SIZE_MIN     8
-#define PROC_NOTIF_SIZE_MAX     128
+#define PROC_NOTIF_SIZE_DEFAULT 64
+#define PROC_NOTIF_SIZE_MIN     16
+#define PROC_NOTIF_SIZE_MAX     256
 
 static bool s_proc_notif_enabled = true;  // Default: ON
 static bool s_proc_notif_enabled_loaded = false;
-static uint8_t s_proc_notif_size = PROC_NOTIF_SIZE_DEFAULT;
+static uint16_t s_proc_notif_size = PROC_NOTIF_SIZE_DEFAULT;
 static bool s_proc_notif_size_loaded = false;
 
 esp_err_t config_store_set_proc_notif_enabled(bool enable)
@@ -1134,13 +1134,15 @@ bool config_store_get_proc_notif_enabled(void)
     return s_proc_notif_enabled;
 }
 
-esp_err_t config_store_set_proc_notif_size(uint8_t size)
+esp_err_t config_store_set_proc_notif_size(uint16_t size)
 {
-    // Validate range
-    if (size < PROC_NOTIF_SIZE_MIN || size > PROC_NOTIF_SIZE_MAX) {
-        ESP_LOGE(TAG, "Invalid processing notification size: %u (must be %d-%d)",
-                 (unsigned)size, PROC_NOTIF_SIZE_MIN, PROC_NOTIF_SIZE_MAX);
-        return ESP_ERR_INVALID_ARG;
+    // Normalize size: 0 = disabled, 1-15 -> 16, >256 -> 256
+    if (size != 0) {
+        if (size < PROC_NOTIF_SIZE_MIN) {
+            size = PROC_NOTIF_SIZE_MIN;
+        } else if (size > PROC_NOTIF_SIZE_MAX) {
+            size = PROC_NOTIF_SIZE_MAX;
+        }
     }
 
     cJSON *cfg = NULL;
@@ -1162,13 +1164,14 @@ esp_err_t config_store_set_proc_notif_size(uint8_t size)
     if (err == ESP_OK) {
         s_proc_notif_size = size;
         s_proc_notif_size_loaded = true;
-        ESP_LOGI(TAG, "Processing notification size saved: %u", (unsigned)size);
+        ESP_LOGI(TAG, "Processing notification size saved: %u%s",
+                 (unsigned)size, size == 0 ? " (disabled)" : "");
     }
 
     return err;
 }
 
-uint8_t config_store_get_proc_notif_size(void)
+uint16_t config_store_get_proc_notif_size(void)
 {
     if (s_proc_notif_size_loaded) {
         return s_proc_notif_size;
@@ -1184,8 +1187,9 @@ uint8_t config_store_get_proc_notif_size(void)
     cJSON *item = cJSON_GetObjectItem(cfg, "proc_notif_size");
     if (item && cJSON_IsNumber(item)) {
         double value = cJSON_GetNumberValue(item);
-        if (value >= PROC_NOTIF_SIZE_MIN && value <= PROC_NOTIF_SIZE_MAX) {
-            s_proc_notif_size = (uint8_t)value;
+        // Accept 0 (disabled) or 16-256
+        if (value == 0 || (value >= PROC_NOTIF_SIZE_MIN && value <= PROC_NOTIF_SIZE_MAX)) {
+            s_proc_notif_size = (uint16_t)value;
         }
     }
 

@@ -64,21 +64,6 @@ esp_err_t config_store_set_rotation(uint16_t rotation_degrees);
 uint16_t config_store_get_rotation(void);
 
 /**
- * @brief Set playlist expansion (PE)
- * 
- * @param pe Playlist expansion (0-1023, 0 = infinite)
- * @return ESP_OK on success
- */
-esp_err_t config_store_set_pe(uint32_t pe);
-
-/**
- * @brief Get playlist expansion (PE)
- * 
- * @return PE value (defaults to 8 if not set)
- */
-uint32_t config_store_get_pe(void);
-
-/**
  * @brief Set play order mode
  * 
  * @param order Play order (0=server, 1=created, 2=random)
@@ -371,6 +356,27 @@ esp_err_t config_store_set_proc_notif_size(uint16_t size);
  * @return Size in pixels (0=disabled, 16-256, defaults to 64 if not set)
  */
 uint16_t config_store_get_proc_notif_size(void);
+
+// ============================================================================
+// Shuffle Override (persisted)
+// ============================================================================
+
+/**
+ * @brief Set shuffle override mode
+ *
+ * When enabled, forces random pick mode regardless of the playset's pick_mode.
+ *
+ * @param enable True to enable shuffle override
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_shuffle_override(bool enable);
+
+/**
+ * @brief Get shuffle override mode
+ *
+ * @return True if shuffle override enabled (defaults to false)
+ */
+bool config_store_get_shuffle_override(void);
 
 #ifdef __cplusplus
 }

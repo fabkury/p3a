@@ -13,10 +13,6 @@ extern "C" {
 #endif
 
 typedef struct {
-    // If present==false, value is ignored.
-    bool pe_present;
-    uint32_t pe;
-
     bool play_order_present;
     uint8_t play_order; // 0..2
 

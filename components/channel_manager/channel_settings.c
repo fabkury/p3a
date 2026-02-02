@@ -56,15 +56,6 @@ static void parse_settings(cJSON *json, channel_settings_t *out)
     memset(out, 0, sizeof(*out));
     if (!json) return;
 
-    cJSON *pe = cJSON_GetObjectItem(json, "pe");
-    if (cJSON_IsNumber(pe)) {
-        int v = (int)cJSON_GetNumberValue(pe);
-        if (v >= 0 && v <= 1023) {
-            out->pe_present = true;
-            out->pe = (uint32_t)v;
-        }
-    }
-
     cJSON *order = cJSON_GetObjectItem(json, "play_order");
     if (cJSON_IsNumber(order)) {
         int v = (int)cJSON_GetNumberValue(order);

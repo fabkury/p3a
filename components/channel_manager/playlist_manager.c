@@ -274,52 +274,52 @@ void playlist_manager_deinit(void)
     s_current_playlist_id = -1;
 }
 
-esp_err_t playlist_get(int32_t post_id, uint32_t pe, playlist_metadata_t **out_playlist)
+esp_err_t playlist_get(int32_t post_id, playlist_metadata_t **out_playlist)
 {
     if (!out_playlist) {
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     // Check if we have this playlist cached
     if (s_current_playlist && s_current_playlist_id == post_id) {
         ESP_LOGD(TAG, "Returning cached playlist %ld", post_id);
         *out_playlist = s_current_playlist;
         return ESP_OK;
     }
-    
+
     // Free old cached playlist
     if (s_current_playlist) {
         ESP_LOGD(TAG, "Releasing old cached playlist %ld", s_current_playlist_id);
         playlist_free(s_current_playlist);
         s_current_playlist = NULL;
     }
-    
+
     // Try to load from disk
     playlist_metadata_t *playlist = NULL;
     esp_err_t err = playlist_load_from_disk(post_id, &playlist);
-    
+
     if (err != ESP_OK || !playlist) {
         ESP_LOGI(TAG, "Playlist %ld not in cache, fetching from server", post_id);
-        err = playlist_fetch_from_server(post_id, pe, &playlist);
+        err = playlist_fetch_from_server(post_id, &playlist);
         if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to fetch playlist %ld from server: %s", 
+            ESP_LOGE(TAG, "Failed to fetch playlist %ld from server: %s",
                      post_id, esp_err_to_name(err));
             return err;
         }
-        
+
         // Save to disk
         playlist_save_to_disk(playlist);
     }
-    
+
     // Cache it
     s_current_playlist = playlist;
     s_current_playlist_id = post_id;
     *out_playlist = playlist;
-    
+
     ESP_LOGI(TAG, "Loaded playlist %ld: %ld total artworks, %ld loaded, %ld available",
-             post_id, playlist->total_artworks, playlist->loaded_artworks, 
+             post_id, playlist->total_artworks, playlist->loaded_artworks,
              playlist->available_artworks);
-    
+
     return ESP_OK;
 }
 
@@ -484,7 +484,7 @@ esp_err_t playlist_save_to_disk(playlist_metadata_t *playlist)
 
 // Continued in next part...
 
-esp_err_t playlist_fetch_from_server(int32_t post_id, uint32_t pe, playlist_metadata_t **out_playlist)
+esp_err_t playlist_fetch_from_server(int32_t post_id, playlist_metadata_t **out_playlist)
 {
     if (!out_playlist) {
         return ESP_ERR_INVALID_ARG;
@@ -492,8 +492,7 @@ esp_err_t playlist_fetch_from_server(int32_t post_id, uint32_t pe, playlist_meta
 
     // Fetch post via Makapix API
     makapix_post_t post = {0};
-    uint16_t pe16 = (pe > 1023) ? 1023 : (uint16_t)pe;
-    esp_err_t err = makapix_api_get_post(post_id, true, pe16, &post);
+    esp_err_t err = makapix_api_get_post(post_id, &post);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "makapix_api_get_post failed for %ld: %s", post_id, esp_err_to_name(err));
         return err;

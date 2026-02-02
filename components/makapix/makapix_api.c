@@ -440,7 +440,7 @@ static void parse_query_response(cJSON *resp_json, makapix_query_response_t *out
     if (cJSON_IsString(next_cursor)) strncpy(out->next_cursor, next_cursor->valuestring, sizeof(out->next_cursor) - 1);
 }
 
-esp_err_t makapix_api_get_post(int32_t post_id, bool pe_present, uint16_t pe, makapix_post_t *out_post)
+esp_err_t makapix_api_get_post(int32_t post_id, makapix_post_t *out_post)
 {
     if (!out_post) return ESP_ERR_INVALID_ARG;
     memset(out_post, 0, sizeof(*out_post));
@@ -450,11 +450,6 @@ esp_err_t makapix_api_get_post(int32_t post_id, bool pe_present, uint16_t pe, ma
 
     cJSON_AddStringToObject(root, "request_type", "get_post");
     cJSON_AddNumberToObject(root, "post_id", (double)post_id);
-
-    if (pe_present) {
-        if (pe > 1023) pe = 1023;
-        cJSON_AddNumberToObject(root, "PE", pe);
-    }
 
     cJSON *response_json = NULL;
     esp_err_t err = publish_and_wait(root, &response_json);
@@ -515,15 +510,6 @@ esp_err_t makapix_api_query_posts(const makapix_query_request_t *req, makapix_qu
 
     if (req->sort == MAKAPIX_SORT_RANDOM && req->random_seed_present) {
         cJSON_AddNumberToObject(root, "random_seed", req->random_seed);
-    }
-    
-    // Add PE (playlist expansion) parameter
-    if (req->pe_present) {
-        uint16_t pe = req->pe;
-        if (pe > 1023) {
-            pe = 1023;
-        }
-        cJSON_AddNumberToObject(root, "PE", pe);
     }
 
     cJSON *response_json = NULL;

@@ -551,9 +551,7 @@ void refresh_task_impl(void *pvParameters)
     query_req.sort = MAKAPIX_SORT_SERVER_ORDER;
     query_req.limit = 32;
     query_req.has_cursor = false;
-    query_req.pe_present = true;
-    query_req.pe = (uint16_t)config_store_get_pe();
-    
+
     const size_t TARGET_COUNT = config_store_get_channel_cache_size();
     
     // Get refresh interval from NVS (defaults to 3600 = 1 hour)

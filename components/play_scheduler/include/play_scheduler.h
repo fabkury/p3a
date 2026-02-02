@@ -186,6 +186,23 @@ void play_scheduler_set_pick_mode(ps_pick_mode_t mode);
  */
 ps_pick_mode_t play_scheduler_get_pick_mode(void);
 
+/**
+ * @brief Set shuffle override flag
+ *
+ * When enabled, forces PS_PICK_RANDOM regardless of the playset's pick_mode.
+ * Persists to NVS and takes effect immediately.
+ *
+ * @param enable true to enable shuffle override
+ */
+void play_scheduler_set_shuffle_override(bool enable);
+
+/**
+ * @brief Get shuffle override flag
+ *
+ * @return true if shuffle override is enabled
+ */
+bool play_scheduler_get_shuffle_override(void);
+
 // ============================================================================
 // Cache Management
 // ============================================================================

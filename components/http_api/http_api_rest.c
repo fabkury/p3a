@@ -902,10 +902,9 @@ esp_err_t h_put_play_order(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Hot-swap the pick mode for the play scheduler
-    // play_order: 0=server, 1=created, 2=random → only 2 is random
-    ps_pick_mode_t pick_mode = (order == 2) ? PS_PICK_RANDOM : PS_PICK_RECENCY;
-    play_scheduler_set_pick_mode(pick_mode);
+    // Set shuffle override based on play_order
+    // order 2 (random) enables shuffle override, else disables
+    play_scheduler_set_shuffle_override(order == 2);
 
     send_json(req, 200, "{\"ok\":true}");
     return ESP_OK;

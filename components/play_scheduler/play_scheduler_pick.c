@@ -582,7 +582,9 @@ bool ps_pick_artwork(ps_state_t *state, size_t channel_index, ps_artwork_t *out_
         return true;
     }
 
-    if (state->pick_mode == PS_PICK_RANDOM) {
+    // shuffle_override takes precedence over playset's pick_mode
+    bool use_random = state->shuffle_override || (state->pick_mode == PS_PICK_RANDOM);
+    if (use_random) {
         return pick_random(state, channel_index, out_artwork);
     } else {
         return pick_recency(state, channel_index, out_artwork);

@@ -290,6 +290,8 @@ esp_err_t play_scheduler_init(void)
     s_state.last_played_id = 0;  // 0 won't match any valid post_id (Makapix=positive, SDcard=negative)
     s_state.exposure_mode = PS_EXPOSURE_EQUAL;
     s_state.pick_mode = PS_PICK_RECENCY;
+    s_state.shuffle_override = config_store_get_shuffle_override();
+    ESP_LOGI(TAG, "Loaded shuffle_override from NVS: %s", s_state.shuffle_override ? "ON" : "OFF");
     s_state.channel_count = 0;
     s_state.current_channel = NULL;
     s_state.command_active = false;
@@ -502,6 +504,25 @@ void play_scheduler_set_pick_mode(ps_pick_mode_t mode)
 ps_pick_mode_t play_scheduler_get_pick_mode(void)
 {
     return s_state.pick_mode;
+}
+
+void play_scheduler_set_shuffle_override(bool enable)
+{
+    if (!s_state.initialized) return;
+
+    // Persist to NVS
+    config_store_set_shuffle_override(enable);
+
+    // Update runtime state
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    s_state.shuffle_override = enable;
+    ESP_LOGI(TAG, "Shuffle override %s", enable ? "enabled" : "disabled");
+    xSemaphoreGive(s_state.mutex);
+}
+
+bool play_scheduler_get_shuffle_override(void)
+{
+    return s_state.shuffle_override;
 }
 
 // ============================================================================

@@ -65,16 +65,15 @@ void playlist_manager_deinit(void);
 
 /**
  * @brief Get playlist metadata
- * 
+ *
  * Returns cached playlist if post_id matches current, otherwise loads from disk.
  * If not on disk or stale, fetches from server.
- * 
+ *
  * @param post_id Playlist post ID
- * @param pe Playlist expansion (0 = all, 1-1023 = first N artworks)
  * @param out_playlist Pointer to receive playlist metadata (do NOT free, owned by manager)
  * @return ESP_OK on success
  */
-esp_err_t playlist_get(int32_t post_id, uint32_t pe, playlist_metadata_t **out_playlist);
+esp_err_t playlist_get(int32_t post_id, playlist_metadata_t **out_playlist);
 
 /**
  * @brief Release reference to cached playlist
@@ -147,13 +146,12 @@ esp_err_t playlist_save_to_disk(playlist_metadata_t *playlist);
 
 /**
  * @brief Fetch playlist from server via Makapix API
- * 
+ *
  * @param post_id Playlist post ID
- * @param pe Playlist expansion
  * @param out_playlist Pointer to receive allocated playlist (caller must free with playlist_free)
  * @return ESP_OK on success
  */
-esp_err_t playlist_fetch_from_server(int32_t post_id, uint32_t pe, playlist_metadata_t **out_playlist);
+esp_err_t playlist_fetch_from_server(int32_t post_id, playlist_metadata_t **out_playlist);
 
 /**
  * @brief Free playlist metadata

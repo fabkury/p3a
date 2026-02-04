@@ -1193,3 +1193,59 @@ bool config_store_get_shuffle_override(void)
     return enabled;
 }
 
+// ============================================================================
+// LTF (Load Tracker File) Enable/Disable
+// ============================================================================
+
+static bool s_ltf_enabled = true;  // Default: enabled
+static bool s_ltf_enabled_loaded = false;
+
+esp_err_t config_store_set_ltf_enabled(bool enable)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "ltf_enabled");
+    if (item) {
+        cJSON_DeleteItemFromObject(cfg, "ltf_enabled");
+    }
+    cJSON_AddBoolToObject(cfg, "ltf_enabled", enable);
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+
+    if (err == ESP_OK) {
+        s_ltf_enabled = enable;
+        s_ltf_enabled_loaded = true;
+        ESP_LOGI(TAG, "LTF enabled: %s", enable ? "ON" : "OFF");
+    }
+
+    return err;
+}
+
+bool config_store_get_ltf_enabled(void)
+{
+    if (s_ltf_enabled_loaded) {
+        return s_ltf_enabled;  // Fast path - no NVS read
+    }
+
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        s_ltf_enabled_loaded = true;
+        return s_ltf_enabled;  // Return default (true)
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "ltf_enabled");
+    if (item && cJSON_IsBool(item)) {
+        s_ltf_enabled = cJSON_IsTrue(item);
+    }
+
+    s_ltf_enabled_loaded = true;
+    cJSON_Delete(cfg);
+    return s_ltf_enabled;
+}
+

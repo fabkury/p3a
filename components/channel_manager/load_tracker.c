@@ -3,6 +3,7 @@
 
 #include "load_tracker.h"
 #include "makapix_channel_internal.h"
+#include "config_store.h"
 #include "cJSON.h"
 #include "esp_log.h"
 #include "esp_http_client.h"
@@ -188,6 +189,10 @@ esp_err_t ltf_load(const char *storage_key, const char *vault_path, load_tracker
         return ESP_ERR_INVALID_ARG;
     }
 
+    if (!config_store_get_ltf_enabled()) {
+        return ESP_ERR_NOT_FOUND;  // LTF disabled = no LTF exists
+    }
+
     // Allocate path on heap to reduce stack usage (this function is called in deep call chains)
     char *path = malloc(256);
     if (!path) {
@@ -230,6 +235,10 @@ esp_err_t ltf_load(const char *storage_key, const char *vault_path, load_tracker
 
 bool ltf_can_download(const char *storage_key, const char *vault_path)
 {
+    if (!config_store_get_ltf_enabled()) {
+        return true;  // LTF disabled = always allow
+    }
+
     load_tracker_t ltf;
     esp_err_t err = ltf_load(storage_key, vault_path, &ltf);
 
@@ -247,6 +256,10 @@ bool ltf_can_download(const char *storage_key, const char *vault_path)
 
 bool ltf_is_terminal(const char *storage_key, const char *vault_path)
 {
+    if (!config_store_get_ltf_enabled()) {
+        return false;  // LTF disabled = never terminal
+    }
+
     load_tracker_t ltf;
     esp_err_t err = ltf_load(storage_key, vault_path, &ltf);
 
@@ -259,6 +272,10 @@ bool ltf_is_terminal(const char *storage_key, const char *vault_path)
 
 int ltf_get_remaining_attempts(const char *storage_key, const char *vault_path)
 {
+    if (!config_store_get_ltf_enabled()) {
+        return LTF_MAX_ATTEMPTS;  // LTF disabled = all attempts available
+    }
+
     load_tracker_t ltf;
     esp_err_t err = ltf_load(storage_key, vault_path, &ltf);
 
@@ -278,6 +295,10 @@ esp_err_t ltf_record_failure(const char *storage_key, const char *vault_path, co
 {
     if (!storage_key || !vault_path) {
         return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!config_store_get_ltf_enabled()) {
+        return ESP_OK;  // LTF disabled = no-op
     }
 
     // Load existing LTF or create new
@@ -471,6 +492,10 @@ ltf_error_class_t ltf_classify_error(esp_err_t err, int http_status)
 
 bool ltf_can_download_now(const char *storage_key, const char *vault_path)
 {
+    if (!config_store_get_ltf_enabled()) {
+        return true;  // LTF disabled = always allow
+    }
+
     load_tracker_t ltf;
     esp_err_t err = ltf_load(storage_key, vault_path, &ltf);
 
@@ -498,6 +523,10 @@ bool ltf_can_download_now(const char *storage_key, const char *vault_path)
 
 uint32_t ltf_get_retry_delay(const char *storage_key, const char *vault_path)
 {
+    if (!config_store_get_ltf_enabled()) {
+        return 0;  // LTF disabled = no delay
+    }
+
     load_tracker_t ltf;
     esp_err_t err = ltf_load(storage_key, vault_path, &ltf);
 
@@ -522,6 +551,10 @@ esp_err_t ltf_record_download_failure(const char *storage_key, const char *vault
 {
     if (!storage_key || !vault_path) {
         return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!config_store_get_ltf_enabled()) {
+        return ESP_OK;  // LTF disabled = no-op
     }
 
     ltf_error_class_t cls = ltf_classify_error(err, http_status);
@@ -580,6 +613,10 @@ esp_err_t ltf_clear_download_failures(const char *storage_key, const char *vault
 {
     if (!storage_key || !vault_path) {
         return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!config_store_get_ltf_enabled()) {
+        return ESP_OK;  // LTF disabled = no-op
     }
 
     load_tracker_t ltf;

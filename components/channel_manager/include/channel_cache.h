@@ -76,7 +76,7 @@ typedef struct {
 #define CHANNEL_CACHE_VERSION   21  // Bumped to 21: removed dwell_time_ms and metadata_modified_at from entries
 
 // Default maximum entries per channel (configurable via config_store)
-#define CHANNEL_CACHE_DEFAULT_MAX_ENTRIES 1024
+#define CHANNEL_CACHE_DEFAULT_MAX_ENTRIES 2048
 
 // Legacy macro for backward compatibility - prefer channel_cache_get_max_entries()
 // NOTE: This macro calls a function, but the function uses in-memory caching
@@ -93,7 +93,7 @@ typedef struct {
  * This value is read from NVS once and cached in memory, so subsequent calls
  * are fast (single integer return).
  *
- * @return Maximum entries (defaults to 1024)
+ * @return Maximum entries (defaults to 2048)
  */
 uint32_t channel_cache_get_max_entries(void);
 

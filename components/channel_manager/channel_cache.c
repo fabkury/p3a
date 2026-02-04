@@ -571,7 +571,7 @@ esp_err_t channel_cache_load(const char *channel_id,
 
         // Pre-allocate LAi array to support incremental batch updates
         // This allows channel_cache_merge_posts() to work correctly on empty cache
-        cache->available_post_ids = psram_malloc(1024 * sizeof(int32_t));  // Match target count
+        cache->available_post_ids = psram_malloc(CHANNEL_CACHE_MAX_ENTRIES * sizeof(int32_t));  // Match configured limit
         cache->available_count = 0;
 
         return ESP_OK;  // Empty cache is valid
@@ -613,7 +613,7 @@ esp_err_t channel_cache_load(const char *channel_id,
 
     // Cache corrupt or migration failed - start empty
     // Pre-allocate LAi array for batch updates
-    cache->available_post_ids = psram_malloc(1024 * sizeof(int32_t));
+    cache->available_post_ids = psram_malloc(CHANNEL_CACHE_MAX_ENTRIES * sizeof(int32_t));
     cache->available_count = 0;
 
     return ESP_OK;  // Empty cache is valid

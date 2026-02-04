@@ -413,6 +413,9 @@ void app_main(void)
     config_store_set_effective_seed(random_seed);
     ESP_LOGD(TAG, "Random seed initialized: 0x%08x", random_seed);
 
+    // Disable LTF system for testing (allows unlimited download retries)
+    config_store_set_ltf_enabled(false);
+
     // Initialize SDIO bus coordinator early
     // This provides mutual exclusion for SDIO operations (WiFi and SD card)
     esp_err_t sdio_err = sdio_bus_init();

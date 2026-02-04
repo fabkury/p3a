@@ -18,7 +18,7 @@ extern "C" {
 /**
  * @brief Maximum artworks per playlist
  */
-#define PLAYLIST_MAX_ARTWORKS 1024
+#define PLAYLIST_MAX_ARTWORKS 2048
 
 /**
  * @brief Artwork reference within a playlist

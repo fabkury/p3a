@@ -470,13 +470,19 @@ static __attribute__((unused)) void format_sockaddr(const struct sockaddr *sa, c
 
 static esp_err_t http_open_fn(httpd_handle_t hd, int sockfd) {
     (void)hd;
-    (void)sockfd;
+
+    // Force immediate socket closure (RST) instead of lingering in TIME_WAIT.
+    // With only 32 lwIP sockets shared across HTTP, MQTT, downloads, and OTA,
+    // TIME_WAIT accumulation from web UI requests can exhaust the socket pool.
+    struct linger so_linger = { .l_onoff = 1, .l_linger = 0 };
+    setsockopt(sockfd, SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger));
+
     return ESP_OK;
 }
 
 static void http_close_fn(httpd_handle_t hd, int sockfd) {
     (void)hd;
-    (void)sockfd;
+    close(sockfd);
 }
 
 // ---------- Start/Stop ----------
@@ -529,8 +535,10 @@ esp_err_t http_api_start(void) {
     cfg.stack_size = 8192;
     cfg.server_port = 80;
     cfg.lru_purge_enable = true;
-    cfg.max_open_sockets = 6;
+    cfg.max_open_sockets = 12;
     cfg.max_uri_handlers = 12;
+    cfg.recv_wait_timeout = 10;   // seconds – reclaim idle connections
+    cfg.send_wait_timeout = 10;   // seconds – don't block on slow clients
     cfg.uri_match_fn = httpd_uri_match_wildcard;
     cfg.open_fn = http_open_fn;
     cfg.close_fn = http_close_fn;

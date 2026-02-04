@@ -27,7 +27,7 @@ typedef enum {
 
 // Default max posts per channel (configurable via config_store at runtime)
 // Legacy macro kept for backward compatibility - actual limit comes from config_store
-#define SDCARD_CHANNEL_DEFAULT_MAX_POSTS 1024
+#define SDCARD_CHANNEL_DEFAULT_MAX_POSTS 2048
 
 #ifdef CONFIG_CHANNEL_MANAGER_MAX_POSTS
 #define SDCARD_CHANNEL_MAX_POSTS CONFIG_CHANNEL_MANAGER_MAX_POSTS
@@ -105,7 +105,7 @@ void sdcard_channel_deinit(void);
  * @brief Refresh the channel by enumerating files from animations directory
  * 
  * Enumerates files from the specified directory up to the configured channel
- * cache size limit (default: 1024, configurable via settings).
+ * cache size limit (default: 2048, configurable via settings).
  * Files are loaded in no particular order.
  * 
  * @param animations_dir Directory path to scan (NULL uses default)

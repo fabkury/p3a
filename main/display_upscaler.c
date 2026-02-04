@@ -561,6 +561,15 @@ void display_upscale_worker_top_task(void *arg)
 
         DISPLAY_MEMORY_BARRIER();
 
+        // Flush this core's cache for the rows we wrote to ensure DMA sees them
+#if DISPLAY_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
+        if (g_upscale_dst_buffer && g_upscale_row_end_top > g_upscale_row_start_top) {
+            uint8_t *flush_start = g_upscale_dst_buffer + (size_t)g_upscale_row_start_top * g_display_row_stride;
+            size_t flush_size = (size_t)(g_upscale_row_end_top - g_upscale_row_start_top) * g_display_row_stride;
+            esp_cache_msync(flush_start, flush_size, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+        }
+#endif
+
         g_upscale_worker_top_done = true;
         if (g_upscale_main_task) {
             xTaskNotify(g_upscale_main_task, notification_bit, eSetBits);
@@ -612,6 +621,15 @@ void display_upscale_worker_bottom_task(void *arg)
         }
 
         DISPLAY_MEMORY_BARRIER();
+
+        // Flush this core's cache for the rows we wrote to ensure DMA sees them
+#if DISPLAY_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
+        if (g_upscale_dst_buffer && g_upscale_row_end_bottom > g_upscale_row_start_bottom) {
+            uint8_t *flush_start = g_upscale_dst_buffer + (size_t)g_upscale_row_start_bottom * g_display_row_stride;
+            size_t flush_size = (size_t)(g_upscale_row_end_bottom - g_upscale_row_start_bottom) * g_display_row_stride;
+            esp_cache_msync(flush_start, flush_size, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+        }
+#endif
 
         g_upscale_worker_bottom_done = true;
         if (g_upscale_main_task) {

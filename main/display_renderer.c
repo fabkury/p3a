@@ -524,7 +524,7 @@ void display_render_task(void *arg)
 
         const bool ui_mode = (mode == DISPLAY_RENDER_MODE_UI);
 
-        // Capture start time before buffer acquisition for accurate frame timing
+        // Capture start time as fallback for first frame timing
         frame_processing_start_us = esp_timer_get_time();
 
         // ================================================================
@@ -622,11 +622,21 @@ void display_render_task(void *arg)
         // ================================================================
         if (!config_store_get_max_speed_playback()) {
             const int64_t now_us = esp_timer_get_time();
-            const int64_t processing_time_us = now_us - frame_processing_start_us;
             const int64_t target_delay_us = (int64_t)prev_frame_delay_ms * 1000;
 
-            if (processing_time_us < target_delay_us) {
-                const int64_t residual_us = target_delay_us - processing_time_us;
+            // Use frame-to-frame interval for accurate timing
+            // If this is the first frame, fall back to processing time
+            int64_t elapsed_us;
+            if (g_last_frame_present_us > 0) {
+                // Most accurate: measure from when previous frame was submitted to DMA
+                elapsed_us = now_us - g_last_frame_present_us;
+            } else {
+                // First frame: use processing time as fallback
+                elapsed_us = now_us - frame_processing_start_us;
+            }
+
+            if (elapsed_us < target_delay_us) {
+                const int64_t residual_us = target_delay_us - elapsed_us;
                 if (residual_us > 2000) {
                     vTaskDelay(pdMS_TO_TICKS((residual_us + 500) / 1000));
                 }

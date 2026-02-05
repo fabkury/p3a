@@ -511,12 +511,10 @@ void display_render_task(void *arg)
     const bool use_triple_buffering = (g_display_buffer_count >= 3) && (g_buffer_free_sem != NULL);
     int64_t frame_processing_start_us = 0;
 
-#if CONFIG_P3A_DISPLAY_WAIT_AFTER_DRAW
     // Legacy 2-buffer mode: clear semaphore at start
     if (use_vsync && !use_triple_buffering) {
         xSemaphoreTake(g_display_vsync_sem, 0);
     }
-#endif
 
     while (true) {
         display_render_mode_t mode = g_display_mode_request;
@@ -541,13 +539,6 @@ void display_render_task(void *arg)
             back_buffer = g_display_buffers[back_buffer_idx];
         } else {
             // Legacy 2-buffer mode or UI mode: use rotating index with VSYNC wait
-#if !CONFIG_P3A_DISPLAY_WAIT_AFTER_DRAW
-            if (use_vsync && !ui_mode) {
-                xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
-                mode = g_display_mode_request;
-                g_display_mode_active = mode;
-            }
-#endif
             back_buffer_idx = (int8_t)g_render_buffer_index;
             back_buffer = g_display_buffers[back_buffer_idx];
         }
@@ -568,51 +559,56 @@ void display_render_task(void *arg)
         int frame_delay_ms = 100;
         uint32_t prev_frame_delay_ms = g_target_frame_delay_ms;
 
-        if (ui_mode) {
-            frame_delay_ms = ugfx_ui_render_to_buffer(back_buffer, g_display_row_stride);
-            if (frame_delay_ms < 0) {
-                memset(back_buffer, 0, g_display_buffer_bytes);
-                frame_delay_ms = 100;
-            }
-            g_target_frame_delay_ms = (uint32_t)frame_delay_ms;
+        if (app_lcd_get_brightness() == 0) {
+            // Handle brightness = 0 (black screen)
+            memset(back_buffer, 0, g_display_buffer_bytes);
         } else {
-            display_frame_callback_t callback = g_display_frame_callback;
-            void *ctx = g_display_frame_callback_ctx;
-
-            if (callback) {
-                prev_frame_delay_ms = g_target_frame_delay_ms;
-                frame_delay_ms = callback(back_buffer, ctx);
+            if (ui_mode) {
+                frame_delay_ms = ugfx_ui_render_to_buffer(back_buffer, g_display_row_stride);
                 if (frame_delay_ms < 0) {
-                    // Callback returned error - reuse last displayed buffer
-                    if (use_triple_buffering) {
-                        g_buffer_info[back_buffer_idx].state = BUFFER_STATE_FREE;
-                    }
-                    back_buffer_idx = (int8_t)g_last_display_buffer;
-                    if (back_buffer_idx >= buffer_count) back_buffer_idx = 0;
-                    back_buffer = g_display_buffers[back_buffer_idx];
+                    memset(back_buffer, 0, g_display_buffer_bytes);
                     frame_delay_ms = 100;
                 }
                 g_target_frame_delay_ms = (uint32_t)frame_delay_ms;
             } else {
-                memset(back_buffer, 0, g_display_buffer_bytes);
-                frame_delay_ms = 100;
-                g_target_frame_delay_ms = 100;
+                display_frame_callback_t callback = g_display_frame_callback;
+                void *ctx = g_display_frame_callback_ctx;
+    
+                if (callback) {
+                    prev_frame_delay_ms = g_target_frame_delay_ms;
+                    frame_delay_ms = callback(back_buffer, ctx);
+                    if (frame_delay_ms < 0) {
+                        // Callback returned error - reuse last displayed buffer
+                        if (use_triple_buffering) {
+                            g_buffer_info[back_buffer_idx].state = BUFFER_STATE_FREE;
+                        }
+                        back_buffer_idx = (int8_t)g_last_display_buffer;
+                        if (back_buffer_idx >= buffer_count) back_buffer_idx = 0;
+                        back_buffer = g_display_buffers[back_buffer_idx];
+                        frame_delay_ms = 100;
+                    }
+                    g_target_frame_delay_ms = (uint32_t)frame_delay_ms;
+                } else {
+                    memset(back_buffer, 0, g_display_buffer_bytes);
+                    frame_delay_ms = 100;
+                    g_target_frame_delay_ms = 100;
+                }
             }
+            
+            // ================================================================
+            // 3. Apply overlays
+            // ================================================================
+            fps_update_and_draw(back_buffer);
+    
+            if (!ui_mode) {
+                processing_notification_update_and_draw(back_buffer);
+            }    
         }
-
-        // ================================================================
-        // 3. Apply overlays
-        // ================================================================
-        fps_update_and_draw(back_buffer);
-
-        if (!ui_mode) {
-            processing_notification_update_and_draw(back_buffer);
-        }
-
+        
         // ================================================================
         // 4. Cache flush
         // ================================================================
-#if DISPLAY_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
+#if DISPLAY_HAVE_CACHE_MSYNC
         esp_cache_msync(back_buffer, g_display_buffer_bytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
 #endif
 
@@ -631,14 +627,7 @@ void display_render_task(void *arg)
                 }
             }
         }
-
-        // Handle brightness = 0 (black screen)
-        if (app_lcd_get_brightness() == 0) {
-            memset(back_buffer, 0, g_display_buffer_bytes);
-#if DISPLAY_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
-            esp_cache_msync(back_buffer, g_display_buffer_bytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-#endif
-        }
+        
 
         // ================================================================
         // 6. Submit to DMA
@@ -678,12 +667,10 @@ void display_render_task(void *arg)
             xSemaphoreTake(g_display_vsync_sem, 0);
         } else {
             // Legacy 2-buffer mode: wait for VSYNC
-#if CONFIG_P3A_DISPLAY_WAIT_AFTER_DRAW
             if (use_vsync && !ui_mode) {
                 xSemaphoreTake(g_display_vsync_sem, 0);
                 xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
             }
-#endif
         }
 
         g_last_frame_present_us = esp_timer_get_time();

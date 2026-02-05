@@ -87,6 +87,9 @@ typedef struct {
     // Repeat avoidance
     int32_t last_played_id;
 
+    // Swap gating: ensures each playset execution produces at most 1 swap
+    bool initial_swap_done;
+
     // Dwell time
     uint32_t dwell_time_seconds;
 

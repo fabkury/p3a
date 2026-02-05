@@ -174,7 +174,8 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
         result = prepare_and_request_swap(s_state, &artwork);
 
         if (result == ESP_OK) {
-            // Success
+            // Success - mark initial swap as done for this playset
+            s_state->initial_swap_done = true;
             break;
         }
 
@@ -309,6 +310,7 @@ esp_err_t play_scheduler_prev(ps_artwork_t *out_artwork)
         result = prepare_and_request_swap(s_state, &artwork);
 
         if (result == ESP_OK) {
+            s_state->initial_swap_done = true;
             break;
         }
 

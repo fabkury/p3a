@@ -524,6 +524,9 @@ void display_render_task(void *arg)
 
         const bool ui_mode = (mode == DISPLAY_RENDER_MODE_UI);
 
+        // Capture start time before buffer acquisition for accurate frame timing
+        frame_processing_start_us = esp_timer_get_time();
+
         // ================================================================
         // 1. Acquire buffer
         // ================================================================
@@ -559,8 +562,6 @@ void display_render_task(void *arg)
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
-
-        frame_processing_start_us = esp_timer_get_time();
 
         // ================================================================
         // 2. Render frame via callback

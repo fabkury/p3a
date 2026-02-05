@@ -504,6 +504,13 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     // Only trigger initial playback if we have entries
     // Otherwise, let download manager trigger it when first file is available
     if (has_entries) {
+        // Mark that we're triggering the initial swap for this epoch
+        // This prevents refresh tasks from triggering multiple swaps
+        xSemaphoreTake(s_state->mutex, portMAX_DELAY);
+        s_state->initial_swap_epoch = s_state->epoch_id;
+        xSemaphoreGive(s_state->mutex);
+        
+        ESP_LOGI(TAG, "Triggering initial swap for epoch %lu", (unsigned long)s_state->epoch_id);
         return play_scheduler_next(NULL);
     } else {
         ESP_LOGI(TAG, "No cached entries yet - waiting for refresh/download");

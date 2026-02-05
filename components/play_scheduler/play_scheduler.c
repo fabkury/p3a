@@ -288,6 +288,7 @@ esp_err_t play_scheduler_init(void)
     s_state.nae_enabled = true;
     s_state.epoch_id = 0;
     s_state.last_played_id = 0;  // 0 won't match any valid post_id (Makapix=positive, SDcard=negative)
+    s_state.initial_swap_epoch = 0;  // No initial swap triggered yet
     s_state.exposure_mode = PS_EXPOSURE_EQUAL;
     s_state.pick_mode = PS_PICK_RECENCY;
     s_state.shuffle_override = config_store_get_shuffle_override();

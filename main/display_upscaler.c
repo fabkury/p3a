@@ -42,13 +42,11 @@ static void blit_upscaled_rows_rgba(const uint8_t *src_rgba, int src_w, int src_
 
     const uint32_t *src_rgba32 = (const uint32_t *)src_rgba;
 
-#if CONFIG_P3A_USE_PIE_SIMD
     // Row duplication optimization: detect runs of consecutive dst rows that map to the same source.
     const uint16_t *run_lookup = (rotation == DISPLAY_ROTATION_90 || rotation == DISPLAY_ROTATION_270)
                                   ? lookup_x : lookup_y;
     uint16_t prev_run_key = UINT16_MAX;
     uint8_t *last_rendered_row = NULL;
-#endif
 
     for (int dst_y = row_start; dst_y < row_end; ++dst_y) {
         if (scaled_w <= 0 || scaled_h <= 0) {
@@ -61,7 +59,6 @@ static void blit_upscaled_rows_rgba(const uint8_t *src_rgba, int src_w, int src_
 
         uint8_t *dst_row_bytes = dst_buffer + (size_t)dst_y * g_display_row_stride;
 
-#if CONFIG_P3A_USE_PIE_SIMD
         const uint16_t run_key = run_lookup[local_y];
         if (run_key == prev_run_key && last_rendered_row != NULL) {
             memcpy(dst_row_bytes, last_rendered_row, g_display_row_stride);
@@ -69,7 +66,6 @@ static void blit_upscaled_rows_rgba(const uint8_t *src_rgba, int src_w, int src_
         }
         prev_run_key = run_key;
         last_rendered_row = dst_row_bytes;
-#endif
 
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
         uint16_t *dst_row = (uint16_t *)dst_row_bytes;
@@ -230,12 +226,10 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
     s_upscale_call_count++;
 #endif
 
-#if CONFIG_P3A_USE_PIE_SIMD
     const uint16_t *run_lookup = (rotation == DISPLAY_ROTATION_90 || rotation == DISPLAY_ROTATION_270)
                                   ? lookup_x : lookup_y;
     uint16_t prev_run_key = UINT16_MAX;
     uint8_t *last_rendered_row = NULL;
-#endif
 
     for (int dst_y = row_start; dst_y < row_end; ++dst_y) {
         if (scaled_w <= 0 || scaled_h <= 0) {
@@ -248,7 +242,6 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
 
         uint8_t *dst_row_bytes = dst_buffer + (size_t)dst_y * g_display_row_stride;
 
-#if CONFIG_P3A_USE_PIE_SIMD
         const uint16_t run_key = run_lookup[local_y];
         if (run_key == prev_run_key && last_rendered_row != NULL) {
             memcpy(dst_row_bytes, last_rendered_row, g_display_row_stride);
@@ -259,7 +252,7 @@ static void blit_upscaled_rows_rgb(const uint8_t *src_rgb, int src_w, int src_h,
         }
         prev_run_key = run_key;
         last_rendered_row = dst_row_bytes;
-#endif
+      
 #if CONFIG_P3A_PERF_DEBUG
         s_rows_rendered++;
 #endif

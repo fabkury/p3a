@@ -647,18 +647,18 @@ void display_render_task(void *arg)
 
         if (use_triple_buffering && !ui_mode) {
             // Check if there's already a pending buffer - if so, wait for VSYNC
-            bool has_pending = false;
-            for (int i = 0; i < g_display_buffer_count; i++) {
-                if (g_buffer_info[i].state == BUFFER_STATE_PENDING) {
-                    has_pending = true;
-                    break;
-                }
-            }
+            // bool has_pending = false;
+            // for (int i = 0; i < g_display_buffer_count; i++) {
+            //     if (g_buffer_info[i].state == BUFFER_STATE_PENDING) {
+            //         has_pending = true;
+            //         break;
+            //     }
+            // }
 
-            if (has_pending) {
+            // if (has_pending) {
                 // Wait for VSYNC to promote the pending buffer to displaying
-                xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
-            }
+            // }
+            xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
 
             // Now safe to submit - at most 1 buffer will be PENDING
             g_buffer_info[back_buffer_idx].state = BUFFER_STATE_PENDING;
@@ -677,7 +677,7 @@ void display_render_task(void *arg)
         // ================================================================
         if (use_triple_buffering && !ui_mode) {
             // Clear any VSYNC signal that arrived during our submission
-            xSemaphoreTake(g_display_vsync_sem, 0);
+            // xSemaphoreTake(g_display_vsync_sem, 0);
         } else {
             // Legacy 2-buffer mode: wait for VSYNC
             if (use_vsync && !ui_mode) {
@@ -687,7 +687,7 @@ void display_render_task(void *arg)
         }
 
         if (!use_vsync || ui_mode) {
-            vTaskDelay(1);
+            vTaskDelay(5);
         }
     }
 }

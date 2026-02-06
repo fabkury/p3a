@@ -171,6 +171,23 @@ esp_err_t h_ws_pico_stream(httpd_req_t *req) {
         return ESP_OK;
     }
 
+    // Application-level ping: 3 bytes "p8P" (0x70 0x38 0x50)
+    if (frame.payload && frame.len == 3 &&
+        frame.payload[0] == 0x70 && frame.payload[1] == 0x38 && frame.payload[2] == 0x50) {
+        uint8_t pong_data[3] = {0x70, 0x38, 0x51}; // "p8Q"
+        httpd_ws_frame_t pong_frame = {
+            .type = HTTPD_WS_TYPE_BINARY,
+            .payload = pong_data,
+            .len = sizeof(pong_data),
+            .final = true
+        };
+        httpd_ws_send_frame_async(req->handle, httpd_req_to_sockfd(req), &pong_frame);
+        if (payload_allocated) {
+            free(payload_buf);
+        }
+        return ESP_OK;
+    }
+
     if (!frame.payload || frame.len < 6) {
         if (payload_allocated) {
             free(payload_buf);

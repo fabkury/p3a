@@ -22,7 +22,20 @@ let currentFps = 0;
 let palettePtr = 0;
 let paletteView = null;
 let currentPalette = PICO8_PALETTE.map(color => color.slice());
-let streamFrameToggle = false; // Toggle for 30fps streaming (send every other frame)
+
+// Adaptive frame rate control
+const MIN_SKIP = 2;          // Maximum 30fps send rate
+const MAX_SKIP = 12;         // Minimum ~5fps send rate
+const FRAME_PACKET_SIZE = 8246;
+let streamSkipCounter = 0;
+let streamSkipInterval = 2;  // Start at 30fps (send every 2nd frame)
+let streamFrameCount = 0;
+
+// Application-level RTT measurement
+let rttMs = 20;
+let pingSentAt = 0;
+let rttHistory = [];
+let pingIntervalId = null;
 
 // DOM elements
 const canvas = document.getElementById('pico-canvas');
@@ -228,6 +241,31 @@ function connectWebSocket() {
     
     ws.onopen = () => {
         updateStatus('Connected to ESP32', 'success');
+        // Start application-level ping interval for RTT measurement
+        pingIntervalId = setInterval(() => {
+            if (pingSentAt === 0 && ws && ws.readyState === WebSocket.OPEN) {
+                const ping = new Uint8Array([0x70, 0x38, 0x50]); // "p8P"
+                ws.send(ping.buffer);
+                pingSentAt = performance.now();
+            } else if (pingSentAt !== 0 && performance.now() - pingSentAt > 2000) {
+                // Ping timeout: push penalty RTT and reset
+                rttHistory.push(500);
+                if (rttHistory.length > 6) rttHistory.shift();
+                pingSentAt = 0;
+            }
+        }, 500);
+    };
+
+    ws.onmessage = (event) => {
+        if (event.data instanceof ArrayBuffer && event.data.byteLength === 3) {
+            const bytes = new Uint8Array(event.data);
+            if (bytes[0] === 0x70 && bytes[1] === 0x38 && bytes[2] === 0x51) { // "p8Q"
+                rttMs = performance.now() - pingSentAt;
+                rttHistory.push(rttMs);
+                if (rttHistory.length > 6) rttHistory.shift();
+                pingSentAt = 0;
+            }
+        }
     };
     
     ws.onerror = (error) => {
@@ -237,6 +275,10 @@ function connectWebSocket() {
     
     ws.onclose = () => {
         updateStatus('Disconnected from ESP32', 'info');
+        if (pingIntervalId) {
+            clearInterval(pingIntervalId);
+            pingIntervalId = null;
+        }
         ws = null;
     };
 }
@@ -378,10 +420,12 @@ function startEmulation() {
         // Draw to canvas
         ctx.putImageData(imageData, 0, 0);
 
-        // Stream to ESP32 via WebSocket at 30fps (every other frame)
-        streamFrameToggle = !streamFrameToggle;
-        if (streamFrameToggle && ws && ws.readyState === WebSocket.OPEN) {
+        // Stream to ESP32 via WebSocket with adaptive rate control
+        streamSkipCounter++;
+        if (streamSkipCounter >= streamSkipInterval && ws && ws.readyState === WebSocket.OPEN) {
+            computeAdaptiveRate();
             streamFrame(fbView, currentPalette);
+            streamSkipCounter = 0;
         }
 
         // Update FPS
@@ -389,9 +433,11 @@ function startEmulation() {
         const now = performance.now();
         if (now - lastFpsTime >= 1000) {
             currentFps = frameCount;
+            const streamFps = streamFrameCount;
             frameCount = 0;
+            streamFrameCount = 0;
             lastFpsTime = now;
-            fpsDisplay.textContent = `FPS: ${currentFps}`;
+            fpsDisplay.textContent = `FPS: ${currentFps} | Stream: ${streamFps}`;
         }
 
         animationFrameId = requestAnimationFrame(animate);
@@ -436,8 +482,30 @@ function streamFrame(fbView, palette) {
     // Framebuffer
     packet.set(fbView, offset);
 
-    if (ws.bufferedAmount < 20000) { // Backpressure check (~2-3 frames max queued)
-        ws.send(packet.buffer);
+    ws.send(packet.buffer);
+    streamFrameCount++;
+}
+
+// Compute adaptive streaming rate based on buffer pressure and RTT
+function computeAdaptiveRate() {
+    const bufferFrames = ws.bufferedAmount / FRAME_PACKET_SIZE;
+    let bufferPressure = 0;
+    if (bufferFrames > 2.5) bufferPressure = 2;
+    else if (bufferFrames > 1.0) bufferPressure = 1;
+
+    const avgRtt = rttHistory.length > 0
+        ? rttHistory.reduce((a, b) => a + b, 0) / rttHistory.length
+        : rttMs;
+    let rttPressure = 0;
+    if (avgRtt > 150) rttPressure = 3;
+    else if (avgRtt > 80) rttPressure = 1;
+    else if (avgRtt < 25) rttPressure = -1;
+
+    const pressure = bufferPressure + rttPressure;
+    if (pressure >= 2) {
+        streamSkipInterval = Math.min(MAX_SKIP, streamSkipInterval + Math.ceil(pressure / 2));
+    } else if (pressure <= -1) {
+        streamSkipInterval = Math.max(MIN_SKIP, streamSkipInterval - 1);
     }
 }
 
@@ -465,10 +533,19 @@ function stopEmulation() {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
     }
+    if (pingIntervalId) {
+        clearInterval(pingIntervalId);
+        pingIntervalId = null;
+    }
     if (ws) {
         ws.close();
         ws = null;
     }
+    streamSkipInterval = 2;
+    streamSkipCounter = 0;
+    rttHistory = [];
+    rttMs = 20;
+    pingSentAt = 0;
     signalExit();
 }
 

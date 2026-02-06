@@ -40,8 +40,14 @@ extern void makapix_cancel_provisioning(void) __attribute__((weak));
 // PICO-8 handlers (from playback_controller.c via weak symbols)
 extern void playback_controller_exit_pico8_mode(void) __attribute__((weak));
 
-// WiFi/AP handlers (from app_wifi.c via weak symbols)
-extern bool app_wifi_is_captive_portal_active(void) __attribute__((weak));
+// UI mode handlers (from app_lcd.c / ugfx_ui via weak symbols)
+extern esp_err_t app_lcd_enter_ui_mode(void) __attribute__((weak));
+extern esp_err_t app_lcd_exit_ui_mode(void) __attribute__((weak));
+extern bool app_lcd_is_ui_mode(void) __attribute__((weak));
+extern gBool ugfx_ui_is_active(void) __attribute__((weak));
+extern void ugfx_ui_hide_registration(void) __attribute__((weak));
+extern esp_err_t ugfx_ui_show_captive_ap_info(void) __attribute__((weak));
+extern esp_err_t ugfx_ui_show_connectivity_error(void) __attribute__((weak));
 
 // USB touch forwarding (from app_usb.c via weak symbols)
 typedef struct {
@@ -99,45 +105,32 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
             return ESP_OK;
         }
             
-        case P3A_TOUCH_EVENT_LONG_PRESS:
-            // Check if captive portal is active - toggle AP info display
-            if (app_wifi_is_captive_portal_active && app_wifi_is_captive_portal_active()) {
-                // Toggle AP info screen
-                extern gBool ugfx_ui_is_active(void) __attribute__((weak));
-                extern void ugfx_ui_hide_registration(void) __attribute__((weak));
-                extern esp_err_t ugfx_ui_show_captive_ap_info(void) __attribute__((weak));
-                extern esp_err_t app_lcd_enter_ui_mode(void) __attribute__((weak));
-                extern esp_err_t app_lcd_exit_ui_mode(void) __attribute__((weak));
-                
-                if (ugfx_ui_is_active && ugfx_ui_is_active()) {
-                    // AP info screen is showing - hide it and exit UI mode
-                    ESP_LOGI(TAG, "Long press with AP info showing - hiding");
-                    if (ugfx_ui_hide_registration) ugfx_ui_hide_registration();
-                    if (app_lcd_exit_ui_mode) app_lcd_exit_ui_mode();
-                } else {
-                    // Show AP info screen
-                    ESP_LOGI(TAG, "Long press in captive portal mode - showing AP info");
-                    if (app_lcd_enter_ui_mode) app_lcd_enter_ui_mode();
-                    if (ugfx_ui_show_captive_ap_info) ugfx_ui_show_captive_ap_info();
-                }
+        case P3A_TOUCH_EVENT_LONG_PRESS: {
+            // If already in UI mode, dismiss the overlay and return to playback
+            if (app_lcd_is_ui_mode && app_lcd_is_ui_mode()) {
+                ESP_LOGI(TAG, "Long press while in UI mode - dismissing");
+                if (ugfx_ui_hide_registration) ugfx_ui_hide_registration();
+                if (app_lcd_exit_ui_mode) app_lcd_exit_ui_mode();
+                return ESP_OK;
+            }
+
+            // Not in UI mode - action depends on connectivity level
+            p3a_connectivity_level_t conn = p3a_state_get_connectivity();
+
+            if (conn == P3A_CONNECTIVITY_NO_WIFI) {
+                // No Wi-Fi: show Wi-Fi setup instructions
+                ESP_LOGI(TAG, "Long press with no Wi-Fi - showing setup instructions");
+                if (app_lcd_enter_ui_mode) app_lcd_enter_ui_mode();
+                if (ugfx_ui_show_captive_ap_info) ugfx_ui_show_captive_ap_info();
+            } else if (conn == P3A_CONNECTIVITY_NO_INTERNET) {
+                // Wi-Fi connected but no internet: show error screen
+                ESP_LOGI(TAG, "Long press with no internet - showing connectivity error");
+                if (app_lcd_enter_ui_mode) app_lcd_enter_ui_mode();
+                if (ugfx_ui_show_connectivity_error) ugfx_ui_show_connectivity_error();
             } else {
-                // Start provisioning - but only if we have internet
+                // Has internet: start provisioning flow
                 ESP_LOGI(TAG, "Long press detected - attempting to start provisioning");
-                
-                // Check for internet connectivity before provisioning
-                if (!p3a_state_has_internet()) {
-                    ESP_LOGW(TAG, "Cannot start provisioning - no internet connectivity");
-                    // Show error message to user
-                    extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
-                                                               int progress_percent, const char *detail) __attribute__((weak));
-                    if (p3a_render_set_channel_message) {
-                        const char *conn_detail = p3a_state_get_connectivity_detail();
-                        p3a_render_set_channel_message("Provisioning Unavailable", 6 /* P3A_CHANNEL_MSG_ERROR */, -1, 
-                                                       conn_detail ? conn_detail : "No internet connection");
-                    }
-                    return ESP_ERR_NOT_FINISHED;
-                }
-                
+
                 if (!makapix_start_provisioning) {
                     ESP_LOGW(TAG, "Provisioning not available (makapix_start_provisioning is NULL)");
                 } else {
@@ -158,6 +151,7 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
                 }
             }
             return ESP_OK;
+        }
             
         case P3A_TOUCH_EVENT_ROTATION_CW:
             if (app_get_screen_rotation && app_set_screen_rotation) {
@@ -179,10 +173,6 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
             return ESP_ERR_NOT_SUPPORTED;
     }
 }
-
-// UI mode handlers for synchronous cleanup (from app_lcd.c via weak symbols)
-extern esp_err_t app_lcd_exit_ui_mode(void) __attribute__((weak));
-extern void ugfx_ui_hide_registration(void) __attribute__((weak));
 
 /**
  * @brief Handle touch events in PROVISIONING state

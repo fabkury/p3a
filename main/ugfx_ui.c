@@ -26,7 +26,8 @@ typedef enum {
     UI_MODE_REGISTRATION,      // Registration code display
     UI_MODE_CAPTIVE_AP_INFO,   // Captive portal setup info
     UI_MODE_OTA_PROGRESS,      // OTA update progress
-    UI_MODE_CHANNEL_MESSAGE    // Channel loading/download status
+    UI_MODE_CHANNEL_MESSAGE,   // Channel loading/download status
+    UI_MODE_CONNECTIVITY_ERROR // Connectivity error (no internet, etc.)
 } ui_mode_t;
 
 // UI state
@@ -142,6 +143,37 @@ static void ugfx_ui_draw_captive_ap_info(void)
     y_pos += 50;
     gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, "4. Enter your WiFi credentials",
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+
+    // Dismiss hint
+    gdispFillStringBox(0, gdispGetHeight() - 60, gdispGetWidth(), 25, "Long-press to dismiss",
+                     gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0x888888), GFX_BLACK, gJustifyCenter);
+}
+
+/**
+ * @brief Draw the connectivity error screen (e.g. no internet)
+ */
+static void ugfx_ui_draw_connectivity_error(void)
+{
+    gdispClear(GFX_BLACK);
+
+    gCoord screen_w = gdispGetWidth();
+    gCoord screen_h = gdispGetHeight();
+
+    // Title
+    gdispFillStringBox(0, screen_h / 2 - 120, screen_w, 36, "No Internet Connection",
+                     gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0xFF6666), GFX_BLACK, gJustifyCenter);
+
+    // Description
+    gdispFillStringBox(0, screen_h / 2 - 50, screen_w, 36, "Wi-Fi connected but no internet access",
+                     gdispOpenFont("* DejaVu Sans 20"), GFX_WHITE, GFX_BLACK, gJustifyCenter);
+
+    // Hint
+    gdispFillStringBox(0, screen_h / 2 + 10, screen_w, 36, "Check your router or network settings",
+                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+
+    // Dismiss hint
+    gdispFillStringBox(0, screen_h - 60, screen_w, 25, "Long-press to dismiss",
+                     gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0x888888), GFX_BLACK, gJustifyCenter);
 }
 
 /**
@@ -456,6 +488,17 @@ esp_err_t ugfx_ui_show_captive_ap_info(void)
     return ESP_OK;
 }
 
+esp_err_t ugfx_ui_show_connectivity_error(void)
+{
+    s_ui_mode = UI_MODE_CONNECTIVITY_ERROR;
+    s_ui_active = true;
+    memset(s_current_code, 0, sizeof(s_current_code));
+    memset(s_status_message, 0, sizeof(s_status_message));
+
+    ESP_LOGD(TAG, "Connectivity error UI activated");
+    return ESP_OK;
+}
+
 esp_err_t ugfx_ui_show_registration(const char *code, const char *expires_at)
 {
     if (!code || !expires_at) {
@@ -612,6 +655,10 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
             
         case UI_MODE_CAPTIVE_AP_INFO:
             ugfx_ui_draw_captive_ap_info();
+            return 100;
+
+        case UI_MODE_CONNECTIVITY_ERROR:
+            ugfx_ui_draw_connectivity_error();
             return 100;
             
         case UI_MODE_OTA_PROGRESS:

@@ -669,7 +669,9 @@ void display_render_task(void *arg)
         }
 
         esp_lcd_panel_draw_bitmap(g_display_panel, 0, 0, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, back_buffer);
-
+        
+        g_last_frame_present_us = esp_timer_get_time();
+        
         // ================================================================
         // 7. Post-submit handling
         // ================================================================
@@ -683,8 +685,6 @@ void display_render_task(void *arg)
                 xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
             }
         }
-
-        g_last_frame_present_us = esp_timer_get_time();
 
         if (!use_vsync || ui_mode) {
             vTaskDelay(1);

@@ -48,6 +48,7 @@
 #include "play_scheduler.h"
 #include "event_bus.h"
 #include "esp_heap_caps.h"
+#include "p3a_board.h"
 #if CONFIG_P3A_PICO8_ENABLE
 #include "pico8_stream.h"
 #endif
@@ -72,7 +73,6 @@ static void do_reboot(void) {
     ESP_LOGI(HTTP_API_TAG, "Reboot command executing, turning off display...");
     
     // Turn off backlight for clean dark screen during reboot
-    extern esp_err_t p3a_board_set_brightness(int percent);
     p3a_board_set_brightness(0);
     
     vTaskDelay(pdMS_TO_TICKS(250));

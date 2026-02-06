@@ -39,6 +39,7 @@
 #include "p3a_state.h"
 #include "event_bus.h"
 #include "esp_heap_caps.h"
+#include "p3a_board.h"
 
 #define EXAMPLE_ESP_WIFI_SSID      CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
@@ -974,7 +975,6 @@ static esp_err_t save_post_handler(httpd_req_t *req)
         vTaskDelay(pdMS_TO_TICKS(1500));
         
         // Turn off backlight for clean dark screen during reboot
-        extern esp_err_t p3a_board_set_brightness(int percent);
         p3a_board_set_brightness(0);
         
         esp_restart();
@@ -999,7 +999,6 @@ static esp_err_t erase_post_handler(httpd_req_t *req)
     vTaskDelay(pdMS_TO_TICKS(1200));
     
     // Turn off backlight for clean dark screen during reboot
-    extern esp_err_t p3a_board_set_brightness(int percent);
     p3a_board_set_brightness(0);
     
     esp_restart();

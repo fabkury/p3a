@@ -369,6 +369,7 @@ esp_err_t channel_cache_get_next_missing(channel_cache_t *cache,
  *
  * @param cache The cache instance
  * @param cursor In/out cursor position (start at 0, updated on each call)
+ * @param max_cursor Maximum cursor position to scan up to (0 = scan to entry_count)
  * @param out_entries Output array (caller-provided, must hold max_batch entries)
  * @param max_batch Maximum number of entries to return per call
  * @param out_count Number of entries actually returned
@@ -376,6 +377,7 @@ esp_err_t channel_cache_get_next_missing(channel_cache_t *cache,
  */
 esp_err_t channel_cache_get_missing_batch(channel_cache_t *cache,
                                           uint32_t *cursor,
+                                          uint32_t max_cursor,
                                           makapix_channel_entry_t *out_entries,
                                           size_t max_batch,
                                           size_t *out_count);

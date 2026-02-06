@@ -532,7 +532,7 @@ skip_prefetch:
             }
 
             // DEBUG: Log decode path for each artwork (remove this block when done investigating)
-#if 1
+#if 0
             ESP_LOGI(TAG, "DEBUG_DECODE_PATH: has_transparency=%d (%s), file=%s",
                      s_front_buffer.decoder_info.has_transparency,
                      s_front_buffer.decoder_info.has_transparency ? "alpha-blend-at-decode" : "rgb-copy",

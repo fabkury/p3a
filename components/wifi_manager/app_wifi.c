@@ -1348,14 +1348,9 @@ static void wifi_init_softap(void)
         ESP_LOGW(TAG, "mDNS start failed (captive portal still works via IP): %s", esp_err_to_name(mdns_err));
     }
 
-    // Auto-display AP setup instructions on screen
-    extern esp_err_t app_lcd_enter_ui_mode(void) __attribute__((weak));
-    extern esp_err_t ugfx_ui_show_captive_ap_info(void) __attribute__((weak));
-    if (app_lcd_enter_ui_mode && ugfx_ui_show_captive_ap_info) {
-        ESP_LOGI(TAG, "Automatically displaying AP setup screen");
-        app_lcd_enter_ui_mode();
-        ugfx_ui_show_captive_ap_info();
-    }
+    // NOTE: WiFi setup instructions are NOT auto-displayed on screen.
+    // The user can long-press to see them. This allows offline animation
+    // playback to continue uninterrupted when credentials are invalid.
 }
 
 esp_err_t app_wifi_init(void)

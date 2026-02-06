@@ -254,14 +254,14 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
                     } else {
                         // No refresh, no download - truly no files available
                         if (animation_player_display_message) {
-                            animation_player_display_message("No Artworks", "No playable files available");
+                            animation_player_display_message("No Artworks", "No artworks to play");
                         }
                     }
                 }
             } else {
                 // No WiFi - can't load channels from Makapix
                 if (animation_player_display_message) {
-                    animation_player_display_message("No Artworks", "No playable files available");
+                    animation_player_display_message("No Artworks", "No artworks to play");
                 }
             }
         }

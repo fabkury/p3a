@@ -1320,10 +1320,10 @@ esp_err_t p3a_state_fallback_to_sdcard(void)
         ESP_LOGW(TAG, "No artworks available on SD card either - showing empty message");
         if (p3a_render_set_channel_message) {
             p3a_render_set_channel_message("p3a", 4 /* P3A_CHANNEL_MSG_EMPTY */, -1,
-                                          "No artworks available.\nLong-press to register.");
+                                          "No artworks to play");
         }
         if (ugfx_ui_show_channel_message) {
-            ugfx_ui_show_channel_message("p3a", "No artworks available.\nLong-press to register.", -1);
+            ugfx_ui_show_channel_message("p3a", "No artworks to play", -1);
         }
     }
 

@@ -45,6 +45,16 @@ esp_err_t ugfx_ui_show_provisioning_status(const char *status_message);
 esp_err_t ugfx_ui_show_captive_ap_info(void);
 
 /**
+ * @brief Show connectivity error screen (e.g. no internet)
+ * 
+ * Displays an error message when Wi-Fi is connected but there is
+ * no internet access. Dismissed by long-press.
+ * 
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t ugfx_ui_show_connectivity_error(void);
+
+/**
  * @brief Activate registration code display
  * 
  * Sets up the UI state for displaying a registration code.

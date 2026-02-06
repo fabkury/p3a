@@ -1162,6 +1162,7 @@ esp_err_t channel_cache_get_next_missing(channel_cache_t *cache,
 
 esp_err_t channel_cache_get_missing_batch(channel_cache_t *cache,
                                           uint32_t *cursor,
+                                          uint32_t max_cursor,
                                           makapix_channel_entry_t *out_entries,
                                           size_t max_batch,
                                           size_t *out_count)
@@ -1173,8 +1174,13 @@ esp_err_t channel_cache_get_missing_batch(channel_cache_t *cache,
     *out_count = 0;
     xSemaphoreTake(cache->mutex, portMAX_DELAY);
 
+    // Use max_cursor if provided and valid, otherwise entry_count
+    uint32_t scan_limit = (max_cursor > 0 && max_cursor < cache->entry_count)
+                          ? max_cursor
+                          : cache->entry_count;
+
     // Scan entries and collect up to max_batch missing ones
-    while (*cursor < cache->entry_count && *out_count < max_batch) {
+    while (*cursor < scan_limit && *out_count < max_batch) {
         const makapix_channel_entry_t *entry = &cache->entries[*cursor];
         (*cursor)++;
 

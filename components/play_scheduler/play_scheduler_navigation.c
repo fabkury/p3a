@@ -157,11 +157,11 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
                 s_state->last_played_id = artwork.artwork_id;
 
                 // Log summary of successful pick
-                ESP_LOGI(TAG, "=== PICK RESULT: post_id=%ld, ch_idx=%d ('%s'), file=%s",
-                         (long)artwork.post_id, artwork.channel_index,
-                         (artwork.channel_index < s_state->channel_count)
-                             ? s_state->channels[artwork.channel_index].channel_id : "?",
-                         artwork.filepath);
+                // ESP_LOGI(TAG, "=== PICK RESULT: post_id=%ld, ch_idx=%d ('%s'), file=%s",
+                //          (long)artwork.post_id, artwork.channel_index,
+                //          (artwork.channel_index < s_state->channel_count)
+                //              ? s_state->channels[artwork.channel_index].channel_id : "?",
+                //          artwork.filepath);
             }
         }
 

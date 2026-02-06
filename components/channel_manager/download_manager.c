@@ -88,6 +88,8 @@ static void dl_get_display_name(const char *channel_id, char *out_name, size_t m
 typedef struct {
     char channel_id[64];
     uint32_t dl_cursor;          // Current position for scanning
+    uint32_t scan_epoch_start;   // Where this scan pass began
+    bool has_wrapped;            // Whether cursor has wrapped from end to 0
     bool channel_complete;       // All entries scanned this epoch
 } dl_channel_state_t;
 
@@ -329,8 +331,9 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             ESP_LOGI(TAG, "DEBUG: Cache not found for '%s'", ch->channel_id);
             continue;
         }
-        ESP_LOGI(TAG, "DEBUG: Checking cache '%s': entry_count=%zu available=%zu cursor=%lu",
-                 ch->channel_id, cache->entry_count, cache->available_count, (unsigned long)ch->dl_cursor);
+        ESP_LOGI(TAG, "DEBUG: Checking cache '%s': entry_count=%zu available=%zu cursor=%lu epoch_start=%lu wrapped=%d",
+                 ch->channel_id, cache->entry_count, cache->available_count, 
+                 (unsigned long)ch->dl_cursor, (unsigned long)ch->scan_epoch_start, ch->has_wrapped);
 
         // Find entries needing download using batch API (reduces mutex contention)
         bool found = false;
@@ -339,12 +342,37 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
         size_t batch_idx = 0;
         size_t batch_count = 0;
 
+        // Calculate effective end for this scan based on wrap state
+        // After wrapping, we only scan up to scan_epoch_start (where we began)
+        uint32_t effective_end = cache->entry_count;
+        if (ch->has_wrapped && ch->scan_epoch_start > 0) {
+            effective_end = ch->scan_epoch_start;
+        }
+
         while (!found) {
             // Fetch next batch if current exhausted
             if (batch_idx >= batch_count) {
-                if (channel_cache_get_missing_batch(cache, &ch->dl_cursor,
+                if (channel_cache_get_missing_batch(cache, &ch->dl_cursor, effective_end,
                         s_batch_entries, DL_BATCH_SIZE, &batch_count) != ESP_OK) {
-                    break;  // No more missing entries
+                    // Batch exhausted - check if we need to wrap or are complete
+                    if (!ch->has_wrapped && ch->dl_cursor >= cache->entry_count) {
+                        // First time reaching end - wrap to beginning
+                        ch->dl_cursor = 0;
+                        ch->has_wrapped = true;
+                        ESP_LOGI(TAG, "Channel '%s' wrapping cursor to 0 (epoch_start=%lu)",
+                                 ch->channel_id, (unsigned long)ch->scan_epoch_start);
+                        
+                        if (ch->scan_epoch_start == 0) {
+                            // Started at 0, scanned everything, done
+                            break;
+                        }
+                        
+                        // Update effective_end for wrapped scan
+                        effective_end = ch->scan_epoch_start;
+                        batch_idx = batch_count = 0;  // Reset batch state
+                        continue;  // Continue scanning from 0
+                    }
+                    break;  // Full scan complete or error
                 }
                 batch_idx = 0;
                 scan_count += batch_count;
@@ -397,6 +425,15 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                          s_dl_storage_key, s_ext_strings[ext_idx]);
             }
 
+            // Set cursor to just after this entry's position, not the batch end.
+            // This ensures we don't skip other entries in the batch if this file
+            // already exists on disk (detected later in download_task).
+            uint32_t entry_ci = ci_find_by_post_id(cache, entry->post_id);
+            if (entry_ci != UINT32_MAX) {
+                ch->dl_cursor = entry_ci + 1;
+            }
+            // If lookup fails (shouldn't happen), cursor stays at batch end position
+
             found = true;
         }
 
@@ -404,15 +441,18 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             // Advance round-robin to next channel for fairness and commit to shared state
             size_t new_rr_idx = (ch_idx + 1) % snapshot->channel_count;
             dl_commit_state(snapshot, new_rr_idx);
-            ESP_LOGI(TAG, "DEBUG: Found download: ch=%s key=%s (scanned %d entries from cursor %lu)",
-                     ch->channel_id, out_request->storage_key, scan_count, (unsigned long)start_cursor);
+            ESP_LOGI(TAG, "DEBUG: Found download: ch=%s key=%s (ci=%lu, cursor now %lu)",
+                     ch->channel_id, out_request->storage_key, 
+                     (unsigned long)(ch->dl_cursor > 0 ? ch->dl_cursor - 1 : 0),
+                     (unsigned long)ch->dl_cursor);
             return ESP_OK;
         }
 
-        // This channel is exhausted
+        // This channel scan is complete - mark it so we skip it in future iterations
         ch->channel_complete = true;
-        ESP_LOGI(TAG, "Channel '%s' download scan complete (scanned %d entries, cursor %lu -> %lu, entry_count=%zu)",
-                 ch->channel_id, scan_count, (unsigned long)start_cursor, (unsigned long)ch->dl_cursor, cache->entry_count);
+        ESP_LOGI(TAG, "Channel '%s' download scan complete (scanned %d entries, cursor %lu -> %lu, epoch_start=%lu, wrapped=%d, entry_count=%zu)",
+                 ch->channel_id, scan_count, (unsigned long)start_cursor, (unsigned long)ch->dl_cursor,
+                 (unsigned long)ch->scan_epoch_start, ch->has_wrapped, cache->entry_count);
     }
 
     // All channels complete - commit the completion state
@@ -752,6 +792,8 @@ void download_manager_rescan(void)
         ESP_LOGD(TAG, "rescan: resetting cursors for %zu channel(s)", s_dl_channel_count);
         for (size_t i = 0; i < s_dl_channel_count; i++) {
             s_dl_channels[i].dl_cursor = 0;
+            s_dl_channels[i].scan_epoch_start = 0;
+            s_dl_channels[i].has_wrapped = false;
             s_dl_channels[i].channel_complete = false;
         }
         xSemaphoreGive(s_mutex);
@@ -800,6 +842,8 @@ void download_manager_set_channels(const char **channel_ids, size_t count)
         for (size_t i = 0; i < s_dl_channel_count; i++) {
             strlcpy(s_dl_channels[i].channel_id, channel_ids[i], sizeof(s_dl_channels[i].channel_id));
             s_dl_channels[i].dl_cursor = 0;
+            s_dl_channels[i].scan_epoch_start = 0;
+            s_dl_channels[i].has_wrapped = false;
             s_dl_channels[i].channel_complete = false;
         }
 
@@ -816,6 +860,8 @@ void download_manager_reset_cursors(void)
     if (s_mutex && xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         for (size_t i = 0; i < s_dl_channel_count; i++) {
             s_dl_channels[i].dl_cursor = 0;
+            s_dl_channels[i].scan_epoch_start = 0;
+            s_dl_channels[i].has_wrapped = false;
             s_dl_channels[i].channel_complete = false;
         }
         s_dl_round_robin_idx = 0;

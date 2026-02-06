@@ -259,6 +259,10 @@ esp_err_t slave_ota_check_and_update(void)
     // Give some time for the co-processor to reboot
     vTaskDelay(pdMS_TO_TICKS(3000));
     
+    // Turn off backlight for clean dark screen during reboot
+    extern esp_err_t p3a_board_set_brightness(int percent);
+    p3a_board_set_brightness(0);
+    
     // Restart the host to re-sync with updated co-processor
     esp_restart();
     

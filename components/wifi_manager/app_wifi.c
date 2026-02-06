@@ -972,6 +972,11 @@ static esp_err_t save_post_handler(httpd_req_t *req)
 
         // Short delay to ensure response is transmitted before reboot
         vTaskDelay(pdMS_TO_TICKS(1500));
+        
+        // Turn off backlight for clean dark screen during reboot
+        extern esp_err_t p3a_board_set_brightness(int percent);
+        p3a_board_set_brightness(0);
+        
         esp_restart();
         return ret;
     } else {
@@ -992,6 +997,11 @@ static esp_err_t erase_post_handler(httpd_req_t *req)
 
     // Delay before reboot to allow the response to be sent and rendered
     vTaskDelay(pdMS_TO_TICKS(1200));
+    
+    // Turn off backlight for clean dark screen during reboot
+    extern esp_err_t p3a_board_set_brightness(int percent);
+    p3a_board_set_brightness(0);
+    
     esp_restart();
     return ret;
 }

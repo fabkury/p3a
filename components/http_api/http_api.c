@@ -69,7 +69,12 @@ static StaticTask_t s_api_worker_task_buffer;
 // ---------- Worker Task ----------
 
 static void do_reboot(void) {
-    ESP_LOGI(HTTP_API_TAG, "Reboot command executing, delaying 250ms...");
+    ESP_LOGI(HTTP_API_TAG, "Reboot command executing, turning off display...");
+    
+    // Turn off backlight for clean dark screen during reboot
+    extern esp_err_t p3a_board_set_brightness(int percent);
+    p3a_board_set_brightness(0);
+    
     vTaskDelay(pdMS_TO_TICKS(250));
     esp_restart();
 }

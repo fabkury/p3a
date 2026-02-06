@@ -619,7 +619,6 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
     size_t total_ci = 0;
     size_t total_lai = 0;
 
-    // ESP_LOGI(TAG, "=== PICK DEBUG: ps_pick_next_available() ===");
     ESP_LOGI(TAG, "Pick mode: %s, Exposure mode: %d, Channels: %zu",
              state->pick_mode == PS_PICK_RANDOM ? "RANDOM" : "RECENCY",
              state->exposure_mode, state->channel_count);

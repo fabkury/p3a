@@ -282,6 +282,7 @@ static esp_err_t load_legacy_format(FILE *f, channel_cache_t *cache, const char 
         return ESP_ERR_NO_MEM;
     }
     cache->available_count = 0;
+    cache->available_capacity = entry_count;
 
     // Rebuild LAi from filesystem (now stores post_ids and builds hash)
     ESP_LOGI(TAG, "Migrating legacy cache, rebuilding LAi for %zu entries", entry_count);
@@ -430,6 +431,7 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
         memcpy(cache->available_post_ids, file_data + header.lai_offset,
                header.lai_count * sizeof(int32_t));
         cache->available_count = header.lai_count;
+        cache->available_capacity = header.ci_count;
     } else {
         // Allocate space for future additions
         if (header.ci_count > 0) {
@@ -441,8 +443,10 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
                 free(file_data);
                 return ESP_ERR_NO_MEM;
             }
+            cache->available_capacity = header.ci_count;
         } else {
             cache->available_post_ids = NULL;
+            cache->available_capacity = 0;
         }
         cache->available_count = 0;
     }
@@ -571,8 +575,10 @@ esp_err_t channel_cache_load(const char *channel_id,
 
         // Pre-allocate LAi array to support incremental batch updates
         // This allows channel_cache_merge_posts() to work correctly on empty cache
-        cache->available_post_ids = psram_malloc(CHANNEL_CACHE_MAX_ENTRIES * sizeof(int32_t));  // Match configured limit
+        size_t max_entries = CHANNEL_CACHE_MAX_ENTRIES;
+        cache->available_post_ids = psram_malloc(max_entries * sizeof(int32_t));  // Match configured limit
         cache->available_count = 0;
+        cache->available_capacity = cache->available_post_ids ? max_entries : 0;
 
         return ESP_OK;  // Empty cache is valid
     }
@@ -613,8 +619,10 @@ esp_err_t channel_cache_load(const char *channel_id,
 
     // Cache corrupt or migration failed - start empty
     // Pre-allocate LAi array for batch updates
-    cache->available_post_ids = psram_malloc(CHANNEL_CACHE_MAX_ENTRIES * sizeof(int32_t));
+    size_t max_entries_fallback = CHANNEL_CACHE_MAX_ENTRIES;
+    cache->available_post_ids = psram_malloc(max_entries_fallback * sizeof(int32_t));
     cache->available_count = 0;
+    cache->available_capacity = cache->available_post_ids ? max_entries_fallback : 0;
 
     return ESP_OK;  // Empty cache is valid
 }
@@ -749,6 +757,7 @@ void channel_cache_free(channel_cache_t *cache)
     free(cache->available_post_ids);
     cache->available_post_ids = NULL;
     cache->available_count = 0;
+    cache->available_capacity = 0;
 
     if (cache->mutex) {
         SemaphoreHandle_t mutex = cache->mutex;
@@ -786,6 +795,26 @@ bool lai_add_entry(channel_cache_t *cache, int32_t post_id)
             xSemaphoreGive(cache->mutex);
             return false;
         }
+        cache->available_capacity = alloc_count;
+    }
+
+    // Grow the array if capacity is exhausted
+    if (cache->available_count >= cache->available_capacity) {
+        size_t new_capacity = cache->available_capacity + (cache->available_capacity / 2);
+        if (new_capacity < cache->available_capacity + 256) {
+            new_capacity = cache->available_capacity + 256;  // Grow by at least 256
+        }
+        int32_t *new_arr = psram_malloc(new_capacity * sizeof(int32_t));
+        if (!new_arr) {
+            ESP_LOGE(TAG, "LAi grow failed: %zu -> %zu", cache->available_capacity, new_capacity);
+            xSemaphoreGive(cache->mutex);
+            return false;
+        }
+        memcpy(new_arr, cache->available_post_ids, cache->available_count * sizeof(int32_t));
+        free(cache->available_post_ids);
+        cache->available_post_ids = new_arr;
+        cache->available_capacity = new_capacity;
+        ESP_LOGI(TAG, "LAi array grew to capacity %zu", new_capacity);
     }
 
     // Add to array
@@ -870,12 +899,15 @@ size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
     // Free existing LAi hash
     lai_hash_free(cache);
 
-    // Ensure LAi array is allocated
-    if (!cache->available_post_ids) {
-        cache->available_post_ids = psram_malloc(cache->entry_count * sizeof(int32_t));
-        if (!cache->available_post_ids) {
+    // Ensure LAi array is allocated and large enough
+    if (!cache->available_post_ids || cache->available_capacity < cache->entry_count) {
+        int32_t *new_arr = psram_malloc(cache->entry_count * sizeof(int32_t));
+        if (!new_arr) {
             return 0;
         }
+        free(cache->available_post_ids);  // Safe even if NULL
+        cache->available_post_ids = new_arr;
+        cache->available_capacity = cache->entry_count;
     }
 
     cache->available_count = 0;
@@ -1499,14 +1531,33 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
     // Rebuild hash table
     ci_rebuild_hash_tables(cache);
 
-    // Ensure available_post_ids array exists for LAi operations
-    // This is needed when merging into an initially empty cache
-    if (!cache->available_post_ids && cache->entry_count > 0) {
-        cache->available_post_ids = psram_malloc(cache->entry_count * sizeof(int32_t));
-        if (cache->available_post_ids) {
-            cache->available_count = 0;  // Stays 0 until files are downloaded
-            ESP_LOGD(TAG, "Allocated available_post_ids for '%s' (capacity: %zu)",
-                     cache->channel_id, cache->entry_count);
+    // Ensure available_post_ids array exists and is large enough for LAi operations
+    if (cache->entry_count > 0) {
+        if (!cache->available_post_ids) {
+            // First allocation
+            cache->available_post_ids = psram_malloc(cache->entry_count * sizeof(int32_t));
+            if (cache->available_post_ids) {
+                cache->available_capacity = cache->entry_count;
+                cache->available_count = 0;  // Stays 0 until files are downloaded
+                ESP_LOGD(TAG, "Allocated available_post_ids for '%s' (capacity: %zu)",
+                         cache->channel_id, cache->entry_count);
+            }
+        } else if (cache->available_capacity < cache->entry_count) {
+            // Grow: entry_count increased beyond current capacity (e.g., cache size config change)
+            int32_t *new_arr = psram_malloc(cache->entry_count * sizeof(int32_t));
+            if (new_arr) {
+                if (cache->available_count > 0) {
+                    memcpy(new_arr, cache->available_post_ids,
+                           cache->available_count * sizeof(int32_t));
+                }
+                free(cache->available_post_ids);
+                cache->available_post_ids = new_arr;
+                ESP_LOGI(TAG, "Grew available_post_ids for '%s': %zu -> %zu",
+                         cache->channel_id, cache->available_capacity, cache->entry_count);
+                cache->available_capacity = cache->entry_count;
+            } else {
+                ESP_LOGE(TAG, "Failed to grow available_post_ids for '%s'", cache->channel_id);
+            }
         }
     }
 

@@ -133,6 +133,7 @@ typedef struct channel_cache_s {
     // LAi - Locally Available index (stores post_ids, not ci_indices)
     int32_t *available_post_ids;        // Array of post_ids (NULL if empty)
     size_t available_count;             // Number of available artworks
+    size_t available_capacity;          // Allocated capacity of available_post_ids
 
     // LAi hash set (rebuilt on load, not persisted)
     lai_post_id_node_t *lai_hash;       // Hash set for O(1) membership check

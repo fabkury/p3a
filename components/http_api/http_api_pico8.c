@@ -181,7 +181,9 @@ esp_err_t h_ws_pico_stream(httpd_req_t *req) {
             .len = sizeof(pong_data),
             .final = true
         };
-        httpd_ws_send_frame_async(req->handle, httpd_req_to_sockfd(req), &pong_frame);
+        // Use synchronous send (safe within handler context; async would risk
+        // the stack-local pong_data being freed before the queued send executes)
+        httpd_ws_send_frame(req, &pong_frame);
         if (payload_allocated) {
             free(payload_buf);
         }

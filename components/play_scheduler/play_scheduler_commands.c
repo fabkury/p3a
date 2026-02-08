@@ -501,6 +501,9 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
 
     xSemaphoreGive(s_state->mutex);
 
+    // Reset auto-swap timer so the full dwell interval starts from this new command
+    ps_timer_reset(s_state);
+
     // Only trigger initial playback if we have entries
     // Otherwise, let download manager trigger it when first file is available
     if (has_entries) {

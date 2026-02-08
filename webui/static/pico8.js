@@ -27,9 +27,12 @@ let currentPalette = PICO8_PALETTE.map(color => color.slice());
 const MIN_SKIP = 2;          // Maximum 30fps send rate
 const MAX_SKIP = 12;         // Minimum ~5fps send rate
 const FRAME_PACKET_SIZE = 8246;
+const GRACE_PERIOD_MS = 2000; // Ignore adaptive throttling for first 2 seconds
 let streamSkipCounter = 0;
 let streamSkipInterval = 2;  // Start at 30fps (send every 2nd frame)
 let streamFrameCount = 0;
+let streamStartTime = 0;     // Timestamp when streaming began
+let stableCount = 0;         // Consecutive checks with no congestion pressure
 
 // Application-level RTT measurement
 let rttMs = 20;
@@ -423,6 +426,7 @@ function startEmulation() {
         // Stream to ESP32 via WebSocket with adaptive rate control
         streamSkipCounter++;
         if (streamSkipCounter >= streamSkipInterval && ws && ws.readyState === WebSocket.OPEN) {
+            if (streamStartTime === 0) streamStartTime = performance.now();
             computeAdaptiveRate();
             streamFrame(fbView, currentPalette);
             streamSkipCounter = 0;
@@ -488,24 +492,43 @@ function streamFrame(fbView, palette) {
 
 // Compute adaptive streaming rate based on buffer pressure and RTT
 function computeAdaptiveRate() {
+    // Grace period: don't throttle during the first few seconds while the
+    // connection stabilises and RTT measurements are still being collected.
+    if (performance.now() - streamStartTime < GRACE_PERIOD_MS) return;
+
     const bufferFrames = ws.bufferedAmount / FRAME_PACKET_SIZE;
     let bufferPressure = 0;
-    if (bufferFrames > 2.5) bufferPressure = 2;
-    else if (bufferFrames > 1.0) bufferPressure = 1;
+    if (bufferFrames > 4) bufferPressure = 2;
+    else if (bufferFrames > 2) bufferPressure = 1;
 
     const avgRtt = rttHistory.length > 0
         ? rttHistory.reduce((a, b) => a + b, 0) / rttHistory.length
         : rttMs;
     let rttPressure = 0;
-    if (avgRtt > 150) rttPressure = 3;
-    else if (avgRtt > 80) rttPressure = 1;
-    else if (avgRtt < 25) rttPressure = -1;
+    if (avgRtt > 200) rttPressure = 2;
+    else if (avgRtt > 120) rttPressure = 1;
+    else if (avgRtt < 80) rttPressure = -1;
 
     const pressure = bufferPressure + rttPressure;
+
     if (pressure >= 2) {
-        streamSkipInterval = Math.min(MAX_SKIP, streamSkipInterval + Math.ceil(pressure / 2));
+        // Congestion: increase skip interval (reduce FPS), max +1 per step
+        streamSkipInterval = Math.min(MAX_SKIP, streamSkipInterval + 1);
+        stableCount = 0;
     } else if (pressure <= -1) {
+        // Good conditions: recover immediately
         streamSkipInterval = Math.max(MIN_SKIP, streamSkipInterval - 1);
+        stableCount = 0;
+    } else if (pressure === 0 && streamSkipInterval > MIN_SKIP) {
+        // Neutral: no congestion, but not clearly good either.
+        // After several stable checks, cautiously recover one step.
+        stableCount++;
+        if (stableCount >= 8) {
+            streamSkipInterval = Math.max(MIN_SKIP, streamSkipInterval - 1);
+            stableCount = 0;
+        }
+    } else {
+        stableCount = 0;
     }
 }
 
@@ -543,6 +566,8 @@ function stopEmulation() {
     }
     streamSkipInterval = 2;
     streamSkipCounter = 0;
+    streamStartTime = 0;
+    stableCount = 0;
     rttHistory = [];
     rttMs = 20;
     pingSentAt = 0;

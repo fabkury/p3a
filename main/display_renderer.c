@@ -512,9 +512,9 @@ void display_render_task(void *arg)
     int64_t frame_processing_start_us = 0;
 
     // Legacy 2-buffer mode: clear semaphore at start
-    if (use_vsync && !use_triple_buffering) {
-        xSemaphoreTake(g_display_vsync_sem, 0);
-    }
+    // if (use_vsync && !use_triple_buffering) {
+    //     xSemaphoreTake(g_display_vsync_sem, 0);
+    // }
 
     while (true) {
         display_render_mode_t mode = g_display_mode_request;
@@ -579,14 +579,19 @@ void display_render_task(void *arg)
                     prev_frame_delay_ms = g_target_frame_delay_ms;
                     frame_delay_ms = callback(back_buffer, ctx);
                     if (frame_delay_ms < 0) {
-                        // Callback returned error - reuse last displayed buffer
+                        // Callback returned error - release back buffer and skip this frame.
+                        // The display continues showing the previously-submitted frame.
+                        // SAFETY: We must NOT fall back to g_last_display_buffer because
+                        // that buffer may still be DISPLAYING (DMA actively reading it).
+                        // Writing overlays to it or resubmitting it would race with DMA.
                         if (use_triple_buffering) {
                             g_buffer_info[back_buffer_idx].state = BUFFER_STATE_FREE;
+                            if (g_buffer_free_sem) {
+                                xSemaphoreGive(g_buffer_free_sem);
+                            }
                         }
-                        back_buffer_idx = (int8_t)g_last_display_buffer;
-                        if (back_buffer_idx >= buffer_count) back_buffer_idx = 0;
-                        back_buffer = g_display_buffers[back_buffer_idx];
-                        frame_delay_ms = 100;
+                        vTaskDelay(pdMS_TO_TICKS(10));
+                        continue;
                     }
                     g_target_frame_delay_ms = (uint32_t)frame_delay_ms;
                 } else {
@@ -606,15 +611,9 @@ void display_render_task(void *arg)
             }    
         }
         
-        // ================================================================
-        // 4. Cache flush
-        // ================================================================
-#if DISPLAY_HAVE_CACHE_MSYNC
-        esp_cache_msync(back_buffer, g_display_buffer_bytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-#endif
 
         // ================================================================
-        // 5. Frame timing delay (if not max_speed_playback)
+        // 4. Frame timing delay (if not max_speed_playback)
         // ================================================================
         if (!config_store_get_max_speed_playback()) {
             const int64_t now_us = esp_timer_get_time();
@@ -641,23 +640,12 @@ void display_render_task(void *arg)
         
 
         // ================================================================
-        // 6. Submit to DMA
+        // 5. Submit to DMA
         // ================================================================
         g_last_display_buffer = (uint8_t)back_buffer_idx;
 
         if (use_triple_buffering && !ui_mode) {
-            // Check if there's already a pending buffer - if so, wait for VSYNC
-            // bool has_pending = false;
-            // for (int i = 0; i < g_display_buffer_count; i++) {
-            //     if (g_buffer_info[i].state == BUFFER_STATE_PENDING) {
-            //         has_pending = true;
-            //         break;
-            //     }
-            // }
-
-            // if (has_pending) {
-                // Wait for VSYNC to promote the pending buffer to displaying
-            // }
+            xSemaphoreTake(g_display_vsync_sem, 0);
             xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
 
             // Now safe to submit - at most 1 buffer will be PENDING
@@ -672,19 +660,6 @@ void display_render_task(void *arg)
         
         g_last_frame_present_us = esp_timer_get_time();
         
-        // ================================================================
-        // 7. Post-submit handling
-        // ================================================================
-        if (use_triple_buffering && !ui_mode) {
-            // Clear any VSYNC signal that arrived during our submission
-            // xSemaphoreTake(g_display_vsync_sem, 0);
-        } else {
-            // Legacy 2-buffer mode: wait for VSYNC
-            if (use_vsync && !ui_mode) {
-                xSemaphoreTake(g_display_vsync_sem, 0);
-                xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
-            }
-        }
 
         if (!use_vsync || ui_mode) {
             vTaskDelay(5);

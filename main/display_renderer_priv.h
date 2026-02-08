@@ -170,6 +170,13 @@ void proc_notif_start(void);
 void proc_notif_success(void);
 
 /**
+ * @brief Signal failure (shows red triangle for 3 seconds)
+ *
+ * Can be called from any state. Directly transitions to FAILED.
+ */
+void proc_notif_fail(void);
+
+/**
  * @brief Update and draw processing notification overlay
  * 
  * Called each frame from display_render_task. Handles state machine

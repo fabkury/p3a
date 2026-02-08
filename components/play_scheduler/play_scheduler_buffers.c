@@ -34,6 +34,14 @@ void ps_history_push(ps_state_t *state, const ps_artwork_t *artwork)
 {
     if (!state->history || !artwork) return;
 
+    // Deduplicate: skip if identical to the most recent entry
+    if (state->history_count > 0) {
+        size_t last_idx = (state->history_head + PS_HISTORY_SIZE - 1) % PS_HISTORY_SIZE;
+        if (strcmp(state->history[last_idx].filepath, artwork->filepath) == 0) {
+            return;
+        }
+    }
+
     // Add to ring buffer at head position
     size_t idx = state->history_head;
     memcpy(&state->history[idx], artwork, sizeof(ps_artwork_t));

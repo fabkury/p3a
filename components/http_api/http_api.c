@@ -43,6 +43,9 @@
 #include "makapix_mqtt.h"
 #include "makapix_artwork.h"
 #include "makapix_channel_impl.h"
+#include "show_url.h"
+#include "sd_path.h"
+#include <sys/stat.h>
 #include "ota_manager.h"
 #include "p3a_state.h"
 #include "play_scheduler.h"
@@ -291,6 +294,80 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
             
             makapix_show_artwork(pid, key, url);
         }
+    } else if (strcmp(command_type, "show_url") == 0) {
+        cJSON *artwork_url = cJSON_GetObjectItem(payload, "artwork_url");
+        if (artwork_url && cJSON_IsString(artwork_url)) {
+            const char *url = cJSON_GetStringValue(artwork_url);
+            cJSON *blocking_item = cJSON_GetObjectItem(payload, "blocking");
+            bool blocking = true; // Default
+            if (blocking_item && cJSON_IsBool(blocking_item)) {
+                blocking = cJSON_IsTrue(blocking_item);
+            }
+            esp_err_t err = show_url_start(url, blocking);
+            if (err != ESP_OK) {
+                ESP_LOGE(HTTP_API_TAG, "show_url failed: %s", esp_err_to_name(err));
+            }
+        } else {
+            ESP_LOGE(HTTP_API_TAG, "show_url: missing artwork_url");
+        }
+    } else if (strcmp(command_type, "swap_to") == 0) {
+        cJSON *channel = cJSON_GetObjectItem(payload, "channel");
+        if (!channel || !cJSON_IsString(channel)) {
+            ESP_LOGE(HTTP_API_TAG, "swap_to: missing channel");
+            return;
+        }
+
+        const char *ch = cJSON_GetStringValue(channel);
+
+        if (strcmp(ch, "sdcard") == 0) {
+            cJSON *filename_item = cJSON_GetObjectItem(payload, "filename");
+            if (!filename_item || !cJSON_IsString(filename_item)) {
+                ESP_LOGE(HTTP_API_TAG, "swap_to sdcard: missing filename");
+                return;
+            }
+
+            const char *fname = cJSON_GetStringValue(filename_item);
+            char animations_dir[128];
+            if (sd_path_get_animations(animations_dir, sizeof(animations_dir)) != ESP_OK) {
+                ESP_LOGE(HTTP_API_TAG, "swap_to: failed to get animations path");
+                return;
+            }
+
+            char filepath[512];
+            snprintf(filepath, sizeof(filepath), "%s/%s", animations_dir, fname);
+
+            struct stat st;
+            if (stat(filepath, &st) != 0) {
+                ESP_LOGE(HTTP_API_TAG, "swap_to: file not found: %s", filepath);
+                return;
+            }
+
+            esp_err_t err = play_scheduler_play_local_file(filepath);
+            if (err != ESP_OK) {
+                ESP_LOGE(HTTP_API_TAG, "swap_to sdcard failed: %s", esp_err_to_name(err));
+            }
+        } else {
+            // Makapix channel: swap by post_id
+            cJSON *post_id_item = cJSON_GetObjectItem(payload, "post_id");
+            cJSON *storage_key_item = cJSON_GetObjectItem(payload, "storage_key");
+            cJSON *art_url_item = cJSON_GetObjectItem(payload, "art_url");
+
+            if (!post_id_item || !cJSON_IsNumber(post_id_item) ||
+                !storage_key_item || !cJSON_IsString(storage_key_item) ||
+                !art_url_item || !cJSON_IsString(art_url_item)) {
+                ESP_LOGE(HTTP_API_TAG, "swap_to Makapix: missing post_id, storage_key, or art_url");
+                return;
+            }
+
+            int32_t pid = (int32_t)cJSON_GetNumberValue(post_id_item);
+            const char *skey = cJSON_GetStringValue(storage_key_item);
+            const char *aurl = cJSON_GetStringValue(art_url_item);
+
+            esp_err_t err = play_scheduler_play_artwork(pid, skey, aurl);
+            if (err != ESP_OK) {
+                ESP_LOGE(HTTP_API_TAG, "swap_to Makapix failed: %s", esp_err_to_name(err));
+            }
+        }
     }
 }
 
@@ -386,6 +463,12 @@ static esp_err_t h_post_router(httpd_req_t *req) {
     }
     if (strcmp(uri, "/channel") == 0) {
         return h_post_channel(req);
+    }
+    if (strcmp(uri, "/action/show_url") == 0) {
+        return h_post_show_url(req);
+    }
+    if (strcmp(uri, "/action/swap_to") == 0) {
+        return h_post_swap_to(req);
     }
     // Playset endpoint: /playset/{name}
     if (strncmp(uri, "/playset/", 9) == 0) {

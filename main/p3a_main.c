@@ -43,6 +43,7 @@
 #include "live_mode.h"         // Live Mode time helpers
 #include "fresh_boot.h"        // Fresh boot debug helpers
 #include "channel_cache.h"       // LAi persistence for channel caches
+#include "show_url.h"            // show-url download command
 #include "freertos/task.h"
 
 static const char *TAG = "p3a";
@@ -513,6 +514,12 @@ void app_main(void)
 
     // Initialize Wi-Fi (will start captive portal if needed, or connect to saved network)
     ESP_ERROR_CHECK(connectivity_service_init());
+
+    // Initialize show-url module (download task for show_url command)
+    esp_err_t show_url_err = show_url_init();
+    if (show_url_err != ESP_OK) {
+        ESP_LOGW(TAG, "show_url_init failed: %s (show-url command unavailable)", esp_err_to_name(show_url_err));
+    }
 
     // Check and update ESP32-C6 co-processor firmware if needed
     // This uses the ESP-Hosted OTA feature to update the WiFi chip

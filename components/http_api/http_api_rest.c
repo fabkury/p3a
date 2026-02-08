@@ -35,10 +35,12 @@
 #include "play_scheduler.h"
 #include "playset_store.h"
 #include "playback_service.h"
+#include "show_url.h"
 #include "app_lcd.h"
 #include "version.h"
 #include "p3a_state.h"
 #include "freertos/semphr.h"
+#include <sys/stat.h>
 
 // Processing notification (from display_renderer_priv.h via weak symbol)
 extern void proc_notif_start(void) __attribute__((weak));
@@ -1239,6 +1241,186 @@ esp_err_t h_post_playset(httpd_req_t *req)
     free(command);
     send_json(req, 200, out);
     free(out);
+    return ESP_OK;
+}
+
+// ---------- Show URL Handler ----------
+
+/**
+ * POST /action/show_url
+ * Download artwork from URL and play it.
+ * JSON body: { "artwork_url": "...", "blocking": true/false }
+ * blocking defaults to true if not provided.
+ */
+esp_err_t h_post_show_url(httpd_req_t *req) {
+    if (!ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+
+    int err_status = 0;
+    size_t body_len = 0;
+    char *body = recv_body_json(req, &body_len, &err_status);
+    if (!body) {
+        char err_msg[128];
+        snprintf(err_msg, sizeof(err_msg),
+                 "{\"ok\":false,\"error\":\"Failed to read body\",\"code\":\"BODY_READ_ERROR\"}");
+        send_json(req, err_status ? err_status : 400, err_msg);
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_Parse(body);
+    free(body);
+
+    if (!root) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid JSON\",\"code\":\"INVALID_JSON\"}");
+        return ESP_OK;
+    }
+
+    cJSON *artwork_url = cJSON_GetObjectItem(root, "artwork_url");
+    if (!artwork_url || !cJSON_IsString(artwork_url) || cJSON_GetStringValue(artwork_url)[0] == '\0') {
+        cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or empty 'artwork_url'\",\"code\":\"MISSING_FIELD\"}");
+        return ESP_OK;
+    }
+
+    cJSON *blocking_item = cJSON_GetObjectItem(root, "blocking");
+    bool blocking = true; // Default
+    if (blocking_item && cJSON_IsBool(blocking_item)) {
+        blocking = cJSON_IsTrue(blocking_item);
+    }
+
+    const char *url = cJSON_GetStringValue(artwork_url);
+    esp_err_t err = show_url_start(url, blocking);
+    cJSON_Delete(root);
+
+    if (err != ESP_OK) {
+        char err_msg[128];
+        snprintf(err_msg, sizeof(err_msg),
+                 "{\"ok\":false,\"error\":\"Failed to start download: %s\",\"code\":\"START_FAILED\"}",
+                 esp_err_to_name(err));
+        send_json(req, 500, err_msg);
+        return ESP_OK;
+    }
+
+    send_json(req, 202, "{\"ok\":true,\"data\":{\"queued\":true,\"action\":\"show_url\"}}");
+    return ESP_OK;
+}
+
+// ---------- Swap To Handler ----------
+
+/**
+ * POST /action/swap_to
+ * Swap to a specific artwork.
+ * For sdcard: { "channel": "sdcard", "filename": "art.gif" }
+ * For Makapix: { "channel": "<name>", "post_id": 123, "storage_key": "...", "art_url": "..." }
+ */
+esp_err_t h_post_swap_to(httpd_req_t *req) {
+    if (!ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+
+    int err_status = 0;
+    size_t body_len = 0;
+    char *body = recv_body_json(req, &body_len, &err_status);
+    if (!body) {
+        char err_msg[128];
+        snprintf(err_msg, sizeof(err_msg),
+                 "{\"ok\":false,\"error\":\"Failed to read body\",\"code\":\"BODY_READ_ERROR\"}");
+        send_json(req, err_status ? err_status : 400, err_msg);
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_Parse(body);
+    free(body);
+
+    if (!root) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid JSON\",\"code\":\"INVALID_JSON\"}");
+        return ESP_OK;
+    }
+
+    cJSON *channel = cJSON_GetObjectItem(root, "channel");
+    if (!channel || !cJSON_IsString(channel)) {
+        cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing 'channel'\",\"code\":\"MISSING_FIELD\"}");
+        return ESP_OK;
+    }
+
+    const char *ch = cJSON_GetStringValue(channel);
+    esp_err_t err;
+
+    if (strcmp(ch, "sdcard") == 0) {
+        // SD card channel: swap by filename
+        cJSON *filename_item = cJSON_GetObjectItem(root, "filename");
+        if (!filename_item || !cJSON_IsString(filename_item) || cJSON_GetStringValue(filename_item)[0] == '\0') {
+            cJSON_Delete(root);
+            send_json(req, 400, "{\"ok\":false,\"error\":\"Missing 'filename' for sdcard channel\",\"code\":\"MISSING_FIELD\"}");
+            return ESP_OK;
+        }
+
+        const char *fname = cJSON_GetStringValue(filename_item);
+
+        // Build full path and verify file exists
+        char animations_dir[128];
+        if (sd_path_get_animations(animations_dir, sizeof(animations_dir)) != ESP_OK) {
+            cJSON_Delete(root);
+            send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to get animations path\",\"code\":\"PATH_ERROR\"}");
+            return ESP_OK;
+        }
+
+        char filepath[512];
+        snprintf(filepath, sizeof(filepath), "%s/%s", animations_dir, fname);
+
+        struct stat st;
+        if (stat(filepath, &st) != 0) {
+            cJSON_Delete(root);
+            send_json(req, 404, "{\"ok\":false,\"error\":\"File not found in animations directory\",\"code\":\"NOT_FOUND\"}");
+            return ESP_OK;
+        }
+
+        err = play_scheduler_play_local_file(filepath);
+    } else {
+        // Makapix channel: swap by post_id
+        cJSON *post_id_item = cJSON_GetObjectItem(root, "post_id");
+        cJSON *storage_key_item = cJSON_GetObjectItem(root, "storage_key");
+        cJSON *art_url_item = cJSON_GetObjectItem(root, "art_url");
+
+        if (!post_id_item || !cJSON_IsNumber(post_id_item)) {
+            cJSON_Delete(root);
+            send_json(req, 400, "{\"ok\":false,\"error\":\"Missing 'post_id' for Makapix channel\",\"code\":\"MISSING_FIELD\"}");
+            return ESP_OK;
+        }
+        if (!storage_key_item || !cJSON_IsString(storage_key_item)) {
+            cJSON_Delete(root);
+            send_json(req, 400, "{\"ok\":false,\"error\":\"Missing 'storage_key' for Makapix channel\",\"code\":\"MISSING_FIELD\"}");
+            return ESP_OK;
+        }
+        if (!art_url_item || !cJSON_IsString(art_url_item)) {
+            cJSON_Delete(root);
+            send_json(req, 400, "{\"ok\":false,\"error\":\"Missing 'art_url' for Makapix channel\",\"code\":\"MISSING_FIELD\"}");
+            return ESP_OK;
+        }
+
+        int32_t post_id = (int32_t)cJSON_GetNumberValue(post_id_item);
+        const char *storage_key = cJSON_GetStringValue(storage_key_item);
+        const char *art_url = cJSON_GetStringValue(art_url_item);
+
+        err = play_scheduler_play_artwork(post_id, storage_key, art_url);
+    }
+
+    cJSON_Delete(root);
+
+    if (err != ESP_OK) {
+        char err_msg[128];
+        snprintf(err_msg, sizeof(err_msg),
+                 "{\"ok\":false,\"error\":\"Swap failed: %s\",\"code\":\"SWAP_FAILED\"}",
+                 esp_err_to_name(err));
+        send_json(req, 500, err_msg);
+        return ESP_OK;
+    }
+
+    send_json(req, 200, "{\"ok\":true,\"data\":{\"action\":\"swap_to\"}}");
     return ESP_OK;
 }
 

@@ -102,6 +102,15 @@ void proc_notif_success(void)
     }
 }
 
+void proc_notif_fail(void)
+{
+    // Directly transition to FAILED state (red triangle for 3 seconds)
+    g_proc_notif_fail_time_us = esp_timer_get_time();
+    g_proc_notif_state = PROC_NOTIF_STATE_FAILED;
+    g_proc_notif_start_time_us = 0;
+    ESP_LOGD(TAG, "Processing notification set to failed");
+}
+
 void processing_notification_update_and_draw(uint8_t *buffer)
 {
     if (!buffer) return;

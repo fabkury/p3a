@@ -437,23 +437,38 @@ static void wifi_health_monitor_task(void *arg)
             continue;
         }
 
-        // DNS-based reachability check (requires internet; chosen by user)
+        // DNS-based reachability check (requires internet; chosen by user).
+        // Retry up to 3 times to avoid forcing a WiFi reconnect on transient DNS blips.
         struct addrinfo hints = {
             .ai_family = AF_INET,
             .ai_socktype = SOCK_STREAM,
         };
-        struct addrinfo *res = NULL;
+        const int max_dns_attempts = 3;
+        bool dns_ok = false;
+        int last_err = 0;
 
-        int err = getaddrinfo("google.com", "80", &hints, &res);
-        if (err != 0 || res == NULL) {
-            ESP_LOGW(HTAG, "Health check failed (getaddrinfo): err=%d res=%p; forcing WiFi reconnect", err, res);
+        for (int attempt = 0; attempt < max_dns_attempts && !dns_ok; attempt++) {
+            struct addrinfo *res = NULL;
+            last_err = getaddrinfo("google.com", "80", &hints, &res);
+            if (last_err == 0 && res != NULL) {
+                dns_ok = true;
+            }
+            if (res) {
+                freeaddrinfo(res);
+            }
+            if (!dns_ok && attempt < max_dns_attempts - 1) {
+                ESP_LOGW(HTAG, "Health check DNS attempt %d/%d failed (err=%d); retrying in 2s",
+                         attempt + 1, max_dns_attempts, last_err);
+                vTaskDelay(pdMS_TO_TICKS(2000));
+            }
+        }
+
+        if (!dns_ok) {
+            ESP_LOGW(HTAG, "Health check failed after %d attempts (last err=%d); forcing WiFi reconnect",
+                     max_dns_attempts, last_err);
             esp_wifi_remote_disconnect(); // triggers WIFI_EVENT_STA_DISCONNECTED -> reconnect logic
         } else {
             ESP_LOGD(HTAG, "Health check OK");
-        }
-
-        if (res) {
-            freeaddrinfo(res);
         }
     }
 }

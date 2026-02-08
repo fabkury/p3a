@@ -236,6 +236,37 @@ body {
 }
 .upload-btn:active:not(:disabled) { background: #45a049; }
 .upload-btn:disabled { background: #ccc; cursor: not-allowed; }
+.show-url-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+.show-url-input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1.5px solid #d0d0d0;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    outline: none;
+    transition: border-color 0.2s;
+    min-width: 0;
+}
+.show-url-input:focus { border-color: #667eea; }
+.show-url-input::placeholder { color: #aaa; }
+.show-url-btn {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+.show-url-btn:active:not(:disabled) { background: #5a6fd6; }
+.show-url-btn:disabled { background: #ccc; cursor: not-allowed; }
 .upload-progress { display: none; margin-top: 6px; }
 .upload-progress.active { display: block; }
 .progress-bar { width: 100%; height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden; }
@@ -355,6 +386,10 @@ body {
                 </div>
             </div>
         </form>
+        <div class="show-url-row">
+            <input type="url" class="show-url-input" id="show-url-input" placeholder="https://example.com/artwork.gif">
+            <button type="button" class="show-url-btn" id="show-url-btn">Show</button>
+        </div>
     </div>
 </div>
 <div class="update-banner" id="update-banner" onclick="window.location.href='/ota'">
@@ -514,6 +549,55 @@ function toggleUploadPanel() {
     var section = document.querySelector('.upload-section');
     section.classList.toggle('collapsed');
 }
+
+// Show URL handler
+var showUrlInput = document.getElementById('show-url-input');
+var showUrlBtn = document.getElementById('show-url-btn');
+showUrlBtn.addEventListener('click', function() {
+    var url = showUrlInput.value.trim();
+    if (!url) {
+        statusDiv.textContent = 'Please enter a URL';
+        statusDiv.className = 'status error';
+        statusDiv.style.display = 'block';
+        setTimeout(function() { statusDiv.style.display = 'none'; }, 4000);
+        return;
+    }
+    showUrlBtn.disabled = true;
+    statusDiv.textContent = 'Sending...';
+    statusDiv.className = 'status';
+    statusDiv.style.display = 'block';
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/action/show_url', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            showUrlBtn.disabled = false;
+            try {
+                var result = JSON.parse(xhr.responseText);
+                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
+                    statusDiv.textContent = 'Download started';
+                    statusDiv.className = 'status success';
+                    showUrlInput.value = '';
+                } else {
+                    statusDiv.textContent = 'Failed: ' + (result.error || 'HTTP ' + xhr.status);
+                    statusDiv.className = 'status error';
+                }
+            } catch (e) {
+                statusDiv.textContent = 'Failed: ' + xhr.statusText;
+                statusDiv.className = 'status error';
+            }
+            statusDiv.style.display = 'block';
+            setTimeout(function() { statusDiv.style.display = 'none'; }, 6000);
+        }
+    };
+    xhr.send(JSON.stringify({ artwork_url: url }));
+});
+showUrlInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        showUrlBtn.click();
+    }
+});
 
 // Drag and drop handlers
 dropZone.addEventListener('click', function(e) {

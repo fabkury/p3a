@@ -299,7 +299,7 @@ esp_err_t config_store_get_sdcard_root(char **out_path);
  * Controls how many artworks can be cached per channel. Higher values use
  * more memory and disk space. Value is cached in memory for fast access.
  *
- * @param size Cache size (32-4096, default 1024)
+ * @param size Cache size (32-4096, default 2048)
  * @return ESP_OK on success
  */
 esp_err_t config_store_set_channel_cache_size(uint32_t size);
@@ -310,7 +310,7 @@ esp_err_t config_store_set_channel_cache_size(uint32_t size);
  * Returns the configured channel cache size. Uses in-memory caching for
  * performance - NVS is only read once.
  *
- * @return Cache size (defaults to 1024 if not set)
+ * @return Cache size (defaults to 2048 if not set)
  */
 uint32_t config_store_get_channel_cache_size(void);
 

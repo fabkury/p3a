@@ -90,6 +90,64 @@ static bool is_supported_extension(const char *ext)
 }
 
 /**
+ * @brief Detect image format from magic bytes
+ *
+ * Pure function: examines the first bytes of a file payload and returns the
+ * detected format string. Uses exact byte-signature matching only.
+ *
+ * @param data Raw file bytes
+ * @param len  Length of data in bytes
+ * @return One of "PNG", "JPEG", "GIF", "WEBP", or "UNSUPPORTED"
+ */
+static const char *detect_image_format(const uint8_t *data, size_t len)
+{
+    // Minimum length guard: longest check (WebP) reads up to offset 11
+    if (!data || len < 12) return "UNSUPPORTED";
+
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
+    if (data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 &&
+        data[4] == 0x0D && data[5] == 0x0A && data[6] == 0x1A && data[7] == 0x0A) {
+        return "PNG";
+    }
+
+    // JPEG: FF D8 FF
+    if (data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF) {
+        return "JPEG";
+    }
+
+    // GIF: 47 49 46 38 (GIF8) followed by 37 61 (7a) or 39 61 (9a)
+    if (data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x38) {
+        if ((data[4] == 0x37 && data[5] == 0x61) ||
+            (data[4] == 0x39 && data[5] == 0x61)) {
+            return "GIF";
+        }
+    }
+
+    // WebP: RIFF (bytes 0-3) + WEBP (bytes 8-11)
+    if (data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
+        data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50) {
+        return "WEBP";
+    }
+
+    return "UNSUPPORTED";
+}
+
+/**
+ * @brief Map format name to file extension
+ *
+ * @param format Format string from detect_image_format()
+ * @return File extension (without dot), or NULL for "UNSUPPORTED"
+ */
+static const char *format_to_extension(const char *format)
+{
+    if (strcmp(format, "PNG") == 0)  return "png";
+    if (strcmp(format, "JPEG") == 0) return "jpg";
+    if (strcmp(format, "GIF") == 0)  return "gif";
+    if (strcmp(format, "WEBP") == 0) return "webp";
+    return NULL;
+}
+
+/**
  * @brief Extract filename from URL (last path component)
  *
  * Given "http://example.com/path/to/art.gif?v=2", extracts "art.gif".
@@ -229,23 +287,38 @@ static void show_url_task(void *arg)
         s_cancel = false;
         s_busy = true;
 
+        // Pause auto-swap timer so the download progress display isn't
+        // interrupted by an artwork swap
+        play_scheduler_pause_auto_swap();
+
         ESP_LOGI(TAG, "Starting download: %s (blocking=%d)", url, (int)blocking);
 
         // ------------------------------------------------------------------
-        // Validate URL extension
+        // Extract filename and check extension
         // ------------------------------------------------------------------
         char filename[SHOW_URL_MAX_FILENAME_LEN];
-        if (!extract_filename_from_url(url, filename, sizeof(filename))) {
-            report_failure(blocking, "Could not extract filename from URL");
-            s_busy = false;
-            continue;
-        }
+        bool needs_format_detection = false;
 
-        const char *ext = strrchr(filename, '.');
-        if (!ext || !is_supported_extension(ext + 1)) {
-            report_failure(blocking, "Unsupported file type");
-            s_busy = false;
-            continue;
+        if (!extract_filename_from_url(url, filename, sizeof(filename))) {
+            // No filename in URL - use fallback base name; format will
+            // be detected from file content after download
+            strlcpy(filename, "artwork", sizeof(filename));
+            needs_format_detection = true;
+        } else {
+            const char *ext = strrchr(filename, '.');
+            if (!ext || !is_supported_extension(ext + 1)) {
+                // Extension missing or unrecognized - strip it to keep
+                // just the base name; format will be detected later
+                needs_format_detection = true;
+                if (ext) {
+                    // Truncate at the dot to remove unrecognized extension
+                    filename[(size_t)(ext - filename)] = '\0';
+                }
+                // Guard against empty base name after stripping
+                if (filename[0] == '\0') {
+                    strlcpy(filename, "artwork", sizeof(filename));
+                }
+            }
         }
 
         // ------------------------------------------------------------------
@@ -253,6 +326,7 @@ static void show_url_task(void *arg)
         // ------------------------------------------------------------------
         if (animation_player_is_sd_export_locked()) {
             report_failure(blocking, "SD card shared over USB");
+            play_scheduler_resume_auto_swap();
             s_busy = false;
             continue;
         }
@@ -270,6 +344,7 @@ static void show_url_task(void *arg)
         if (sd_path_get_animations(animations_dir, sizeof(animations_dir)) != ESP_OK ||
             sd_path_get_downloads(downloads_dir, sizeof(downloads_dir)) != ESP_OK) {
             report_failure(blocking, "Failed to get SD paths");
+            play_scheduler_resume_auto_swap();
             s_busy = false;
             continue;
         }
@@ -282,20 +357,6 @@ static void show_url_task(void *arg)
         if (stat(animations_dir, &st) != 0) {
             mkdir(animations_dir, 0755);
         }
-
-        // ------------------------------------------------------------------
-        // Generate unique filename
-        // ------------------------------------------------------------------
-        char final_path[512];
-        char final_name[SHOW_URL_MAX_FILENAME_LEN];
-        if (!generate_unique_filename(animations_dir, filename, final_path, sizeof(final_path),
-                                      final_name, sizeof(final_name))) {
-            report_failure(blocking, "Could not generate unique filename");
-            s_busy = false;
-            continue;
-        }
-
-        ESP_LOGI(TAG, "Target filename: %s", final_name);
 
         // ------------------------------------------------------------------
         // Create temp file
@@ -324,6 +385,7 @@ static void show_url_task(void *arg)
         esp_http_client_handle_t client = esp_http_client_init(&config);
         if (!client) {
             report_failure(blocking, "HTTP client init failed");
+            play_scheduler_resume_auto_swap();
             s_busy = false;
             continue;
         }
@@ -333,6 +395,7 @@ static void show_url_task(void *arg)
             ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(err));
             esp_http_client_cleanup(client);
             report_failure(blocking, "Connection failed");
+            play_scheduler_resume_auto_swap();
             s_busy = false;
             continue;
         }
@@ -347,6 +410,7 @@ static void show_url_task(void *arg)
             char err_msg[64];
             snprintf(err_msg, sizeof(err_msg), "HTTP error %d", status_code);
             report_failure(blocking, err_msg);
+            play_scheduler_resume_auto_swap();
             s_busy = false;
             continue;
         }
@@ -357,6 +421,7 @@ static void show_url_task(void *arg)
             esp_http_client_close(client);
             esp_http_client_cleanup(client);
             report_failure(blocking, "File exceeds 16 MiB limit");
+            play_scheduler_resume_auto_swap();
             s_busy = false;
             continue;
         }
@@ -372,6 +437,7 @@ static void show_url_task(void *arg)
                 esp_http_client_close(client);
                 esp_http_client_cleanup(client);
                 report_failure(blocking, "Out of memory");
+                play_scheduler_resume_auto_swap();
                 s_busy = false;
                 continue;
             }
@@ -380,13 +446,14 @@ static void show_url_task(void *arg)
         // ------------------------------------------------------------------
         // Open temp file
         // ------------------------------------------------------------------
-        FILE *fp = fopen(temp_path, "wb");
+        FILE *fp = fopen(temp_path, "w+b");
         if (!fp) {
             ESP_LOGE(TAG, "Failed to open temp file: %s", strerror(errno));
             free(chunk_buffer);
             esp_http_client_close(client);
             esp_http_client_cleanup(client);
             report_failure(blocking, "Failed to create temp file");
+            play_scheduler_resume_auto_swap();
             s_busy = false;
             continue;
         }
@@ -487,6 +554,7 @@ static void show_url_task(void *arg)
                 report_failure(blocking, "Download failed");
             }
 
+            play_scheduler_resume_auto_swap();
             s_busy = false;
             continue;
         }
@@ -496,6 +564,7 @@ static void show_url_task(void *arg)
             fclose(fp);
             unlink(temp_path);
             report_failure(blocking, "Downloaded file is empty");
+            play_scheduler_resume_auto_swap();
             s_busy = false;
             continue;
         }
@@ -506,9 +575,62 @@ static void show_url_task(void *arg)
             fclose(fp);
             unlink(temp_path);
             report_failure(blocking, "Incomplete download");
+            play_scheduler_resume_auto_swap();
             s_busy = false;
             continue;
         }
+
+        // ------------------------------------------------------------------
+        // Format detection fallback (when extension was missing/unknown)
+        // ------------------------------------------------------------------
+        if (needs_format_detection) {
+            // Read first 12 bytes from the temp file to detect format
+            fflush(fp);
+            fseek(fp, 0, SEEK_SET);
+            uint8_t header[12];
+            size_t header_read = fread(header, 1, sizeof(header), fp);
+
+            const char *format = detect_image_format(header, header_read);
+            const char *detected_ext = format_to_extension(format);
+
+            if (!detected_ext) {
+                fclose(fp);
+                unlink(temp_path);
+                report_failure(blocking, "Unsupported file type");
+                play_scheduler_resume_auto_swap();
+                s_busy = false;
+                continue;
+            }
+
+            ESP_LOGI(TAG, "Format auto-detected from file content: %s", format);
+
+            // Build filename with detected extension: base_name.ext
+            // Truncate base name if needed to leave room for '.' + ext (max 5 chars)
+            size_t max_base = sizeof(filename) - strlen(detected_ext) - 2; // dot + NUL
+            if (strlen(filename) > max_base) {
+                filename[max_base] = '\0';
+            }
+            char detected_name[SHOW_URL_MAX_FILENAME_LEN];
+            snprintf(detected_name, sizeof(detected_name), "%s.%s", filename, detected_ext);
+            strlcpy(filename, detected_name, sizeof(filename));
+        }
+
+        // ------------------------------------------------------------------
+        // Generate unique filename
+        // ------------------------------------------------------------------
+        char final_path[512];
+        char final_name[SHOW_URL_MAX_FILENAME_LEN];
+        if (!generate_unique_filename(animations_dir, filename, final_path, sizeof(final_path),
+                                      final_name, sizeof(final_name))) {
+            fclose(fp);
+            unlink(temp_path);
+            report_failure(blocking, "Could not generate unique filename");
+            play_scheduler_resume_auto_swap();
+            s_busy = false;
+            continue;
+        }
+
+        ESP_LOGI(TAG, "Target filename: %s", final_name);
 
         // ------------------------------------------------------------------
         // Flush and move to final path
@@ -521,6 +643,7 @@ static void show_url_task(void *arg)
             ESP_LOGE(TAG, "Failed to rename %s -> %s: %s", temp_path, final_path, strerror(errno));
             unlink(temp_path);
             report_failure(blocking, "Failed to save file");
+            play_scheduler_resume_auto_swap();
             s_busy = false;
             continue;
         }
@@ -543,6 +666,7 @@ static void show_url_task(void *arg)
             // File is saved, but playback failed - not a fatal error
         }
 
+        play_scheduler_resume_auto_swap();
         s_busy = false;
     }
 }

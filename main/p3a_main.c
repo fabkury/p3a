@@ -199,10 +199,10 @@ static void handle_playback_event(const p3a_event_t *event, void *ctx)
             app_lcd_cycle_animation_backward();
             break;
         case P3A_EVENT_PAUSE:
-            app_lcd_set_animation_paused(true);
+            playback_service_pause();
             break;
         case P3A_EVENT_RESUME:
-            app_lcd_set_animation_paused(false);
+            playback_service_resume();
             break;
         default:
             break;

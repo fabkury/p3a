@@ -751,10 +751,10 @@ function loadCacheSize() {
             try {
                 var resp = JSON.parse(xhr.responseText || '{}');
                 var cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-                var size = (typeof cfg.channel_cache_size === 'number') ? cfg.channel_cache_size : 1024;
+                var size = (typeof cfg.channel_cache_size === 'number') ? cfg.channel_cache_size : 2048;
                 document.getElementById('cache-size').value = size;
             } catch (e) {
-                document.getElementById('cache-size').value = 1024;
+                document.getElementById('cache-size').value = 2048;
             }
         }
     };

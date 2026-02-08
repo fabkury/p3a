@@ -560,8 +560,10 @@ void display_render_task(void *arg)
         int frame_delay_ms = 100;
         uint32_t prev_frame_delay_ms = g_target_frame_delay_ms;
 
-        if (app_lcd_get_brightness() == 0) {
-            // Handle brightness = 0 (black screen)
+        bool brightness_zero = (app_lcd_get_brightness() == 0);
+        bool anim_paused = app_lcd_is_animation_paused();
+        if (brightness_zero && !anim_paused) {
+            // User manually set brightness to 0 (not paused): skip callback
             memset(back_buffer, 0, g_display_buffer_bytes);
         } else {
             if (ui_mode) {

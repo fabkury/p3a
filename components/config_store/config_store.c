@@ -953,7 +953,7 @@ esp_err_t config_store_get_sdcard_root(char **out_path)
 // Channel Cache Size (persisted, with in-memory caching)
 // ============================================================================
 
-#define CHANNEL_CACHE_SIZE_DEFAULT 1024
+#define CHANNEL_CACHE_SIZE_DEFAULT 2048
 #define CHANNEL_CACHE_SIZE_MIN     32
 #define CHANNEL_CACHE_SIZE_MAX     4096
 

@@ -113,7 +113,7 @@ void play_scheduler_pause_auto_swap(void)
         return;
     }
 
-    ESP_LOGI(TAG, "Pausing auto-swap timer (PICO-8 mode)");
+    ESP_LOGI(TAG, "Pausing auto-swap timer");
     xTimerStop(state->dwell_timer, 0);
 }
 

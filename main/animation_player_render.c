@@ -581,13 +581,14 @@ skip_prefetch:
 #endif
 
     // Render animation frame
-    if (paused_local && s_use_prefetched && s_front_buffer.ready) {
-        // When paused, show the prefetched frame once then hold
-        frame_delay_ms = render_next_frame(&s_front_buffer, dest_buffer, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, true);
-        s_use_prefetched = false;
-        if (frame_delay_ms < 0) frame_delay_ms = 100;
+    if (paused_local) {
+        // Paused: output black frame. Buffer management (prefetch + swap)
+        // already ran above so animations load silently in the background.
+        // Don't consume s_use_prefetched -- leave it for resume.
+        memset(dest_buffer, 0, EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES * (EXAMPLE_LCD_BIT_PER_PIXEL / 8));
         s_target_frame_delay_ms = 100;
-    } else if (!paused_local && s_front_buffer.ready) {
+        return 100;
+    } else if (s_front_buffer.ready) {
         // Normal playback
         frame_delay_ms = render_next_frame(&s_front_buffer, dest_buffer, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, s_use_prefetched);
         s_use_prefetched = false;

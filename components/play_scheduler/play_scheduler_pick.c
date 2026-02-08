@@ -79,10 +79,10 @@ static void ps_build_sdcard_filepath(const sdcard_index_entry_t *entry,
     }
 
     // Build full path: animations_path + "/" + filename
-    // Note: filename is max 143 chars, animations_path is max 127 chars
-    // Total max: 127 + 1 + 143 + 1 = 272 bytes, but out_len is typically 256
-    int written = snprintf(out, out_len, "%s/%s", animations_path, entry->filename);
-    if (written < 0 || (size_t)written >= out_len) {
+    size_t n = strlcpy(out, animations_path, out_len);
+    if (n < out_len) n = strlcat(out, "/", out_len);
+    if (n < out_len) n = strlcat(out, entry->filename, out_len);
+    if (n >= out_len) {
         ESP_LOGW(TAG, "SD card filepath truncated: %s", entry->filename);
     }
 }

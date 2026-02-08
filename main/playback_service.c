@@ -4,6 +4,14 @@
 #include "playback_service.h"
 #include "play_scheduler.h"
 #include "animation_player.h"
+#include "app_lcd.h"
+#include "esp_log.h"
+
+static const char *TAG = "playback_svc";
+
+// Pause state (runtime-only, NOT persisted to NVS)
+static bool s_paused = false;
+static int  s_saved_brightness = 100;
 
 esp_err_t playback_service_init(void)
 {
@@ -40,14 +48,57 @@ esp_err_t playback_service_prev(void)
 
 esp_err_t playback_service_pause(void)
 {
+    if (s_paused) {
+        return ESP_OK;  // Already paused
+    }
+
+    // Save current brightness before blanking the screen
+    s_saved_brightness = app_lcd_get_brightness();
+    if (s_saved_brightness == 0) {
+        // Edge case: if brightness was already 0, restore to a sane default
+        s_saved_brightness = 100;
+    }
+
+    ESP_LOGI(TAG, "Pausing playback (saved brightness=%d)", s_saved_brightness);
+
+    // Set animation paused flag (render callback will output black)
     animation_player_set_paused(true);
+
+    // Set brightness to 0 for maximum blackness (backlight off)
+    app_lcd_set_brightness(0);
+
+    // Stop the auto-swap timer so no automatic swaps fire while paused
+    play_scheduler_pause_auto_swap();
+
+    s_paused = true;
     return ESP_OK;
 }
 
 esp_err_t playback_service_resume(void)
 {
+    if (!s_paused) {
+        return ESP_OK;  // Not paused
+    }
+
+    ESP_LOGI(TAG, "Resuming playback (restoring brightness=%d)", s_saved_brightness);
+
+    s_paused = false;
+
+    // Resume animation decoding
     animation_player_set_paused(false);
+
+    // Restore user brightness
+    app_lcd_set_brightness(s_saved_brightness);
+
+    // Restart the auto-swap timer
+    play_scheduler_resume_auto_swap();
+
     return ESP_OK;
+}
+
+bool playback_service_is_paused(void)
+{
+    return s_paused;
 }
 
 esp_err_t playback_service_set_rotation(int degrees)

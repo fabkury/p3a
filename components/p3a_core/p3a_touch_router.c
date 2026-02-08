@@ -8,6 +8,7 @@
 
 #include "p3a_touch_router.h"
 #include "p3a_state.h"
+#include "event_bus.h"
 #include "esp_log.h"
 #include <string.h>
 #include <stdbool.h>
@@ -49,6 +50,9 @@ extern void ugfx_ui_hide_registration(void) __attribute__((weak));
 extern esp_err_t ugfx_ui_show_captive_ap_info(void) __attribute__((weak));
 extern esp_err_t ugfx_ui_show_connectivity_error(void) __attribute__((weak));
 
+// Playback service (from playback_service.c via weak symbol)
+extern bool playback_service_is_paused(void) __attribute__((weak));
+
 // USB touch forwarding (from app_usb.c via weak symbols)
 typedef struct {
     uint8_t report_id;
@@ -75,6 +79,16 @@ static bool s_initialized = false;
  */
 static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
 {
+    // While paused, only long-press (to unpause) is allowed
+    if (playback_service_is_paused && playback_service_is_paused()) {
+        if (event->type == P3A_TOUCH_EVENT_LONG_PRESS) {
+            ESP_LOGI(TAG, "Long press while paused - resuming playback");
+            event_bus_emit_simple(P3A_EVENT_RESUME);
+            return ESP_OK;
+        }
+        return ESP_OK;  // Silently ignore all other gestures
+    }
+
     switch (event->type) {
         case P3A_TOUCH_EVENT_TAP_LEFT:
             if (proc_notif_start) {
@@ -305,7 +319,11 @@ bool p3a_touch_router_is_gesture_enabled(p3a_touch_event_type_t event_type)
     
     switch (current_state) {
         case P3A_STATE_ANIMATION_PLAYBACK:
-            // All gestures enabled during animation playback
+            // While paused, only long-press (to unpause) is allowed
+            if (playback_service_is_paused && playback_service_is_paused()) {
+                return (event_type == P3A_TOUCH_EVENT_LONG_PRESS);
+            }
+            // All gestures enabled during normal animation playback
             return true;
             
         case P3A_STATE_PROVISIONING:

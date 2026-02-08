@@ -11,7 +11,7 @@ cmake_minimum_required(VERSION 3.16)
 # - Increment MINOR for new features (backward compatible)
 # - Increment PATCH for bug fixes
 # For testing OTA, use pre-release versions on GitHub
-set(PROJECT_VER "0.7.8-dev")
+set(PROJECT_VER "0.7.9-dev")
 # =============================================================================
 
 # =============================================================================
@@ -19,7 +19,7 @@ set(PROJECT_VER "0.7.8-dev")
 # =============================================================================
 # Web UI version uses X.Y format (not X.Y.Z). Updates are independent of
 # firmware updates and are checked/installed automatically during OTA checks.
-set(WEBUI_VERSION "0.8")
+set(WEBUI_VERSION "0.9")
 # =============================================================================
 
 # =============================================================================
@@ -27,7 +27,7 @@ set(WEBUI_VERSION "0.8")
 # =============================================================================
 # Bump ONLY when making breaking changes to HTTP API endpoints.
 # New firmware MUST remain backwards-compatible with old Web UI at same api_version.
-set(P3A_API_VERSION 1)
+set(P3A_API_VERSION 2)
 # =============================================================================
 
 # =============================================================================
@@ -35,7 +35,7 @@ set(P3A_API_VERSION 1)
 # =============================================================================
 # Set P3A_BUILD_FLASHER to OFF to skip flasher build (faster dev builds)
 # Set to ON for release builds that need the flasher executable
-set(P3A_BUILD_FLASHER OFF)
+set(P3A_BUILD_FLASHER ON)
 # =============================================================================
 
 # Parse PROJECT_VER to extract major, minor, patch components

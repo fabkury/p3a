@@ -73,7 +73,7 @@ typedef struct {
 
 // Magic number: 'P3AC' (p3a Cache)
 #define CHANNEL_CACHE_MAGIC     0x50334143
-#define CHANNEL_CACHE_VERSION   21  // Bumped to 21: removed dwell_time_ms and metadata_modified_at from entries
+#define CHANNEL_CACHE_VERSION   22  // Bumped to 22: force fresh cache rebuild
 
 // Default maximum entries per channel (configurable via config_store)
 #define CHANNEL_CACHE_DEFAULT_MAX_ENTRIES 2048

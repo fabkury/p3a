@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -17,6 +18,7 @@ esp_err_t playback_service_next(void);
 esp_err_t playback_service_prev(void);
 esp_err_t playback_service_pause(void);
 esp_err_t playback_service_resume(void);
+bool playback_service_is_paused(void);
 esp_err_t playback_service_set_rotation(int degrees);
 
 #ifdef __cplusplus

@@ -23,8 +23,8 @@
 static const char *TAG = "makapix_artwork";
 
 // Chunk size for serialized download (read chunk from WiFi, then write to SD)
-// 128KB provides good balance between throughput and memory usage
-#define DOWNLOAD_CHUNK_SIZE (128 * 1024)
+// 64 KB provides good balance between throughput, memory usage and animation jitter.
+#define DOWNLOAD_CHUNK_SIZE (32 * 1024)
 
 // Extension strings for file naming
 static const char *s_ext_strings[] = { ".webp", ".gif", ".png", ".jpg" };

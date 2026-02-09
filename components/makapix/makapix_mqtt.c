@@ -458,7 +458,7 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
         // Default 6KB is insufficient when parsing large API responses (~15KB JSON).
         // The event handler calls response_callback which does cJSON_Parse synchronously.
         .task.stack_size = 16384,
-        .task.priority = 5,
+        .task.priority = CONFIG_P3A_NETWORK_TASK_PRIORITY,  // was 5
     };
 
     // Set mTLS certificates

@@ -433,7 +433,7 @@ class P3AFlasher(tk.Tk):
         info_frame.pack(fill='x', pady=(10, 5))
 
         info_text1 = ttk.Label(info_frame,
-            text="The flashing process takes about 3 minutes. At the end, the device will automatically",
+            text="The flashing process takes about 4 minutes. At the end, the device will automatically",
             style='Footer.TLabel')
         info_text1.pack(anchor='w')
         info_text2 = ttk.Label(info_frame,

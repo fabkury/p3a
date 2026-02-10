@@ -329,7 +329,18 @@ static void refresh_task(void *arg)
                     // it returns true when a message (like "No playable files available")
                     // is being displayed, which would prevent playback from starting.
                     if (entry_count > 0) {
-                        ESP_LOGI(TAG, "Async refresh complete - triggering playback");
+                        // Check if initial swap has already been triggered for this epoch
+                        bool should_trigger = (state->initial_swap_epoch != state->epoch_id);
+                        
+                        if (should_trigger) {
+                            // Mark that we're triggering the initial swap for this epoch
+                            state->initial_swap_epoch = state->epoch_id;
+                            ESP_LOGI(TAG, "Async refresh complete - triggering initial swap for epoch %lu",
+                                     (unsigned long)state->epoch_id);
+                        } else {
+                            ESP_LOGI(TAG, "Async refresh complete - skipping swap (already triggered for epoch %lu)",
+                                     (unsigned long)state->epoch_id);
+                        }
 
                         // Clear any loading/error message
                         extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail);
@@ -342,8 +353,10 @@ static void refresh_task(void *arg)
                         // Release mutex before calling play_scheduler_next to avoid deadlock
                         xSemaphoreGive(state->mutex);
 
-                        // Trigger playback - this will pick an available artwork
-                        play_scheduler_next(NULL);
+                        if (should_trigger) {
+                            // Trigger playback - this will pick an available artwork
+                            play_scheduler_next(NULL);
+                        }
 
                         // Re-acquire mutex for the rest of the loop
                         xSemaphoreTake(state->mutex, portMAX_DELAY);
@@ -423,6 +436,22 @@ static void refresh_task(void *arg)
         // For other channels: only trigger if no animation is currently playing
         bool should_trigger_playback = (err == ESP_OK && sync_entry_count > 0);
         bool is_artwork_channel = (type == PS_CHANNEL_TYPE_ARTWORK);
+        
+        // For non-artwork channels, also check if initial swap already triggered for this epoch
+        if (should_trigger_playback && !is_artwork_channel) {
+            if (state->initial_swap_epoch == state->epoch_id) {
+                ESP_LOGI(TAG, "Sync refresh complete - skipping swap (already triggered for epoch %lu)",
+                         (unsigned long)state->epoch_id);
+                should_trigger_playback = false;
+            }
+        }
+        
+        // Mark that we're triggering initial swap if we're about to
+        if (should_trigger_playback && !is_artwork_channel) {
+            state->initial_swap_epoch = state->epoch_id;
+            ESP_LOGI(TAG, "Sync refresh complete - will trigger initial swap for epoch %lu",
+                     (unsigned long)state->epoch_id);
+        }
 
         xSemaphoreGive(state->mutex);
 

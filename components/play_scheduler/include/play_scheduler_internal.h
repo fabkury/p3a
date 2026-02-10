@@ -87,6 +87,9 @@ typedef struct {
     // Repeat avoidance
     int32_t last_played_id;
 
+    // Playback tracking
+    uint32_t initial_swap_epoch;  // Epoch ID when initial swap was triggered (0 = none)
+
     // Dwell time
     uint32_t dwell_time_seconds;
 

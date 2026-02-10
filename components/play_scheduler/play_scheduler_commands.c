@@ -397,6 +397,9 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     // Increment epoch (history is preserved)
     s_state->epoch_id++;
 
+    // Reset swap gate so the first swap for this playset can proceed
+    s_state->initial_swap_done = false;
+
     // Initialize each channel
     for (size_t i = 0; i < command->channel_count; i++) {
         const ps_channel_spec_t *spec = &command->channels[i];

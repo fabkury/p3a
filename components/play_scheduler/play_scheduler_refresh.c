@@ -324,11 +324,9 @@ static void refresh_task(void *arg)
                     extern void download_manager_reset_cursors(void);
                     download_manager_reset_cursors();
 
-                    // Always trigger playback after async refresh completes with entries.
-                    // Note: We can't rely on animation_player_is_animation_ready() because
-                    // it returns true when a message (like "No playable files available")
-                    // is being displayed, which would prevent playback from starting.
-                    if (entry_count > 0) {
+                    // Trigger playback after async refresh only if no swap has happened yet
+                    // for this playset. This ensures each playset execution produces at most 1 swap.
+                    if (entry_count > 0 && !state->initial_swap_done) {
                         ESP_LOGI(TAG, "Async refresh complete - triggering playback");
 
                         // Clear any loading/error message
@@ -347,6 +345,12 @@ static void refresh_task(void *arg)
 
                         // Re-acquire mutex for the rest of the loop
                         xSemaphoreTake(state->mutex, portMAX_DELAY);
+                    } else if (entry_count > 0) {
+                        ESP_LOGD(TAG, "Async refresh complete but swap already done for this playset, skipping playback trigger");
+
+                        // Still signal download manager to rescan
+                        extern void download_manager_rescan(void);
+                        download_manager_rescan();
                     }
                 }
             }
@@ -423,14 +427,17 @@ static void refresh_task(void *arg)
         // For other channels: only trigger if no animation is currently playing
         bool should_trigger_playback = (err == ESP_OK && sync_entry_count > 0);
         bool is_artwork_channel = (type == PS_CHANNEL_TYPE_ARTWORK);
+        bool swap_already_done = state->initial_swap_done;
 
         xSemaphoreGive(state->mutex);
 
         if (should_trigger_playback) {
-            // For artwork channels, always trigger playback immediately
-            // For other channels, only trigger if nothing is playing yet
+            // Only trigger playback if no swap has happened yet for this playset.
+            // This ensures each playset execution produces at most 1 swap.
+            // For artwork channels, always trigger (show_artwork should immediately display).
+            // For other channels, also respect the existing check for no animation playing.
             extern bool animation_player_is_animation_ready(void);
-            if (is_artwork_channel || !animation_player_is_animation_ready()) {
+            if (!swap_already_done && (is_artwork_channel || !animation_player_is_animation_ready())) {
                 ESP_LOGI(TAG, "%s - triggering playback",
                          is_artwork_channel ? "Artwork channel ready" : "No animation playing after refresh");
 
@@ -444,6 +451,8 @@ static void refresh_task(void *arg)
 
                 // Trigger playback
                 play_scheduler_next(NULL);
+            } else if (swap_already_done) {
+                ESP_LOGD(TAG, "Sync refresh complete but swap already done for this playset, skipping playback trigger");
             }
         }
 

@@ -5,6 +5,7 @@
 #include "play_scheduler.h"
 #include "animation_player.h"
 #include "app_lcd.h"
+#include "view_tracker.h"
 #include "esp_log.h"
 
 static const char *TAG = "playback_svc";
@@ -64,6 +65,9 @@ esp_err_t playback_service_pause(void)
     // Set animation paused flag (render callback will output black)
     animation_player_set_paused(true);
 
+    // Pause view tracking (state is preserved)
+    view_tracker_pause();
+
     // Set brightness to 0 for maximum blackness (backlight off)
     app_lcd_set_brightness(0);
 
@@ -86,6 +90,9 @@ esp_err_t playback_service_resume(void)
 
     // Resume animation decoding
     animation_player_set_paused(false);
+
+    // Resume view tracking
+    view_tracker_resume();
 
     // Restore user brightness
     app_lcd_set_brightness(s_saved_brightness);

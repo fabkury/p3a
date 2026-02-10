@@ -181,6 +181,32 @@ void view_tracker_stop(void)
     s_state.current_filepath[0] = '\0';
 }
 
+void view_tracker_pause(void)
+{
+    if (!s_state.initialized || !s_state.tracking_active) {
+        return;
+    }
+    
+    if (s_state.timer) {
+        xTimerStop(s_state.timer, 0);
+    }
+    
+    ESP_LOGD(TAG, "View tracking paused at %" PRIu32 "s", s_state.elapsed_seconds);
+}
+
+void view_tracker_resume(void)
+{
+    if (!s_state.initialized || !s_state.tracking_active) {
+        return;
+    }
+    
+    if (s_state.timer) {
+        xTimerStart(s_state.timer, 0);
+    }
+    
+    ESP_LOGD(TAG, "View tracking resumed at %" PRIu32 "s", s_state.elapsed_seconds);
+}
+
 static void timer_callback(TimerHandle_t timer)
 {
     (void)timer;

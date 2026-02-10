@@ -48,6 +48,22 @@ void view_tracker_signal_swap(int32_t post_id, const char *filepath);
  */
 void view_tracker_stop(void);
 
+/**
+ * @brief Pause view tracking
+ * 
+ * Stops the timer but preserves tracking state (elapsed time, post_id, etc.).
+ * Use this when playback is paused. Call view_tracker_resume() to continue tracking.
+ */
+void view_tracker_pause(void);
+
+/**
+ * @brief Resume view tracking
+ * 
+ * Restarts the timer from where it was paused. Tracking state is preserved.
+ * Use this when playback is resumed after being paused.
+ */
+void view_tracker_resume(void);
+
 #ifdef __cplusplus
 }
 #endif

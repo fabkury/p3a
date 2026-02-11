@@ -13,6 +13,7 @@
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "p3a_board.h"
 
 static const char *TAG = "slave_ota";
 
@@ -258,6 +259,9 @@ esp_err_t slave_ota_check_and_update(void)
     
     // Give some time for the co-processor to reboot
     vTaskDelay(pdMS_TO_TICKS(3000));
+    
+    // Turn off backlight for clean dark screen during reboot
+    p3a_board_set_brightness(0);
     
     // Restart the host to re-sync with updated co-processor
     esp_restart();

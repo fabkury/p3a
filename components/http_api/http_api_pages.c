@@ -192,6 +192,10 @@ esp_err_t h_post_erase(httpd_req_t *req) {
 
     // Delay before reboot to allow response to be sent
     vTaskDelay(pdMS_TO_TICKS(1200));
+    
+    // Turn off backlight for clean dark screen during reboot
+    p3a_board_set_brightness(0);
+    
     esp_restart();
 
     return ESP_OK;

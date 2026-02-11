@@ -25,6 +25,7 @@
 #include "nvs_flash.h"
 #include "p3a_state.h"
 #include "p3a_render.h"
+#include "p3a_board.h"
 #include "esp_heap_caps.h"
 #include <string.h>
 #include <stdlib.h>
@@ -963,6 +964,9 @@ esp_err_t ota_manager_install_update(ota_progress_cb_t progress_cb, ota_ui_cb_t 
     
     vTaskDelay(pdMS_TO_TICKS(3000));
     
+    // Turn off backlight for clean dark screen during reboot
+    p3a_board_set_brightness(0);
+    
     // Note: We don't exit UI mode since we're rebooting immediately
     esp_restart();
     
@@ -999,6 +1003,10 @@ esp_err_t ota_manager_rollback(void)
     
     ESP_LOGI(TAG, "Rollback scheduled, rebooting...");
     vTaskDelay(pdMS_TO_TICKS(1000));
+    
+    // Turn off backlight for clean dark screen during reboot
+    p3a_board_set_brightness(0);
+    
     esp_restart();
     
     // Never reached

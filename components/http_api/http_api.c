@@ -51,6 +51,7 @@
 #include "play_scheduler.h"
 #include "event_bus.h"
 #include "esp_heap_caps.h"
+#include "p3a_board.h"
 #if CONFIG_P3A_PICO8_ENABLE
 #include "pico8_stream.h"
 #endif
@@ -72,8 +73,13 @@ static StaticTask_t s_api_worker_task_buffer;
 // ---------- Worker Task ----------
 
 static void do_reboot(void) {
-    ESP_LOGI(HTTP_API_TAG, "Reboot command executing, delaying 250ms...");
+    ESP_LOGI(HTTP_API_TAG, "Reboot command executing...");
+    
     vTaskDelay(pdMS_TO_TICKS(250));
+    
+    // Turn off backlight for clean dark screen during reboot
+    p3a_board_set_brightness(0);
+    
     esp_restart();
 }
 

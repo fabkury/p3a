@@ -1,13 +1,5 @@
 menu "Channel Manager"
 
-    config CHANNEL_MANAGER_MAX_POSTS
-        int "Maximum posts per channel"
-        default 2048
-        range 32 4096
-        help
-            Maximum number of posts (artworks) that can be loaded from a single channel.
-            Higher values use more RAM.
-
     config CHANNEL_MANAGER_PAGE_SIZE
         int "Query page size"
         default 32

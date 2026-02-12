@@ -24,7 +24,6 @@ Reduce the number of includes in key files, eliminate circular dependencies, and
 #include "sdio_bus.h"
 #include "pico8_stream.h"
 #include "pico8_render.h"
-#include "swap_future.h"
 #include "p3a_state.h"
 #include "makapix_channel_impl.h"
 #include "makapix.h"

@@ -445,48 +445,6 @@ bool config_store_get_randomize_playlist(void)
     return enable;
 }
 
-esp_err_t config_store_set_live_mode(bool enable)
-{
-    cJSON *cfg = NULL;
-    esp_err_t err = config_store_load(&cfg);
-    if (err != ESP_OK) {
-        return err;
-    }
-    
-    cJSON *item = cJSON_GetObjectItem(cfg, "live_mode");
-    if (item) {
-        cJSON_DeleteItemFromObject(cfg, "live_mode");
-    }
-    cJSON_AddBoolToObject(cfg, "live_mode", enable);
-    
-    err = config_store_save(cfg);
-    cJSON_Delete(cfg);
-    
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Live mode saved: %s", enable ? "ON" : "OFF");
-    }
-    
-    return err;
-}
-
-bool config_store_get_live_mode(void)
-{
-    cJSON *cfg = NULL;
-    esp_err_t err = config_store_load(&cfg);
-    if (err != ESP_OK) {
-        return false;  // Default: OFF
-    }
-    
-    bool enable = false;
-    cJSON *item = cJSON_GetObjectItem(cfg, "live_mode");
-    if (item && cJSON_IsBool(item)) {
-        enable = cJSON_IsTrue(item);
-    }
-    
-    cJSON_Delete(cfg);
-    return enable;
-}
-
 // ============================================================================
 // View Acknowledgment
 // ============================================================================

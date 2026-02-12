@@ -71,12 +71,6 @@ static void parse_settings(cJSON *json, channel_settings_t *out)
         out->randomize_playlist = cJSON_IsTrue(rp);
     }
 
-    cJSON *lm = cJSON_GetObjectItem(json, "live_mode");
-    if (cJSON_IsBool(lm)) {
-        out->live_mode_present = true;
-        out->live_mode = cJSON_IsTrue(lm);
-    }
-
     cJSON *dwell = cJSON_GetObjectItem(json, "dwell_time_ms");
     if (cJSON_IsNumber(dwell)) {
         double v = cJSON_GetNumberValue(dwell);

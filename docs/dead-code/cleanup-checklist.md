@@ -20,24 +20,7 @@ rm webui/static/pico8_logo.png
 
 ---
 
-### 2. Remove or Relocate Example Code
-
-**File:** `components/sync_playlist/example.c`
-
-Options:
-1. **Remove:** Delete the file entirely
-2. **Exclude from build:** Update `components/sync_playlist/CMakeLists.txt`:
-   ```cmake
-   idf_component_register(
-       SRCS "sync_playlist.c"  # Remove example.c from SRCS
-       ...
-   )
-   ```
-3. **Relocate:** Move to `/docs/examples/sync_playlist_example.c`
-
----
-
-### 3. Fix Duplicate Declaration
+### 2. Fix Duplicate Declaration
 
 **File:** `main/include/animation_player.h`
 
@@ -140,20 +123,7 @@ mv release/v0.7.1-dev release/archive/
 
 ---
 
-### 8. Document Live Mode Deferral
-
-**Files:**
-- `components/live_mode/`
-- `components/sync_playlist/`
-
-Add a clear `README.md` in these directories explaining:
-1. Feature is deferred, not abandoned
-2. When/if it will be reimplemented
-3. Why the code is being kept
-
----
-
-### 9. Remove Legacy Migration Code (After Transition Period)
+### 8. Remove Legacy Migration Code (After Transition Period)
 
 **File:** `components/channel_manager/channel_cache.c`
 
@@ -176,7 +146,6 @@ The following items look like dead code but should be kept:
 | Commented code in gif.inl | Third-party upstream code |
 | pico8_stream_stubs.c | Provides no-op implementations for disabled feature |
 | debug_http_log component | Proper feature gating with CONFIG_P3A_PERF_DEBUG |
-| Live Mode code | Planned feature, intentionally deferred |
 
 ---
 

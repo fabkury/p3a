@@ -36,27 +36,7 @@ The p3a codebase is generally well-maintained with minimal dead code. However, t
 
 ## 1. Unused Components
 
-### 1.1 `components/sync_playlist/`
-
-**Status:** Partially used (only by `live_mode`)  
-**Impact:** Medium  
-**Location:** `components/sync_playlist/`
-
-The sync_playlist component is designed for Live Mode synchronized playback. Currently:
-- Only referenced by `components/live_mode/swap_future.c`
-- Live Mode itself is marked as "DEFERRED" in the codebase
-- Contains a working implementation but no active consumers in main application
-
-**Files:**
-- `sync_playlist.c` - Full implementation (~200 lines)
-- `sync_playlist.h` - Public API
-- `example.c` - Example code that should not be in production
-
-**Recommendation:** Keep if Live Mode is planned for re-implementation. Mark as experimental/deferred.
-
----
-
-### 1.2 `components/content_source/`
+### 1.1 `components/content_source/`
 
 **Status:** Completely unused  
 **Impact:** Low  
@@ -163,8 +143,6 @@ esp_err_t p3a_state_load_channel(p3a_channel_info_t *out_info);
 | `main/animation_player_priv.h` | `ANIMATIONS_PREFERRED_DIR` | Deprecated in favor of `sd_path_get_animations()` |
 | `main/include/app_lcd.h:2` | `app_lcd_draw()` | "Draw to display (legacy, not used)" |
 | `main/animation_player.h:165-167` | `animation_player_submit_pico8_frame()` | Use `pico8_render_submit_frame()` instead |
-| `components/http_api/http_api_rest.c` | Live mode endpoints | "Live mode deprecated" |
-| `components/play_scheduler/play_scheduler_compat.c` | Entire file | "Compatibility shims for legacy symbols" |
 
 ---
 
@@ -257,32 +235,7 @@ Contains 13 historical release versions (v0.6.0-dev through v0.7.8-dev). Older v
 
 ---
 
-## 6. Example/Test Code in Production
-
-### 6.1 `components/sync_playlist/example.c`
-
-**Location:** `components/sync_playlist/example.c`
-
-This file contains example usage code with a sample `app_main()` function. It should not be compiled into production builds.
-
-```c
-// Example: Initialize the Synchronized Playlist Engine.
-void app_main(void)
-{
-    // Initialize animations (for example purposes, durations are illustrative)
-    animation_t animations[] = { ... };
-    ...
-}
-```
-
-**Recommendation:** Either:
-1. Exclude from CMakeLists.txt SRCS
-2. Move to a `/examples/` directory
-3. Remove entirely if example is obsolete
-
----
-
-## 7. Commented-Out Code Blocks
+## 6. Commented-Out Code Blocks
 
 ### 7.1 Third-Party Libraries (Low Priority)
 
@@ -305,7 +258,6 @@ These are in third-party code and should not be modified:
 |------|---------|
 | `components/channel_manager/playlist_manager.c` | "TODO: Implement background update queue" |
 | `components/p3a_board_ep44b/include/p3a_board.h` | "TODO: Remove these after full migration" |
-| `components/live_mode/swap_future.c` | Full block explaining deferred Live Mode |
 
 These are planned features, not dead code.
 
@@ -320,9 +272,7 @@ These are planned features, not dead code.
    - `/images/PICO-8_logo_35p.gif`
    - `/webui/static/pico8_logo.png`
 
-2. **Remove or relocate `sync_playlist/example.c`**
-
-3. **Remove `components/content_source/`** if not part of active development plans
+2. **Remove `components/content_source/`** if not part of active development plans
 
 ### Medium Priority (Cleanup When Convenient)
 
@@ -345,4 +295,3 @@ These are planned features, not dead code.
 - Code marked with `__attribute__((unused))` is intentionally kept and should not be removed without understanding why it was preserved
 - Conditional compilation (`#if CONFIG_*`) is NOT dead code - it's proper feature gating
 - Third-party libraries (ugfx, gif decoder) should not be modified even if they contain dead code
-- The Live Mode features are deferred, not abandoned - sync_playlist should be kept if Live Mode is planned

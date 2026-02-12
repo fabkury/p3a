@@ -21,9 +21,6 @@ static esp_err_t map_artwork_to_request(const ps_artwork_t *artwork, queued_item
     strlcpy(out->request.filepath, artwork->filepath, sizeof(out->request.filepath));
     out->request.type = artwork->type;
     out->request.post_id = artwork->post_id;
-    out->request.is_live_mode = false;
-    out->request.start_time_ms = 0;
-    out->request.start_frame = 0;
 
     if (artwork->dwell_time_ms > 0) {
         out->request.dwell_time_ms = artwork->dwell_time_ms;

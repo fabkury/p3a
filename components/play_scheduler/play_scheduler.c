@@ -39,33 +39,6 @@
 static const char *TAG = "play_scheduler";
 
 // ============================================================================
-// DEFERRED: Live Mode Synchronized Playback
-// ============================================================================
-//
-// Live Mode was a feature for synchronized playback across multiple devices.
-// Key concepts that were in the deprecated play_navigator.c:
-//
-// - live_mode flag on navigator: Indicates synchronized playback is active
-// - live_p/live_q arrays: Flattened schedule of (post, artwork) indices
-// - live_count: Number of items in the flattened schedule
-// - live_ready: Whether the schedule has been built and is valid
-//
-// Key functions that existed:
-// - play_navigator_set_live_mode(): Enable/disable synchronized playback
-// - play_navigator_mark_live_dirty(): Signal schedule needs rebuild
-// - Schedule calculation based on SNTP-synchronized wall clock time
-//
-// When implementing Live Mode in Play Scheduler:
-// 1. Add live_mode flag to ps_state_t
-// 2. Use SNTP time sync for coordination (sntp_sync.h)
-// 3. Build flattened schedule from channel entries
-// 4. Calculate start_time_ms and start_frame for swap requests
-// 5. Wire into swap_future.c for scheduled swaps
-//
-// See docs/LIVE_MODE_ANALYSIS.md for full analysis.
-// ============================================================================
-
-// ============================================================================
 // Global State
 // ============================================================================
 

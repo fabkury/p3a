@@ -18,8 +18,6 @@
 
 // NOTE: play_navigator was removed as part of Play Scheduler migration.
 // Navigation is now handled by Play Scheduler directly.
-// The legacy navigation functions below return ESP_ERR_NOT_SUPPORTED.
-// See play_scheduler.c for Live Mode deferred feature notes.
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"

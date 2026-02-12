@@ -39,8 +39,6 @@
 #include "content_service.h"
 #include "playback_service.h"
 #include "connectivity_service.h"
-#include "swap_future.h"       // Live Mode swap_future
-#include "live_mode.h"         // Live Mode time helpers
 #include "fresh_boot.h"        // Fresh boot debug helpers
 #include "channel_cache.h"       // LAi persistence for channel caches
 #include "show_url.h"            // show-url download command
@@ -404,10 +402,10 @@ void app_main(void)
     fresh_boot_erase_nvs();
 #endif
 
-    // Set timezone to UTC for Live Mode synchronization
+    // Set timezone to UTC for consistent timestamps (logging, MQTT, etc.)
     setenv("TZ", "UTC", 1);
     tzset();
-    ESP_LOGD(TAG, "Timezone set to UTC for Live Mode");
+    ESP_LOGD(TAG, "Timezone set to UTC");
 
     // Initialize random seed from hardware RNG
     uint32_t random_seed = esp_random();

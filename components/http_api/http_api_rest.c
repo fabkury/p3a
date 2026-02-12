@@ -48,19 +48,7 @@ extern void proc_notif_start(void) __attribute__((weak));
 // ---------- Debug Handler (Dev Mode) ----------
 
 #if CONFIG_OTA_DEV_MODE
-#include "swap_future.h"
 #include "playlist_manager.h"
-#include <sys/time.h>
-
-// Play Scheduler owns auto-swap timer now.
-// (Old auto_swap_task in main was removed during migration.)
-
-static uint64_t wall_clock_ms_http(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (uint64_t)tv.tv_sec * 1000ULL + (uint64_t)tv.tv_usec / 1000ULL;
-}
 
 /**
  * POST /debug  (CONFIG_OTA_DEV_MODE only)
@@ -98,94 +86,9 @@ esp_err_t h_post_debug(httpd_req_t *req)
         return ESP_OK;
     }
 
-    cJSON *resp = cJSON_CreateObject();
-    cJSON_AddBoolToObject(resp, "ok", true);
-    cJSON_AddStringToObject(resp, "op", op_s);
-
-    if (strcmp(op_s, "swap_future_cancel") == 0) {
-        swap_future_cancel();
-        play_scheduler_reset_timer();
-        cJSON_AddStringToObject(resp, "result", "cancelled");
-    } else if (strcmp(op_s, "live_mode_enter") == 0 || strcmp(op_s, "live_mode_exit") == 0) {
-        // Live Mode is a deferred feature pending Play Scheduler migration completion.
-        // See play_scheduler.c for notes on re-implementing this feature.
-        cJSON_Delete(root);
-        cJSON_Delete(resp);
-        send_json(req, 410, "{\"ok\":false,\"error\":\"Live Mode is a deferred feature\",\"code\":\"DEFERRED\"}");
-        return ESP_OK;
-    } else if (strcmp(op_s, "swap_future_test") == 0) {
-        // Build swap_future targeting the current file.
-        ps_artwork_t artwork = {0};
-        if (play_scheduler_current(&artwork) != ESP_OK || artwork.filepath[0] == '\0') {
-            cJSON_Delete(root);
-            cJSON_Delete(resp);
-            send_json(req, 409, "{\"ok\":false,\"error\":\"No current artwork\",\"code\":\"NO_CURRENT\"}");
-            return ESP_OK;
-        }
-
-        uint32_t delay_ms = 1000;
-        uint32_t start_offset_ms = 0;
-        uint32_t start_frame = 0;
-
-        if (data && cJSON_IsObject(data)) {
-            cJSON *d = cJSON_GetObjectItem(data, "delay_ms");
-            if (d && cJSON_IsNumber(d) && cJSON_GetNumberValue(d) >= 0) {
-                delay_ms = (uint32_t)cJSON_GetNumberValue(d);
-            }
-            cJSON *o = cJSON_GetObjectItem(data, "start_offset_ms");
-            if (o && cJSON_IsNumber(o) && cJSON_GetNumberValue(o) >= 0) {
-                start_offset_ms = (uint32_t)cJSON_GetNumberValue(o);
-            }
-            cJSON *sf = cJSON_GetObjectItem(data, "start_frame");
-            if (sf && cJSON_IsNumber(sf) && cJSON_GetNumberValue(sf) >= 0) {
-                start_frame = (uint32_t)cJSON_GetNumberValue(sf);
-            }
-        }
-
-        uint64_t now_ms = wall_clock_ms_http();
-        uint64_t target_ms = now_ms + (uint64_t)delay_ms;
-        uint64_t start_ms = (start_offset_ms <= delay_ms) ? (target_ms - (uint64_t)start_offset_ms) : target_ms;
-
-        artwork_ref_t art = {0};
-        strlcpy(art.filepath, artwork.filepath, sizeof(art.filepath));
-        art.type = artwork.type;
-        art.downloaded = true;
-
-        swap_future_t sf = {0};
-        sf.valid = true;
-        sf.target_time_ms = target_ms;
-        sf.start_time_ms = start_ms;
-        sf.start_frame = start_frame;
-        sf.artwork = art;
-        sf.is_live_mode_swap = false;
-        sf.is_automated = true;
-
-        swap_future_cancel();
-        esp_err_t e = swap_future_schedule(&sf);
-        play_scheduler_reset_timer();
-
-        cJSON_AddNumberToObject(resp, "esp_err", (double)e);
-        cJSON_AddNumberToObject(resp, "now_ms", (double)now_ms);
-        cJSON_AddNumberToObject(resp, "target_time_ms", (double)target_ms);
-        cJSON_AddNumberToObject(resp, "start_time_ms", (double)start_ms);
-        cJSON_AddNumberToObject(resp, "start_frame", (double)start_frame);
-        cJSON_AddStringToObject(resp, "filepath", artwork.filepath);
-    } else {
-        cJSON_Delete(root);
-        cJSON_Delete(resp);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Unknown op\",\"code\":\"UNKNOWN_OP\"}");
-        return ESP_OK;
-    }
-
-    char *out = cJSON_PrintUnformatted(resp);
+    // No debug ops currently defined
     cJSON_Delete(root);
-    cJSON_Delete(resp);
-    if (!out) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-    send_json(req, 200, out);
-    free(out);
+    send_json(req, 400, "{\"ok\":false,\"error\":\"Unknown op\",\"code\":\"UNKNOWN_OP\"}");
     return ESP_OK;
 }
 #endif // CONFIG_OTA_DEV_MODE
@@ -390,8 +293,6 @@ esp_err_t h_get_api_state(httpd_req_t *req)
     cJSON_AddStringToObject(data, "state", p3a_state_get_app_status_name(p3a_state_get_app_status()));
     cJSON_AddNumberToObject(data, "uptime_ms", (double)(esp_timer_get_time() / 1000ULL));
     cJSON_AddNumberToObject(data, "heap_free", (double)esp_get_free_heap_size());
-    cJSON_AddBoolToObject(data, "live_mode", false);  // Live mode deprecated
-
     if (rssi_ok) {
         cJSON_AddNumberToObject(data, "rssi", ap.rssi);
     } else {

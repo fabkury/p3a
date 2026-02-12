@@ -608,8 +608,6 @@ esp_err_t makapix_mqtt_publish_status(int32_t current_post_id)
 
     cJSON_AddStringToObject(status, "player_key", s_player_key);
     cJSON_AddStringToObject(status, "status", "online");
-    cJSON_AddBoolToObject(status, "live_mode", false);  // Live mode deprecated
-    
     if (current_post_id > 0) {
         cJSON_AddNumberToObject(status, "current_post_id", current_post_id);
     } else {

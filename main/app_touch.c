@@ -497,7 +497,7 @@ esp_err_t app_touch_init(void)
     }
 
     // NOTE: Touch task stack must be large enough for gesture routing + logging.
-    // Some tap paths can indirectly trigger deeper call chains (e.g. Live Mode / channel rebuild),
+    // Some tap paths can indirectly trigger deeper call chains (e.g. channel rebuild),
     // and 4KB has proven insufficient (stack overflow faults).
     const BaseType_t created = xTaskCreate(app_touch_task, "app_touch_task", 8192, NULL,
                                            CONFIG_P3A_TOUCH_TASK_PRIORITY, NULL);

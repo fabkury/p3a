@@ -41,7 +41,6 @@ main/animation_player.c includes:
 ├── sdio_bus.h
 ├── pico8_stream.h
 ├── pico8_render.h
-├── swap_future.h
 ├── p3a_state.h
 ├── makapix_channel_impl.h
 ├── makapix.h

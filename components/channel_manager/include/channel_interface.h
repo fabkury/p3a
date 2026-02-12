@@ -228,7 +228,7 @@ typedef struct {
     esp_err_t (*get_post)(channel_handle_t channel, size_t post_index, channel_post_t *out_post);
 
     // ---------------------------------------------------------------------
-    // Optional navigator API (used by Live Mode)
+    // Optional navigator API
     // ---------------------------------------------------------------------
     // Returns an opaque pointer to the channel's play navigator (typically play_navigator_t*).
     // Can return NULL if navigator is not initialized/available for this channel.

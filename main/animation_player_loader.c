@@ -6,7 +6,6 @@
 #include "esp_heap_caps.h"
 #include "play_scheduler.h"
 #include "playback_queue.h"
-#include "swap_future.h"
 #include "sdio_bus.h"
 #include "ota_manager.h"
 #include "p3a_render.h"
@@ -60,7 +59,7 @@ void animation_loader_mark_swap_successful(void)
 
 // Simplified discard: No auto-retry, no navigation.
 // Just clean up state and display error.
-static void discard_failed_swap_request(esp_err_t error, bool is_live_mode_swap)
+static void discard_failed_swap_request(esp_err_t error)
 {
     bool had_swap_request = false;
     
@@ -228,7 +227,7 @@ void animation_loader_task(void *arg)
             continue;
         }
 
-        // If swap_future_execute() provided an override, use it for this load.
+        // If animation_player_request_swap() provided an override, use it for this load.
         animation_load_override_t ov = {0};
         if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
             ov = s_load_override;
@@ -239,7 +238,7 @@ void animation_loader_task(void *arg)
             xSemaphoreGive(s_buffer_mutex);
         }
 
-        // Apply deferred manual cycle (advance/go_back + exit Live Mode) in the loader task context
+        // Apply deferred manual cycle (advance/go_back) in the loader task context
         // to avoid overflowing the touch task stack.
         if (!ov.valid) {
             bool do_cycle = false;
@@ -255,35 +254,35 @@ void animation_loader_task(void *arg)
                 // Re-run "swap request ignored" checks here (moved from touch path).
                 if (display_renderer_is_ui_mode()) {
                     ESP_LOGW(TAG, "Deferred cycle ignored: UI mode active");
-                    discard_failed_swap_request(ESP_ERR_INVALID_STATE, false);
+                    discard_failed_swap_request(ESP_ERR_INVALID_STATE);
                     continue;
                 }
                 if (animation_player_is_sd_export_locked()) {
                     ESP_LOGW(TAG, "Deferred cycle ignored: SD card is exported over USB");
-                    discard_failed_swap_request(ESP_ERR_INVALID_STATE, false);
+                    discard_failed_swap_request(ESP_ERR_INVALID_STATE);
                     continue;
                 }
                 if (animation_player_is_sd_paused()) {
                     ESP_LOGW(TAG, "Deferred cycle ignored: SD access paused for OTA");
-                    discard_failed_swap_request(ESP_ERR_INVALID_STATE, false);
+                    discard_failed_swap_request(ESP_ERR_INVALID_STATE);
                     continue;
                 }
                 if (sdio_bus_is_locked()) {
                     ESP_LOGW(TAG, "Deferred cycle ignored: SDIO bus locked by %s",
                              sdio_bus_get_holder() ? sdio_bus_get_holder() : "unknown");
-                    discard_failed_swap_request(ESP_ERR_INVALID_STATE, false);
+                    discard_failed_swap_request(ESP_ERR_INVALID_STATE);
                     continue;
                 }
                 if (ota_manager_is_checking()) {
                     ESP_LOGW(TAG, "Deferred cycle ignored: OTA check in progress");
-                    discard_failed_swap_request(ESP_ERR_INVALID_STATE, false);
+                    discard_failed_swap_request(ESP_ERR_INVALID_STATE);
                     continue;
                 }
                 {
                     size_t total_available = play_scheduler_get_total_available();
                     if (total_available == 0) {
                         ESP_LOGW(TAG, "Deferred cycle ignored: no animations available");
-                        discard_failed_swap_request(ESP_ERR_NOT_FOUND, false);
+                        discard_failed_swap_request(ESP_ERR_NOT_FOUND);
                         continue;
                     }
                 }
@@ -291,7 +290,7 @@ void animation_loader_task(void *arg)
                 // Deferred cycle logic removed - navigation now handled by play_scheduler
                 // This code path is deprecated and should not be reached
                 ESP_LOGW(TAG, "Deferred cycle logic deprecated - navigation should use play_scheduler API");
-                discard_failed_swap_request(ESP_ERR_NOT_SUPPORTED, false);
+                discard_failed_swap_request(ESP_ERR_NOT_SUPPORTED);
                 continue;
             }
         }
@@ -301,7 +300,6 @@ void animation_loader_task(void *arg)
         const char *name_for_log = NULL;
         uint32_t start_frame = 0;
         uint64_t start_time_ms = 0;
-        uint32_t live_index = 0;
         int32_t post_id = 0;
 
         if (ov.valid) {
@@ -310,7 +308,6 @@ void animation_loader_task(void *arg)
             name_for_log = ov.filepath;
             start_frame = ov.start_frame;
             start_time_ms = ov.start_time_ms;
-            live_index = ov.live_index;
             post_id = ov.post_id;
             ESP_LOGI(TAG, "Loader task: swap request: %s (type=%d start_frame=%u start_time_ms=%llu post_id=%d)",
                      filepath, (int)type, (unsigned)start_frame, (unsigned long long)start_time_ms, (int)post_id);
@@ -320,7 +317,7 @@ void animation_loader_task(void *arg)
             esp_err_t err = playback_queue_current(&current);
             if (err != ESP_OK || current.request.filepath[0] == '\0') {
                 ESP_LOGE(TAG, "Loader task: No current artwork available");
-                discard_failed_swap_request(ESP_ERR_NOT_FOUND, false);
+                discard_failed_swap_request(ESP_ERR_NOT_FOUND);
                 continue;
             }
             // Use static buffer to hold filepath (play_scheduler_current returns by value)
@@ -341,9 +338,8 @@ void animation_loader_task(void *arg)
             continue;
         }
 
-        // If this is a normal swap request (not swap_future) and the target filepath is
-        // exactly the same as what we're already playing, ignore the swap entirely.
-        // swap_future is exempt because it can carry start alignment (re-sync) semantics.
+        // If the target filepath is exactly the same as what we're already playing,
+        // ignore the swap entirely.
         if (!ov.valid && filepath) {
             bool same_as_current = false;
             if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
@@ -397,15 +393,13 @@ void animation_loader_task(void *arg)
             }
             
             // Clean up and display error
-            discard_failed_swap_request(err, ov.valid ? ov.is_live_mode_swap : false);
+            discard_failed_swap_request(err);
             continue;
         }
 
         if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
             s_back_buffer.prefetch_pending = true;
             s_back_buffer.ready = false;
-            s_back_buffer.is_live_mode_swap = ov.valid ? ov.is_live_mode_swap : false;
-            s_back_buffer.live_index = ov.valid ? live_index : 0;
             s_back_buffer.post_id = post_id;  // For view tracking
             if (swap_was_requested) {
                 s_swap_requested = true;
@@ -603,8 +597,6 @@ void unload_animation_buffer(animation_buffer_t *buf)
     buf->static_bg_generation = 0;
     buf->start_time_ms = 0;
     buf->start_frame = 0;
-    buf->is_live_mode_swap = false;
-    buf->live_index = 0;
 
     free(buf->filepath);
     buf->filepath = NULL;

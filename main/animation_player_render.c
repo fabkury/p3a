@@ -7,7 +7,6 @@
 #include "ugfx_ui.h"
 #include "view_tracker.h"
 #include "play_scheduler.h"
-#include "swap_future.h"
 #include "config_store.h"
 #include "debug_http_log.h"
 #include <sys/time.h>
@@ -306,7 +305,7 @@ esp_err_t prefetch_first_frame(animation_buffer_t *buf)
         return ESP_ERR_INVALID_ARG;
     }
 
-    // If Live Mode / swap_future provided a start alignment, prefetch the correctly-aligned first frame.
+    // If a start alignment was provided, prefetch the correctly-aligned first frame.
     if ((buf->start_time_ms != 0) || (buf->start_frame != 0)) {
         esp_err_t seek_err = prefetch_first_frame_seeked(buf, buf->start_frame, buf->start_time_ms);
         if (seek_err == ESP_OK) {
@@ -546,10 +545,6 @@ skip_prefetch:
                 p3a_render_set_channel_message(NULL, 0 /* P3A_CHANNEL_MSG_NONE */, -1, NULL);
             }
 
-            if (s_front_buffer.is_live_mode_swap) {
-                live_mode_notify_swap_succeeded(s_front_buffer.live_index);
-            }
-            
             // Notify play_scheduler that swap succeeded (resets dwell timer)
             play_scheduler_reset_timer();
             

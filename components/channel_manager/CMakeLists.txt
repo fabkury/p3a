@@ -13,5 +13,5 @@ idf_component_register(
          "channel_cache.c"
          "load_tracker.c"
     INCLUDE_DIRS "include"
-    REQUIRES esp_common json makapix sdio_bus config_store sync_playlist wifi_manager live_mode p3a_core play_scheduler event_bus
+    REQUIRES esp_common json makapix sdio_bus config_store wifi_manager p3a_core play_scheduler event_bus
 )

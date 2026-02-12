@@ -10,8 +10,7 @@
 4. [Command Sources & Flow](#command-sources--flow)
 5. [Channel Types & Implementations](#channel-types--implementations)
 6. [Error Sources & Handling](#error-sources--handling)
-7. [Live Mode Synchronization](#live-mode-synchronization)
-8. [Key Files Reference](#key-files-reference)
+7. [Key Files Reference](#key-files-reference)
 
 ---
 
@@ -124,7 +123,6 @@ typedef struct {
     play_order_mode_t order;       // Current play order
     uint32_t pe;                   // Playlist expansion (0 = infinite)
     bool randomize_playlist;       // Randomize within playlists
-    bool live_mode;                // Live Mode synchronization
     uint32_t global_seed;          // Deterministic random seed
     
     uint32_t p;                    // Post index in channel
@@ -132,12 +130,6 @@ typedef struct {
     
     uint32_t *order_indices;       // Cached post order mapping
     size_t order_count;            // Number of posts
-    
-    // Live Mode flattened schedule
-    bool live_ready;
-    uint32_t live_count;
-    uint32_t *live_p;              // Flattened p indices
-    uint32_t *live_q;              // Flattened q indices
 } play_navigator_t;
 ```
 
@@ -159,7 +151,6 @@ channel_player_go_back();    // Previous artwork
 // Query
 channel_player_get_current_post(&post);
 channel_player_get_post_count();
-channel_player_is_live_mode_active();
 ```
 
 ### 4. `animation_player` (Playback Controller)
@@ -252,7 +243,6 @@ flowchart TB
         TOUCH[Touch Gestures<br/>app_touch.c]
         HTTP[HTTP API<br/>http_api_rest.c]
         TIMER[Auto-swap Timer<br/>p3a_main.c]
-        LIVE[Live Mode<br/>swap_future]
     end
 
     subgraph "Routing Layer"
@@ -263,7 +253,6 @@ flowchart TB
     subgraph "Navigation"
         CYCLE[animation_player_cycle_animation]
         SWAP_CUR[animation_player_request_swap_current]
-        SWAP_FUT[swap_future_execute]
     end
 
     subgraph "Channel Layer"
@@ -286,9 +275,6 @@ flowchart TB
     CMDQ --> CYCLE
     
     TIMER -->|dwell timeout| CYCLE
-    
-    LIVE -->|wall-clock trigger| SWAP_FUT
-    SWAP_FUT -->|override filepath| LOADER
     
     CYCLE -->|s_cycle_pending=true| LOADER
     LOADER -->|deferred| ADV
@@ -361,12 +347,6 @@ esp_err_t h_post_swap_next(httpd_req_t *req) {
 ```c
 static void auto_swap_task(void *arg) {
     while (true) {
-        // Check for swap_future first (Live Mode)
-        if (swap_future_has_pending()) { ... }
-        
-        // Check Live Mode continuous scheduling
-        if (channel_player_is_live_mode_active()) { ... }
-        
         // Normal dwell-based timing
         const TickType_t delay_ticks = pdMS_TO_TICKS(get_current_effective_dwell_ms());
         uint32_t notified = ulTaskNotifyTake(pdTRUE, delay_ticks);
@@ -377,25 +357,6 @@ static void auto_swap_task(void *arg) {
         app_lcd_cycle_animation();  // Auto-advance
     }
 }
-```
-
-### 4. Live Mode (Synchronized Playback)
-
-**Path:** `live_mode.c` → `swap_future.c` → `animation_player.c`
-
-Live Mode schedules artwork swaps at precise wall-clock times for multi-device synchronization:
-
-```c
-// swap_future scheduling
-swap_future_t sf = {
-    .valid = true,
-    .target_time_ms = wall_clock_target,
-    .start_time_ms = animation_start_time,
-    .start_frame = calculated_frame,
-    .artwork = artwork_ref,
-    .is_live_mode_swap = true
-};
-swap_future_schedule(&sf);
 ```
 
 ---
@@ -558,60 +519,6 @@ esp_err_t animation_player_request_swap_current(void) {
 }
 ```
 
-### 5. Live Mode Failures
-
-**Handler:** `live_mode_recover_from_failed_swap()`
-
-When a Live Mode swap fails, the system scans forward to find the next available artwork:
-
-```c
-esp_err_t live_mode_recover_from_failed_swap(void *navigator, 
-                                              uint32_t failed_live_index, 
-                                              esp_err_t reason);
-```
-
----
-
-## Live Mode Synchronization
-
-Live Mode enables multiple p3a devices to display the same artwork at the same time.
-
-### Timing Model
-
-```
-Channel Epoch (Jan 16, 2026) ─────────────────────────────────────►
-                             │
-                             ├── Art₀ [30s] ──► Art₁ [30s] ──► Art₂ [45s] ──► ...
-                             │
-Wall Clock Now ──────────────┼─────────────────────────X
-                                                       ↑
-                                                Current Position
-```
-
-### Flattened Schedule
-
-Playlists are "flattened" into a single timeline:
-
-```c
-// build_live_schedule() creates:
-nav->live_p[idx]  // Post index for each slot
-nav->live_q[idx]  // Playlist index for each slot
-nav->live_count   // Total flattened items
-```
-
-### Swap Future Scheduling
-
-```c
-typedef struct {
-    bool valid;
-    uint64_t target_time_ms;      // When to execute swap
-    uint64_t start_time_ms;       // Animation's logical start time
-    uint32_t start_frame;         // Frame to start at
-    artwork_ref_t artwork;        // What to display
-    bool is_live_mode_swap;       // Maintains sync
-} swap_future_t;
-```
-
 ---
 
 ## Key Files Reference
@@ -625,7 +532,6 @@ typedef struct {
 | Animation Player | `animation_player.c`, `animation_player_loader.c` | Playback & loading |
 | Touch Router | `p3a_touch_router.h/c` | State-aware touch handling |
 | HTTP API | `http_api_rest.c` | REST endpoints |
-| Live Mode | `live_mode.h`, `swap_future.h` | Synchronized playback |
 | SD Channel | `sdcard_channel.c`, `sdcard_channel_impl.c` | Local file channel |
 | Makapix Channel | `makapix_channel_impl.c` | Cloud channel |
 | State Machine | `p3a_state.h/c` | Global app state |
@@ -646,9 +552,7 @@ typedef struct {
 
 ### Potential Areas of Interest
 
-1. **Manual swap exits Live Mode:** Any manual navigation (touch, API) disables Live Mode synchronization
-
-2. **Auto-retry limit:** Only one auto-retry after failure to prevent loops
+1. **Auto-retry limit:** Only one auto-retry after failure to prevent loops
 
 3. **Corrupt file cooldown:** Can only delete one corrupt vault file per hour (safeguard against cascade deletion)
 

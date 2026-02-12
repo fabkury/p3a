@@ -437,7 +437,19 @@ static void parse_query_response(cJSON *resp_json, makapix_query_response_t *out
     out->has_more = cJSON_IsBool(has_more) ? cJSON_IsTrue(has_more) : false;
 
     cJSON *next_cursor = cJSON_GetObjectItem(resp_json, "next_cursor");
-    if (cJSON_IsString(next_cursor)) strncpy(out->next_cursor, next_cursor->valuestring, sizeof(out->next_cursor) - 1);
+    if (cJSON_IsString(next_cursor)) {
+        size_t server_cursor_len = strlen(next_cursor->valuestring);
+        if (server_cursor_len >= sizeof(out->next_cursor)) {
+            ESP_LOGW(TAG, "CURSOR TRUNCATED: server sent %zu chars, buffer is %zu bytes",
+                     server_cursor_len, sizeof(out->next_cursor));
+        }
+        strncpy(out->next_cursor, next_cursor->valuestring, sizeof(out->next_cursor) - 1);
+    } else if (out->has_more && next_cursor) {
+        ESP_LOGW(TAG, "next_cursor field is not a string (cJSON type=%d) despite has_more=true",
+                 next_cursor->type);
+    } else if (out->has_more) {
+        ESP_LOGW(TAG, "next_cursor field missing from response despite has_more=true");
+    }
 }
 
 esp_err_t makapix_api_get_post(int32_t post_id, makapix_post_t *out_post)

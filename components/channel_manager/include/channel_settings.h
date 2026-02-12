@@ -19,9 +19,6 @@ typedef struct {
     bool randomize_playlist_present;
     bool randomize_playlist;
 
-    bool live_mode_present;
-    bool live_mode;
-
     // Channel dwell override (0 disables this override)
     bool channel_dwell_time_present;
     uint32_t channel_dwell_time_ms;

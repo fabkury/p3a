@@ -123,17 +123,13 @@ typedef struct {
     bool static_frame_cached;
     uint32_t static_bg_generation;
 
-    // Live Mode / swap_future start alignment
+    // Start alignment for seeked prefetch
     // - start_time_ms: ideal wall-clock time when this animation "started" (UTC, ms since epoch).
     //   Prefetch will align by seeking to (now_ms - start_time_ms).
     // - start_frame: optional explicit frame seek (frame index); used when start_time_ms == 0.
     uint64_t start_time_ms;
     uint32_t start_frame;
 
-    // Live Mode swap context (for recovery)
-    bool is_live_mode_swap;
-    uint32_t live_index;
-    
     // View tracking: post_id of the artwork being displayed
     int32_t post_id;
 } animation_buffer_t;
@@ -151,7 +147,7 @@ extern SemaphoreHandle_t s_loader_sem;
 extern SemaphoreHandle_t s_buffer_mutex;
 extern SemaphoreHandle_t s_prefetch_done_sem;  // Signaled when prefetch completes
 
-// Override for the next load triggered by swap_future_execute().
+// Override for the next load triggered by animation_player_request_swap().
 // If valid, the loader will load this filepath/type instead of play_scheduler current item,
 // and will propagate start_time_ms/start_frame to the back buffer for prefetch alignment.
 typedef struct {
@@ -160,8 +156,6 @@ typedef struct {
     asset_type_t type;
     uint64_t start_time_ms;
     uint32_t start_frame;
-    bool is_live_mode_swap;
-    uint32_t live_index;
     int32_t post_id;  // For view tracking
 } animation_load_override_t;
 

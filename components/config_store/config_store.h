@@ -94,21 +94,6 @@ esp_err_t config_store_set_randomize_playlist(bool enable);
 bool config_store_get_randomize_playlist(void);
 
 /**
- * @brief Set Live Mode
- * 
- * @param enable True to enable Live Mode sync
- * @return ESP_OK on success
- */
-esp_err_t config_store_set_live_mode(bool enable);
-
-/**
- * @brief Get Live Mode
- * 
- * @return True if Live Mode enabled (defaults to false)
- */
-bool config_store_get_live_mode(void);
-
-/**
  * @brief Set dwell time
  * 
  * @param dwell_time_ms Dwell time in milliseconds

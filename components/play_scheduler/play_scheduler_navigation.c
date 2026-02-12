@@ -103,10 +103,6 @@ static esp_err_t prepare_and_request_swap(ps_state_t *state, const ps_artwork_t 
         request.dwell_time_ms = config_store_get_dwell_time();
     }
 
-    request.is_live_mode = false;
-    request.start_time_ms = 0;
-    request.start_frame = 0;
-
     if (animation_player_request_swap) {
         esp_err_t err = animation_player_request_swap(&request);
         if (err == ESP_OK) {

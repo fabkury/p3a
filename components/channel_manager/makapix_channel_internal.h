@@ -31,7 +31,6 @@ typedef enum {
  *
  * NOTE: play_navigator was removed as part of Play Scheduler migration.
  * Navigation is now handled by Play Scheduler directly.
- * See play_scheduler.c for Live Mode deferred feature notes.
  *
  * NOTE: entries/entry_count fields were removed as part of channel cache unification.
  * All entry data is now stored in channel_cache_t and accessed via

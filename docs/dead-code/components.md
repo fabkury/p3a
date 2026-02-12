@@ -84,16 +84,9 @@ Detailed analysis of each component in the p3a repository.
   - `log_all_netifs()`
   - `verify_server_listening()`
   - `format_sockaddr()`
-- `http_api_rest.c`: "Live mode deprecated" endpoints
-
 ### ✅ `libwebp_decoder`
 **Status:** Active (wrapper for external libwebp)  
 **Dead Code:** `webp_decoder_component.c` is just a 6-line comment wrapper - not actual dead code
-
-### ⚠️ `live_mode`
-**Status:** DEFERRED feature  
-**Dead Code:** The entire Live Mode implementation is marked as deferred, but code is intentionally preserved for future implementation. Key file:
-- `swap_future.c` lines 16-33 explain the deferral
 
 ### ✅ `loader_service`
 **Status:** Active  
@@ -126,7 +119,6 @@ Detailed analysis of each component in the p3a repository.
 **Status:** Active  
 **Dead Code:**
 - `play_scheduler_pick.c`: `has_404_marker()` marked `__attribute__((unused))`
-- `play_scheduler_compat.c`: Contains "Compatibility shims for legacy symbols"
 - Kconfig: `CONFIG_PLAY_SCHEDULER_RANDOM_WINDOW` defined but never used
 
 ### ✅ `playback_queue`
@@ -140,11 +132,6 @@ Detailed analysis of each component in the p3a repository.
 ### ✅ `slave_ota`
 **Status:** Active (called from p3a_main.c)  
 **Dead Code:** None
-
-### ⚠️ `sync_playlist`
-**Status:** Partially used (only by live_mode which is deferred)  
-**Dead Code:**
-- `example.c`: Example code that should not be in production build
 
 ### ✅ `ugfx`
 **Status:** Active (third-party UI library)  
@@ -163,7 +150,6 @@ Detailed analysis of each component in the p3a repository.
 | Item | Location | Reason |
 |------|----------|--------|
 | `content_source` component | `components/content_source/` | Completely unused |
-| `example.c` | `components/sync_playlist/` | Example code in production |
 | Unused image assets | `images/`, `webui/static/` | Never referenced |
 
 ### 🟡 Consider Removing/Cleaning
@@ -179,6 +165,5 @@ Detailed analysis of each component in the p3a repository.
 | Item | Location | Reason |
 |------|----------|--------|
 | `__attribute__((unused))` functions | Various | Debug/development helpers |
-| Live Mode code | `live_mode/`, `sync_playlist/` | Deferred feature, planned |
 | Legacy migration code | `channel_cache.c` | May still be needed for old installations |
 | Third-party commented code | `ugfx/`, `animated_gif_decoder/` | Upstream code, don't modify |

@@ -14,9 +14,6 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 
-// NOTE: play_navigator was removed as part of Play Scheduler migration.
-// Live Mode synchronization is now deferred.
-// See play_scheduler.c for Live Mode deferred feature notes.
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "cJSON.h"
@@ -654,9 +651,6 @@ void refresh_task_impl(void *pvParameters)
             // Signal download manager to rescan - new index entries arrived
             download_manager_rescan();
 
-            // NOTE: Live Mode schedule marking was here but has been removed.
-            // Live Mode is now deferred. See play_scheduler.c for notes.
-
             // Free any heap allocations inside parsed posts
             for (size_t pi = 0; pi < resp->post_count; pi++) {
                 if (resp->posts[pi].kind == MAKAPIX_POST_KIND_PLAYLIST && resp->posts[pi].artworks) {
@@ -674,8 +668,16 @@ void refresh_task_impl(void *pvParameters)
                 if (copy_len >= sizeof(query_req.cursor)) copy_len = sizeof(query_req.cursor) - 1;
                 memcpy(query_req.cursor, resp->next_cursor, copy_len);
                 query_req.cursor[copy_len] = '\0';
+                ESP_LOGI(TAG, "Cursor advanced: len=%zu, preview=%.20s...", copy_len, query_req.cursor);
             } else {
                 query_req.has_cursor = false;
+                if (resp->has_more) {
+                    ESP_LOGW(TAG, "has_more=true but next_cursor is empty! Pagination may be broken. "
+                             "total_queried=%zu, entry_count=%zu",
+                             total_queried,
+                             channel_cache_registry_find(ch->channel_id)
+                                 ? channel_cache_registry_find(ch->channel_id)->entry_count : 0);
+                }
             }
             
             if (!resp->has_more) {

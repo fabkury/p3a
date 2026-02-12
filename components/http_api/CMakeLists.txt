@@ -3,10 +3,6 @@ set(http_api_requires
     makapix ota_manager p3a_core channel_manager play_scheduler event_bus show_url
 )
 
-if(CONFIG_OTA_DEV_MODE)
-    list(APPEND http_api_requires live_mode)
-endif()
-
 idf_component_register(SRCS "http_api.c"
                              "http_api_utils.c"
                              "http_api_rest.c"

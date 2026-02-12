@@ -15,7 +15,6 @@
 #include "sdio_bus.h"
 #include "pico8_stream.h"
 #include "pico8_render.h"
-#include "swap_future.h"
 #include "p3a_state.h"
 #include "makapix_channel_impl.h"
 #include "makapix.h"
@@ -41,7 +40,7 @@ SemaphoreHandle_t s_prefetch_done_sem = NULL;
 
 bool s_anim_paused = false;
 
-// swap_future load override (one-shot)
+// Load override (one-shot, set by animation_player_request_swap)
 animation_load_override_t s_load_override = {0};
 
 app_lcd_sd_file_list_t s_sd_file_list = {0};
@@ -219,13 +218,6 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         playback_controller_deinit();
         display_renderer_deinit();
         return err;
-    }
-
-    // Initialize swap_future system for Live Mode
-    err = swap_future_init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize swap_future system: %s", esp_err_to_name(err));
-        // Non-fatal - continue without swap_future support
     }
 
     // SD card path is no longer needed here - play_scheduler handles SD card channel internally
@@ -458,7 +450,7 @@ bool animation_player_is_paused(void)
 void animation_player_cycle_animation(bool forward)
 {
     // IMPORTANT: This function is called from the touch task. Keep it stack-light.
-    // Do not call into channel/navigation code here; that can trigger Live Mode schedule builds
+    // Do not call into channel/navigation code here; that can trigger deep call chains
     // (deep stack) and overflow app_touch_task. Instead, defer all work to the loader task.
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
         if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
@@ -547,7 +539,6 @@ esp_err_t animation_player_request_swap(const swap_request_t *request)
         // Set up load override with validated swap request data
         memset(&s_load_override, 0, sizeof(s_load_override));
         s_load_override.valid = true;
-        s_load_override.is_live_mode_swap = request->is_live_mode;
         s_load_override.start_frame = request->start_frame;
         s_load_override.start_time_ms = request->start_time_ms;
         s_load_override.type = request->type;
@@ -584,66 +575,6 @@ void animation_player_display_message(const char *title, const char *body)
 }
 
 // ============================================================================
-
-esp_err_t swap_future_execute(const swap_future_t *swap)
-{
-    if (!swap || !swap->valid) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    ESP_LOGD(TAG, "Executing swap_future: frame=%u, live=%d", 
-             swap->start_frame, swap->is_live_mode_swap);
-
-    if (swap->artwork.filepath[0] == '\0') {
-        ESP_LOGW(TAG, "swap_future invalid: artwork filepath missing");
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    // Check if OTA is in progress
-    if (ota_manager_is_checking()) {
-        ESP_LOGW(TAG, "swap_future blocked: OTA check in progress");
-        return ESP_ERR_INVALID_STATE;
-    }
-    
-    // Check if SD access is paused
-    if (animation_player_is_sd_paused()) {
-        ESP_LOGW(TAG, "swap_future blocked: SD access paused");
-        return ESP_ERR_INVALID_STATE;
-    }
-    
-    // Check if swap already in progress and install one-shot loader override.
-    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
-            ESP_LOGW(TAG, "swap_future blocked: swap already in progress");
-            xSemaphoreGive(s_buffer_mutex);
-            return ESP_ERR_INVALID_STATE;
-        }
-
-        memset(&s_load_override, 0, sizeof(s_load_override));
-        s_load_override.valid = true;
-        strlcpy(s_load_override.filepath, swap->artwork.filepath, sizeof(s_load_override.filepath));
-        s_load_override.type = swap->artwork.type;
-        s_load_override.start_frame = swap->start_frame;
-        s_load_override.start_time_ms = swap->start_time_ms;
-        s_load_override.is_live_mode_swap = swap->is_live_mode_swap;
-        s_load_override.live_index = swap->live_index;
-        s_load_override.post_id = swap->artwork.post_id;
-
-        s_swap_requested = true;
-        xSemaphoreGive(s_buffer_mutex);
-        
-        if (s_loader_sem) {
-            xSemaphoreGive(s_loader_sem);
-        }
-        
-        ESP_LOGD(TAG, "swap_future triggered loader: %s (type=%d start_frame=%u start_time_ms=%llu)",
-                 s_load_override.filepath, (int)s_load_override.type,
-                 (unsigned)s_load_override.start_frame, (unsigned long long)s_load_override.start_time_ms);
-        return ESP_OK;
-    }
-    
-    return ESP_ERR_TIMEOUT;
-}
 
 esp_err_t animation_player_begin_sd_export(void)
 {
@@ -824,8 +755,6 @@ void animation_player_deinit(void)
     pico8_render_deinit();
 #endif
     s_sd_export_active = false;
-
-    swap_future_deinit();
 
     if (s_loader_task) {
         vTaskDelete(s_loader_task);

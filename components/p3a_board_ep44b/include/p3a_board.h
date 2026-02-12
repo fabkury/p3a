@@ -209,6 +209,23 @@ esp_err_t p3a_board_touch_init(esp_lcd_touch_handle_t *handle);
 #endif
 
 // ============================================================================
+// BUTTONS (available if P3A_HAS_BUTTONS)
+// ============================================================================
+
+#if P3A_HAS_BUTTONS
+/**
+ * @brief Initialize physical button(s)
+ * 
+ * Configures the BOOT button GPIO as input with pull-up and sets up
+ * an ISR with software debouncing. Button presses emit events on the
+ * event bus.
+ * 
+ * @return ESP_OK on success
+ */
+esp_err_t p3a_board_button_init(void);
+#endif
+
+// ============================================================================
 // SD CARD (available if P3A_HAS_SDCARD)
 // ============================================================================
 

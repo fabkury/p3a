@@ -202,6 +202,13 @@ static void handle_playback_event(const p3a_event_t *event, void *ctx)
         case P3A_EVENT_RESUME:
             playback_service_resume();
             break;
+        case P3A_EVENT_TOGGLE_PAUSE:
+            if (playback_service_is_paused()) {
+                playback_service_resume();
+            } else {
+                playback_service_pause();
+            }
+            break;
         default:
             break;
     }
@@ -439,6 +446,7 @@ void app_main(void)
         event_bus_subscribe(P3A_EVENT_SWAP_BACK, handle_playback_event, NULL);
         event_bus_subscribe(P3A_EVENT_PAUSE, handle_playback_event, NULL);
         event_bus_subscribe(P3A_EVENT_RESUME, handle_playback_event, NULL);
+        event_bus_subscribe(P3A_EVENT_TOGGLE_PAUSE, handle_playback_event, NULL);
 
         event_bus_subscribe(P3A_EVENT_WIFI_CONNECTED, handle_system_event, NULL);
         event_bus_subscribe(P3A_EVENT_WIFI_DISCONNECTED, handle_system_event, NULL);
@@ -490,6 +498,11 @@ void app_main(void)
     // Initialize LCD and touch
     ESP_ERROR_CHECK(app_lcd_init());
     ESP_ERROR_CHECK(app_touch_init());
+
+#if P3A_HAS_BUTTONS
+    // Initialize BOOT button for pause/resume toggle
+    ESP_ERROR_CHECK(p3a_board_button_init());
+#endif
 
     // Initialize state-aware rendering (after display is ready)
     esp_err_t render_err = p3a_render_init();

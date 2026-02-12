@@ -25,16 +25,6 @@ typedef enum {
     ASSET_TYPE_JPEG,
 } asset_type_t;
 
-// Default max posts per channel (configurable via config_store at runtime)
-// Legacy macro kept for backward compatibility - actual limit comes from config_store
-#define SDCARD_CHANNEL_DEFAULT_MAX_POSTS 2048
-
-#ifdef CONFIG_CHANNEL_MANAGER_MAX_POSTS
-#define SDCARD_CHANNEL_MAX_POSTS CONFIG_CHANNEL_MANAGER_MAX_POSTS
-#else
-#define SDCARD_CHANNEL_MAX_POSTS SDCARD_CHANNEL_DEFAULT_MAX_POSTS
-#endif
-
 #ifdef CONFIG_CHANNEL_MANAGER_PAGE_SIZE
 #define SDCARD_CHANNEL_PAGE_SIZE CONFIG_CHANNEL_MANAGER_PAGE_SIZE
 #else

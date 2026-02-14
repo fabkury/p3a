@@ -1,0 +1,24 @@
+menu "Giphy Integration"
+
+    config GIPHY_API_KEY_DEFAULT
+        string "Default Giphy API Key"
+        default ""
+        help
+            Giphy API key. No built-in default is provided; the user must
+            configure a key via the web UI (stored in NVS).
+
+    config GIPHY_RENDITION_DEFAULT
+        string "Default rendition"
+        default "fixed_height"
+        help
+            Default Giphy rendition to download.
+            Options: fixed_height, fixed_width, original, downsized_medium, downsized
+
+    config GIPHY_FORMAT_DEFAULT
+        string "Default format"
+        default "gif"
+        help
+            Default file format to download.
+            Options: webp, gif
+
+endmenu

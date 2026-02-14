@@ -355,6 +355,7 @@ body {
         <button class="channel-btn" id="ch-channel_promoted" onclick="playPlayset('channel_promoted')">Promoted <span id="cache-promoted" class="cache-badge"></span></button>
         <button class="channel-btn" id="ch-followed_artists" onclick="playPlayset('followed_artists')">Followed Artists</button>
         <button class="channel-btn" id="ch-channel_sdcard" onclick="playPlayset('channel_sdcard')">SD Card</button>
+        <button class="channel-btn" id="ch-giphy_trending" onclick="playPlayset('giphy_trending')">Giphy Trending <span id="cache-giphy-trending" class="cache-badge"></span></button>
     </div>
     <div class="shuffle-row">
         <span class="shuffle-label">Shuffle</span>
@@ -400,6 +401,7 @@ body {
     <button class="footer-btn" onclick="window.location.href='/config/network'">Network</button>
     <button class="footer-btn" id="pico8-btn" style="display:none" onclick="window.location.href='/pico8'">PICO-8</button>
     <button class="footer-btn" onclick="window.location.href='/settings'">Settings</button>
+    <button class="footer-btn" onclick="window.location.href='/giphy'">Giphy</button>
     <button class="footer-btn" onclick="window.location.href='/ota'">Update</button>
 </div>
 <div class="status" id="status"></div>
@@ -519,6 +521,7 @@ function playPlayset(name) {
                     else if (name === 'channel_promoted') displayName = 'Promoted';
                     else if (name === 'channel_sdcard') displayName = 'SD Card';
                     else if (name === 'followed_artists') displayName = 'Followed Artists';
+                    else if (name === 'giphy_trending') displayName = 'Giphy Trending';
                     status.textContent = 'Switched to ' + displayName;
                     status.className = 'status success';
                     updateSelectedChannel(name);
@@ -820,6 +823,7 @@ function loadChannelStats(attempt) {
             if (resp.ok && resp.data) {
                 var allEl = document.getElementById('cache-all');
                 var promEl = document.getElementById('cache-promoted');
+                var giphyEl = document.getElementById('cache-giphy-trending');
                 var recentBtn = document.getElementById('ch-channel_recent');
                 var promBtn = document.getElementById('ch-channel_promoted');
                 var followedBtn = document.getElementById('ch-followed_artists');
@@ -829,6 +833,9 @@ function loadChannelStats(attempt) {
                 }
                 if (promEl && resp.data.promoted) {
                     promEl.textContent = resp.data.promoted.cached + '/' + resp.data.promoted.total;
+                }
+                if (giphyEl && resp.data.giphy_trending) {
+                    giphyEl.textContent = resp.data.giphy_trending.cached + '/' + resp.data.giphy_trending.total;
                 }
                 if (recentBtn) recentBtn.disabled = !registered;
                 if (promBtn) promBtn.disabled = !registered;

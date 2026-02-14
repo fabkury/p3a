@@ -16,6 +16,9 @@
 #include "makapix.h"
 #include "makapix_artwork.h"  // For makapix_artwork_download_with_progress()
 #include "makapix_channel_events.h"  // For async completion events
+#include "giphy.h"             // For giphy_refresh_channel()
+#include "config_store.h"      // For config_store_get_giphy_refresh_interval()
+#include "channel_metadata.h"  // For channel_metadata_load()
 #include "sd_path.h"
 #include "p3a_state.h"   // For P3A_CHANNEL_MSG_* constants
 #include "p3a_render.h"  // For p3a_render_set_channel_message()
@@ -73,6 +76,14 @@ static int find_next_pending_refresh(ps_state_t *state)
         // Artwork channels don't need MQTT - they download directly
         if (ch->type == PS_CHANNEL_TYPE_ARTWORK) {
             return (int)i;  // Always ready to process
+        }
+
+        // Giphy channels need WiFi but not MQTT
+        if (ch->type == PS_CHANNEL_TYPE_GIPHY) {
+            if (p3a_state_has_wifi()) {
+                return (int)i;
+            }
+            continue;  // Skip Giphy channels until WiFi is ready
         }
 
         // For Makapix channels, only proceed if MQTT is connected
@@ -370,6 +381,7 @@ static void refresh_task(void *arg)
         ps_channel_type_t type = ch->type;
         char channel_id[64];
         strlcpy(channel_id, ch->channel_id, sizeof(channel_id));
+        bool cache_has_entries = (ch->cache != NULL && ch->cache->entry_count > 0);
 
         xSemaphoreGive(state->mutex);
 
@@ -380,6 +392,65 @@ static void refresh_task(void *arg)
             err = refresh_sdcard_channel(ch);
         } else if (type == PS_CHANNEL_TYPE_ARTWORK) {
             err = refresh_artwork_channel(ch);
+        } else if (type == PS_CHANNEL_TYPE_GIPHY) {
+            // Verify that a Giphy API key is configured before attempting refresh
+            char giphy_key_check[128];
+            config_store_get_giphy_api_key(giphy_key_check, sizeof(giphy_key_check));
+            if (giphy_key_check[0] == '\0') {
+                ESP_LOGW(TAG, "Giphy channel '%s' skipped: no API key configured", channel_id);
+                char giphy_display_name[64];
+                ps_get_display_name(channel_id, giphy_display_name, sizeof(giphy_display_name));
+                p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1,
+                                               "No Giphy API key configured");
+                err = ESP_ERR_NOT_FOUND;
+            } else {
+            // Check if Giphy channel was refreshed recently enough.
+            // If the cache is empty (e.g. deleted), always refresh so the
+            // user has something to see, even if the interval hasn't elapsed.
+            char ch_path[128];
+            if (sd_path_get_channel(ch_path, sizeof(ch_path)) != ESP_OK) {
+                strlcpy(ch_path, "/sdcard/p3a/channel", sizeof(ch_path));
+            }
+            channel_metadata_t giphy_meta;
+            channel_metadata_load(channel_id, ch_path, &giphy_meta);
+
+            time_t now = time(NULL);
+            uint32_t interval = config_store_get_giphy_refresh_interval();
+            if (cache_has_entries &&
+                giphy_meta.last_refresh > 0 && now > 0 &&
+                (now - giphy_meta.last_refresh) < (time_t)interval) {
+                ESP_LOGI(TAG, "Giphy channel '%s' still fresh (last refresh %lds ago, interval %lus), skipping",
+                         channel_id, (long)(now - giphy_meta.last_refresh), (unsigned long)interval);
+                err = ESP_OK;  // Treat as successful (no-op)
+            } else {
+                if (!cache_has_entries && giphy_meta.last_refresh > 0) {
+                    ESP_LOGI(TAG, "Giphy channel '%s' cache is empty, forcing refresh despite interval",
+                             channel_id);
+                }
+
+                // Show loading message while Giphy API is being called.
+                // This is especially important during boot when the initial
+                // "Loading channel..." from ps_execute_scheduler_command() was
+                // skipped because WiFi wasn't ready yet.
+                extern bool animation_player_is_animation_ready(void);
+                if (!animation_player_is_animation_ready()) {
+                    char giphy_display_name[64];
+                    ps_get_display_name(channel_id, giphy_display_name, sizeof(giphy_display_name));
+                    p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_LOADING, -1,
+                                                   "Loading channel...");
+                }
+
+                err = giphy_refresh_channel(channel_id);
+                if (err != ESP_OK) {
+                    char giphy_display_name[64];
+                    ps_get_display_name(channel_id, giphy_display_name, sizeof(giphy_display_name));
+                    const char *detail = "Giphy refresh failed";
+                    if (err == ESP_ERR_NOT_ALLOWED) detail = "Invalid Giphy API key";
+                    else if (err == ESP_ERR_INVALID_RESPONSE) detail = "Giphy API rate limited";
+                    p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1, detail);
+                }
+            }
+            }
         } else {
             err = refresh_makapix_channel(ch);
         }
@@ -400,6 +471,13 @@ static void refresh_task(void *arg)
             // Note: refresh_async_pending was set in refresh_makapix_channel()
         } else if (err == ESP_OK) {
             ch->refresh_in_progress = false;
+
+            // Update active flag based on available artwork count
+            // (Giphy channels set available_count during giphy_lai_rebuild)
+            if (ch->cache) {
+                ch->active = (ch->cache->available_count > 0);
+            }
+
             sync_entry_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
             ESP_LOGI(TAG, "Channel '%s' refresh complete: %zu entries, active=%d",
                      channel_id, sync_entry_count, ch->active);
@@ -419,20 +497,28 @@ static void refresh_task(void *arg)
         }
 
         // Check if we should trigger playback after refresh
-        // For artwork channels: ALWAYS trigger (show_artwork should immediately display)
+        // For artwork/Giphy channels: ALWAYS trigger (they complete synchronously and
+        //   animation_player_is_animation_ready() returns true when a loading message
+        //   is displayed, which would incorrectly prevent playback from starting)
         // For other channels: only trigger if no animation is currently playing
         bool should_trigger_playback = (err == ESP_OK && sync_entry_count > 0);
         bool is_artwork_channel = (type == PS_CHANNEL_TYPE_ARTWORK);
+        bool is_giphy_channel = (type == PS_CHANNEL_TYPE_GIPHY);
 
         xSemaphoreGive(state->mutex);
 
         if (should_trigger_playback) {
-            // For artwork channels, always trigger playback immediately
-            // For other channels, only trigger if nothing is playing yet
+            // For artwork/Giphy channels, always trigger playback immediately.
+            // We can't rely on animation_player_is_animation_ready() because it
+            // returns true when a message (like "Loading channel...") is being
+            // displayed, which would prevent playback from starting.
+            // For other channels, only trigger if nothing is playing yet.
             extern bool animation_player_is_animation_ready(void);
-            if (is_artwork_channel || !animation_player_is_animation_ready()) {
+            if (is_artwork_channel || is_giphy_channel || !animation_player_is_animation_ready()) {
                 ESP_LOGI(TAG, "%s - triggering playback",
-                         is_artwork_channel ? "Artwork channel ready" : "No animation playing after refresh");
+                         is_artwork_channel ? "Artwork channel ready" :
+                         is_giphy_channel ? "Giphy refresh complete" :
+                         "No animation playing after refresh");
 
                 // For artwork channels: DON'T clear the message here.
                 // The animation player will clear it AFTER the buffer swap completes,

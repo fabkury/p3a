@@ -65,6 +65,7 @@ typedef enum {
     PS_CHANNEL_TYPE_HASHTAG,  // "hashtag_{tag}"
     PS_CHANNEL_TYPE_SDCARD,   // "sdcard"
     PS_CHANNEL_TYPE_ARTWORK,  // Single artwork (in-memory only)
+    PS_CHANNEL_TYPE_GIPHY,    // "giphy_trending", "giphy_search_*", etc.
 } ps_channel_type_t;
 
 /**
@@ -76,6 +77,7 @@ typedef enum {
     PS_ENTRY_FORMAT_NONE,     // No entries loaded
     PS_ENTRY_FORMAT_MAKAPIX,  // makapix_channel_entry_t (64 bytes)
     PS_ENTRY_FORMAT_SDCARD,   // sdcard_index_entry_t (160 bytes)
+    PS_ENTRY_FORMAT_GIPHY,    // giphy_channel_entry_t (64 bytes)
 } ps_entry_format_t;
 
 // ============================================================================

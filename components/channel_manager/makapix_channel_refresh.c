@@ -9,7 +9,8 @@
 #include "download_manager.h"
 #include "config_store.h"
 #include "makapix_channel_events.h"
-#include "channel_cache.h"  // For LAi synchronous cleanup on eviction
+#include "channel_cache.h"     // For LAi synchronous cleanup on eviction
+#include "channel_metadata.h"  // For generic metadata save/load
 #include "p3a_state.h"      // For PICO-8 mode check
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -140,116 +141,33 @@ static void lai_cleanup_on_eviction(const char *channel_id, int32_t post_id)
 
 esp_err_t save_channel_metadata(makapix_channel_t *ch, const char *cursor, time_t refresh_time)
 {
-    char meta_path[256];
-    snprintf(meta_path, sizeof(meta_path), "%s/%s.json", ch->channels_path, ch->channel_id);
-    
-    cJSON *meta = cJSON_CreateObject();
-    if (!meta) return ESP_ERR_NO_MEM;
-    
-    if (cursor && strlen(cursor) > 0) {
-        cJSON_AddStringToObject(meta, "cursor", cursor);
-    } else {
-        cJSON_AddNullToObject(meta, "cursor");
+    channel_metadata_t meta = {
+        .last_refresh = refresh_time,
+    };
+    if (cursor && cursor[0] != '\0') {
+        strncpy(meta.cursor, cursor, sizeof(meta.cursor) - 1);
+        meta.cursor[sizeof(meta.cursor) - 1] = '\0';
     }
-    cJSON_AddNumberToObject(meta, "last_refresh", (double)refresh_time);
-    
-    char *json_str = cJSON_PrintUnformatted(meta);
-    cJSON_Delete(meta);
-    if (!json_str) return ESP_ERR_NO_MEM;
-    
-    // Atomic write: write to temp file, then rename
-    char temp_path[260];
-    size_t path_len = strlen(meta_path);
-    if (path_len + 4 < sizeof(temp_path)) {
-        snprintf(temp_path, sizeof(temp_path), "%s.tmp", meta_path);
-    } else {
-        ESP_LOGE(TAG, "Meta path too long for temp file");
-        free(json_str);
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    FILE *f = fopen(temp_path, "w");
-    if (!f) {
-        free(json_str);
-        return ESP_FAIL;
-    }
-    
-    fprintf(f, "%s", json_str);
-    fflush(f);
-    fsync(fileno(f));
-    fclose(f);
-    free(json_str);
-    
-    // Rename temp to final
-    if (rename(temp_path, meta_path) != 0) {
-        unlink(temp_path);
-        return ESP_FAIL;
-    }
-    
-    return ESP_OK;
+    return channel_metadata_save(ch->channel_id, ch->channels_path, &meta);
 }
 
 esp_err_t load_channel_metadata(makapix_channel_t *ch, char *out_cursor, time_t *out_refresh_time)
 {
-    char meta_path[256];
-    snprintf(meta_path, sizeof(meta_path), "%s/%s.json", ch->channels_path, ch->channel_id);
-    
-    // Clean up orphan .tmp file if it exists (lazy cleanup)
-    char tmp_path[260];
-    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", meta_path);
-    struct stat tmp_st;
-    if (stat(tmp_path, &tmp_st) == 0 && S_ISREG(tmp_st.st_mode)) {
-        ESP_LOGD(TAG, "Removing orphan temp file: %s", tmp_path);
-        unlink(tmp_path);
-    }
-    
-    FILE *f = fopen(meta_path, "r");
-    if (!f) {
-        if (out_cursor) out_cursor[0] = '\0';
-        if (out_refresh_time) *out_refresh_time = 0;
-        return ESP_ERR_NOT_FOUND;
-    }
-    
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    
-    if (size <= 0 || size > 4096) {
-        fclose(f);
-        return ESP_ERR_INVALID_SIZE;
-    }
-    
-    char *json_buf = malloc(size + 1);
-    if (!json_buf) {
-        fclose(f);
-        return ESP_ERR_NO_MEM;
-    }
-    
-    fread(json_buf, 1, size, f);
-    json_buf[size] = '\0';
-    fclose(f);
-    
-    cJSON *meta = cJSON_Parse(json_buf);
-    free(json_buf);
-    if (!meta) return ESP_ERR_INVALID_RESPONSE;
-    
-    cJSON *cursor = cJSON_GetObjectItem(meta, "cursor");
+    channel_metadata_t meta;
+    esp_err_t err = channel_metadata_load(ch->channel_id, ch->channels_path, &meta);
+
     if (out_cursor) {
-        if (cJSON_IsString(cursor)) {
-            strncpy(out_cursor, cursor->valuestring, 63);
-            out_cursor[63] = '\0';
+        if (err == ESP_OK) {
+            strlcpy(out_cursor, meta.cursor, 64);
         } else {
             out_cursor[0] = '\0';
         }
     }
-    
-    cJSON *refresh = cJSON_GetObjectItem(meta, "last_refresh");
     if (out_refresh_time) {
-        *out_refresh_time = cJSON_IsNumber(refresh) ? (time_t)cJSON_GetNumberValue(refresh) : 0;
+        *out_refresh_time = (err == ESP_OK) ? meta.last_refresh : 0;
     }
-    
-    cJSON_Delete(meta);
-    return ESP_OK;
+
+    return err;
 }
 
 /**

@@ -2537,6 +2537,14 @@ CONFIG_CHANNEL_DEFAULT_ANIMATIONS_DIR="/sdcard/p3a/animations"
 # end of Channel Manager
 
 #
+# Giphy Integration
+#
+CONFIG_GIPHY_API_KEY_DEFAULT=""
+CONFIG_GIPHY_RENDITION_DEFAULT="fixed_height"
+CONFIG_GIPHY_FORMAT_DEFAULT="webp"
+# end of Giphy Integration
+
+#
 # Makapix Configuration
 #
 CONFIG_MAKAPIX_CLUB_HOST="makapix.club"

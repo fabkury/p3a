@@ -474,6 +474,17 @@ esp_err_t play_scheduler_get_channel_entry(const char *channel_id, size_t index,
  */
 bool play_scheduler_is_makapix_channel(const char *channel_id);
 
+/**
+ * @brief Check if a channel needs artwork downloads
+ *
+ * Returns true for both Makapix and Giphy channels (they download from network).
+ * Returns false for SD card channel (files are already local).
+ *
+ * @param channel_id Channel ID
+ * @return true if this channel needs downloads from network
+ */
+bool play_scheduler_needs_download(const char *channel_id);
+
 #ifdef __cplusplus
 }
 #endif

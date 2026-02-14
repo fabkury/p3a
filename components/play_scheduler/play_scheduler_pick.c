@@ -13,6 +13,7 @@
 #include "channel_cache.h"
 #include "makapix_channel_impl.h"
 #include "makapix_channel_utils.h"
+#include "giphy.h"
 #include "sd_path.h"
 #include "esp_log.h"
 #include <string.h>
@@ -316,13 +317,18 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
             continue;
         }
 
-        // Build filepath for this entry
+        // Build filepath and storage_key based on entry format
         char filepath[256];
-        ps_build_vault_filepath(entry, filepath, sizeof(filepath));
-
-        // Found valid artwork - build storage_key string
         char storage_key[40];
-        bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
+
+        if (ch->entry_format == PS_ENTRY_FORMAT_GIPHY) {
+            const giphy_channel_entry_t *ge = (const giphy_channel_entry_t *)entry;
+            giphy_build_entry_filepath(ge, filepath, sizeof(filepath));
+            strlcpy(storage_key, ge->giphy_id, sizeof(storage_key));
+        } else {
+            ps_build_vault_filepath(entry, filepath, sizeof(filepath));
+            bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
+        }
 
         ESP_LOGI(TAG, ">>> PICKED (RecencyPick Makapix): LAi_index=%lu, Ci_index=%lu, post_id=%ld, "
                  "pool_size=%zu, skipped=%d, storage_key=%.8s...",
@@ -358,6 +364,8 @@ static bool pick_recency(ps_state_t *state, size_t channel_index, ps_artwork_t *
     if (ch->entry_format == PS_ENTRY_FORMAT_SDCARD) {
         return pick_recency_sdcard(state, channel_index, out_artwork);
     } else {
+        // Both Makapix and Giphy use the same LAi-based pick logic
+        // (filepath dispatch handled inside pick_recency_makapix)
         return pick_recency_makapix(state, channel_index, out_artwork);
     }
 }
@@ -494,10 +502,16 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
         }
 
         char filepath[256];
-        ps_build_vault_filepath(entry, filepath, sizeof(filepath));
-
         char storage_key[40];
-        bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
+
+        if (ch->entry_format == PS_ENTRY_FORMAT_GIPHY) {
+            const giphy_channel_entry_t *ge = (const giphy_channel_entry_t *)entry;
+            giphy_build_entry_filepath(ge, filepath, sizeof(filepath));
+            strlcpy(storage_key, ge->giphy_id, sizeof(storage_key));
+        } else {
+            ps_build_vault_filepath(entry, filepath, sizeof(filepath));
+            bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
+        }
 
         ESP_LOGI(TAG, ">>> PICKED (RandomPick Makapix): LAi_index=%zu, Ci_index=%lu, post_id=%ld, "
                  "pool_size=%zu, attempt=%d, storage_key=%.8s...",
@@ -626,7 +640,7 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
     for (size_t i = 0; i < state->channel_count; i++) {
         ps_channel_state_t *ch = &state->channels[i];
 
-        if (ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX && ch->cache) {
+        if ((ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX || ch->entry_format == PS_ENTRY_FORMAT_GIPHY) && ch->cache) {
             size_t ci_count = ch->cache->entry_count;
             size_t lai_count = ch->cache->available_count;
             ESP_LOGI(TAG, "  Ch[%zu] '%s': Ci=%zu, LAi=%zu, cursor=%lu, active=%d, weight=%lu",
@@ -642,7 +656,7 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
                 active_count++;
             }
         } else {
-            // SD card channel or Makapix without cache
+            // SD card channel or channel without cache
             ESP_LOGI(TAG, "  Ch[%zu] '%s' (SD): entries=%zu, cursor=%lu, active=%d, weight=%lu",
                      i, ch->channel_id, ch->entry_count,
                      (unsigned long)ch->cursor, ch->active, (unsigned long)ch->weight);

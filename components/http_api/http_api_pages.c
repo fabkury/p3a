@@ -180,6 +180,14 @@ esp_err_t h_get_network_config(httpd_req_t *req) {
 }
 
 /**
+ * GET /giphy
+ * Serves the Giphy settings page from LittleFS
+ */
+static esp_err_t h_get_giphy(httpd_req_t *req) {
+    return serve_file(req, "/spiffs/giphy.html");
+}
+
+/**
  * POST /erase
  * Erases Wi-Fi credentials and reboots the device
  */
@@ -251,6 +259,9 @@ esp_err_t http_api_pages_route_get(httpd_req_t *req) {
     }
     if (strcmp(uri, "/settings") == 0) {
         return h_get_settings(req);
+    }
+    if (strcmp(uri, "/giphy") == 0) {
+        return h_get_giphy(req);
     }
 
 #if CONFIG_P3A_PICO8_ENABLE

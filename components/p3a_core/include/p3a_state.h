@@ -142,6 +142,7 @@ typedef enum {
     P3A_CHANNEL_MAKAPIX_BY_USER,    ///< Makapix "by_user" channel (specific artist)
     P3A_CHANNEL_MAKAPIX_HASHTAG,    ///< Makapix "hashtag" channel (specific hashtag)
     P3A_CHANNEL_MAKAPIX_ARTWORK,    ///< Transient single-artwork channel
+    P3A_CHANNEL_GIPHY_TRENDING,     ///< Giphy Trending channel
 } p3a_channel_type_t;
 
 /**

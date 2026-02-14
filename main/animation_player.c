@@ -238,6 +238,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
             boot_channel = "sdcard";
         } else if (strcmp(active_playset, "followed_artists") == 0) {
             boot_channel = "followed";  // Display "Followed Artists"
+        } else if (strcmp(active_playset, "giphy_trending") == 0) {
+            boot_channel = "giphy";  // Display "Giphy Trending"
         } else {
             // Custom playset - use generic name
             boot_channel = "channel";
@@ -317,6 +319,8 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
             snprintf(display_name, sizeof(display_name), "Promoted");
         } else if (strcmp(boot_channel, "followed") == 0) {
             snprintf(display_name, sizeof(display_name), "Followed Artists");
+        } else if (strcmp(boot_channel, "giphy") == 0) {
+            snprintf(display_name, sizeof(display_name), "Giphy: Trending");
         } else {
             snprintf(display_name, sizeof(display_name), "%s", boot_channel);
         }
@@ -325,6 +329,10 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
             // SD card boot: show hint for provisioning if no local files
             p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_LOADING, -1,
                                            "Loading animations from SD card...");
+        } else if (strcmp(boot_channel, "giphy") == 0) {
+            // Giphy boot: show loading (no MQTT needed)
+            p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_LOADING, -1,
+                                           "Loading channel...");
         } else {
             // Makapix boot: show connecting/loading
             p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_LOADING, -1,

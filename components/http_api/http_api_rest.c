@@ -340,22 +340,26 @@ esp_err_t h_get_channels_stats(httpd_req_t *req) {
     // Get stats from Play Scheduler (O(1) lookup from LAi)
     size_t all_total = 0, all_cached = 0;
     size_t promoted_total = 0, promoted_cached = 0;
+    size_t giphy_trending_total = 0, giphy_trending_cached = 0;
 
     // Use new LAi-based API for instant stats
     play_scheduler_get_channel_stats("all", &all_total, &all_cached);
     play_scheduler_get_channel_stats("promoted", &promoted_total, &promoted_cached);
+    play_scheduler_get_channel_stats("giphy_trending", &giphy_trending_total, &giphy_trending_cached);
 
     // Check if Makapix is registered (has player_key)
     bool is_registered = makapix_store_has_player_key();
 
-    char response[300];
+    char response[400];
     snprintf(response, sizeof(response),
              "{\"ok\":true,\"data\":{"
              "\"all\":{\"total\":%zu,\"cached\":%zu},"
              "\"promoted\":{\"total\":%zu,\"cached\":%zu},"
+             "\"giphy_trending\":{\"total\":%zu,\"cached\":%zu},"
              "\"registered\":%s"
              "}}",
              all_total, all_cached, promoted_total, promoted_cached,
+             giphy_trending_total, giphy_trending_cached,
              is_registered ? "true" : "false");
     send_json(req, 200, response);
     return ESP_OK;
@@ -434,6 +438,10 @@ esp_err_t h_put_config(httpd_req_t *req) {
         send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
         return ESP_OK;
     }
+
+    // Giphy refresh interval and cache size are not user-configurable
+    cJSON_DeleteItemFromObject(o, "giphy_refresh_interval");
+    cJSON_DeleteItemFromObject(o, "giphy_cache_size");
 
     esp_err_t e = config_store_save(o);
 
@@ -556,6 +564,8 @@ esp_err_t h_get_channel(httpd_req_t *req) {
             channel_name = "sdcard";
         } else if (strcmp(playset, "followed_artists") == 0) {
             channel_name = "followed_artists";
+        } else if (strcmp(playset, "giphy_trending") == 0) {
+            channel_name = "giphy_trending";
         }
     } else if (err == ESP_OK) {
         // Fallback to channel type if no playset set (legacy)
@@ -568,6 +578,9 @@ esp_err_t h_get_channel(httpd_req_t *req) {
                 break;
             case P3A_CHANNEL_MAKAPIX_PROMOTED:
                 channel_name = "promoted";
+                break;
+            case P3A_CHANNEL_GIPHY_TRENDING:
+                channel_name = "giphy_trending";
                 break;
             default:
                 channel_name = "other";

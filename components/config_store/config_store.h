@@ -387,6 +387,76 @@ esp_err_t config_store_set_ltf_enabled(bool enable);
  */
 bool config_store_get_ltf_enabled(void);
 
+// ============================================================================
+// Giphy Settings (persisted)
+// ============================================================================
+
+/**
+ * @brief Set Giphy API key (overrides Kconfig default)
+ */
+esp_err_t config_store_set_giphy_api_key(const char *key);
+
+/**
+ * @brief Get Giphy API key
+ *
+ * Returns NVS value if set, otherwise Kconfig default.
+ */
+esp_err_t config_store_get_giphy_api_key(char *out_key, size_t max_len);
+
+/**
+ * @brief Set Giphy rendition (e.g., "fixed_height", "original")
+ */
+esp_err_t config_store_set_giphy_rendition(const char *rendition);
+
+/**
+ * @brief Get Giphy rendition (defaults to "fixed_height")
+ */
+esp_err_t config_store_get_giphy_rendition(char *out, size_t max_len);
+
+/**
+ * @brief Set Giphy format ("webp" or "gif")
+ */
+esp_err_t config_store_set_giphy_format(const char *format);
+
+/**
+ * @brief Get Giphy format (defaults to "webp")
+ */
+esp_err_t config_store_get_giphy_format(char *out, size_t max_len);
+
+/**
+ * @brief Set Giphy content rating filter ("g", "pg", "pg-13", "r")
+ */
+esp_err_t config_store_set_giphy_rating(const char *rating);
+
+/**
+ * @brief Get Giphy content rating filter (defaults to "pg-13")
+ */
+esp_err_t config_store_get_giphy_rating(char *out, size_t max_len);
+
+/**
+ * @brief Set Giphy cache size (max entries per channel)
+ *
+ * @param size Cache size (32-4096, default 256)
+ */
+esp_err_t config_store_set_giphy_cache_size(uint32_t size);
+
+/**
+ * @brief Get Giphy cache size (defaults to 256)
+ */
+uint32_t config_store_get_giphy_cache_size(void);
+
+/**
+ * @brief Set Giphy refresh interval in seconds
+ *
+ * @param seconds Refresh interval (60-86400, default 7200 = 2 hours)
+ */
+esp_err_t config_store_set_giphy_refresh_interval(uint32_t seconds);
+
+/**
+ * @brief Get Giphy refresh interval (defaults to 7200 = 2 hours)
+ */
+uint32_t config_store_get_giphy_refresh_interval(void);
+
 #ifdef __cplusplus
 }
 #endif

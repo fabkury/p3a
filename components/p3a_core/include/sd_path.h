@@ -100,6 +100,15 @@ esp_err_t sd_path_get_playlists(char *out_path, size_t out_len);
 esp_err_t sd_path_get_downloads(char *out_path, size_t out_len);
 
 /**
+ * @brief Get the giphy directory path (for Giphy artwork cache)
+ * 
+ * @param out_path Output buffer for the path
+ * @param out_len Size of output buffer
+ * @return ESP_OK on success
+ */
+esp_err_t sd_path_get_giphy(char *out_path, size_t out_len);
+
+/**
  * @brief Set the SD card root folder (persisted to NVS, requires reboot)
  * 
  * Accepts either:

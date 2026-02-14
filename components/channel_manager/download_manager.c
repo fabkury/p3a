@@ -23,6 +23,7 @@
 #include "makapix_channel_utils.h"
 #include "makapix_artwork.h"
 #include "makapix_channel_events.h"
+#include "giphy.h"
 #include "channel_cache.h"
 #include "load_tracker.h"
 #include "sd_path.h"
@@ -73,6 +74,10 @@ static void dl_get_display_name(const char *channel_id, char *out_name, size_t m
     } else if (strncmp(channel_id, "hashtag_", 8) == 0) {
         // Truncate hashtag to fit in output buffer with "#" prefix
         snprintf(out_name, max_len, "#%.56s", channel_id + 8);
+    } else if (strcmp(channel_id, "giphy_trending") == 0) {
+        snprintf(out_name, max_len, "Giphy: Trending");
+    } else if (strncmp(channel_id, "giphy_", 6) == 0) {
+        snprintf(out_name, max_len, "Giphy: %.56s", channel_id + 6);
     } else {
         // Truncate channel_id to fit in output buffer
         snprintf(out_name, max_len, "%.63s", channel_id);
@@ -313,9 +318,9 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
         size_t ch_idx = (snapshot->round_robin_idx + attempt) % snapshot->channel_count;
         dl_channel_state_t *ch = &snapshot->channels[ch_idx];
 
-        // Skip non-Makapix channels (e.g., SD card - no downloads needed)
-        if (!play_scheduler_is_makapix_channel(ch->channel_id)) {
-            ESP_LOGI(TAG, "DEBUG: Skipping non-Makapix channel '%s'", ch->channel_id);
+        // Skip channels that don't need downloads (e.g., SD card - local files)
+        if (!play_scheduler_needs_download(ch->channel_id)) {
+            ESP_LOGI(TAG, "DEBUG: Skipping local channel '%s'", ch->channel_id);
             continue;
         }
 
@@ -381,25 +386,36 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             // Process current batch entry (mutex NOT held during this processing)
             makapix_channel_entry_t *entry = &s_batch_entries[batch_idx++];
 
-            // Build filepath into static buffer (used by has_404_marker and output)
-            dl_build_vault_filepath(entry, s_dl_filepath, sizeof(s_dl_filepath));
+            // Build filepath and storage key based on channel type
+            bool is_giphy = giphy_is_giphy_channel(ch->channel_id);
+
+            if (is_giphy) {
+                // Giphy channel: entry is giphy_channel_entry_t (same size as makapix_channel_entry_t)
+                const giphy_channel_entry_t *ge = (const giphy_channel_entry_t *)entry;
+                giphy_build_filepath(ge->giphy_id, ge->extension, s_dl_filepath, sizeof(s_dl_filepath));
+                strlcpy(s_dl_storage_key, ge->giphy_id, sizeof(s_dl_storage_key));
+            } else {
+                // Makapix channel: standard vault filepath
+                dl_build_vault_filepath(entry, s_dl_filepath, sizeof(s_dl_filepath));
+                bytes_to_uuid(entry->storage_key_uuid, s_dl_storage_key, sizeof(s_dl_storage_key));
+            }
 
             // Skip if 404 marker exists
             if (has_404_marker(s_dl_filepath)) {
-                // Convert UUID to string for logging
-                char skip_key[40];
-                bytes_to_uuid(entry->storage_key_uuid, skip_key, sizeof(skip_key));
-                ESP_LOGI(TAG, "SKIP post_id=%d: has 404 marker (key=%.8s...)", entry->post_id, skip_key);
+                ESP_LOGI(TAG, "SKIP post_id=%d: has 404 marker (key=%.8s...)", entry->post_id, s_dl_storage_key);
                 continue;
             }
 
-            // Get vault base path for LTF check
-            if (sd_path_get_vault(s_dl_vault_base, sizeof(s_dl_vault_base)) != ESP_OK) {
-                strlcpy(s_dl_vault_base, "/sdcard/p3a/vault", sizeof(s_dl_vault_base));
+            // Get base path for LTF check
+            if (is_giphy) {
+                if (sd_path_get_giphy(s_dl_vault_base, sizeof(s_dl_vault_base)) != ESP_OK) {
+                    strlcpy(s_dl_vault_base, "/sdcard/p3a/giphy", sizeof(s_dl_vault_base));
+                }
+            } else {
+                if (sd_path_get_vault(s_dl_vault_base, sizeof(s_dl_vault_base)) != ESP_OK) {
+                    strlcpy(s_dl_vault_base, "/sdcard/p3a/vault", sizeof(s_dl_vault_base));
+                }
             }
-
-            // Convert UUID to string
-            bytes_to_uuid(entry->storage_key_uuid, s_dl_storage_key, sizeof(s_dl_storage_key));
 
             // Skip if LTF is terminal or in backoff
             if (!ltf_can_download_now(s_dl_storage_key, s_dl_vault_base)) {
@@ -414,15 +430,20 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             strlcpy(out_request->channel_id, ch->channel_id, sizeof(out_request->channel_id));
             out_request->post_id = entry->post_id;  // Capture post_id for O(1) LAi lookup
 
-            // Build artwork URL (using static sha256 buffer)
-            memset(s_dl_sha256, 0, sizeof(s_dl_sha256));
-            if (storage_key_sha256(s_dl_storage_key, s_dl_sha256) == ESP_OK) {
-                int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
-                snprintf(out_request->art_url, sizeof(out_request->art_url),
-                         "https://%s/api/vault/%02x/%02x/%02x/%s%s",
-                         CONFIG_MAKAPIX_CLUB_HOST,
-                         (unsigned int)s_dl_sha256[0], (unsigned int)s_dl_sha256[1], (unsigned int)s_dl_sha256[2],
-                         s_dl_storage_key, s_ext_strings[ext_idx]);
+            if (is_giphy) {
+                // Build Giphy download URL from giphy_id + configured rendition/format
+                giphy_build_download_url(s_dl_storage_key, out_request->art_url, sizeof(out_request->art_url));
+            } else {
+                // Build Makapix artwork URL (using static sha256 buffer)
+                memset(s_dl_sha256, 0, sizeof(s_dl_sha256));
+                if (storage_key_sha256(s_dl_storage_key, s_dl_sha256) == ESP_OK) {
+                    int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
+                    snprintf(out_request->art_url, sizeof(out_request->art_url),
+                             "https://%s/api/vault/%02x/%02x/%02x/%s%s",
+                             CONFIG_MAKAPIX_CLUB_HOST,
+                             (unsigned int)s_dl_sha256[0], (unsigned int)s_dl_sha256[1], (unsigned int)s_dl_sha256[2],
+                             s_dl_storage_key, s_ext_strings[ext_idx]);
+                }
             }
 
             // Set cursor to just after this entry's position, not the batch end.
@@ -645,7 +666,17 @@ static void download_task(void *arg)
 
         memset(s_task_out_path, 0, sizeof(s_task_out_path));
         ESP_LOGI(TAG, "Downloading: %s", s_dl_req.art_url);
-        esp_err_t err = makapix_artwork_download(s_dl_req.art_url, s_dl_req.storage_key, s_task_out_path, sizeof(s_task_out_path));
+        esp_err_t err;
+        if (giphy_is_giphy_channel(s_dl_req.channel_id)) {
+            // Giphy channel: use giphy_download_artwork
+            // Determine extension from the filepath
+            uint8_t ext = 0;  // default webp
+            size_t flen = strlen(s_dl_req.filepath);
+            if (flen >= 4 && strcmp(s_dl_req.filepath + flen - 4, ".gif") == 0) ext = 1;
+            err = giphy_download_artwork(s_dl_req.storage_key, ext, s_task_out_path, sizeof(s_task_out_path));
+        } else {
+            err = makapix_artwork_download(s_dl_req.art_url, s_dl_req.storage_key, s_task_out_path, sizeof(s_task_out_path));
+        }
         
         set_busy(false, NULL);
 

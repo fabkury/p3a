@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="/static/compat.js"></script>
+<title>p3a - Giphy Settings</title>
+<style>
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    padding: 12px 10px 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: #fff;
+}
+@supports (min-height: 100svh) { body { min-height: 100svh; } }
+@supports (min-height: 100dvh) { body { min-height: 100dvh; } }
+.header {
+    text-align: center;
+    padding: 8px 0 4px;
+    color: white;
+}
+.header h1 {
+    margin: 0;
+    font-size: clamp(1.8rem, 4vw, 2.2rem);
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    text-transform: lowercase;
+}
+.section {
+    width: min(520px, 100%);
+    background: rgba(255,255,255,0.95);
+    border-radius: 16px;
+    padding: 14px;
+    margin: 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.section h3 {
+    margin: 0 0 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #333;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.setting-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 0;
+}
+.setting-label {
+    font-size: 0.9rem;
+    color: #333;
+    min-width: 120px;
+}
+.setting-input {
+    flex: 1;
+    min-width: 100px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    font-size: 0.9rem;
+}
+.setting-select {
+    flex: 1;
+    min-width: 100px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    font-size: 0.9rem;
+    background: white;
+}
+.setting-hint {
+    font-size: 0.75rem;
+    color: #555;
+    word-break: break-word;
+    min-height: 1.2em;
+    width: 100%;
+}
+.btn {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 9px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.btn:active:not(:disabled) {
+    background: #5568d3;
+}
+.btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+.save-all {
+    width: 100%;
+    margin-top: 8px;
+}
+.footer {
+    width: min(520px, 100%);
+    padding: 8px 0 4px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.footer-btn {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 0.85rem;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.footer-btn:active {
+    background: rgba(255,255,255,0.3);
+}
+@media (min-width: 481px) {
+    .footer-btn:hover { background: rgba(255,255,255,0.3); }
+}
+.status {
+    position: fixed;
+    top: clamp(48px, 12vh, 80px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    display: none;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.status.success { background: #4CAF50; color: white; }
+.status.error { background: #f44336; color: white; }
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>giphy settings</h1>
+</div>
+<div class="section">
+    <h3>API</h3>
+    <div class="setting-row">
+        <label class="setting-label" for="giphy-api-key">API Key</label>
+        <input class="setting-input" id="giphy-api-key" type="text" placeholder="Giphy API Key">
+    </div>
+    <div class="setting-hint">Enter your Giphy API key. Giphy channels will not work without a valid key.</div>
+</div>
+<div class="section">
+    <h3>Download</h3>
+    <div class="setting-row">
+        <label class="setting-label" for="giphy-rendition">Rendition</label>
+        <select class="setting-select" id="giphy-rendition">
+            <option value="fixed_height">Fixed Height (200px)</option>
+            <option value="fixed_width">Fixed Width (200px)</option>
+            <option value="original">Original</option>
+            <option value="downsized_medium">Downsized Medium</option>
+            <option value="downsized">Downsized</option>
+        </select>
+    </div>
+    <div class="setting-row">
+        <label class="setting-label" for="giphy-format">Format</label>
+        <select class="setting-select" id="giphy-format">
+            <option value="webp">WebP</option>
+            <option value="gif">GIF</option>
+        </select>
+    </div>
+    <div class="setting-hint">WebP is smaller and recommended. Downsized renditions are only available as GIF. Original can be very large (10MB+).</div>
+</div>
+<div class="section">
+    <h3>Content</h3>
+    <div class="setting-row">
+        <label class="setting-label" for="giphy-rating">Content Rating</label>
+        <select class="setting-select" id="giphy-rating">
+            <option value="g">G - General Audiences</option>
+            <option value="pg">PG - Parental Guidance</option>
+            <option value="pg-13">PG-13 (default)</option>
+            <option value="r">R - Restricted</option>
+        </select>
+    </div>
+</div>
+<div class="section">
+    <button class="btn save-all" id="save-btn" onclick="saveAll()">Save All Settings</button>
+</div>
+<div class="footer">
+    <button class="footer-btn" onclick="window.location.href='/'">Home</button>
+</div>
+<div class="status" id="status"></div>
+<script>
+// Valid formats per rendition (matches backend s_rendition_map)
+var RENDITION_FORMATS = {
+    'fixed_height':     ['webp', 'gif'],
+    'fixed_width':      ['webp', 'gif'],
+    'original':         ['webp', 'gif'],
+    'downsized_medium': ['gif'],
+    'downsized':        ['gif']
+};
+
+var FORMAT_LABELS = { 'webp': 'WebP', 'gif': 'GIF' };
+
+function showToast(msg, isError) {
+    var s = document.getElementById('status');
+    s.textContent = msg;
+    s.className = isError ? 'status error' : 'status success';
+    s.style.display = 'block';
+    setTimeout(function() { s.style.display = 'none'; }, 6000);
+}
+
+/**
+ * Rebuild the format dropdown based on the selected rendition.
+ * Preserves current selection when still valid, otherwise picks first valid.
+ */
+function updateFormatOptions() {
+    var renditionSel = document.getElementById('giphy-rendition');
+    var formatSel = document.getElementById('giphy-format');
+    var current = formatSel.value;
+    var allowed = RENDITION_FORMATS[renditionSel.value] || ['webp', 'gif'];
+
+    // Clear options
+    formatSel.length = 0;
+    for (var i = 0; i < allowed.length; i++) {
+        var opt = document.createElement('option');
+        opt.value = allowed[i];
+        opt.textContent = FORMAT_LABELS[allowed[i]] || allowed[i];
+        formatSel.appendChild(opt);
+    }
+
+    // Restore previous selection if still valid, otherwise first option
+    if (allowed.indexOf(current) !== -1) {
+        formatSel.value = current;
+    } else {
+        formatSel.value = allowed[0];
+    }
+}
+
+function loadSettings() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/config', true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            try {
+                var resp = JSON.parse(xhr.responseText || '{}');
+                var cfg = (resp && resp.ok && resp.data) ? resp.data : {};
+                document.getElementById('giphy-api-key').value = cfg.giphy_api_key || '';
+                document.getElementById('giphy-rendition').value = cfg.giphy_rendition || 'fixed_height';
+                updateFormatOptions();
+                document.getElementById('giphy-format').value = cfg.giphy_format || 'webp';
+                // Re-run in case the loaded format isn't valid for the loaded rendition
+                updateFormatOptions();
+                document.getElementById('giphy-rating').value = cfg.giphy_rating || 'pg-13';
+            } catch (e) {
+                showToast('Failed to load settings', true);
+            }
+        }
+    };
+    xhr.send();
+}
+
+function saveAll() {
+    var btn = document.getElementById('save-btn');
+    btn.disabled = true;
+
+    var apiKey = document.getElementById('giphy-api-key').value.trim();
+    var rendition = document.getElementById('giphy-rendition').value;
+    var format = document.getElementById('giphy-format').value;
+    var rating = document.getElementById('giphy-rating').value;
+
+    if (!apiKey) { showToast('API Key is required', true); btn.disabled = false; return; }
+
+    // Read current config, merge, save
+    var xhrGet = new XMLHttpRequest();
+    xhrGet.open('GET', '/config', true);
+    xhrGet.onreadystatechange = function() {
+        if (xhrGet.readyState === 4) {
+            var cfg = {};
+            try {
+                var resp = JSON.parse(xhrGet.responseText || '{}');
+                cfg = (resp && resp.ok && resp.data) ? resp.data : {};
+            } catch (e) { cfg = {}; }
+
+            cfg.giphy_api_key = apiKey;
+            cfg.giphy_rendition = rendition;
+            cfg.giphy_format = format;
+            cfg.giphy_rating = rating;
+
+            var xhrPut = new XMLHttpRequest();
+            xhrPut.open('PUT', '/config', true);
+            xhrPut.setRequestHeader('Content-Type', 'application/json');
+            xhrPut.onreadystatechange = function() {
+                if (xhrPut.readyState === 4) {
+                    btn.disabled = false;
+                    if (xhrPut.status >= 200 && xhrPut.status < 300) {
+                        showToast('Giphy settings saved', false);
+                    } else {
+                        showToast('Save failed (HTTP ' + xhrPut.status + ')', true);
+                    }
+                }
+            };
+            xhrPut.send(JSON.stringify(cfg));
+        }
+    };
+    xhrGet.send();
+}
+
+// Wire up rendition change to refresh format options
+document.getElementById('giphy-rendition').addEventListener('change', updateFormatOptions);
+
+loadSettings();
+</script>
+</body>
+</html>

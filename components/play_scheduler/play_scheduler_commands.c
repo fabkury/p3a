@@ -95,6 +95,10 @@ static void ps_build_channel_id(const ps_channel_spec_t *spec, char *out_id, siz
             snprintf(out_id, max_len, "artwork");
             break;
 
+        case PS_CHANNEL_TYPE_GIPHY:
+            snprintf(out_id, max_len, "giphy_%s", spec->name);
+            break;
+
         default:
             snprintf(out_id, max_len, "unknown");
             break;
@@ -335,6 +339,16 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
         return ps_load_sdcard_cache(ch);
     }
 
+    // Giphy channels use channel_cache module (same 64-byte entries as Makapix)
+    // but with giphy/ base path for LAi rebuild
+    if (ch->type == PS_CHANNEL_TYPE_GIPHY) {
+        esp_err_t err = ps_load_makapix_cache(ch);
+        if (err == ESP_OK) {
+            ch->entry_format = PS_ENTRY_FORMAT_GIPHY;
+        }
+        return err;
+    }
+
     // Makapix channels use channel_cache module for LAi persistence
     return ps_load_makapix_cache(ch);
 }
@@ -467,6 +481,8 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
             p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_HASHTAG, spec->identifier);
         } else if (spec->type == PS_CHANNEL_TYPE_ARTWORK) {
             p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_ARTWORK, NULL);
+        } else if (spec->type == PS_CHANNEL_TYPE_GIPHY) {
+            p3a_state_switch_channel(P3A_CHANNEL_GIPHY_TRENDING, NULL);
         }
     }
 
@@ -551,6 +567,11 @@ esp_err_t ps_create_channel_playset(const char *playset_name, ps_scheduler_comma
     } else if (strcmp(playset_name, "channel_sdcard") == 0) {
         out_cmd->channels[0].type = PS_CHANNEL_TYPE_SDCARD;
         strlcpy(out_cmd->channels[0].name, "sdcard", sizeof(out_cmd->channels[0].name));
+        out_cmd->channels[0].weight = 1;
+        return ESP_OK;
+    } else if (strcmp(playset_name, "giphy_trending") == 0) {
+        out_cmd->channels[0].type = PS_CHANNEL_TYPE_GIPHY;
+        strlcpy(out_cmd->channels[0].name, "trending", sizeof(out_cmd->channels[0].name));
         out_cmd->channels[0].weight = 1;
         return ESP_OK;
     }

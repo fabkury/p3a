@@ -520,8 +520,8 @@ esp_err_t play_scheduler_get_channel_entry(const char *channel_id, size_t index,
     for (size_t i = 0; i < s_state->channel_count; i++) {
         ps_channel_state_t *ch = &s_state->channels[i];
         if (strcmp(ch->channel_id, channel_id) == 0) {
-            // Only Makapix channels have makapix_channel_entry_t format
-            if (ch->entry_format != PS_ENTRY_FORMAT_MAKAPIX) {
+            // Only Makapix and Giphy channels have makapix_channel_entry_t-compatible format
+            if (ch->entry_format != PS_ENTRY_FORMAT_MAKAPIX && ch->entry_format != PS_ENTRY_FORMAT_GIPHY) {
                 result = ESP_ERR_NOT_SUPPORTED;
                 break;
             }
@@ -562,6 +562,24 @@ bool play_scheduler_is_makapix_channel(const char *channel_id)
         return false;
     }
 
+    // Giphy channels are not Makapix channels (they have their own download path)
+    if (strncmp(channel_id, "giphy_", 6) == 0) {
+        return false;
+    }
+
     // All other channels (all, promoted, user, by_user_*, hashtag_*) are Makapix channels
+    return true;
+}
+
+bool play_scheduler_needs_download(const char *channel_id)
+{
+    if (!channel_id) return false;
+
+    // SD card channel has local files, no download needed
+    if (strcmp(channel_id, "sdcard") == 0) {
+        return false;
+    }
+
+    // Both Makapix and Giphy channels need downloads
     return true;
 }

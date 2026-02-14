@@ -147,6 +147,7 @@ static const char *channel_type_to_string(p3a_channel_type_t type)
         case P3A_CHANNEL_MAKAPIX_BY_USER: return "by_user";
         case P3A_CHANNEL_MAKAPIX_HASHTAG: return "hashtag";
         case P3A_CHANNEL_MAKAPIX_ARTWORK: return "artwork";
+        case P3A_CHANNEL_GIPHY_TRENDING: return "giphy_trending";
         default: return "unknown";
     }
 }
@@ -160,6 +161,7 @@ static p3a_channel_type_t string_to_channel_type(const char *str)
     if (strcmp(str, "by_user") == 0) return P3A_CHANNEL_MAKAPIX_BY_USER;
     if (strcmp(str, "hashtag") == 0) return P3A_CHANNEL_MAKAPIX_HASHTAG;
     if (strcmp(str, "artwork") == 0) return P3A_CHANNEL_MAKAPIX_ARTWORK;
+    if (strcmp(str, "giphy_trending") == 0) return P3A_CHANNEL_GIPHY_TRENDING;
     return P3A_CHANNEL_SDCARD;
 }
 
@@ -188,6 +190,9 @@ static void update_channel_display_name(p3a_channel_info_t *info)
             break;
         case P3A_CHANNEL_MAKAPIX_ARTWORK:
             snprintf(info->display_name, sizeof(info->display_name), "Single Artwork");
+            break;
+        case P3A_CHANNEL_GIPHY_TRENDING:
+            snprintf(info->display_name, sizeof(info->display_name), "Giphy: Trending");
             break;
         default:
             snprintf(info->display_name, sizeof(info->display_name), "Unknown");

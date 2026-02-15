@@ -23,7 +23,7 @@ This document provides a comprehensive overview of the p3a (Pixel Pea) firmware 
 
 ## Project Overview
 
-**p3a (Pixel Pea)** is an ESP32-P4-powered Wi-Fi art frame that displays pixel art animations. It integrates:
+**p3a** is an ESP32-P4-powered Wi-Fi art frame that displays pixel art animations. It integrates:
 
 - **Microcontroller**: Dual-core ESP32-P4 with ESP32-C6 for Wi-Fi 6/BLE
 - **Display**: 720×720 pixel IPS touchscreen with 24-bit color

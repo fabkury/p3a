@@ -252,7 +252,7 @@
 
 **Phase E — Test & Ship** (upcoming): §14, §15, §16 → CI releases v1.0
 
-### Current Status (December 2025)
+### Current Status (February 2026)
 
 Completed:
 - Display pipeline with multi-buffer rendering
@@ -267,6 +267,7 @@ Completed:
 - Device registration at makapix.club
 - TLS MQTT client with mTLS authentication
 - **Makapix Club integration** — send artworks directly from makapix.club
+- **Giphy integration** — play trending GIFs from Giphy with configurable content rating, rendition, format, and automatic refresh
 - Remote control from website (commands via MQTT)
 - USB composite device (serial + mass storage)
 - **OTA firmware updates** from GitHub Releases with automatic rollback

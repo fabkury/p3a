@@ -39,6 +39,7 @@ This document provides a comprehensive overview of the p3a (Pixel Pea) firmware 
 - **Aspect ratio preservation** for non-square artworks
 - Touch gestures for navigation and brightness control
 - Web-based control panel at `http://p3a.local/`
+- **Giphy integration** — play trending GIFs from [Giphy](https://giphy.com/) with configurable content rating, rendition, and automatic refresh
 - **Makapix Club integration** — send artworks directly from [makapix.club](https://makapix.club/)
 - **Over-the-Air updates** — install firmware updates wirelessly via web UI
 - **ESP32-C6 auto-flash** — co-processor firmware is updated automatically when needed
@@ -48,7 +49,7 @@ This document provides a comprehensive overview of the p3a (Pixel Pea) firmware 
 
 ### Codebase Statistics
 
-- **Custom components**: 12+ ESP-IDF components
+- **Custom components**: 13+ ESP-IDF components
 - **Main application files**: ~11 C source files
 - **Build artifacts**: ~22MB (compiled binaries + SPIFFS image)
 
@@ -203,6 +204,7 @@ p3a/
 │   │
 │   ├── app_state/             # Application state management
 │   ├── config_store/          # NVS-backed configuration
+│   ├── giphy/                 # Giphy API integration (trending GIFs)
 │   ├── http_api/              # HTTP server and REST API
 │   ├── makapix/               # Makapix Club integration (MQTT, artwork sending)
 │   ├── ota_manager/           # OTA firmware updates from GitHub Releases
@@ -374,19 +376,31 @@ idf.py flash monitor
   - Status publishing every 30 seconds
 - **Files**: `makapix.c`, `makapix_mqtt.c`, `makapix_provision.c`, `makapix_store.c`
 
-#### 7. **http_api** (Web Interface)
+#### 7. **giphy** (Giphy Integration)
+- **Purpose**: Fetch and cache trending GIFs from the Giphy API
+- **Files**: `giphy_api.c`, `giphy_cache.c`, `giphy_download.c`, `giphy_refresh.c`
+- **Features**:
+  - Fetches trending GIFs via the Giphy API (paginated, up to cache size)
+  - SHA256-sharded file storage on SD card (`/sdcard/p3a/giphy/`)
+  - Configurable rendition, format (WebP/GIF), content rating, refresh interval, and cache size
+  - Periodic automatic refresh of trending content
+  - On-demand download with atomic writes (temp file + rename)
+- **Web UI**: Settings page at `/giphy.html`
+- **Kconfig**: `GIPHY_API_KEY_DEFAULT`, `GIPHY_RENDITION_DEFAULT`, `GIPHY_FORMAT_DEFAULT`
+
+#### 8. **http_api** (Web Interface)
 - **Purpose**: HTTP server, REST API, WebSocket handler
 - **Endpoints**: `/status`, `/action/*`, `/config/*`, `/files/*`, `/ws/pico8`
 - **Features**: mDNS, static file serving, file upload/delete
 
-#### 8. **config_store** (Configuration)
+#### 9. **config_store** (Configuration)
 - **Purpose**: NVS-backed persistent configuration
-- **Stores**: Wi-Fi credentials, brightness, auto-swap interval, rotation, background color
+- **Stores**: Wi-Fi credentials, brightness, auto-swap interval, rotation, background color, Giphy settings
 
-#### 9. **app_state** (State Machine)
+#### 10. **app_state** (State Machine)
 - **Purpose**: Centralized application state (ready, processing, error)
 
-#### 10. **ota_manager** (Over-the-Air Updates)
+#### 11. **ota_manager** (Over-the-Air Updates)
 - **Purpose**: Wireless firmware updates from GitHub Releases
 - **Features**:
   - Automatic periodic update checks (every 2 hours)
@@ -396,7 +410,7 @@ idf.py flash monitor
   - Automatic rollback if firmware fails to boot 3 times
 - **Files**: `ota_manager.c`, `ota_manager.h`
 
-#### 11. **slave_ota** (ESP32-C6 Co-processor Firmware)
+#### 12. **slave_ota** (ESP32-C6 Co-processor Firmware)
 - **Purpose**: Automatic firmware management for the ESP32-C6 Wi-Fi co-processor
 - **Features**:
   - Detects outdated or missing co-processor firmware
@@ -518,6 +532,7 @@ All p3a data is stored under the configurable root folder (`/sdcard/p3a` by defa
 /sdcard/p3a/
 ├── animations/    # Local animation files (WebP, GIF, PNG, JPEG)
 ├── vault/         # Cached artwork from Makapix (sharded by SHA256)
+├── giphy/         # Cached Giphy GIFs (sharded by SHA256)
 ├── channel/       # Channel settings and index files
 ├── playlists/     # Playlist cache files
 └── downloads/     # Temporary upload storage
@@ -645,4 +660,4 @@ Manual testing workflow:
 
 ---
 
-*Last updated: December 2025*
+*Last updated: February 2026*

@@ -12,9 +12,10 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 6. [REST API](#rest-api)
 7. [USB SD Card Access](#usb-sd-card-access)
 8. [Firmware Updates](#firmware-updates)
-9. [Device Registration](#device-registration)
-10. [Makapix Club Features](#makapix-club-features)
-11. [PICO-8 Monitor](#pico-8-monitor-optional)
+9. [Giphy Integration](#giphy-integration)
+10. [Device Registration](#device-registration)
+11. [Makapix Club Features](#makapix-club-features)
+12. [PICO-8 Monitor](#pico-8-monitor-optional)
 
 ---
 
@@ -262,6 +263,40 @@ curl -X POST http://p3a.local/ota/install
 # Rollback to previous version
 curl -X POST http://p3a.local/ota/rollback
 ```
+
+---
+
+## Giphy Integration
+
+p3a can play trending animated GIFs directly from [Giphy](https://giphy.com/). Once configured, Giphy channels appear alongside your Makapix and local artwork channels, and you can mix them in the same playset.
+
+### Getting a Giphy API key
+
+To use Giphy, you need a free API key:
+
+1. Go to [developers.giphy.com](https://developers.giphy.com/) and sign up
+2. Create an app and copy the API key
+3. Open the p3a Giphy settings page at `http://p3a.local/giphy.html`
+4. Paste your API key and click **Save All Settings**
+
+### Configuring Giphy
+
+The settings page at `http://p3a.local/giphy.html` lets you customize:
+
+| Setting | Options | Description |
+|---------|---------|-------------|
+| **Rendition** | Fixed Height, Fixed Width, Original, Downsized | Controls the resolution of downloaded GIFs |
+| **Format** | WebP, GIF | WebP is smaller and recommended; some renditions are GIF-only |
+| **Content Rating** | G, PG, PG-13, R | Filters content by age-appropriateness |
+| **Refresh Interval** | 1–24 hours | How often p3a fetches fresh trending content from Giphy |
+| **Cache Size** | 32–500 items | Maximum number of GIFs kept per Giphy channel |
+
+### How it works
+
+- p3a periodically fetches trending GIFs from the Giphy API and caches them on the SD card
+- Downloaded artworks are stored in `/sdcard/p3a/giphy/` and managed automatically
+- The device downloads GIFs on demand as they come up in the rotation, so the first few plays may take a moment to load
+- Once cached, playback is instant — just like local files
 
 ---
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-p3a is an ESP32-P4 Wi-Fi pixel art player that displays animated WebP/GIF/PNG/JPEG files. It connects to Makapix Club (a pixel art social network) and runs on the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board (720×720 IPS + GT911 touch + ESP32-C6 Wi-Fi 6 co-processor).
+p3a is an ESP32-P4 Wi-Fi pixel art player that displays animated WebP/GIF/PNG/JPEG files. It plays trending GIFs from Giphy, artworks from Makapix Club (a pixel art social network), and local files. Runs on the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board (720×720 IPS + GT911 touch + ESP32-C6 Wi-Fi 6 co-processor).
 
 ## Build Management
 
@@ -51,6 +51,7 @@ Build artifacts go to `build/`. Release binaries are copied to `release/v{VERSIO
 | `p3a_core` | Unified state machine and lifecycle management |
 | `play_scheduler` | Playback engine that executes playsets (scheduler commands) to select artwork |
 | `channel_manager` | Playlist/channel handling, vault storage (SHA256-sharded `/sdcard/p3a/vault/`) |
+| `giphy` | Giphy API integration: trending GIFs, on-demand download, SD card caching (`/sdcard/p3a/giphy/`) |
 | `animation_decoder` | WebP/PNG/JPEG decoders with transparency support |
 | `animated_gif_decoder` | GIF decoder (C++ wrapper) |
 | `wifi_manager` | Wi-Fi provisioning, captive portal, mDNS (`p3a.local`) |

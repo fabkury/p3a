@@ -2,11 +2,14 @@
 
 # p3a — Pixel Art Player
 
-p3a is a Wi-Fi pixel art player that connects to [Makapix Club](https://makapix.club/), a pixel art social network. Built on the ESP32-P4, it's a 4-inch smart art frame you can control from anywhere—via touchscreen, web browser, REST API, or securely through Makapix Club's MQTTS backend. Register your p3a at [makapix.club](https://makapix.club/) and play artworks and channels from the website directly on the device, or copy your own directly to the device.  
+p3a is a Wi-Fi pixel art player built on the ESP32-P4. It's a 4-inch smart art frame that plays animated GIFs from [Giphy](https://giphy.com/), artworks from [Makapix Club](https://makapix.club/) (a pixel art social network), and your own files—all from one tiny device you can control via touchscreen, web browser, REST API, or securely from anywhere through Makapix Club's MQTTS backend.
 > **Join the community:** Connect with other p3a users and discuss pixel art on the [Makapix Club Discord](https://discord.gg/xk9umcujXV).
 
-## Hardware photos
+## Photos
+
 <p>
+  <img src="images/p3a-3-giphy.jpg" alt="P3A playing a Giphy GIF" height="320">
+  <img src="images/p3a-4-giphy.jpg" alt="P3A playing a Giphy GIF" height="320">
   <img src="images/p3a-1.jpg" alt="P3A front" height="320">
   <img src="images/p3a-2.jpg" alt="P3A angled" height="320">
 </p>
@@ -22,13 +25,20 @@ p3a is a Wi-Fi pixel art player that connects to [Makapix Club](https://makapix.
 4. **Flash the firmware**: Visit the [p3a Web Flasher](https://fabkury.github.io/p3a/web-flasher/) — just connect your device and click to flash. No software installation needed. See the [flashing guide](docs/flash-p3a.md) for alternative methods.
 5. **Connect to Wi-Fi**: On first boot, connect to the `p3a-setup` network and visit http://p3a.local/ to configure your Wi-Fi
 6. **Register it at Makapix Club**: Long press on the screen and follow the instructions
-7. **Send art to it**: Browse https://makapix.club/ and securely send artworks to your p3a
+7. **Play art on it**: Enable [Giphy](https://giphy.com/) trending GIFs from the web UI, browse https://makapix.club/ to send artworks, or copy your own files via USB
 
 > **Note:** The initial flash requires USB and a laptop or desktop (does not work on a smartphone). After that, all updates are wireless via the web UI.
 
 For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 
 ## Features
+
+### Giphy Integration
+
+- **Trending GIFs on your desk**: p3a fetches trending GIFs directly from the [Giphy](https://giphy.com/) API and plays them in a continuous loop — animated memes, reactions, and pop culture moments cycling on your display all day long
+- **Configurable content**: Choose your preferred rendition size, file format (WebP or GIF), and content rating (G through R) from the built-in Giphy settings page
+- **Automatic refresh**: p3a periodically checks Giphy for fresh trending content so the feed stays current without any manual intervention
+- **Mix and match**: Combine Giphy channels with Makapix artwork channels in the same playset for a varied, ever-changing display
 
 ### Makapix Club Integration
 
@@ -114,9 +124,10 @@ p3a is in active development. The following features are implemented:
 - Screen rotation (0°, 90°, 180°, 270°) with persistence
 - Wi-Fi provisioning with captive portal and mDNS (http://p3a.local/)
 - Local web UI and REST API, also with mDNS
+- **Giphy integration** — play trending GIFs from [Giphy](https://giphy.com/) with configurable content rating, rendition, and format
 - **Makapix Club integration** — play individual artworks and entire channels from [makapix.club](https://makapix.club/)
 - **Secure mTLS MQTT client** for device registration and remote control
-- **Over-the-Air (OTA) updates** — install firmware updates wirelessly via web UI with integrity verification and full rollback support 
+- **Over-the-Air (OTA) updates** — install firmware updates wirelessly via web UI with integrity verification and full rollback support
 - **Automatic ESP32-C6 firmware updates** for the Wi-Fi co-processor
 - USB composite device (serial console + mass storage)
 

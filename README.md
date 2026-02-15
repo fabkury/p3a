@@ -2,16 +2,16 @@
 
 # p3a — Pixel Art Player
 
-p3a is a Wi-Fi pixel art player built on the ESP32-P4. It's a 4-inch smart art frame that plays animated GIFs from [Giphy](https://giphy.com/), artworks from [Makapix Club](https://makapix.club/) (a pixel art social network), and your own files—all from one tiny device you can control via touchscreen, web browser, REST API, or securely from anywhere through Makapix Club's MQTTS backend.
+p3a is a Wi-Fi pixel art player built on the ESP32-P4. It's a 4-inch smart art frame that plays animated artworks ("gifs") from [Makapix Club](https://makapix.club/) (a pixel art social network), from [Giphy](https://giphy.com/), and your own files—all from one tiny device you can control via touchscreen, web browser, REST API, or securely from anywhere through Makapix Club's MQTTS backend.
 > **Join the community:** Connect with other p3a users and discuss pixel art on the [Makapix Club Discord](https://discord.gg/xk9umcujXV).
 
 ## Photos
 
 <p>
-  <img src="images/p3a-3-giphy.jpg" alt="P3A playing a Giphy GIF" height="320">
-  <img src="images/p3a-4-giphy.jpg" alt="P3A playing a Giphy GIF" height="320">
   <img src="images/p3a-1.jpg" alt="P3A front" height="320">
   <img src="images/p3a-2.jpg" alt="P3A angled" height="320">
+  <img src="images/p3a-3-giphy.jpg" alt="P3A playing a Giphy GIF" height="320">
+  <img src="images/p3a-4-giphy.jpg" alt="P3A playing a Giphy GIF" height="320">
 </p>
 
 ## Quick start
@@ -33,13 +33,6 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 
 ## Features
 
-### Giphy Integration
-
-- **Trending GIFs on your desk**: p3a fetches trending GIFs directly from the [Giphy](https://giphy.com/) API and plays them in a continuous loop — animated memes, reactions, and pop culture moments cycling on your display all day long
-- **Configurable content**: Choose your preferred rendition size, file format (WebP or GIF), and content rating (G through R) from the built-in Giphy settings page
-- **Automatic refresh**: p3a periodically checks Giphy for fresh trending content so the feed stays current without any manual intervention
-- **Mix and match**: Combine Giphy channels with Makapix artwork channels in the same playset for a varied, ever-changing display
-
 ### Makapix Club Integration
 
 - **Play artworks and channels**: Play individual artworks or entire channels (e.g., "Promoted Artworks", "Recent Artworks") directly from [Makapix Club](https://makapix.club/) to your p3a
@@ -47,6 +40,13 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 - **Cloud connectivity**: Register your device at [makapix.club](https://makapix.club/) to unlock remote control from anywhere
 - **Join the community**: Connect with other p3a users and discuss pixel art players on the [Makapix Club Discord](https://discord.gg/xk9umcujXV)
 - **Coming soon**: Send a "like" to the artwork by touching the screen, swipe up to view artwork comments from the Makapix community
+
+### Giphy Integration
+
+- **Trending GIFs on your desk**: p3a fetches trending GIFs directly from the [Giphy](https://giphy.com/) API and plays them in a continuous loop — animated memes, reactions, and pop culture moments cycling on your display all day long
+- **Configurable content**: Choose your preferred rendition size, file format (WebP or GIF), and content rating (G through R) from the built-in Giphy settings page
+- **Automatic refresh**: p3a periodically checks Giphy for fresh trending content so the feed stays current without any manual intervention
+- **Mix and match**: Combine Giphy channels with Makapix artwork channels in the same playset for a varied, ever-changing display
 
 ### Seamless Playback
 

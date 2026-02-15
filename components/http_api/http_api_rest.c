@@ -439,10 +439,6 @@ esp_err_t h_put_config(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    // Giphy refresh interval and cache size are not user-configurable
-    cJSON_DeleteItemFromObject(o, "giphy_refresh_interval");
-    cJSON_DeleteItemFromObject(o, "giphy_cache_size");
-
     esp_err_t e = config_store_save(o);
 
     if (e != ESP_OK) {
@@ -456,6 +452,16 @@ esp_err_t h_put_config(httpd_req_t *req) {
     if (dwell_item && cJSON_IsNumber(dwell_item)) {
         uint32_t dwell_ms = (uint32_t)cJSON_GetNumberValue(dwell_item);
         play_scheduler_set_dwell_time(dwell_ms / 1000);
+    }
+
+    // Invalidate in-memory caches for giphy settings so getters re-read from NVS
+    cJSON *cs = cJSON_GetObjectItem(o, "giphy_cache_size");
+    if (cs && cJSON_IsNumber(cs)) {
+        config_store_invalidate_giphy_cache_size();
+    }
+    cJSON *ri = cJSON_GetObjectItem(o, "giphy_refresh_interval");
+    if (ri && cJSON_IsNumber(ri)) {
+        config_store_invalidate_giphy_refresh_interval();
     }
 
     cJSON_Delete(o);

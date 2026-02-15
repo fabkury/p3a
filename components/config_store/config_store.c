@@ -1301,9 +1301,9 @@ esp_err_t config_store_get_giphy_rating(char *out, size_t max_len)
     return cfg_get_string("giphy_rating", "pg-13", out, max_len);
 }
 
-#define GIPHY_CACHE_SIZE_DEFAULT 256
+#define GIPHY_CACHE_SIZE_DEFAULT 400
 #define GIPHY_CACHE_SIZE_MIN     32
-#define GIPHY_CACHE_SIZE_MAX     4096
+#define GIPHY_CACHE_SIZE_MAX     500
 
 static uint32_t s_giphy_cache_size = GIPHY_CACHE_SIZE_DEFAULT;
 static bool s_giphy_cache_size_loaded = false;
@@ -1365,7 +1365,7 @@ uint32_t config_store_get_giphy_cache_size(void)
     return s_giphy_cache_size;
 }
 
-#define GIPHY_REFRESH_INTERVAL_DEFAULT 14400
+#define GIPHY_REFRESH_INTERVAL_DEFAULT 3600
 
 static uint32_t s_giphy_refresh_interval = GIPHY_REFRESH_INTERVAL_DEFAULT;
 static bool s_giphy_refresh_interval_loaded = false;
@@ -1424,4 +1424,14 @@ uint32_t config_store_get_giphy_refresh_interval(void)
     s_giphy_refresh_interval_loaded = true;
     cJSON_Delete(cfg);
     return s_giphy_refresh_interval;
+}
+
+void config_store_invalidate_giphy_cache_size(void)
+{
+    s_giphy_cache_size_loaded = false;
+}
+
+void config_store_invalidate_giphy_refresh_interval(void)
+{
+    s_giphy_refresh_interval_loaded = false;
 }

@@ -436,26 +436,44 @@ esp_err_t config_store_get_giphy_rating(char *out, size_t max_len);
 /**
  * @brief Set Giphy cache size (max entries per channel)
  *
- * @param size Cache size (32-4096, default 256)
+ * @param size Cache size (32-500, default 400)
  */
 esp_err_t config_store_set_giphy_cache_size(uint32_t size);
 
 /**
- * @brief Get Giphy cache size (defaults to 256)
+ * @brief Get Giphy cache size (defaults to 400)
  */
 uint32_t config_store_get_giphy_cache_size(void);
 
 /**
  * @brief Set Giphy refresh interval in seconds
  *
- * @param seconds Refresh interval (60-86400, default 7200 = 2 hours)
+ * @param seconds Refresh interval (60-86400, default 3600 = 1 hour)
  */
 esp_err_t config_store_set_giphy_refresh_interval(uint32_t seconds);
 
 /**
- * @brief Get Giphy refresh interval (defaults to 7200 = 2 hours)
+ * @brief Get Giphy refresh interval (defaults to 3600 = 1 hour)
  */
 uint32_t config_store_get_giphy_refresh_interval(void);
+
+/**
+ * @brief Invalidate in-memory cache for Giphy cache size
+ *
+ * Forces the next call to config_store_get_giphy_cache_size() to re-read
+ * from NVS. Use after saving config via config_store_save() which bypasses
+ * the dedicated setter.
+ */
+void config_store_invalidate_giphy_cache_size(void);
+
+/**
+ * @brief Invalidate in-memory cache for Giphy refresh interval
+ *
+ * Forces the next call to config_store_get_giphy_refresh_interval() to
+ * re-read from NVS. Use after saving config via config_store_save() which
+ * bypasses the dedicated setter.
+ */
+void config_store_invalidate_giphy_refresh_interval(void);
 
 #ifdef __cplusplus
 }

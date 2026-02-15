@@ -195,6 +195,25 @@ body {
     </div>
 </div>
 <div class="section">
+    <h3>Advanced</h3>
+    <div class="setting-row">
+        <label class="setting-label" for="giphy-refresh">Refresh Interval</label>
+        <select class="setting-select" id="giphy-refresh">
+            <option value="3600">1 hour (default)</option>
+            <option value="7200">2 hours</option>
+            <option value="14400">4 hours</option>
+            <option value="28800">8 hours</option>
+            <option value="43200">12 hours</option>
+            <option value="86400">24 hours</option>
+        </select>
+    </div>
+    <div class="setting-row">
+        <label class="setting-label" for="giphy-cache-size">Cache Size</label>
+        <input class="setting-input" id="giphy-cache-size" type="number" min="32" max="500" step="1" value="400">
+    </div>
+    <div class="setting-hint">Refresh interval controls how often Giphy channels fetch new content. Cache size sets the max number of items kept per channel (32–500).</div>
+</div>
+<div class="section">
     <button class="btn save-all" id="save-btn" onclick="saveAll()">Save All Settings</button>
 </div>
 <div class="footer">
@@ -263,6 +282,11 @@ function loadSettings() {
                 // Re-run in case the loaded format isn't valid for the loaded rendition
                 updateFormatOptions();
                 document.getElementById('giphy-rating').value = cfg.giphy_rating || 'pg-13';
+                var refreshSel = document.getElementById('giphy-refresh');
+                var refreshVal = String(cfg.giphy_refresh_interval || 3600);
+                refreshSel.value = refreshVal;
+                if (!refreshSel.value) refreshSel.value = '3600';
+                document.getElementById('giphy-cache-size').value = cfg.giphy_cache_size || 400;
             } catch (e) {
                 showToast('Failed to load settings', true);
             }
@@ -297,6 +321,11 @@ function saveAll() {
             cfg.giphy_rendition = rendition;
             cfg.giphy_format = format;
             cfg.giphy_rating = rating;
+            cfg.giphy_refresh_interval = parseInt(document.getElementById('giphy-refresh').value, 10);
+            var cacheSize = parseInt(document.getElementById('giphy-cache-size').value, 10) || 400;
+            if (cacheSize < 32) cacheSize = 32;
+            if (cacheSize > 500) cacheSize = 500;
+            cfg.giphy_cache_size = cacheSize;
 
             var xhrPut = new XMLHttpRequest();
             xhrPut.open('PUT', '/config', true);

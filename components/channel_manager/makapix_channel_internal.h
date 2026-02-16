@@ -133,10 +133,6 @@ file_extension_t detect_file_type(const char *url);
  */
 void refresh_task_impl(void *pvParameters);
 
-/**
- * @brief Evict excess artworks beyond limit
- */
-esp_err_t evict_excess_artworks(makapix_channel_t *ch, size_t max_count);
 
 /**
  * @brief Save channel metadata JSON

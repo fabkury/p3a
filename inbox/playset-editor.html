@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Playset Editor - p3a</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: min(520px, 100%);
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        h1, h2, h3 {
+            font-weight: 300;
+            color: white;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            font-size: clamp(24px, 6vw, 32px);
+        }
+
+        h2 {
+            font-size: clamp(20px, 5vw, 24px);
+        }
+
+        h3 {
+            font-size: clamp(16px, 4vw, 18px);
+            color: #333;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+            padding: 8px 16px;
+            font-size: 12px;
+            border-radius: 8px;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 12px;
+            border-radius: 8px;
+        }
+
+        .btn-icon {
+            padding: 8px;
+            border-radius: 8px;
+            background: transparent;
+            border: 1px solid #ddd;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-icon:hover {
+            background: #f5f5f5;
+        }
+
+        .playset-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .playset-item {
+            padding: 16px;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.2s;
+        }
+
+        .playset-item:hover {
+            background: #f9f9f9;
+            border-color: #667eea;
+        }
+
+        .playset-info {
+            flex: 1;
+        }
+
+        .playset-name {
+            font-weight: 500;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .playset-meta {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .playset-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-input:read-only {
+            background: #f5f5f5;
+            cursor: not-allowed;
+        }
+
+        .form-input.error {
+            border-color: #ef4444;
+        }
+
+        .error-message {
+            color: #ef4444;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .radio-option {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .radio-option input[type="radio"] {
+            display: none;
+        }
+
+        .radio-label {
+            display: block;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .radio-option input[type="radio"]:checked + .radio-label {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+            font-weight: 500;
+        }
+
+        .radio-label:hover {
+            border-color: #667eea;
+        }
+
+        .mode-description {
+            margin-top: 8px;
+            padding: 12px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .channel-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .channel-card {
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            padding: 16px;
+            background: #fafafa;
+            transition: all 0.2s;
+        }
+
+        .channel-card.dragging {
+            opacity: 0.5;
+        }
+
+        .channel-card.drag-over {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .channel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .channel-type-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            background: #667eea;
+            color: white;
+        }
+
+        .channel-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .channel-fields {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .field-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .field-row > * {
+            flex: 1;
+        }
+
+        .field-row .form-input {
+            margin-bottom: 0;
+        }
+
+        .weight-viz-container {
+            margin-bottom: 20px;
+        }
+
+        .weight-viz {
+            display: flex;
+            height: 40px;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .weight-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: white;
+            font-weight: 500;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .weight-bar:hover {
+            filter: brightness(1.1);
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 480px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 500;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+        }
+
+        .close-btn:hover {
+            background: #f0f0f0;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 2000;
+            opacity: 0;
+            transition: all 0.3s;
+            max-width: 90%;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success {
+            border-left: 4px solid #10b981;
+        }
+
+        .toast.error {
+            border-left: 4px solid #ef4444;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .button-group .btn {
+            flex: 1;
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 12px;
+            }
+
+            .card {
+                padding: 16px;
+            }
+
+            .header-card {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .radio-group {
+                flex-direction: column;
+            }
+
+            .radio-option {
+                min-width: 100%;
+            }
+
+            .playset-item {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .playset-actions {
+                justify-content: stretch;
+            }
+
+            .playset-actions .btn {
+                flex: 1;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .field-row {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header-card card">
+            <div>
+                <h1>Playset Editor</h1>
+                <p style="color: #666; font-size: 14px;">Create and manage playback configurations</p>
+            </div>
+            <a href="index.html" class="btn btn-secondary btn-small">← Home</a>
+        </div>
+
+        <!-- Playset List View -->
+        <div id="listView">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="color: #333; margin: 0;">My Playsets</h2>
+                    <button class="btn btn-primary btn-small" onclick="showEditor()">+ Create New</button>
+                </div>
+                <div id="playsetList" class="playset-list">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⏳</div>
+                        <p>Loading playsets...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Editor View -->
+        <div id="editorView" class="hidden">
+            <div class="card">
+                <h2 style="color: #333;">Playset Configuration</h2>
+                
+                <form id="playsetForm">
+                    <!-- Playset Name -->
+                    <div class="form-group">
+                        <label class="form-label">Playset Name</label>
+                        <input type="text" id="playsetName" class="form-input" maxlength="32" 
+                               pattern="[a-zA-Z0-9_]+" placeholder="my_awesome_mix" required>
+                        <div class="error-message hidden" id="nameError"></div>
+                    </div>
+
+                    <!-- Exposure Mode -->
+                    <div class="form-group">
+                        <label class="form-label">Balance Mode</label>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="exposureEqual" name="exposureMode" value="equal" checked>
+                                <label class="radio-label" for="exposureEqual">Equal</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="exposureManual" name="exposureMode" value="manual">
+                                <label class="radio-label" for="exposureManual">Manual</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="exposureProportional" name="exposureMode" value="proportional">
+                                <label class="radio-label" for="exposureProportional">Proportional</label>
+                            </div>
+                        </div>
+                        <div class="mode-description" id="exposureDescription">
+                            All channels get the same play time. Weights are ignored.
+                        </div>
+                    </div>
+
+                    <!-- Pick Mode -->
+                    <div class="form-group">
+                        <label class="form-label">Selection Mode</label>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="pickRecency" name="pickMode" value="recency" checked>
+                                <label class="radio-label" for="pickRecency">Newest First</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="pickRandom" name="pickMode" value="random">
+                                <label class="radio-label" for="pickRandom">Random</label>
+                            </div>
+                        </div>
+                        <div class="mode-description" id="pickDescription">
+                            Plays artwork from newest to oldest in order.
+                        </div>
+                    </div>
+
+                    <!-- Weight Visualization -->
+                    <div id="weightVizContainer" class="weight-viz-container hidden">
+                        <label class="form-label">Channel Balance</label>
+                        <div id="weightViz" class="weight-viz"></div>
+                    </div>
+
+                    <!-- Channel List -->
+                    <div class="form-group">
+                        <label class="form-label">Channels (<span id="channelCount">0</span>/64)</label>
+                        <div id="channelList" class="channel-list"></div>
+                        <button type="button" class="btn btn-secondary btn-small" onclick="showAddChannelModal()" 
+                                id="addChannelBtn">+ Add Channel</button>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" onclick="cancelEdit()">Cancel</button>
+                        <button type="button" class="btn btn-primary" onclick="savePlayset()">Save</button>
+                        <button type="button" class="btn btn-primary" onclick="saveAndPlay()">Save & Play</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Channel Modal -->
+    <div id="addChannelModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Add Channel</h3>
+                <button class="close-btn" onclick="closeAddChannelModal()">&times;</button>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Channel Type</label>
+                <select id="channelType" class="form-input" onchange="updateChannelTypeFields()">
+                    <option value="named">Named Channel</option>
+                    <option value="user">Artist</option>
+                    <option value="hashtag">Hashtag</option>
+                    <option value="sdcard">SD Card</option>
+                    <option value="giphy">Giphy</option>
+                </select>
+            </div>
+
+            <div id="channelTypeFields">
+                <!-- Dynamic fields based on channel type -->
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Display Name (optional)</label>
+                <input type="text" id="channelDisplayName" class="form-input" maxlength="64" 
+                       placeholder="Custom label for this channel">
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-secondary" onclick="closeAddChannelModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="addChannel()">Add Channel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <span id="toastMessage"></span>
+    </div>
+
+    <script>
+        // State
+        var state = {
+            playsets: [],
+            currentPlayset: null,
+            channels: [],
+            isEditing: false,
+            editingName: null,
+            draggedIndex: null
+        };
+
+        // Mode descriptions
+        var exposureModeDescriptions = {
+            equal: 'All channels get the same play time. Weights are ignored.',
+            manual: 'Each channel has an explicit weight controlling how often it plays relative to others.',
+            proportional: 'Channels are automatically weighted by how much recent content they have. Weights are ignored.'
+        };
+
+        var pickModeDescriptions = {
+            recency: 'Plays artwork from newest to oldest in order.',
+            random: 'Randomly selects artwork within each channel.'
+        };
+
+        var channelTypeLabels = {
+            named: 'Named',
+            user: 'Artist',
+            hashtag: 'Hashtag',
+            sdcard: 'SD Card',
+            giphy: 'Giphy'
+        };
+
+        var channelColors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b', '#fa709a'];
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPlaysets();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Exposure mode change
+            var exposureModes = document.getElementsByName('exposureMode');
+            for (var i = 0; i < exposureModes.length; i++) {
+                exposureModes[i].addEventListener('change', function() {
+                    updateExposureDescription();
+                    updateWeightVisibility();
+                    renderChannels();
+                });
+            }
+
+            // Pick mode change
+            var pickModes = document.getElementsByName('pickMode');
+            for (var i = 0; i < pickModes.length; i++) {
+                pickModes[i].addEventListener('change', updatePickDescription);
+            }
+
+            // Name validation
+            document.getElementById('playsetName').addEventListener('input', validateName);
+        }
+
+        function updateExposureDescription() {
+            var mode = getSelectedExposureMode();
+            document.getElementById('exposureDescription').textContent = exposureModeDescriptions[mode];
+        }
+
+        function updatePickDescription() {
+            var mode = getSelectedPickMode();
+            document.getElementById('pickDescription').textContent = pickModeDescriptions[mode];
+        }
+
+        function getSelectedExposureMode() {
+            var modes = document.getElementsByName('exposureMode');
+            for (var i = 0; i < modes.length; i++) {
+                if (modes[i].checked) return modes[i].value;
+            }
+            return 'equal';
+        }
+
+        function getSelectedPickMode() {
+            var modes = document.getElementsByName('pickMode');
+            for (var i = 0; i < modes.length; i++) {
+                if (modes[i].checked) return modes[i].value;
+            }
+            return 'recency';
+        }
+
+        function validateName() {
+            var input = document.getElementById('playsetName');
+            var error = document.getElementById('nameError');
+            var value = input.value;
+            
+            if (!value) {
+                error.textContent = 'Name is required';
+                error.classList.remove('hidden');
+                input.classList.add('error');
+                return false;
+            }
+            
+            if (!/^[a-zA-Z0-9_]+$/.test(value)) {
+                error.textContent = 'Only letters, numbers, and underscores allowed';
+                error.classList.remove('hidden');
+                input.classList.add('error');
+                return false;
+            }
+            
+            error.classList.add('hidden');
+            input.classList.remove('error');
+            return true;
+        }
+
+        // API Functions
+        function loadPlaysets() {
+            fetch('/playsets')
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.ok) {
+                        state.playsets = data.data.playsets || [];
+                        renderPlaysetList();
+                    } else {
+                        showToast('Failed to load playsets: ' + (data.error || 'Unknown error'), 'error');
+                        renderPlaysetList();
+                    }
+                })
+                .catch(function(error) {
+                    showToast('Error loading playsets: ' + error.message, 'error');
+                    renderPlaysetList();
+                });
+        }
+
+        function loadPlayset(name) {
+            fetch('/playset/' + encodeURIComponent(name))
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.ok) {
+                        var playset = data.data;
+                        state.channels = playset.channels || [];
+                        state.isEditing = true;
+                        state.editingName = name;
+                        
+                        document.getElementById('playsetName').value = name;
+                        document.getElementById('playsetName').readOnly = true;
+                        
+                        // Set modes
+                        document.getElementById('exposure' + capitalize(playset.exposure_mode)).checked = true;
+                        document.getElementById('pick' + capitalize(playset.pick_mode)).checked = true;
+                        
+                        updateExposureDescription();
+                        updatePickDescription();
+                        updateWeightVisibility();
+                        renderChannels();
+                        
+                        showEditorView();
+                    } else {
+                        showToast('Failed to load playset: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(function(error) {
+                    showToast('Error loading playset: ' + error.message, 'error');
+                });
+        }
+
+        function savePlayset() {
+            if (!validateForm()) return;
+            
+            var name = document.getElementById('playsetName').value;
+            var data = {
+                exposure_mode: getSelectedExposureMode(),
+                pick_mode: getSelectedPickMode(),
+                channels: state.channels
+            };
+            
+            fetch('/playset/' + encodeURIComponent(name), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+                .then(function(response) { return response.json(); })
+                .then(function(result) {
+                    if (result.ok) {
+                        showToast('Playset saved successfully!', 'success');
+                        setTimeout(function() {
+                            cancelEdit();
+                            loadPlaysets();
+                        }, 1000);
+                    } else {
+                        showToast('Failed to save playset: ' + (result.error || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(function(error) {
+                    showToast('Error saving playset: ' + error.message, 'error');
+                });
+        }
+
+        function saveAndPlay() {
+            if (!validateForm()) return;
+            
+            var name = document.getElementById('playsetName').value;
+            var data = {
+                exposure_mode: getSelectedExposureMode(),
+                pick_mode: getSelectedPickMode(),
+                channels: state.channels
+            };
+            
+            fetch('/playset/' + encodeURIComponent(name), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+                .then(function(response) { return response.json(); })
+                .then(function(result) {
+                    if (result.ok) {
+                        return fetch('/playset/' + encodeURIComponent(name), { method: 'POST' });
+                    } else {
+                        throw new Error(result.error || 'Failed to save');
+                    }
+                })
+                .then(function(response) { return response.json(); })
+                .then(function(result) {
+                    if (result.ok) {
+                        showToast('Playset saved and playing!', 'success');
+                        setTimeout(function() {
+                            cancelEdit();
+                            loadPlaysets();
+                        }, 1500);
+                    } else {
+                        showToast('Saved but failed to play: ' + (result.error || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(function(error) {
+                    showToast('Error: ' + error.message, 'error');
+                });
+        }
+
+        function deletePlayset(name) {
+            if (!confirm('Delete playset "' + name + '"?')) return;
+            
+            fetch('/playset/' + encodeURIComponent(name), { method: 'DELETE' })
+                .then(function(response) { return response.json(); })
+                .then(function(result) {
+                    if (result.ok) {
+                        showToast('Playset deleted', 'success');
+                        loadPlaysets();
+                    } else {
+                        showToast('Failed to delete: ' + (result.error || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(function(error) {
+                    showToast('Error deleting playset: ' + error.message, 'error');
+                });
+        }
+
+        function playPlayset(name) {
+            fetch('/playset/' + encodeURIComponent(name), { method: 'POST' })
+                .then(function(response) { return response.json(); })
+                .then(function(result) {
+                    if (result.ok) {
+                        showToast('Playing playset "' + name + '"', 'success');
+                    } else {
+                        showToast('Failed to play: ' + (result.error || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(function(error) {
+                    showToast('Error playing playset: ' + error.message, 'error');
+                });
+        }
+
+        function validateForm() {
+            if (!validateName()) return false;
+            
+            if (state.channels.length === 0) {
+                showToast('Add at least one channel', 'error');
+                return false;
+            }
+            
+            if (state.channels.length > 64) {
+                showToast('Maximum 64 channels allowed', 'error');
+                return false;
+            }
+            
+            return true;
+        }
+
+        // View Functions
+        function showEditorView() {
+            document.getElementById('listView').classList.add('hidden');
+            document.getElementById('editorView').classList.remove('hidden');
+        }
+
+        function showListView() {
+            document.getElementById('listView').classList.remove('hidden');
+            document.getElementById('editorView').classList.add('hidden');
+        }
+
+        function showEditor() {
+            state.channels = [{
+                type: 'named',
+                name: 'all',
+                identifier: '',
+                display_name: 'All Recent Artworks',
+                weight: 100
+            }];
+            state.isEditing = false;
+            state.editingName = null;
+            
+            document.getElementById('playsetName').value = '';
+            document.getElementById('playsetName').readOnly = false;
+            document.getElementById('exposureEqual').checked = true;
+            document.getElementById('pickRecency').checked = true;
+            
+            updateExposureDescription();
+            updatePickDescription();
+            updateWeightVisibility();
+            renderChannels();
+            showEditorView();
+        }
+
+        function cancelEdit() {
+            showListView();
+        }
+
+        function renderPlaysetList() {
+            var list = document.getElementById('playsetList');
+            
+            if (state.playsets.length === 0) {
+                list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🎵</div><p>No playsets yet. Create your first mix!</p></div>';
+                return;
+            }
+            
+            var html = '';
+            for (var i = 0; i < state.playsets.length; i++) {
+                var p = state.playsets[i];
+                html += '<div class="playset-item">' +
+                    '<div class="playset-info">' +
+                    '<div class="playset-name">' + escapeHtml(p.name) + '</div>' +
+                    '<div class="playset-meta">' +
+                    p.channel_count + ' channels · ' +
+                    capitalize(p.exposure_mode) + ' balance · ' +
+                    capitalize(p.pick_mode) + ' selection' +
+                    '</div>' +
+                    '</div>' +
+                    '<div class="playset-actions">' +
+                    '<button class="btn btn-primary btn-small" onclick="playPlayset(\'' + escapeHtml(p.name) + '\')">▶ Play</button>' +
+                    '<button class="btn btn-secondary btn-small" onclick="loadPlayset(\'' + escapeHtml(p.name) + '\')">Edit</button>' +
+                    '<button class="btn btn-danger" onclick="deletePlayset(\'' + escapeHtml(p.name) + '\')">Delete</button>' +
+                    '</div>' +
+                    '</div>';
+            }
+            list.innerHTML = html;
+        }
+
+        function updateWeightVisibility() {
+            var mode = getSelectedExposureMode();
+            var container = document.getElementById('weightVizContainer');
+            
+            if (mode === 'manual') {
+                container.classList.remove('hidden');
+                updateWeightVisualization();
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        function updateWeightVisualization() {
+            var mode = getSelectedExposureMode();
+            if (mode !== 'manual') return;
+            
+            var viz = document.getElementById('weightViz');
+            var total = 0;
+            
+            for (var i = 0; i < state.channels.length; i++) {
+                var weight = parseInt(state.channels[i].weight) || 0;
+                if (weight === 0) weight = 100; // Auto-calculate as 100
+                total += weight;
+            }
+            
+            if (total === 0) {
+                viz.innerHTML = '<div style="padding: 10px; text-align: center; color: #666;">Add weights to see balance</div>';
+                return;
+            }
+            
+            var html = '';
+            for (var i = 0; i < state.channels.length; i++) {
+                var channel = state.channels[i];
+                var weight = parseInt(channel.weight) || 100;
+                var percent = (weight / total * 100);
+                var displayName = channel.display_name || getDefaultChannelName(channel);
+                var color = channelColors[i % channelColors.length];
+                
+                if (percent >= 5) {
+                    html += '<div class="weight-bar" style="width: ' + percent + '%; background: ' + color + '" ' +
+                        'title="' + escapeHtml(displayName) + ': ' + Math.round(percent) + '%">' +
+                        (percent >= 10 ? Math.round(percent) + '%' : '') +
+                        '</div>';
+                }
+            }
+            
+            viz.innerHTML = html;
+        }
+
+        function renderChannels() {
+            var list = document.getElementById('channelList');
+            var mode = getSelectedExposureMode();
+            var showWeights = mode === 'manual';
+            
+            document.getElementById('channelCount').textContent = state.channels.length;
+            document.getElementById('addChannelBtn').disabled = state.channels.length >= 64;
+            
+            if (state.channels.length === 0) {
+                list.innerHTML = '<div class="empty-state"><p>No channels yet</p></div>';
+                return;
+            }
+            
+            var html = '';
+            for (var i = 0; i < state.channels.length; i++) {
+                html += renderChannelCard(i, showWeights);
+            }
+            list.innerHTML = html;
+            
+            if (showWeights) {
+                updateWeightVisualization();
+            }
+        }
+
+        function renderChannelCard(index, showWeights) {
+            var channel = state.channels[index];
+            var typeName = channelTypeLabels[channel.type] || channel.type;
+            var displayName = channel.display_name || getDefaultChannelName(channel);
+            
+            var html = '<div class="channel-card" draggable="true" ' +
+                'ondragstart="handleDragStart(event, ' + index + ')" ' +
+                'ondragover="handleDragOver(event)" ' +
+                'ondrop="handleDrop(event, ' + index + ')" ' +
+                'ondragenter="handleDragEnter(event)" ' +
+                'ondragleave="handleDragLeave(event)" ' +
+                'ondragend="handleDragEnd(event)">' +
+                '<div class="channel-header">' +
+                '<span class="channel-type-badge">' + typeName + '</span>' +
+                '<div class="channel-controls">' +
+                '<button class="btn-icon" onclick="moveChannel(' + index + ', -1)" ' + 
+                (index === 0 ? 'disabled' : '') + ' title="Move up">↑</button>' +
+                '<button class="btn-icon" onclick="moveChannel(' + index + ', 1)" ' + 
+                (index === state.channels.length - 1 ? 'disabled' : '') + ' title="Move down">↓</button>' +
+                '<button class="btn btn-danger" onclick="removeChannel(' + index + ')" ' +
+                (state.channels.length === 1 ? 'disabled' : '') + '>Remove</button>' +
+                '</div>' +
+                '</div>' +
+                '<div class="channel-fields">';
+            
+            // Display name
+            html += '<div class="form-group" style="margin-bottom: 8px;">' +
+                '<input type="text" class="form-input" placeholder="Display name" ' +
+                'value="' + escapeHtml(displayName) + '" maxlength="64" ' +
+                'onchange="updateChannelField(' + index + ', \'display_name\', this.value)">' +
+                '</div>';
+            
+            // Type-specific fields
+            html += renderChannelSpecificFields(channel, index);
+            
+            // Weight (only in manual mode)
+            if (showWeights) {
+                html += '<div class="field-row">' +
+                    '<div class="form-group" style="margin: 0;">' +
+                    '<label class="form-label" style="font-size: 12px;">Weight (0 = auto)</label>' +
+                    '<input type="number" class="form-input" min="0" max="4294967295" ' +
+                    'value="' + (channel.weight || 0) + '" ' +
+                    'onchange="updateChannelField(' + index + ', \'weight\', parseInt(this.value) || 0)">' +
+                    '</div>' +
+                    '</div>';
+            }
+            
+            html += '</div></div>';
+            return html;
+        }
+
+        function renderChannelSpecificFields(channel, index) {
+            var html = '';
+            
+            switch (channel.type) {
+                case 'named':
+                    html += '<div class="form-group" style="margin-bottom: 0;">' +
+                        '<label class="form-label" style="font-size: 12px;">Channel</label>' +
+                        '<select class="form-input" onchange="updateChannelField(' + index + ', \'name\', this.value)">' +
+                        '<option value="all"' + (channel.name === 'all' ? ' selected' : '') + '>All Recent Artworks</option>' +
+                        '<option value="promoted"' + (channel.name === 'promoted' ? ' selected' : '') + '>Promoted Artworks</option>' +
+                        '</select>' +
+                        '</div>';
+                    break;
+                    
+                case 'user':
+                    html += '<div class="form-group" style="margin-bottom: 0;">' +
+                        '<label class="form-label" style="font-size: 12px;">Artist ID (sqid)</label>' +
+                        '<input type="text" class="form-input" placeholder="artist_sqid" maxlength="32" ' +
+                        'value="' + escapeHtml(channel.identifier || '') + '" ' +
+                        'onchange="updateChannelField(' + index + ', \'identifier\', this.value)">' +
+                        '</div>';
+                    break;
+                    
+                case 'hashtag':
+                    html += '<div class="form-group" style="margin-bottom: 0;">' +
+                        '<label class="form-label" style="font-size: 12px;">Hashtag (without #)</label>' +
+                        '<input type="text" class="form-input" placeholder="pixelart" maxlength="32" ' +
+                        'value="' + escapeHtml(channel.identifier || '') + '" ' +
+                        'onchange="updateChannelField(' + index + ', \'identifier\', this.value)">' +
+                        '</div>';
+                    break;
+                    
+                case 'giphy':
+                    var isSearch = channel.name && channel.name.indexOf('search_') === 0;
+                    var searchQuery = isSearch ? channel.name.substring(7) : '';
+                    
+                    html += '<div class="form-group" style="margin-bottom: 8px;">' +
+                        '<label class="form-label" style="font-size: 12px;">Giphy Mode</label>' +
+                        '<select class="form-input" onchange="handleGiphyModeChange(' + index + ', this.value)">' +
+                        '<option value="trending"' + (!isSearch ? ' selected' : '') + '>Trending</option>' +
+                        '<option value="search"' + (isSearch ? ' selected' : '') + '>Search</option>' +
+                        '</select>' +
+                        '</div>';
+                    
+                    if (isSearch) {
+                        html += '<div class="form-group" style="margin-bottom: 0;">' +
+                            '<label class="form-label" style="font-size: 12px;">Search Query</label>' +
+                            '<input type="text" class="form-input" placeholder="cats" maxlength="32" ' +
+                            'value="' + escapeHtml(searchQuery) + '" ' +
+                            'onchange="updateGiphySearch(' + index + ', this.value)">' +
+                            '</div>';
+                    }
+                    break;
+                    
+                case 'sdcard':
+                    html += '<div style="padding: 8px; background: #f0f0f0; border-radius: 8px; font-size: 13px; color: #666;">' +
+                        'Plays files from the device SD card' +
+                        '</div>';
+                    break;
+            }
+            
+            return html;
+        }
+
+        function getDefaultChannelName(channel) {
+            switch (channel.type) {
+                case 'named':
+                    return channel.name === 'all' ? 'All Recent Artworks' : 'Promoted Artworks';
+                case 'user':
+                    return 'Artist: ' + (channel.identifier || 'unknown');
+                case 'hashtag':
+                    return '#' + (channel.identifier || 'tag');
+                case 'sdcard':
+                    return 'SD Card';
+                case 'giphy':
+                    if (channel.name === 'trending') return 'Giphy Trending';
+                    if (channel.name && channel.name.indexOf('search_') === 0) {
+                        return 'Giphy: ' + channel.name.substring(7);
+                    }
+                    return 'Giphy';
+                default:
+                    return channel.type;
+            }
+        }
+
+        function updateChannelField(index, field, value) {
+            state.channels[index][field] = value;
+            if (field === 'weight') {
+                updateWeightVisualization();
+            }
+        }
+
+        function handleGiphyModeChange(index, mode) {
+            if (mode === 'trending') {
+                state.channels[index].name = 'trending';
+            } else {
+                state.channels[index].name = 'search_';
+            }
+            renderChannels();
+        }
+
+        function updateGiphySearch(index, query) {
+            state.channels[index].name = 'search_' + query;
+        }
+
+        function removeChannel(index) {
+            if (state.channels.length === 1) {
+                showToast('Cannot remove the last channel', 'error');
+                return;
+            }
+            state.channels.splice(index, 1);
+            renderChannels();
+        }
+
+        function moveChannel(index, direction) {
+            var newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= state.channels.length) return;
+            
+            var temp = state.channels[index];
+            state.channels[index] = state.channels[newIndex];
+            state.channels[newIndex] = temp;
+            
+            renderChannels();
+        }
+
+        // Drag and Drop
+        function handleDragStart(event, index) {
+            state.draggedIndex = index;
+            event.currentTarget.classList.add('dragging');
+            event.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragOver(event) {
+            if (event.preventDefault) {
+                event.preventDefault();
+            }
+            event.dataTransfer.dropEffect = 'move';
+            return false;
+        }
+
+        function handleDragEnter(event) {
+            event.currentTarget.classList.add('drag-over');
+        }
+
+        function handleDragLeave(event) {
+            event.currentTarget.classList.remove('drag-over');
+        }
+
+        function handleDrop(event, dropIndex) {
+            if (event.stopPropagation) {
+                event.stopPropagation();
+            }
+            event.preventDefault();
+            
+            event.currentTarget.classList.remove('drag-over');
+            
+            if (state.draggedIndex !== null && state.draggedIndex !== dropIndex) {
+                var draggedChannel = state.channels[state.draggedIndex];
+                state.channels.splice(state.draggedIndex, 1);
+                state.channels.splice(dropIndex, 0, draggedChannel);
+                renderChannels();
+            }
+            
+            return false;
+        }
+
+        function handleDragEnd(event) {
+            event.currentTarget.classList.remove('dragging');
+            state.draggedIndex = null;
+            
+            var cards = document.querySelectorAll('.channel-card');
+            for (var i = 0; i < cards.length; i++) {
+                cards[i].classList.remove('drag-over');
+            }
+        }
+
+        // Add Channel Modal
+        function showAddChannelModal() {
+            if (state.channels.length >= 64) {
+                showToast('Maximum 64 channels allowed', 'error');
+                return;
+            }
+            
+            document.getElementById('channelType').value = 'named';
+            document.getElementById('channelDisplayName').value = '';
+            updateChannelTypeFields();
+            document.getElementById('addChannelModal').classList.add('active');
+        }
+
+        function closeAddChannelModal() {
+            document.getElementById('addChannelModal').classList.remove('active');
+        }
+
+        function updateChannelTypeFields() {
+            var type = document.getElementById('channelType').value;
+            var container = document.getElementById('channelTypeFields');
+            var html = '';
+            
+            switch (type) {
+                case 'named':
+                    html = '<div class="form-group">' +
+                        '<label class="form-label">Channel</label>' +
+                        '<select id="namedChannelValue" class="form-input">' +
+                        '<option value="all">All Recent Artworks</option>' +
+                        '<option value="promoted">Promoted Artworks</option>' +
+                        '</select>' +
+                        '</div>';
+                    break;
+                    
+                case 'user':
+                    html = '<div class="form-group">' +
+                        '<label class="form-label">Artist ID (sqid)</label>' +
+                        '<input type="text" id="userIdentifier" class="form-input" placeholder="artist_sqid" maxlength="32">' +
+                        '</div>';
+                    break;
+                    
+                case 'hashtag':
+                    html = '<div class="form-group">' +
+                        '<label class="form-label">Hashtag (without #)</label>' +
+                        '<input type="text" id="hashtagIdentifier" class="form-input" placeholder="pixelart" maxlength="32">' +
+                        '</div>';
+                    break;
+                    
+                case 'sdcard':
+                    var hasSDCard = false;
+                    for (var i = 0; i < state.channels.length; i++) {
+                        if (state.channels[i].type === 'sdcard') {
+                            hasSDCard = true;
+                            break;
+                        }
+                    }
+                    if (hasSDCard) {
+                        html = '<div class="mode-description" style="margin-top: 0;">⚠️ SD Card channel already added</div>';
+                    } else {
+                        html = '<div class="mode-description" style="margin-top: 0;">Plays local files from the device SD card</div>';
+                    }
+                    break;
+                    
+                case 'giphy':
+                    html = '<div class="form-group">' +
+                        '<label class="form-label">Giphy Mode</label>' +
+                        '<select id="giphyMode" class="form-input" onchange="updateGiphyFields()">' +
+                        '<option value="trending">Trending</option>' +
+                        '<option value="search">Search</option>' +
+                        '</select>' +
+                        '</div>' +
+                        '<div id="giphySearchField" class="form-group hidden">' +
+                        '<label class="form-label">Search Query</label>' +
+                        '<input type="text" id="giphySearch" class="form-input" placeholder="cats" maxlength="32">' +
+                        '</div>';
+                    break;
+            }
+            
+            container.innerHTML = html;
+        }
+
+        function updateGiphyFields() {
+            var mode = document.getElementById('giphyMode').value;
+            var searchField = document.getElementById('giphySearchField');
+            if (mode === 'search') {
+                searchField.classList.remove('hidden');
+            } else {
+                searchField.classList.add('hidden');
+            }
+        }
+
+        function addChannel() {
+            var type = document.getElementById('channelType').value;
+            var displayName = document.getElementById('channelDisplayName').value.trim();
+            
+            var channel = {
+                type: type,
+                name: '',
+                identifier: '',
+                display_name: displayName,
+                weight: 100
+            };
+            
+            switch (type) {
+                case 'named':
+                    channel.name = document.getElementById('namedChannelValue').value;
+                    break;
+                    
+                case 'user':
+                    channel.name = 'user';
+                    channel.identifier = document.getElementById('userIdentifier').value.trim();
+                    if (!channel.identifier) {
+                        showToast('Please enter an artist ID', 'error');
+                        return;
+                    }
+                    break;
+                    
+                case 'hashtag':
+                    channel.name = 'hashtag';
+                    channel.identifier = document.getElementById('hashtagIdentifier').value.trim();
+                    if (!channel.identifier) {
+                        showToast('Please enter a hashtag', 'error');
+                        return;
+                    }
+                    break;
+                    
+                case 'sdcard':
+                    for (var i = 0; i < state.channels.length; i++) {
+                        if (state.channels[i].type === 'sdcard') {
+                            showToast('SD Card channel already added', 'error');
+                            return;
+                        }
+                    }
+                    channel.name = 'sdcard';
+                    break;
+                    
+                case 'giphy':
+                    var giphyMode = document.getElementById('giphyMode').value;
+                    if (giphyMode === 'trending') {
+                        channel.name = 'trending';
+                    } else {
+                        var query = document.getElementById('giphySearch').value.trim();
+                        if (!query) {
+                            showToast('Please enter a search query', 'error');
+                            return;
+                        }
+                        channel.name = 'search_' + query;
+                    }
+                    break;
+            }
+            
+            state.channels.push(channel);
+            renderChannels();
+            closeAddChannelModal();
+            showToast('Channel added', 'success');
+        }
+
+        // Toast
+        function showToast(message, type) {
+            var toast = document.getElementById('toast');
+            var messageEl = document.getElementById('toastMessage');
+            
+            messageEl.textContent = message;
+            toast.className = 'toast ' + type;
+            
+            setTimeout(function() {
+                toast.classList.add('show');
+            }, 10);
+            
+            setTimeout(function() {
+                toast.classList.remove('show');
+            }, type === 'error' ? 6000 : 5000);
+        }
+
+        // Utilities
+        function capitalize(str) {
+            if (!str) return '';
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

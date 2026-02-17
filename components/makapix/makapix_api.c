@@ -5,6 +5,7 @@
 #include "makapix_mqtt.h"
 #include "makapix_store.h"
 #include "psram_alloc.h"
+#include "playset_json.h"
 #include "cJSON.h"
 #include "esp_log.h"
 #include "esp_random.h"
@@ -576,39 +577,6 @@ esp_err_t makapix_api_get_comments(int32_t post_id, const char *cursor, uint8_t 
     return ESP_OK;
 }
 
-/**
- * @brief Parse exposure_mode string to enum
- */
-static ps_exposure_mode_t parse_exposure_mode(const char *mode_str)
-{
-    if (!mode_str) return PS_EXPOSURE_EQUAL;
-    if (strcmp(mode_str, "manual") == 0) return PS_EXPOSURE_MANUAL;
-    if (strcmp(mode_str, "proportional") == 0) return PS_EXPOSURE_PROPORTIONAL;
-    return PS_EXPOSURE_EQUAL;  // Default
-}
-
-/**
- * @brief Parse pick_mode string to enum
- */
-static ps_pick_mode_t parse_pick_mode(const char *mode_str)
-{
-    if (!mode_str) return PS_PICK_RECENCY;
-    if (strcmp(mode_str, "random") == 0) return PS_PICK_RANDOM;
-    return PS_PICK_RECENCY;  // Default
-}
-
-/**
- * @brief Parse channel type string to enum
- */
-static ps_channel_type_t parse_channel_type(const char *type_str)
-{
-    if (!type_str) return PS_CHANNEL_TYPE_NAMED;
-    if (strcmp(type_str, "user") == 0) return PS_CHANNEL_TYPE_USER;
-    if (strcmp(type_str, "hashtag") == 0) return PS_CHANNEL_TYPE_HASHTAG;
-    if (strcmp(type_str, "sdcard") == 0) return PS_CHANNEL_TYPE_SDCARD;
-    return PS_CHANNEL_TYPE_NAMED;  // "named" or default
-}
-
 esp_err_t makapix_api_get_playset(const char *playset_name, ps_scheduler_command_t *out_command)
 {
     if (!playset_name || !out_command) return ESP_ERR_INVALID_ARG;
@@ -644,95 +612,14 @@ esp_err_t makapix_api_get_playset(const char *playset_name, ps_scheduler_command
         return ESP_FAIL;
     }
 
-    // Parse exposure_mode
-    cJSON *exposure_mode = cJSON_GetObjectItem(response_json, "exposure_mode");
-    if (cJSON_IsString(exposure_mode)) {
-        out_command->exposure_mode = parse_exposure_mode(cJSON_GetStringValue(exposure_mode));
-    } else {
-        out_command->exposure_mode = PS_EXPOSURE_EQUAL;
-    }
-
-    // Parse pick_mode
-    cJSON *pick_mode = cJSON_GetObjectItem(response_json, "pick_mode");
-    if (cJSON_IsString(pick_mode)) {
-        out_command->pick_mode = parse_pick_mode(cJSON_GetStringValue(pick_mode));
-    } else {
-        out_command->pick_mode = PS_PICK_RECENCY;
-    }
-
-    // Parse channels array
-    cJSON *channels = cJSON_GetObjectItem(response_json, "channels");
-    if (!cJSON_IsArray(channels)) {
-        ESP_LOGE(TAG, "get_playset: missing or invalid 'channels' array");
-        cJSON_Delete(response_json);
-        return ESP_ERR_INVALID_RESPONSE;
-    }
-
-    size_t count = cJSON_GetArraySize(channels);
-    if (count == 0 || count > PS_MAX_CHANNELS) {
-        ESP_LOGE(TAG, "get_playset: invalid channel count %zu", count);
-        cJSON_Delete(response_json);
-        return ESP_ERR_INVALID_RESPONSE;
-    }
-
-    out_command->channel_count = count;
-
-    for (size_t i = 0; i < count; i++) {
-        cJSON *ch = cJSON_GetArrayItem(channels, i);
-        if (!cJSON_IsObject(ch)) continue;
-
-        ps_channel_spec_t *spec = &out_command->channels[i];
-
-        // Parse type
-        cJSON *type = cJSON_GetObjectItem(ch, "type");
-        if (cJSON_IsString(type)) {
-            spec->type = parse_channel_type(cJSON_GetStringValue(type));
-        } else {
-            spec->type = PS_CHANNEL_TYPE_NAMED;
-        }
-
-        // Parse name (for named channels) or set based on type
-        cJSON *name = cJSON_GetObjectItem(ch, "name");
-        if (cJSON_IsString(name)) {
-            strncpy(spec->name, cJSON_GetStringValue(name), sizeof(spec->name) - 1);
-        } else {
-            // Set default name based on type
-            switch (spec->type) {
-                case PS_CHANNEL_TYPE_USER:
-                    strncpy(spec->name, "user", sizeof(spec->name) - 1);
-                    break;
-                case PS_CHANNEL_TYPE_HASHTAG:
-                    strncpy(spec->name, "hashtag", sizeof(spec->name) - 1);
-                    break;
-                case PS_CHANNEL_TYPE_SDCARD:
-                    strncpy(spec->name, "sdcard", sizeof(spec->name) - 1);
-                    break;
-                default:
-                    strncpy(spec->name, "all", sizeof(spec->name) - 1);
-                    break;
-            }
-        }
-
-        // Parse identifier
-        cJSON *identifier = cJSON_GetObjectItem(ch, "identifier");
-        if (cJSON_IsString(identifier)) {
-            strncpy(spec->identifier, cJSON_GetStringValue(identifier), sizeof(spec->identifier) - 1);
-        }
-
-        // Parse display_name
-        cJSON *display_name = cJSON_GetObjectItem(ch, "display_name");
-        if (cJSON_IsString(display_name)) {
-            strncpy(spec->display_name, cJSON_GetStringValue(display_name), sizeof(spec->display_name) - 1);
-        }
-
-        // Parse weight
-        cJSON *weight = cJSON_GetObjectItem(ch, "weight");
-        if (cJSON_IsNumber(weight)) {
-            spec->weight = (uint32_t)cJSON_GetNumberValue(weight);
-        }
-    }
-
+    // Parse playset fields using shared JSON parser
+    esp_err_t parse_err = playset_json_parse(response_json, out_command);
     cJSON_Delete(response_json);
+
+    if (parse_err != ESP_OK) {
+        ESP_LOGE(TAG, "get_playset: failed to parse response: %s", esp_err_to_name(parse_err));
+        return ESP_ERR_INVALID_RESPONSE;
+    }
 
     ESP_LOGI(TAG, "get_playset '%s': %zu channels, exposure=%d, pick=%d",
              playset_name, out_command->channel_count,

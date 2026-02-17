@@ -106,6 +106,29 @@ bool playset_store_exists(const char *name);
  */
 esp_err_t playset_store_delete(const char *name);
 
+/**
+ * @brief Playset list entry (summary metadata for listing)
+ */
+typedef struct {
+    char name[PLAYSET_MAX_NAME_LEN + 1];
+    size_t channel_count;
+    ps_exposure_mode_t exposure_mode;
+    ps_pick_mode_t pick_mode;
+} playset_list_entry_t;
+
+/**
+ * @brief List all saved playsets on SD card
+ *
+ * Scans the playset directory for *.playset files and loads metadata
+ * for each. Files that fail to load (corrupt, version mismatch) are skipped.
+ *
+ * @param out       Output array of list entries
+ * @param max       Maximum number of entries to return
+ * @param out_count Output: actual number of entries populated
+ * @return ESP_OK on success (even if directory doesn't exist, returns count=0)
+ */
+esp_err_t playset_store_list(playset_list_entry_t *out, size_t max, size_t *out_count);
+
 #ifdef __cplusplus
 }
 #endif

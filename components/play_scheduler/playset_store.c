@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
+#include <dirent.h>
 
 static const char *TAG = "playset_store";
 
@@ -316,5 +317,57 @@ esp_err_t playset_store_delete(const char *name)
     }
 
     ESP_LOGI(TAG, "Deleted playset '%s'", name);
+    return ESP_OK;
+}
+
+esp_err_t playset_store_list(playset_list_entry_t *out, size_t max, size_t *out_count)
+{
+    if (!out || !out_count) return ESP_ERR_INVALID_ARG;
+    *out_count = 0;
+
+    DIR *dir = opendir(PLAYSET_DIR);
+    if (!dir) {
+        // Directory doesn't exist — not an error, just no playsets
+        return ESP_OK;
+    }
+
+    struct dirent *ent;
+    size_t count = 0;
+    const char *suffix = ".playset";
+    size_t suffix_len = strlen(suffix);
+
+    while ((ent = readdir(dir)) != NULL && count < max) {
+        // Match *.playset files
+        size_t name_len = strlen(ent->d_name);
+        if (name_len <= suffix_len) continue;
+        if (strcmp(ent->d_name + name_len - suffix_len, suffix) != 0) continue;
+
+        // Extract playset name (strip .playset suffix)
+        size_t base_len = name_len - suffix_len;
+        if (base_len > PLAYSET_MAX_NAME_LEN) continue;
+
+        char name[PLAYSET_MAX_NAME_LEN + 1];
+        memcpy(name, ent->d_name, base_len);
+        name[base_len] = '\0';
+
+        // Load to get metadata
+        ps_scheduler_command_t cmd;
+        esp_err_t err = playset_store_load(name, &cmd);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Skipping '%s': load failed (%s)", name, esp_err_to_name(err));
+            continue;
+        }
+
+        playset_list_entry_t *entry = &out[count];
+        strncpy(entry->name, name, sizeof(entry->name) - 1);
+        entry->name[sizeof(entry->name) - 1] = '\0';
+        entry->channel_count = cmd.channel_count;
+        entry->exposure_mode = cmd.exposure_mode;
+        entry->pick_mode = cmd.pick_mode;
+        count++;
+    }
+
+    closedir(dir);
+    *out_count = count;
     return ESP_OK;
 }

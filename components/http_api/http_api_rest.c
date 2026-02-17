@@ -34,6 +34,7 @@
 #include "animation_player.h"
 #include "play_scheduler.h"
 #include "playset_store.h"
+#include "playset_json.h"
 #include "playback_service.h"
 #include "show_url.h"
 #include "app_lcd.h"
@@ -1341,6 +1342,318 @@ esp_err_t h_post_swap_to(httpd_req_t *req) {
     }
 
     send_json(req, 200, "{\"ok\":true,\"data\":{\"action\":\"swap_to\"}}");
+    return ESP_OK;
+}
+
+// ---------- Playset CRUD Handlers ----------
+
+/**
+ * GET /playsets
+ * List all saved playsets
+ */
+esp_err_t h_get_playsets(httpd_req_t *req)
+{
+    playset_list_entry_t *entries = calloc(32, sizeof(playset_list_entry_t));
+    if (!entries) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    size_t count = 0;
+    esp_err_t err = playset_store_list(entries, 32, &count);
+    if (err != ESP_OK) {
+        free(entries);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to list playsets\",\"code\":\"LIST_ERROR\"}");
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        free(entries);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    cJSON_AddBoolToObject(root, "ok", true);
+
+    cJSON *data = cJSON_AddObjectToObject(root, "data");
+    cJSON *arr = cJSON_AddArrayToObject(data, "playsets");
+
+    for (size_t i = 0; i < count; i++) {
+        cJSON *item = cJSON_CreateObject();
+        if (!item) continue;
+        cJSON_AddStringToObject(item, "name", entries[i].name);
+        cJSON_AddNumberToObject(item, "channel_count", (double)entries[i].channel_count);
+        cJSON_AddStringToObject(item, "exposure_mode", playset_exposure_mode_str(entries[i].exposure_mode));
+        cJSON_AddStringToObject(item, "pick_mode", playset_pick_mode_str(entries[i].pick_mode));
+        cJSON_AddItemToArray(arr, item);
+    }
+
+    free(entries);
+
+    char *out = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!out) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, out);
+    free(out);
+    return ESP_OK;
+}
+
+/**
+ * GET /playsets/{name}[?activate=true]
+ * Read a playset; optionally activate it
+ */
+esp_err_t h_get_playset_by_name(httpd_req_t *req)
+{
+    const char *uri = req->uri;
+    const char *prefix = "/playsets/";
+    size_t prefix_len = 10; // strlen("/playsets/")
+
+    if (strncmp(uri, prefix, prefix_len) != 0 || uri[prefix_len] == '\0') {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid path\",\"code\":\"INVALID_PATH\"}");
+        return ESP_OK;
+    }
+
+    // Extract name, strip query string
+    char name[PLAYSET_MAX_NAME_LEN + 1];
+    const char *name_start = uri + prefix_len;
+    const char *qmark = strchr(name_start, '?');
+    size_t name_len = qmark ? (size_t)(qmark - name_start) : strlen(name_start);
+    if (name_len == 0 || name_len > PLAYSET_MAX_NAME_LEN) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset name\",\"code\":\"INVALID_NAME\"}");
+        return ESP_OK;
+    }
+    memcpy(name, name_start, name_len);
+    name[name_len] = '\0';
+
+    // Check ?activate=true
+    bool activate = false;
+    if (qmark) {
+        activate = (strstr(qmark, "activate=true") != NULL);
+    }
+
+    // Allocate on heap (struct is ~9KB)
+    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
+    if (!cmd) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    esp_err_t err = playset_store_load(name, cmd);
+    if (err == ESP_ERR_NOT_FOUND) {
+        free(cmd);
+        send_json(req, 404, "{\"ok\":false,\"error\":\"Playset not found\",\"code\":\"NOT_FOUND\"}");
+        return ESP_OK;
+    } else if (err != ESP_OK) {
+        free(cmd);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to load playset\",\"code\":\"LOAD_ERROR\"}");
+        return ESP_OK;
+    }
+
+    bool activated = false;
+    if (activate) {
+        esp_err_t exec_err = play_scheduler_execute_command(cmd);
+        if (exec_err == ESP_OK) {
+            p3a_state_set_active_playset(name);
+            activated = true;
+        }
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        free(cmd);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    cJSON_AddBoolToObject(root, "ok", true);
+
+    cJSON *data_obj = playset_json_serialize(cmd);
+    free(cmd);
+
+    if (!data_obj) {
+        cJSON_Delete(root);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    cJSON_AddItemToObject(root, "data", data_obj);
+    cJSON_AddBoolToObject(root, "activated", activated);
+
+    char *out = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!out) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, out);
+    free(out);
+    return ESP_OK;
+}
+
+/**
+ * POST /playsets/{name}
+ * Create/update a playset; optionally activate it
+ */
+esp_err_t h_post_playset_crud(httpd_req_t *req)
+{
+    const char *uri = req->uri;
+    const char *prefix = "/playsets/";
+    size_t prefix_len = 10;
+
+    if (strncmp(uri, prefix, prefix_len) != 0 || uri[prefix_len] == '\0') {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid path\",\"code\":\"INVALID_PATH\"}");
+        return ESP_OK;
+    }
+
+    // Extract name (strip query string if present)
+    char name[PLAYSET_MAX_NAME_LEN + 1];
+    const char *name_start = uri + prefix_len;
+    const char *qmark = strchr(name_start, '?');
+    size_t name_len = qmark ? (size_t)(qmark - name_start) : strlen(name_start);
+    if (name_len == 0 || name_len > PLAYSET_MAX_NAME_LEN) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset name\",\"code\":\"INVALID_NAME\"}");
+        return ESP_OK;
+    }
+    memcpy(name, name_start, name_len);
+    name[name_len] = '\0';
+
+    if (!ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+
+    int err_status;
+    size_t body_len;
+    char *body = recv_body_json(req, &body_len, &err_status);
+    if (!body) {
+        send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_ParseWithLength(body, body_len);
+    free(body);
+    if (!root || !cJSON_IsObject(root)) {
+        if (root) cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
+        return ESP_OK;
+    }
+
+    // Extract optional "activate" boolean
+    bool activate = false;
+    cJSON *activate_item = cJSON_GetObjectItem(root, "activate");
+    if (activate_item && cJSON_IsBool(activate_item)) {
+        activate = cJSON_IsTrue(activate_item);
+    }
+
+    // Parse playset
+    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
+    if (!cmd) {
+        cJSON_Delete(root);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    esp_err_t parse_err = playset_json_parse(root, cmd);
+    cJSON_Delete(root);
+
+    if (parse_err != ESP_OK) {
+        free(cmd);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset definition\",\"code\":\"INVALID_PLAYSET\"}");
+        return ESP_OK;
+    }
+
+    // Save
+    esp_err_t save_err = playset_store_save(name, cmd);
+    if (save_err != ESP_OK) {
+        free(cmd);
+        char err_msg[128];
+        snprintf(err_msg, sizeof(err_msg),
+                 "{\"ok\":false,\"error\":\"Failed to save playset: %s\",\"code\":\"SAVE_ERROR\"}",
+                 esp_err_to_name(save_err));
+        send_json(req, 500, err_msg);
+        return ESP_OK;
+    }
+
+    // Activate if requested
+    bool activated = false;
+    if (activate) {
+        esp_err_t exec_err = play_scheduler_execute_command(cmd);
+        if (exec_err == ESP_OK) {
+            p3a_state_set_active_playset(name);
+            activated = true;
+        }
+    }
+
+    free(cmd);
+
+    cJSON *resp = cJSON_CreateObject();
+    if (!resp) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    cJSON_AddBoolToObject(resp, "ok", true);
+    cJSON *data = cJSON_AddObjectToObject(resp, "data");
+    cJSON_AddBoolToObject(data, "saved", true);
+    cJSON_AddBoolToObject(data, "activated", activated);
+
+    char *out = cJSON_PrintUnformatted(resp);
+    cJSON_Delete(resp);
+    if (!out) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, out);
+    free(out);
+    return ESP_OK;
+}
+
+/**
+ * DELETE /playsets/{name}
+ * Delete a saved playset
+ */
+esp_err_t h_delete_playset(httpd_req_t *req)
+{
+    const char *uri = req->uri;
+    const char *prefix = "/playsets/";
+    size_t prefix_len = 10;
+
+    if (strncmp(uri, prefix, prefix_len) != 0 || uri[prefix_len] == '\0') {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid path\",\"code\":\"INVALID_PATH\"}");
+        return ESP_OK;
+    }
+
+    // Extract name (strip query string if present)
+    char name[PLAYSET_MAX_NAME_LEN + 1];
+    const char *name_start = uri + prefix_len;
+    const char *qmark = strchr(name_start, '?');
+    size_t name_len = qmark ? (size_t)(qmark - name_start) : strlen(name_start);
+    if (name_len == 0 || name_len > PLAYSET_MAX_NAME_LEN) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset name\",\"code\":\"INVALID_NAME\"}");
+        return ESP_OK;
+    }
+    memcpy(name, name_start, name_len);
+    name[name_len] = '\0';
+
+    if (!playset_store_exists(name)) {
+        send_json(req, 404, "{\"ok\":false,\"error\":\"Playset not found\",\"code\":\"NOT_FOUND\"}");
+        return ESP_OK;
+    }
+
+    esp_err_t err = playset_store_delete(name);
+    if (err != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to delete playset\",\"code\":\"DELETE_ERROR\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, "{\"ok\":true}");
     return ESP_OK;
 }
 

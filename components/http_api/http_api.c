@@ -49,6 +49,8 @@
 #include "ota_manager.h"
 #include "p3a_state.h"
 #include "play_scheduler.h"
+#include "playset_json.h"
+#include "playset_store.h"
 #include "event_bus.h"
 #include "esp_heap_caps.h"
 #if CONFIG_P3A_PICO8_ENABLE
@@ -368,6 +370,44 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
                 ESP_LOGE(HTTP_API_TAG, "swap_to Makapix failed: %s", esp_err_to_name(err));
             }
         }
+    } else if (strcmp(command_type, "execute_playset") == 0) {
+        if (!payload || !cJSON_IsObject(payload)) {
+            ESP_LOGE(HTTP_API_TAG, "execute_playset: invalid payload");
+            return;
+        }
+
+        ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
+        if (!cmd) {
+            ESP_LOGE(HTTP_API_TAG, "execute_playset: OOM");
+            return;
+        }
+
+        esp_err_t parse_err = playset_json_parse(payload, cmd);
+        if (parse_err != ESP_OK) {
+            ESP_LOGE(HTTP_API_TAG, "execute_playset: parse failed: %s", esp_err_to_name(parse_err));
+            free(cmd);
+            return;
+        }
+
+        // Optional "name" field: save to store and persist
+        cJSON *name_item = cJSON_GetObjectItem(payload, "name");
+        if (name_item && cJSON_IsString(name_item)) {
+            const char *name = cJSON_GetStringValue(name_item);
+            esp_err_t save_err = playset_store_save(name, cmd);
+            if (save_err != ESP_OK) {
+                ESP_LOGW(HTTP_API_TAG, "execute_playset: failed to save '%s': %s", name, esp_err_to_name(save_err));
+            }
+            p3a_state_set_active_playset(name);
+        }
+
+        esp_err_t exec_err = play_scheduler_execute_command(cmd);
+        free(cmd);
+
+        if (exec_err != ESP_OK) {
+            ESP_LOGE(HTTP_API_TAG, "execute_playset: execute failed: %s", esp_err_to_name(exec_err));
+        } else {
+            ESP_LOGI(HTTP_API_TAG, "execute_playset: activated");
+        }
     }
 }
 
@@ -417,6 +457,12 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     }
     if (strcmp(uri, "/channel") == 0) {
         return h_get_channel(req);
+    }
+    if (strcmp(uri, "/playsets") == 0) {
+        return h_get_playsets(req);
+    }
+    if (strncmp(uri, "/playsets/", 10) == 0) {
+        return h_get_playset_by_name(req);
     }
 
     // UI/pages module
@@ -470,9 +516,13 @@ static esp_err_t h_post_router(httpd_req_t *req) {
     if (strcmp(uri, "/action/swap_to") == 0) {
         return h_post_swap_to(req);
     }
-    // Playset endpoint: /playset/{name}
+    // Playset endpoint: /playset/{name} (activate-only, existing)
     if (strncmp(uri, "/playset/", 9) == 0) {
         return h_post_playset(req);
+    }
+    // Playset CRUD: /playsets/{name}
+    if (strncmp(uri, "/playsets/", 10) == 0) {
+        return h_post_playset_crud(req);
     }
 
     // UI/pages module
@@ -515,6 +565,21 @@ static esp_err_t h_put_router(httpd_req_t *req) {
     }
     if (strcmp(uri, "/settings/play_order") == 0) {
         return h_put_play_order(req);
+    }
+
+    httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
+    return ESP_OK;
+}
+
+static esp_err_t h_delete_router(httpd_req_t *req) {
+    const char *uri = req ? req->uri : NULL;
+    if (!uri) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Bad request");
+        return ESP_OK;
+    }
+
+    if (strncmp(uri, "/playsets/", 10) == 0) {
+        return h_delete_playset(req);
     }
 
     httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
@@ -619,7 +684,7 @@ esp_err_t http_api_start(void) {
     cfg.server_port = 80;
     cfg.lru_purge_enable = true;
     cfg.max_open_sockets = 12;
-    cfg.max_uri_handlers = 12;
+    cfg.max_uri_handlers = 13;
     cfg.recv_wait_timeout = 10;   // seconds – reclaim idle connections
     cfg.send_wait_timeout = 10;   // seconds – don't block on slow clients
     cfg.uri_match_fn = httpd_uri_match_wildcard;
@@ -674,6 +739,12 @@ esp_err_t http_api_start(void) {
     u.uri = "/*";
     u.method = HTTP_PUT;
     u.handler = h_put_router;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(s_server, &u);
+
+    u.uri = "/*";
+    u.method = HTTP_DELETE;
+    u.handler = h_delete_router;
     u.user_ctx = NULL;
     register_uri_handler_or_log(s_server, &u);
 

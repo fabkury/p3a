@@ -20,7 +20,9 @@ const char* http_status_str(int status) {
         case 413: return "413 Payload Too Large";
         case 415: return "415 Unsupported Media Type";
         case 500: return "500 Internal Server Error";
+        case 404: return "404 Not Found";
         case 503: return "503 Service Unavailable";
+        case 504: return "504 Gateway Timeout";
         default: return "500 Internal Server Error";
     }
 }

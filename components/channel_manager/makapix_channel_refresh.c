@@ -378,19 +378,6 @@ static esp_err_t evict_for_storage_pressure(makapix_channel_t *ch, size_t min_re
     return ESP_OK;
 }
 
-esp_err_t evict_excess_artworks(makapix_channel_t *ch, size_t max_count)
-{
-    if (!ch) return ESP_ERR_INVALID_ARG;
-
-    channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
-    if (!cache) return ESP_OK;
-
-    size_t evicted = channel_cache_evict_excess(cache, max_count, ch->vault_path);
-    if (evicted > 0) {
-        ESP_LOGI(TAG, "Evicted %zu artwork files (limit: %zu)", evicted, max_count);
-    }
-    return ESP_OK;
-}
 
 void refresh_task_impl(void *pvParameters)
 {
@@ -547,19 +534,6 @@ void refresh_task_impl(void *pvParameters)
                          ch->channel_id, esp_err_to_name(merge_err));
             }
 
-            // Per-batch eviction: if Ci exceeds limit after adding this batch,
-            // evict oldest files immediately to maintain invariant.
-            // This ensures Ci transitions from one valid state to another.
-            {
-                channel_cache_t *batch_cache = channel_cache_registry_find(ch->channel_id);
-                size_t entry_count = batch_cache ? batch_cache->entry_count : 0;
-                if (entry_count > TARGET_COUNT) {
-                    ESP_LOGD(TAG, "Per-batch eviction: entry_count=%zu exceeds limit=%zu",
-                             entry_count, TARGET_COUNT);
-                    evict_excess_artworks(ch, TARGET_COUNT);
-                }
-            }
-
             // Check for shutdown after index update
             if (!ch->refreshing) {
                 ESP_LOGI(TAG, "Shutdown requested during index update, exiting");
@@ -624,12 +598,6 @@ void refresh_task_impl(void *pvParameters)
             ESP_LOGI(TAG, "Shutdown requested during eviction, exiting");
             break;
         }
-
-        // Count-based eviction: ensure we don't exceed 1,024 artworks per channel
-        evict_excess_artworks(ch, TARGET_COUNT);
-
-        // Check for shutdown after count eviction
-        if (!ch->refreshing) break;
 
         // Save metadata
         time_t now = time(NULL);

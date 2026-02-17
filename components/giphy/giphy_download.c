@@ -85,10 +85,10 @@ esp_err_t giphy_build_download_url(const char *giphy_id, char *out_url, size_t o
     }
 
     if (!suffix) {
-        // Fallback: fixed_height webp
-        ESP_LOGW(TAG, "Unknown rendition/format combo: %s/%s, falling back to fixed_height/webp",
+        // Fallback: fixed_height gif
+        ESP_LOGW(TAG, "Unknown rendition/format combo: %s/%s, falling back to fixed_height/gif",
                  rendition, format);
-        suffix = "200.webp";
+        suffix = "200.gif";
     }
 
     snprintf(out_url, out_len, "https://i.giphy.com/media/%s/%s", giphy_id, suffix);

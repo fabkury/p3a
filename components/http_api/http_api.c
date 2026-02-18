@@ -428,6 +428,9 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     }
 
     // Core JSON endpoints
+    if (strcmp(uri, "/api/init") == 0) {
+        return h_get_api_init(req);
+    }
     if (strcmp(uri, "/api/ui-config") == 0) {
         return h_get_ui_config(req);
     }
@@ -463,6 +466,9 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     }
     if (strcmp(uri, "/playsets") == 0) {
         return h_get_playsets(req);
+    }
+    if (strcmp(uri, "/playsets/active") == 0) {
+        return h_get_active_playset(req);
     }
     if (strncmp(uri, "/playsets/", 10) == 0) {
         return h_get_playset_by_name(req);
@@ -557,7 +563,7 @@ static esp_err_t h_put_router(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    if (strcmp(uri, "/config") == 0) {
+    if (strncmp(uri, "/config", 7) == 0 && (uri[7] == '\0' || uri[7] == '?')) {
         return h_put_config(req);
     }
     if (strcmp(uri, "/settings/dwell_time") == 0) {

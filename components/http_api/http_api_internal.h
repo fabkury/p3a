@@ -115,6 +115,7 @@ bool api_enqueue_resume(void);
 // ---------- REST API Handlers (http_api_rest.c) ----------
 
 esp_err_t h_get_ui_config(httpd_req_t *req);
+esp_err_t h_get_api_init(httpd_req_t *req);
 esp_err_t h_get_network_status(httpd_req_t *req);
 esp_err_t h_get_status(httpd_req_t *req);
 esp_err_t h_get_api_state(httpd_req_t *req);
@@ -139,6 +140,7 @@ esp_err_t h_post_rotation(httpd_req_t *req);
 esp_err_t h_post_playset(httpd_req_t *req);
 esp_err_t h_post_show_url(httpd_req_t *req);
 esp_err_t h_post_swap_to(httpd_req_t *req);
+esp_err_t h_get_active_playset(httpd_req_t *req);
 esp_err_t h_get_playsets(httpd_req_t *req);
 esp_err_t h_get_playset_by_name(httpd_req_t *req);
 esp_err_t h_post_playset_crud(httpd_req_t *req);

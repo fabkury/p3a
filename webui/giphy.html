@@ -338,51 +338,40 @@ function saveAll() {
 
     if (!apiKey) { showToast('API Key is required', true); btn.disabled = false; return; }
 
-    // Read current config, merge, save
-    var xhrGet = new XMLHttpRequest();
-    xhrGet.open('GET', '/config', true);
-    xhrGet.onreadystatechange = function() {
-        if (xhrGet.readyState === 4) {
-            var cfg = {};
-            try {
-                var resp = JSON.parse(xhrGet.responseText || '{}');
-                cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-            } catch (e) { cfg = {}; }
+    var cacheSize = parseInt(document.getElementById('giphy-cache-size').value, 10) || 400;
+    if (cacheSize < 32) cacheSize = 32;
+    if (cacheSize > 500) cacheSize = 500;
 
-            cfg.giphy_api_key = apiKey;
-            cfg.giphy_rendition = rendition;
-            cfg.giphy_format = format;
-            cfg.giphy_rating = rating;
-            cfg.giphy_refresh_interval = parseInt(document.getElementById('giphy-refresh').value, 10);
-            var cacheSize = parseInt(document.getElementById('giphy-cache-size').value, 10) || 400;
-            if (cacheSize < 32) cacheSize = 32;
-            if (cacheSize > 500) cacheSize = 500;
-            cfg.giphy_cache_size = cacheSize;
+    var partial = {
+        giphy_api_key: apiKey,
+        giphy_rendition: rendition,
+        giphy_format: format,
+        giphy_rating: rating,
+        giphy_refresh_interval: parseInt(document.getElementById('giphy-refresh').value, 10),
+        giphy_cache_size: cacheSize
+    };
 
-            var xhrPut = new XMLHttpRequest();
-            xhrPut.open('PUT', '/config', true);
-            xhrPut.setRequestHeader('Content-Type', 'application/json');
-            xhrPut.onreadystatechange = function() {
-                if (xhrPut.readyState === 4) {
-                    btn.disabled = false;
-                    if (xhrPut.status >= 200 && xhrPut.status < 300) {
-                        // Save override flag
-                        var xhrOvr = new XMLHttpRequest();
-                        xhrOvr.open('PUT', '/settings/giphy_refresh_override', true);
-                        xhrOvr.setRequestHeader('Content-Type', 'application/json');
-                        xhrOvr.send(JSON.stringify({
-                            giphy_refresh_allow_override: document.getElementById('giphy-refresh-override').checked
-                        }));
-                        showToast('Giphy settings saved', false);
-                    } else {
-                        showToast('Save failed (HTTP ' + xhrPut.status + ')', true);
-                    }
-                }
-            };
-            xhrPut.send(JSON.stringify(cfg));
+    var xhr = new XMLHttpRequest();
+    xhr.open('PUT', '/config?merge=true', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            btn.disabled = false;
+            if (xhr.status >= 200 && xhr.status < 300) {
+                // Save override flag
+                var xhrOvr = new XMLHttpRequest();
+                xhrOvr.open('PUT', '/settings/giphy_refresh_override', true);
+                xhrOvr.setRequestHeader('Content-Type', 'application/json');
+                xhrOvr.send(JSON.stringify({
+                    giphy_refresh_allow_override: document.getElementById('giphy-refresh-override').checked
+                }));
+                showToast('Giphy settings saved', false);
+            } else {
+                showToast('Save failed (HTTP ' + xhr.status + ')', true);
+            }
         }
     };
-    xhrGet.send();
+    xhr.send(JSON.stringify(partial));
 }
 
 // Wire up rendition change to refresh format options

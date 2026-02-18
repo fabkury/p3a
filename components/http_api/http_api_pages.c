@@ -263,6 +263,9 @@ esp_err_t http_api_pages_route_get(httpd_req_t *req) {
     if (strcmp(uri, "/giphy") == 0) {
         return h_get_giphy(req);
     }
+    if (strcmp(uri, "/playset-editor") == 0) {
+        return serve_file(req, "/spiffs/playset-editor.html");
+    }
 
 #if CONFIG_P3A_PICO8_ENABLE
     if (strcmp(uri, "/pico8") == 0) {

@@ -346,31 +346,57 @@ function updateColorPreview() {
     var b = clamp255(document.getElementById('bg-b').value);
     document.getElementById('bg-preview').style.background = 'rgb(' + r + ',' + g + ',' + b + ')';
 }
-function loadBackgroundColor() {
+function loadAllConfig() {
     var xhr = new XMLHttpRequest();
     xhr.open('GET', '/config', true);
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
+            var cfg = {};
             try {
                 var resp = JSON.parse(xhr.responseText || '{}');
-                var cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-                var bg = (cfg && cfg.background_color) ? cfg.background_color : null;
-                var r = bg && typeof bg.r === 'number' ? bg.r : 0;
-                var g = bg && typeof bg.g === 'number' ? bg.g : 0;
-                var b = bg && typeof bg.b === 'number' ? bg.b : 0;
-                document.getElementById('bg-r').value = clamp255(r);
-                document.getElementById('bg-g').value = clamp255(g);
-                document.getElementById('bg-b').value = clamp255(b);
-                updateColorPreview();
-            } catch (e) {
-                document.getElementById('bg-r').value = 0;
-                document.getElementById('bg-g').value = 0;
-                document.getElementById('bg-b').value = 0;
-                updateColorPreview();
-            }
+                cfg = (resp && resp.ok && resp.data) ? resp.data : {};
+            } catch (e) { cfg = {}; }
+            // Background color
+            var bg = cfg.background_color || {};
+            document.getElementById('bg-r').value = clamp255(bg.r || 0);
+            document.getElementById('bg-g').value = clamp255(bg.g || 0);
+            document.getElementById('bg-b').value = clamp255(bg.b || 0);
+            updateColorPreview();
+            // Processing indicator size
+            document.getElementById('proc-notif-size').value =
+                (typeof cfg.proc_notif_size === 'number') ? cfg.proc_notif_size : 64;
+            // Show FPS
+            document.getElementById('fps-toggle').checked =
+                (typeof cfg.show_fps === 'boolean') ? cfg.show_fps : true;
+            // Max speed playback
+            document.getElementById('maxspeed-toggle').checked =
+                (typeof cfg.max_speed_playback === 'boolean') ? cfg.max_speed_playback : false;
+            // Auto-swap interval
+            var ms = (typeof cfg.dwell_time_ms === 'number') ? cfg.dwell_time_ms : 30000;
+            document.getElementById('autoswap').value = Math.floor(ms / 1000);
+            // Channel cache size
+            document.getElementById('cache-size').value =
+                (typeof cfg.channel_cache_size === 'number') ? cfg.channel_cache_size : 2048;
+            // SD card root
+            document.getElementById('sd-root').value = cfg.sdcard_root || '/p3a';
         }
     };
     xhr.send();
+}
+function mergeConfig(partial, onSuccess, onError) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('PUT', '/config?merge=true', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                if (onSuccess) onSuccess();
+            } else {
+                if (onError) onError(xhr.status);
+            }
+        }
+    };
+    xhr.send(JSON.stringify(partial));
 }
 function saveBackgroundColor() {
     var btn = document.getElementById('bg-save');
@@ -378,142 +404,29 @@ function saveBackgroundColor() {
     var r = clamp255(document.getElementById('bg-r').value);
     var g = clamp255(document.getElementById('bg-g').value);
     var b = clamp255(document.getElementById('bg-b').value);
-    var xhrGet = new XMLHttpRequest();
-    xhrGet.open('GET', '/config', true);
-    xhrGet.onreadystatechange = function() {
-        if (xhrGet.readyState === 4) {
-            var cfg = {};
-            try {
-                var resp = JSON.parse(xhrGet.responseText || '{}');
-                cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-            } catch (e) { cfg = {}; }
-            cfg.background_color = { r: r, g: g, b: b };
-            var xhrPut = new XMLHttpRequest();
-            xhrPut.open('PUT', '/config', true);
-            xhrPut.setRequestHeader('Content-Type', 'application/json');
-            xhrPut.onreadystatechange = function() {
-                if (xhrPut.readyState === 4) {
-                    btn.disabled = false;
-                    if (xhrPut.status >= 200 && xhrPut.status < 300) {
-                        showToast('Background saved', false);
-                    } else {
-                        showToast('Save failed (HTTP ' + xhrPut.status + ')', true);
-                    }
-                }
-            };
-            xhrPut.send(JSON.stringify(cfg));
-        }
-    };
-    xhrGet.send();
-}
-function loadShowFps() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/config', true);
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            try {
-                var resp = JSON.parse(xhr.responseText || '{}');
-                var cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-                var showFps = (typeof cfg.show_fps === 'boolean') ? cfg.show_fps : true;
-                document.getElementById('fps-toggle').checked = showFps;
-            } catch (e) {
-                document.getElementById('fps-toggle').checked = true;
-            }
-        }
-    };
-    xhr.send();
+    mergeConfig({background_color: {r: r, g: g, b: b}}, function() {
+        btn.disabled = false;
+        showToast('Background saved', false);
+    }, function(status) {
+        btn.disabled = false;
+        showToast('Save failed (HTTP ' + status + ')', true);
+    });
 }
 function toggleShowFps(enable) {
-    var xhrGet = new XMLHttpRequest();
-    xhrGet.open('GET', '/config', true);
-    xhrGet.onreadystatechange = function() {
-        if (xhrGet.readyState === 4) {
-            var cfg = {};
-            try {
-                var resp = JSON.parse(xhrGet.responseText || '{}');
-                cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-            } catch (e) { cfg = {}; }
-            cfg.show_fps = enable;
-            var xhrPut = new XMLHttpRequest();
-            xhrPut.open('PUT', '/config', true);
-            xhrPut.setRequestHeader('Content-Type', 'application/json');
-            xhrPut.onreadystatechange = function() {
-                if (xhrPut.readyState === 4) {
-                    if (xhrPut.status >= 200 && xhrPut.status < 300) {
-                        showToast('FPS display ' + (enable ? 'enabled' : 'disabled'), false);
-                    } else {
-                        showToast('Save failed (HTTP ' + xhrPut.status + ')', true);
-                        document.getElementById('fps-toggle').checked = !enable;
-                    }
-                }
-            };
-            xhrPut.send(JSON.stringify(cfg));
-        }
-    };
-    xhrGet.send();
-}
-function loadMaxSpeedPlayback() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/config', true);
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            try {
-                var resp = JSON.parse(xhr.responseText || '{}');
-                var cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-                var maxSpeed = (typeof cfg.max_speed_playback === 'boolean') ? cfg.max_speed_playback : false;
-                document.getElementById('maxspeed-toggle').checked = maxSpeed;
-            } catch (e) {
-                document.getElementById('maxspeed-toggle').checked = false;
-            }
-        }
-    };
-    xhr.send();
+    mergeConfig({show_fps: enable}, function() {
+        showToast('FPS display ' + (enable ? 'enabled' : 'disabled'), false);
+    }, function() {
+        showToast('Save failed', true);
+        document.getElementById('fps-toggle').checked = !enable;
+    });
 }
 function toggleMaxSpeedPlayback(enable) {
-    var xhrGet = new XMLHttpRequest();
-    xhrGet.open('GET', '/config', true);
-    xhrGet.onreadystatechange = function() {
-        if (xhrGet.readyState === 4) {
-            var cfg = {};
-            try {
-                var resp = JSON.parse(xhrGet.responseText || '{}');
-                cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-            } catch (e) { cfg = {}; }
-            cfg.max_speed_playback = enable;
-            var xhrPut = new XMLHttpRequest();
-            xhrPut.open('PUT', '/config', true);
-            xhrPut.setRequestHeader('Content-Type', 'application/json');
-            xhrPut.onreadystatechange = function() {
-                if (xhrPut.readyState === 4) {
-                    if (xhrPut.status >= 200 && xhrPut.status < 300) {
-                        showToast('Max speed playback ' + (enable ? 'enabled' : 'disabled'), false);
-                    } else {
-                        showToast('Save failed (HTTP ' + xhrPut.status + ')', true);
-                        document.getElementById('maxspeed-toggle').checked = !enable;
-                    }
-                }
-            };
-            xhrPut.send(JSON.stringify(cfg));
-        }
-    };
-    xhrGet.send();
-}
-function loadSdRoot() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/config', true);
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            try {
-                var resp = JSON.parse(xhr.responseText || '{}');
-                var cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-                var sdRoot = cfg.sdcard_root || '/p3a';
-                document.getElementById('sd-root').value = sdRoot;
-            } catch (e) {
-                document.getElementById('sd-root').value = '/p3a';
-            }
-        }
-    };
-    xhr.send();
+    mergeConfig({max_speed_playback: enable}, function() {
+        showToast('Max speed playback ' + (enable ? 'enabled' : 'disabled'), false);
+    }, function() {
+        showToast('Save failed', true);
+        document.getElementById('maxspeed-toggle').checked = !enable;
+    });
 }
 function saveSdRoot() {
     var btn = document.getElementById('sd-save');
@@ -539,33 +452,13 @@ function saveSdRoot() {
         btn.disabled = false;
         return;
     }
-    var xhrGet = new XMLHttpRequest();
-    xhrGet.open('GET', '/config', true);
-    xhrGet.onreadystatechange = function() {
-        if (xhrGet.readyState === 4) {
-            var cfg = {};
-            try {
-                var resp = JSON.parse(xhrGet.responseText || '{}');
-                cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-            } catch (e) { cfg = {}; }
-            cfg.sdcard_root = sdRoot;
-            var xhrPut = new XMLHttpRequest();
-            xhrPut.open('PUT', '/config', true);
-            xhrPut.setRequestHeader('Content-Type', 'application/json');
-            xhrPut.onreadystatechange = function() {
-                if (xhrPut.readyState === 4) {
-                    btn.disabled = false;
-                    if (xhrPut.status >= 200 && xhrPut.status < 300) {
-                        showToast('Root path saved - reboot required', false);
-                    } else {
-                        showToast('Save failed (HTTP ' + xhrPut.status + ')', true);
-                    }
-                }
-            };
-            xhrPut.send(JSON.stringify(cfg));
-        }
-    };
-    xhrGet.send();
+    mergeConfig({sdcard_root: sdRoot}, function() {
+        btn.disabled = false;
+        showToast('Root path saved - reboot required', false);
+    }, function(status) {
+        btn.disabled = false;
+        showToast('Save failed (HTTP ' + status + ')', true);
+    });
 }
 function loadSeed() {
     var xhr = new XMLHttpRequest();
@@ -616,23 +509,6 @@ function saveSeed() {
     };
     xhr.send(JSON.stringify({global_seed: n}));
 }
-function loadAutoSwap() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/config', true);
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            try {
-                var resp = JSON.parse(xhr.responseText || '{}');
-                var cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-                var ms = (typeof cfg.dwell_time_ms === 'number') ? cfg.dwell_time_ms : 30000;
-                document.getElementById('autoswap').value = Math.floor(ms / 1000);
-            } catch (e) {
-                document.getElementById('autoswap').value = 30;
-            }
-        }
-    };
-    xhr.send();
-}
 function saveAutoSwap() {
     var sec = parseInt(document.getElementById('autoswap').value, 10);
     if (isNaN(sec) || sec < 0) sec = 0;
@@ -641,49 +517,11 @@ function saveAutoSwap() {
         showToast('Minimum is 5 seconds', true);
         return;
     }
-    var xhrGet = new XMLHttpRequest();
-    xhrGet.open('GET', '/config', true);
-    xhrGet.onreadystatechange = function() {
-        if (xhrGet.readyState === 4) {
-            var cfg = {};
-            try {
-                var resp = JSON.parse(xhrGet.responseText || '{}');
-                cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-            } catch (e) { cfg = {}; }
-            cfg.dwell_time_ms = sec * 1000;
-            var xhrPut = new XMLHttpRequest();
-            xhrPut.open('PUT', '/config', true);
-            xhrPut.setRequestHeader('Content-Type', 'application/json');
-            xhrPut.onreadystatechange = function() {
-                if (xhrPut.readyState === 4) {
-                    if (xhrPut.status >= 200 && xhrPut.status < 300) {
-                        showToast(sec === 0 ? 'Auto-swap disabled' : 'Auto-swap: ' + sec + 's', false);
-                    } else {
-                        showToast('Save failed', true);
-                    }
-                }
-            };
-            xhrPut.send(JSON.stringify(cfg));
-        }
-    };
-    xhrGet.send();
-}
-function loadProcNotifSize() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/config', true);
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            try {
-                var resp = JSON.parse(xhr.responseText || '{}');
-                var cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-                var size = (typeof cfg.proc_notif_size === 'number') ? cfg.proc_notif_size : 64;
-                document.getElementById('proc-notif-size').value = size;
-            } catch (e) {
-                document.getElementById('proc-notif-size').value = 64;
-            }
-        }
-    };
-    xhr.send();
+    mergeConfig({dwell_time_ms: sec * 1000}, function() {
+        showToast(sec === 0 ? 'Auto-swap disabled' : 'Auto-swap: ' + sec + 's', false);
+    }, function() {
+        showToast('Save failed', true);
+    });
 }
 function saveProcNotifSize() {
     var size = parseInt(document.getElementById('proc-notif-size').value, 10);
@@ -692,32 +530,11 @@ function saveProcNotifSize() {
     if (size > 0 && size < 16) size = 16;
     if (size > 256) size = 256;
     document.getElementById('proc-notif-size').value = size;
-    var xhrGet = new XMLHttpRequest();
-    xhrGet.open('GET', '/config', true);
-    xhrGet.onreadystatechange = function() {
-        if (xhrGet.readyState === 4) {
-            var cfg = {};
-            try {
-                var resp = JSON.parse(xhrGet.responseText || '{}');
-                cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-            } catch (e) { cfg = {}; }
-            cfg.proc_notif_size = size;
-            var xhrPut = new XMLHttpRequest();
-            xhrPut.open('PUT', '/config', true);
-            xhrPut.setRequestHeader('Content-Type', 'application/json');
-            xhrPut.onreadystatechange = function() {
-                if (xhrPut.readyState === 4) {
-                    if (xhrPut.status >= 200 && xhrPut.status < 300) {
-                        showToast(size === 0 ? 'Indicator disabled' : 'Indicator size: ' + size + 'px', false);
-                    } else {
-                        showToast('Save failed', true);
-                    }
-                }
-            };
-            xhrPut.send(JSON.stringify(cfg));
-        }
-    };
-    xhrGet.send();
+    mergeConfig({proc_notif_size: size}, function() {
+        showToast(size === 0 ? 'Indicator disabled' : 'Indicator size: ' + size + 'px', false);
+    }, function() {
+        showToast('Save failed', true);
+    });
 }
 var rebootPending = false;
 var rebootTimeout = null;
@@ -744,63 +561,19 @@ function reboot() {
         btn.classList.remove('confirm');
     }
 }
-function loadCacheSize() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/config', true);
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            try {
-                var resp = JSON.parse(xhr.responseText || '{}');
-                var cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-                var size = (typeof cfg.channel_cache_size === 'number') ? cfg.channel_cache_size : 2048;
-                document.getElementById('cache-size').value = size;
-            } catch (e) {
-                document.getElementById('cache-size').value = 2048;
-            }
-        }
-    };
-    xhr.send();
-}
 function saveCacheSize() {
     var size = parseInt(document.getElementById('cache-size').value, 10);
     if (isNaN(size) || size < 32 || size > 4096) {
         showToast('Invalid size (32-4096)', true);
         return;
     }
-    var xhrGet = new XMLHttpRequest();
-    xhrGet.open('GET', '/config', true);
-    xhrGet.onreadystatechange = function() {
-        if (xhrGet.readyState === 4) {
-            var cfg = {};
-            try {
-                var resp = JSON.parse(xhrGet.responseText || '{}');
-                cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-            } catch (e) { cfg = {}; }
-            cfg.channel_cache_size = size;
-            var xhrPut = new XMLHttpRequest();
-            xhrPut.open('PUT', '/config', true);
-            xhrPut.setRequestHeader('Content-Type', 'application/json');
-            xhrPut.onreadystatechange = function() {
-                if (xhrPut.readyState === 4) {
-                    if (xhrPut.status >= 200 && xhrPut.status < 300) {
-                        showToast('Cache size: ' + size + ' (reboot recommended)', false);
-                    } else {
-                        showToast('Save failed', true);
-                    }
-                }
-            };
-            xhrPut.send(JSON.stringify(cfg));
-        }
-    };
-    xhrGet.send();
+    mergeConfig({channel_cache_size: size}, function() {
+        showToast('Cache size: ' + size + ' (reboot recommended)', false);
+    }, function() {
+        showToast('Save failed', true);
+    });
 }
-loadBackgroundColor();
-loadProcNotifSize();
-loadShowFps();
-loadMaxSpeedPlayback();
-loadAutoSwap();
-loadCacheSize();
-loadSdRoot();
+loadAllConfig();
 loadSeed();
 </script>
 </body>

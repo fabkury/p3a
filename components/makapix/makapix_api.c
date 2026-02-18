@@ -8,11 +8,13 @@
 #include "playset_json.h"
 #include "cJSON.h"
 #include "esp_log.h"
+#include "pcg32_reversible.h"
 #include "esp_random.h"
 #include "esp_check.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include <inttypes.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -87,14 +89,20 @@ esp_err_t makapix_api_init(void)
     return ESP_OK;
 }
 
+static pcg32_rng_t s_reqid_rng;
+static bool s_reqid_rng_seeded = false;
+
 static void generate_request_id(char *out, size_t len)
 {
-    // 16 bytes random => 32 hex chars
     const size_t req_len = 32;
     if (len < req_len + 1) return;
-    for (size_t i = 0; i < req_len/2; i++) {
-        uint8_t b = (uint8_t)(esp_random() & 0xFF);
-        snprintf(out + (i * 2), 3, "%02x", b);
+    if (!s_reqid_rng_seeded) {
+        pcg32_seed(&s_reqid_rng, esp_random(), 0);
+        s_reqid_rng_seeded = true;
+    }
+    for (size_t i = 0; i < req_len / 8; i++) {
+        uint32_t r = pcg32_next_u32(&s_reqid_rng);
+        snprintf(out + (i * 8), 9, "%08" PRIx32, r);
     }
     out[req_len] = '\0';
 }

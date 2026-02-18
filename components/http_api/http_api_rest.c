@@ -46,6 +46,25 @@
 // Processing notification (from display_renderer_priv.h via weak symbol)
 extern void proc_notif_start(void) __attribute__((weak));
 
+// ---------- Playset Mode String Helpers ----------
+
+static const char *exposure_mode_str(ps_exposure_mode_t m) {
+    switch (m) {
+        case PS_EXPOSURE_EQUAL:        return "equal";
+        case PS_EXPOSURE_MANUAL:       return "manual";
+        case PS_EXPOSURE_PROPORTIONAL: return "proportional";
+        default:                       return "unknown";
+    }
+}
+
+static const char *pick_mode_str(ps_pick_mode_t m) {
+    switch (m) {
+        case PS_PICK_RECENCY: return "recency";
+        case PS_PICK_RANDOM:  return "random";
+        default:              return "unknown";
+    }
+}
+
 // ---------- Debug Handler (Dev Mode) ----------
 
 #if CONFIG_OTA_DEV_MODE
@@ -124,6 +143,86 @@ esp_err_t h_get_ui_config(httpd_req_t *req) {
 
     cJSON_AddBoolToObject(root, "ok", true);
     cJSON_AddItemToObject(root, "data", data);
+
+    char *json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!json) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, json);
+    free(json);
+    return ESP_OK;
+}
+
+/**
+ * GET /api/init
+ * Combined init endpoint for index.html - returns all data needed on page load
+ * in a single request: ui_config, channel_stats, active_playset, play_order
+ */
+esp_err_t h_get_api_init(httpd_req_t *req) {
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    cJSON_AddBoolToObject(root, "ok", true);
+    cJSON *data = cJSON_AddObjectToObject(root, "data");
+
+    // ui_config: LCD dimensions + feature flags
+    cJSON *ui = cJSON_AddObjectToObject(data, "ui_config");
+    cJSON_AddNumberToObject(ui, "lcd_width", LCD_MAX_WIDTH);
+    cJSON_AddNumberToObject(ui, "lcd_height", LCD_MAX_HEIGHT);
+#if CONFIG_P3A_PICO8_ENABLE
+    cJSON_AddBoolToObject(ui, "pico8_enabled", true);
+#else
+    cJSON_AddBoolToObject(ui, "pico8_enabled", false);
+#endif
+
+    // channel_stats: per-channel cached/total counts (O(1) from LAi)
+    size_t all_total = 0, all_cached = 0;
+    size_t promoted_total = 0, promoted_cached = 0;
+    size_t giphy_trending_total = 0, giphy_trending_cached = 0;
+    play_scheduler_get_channel_stats("all", &all_total, &all_cached);
+    play_scheduler_get_channel_stats("promoted", &promoted_total, &promoted_cached);
+    play_scheduler_get_channel_stats("giphy_trending", &giphy_trending_total, &giphy_trending_cached);
+    bool is_registered = makapix_store_has_player_key();
+
+    cJSON *stats = cJSON_AddObjectToObject(data, "channel_stats");
+    cJSON *s_all = cJSON_AddObjectToObject(stats, "all");
+    cJSON_AddNumberToObject(s_all, "total", (double)all_total);
+    cJSON_AddNumberToObject(s_all, "cached", (double)all_cached);
+    cJSON *s_prom = cJSON_AddObjectToObject(stats, "promoted");
+    cJSON_AddNumberToObject(s_prom, "total", (double)promoted_total);
+    cJSON_AddNumberToObject(s_prom, "cached", (double)promoted_cached);
+    cJSON *s_giphy = cJSON_AddObjectToObject(stats, "giphy_trending");
+    cJSON_AddNumberToObject(s_giphy, "total", (double)giphy_trending_total);
+    cJSON_AddNumberToObject(s_giphy, "cached", (double)giphy_trending_cached);
+    cJSON_AddBoolToObject(stats, "registered", is_registered);
+
+    // active_playset: current channel/playset name
+    const char *playset = p3a_state_get_active_playset();
+    cJSON_AddStringToObject(data, "active_playset", playset ? playset : "");
+
+    // play_order: shuffle mode
+    uint8_t play_order = config_store_get_play_order();
+    cJSON_AddNumberToObject(data, "play_order", (double)play_order);
+
+    // paused: current pause state
+    cJSON_AddBoolToObject(data, "paused", playback_service_is_paused());
+
+    // playset_info: active playset details
+    ps_stats_t ps_stats;
+    if (play_scheduler_get_stats(&ps_stats) == ESP_OK) {
+        cJSON *pi = cJSON_AddObjectToObject(data, "playset_info");
+        cJSON_AddNumberToObject(pi, "channel_count", (double)ps_stats.channel_count);
+        cJSON_AddNumberToObject(pi, "total_cached", (double)ps_stats.total_available);
+        cJSON_AddNumberToObject(pi, "total_entries", (double)ps_stats.total_entries);
+        cJSON_AddStringToObject(pi, "exposure_mode", exposure_mode_str(ps_stats.exposure_mode));
+        cJSON_AddStringToObject(pi, "pick_mode", pick_mode_str(ps_stats.pick_mode));
+    }
 
     char *json = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -440,7 +539,41 @@ esp_err_t h_put_config(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    esp_err_t e = config_store_save(o);
+    // Merge mode: load current config and merge incoming fields on top
+    bool merge_mode = (strstr(req->uri, "merge=true") != NULL);
+    cJSON *merged = NULL;
+    cJSON *to_save = o;
+
+    if (merge_mode) {
+        char *cur_json = NULL;
+        size_t cur_len = 0;
+        esp_err_t load_err = config_store_get_serialized(&cur_json, &cur_len);
+        if (load_err == ESP_OK && cur_json) {
+            merged = cJSON_ParseWithLength(cur_json, cur_len);
+            free(cur_json);
+        }
+        if (!merged) {
+            merged = cJSON_CreateObject();
+        }
+        // Shallow-merge incoming keys into current config
+        cJSON *child = o->child;
+        while (child) {
+            cJSON *dup = cJSON_Duplicate(child, true);
+            if (cJSON_HasObjectItem(merged, child->string)) {
+                cJSON_ReplaceItemInObject(merged, child->string, dup);
+            } else {
+                cJSON_AddItemToObject(merged, child->string, dup);
+            }
+            child = child->next;
+        }
+        to_save = merged;
+    }
+
+    esp_err_t e = config_store_save(to_save);
+
+    if (merged) {
+        cJSON_Delete(merged);
+    }
 
     if (e != ESP_OK) {
         cJSON_Delete(o);
@@ -551,6 +684,8 @@ esp_err_t h_post_channel(httpd_req_t *req) {
  * Returns: {"ok": true, "data": {"playset": "channel_recent"|"channel_promoted"|"channel_sdcard"|"followed_artists"|...}}
  *
  * For backwards compatibility, also includes "channel_name" mapped from playset.
+ *
+ * @deprecated Use GET /playsets/active instead. This endpoint will be removed in a future version.
  */
 esp_err_t h_get_channel(httpd_req_t *req) {
     // Get the active playset name (primary source of truth)
@@ -1149,6 +1284,15 @@ esp_err_t h_post_playset(httpd_req_t *req)
     cJSON_AddNumberToObject(root, "channel_count", (double)command->channel_count);
     cJSON_AddBoolToObject(root, "from_cache", from_cache);
     cJSON_AddBoolToObject(root, "builtin", is_builtin);
+    cJSON_AddStringToObject(root, "exposure_mode", exposure_mode_str(command->exposure_mode));
+    cJSON_AddStringToObject(root, "pick_mode", pick_mode_str(command->pick_mode));
+
+    // Compute artwork sums from live scheduler state (caches loaded by execute_command)
+    ps_stats_t ps_stats;
+    if (play_scheduler_get_stats(&ps_stats) == ESP_OK) {
+        cJSON_AddNumberToObject(root, "total_cached", (double)ps_stats.total_available);
+        cJSON_AddNumberToObject(root, "total_entries", (double)ps_stats.total_entries);
+    }
 
     char *out = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -1348,6 +1492,39 @@ esp_err_t h_post_swap_to(httpd_req_t *req) {
 // ---------- Playset CRUD Handlers ----------
 
 /**
+ * GET /playsets/active
+ * Returns the currently active playset name.
+ * This is the playset-centric replacement for GET /channel's playset field.
+ * (GET /channel is deprecated and will be removed in a future version.)
+ */
+esp_err_t h_get_active_playset(httpd_req_t *req)
+{
+    const char *playset = p3a_state_get_active_playset();
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    cJSON_AddBoolToObject(root, "ok", true);
+
+    cJSON *data = cJSON_AddObjectToObject(root, "data");
+    cJSON_AddStringToObject(data, "name", playset ? playset : "");
+
+    char *out = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!out) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, out);
+    free(out);
+    return ESP_OK;
+}
+
+/**
  * GET /playsets
  * List all saved playsets
  */
@@ -1523,6 +1700,15 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
     memcpy(name, name_start, name_len);
     name[name_len] = '\0';
 
+    // Protected playsets cannot be overwritten via REST API
+    static const char *protected_playsets[] = { "followed_artists" };
+    for (size_t i = 0; i < sizeof(protected_playsets) / sizeof(protected_playsets[0]); i++) {
+        if (strcmp(name, protected_playsets[i]) == 0) {
+            send_json(req, 403, "{\"ok\":false,\"error\":\"Cannot overwrite protected playset\",\"code\":\"PROTECTED_PLAYSET\"}");
+            return ESP_OK;
+        }
+    }
+
     if (!ensure_json_content(req)) {
         send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
         return ESP_OK;
@@ -1549,6 +1735,14 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
     cJSON *activate_item = cJSON_GetObjectItem(root, "activate");
     if (activate_item && cJSON_IsBool(activate_item)) {
         activate = cJSON_IsTrue(activate_item);
+    }
+
+    // Extract optional "rename_from" string (must copy before cJSON_Delete)
+    char rename_from[PLAYSET_MAX_NAME_LEN + 1] = {0};
+    cJSON *rename_item = cJSON_GetObjectItem(root, "rename_from");
+    if (rename_item && cJSON_IsString(rename_item) && rename_item->valuestring[0] != '\0') {
+        strncpy(rename_from, rename_item->valuestring, PLAYSET_MAX_NAME_LEN);
+        rename_from[PLAYSET_MAX_NAME_LEN] = '\0';
     }
 
     // Parse playset
@@ -1592,6 +1786,28 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
 
     free(cmd);
 
+    // Handle rename: delete old file if rename_from is set and different from target name
+    bool renamed = false;
+    if (rename_from[0] != '\0' && strcmp(rename_from, name) != 0) {
+        // Don't allow renaming from a protected playset
+        bool rename_protected = false;
+        for (size_t i = 0; i < sizeof(protected_playsets) / sizeof(protected_playsets[0]); i++) {
+            if (strcmp(rename_from, protected_playsets[i]) == 0) {
+                rename_protected = true;
+                break;
+            }
+        }
+        if (!rename_protected) {
+            playset_store_delete(rename_from);
+            // Update active playset reference if it pointed to the old name
+            const char *active = p3a_state_get_active_playset();
+            if (active && strcmp(active, rename_from) == 0) {
+                p3a_state_set_active_playset(name);
+            }
+            renamed = true;
+        }
+    }
+
     cJSON *resp = cJSON_CreateObject();
     if (!resp) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
@@ -1602,6 +1818,7 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
     cJSON *data = cJSON_AddObjectToObject(resp, "data");
     cJSON_AddBoolToObject(data, "saved", true);
     cJSON_AddBoolToObject(data, "activated", activated);
+    cJSON_AddBoolToObject(data, "renamed", renamed);
 
     char *out = cJSON_PrintUnformatted(resp);
     cJSON_Delete(resp);
@@ -1641,6 +1858,15 @@ esp_err_t h_delete_playset(httpd_req_t *req)
     }
     memcpy(name, name_start, name_len);
     name[name_len] = '\0';
+
+    // Protected playsets cannot be deleted
+    static const char *protected_playsets[] = { "followed_artists" };
+    for (size_t i = 0; i < sizeof(protected_playsets) / sizeof(protected_playsets[0]); i++) {
+        if (strcmp(name, protected_playsets[i]) == 0) {
+            send_json(req, 403, "{\"ok\":false,\"error\":\"Cannot delete protected playset\",\"code\":\"PROTECTED_PLAYSET\"}");
+            return ESP_OK;
+        }
+    }
 
     if (!playset_store_exists(name)) {
         send_json(req, 404, "{\"ok\":false,\"error\":\"Playset not found\",\"code\":\"NOT_FOUND\"}");

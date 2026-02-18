@@ -189,6 +189,10 @@ typedef struct {
     size_t nae_pool_count;
     uint32_t epoch_id;
     const char *current_channel_id;
+    ps_exposure_mode_t exposure_mode;
+    ps_pick_mode_t pick_mode;
+    size_t total_available;             // Sum of |LAi| across channels
+    size_t total_entries;               // Sum of |Ci| across channels
 } ps_stats_t;
 
 // ============================================================================

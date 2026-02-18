@@ -517,6 +517,17 @@ esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats)
     out_stats->current_channel_id = s_state.channel_count > 0
         ? s_state.current_channel_id
         : NULL;
+    out_stats->exposure_mode = s_state.exposure_mode;
+    out_stats->pick_mode = s_state.pick_mode;
+
+    size_t total_avail = 0, total_entries = 0;
+    for (size_t i = 0; i < s_state.channel_count; i++) {
+        ps_channel_state_t *ch = &s_state.channels[i];
+        total_avail   += (ch->cache ? ch->cache->available_count : ch->available_count);
+        total_entries  += (ch->cache ? ch->cache->entry_count : ch->entry_count);
+    }
+    out_stats->total_available = total_avail;
+    out_stats->total_entries = total_entries;
 
     xSemaphoreGive(s_state.mutex);
 

@@ -92,6 +92,27 @@ body {
     min-width: 110px;
 }
 .pause-btn:active { transform: scale(0.95); }
+.playset-card {
+    background: rgba(255,255,255,0.85);
+    border-radius: 10px;
+    padding: 8px 16px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: #444;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    width: 100%;
+    box-sizing: border-box;
+}
+.playset-name {
+    font-weight: 600;
+    color: #667eea;
+    font-size: 0.85rem;
+    margin-bottom: 2px;
+}
+.playset-stats {
+    color: #666;
+    font-size: 0.75rem;
+}
 .channel-btn {
     background: rgba(255,255,255,0.95);
     border: none;
@@ -347,6 +368,10 @@ body {
         <button class="arrow-btn" id="back-btn" onclick="sendCommand('swap_back')">&#9664;</button>
         <button class="arrow-btn" id="next-btn" onclick="sendCommand('swap_next')">&#9654;</button>
     </div>
+    <div class="playset-card" id="playset-card" style="display:none;">
+        <div class="playset-name" id="playset-name"></div>
+        <div class="playset-stats" id="playset-stats"></div>
+    </div>
     <button class="pause-btn" id="pause-btn" onclick="togglePause()">Pause</button>
 </div>
 <div class="controls" style="margin-top: 0;">
@@ -402,6 +427,7 @@ body {
     <button class="footer-btn" id="pico8-btn" style="display:none" onclick="window.location.href='/pico8'">PICO-8</button>
     <button class="footer-btn" onclick="window.location.href='/settings'">Settings</button>
     <button class="footer-btn" onclick="window.location.href='/giphy'">Giphy</button>
+    <button class="footer-btn" onclick="window.location.href='/playset-editor'">Playsets</button>
     <button class="footer-btn" onclick="window.location.href='/ota'">Update</button>
 </div>
 <div class="status" id="status"></div>
@@ -410,16 +436,53 @@ var isPaused = false;
 var LCD_MAX_WIDTH = 720;
 var LCD_MAX_HEIGHT = 720;
 
-// Load UI config from device
-fetch('/api/ui-config').then(function(r) { return r.json(); }).then(function(d) {
-    if (d.ok && d.data) {
-        LCD_MAX_WIDTH = d.data.lcd_width || 720;
-        LCD_MAX_HEIGHT = d.data.lcd_height || 720;
-        if (d.data.pico8_enabled) {
+// Load all init data from device in a single request
+fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok || !d.data) return;
+    var data = d.data;
+    // UI config
+    if (data.ui_config) {
+        LCD_MAX_WIDTH = data.ui_config.lcd_width || 720;
+        LCD_MAX_HEIGHT = data.ui_config.lcd_height || 720;
+        if (data.ui_config.pico8_enabled) {
             document.getElementById('pico8-btn').style.display = '';
         }
     }
-}).catch(function(e) { console.log('Config fetch failed:', e); });
+    // Channel stats
+    if (data.channel_stats) {
+        var s = data.channel_stats;
+        var allEl = document.getElementById('cache-all');
+        var promEl = document.getElementById('cache-promoted');
+        var giphyEl = document.getElementById('cache-giphy-trending');
+        var registered = s.registered === true;
+        if (allEl && s.all) allEl.textContent = s.all.cached + '/' + s.all.total;
+        if (promEl && s.promoted) promEl.textContent = s.promoted.cached + '/' + s.promoted.total;
+        if (giphyEl && s.giphy_trending) giphyEl.textContent = s.giphy_trending.cached + '/' + s.giphy_trending.total;
+        var recentBtn = document.getElementById('ch-channel_recent');
+        var promBtn = document.getElementById('ch-channel_promoted');
+        var followedBtn = document.getElementById('ch-followed_artists');
+        if (recentBtn) recentBtn.disabled = !registered;
+        if (promBtn) promBtn.disabled = !registered;
+        if (followedBtn) followedBtn.disabled = !registered;
+    }
+    // Active playset
+    if (data.active_playset) {
+        updateSelectedChannel(data.active_playset);
+    }
+    // Playset info card
+    if (data.active_playset && data.playset_info) {
+        updatePlaysetInfo(data.active_playset, data.playset_info);
+    }
+    // Play order (shuffle toggle)
+    if (typeof data.play_order === 'number') {
+        document.getElementById('shuffle-toggle').checked = (data.play_order === 2);
+    }
+    // Pause state
+    if (data.paused) {
+        isPaused = true;
+        document.getElementById('pause-btn').textContent = 'Resume';
+    }
+}).catch(function(e) { console.log('Init fetch failed:', e); });
 
 function showToast(msg, isError) {
     var status = document.getElementById('status');
@@ -525,6 +588,13 @@ function playPlayset(name) {
                     status.textContent = 'Switched to ' + displayName;
                     status.className = 'status success';
                     updateSelectedChannel(name);
+                    updatePlaysetInfo(name, {
+                        channel_count: result.channel_count,
+                        total_cached: result.total_cached,
+                        total_entries: result.total_entries,
+                        exposure_mode: result.exposure_mode,
+                        pick_mode: result.pick_mode
+                    });
                 } else {
                     status.textContent = result.error || 'Failed to load playset';
                     status.className = 'status error';
@@ -845,6 +915,31 @@ function loadChannelStats(attempt) {
     };
     xhr.send();
 }
+function playsetDisplayName(name) {
+    if (name === 'channel_recent') return 'Recent Artworks';
+    if (name === 'channel_promoted') return 'Promoted';
+    if (name === 'channel_sdcard') return 'SD Card';
+    if (name === 'followed_artists') return 'Followed Artists';
+    if (name === 'giphy_trending') return 'Giphy Trending';
+    return name;
+}
+function updatePlaysetInfo(name, info) {
+    var card = document.getElementById('playset-card');
+    if (!info) { card.style.display = 'none'; return; }
+    var nameEl = document.getElementById('playset-name');
+    var statsEl = document.getElementById('playset-stats');
+    nameEl.textContent = playsetDisplayName(name);
+    var parts = [];
+    if (typeof info.channel_count === 'number') parts.push(info.channel_count + ' ch');
+    if (typeof info.total_cached === 'number' && typeof info.total_entries === 'number')
+        parts.push(info.total_cached + '/' + info.total_entries + ' artworks');
+    var modes = [];
+    if (info.exposure_mode) modes.push(info.exposure_mode.charAt(0).toUpperCase() + info.exposure_mode.slice(1));
+    if (info.pick_mode) modes.push(info.pick_mode.charAt(0).toUpperCase() + info.pick_mode.slice(1));
+    if (modes.length) parts.push(modes.join(' \u00b7 '));
+    statsEl.textContent = parts.join(' \u00b7 ');
+    card.style.display = '';
+}
 function updateSelectedChannel(playsetOrChannel) {
     var buttons = document.querySelectorAll('.channel-btn');
     buttons.forEach(function(btn) { btn.classList.remove('selected'); });
@@ -923,9 +1018,6 @@ function loadPlayOrder() {
     xhr.send();
 }
 checkForUpdates();
-loadChannelStats();
-loadCurrentChannel();
-loadPlayOrder();
 setInterval(loadChannelStats, 5000);
 </script>
 </body>

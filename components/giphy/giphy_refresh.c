@@ -25,6 +25,19 @@
 
 static const char *TAG = "giphy_refresh";
 
+static volatile bool s_refresh_cancel = false;
+
+void giphy_cancel_refresh(void)
+{
+    s_refresh_cancel = true;
+    ESP_LOGI(TAG, "Giphy refresh cancellation requested");
+}
+
+bool giphy_is_refresh_cancelled(void)
+{
+    return s_refresh_cancel;
+}
+
 /**
  * @brief Merge Giphy entries into a channel cache
  *
@@ -200,6 +213,8 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
 
     ESP_LOGI(TAG, "Refreshing Giphy channel: %s", channel_id);
 
+    s_refresh_cancel = false;
+
     // Determine cache size from config
     uint32_t cache_size = config_store_get_giphy_cache_size();
     if (cache_size == 0) cache_size = 256;
@@ -219,6 +234,13 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
     // Fetch trending
     size_t fetched = 0;
     esp_err_t err = giphy_fetch_trending(entries, cache_size, &fetched);
+
+    if (s_refresh_cancel) {
+        ESP_LOGI(TAG, "Refresh cancelled after fetch");
+        free(entries);
+        return ESP_ERR_NOT_ALLOWED;
+    }
+
     if (err != ESP_OK || fetched == 0) {
         ESP_LOGW(TAG, "Fetch failed or returned 0 entries: %s", esp_err_to_name(err));
         free(entries);
@@ -226,6 +248,12 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
     }
 
     ESP_LOGI(TAG, "Fetched %zu trending entries, merging into cache", fetched);
+
+    if (s_refresh_cancel) {
+        ESP_LOGI(TAG, "Refresh cancelled before cache merge");
+        free(entries);
+        return ESP_ERR_NOT_ALLOWED;
+    }
 
     // Find channel cache
     channel_cache_t *cache = channel_cache_registry_find(channel_id);

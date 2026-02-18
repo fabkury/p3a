@@ -444,12 +444,22 @@ static void refresh_task(void *arg)
                 err = giphy_refresh_channel(channel_id);
                 if (err == ESP_OK) {
                     config_store_set_giphy_refresh_allow_override(false);
+                } else if (err == ESP_ERR_NOT_ALLOWED) {
+                    // Check if this is a cancellation (from giphy_cancel_refresh)
+                    // vs an invalid API key (HTTP 401/403 from giphy_fetch_trending)
+                    if (giphy_is_refresh_cancelled()) {
+                        ESP_LOGI(TAG, "Giphy channel '%s' refresh cancelled", channel_id);
+                    } else {
+                        char giphy_display_name[64];
+                        ps_get_display_name(channel_id, giphy_display_name, sizeof(giphy_display_name));
+                        p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1,
+                                                       "Invalid Giphy API key");
+                    }
                 } else {
                     char giphy_display_name[64];
                     ps_get_display_name(channel_id, giphy_display_name, sizeof(giphy_display_name));
                     const char *detail = "Giphy refresh failed";
-                    if (err == ESP_ERR_NOT_ALLOWED) detail = "Invalid Giphy API key";
-                    else if (err == ESP_ERR_INVALID_RESPONSE) detail = "Giphy API rate limited";
+                    if (err == ESP_ERR_INVALID_RESPONSE) detail = "Giphy API rate limited";
                     p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1, detail);
                 }
             }
@@ -460,6 +470,16 @@ static void refresh_task(void *arg)
 
         // Update state after refresh
         xSemaphoreTake(state->mutex, portMAX_DELAY);
+
+        // Staleness guard: channel may have been reconfigured while we were refreshing
+        if ((size_t)ch_idx >= state->channel_count ||
+            strcmp(state->channels[ch_idx].channel_id, channel_id) != 0) {
+            ESP_LOGW(TAG, "Channel '%s' reconfigured during refresh, discarding result", channel_id);
+            xSemaphoreGive(state->mutex);
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+        ch = &state->channels[ch_idx];
 
         size_t sync_entry_count = 0;
         if (err == ESP_ERR_INVALID_STATE) {

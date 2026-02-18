@@ -146,6 +146,20 @@ esp_err_t giphy_download_artwork(const char *giphy_id, uint8_t extension,
  */
 esp_err_t giphy_refresh_channel(const char *channel_id);
 
+/**
+ * @brief Cancel any in-progress Giphy refresh
+ *
+ * Sets a flag checked between API batches in giphy_fetch_trending().
+ * The in-flight HTTP request completes; cancellation takes effect at
+ * the next check point. Safe to call from any task.
+ */
+void giphy_cancel_refresh(void);
+
+/**
+ * @brief Check if refresh cancellation has been requested
+ */
+bool giphy_is_refresh_cancelled(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -23,6 +23,7 @@
 #include "sd_path.h"
 #include "content_cache.h"
 #include "makapix.h"
+#include "giphy.h"
 #include "esp_log.h"
 #include "mbedtls/sha256.h"
 #include <stdio.h>
@@ -371,6 +372,7 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     // Cancel all active Makapix refresh tasks before setting up new channels
     // This prevents old refresh tasks from wasting MQTT queries when switching channels
     makapix_cancel_all_refreshes();
+    giphy_cancel_refresh();
 
     // Reset the periodic refresh timer so this command triggers immediate refresh
     ps_refresh_reset_timer();

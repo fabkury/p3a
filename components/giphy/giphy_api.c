@@ -158,6 +158,11 @@ esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
     int offset = 0;
 
     while (total_fetched < max_entries) {
+        if (giphy_is_refresh_cancelled()) {
+            ESP_LOGI(TAG, "Fetch cancelled before next batch (offset=%d)", offset);
+            break;
+        }
+
         int page_limit = GIPHY_PAGE_LIMIT;
         if (total_fetched + page_limit > max_entries) {
             page_limit = (int)(max_entries - total_fetched);
@@ -228,6 +233,11 @@ esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
 
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
+
+        if (giphy_is_refresh_cancelled()) {
+            ESP_LOGI(TAG, "Fetch cancelled after HTTP response (offset=%d)", offset);
+            break;
+        }
 
         ESP_LOGI(TAG, "Received %d bytes from Giphy API", total_read);
 

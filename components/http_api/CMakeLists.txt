@@ -5,7 +5,10 @@ set(http_api_requires
 
 idf_component_register(SRCS "http_api.c"
                              "http_api_utils.c"
-                             "http_api_rest.c"
+                             "http_api_rest_status.c"
+                             "http_api_rest_settings.c"
+                             "http_api_rest_actions.c"
+                             "http_api_rest_playsets.c"
                              "http_api_pages.c"
                              "http_api_pico8.c"
                              "http_api_ota.c"

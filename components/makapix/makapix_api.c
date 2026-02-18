@@ -614,7 +614,7 @@ esp_err_t makapix_api_get_playset(const char *playset_name, ps_scheduler_command
     if (!cJSON_IsBool(success) || !cJSON_IsTrue(success)) {
         cJSON *error = cJSON_GetObjectItem(response_json, "error");
         if (cJSON_IsString(error)) {
-            ESP_LOGE(TAG, "get_playset error: %s", cJSON_GetStringValue(error));
+            ESP_LOGW(TAG, "get_playset error: %s", cJSON_GetStringValue(error));
         }
         cJSON_Delete(response_json);
         return ESP_FAIL;

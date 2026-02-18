@@ -31,7 +31,7 @@ static const char *TAG = "ps_swrr";
  */
 static inline size_t get_effective_count(const ps_channel_state_t *ch)
 {
-    if (ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX && ch->cache) {
+    if ((ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX || ch->entry_format == PS_ENTRY_FORMAT_GIPHY) && ch->cache) {
         return ch->cache->available_count;
     }
     return ch->entry_count;
@@ -45,8 +45,8 @@ static inline bool has_available_artwork(const ps_channel_state_t *ch)
     if (!ch->active) {
         return false;
     }
-    // Makapix: check cache directly; SD card: check entry_count
-    size_t entry_count = (ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX && ch->cache)
+    // Makapix/Giphy: check cache directly; SD card: check entry_count
+    size_t entry_count = ((ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX || ch->entry_format == PS_ENTRY_FORMAT_GIPHY) && ch->cache)
                          ? ch->cache->entry_count
                          : ch->entry_count;
     if (entry_count == 0) {
@@ -219,7 +219,7 @@ void ps_swrr_calculate_weights(ps_state_t *state)
     // Log weights
     for (size_t i = 0; i < state->channel_count; i++) {
         ps_channel_state_t *ch = &state->channels[i];
-        if (ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX && ch->cache) {
+        if ((ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX || ch->entry_format == PS_ENTRY_FORMAT_GIPHY) && ch->cache) {
             ESP_LOGD(TAG, "Channel '%s': weight=%lu, active=%d, entries=%zu, available=%zu",
                      ch->channel_id,
                      (unsigned long)ch->weight,

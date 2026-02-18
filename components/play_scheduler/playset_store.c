@@ -350,20 +350,23 @@ esp_err_t playset_store_list(playset_list_entry_t *out, size_t max, size_t *out_
         memcpy(name, ent->d_name, base_len);
         name[base_len] = '\0';
 
-        // Load to get metadata
-        ps_scheduler_command_t cmd;
-        esp_err_t err = playset_store_load(name, &cmd);
+        // Load to get metadata (heap-allocate: ps_scheduler_command_t is ~46KB)
+        ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
+        if (!cmd) break;  // OOM - stop listing
+        esp_err_t err = playset_store_load(name, cmd);
         if (err != ESP_OK) {
             ESP_LOGW(TAG, "Skipping '%s': load failed (%s)", name, esp_err_to_name(err));
+            free(cmd);
             continue;
         }
 
         playset_list_entry_t *entry = &out[count];
         strncpy(entry->name, name, sizeof(entry->name) - 1);
         entry->name[sizeof(entry->name) - 1] = '\0';
-        entry->channel_count = cmd.channel_count;
-        entry->exposure_mode = cmd.exposure_mode;
-        entry->pick_mode = cmd.pick_mode;
+        entry->channel_count = cmd->channel_count;
+        entry->exposure_mode = cmd->exposure_mode;
+        entry->pick_mode = cmd->pick_mode;
+        free(cmd);
         count++;
     }
 

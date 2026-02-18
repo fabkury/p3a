@@ -1372,7 +1372,7 @@ static bool s_giphy_refresh_interval_loaded = false;
 
 esp_err_t config_store_set_giphy_refresh_interval(uint32_t seconds)
 {
-    if (seconds < 60 || seconds > 86400) {
+    if (seconds < 60 || seconds > 14400) {
         ESP_LOGE(TAG, "Invalid giphy refresh interval: %lu sec", (unsigned long)seconds);
         return ESP_ERR_INVALID_ARG;
     }
@@ -1416,7 +1416,7 @@ uint32_t config_store_get_giphy_refresh_interval(void)
     cJSON *item = cJSON_GetObjectItem(cfg, "giphy_refresh_interval");
     if (item && cJSON_IsNumber(item)) {
         double value = cJSON_GetNumberValue(item);
-        if (value >= 60 && value <= 86400) {
+        if (value >= 60 && value <= 14400) {
             s_giphy_refresh_interval = (uint32_t)value;
         }
     }

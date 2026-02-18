@@ -448,7 +448,7 @@ uint32_t config_store_get_giphy_cache_size(void);
 /**
  * @brief Set Giphy refresh interval in seconds
  *
- * @param seconds Refresh interval (60-86400, default 3600 = 1 hour)
+ * @param seconds Refresh interval (60-14400, default 3600 = 1 hour)
  */
 esp_err_t config_store_set_giphy_refresh_interval(uint32_t seconds);
 

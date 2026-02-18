@@ -1,11 +1,14 @@
 idf_component_register(
-    SRCS 
+    SRCS
         "makapix_store.c"
         "makapix_provision.c"
         "makapix_mqtt.c"
         "makapix_api.c"
         "makapix_artwork.c"
         "makapix.c"
+        "makapix_channel_switch.c"
+        "makapix_refresh.c"
+        "makapix_single_artwork.c"
         "makapix_provision_flow.c"
         "makapix_connection.c"
         "makapix_certs.c"

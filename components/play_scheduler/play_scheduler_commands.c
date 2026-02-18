@@ -515,6 +515,8 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         ps_get_display_name(s_state->channels[0].channel_id, first_channel_display_name, sizeof(first_channel_display_name));
     }
 
+    s_state->playback_triggered = false;
+
     xSemaphoreGive(s_state->mutex);
 
     // Reset auto-swap timer so the full dwell interval starts from this new command
@@ -523,7 +525,9 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     // Only trigger initial playback if we have entries
     // Otherwise, let download manager trigger it when first file is available
     if (has_entries) {
-        return play_scheduler_next(NULL);
+        esp_err_t next_err = play_scheduler_next(NULL);
+        s_state->playback_triggered = true;
+        return next_err;
     } else {
         ESP_LOGI(TAG, "No cached entries yet - waiting for refresh/download");
 

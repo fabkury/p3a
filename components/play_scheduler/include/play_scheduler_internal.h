@@ -96,6 +96,7 @@ typedef struct {
     // Command gating
     SemaphoreHandle_t mutex;
     bool command_active;
+    bool playback_triggered;  // prevents multiple swap triggers per command execution
     bool initialized;
 } ps_state_t;
 

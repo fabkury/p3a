@@ -272,8 +272,9 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
             total_available += (c->cache ? c->cache->available_count : c->available_count);
         }
         
-        if (total_available > 0) {
+        if (total_available > 0 && !s_state->playback_triggered) {
             ESP_LOGI(TAG, "After cache reload - triggering playback (%zu total available)", total_available);
+            s_state->playback_triggered = true;
             xSemaphoreGive(s_state->mutex);
             event_bus_emit_simple(P3A_EVENT_SWAP_NEXT);
             return;
@@ -300,8 +301,9 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
                  prev_channel_available, new_channel_available, ci_count);
 
         // Check for zero-to-one transition
-        if (prev_total_available == 0 && new_channel_available > 0) {
+        if (prev_total_available == 0 && new_channel_available > 0 && !s_state->playback_triggered) {
             ESP_LOGI(TAG, "Zero-to-one transition - triggering playback");
+            s_state->playback_triggered = true;
             xSemaphoreGive(s_state->mutex);
 
             // Trigger playback via event bus to avoid race condition

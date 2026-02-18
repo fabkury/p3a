@@ -295,6 +295,7 @@ static void refresh_task(void *arg)
 
         // Check for async Makapix refresh completions (non-blocking poll)
         if (makapix_channel_wait_for_ps_refresh_done(0)) {
+            bool should_trigger = false;
             xSemaphoreTake(state->mutex, portMAX_DELAY);
             for (size_t i = 0; i < state->channel_count; i++) {
                 ps_channel_state_t *ch = &state->channels[i];
@@ -335,33 +336,28 @@ static void refresh_task(void *arg)
                     extern void download_manager_reset_cursors(void);
                     download_manager_reset_cursors();
 
-                    // Always trigger playback after async refresh completes with entries.
-                    // Note: We can't rely on animation_player_is_animation_ready() because
-                    // it returns true when a message (like "No playable files available")
-                    // is being displayed, which would prevent playback from starting.
-                    if (entry_count > 0) {
-                        ESP_LOGI(TAG, "Async refresh complete - triggering playback");
-
-                        // Clear any loading/error message
-                        extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail);
-                        p3a_render_set_channel_message(NULL, 0 /* P3A_CHANNEL_MSG_NONE */, -1, NULL);
-
-                        // Signal download manager to rescan for any missing files
-                        extern void download_manager_rescan(void);
-                        download_manager_rescan();
-
-                        // Release mutex before calling play_scheduler_next to avoid deadlock
-                        xSemaphoreGive(state->mutex);
-
-                        // Trigger playback - this will pick an available artwork
-                        play_scheduler_next(NULL);
-
-                        // Re-acquire mutex for the rest of the loop
-                        xSemaphoreTake(state->mutex, portMAX_DELAY);
+                    // Track if we should trigger playback (once, after the loop)
+                    if (entry_count > 0 && !state->playback_triggered) {
+                        should_trigger = true;
                     }
                 }
             }
             xSemaphoreGive(state->mutex);
+
+            // Trigger playback once outside the loop and mutex
+            if (should_trigger) {
+                ESP_LOGI(TAG, "Async refresh complete - triggering playback");
+
+                // Clear any loading/error message
+                p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
+
+                // Signal download manager to rescan for any missing files
+                extern void download_manager_rescan(void);
+                download_manager_rescan();
+
+                play_scheduler_next(NULL);
+                state->playback_triggered = true;
+            }
         }
 
         // Find next pending refresh
@@ -504,40 +500,28 @@ static void refresh_task(void *arg)
         }
 
         // Check if we should trigger playback after refresh
-        // For artwork/Giphy channels: ALWAYS trigger (they complete synchronously and
-        //   animation_player_is_animation_ready() returns true when a loading message
-        //   is displayed, which would incorrectly prevent playback from starting)
-        // For other channels: only trigger if no animation is currently playing
-        bool should_trigger_playback = (err == ESP_OK && sync_entry_count > 0);
+        bool should_trigger_playback = (err == ESP_OK && sync_entry_count > 0 && !state->playback_triggered);
         bool is_artwork_channel = (type == PS_CHANNEL_TYPE_ARTWORK);
-        bool is_giphy_channel = (type == PS_CHANNEL_TYPE_GIPHY);
 
         xSemaphoreGive(state->mutex);
 
         if (should_trigger_playback) {
-            // For artwork/Giphy channels, always trigger playback immediately.
-            // We can't rely on animation_player_is_animation_ready() because it
-            // returns true when a message (like "Loading channel...") is being
-            // displayed, which would prevent playback from starting.
-            // For other channels, only trigger if nothing is playing yet.
-            extern bool animation_player_is_animation_ready(void);
-            if (is_artwork_channel || is_giphy_channel || !animation_player_is_animation_ready()) {
-                ESP_LOGI(TAG, "%s - triggering playback",
-                         is_artwork_channel ? "Artwork channel ready" :
-                         is_giphy_channel ? "Giphy refresh complete" :
-                         "No animation playing after refresh");
+            ESP_LOGI(TAG, "%s - triggering playback",
+                     is_artwork_channel ? "Artwork channel ready" :
+                     (type == PS_CHANNEL_TYPE_GIPHY) ? "Giphy refresh complete" :
+                     "Sync refresh complete");
 
-                // For artwork channels: DON'T clear the message here.
-                // The animation player will clear it AFTER the buffer swap completes,
-                // ensuring seamless UI → new animation transition (no flash).
-                // For other channels: clear immediately since no animation is playing.
-                if (!is_artwork_channel) {
-                    p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
-                }
-
-                // Trigger playback
-                play_scheduler_next(NULL);
+            // For artwork channels: DON'T clear the message here.
+            // The animation player will clear it AFTER the buffer swap completes,
+            // ensuring seamless UI → new animation transition (no flash).
+            // For other channels: clear immediately since no animation is playing.
+            if (!is_artwork_channel) {
+                p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
             }
+
+            // Trigger playback
+            play_scheduler_next(NULL);
+            state->playback_triggered = true;
         }
 
         if (err != ESP_OK && err != ESP_ERR_NOT_FINISHED) {

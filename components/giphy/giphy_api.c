@@ -200,6 +200,13 @@ esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
 
         if (status != 200) {
             ESP_LOGE(TAG, "Giphy API returned status %d", status);
+            // Debug: read and log error response body
+            char err_buf[256];
+            int err_read = esp_http_client_read(client, err_buf, sizeof(err_buf) - 1);
+            if (err_read > 0) {
+                err_buf[err_read] = '\0';
+                ESP_LOGW(TAG, "DEBUG: Error response body: %s", err_buf);
+            }
             esp_http_client_close(client);
             esp_http_client_cleanup(client);
             free(response_buf);
@@ -223,6 +230,10 @@ esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
         esp_http_client_cleanup(client);
 
         ESP_LOGI(TAG, "Received %d bytes from Giphy API", total_read);
+
+        if (total_read > 0 && total_read < 150) {
+            ESP_LOGW(TAG, "DEBUG: Small response (%d bytes), full body: %s", total_read, response_buf);
+        }
 
         if (total_read == 0) {
             ESP_LOGE(TAG, "Empty response from Giphy API");
@@ -257,6 +268,17 @@ esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
         int array_size = cJSON_GetArraySize(data);
         if (array_size == 0) {
             ESP_LOGI(TAG, "No more trending results at offset %d", offset);
+
+            // Debug: log meta object if present
+            const cJSON *meta = cJSON_GetObjectItem(root, "meta");
+            if (cJSON_IsObject(meta)) {
+                const cJSON *meta_status = cJSON_GetObjectItem(meta, "status");
+                const cJSON *meta_msg = cJSON_GetObjectItem(meta, "msg");
+                ESP_LOGW(TAG, "DEBUG: meta.status=%d, meta.msg=%s",
+                         cJSON_IsNumber(meta_status) ? meta_status->valueint : -1,
+                         cJSON_IsString(meta_msg) ? meta_msg->valuestring : "(none)");
+            }
+
             cJSON_Delete(root);
             break;
         }

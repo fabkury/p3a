@@ -1,6 +1,8 @@
 idf_component_register(
     SRCS
         "ota_manager.c"
+        "ota_manager_install.c"
+        "ota_manager_webui.c"
         "github_ota.c"
     INCLUDE_DIRS
         "include"
@@ -19,4 +21,3 @@ idf_component_register(
     PRIV_REQUIRES
         esp_netif
 )
-

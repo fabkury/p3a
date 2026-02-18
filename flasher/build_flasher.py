@@ -7,7 +7,7 @@ Called automatically by CMake after the main build (if enabled).
 
 Usage:
     python build_flasher.py <project_dir> <version> <release_dir>
-    
+
 Arguments:
     project_dir  - Path to p3a project root
     version      - Firmware version (e.g., "0.6.0-dev")
@@ -19,7 +19,98 @@ import sys
 import shutil
 import subprocess
 import tempfile
+import venv
 from pathlib import Path
+
+
+def find_system_python():
+    """Find a system Python that has tkinter (not the ESP-IDF minimal Python)."""
+    candidates = []
+
+    # On Windows, try the py launcher first (most reliable)
+    if sys.platform == 'win32':
+        candidates.append(['py', '-3'])
+
+    candidates.extend([['python3'], ['python']])
+
+    for cmd in candidates:
+        try:
+            result = subprocess.run(
+                cmd + ['-c', 'import tkinter; import sys; print(sys.executable)'],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                python_path = result.stdout.strip()
+                # Skip the ESP-IDF Python (it doesn't have tkinter anyway,
+                # but guard against future changes)
+                if 'espressif' not in python_path.lower():
+                    return python_path
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+
+    return None
+
+
+def get_or_create_venv(flasher_dir):
+    """Get or create a cached venv with flasher dependencies.
+
+    The venv is created from a system Python (with tkinter) and cached
+    at flasher/.venv so it persists across builds.
+    """
+    venv_dir = flasher_dir / '.venv'
+    requirements_file = flasher_dir / 'requirements.txt'
+
+    if sys.platform == 'win32':
+        venv_python = venv_dir / 'Scripts' / 'python.exe'
+    else:
+        venv_python = venv_dir / 'bin' / 'python'
+
+    # Check if existing venv is usable (has PyInstaller and tkinter)
+    if venv_python.exists():
+        check = subprocess.run(
+            [str(venv_python), '-c', 'import tkinter; import PyInstaller'],
+            capture_output=True, text=True
+        )
+        if check.returncode == 0:
+            print(f"  Using cached venv: {venv_dir}")
+            return str(venv_python)
+        else:
+            print(f"  Cached venv is stale, recreating...")
+            shutil.rmtree(venv_dir, ignore_errors=True)
+
+    # Find system Python with tkinter
+    system_python = find_system_python()
+    if not system_python:
+        print("ERROR: No system Python with tkinter found.")
+        print("       The ESP-IDF Python does not include tkinter.")
+        print("       Install a standard Python from https://python.org")
+        sys.exit(1)
+
+    print(f"  System Python: {system_python}")
+    print(f"  Creating venv: {venv_dir}")
+
+    # Create venv using the system Python
+    result = subprocess.run(
+        [system_python, '-m', 'venv', str(venv_dir)],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        print(f"ERROR: Failed to create venv:\n{result.stderr}")
+        sys.exit(1)
+
+    # Install requirements
+    print(f"  Installing flasher dependencies...")
+    result = subprocess.run(
+        [str(venv_python), '-m', 'pip', 'install', '-q', '-r', str(requirements_file)],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        print(f"ERROR: Failed to install dependencies:\n{result.stderr}")
+        shutil.rmtree(venv_dir, ignore_errors=True)
+        sys.exit(1)
+
+    print(f"  Venv ready.")
+    return str(venv_python)
 
 
 def main():
@@ -32,22 +123,26 @@ def main():
         print("Usage: python build_flasher.py <project_dir> <version> <release_dir>")
         print("Example: python build_flasher.py . 0.6.0-dev release/v0.6.0-dev/dev")
         sys.exit(1)
-    
+
     project_dir = Path(sys.argv[1]).resolve()
     version = sys.argv[2]
     release_dir = Path(sys.argv[3]).resolve()
-    
+
     flasher_dir = project_dir / 'flasher'
     flasher_py = flasher_dir / 'p3a_flasher.py'
     logo_file = flasher_dir / 'p3a_logo.png'
     icon_file = flasher_dir / 'p3a_icon.ico'
-    
+
     print(f"\n{'='*60}")
     print(f"  Building p3a Flasher v{version}")
     print(f"{'='*60}")
     print(f"  Project:  {project_dir}")
     print(f"  Release:  {release_dir}")
     print(f"  Flasher:  {flasher_dir}")
+    print()
+
+    # Get or create a Python venv with tkinter and flasher deps
+    venv_python = get_or_create_venv(flasher_dir)
     print()
     
     # Verify source files exist
@@ -133,7 +228,7 @@ def main():
         print("\nRunning PyInstaller...")
         
         pyinstaller_args = [
-            'python', '-m', 'PyInstaller',
+            venv_python, '-m', 'PyInstaller',
             '--name', 'p3a-flasher',
             '--onefile',
             '--windowed',

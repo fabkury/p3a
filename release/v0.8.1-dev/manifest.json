@@ -6,9 +6,9 @@
     "sha256": "8b07c8a97ed9f1ec402e2a3f96ea868ba3d3588877c187a7a1c33262d3ba2507"
   },
   "webui": {
-    "version": "1.0",
+    "version": "1.1",
     "requires_api_version": 2,
     "file": "storage.bin",
-    "sha256": "b2b4ed41de67a36691dfe112010d141f1409d24c09d667a8c0f74e12e79428a8"
+    "sha256": "bab50a0ebd4b434ad5f3d2f54268cd8e43b5e33615248e491f82410275af37a9"
   }
 }

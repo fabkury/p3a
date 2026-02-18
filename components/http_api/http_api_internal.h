@@ -143,6 +143,8 @@ esp_err_t h_get_playsets(httpd_req_t *req);
 esp_err_t h_get_playset_by_name(httpd_req_t *req);
 esp_err_t h_post_playset_crud(httpd_req_t *req);
 esp_err_t h_delete_playset(httpd_req_t *req);
+esp_err_t h_get_giphy_refresh_override(httpd_req_t *req);
+esp_err_t h_put_giphy_refresh_override(httpd_req_t *req);
 
 #if CONFIG_OTA_DEV_MODE
 esp_err_t h_post_debug(httpd_req_t *req);

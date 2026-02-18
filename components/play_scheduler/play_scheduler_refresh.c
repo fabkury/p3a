@@ -416,14 +416,19 @@ static void refresh_task(void *arg)
 
             time_t now = time(NULL);
             uint32_t interval = config_store_get_giphy_refresh_interval();
-            if (cache_has_entries &&
+            bool allow_override = config_store_get_giphy_refresh_allow_override();
+            if (!allow_override &&
+                cache_has_entries &&
                 giphy_meta.last_refresh > 0 && now > 0 &&
                 (now - giphy_meta.last_refresh) < (time_t)interval) {
                 ESP_LOGI(TAG, "Giphy channel '%s' still fresh (last refresh %lds ago, interval %lus), skipping",
                          channel_id, (long)(now - giphy_meta.last_refresh), (unsigned long)interval);
                 err = ESP_OK;  // Treat as successful (no-op)
             } else {
-                if (!cache_has_entries && giphy_meta.last_refresh > 0) {
+                if (allow_override) {
+                    ESP_LOGI(TAG, "Giphy channel '%s' refresh override active, bypassing interval check",
+                             channel_id);
+                } else if (!cache_has_entries && giphy_meta.last_refresh > 0) {
                     ESP_LOGI(TAG, "Giphy channel '%s' cache is empty, forcing refresh despite interval",
                              channel_id);
                 }
@@ -441,7 +446,9 @@ static void refresh_task(void *arg)
                 }
 
                 err = giphy_refresh_channel(channel_id);
-                if (err != ESP_OK) {
+                if (err == ESP_OK) {
+                    config_store_set_giphy_refresh_allow_override(false);
+                } else {
                     char giphy_display_name[64];
                     ps_get_display_name(channel_id, giphy_display_name, sizeof(giphy_display_name));
                     const char *detail = "Giphy refresh failed";

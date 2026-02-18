@@ -1657,3 +1657,56 @@ esp_err_t h_delete_playset(httpd_req_t *req)
     return ESP_OK;
 }
 
+esp_err_t h_get_giphy_refresh_override(httpd_req_t *req)
+{
+    bool val = config_store_get_giphy_refresh_allow_override();
+    char response[128];
+    snprintf(response, sizeof(response),
+             "{\"ok\":true,\"data\":{\"giphy_refresh_allow_override\":%s}}",
+             val ? "true" : "false");
+    send_json(req, 200, response);
+    return ESP_OK;
+}
+
+esp_err_t h_put_giphy_refresh_override(httpd_req_t *req)
+{
+    if (!ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+
+    int err_status;
+    size_t len;
+    char *body = recv_body_json(req, &len, &err_status);
+    if (!body) {
+        if (err_status == 413) {
+            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
+        } else {
+            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
+        }
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_ParseWithLength(body, len);
+    free(body);
+    if (!root || !cJSON_IsObject(root)) {
+        if (root) cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
+        return ESP_OK;
+    }
+
+    cJSON *item = cJSON_GetObjectItem(root, "giphy_refresh_allow_override");
+    if (!item || !cJSON_IsBool(item)) {
+        cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'giphy_refresh_allow_override' field\",\"code\":\"INVALID_REQUEST\"}");
+        return ESP_OK;
+    }
+
+    bool val = cJSON_IsTrue(item);
+    cJSON_Delete(root);
+
+    config_store_set_giphy_refresh_allow_override(val);
+    send_json(req, 200, "{\"ok\":true}");
+    return ESP_OK;
+}
+

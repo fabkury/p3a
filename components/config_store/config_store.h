@@ -475,6 +475,9 @@ void config_store_invalidate_giphy_cache_size(void);
  */
 void config_store_invalidate_giphy_refresh_interval(void);
 
+void config_store_set_giphy_refresh_allow_override(bool allow);
+bool config_store_get_giphy_refresh_allow_override(void);
+
 #ifdef __cplusplus
 }
 #endif

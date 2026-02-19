@@ -3,10 +3,11 @@
 
 /**
  * @file giphy_refresh.c
- * @brief Giphy channel refresh - fetches trending and merges into channel cache
+ * @brief Giphy channel refresh - fetches trending/search and merges into cache
  *
  * Called from play_scheduler_refresh.c when a Giphy channel has
- * refresh_pending = true.
+ * refresh_pending = true. Dispatches to the trending or search endpoint
+ * based on channel_id prefix.
  */
 
 #include "giphy.h"
@@ -14,6 +15,7 @@
 #include "config_store.h"
 #include "channel_cache.h"
 #include "channel_metadata.h"
+#include "sntp_sync.h"             // For sntp_sync_is_synchronized()
 #include "makapix_channel_events.h"
 #include "sd_path.h"
 #include "esp_log.h"
@@ -231,9 +233,19 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
         }
     }
 
-    // Fetch trending
+    // Dispatch to search or trending based on channel_id prefix
+    static const char search_prefix[] = "giphy_search_";
+    const size_t prefix_len = sizeof(search_prefix) - 1;
+
     size_t fetched = 0;
-    esp_err_t err = giphy_fetch_trending(entries, cache_size, &fetched);
+    esp_err_t err;
+    if (strncmp(channel_id, search_prefix, prefix_len) == 0) {
+        const char *query = channel_id + prefix_len;
+        ESP_LOGI(TAG, "Search query: %s", query);
+        err = giphy_fetch_search(query, entries, cache_size, &fetched);
+    } else {
+        err = giphy_fetch_trending(entries, cache_size, &fetched);
+    }
 
     if (s_refresh_cancel) {
         ESP_LOGI(TAG, "Refresh cancelled after fetch");
@@ -247,7 +259,7 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
         return (err != ESP_OK) ? err : ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Fetched %zu trending entries, merging into cache", fetched);
+    ESP_LOGI(TAG, "Fetched %zu entries, merging into cache", fetched);
 
     if (s_refresh_cancel) {
         ESP_LOGI(TAG, "Refresh cancelled before cache merge");
@@ -282,18 +294,26 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
     extern void download_manager_rescan(void);
     download_manager_rescan();
 
-    // Persist channel metadata (last_refresh timestamp)
-    char channels_path[128];
-    if (sd_path_get_channel(channels_path, sizeof(channels_path)) != ESP_OK) {
-        strlcpy(channels_path, "/sdcard/p3a/channel", sizeof(channels_path));
-    }
-    channel_metadata_t meta = {
-        .last_refresh = time(NULL),
-        .cursor = "",
-    };
-    esp_err_t meta_err = channel_metadata_save(channel_id, channels_path, &meta);
-    if (meta_err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to save channel metadata: %s", esp_err_to_name(meta_err));
+    // Persist channel metadata (last_refresh timestamp).
+    // Only save when the clock is synchronized -- an unsynchronized clock would
+    // write a garbage timestamp that poisons future cooldown checks. Skipping
+    // preserves the previous session's real timestamp for post-SNTP re-evaluation.
+    if (sntp_sync_is_synchronized()) {
+        char channels_path[128];
+        if (sd_path_get_channel(channels_path, sizeof(channels_path)) != ESP_OK) {
+            strlcpy(channels_path, "/sdcard/p3a/channel", sizeof(channels_path));
+        }
+        channel_metadata_t meta = {
+            .last_refresh = time(NULL),
+            .cursor = "",
+        };
+        esp_err_t meta_err = channel_metadata_save(channel_id, channels_path, &meta);
+        if (meta_err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to save channel metadata: %s", esp_err_to_name(meta_err));
+        }
+    } else {
+        ESP_LOGI(TAG, "Clock not synchronized, deferring metadata save for '%s'",
+                 channel_id);
     }
 
     ESP_LOGI(TAG, "Giphy channel '%s' refresh complete: %zu entries, %zu available",

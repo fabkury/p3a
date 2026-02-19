@@ -19,6 +19,7 @@
 #include "giphy.h"             // For giphy_refresh_channel()
 #include "config_store.h"      // For config_store_get_giphy_refresh_interval()
 #include "channel_metadata.h"  // For channel_metadata_load()
+#include "sntp_sync.h"         // For sntp_sync_is_synchronized()
 #include "sd_path.h"
 #include "p3a_state.h"   // For P3A_CHANNEL_MSG_* constants
 #include "p3a_render.h"  // For p3a_render_set_channel_message()
@@ -47,6 +48,7 @@ static const char *TAG = "ps_refresh";
 static TaskHandle_t s_refresh_task = NULL;
 static EventGroupHandle_t s_refresh_events = NULL;
 static volatile bool s_task_running = false;
+static volatile bool s_sntp_synced_observed = false;
 static time_t s_last_full_refresh_complete = 0;
 
 // PSRAM-backed stack for refresh task
@@ -293,6 +295,25 @@ static void refresh_task(void *arg)
             break;
         }
 
+        // One-shot: when SNTP first synchronizes, re-queue Giphy channels.
+        // A pre-SNTP refresh may have bypassed cooldown (check-side guard) and
+        // skipped the metadata save (save-side guard). Re-queuing lets the
+        // cooldown logic re-evaluate with a valid clock and the preserved
+        // on-disk last_refresh from the previous session.
+        if (!s_sntp_synced_observed && sntp_sync_is_synchronized()) {
+            s_sntp_synced_observed = true;
+            ESP_LOGI(TAG, "SNTP synchronized - re-evaluating Giphy channels");
+            xSemaphoreTake(state->mutex, portMAX_DELAY);
+            for (size_t i = 0; i < state->channel_count; i++) {
+                if (state->channels[i].type == PS_CHANNEL_TYPE_GIPHY &&
+                    !state->channels[i].refresh_in_progress &&
+                    !state->channels[i].refresh_pending) {
+                    state->channels[i].refresh_pending = true;
+                }
+            }
+            xSemaphoreGive(state->mutex);
+        }
+
         // Check for async Makapix refresh completions (non-blocking poll)
         if (makapix_channel_wait_for_ps_refresh_done(0)) {
             bool should_trigger = false;
@@ -414,6 +435,7 @@ static void refresh_task(void *arg)
             uint32_t interval = config_store_get_giphy_refresh_interval();
             bool allow_override = config_store_get_giphy_refresh_allow_override();
             if (!allow_override &&
+                // sntp_sync_is_synchronized() && // Giphy channels are re-checked on SNTP sync
                 cache_has_entries &&
                 giphy_meta.last_refresh > 0 && now > 0 &&
                 (now - giphy_meta.last_refresh) < (time_t)interval) {
@@ -675,6 +697,7 @@ void ps_refresh_reset_timer(void)
     // Reset the periodic refresh timer - called when a new scheduler command is executed
     // This ensures immediate refresh happens and the 1-hour timer starts fresh
     s_last_full_refresh_complete = 0;
+    s_sntp_synced_observed = false;
     ESP_LOGD(TAG, "Refresh timer reset");
 }
 

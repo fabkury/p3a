@@ -49,6 +49,27 @@ void giphy_deinit(void);
 esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
                                size_t max_entries, size_t *out_count);
 
+/**
+ * @brief Fetch GIFs matching a search query from Giphy API
+ *
+ * Paginates internally (25 per request) up to max_entries.
+ * Uses configured API key, rating, rendition, and format from config_store.
+ * Underscores in the query are converted to spaces for the API call.
+ *
+ * @param query Search query string (e.g., "pixel_art")
+ * @param out_entries Output array of entries
+ * @param max_entries Maximum number of entries to fetch
+ * @param out_count Actual number of entries fetched
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG if query is empty,
+ *         ESP_ERR_NOT_FOUND if no API key configured,
+ *         ESP_ERR_NOT_ALLOWED on invalid API key (HTTP 401/403),
+ *         ESP_ERR_INVALID_RESPONSE on rate limiting (HTTP 429),
+ *         ESP_ERR_TIMEOUT on network timeout, ESP_FAIL on other API error
+ */
+esp_err_t giphy_fetch_search(const char *query,
+                             giphy_channel_entry_t *out_entries,
+                             size_t max_entries, size_t *out_count);
+
 // ============================================================================
 // Cache / Path Helpers
 // ============================================================================
@@ -136,12 +157,16 @@ esp_err_t giphy_download_artwork(const char *giphy_id, uint8_t extension,
 // ============================================================================
 
 /**
- * @brief Refresh a Giphy channel by fetching trending and merging into cache
+ * @brief Refresh a Giphy channel by fetching GIFs and merging into cache
+ *
+ * Dispatches to the trending or search endpoint based on channel_id:
+ *   - "giphy_trending"        -> trending endpoint
+ *   - "giphy_search_{query}"  -> search endpoint with the given query
  *
  * Called from play_scheduler_refresh.c when a Giphy channel has
  * refresh_pending = true.
  *
- * @param channel_id The channel ID (e.g., "giphy_trending")
+ * @param channel_id The channel ID (e.g., "giphy_trending" or "giphy_search_cats")
  * @return ESP_OK on success, ESP_ERR_INVALID_STATE if WiFi not ready
  */
 esp_err_t giphy_refresh_channel(const char *channel_id);

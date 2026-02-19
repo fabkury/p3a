@@ -3,7 +3,7 @@
 
 /**
  * @file giphy_api.c
- * @brief Giphy API client - fetches trending GIFs via HTTP
+ * @brief Giphy API client - fetches trending and search GIFs via HTTP
  */
 
 #include "giphy.h"
@@ -112,14 +112,35 @@ static bool parse_gif_object(const cJSON *gif, giphy_channel_entry_t *out_entry,
     return true;
 }
 
-esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
-                               size_t max_entries, size_t *out_count)
+/**
+ * @brief Shared fetch implementation for both trending and search endpoints.
+ *
+ * @param query  Search query (underscores become spaces). NULL = trending.
+ */
+static esp_err_t giphy_fetch_gifs(const char *query,
+                                  giphy_channel_entry_t *out_entries,
+                                  size_t max_entries, size_t *out_count)
 {
     if (!out_entries || !out_count || max_entries == 0) {
         return ESP_ERR_INVALID_ARG;
     }
 
     *out_count = 0;
+
+    const bool is_search = (query != NULL && query[0] != '\0');
+    const char *mode_label = is_search ? "search" : "trending";
+    const int max_offset = is_search ? 4999 : 499;
+
+    // URL-encode the query: replace underscores with '+' for word boundaries.
+    // The UI sanitiser only allows [a-zA-Z0-9_], so '+' is the only encoding
+    // we need; the rest of the characters are URL-safe.
+    char encoded_query[128] = "";
+    if (is_search) {
+        strlcpy(encoded_query, query, sizeof(encoded_query));
+        for (char *p = encoded_query; *p; p++) {
+            if (*p == '_') *p = '+';
+        }
+    }
 
     // Get config values
     char api_key[128];
@@ -170,11 +191,17 @@ esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
 
         // Build URL
         char url[512];
-        snprintf(url, sizeof(url),
-                 "https://api.giphy.com/v1/gifs/trending?api_key=%s&limit=%d&offset=%d&rating=%s",
-                 api_key, page_limit, offset, rating);
+        if (is_search) {
+            snprintf(url, sizeof(url),
+                     "https://api.giphy.com/v1/gifs/search?api_key=%s&q=%s&limit=%d&offset=%d&rating=%s",
+                     api_key, encoded_query, page_limit, offset, rating);
+        } else {
+            snprintf(url, sizeof(url),
+                     "https://api.giphy.com/v1/gifs/trending?api_key=%s&limit=%d&offset=%d&rating=%s",
+                     api_key, page_limit, offset, rating);
+        }
 
-        ESP_LOGI(TAG, "Fetching trending: offset=%d, limit=%d", offset, page_limit);
+        ESP_LOGI(TAG, "Fetching %s: offset=%d, limit=%d", mode_label, offset, page_limit);
 
         // Configure HTTP client
         esp_http_client_config_t config = {
@@ -205,7 +232,6 @@ esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
 
         if (status != 200) {
             ESP_LOGE(TAG, "Giphy API returned status %d", status);
-            // Debug: read and log error response body
             char err_buf[256];
             int err_read = esp_http_client_read(client, err_buf, sizeof(err_buf) - 1);
             if (err_read > 0) {
@@ -259,7 +285,6 @@ esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
         cJSON *root = cJSON_Parse(response_buf);
         if (!root) {
             ESP_LOGE(TAG, "Failed to parse Giphy JSON response (%d bytes)", total_read);
-            // Log first 200 chars for debugging
             char snippet[201];
             int snip_len = total_read < 200 ? total_read : 200;
             memcpy(snippet, response_buf, snip_len);
@@ -277,9 +302,8 @@ esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
 
         int array_size = cJSON_GetArraySize(data);
         if (array_size == 0) {
-            ESP_LOGI(TAG, "No more trending results at offset %d", offset);
+            ESP_LOGI(TAG, "No more %s results at offset %d", mode_label, offset);
 
-            // Debug: log meta object if present
             const cJSON *meta = cJSON_GetObjectItem(root, "meta");
             if (cJSON_IsObject(meta)) {
                 const cJSON *meta_status = cJSON_GetObjectItem(meta, "status");
@@ -310,7 +334,7 @@ esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
         const cJSON *pagination = cJSON_GetObjectItem(root, "pagination");
         if (cJSON_IsObject(pagination)) {
             const cJSON *tc = cJSON_GetObjectItem(pagination, "total_count");
-            (void)tc;  // total_count available for future use
+            (void)tc;
         }
 
         cJSON_Delete(root);
@@ -318,8 +342,7 @@ esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
         // Move to next page
         offset += array_size;
 
-        // Stop if we've reached the end of results or API offset limit
-        if (array_size < page_limit || offset >= 499) {
+        if (array_size < page_limit || offset >= max_offset) {
             break;
         }
 
@@ -330,6 +353,23 @@ esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
     free(response_buf);
     *out_count = total_fetched;
 
-    ESP_LOGI(TAG, "Trending fetch complete: %zu entries", total_fetched);
+    ESP_LOGI(TAG, "Giphy %s fetch complete: %zu entries", mode_label, total_fetched);
     return (total_fetched > 0) ? ESP_OK : ESP_FAIL;
+}
+
+esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
+                               size_t max_entries, size_t *out_count)
+{
+    return giphy_fetch_gifs(NULL, out_entries, max_entries, out_count);
+}
+
+esp_err_t giphy_fetch_search(const char *query,
+                             giphy_channel_entry_t *out_entries,
+                             size_t max_entries, size_t *out_count)
+{
+    if (!query || query[0] == '\0') {
+        ESP_LOGE(TAG, "giphy_fetch_search called with empty query");
+        return ESP_ERR_INVALID_ARG;
+    }
+    return giphy_fetch_gifs(query, out_entries, max_entries, out_count);
 }

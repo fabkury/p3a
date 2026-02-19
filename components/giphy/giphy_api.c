@@ -3,7 +3,7 @@
 
 /**
  * @file giphy_api.c
- * @brief Giphy API client - fetches trending GIFs via HTTP
+ * @brief Giphy API client - fetches trending and search GIFs via HTTP
  */
 
 #include "giphy.h"
@@ -104,9 +104,33 @@ static bool parse_gif_object(const cJSON *gif, giphy_channel_entry_t *out_entry,
     return true;
 }
 
-esp_err_t giphy_fetch_trending_page(giphy_fetch_ctx_t *ctx, int offset,
-                                    giphy_channel_entry_t *out_entries,
-                                    size_t *out_count, bool *out_has_more)
+/**
+ * @brief URL-encode a string (RFC 3986)
+ *
+ * Unreserved characters (A-Z, a-z, 0-9, '-', '_', '.', '~') pass through;
+ * everything else is percent-encoded.
+ */
+static void url_encode(const char *in, char *out, size_t out_len)
+{
+    static const char *hex = "0123456789ABCDEF";
+    size_t o = 0;
+    for (size_t i = 0; in[i] && o + 3 < out_len; i++) {
+        unsigned char c = (unsigned char)in[i];
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') {
+            out[o++] = c;
+        } else {
+            out[o++] = '%';
+            out[o++] = hex[c >> 4];
+            out[o++] = hex[c & 0xF];
+        }
+    }
+    out[o] = '\0';
+}
+
+esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
+                           giphy_channel_entry_t *out_entries,
+                           size_t *out_count, bool *out_has_more)
 {
     if (!ctx || !out_entries || !out_count || !out_has_more) {
         return ESP_ERR_INVALID_ARG;
@@ -115,13 +139,23 @@ esp_err_t giphy_fetch_trending_page(giphy_fetch_ctx_t *ctx, int offset,
     *out_count = 0;
     *out_has_more = false;
 
+    bool is_search = (ctx->query[0] != '\0');
+
     // Build URL
     char url[512];
-    snprintf(url, sizeof(url),
-             "https://api.giphy.com/v1/gifs/trending?api_key=%s&limit=%d&offset=%d&rating=%s",
-             ctx->api_key, GIPHY_PAGE_LIMIT, offset, ctx->rating);
-
-    ESP_LOGI(TAG, "Fetching trending: offset=%d, limit=%d", offset, GIPHY_PAGE_LIMIT);
+    if (is_search) {
+        char encoded_query[192];
+        url_encode(ctx->query, encoded_query, sizeof(encoded_query));
+        snprintf(url, sizeof(url),
+                 "https://api.giphy.com/v1/gifs/search?api_key=%s&q=%s&limit=%d&offset=%d&rating=%s",
+                 ctx->api_key, encoded_query, GIPHY_PAGE_LIMIT, offset, ctx->rating);
+        ESP_LOGI(TAG, "Fetching search q=\"%s\": offset=%d, limit=%d", ctx->query, offset, GIPHY_PAGE_LIMIT);
+    } else {
+        snprintf(url, sizeof(url),
+                 "https://api.giphy.com/v1/gifs/trending?api_key=%s&limit=%d&offset=%d&rating=%s",
+                 ctx->api_key, GIPHY_PAGE_LIMIT, offset, ctx->rating);
+        ESP_LOGI(TAG, "Fetching trending: offset=%d, limit=%d", offset, GIPHY_PAGE_LIMIT);
+    }
 
     // Configure HTTP client
     esp_http_client_config_t config = {
@@ -214,7 +248,7 @@ esp_err_t giphy_fetch_trending_page(giphy_fetch_ctx_t *ctx, int offset,
 
     int array_size = cJSON_GetArraySize(data);
     if (array_size == 0) {
-        ESP_LOGI(TAG, "No more trending results at offset %d", offset);
+        ESP_LOGI(TAG, "No more results at offset %d", offset);
         cJSON_Delete(root);
         return ESP_OK;  // Success, but 0 entries — caller sees *out_count == 0
     }
@@ -233,6 +267,9 @@ esp_err_t giphy_fetch_trending_page(giphy_fetch_ctx_t *ctx, int offset,
     cJSON_Delete(root);
 
     *out_count = parsed;
+    // Cap at 499 for both trending and search to prevent API key exhaustion.
+    // The search endpoint supports up to 4999, but we intentionally use the
+    // same conservative limit as trending.
     *out_has_more = (array_size >= GIPHY_PAGE_LIMIT && (offset + array_size) < 499);
 
     return ESP_OK;

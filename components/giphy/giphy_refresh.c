@@ -251,6 +251,20 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
         strlcpy(ctx.rating, "pg-13", sizeof(ctx.rating));
     }
 
+    // Parse channel_id to determine trending vs search mode.
+    // Channel IDs: "giphy_trending" → trending, "giphy_search_cats" → search "cats"
+    const char *after_prefix = channel_id + 6;  // skip "giphy_"
+    if (strncmp(after_prefix, "search_", 7) == 0 && after_prefix[7] != '\0') {
+        strlcpy(ctx.query, after_prefix + 7, sizeof(ctx.query));
+        // Convert underscores back to spaces (channel ID encoding)
+        for (char *p = ctx.query; *p; p++) {
+            if (*p == '_') *p = ' ';
+        }
+        ESP_LOGI(TAG, "Search mode: q=\"%s\"", ctx.query);
+    } else {
+        ctx.query[0] = '\0';  // trending mode
+    }
+
     // Allocate response buffer in PSRAM (shared across all pages)
     ctx.response_buf_size = GIPHY_RESPONSE_BUF_SIZE;
     ctx.response_buf = heap_caps_malloc(ctx.response_buf_size, MALLOC_CAP_SPIRAM);
@@ -286,7 +300,7 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
 
         size_t page_count = 0;
         bool has_more = false;
-        esp_err_t err = giphy_fetch_trending_page(&ctx, offset, page_entries,
+        esp_err_t err = giphy_fetch_page(&ctx, offset, page_entries,
                                                   &page_count, &has_more);
 
         // Check cancellation after fetch

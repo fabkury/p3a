@@ -43,12 +43,16 @@ typedef struct {
     char rendition[32];
     char format[8];
     char rating[8];
+    char query[64];             ///< Search query (empty = trending, non-empty = search)
     char *response_buf;         ///< Caller-allocated buffer (PSRAM recommended)
     size_t response_buf_size;   ///< Size of response_buf in bytes
 } giphy_fetch_ctx_t;
 
 /**
- * @brief Fetch a single page of trending GIFs from Giphy API
+ * @brief Fetch a single page of GIFs from Giphy API (trending or search)
+ *
+ * When ctx->query is empty, fetches from /v1/gifs/trending.
+ * When ctx->query is non-empty, fetches from /v1/gifs/search with that query.
  *
  * Builds the request URL, performs the HTTP GET, parses the JSON response,
  * and fills the output array with up to 25 entries. The caller is responsible
@@ -62,9 +66,9 @@ typedef struct {
  * @return ESP_OK on success, ESP_ERR_NOT_ALLOWED on HTTP 401/403,
  *         ESP_ERR_INVALID_RESPONSE on HTTP 429, ESP_FAIL on other errors
  */
-esp_err_t giphy_fetch_trending_page(giphy_fetch_ctx_t *ctx, int offset,
-                                    giphy_channel_entry_t *out_entries,
-                                    size_t *out_count, bool *out_has_more);
+esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
+                           giphy_channel_entry_t *out_entries,
+                           size_t *out_count, bool *out_has_more);
 
 // ============================================================================
 // Cache / Path Helpers

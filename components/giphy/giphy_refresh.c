@@ -274,11 +274,13 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
     size_t total_fetched = 0;
     int offset = 0;
     esp_err_t last_err = ESP_OK;
+    bool refresh_completed = true;  // set false on cancel or error
 
     while ((size_t)offset < cache_size) {
         // Check cancellation before fetching
         if (s_refresh_cancel) {
             ESP_LOGI(TAG, "Refresh cancelled before page fetch (offset=%d)", offset);
+            refresh_completed = false;
             break;
         }
 
@@ -290,12 +292,14 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
         // Check cancellation after fetch
         if (s_refresh_cancel) {
             ESP_LOGI(TAG, "Refresh cancelled after page fetch (offset=%d)", offset);
+            refresh_completed = false;
             break;
         }
 
         if (err != ESP_OK) {
             ESP_LOGW(TAG, "Page fetch failed at offset=%d: %s", offset, esp_err_to_name(err));
             last_err = err;
+            refresh_completed = false;
             break;
         }
 
@@ -308,6 +312,7 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
         esp_err_t merge_err = giphy_merge_entries(cache, page_entries, page_count, cache_size);
         if (merge_err != ESP_OK) {
             ESP_LOGW(TAG, "Merge failed at offset=%d: %s", offset, esp_err_to_name(merge_err));
+            refresh_completed = false;
             break;
         }
 
@@ -329,22 +334,27 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
 
     free(ctx.response_buf);
 
-    // Persist channel metadata (last_refresh timestamp)
-    char channels_path[128];
-    if (sd_path_get_channel(channels_path, sizeof(channels_path)) != ESP_OK) {
-        strlcpy(channels_path, "/sdcard/p3a/channel", sizeof(channels_path));
-    }
-    channel_metadata_t meta = {
-        .last_refresh = time(NULL),
-        .cursor = "",
-    };
-    esp_err_t meta_err = channel_metadata_save(channel_id, channels_path, &meta);
-    if (meta_err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to save channel metadata: %s", esp_err_to_name(meta_err));
+    // Only persist last_refresh timestamp when the refresh ran to completion.
+    // Cancelled or failed refreshes must not update the timestamp, otherwise
+    // the next refresh attempt will consider the channel "still fresh".
+    if (refresh_completed) {
+        char channels_path[128];
+        if (sd_path_get_channel(channels_path, sizeof(channels_path)) != ESP_OK) {
+            strlcpy(channels_path, "/sdcard/p3a/channel", sizeof(channels_path));
+        }
+        channel_metadata_t meta = {
+            .last_refresh = time(NULL),
+            .cursor = "",
+        };
+        esp_err_t meta_err = channel_metadata_save(channel_id, channels_path, &meta);
+        if (meta_err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to save channel metadata: %s", esp_err_to_name(meta_err));
+        }
     }
 
-    ESP_LOGI(TAG, "Giphy channel '%s' refresh complete: %zu fetched, %zu in cache",
-             channel_id, total_fetched, cache->entry_count);
+    ESP_LOGI(TAG, "Giphy channel '%s' refresh %s: %zu fetched, %zu in cache",
+             channel_id, refresh_completed ? "complete" : "incomplete",
+             total_fetched, cache->entry_count);
 
     if (total_fetched > 0) return ESP_OK;
     // Propagate specific error (e.g. ESP_ERR_NOT_ALLOWED for invalid API key)

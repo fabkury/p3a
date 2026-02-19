@@ -134,22 +134,6 @@ body {
     color: white;
     box-shadow: 0 6px 16px rgba(102,126,234,0.4);
 }
-.channel-btn.selected .cache-badge {
-    color: rgba(255,255,255,0.9);
-    background: rgba(255,255,255,0.2);
-}
-.cache-badge {
-    display: inline-block;
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: #666;
-    background: rgba(0,0,0,0.08);
-    padding: 2px 6px;
-    border-radius: 8px;
-    margin-left: 4px;
-    vertical-align: middle;
-}
-.cache-badge:empty { display: none; }
 .footer {
     width: min(420px, 100%);
     padding: 8px 0 4px;
@@ -376,11 +360,11 @@ body {
 </div>
 <div class="controls" style="margin-top: 0;">
     <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
-        <button class="channel-btn" id="ch-channel_recent" onclick="playPlayset('channel_recent')">Recent Artworks <span id="cache-all" class="cache-badge"></span></button>
-        <button class="channel-btn" id="ch-channel_promoted" onclick="playPlayset('channel_promoted')">Promoted <span id="cache-promoted" class="cache-badge"></span></button>
+        <button class="channel-btn" id="ch-channel_recent" onclick="playPlayset('channel_recent')">Recent Artworks</button>
+        <button class="channel-btn" id="ch-channel_promoted" onclick="playPlayset('channel_promoted')">Promoted</button>
         <button class="channel-btn" id="ch-followed_artists" onclick="playPlayset('followed_artists')">Followed Artists</button>
         <button class="channel-btn" id="ch-channel_sdcard" onclick="playPlayset('channel_sdcard')">SD Card</button>
-        <button class="channel-btn" id="ch-giphy_trending" onclick="playPlayset('giphy_trending')">Giphy Trending <span id="cache-giphy-trending" class="cache-badge"></span></button>
+        <button class="channel-btn" id="ch-giphy_trending" onclick="playPlayset('giphy_trending')">Giphy Trending</button>
     </div>
     <div class="shuffle-row">
         <span class="shuffle-label">Shuffle</span>
@@ -450,14 +434,7 @@ fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
     }
     // Channel stats
     if (data.channel_stats) {
-        var s = data.channel_stats;
-        var allEl = document.getElementById('cache-all');
-        var promEl = document.getElementById('cache-promoted');
-        var giphyEl = document.getElementById('cache-giphy-trending');
-        var registered = s.registered === true;
-        if (allEl && s.all) allEl.textContent = s.all.cached + '/' + s.all.total;
-        if (promEl && s.promoted) promEl.textContent = s.promoted.cached + '/' + s.promoted.total;
-        if (giphyEl && s.giphy_trending) giphyEl.textContent = s.giphy_trending.cached + '/' + s.giphy_trending.total;
+        var registered = data.channel_stats.registered === true;
         var recentBtn = document.getElementById('ch-channel_recent');
         var promBtn = document.getElementById('ch-channel_promoted');
         var followedBtn = document.getElementById('ch-followed_artists');
@@ -873,14 +850,14 @@ function checkForUpdates() {
         }
     }).catch(function(e) { console.log('Update check failed:', e); });
 }
-function loadChannelStats(attempt) {
+function pollActivePlayset(attempt) {
     attempt = attempt || 0;
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/channels/stats', true);
+    xhr.open('GET', '/playsets/active', true);
     xhr.timeout = 5000;
     function retry() {
         if (attempt < 2) {
-            setTimeout(function() { loadChannelStats(attempt + 1); }, 500);
+            setTimeout(function() { pollActivePlayset(attempt + 1); }, 500);
         }
     }
     xhr.onerror = retry;
@@ -891,27 +868,19 @@ function loadChannelStats(attempt) {
         try {
             var resp = JSON.parse(xhr.responseText);
             if (resp.ok && resp.data) {
-                var allEl = document.getElementById('cache-all');
-                var promEl = document.getElementById('cache-promoted');
-                var giphyEl = document.getElementById('cache-giphy-trending');
+                var registered = resp.data.registered === true;
                 var recentBtn = document.getElementById('ch-channel_recent');
                 var promBtn = document.getElementById('ch-channel_promoted');
                 var followedBtn = document.getElementById('ch-followed_artists');
-                var registered = resp.data.registered === true;
-                if (allEl && resp.data.all) {
-                    allEl.textContent = resp.data.all.cached + '/' + resp.data.all.total;
-                }
-                if (promEl && resp.data.promoted) {
-                    promEl.textContent = resp.data.promoted.cached + '/' + resp.data.promoted.total;
-                }
-                if (giphyEl && resp.data.giphy_trending) {
-                    giphyEl.textContent = resp.data.giphy_trending.cached + '/' + resp.data.giphy_trending.total;
-                }
                 if (recentBtn) recentBtn.disabled = !registered;
                 if (promBtn) promBtn.disabled = !registered;
                 if (followedBtn) followedBtn.disabled = !registered;
+                if (resp.data.name && resp.data.playset_info) {
+                    updatePlaysetInfo(resp.data.name, resp.data.playset_info);
+                    updateSelectedChannel(resp.data.name);
+                }
             }
-        } catch (e) { console.log('Channel stats parse error:', e); retry(); }
+        } catch (e) { console.log('Playset poll parse error:', e); retry(); }
     };
     xhr.send();
 }
@@ -1018,7 +987,7 @@ function loadPlayOrder() {
     xhr.send();
 }
 checkForUpdates();
-setInterval(loadChannelStats, 5000);
+setInterval(pollActivePlayset, 5000);
 </script>
 </body>
 </html>

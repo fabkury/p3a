@@ -446,7 +446,7 @@ static void refresh_task(void *arg)
                     config_store_set_giphy_refresh_allow_override(false);
                 } else if (err == ESP_ERR_NOT_ALLOWED) {
                     // Check if this is a cancellation (from giphy_cancel_refresh)
-                    // vs an invalid API key (HTTP 401/403 from giphy_fetch_trending)
+                    // vs an invalid API key (HTTP 401/403 from giphy_fetch_trending_page)
                     if (giphy_is_refresh_cancelled()) {
                         ESP_LOGI(TAG, "Giphy channel '%s' refresh cancelled", channel_id);
                     } else {

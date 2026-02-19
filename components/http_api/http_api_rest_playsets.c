@@ -17,6 +17,7 @@
 #include "http_api_internal.h"
 #include "makapix_api.h"
 #include "makapix_mqtt.h"
+#include "makapix_store.h"
 #include "play_scheduler.h"
 #include "playset_store.h"
 #include "playset_json.h"
@@ -215,6 +216,17 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
 
     cJSON *data = cJSON_AddObjectToObject(root, "data");
     cJSON_AddStringToObject(data, "name", playset ? playset : "");
+    cJSON_AddBoolToObject(data, "registered", makapix_store_has_player_key());
+
+    ps_stats_t ps_stats;
+    if (play_scheduler_get_stats(&ps_stats) == ESP_OK) {
+        cJSON *pi = cJSON_AddObjectToObject(data, "playset_info");
+        cJSON_AddNumberToObject(pi, "channel_count", (double)ps_stats.channel_count);
+        cJSON_AddNumberToObject(pi, "total_cached", (double)ps_stats.total_available);
+        cJSON_AddNumberToObject(pi, "total_entries", (double)ps_stats.total_entries);
+        cJSON_AddStringToObject(pi, "exposure_mode", exposure_mode_str(ps_stats.exposure_mode));
+        cJSON_AddStringToObject(pi, "pick_mode", pick_mode_str(ps_stats.pick_mode));
+    }
 
     char *out = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);

@@ -437,8 +437,13 @@ esp_err_t makapix_connect_if_registered(void)
                 }
             }
         }
+        // Start watchdog even on initial failure — it will re-spawn reconnect task if needed
+        makapix_reconnect_watchdog_start();
         return err;
     }
+
+    // Start reconnect watchdog as safety net for future disconnections
+    makapix_reconnect_watchdog_start();
 
     return ESP_OK;
 }

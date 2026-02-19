@@ -141,3 +141,11 @@ void makapix_status_publish_task(void *pvParameters);
  */
 void makapix_channel_switch_task(void *pvParameters);
 
+/**
+ * @brief Start the reconnect watchdog timer
+ *
+ * Periodically checks if the reconnect task needs re-spawning when
+ * MQTT is disconnected. Safe to call multiple times (idempotent).
+ */
+void makapix_reconnect_watchdog_start(void);
+

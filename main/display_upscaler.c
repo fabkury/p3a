@@ -17,185 +17,6 @@
 #define DISPLAY_UPSCALE_SINGLE_WORKER 0
 
 // ============================================================================
-// Row-based RGBA blit implementation
-// ============================================================================
-
-static void blit_upscaled_rows_rgba(const uint8_t *src_rgba, int src_w, int src_h,
-                                    uint8_t *dst_buffer, int dst_w, int dst_h,
-                                    int row_start, int row_end,
-                                    int offset_x, int offset_y, int scaled_w, int scaled_h,
-                                    const uint16_t *lookup_x, const uint16_t *lookup_y,
-                                    display_rotation_t rotation)
-{
-    if (!src_rgba || !dst_buffer || src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0) {
-        return;
-    }
-
-    if (row_start < 0) row_start = 0;
-    if (row_end > dst_h) row_end = dst_h;
-    if (row_start >= row_end) return;
-
-    if (!lookup_x || !lookup_y) {
-        ESP_LOGE(DISPLAY_TAG, "Upscale lookup tables not initialized");
-        return;
-    }
-
-    const uint32_t *src_rgba32 = (const uint32_t *)src_rgba;
-
-    // Row duplication optimization: detect runs of consecutive dst rows that map to the same source.
-    const uint16_t *run_lookup = (rotation == DISPLAY_ROTATION_90 || rotation == DISPLAY_ROTATION_270)
-                                  ? lookup_x : lookup_y;
-    uint16_t prev_run_key = UINT16_MAX;
-    uint8_t *last_rendered_row = NULL;
-
-    for (int dst_y = row_start; dst_y < row_end; ++dst_y) {
-        if (scaled_w <= 0 || scaled_h <= 0) {
-            continue;
-        }
-        if (dst_y < offset_y || dst_y >= (offset_y + scaled_h)) {
-            continue;
-        }
-        const int local_y = dst_y - offset_y;
-
-        uint8_t *dst_row_bytes = dst_buffer + (size_t)dst_y * g_display_row_stride;
-
-        const uint16_t run_key = run_lookup[local_y];
-        if (run_key == prev_run_key && last_rendered_row != NULL) {
-            memcpy(dst_row_bytes, last_rendered_row, g_display_row_stride);
-            continue;
-        }
-        prev_run_key = run_key;
-        last_rendered_row = dst_row_bytes;
-
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-        uint16_t *dst_row = (uint16_t *)dst_row_bytes;
-#else
-        uint8_t *dst_row = dst_row_bytes;
-#endif
-
-        switch (rotation) {
-            case DISPLAY_ROTATION_0: {
-                const uint16_t src_y = lookup_y[local_y];
-                const uint32_t *src_row32 = src_rgba32 + (size_t)src_y * src_w;
-                // Optimization: cache source pixel when src_x doesn't change (helps high upscale ratios)
-                uint16_t prev_src_x = UINT16_MAX;
-                uint8_t cached_r = 0, cached_g = 0, cached_b = 0;
-                for (int dst_x = offset_x; dst_x < (offset_x + scaled_w); ++dst_x) {
-                    const int local_x = dst_x - offset_x;
-                    const uint16_t src_x = lookup_x[local_x];
-                    if (src_x != prev_src_x) {
-                        const uint32_t rgba = src_row32[src_x];
-                        cached_r = rgba & 0xFF;
-                        cached_g = (rgba >> 8) & 0xFF;
-                        cached_b = (rgba >> 16) & 0xFF;
-                        prev_src_x = src_x;
-                    }
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(cached_r, cached_g, cached_b);
-#else
-                    const size_t idx = (size_t)dst_x * 3U;
-                    dst_row[idx + 0] = cached_b;
-                    dst_row[idx + 1] = cached_g;
-                    dst_row[idx + 2] = cached_r;
-#endif
-                }
-                break;
-            }
-            
-            case DISPLAY_ROTATION_90: {
-                const uint16_t src_x_fixed = lookup_x[local_y];
-                for (int dst_x = offset_x; dst_x < (offset_x + scaled_w); ++dst_x) {
-                    const int local_x = dst_x - offset_x;
-                    const uint16_t raw_src_y = lookup_y[local_x];
-                    const uint16_t src_y = (src_h - 1) - raw_src_y;
-                    const uint32_t rgba = src_rgba32[(size_t)src_y * src_w + src_x_fixed];
-                    const uint8_t r = rgba & 0xFF;
-                    const uint8_t g = (rgba >> 8) & 0xFF;
-                    const uint8_t b = (rgba >> 16) & 0xFF;
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(r, g, b);
-#else
-                    const size_t idx = (size_t)dst_x * 3U;
-                    dst_row[idx + 0] = b;
-                    dst_row[idx + 1] = g;
-                    dst_row[idx + 2] = r;
-#endif
-                }
-                break;
-            }
-            
-            case DISPLAY_ROTATION_180: {
-                const uint16_t raw_src_y = lookup_y[local_y];
-                const uint16_t src_y = (src_h - 1) - raw_src_y;
-                const uint32_t *src_row32 = src_rgba32 + (size_t)src_y * src_w;
-                for (int dst_x = offset_x; dst_x < (offset_x + scaled_w); ++dst_x) {
-                    const int local_x = dst_x - offset_x;
-                    const uint16_t raw_src_x = lookup_x[local_x];
-                    const uint16_t src_x = (src_w - 1) - raw_src_x;
-                    const uint32_t rgba = src_row32[src_x];
-                    const uint8_t r = rgba & 0xFF;
-                    const uint8_t g = (rgba >> 8) & 0xFF;
-                    const uint8_t b = (rgba >> 16) & 0xFF;
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(r, g, b);
-#else
-                    const size_t idx = (size_t)dst_x * 3U;
-                    dst_row[idx + 0] = b;
-                    dst_row[idx + 1] = g;
-                    dst_row[idx + 2] = r;
-#endif
-                }
-                break;
-            }
-            
-            case DISPLAY_ROTATION_270: {
-                const uint16_t raw_src_x = lookup_x[local_y];
-                const uint16_t src_x_fixed = (src_w - 1) - raw_src_x;
-                for (int dst_x = offset_x; dst_x < (offset_x + scaled_w); ++dst_x) {
-                    const int local_x = dst_x - offset_x;
-                    const uint16_t src_y = lookup_y[local_x];
-                    const uint32_t rgba = src_rgba32[(size_t)src_y * src_w + src_x_fixed];
-                    const uint8_t r = rgba & 0xFF;
-                    const uint8_t g = (rgba >> 8) & 0xFF;
-                    const uint8_t b = (rgba >> 16) & 0xFF;
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(r, g, b);
-#else
-                    const size_t idx = (size_t)dst_x * 3U;
-                    dst_row[idx + 0] = b;
-                    dst_row[idx + 1] = g;
-                    dst_row[idx + 2] = r;
-#endif
-                }
-                break;
-            }
-            
-            default: {
-                const uint16_t src_y = lookup_y[local_y];
-                const uint32_t *src_row32 = src_rgba32 + (size_t)src_y * src_w;
-                for (int dst_x = offset_x; dst_x < (offset_x + scaled_w); ++dst_x) {
-                    const int local_x = dst_x - offset_x;
-                    const uint16_t src_x = lookup_x[local_x];
-                    const uint32_t rgba = src_row32[src_x];
-                    const uint8_t r = rgba & 0xFF;
-                    const uint8_t g = (rgba >> 8) & 0xFF;
-                    const uint8_t b = (rgba >> 16) & 0xFF;
-#if CONFIG_LCD_PIXEL_FORMAT_RGB565
-                    dst_row[dst_x] = rgb565(r, g, b);
-#else
-                    const size_t idx = (size_t)dst_x * 3U;
-                    dst_row[idx + 0] = b;
-                    dst_row[idx + 1] = g;
-                    dst_row[idx + 2] = r;
-#endif
-                }
-                break;
-            }
-        }
-    }
-}
-
-// ============================================================================
 // Row-based RGB blit implementation
 // ============================================================================
 
@@ -522,27 +343,15 @@ void display_upscale_worker_top_task(void *arg)
 
         if (g_upscale_src_buffer && g_upscale_dst_buffer &&
             g_upscale_row_start_top < g_upscale_row_end_top) {
-            if (g_upscale_src_bpp == 3) {
-                blit_upscaled_rows_rgb(g_upscale_src_buffer,
-                                       g_upscale_src_w, g_upscale_src_h,
-                                       g_upscale_dst_buffer,
-                                       EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
-                                       g_upscale_row_start_top, g_upscale_row_end_top,
-                                       g_upscale_offset_x, g_upscale_offset_y,
-                                       g_upscale_scaled_w, g_upscale_scaled_h,
-                                       g_upscale_lookup_x, g_upscale_lookup_y,
-                                       g_upscale_rotation);
-            } else {
-                blit_upscaled_rows_rgba(g_upscale_src_buffer,
-                                        g_upscale_src_w, g_upscale_src_h,
-                                        g_upscale_dst_buffer,
-                                        EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
-                                        g_upscale_row_start_top, g_upscale_row_end_top,
-                                        g_upscale_offset_x, g_upscale_offset_y,
-                                        g_upscale_scaled_w, g_upscale_scaled_h,
-                                        g_upscale_lookup_x, g_upscale_lookup_y,
-                                        g_upscale_rotation);
-            }
+            blit_upscaled_rows_rgb(g_upscale_src_buffer,
+                                   g_upscale_src_w, g_upscale_src_h,
+                                   g_upscale_dst_buffer,
+                                   EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
+                                   g_upscale_row_start_top, g_upscale_row_end_top,
+                                   g_upscale_offset_x, g_upscale_offset_y,
+                                   g_upscale_scaled_w, g_upscale_scaled_h,
+                                   g_upscale_lookup_x, g_upscale_lookup_y,
+                                   g_upscale_rotation);
             if (g_upscale_has_borders) {
                 fill_borders_rows(g_upscale_dst_buffer,
                                   EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
@@ -583,27 +392,15 @@ void display_upscale_worker_bottom_task(void *arg)
 
         if (g_upscale_src_buffer && g_upscale_dst_buffer &&
             g_upscale_row_start_bottom < g_upscale_row_end_bottom) {
-            if (g_upscale_src_bpp == 3) {
-                blit_upscaled_rows_rgb(g_upscale_src_buffer,
-                                       g_upscale_src_w, g_upscale_src_h,
-                                       g_upscale_dst_buffer,
-                                       EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
-                                       g_upscale_row_start_bottom, g_upscale_row_end_bottom,
-                                       g_upscale_offset_x, g_upscale_offset_y,
-                                       g_upscale_scaled_w, g_upscale_scaled_h,
-                                       g_upscale_lookup_x, g_upscale_lookup_y,
-                                       g_upscale_rotation);
-            } else {
-                blit_upscaled_rows_rgba(g_upscale_src_buffer,
-                                        g_upscale_src_w, g_upscale_src_h,
-                                        g_upscale_dst_buffer,
-                                        EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
-                                        g_upscale_row_start_bottom, g_upscale_row_end_bottom,
-                                        g_upscale_offset_x, g_upscale_offset_y,
-                                        g_upscale_scaled_w, g_upscale_scaled_h,
-                                        g_upscale_lookup_x, g_upscale_lookup_y,
-                                        g_upscale_rotation);
-            }
+            blit_upscaled_rows_rgb(g_upscale_src_buffer,
+                                   g_upscale_src_w, g_upscale_src_h,
+                                   g_upscale_dst_buffer,
+                                   EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
+                                   g_upscale_row_start_bottom, g_upscale_row_end_bottom,
+                                   g_upscale_offset_x, g_upscale_offset_y,
+                                   g_upscale_scaled_w, g_upscale_scaled_h,
+                                   g_upscale_lookup_x, g_upscale_lookup_y,
+                                   g_upscale_rotation);
             if (g_upscale_has_borders) {
                 fill_borders_rows(g_upscale_dst_buffer,
                                   EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
@@ -634,98 +431,6 @@ void display_upscale_worker_bottom_task(void *arg)
 // ============================================================================
 // Public parallel upscale API
 // ============================================================================
-
-void display_renderer_parallel_upscale(const uint8_t *src_rgba, int src_w, int src_h,
-                                       uint8_t *dst_buffer,
-                                       const uint16_t *lookup_x, const uint16_t *lookup_y,
-                                       int offset_x, int offset_y, int scaled_w, int scaled_h,
-                                       bool has_borders,
-                                       display_rotation_t rotation)
-{
-    const int dst_h = EXAMPLE_LCD_V_RES;
-    const int dst_w = EXAMPLE_LCD_H_RES;
-
-    if (!src_rgba || !dst_buffer || !lookup_x || !lookup_y) {
-        ESP_LOGE(DISPLAY_TAG, "Upscale: NULL pointer (src=%p dst=%p lx=%p ly=%p)",
-                 src_rgba, dst_buffer, lookup_x, lookup_y);
-        return;
-    }
-    if (display_renderer_ensure_upscale_workers() != ESP_OK) {
-        ESP_LOGE(DISPLAY_TAG, "Upscale: failed to start worker tasks");
-        return;
-    }
-    if (src_w <= 0 || src_h <= 0 || scaled_w <= 0 || scaled_h <= 0) {
-        ESP_LOGE(DISPLAY_TAG, "Upscale: Invalid dimensions (src %dx%d, scaled %dx%d)",
-                 src_w, src_h, scaled_w, scaled_h);
-        return;
-    }
-    if (offset_x < 0 || offset_y < 0 || offset_x + scaled_w > dst_w || offset_y + scaled_h > dst_h) {
-        ESP_LOGE(DISPLAY_TAG, "Upscale: Offset/scaled out of bounds (offset %d,%d scaled %dx%d dst %dx%d)",
-                 offset_x, offset_y, scaled_w, scaled_h, dst_w, dst_h);
-        return;
-    }
-
-#if !DISPLAY_UPSCALE_SINGLE_WORKER
-    const int mid_row = dst_h / 2;
-#endif
-
-    g_upscale_src_buffer = src_rgba;
-    g_upscale_src_bpp = 4;
-    g_upscale_dst_buffer = dst_buffer;
-    g_upscale_lookup_x = lookup_x;
-    g_upscale_lookup_y = lookup_y;
-    g_upscale_src_w = src_w;
-    g_upscale_src_h = src_h;
-    g_upscale_rotation = rotation;
-    g_upscale_offset_x = offset_x;
-    g_upscale_offset_y = offset_y;
-    g_upscale_scaled_w = scaled_w;
-    g_upscale_scaled_h = scaled_h;
-    g_upscale_has_borders = has_borders;
-    config_store_get_background_color(&g_upscale_bg_r, &g_upscale_bg_g, &g_upscale_bg_b);
-    g_upscale_bg_rgb565 = rgb565(g_upscale_bg_r, g_upscale_bg_g, g_upscale_bg_b);
-    g_upscale_main_task = xTaskGetCurrentTaskHandle();
-
-    g_upscale_worker_top_done = false;
-    g_upscale_worker_bottom_done = false;
-
-#if DISPLAY_UPSCALE_SINGLE_WORKER
-    g_upscale_row_start_top = 0;
-    g_upscale_row_end_top = dst_h;
-    g_upscale_row_start_bottom = dst_h;
-    g_upscale_row_end_bottom = dst_h;
-#else
-    g_upscale_row_start_top = 0;
-    g_upscale_row_end_top = mid_row;
-    g_upscale_row_start_bottom = mid_row;
-    g_upscale_row_end_bottom = dst_h;
-#endif
-
-    DISPLAY_MEMORY_BARRIER();
-
-    if (g_upscale_worker_top && g_upscale_worker_bottom) {
-        xTaskNotify(g_upscale_worker_top, 1, eSetBits);
-        xTaskNotify(g_upscale_worker_bottom, 1, eSetBits);
-    }
-
-    const uint32_t all_bits = (1UL << 0) | (1UL << 1);
-    uint32_t notification_value = 0;
-
-    while ((notification_value & all_bits) != all_bits) {
-        uint32_t received_bits = 0;
-        if (xTaskNotifyWait(0, UINT32_MAX, &received_bits, pdMS_TO_TICKS(50)) == pdTRUE) {
-            notification_value |= received_bits;
-        } else {
-            taskYIELD();
-        }
-    }
-
-    if (!g_upscale_worker_top_done || !g_upscale_worker_bottom_done) {
-        ESP_LOGW(DISPLAY_TAG, "Upscale workers may not have completed properly");
-    }
-
-    DISPLAY_MEMORY_BARRIER();
-}
 
 void display_renderer_parallel_upscale_rgb(const uint8_t *src_rgb, int src_w, int src_h,
                                           uint8_t *dst_buffer,
@@ -762,7 +467,6 @@ void display_renderer_parallel_upscale_rgb(const uint8_t *src_rgb, int src_w, in
 #endif
 
     g_upscale_src_buffer = src_rgb;
-    g_upscale_src_bpp = 3;
     g_upscale_dst_buffer = dst_buffer;
     g_upscale_lookup_x = lookup_x;
     g_upscale_lookup_y = lookup_y;

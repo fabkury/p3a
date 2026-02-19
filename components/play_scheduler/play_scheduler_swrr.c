@@ -274,7 +274,7 @@ int ps_swrr_select_channel(ps_state_t *state)
         state->channels[best].credit -= WSUM;
 
         // Log SWRR selection with all channel credits
-        ESP_LOGI(TAG, "SWRR selected channel[%d] '%s' (credit was %ld, now %ld)",
+        ESP_LOGD(TAG, "SWRR selected channel[%d] '%s' (credit was %ld, now %ld)",
                  best, state->channels[best].channel_id,
                  (long)(best_credit), (long)state->channels[best].credit);
 

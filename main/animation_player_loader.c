@@ -309,7 +309,7 @@ void animation_loader_task(void *arg)
             start_frame = ov.start_frame;
             start_time_ms = ov.start_time_ms;
             post_id = ov.post_id;
-            ESP_LOGI(TAG, "Loader task: swap request: %s (type=%d start_frame=%u start_time_ms=%llu post_id=%d)",
+            ESP_LOGD(TAG, "Loader task: swap request: %s (type=%d start_frame=%u start_time_ms=%llu post_id=%d)",
                      filepath, (int)type, (unsigned)start_frame, (unsigned long long)start_time_ms, (int)post_id);
         } else if (swap_was_requested) {
             // Get current artwork from play_scheduler only if an actual swap was requested

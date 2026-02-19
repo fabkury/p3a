@@ -38,7 +38,6 @@ TaskHandle_t g_upscale_main_task = NULL;
 
 // Upscale shared state (set per-frame before notifying workers)
 const uint8_t *g_upscale_src_buffer = NULL;
-int g_upscale_src_bpp = 4;
 uint8_t *g_upscale_dst_buffer = NULL;
 const uint16_t *g_upscale_lookup_x = NULL;
 const uint16_t *g_upscale_lookup_y = NULL;

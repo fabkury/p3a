@@ -29,7 +29,7 @@ static const pico8_color_t s_pico8_palette_defaults[PICO8_PALETTE_COLORS] = {
 
 // Internal state
 static struct {
-    uint8_t *frame_buffers[2];      // Double-buffered RGBA frames
+    uint8_t *frame_buffers[2];      // Double-buffered RGB frames
     uint8_t decode_index;           // Buffer being written to
     uint8_t display_index;          // Buffer being displayed
     bool frame_ready;               // A new frame is ready to display
@@ -95,7 +95,7 @@ esp_err_t pico8_render_init(void)
         return ESP_OK;
     }
     
-    const size_t frame_bytes = (size_t)PICO8_FRAME_WIDTH * PICO8_FRAME_HEIGHT * 4;
+    const size_t frame_bytes = (size_t)PICO8_FRAME_WIDTH * PICO8_FRAME_HEIGHT * 3;
     
     // Allocate frame buffers
     for (int i = 0; i < 2; ++i) {
@@ -271,33 +271,31 @@ esp_err_t pico8_render_submit_frame(const uint8_t *palette_rgb, size_t palette_l
         return ESP_ERR_INVALID_STATE;
     }
     
-    // Decode packed 4bpp pixels to RGBA
+    // Decode packed 4bpp pixels to RGB
     const size_t total_pixels = (size_t)PICO8_FRAME_WIDTH * PICO8_FRAME_HEIGHT;
     size_t pixel_cursor = 0;
-    
+
     for (size_t i = 0; i < PICO8_FRAME_BYTES && i < pixel_len; ++i) {
         uint8_t packed = pixel_data[i];
         uint8_t low_idx = packed & 0x0F;
         uint8_t high_idx = (packed >> 4) & 0x0F;
-        
+
         pico8_color_t low_color = s_pico8.palette[low_idx];
         pico8_color_t high_color = s_pico8.palette[high_idx];
-        
+
         if (pixel_cursor < total_pixels) {
-            uint8_t *dst = target + pixel_cursor * 4;
+            uint8_t *dst = target + pixel_cursor * 3;
             dst[0] = low_color.r;
             dst[1] = low_color.g;
             dst[2] = low_color.b;
-            dst[3] = 0xFF;
             pixel_cursor++;
         }
-        
+
         if (pixel_cursor < total_pixels) {
-            uint8_t *dst = target + pixel_cursor * 4;
+            uint8_t *dst = target + pixel_cursor * 3;
             dst[0] = high_color.r;
             dst[1] = high_color.g;
             dst[2] = high_color.b;
-            dst[3] = 0xFF;
             pixel_cursor++;
         }
     }
@@ -402,15 +400,14 @@ int pico8_render_frame(uint8_t *dest_buffer, size_t row_stride)
         return pico8_render_logo(dest_buffer, row_stride);
     }
     
-    // Use display_renderer for parallel upscaling
-    // Note: PICO-8 doesn't use rotation (always ROTATION_0)
-    display_renderer_parallel_upscale(src, PICO8_FRAME_WIDTH, PICO8_FRAME_HEIGHT,
-                                      dest_buffer,
-                                      s_pico8.lookup_x, s_pico8.lookup_y,
-                                      s_pico8.offset_x, s_pico8.offset_y,
-                                      s_pico8.scaled_w, s_pico8.scaled_h,
-                                      s_pico8.has_borders,
-                                      DISPLAY_ROTATION_0);
+    // Use display_renderer for parallel upscaling with user's rotation setting
+    display_renderer_parallel_upscale_rgb(src, PICO8_FRAME_WIDTH, PICO8_FRAME_HEIGHT,
+                                          dest_buffer,
+                                          s_pico8.lookup_x, s_pico8.lookup_y,
+                                          s_pico8.offset_x, s_pico8.offset_y,
+                                          s_pico8.scaled_w, s_pico8.scaled_h,
+                                          s_pico8.has_borders,
+                                          display_renderer_get_rotation());
     
     return 16; // Frame delay (~60fps)
 }

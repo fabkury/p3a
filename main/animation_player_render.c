@@ -522,7 +522,7 @@ skip_prefetch:
             }
             xSemaphoreGive(s_buffer_mutex);
             
-            ESP_LOGI(TAG, "Buffers swapped: now playing %s",
+            ESP_LOGD(TAG, "Buffers swapped: now playing %s",
                      s_front_buffer.filepath ? s_front_buffer.filepath : "(unknown)");
 
             // Clear processing notification - successful swap

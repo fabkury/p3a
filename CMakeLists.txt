@@ -19,7 +19,7 @@ set(PROJECT_VER "0.8.2-dev")
 # =============================================================================
 # Web UI version uses X.Y format (not X.Y.Z). Updates are independent of
 # firmware updates and are checked/installed automatically during OTA checks.
-set(WEBUI_VERSION "1.1")
+set(WEBUI_VERSION "1.2")
 # =============================================================================
 
 # =============================================================================

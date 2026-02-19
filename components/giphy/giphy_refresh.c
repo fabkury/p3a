@@ -15,12 +15,15 @@
 #include "config_store.h"
 #include "channel_cache.h"
 #include "channel_metadata.h"
-#include "sntp_sync.h"             // For sntp_sync_is_synchronized()
+#include "sntp_sync.h"
 #include "makapix_channel_events.h"
 #include "sd_path.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "psram_alloc.h"
+#include "sdkconfig.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -209,6 +212,10 @@ static size_t giphy_lai_rebuild(channel_cache_t *cache)
     return found;
 }
 
+// Response buffer size for Giphy API (allocated in PSRAM).
+// Each GIF object is ~8KB of JSON; at 25 items/page this is ~200KB.
+#define GIPHY_RESPONSE_BUF_SIZE (256 * 1024)
+
 esp_err_t giphy_refresh_channel(const char *channel_id)
 {
     if (!channel_id) return ESP_ERR_INVALID_ARG;
@@ -217,88 +224,135 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
 
     s_refresh_cancel = false;
 
+    // Find channel cache early — fail fast before allocating buffers
+    channel_cache_t *cache = channel_cache_registry_find(channel_id);
+    if (!cache) {
+        ESP_LOGW(TAG, "Channel cache not found for '%s'", channel_id);
+        return ESP_ERR_NOT_FOUND;
+    }
+
     // Determine cache size from config
     uint32_t cache_size = config_store_get_giphy_cache_size();
     if (cache_size == 0) cache_size = 256;
     if (cache_size > 4096) cache_size = 4096;
 
-    // Allocate entry buffer in PSRAM
-    size_t alloc_size = cache_size * sizeof(giphy_channel_entry_t);
-    giphy_channel_entry_t *entries = heap_caps_malloc(alloc_size, MALLOC_CAP_SPIRAM);
-    if (!entries) {
-        entries = malloc(alloc_size);
-        if (!entries) {
-            ESP_LOGE(TAG, "Failed to allocate %zu bytes for entries", alloc_size);
+    // Read API config into fetch context
+    giphy_fetch_ctx_t ctx = {0};
+    config_store_get_giphy_api_key(ctx.api_key, sizeof(ctx.api_key));
+    if (ctx.api_key[0] == '\0') {
+        ESP_LOGE(TAG, "No Giphy API key configured");
+        return ESP_ERR_NOT_FOUND;
+    }
+    if (config_store_get_giphy_rendition(ctx.rendition, sizeof(ctx.rendition)) != ESP_OK) {
+        strlcpy(ctx.rendition, CONFIG_GIPHY_RENDITION_DEFAULT, sizeof(ctx.rendition));
+    }
+    if (config_store_get_giphy_format(ctx.format, sizeof(ctx.format)) != ESP_OK) {
+        strlcpy(ctx.format, CONFIG_GIPHY_FORMAT_DEFAULT, sizeof(ctx.format));
+    }
+    if (config_store_get_giphy_rating(ctx.rating, sizeof(ctx.rating)) != ESP_OK) {
+        strlcpy(ctx.rating, "pg-13", sizeof(ctx.rating));
+    }
+
+    // Parse channel_id to determine trending vs search mode.
+    // Channel IDs: "giphy_trending" -> trending, "giphy_search_cats" -> search "cats"
+    const char *after_prefix = channel_id + 6;  // skip "giphy_"
+    if (strncmp(after_prefix, "search_", 7) == 0 && after_prefix[7] != '\0') {
+        strlcpy(ctx.query, after_prefix + 7, sizeof(ctx.query));
+        for (char *p = ctx.query; *p; p++) {
+            if (*p == '_') *p = ' ';
+        }
+        ESP_LOGI(TAG, "Search mode: q=\"%s\"", ctx.query);
+    } else {
+        ctx.query[0] = '\0';
+    }
+
+    // Allocate response buffer in PSRAM (shared across all pages)
+    ctx.response_buf_size = GIPHY_RESPONSE_BUF_SIZE;
+    ctx.response_buf = heap_caps_malloc(ctx.response_buf_size, MALLOC_CAP_SPIRAM);
+    if (!ctx.response_buf) {
+        ctx.response_buf = malloc(ctx.response_buf_size);
+        if (!ctx.response_buf) {
+            ESP_LOGE(TAG, "Failed to allocate response buffer");
             return ESP_ERR_NO_MEM;
         }
     }
 
-    // Dispatch to search or trending based on channel_id prefix
-    static const char search_prefix[] = "giphy_search_";
-    const size_t prefix_len = sizeof(search_prefix) - 1;
-
-    size_t fetched = 0;
-    esp_err_t err;
-    if (strncmp(channel_id, search_prefix, prefix_len) == 0) {
-        const char *query = channel_id + prefix_len;
-        ESP_LOGI(TAG, "Search query: %s", query);
-        err = giphy_fetch_search(query, entries, cache_size, &fetched);
-    } else {
-        err = giphy_fetch_trending(entries, cache_size, &fetched);
-    }
-
-    if (s_refresh_cancel) {
-        ESP_LOGI(TAG, "Refresh cancelled after fetch");
-        free(entries);
-        return ESP_ERR_NOT_ALLOWED;
-    }
-
-    if (err != ESP_OK || fetched == 0) {
-        ESP_LOGW(TAG, "Fetch failed or returned 0 entries: %s", esp_err_to_name(err));
-        free(entries);
-        return (err != ESP_OK) ? err : ESP_FAIL;
-    }
-
-    ESP_LOGI(TAG, "Fetched %zu entries, merging into cache", fetched);
-
-    if (s_refresh_cancel) {
-        ESP_LOGI(TAG, "Refresh cancelled before cache merge");
-        free(entries);
-        return ESP_ERR_NOT_ALLOWED;
-    }
-
-    // Find channel cache
-    channel_cache_t *cache = channel_cache_registry_find(channel_id);
-    if (!cache) {
-        ESP_LOGW(TAG, "Channel cache not found for '%s'", channel_id);
-        free(entries);
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    // Merge entries into channel cache
-    esp_err_t merge_err = giphy_merge_entries(cache, entries, fetched, cache_size);
-    free(entries);
-
-    if (merge_err != ESP_OK) {
-        ESP_LOGW(TAG, "Merge failed: %s", esp_err_to_name(merge_err));
-        return merge_err;
-    }
-
-    // Rebuild LAi (check which files are already downloaded)
+    // Rebuild LAi BEFORE the loop so the download manager recognizes
+    // files already on disk from previous sessions
     size_t available = giphy_lai_rebuild(cache);
+    ESP_LOGI(TAG, "LAi rebuilt: %zu files already available", available);
 
-    // Reset download cursors and wake download manager to rescan for new entries.
-    // Must use rescan() (not just signal_downloads_needed) because the download
-    // manager may have already scanned the empty cache and set channel_complete=true
-    // before the refresh finished. rescan() clears that flag and wakes the task.
     extern void download_manager_rescan(void);
-    download_manager_rescan();
 
-    // Persist channel metadata (last_refresh timestamp).
-    // Only save when the clock is synchronized -- an unsynchronized clock would
-    // write a garbage timestamp that poisons future cooldown checks. Skipping
-    // preserves the previous session's real timestamp for post-SNTP re-evaluation.
-    if (sntp_sync_is_synchronized()) {
+    // Per-page entry buffer on the stack (25 entries x 64 bytes = 1600 bytes)
+    giphy_channel_entry_t page_entries[25];
+    size_t total_fetched = 0;
+    int offset = 0;
+    esp_err_t last_err = ESP_OK;
+    bool refresh_completed = true;
+
+    while ((size_t)offset < cache_size) {
+        if (s_refresh_cancel) {
+            ESP_LOGI(TAG, "Refresh cancelled before page fetch (offset=%d)", offset);
+            refresh_completed = false;
+            break;
+        }
+
+        size_t page_count = 0;
+        bool has_more = false;
+        esp_err_t err = giphy_fetch_page(&ctx, offset, page_entries,
+                                                  &page_count, &has_more);
+
+        if (s_refresh_cancel) {
+            ESP_LOGI(TAG, "Refresh cancelled after page fetch (offset=%d)", offset);
+            refresh_completed = false;
+            break;
+        }
+
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Page fetch failed at offset=%d: %s", offset, esp_err_to_name(err));
+            last_err = err;
+            refresh_completed = false;
+            break;
+        }
+
+        if (page_count == 0) {
+            ESP_LOGI(TAG, "No entries returned at offset=%d, done", offset);
+            break;
+        }
+
+        // Merge this page into cache
+        esp_err_t merge_err = giphy_merge_entries(cache, page_entries, page_count, cache_size);
+        if (merge_err != ESP_OK) {
+            ESP_LOGW(TAG, "Merge failed at offset=%d: %s", offset, esp_err_to_name(merge_err));
+            refresh_completed = false;
+            break;
+        }
+
+        total_fetched += page_count;
+        ESP_LOGI(TAG, "Page merged: %zu entries (total: %zu)", page_count, total_fetched);
+
+        // Signal download manager — downloads can start while we fetch more pages
+        download_manager_rescan();
+
+        offset += (int)page_count;
+
+        if (!has_more) {
+            break;
+        }
+
+        // Brief delay between pages to be nice to the API
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+
+    free(ctx.response_buf);
+
+    // Only persist last_refresh timestamp when the refresh ran to completion.
+    // Cancelled or failed refreshes must not update the timestamp, otherwise
+    // the next refresh attempt will consider the channel "still fresh".
+    // Only save when the clock is synchronized — an unsynchronized clock would
+    // write a garbage timestamp that poisons future cooldown checks.
+    if (refresh_completed && sntp_sync_is_synchronized()) {
         char channels_path[128];
         if (sd_path_get_channel(channels_path, sizeof(channels_path)) != ESP_OK) {
             strlcpy(channels_path, "/sdcard/p3a/channel", sizeof(channels_path));
@@ -311,13 +365,16 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
         if (meta_err != ESP_OK) {
             ESP_LOGW(TAG, "Failed to save channel metadata: %s", esp_err_to_name(meta_err));
         }
-    } else {
+    } else if (refresh_completed) {
         ESP_LOGI(TAG, "Clock not synchronized, deferring metadata save for '%s'",
                  channel_id);
     }
 
-    ESP_LOGI(TAG, "Giphy channel '%s' refresh complete: %zu entries, %zu available",
-             channel_id, cache->entry_count, available);
+    ESP_LOGI(TAG, "Giphy channel '%s' refresh %s: %zu fetched, %zu in cache",
+             channel_id, refresh_completed ? "complete" : "incomplete",
+             total_fetched, cache->entry_count);
 
-    return ESP_OK;
+    if (total_fetched > 0) return ESP_OK;
+    // Propagate specific error (e.g. ESP_ERR_NOT_ALLOWED for invalid API key)
+    return (last_err != ESP_OK) ? last_err : ESP_FAIL;
 }

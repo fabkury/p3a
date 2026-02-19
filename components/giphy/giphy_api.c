@@ -8,24 +8,16 @@
 
 #include "giphy.h"
 #include "giphy_types.h"
-#include "config_store.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_log.h"
-#include "esp_heap_caps.h"
 #include "cJSON.h"
-#include "sdkconfig.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
 static const char *TAG = "giphy_api";
-
-// Maximum response buffer size (allocated in PSRAM).
-// Each GIF object is ~8KB of JSON (20+ renditions with full URLs).
-// At 25 items/page this is ~200KB, so 256KB provides safe headroom.
-#define GIPHY_RESPONSE_BUF_SIZE (256 * 1024)
 
 // Maximum items per API call.
 // Giphy beta key allows up to 50, but each GIF object is ~8KB of JSON,
@@ -113,263 +105,172 @@ static bool parse_gif_object(const cJSON *gif, giphy_channel_entry_t *out_entry,
 }
 
 /**
- * @brief Shared fetch implementation for both trending and search endpoints.
+ * @brief URL-encode a string (RFC 3986)
  *
- * @param query  Search query (underscores become spaces). NULL = trending.
+ * Unreserved characters (A-Z, a-z, 0-9, '-', '_', '.', '~') pass through;
+ * everything else is percent-encoded.
  */
-static esp_err_t giphy_fetch_gifs(const char *query,
-                                  giphy_channel_entry_t *out_entries,
-                                  size_t max_entries, size_t *out_count)
+static void url_encode(const char *in, char *out, size_t out_len)
 {
-    if (!out_entries || !out_count || max_entries == 0) {
+    static const char *hex = "0123456789ABCDEF";
+    size_t o = 0;
+    for (size_t i = 0; in[i] && o + 3 < out_len; i++) {
+        unsigned char c = (unsigned char)in[i];
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') {
+            out[o++] = c;
+        } else {
+            out[o++] = '%';
+            out[o++] = hex[c >> 4];
+            out[o++] = hex[c & 0xF];
+        }
+    }
+    out[o] = '\0';
+}
+
+esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
+                           giphy_channel_entry_t *out_entries,
+                           size_t *out_count, bool *out_has_more)
+{
+    if (!ctx || !out_entries || !out_count || !out_has_more) {
         return ESP_ERR_INVALID_ARG;
     }
 
     *out_count = 0;
+    *out_has_more = false;
 
-    const bool is_search = (query != NULL && query[0] != '\0');
-    const char *mode_label = is_search ? "search" : "trending";
-    const int max_offset = is_search ? 4999 : 499;
+    bool is_search = (ctx->query[0] != '\0');
 
-    // URL-encode the query: replace underscores with '+' for word boundaries.
-    // The UI sanitiser only allows [a-zA-Z0-9_], so '+' is the only encoding
-    // we need; the rest of the characters are URL-safe.
-    char encoded_query[128] = "";
+    // Build URL
+    char url[512];
     if (is_search) {
-        strlcpy(encoded_query, query, sizeof(encoded_query));
-        for (char *p = encoded_query; *p; p++) {
-            if (*p == '_') *p = '+';
-        }
+        char encoded_query[192];
+        url_encode(ctx->query, encoded_query, sizeof(encoded_query));
+        snprintf(url, sizeof(url),
+                 "https://api.giphy.com/v1/gifs/search?api_key=%s&q=%s&limit=%d&offset=%d&rating=%s",
+                 ctx->api_key, encoded_query, GIPHY_PAGE_LIMIT, offset, ctx->rating);
+        ESP_LOGI(TAG, "Fetching search q=\"%s\": offset=%d, limit=%d", ctx->query, offset, GIPHY_PAGE_LIMIT);
+    } else {
+        snprintf(url, sizeof(url),
+                 "https://api.giphy.com/v1/gifs/trending?api_key=%s&limit=%d&offset=%d&rating=%s",
+                 ctx->api_key, GIPHY_PAGE_LIMIT, offset, ctx->rating);
+        ESP_LOGI(TAG, "Fetching trending: offset=%d, limit=%d", offset, GIPHY_PAGE_LIMIT);
     }
 
-    // Get config values
-    char api_key[128];
-    config_store_get_giphy_api_key(api_key, sizeof(api_key));
-    if (api_key[0] == '\0') {
-        ESP_LOGE(TAG, "No Giphy API key configured");
-        return ESP_ERR_NOT_FOUND;
+    // Configure HTTP client
+    esp_http_client_config_t config = {
+        .url = url,
+        .timeout_ms = 15000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .buffer_size = 4096,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (!client) {
+        ESP_LOGE(TAG, "Failed to init HTTP client");
+        return ESP_ERR_NO_MEM;
     }
 
-    char rendition[32];
-    if (config_store_get_giphy_rendition(rendition, sizeof(rendition)) != ESP_OK) {
-        strlcpy(rendition, CONFIG_GIPHY_RENDITION_DEFAULT, sizeof(rendition));
+    // Perform request
+    esp_err_t err = esp_http_client_open(client, 0);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(err));
+        esp_http_client_cleanup(client);
+        return err;
     }
 
-    char format[8];
-    if (config_store_get_giphy_format(format, sizeof(format)) != ESP_OK) {
-        strlcpy(format, CONFIG_GIPHY_FORMAT_DEFAULT, sizeof(format));
-    }
+    esp_http_client_fetch_headers(client);
+    int status = esp_http_client_get_status_code(client);
 
-    char rating[8];
-    if (config_store_get_giphy_rating(rating, sizeof(rating)) != ESP_OK) {
-        strlcpy(rating, "pg-13", sizeof(rating));
-    }
-
-    // Allocate response buffer in PSRAM
-    char *response_buf = heap_caps_malloc(GIPHY_RESPONSE_BUF_SIZE, MALLOC_CAP_SPIRAM);
-    if (!response_buf) {
-        response_buf = malloc(GIPHY_RESPONSE_BUF_SIZE);
-        if (!response_buf) {
-            ESP_LOGE(TAG, "Failed to allocate response buffer");
-            return ESP_ERR_NO_MEM;
+    if (status != 200) {
+        ESP_LOGE(TAG, "Giphy API returned status %d", status);
+        char err_buf[256];
+        int err_read = esp_http_client_read(client, err_buf, sizeof(err_buf) - 1);
+        if (err_read > 0) {
+            err_buf[err_read] = '\0';
+            ESP_LOGW(TAG, "Error response body: %s", err_buf);
         }
-    }
-
-    size_t total_fetched = 0;
-    int offset = 0;
-
-    while (total_fetched < max_entries) {
-        if (giphy_is_refresh_cancelled()) {
-            ESP_LOGI(TAG, "Fetch cancelled before next batch (offset=%d)", offset);
-            break;
-        }
-
-        int page_limit = GIPHY_PAGE_LIMIT;
-        if (total_fetched + page_limit > max_entries) {
-            page_limit = (int)(max_entries - total_fetched);
-        }
-
-        // Build URL
-        char url[512];
-        if (is_search) {
-            snprintf(url, sizeof(url),
-                     "https://api.giphy.com/v1/gifs/search?api_key=%s&q=%s&limit=%d&offset=%d&rating=%s",
-                     api_key, encoded_query, page_limit, offset, rating);
-        } else {
-            snprintf(url, sizeof(url),
-                     "https://api.giphy.com/v1/gifs/trending?api_key=%s&limit=%d&offset=%d&rating=%s",
-                     api_key, page_limit, offset, rating);
-        }
-
-        ESP_LOGI(TAG, "Fetching %s: offset=%d, limit=%d", mode_label, offset, page_limit);
-
-        // Configure HTTP client
-        esp_http_client_config_t config = {
-            .url = url,
-            .timeout_ms = 15000,
-            .crt_bundle_attach = esp_crt_bundle_attach,
-            .buffer_size = 4096,
-        };
-
-        esp_http_client_handle_t client = esp_http_client_init(&config);
-        if (!client) {
-            ESP_LOGE(TAG, "Failed to init HTTP client");
-            free(response_buf);
-            return ESP_ERR_NO_MEM;
-        }
-
-        // Perform request
-        esp_err_t err = esp_http_client_open(client, 0);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(err));
-            esp_http_client_cleanup(client);
-            free(response_buf);
-            return err;
-        }
-
-        esp_http_client_fetch_headers(client);
-        int status = esp_http_client_get_status_code(client);
-
-        if (status != 200) {
-            ESP_LOGE(TAG, "Giphy API returned status %d", status);
-            char err_buf[256];
-            int err_read = esp_http_client_read(client, err_buf, sizeof(err_buf) - 1);
-            if (err_read > 0) {
-                err_buf[err_read] = '\0';
-                ESP_LOGW(TAG, "DEBUG: Error response body: %s", err_buf);
-            }
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            free(response_buf);
-            if (status == 401 || status == 403) return ESP_ERR_NOT_ALLOWED;
-            if (status == 429) return ESP_ERR_INVALID_RESPONSE;
-            return ESP_FAIL;
-        }
-
-        // Read response body
-        int total_read = 0;
-        int read_len;
-        while (total_read < GIPHY_RESPONSE_BUF_SIZE - 1) {
-            read_len = esp_http_client_read(client, response_buf + total_read,
-                                            GIPHY_RESPONSE_BUF_SIZE - 1 - total_read);
-            if (read_len <= 0) break;
-            total_read += read_len;
-        }
-        response_buf[total_read] = '\0';
-
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
+        if (status == 401 || status == 403) return ESP_ERR_NOT_ALLOWED;
+        if (status == 429) return ESP_ERR_INVALID_RESPONSE;
+        return ESP_FAIL;
+    }
 
-        if (giphy_is_refresh_cancelled()) {
-            ESP_LOGI(TAG, "Fetch cancelled after HTTP response (offset=%d)", offset);
-            break;
-        }
+    // Read response body
+    int total_read = 0;
+    int read_len;
+    while (total_read < (int)ctx->response_buf_size - 1) {
+        read_len = esp_http_client_read(client, ctx->response_buf + total_read,
+                                        ctx->response_buf_size - 1 - total_read);
+        if (read_len <= 0) break;
+        total_read += read_len;
+    }
+    ctx->response_buf[total_read] = '\0';
 
-        ESP_LOGI(TAG, "Received %d bytes from Giphy API", total_read);
+    esp_http_client_close(client);
+    esp_http_client_cleanup(client);
 
-        if (total_read > 0 && total_read < 150) {
-            ESP_LOGW(TAG, "DEBUG: Small response (%d bytes), full body: %s", total_read, response_buf);
-        }
+    ESP_LOGI(TAG, "Received %d bytes from Giphy API", total_read);
 
-        if (total_read == 0) {
-            ESP_LOGE(TAG, "Empty response from Giphy API");
-            break;
-        }
+    if (total_read > 0 && total_read < 150) {
+        ESP_LOGW(TAG, "Small response (%d bytes), full body: %s", total_read, ctx->response_buf);
+    }
 
-        if (total_read >= GIPHY_RESPONSE_BUF_SIZE - 1) {
-            ESP_LOGE(TAG, "Response truncated at %d bytes (buffer full) - reduce page limit", total_read);
-            break;
-        }
+    if (total_read == 0) {
+        ESP_LOGE(TAG, "Empty response from Giphy API");
+        return ESP_FAIL;
+    }
 
-        // Parse JSON
-        cJSON *root = cJSON_Parse(response_buf);
-        if (!root) {
-            ESP_LOGE(TAG, "Failed to parse Giphy JSON response (%d bytes)", total_read);
-            char snippet[201];
-            int snip_len = total_read < 200 ? total_read : 200;
-            memcpy(snippet, response_buf, snip_len);
-            snippet[snip_len] = '\0';
-            ESP_LOGE(TAG, "Response start: %.200s", snippet);
-            break;
-        }
+    if (total_read >= (int)ctx->response_buf_size - 1) {
+        ESP_LOGE(TAG, "Response truncated at %d bytes (buffer full)", total_read);
+        return ESP_FAIL;
+    }
 
-        const cJSON *data = cJSON_GetObjectItem(root, "data");
-        if (!cJSON_IsArray(data)) {
-            ESP_LOGE(TAG, "Giphy response missing 'data' array");
-            cJSON_Delete(root);
-            break;
-        }
+    // Parse JSON
+    cJSON *root = cJSON_Parse(ctx->response_buf);
+    if (!root) {
+        ESP_LOGE(TAG, "Failed to parse Giphy JSON response (%d bytes)", total_read);
+        char snippet[201];
+        int snip_len = total_read < 200 ? total_read : 200;
+        memcpy(snippet, ctx->response_buf, snip_len);
+        snippet[snip_len] = '\0';
+        ESP_LOGE(TAG, "Response start: %.200s", snippet);
+        return ESP_FAIL;
+    }
 
-        int array_size = cJSON_GetArraySize(data);
-        if (array_size == 0) {
-            ESP_LOGI(TAG, "No more %s results at offset %d", mode_label, offset);
-
-            const cJSON *meta = cJSON_GetObjectItem(root, "meta");
-            if (cJSON_IsObject(meta)) {
-                const cJSON *meta_status = cJSON_GetObjectItem(meta, "status");
-                const cJSON *meta_msg = cJSON_GetObjectItem(meta, "msg");
-                ESP_LOGW(TAG, "DEBUG: meta.status=%d, meta.msg=%s",
-                         cJSON_IsNumber(meta_status) ? meta_status->valueint : -1,
-                         cJSON_IsString(meta_msg) ? meta_msg->valuestring : "(none)");
-            }
-
-            cJSON_Delete(root);
-            break;
-        }
-
-        // Parse each GIF object
-        int page_parsed = 0;
-        for (int i = 0; i < array_size && total_fetched < max_entries; i++) {
-            const cJSON *gif = cJSON_GetArrayItem(data, i);
-            if (parse_gif_object(gif, &out_entries[total_fetched], rendition, format)) {
-                total_fetched++;
-                page_parsed++;
-            }
-        }
-
-        ESP_LOGI(TAG, "Parsed %d/%d GIFs (total: %zu/%zu)",
-                 page_parsed, array_size, total_fetched, max_entries);
-
-        // Check pagination
-        const cJSON *pagination = cJSON_GetObjectItem(root, "pagination");
-        if (cJSON_IsObject(pagination)) {
-            const cJSON *tc = cJSON_GetObjectItem(pagination, "total_count");
-            (void)tc;
-        }
-
+    const cJSON *data = cJSON_GetObjectItem(root, "data");
+    if (!cJSON_IsArray(data)) {
+        ESP_LOGE(TAG, "Giphy response missing 'data' array");
         cJSON_Delete(root);
+        return ESP_FAIL;
+    }
 
-        // Move to next page
-        offset += array_size;
+    int array_size = cJSON_GetArraySize(data);
+    if (array_size == 0) {
+        ESP_LOGI(TAG, "No more results at offset %d", offset);
+        cJSON_Delete(root);
+        return ESP_OK;
+    }
 
-        if (array_size < page_limit || offset >= max_offset) {
-            break;
+    // Parse each GIF object
+    size_t parsed = 0;
+    for (int i = 0; i < array_size; i++) {
+        const cJSON *gif = cJSON_GetArrayItem(data, i);
+        if (parse_gif_object(gif, &out_entries[parsed], ctx->rendition, ctx->format)) {
+            parsed++;
         }
-
-        // Brief delay between pages to be nice to the API
-        vTaskDelay(pdMS_TO_TICKS(200));
     }
 
-    free(response_buf);
-    *out_count = total_fetched;
+    ESP_LOGI(TAG, "Parsed %zu/%d GIFs at offset %d", parsed, array_size, offset);
 
-    ESP_LOGI(TAG, "Giphy %s fetch complete: %zu entries", mode_label, total_fetched);
-    return (total_fetched > 0) ? ESP_OK : ESP_FAIL;
-}
+    cJSON_Delete(root);
 
-esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
-                               size_t max_entries, size_t *out_count)
-{
-    return giphy_fetch_gifs(NULL, out_entries, max_entries, out_count);
-}
+    *out_count = parsed;
+    // Cap at 499 for both trending and search to prevent API key exhaustion.
+    // The search endpoint supports up to 4999, but we intentionally use the
+    // same conservative limit as trending.
+    *out_has_more = (array_size >= GIPHY_PAGE_LIMIT && (offset + array_size) < 499);
 
-esp_err_t giphy_fetch_search(const char *query,
-                             giphy_channel_entry_t *out_entries,
-                             size_t max_entries, size_t *out_count)
-{
-    if (!query || query[0] == '\0') {
-        ESP_LOGE(TAG, "giphy_fetch_search called with empty query");
-        return ESP_ERR_INVALID_ARG;
-    }
-    return giphy_fetch_gifs(query, out_entries, max_entries, out_count);
+    return ESP_OK;
 }

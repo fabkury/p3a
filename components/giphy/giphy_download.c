@@ -193,7 +193,7 @@ esp_err_t giphy_download_artwork(const char *giphy_id, uint8_t extension,
     char temp_path[264];
     snprintf(temp_path, sizeof(temp_path), "%s.tmp", out_path);
 
-    ESP_LOGI(TAG, "Downloading: %s -> %s", url, out_path);
+    ESP_LOGD(TAG, "Downloading: %s -> %s", url, out_path);
 
     // Allocate chunk buffer (prefer PSRAM)
     uint8_t *chunk_buffer = heap_caps_malloc(DOWNLOAD_CHUNK_SIZE, MALLOC_CAP_SPIRAM);

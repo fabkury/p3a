@@ -74,7 +74,6 @@ extern TaskHandle_t g_upscale_main_task;
 
 // Upscale shared state (set per-frame before notifying workers)
 extern const uint8_t *g_upscale_src_buffer;
-extern int g_upscale_src_bpp;
 extern uint8_t *g_upscale_dst_buffer;
 extern const uint16_t *g_upscale_lookup_x;
 extern const uint16_t *g_upscale_lookup_y;

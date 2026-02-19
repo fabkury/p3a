@@ -131,27 +131,6 @@ void display_renderer_get_dimensions(int *width, int *height, size_t *stride);
 size_t display_renderer_get_buffer_bytes(void);
 
 /**
- * @brief Trigger parallel upscale operation using worker tasks
- * 
- * Sets up shared state and notifies upscale workers to process rows.
- * Blocks until both workers complete.
- * 
- * @param src_rgba Source RGBA buffer
- * @param src_w Source width
- * @param src_h Source height
- * @param dst_buffer Destination buffer
- * @param lookup_x X lookup table
- * @param lookup_y Y lookup table
- * @param rotation Rotation to apply
- */
-void display_renderer_parallel_upscale(const uint8_t *src_rgba, int src_w, int src_h,
-                                       uint8_t *dst_buffer,
-                                       const uint16_t *lookup_x, const uint16_t *lookup_y,
-                                       int offset_x, int offset_y, int scaled_w, int scaled_h,
-                                       bool has_borders,
-                                       display_rotation_t rotation);
-
-/**
  * @brief Trigger parallel upscale operation from RGB888 source (3 bytes/pixel)
  *
  * Source is packed RGB (R,G,B). No alpha channel.

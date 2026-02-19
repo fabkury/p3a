@@ -303,7 +303,7 @@ static void process_swap_event(void)
     xTimerStop(s_state.timer, 0);
     xTimerStart(s_state.timer, 0);
     
-    ESP_LOGI(TAG, "Started tracking post_id=%" PRId32 ", intent=%s", 
+    ESP_LOGD(TAG, "Started tracking post_id=%" PRId32 ", intent=%s", 
              post_id, is_intentional ? "artwork" : "channel");
 }
 

@@ -121,6 +121,7 @@ static SemaphoreHandle_t s_mutex = NULL;
 static char s_active_channel[64] = {0};
 static bool s_busy = false;
 static bool s_playback_initiated = false;  // Track if we've started playback
+static bool s_all_downloaded_logged = false;  // Suppress repeated "All files downloaded" logs
 
 // PSRAM-backed static task stack for reduced internal RAM usage
 static StackType_t *s_download_stack = NULL;
@@ -233,11 +234,11 @@ static bool dl_take_snapshot(dl_snapshot_t *out_snapshot)
                    s_dl_channel_count * sizeof(dl_channel_state_t));
             success = true;
         } else {
-            ESP_LOGI(TAG, "DEBUG: dl_take_snapshot: no channels configured");
+            ESP_LOGD(TAG, "dl_take_snapshot: no channels configured");
         }
         xSemaphoreGive(s_mutex);
     } else {
-        ESP_LOGW(TAG, "DEBUG: dl_take_snapshot: mutex take failed (s_mutex=%p)", s_mutex);
+        ESP_LOGW(TAG, "dl_take_snapshot: mutex take failed (s_mutex=%p)", s_mutex);
     }
 
     return success;
@@ -308,7 +309,7 @@ static makapix_channel_entry_t s_batch_entries[DL_BATCH_SIZE];
 static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapshot_t *snapshot)
 {
     if (!snapshot || snapshot->channel_count == 0 || !out_request) {
-        ESP_LOGI(TAG, "DEBUG: dl_get_next_download invalid args (snapshot=%p, count=%zu)",
+        ESP_LOGD(TAG, "dl_get_next_download invalid args (snapshot=%p, count=%zu)",
                  snapshot, snapshot ? snapshot->channel_count : 0);
         return ESP_ERR_NOT_FOUND;
     }
@@ -320,24 +321,24 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
 
         // Skip channels that don't need downloads (e.g., SD card - local files)
         if (!play_scheduler_needs_download(ch->channel_id)) {
-            ESP_LOGI(TAG, "DEBUG: Skipping local channel '%s'", ch->channel_id);
+            ESP_LOGD(TAG, "Skipping local channel '%s'", ch->channel_id);
             continue;
         }
 
         // Skip completed channels
         if (ch->channel_complete) {
-            ESP_LOGI(TAG, "DEBUG: Skipping completed channel '%s'", ch->channel_id);
+            ESP_LOGD(TAG, "Skipping completed channel '%s'", ch->channel_id);
             continue;
         }
 
         // Get channel cache from registry
         channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
         if (!cache) {
-            ESP_LOGI(TAG, "DEBUG: Cache not found for '%s'", ch->channel_id);
+            ESP_LOGD(TAG, "Cache not found for '%s'", ch->channel_id);
             continue;
         }
-        ESP_LOGI(TAG, "DEBUG: Checking cache '%s': entry_count=%zu available=%zu cursor=%lu epoch_start=%lu wrapped=%d",
-                 ch->channel_id, cache->entry_count, cache->available_count, 
+        ESP_LOGD(TAG, "Checking cache '%s': entry_count=%zu available=%zu cursor=%lu epoch_start=%lu wrapped=%d",
+                 ch->channel_id, cache->entry_count, cache->available_count,
                  (unsigned long)ch->dl_cursor, (unsigned long)ch->scan_epoch_start, ch->has_wrapped);
 
         // Find entries needing download using batch API (reduces mutex contention)
@@ -364,7 +365,7 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                         // First time reaching end - wrap to beginning
                         ch->dl_cursor = 0;
                         ch->has_wrapped = true;
-                        ESP_LOGI(TAG, "Channel '%s' wrapping cursor to 0 (epoch_start=%lu)",
+                        ESP_LOGD(TAG, "Channel '%s' wrapping cursor to 0 (epoch_start=%lu)",
                                  ch->channel_id, (unsigned long)ch->scan_epoch_start);
                         
                         if (ch->scan_epoch_start == 0) {
@@ -402,7 +403,7 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
 
             // Skip if 404 marker exists
             if (has_404_marker(s_dl_filepath)) {
-                ESP_LOGI(TAG, "SKIP post_id=%d: has 404 marker (key=%.8s...)", entry->post_id, s_dl_storage_key);
+                ESP_LOGD(TAG, "SKIP post_id=%d: has 404 marker (key=%.8s...)", entry->post_id, s_dl_storage_key);
                 continue;
             }
 
@@ -462,8 +463,8 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             // Advance round-robin to next channel for fairness and commit to shared state
             size_t new_rr_idx = (ch_idx + 1) % snapshot->channel_count;
             dl_commit_state(snapshot, new_rr_idx);
-            ESP_LOGI(TAG, "DEBUG: Found download: ch=%s key=%s (ci=%lu, cursor now %lu)",
-                     ch->channel_id, out_request->storage_key, 
+            ESP_LOGD(TAG, "Found download: ch=%s key=%s (ci=%lu, cursor now %lu)",
+                     ch->channel_id, out_request->storage_key,
                      (unsigned long)(ch->dl_cursor > 0 ? ch->dl_cursor - 1 : 0),
                      (unsigned long)ch->dl_cursor);
             return ESP_OK;
@@ -471,7 +472,7 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
 
         // This channel scan is complete - mark it so we skip it in future iterations
         ch->channel_complete = true;
-        ESP_LOGI(TAG, "Channel '%s' download scan complete (scanned %d entries, cursor %lu -> %lu, epoch_start=%lu, wrapped=%d, entry_count=%zu)",
+        ESP_LOGD(TAG, "Channel '%s' download scan complete (scanned %d entries, cursor %lu -> %lu, epoch_start=%lu, wrapped=%d, entry_count=%zu)",
                  ch->channel_id, scan_count, (unsigned long)start_cursor, (unsigned long)ch->dl_cursor,
                  (unsigned long)ch->scan_epoch_start, ch->has_wrapped, cache->entry_count);
     }
@@ -538,7 +539,7 @@ static void download_task(void *arg)
         bool sdio_locked = sdio_bus_is_locked();
         bool sd_paused = (animation_player_is_sd_paused && animation_player_is_sd_paused());
         if (sdio_locked || sd_paused) {
-            ESP_LOGI(TAG, "DEBUG: Waiting for bus/SD (sdio_locked=%d, sd_paused=%d)", sdio_locked, sd_paused);
+            ESP_LOGD(TAG, "Waiting for bus/SD (sdio_locked=%d, sd_paused=%d)", sdio_locked, sd_paused);
         }
         while (wait_count < max_wait) {
             bool should_wait = sdio_bus_is_locked();
@@ -566,10 +567,10 @@ static void download_task(void *arg)
 
         memset(&s_dl_snapshot, 0, sizeof(s_dl_snapshot));
         bool snapshot_ok = dl_take_snapshot(&s_dl_snapshot);
-        ESP_LOGI(TAG, "DEBUG: snapshot_ok=%d, channel_count=%zu", snapshot_ok, s_dl_channel_count);
+        ESP_LOGD(TAG, "snapshot_ok=%d, channel_count=%zu", snapshot_ok, s_dl_channel_count);
         if (snapshot_ok) {
             get_err = dl_get_next_download(&s_dl_req, &s_dl_snapshot);
-            ESP_LOGI(TAG, "DEBUG: dl_get_next_download returned %s (post_id=%ld)",
+            ESP_LOGD(TAG, "dl_get_next_download returned %s (post_id=%ld)",
                      esp_err_to_name(get_err), (long)s_dl_req.post_id);
             if (get_err == ESP_OK) {
                 // Clear the signal since we have work - prevents race condition where
@@ -582,13 +583,14 @@ static void download_task(void *arg)
             // All files downloaded OR no channels configured - wait for signal
             // Clear signal before waiting so we only wake on NEW signals
             if (s_dl_channel_count == 0) {
-                ESP_LOGI(TAG, "DEBUG: No channels configured, waiting for signal...");
-            } else {
+                ESP_LOGD(TAG, "No channels configured, waiting for signal...");
+            } else if (!s_all_downloaded_logged) {
                 ESP_LOGI(TAG, "All files downloaded (ch_count=%zu), waiting for signal...", s_dl_channel_count);
+                s_all_downloaded_logged = true;
             }
             makapix_channel_clear_downloads_needed();
             makapix_channel_wait_for_downloads_needed(portMAX_DELAY);
-            ESP_LOGI(TAG, "Woke from downloads_needed wait");
+            ESP_LOGD(TAG, "Woke from downloads_needed wait");
             continue;
         }
 
@@ -615,6 +617,7 @@ static void download_task(void *arg)
         // Treat this the same as a successful download - update LAi and signal availability
         if (file_exists(s_dl_req.filepath)) {
             ESP_LOGI(TAG, "File already exists, updating LAi: %s", s_dl_req.storage_key);
+            s_all_downloaded_logged = false;
 
             // Clear any previous LTF failures since file is valid
             ltf_clear(s_dl_req.storage_key, s_task_vault_base);
@@ -650,6 +653,7 @@ static void download_task(void *arg)
         }
 
         // Start download
+        s_all_downloaded_logged = false;
         set_busy(true, s_dl_req.channel_id);
 
         // Update UI message if:
@@ -878,6 +882,7 @@ void download_manager_set_channels(const char **channel_ids, size_t count)
             s_dl_channels[i].channel_complete = false;
         }
 
+        s_all_downloaded_logged = false;
         ESP_LOGI(TAG, "Configured %zu channel(s) for download", s_dl_channel_count);
         xSemaphoreGive(s_mutex);
     }
@@ -896,6 +901,7 @@ void download_manager_reset_cursors(void)
             s_dl_channels[i].channel_complete = false;
         }
         s_dl_round_robin_idx = 0;
+        s_all_downloaded_logged = false;
         ESP_LOGI(TAG, "Reset download cursors");
         xSemaphoreGive(s_mutex);
     }

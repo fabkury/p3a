@@ -169,7 +169,7 @@ static bool pick_recency_sdcard(ps_state_t *state, size_t channel_index, ps_artw
         return false;
     }
 
-    ESP_LOGI(TAG, "RecencyPick SD[%zu] '%s': pool_size=%zu, start_cursor=%lu",
+    ESP_LOGD(TAG, "RecencyPick SD[%zu] '%s': pool_size=%zu, start_cursor=%lu",
              channel_index, ch->channel_id, ch->entry_count, (unsigned long)ch->cursor);
 
     uint32_t start_cursor = ch->cursor;
@@ -268,7 +268,7 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
         return false;
     }
 
-    ESP_LOGI(TAG, "RecencyPick Makapix[%zu] '%s': pool_size(LAi)=%zu, Ci=%zu, start_cursor=%lu",
+    ESP_LOGD(TAG, "RecencyPick Makapix[%zu] '%s': pool_size(LAi)=%zu, Ci=%zu, start_cursor=%lu",
              channel_index, ch->channel_id, available_count, entry_count, (unsigned long)ch->cursor);
 
     // Cursor operates over available_post_ids (LAi), not full Ci
@@ -293,8 +293,12 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
 
         uint32_t ci_index = ci_find_by_post_id(ch->cache, post_id);
         if (ci_index == UINT32_MAX) {
-            ESP_LOGW(TAG, "  RecencyPick: LAi[%lu] post_id=%ld NOT FOUND in Ci (hash miss)",
+            ESP_LOGI(TAG, "  RecencyPick: LAi[%lu] post_id=%ld NOT FOUND in Ci (hash miss), evicting stale entry",
                      (unsigned long)lai_index, (long)post_id);
+            lai_remove_entry(ch->cache, post_id);
+            available_count = ch->cache->available_count;
+            ch->cursor--;
+            if (available_count == 0) break;
             skipped_count++;
             continue;
         }
@@ -330,7 +334,7 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
             bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
         }
 
-        ESP_LOGI(TAG, ">>> PICKED (RecencyPick Makapix): LAi_index=%lu, Ci_index=%lu, post_id=%ld, "
+        ESP_LOGI(TAG, ">>> PICKED (RecencyPick): LAi_index=%lu, Ci_index=%lu, post_id=%ld, "
                  "pool_size=%zu, skipped=%d, storage_key=%.8s...",
                  (unsigned long)lai_index, (unsigned long)ci_index, (long)post_id,
                  available_count, skipped_count, storage_key);
@@ -387,7 +391,7 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
         return false;
     }
 
-    ESP_LOGI(TAG, "RandomPick SD[%zu] '%s': pool_size=%zu",
+    ESP_LOGD(TAG, "RandomPick SD[%zu] '%s': pool_size=%zu",
              channel_index, ch->channel_id, ch->entry_count);
 
     // Sample from all entries for true shuffle
@@ -470,7 +474,7 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
         return false;
     }
 
-    ESP_LOGI(TAG, "RandomPick Makapix[%zu] '%s': pool_size(LAi)=%zu, Ci=%zu",
+    ESP_LOGD(TAG, "RandomPick Makapix[%zu] '%s': pool_size(LAi)=%zu, Ci=%zu",
              channel_index, ch->channel_id, available_count, entry_count);
 
     // Sample from available_post_ids (LAi) directly
@@ -484,7 +488,10 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
 
         uint32_t ci_index = ci_find_by_post_id(ch->cache, post_id);
         if (ci_index == UINT32_MAX) {
-            ESP_LOGW(TAG, "  RandomPick: LAi[%zu] post_id=%ld NOT FOUND in Ci", lai_index, (long)post_id);
+            ESP_LOGI(TAG, "  RandomPick: LAi[%zu] post_id=%ld NOT FOUND in Ci, evicting stale entry", lai_index, (long)post_id);
+            lai_remove_entry(ch->cache, post_id);
+            available_count = ch->cache->available_count;
+            if (available_count == 0) break;
             continue;
         }
 
@@ -513,7 +520,7 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
             bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
         }
 
-        ESP_LOGI(TAG, ">>> PICKED (RandomPick Makapix): LAi_index=%zu, Ci_index=%lu, post_id=%ld, "
+        ESP_LOGI(TAG, ">>> PICKED (RandomPick): LAi_index=%zu, Ci_index=%lu, post_id=%ld, "
                  "pool_size=%zu, attempt=%d, storage_key=%.8s...",
                  lai_index, (unsigned long)ci_index, (long)post_id,
                  available_count, attempt + 1, storage_key);
@@ -633,7 +640,7 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
     size_t total_ci = 0;
     size_t total_lai = 0;
 
-    ESP_LOGI(TAG, "Pick mode: %s, Exposure mode: %d, Channels: %zu",
+    ESP_LOGD(TAG, "Pick mode: %s, Exposure mode: %d, Channels: %zu",
              state->pick_mode == PS_PICK_RANDOM ? "RANDOM" : "RECENCY",
              state->exposure_mode, state->channel_count);
 
@@ -643,7 +650,7 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
         if ((ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX || ch->entry_format == PS_ENTRY_FORMAT_GIPHY) && ch->cache) {
             size_t ci_count = ch->cache->entry_count;
             size_t lai_count = ch->cache->available_count;
-            ESP_LOGI(TAG, "  Ch[%zu] '%s': Ci=%zu, LAi=%zu, cursor=%lu, active=%d, weight=%lu",
+            ESP_LOGD(TAG, "  Ch[%zu] '%s': Ci=%zu, LAi=%zu, cursor=%lu, active=%d, weight=%lu",
                      i, ch->channel_id, ci_count, lai_count,
                      (unsigned long)ch->cursor, ch->active, (unsigned long)ch->weight);
             total_ci += ci_count;

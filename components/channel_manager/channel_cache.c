@@ -44,6 +44,7 @@ static struct {
     size_t registered_count;
     char channels_path[128];  // Stored for timer callback
     SemaphoreHandle_t registry_mutex;
+    TickType_t first_dirty_tick;  // Tick when first cache became dirty (0 = none)
 } s_cache_state = {0};
 
 // ============================================================================
@@ -1019,6 +1020,18 @@ void channel_cache_schedule_save(channel_cache_t *cache)
 
     cache->dirty = true;
 
+    // Record tick of first dirty mark (since last flush)
+    if (s_cache_state.first_dirty_tick == 0) {
+        s_cache_state.first_dirty_tick = xTaskGetTickCount() | 1;  // Ensure non-zero
+    }
+
+    // If max delay exceeded, flush immediately instead of resetting debounce
+    TickType_t elapsed = xTaskGetTickCount() - s_cache_state.first_dirty_tick;
+    if (elapsed >= pdMS_TO_TICKS(CHANNEL_CACHE_SAVE_MAX_DELAY_MS)) {
+        event_bus_emit_simple(P3A_EVENT_CACHE_FLUSH);
+        return;
+    }
+
     // Reset the debounce timer
     if (s_cache_state.save_timer) {
         xTimerReset(s_cache_state.save_timer, 0);
@@ -1043,6 +1056,9 @@ void channel_cache_flush_all(const char *channels_path)
             }
         }
     }
+
+    // Reset max-delay tracker after flush
+    s_cache_state.first_dirty_tick = 0;
 
     xSemaphoreGive(s_cache_state.registry_mutex);
 }

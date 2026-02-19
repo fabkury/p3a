@@ -33,42 +33,42 @@ void giphy_deinit(void);
 // ============================================================================
 
 /**
- * @brief Fetch trending GIFs from Giphy API
+ * @brief Context for Giphy API fetch operations
  *
- * Paginates internally (limit=50 per request) up to max_entries.
- * Uses configured API key, rating, rendition, and format from config_store.
- *
- * @param out_entries Output array of entries
- * @param max_entries Maximum number of entries to fetch
- * @param out_count Actual number of entries fetched
- * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no API key configured,
- *         ESP_ERR_NOT_ALLOWED on invalid API key (HTTP 401/403),
- *         ESP_ERR_INVALID_RESPONSE on rate limiting (HTTP 429),
- *         ESP_ERR_TIMEOUT on network timeout, ESP_FAIL on other API error
+ * Bundles API configuration and a shared response buffer so that the caller
+ * can reuse the same buffer across multiple paginated requests.
  */
-esp_err_t giphy_fetch_trending(giphy_channel_entry_t *out_entries,
-                               size_t max_entries, size_t *out_count);
+typedef struct {
+    char api_key[128];
+    char rendition[32];
+    char format[8];
+    char rating[8];
+    char query[64];             ///< Search query (empty = trending, non-empty = search)
+    char *response_buf;         ///< Caller-allocated buffer (PSRAM recommended)
+    size_t response_buf_size;   ///< Size of response_buf in bytes
+} giphy_fetch_ctx_t;
 
 /**
- * @brief Fetch GIFs matching a search query from Giphy API
+ * @brief Fetch a single page of GIFs from Giphy API (trending or search)
  *
- * Paginates internally (25 per request) up to max_entries.
- * Uses configured API key, rating, rendition, and format from config_store.
- * Underscores in the query are converted to spaces for the API call.
+ * When ctx->query is empty, fetches from /v1/gifs/trending.
+ * When ctx->query is non-empty, fetches from /v1/gifs/search with that query.
  *
- * @param query Search query string (e.g., "pixel_art")
- * @param out_entries Output array of entries
- * @param max_entries Maximum number of entries to fetch
- * @param out_count Actual number of entries fetched
- * @return ESP_OK on success, ESP_ERR_INVALID_ARG if query is empty,
- *         ESP_ERR_NOT_FOUND if no API key configured,
- *         ESP_ERR_NOT_ALLOWED on invalid API key (HTTP 401/403),
- *         ESP_ERR_INVALID_RESPONSE on rate limiting (HTTP 429),
- *         ESP_ERR_TIMEOUT on network timeout, ESP_FAIL on other API error
+ * Builds the request URL, performs the HTTP GET, parses the JSON response,
+ * and fills the output array with up to 25 entries. The caller is responsible
+ * for pagination, cancellation checks, and inter-page delays.
+ *
+ * @param ctx        Fetch context (API config + shared response buffer)
+ * @param offset     Pagination offset (0-based)
+ * @param out_entries Output array (must hold at least 25 entries)
+ * @param out_count  Number of entries parsed from this page
+ * @param out_has_more Set to true if more pages are likely available
+ * @return ESP_OK on success, ESP_ERR_NOT_ALLOWED on HTTP 401/403,
+ *         ESP_ERR_INVALID_RESPONSE on HTTP 429, ESP_FAIL on other errors
  */
-esp_err_t giphy_fetch_search(const char *query,
-                             giphy_channel_entry_t *out_entries,
-                             size_t max_entries, size_t *out_count);
+esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
+                           giphy_channel_entry_t *out_entries,
+                           size_t *out_count, bool *out_has_more);
 
 // ============================================================================
 // Cache / Path Helpers
@@ -174,7 +174,7 @@ esp_err_t giphy_refresh_channel(const char *channel_id);
 /**
  * @brief Cancel any in-progress Giphy refresh
  *
- * Sets a flag checked between API batches in giphy_fetch_trending().
+ * Sets a flag checked between pages in giphy_refresh_channel().
  * The in-flight HTTP request completes; cancellation takes effect at
  * the next check point. Safe to call from any task.
  */

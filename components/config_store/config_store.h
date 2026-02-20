@@ -478,6 +478,10 @@ void config_store_invalidate_giphy_refresh_interval(void);
 void config_store_set_giphy_refresh_allow_override(bool allow);
 bool config_store_get_giphy_refresh_allow_override(void);
 
+esp_err_t config_store_set_giphy_full_refresh(bool enable);
+bool config_store_get_giphy_full_refresh(void);
+void config_store_invalidate_giphy_full_refresh(void);
+
 #ifdef __cplusplus
 }
 #endif

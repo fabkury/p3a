@@ -152,6 +152,10 @@ esp_err_t h_put_config(httpd_req_t *req) {
     if (ri && cJSON_IsNumber(ri)) {
         config_store_invalidate_giphy_refresh_interval();
     }
+    cJSON *fr = cJSON_GetObjectItem(o, "giphy_full_refresh");
+    if (fr && cJSON_IsBool(fr)) {
+        config_store_invalidate_giphy_full_refresh();
+    }
 
     cJSON_Delete(o);
     send_json(req, 200, "{\"ok\":true}");

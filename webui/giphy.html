@@ -227,6 +227,13 @@ body {
         </label>
     </div>
     <div class="setting-hint">When checked, the next Giphy refresh will ignore the interval. Automatically unchecks after a successful refresh.</div>
+    <div class="checkbox-row">
+        <input type="checkbox" id="giphy-full-refresh">
+        <label class="checkbox-label" for="giphy-full-refresh">
+            Full refresh mode
+        </label>
+    </div>
+    <div class="setting-hint">Keeps the channel in sync with current Giphy results by removing entries no longer returned by the API.</div>
 </div>
 <div class="section">
     <button class="btn save-all" id="save-btn" onclick="saveAll()">Save All Settings</button>
@@ -302,6 +309,7 @@ function loadSettings() {
                 refreshSel.value = refreshVal;
                 if (!refreshSel.value) refreshSel.value = '3600';
                 document.getElementById('giphy-cache-size').value = cfg.giphy_cache_size || 400;
+                document.getElementById('giphy-full-refresh').checked = !!cfg.giphy_full_refresh;
             } catch (e) {
                 showToast('Failed to load settings', true);
             }
@@ -345,7 +353,8 @@ function saveAll() {
         giphy_format: format,
         giphy_rating: rating,
         giphy_refresh_interval: parseInt(document.getElementById('giphy-refresh').value, 10),
-        giphy_cache_size: cacheSize
+        giphy_cache_size: cacheSize,
+        giphy_full_refresh: document.getElementById('giphy-full-refresh').checked
     };
 
     var xhr = new XMLHttpRequest();

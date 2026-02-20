@@ -26,9 +26,18 @@
 #include "freertos/task.h"
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <time.h>
 
 static const char *TAG = "giphy_refresh";
+
+/**
+ * @brief Si hash node — tracks post_ids seen during a full-refresh cycle
+ */
+typedef struct {
+    int32_t post_id;
+    UT_hash_handle hh;
+} si_node_t;
 
 static volatile bool s_refresh_cancel = false;
 
@@ -212,6 +221,78 @@ static size_t giphy_lai_rebuild(channel_cache_t *cache)
     return found;
 }
 
+/**
+ * @brief Evict channel entries not present in the Si hash (full-refresh mode)
+ *
+ * Compacts the cache in-place, keeping only entries whose post_id exists in
+ * si_hash. Evicted entries have their cached files deleted.
+ */
+static void giphy_evict_orphans(channel_cache_t *cache, si_node_t *si_hash)
+{
+    if (!cache) return;
+
+    xSemaphoreTake(cache->mutex, portMAX_DELAY);
+
+    size_t kept = 0;
+    size_t evicted = 0;
+
+    for (size_t i = 0; i < cache->entry_count; i++) {
+        si_node_t *found = NULL;
+        HASH_FIND_INT(si_hash, &cache->entries[i].post_id, found);
+        if (found) {
+            // Keep — compact in place
+            if (kept != i) {
+                memcpy(&cache->entries[kept], &cache->entries[i],
+                       sizeof(makapix_channel_entry_t));
+            }
+            kept++;
+        } else {
+            // Evict — delete cached file
+            const giphy_channel_entry_t *ge =
+                (const giphy_channel_entry_t *)&cache->entries[i];
+            char filepath[256];
+            giphy_build_filepath(ge->giphy_id, ge->extension,
+                                 filepath, sizeof(filepath));
+            unlink(filepath);
+            evicted++;
+        }
+    }
+
+    cache->entry_count = kept;
+
+    // Rebuild Ci hash table
+    ci_post_id_node_t *node, *tmp;
+    HASH_ITER(hh, cache->post_id_hash, node, tmp) {
+        HASH_DEL(cache->post_id_hash, node);
+        free(node);
+    }
+    cache->post_id_hash = NULL;
+
+    for (size_t i = 0; i < kept; i++) {
+        ci_post_id_node_t *n = psram_malloc(sizeof(ci_post_id_node_t));
+        if (n) {
+            n->post_id = cache->entries[i].post_id;
+            n->ci_index = (uint32_t)i;
+            HASH_ADD_INT(cache->post_id_hash, post_id, n);
+        }
+    }
+
+    cache->dirty = true;
+    xSemaphoreGive(cache->mutex);
+
+    // Rebuild LAi from surviving files
+    giphy_lai_rebuild(cache);
+
+    // Save cache to disk
+    char channels_path[128];
+    if (sd_path_get_channel(channels_path, sizeof(channels_path)) != ESP_OK) {
+        strlcpy(channels_path, "/sdcard/p3a/channel", sizeof(channels_path));
+    }
+    channel_cache_save(cache, channels_path);
+
+    ESP_LOGI(TAG, "Full refresh: evicted %zu orphaned entries, %zu kept", evicted, kept);
+}
+
 // Response buffer size for Giphy API (allocated in PSRAM).
 // Each GIF object is ~8KB of JSON; at 25 items/page this is ~200KB.
 #define GIPHY_RESPONSE_BUF_SIZE (256 * 1024)
@@ -277,6 +358,9 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
         }
     }
 
+    // Read full-refresh setting early
+    bool full_refresh = config_store_get_giphy_full_refresh();
+
     // Rebuild LAi BEFORE the loop so the download manager recognizes
     // files already on disk from previous sessions
     size_t available = giphy_lai_rebuild(cache);
@@ -290,6 +374,9 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
     int offset = 0;
     esp_err_t last_err = ESP_OK;
     bool refresh_completed = true;
+
+    // Si hash: tracks all post_ids seen during this refresh (full-refresh mode)
+    si_node_t *si_hash = NULL;
 
     while ((size_t)offset < cache_size) {
         if (s_refresh_cancel) {
@@ -329,6 +416,22 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
             break;
         }
 
+        // Track page entries in Si hash for full-refresh eviction
+        if (full_refresh) {
+            for (size_t i = 0; i < page_count; i++) {
+                int32_t pid = page_entries[i].post_id;
+                si_node_t *existing = NULL;
+                HASH_FIND_INT(si_hash, &pid, existing);
+                if (!existing) {
+                    si_node_t *n = psram_malloc(sizeof(si_node_t));
+                    if (n) {
+                        n->post_id = pid;
+                        HASH_ADD_INT(si_hash, post_id, n);
+                    }
+                }
+            }
+        }
+
         total_fetched += page_count;
         ESP_LOGI(TAG, "Page merged: %zu entries (total: %zu)", page_count, total_fetched);
 
@@ -346,6 +449,21 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
     }
 
     free(ctx.response_buf);
+
+    // Full-refresh eviction: remove entries not seen in this refresh cycle
+    if (refresh_completed && full_refresh && si_hash) {
+        giphy_evict_orphans(cache, si_hash);
+    }
+
+    // Free Si hash (always, even on error/cancel)
+    {
+        si_node_t *node, *tmp;
+        HASH_ITER(hh, si_hash, node, tmp) {
+            HASH_DEL(si_hash, node);
+            free(node);
+        }
+        si_hash = NULL;
+    }
 
     // Only persist last_refresh timestamp when the refresh ran to completion.
     // Cancelled or failed refreshes must not update the timestamp, otherwise

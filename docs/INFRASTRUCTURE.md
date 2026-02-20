@@ -51,7 +51,7 @@ This document provides a comprehensive overview of the p3a (Pixel Pea) firmware 
 
 - **Custom components**: 13+ ESP-IDF components
 - **Main application files**: ~11 C source files
-- **Build artifacts**: ~22MB (compiled binaries + SPIFFS image)
+- **Build artifacts**: ~22MB (compiled binaries + LittleFS image)
 
 ---
 
@@ -97,7 +97,7 @@ This document provides a comprehensive overview of the p3a (Pixel Pea) firmware 
 1. **Initialization** (`app_main`):
    - NVS flash initialization
    - Network interface setup
-   - Board SPIFFS filesystem mount (`p3a_board_spiffs_mount`)
+   - Board LittleFS filesystem mount (`p3a_board_littlefs_mount`)
    - LCD, touch, USB, and Wi-Fi initialization
    - HTTP server startup
    - Makapix Club connection (if provisioned)
@@ -146,7 +146,7 @@ p3a/
 │   ├── p3a_board_ep44b/      # Board abstraction (EP44B hardware)
 │   │   ├── include/p3a_board.h  # Public board API
 │   │   ├── p3a_board_display.c  # Display hardware
-│   │   ├── p3a_board_fs.c       # SPIFFS initialization
+│   │   ├── p3a_board_fs.c       # LittleFS initialization
 │   │   ├── CMakeLists.txt
 │   │   └── Kconfig
 │   │
@@ -234,8 +234,8 @@ p3a/
 
 ### Key Files
 
-- **CMakeLists.txt**: Root build configuration, includes SPIFFS image creation
-- **partitions.csv**: Defines flash memory layout (NVS, OTA partitions, SPIFFS)
+- **CMakeLists.txt**: Root build configuration, includes LittleFS image creation
+- **partitions.csv**: Defines flash memory layout (NVS, OTA partitions, LittleFS)
 - **sdkconfig**: ESP-IDF project configuration (auto-generated from menuconfig)
 - **dependencies.lock**: Pinned versions of ESP Component Registry dependencies
 
@@ -255,13 +255,13 @@ cmake_minimum_required(VERSION 3.16)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 add_compile_options(-Wno-ignored-qualifiers)
 project(p3a)
-spiffs_create_partition_image(storage webui FLASH_IN_PROJECT)
+littlefs_create_partition_image(storage webui FLASH_IN_PROJECT)
 ```
 
 Key features:
 - **Target**: `esp32p4`
 - **Compiler flags**: `-Wno-ignored-qualifiers` to suppress qualifier warnings
-- **SPIFFS**: Web UI assets compiled into a partition image
+- **LittleFS**: Web UI assets compiled into a partition image
 
 #### Main Component Registration
 
@@ -327,7 +327,7 @@ idf.py flash monitor
   - `P3A_DISPLAY_WIDTH` (720), `P3A_DISPLAY_HEIGHT` (720)
   - `P3A_PIXEL_RGB888` / `P3A_PIXEL_RGB565`
   - `P3A_HAS_TOUCH`, `P3A_HAS_WIFI`, `P3A_HAS_USB`, etc.
-- **Functions**: `p3a_board_display_init()`, `p3a_board_spiffs_mount()`, `p3a_board_set_brightness()`, etc.
+- **Functions**: `p3a_board_display_init()`, `p3a_board_littlefs_mount()`, `p3a_board_set_brightness()`, etc.
 
 #### 2. **channel_manager** (Playlist/Channel Management)
 - **Purpose**: Manages animation channels, playlists, and vault storage
@@ -506,10 +506,10 @@ idf.py flash monitor
 
 ## Storage and Filesystem
 
-### SPIFFS (Internal Flash)
-- **Partition**: `storage` (1MB)
-- **Mount point**: `/spiffs`
-- **Initialization**: `p3a_board_spiffs_mount()` (in p3a_board_ep44b)
+### LittleFS (Internal Flash)
+- **Partition**: `storage` (4MB)
+- **Mount point**: `/webui`
+- **Initialization**: `p3a_board_littlefs_mount()` (in p3a_board_ep44b)
 - **Purpose**: Web UI assets, configuration
 
 ### SD Card (SDMMC)

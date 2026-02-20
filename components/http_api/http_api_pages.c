@@ -59,7 +59,7 @@ static esp_err_t serve_surrogate_ui(httpd_req_t *req)
  * Falls back to uncompressed version if .gz not found.
  *
  * @param req HTTP request
- * @param filepath Full path to file (e.g., "/spiffs/index.html")
+ * @param filepath Full path to file (e.g., "/webui/index.html")
  * @return ESP_OK on success, error code on failure
  */
 esp_err_t serve_file(httpd_req_t *req, const char *filepath) {
@@ -160,7 +160,7 @@ esp_err_t serve_file(httpd_req_t *req, const char *filepath) {
  * Serves the main control page from LittleFS
  */
 esp_err_t h_get_root(httpd_req_t *req) {
-    return serve_file(req, "/spiffs/index.html");
+    return serve_file(req, "/webui/index.html");
 }
 
 /**
@@ -168,7 +168,7 @@ esp_err_t h_get_root(httpd_req_t *req) {
  * Serves the settings page from LittleFS
  */
 esp_err_t h_get_settings(httpd_req_t *req) {
-    return serve_file(req, "/spiffs/settings.html");
+    return serve_file(req, "/webui/settings.html");
 }
 
 /**
@@ -176,7 +176,7 @@ esp_err_t h_get_settings(httpd_req_t *req) {
  * Serves the network status page from LittleFS
  */
 esp_err_t h_get_network_config(httpd_req_t *req) {
-    return serve_file(req, "/spiffs/config/network.html");
+    return serve_file(req, "/webui/config/network.html");
 }
 
 /**
@@ -184,7 +184,7 @@ esp_err_t h_get_network_config(httpd_req_t *req) {
  * Serves the Giphy settings page from LittleFS
  */
 static esp_err_t h_get_giphy(httpd_req_t *req) {
-    return serve_file(req, "/spiffs/giphy.html");
+    return serve_file(req, "/webui/giphy.html");
 }
 
 /**
@@ -212,7 +212,7 @@ esp_err_t h_post_erase(httpd_req_t *req) {
  * Serves favicon from LittleFS
  */
 static esp_err_t h_get_favicon(httpd_req_t *req) {
-    return serve_file(req, "/spiffs/favicon.ico");
+    return serve_file(req, "/webui/favicon.ico");
 }
 
 // ---------- Static File Handler ----------
@@ -224,9 +224,9 @@ static esp_err_t h_get_favicon(httpd_req_t *req) {
 static esp_err_t h_get_static(httpd_req_t *req) {
     const char* uri = req->uri;
 
-    // Map /static/* to /spiffs/static/*
+    // Map /static/* to /webui/static/*
     char filepath[MAX_FILE_PATH];
-    static const char *prefix = "/spiffs";
+    static const char *prefix = "/webui";
     size_t prefix_len = strlen(prefix);
     size_t uri_len = strlen(uri);
     if (prefix_len + uri_len >= sizeof(filepath)) {
@@ -264,7 +264,7 @@ esp_err_t http_api_pages_route_get(httpd_req_t *req) {
         return h_get_giphy(req);
     }
     if (strcmp(uri, "/playset-editor") == 0) {
-        return serve_file(req, "/spiffs/playset-editor.html");
+        return serve_file(req, "/webui/playset-editor.html");
     }
 
 #if CONFIG_P3A_PICO8_ENABLE

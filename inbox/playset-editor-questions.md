@@ -23,10 +23,10 @@ Existing pages are routed in `http_api_pages.c:245` (`http_api_pages_route_get`)
 
 | URL | File |
 |-----|------|
-| `/` | `/spiffs/index.html` |
-| `/settings` | `/spiffs/settings.html` |
-| `/giphy` | `/spiffs/giphy.html` |
-| `/config/network` | `/spiffs/config/network.html` |
+| `/` | `/webui/index.html` |
+| `/settings` | `/webui/settings.html` |
+| `/giphy` | `/webui/giphy.html` |
+| `/config/network` | `/webui/config/network.html` |
 
 **Question:** What URL should the playset editor live at?
 

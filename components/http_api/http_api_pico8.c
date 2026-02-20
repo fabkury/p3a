@@ -19,10 +19,10 @@ static bool s_ws_client_connected = false;
 
 /**
  * GET /pico8
- * Serves the PICO-8 monitor page from SPIFFS
+ * Serves the PICO-8 monitor page from LittleFS
  */
 esp_err_t h_get_pico8(httpd_req_t *req) {
-    const char* filepath = "/spiffs/pico8/index.html";
+    const char* filepath = "/webui/pico8/index.html";
     
     FILE* f = fopen(filepath, "r");
     if (!f) {

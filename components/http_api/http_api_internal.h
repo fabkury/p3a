@@ -102,7 +102,7 @@ const char* get_mime_type(const char* path);
  * Falls back to uncompressed version if .gz not found.
  *
  * @param req HTTP request
- * @param filepath Full path to file (e.g., "/spiffs/index.html")
+ * @param filepath Full path to file (e.g., "/webui/index.html")
  * @return ESP_OK on success, error code on failure
  */
 esp_err_t serve_file(httpd_req_t *req, const char *filepath);

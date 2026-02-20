@@ -841,7 +841,7 @@ static void html_escape_ssid(const char *in, char *out, size_t out_len) {
 
 /* Serve success page with SSID injected - serves HTML directly instead of redirect */
 static esp_err_t serve_success_page_with_ssid(httpd_req_t *req, const char *ssid) {
-    const char *filepath = "/spiffs/setup/success.html";
+    const char *filepath = "/webui/setup/success.html";
     const char *placeholder = "{SSID}";
 
     FILE *f = fopen(filepath, "r");
@@ -973,7 +973,7 @@ static esp_err_t serve_file_simple(httpd_req_t *req, const char *filepath) {
 /* HTTP Server Handlers */
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
-    return serve_file_simple(req, "/spiffs/setup/index.html");
+    return serve_file_simple(req, "/webui/setup/index.html");
 }
 
 static esp_err_t save_post_handler(httpd_req_t *req)
@@ -1041,7 +1041,7 @@ static esp_err_t save_post_handler(httpd_req_t *req)
         return ret;
     } else {
         // SSID required - serve error page
-        return serve_file_simple(req, "/spiffs/setup/error.html");
+        return serve_file_simple(req, "/webui/setup/error.html");
     }
 
     return ESP_OK;
@@ -1053,7 +1053,7 @@ static esp_err_t erase_post_handler(httpd_req_t *req)
     ESP_LOGD(TAG, "Erased credentials, rebooting...");
 
     // Serve the erased confirmation page
-    esp_err_t ret = serve_file_simple(req, "/spiffs/setup/erased.html");
+    esp_err_t ret = serve_file_simple(req, "/webui/setup/erased.html");
 
     // Delay before reboot to allow the response to be sent and rendered
     vTaskDelay(pdMS_TO_TICKS(1200));
@@ -1073,9 +1073,9 @@ static esp_err_t setup_get_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    // Map /setup/X to /spiffs/setup/X
+    // Map /setup/X to /webui/setup/X
     char filepath[128];
-    snprintf(filepath, sizeof(filepath), "/spiffs%.64s", uri);
+    snprintf(filepath, sizeof(filepath), "/webui%.64s", uri);
 
     return serve_file_simple(req, filepath);
 }

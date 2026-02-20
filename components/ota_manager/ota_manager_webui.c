@@ -193,7 +193,7 @@ esp_err_t webui_ota_get_current_version(char *version, size_t buf_size)
         return ESP_ERR_INVALID_ARG;
     }
 
-    FILE *f = fopen("/spiffs/version.txt", "r");
+    FILE *f = fopen("/webui/version.txt", "r");
     if (!f) {
         // Only log warning if partition is supposed to be valid
         // (avoids noise during OTA updates when filesystem is temporarily unmounted)
@@ -613,7 +613,7 @@ esp_err_t webui_ota_install_update(const char *download_url,
 
     // Remount LittleFS
     esp_vfs_littlefs_conf_t conf = {
-        .base_path = "/spiffs",
+        .base_path = "/webui",
         .partition_label = "storage",
         .format_if_mount_failed = false,
         .dont_mount = false,

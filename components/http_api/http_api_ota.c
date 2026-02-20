@@ -333,7 +333,7 @@ static esp_err_t h_post_webui_ota_repair(httpd_req_t *req) {
  * Serves the OTA update page from LittleFS
  */
 static esp_err_t h_get_ota_page(httpd_req_t *req) {
-    return serve_file(req, "/spiffs/ota.html");
+    return serve_file(req, "/webui/ota.html");
 }
 
 // ---------- Sub-router entrypoints ----------

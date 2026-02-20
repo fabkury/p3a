@@ -219,7 +219,7 @@ const char *webui_ota_state_to_string(webui_ota_state_t state);
 /**
  * @brief Get current web UI version
  *
- * Reads version from /spiffs/version.txt
+ * Reads version from /webui/version.txt
  *
  * @param[out] version Buffer to store version string (at least 16 bytes)
  * @param buf_size Size of version buffer

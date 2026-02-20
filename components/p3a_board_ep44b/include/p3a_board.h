@@ -259,7 +259,7 @@ const char* p3a_board_sdcard_mount_point(void);
 /**
  * @brief Mount LittleFS filesystem for web UI assets
  *
- * Mounts the LittleFS partition at /spiffs for web UI and configuration.
+ * Mounts the LittleFS partition at /webui for web UI and configuration.
  *
  * @return ESP_OK on success
  */

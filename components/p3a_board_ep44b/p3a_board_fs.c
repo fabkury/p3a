@@ -16,7 +16,7 @@ esp_err_t p3a_board_littlefs_mount(void)
     }
 
     esp_vfs_littlefs_conf_t conf = {
-        .base_path = "/spiffs",
+        .base_path = "/webui",
         .partition_label = "storage",
         .format_if_mount_failed = false,
         .dont_mount = false,
@@ -80,7 +80,7 @@ static bool check_webui_partition_health(void)
     }
 
     // Check if version.txt exists and is readable
-    FILE *f = fopen("/spiffs/version.txt", "r");
+    FILE *f = fopen("/webui/version.txt", "r");
     if (!f) {
         ESP_LOGW(TAG, "Web UI version.txt not found");
         return false;

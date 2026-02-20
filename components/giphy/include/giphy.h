@@ -152,6 +152,25 @@ esp_err_t giphy_build_download_url(const char *giphy_id, char *out_url, size_t o
 esp_err_t giphy_download_artwork(const char *giphy_id, uint8_t extension,
                                  char *out_path, size_t out_len);
 
+/**
+ * @brief Progress callback for giphy_download_artwork_with_progress()
+ *
+ * @param bytes_read Bytes downloaded so far
+ * @param content_length Total content length from HTTP header
+ * @param user_ctx User context pointer
+ */
+typedef void (*giphy_download_progress_cb_t)(size_t bytes_read, size_t content_length, void *user_ctx);
+
+/**
+ * @brief Download a Giphy artwork with progress reporting
+ *
+ * Same as giphy_download_artwork() but invokes progress_cb after each chunk.
+ */
+esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t extension,
+                                               char *out_path, size_t out_len,
+                                               giphy_download_progress_cb_t progress_cb,
+                                               void *progress_ctx);
+
 // ============================================================================
 // Refresh (called from play_scheduler_refresh)
 // ============================================================================
@@ -170,6 +189,24 @@ esp_err_t giphy_download_artwork(const char *giphy_id, uint8_t extension,
  * @return ESP_OK on success, ESP_ERR_INVALID_STATE if WiFi not ready
  */
 esp_err_t giphy_refresh_channel(const char *channel_id);
+
+/**
+ * @brief Progress callback for giphy_refresh_channel_with_progress()
+ *
+ * @param current_offset Entries fetched so far
+ * @param cache_size     Target cache size (total expected)
+ * @param user_ctx       User context pointer
+ */
+typedef void (*giphy_refresh_progress_cb_t)(int current_offset, int cache_size, void *user_ctx);
+
+/**
+ * @brief Refresh a Giphy channel with per-page progress reporting
+ *
+ * Same as giphy_refresh_channel() but invokes progress_cb after each page merge.
+ */
+esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
+                                               giphy_refresh_progress_cb_t progress_cb,
+                                               void *progress_ctx);
 
 /**
  * @brief Cancel any in-progress Giphy refresh

@@ -128,6 +128,14 @@ static esp_err_t ensure_giphy_dirs(const char *giphy_base,
 esp_err_t giphy_download_artwork(const char *giphy_id, uint8_t extension,
                                  char *out_path, size_t out_len)
 {
+    return giphy_download_artwork_with_progress(giphy_id, extension, out_path, out_len, NULL, NULL);
+}
+
+esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t extension,
+                                               char *out_path, size_t out_len,
+                                               giphy_download_progress_cb_t progress_cb,
+                                               void *progress_ctx)
+{
     if (!giphy_id || !out_path || out_len == 0) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -228,6 +236,7 @@ esp_err_t giphy_download_artwork(const char *giphy_id, uint8_t extension,
     }
 
     esp_http_client_fetch_headers(client);
+    int64_t content_length = esp_http_client_get_content_length(client);
     int status = esp_http_client_get_status_code(client);
 
     if (status == 404) {
@@ -287,6 +296,12 @@ esp_err_t giphy_download_artwork(const char *giphy_id, uint8_t extension,
         }
 
         total_written += written;
+
+        if (progress_cb) {
+            progress_cb(total_written,
+                        (content_length > 0) ? (size_t)content_length : 0,
+                        progress_ctx);
+        }
 
         if (chunk_received < DOWNLOAD_CHUNK_SIZE) break;  // Last chunk
     }

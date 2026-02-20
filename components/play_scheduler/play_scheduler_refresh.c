@@ -98,6 +98,27 @@ static int find_next_pending_refresh(ps_state_t *state)
     return -1;
 }
 
+// External: check if download manager is actively downloading
+extern bool download_manager_is_busy(void);
+
+/**
+ * @brief Progress callback for Giphy channel refresh
+ *
+ * Updates the UI with page-fetch progress during fresh start.
+ * Yields to download progress when the download manager is busy.
+ */
+static void giphy_refresh_ui_cb(int offset, int cache_size, void *ctx)
+{
+    // Don't override download progress
+    if (download_manager_is_busy()) return;
+
+    const char *name = (const char *)ctx;
+    int pct = (cache_size > 0) ? (offset * 100) / cache_size : -1;
+    char detail[64];
+    snprintf(detail, sizeof(detail), "Fetching trending (%d/%d)", offset, cache_size);
+    p3a_render_set_channel_message(name, P3A_CHANNEL_MSG_LOADING, pct, detail);
+}
+
 /**
  * @brief Progress callback for artwork downloads
  *
@@ -456,14 +477,16 @@ static void refresh_task(void *arg)
                 // "Loading channel..." from ps_execute_scheduler_command() was
                 // skipped because WiFi wasn't ready yet.
                 extern bool animation_player_is_animation_ready(void);
+                char giphy_display_name[64];
+                ps_get_display_name(channel_id, giphy_display_name, sizeof(giphy_display_name));
                 if (!animation_player_is_animation_ready()) {
-                    char giphy_display_name[64];
-                    ps_get_display_name(channel_id, giphy_display_name, sizeof(giphy_display_name));
                     p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_LOADING, -1,
                                                    "Loading channel...");
+                    err = giphy_refresh_channel_with_progress(channel_id,
+                              giphy_refresh_ui_cb, giphy_display_name);
+                } else {
+                    err = giphy_refresh_channel(channel_id);
                 }
-
-                err = giphy_refresh_channel(channel_id);
                 if (err == ESP_OK) {
                     config_store_set_giphy_refresh_allow_override(false);
                 } else if (err == ESP_ERR_NOT_ALLOWED) {
@@ -556,9 +579,13 @@ static void refresh_task(void *arg)
             // For artwork channels: DON'T clear the message here.
             // The animation player will clear it AFTER the buffer swap completes,
             // ensuring seamless UI → new animation transition (no flash).
-            // For other channels: clear immediately since no animation is playing.
+            // For other channels during normal operation: clear immediately.
+            // During fresh start: keep the message until the buffer swap clears it.
             if (!is_artwork_channel) {
-                p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
+                extern bool animation_player_is_animation_ready(void);
+                if (animation_player_is_animation_ready()) {
+                    p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
+                }
             }
 
             // Trigger playback

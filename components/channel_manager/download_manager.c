@@ -492,6 +492,14 @@ static char s_task_vault_base[128];   // For LTF operations
 static char s_task_marker_path[264];  // For 404 marker creation
 static char s_task_display_name[64];  // For UI display name
 
+static void dl_progress_cb(size_t bytes_read, size_t content_length, void *ctx)
+{
+    const char *name = (const char *)ctx;
+    int pct = (content_length > 0) ? (int)((bytes_read * 100) / content_length) : -1;
+    p3a_render_set_channel_message(name, 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, pct,
+                                    "Downloading artwork...");
+}
+
 static void download_task(void *arg)
 {
     (void)arg;
@@ -634,7 +642,8 @@ static void download_task(void *arg)
                 if (swap_err == ESP_OK) {
                     ESP_LOGI(TAG, "Existing file found - triggered playback via play_scheduler");
                     s_playback_initiated = true;
-                    p3a_render_set_channel_message(NULL, 0 /* P3A_CHANNEL_MSG_NONE */, -1, NULL);
+                    // Don't clear the channel message here - the animation player
+                    // will clear it after the buffer swap completes (seamless transition)
                 }
             }
 
@@ -656,16 +665,12 @@ static void download_task(void *arg)
         s_all_downloaded_logged = false;
         set_busy(true, s_dl_req.channel_id);
 
-        // Update UI message if:
-        // - No animation is playing yet
-        // - We haven't initiated playback
-        // - The initial refresh has completed (so we don't override "Updating channel index...")
-        // During initial refresh, let the refresh task control the message
-        bool refresh_done = makapix_channel_is_refresh_done();
-        if (!s_playback_initiated && !animation_player_is_animation_ready() && refresh_done) {
+        // Update UI message during fresh start (no animation playing yet)
+        // Show download progress immediately, even if refresh is still running
+        if (!s_playback_initiated && !animation_player_is_animation_ready()) {
             // Get display name from channel_id in the request (using static buffer)
             dl_get_display_name(s_dl_req.channel_id, s_task_display_name, sizeof(s_task_display_name));
-            p3a_render_set_channel_message(s_task_display_name, 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1, "Downloading artwork...");
+            p3a_render_set_channel_message(s_task_display_name, 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, 0, "Downloading artwork...");
         }
 
         memset(s_task_out_path, 0, sizeof(s_task_out_path));
@@ -677,7 +682,13 @@ static void download_task(void *arg)
             uint8_t ext = 0;  // default webp
             size_t flen = strlen(s_dl_req.filepath);
             if (flen >= 4 && strcmp(s_dl_req.filepath + flen - 4, ".gif") == 0) ext = 1;
-            err = giphy_download_artwork(s_dl_req.storage_key, ext, s_task_out_path, sizeof(s_task_out_path));
+            if (!s_playback_initiated && !animation_player_is_animation_ready()) {
+                err = giphy_download_artwork_with_progress(s_dl_req.storage_key, ext,
+                          s_task_out_path, sizeof(s_task_out_path),
+                          dl_progress_cb, s_task_display_name);
+            } else {
+                err = giphy_download_artwork(s_dl_req.storage_key, ext, s_task_out_path, sizeof(s_task_out_path));
+            }
         } else {
             err = makapix_artwork_download(s_dl_req.art_url, s_dl_req.storage_key, s_task_out_path, sizeof(s_task_out_path));
         }
@@ -701,8 +712,8 @@ static void download_task(void *arg)
                 if (swap_err == ESP_OK) {
                     ESP_LOGI(TAG, "First download complete - triggered playback via play_scheduler");
                     s_playback_initiated = true;  // Mark that we've initiated playback
-                    // Clear the loading message since playback is starting
-                    p3a_render_set_channel_message(NULL, 0 /* P3A_CHANNEL_MSG_NONE */, -1, NULL);
+                    // Don't clear the channel message here - the animation player
+                    // will clear it after the buffer swap completes (seamless transition)
                 } else {
                     ESP_LOGD(TAG, "play_scheduler_next after download returned: %s", esp_err_to_name(swap_err));
                 }

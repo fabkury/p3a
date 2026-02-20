@@ -299,6 +299,13 @@ static void giphy_evict_orphans(channel_cache_t *cache, si_node_t *si_hash)
 
 esp_err_t giphy_refresh_channel(const char *channel_id)
 {
+    return giphy_refresh_channel_with_progress(channel_id, NULL, NULL);
+}
+
+esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
+                                               giphy_refresh_progress_cb_t progress_cb,
+                                               void *progress_ctx)
+{
     if (!channel_id) return ESP_ERR_INVALID_ARG;
 
     ESP_LOGI(TAG, "Refreshing Giphy channel: %s", channel_id);
@@ -443,6 +450,11 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
 
         // Signal download manager — downloads can start while we fetch more pages
         download_manager_rescan();
+
+        // Report progress to caller (e.g. UI)
+        if (progress_cb) {
+            progress_cb(offset + (int)page_count, (int)cache_size, progress_ctx);
+        }
 
         offset += (int)page_count;
 

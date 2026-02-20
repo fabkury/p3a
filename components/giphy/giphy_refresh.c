@@ -375,8 +375,10 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
     esp_err_t last_err = ESP_OK;
     bool refresh_completed = true;
 
-    // Si hash: tracks all post_ids seen during this refresh (full-refresh mode)
+    // Si hash: tracks all post_ids seen during this refresh (full-refresh mode).
+    // Capped at cache_size so the post-eviction cache never exceeds the limit.
     si_node_t *si_hash = NULL;
+    size_t si_count = 0;
 
     while ((size_t)offset < cache_size) {
         if (s_refresh_cancel) {
@@ -408,8 +410,11 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
             break;
         }
 
-        // Merge this page into cache
-        esp_err_t merge_err = giphy_merge_entries(cache, page_entries, page_count, cache_size);
+        // Merge this page into cache. In full-refresh mode, allow the cache to
+        // temporarily exceed the cap so new API entries aren't dropped — the
+        // eviction pass after the loop compacts it back down.
+        size_t merge_limit = full_refresh ? (cache_size * 2) : cache_size;
+        esp_err_t merge_err = giphy_merge_entries(cache, page_entries, page_count, merge_limit);
         if (merge_err != ESP_OK) {
             ESP_LOGW(TAG, "Merge failed at offset=%d: %s", offset, esp_err_to_name(merge_err));
             refresh_completed = false;
@@ -418,7 +423,7 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
 
         // Track page entries in Si hash for full-refresh eviction
         if (full_refresh) {
-            for (size_t i = 0; i < page_count; i++) {
+            for (size_t i = 0; i < page_count && si_count < cache_size; i++) {
                 int32_t pid = page_entries[i].post_id;
                 si_node_t *existing = NULL;
                 HASH_FIND_INT(si_hash, &pid, existing);
@@ -427,6 +432,7 @@ esp_err_t giphy_refresh_channel(const char *channel_id)
                     if (n) {
                         n->post_id = pid;
                         HASH_ADD_INT(si_hash, post_id, n);
+                        si_count++;
                     }
                 }
             }

@@ -52,6 +52,7 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 
 - **Freeze-free, gapless playback**: Robust multi-buffer rendering handles animations smoothly, even with corrupt or problematic files
 - **Full format support**: Animated WebP and GIF, and still PNG all with transparency and alpha channel support, plus hardware-accelerated JPEG support
+- **Smart upscaling**: Giphy content is upscaled with hardware-accelerated bilinear interpolation (PPA) for smooth results, while pixel art from Makapix and local files uses nearest-neighbor scaling to preserve crisp pixel edges
 - **Aspect ratio preservation**: Non-square artworks display without distortion, properly centered with configurable background color
 
 ### Control & Customization
@@ -117,6 +118,7 @@ After the initial firmware flash via USB-C cable, all subsequent updates can be 
 p3a is in active development. The following features are implemented:
 
 - Display pipeline with multi-buffer rendering for freeze-free playback
+- **Hardware-accelerated upscaling** — PPA bilinear interpolation for Giphy content, nearest-neighbor for pixel art
 - Animation playback with prefetching and robust error handling
 - **Transparency & alpha channel support** for WebP, GIF, and PNG with configurable background color
 - **Aspect ratio preservation** for non-square artworks

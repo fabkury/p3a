@@ -127,6 +127,7 @@ p3a/
 │   ├── animation_player.c    # Core animation engine
 │   ├── animation_player_render.c   # Frame rendering
 │   ├── animation_player_loader.c   # Asset loading
+│   ├── display_ppa_upscaler.c # PPA hardware-accelerated upscaling (Giphy)
 │   ├── playback_controller.c # Playback source management
 │   ├── ugfx_ui.c             # µGFX-based UI rendering
 │   ├── CMakeLists.txt        # Main component build config
@@ -571,11 +572,12 @@ All p3a data is stored under the configurable root folder (`/sdcard/p3a` by defa
 - **Transparency/Alpha blending**: Images with transparent backgrounds are composited over a configurable background color
 - **Aspect ratio preservation**: Non-square images are scaled to fit while maintaining original proportions
 - **Configurable background**: Background color can be set via web UI or REST API
-- **Nearest-neighbor scaling**: Preserves crisp pixel art edges during upscaling
+- **Channel-aware upscaling**: Giphy content uses PPA hardware-accelerated bilinear interpolation (smooth results for photographic/video content), while pixel art from Makapix and local files uses CPU nearest-neighbor scaling (crisp pixel edges). The PPA path also handles rotation and R/B channel swap in hardware, with border regions filled via PPA Fill. Configurable via settings.
 
 ### Key Files
-- `display_renderer.c`: Frame buffer management, vsync, parallel upscaling, alpha blending
-- `animation_player_render.c`: Frame decoding, aspect ratio calculation, composition
+- `display_renderer.c`: Frame buffer management, vsync, parallel CPU upscaling, alpha blending
+- `animation_player_render.c`: Frame decoding, aspect ratio calculation, composition, PPA/CPU upscale routing
+- `display_ppa_upscaler.c`: PPA SRM bilinear upscaling with rotation and border fill for Giphy channels
 - `playback_controller.c`: Source switching (animation, PICO-8, UI)
 
 ---

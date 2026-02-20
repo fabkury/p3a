@@ -171,7 +171,7 @@ A dedicated 2D image processing engine for pixel-level transformations with zero
 
 **Performance note:** PPA throughput is proportional to block size and highly dependent on PSRAM bandwidth. When many peripherals access PSRAM simultaneously, performance degrades.
 
-**Upscaling caveat:** The PPA SRM engine uses bilinear interpolation, which produces blurry results when upscaling low-resolution pixel art. Makapix channels require crisp nearest-neighbor upscaling to preserve pixel-perfect edges, so PPA cannot be used for that path. Giphy channels (photographic/video content) could benefit from PPA-accelerated upscaling.
+**Upscaling note:** The PPA SRM engine uses bilinear interpolation, which produces smooth results for photographic/video content but blurs low-resolution pixel art. p3a uses PPA upscaling for Giphy channels (where bilinear interpolation improves visual quality) and retains CPU nearest-neighbor upscaling for Makapix and local file channels (where crisp pixel-perfect edges are essential). This is configurable via the "PPA Upscale" toggle in the settings UI.
 
 ### H.264 Encoder
 
@@ -269,7 +269,7 @@ A full camera image processing pipeline (designed for MIPI-CSI camera input).
 | Capability | Used by p3a? | Notes |
 |-----------|:---:|-------|
 | **JPEG HW Codec** | Yes (decode) | `animation_decoder` decodes JPEG artwork via hardware |
-| **PPA** | No | PPA uses bilinear interpolation (blurry upscaling), which disqualifies it for Makapix channels that require nearest-neighbor upscaling. Could benefit Giphy channels and alpha blending/fill operations. |
+| **PPA** | Yes (Giphy) | SRM engine upscales Giphy content with bilinear interpolation + rotation + R/B swap; Fill engine draws background-colored borders. Pixel art channels use CPU nearest-neighbor to preserve crisp edges. Configurable via settings. |
 | **H.264 Encoder** | No | Encode-only; not applicable to playback |
 | **2D-DMA** | Indirectly | Serves JPEG decoder; may assist display path |
 | **ISP** | No | Camera pipeline; not needed without camera |

@@ -63,7 +63,7 @@ The firmware looks for artwork in this order:
 
 - **Any aspect ratio works** — non-square images are scaled to fit while preserving the original aspect ratio
 - **Small pixel art is upscaled** — a 128×128 image will be scaled up to fill the display
-- **Nearest-neighbor scaling** preserves crisp pixel edges
+- **Smart upscaling** — pixel art (Makapix and local files) uses nearest-neighbor scaling to preserve crisp pixel edges, while Giphy content uses hardware-accelerated bilinear interpolation for smooth results
 - **Centered display** — artwork is centered on the 720×720 display with configurable background color
 - **Transparent artwork** — images with transparency are composited over the configured background color
 

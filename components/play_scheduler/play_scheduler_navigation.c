@@ -92,6 +92,7 @@ static esp_err_t prepare_and_request_swap(ps_state_t *state, const ps_artwork_t 
     swap_request_t request = {0};
     strlcpy(request.filepath, artwork->filepath, sizeof(request.filepath));
     request.type = artwork->type;
+    request.channel_type = artwork->channel_type;
     request.post_id = artwork->post_id;
 
     // Dwell time: user override > artwork dwell

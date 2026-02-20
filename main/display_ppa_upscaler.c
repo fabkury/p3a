@@ -17,7 +17,6 @@
 #include "display_ppa_upscaler.h"
 #include "config_store.h"
 #include "driver/ppa.h"
-#include "esp_cache.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include <math.h>
@@ -233,15 +232,9 @@ esp_err_t display_ppa_upscale_rgb(
         }
     }
 
-    // --- Cache coherency: flush source buffer from CPU cache to memory ---
-    uint32_t src_size = (uint32_t)(src_w * src_h * BYTES_PER_PIXEL);
-    err = esp_cache_msync((void *)src_rgb, src_size, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Cache flush (src C2M) failed: %s", esp_err_to_name(err));
-        // Non-fatal: PPA may still work with stale data, but try anyway
-    }
-
     // --- PPA SRM operation ---
+    // Note: manual cache sync removed -- the PPA driver handles cache coherency
+    // internally (source flush with UNALIGNED flag, destination invalidation).
     ppa_srm_oper_config_t srm_cfg = {
         .in = {
             .buffer = (const void *)src_rgb,
@@ -277,11 +270,12 @@ esp_err_t display_ppa_upscale_rgb(
         return err;
     }
 
-    // --- Cache coherency: invalidate destination buffer so CPU sees PPA output ---
-    err = esp_cache_msync(dst_buffer, dst_buf_size, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Cache invalidate (dst M2C) failed: %s", esp_err_to_name(err));
-        // Non-fatal: display may show stale data for one frame
+    static bool s_first_srm_ok = true;
+    if (s_first_srm_ok) {
+        ESP_LOGI(TAG, "PPA SRM ok (src=%dx%d -> %dx%d @ offset %d,%d scale=%.3f rot=%d)",
+                 src_w, src_h, actual_w, actual_h,
+                 offset_x, offset_y, quantized_scale, (int)rotation);
+        s_first_srm_ok = false;
     }
 
     return ESP_OK;

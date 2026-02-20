@@ -168,13 +168,27 @@ static void upscale_frame_to_display(const animation_buffer_t *buf,
 #if CONFIG_P3A_PPA_UPSCALE_ENABLE
     if (config_store_get_ppa_upscale() &&
         buf->channel_type == PS_CHANNEL_TYPE_GIPHY) {
+        static bool s_ppa_first_attempt = true;
+        if (s_ppa_first_attempt) {
+            ESP_LOGI(TAG, "PPA upscale: first attempt (src=%dx%d dst=%dx%d)",
+                     buf->upscale_src_w, buf->upscale_src_h,
+                     buf->upscale_dst_w, buf->upscale_dst_h);
+            s_ppa_first_attempt = false;
+        }
         esp_err_t err = display_ppa_upscale_rgb(
             src, buf->upscale_src_w, buf->upscale_src_h,
             dst, buf->upscale_dst_w, buf->upscale_dst_h,
             buf->upscale_has_borders,
             display_renderer_get_rotation());
-        if (err == ESP_OK) return;
-        // PPA failed: fall through to CPU upscale
+        if (err == ESP_OK) {
+            static bool s_ppa_first_success = true;
+            if (s_ppa_first_success) {
+                ESP_LOGI(TAG, "PPA upscale: first success");
+                s_ppa_first_success = false;
+            }
+            return;
+        }
+        ESP_LOGW(TAG, "PPA upscale failed: %s, falling back to CPU", esp_err_to_name(err));
     }
 #endif
     display_renderer_parallel_upscale_rgb(

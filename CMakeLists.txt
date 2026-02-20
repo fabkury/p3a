@@ -11,7 +11,7 @@ cmake_minimum_required(VERSION 3.16)
 # - Increment MINOR for new features (backward compatible)
 # - Increment PATCH for bug fixes
 # For testing OTA, use pre-release versions on GitHub
-set(PROJECT_VER "0.8.2-dev")
+set(PROJECT_VER "0.8.3-dev")
 # =============================================================================
 
 # =============================================================================

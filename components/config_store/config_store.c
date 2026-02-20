@@ -1453,7 +1453,7 @@ bool config_store_get_giphy_refresh_allow_override(void)
 // Giphy Full Refresh Mode
 // ============================================================================
 
-static bool s_giphy_full_refresh = false;  // Default: disabled
+static bool s_giphy_full_refresh = true;  // Default: enabled
 static bool s_giphy_full_refresh_loaded = false;
 
 esp_err_t config_store_set_giphy_full_refresh(bool enable)

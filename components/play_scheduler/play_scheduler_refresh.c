@@ -565,7 +565,7 @@ static void refresh_task(void *arg)
         }
 
         // Check if we should trigger playback after refresh
-        bool should_trigger_playback = (err == ESP_OK && sync_entry_count > 0 && !state->playback_triggered);
+        bool should_trigger_playback = (err == ESP_OK && sync_entry_count > 0 && ch->active && !state->playback_triggered);
         bool is_artwork_channel = (type == PS_CHANNEL_TYPE_ARTWORK);
 
         xSemaphoreGive(state->mutex);

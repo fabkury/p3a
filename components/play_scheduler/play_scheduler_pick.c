@@ -224,6 +224,7 @@ static bool pick_recency_sdcard(ps_state_t *state, size_t channel_index, ps_artw
         out_artwork->dwell_time_ms = 0;  // Use global config default
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
+        out_artwork->channel_type = ch->type;
 
         return true;
     }
@@ -347,6 +348,7 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
         out_artwork->dwell_time_ms = 0;  // Use global config default
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
+        out_artwork->channel_type = ch->type;
 
         return true;
     }
@@ -431,6 +433,7 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
         out_artwork->dwell_time_ms = 0;  // Use global config default
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
+        out_artwork->channel_type = ch->type;
 
         return true;
     }
@@ -533,6 +536,7 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
         out_artwork->dwell_time_ms = 0;  // Use global config default
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
+        out_artwork->channel_type = ch->type;
 
         return true;
     }
@@ -584,6 +588,7 @@ bool ps_pick_artwork(ps_state_t *state, size_t channel_index, ps_artwork_t *out_
         out_artwork->dwell_time_ms = 0;  // No auto-swap for single artwork
         out_artwork->type = get_asset_type_from_extension(0);  // Default to WEBP, will be detected on load
         out_artwork->channel_index = (uint8_t)channel_index;
+        out_artwork->channel_type = ch->type;
 
         // Detect asset type from filepath
         size_t path_len = strlen(out_artwork->filepath);

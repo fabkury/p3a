@@ -297,6 +297,7 @@ void animation_loader_task(void *arg)
 
         const char *filepath = NULL;
         asset_type_t type = ASSET_TYPE_WEBP;
+        ps_channel_type_t channel_type = PS_CHANNEL_TYPE_NAMED;  // default
         const char *name_for_log = NULL;
         uint32_t start_frame = 0;
         uint64_t start_time_ms = 0;
@@ -305,6 +306,7 @@ void animation_loader_task(void *arg)
         if (ov.valid) {
             filepath = ov.filepath;
             type = ov.type;
+            channel_type = ov.channel_type;
             name_for_log = ov.filepath;
             start_frame = ov.start_frame;
             start_time_ms = ov.start_time_ms;
@@ -325,6 +327,7 @@ void animation_loader_task(void *arg)
             strlcpy(s_current_filepath, current.request.filepath, sizeof(s_current_filepath));
             filepath = s_current_filepath;
             type = current.request.type;
+            channel_type = current.request.channel_type;
             name_for_log = current.request.filepath;
             post_id = current.request.post_id;
         } else {
@@ -372,7 +375,8 @@ void animation_loader_task(void *arg)
             file_missing = true;
         }
 
-        esp_err_t err = file_missing ? ESP_ERR_NOT_FOUND : load_animation_into_buffer(filepath, type, &s_back_buffer,
+        esp_err_t err = file_missing ? ESP_ERR_NOT_FOUND : load_animation_into_buffer(filepath, type, channel_type,
+                                                                                      &s_back_buffer,
                                                                                       start_frame, start_time_ms);
         if (err != ESP_OK) {
             bool is_vault_file = filepath && strstr(filepath, "/vault/") != NULL;
@@ -819,7 +823,8 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf,
     return ESP_OK;
 }
 
-esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, animation_buffer_t *buf,
+esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, ps_channel_type_t channel_type,
+                                     animation_buffer_t *buf,
                                      uint32_t start_frame, uint64_t start_time_ms)
 {
     if (!buf || !filepath) {
@@ -851,6 +856,7 @@ esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, an
     buf->file_data = loaded.file_data;
     buf->file_size = loaded.file_size;
     buf->type = type;
+    buf->channel_type = channel_type;
     buf->asset_index = 0;  // Position tracking now managed by play_scheduler
 
     // Store filepath

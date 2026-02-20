@@ -58,6 +58,15 @@ menu "Physical Player of Pixel Art (P3A)"
                 submitted buffer before it is reused. Disable to use legacy timing
                 (wait before render). Recommended ON for 2-buffer setups.
 
+        config P3A_PPA_UPSCALE_ENABLE
+            bool "Enable PPA hardware-accelerated upscaling for Giphy"
+            default y
+            depends on SOC_PPA_SUPPORTED
+            help
+                Use the Pixel Processing Accelerator (PPA) for bilinear upscaling
+                of Giphy channel content. Makapix channels always use CPU
+                nearest-neighbor upscaling. Disable to exclude PPA code entirely.
+
         config P3A_USE_PIE_SIMD
             bool "Enable upscale row duplication optimization"
             default y

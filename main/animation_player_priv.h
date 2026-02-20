@@ -12,6 +12,7 @@
 #include "p3a_board.h"
 #include "app_lcd.h"
 #include "sdcard_channel.h"  // For asset_type_t (canonical definition)
+#include "play_scheduler_types.h"  // For ps_channel_type_t
 #include "config_store.h"
 #include "sd_path.h"
 #include "esp_log.h"
@@ -90,6 +91,7 @@ typedef struct {
     size_t file_size;
     animation_decoder_info_t decoder_info;
     asset_type_t type;
+    ps_channel_type_t channel_type;  // Channel type for PPA upscale branching
     size_t asset_index;
     uint8_t *native_frame_b1;           // Native decoded frame buffer 1
     uint8_t *native_frame_b2;           // Native decoded frame buffer 2
@@ -154,6 +156,7 @@ typedef struct {
     bool valid;
     char filepath[256];
     asset_type_t type;
+    ps_channel_type_t channel_type;  // Channel type for PPA upscale branching
     uint64_t start_time_ms;
     uint32_t start_frame;
     int32_t post_id;  // For view tracking
@@ -168,7 +171,8 @@ extern bool s_sd_mounted;
 extern bool s_sd_export_active;
 
 // Animation loading functions
-esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, animation_buffer_t *buf,
+esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, ps_channel_type_t channel_type,
+                                     animation_buffer_t *buf,
                                      uint32_t start_frame, uint64_t start_time_ms);
 void unload_animation_buffer(animation_buffer_t *buf);
 esp_err_t prefetch_first_frame(animation_buffer_t *buf);

@@ -1509,3 +1509,81 @@ void config_store_invalidate_giphy_full_refresh(void)
 {
     s_giphy_full_refresh_loaded = false;
 }
+
+// ============================================================================
+// PPA Upscale (Giphy-only hardware upscaling)
+// ============================================================================
+
+#if CONFIG_P3A_PPA_UPSCALE_ENABLE
+static bool s_ppa_upscale = true;  // Default: enabled
+static bool s_ppa_upscale_loaded = false;
+
+esp_err_t config_store_set_ppa_upscale(bool enable)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "ppa_upscale");
+    if (item) {
+        cJSON_DeleteItemFromObject(cfg, "ppa_upscale");
+    }
+    cJSON_AddBoolToObject(cfg, "ppa_upscale", enable);
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+
+    if (err == ESP_OK) {
+        s_ppa_upscale = enable;
+        s_ppa_upscale_loaded = true;
+        ESP_LOGI(TAG, "PPA upscale: %s", enable ? "ON" : "OFF");
+    }
+
+    return err;
+}
+
+bool config_store_get_ppa_upscale(void)
+{
+    if (s_ppa_upscale_loaded) {
+        return s_ppa_upscale;  // Fast path - no NVS read
+    }
+
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        s_ppa_upscale_loaded = true;
+        return s_ppa_upscale;  // Return default (true)
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "ppa_upscale");
+    if (item && cJSON_IsBool(item)) {
+        s_ppa_upscale = cJSON_IsTrue(item);
+    }
+
+    s_ppa_upscale_loaded = true;
+    cJSON_Delete(cfg);
+    return s_ppa_upscale;
+}
+
+void config_store_invalidate_ppa_upscale(void)
+{
+    s_ppa_upscale_loaded = false;
+}
+#else
+esp_err_t config_store_set_ppa_upscale(bool enable)
+{
+    (void)enable;
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+bool config_store_get_ppa_upscale(void)
+{
+    return false;
+}
+
+void config_store_invalidate_ppa_upscale(void)
+{
+}
+#endif

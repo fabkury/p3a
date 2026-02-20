@@ -2,6 +2,7 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "channel_cache.h"
+#include "freertos/task.h"
 #include "config_store.h"
 #include "event_bus.h"
 #include "makapix_channel_internal.h"
@@ -1360,8 +1361,12 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
         all_count = 0;
     }
 
-    // Process each new post
+    // Process each new post, yielding periodically so higher-priority tasks
+    // (e.g. display rendering) are not starved during large merges.
     for (size_t i = 0; i < count; i++) {
+        if (i > 0 && (i % 8) == 0) {
+            taskYIELD();
+        }
         const makapix_post_t *post = &posts[i];
 
         // Find existing entry by (post_id, kind)
@@ -1584,17 +1589,13 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
     ESP_LOGD(TAG, "Merged %zu posts into cache '%s': total %zu entries",
              count, cache->channel_id, all_count);
 
-    // Release mutex before I/O to avoid blocking other threads
+    // Release mutex before scheduling I/O to avoid blocking other threads
     xSemaphoreGive(cache->mutex);
 
-    // Save immediately to persist Ci changes (unified .cache file)
-    esp_err_t save_err = channel_cache_save(cache, channels_path);
-    if (save_err == ESP_OK) {
-        cache->dirty = false;
-    } else {
-        ESP_LOGW(TAG, "Failed to save cache after merge: %s", esp_err_to_name(save_err));
-        cache->dirty = true;  // Mark dirty for later retry via debounce
-    }
+    // Defer save via debounce timer to avoid blocking SD card I/O on every
+    // MQTT response.  The merged data is safely in RAM; the periodic flush
+    // (10 s debounce / 120 s max delay) will persist it to disk.
+    channel_cache_schedule_save(cache);
 
     return ret;
 }

@@ -178,7 +178,6 @@ static void upscale_frame_to_display(const animation_buffer_t *buf,
         esp_err_t err = display_ppa_upscale_rgb(
             src, buf->upscale_src_w, buf->upscale_src_h,
             dst, buf->upscale_dst_w, buf->upscale_dst_h,
-            buf->upscale_has_borders,
             display_renderer_get_rotation());
         if (err == ESP_OK) {
             static bool s_ppa_first_success = true;

@@ -134,7 +134,6 @@ static esp_err_t fill_strip(uint8_t *dst_buffer, int dst_w, int dst_h, uint32_t 
 esp_err_t display_ppa_upscale_rgb(
     const uint8_t *src_rgb, int src_w, int src_h,
     uint8_t *dst_buffer, int dst_w, int dst_h,
-    bool has_borders,
     display_rotation_t rotation)
 {
     if (!src_rgb || !dst_buffer || src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0) {
@@ -178,7 +177,10 @@ esp_err_t display_ppa_upscale_rgb(
     uint32_t dst_buf_size = (uint32_t)(dst_w * dst_h * BYTES_PER_PIXEL);
 
     // --- Border fill (only the border strips, not the artwork region) ---
-    if (has_borders && (offset_x > 0 || offset_y > 0)) {
+    // Use PPA's own computed offsets rather than the caller's has_borders flag:
+    // PPA floor-quantizes the scale factor to 1/16 steps, which can produce a
+    // smaller output than the CPU upscaler predicted, leaving unfilled strips.
+    if (offset_x > 0 || offset_y > 0) {
         // Get background color (stored as R,G,B)
         uint8_t bg_r, bg_g, bg_b;
         config_store_get_background_color(&bg_r, &bg_g, &bg_b);

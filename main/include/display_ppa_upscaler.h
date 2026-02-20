@@ -27,14 +27,12 @@ extern "C" {
  * @param dst_buffer Destination RGB888 display buffer (PSRAM-backed, full frame)
  * @param dst_w     Destination width (e.g. 720)
  * @param dst_h     Destination height (e.g. 720)
- * @param has_borders Whether borders may be needed (source aspect != display aspect)
  * @param rotation  Current display rotation
  * @return ESP_OK on success, or an error code (caller should fall back to CPU)
  */
 esp_err_t display_ppa_upscale_rgb(
     const uint8_t *src_rgb, int src_w, int src_h,
     uint8_t *dst_buffer, int dst_w, int dst_h,
-    bool has_borders,
     display_rotation_t rotation);
 
 /**

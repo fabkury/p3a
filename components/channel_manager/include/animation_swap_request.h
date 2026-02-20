@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include "sdcard_channel.h"  // asset_type_t
+#include "play_scheduler_types.h"  // ps_channel_type_t
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,6 +23,7 @@ extern "C" {
 typedef struct swap_request_s {
     char filepath[256];        // Validated file path (file exists)
     asset_type_t type;         // File type (WebP, GIF, PNG, JPEG)
+    ps_channel_type_t channel_type; // Channel type (for PPA upscale branching)
     int32_t post_id;           // For view tracking (0 if not applicable)
     uint32_t dwell_time_ms;    // Effective dwell time for this artwork
     uint64_t start_time_ms;    // Start alignment (0 = ignore)

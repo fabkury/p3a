@@ -282,6 +282,13 @@ body {
             <span class="toggle-slider"></span>
         </label>
     </div>
+    <div class="toggle-row">
+        <label for="ppa-upscale-toggle" class="toggle-label">PPA Upscale (Giphy)</label>
+        <label class="toggle-switch">
+            <input type="checkbox" id="ppa-upscale-toggle" onchange="togglePpaUpscale(this.checked)">
+            <span class="toggle-slider"></span>
+        </label>
+    </div>
     <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
         <label class="toggle-label">Auto-swap interval</label>
         <div style="display:flex;gap:8px;align-items:center;">
@@ -371,6 +378,9 @@ function loadAllConfig() {
             // Max speed playback
             document.getElementById('maxspeed-toggle').checked =
                 (typeof cfg.max_speed_playback === 'boolean') ? cfg.max_speed_playback : false;
+            // PPA upscale (Giphy)
+            document.getElementById('ppa-upscale-toggle').checked =
+                (typeof cfg.ppa_upscale === 'boolean') ? cfg.ppa_upscale : true;
             // Auto-swap interval
             var ms = (typeof cfg.dwell_time_ms === 'number') ? cfg.dwell_time_ms : 30000;
             document.getElementById('autoswap').value = Math.floor(ms / 1000);
@@ -426,6 +436,14 @@ function toggleMaxSpeedPlayback(enable) {
     }, function() {
         showToast('Save failed', true);
         document.getElementById('maxspeed-toggle').checked = !enable;
+    });
+}
+function togglePpaUpscale(enable) {
+    mergeConfig({ppa_upscale: enable}, function() {
+        showToast('PPA upscale ' + (enable ? 'enabled' : 'disabled'), false);
+    }, function() {
+        showToast('Save failed', true);
+        document.getElementById('ppa-upscale-toggle').checked = !enable;
     });
 }
 function saveSdRoot() {

@@ -17,6 +17,12 @@ set(srcs
     "ugfx_ui.c"
 )
 
+if(CONFIG_P3A_PPA_UPSCALE_ENABLE)
+    list(APPEND srcs
+        "display_ppa_upscaler.c"
+    )
+endif()
+
 if(CONFIG_P3A_USB_MSC_ENABLE)
     list(APPEND srcs
         "app_usb.c"
@@ -27,7 +33,8 @@ endif()
 idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS "include" "."
-    REQUIRES driver animation_decoder p3a_board_ep44b waveshare__esp32_p4_wifi6_touch_lcd_4b espressif__esp_lcd_touch config_store http_api json nvs_flash esp_netif esp_hosted tinyusb esp_tinyusb esp_driver_sdmmc makapix ugfx ota_manager slave_ota channel_manager wifi_manager pico8 p3a_core sdio_bus debug_http_log play_scheduler event_bus content_cache playback_queue loader_service show_url giphy
+    REQUIRES driver animation_decoder p3a_board_ep44b waveshare__esp32_p4_wifi6_touch_lcd_4b espressif__esp_lcd_touch config_store http_api json nvs_flash esp_netif esp_hosted tinyusb esp_tinyusb esp_driver_sdmmc makapix ugfx ota_manager slave_ota channel_manager wifi_manager pico8 p3a_core sdio_bus debug_http_log play_scheduler event_bus content_cache playback_queue loader_service show_url giphy esp_driver_ppa
+    PRIV_REQUIRES esp_mm
 )
 
 # Add compiler definitions

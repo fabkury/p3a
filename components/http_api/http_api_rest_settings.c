@@ -156,6 +156,10 @@ esp_err_t h_put_config(httpd_req_t *req) {
     if (fr && cJSON_IsBool(fr)) {
         config_store_invalidate_giphy_full_refresh();
     }
+    cJSON *ppa = cJSON_GetObjectItem(o, "ppa_upscale");
+    if (ppa && cJSON_IsBool(ppa)) {
+        config_store_invalidate_ppa_upscale();
+    }
 
     cJSON_Delete(o);
     send_json(req, 200, "{\"ok\":true}");

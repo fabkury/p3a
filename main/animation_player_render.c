@@ -9,6 +9,9 @@
 #include "play_scheduler.h"
 #include "config_store.h"
 #include "debug_http_log.h"
+#if CONFIG_P3A_PPA_UPSCALE_ENABLE
+#include "display_ppa_upscaler.h"
+#endif
 #include <sys/time.h>
 
 // Processing notification (from display_renderer_priv.h via weak symbol)
@@ -154,6 +157,50 @@ static esp_err_t prefetch_first_frame_seeked(animation_buffer_t *buf, uint32_t s
 }
 
 /**
+ * @brief Select PPA or CPU upscaling based on channel type and config.
+ *
+ * Giphy channels use PPA bilinear upscaling (when enabled); all other
+ * channels use the CPU nearest-neighbor pipeline.
+ */
+static void upscale_frame_to_display(const animation_buffer_t *buf,
+                                     const uint8_t *src, uint8_t *dst)
+{
+#if CONFIG_P3A_PPA_UPSCALE_ENABLE
+    if (config_store_get_ppa_upscale() &&
+        buf->channel_type == PS_CHANNEL_TYPE_GIPHY) {
+        static bool s_ppa_first_attempt = true;
+        if (s_ppa_first_attempt) {
+            ESP_LOGI(TAG, "PPA upscale: first attempt (src=%dx%d dst=%dx%d)",
+                     buf->upscale_src_w, buf->upscale_src_h,
+                     buf->upscale_dst_w, buf->upscale_dst_h);
+            s_ppa_first_attempt = false;
+        }
+        esp_err_t err = display_ppa_upscale_rgb(
+            src, buf->upscale_src_w, buf->upscale_src_h,
+            dst, buf->upscale_dst_w, buf->upscale_dst_h,
+            display_renderer_get_rotation());
+        if (err == ESP_OK) {
+            static bool s_ppa_first_success = true;
+            if (s_ppa_first_success) {
+                ESP_LOGI(TAG, "PPA upscale: first success");
+                s_ppa_first_success = false;
+            }
+            return;
+        }
+        ESP_LOGW(TAG, "PPA upscale failed: %s, falling back to CPU", esp_err_to_name(err));
+    }
+#endif
+    display_renderer_parallel_upscale_rgb(
+        src, buf->upscale_src_w, buf->upscale_src_h,
+        dst,
+        buf->upscale_lookup_x, buf->upscale_lookup_y,
+        buf->upscale_offset_x, buf->upscale_offset_y,
+        buf->upscale_scaled_w, buf->upscale_scaled_h,
+        buf->upscale_has_borders,
+        display_renderer_get_rotation());
+}
+
+/**
  * @brief Decode the next animation frame and upscale to display buffer
  */
 static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int target_w, int target_h, bool use_prefetched)
@@ -170,13 +217,7 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
     // No intermediate buffer or memcpy needed - the decode was done during prefetch,
     // now we just upscale directly to the display back buffer
     if (use_prefetched && buf->first_frame_ready && buf->native_frame_b1) {
-        display_renderer_parallel_upscale_rgb(buf->native_frame_b1, buf->upscale_src_w, buf->upscale_src_h,
-                                              dest_buffer,
-                                              buf->upscale_lookup_x, buf->upscale_lookup_y,
-                                              buf->upscale_offset_x, buf->upscale_offset_y,
-                                              buf->upscale_scaled_w, buf->upscale_scaled_h,
-                                              buf->upscale_has_borders,
-                                              display_renderer_get_rotation());
+        upscale_frame_to_display(buf, buf->native_frame_b1, dest_buffer);
         buf->first_frame_ready = false;
         // Static images: keep using native_frame_b1 without re-decoding each tick
         if (buf->decoder_info.frame_count <= 1) {
@@ -219,13 +260,7 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
             }
         }
 
-        display_renderer_parallel_upscale_rgb(buf->native_frame_b1, buf->upscale_src_w, buf->upscale_src_h,
-                                              dest_buffer,
-                                              buf->upscale_lookup_x, buf->upscale_lookup_y,
-                                              buf->upscale_offset_x, buf->upscale_offset_y,
-                                              buf->upscale_scaled_w, buf->upscale_scaled_h,
-                                              buf->upscale_has_borders,
-                                              display_renderer_get_rotation());
+        upscale_frame_to_display(buf, buf->native_frame_b1, dest_buffer);
         return (int)buf->prefetched_first_frame_delay_ms;
     }
 
@@ -267,14 +302,8 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
     int64_t t_upscale_start = debug_timer_now_us();
 #endif
 
-    // Use display_renderer for parallel upscaling with rotation
-    display_renderer_parallel_upscale_rgb(decode_buffer, buf->upscale_src_w, buf->upscale_src_h,
-                                          dest_buffer,
-                                          buf->upscale_lookup_x, buf->upscale_lookup_y,
-                                          buf->upscale_offset_x, buf->upscale_offset_y,
-                                          buf->upscale_scaled_w, buf->upscale_scaled_h,
-                                          buf->upscale_has_borders,
-                                          display_renderer_get_rotation());
+    // Upscale to display (PPA for Giphy, CPU for everything else)
+    upscale_frame_to_display(buf, decode_buffer, dest_buffer);
 
 #if CONFIG_P3A_PERF_DEBUG
     int64_t t_upscale_end = debug_timer_now_us();

@@ -550,6 +550,7 @@ esp_err_t animation_player_request_swap(const swap_request_t *request)
         s_load_override.start_frame = request->start_frame;
         s_load_override.start_time_ms = request->start_time_ms;
         s_load_override.type = request->type;
+        s_load_override.channel_type = request->channel_type;
         s_load_override.post_id = request->post_id;
         strlcpy(s_load_override.filepath, request->filepath, sizeof(s_load_override.filepath));
         

@@ -224,6 +224,7 @@ typedef struct {
     // SWRR state
     int32_t credit;
     uint32_t weight;          // Normalized weight (out of 65536)
+    uint32_t spec_weight;     // Original weight from playset spec (for MaE recalculation)
 
     // Pick state
     uint32_t cursor;          // For RecencyPick

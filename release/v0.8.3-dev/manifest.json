@@ -3,12 +3,12 @@
   "firmware": {
     "version": "0.8.3-dev",
     "file": "p3a.bin",
-    "sha256": "01418f77af61941c6e82513247048a1adbdcf6a49650ecd54532e091619ff2f8"
+    "sha256": "b25d54e0094453edbb3a9449ba43504e35733b007b89c17afe013884f9fb4a71"
   },
   "webui": {
-    "version": "1.2",
+    "version": "1.3",
     "requires_api_version": 2,
     "file": "storage.bin",
-    "sha256": "325bbcfa51a324194a8432e744f97d8642ce140beeff2ab3dfebe2d64ee864b9"
+    "sha256": "7b0a72833c31fa484202941af79dc439f757ee02c0bbf737ce5166ffe90642d3"
   }
 }

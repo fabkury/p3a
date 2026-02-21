@@ -96,24 +96,24 @@ static void calculate_weights_manual(ps_state_t *state)
 {
     uint32_t total_weight = 0;
 
-    // Sum manual weights for active channels with available artwork
+    // Sum original spec weights for active channels with available artwork
     for (size_t i = 0; i < state->channel_count; i++) {
         if (has_available_artwork(&state->channels[i])) {
-            total_weight += state->channels[i].weight;
+            total_weight += state->channels[i].spec_weight;
         }
     }
 
     if (total_weight == 0) {
-        // Fall back to equal weights
+        // Fall back to equal weights (e.g., all spec_weight=0)
         calculate_weights_equal(state);
         return;
     }
 
-    // Normalize to WSUM
+    // Normalize spec_weight to WSUM, writing result to weight
     for (size_t i = 0; i < state->channel_count; i++) {
         if (has_available_artwork(&state->channels[i])) {
             state->channels[i].weight =
-                (uint32_t)((uint64_t)state->channels[i].weight * WSUM / total_weight);
+                (uint32_t)((uint64_t)state->channels[i].spec_weight * WSUM / total_weight);
         } else {
             state->channels[i].weight = 0;
         }

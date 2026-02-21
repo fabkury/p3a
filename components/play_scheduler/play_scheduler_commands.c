@@ -425,6 +425,7 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         // Reset SWRR state
         ch->credit = 0;
         ch->weight = spec->weight;  // Will be recalculated after cache load
+        ch->spec_weight = spec->weight;  // Preserve original for MaE recalculation
 
         // Reset pick state
         ch->cursor = 0;

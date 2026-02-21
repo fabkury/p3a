@@ -29,15 +29,3 @@ esp_err_t makapix_artwork_download(const char *art_url, const char *storage_key,
 esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char *storage_key,
                                                  char *out_path, size_t path_len,
                                                  makapix_download_progress_cb cb, void *user_ctx);
-
-/**
- * @brief Ensure cache doesn't exceed limit by evicting oldest items
- * 
- * Scans the vault directory and deletes oldest files (by creation date) until
- * the total count is below max_items.
- * 
- * @param max_items Maximum number of items to keep in cache (default: 250)
- * @return ESP_OK on success, error code otherwise
- */
-esp_err_t makapix_artwork_ensure_cache_limit(size_t max_items);
-

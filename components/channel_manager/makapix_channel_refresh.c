@@ -3,13 +3,12 @@
 
 #include "makapix_channel_internal.h"
 #include "makapix_api.h"
-#include "makapix_artwork.h"
 #include "makapix.h"  // For makapix_ps_refresh_mark_complete()
 #include "playlist_manager.h"
 #include "download_manager.h"
 #include "config_store.h"
 #include "makapix_channel_events.h"
-#include "channel_cache.h"     // For LAi synchronous cleanup on eviction
+#include "channel_cache.h"
 #include "channel_metadata.h"  // For generic metadata save/load
 #include "p3a_state.h"      // For PICO-8 mode check
 #include "esp_log.h"
@@ -98,47 +97,6 @@ static void makapix_temp_debug_log_rename_failure(const char *src_path, const ch
 }
 #endif
 
-// Helper: comparison function for qsort (entries by created_at, oldest first)
-static int compare_entries_by_created(const void *a, const void *b)
-{
-    const makapix_channel_entry_t *ea = (const makapix_channel_entry_t *)a;
-    const makapix_channel_entry_t *eb = (const makapix_channel_entry_t *)b;
-    if (ea->created_at < eb->created_at) return -1;
-    if (ea->created_at > eb->created_at) return 1;
-    return 0;
-}
-
-/**
- * @brief Remove an entry from LAi when evicting a file
- *
- * Synchronously updates the LAi (Locally Available Index) when a file is
- * deleted due to eviction. This ensures LAi stays consistent with the
- * actual files on disk.
- *
- * @param channel_id Channel identifier (e.g., "all", "promoted")
- * @param post_id Post ID of the evicted entry
- */
-static void lai_cleanup_on_eviction(const char *channel_id, int32_t post_id)
-{
-    if (!channel_id) return;
-
-    channel_cache_t *cache = channel_cache_registry_find(channel_id);
-    if (!cache) {
-        // Channel cache not loaded/registered - this is normal during early boot
-        // or when channel is not currently active in play scheduler
-        ESP_LOGD(TAG, "LAi cleanup: cache not found for channel '%s' (post_id=%ld)",
-                 channel_id, (long)post_id);
-        return;
-    }
-
-    if (lai_remove_entry(cache, post_id)) {
-        ESP_LOGD(TAG, "LAi cleanup: removed post_id=%ld from channel '%s'",
-                 (long)post_id, channel_id);
-        // Schedule debounced save to persist LAi changes
-        channel_cache_schedule_save(cache);
-    }
-}
-
 esp_err_t save_channel_metadata(makapix_channel_t *ch, const char *cursor, time_t refresh_time)
 {
     channel_metadata_t meta = {
@@ -189,195 +147,6 @@ static esp_err_t merge_refresh_batch(makapix_channel_t *ch, const makapix_post_t
 
     return channel_cache_merge_posts(cache, posts, count, ch->channels_path, ch->vault_path);
 }
-
-/**
- * @brief Get available storage space on SD card
- * 
- * @param path Path to check (typically /sdcard)
- * @param out_free_bytes Pointer to receive free bytes available
- * @return ESP_OK on success
- */
-static esp_err_t get_storage_free_space(const char *path, uint64_t *out_free_bytes)
-{
-    if (!path || !out_free_bytes) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    // Try to get filesystem statistics
-    // NOTE: ESP-IDF VFS may not support statvfs on all filesystems
-    // For FATFS, we can use a workaround with stat()
-    struct stat st;
-    if (stat(path, &st) != 0) {
-        return ESP_FAIL;
-    }
-    
-    // Since statvfs is not reliably available on ESP32 FATFS,
-    // we use a conservative heuristic: assume storage is "low" 
-    // if we can't create a test file. This is a simplified approach.
-    // A more robust solution would require FATFS-specific APIs.
-    
-    // For now, we'll return a "success" with a large value to indicate
-    // we can't reliably detect storage pressure via statvfs.
-    // The count-based eviction will handle the primary case.
-    *out_free_bytes = UINT64_MAX;  // Unknown/unlimited
-    
-    ESP_LOGD(TAG, "Storage free space check: not fully implemented (using count-based eviction only)");
-    return ESP_OK;
-}
-
-/**
- * @brief Build vault path from entry without needing makapix_channel_t
- * (Local helper - duplicates logic from channel_cache.c for encapsulation)
- */
-static void build_vault_path_from_entry_local(const makapix_channel_entry_t *entry,
-                                              const char *vault_path,
-                                              char *out, size_t out_len)
-{
-    char storage_key[40];
-    bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
-
-    uint8_t sha256[32];
-    if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
-        snprintf(out, out_len, "%s/%s%s", vault_path, storage_key, s_ext_strings[0]);
-        return;
-    }
-
-    char dir1[3], dir2[3], dir3[3];
-    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
-    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
-    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
-
-    int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
-    snprintf(out, out_len, "%s/%s/%s/%s/%s%s",
-             vault_path, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
-}
-
-/**
- * @brief Evict artworks when storage is critically low
- *
- * Per spec: Check available storage and evict oldest files until minimum reserve is met.
- * Only evict from current channel (future: may consider cross-channel eviction).
- * Uses channel_cache for entries lookup.
- *
- * @param ch Channel handle
- * @param min_reserve_bytes Minimum free space to maintain (e.g., 10MB)
- * @return ESP_OK on success
- */
-static esp_err_t evict_for_storage_pressure(makapix_channel_t *ch, size_t min_reserve_bytes)
-{
-    if (!ch) return ESP_ERR_INVALID_ARG;
-
-    uint64_t free_bytes = 0;
-    esp_err_t err = get_storage_free_space("/sdcard", &free_bytes);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Could not determine free storage space");
-        return ESP_OK;  // Skip storage-based eviction if we can't measure it
-    }
-
-    // If we have enough free space, no action needed
-    if (free_bytes == UINT64_MAX || free_bytes >= (uint64_t)min_reserve_bytes) {
-        return ESP_OK;
-    }
-
-    ESP_LOGD(TAG, "Storage pressure detected: %llu bytes free, %zu bytes required",
-             (unsigned long long)free_bytes, min_reserve_bytes);
-
-    // Look up channel cache
-    channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
-    if (!cache) {
-        ESP_LOGW(TAG, "No cache to evict for storage pressure");
-        return ESP_OK;
-    }
-
-    // Take mutex to safely read cache fields (entries, lai_hash, available_count)
-    // This prevents race conditions with download manager's lai_add_entry
-    xSemaphoreTake(cache->mutex, portMAX_DELAY);
-
-    if (!cache->entries || cache->entry_count == 0) {
-        xSemaphoreGive(cache->mutex);
-        ESP_LOGW(TAG, "No entries to evict for storage pressure");
-        return ESP_OK;
-    }
-
-    // Use LAi to determine downloaded count (O(1) vs filesystem I/O)
-    size_t downloaded_count = cache->available_count;
-
-    if (downloaded_count == 0) {
-        xSemaphoreGive(cache->mutex);
-        ESP_LOGW(TAG, "No files to evict for storage pressure");
-        return ESP_OK;
-    }
-
-    makapix_channel_entry_t *downloaded = malloc(downloaded_count * sizeof(makapix_channel_entry_t));
-    if (!downloaded) {
-        xSemaphoreGive(cache->mutex);
-        return ESP_ERR_NO_MEM;
-    }
-
-    // Collect entries that are in LAi (downloaded) - must hold mutex while accessing lai_hash
-    size_t di = 0;
-    for (size_t i = 0; i < cache->entry_count && di < downloaded_count; i++) {
-        if (cache->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
-            // Check if this post_id is in LAi using the hash table (O(1) lookup)
-            int32_t post_id = cache->entries[i].post_id;
-            lai_post_id_node_t *node;
-            HASH_FIND_INT(cache->lai_hash, &post_id, node);
-            if (node) {
-                downloaded[di++] = cache->entries[i];
-            }
-        }
-    }
-
-    // Release mutex before file I/O operations (lai_cleanup_on_eviction takes its own mutex)
-    xSemaphoreGive(cache->mutex);
-
-    // Update downloaded_count to actual count collected (may differ if entries weren't all artworks)
-    downloaded_count = di;
-
-    if (downloaded_count == 0) {
-        free(downloaded);
-        ESP_LOGW(TAG, "No downloaded artwork files to evict for storage pressure");
-        return ESP_OK;
-    }
-
-    // Sort by created_at (oldest first)
-    qsort(downloaded, downloaded_count, sizeof(makapix_channel_entry_t), compare_entries_by_created);
-
-    // Evict oldest files in batches until we have enough space
-    const size_t EVICTION_BATCH = 16;  // Smaller batches for storage pressure
-    size_t actually_deleted = 0;
-
-    for (size_t batch_start = 0; batch_start < downloaded_count; batch_start += EVICTION_BATCH) {
-        size_t batch_end = batch_start + EVICTION_BATCH;
-        if (batch_end > downloaded_count) {
-            batch_end = downloaded_count;
-        }
-
-        // Delete this batch and synchronously update LAi
-        for (size_t i = batch_start; i < batch_end; i++) {
-            char file_path[512];
-            build_vault_path_from_entry_local(&downloaded[i], ch->vault_path, file_path, sizeof(file_path));
-            if (unlink(file_path) == 0) {
-                actually_deleted++;
-                // Synchronously update LAi to remove the evicted entry
-                lai_cleanup_on_eviction(ch->channel_id, downloaded[i].post_id);
-            }
-        }
-
-        // Re-check free space
-        err = get_storage_free_space("/sdcard", &free_bytes);
-        if (err == ESP_OK && (free_bytes == UINT64_MAX || free_bytes >= (uint64_t)min_reserve_bytes)) {
-            ESP_LOGD(TAG, "Storage pressure relieved after evicting %zu files", actually_deleted);
-            break;
-        }
-    }
-
-    free(downloaded);
-
-    ESP_LOGD(TAG, "Storage-based eviction: deleted %zu files", actually_deleted);
-    return ESP_OK;
-}
-
 
 void refresh_task_impl(void *pvParameters)
 {
@@ -585,19 +354,6 @@ void refresh_task_impl(void *pvParameters)
         }
         
         free(resp);
-
-        // Storage-aware eviction: ensure minimum free space (10MB reserve)
-        // NOTE: Only evicts from current channel per spec. Future consideration:
-        // cross-channel eviction would require loading all channel indices simultaneously,
-        // which may not be feasible with memory constraints.
-        const size_t MIN_RESERVE_BYTES = 10 * 1024 * 1024;  // 10MB minimum free space
-        evict_for_storage_pressure(ch, MIN_RESERVE_BYTES);
-
-        // Check for shutdown after storage eviction
-        if (!ch->refreshing) {
-            ESP_LOGI(TAG, "Shutdown requested during eviction, exiting");
-            break;
-        }
 
         // Save metadata
         time_t now = time(NULL);

@@ -29,11 +29,11 @@ config OTA_DEV_MODE
 
 config OTA_CHECK_INTERVAL_HOURS
     int "Update check interval (hours)"
-    default 2
+    default 12
     range 1 24
     help
         How often to automatically check for firmware updates.
-        Default is 2 hours.
+        Default is 12 hours.
 
 config OTA_GITHUB_REPO
     string "GitHub repository (owner/repo)"

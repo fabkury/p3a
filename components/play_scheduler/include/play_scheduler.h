@@ -203,6 +203,24 @@ void play_scheduler_set_shuffle_override(bool enable);
  */
 bool play_scheduler_get_shuffle_override(void);
 
+/**
+ * @brief Set channel selection mode
+ *
+ * Switches between SWRR (deterministic) and Stochastic (randomized) channel
+ * selection for multi-channel playsets. Persists to NVS and takes effect
+ * immediately on the next pick.
+ *
+ * @param mode PS_CHANNEL_SELECT_SWRR or PS_CHANNEL_SELECT_STOCHASTIC
+ */
+void play_scheduler_set_channel_select_mode(ps_channel_select_mode_t mode);
+
+/**
+ * @brief Get channel selection mode
+ *
+ * @return Current channel selection mode
+ */
+ps_channel_select_mode_t play_scheduler_get_channel_select_mode(void);
+
 // ============================================================================
 // Cache Management
 // ============================================================================

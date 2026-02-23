@@ -178,10 +178,7 @@ body {
         <label class="setting-label" for="giphy-rendition">Rendition</label>
         <select class="setting-select" id="giphy-rendition">
             <option value="fixed_height">Fixed Height (200px)</option>
-            <option value="fixed_width">Fixed Width (200px)</option>
             <option value="original">Original</option>
-            <option value="downsized_medium">Downsized Medium</option>
-            <option value="downsized">Downsized</option>
         </select>
     </div>
     <div class="setting-row">
@@ -191,7 +188,7 @@ body {
             <option value="gif">GIF</option>
         </select>
     </div>
-    <div class="setting-hint">WebP looks better but is visibly slow. GIF is faster and recommended. Downsized renditions are only available as GIF. Original can be very large (10MB+).</div>
+    <div class="setting-hint">GIF is faster and recommended. WebP looks better but can be visibly slow. Original can be large (10+ MB) and sometimes slow too.</div>
 </div>
 <div class="section">
     <h3>Content</h3>
@@ -246,10 +243,7 @@ body {
 // Valid formats per rendition (matches backend s_rendition_map)
 var RENDITION_FORMATS = {
     'fixed_height':     ['webp', 'gif'],
-    'fixed_width':      ['webp', 'gif'],
-    'original':         ['webp', 'gif'],
-    'downsized_medium': ['gif'],
-    'downsized':        ['gif']
+    'original':         ['webp', 'gif']
 };
 
 var FORMAT_LABELS = { 'webp': 'WebP', 'gif': 'GIF' };
@@ -309,7 +303,7 @@ function loadSettings() {
                 refreshSel.value = refreshVal;
                 if (!refreshSel.value) refreshSel.value = '3600';
                 document.getElementById('giphy-cache-size').value = cfg.giphy_cache_size || 400;
-                document.getElementById('giphy-full-refresh').checked = !!cfg.giphy_full_refresh;
+                document.getElementById('giphy-full-refresh').checked = cfg.giphy_full_refresh !== false;
             } catch (e) {
                 showToast('Failed to load settings', true);
             }

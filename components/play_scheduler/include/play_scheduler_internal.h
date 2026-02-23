@@ -57,6 +57,7 @@ typedef struct {
     // Configuration
     ps_exposure_mode_t exposure_mode;
     ps_pick_mode_t pick_mode;
+    ps_channel_select_mode_t channel_select_mode;
     bool shuffle_override;  // Forces PS_PICK_RANDOM when true, persisted separately
 
     // Channels
@@ -184,6 +185,17 @@ void ps_swrr_calculate_weights(ps_state_t *state);
  * @return Channel index, or -1 if no active channels
  */
 int ps_swrr_select_channel(ps_state_t *state);
+
+/**
+ * @brief Select next channel using stochastic weighted sampling
+ *
+ * Uses credit-biased probabilities for randomized channel selection
+ * while preserving long-term exposure ratios via the credit feedback loop.
+ *
+ * @param state Scheduler state
+ * @return Channel index, or -1 if no active channels
+ */
+int ps_stochastic_select_channel(ps_state_t *state);
 
 /**
  * @brief Reset SWRR credits

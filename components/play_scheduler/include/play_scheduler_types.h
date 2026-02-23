@@ -57,6 +57,14 @@ typedef enum {
 } ps_pick_mode_t;
 
 /**
+ * @brief Channel selection modes for multi-channel playsets
+ */
+typedef enum {
+    PS_CHANNEL_SELECT_SWRR,        // Smooth Weighted Round Robin (deterministic with random tie-breaking)
+    PS_CHANNEL_SELECT_STOCHASTIC,  // Weighted random sampling with credit drift correction
+} ps_channel_select_mode_t;
+
+/**
  * @brief Channel types
  */
 typedef enum {

@@ -265,6 +265,9 @@ esp_err_t play_scheduler_init(void)
     s_state.pick_mode = PS_PICK_RECENCY;
     s_state.shuffle_override = config_store_get_shuffle_override();
     ESP_LOGI(TAG, "Loaded shuffle_override from NVS: %s", s_state.shuffle_override ? "ON" : "OFF");
+    s_state.channel_select_mode = (ps_channel_select_mode_t)config_store_get_channel_select_mode();
+    ESP_LOGI(TAG, "Loaded channel_select_mode from NVS: %s",
+             s_state.channel_select_mode == PS_CHANNEL_SELECT_STOCHASTIC ? "Stochastic" : "SWRR");
     s_state.channel_count = 0;
     s_state.current_channel = NULL;
     s_state.command_active = false;
@@ -496,6 +499,24 @@ void play_scheduler_set_shuffle_override(bool enable)
 bool play_scheduler_get_shuffle_override(void)
 {
     return s_state.shuffle_override;
+}
+
+void play_scheduler_set_channel_select_mode(ps_channel_select_mode_t mode)
+{
+    if (!s_state.initialized) return;
+
+    config_store_set_channel_select_mode((uint8_t)mode);
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    s_state.channel_select_mode = mode;
+    ESP_LOGI(TAG, "Channel select mode set to %s",
+             mode == PS_CHANNEL_SELECT_STOCHASTIC ? "Stochastic" : "SWRR");
+    xSemaphoreGive(s_state.mutex);
+}
+
+ps_channel_select_mode_t play_scheduler_get_channel_select_mode(void)
+{
+    return s_state.channel_select_mode;
 }
 
 // ============================================================================

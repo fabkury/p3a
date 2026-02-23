@@ -691,9 +691,11 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
         return false;
     }
 
-    // Try each active channel via SWRR
+    // Try each active channel via configured selection mode
     for (size_t attempt = 0; attempt < active_count; attempt++) {
-        int ch_idx = ps_swrr_select_channel(state);
+        int ch_idx = (state->channel_select_mode == PS_CHANNEL_SELECT_STOCHASTIC)
+            ? ps_stochastic_select_channel(state)
+            : ps_swrr_select_channel(state);
         if (ch_idx < 0) {
             ESP_LOGW(TAG, "SWRR returned -1 on attempt %zu", attempt);
             break;

@@ -27,6 +27,7 @@
 #include "sdcard_channel_impl.h"
 #include "makapix_channel_impl.h"
 #include "config_store.h"
+#include "channel_metadata.h"
 #include "p3a_state.h"
 #include "sd_path.h"
 #include "esp_log.h"
@@ -549,6 +550,57 @@ esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats)
 
     xSemaphoreGive(s_state.mutex);
 
+    return ESP_OK;
+}
+
+esp_err_t play_scheduler_get_channel_details(
+    ps_channel_detail_t *out_channels, size_t max_count, size_t *out_count)
+{
+    if (!s_state.initialized || !out_channels || !out_count) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    char ch_path[128];
+    if (sd_path_get_channel(ch_path, sizeof(ch_path)) != ESP_OK) {
+        strlcpy(ch_path, "/sdcard/p3a/channel", sizeof(ch_path));
+    }
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+
+    size_t count = s_state.channel_count;
+    if (count > max_count) count = max_count;
+
+    for (size_t i = 0; i < count; i++) {
+        ps_channel_state_t *ch = &s_state.channels[i];
+        ps_channel_detail_t *d = &out_channels[i];
+
+        strlcpy(d->channel_id, ch->channel_id, sizeof(d->channel_id));
+        strlcpy(d->identifier, ch->identifier, sizeof(d->identifier));
+        strlcpy(d->display_name, ch->display_name, sizeof(d->display_name));
+        strlcpy(d->spec_name, ch->spec_name, sizeof(d->spec_name));
+        d->type = ch->type;
+
+        d->entry_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
+        d->available_count = ch->cache ? ch->cache->available_count : ch->available_count;
+        if (ch->type == PS_CHANNEL_TYPE_SDCARD) {
+            d->available_count = d->entry_count;
+        }
+
+        d->refreshing = ch->refresh_pending || ch->refresh_in_progress || ch->refresh_async_pending;
+        d->last_refresh = 0;
+    }
+
+    xSemaphoreGive(s_state.mutex);
+
+    // Load last_refresh timestamps outside the mutex (filesystem I/O)
+    for (size_t i = 0; i < count; i++) {
+        channel_metadata_t meta;
+        if (channel_metadata_load(out_channels[i].channel_id, ch_path, &meta) == ESP_OK) {
+            out_channels[i].last_refresh = meta.last_refresh;
+        }
+    }
+
+    *out_count = count;
     return ESP_OK;
 }
 

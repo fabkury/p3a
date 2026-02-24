@@ -237,6 +237,7 @@ typedef struct {
     char channel_id[64];      // Derived: "all", "by_user_uvz", "hashtag_sunset", etc.
     char identifier[33];      // Original identifier from spec (USER: sqid, HASHTAG: tag, GIPHY search: query)
     char display_name[65];    // Human-readable display name
+    char spec_name[33];       // Original name from ps_channel_spec_t (sub-type: "all", "trending", etc.)
     ps_channel_type_t type;   // Channel type
     void *handle;             // channel_handle_t (legacy)
 
@@ -285,6 +286,24 @@ typedef struct {
     } artwork_state;
 
 } ps_channel_state_t;
+
+/**
+ * @brief Per-channel detail snapshot (for API responses)
+ *
+ * Lightweight copy of channel state for external consumption.
+ * Populated by play_scheduler_get_channel_details() under mutex.
+ */
+typedef struct {
+    char channel_id[64];
+    char identifier[33];
+    char display_name[65];
+    char spec_name[33];       // Sub-type from spec (e.g. "all", "trending", "search")
+    ps_channel_type_t type;
+    size_t entry_count;       // Ci (total in cache)
+    size_t available_count;   // LAi (locally available)
+    bool refreshing;          // refresh_pending || refresh_in_progress || refresh_async_pending
+    time_t last_refresh;      // From channel_metadata sidecar (0 = never)
+} ps_channel_detail_t;
 
 #ifdef __cplusplus
 }

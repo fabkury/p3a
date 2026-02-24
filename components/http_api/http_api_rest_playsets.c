@@ -222,6 +222,27 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
         cJSON_AddNumberToObject(pi, "total_entries", (double)ps_stats.total_entries);
         cJSON_AddStringToObject(pi, "exposure_mode", exposure_mode_str(ps_stats.exposure_mode));
         cJSON_AddStringToObject(pi, "pick_mode", pick_mode_str(ps_stats.pick_mode));
+
+        ps_channel_detail_t *ch_details = calloc(PS_MAX_CHANNELS, sizeof(ps_channel_detail_t));
+        size_t ch_count = 0;
+        if (ch_details &&
+            play_scheduler_get_channel_details(ch_details, PS_MAX_CHANNELS, &ch_count) == ESP_OK &&
+            ch_count > 0) {
+            cJSON *ch_arr = cJSON_AddArrayToObject(pi, "channels");
+            for (size_t i = 0; i < ch_count; i++) {
+                cJSON *ch_obj = cJSON_CreateObject();
+                cJSON_AddStringToObject(ch_obj, "display_name", ch_details[i].display_name);
+                cJSON_AddStringToObject(ch_obj, "type", playset_channel_type_str(ch_details[i].type));
+                cJSON_AddStringToObject(ch_obj, "name", ch_details[i].spec_name);
+                cJSON_AddStringToObject(ch_obj, "identifier", ch_details[i].identifier);
+                cJSON_AddNumberToObject(ch_obj, "available", (double)ch_details[i].available_count);
+                cJSON_AddNumberToObject(ch_obj, "total", (double)ch_details[i].entry_count);
+                cJSON_AddBoolToObject(ch_obj, "refreshing", ch_details[i].refreshing);
+                cJSON_AddNumberToObject(ch_obj, "last_refresh", (double)ch_details[i].last_refresh);
+                cJSON_AddItemToArray(ch_arr, ch_obj);
+            }
+        }
+        free(ch_details);
     }
 
     char *out = cJSON_PrintUnformatted(root);

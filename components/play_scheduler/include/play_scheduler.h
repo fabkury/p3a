@@ -454,6 +454,21 @@ void ps_get_display_name(const char *channel_id, char *out_name, size_t max_len)
 esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats);
 
 /**
+ * @brief Get per-channel detail snapshots for all active channels
+ *
+ * Copies channel state into caller-provided array under mutex.
+ * Includes entry/available counts, refresh state, and last_refresh
+ * timestamp from channel metadata sidecar files.
+ *
+ * @param out_channels  Caller-allocated array to receive details
+ * @param max_count     Capacity of out_channels array
+ * @param out_count     Receives actual number of channels written
+ * @return ESP_OK on success, ESP_ERR_INVALID_STATE if not initialized
+ */
+esp_err_t play_scheduler_get_channel_details(
+    ps_channel_detail_t *out_channels, size_t max_count, size_t *out_count);
+
+/**
  * @brief Reset the scheduler
  *
  * Clears cursors, SWRR credits, and NAE pool. Preserves history.

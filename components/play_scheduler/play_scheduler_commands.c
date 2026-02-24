@@ -471,6 +471,7 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
             ps_get_display_name(ch->channel_id, ch->display_name, sizeof(ch->display_name));
         }
         ch->type = spec->type;
+        strlcpy(ch->spec_name, spec->name, sizeof(ch->spec_name));
 
         // Reset SWRR state
         ch->credit = 0;

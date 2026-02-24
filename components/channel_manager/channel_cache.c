@@ -209,95 +209,6 @@ void channel_cache_build_path(const char *channel_id,
     snprintf(out, out_len, "%s/%s.cache", channels_path, safe_id);
 }
 
-// ============================================================================
-// Legacy Format Detection and Migration
-// ============================================================================
-
-/**
- * @brief Check if file uses legacy format (no header, just raw entries)
- *
- * Legacy format: file size is multiple of 64 bytes (sizeof(makapix_channel_entry_t))
- * New format: starts with CHANNEL_CACHE_MAGIC
- */
-static bool is_legacy_format(FILE *f)
-{
-    uint32_t magic;
-    if (fread(&magic, sizeof(magic), 1, f) != 1) {
-        return false;  // Empty or unreadable
-    }
-    fseek(f, 0, SEEK_SET);
-    return magic != CHANNEL_CACHE_MAGIC;
-}
-
-/**
- * @brief Load legacy format (raw array of entries)
- */
-static esp_err_t load_legacy_format(FILE *f, channel_cache_t *cache, const char *vault_path)
-{
-    // Get file size
-    fseek(f, 0, SEEK_END);
-    long file_size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if (file_size < 0 || file_size % sizeof(makapix_channel_entry_t) != 0) {
-        ESP_LOGW(TAG, "Legacy file size %ld not aligned to entry size", file_size);
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    size_t entry_count = file_size / sizeof(makapix_channel_entry_t);
-    if (entry_count > CHANNEL_CACHE_MAX_ENTRIES) {
-        entry_count = CHANNEL_CACHE_MAX_ENTRIES;
-    }
-
-    if (entry_count == 0) {
-        cache->entries = NULL;
-        cache->entry_count = 0;
-        cache->available_post_ids = NULL;
-        cache->available_count = 0;
-        return ESP_OK;
-    }
-
-    // Allocate entries
-    cache->entries = psram_malloc(entry_count * sizeof(makapix_channel_entry_t));
-    if (!cache->entries) {
-        return ESP_ERR_NO_MEM;
-    }
-
-    // Read entries
-    size_t read = fread(cache->entries, sizeof(makapix_channel_entry_t), entry_count, f);
-    if (read != entry_count) {
-        free(cache->entries);
-        cache->entries = NULL;
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    cache->entry_count = entry_count;
-
-    // Build Ci hash table
-    ci_rebuild_hash_tables(cache);
-
-    // Allocate LAi (will be populated by lai_rebuild)
-    cache->available_post_ids = psram_malloc(entry_count * sizeof(int32_t));
-    if (!cache->available_post_ids) {
-        ci_hash_free(cache);
-        free(cache->entries);
-        cache->entries = NULL;
-        return ESP_ERR_NO_MEM;
-    }
-    cache->available_count = 0;
-    cache->available_capacity = entry_count;
-
-    // Rebuild LAi from filesystem (now stores post_ids and builds hash)
-    ESP_LOGI(TAG, "Migrating legacy cache, rebuilding LAi for %zu entries", entry_count);
-    size_t available = lai_rebuild(cache, vault_path);
-    ESP_LOGI(TAG, "LAi rebuild complete: %zu available", available);
-
-    // Mark dirty to save in new format
-    cache->dirty = true;
-
-    return ESP_OK;
-}
-
 /**
  * @brief Load new format with header
  *
@@ -589,39 +500,19 @@ esp_err_t channel_cache_load(const char *channel_id,
         return ESP_OK;  // Empty cache is valid
     }
 
-    // Cache file exists - check if it's valid new format
-    if (!is_legacy_format(f)) {
-        ESP_LOGI(TAG, "Loading cache for '%s'", channel_id);
-        esp_err_t err = load_new_format(f, cache);
-        fclose(f);
+    ESP_LOGI(TAG, "Loading cache for '%s'", channel_id);
+    esp_err_t err = load_new_format(f, cache);
+    fclose(f);
 
-        if (err == ESP_OK) {
-            ESP_LOGI(TAG, "Loaded cache '%s': %zu entries, %zu available",
-                     channel_id, cache->entry_count, cache->available_count);
-            return ESP_OK;
-        }
-
-        ESP_LOGW(TAG, "Cache file corrupt for '%s': %s, deleting and starting empty",
-                 channel_id, esp_err_to_name(err));
-        // Delete the corrupt cache file to prevent repeated crashes on boot
-        unlink(cache_path);
-    } else {
-        // Legacy format in .cache file - migrate it
-        ESP_LOGW(TAG, "Cache file '%s' has legacy format, migrating", cache_path);
-        esp_err_t err = load_legacy_format(f, cache, vault_path);
-        fclose(f);
-
-        if (err == ESP_OK) {
-            ESP_LOGI(TAG, "Loaded cache '%s': %zu entries, %zu available (migrated)",
-                     channel_id, cache->entry_count, cache->available_count);
-            return ESP_OK;
-        }
-
-        ESP_LOGW(TAG, "Failed to migrate legacy cache '%s': %s, deleting and starting empty",
-                 channel_id, esp_err_to_name(err));
-        // Delete the corrupt/unmigrateable cache file to prevent repeated issues
-        unlink(cache_path);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Loaded cache '%s': %zu entries, %zu available",
+                 channel_id, cache->entry_count, cache->available_count);
+        return ESP_OK;
     }
+
+    ESP_LOGW(TAG, "Cache file invalid for '%s': %s, deleting and starting fresh",
+             channel_id, esp_err_to_name(err));
+    unlink(cache_path);
 
     // Cache corrupt or migration failed - start empty
     // Pre-allocate LAi array for batch updates

@@ -77,27 +77,22 @@ v0.6.x releases have already been removed. Consider archiving v0.7.x releases wh
 
 ---
 
-### 11. Remove Legacy Migration Code (After Transition Period)
+### 11. Remove Legacy Migration Code -- DONE
 
-**File:** `components/channel_manager/channel_cache.c`
-
-Functions:
-- `is_legacy_format()`
-- `load_legacy_format()`
-
-These can be removed once all users have migrated to the new format.
+Removed `is_legacy_format()` and `load_legacy_format()` from `channel_cache.c`.
+Simplified `channel_cache_load()` to only attempt the current format; invalid/legacy files
+are deleted and an empty cache is created from scratch.
 
 ---
 
-### 12. Remove Deprecated `p3a_state` Functions (When Callers Are Migrated)
+### 12. Remove Deprecated `p3a_state` Functions -- DONE
 
-**File:** `components/p3a_core/p3a_state.c`
-
-Functions:
-- `p3a_state_persist_channel()` -- still called from `p3a_state_switch_channel()`
-- `p3a_state_load_channel()` -- still called from `p3a_state_init()` and `p3a_state_get_default_channel()`
-
-These have live callers and cannot be removed yet. Remove after callers are migrated to playset persistence.
+Removed `p3a_state_persist_channel()`, `p3a_state_load_channel()`, and
+`p3a_state_get_default_channel()` from `p3a_state.c` / `p3a_state.h`.
+Removed the NVS key constants `NVS_KEY_CHANNEL_TYPE` / `NVS_KEY_CHANNEL_IDENT` and the
+helper functions `channel_type_to_string()` / `string_to_channel_type()`.
+Replaced the legacy channel load in `p3a_state_init()` with a fresh SD card default.
+Channel persistence is now handled entirely by the playset system.
 
 ---
 

@@ -589,6 +589,7 @@ esp_err_t makapix_api_get_playset(const char *playset_name, ps_scheduler_command
 {
     if (!playset_name || !out_command) return ESP_ERR_INVALID_ARG;
     memset(out_command, 0, sizeof(*out_command));
+    strlcpy(out_command->name, playset_name, sizeof(out_command->name));
 
     cJSON *root = cJSON_CreateObject();
     if (!root) return ESP_ERR_NO_MEM;

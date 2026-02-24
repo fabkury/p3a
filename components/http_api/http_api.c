@@ -393,6 +393,7 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
         cJSON *name_item = cJSON_GetObjectItem(payload, "name");
         if (name_item && cJSON_IsString(name_item)) {
             const char *name = cJSON_GetStringValue(name_item);
+            strlcpy(cmd->name, name, sizeof(cmd->name));
             esp_err_t save_err = playset_store_save(name, cmd);
             if (save_err != ESP_OK) {
                 ESP_LOGW(HTTP_API_TAG, "execute_playset: failed to save '%s': %s", name, esp_err_to_name(save_err));

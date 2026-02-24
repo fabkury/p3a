@@ -419,6 +419,8 @@ static void refresh_task(void *arg)
         ps_channel_type_t type = ch->type;
         char channel_id[64];
         strlcpy(channel_id, ch->channel_id, sizeof(channel_id));
+        char identifier[33];
+        strlcpy(identifier, ch->identifier, sizeof(identifier));
         bool cache_has_entries = (ch->cache != NULL && ch->cache->entry_count > 0);
 
         xSemaphoreGive(state->mutex);
@@ -482,10 +484,12 @@ static void refresh_task(void *arg)
                 if (!animation_player_is_animation_ready()) {
                     p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_LOADING, -1,
                                                    "Loading channel...");
-                    err = giphy_refresh_channel_with_progress(channel_id,
+                    const char *query = identifier[0] != '\0' ? identifier : NULL;
+                    err = giphy_refresh_channel_with_progress(channel_id, query,
                               giphy_refresh_ui_cb, giphy_display_name);
                 } else {
-                    err = giphy_refresh_channel(channel_id);
+                    const char *query = identifier[0] != '\0' ? identifier : NULL;
+                    err = giphy_refresh_channel(channel_id, query);
                 }
                 if (err == ESP_OK) {
                     config_store_set_giphy_refresh_allow_override(false);

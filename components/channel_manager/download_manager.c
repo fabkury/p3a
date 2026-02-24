@@ -50,38 +50,12 @@ extern bool animation_player_is_animation_ready(void);
 extern void p3a_render_set_channel_message(const char *channel_name, int msg_type, int progress_percent, const char *detail);
 
 // ============================================================================
-// Helpers - Display Name
+// Helpers - Display Name (delegates to play_scheduler's canonical implementation)
 // ============================================================================
 
-/**
- * @brief Get user-friendly display name from channel_id
- */
 static void dl_get_display_name(const char *channel_id, char *out_name, size_t max_len)
 {
-    if (!channel_id || !out_name || max_len == 0) return;
-    
-    if (strcmp(channel_id, "all") == 0) {
-        snprintf(out_name, max_len, "All Artworks");
-    } else if (strcmp(channel_id, "promoted") == 0) {
-        snprintf(out_name, max_len, "Promoted");
-    } else if (strcmp(channel_id, "user") == 0) {
-        snprintf(out_name, max_len, "My Channel");
-    } else if (strcmp(channel_id, "sdcard") == 0) {
-        snprintf(out_name, max_len, "microSD Card");
-    } else if (strncmp(channel_id, "by_user_", 8) == 0) {
-        // Truncate user ID to fit in output buffer with "User: " prefix
-        snprintf(out_name, max_len, "User: %.48s", channel_id + 8);
-    } else if (strncmp(channel_id, "hashtag_", 8) == 0) {
-        // Truncate hashtag to fit in output buffer with "#" prefix
-        snprintf(out_name, max_len, "#%.56s", channel_id + 8);
-    } else if (strcmp(channel_id, "giphy_trending") == 0) {
-        snprintf(out_name, max_len, "Giphy: Trending");
-    } else if (strncmp(channel_id, "giphy_", 6) == 0) {
-        snprintf(out_name, max_len, "Giphy: %.56s", channel_id + 6);
-    } else {
-        // Truncate channel_id to fit in output buffer
-        snprintf(out_name, max_len, "%.63s", channel_id);
-    }
+    ps_get_display_name(channel_id, out_name, max_len);
 }
 
 // ============================================================================

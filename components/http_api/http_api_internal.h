@@ -85,6 +85,16 @@ bool ensure_json_content(httpd_req_t *req);
 char* recv_body_json(httpd_req_t *req, size_t *out_len, int *out_err_status);
 
 /**
+ * @brief URL-decode a string in place
+ *
+ * Decodes percent-encoded characters (e.g., %20 -> space, %26 -> &).
+ * The decoded string is always <= the encoded string in length.
+ *
+ * @param str String to decode in place
+ */
+void url_decode_in_place(char *str);
+
+/**
  * @brief Register URI handler with error logging
  */
 void register_uri_handler_or_log(httpd_handle_t server, httpd_uri_t *uri);

@@ -426,6 +426,22 @@ void play_scheduler_touch_next(void);
 void play_scheduler_touch_back(void);
 
 // ============================================================================
+// Display Helpers
+// ============================================================================
+
+/**
+ * @brief Get user-friendly display name from channel_id
+ *
+ * Converts internal channel IDs (e.g., "by_user_uvz", "giphy_search_cats")
+ * into human-readable display names (e.g., "User: uvz", "Giphy: cats").
+ *
+ * @param channel_id Internal channel identifier
+ * @param out_name Output buffer for display name
+ * @param max_len Size of output buffer
+ */
+void ps_get_display_name(const char *channel_id, char *out_name, size_t max_len);
+
+// ============================================================================
 // Status & Debugging
 // ============================================================================
 

@@ -11,6 +11,39 @@
 #include "http_api_internal.h"
 #include <strings.h>
 
+static int hex_digit(char c)
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+void url_decode_in_place(char *str)
+{
+    if (!str) return;
+    char *src = str;
+    char *dst = str;
+    while (*src) {
+        if (*src == '%' && src[1] && src[2]) {
+            int hi = hex_digit(src[1]);
+            int lo = hex_digit(src[2]);
+            if (hi >= 0 && lo >= 0) {
+                *dst++ = (char)((hi << 4) | lo);
+                src += 3;
+                continue;
+            }
+        }
+        if (*src == '+') {
+            *dst++ = ' ';
+            src++;
+            continue;
+        }
+        *dst++ = *src++;
+    }
+    *dst = '\0';
+}
+
 const char* http_status_str(int status) {
     switch(status) {
         case 200: return "200 OK";

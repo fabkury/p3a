@@ -788,8 +788,8 @@
                 return false;
             }
 
-            if (!/^[a-zA-Z0-9_]+$/.test(value)) {
-                error.textContent = 'Only letters, numbers, and underscores allowed';
+            if (/[\x00-\x1f]/.test(value)) {
+                error.textContent = 'Name must not contain control characters';
                 error.classList.remove('hidden');
                 input.classList.add('error');
                 return false;
@@ -821,9 +821,7 @@
             return false;
         }
 
-        function sanitizeGiphyName(query) {
-            return query.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-        }
+        // sanitizeGiphyName removed: Giphy queries now stored verbatim in identifier field
 
         // API Functions
         function loadActivePlayset() {
@@ -1349,8 +1347,8 @@
                     break;
 
                 case 'giphy':
-                    var isSearch = channel.name && channel.name.indexOf('search_') === 0;
-                    var searchQuery = isSearch ? channel.name.substring(7) : '';
+                    var isSearch = channel.name === 'search';
+                    var searchQuery = isSearch ? (channel.identifier || '') : '';
 
                     html += '<div class="form-group" style="margin-bottom: 8px;">' +
                         '<label class="form-label" style="font-size: 12px;">Giphy Mode</label>' +
@@ -1392,8 +1390,8 @@
                     return 'SD Card';
                 case 'giphy':
                     if (channel.name === 'trending') return 'Giphy Trending';
-                    if (channel.name && channel.name.indexOf('search_') === 0) {
-                        return 'Giphy: ' + channel.name.substring(7);
+                    if (channel.name === 'search' && channel.identifier) {
+                        return 'Giphy: ' + channel.identifier;
                     }
                     return 'Giphy';
                 default:
@@ -1411,14 +1409,16 @@
         function handleGiphyModeChange(index, mode) {
             if (mode === 'trending') {
                 state.channels[index].name = 'trending';
+                state.channels[index].identifier = '';
             } else {
-                state.channels[index].name = 'search_';
+                state.channels[index].name = 'search';
+                state.channels[index].identifier = '';
             }
             renderChannels();
         }
 
         function updateGiphySearch(index, query) {
-            state.channels[index].name = 'search_' + sanitizeGiphyName(query);
+            state.channels[index].identifier = query;
         }
 
         function removeChannel(index) {
@@ -1637,7 +1637,8 @@
                             showToast('Please enter a search query', 'error');
                             return;
                         }
-                        channel.name = 'search_' + sanitizeGiphyName(query);
+                        channel.name = 'search';
+                        channel.identifier = query;
                     }
                     break;
             }

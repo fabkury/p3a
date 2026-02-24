@@ -60,6 +60,45 @@ static void ps_sanitize_identifier(const char *input, char *output, size_t max_l
     output[j] = '\0';
 }
 
+void ps_ensure_display_name(ps_channel_spec_t *spec)
+{
+    if (spec->display_name[0] != '\0') return;
+
+    switch (spec->type) {
+        case PS_CHANNEL_TYPE_NAMED:
+            if (strcmp(spec->name, "all") == 0) {
+                strlcpy(spec->display_name, "All Artworks", sizeof(spec->display_name));
+            } else if (strcmp(spec->name, "promoted") == 0) {
+                strlcpy(spec->display_name, "Promoted", sizeof(spec->display_name));
+            } else {
+                strlcpy(spec->display_name, spec->name, sizeof(spec->display_name));
+            }
+            break;
+        case PS_CHANNEL_TYPE_USER:
+            snprintf(spec->display_name, sizeof(spec->display_name), "User: %.48s", spec->identifier);
+            break;
+        case PS_CHANNEL_TYPE_HASHTAG:
+            snprintf(spec->display_name, sizeof(spec->display_name), "#%.56s", spec->identifier);
+            break;
+        case PS_CHANNEL_TYPE_SDCARD:
+            strlcpy(spec->display_name, "microSD Card", sizeof(spec->display_name));
+            break;
+        case PS_CHANNEL_TYPE_ARTWORK:
+            strlcpy(spec->display_name, "Single Artwork", sizeof(spec->display_name));
+            break;
+        case PS_CHANNEL_TYPE_GIPHY:
+            if (strcmp(spec->name, "search") == 0 && spec->identifier[0] != '\0') {
+                snprintf(spec->display_name, sizeof(spec->display_name), "Giphy: %.50s", spec->identifier);
+            } else {
+                strlcpy(spec->display_name, "Giphy: Trending", sizeof(spec->display_name));
+            }
+            break;
+        default:
+            strlcpy(spec->display_name, "Channel", sizeof(spec->display_name));
+            break;
+    }
+}
+
 /**
  * @brief Build channel_id from channel spec
  *
@@ -97,7 +136,12 @@ static void ps_build_channel_id(const ps_channel_spec_t *spec, char *out_id, siz
             break;
 
         case PS_CHANNEL_TYPE_GIPHY:
-            snprintf(out_id, max_len, "giphy_%s", spec->name);
+            if (spec->identifier[0] != '\0') {
+                ps_sanitize_identifier(spec->identifier, sanitized, sizeof(sanitized));
+                snprintf(out_id, max_len, "giphy_%s_%s", spec->name, sanitized);
+            } else {
+                snprintf(out_id, max_len, "giphy_%s", spec->name);
+            }
             break;
 
         default:
@@ -418,8 +462,14 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         const ps_channel_spec_t *spec = &command->channels[i];
         ps_channel_state_t *ch = &s_state->channels[i];
 
-        // Build channel_id from spec
+        // Build channel_id from spec and preserve original identifier
         ps_build_channel_id(spec, ch->channel_id, sizeof(ch->channel_id));
+        strlcpy(ch->identifier, spec->identifier, sizeof(ch->identifier));
+        if (spec->display_name[0] != '\0') {
+            strlcpy(ch->display_name, spec->display_name, sizeof(ch->display_name));
+        } else {
+            ps_get_display_name(ch->channel_id, ch->display_name, sizeof(ch->display_name));
+        }
         ch->type = spec->type;
 
         // Reset SWRR state
@@ -565,25 +615,24 @@ esp_err_t ps_create_channel_playset(const char *playset_name, ps_scheduler_comma
         out_cmd->channels[0].type = PS_CHANNEL_TYPE_NAMED;
         strlcpy(out_cmd->channels[0].name, "all", sizeof(out_cmd->channels[0].name));
         out_cmd->channels[0].weight = 1;
-        return ESP_OK;
     } else if (strcmp(playset_name, "channel_promoted") == 0) {
         out_cmd->channels[0].type = PS_CHANNEL_TYPE_NAMED;
         strlcpy(out_cmd->channels[0].name, "promoted", sizeof(out_cmd->channels[0].name));
         out_cmd->channels[0].weight = 1;
-        return ESP_OK;
     } else if (strcmp(playset_name, "channel_sdcard") == 0) {
         out_cmd->channels[0].type = PS_CHANNEL_TYPE_SDCARD;
         strlcpy(out_cmd->channels[0].name, "sdcard", sizeof(out_cmd->channels[0].name));
         out_cmd->channels[0].weight = 1;
-        return ESP_OK;
     } else if (strcmp(playset_name, "giphy_trending") == 0) {
         out_cmd->channels[0].type = PS_CHANNEL_TYPE_GIPHY;
         strlcpy(out_cmd->channels[0].name, "trending", sizeof(out_cmd->channels[0].name));
         out_cmd->channels[0].weight = 1;
-        return ESP_OK;
+    } else {
+        return ESP_ERR_NOT_FOUND;
     }
 
-    return ESP_ERR_NOT_FOUND;  // Not a built-in playset
+    ps_ensure_display_name(&out_cmd->channels[0]);
+    return ESP_OK;
 }
 
 // ============================================================================
@@ -618,6 +667,7 @@ esp_err_t play_scheduler_play_named_channel(const char *name)
         strlcpy(cmd->channels[0].name, name, sizeof(cmd->channels[0].name));
     }
     cmd->channels[0].weight = 1;
+    ps_ensure_display_name(&cmd->channels[0]);
 
     esp_err_t result = play_scheduler_execute_command(cmd);
     free(cmd);
@@ -647,6 +697,7 @@ esp_err_t play_scheduler_play_user_channel(const char *user_sqid)
     strlcpy(cmd->channels[0].name, "user", sizeof(cmd->channels[0].name));
     strlcpy(cmd->channels[0].identifier, user_sqid, sizeof(cmd->channels[0].identifier));
     cmd->channels[0].weight = 1;
+    ps_ensure_display_name(&cmd->channels[0]);
 
     esp_err_t result = play_scheduler_execute_command(cmd);
     free(cmd);
@@ -676,6 +727,7 @@ esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag)
     strlcpy(cmd->channels[0].name, "hashtag", sizeof(cmd->channels[0].name));
     strlcpy(cmd->channels[0].identifier, hashtag, sizeof(cmd->channels[0].identifier));
     cmd->channels[0].weight = 1;
+    ps_ensure_display_name(&cmd->channels[0]);
 
     esp_err_t result = play_scheduler_execute_command(cmd);
     free(cmd);

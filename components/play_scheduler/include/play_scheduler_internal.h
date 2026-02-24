@@ -346,6 +346,13 @@ bool ps_file_exists(const char *path);
 void ps_get_display_name(const char *channel_id, char *out_name, size_t max_len);
 
 /**
+ * @brief Ensure a channel spec has a display_name populated
+ *
+ * If display_name is empty, generates one from type/name/identifier.
+ */
+void ps_ensure_display_name(ps_channel_spec_t *spec);
+
+/**
  * @brief Compute SHA256 of a storage key
  */
 esp_err_t ps_storage_key_sha256(const char *storage_key, uint8_t out_sha256[32]);

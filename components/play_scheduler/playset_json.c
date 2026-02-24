@@ -7,6 +7,7 @@
  */
 
 #include "playset_json.h"
+#include "play_scheduler_internal.h"
 #include "esp_log.h"
 #include <string.h>
 
@@ -80,6 +81,12 @@ esp_err_t playset_json_parse(const cJSON *json, ps_scheduler_command_t *out)
     if (!json || !out) return ESP_ERR_INVALID_ARG;
 
     memset(out, 0, sizeof(*out));
+
+    // Parse playset name (optional)
+    const cJSON *name_field = cJSON_GetObjectItemCaseSensitive(json, "name");
+    if (cJSON_IsString(name_field)) {
+        strlcpy(out->name, cJSON_GetStringValue(name_field), sizeof(out->name));
+    }
 
     // Parse exposure_mode (optional, defaults to equal)
     const cJSON *exposure_mode = cJSON_GetObjectItemCaseSensitive(json, "exposure_mode");
@@ -165,6 +172,8 @@ esp_err_t playset_json_parse(const cJSON *json, ps_scheduler_command_t *out)
         if (cJSON_IsNumber(weight)) {
             spec->weight = (uint32_t)cJSON_GetNumberValue(weight);
         }
+
+        ps_ensure_display_name(spec);
     }
 
     return ESP_OK;
@@ -177,6 +186,9 @@ cJSON *playset_json_serialize(const ps_scheduler_command_t *cmd)
     cJSON *root = cJSON_CreateObject();
     if (!root) return NULL;
 
+    if (cmd->name[0] != '\0') {
+        cJSON_AddStringToObject(root, "name", cmd->name);
+    }
     cJSON_AddStringToObject(root, "exposure_mode", playset_exposure_mode_str(cmd->exposure_mode));
     cJSON_AddStringToObject(root, "pick_mode", playset_pick_mode_str(cmd->pick_mode));
 

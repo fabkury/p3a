@@ -178,17 +178,16 @@ esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t ext
 /**
  * @brief Refresh a Giphy channel by fetching GIFs and merging into cache
  *
- * Dispatches to the trending or search endpoint based on channel_id:
- *   - "giphy_trending"        -> trending endpoint
- *   - "giphy_search_{query}"  -> search endpoint with the given query
+ * Dispatches to the trending or search endpoint based on the query parameter.
  *
  * Called from play_scheduler_refresh.c when a Giphy channel has
  * refresh_pending = true.
  *
  * @param channel_id The channel ID (e.g., "giphy_trending" or "giphy_search_cats")
+ * @param query      Search query string, or NULL/empty for trending mode
  * @return ESP_OK on success, ESP_ERR_INVALID_STATE if WiFi not ready
  */
-esp_err_t giphy_refresh_channel(const char *channel_id);
+esp_err_t giphy_refresh_channel(const char *channel_id, const char *query);
 
 /**
  * @brief Progress callback for giphy_refresh_channel_with_progress()
@@ -203,8 +202,14 @@ typedef void (*giphy_refresh_progress_cb_t)(int current_offset, int cache_size, 
  * @brief Refresh a Giphy channel with per-page progress reporting
  *
  * Same as giphy_refresh_channel() but invokes progress_cb after each page merge.
+ *
+ * @param channel_id   The channel ID
+ * @param query        Search query string, or NULL/empty for trending mode
+ * @param progress_cb  Callback invoked after each page merge
+ * @param progress_ctx User context for callback
  */
 esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
+                                               const char *query,
                                                giphy_refresh_progress_cb_t progress_cb,
                                                void *progress_ctx);
 

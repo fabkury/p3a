@@ -136,9 +136,15 @@ typedef struct {
  * Specifies a channel to include in a playset (scheduler command).
  */
 typedef struct {
-    ps_channel_type_t type;       // NAMED, USER, HASHTAG, SDCARD, ARTWORK
-    char name[33];                // "all", "promoted", "user", "hashtag", "sdcard", "artwork"
-    char identifier[33];          // For USER: sqid, for HASHTAG: tag
+    ps_channel_type_t type;       // NAMED, USER, HASHTAG, SDCARD, ARTWORK, GIPHY
+    char name[33];                // Type-specific sub-name:
+                                  //   NAMED: "all", "promoted"
+                                  //   GIPHY: "trending" or "search"
+                                  //   Others: type label ("user", "hashtag", "sdcard", "artwork")
+    char identifier[33];          // Type-specific parameter:
+                                  //   USER: sqid
+                                  //   HASHTAG: tag
+                                  //   GIPHY (search): search query (verbatim, spaces allowed)
     char display_name[65];        // Optional: friendly display name (e.g., user handle, hashtag)
     uint32_t weight;              // For MaE mode (0 = auto-calculate)
 
@@ -172,7 +178,10 @@ typedef struct {
  * deferred until a future design decision is made about dwell time handling.
  * See config_store_get_dwell_time() for the current implementation.
  */
+#define PS_PLAYSET_NAME_MAX 32
+
 typedef struct {
+    char name[PS_PLAYSET_NAME_MAX + 1]; // Playset name (empty for transient/anonymous commands)
     ps_channel_spec_t channels[PS_MAX_CHANNELS];
     size_t channel_count;
     ps_exposure_mode_t exposure_mode;
@@ -226,6 +235,8 @@ typedef struct {
  */
 typedef struct {
     char channel_id[64];      // Derived: "all", "by_user_uvz", "hashtag_sunset", etc.
+    char identifier[33];      // Original identifier from spec (USER: sqid, HASHTAG: tag, GIPHY search: query)
+    char display_name[65];    // Human-readable display name
     ps_channel_type_t type;   // Channel type
     void *handle;             // channel_handle_t (legacy)
 

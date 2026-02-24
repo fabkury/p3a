@@ -73,19 +73,16 @@ void ps_get_display_name(const char *channel_id, char *out_name, size_t max_len)
     } else if (strcmp(channel_id, "sdcard") == 0) {
         snprintf(out_name, max_len, "microSD Card");
     } else if (strncmp(channel_id, "by_user_", 8) == 0) {
-        // Truncate user ID to fit in output buffer with "User: " prefix
-        char truncated[48];
-        strncpy(truncated, channel_id + 8, sizeof(truncated) - 1);
-        truncated[sizeof(truncated) - 1] = '\0';
-        snprintf(out_name, max_len, "User: %.48s", truncated);
+        snprintf(out_name, max_len, "User: %.48s", channel_id + 8);
     } else if (strncmp(channel_id, "hashtag_", 8) == 0) {
-        // Truncate hashtag to fit in output buffer with "#" prefix
-        char truncated[56];
-        strncpy(truncated, channel_id + 8, sizeof(truncated) - 1);
-        truncated[sizeof(truncated) - 1] = '\0';
-        snprintf(out_name, max_len, "#%.56s", truncated);
+        snprintf(out_name, max_len, "#%.56s", channel_id + 8);
+    } else if (strcmp(channel_id, "giphy_trending") == 0) {
+        snprintf(out_name, max_len, "Giphy: Trending");
+    } else if (strncmp(channel_id, "giphy_search_", 13) == 0) {
+        snprintf(out_name, max_len, "Giphy: %.50s", channel_id + 13);
+    } else if (strncmp(channel_id, "giphy_", 6) == 0) {
+        snprintf(out_name, max_len, "Giphy: %.56s", channel_id + 6);
     } else {
-        // Truncate channel_id to fit in output buffer
         snprintf(out_name, max_len, "%.63s", channel_id);
     }
 }

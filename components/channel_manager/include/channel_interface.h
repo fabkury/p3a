@@ -149,39 +149,6 @@ typedef struct {
                                  const channel_filter_config_t *filter);
     
     /**
-     * @brief Get the next item for playback
-     * 
-     * Advances position and returns the next item reference.
-     * Wraps around at the end (re-shuffles if random mode).
-     * 
-     * @param channel Channel handle
-     * @param out_item Pointer to receive item reference
-     * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no items
-     */
-    esp_err_t (*next_item)(channel_handle_t channel, channel_item_ref_t *out_item);
-    
-    /**
-     * @brief Get the previous item for playback
-     * 
-     * Moves position backward and returns the item reference.
-     * Wraps around at the beginning.
-     * 
-     * @param channel Channel handle
-     * @param out_item Pointer to receive item reference
-     * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no items
-     */
-    esp_err_t (*prev_item)(channel_handle_t channel, channel_item_ref_t *out_item);
-    
-    /**
-     * @brief Get the current item without advancing
-     * 
-     * @param channel Channel handle
-     * @param out_item Pointer to receive item reference
-     * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no items
-     */
-    esp_err_t (*current_item)(channel_handle_t channel, channel_item_ref_t *out_item);
-    
-    /**
      * @brief Request random reshuffle of playback order
      * 
      * Only effective if current order mode is CHANNEL_ORDER_RANDOM.
@@ -253,9 +220,6 @@ struct channel_s {
 #define channel_load(ch) ((ch)->ops->load(ch))
 #define channel_unload(ch) ((ch)->ops->unload(ch))
 #define channel_start_playback(ch, order, filter) ((ch)->ops->start_playback((ch), (order), (filter)))
-#define channel_next_item(ch, out) ((ch)->ops->next_item((ch), (out)))
-#define channel_prev_item(ch, out) ((ch)->ops->prev_item((ch), (out)))
-#define channel_current_item(ch, out) ((ch)->ops->current_item((ch), (out)))
 #define channel_request_reshuffle(ch) ((ch)->ops->request_reshuffle(ch))
 #define channel_request_refresh(ch) ((ch)->ops->request_refresh(ch))
 #define channel_get_stats(ch, out) ((ch)->ops->get_stats((ch), (out)))

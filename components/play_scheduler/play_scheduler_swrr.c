@@ -15,7 +15,7 @@
 #include <limits.h>
 #include <math.h>
 
-static const char *TAG = "ps_swrr";
+static const char *TAG = "ps_chsel";
 
 #define WSUM 65536
 

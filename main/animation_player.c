@@ -31,8 +31,6 @@ animation_buffer_t s_back_buffer = {0};
 size_t s_next_asset_index = 0;
 bool s_swap_requested = false;
 bool s_loader_busy = false;
-volatile bool s_cycle_pending = false;
-volatile bool s_cycle_forward = true;
 TaskHandle_t s_loader_task = NULL;
 SemaphoreHandle_t s_loader_sem = NULL;
 SemaphoreHandle_t s_buffer_mutex = NULL;
@@ -455,56 +453,6 @@ bool animation_player_is_paused(void)
     return paused;
 }
 
-void animation_player_cycle_animation(bool forward)
-{
-    // IMPORTANT: This function is called from the touch task. Keep it stack-light.
-    // Do not call into channel/navigation code here; that can trigger deep call chains
-    // (deep stack) and overflow app_touch_task. Instead, defer all work to the loader task.
-    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-        if (s_swap_requested || s_loader_busy || s_back_buffer.prefetch_pending) {
-            xSemaphoreGive(s_buffer_mutex);
-            return;
-        }
-
-        // IMPORTANT: Do NOT call play_scheduler_next/prev in the touch task context.
-        // Those paths can be heavy and overflow the 4KB touch task stack.
-        // Instead, defer navigation to the loader task (which has a larger stack).
-        s_cycle_pending = true;
-        s_cycle_forward = forward;
-        s_next_asset_index = forward ? 1 : 0;
-        s_swap_requested = true;
-        xSemaphoreGive(s_buffer_mutex);
-
-        if (s_loader_sem) {
-            xSemaphoreGive(s_loader_sem);
-        }
-    }
-}
-
-esp_err_t animation_player_request_swap_current(void)
-{
-    // Get current artwork from play_scheduler
-    queued_item_t current = {0};
-    esp_err_t err = playback_queue_current(&current);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "No current artwork to swap to: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    if (current.request.filepath[0] == '\0') {
-        ESP_LOGW(TAG, "Current artwork has empty filepath");
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    // Build swap request with the current artwork's data
-    swap_request_t request = current.request;
-
-    ESP_LOGD(TAG, "Requested swap to current: '%s' (post_id=%d)", request.filepath, request.post_id);
-
-    // Use the new swap request API
-    return animation_player_request_swap(&request);
-}
-
 // ============================================================================
 // NEW SIMPLIFIED API (Phase 3 Refactor)
 // ============================================================================
@@ -865,24 +813,6 @@ void animation_player_exit_ui_mode(void)
 bool animation_player_is_ui_mode(void)
 {
     return display_renderer_is_ui_mode();
-}
-
-// ============================================================================
-// PICO-8 compatibility wrapper
-// ============================================================================
-
-esp_err_t animation_player_submit_pico8_frame(const uint8_t *palette_rgb, size_t palette_len,
-                                              const uint8_t *pixel_data, size_t pixel_len)
-{
-#if CONFIG_P3A_PICO8_ENABLE
-    return pico8_render_submit_frame(palette_rgb, palette_len, pixel_data, pixel_len);
-#else
-    (void)palette_rgb;
-    (void)palette_len;
-    (void)pixel_data;
-    (void)pixel_len;
-    return ESP_ERR_NOT_SUPPORTED;
-#endif
 }
 
 // ============================================================================

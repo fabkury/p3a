@@ -3,7 +3,7 @@
   "firmware": {
     "version": "0.8.4-dev",
     "file": "p3a.bin",
-    "sha256": "e970a40732626f762d90838ab051f40f6c80994bee2006b51bb88295f2462943"
+    "sha256": "e8b4670b5146ec644a79785606b3e5e0a36f627bce6d4c1207260286d9352620"
   },
   "webui": {
     "version": "1.3",

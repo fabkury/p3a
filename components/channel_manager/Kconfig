@@ -7,13 +7,5 @@ menu "Channel Manager"
         help
             Number of posts returned per paginated query.
 
-    config CHANNEL_DEFAULT_ANIMATIONS_DIR
-        string "Default animations directory"
-        default "/sdcard/p3a/animations"
-        help
-            Default directory path for SD card animations.
-            All p3a data is stored under a configurable root folder (default: /p3a).
-            The full path combines SD mount point (/sdcard) with the root folder.
-
 endmenu
 

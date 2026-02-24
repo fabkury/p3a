@@ -29,15 +29,6 @@
 
 static const char *TAG = "app_lcd";
 
-void app_lcd_draw(uint8_t *buf, uint32_t len, uint16_t width, uint16_t height)
-{
-    (void)buf;
-    (void)len;
-    (void)width;
-    (void)height;
-    // The animation owns the display pipeline; external draw requests are ignored.
-}
-
 esp_err_t app_lcd_init(void)
 {
     ESP_LOGI(TAG, "P3A: Initialize display");

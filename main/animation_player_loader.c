@@ -261,8 +261,17 @@ void animation_loader_task(void *arg)
             queued_item_t current = {0};
             esp_err_t err = playback_queue_current(&current);
             if (err != ESP_OK || current.request.filepath[0] == '\0') {
-                ESP_LOGE(TAG, "Loader task: No current artwork available");
-                discard_failed_swap_request(ESP_ERR_NOT_FOUND);
+                // No current artwork. This is expected after exiting UI mode
+                // (provisioning/OTA) where metadata was cleared. Silently clear
+                // the swap request instead of showing a "Playback Error" message;
+                // the provisioning exit path triggers play_scheduler_next() to
+                // pick a new animation.
+                ESP_LOGD(TAG, "Loader task: No current artwork (likely post-UI-mode exit)");
+                if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+                    s_swap_requested = false;
+                    s_loader_busy = false;
+                    xSemaphoreGive(s_buffer_mutex);
+                }
                 continue;
             }
             // Use static buffer to hold filepath (play_scheduler_current returns by value)

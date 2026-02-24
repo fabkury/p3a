@@ -14,6 +14,7 @@
 #include "play_scheduler.h"  // For play_scheduler_next()
 #include "channel_cache.h"   // For channel_cache_save()
 #include "makapix.h"
+#include "makapix_mqtt.h"     // For makapix_mqtt_is_connected()
 #include "makapix_artwork.h"  // For makapix_artwork_download_with_progress()
 #include "makapix_channel_events.h"  // For async completion events
 #include "giphy.h"             // For giphy_refresh_channel()
@@ -67,7 +68,7 @@ static StaticTask_t s_refresh_task_buffer;
  */
 static int find_next_pending_refresh(ps_state_t *state)
 {
-    bool mqtt_ready = makapix_channel_is_mqtt_ready();
+    bool mqtt_ready = makapix_mqtt_is_connected();
 
     for (size_t i = 0; i < state->channel_count; i++) {
         ps_channel_state_t *ch = &state->channels[i];

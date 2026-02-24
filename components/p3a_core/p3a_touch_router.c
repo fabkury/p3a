@@ -215,6 +215,13 @@ static esp_err_t handle_provisioning(const p3a_touch_event_t *event)
             // Step 3: Transition state
             p3a_state_exit_to_playback();
 
+            // Step 4: Resume animation playback immediately.
+            // Without this, the screen stays blank (or shows stale channel
+            // messages) until the next dwell timer fires, which can be up to
+            // 30 seconds. Emitting SWAP_NEXT triggers play_scheduler_next()
+            // to pick and load an animation right away.
+            event_bus_emit_simple(P3A_EVENT_SWAP_NEXT);
+
             return ESP_OK;
 
         default:

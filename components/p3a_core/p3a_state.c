@@ -741,6 +741,13 @@ void p3a_state_set_channel_message(const p3a_channel_message_t *msg)
     if (!s_state.initialized || !msg) return;
     
     xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    // Channel message substates only apply during animation playback.
+    // Reject when in provisioning, OTA, or other exclusive states to
+    // prevent background downloads from corrupting the active UI.
+    if (s_state.current_state != P3A_STATE_ANIMATION_PLAYBACK) {
+        xSemaphoreGive(s_state.mutex);
+        return;
+    }
     // IMPORTANT: Treat "NONE" as clearing the channel message and returning to normal playback.
     // Otherwise the renderer stays in CHANNEL_MESSAGE mode forever, which prevents normal
     // animation playback (and swap/prefetch processing) from running.

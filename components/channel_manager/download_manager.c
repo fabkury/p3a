@@ -468,6 +468,13 @@ static char s_task_display_name[64];  // For UI display name
 
 static void dl_progress_cb(size_t bytes_read, size_t content_length, void *ctx)
 {
+    // The progress callback is registered when a download starts during fresh
+    // start (!s_playback_initiated && !animation_player_is_animation_ready()).
+    // However, playback may have been initiated by an external trigger (e.g.,
+    // LAi zero-to-one transition, or provisioning exit) while this download is
+    // still running. Re-check dynamically to avoid overriding the display.
+    if (s_playback_initiated || animation_player_is_animation_ready()) return;
+
     const char *name = (const char *)ctx;
     int pct = (content_length > 0) ? (int)((bytes_read * 100) / content_length) : -1;
     p3a_render_set_channel_message(name, 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, pct,
@@ -638,6 +645,13 @@ static void download_task(void *arg)
         // Start download
         s_all_downloaded_logged = false;
         set_busy(true, s_dl_req.channel_id);
+
+        // Self-correct: if playback was triggered externally (e.g., LAi
+        // zero-to-one transition via event bus), detect it now so we don't
+        // show download progress after exiting provisioning/OTA modes.
+        if (!s_playback_initiated && animation_player_is_animation_ready()) {
+            s_playback_initiated = true;
+        }
 
         // Update UI message during fresh start (no animation playing yet)
         // Show download progress immediately, even if refresh is still running

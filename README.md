@@ -7,11 +7,12 @@ p3a is a Wi-Fi pixel art player built on the ESP32-P4. It's a 4-inch smart art f
 
 ## Photos
 
-<p>
-  <img src="images/p3a-1.jpg" alt="P3A front" height="320">
-  <img src="images/p3a-2.jpg" alt="P3A angled" height="320">
-  <img src="images/p3a-3-giphy.jpg" alt="P3A playing a Giphy GIF" height="320">
-  <img src="images/p3a-4-giphy.jpg" alt="P3A playing a Giphy GIF" height="320">
+<p align="center">
+  <img src="images/p3a-1.jpg" alt="p3a front" height="320">
+  <img src="images/p3a-7.jpg" alt="p3a angled" height="320">
+  <img src="images/p3a-4-giphy.jpg" alt="p3a playing a Giphy GIF" height="320">
+  <img src="images/p3a-5.jpg" alt="p3a in hand" height="320">
+  <img src="images/p3a-6.jpg" alt="p3a in hand" height="320">
 </p>
 
 ## Quick start
@@ -41,12 +42,19 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 - **Join the community**: Connect with other p3a users and discuss pixel art players on the [Makapix Club Discord](https://discord.gg/xk9umcujXV)
 - **Coming soon**: Send a "like" to the artwork by touching the screen, swipe up to view artwork comments from the Makapix community
 
-### Giphy Integration
+<p align="center">
+  <img src="images/p3a-2.jpg" alt="p3a angled" height="320">
+</p>
 
+### Giphy Integration
 - **Trending GIFs on your desk**: p3a fetches trending GIFs directly from the [Giphy](https://giphy.com/) API and plays them in a continuous loop — animated memes, reactions, and pop culture moments cycling on your display all day long
 - **Configurable content**: Choose your preferred rendition size, file format (WebP or GIF), and content rating (G through R) from the built-in Giphy settings page
 - **Automatic refresh**: p3a periodically checks Giphy for fresh trending content so the feed stays current without any manual intervention
 - **Mix and match**: Combine Giphy channels with Makapix artwork channels in the same playset for a varied, ever-changing display
+
+<p align="center">
+  <img src="images/p3a-3-giphy.jpg" alt="p3a playing a Giphy GIF" height="320">
+</p>
 
 ### Seamless Playback
 
@@ -54,6 +62,10 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 - **Full format support**: Animated WebP and GIF, and still PNG all with transparency and alpha channel support, plus hardware-accelerated JPEG support
 - **Smart upscaling**: Giphy content is upscaled with hardware-accelerated bilinear interpolation (PPA) for smooth results, while pixel art from Makapix and local files uses nearest-neighbor scaling to preserve crisp pixel edges
 - **Aspect ratio preservation**: Non-square artworks display without distortion, properly centered with configurable background color
+
+<p align="center">
+  <img src="images/p3a_10fps.gif" alt="p3a playing two animated artworks" height="320">
+</p>
 
 ### Control & Customization
 
@@ -69,7 +81,7 @@ For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 - **PICO-8 Monitor**: Stream PICO-8 games to the display via Wi-Fi
 
 <p align="center">
-  <img src="images/p3a_10fps.gif" alt="p3a video">
+  <img src="images/pico-8-gameplay-2.gif" alt="p3a PICO-8 gameplay">
 </p>
 
 ## Over-the-Air Updates

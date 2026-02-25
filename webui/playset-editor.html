@@ -233,6 +233,44 @@
             border-color: #ef4444;
         }
 
+        .sqid-input-row {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+        .sqid-input-row .form-input {
+            flex: 1;
+        }
+        .check-results {
+            margin-top: 6px;
+            padding: 8px 10px;
+            font-size: 12px;
+            color: #999;
+            background: #fafafa;
+            border-radius: 6px;
+            min-height: 24px;
+        }
+        .check-results.has-data {
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .check-results .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: pixelated;
+            -ms-interpolation-mode: nearest-neighbor;
+            flex-shrink: 0;
+        }
+        .check-results .user-info {
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
         .error-message {
             color: #ef4444;
             font-size: 12px;
@@ -1305,7 +1343,7 @@
 
             // Display name
             html += '<div class="form-group" style="margin-bottom: 8px;">' +
-                '<input type="text" class="form-input" placeholder="Display name" ' +
+                '<input type="text" class="form-input" id="displayName_' + index + '" placeholder="Display name" ' +
                 'value="' + escapeAttr(displayName) + '" maxlength="64" ' +
                 'onchange="updateChannelField(' + index + ', \'display_name\', this.value)">' +
                 '</div>';
@@ -1346,9 +1384,16 @@
                 case 'user':
                     html += '<div class="form-group" style="margin-bottom: 0;">' +
                         '<label class="form-label" style="font-size: 12px;">Artist ID (sqid)</label>' +
-                        '<input type="text" class="form-input" placeholder="artist_sqid" maxlength="32" ' +
+                        '<div class="sqid-input-row">' +
+                        '<input type="text" class="form-input" id="sqidInput_' + index + '" placeholder="artist_sqid" maxlength="32" ' +
                         'value="' + escapeAttr(channel.identifier || '') + '" ' +
+                        'oninput="updateCardCheckButton(' + index + ')" ' +
                         'onchange="updateChannelField(' + index + ', \'identifier\', this.value)">' +
+                        '<button type="button" class="btn btn-secondary btn-small" id="sqidCheckBtn_' + index + '" ' +
+                        'onclick="verifyArtist(document.getElementById(\'sqidInput_' + index + '\').value, \'sqidResults_' + index + '\', null, ' + index + ')" ' +
+                        (isValidSqid(channel.identifier) ? '' : 'disabled') + '>Check</button>' +
+                        '</div>' +
+                        '<div class="check-results" id="sqidResults_' + index + '">Enter sqid to check.</div>' +
                         '</div>';
                     break;
 
@@ -1419,6 +1464,86 @@
             if (field === 'weight') {
                 updateWeightVisualization();
             }
+        }
+
+        function isValidSqid(value) {
+            return !!value && /^[a-zA-Z0-9]+$/.test(value);
+        }
+
+        function updateModalCheckButton() {
+            var btn = document.getElementById('modalCheckBtn');
+            if (btn) {
+                var val = document.getElementById('userIdentifier').value.trim();
+                btn.disabled = !isValidSqid(val);
+            }
+        }
+
+        function updateCardCheckButton(index) {
+            var input = document.getElementById('sqidInput_' + index);
+            var btn = document.getElementById('sqidCheckBtn_' + index);
+            if (input && btn) {
+                var val = input.value.trim();
+                btn.disabled = !isValidSqid(val);
+                updateChannelField(index, 'identifier', val);
+            }
+        }
+
+        function verifyArtist(sqid, resultsId, displayNameTarget, channelIndex) {
+            sqid = (sqid || '').trim();
+            var el = document.getElementById(resultsId);
+            if (!el) return;
+            if (!isValidSqid(sqid)) {
+                el.className = 'check-results';
+                el.innerHTML = 'Enter sqid to check.';
+                return;
+            }
+            el.className = 'check-results';
+            el.innerHTML = 'Querying Makapix Club...';
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', 'https://makapix.club/api/player/verify-user/' + encodeURIComponent(sqid), true);
+            xhr.onload = function() {
+                if (xhr.status === 404) {
+                    el.className = 'check-results';
+                    el.innerHTML = 'User not found.';
+                    return;
+                }
+                if (xhr.status !== 200) {
+                    el.className = 'check-results';
+                    el.innerHTML = 'Error (HTTP ' + xhr.status + ').';
+                    return;
+                }
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    var handle = data.handle || sqid;
+                    var avatarHtml = data.avatar_url ?
+                        '<img class="avatar" src="' + escapeAttr(data.avatar_url) + '" alt="avatar">' : '';
+                    var rep = data.reputation !== undefined ? data.reputation : '?';
+                    var artworks = data.artwork_count !== undefined ? data.artwork_count : '?';
+                    el.className = 'check-results has-data';
+                    el.innerHTML = avatarHtml +
+                        '<div class="user-info"><strong>' + escapeAttr(handle) + '</strong><br>' +
+                        'Rep: ' + escapeAttr(String(rep)) + ' &middot; Artworks: ' + escapeAttr(String(artworks)) + '</div>';
+
+                    // Auto-fill display name
+                    if (displayNameTarget && typeof displayNameTarget === 'string') {
+                        var dnInput = document.getElementById(displayNameTarget);
+                        if (dnInput) dnInput.value = handle;
+                    } else if (channelIndex !== null) {
+                        var dnCard = document.getElementById('displayName_' + channelIndex);
+                        if (dnCard) dnCard.value = handle;
+                        state.channels[channelIndex].display_name = handle;
+                    }
+                } catch (e) {
+                    el.className = 'check-results';
+                    el.innerHTML = 'Invalid response.';
+                }
+            };
+            xhr.onerror = function() {
+                el.className = 'check-results';
+                el.innerHTML = 'Network error.';
+            };
+            xhr.send();
         }
 
         function handleGiphyModeChange(index, mode) {
@@ -1539,7 +1664,13 @@
                 case 'user':
                     html = '<div class="form-group">' +
                         '<label class="form-label">Artist ID (sqid)</label>' +
-                        '<input type="text" id="userIdentifier" class="form-input" placeholder="artist_sqid" maxlength="32">' +
+                        '<div class="sqid-input-row">' +
+                        '<input type="text" id="userIdentifier" class="form-input" placeholder="artist_sqid" maxlength="32" ' +
+                        'oninput="updateModalCheckButton()">' +
+                        '<button type="button" class="btn btn-secondary btn-small" id="modalCheckBtn" ' +
+                        'onclick="verifyArtist(document.getElementById(\'userIdentifier\').value, \'modalCheckResults\', \'channelDisplayName\', null)" disabled>Check</button>' +
+                        '</div>' +
+                        '<div class="check-results" id="modalCheckResults">Enter sqid to check.</div>' +
                         '</div>';
                     break;
 

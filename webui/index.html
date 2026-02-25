@@ -993,23 +993,53 @@ function escHtml(s) {
     d.appendChild(document.createTextNode(s));
     return d.innerHTML;
 }
+function createChannelRow(ch) {
+    var row = document.createElement('div');
+    row.className = 'ps-ch-row';
+    if (ch.refreshing) row.classList.add('refreshing');
+    var s = '<span class="ps-badge ps-badge-type">' + typeBadgeLetter(ch.type) + '</span>';
+    s += '<span class="ps-badge ps-badge-sub">' + subTypeBadge(ch.name) + '</span>';
+    s += '<span class="ps-ch-name">' + escHtml(ch.display_name || ch.channel_id || '') + '</span>';
+    if (ch.identifier) s += '<span class="ps-ch-id">' + escHtml(ch.identifier) + '</span>';
+    s += '<span class="ps-ch-count">' + (ch.available || 0) + '/' + (ch.total || 0) + '</span>';
+    s += '<span class="ps-ch-time">' + relativeTime(ch.last_refresh) + '</span>';
+    row.innerHTML = s;
+    return row;
+}
+function updateChannelRow(row, ch) {
+    if (ch.refreshing) row.classList.add('refreshing');
+    else row.classList.remove('refreshing');
+    row.querySelector('.ps-badge-type').textContent = typeBadgeLetter(ch.type);
+    row.querySelector('.ps-badge-sub').textContent = subTypeBadge(ch.name);
+    row.querySelector('.ps-ch-name').textContent = ch.display_name || ch.channel_id || '';
+    var idSpan = row.querySelector('.ps-ch-id');
+    if (ch.identifier) {
+        if (!idSpan) {
+            idSpan = document.createElement('span');
+            idSpan.className = 'ps-ch-id';
+            row.insertBefore(idSpan, row.querySelector('.ps-ch-count'));
+        }
+        idSpan.textContent = ch.identifier;
+    } else if (idSpan) {
+        idSpan.remove();
+    }
+    row.querySelector('.ps-ch-count').textContent = (ch.available || 0) + '/' + (ch.total || 0);
+    row.querySelector('.ps-ch-time').textContent = relativeTime(ch.last_refresh);
+}
 function renderChannelRows(channels) {
     var container = document.getElementById('playset-channels');
     if (!channels || !channels.length) { container.innerHTML = ''; return; }
-    var html = '';
+    var existing = container.children;
     for (var i = 0; i < channels.length; i++) {
-        var ch = channels[i];
-        var cls = 'ps-ch-row' + (ch.refreshing ? ' refreshing' : '');
-        html += '<div class="' + cls + '">';
-        html += '<span class="ps-badge ps-badge-type">' + typeBadgeLetter(ch.type) + '</span>';
-        html += '<span class="ps-badge ps-badge-sub">' + subTypeBadge(ch.name) + '</span>';
-        html += '<span class="ps-ch-name">' + escHtml(ch.display_name || ch.channel_id || '') + '</span>';
-        if (ch.identifier) html += '<span class="ps-ch-id">' + escHtml(ch.identifier) + '</span>';
-        html += '<span class="ps-ch-count">' + (ch.available || 0) + '/' + (ch.total || 0) + '</span>';
-        html += '<span class="ps-ch-time">' + relativeTime(ch.last_refresh) + '</span>';
-        html += '</div>';
+        if (i < existing.length) {
+            updateChannelRow(existing[i], channels[i]);
+        } else {
+            container.appendChild(createChannelRow(channels[i]));
+        }
     }
-    container.innerHTML = html;
+    while (container.children.length > channels.length) {
+        container.removeChild(container.lastChild);
+    }
 }
 function updatePlaysetInfo(name, info) {
     var card = document.getElementById('playset-card');

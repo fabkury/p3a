@@ -47,11 +47,6 @@ extern "C" {
  */
 esp_err_t app_lcd_init(void);
 
-/**
- * @brief Draw to display (legacy, not used)
- */
-void app_lcd_draw(uint8_t *buf, uint32_t len, uint16_t width, uint16_t height);
-
 // ============================================================================
 // ANIMATION CONTROL
 // ============================================================================

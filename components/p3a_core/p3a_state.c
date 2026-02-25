@@ -44,8 +44,6 @@ static const char *s_connectivity_detail_messages[] = {
 
 // NVS storage
 #define NVS_NAMESPACE "p3a_state"
-#define NVS_KEY_CHANNEL_TYPE "ch_type"      // Deprecated: use playset instead
-#define NVS_KEY_CHANNEL_IDENT "ch_ident"    // Deprecated: use playset instead
 #define NVS_KEY_LAST_STATE "last_state"
 #define NVS_KEY_ACTIVE_PLAYSET "playset"    // Active playset name (e.g., "channel_recent")
 
@@ -135,34 +133,6 @@ static void notify_callbacks(p3a_state_t old_state, p3a_state_t new_state)
             s_state.callbacks[i].callback(old_state, new_state, s_state.callbacks[i].user_data);
         }
     }
-}
-
-static const char *channel_type_to_string(p3a_channel_type_t type)
-{
-    switch (type) {
-        case P3A_CHANNEL_SDCARD: return "sdcard";
-        case P3A_CHANNEL_MAKAPIX_ALL: return "all";
-        case P3A_CHANNEL_MAKAPIX_PROMOTED: return "promoted";
-        case P3A_CHANNEL_MAKAPIX_USER: return "user";
-        case P3A_CHANNEL_MAKAPIX_BY_USER: return "by_user";
-        case P3A_CHANNEL_MAKAPIX_HASHTAG: return "hashtag";
-        case P3A_CHANNEL_MAKAPIX_ARTWORK: return "artwork";
-        case P3A_CHANNEL_GIPHY_TRENDING: return "giphy_trending";
-        default: return "unknown";
-    }
-}
-
-static p3a_channel_type_t string_to_channel_type(const char *str)
-{
-    if (!str) return P3A_CHANNEL_SDCARD;
-    if (strcmp(str, "all") == 0) return P3A_CHANNEL_MAKAPIX_ALL;
-    if (strcmp(str, "promoted") == 0) return P3A_CHANNEL_MAKAPIX_PROMOTED;
-    if (strcmp(str, "user") == 0) return P3A_CHANNEL_MAKAPIX_USER;
-    if (strcmp(str, "by_user") == 0) return P3A_CHANNEL_MAKAPIX_BY_USER;
-    if (strcmp(str, "hashtag") == 0) return P3A_CHANNEL_MAKAPIX_HASHTAG;
-    if (strcmp(str, "artwork") == 0) return P3A_CHANNEL_MAKAPIX_ARTWORK;
-    if (strcmp(str, "giphy_trending") == 0) return P3A_CHANNEL_GIPHY_TRENDING;
-    return P3A_CHANNEL_SDCARD;
 }
 
 static void update_channel_display_name(p3a_channel_info_t *info)
@@ -317,105 +287,6 @@ static bool can_enter_state(p3a_state_t target)
 // Persistence
 // ============================================================================
 
-esp_err_t p3a_state_persist_channel(void)
-{
-    if (!s_state.initialized || !s_state.mutex) {
-        return ESP_ERR_INVALID_STATE;
-    }
-    
-    // Take mutex to read channel state atomically
-    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
-    
-    // Copy channel info under mutex protection
-    p3a_channel_info_t channel_copy;
-    memcpy(&channel_copy, &s_state.current_channel, sizeof(channel_copy));
-    
-    xSemaphoreGive(s_state.mutex);
-    
-    // Don't persist transient artwork channels
-    if (channel_copy.type == P3A_CHANNEL_MAKAPIX_ARTWORK) {
-        return ESP_OK;
-    }
-    
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to open NVS for writing: %s", esp_err_to_name(err));
-        return err;
-    }
-    
-    const char *type_str = channel_type_to_string(channel_copy.type);
-    err = nvs_set_str(handle, NVS_KEY_CHANNEL_TYPE, type_str);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to save channel type: %s", esp_err_to_name(err));
-    }
-    
-    if (channel_copy.type == P3A_CHANNEL_MAKAPIX_BY_USER || 
-        channel_copy.type == P3A_CHANNEL_MAKAPIX_HASHTAG) {
-        err = nvs_set_str(handle, NVS_KEY_CHANNEL_IDENT, channel_copy.identifier);
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to save channel identifier: %s", esp_err_to_name(err));
-        }
-    }
-    
-    err = nvs_commit(handle);
-    nvs_close(handle);
-    
-    ESP_LOGI(TAG, "Persisted channel: %s", channel_copy.display_name);
-    return err;
-}
-
-esp_err_t p3a_state_load_channel(p3a_channel_info_t *out_info)
-{
-    if (!out_info) return ESP_ERR_INVALID_ARG;
-
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
-    if (err != ESP_OK) {
-        // No saved channel - default to SD card
-        ESP_LOGI(TAG, "No saved channel, defaulting to SD card");
-        out_info->type = P3A_CHANNEL_SDCARD;
-        memset(out_info->identifier, 0, sizeof(out_info->identifier));
-        memset(out_info->storage_key, 0, sizeof(out_info->storage_key));
-        update_channel_display_name(out_info);
-        return ESP_OK;
-    }
-
-    char type_str[32] = {0};
-    size_t len = sizeof(type_str);
-    err = nvs_get_str(handle, NVS_KEY_CHANNEL_TYPE, type_str, &len);
-    if (err == ESP_OK) {
-        out_info->type = string_to_channel_type(type_str);
-    } else {
-        out_info->type = P3A_CHANNEL_SDCARD;
-    }
-
-    if (out_info->type == P3A_CHANNEL_MAKAPIX_BY_USER ||
-        out_info->type == P3A_CHANNEL_MAKAPIX_HASHTAG) {
-        len = sizeof(out_info->identifier);
-        err = nvs_get_str(handle, NVS_KEY_CHANNEL_IDENT, out_info->identifier, &len);
-        if (err != ESP_OK) {
-            // Invalid channel without identifier - fall back to SD card
-            out_info->type = P3A_CHANNEL_SDCARD;
-            memset(out_info->identifier, 0, sizeof(out_info->identifier));
-        }
-    } else {
-        memset(out_info->identifier, 0, sizeof(out_info->identifier));
-    }
-
-    memset(out_info->storage_key, 0, sizeof(out_info->storage_key));
-    update_channel_display_name(out_info);
-
-    nvs_close(handle);
-
-    ESP_LOGI(TAG, "Loaded channel: %s", out_info->display_name);
-    return ESP_OK;
-}
-
-// ============================================================================
-// Playset Persistence (new)
-// ============================================================================
-
 esp_err_t p3a_state_set_active_playset(const char *name)
 {
     if (!s_state.initialized || !s_state.mutex) {
@@ -518,8 +389,9 @@ esp_err_t p3a_state_init(void)
     }
     ESP_LOGI(TAG, "Loaded active playset: '%s'", s_state.active_playset);
 
-    // Load persisted channel (legacy, for backwards compatibility)
-    p3a_state_load_channel(&s_state.current_channel);
+    // Default channel until playset system takes over
+    s_state.current_channel.type = P3A_CHANNEL_SDCARD;
+    update_channel_display_name(&s_state.current_channel);
     
     // Initialize to animation playback state with "Starting..." message
     // This prevents blank screen gap between boot logo and first content
@@ -869,6 +741,13 @@ void p3a_state_set_channel_message(const p3a_channel_message_t *msg)
     if (!s_state.initialized || !msg) return;
     
     xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    // Channel message substates only apply during animation playback.
+    // Reject when in provisioning, OTA, or other exclusive states to
+    // prevent background downloads from corrupting the active UI.
+    if (s_state.current_state != P3A_STATE_ANIMATION_PLAYBACK) {
+        xSemaphoreGive(s_state.mutex);
+        return;
+    }
     // IMPORTANT: Treat "NONE" as clearing the channel message and returning to normal playback.
     // Otherwise the renderer stays in CHANNEL_MESSAGE mode forever, which prevents normal
     // animation playback (and swap/prefetch processing) from running.
@@ -1256,9 +1135,6 @@ esp_err_t p3a_state_switch_channel(p3a_channel_type_t type, const char *identifi
     
     xSemaphoreGive(s_state.mutex);
     
-    // Persist (except transient channels)
-    p3a_state_persist_channel();
-    
     ESP_LOGI(TAG, "Switched to channel: %s", display_name_copy);
     
     return ESP_OK;
@@ -1335,14 +1211,7 @@ esp_err_t p3a_state_fallback_to_sdcard(void)
     return err;
 }
 
-p3a_channel_type_t p3a_state_get_default_channel(void)
-{
-    p3a_channel_info_t info;
-    if (p3a_state_load_channel(&info) == ESP_OK) {
-        return info.type;
-    }
-    return P3A_CHANNEL_SDCARD;
-}
+
 
 // ============================================================================
 // Callbacks

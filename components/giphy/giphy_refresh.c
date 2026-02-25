@@ -297,12 +297,13 @@ static void giphy_evict_orphans(channel_cache_t *cache, si_node_t *si_hash)
 // Each GIF object is ~8KB of JSON; at 25 items/page this is ~200KB.
 #define GIPHY_RESPONSE_BUF_SIZE (256 * 1024)
 
-esp_err_t giphy_refresh_channel(const char *channel_id)
+esp_err_t giphy_refresh_channel(const char *channel_id, const char *query)
 {
-    return giphy_refresh_channel_with_progress(channel_id, NULL, NULL);
+    return giphy_refresh_channel_with_progress(channel_id, query, NULL, NULL);
 }
 
 esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
+                                               const char *query,
                                                giphy_refresh_progress_cb_t progress_cb,
                                                void *progress_ctx)
 {
@@ -341,14 +342,8 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
         strlcpy(ctx.rating, "pg-13", sizeof(ctx.rating));
     }
 
-    // Parse channel_id to determine trending vs search mode.
-    // Channel IDs: "giphy_trending" -> trending, "giphy_search_cats" -> search "cats"
-    const char *after_prefix = channel_id + 6;  // skip "giphy_"
-    if (strncmp(after_prefix, "search_", 7) == 0 && after_prefix[7] != '\0') {
-        strlcpy(ctx.query, after_prefix + 7, sizeof(ctx.query));
-        for (char *p = ctx.query; *p; p++) {
-            if (*p == '_') *p = ' ';
-        }
+    if (query && query[0] != '\0') {
+        strlcpy(ctx.query, query, sizeof(ctx.query));
         ESP_LOGI(TAG, "Search mode: q=\"%s\"", ctx.query);
     } else {
         ctx.query[0] = '\0';

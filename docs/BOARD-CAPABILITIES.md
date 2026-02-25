@@ -171,7 +171,7 @@ A dedicated 2D image processing engine for pixel-level transformations with zero
 
 **Performance note:** PPA throughput is proportional to block size and highly dependent on PSRAM bandwidth. When many peripherals access PSRAM simultaneously, performance degrades.
 
-**Upscaling note:** The PPA SRM engine uses bilinear interpolation, which produces smooth results for photographic/video content but blurs low-resolution pixel art. p3a uses PPA upscaling for Giphy channels (where bilinear interpolation improves visual quality) and retains CPU nearest-neighbor upscaling for Makapix and local file channels (where crisp pixel-perfect edges are essential). This is configurable via the "PPA Upscale" toggle in the settings UI.
+**Upscaling note:** The PPA SRM engine uses bilinear interpolation, which produces smooth results for photographic/video content but blurs low-resolution pixel art. p3a uses PPA upscaling for Giphy channels (where bilinear interpolation improves visual quality) and retains CPU nearest-neighbor upscaling for Makapix and local file channels (where crisp pixel-perfect edges are essential). The Giphy behavior is configurable via the "PPA Upscale" toggle in the settings UI.
 
 ### H.264 Encoder
 

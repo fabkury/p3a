@@ -14,6 +14,7 @@
 #include "play_scheduler.h"  // For play_scheduler_next()
 #include "channel_cache.h"   // For channel_cache_save()
 #include "makapix.h"
+#include "makapix_mqtt.h"     // For makapix_mqtt_is_connected()
 #include "makapix_artwork.h"  // For makapix_artwork_download_with_progress()
 #include "makapix_channel_events.h"  // For async completion events
 #include "giphy.h"             // For giphy_refresh_channel()
@@ -67,7 +68,7 @@ static StaticTask_t s_refresh_task_buffer;
  */
 static int find_next_pending_refresh(ps_state_t *state)
 {
-    bool mqtt_ready = makapix_channel_is_mqtt_ready();
+    bool mqtt_ready = makapix_mqtt_is_connected();
 
     for (size_t i = 0; i < state->channel_count; i++) {
         ps_channel_state_t *ch = &state->channels[i];
@@ -407,6 +408,35 @@ static void refresh_task(void *arg)
         int ch_idx = find_next_pending_refresh(state);
 
         if (ch_idx < 0) {
+            // No channels pending — check if periodic refresh is due
+            bool any_in_progress = false;
+            for (size_t i = 0; i < state->channel_count; i++) {
+                if (state->channels[i].refresh_async_pending || state->channels[i].refresh_in_progress) {
+                    any_in_progress = true;
+                    break;
+                }
+            }
+
+            if (!any_in_progress && state->channel_count > 0) {
+                time_t now = time(NULL);
+                if (s_last_full_refresh_complete == 0) {
+                    s_last_full_refresh_complete = now;
+                    ESP_LOGI(TAG, "All channels refreshed. Next periodic refresh in %d seconds.",
+                             REFRESH_INTERVAL_SECONDS);
+                } else if (now - s_last_full_refresh_complete >= REFRESH_INTERVAL_SECONDS) {
+                    ESP_LOGI(TAG, "Starting periodic refresh cycle (%d seconds elapsed)",
+                             REFRESH_INTERVAL_SECONDS);
+                    for (size_t i = 0; i < state->channel_count; i++) {
+                        state->channels[i].refresh_pending = true;
+                    }
+                    s_last_full_refresh_complete = 0;
+                    xSemaphoreGive(state->mutex);
+                    ps_refresh_signal_work();
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                    continue;
+                }
+            }
+
             xSemaphoreGive(state->mutex);
             continue;
         }
@@ -419,6 +449,8 @@ static void refresh_task(void *arg)
         ps_channel_type_t type = ch->type;
         char channel_id[64];
         strlcpy(channel_id, ch->channel_id, sizeof(channel_id));
+        char identifier[33];
+        strlcpy(identifier, ch->identifier, sizeof(identifier));
         bool cache_has_entries = (ch->cache != NULL && ch->cache->entry_count > 0);
 
         xSemaphoreGive(state->mutex);
@@ -482,10 +514,12 @@ static void refresh_task(void *arg)
                 if (!animation_player_is_animation_ready()) {
                     p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_LOADING, -1,
                                                    "Loading channel...");
-                    err = giphy_refresh_channel_with_progress(channel_id,
+                    const char *query = identifier[0] != '\0' ? identifier : NULL;
+                    err = giphy_refresh_channel_with_progress(channel_id, query,
                               giphy_refresh_ui_cb, giphy_display_name);
                 } else {
-                    err = giphy_refresh_channel(channel_id);
+                    const char *query = identifier[0] != '\0' ? identifier : NULL;
+                    err = giphy_refresh_channel(channel_id, query);
                 }
                 if (err == ESP_OK) {
                     config_store_set_giphy_refresh_allow_override(false);
@@ -596,42 +630,6 @@ static void refresh_task(void *arg)
         if (err != ESP_OK && err != ESP_ERR_NOT_FINISHED) {
             ESP_LOGW(TAG, "Channel '%s' refresh failed: %s", channel_id, esp_err_to_name(err));
         }
-
-        // Check if all channels have completed refresh (for periodic refresh timing)
-        xSemaphoreTake(state->mutex, portMAX_DELAY);
-        int pending_idx = find_next_pending_refresh(state);
-
-        // Also check if any channel is still in async refresh
-        bool any_async_pending = false;
-        for (size_t i = 0; i < state->channel_count; i++) {
-            if (state->channels[i].refresh_async_pending || state->channels[i].refresh_in_progress) {
-                any_async_pending = true;
-                break;
-            }
-        }
-
-        if (pending_idx < 0 && !any_async_pending && state->channel_count > 0) {
-            // All channels done (no pending AND no async in progress)
-            time_t now = time(NULL);
-
-            if (s_last_full_refresh_complete == 0) {
-                // First time completing all refreshes
-                s_last_full_refresh_complete = now;
-                ESP_LOGI(TAG, "All channels refreshed. Next refresh in %d seconds.", REFRESH_INTERVAL_SECONDS);
-            } else if (now - s_last_full_refresh_complete >= REFRESH_INTERVAL_SECONDS) {
-                // Time for periodic refresh
-                ESP_LOGI(TAG, "Starting periodic refresh cycle (1 hour elapsed)");
-                for (size_t i = 0; i < state->channel_count; i++) {
-                    state->channels[i].refresh_pending = true;
-                }
-                s_last_full_refresh_complete = 0;  // Reset to track next completion
-                xSemaphoreGive(state->mutex);
-                ps_refresh_signal_work();
-                vTaskDelay(pdMS_TO_TICKS(100));
-                continue;  // Skip to next iteration
-            }
-        }
-        xSemaphoreGive(state->mutex);
 
         // Brief delay between refreshes to avoid overloading
         vTaskDelay(pdMS_TO_TICKS(100));

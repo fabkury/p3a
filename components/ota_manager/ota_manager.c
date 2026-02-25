@@ -243,16 +243,6 @@ esp_err_t ota_manager_init(void)
     ESP_LOGI(TAG, "OTA manager initialized (check interval: %d hours)", CONFIG_OTA_CHECK_INTERVAL_HOURS);
 #endif
 
-    // Do initial check after a short delay
-    esp_timer_handle_t initial_check_timer;
-    esp_timer_create_args_t initial_args = {
-        .callback = ota_timer_callback,
-        .name = "ota_initial",
-    };
-    if (esp_timer_create(&initial_args, &initial_check_timer) == ESP_OK) {
-        esp_timer_start_once(initial_check_timer, 300 * 1000000);  // 5 minutes after boot
-    }
-
     return ESP_OK;
 }
 

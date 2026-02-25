@@ -95,14 +95,23 @@ body {
 .playset-card {
     background: #667eea;
     border-radius: 12px;
-    padding: 8px 16px;
-    text-align: center;
     font-size: 0.8rem;
     color: white;
     box-shadow: 0 6px 16px rgba(102,126,234,0.4);
     width: 100%;
     box-sizing: border-box;
+    overflow: hidden;
 }
+.playset-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+.playset-header-text { text-align: center; flex: 1; min-width: 0; }
 .playset-name {
     font-weight: 600;
     color: white;
@@ -113,6 +122,56 @@ body {
     color: rgba(255,255,255,0.85);
     font-size: 0.75rem;
 }
+.playset-toggle {
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.7);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+.playset-card.collapsed .playset-toggle { transform: rotate(-90deg); }
+.playset-card.collapsed .playset-channels { display: none; }
+.playset-channels {
+    border-top: 1px solid rgba(255,255,255,0.2);
+    padding: 6px 10px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.ps-ch-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+    padding: 4px 6px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.08);
+    transition: opacity 0.3s;
+}
+.ps-ch-row.refreshing {
+    animation: ps-pulse 1.8s ease-in-out infinite;
+}
+@keyframes ps-pulse {
+    0%, 100% { background: rgba(255,255,255,0.08); }
+    50% { background: rgba(255,255,255,0.22); }
+}
+.ps-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+.ps-badge-type { background: rgba(255,255,255,0.25); color: #fff; }
+.ps-badge-sub { background: rgba(0,0,0,0.18); color: rgba(255,255,255,0.9); }
+.ps-ch-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; }
+.ps-ch-id { color: rgba(255,255,255,0.65); font-size: 0.65rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80px; }
+.ps-ch-count { white-space: nowrap; color: rgba(255,255,255,0.85); flex-shrink: 0; }
+.ps-ch-time { white-space: nowrap; color: rgba(255,255,255,0.55); font-size: 0.6rem; flex-shrink: 0; }
+.ps-ch-loading { text-align: center; color: rgba(255,255,255,0.6); font-size: 0.75rem; padding: 6px 0; }
 .channel-btn {
     background: rgba(255,255,255,0.95);
     border: none;
@@ -350,13 +409,19 @@ body {
 <div class="controls">
     <div class="arrow-row">
         <button class="arrow-btn" id="back-btn" onclick="sendCommand('swap_back')">&#9664;</button>
+        <button class="pause-btn" id="pause-btn" onclick="togglePause()">Pause</button>
         <button class="arrow-btn" id="next-btn" onclick="sendCommand('swap_next')">&#9654;</button>
     </div>
-    <div class="playset-card" id="playset-card" style="display:none;">
-        <div class="playset-name" id="playset-name"></div>
-        <div class="playset-stats" id="playset-stats"></div>
+    <div class="playset-card collapsed" id="playset-card" style="display:none;">
+        <div class="playset-header" onclick="togglePlaysetCard()">
+            <div class="playset-header-text">
+                <div class="playset-name" id="playset-name"></div>
+                <div class="playset-stats" id="playset-stats"></div>
+            </div>
+            <span class="playset-toggle" id="playset-toggle">&#9660;</span>
+        </div>
+        <div class="playset-channels" id="playset-channels"></div>
     </div>
-    <button class="pause-btn" id="pause-btn" onclick="togglePause()">Pause</button>
 </div>
 <div class="controls" style="margin-top: 0;">
     <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
@@ -892,6 +957,60 @@ function playsetDisplayName(name) {
     if (name === 'giphy_trending') return 'Giphy Trending';
     return name;
 }
+function togglePlaysetCard() {
+    var card = document.getElementById('playset-card');
+    var wasCollapsed = card.classList.contains('collapsed');
+    card.classList.toggle('collapsed');
+    if (wasCollapsed) {
+        var container = document.getElementById('playset-channels');
+        if (!container.querySelector('.ps-ch-row')) {
+            container.innerHTML = '<div class="ps-ch-loading">Loading\u2026</div>';
+        }
+        pollActivePlayset();
+    }
+}
+function typeBadgeLetter(type) {
+    var m = {named:'N',user:'U',hashtag:'H',sdcard:'S',giphy:'G',artwork:'A'};
+    return m[type] || '?';
+}
+function subTypeBadge(name) {
+    if (!name) return '';
+    var m = {all:'AL',promoted:'PR',trending:'TR',search:'SE',sdcard:'SD',user:'US',hashtag:'HT',artwork:'AW'};
+    return m[name] || name.substring(0,2).toUpperCase();
+}
+function relativeTime(epoch) {
+    if (!epoch) return 'never';
+    var now = Math.floor(Date.now() / 1000);
+    var d = now - epoch;
+    if (d < 0) return 'now';
+    if (d < 60) return d + 's ago';
+    if (d < 3600) return Math.floor(d / 60) + 'm ago';
+    if (d < 86400) return Math.floor(d / 3600) + 'h ago';
+    return Math.floor(d / 86400) + 'd ago';
+}
+function escHtml(s) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(s));
+    return d.innerHTML;
+}
+function renderChannelRows(channels) {
+    var container = document.getElementById('playset-channels');
+    if (!channels || !channels.length) { container.innerHTML = ''; return; }
+    var html = '';
+    for (var i = 0; i < channels.length; i++) {
+        var ch = channels[i];
+        var cls = 'ps-ch-row' + (ch.refreshing ? ' refreshing' : '');
+        html += '<div class="' + cls + '">';
+        html += '<span class="ps-badge ps-badge-type">' + typeBadgeLetter(ch.type) + '</span>';
+        html += '<span class="ps-badge ps-badge-sub">' + subTypeBadge(ch.name) + '</span>';
+        html += '<span class="ps-ch-name">' + escHtml(ch.display_name || ch.channel_id || '') + '</span>';
+        if (ch.identifier) html += '<span class="ps-ch-id">' + escHtml(ch.identifier) + '</span>';
+        html += '<span class="ps-ch-count">' + (ch.available || 0) + '/' + (ch.total || 0) + '</span>';
+        html += '<span class="ps-ch-time">' + relativeTime(ch.last_refresh) + '</span>';
+        html += '</div>';
+    }
+    container.innerHTML = html;
+}
 function updatePlaysetInfo(name, info) {
     var card = document.getElementById('playset-card');
     if (!info) { card.style.display = 'none'; return; }
@@ -908,6 +1027,7 @@ function updatePlaysetInfo(name, info) {
     if (modes.length) parts.push(modes.join(' \u00b7 '));
     statsEl.textContent = parts.join(' \u00b7 ');
     card.style.display = '';
+    if (info.channels) renderChannelRows(info.channels);
 }
 function updateSelectedChannel(playsetOrChannel) {
     var buttons = document.querySelectorAll('.channel-btn');

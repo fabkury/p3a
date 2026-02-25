@@ -26,7 +26,8 @@ esp_err_t sntp_sync_init(void)
 
     ESP_LOGI(TAG, "Initializing SNTP");
 
-    esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+    esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG_MULTIPLE(2,
+        ESP_SNTP_SERVER_LIST("pool.ntp.org", "time.google.com"));
     config.sync_cb = sntp_sync_time_cb;
     config.start = true;
     config.renew_servers_after_new_IP = true;

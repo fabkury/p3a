@@ -27,6 +27,7 @@
 #include "sdcard_channel_impl.h"
 #include "makapix_channel_impl.h"
 #include "config_store.h"
+#include "channel_metadata.h"
 #include "p3a_state.h"
 #include "sd_path.h"
 #include "esp_log.h"
@@ -73,19 +74,16 @@ void ps_get_display_name(const char *channel_id, char *out_name, size_t max_len)
     } else if (strcmp(channel_id, "sdcard") == 0) {
         snprintf(out_name, max_len, "microSD Card");
     } else if (strncmp(channel_id, "by_user_", 8) == 0) {
-        // Truncate user ID to fit in output buffer with "User: " prefix
-        char truncated[48];
-        strncpy(truncated, channel_id + 8, sizeof(truncated) - 1);
-        truncated[sizeof(truncated) - 1] = '\0';
-        snprintf(out_name, max_len, "User: %.48s", truncated);
+        snprintf(out_name, max_len, "User: %.48s", channel_id + 8);
     } else if (strncmp(channel_id, "hashtag_", 8) == 0) {
-        // Truncate hashtag to fit in output buffer with "#" prefix
-        char truncated[56];
-        strncpy(truncated, channel_id + 8, sizeof(truncated) - 1);
-        truncated[sizeof(truncated) - 1] = '\0';
-        snprintf(out_name, max_len, "#%.56s", truncated);
+        snprintf(out_name, max_len, "#%.56s", channel_id + 8);
+    } else if (strcmp(channel_id, "giphy_trending") == 0) {
+        snprintf(out_name, max_len, "Giphy: Trending");
+    } else if (strncmp(channel_id, "giphy_search_", 13) == 0) {
+        snprintf(out_name, max_len, "Giphy: %.50s", channel_id + 13);
+    } else if (strncmp(channel_id, "giphy_", 6) == 0) {
+        snprintf(out_name, max_len, "Giphy: %.56s", channel_id + 6);
     } else {
-        // Truncate channel_id to fit in output buffer
         snprintf(out_name, max_len, "%.63s", channel_id);
     }
 }
@@ -265,6 +263,9 @@ esp_err_t play_scheduler_init(void)
     s_state.pick_mode = PS_PICK_RECENCY;
     s_state.shuffle_override = config_store_get_shuffle_override();
     ESP_LOGI(TAG, "Loaded shuffle_override from NVS: %s", s_state.shuffle_override ? "ON" : "OFF");
+    s_state.channel_select_mode = (ps_channel_select_mode_t)config_store_get_channel_select_mode();
+    ESP_LOGI(TAG, "Loaded channel_select_mode from NVS: %s",
+             s_state.channel_select_mode == PS_CHANNEL_SELECT_STOCHASTIC ? "Stochastic" : "SWRR");
     s_state.channel_count = 0;
     s_state.current_channel = NULL;
     s_state.command_active = false;
@@ -498,6 +499,24 @@ bool play_scheduler_get_shuffle_override(void)
     return s_state.shuffle_override;
 }
 
+void play_scheduler_set_channel_select_mode(ps_channel_select_mode_t mode)
+{
+    if (!s_state.initialized) return;
+
+    config_store_set_channel_select_mode((uint8_t)mode);
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    s_state.channel_select_mode = mode;
+    ESP_LOGI(TAG, "Channel select mode set to %s",
+             mode == PS_CHANNEL_SELECT_STOCHASTIC ? "Stochastic" : "SWRR");
+    xSemaphoreGive(s_state.mutex);
+}
+
+ps_channel_select_mode_t play_scheduler_get_channel_select_mode(void)
+{
+    return s_state.channel_select_mode;
+}
+
 // ============================================================================
 // Status & Debugging
 // ============================================================================
@@ -531,6 +550,57 @@ esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats)
 
     xSemaphoreGive(s_state.mutex);
 
+    return ESP_OK;
+}
+
+esp_err_t play_scheduler_get_channel_details(
+    ps_channel_detail_t *out_channels, size_t max_count, size_t *out_count)
+{
+    if (!s_state.initialized || !out_channels || !out_count) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    char ch_path[128];
+    if (sd_path_get_channel(ch_path, sizeof(ch_path)) != ESP_OK) {
+        strlcpy(ch_path, "/sdcard/p3a/channel", sizeof(ch_path));
+    }
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+
+    size_t count = s_state.channel_count;
+    if (count > max_count) count = max_count;
+
+    for (size_t i = 0; i < count; i++) {
+        ps_channel_state_t *ch = &s_state.channels[i];
+        ps_channel_detail_t *d = &out_channels[i];
+
+        strlcpy(d->channel_id, ch->channel_id, sizeof(d->channel_id));
+        strlcpy(d->identifier, ch->identifier, sizeof(d->identifier));
+        strlcpy(d->display_name, ch->display_name, sizeof(d->display_name));
+        strlcpy(d->spec_name, ch->spec_name, sizeof(d->spec_name));
+        d->type = ch->type;
+
+        d->entry_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
+        d->available_count = ch->cache ? ch->cache->available_count : ch->available_count;
+        if (ch->type == PS_CHANNEL_TYPE_SDCARD) {
+            d->available_count = d->entry_count;
+        }
+
+        d->refreshing = ch->refresh_pending || ch->refresh_in_progress || ch->refresh_async_pending;
+        d->last_refresh = 0;
+    }
+
+    xSemaphoreGive(s_state.mutex);
+
+    // Load last_refresh timestamps outside the mutex (filesystem I/O)
+    for (size_t i = 0; i < count; i++) {
+        channel_metadata_t meta;
+        if (channel_metadata_load(out_channels[i].channel_id, ch_path, &meta) == ESP_OK) {
+            out_channels[i].last_refresh = meta.last_refresh;
+        }
+    }
+
+    *out_count = count;
     return ESP_OK;
 }
 

@@ -4,9 +4,6 @@
  *
  * This file provides no-op implementations of the PICO-8 API to prevent
  * link errors when CONFIG_P3A_PICO8_ENABLE is disabled.
- * 
- * Note: animation_player_submit_pico8_frame is defined in animation_player.c
- * and returns ESP_ERR_NOT_SUPPORTED when PICO-8 is disabled.
  */
 
 #include "pico8_stream.h"

@@ -2,6 +2,7 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "sdcard_channel_impl.h"
+#include "sd_path.h"
 #include "playlist_manager.h"
 #include "channel_settings.h"
 #include "config_store.h"
@@ -70,9 +71,6 @@ static void sdcard_impl_unload(channel_handle_t channel);
 static esp_err_t sdcard_impl_start_playback(channel_handle_t channel,
                                             channel_order_mode_t order_mode,
                                             const channel_filter_config_t *filter);
-static esp_err_t sdcard_impl_next_item(channel_handle_t channel, channel_item_ref_t *out_item);
-static esp_err_t sdcard_impl_prev_item(channel_handle_t channel, channel_item_ref_t *out_item);
-static esp_err_t sdcard_impl_current_item(channel_handle_t channel, channel_item_ref_t *out_item);
 static esp_err_t sdcard_impl_request_reshuffle(channel_handle_t channel);
 static esp_err_t sdcard_impl_request_refresh(channel_handle_t channel);
 static esp_err_t sdcard_impl_get_stats(channel_handle_t channel, channel_stats_t *out_stats);
@@ -86,9 +84,6 @@ static const channel_ops_t s_sdcard_ops = {
     .load = sdcard_impl_load,
     .unload = sdcard_impl_unload,
     .start_playback = sdcard_impl_start_playback,
-    .next_item = sdcard_impl_next_item,
-    .prev_item = sdcard_impl_prev_item,
-    .current_item = sdcard_impl_current_item,
     .request_reshuffle = sdcard_impl_request_reshuffle,
     .request_refresh = sdcard_impl_request_refresh,
     .get_stats = sdcard_impl_get_stats,
@@ -297,7 +292,14 @@ static esp_err_t sdcard_impl_load(channel_handle_t channel)
         sdcard_impl_unload(channel);
     }
 
-    const char *dir_path = ch->animations_dir ? ch->animations_dir : ANIMATIONS_DEFAULT_DIR;
+    char default_dir[128];
+    if (!ch->animations_dir) {
+        if (sd_path_get_animations(default_dir, sizeof(default_dir)) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to get animations path");
+            return ESP_FAIL;
+        }
+    }
+    const char *dir_path = ch->animations_dir ? ch->animations_dir : default_dir;
     ESP_LOGI(TAG, "Loading SD channel from: %s", dir_path);
 
     DIR *dir = opendir(dir_path);
@@ -515,30 +517,6 @@ static esp_err_t sdcard_impl_start_playback(channel_handle_t channel,
     ch->base.current_order = order_mode;
     ESP_LOGD(TAG, "start_playback called but navigation now handled by Play Scheduler");
     return ESP_OK;
-}
-
-static esp_err_t sdcard_impl_current_item(channel_handle_t channel, channel_item_ref_t *out_item)
-{
-    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
-    (void)channel;
-    (void)out_item;
-    return ESP_ERR_NOT_SUPPORTED;
-}
-
-static esp_err_t sdcard_impl_next_item(channel_handle_t channel, channel_item_ref_t *out_item)
-{
-    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
-    (void)channel;
-    (void)out_item;
-    return ESP_ERR_NOT_SUPPORTED;
-}
-
-static esp_err_t sdcard_impl_prev_item(channel_handle_t channel, channel_item_ref_t *out_item)
-{
-    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
-    (void)channel;
-    (void)out_item;
-    return ESP_ERR_NOT_SUPPORTED;
 }
 
 static esp_err_t sdcard_impl_request_reshuffle(channel_handle_t channel)

@@ -310,6 +310,10 @@ static void handle_makapix_state_event(const p3a_event_t *event, void *ctx)
             app_lcd_exit_ui_mode();
             ugfx_ui_hide_registration();
         }
+        // Resume animation playback (handles both manual cancel and auto-expiry).
+        // The touch router also emits SWAP_NEXT for manual cancel, but a redundant
+        // swap is harmless and this covers the auto-expiry path.
+        app_lcd_cycle_animation();
         ESP_LOGD(TAG, "Registration mode exited (cleanup was %s)", still_in_ui ? "needed" : "already done");
     }
 

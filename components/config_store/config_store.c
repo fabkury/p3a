@@ -1153,6 +1153,55 @@ bool config_store_get_shuffle_override(void)
 }
 
 // ============================================================================
+// Channel Select Mode
+// ============================================================================
+
+esp_err_t config_store_set_channel_select_mode(uint8_t mode)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "channel_select_mode");
+    if (item) {
+        cJSON_DeleteItemFromObject(cfg, "channel_select_mode");
+    }
+    cJSON_AddNumberToObject(cfg, "channel_select_mode", (double)mode);
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Channel select mode saved: %u", (unsigned)mode);
+    }
+
+    return err;
+}
+
+uint8_t config_store_get_channel_select_mode(void)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return 0;  // Default: SWRR
+    }
+
+    uint8_t mode = 1;  // Default: Stochastic
+    cJSON *item = cJSON_GetObjectItem(cfg, "channel_select_mode");
+    if (item && cJSON_IsNumber(item)) {
+        int val = (int)cJSON_GetNumberValue(item);
+        if (val >= 0 && val <= 1) {
+            mode = (uint8_t)val;
+        }
+    }
+
+    cJSON_Delete(cfg);
+    return mode;
+}
+
+// ============================================================================
 // LTF (Load Tracker File) Enable/Disable
 // ============================================================================
 
@@ -1492,7 +1541,7 @@ bool config_store_get_giphy_full_refresh(void)
     esp_err_t err = config_store_load(&cfg);
     if (err != ESP_OK) {
         s_giphy_full_refresh_loaded = true;
-        return s_giphy_full_refresh;  // Return default (false)
+        return s_giphy_full_refresh;  // Return default (true)
     }
 
     cJSON *item = cJSON_GetObjectItem(cfg, "giphy_full_refresh");

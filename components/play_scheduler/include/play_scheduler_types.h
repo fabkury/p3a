@@ -57,6 +57,14 @@ typedef enum {
 } ps_pick_mode_t;
 
 /**
+ * @brief Channel selection modes for multi-channel playsets
+ */
+typedef enum {
+    PS_CHANNEL_SELECT_SWRR,        // Smooth Weighted Round Robin (deterministic with random tie-breaking)
+    PS_CHANNEL_SELECT_STOCHASTIC,  // Weighted random sampling with credit drift correction
+} ps_channel_select_mode_t;
+
+/**
  * @brief Channel types
  */
 typedef enum {
@@ -128,9 +136,15 @@ typedef struct {
  * Specifies a channel to include in a playset (scheduler command).
  */
 typedef struct {
-    ps_channel_type_t type;       // NAMED, USER, HASHTAG, SDCARD, ARTWORK
-    char name[33];                // "all", "promoted", "user", "hashtag", "sdcard", "artwork"
-    char identifier[33];          // For USER: sqid, for HASHTAG: tag
+    ps_channel_type_t type;       // NAMED, USER, HASHTAG, SDCARD, ARTWORK, GIPHY
+    char name[33];                // Type-specific sub-name:
+                                  //   NAMED: "all", "promoted"
+                                  //   GIPHY: "trending" or "search"
+                                  //   Others: type label ("user", "hashtag", "sdcard", "artwork")
+    char identifier[33];          // Type-specific parameter:
+                                  //   USER: sqid
+                                  //   HASHTAG: tag
+                                  //   GIPHY (search): search query (verbatim, spaces allowed)
     char display_name[65];        // Optional: friendly display name (e.g., user handle, hashtag)
     uint32_t weight;              // For MaE mode (0 = auto-calculate)
 
@@ -164,7 +178,10 @@ typedef struct {
  * deferred until a future design decision is made about dwell time handling.
  * See config_store_get_dwell_time() for the current implementation.
  */
+#define PS_PLAYSET_NAME_MAX 32
+
 typedef struct {
+    char name[PS_PLAYSET_NAME_MAX + 1]; // Playset name (empty for transient/anonymous commands)
     ps_channel_spec_t channels[PS_MAX_CHANNELS];
     size_t channel_count;
     ps_exposure_mode_t exposure_mode;
@@ -218,12 +235,16 @@ typedef struct {
  */
 typedef struct {
     char channel_id[64];      // Derived: "all", "by_user_uvz", "hashtag_sunset", etc.
+    char identifier[33];      // Original identifier from spec (USER: sqid, HASHTAG: tag, GIPHY search: query)
+    char display_name[65];    // Human-readable display name
+    char spec_name[33];       // Original name from ps_channel_spec_t (sub-type: "all", "trending", etc.)
     ps_channel_type_t type;   // Channel type
     void *handle;             // channel_handle_t (legacy)
 
     // SWRR state
     int32_t credit;
     uint32_t weight;          // Normalized weight (out of 65536)
+    uint32_t spec_weight;     // Original weight from playset spec (for MaE recalculation)
 
     // Pick state
     uint32_t cursor;          // For RecencyPick
@@ -265,6 +286,24 @@ typedef struct {
     } artwork_state;
 
 } ps_channel_state_t;
+
+/**
+ * @brief Per-channel detail snapshot (for API responses)
+ *
+ * Lightweight copy of channel state for external consumption.
+ * Populated by play_scheduler_get_channel_details() under mutex.
+ */
+typedef struct {
+    char channel_id[64];
+    char identifier[33];
+    char display_name[65];
+    char spec_name[33];       // Sub-type from spec (e.g. "all", "trending", "search")
+    ps_channel_type_t type;
+    size_t entry_count;       // Ci (total in cache)
+    size_t available_count;   // LAi (locally available)
+    bool refreshing;          // refresh_pending || refresh_in_progress || refresh_async_pending
+    time_t last_refresh;      // From channel_metadata sidecar (0 = never)
+} ps_channel_detail_t;
 
 #ifdef __cplusplus
 }

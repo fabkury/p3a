@@ -2,6 +2,7 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "sdcard_channel.h"
+#include "sd_path.h"
 #include "config_store.h"
 #include "psram_alloc.h"
 #include "esp_log.h"
@@ -154,7 +155,14 @@ esp_err_t sdcard_channel_refresh(const char *animations_dir)
         return ESP_ERR_INVALID_STATE;
     }
 
-    const char *dir_path = animations_dir ? animations_dir : ANIMATIONS_DEFAULT_DIR;
+    char default_dir[128];
+    if (!animations_dir) {
+        if (sd_path_get_animations(default_dir, sizeof(default_dir)) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to get animations path");
+            return ESP_FAIL;
+        }
+    }
+    const char *dir_path = animations_dir ? animations_dir : default_dir;
     ESP_LOGI(TAG, "Refreshing channel from directory: %s", dir_path);
 
     // Free existing posts

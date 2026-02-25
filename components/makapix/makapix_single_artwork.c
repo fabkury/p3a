@@ -121,24 +121,6 @@ static esp_err_t single_ch_start_playback(channel_handle_t channel, channel_orde
     return ESP_OK;
 }
 
-static esp_err_t single_ch_next(channel_handle_t channel, channel_item_ref_t *out_item)
-{
-    single_artwork_channel_t *ch = (single_artwork_channel_t *)channel;
-    if (!ch || !ch->has_item) return ESP_ERR_NOT_FOUND;
-    if (out_item) *out_item = ch->item;
-    return ESP_OK;
-}
-
-static esp_err_t single_ch_prev(channel_handle_t channel, channel_item_ref_t *out_item)
-{
-    return single_ch_next(channel, out_item);
-}
-
-static esp_err_t single_ch_current(channel_handle_t channel, channel_item_ref_t *out_item)
-{
-    return single_ch_next(channel, out_item);
-}
-
 static esp_err_t single_ch_request_reshuffle(channel_handle_t channel)
 {
     (void)channel;
@@ -173,9 +155,6 @@ static const channel_ops_t s_single_ops = {
     .load = single_ch_load,
     .unload = single_ch_unload,
     .start_playback = single_ch_start_playback,
-    .next_item = single_ch_next,
-    .prev_item = single_ch_prev,
-    .current_item = single_ch_current,
     .request_reshuffle = single_ch_request_reshuffle,
     .request_refresh = single_ch_request_refresh,
     .get_stats = single_ch_get_stats,

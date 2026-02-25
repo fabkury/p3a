@@ -161,6 +161,14 @@ esp_err_t h_put_config(httpd_req_t *req) {
         config_store_invalidate_ppa_upscale();
     }
 
+    cJSON *csm = cJSON_GetObjectItem(o, "channel_select_mode");
+    if (csm && cJSON_IsNumber(csm)) {
+        int mode = (int)cJSON_GetNumberValue(csm);
+        if (mode >= 0 && mode <= 1) {
+            play_scheduler_set_channel_select_mode((ps_channel_select_mode_t)mode);
+        }
+    }
+
     cJSON_Delete(o);
     send_json(req, 200, "{\"ok\":true}");
     return ESP_OK;

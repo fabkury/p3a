@@ -23,6 +23,17 @@
 #include "playset_json.h"
 #include "p3a_state.h"
 
+// ---------- Playset Name Validation ----------
+
+static bool is_valid_playset_name(const char *name, size_t len)
+{
+    if (!name || len == 0 || len > PLAYSET_MAX_NAME_LEN) return false;
+    for (size_t i = 0; i < len; i++) {
+        if ((unsigned char)name[i] < 0x20) return false;
+    }
+    return true;
+}
+
 // ---------- Playset Mode String Helpers ----------
 
 static const char *exposure_mode_str(ps_exposure_mode_t m) {
@@ -67,18 +78,17 @@ esp_err_t h_post_playset(httpd_req_t *req)
         return ESP_OK;
     }
 
-    const char *playset_name = uri + prefix_len;
-    if (strlen(playset_name) == 0 || strlen(playset_name) > PLAYSET_MAX_NAME_LEN) {
+    // Copy and URL-decode the name (URI contains percent-encoded characters)
+    char name[PLAYSET_MAX_NAME_LEN + 1];
+    strlcpy(name, uri + prefix_len, sizeof(name));
+    url_decode_in_place(name);
+
+    size_t name_len = strlen(name);
+    if (!is_valid_playset_name(name, name_len)) {
         send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset name\",\"code\":\"INVALID_NAME\"}");
         return ESP_OK;
     }
 
-    // Make a copy of the name (in case URI buffer is reused)
-    char name[PLAYSET_MAX_NAME_LEN + 1];
-    strncpy(name, playset_name, sizeof(name) - 1);
-    name[sizeof(name) - 1] = '\0';
-
-    // Allocate on heap - struct is ~9KB, too large for httpd stack (8KB)
     ps_scheduler_command_t *command = calloc(1, sizeof(ps_scheduler_command_t));
     if (!command) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
@@ -89,52 +99,38 @@ esp_err_t h_post_playset(httpd_req_t *req)
     bool from_cache = false;
     bool is_builtin = false;
 
-    // Check for built-in playsets first (no server fetch needed)
+    // 1. Check built-in playsets (no I/O needed)
     err = ps_create_channel_playset(name, command);
     if (err == ESP_OK) {
         is_builtin = true;
         ESP_LOGI("http_api", "Using built-in playset: %s", name);
     } else {
-        // Not a built-in playset - try server or cache
-
-        // Try to fetch from server if MQTT is connected
-        if (makapix_mqtt_is_connected()) {
+        // 2. Try local cache first (instant, avoids 30s MQTT timeout for user-created playsets)
+        err = playset_store_load(name, command);
+        if (err == ESP_OK) {
+            from_cache = true;
+        } else if (makapix_mqtt_is_connected()) {
+            // 3. Not cached locally -- try fetching from server
             err = makapix_api_get_playset(name, command);
             if (err == ESP_OK) {
-                // Save to cache for offline use
+                strlcpy(command->name, name, sizeof(command->name));
                 esp_err_t save_err = playset_store_save(name, command);
                 if (save_err != ESP_OK) {
                     ESP_LOGW("http_api", "Failed to cache playset '%s': %s", name, esp_err_to_name(save_err));
                 }
-            } else if (err == ESP_ERR_TIMEOUT) {
-                free(command);
-                send_json(req, 504, "{\"ok\":false,\"error\":\"Request timed out\",\"code\":\"MQTT_TIMEOUT\"}");
-                return ESP_OK;
             } else {
-                // Server error or playset not found - try cache as fallback
-                err = playset_store_load(name, command);
-                if (err == ESP_OK) {
-                    from_cache = true;
+                free(command);
+                if (err == ESP_ERR_TIMEOUT) {
+                    send_json(req, 504, "{\"ok\":false,\"error\":\"Request timed out\",\"code\":\"MQTT_TIMEOUT\"}");
                 } else {
-                    free(command);
                     send_json(req, 404, "{\"ok\":false,\"error\":\"Playset not found\",\"code\":\"PLAYSET_NOT_FOUND\"}");
-                    return ESP_OK;
                 }
+                return ESP_OK;
             }
         } else {
-            // MQTT not connected - try loading from cache
-            err = playset_store_load(name, command);
-            if (err == ESP_OK) {
-                from_cache = true;
-            } else if (err == ESP_ERR_NOT_FOUND) {
-                free(command);
-                send_json(req, 503, "{\"ok\":false,\"error\":\"Not connected and no cached playset\",\"code\":\"NOT_CONNECTED\"}");
-                return ESP_OK;
-            } else {
-                free(command);
-                send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to load cached playset\",\"code\":\"CACHE_ERROR\"}");
-                return ESP_OK;
-            }
+            free(command);
+            send_json(req, 503, "{\"ok\":false,\"error\":\"Not connected and no cached playset\",\"code\":\"NOT_CONNECTED\"}");
+            return ESP_OK;
         }
     }
 
@@ -226,6 +222,27 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
         cJSON_AddNumberToObject(pi, "total_entries", (double)ps_stats.total_entries);
         cJSON_AddStringToObject(pi, "exposure_mode", exposure_mode_str(ps_stats.exposure_mode));
         cJSON_AddStringToObject(pi, "pick_mode", pick_mode_str(ps_stats.pick_mode));
+
+        ps_channel_detail_t *ch_details = calloc(PS_MAX_CHANNELS, sizeof(ps_channel_detail_t));
+        size_t ch_count = 0;
+        if (ch_details &&
+            play_scheduler_get_channel_details(ch_details, PS_MAX_CHANNELS, &ch_count) == ESP_OK &&
+            ch_count > 0) {
+            cJSON *ch_arr = cJSON_AddArrayToObject(pi, "channels");
+            for (size_t i = 0; i < ch_count; i++) {
+                cJSON *ch_obj = cJSON_CreateObject();
+                cJSON_AddStringToObject(ch_obj, "display_name", ch_details[i].display_name);
+                cJSON_AddStringToObject(ch_obj, "type", playset_channel_type_str(ch_details[i].type));
+                cJSON_AddStringToObject(ch_obj, "name", ch_details[i].spec_name);
+                cJSON_AddStringToObject(ch_obj, "identifier", ch_details[i].identifier);
+                cJSON_AddNumberToObject(ch_obj, "available", (double)ch_details[i].available_count);
+                cJSON_AddNumberToObject(ch_obj, "total", (double)ch_details[i].entry_count);
+                cJSON_AddBoolToObject(ch_obj, "refreshing", ch_details[i].refreshing);
+                cJSON_AddNumberToObject(ch_obj, "last_refresh", (double)ch_details[i].last_refresh);
+                cJSON_AddItemToArray(ch_arr, ch_obj);
+            }
+        }
+        free(ch_details);
     }
 
     char *out = cJSON_PrintUnformatted(root);
@@ -311,25 +328,27 @@ esp_err_t h_get_playset_by_name(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Extract name, strip query string
-    char name[PLAYSET_MAX_NAME_LEN + 1];
     const char *name_start = uri + prefix_len;
     const char *qmark = strchr(name_start, '?');
-    size_t name_len = qmark ? (size_t)(qmark - name_start) : strlen(name_start);
-    if (name_len == 0 || name_len > PLAYSET_MAX_NAME_LEN) {
+    size_t raw_len = qmark ? (size_t)(qmark - name_start) : strlen(name_start);
+
+    char name[PLAYSET_MAX_NAME_LEN + 1];
+    if (raw_len >= sizeof(name)) raw_len = sizeof(name) - 1;
+    memcpy(name, name_start, raw_len);
+    name[raw_len] = '\0';
+    url_decode_in_place(name);
+
+    size_t name_len = strlen(name);
+    if (!is_valid_playset_name(name, name_len)) {
         send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset name\",\"code\":\"INVALID_NAME\"}");
         return ESP_OK;
     }
-    memcpy(name, name_start, name_len);
-    name[name_len] = '\0';
 
-    // Check ?activate=true
     bool activate = false;
     if (qmark) {
         activate = (strstr(qmark, "activate=true") != NULL);
     }
 
-    // Allocate on heap (struct is ~9KB)
     ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
     if (!cmd) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
@@ -404,17 +423,21 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Extract name (strip query string if present)
-    char name[PLAYSET_MAX_NAME_LEN + 1];
     const char *name_start = uri + prefix_len;
     const char *qmark = strchr(name_start, '?');
-    size_t name_len = qmark ? (size_t)(qmark - name_start) : strlen(name_start);
-    if (name_len == 0 || name_len > PLAYSET_MAX_NAME_LEN) {
+    size_t raw_len = qmark ? (size_t)(qmark - name_start) : strlen(name_start);
+
+    char name[PLAYSET_MAX_NAME_LEN + 1];
+    if (raw_len >= sizeof(name)) raw_len = sizeof(name) - 1;
+    memcpy(name, name_start, raw_len);
+    name[raw_len] = '\0';
+    url_decode_in_place(name);
+
+    size_t name_len = strlen(name);
+    if (!is_valid_playset_name(name, name_len)) {
         send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset name\",\"code\":\"INVALID_NAME\"}");
         return ESP_OK;
     }
-    memcpy(name, name_start, name_len);
-    name[name_len] = '\0';
 
     // Protected playsets cannot be overwritten via REST API
     static const char *protected_playsets[] = { "followed_artists" };
@@ -478,7 +501,7 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Save
+    strlcpy(cmd->name, name, sizeof(cmd->name));
     esp_err_t save_err = playset_store_save(name, cmd);
     if (save_err != ESP_OK) {
         free(cmd);
@@ -563,17 +586,21 @@ esp_err_t h_delete_playset(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Extract name (strip query string if present)
-    char name[PLAYSET_MAX_NAME_LEN + 1];
     const char *name_start = uri + prefix_len;
     const char *qmark = strchr(name_start, '?');
-    size_t name_len = qmark ? (size_t)(qmark - name_start) : strlen(name_start);
-    if (name_len == 0 || name_len > PLAYSET_MAX_NAME_LEN) {
+    size_t raw_len = qmark ? (size_t)(qmark - name_start) : strlen(name_start);
+
+    char name[PLAYSET_MAX_NAME_LEN + 1];
+    if (raw_len >= sizeof(name)) raw_len = sizeof(name) - 1;
+    memcpy(name, name_start, raw_len);
+    name[raw_len] = '\0';
+    url_decode_in_place(name);
+
+    size_t name_len = strlen(name);
+    if (!is_valid_playset_name(name, name_len)) {
         send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset name\",\"code\":\"INVALID_NAME\"}");
         return ESP_OK;
     }
-    memcpy(name, name_start, name_len);
-    name[name_len] = '\0';
 
     // Protected playsets cannot be deleted
     static const char *protected_playsets[] = { "followed_artists" };

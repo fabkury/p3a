@@ -6,9 +6,11 @@
  * @brief Playset storage API for persisting named playsets to SD card
  *
  * Provides binary file storage for playsets (scheduler commands) with CRC32
- * validation. Playsets are stored in /sdcard/p3a/channel/{name}.playset
+ * validation. Playsets are stored in /sdcard/p3a/channel/ps_{hash}.playset
+ * where {hash} is a DJB2 hash of the playset name. The name is stored inside
+ * the file header, decoupling human-readable names from filesystem constraints.
  *
- * File format: 32-byte header + N * 144-byte channel entries
+ * File format: 64-byte header + N * 144-byte channel entries
  */
 
 #ifndef PLAYSET_STORE_H
@@ -26,27 +28,28 @@ extern "C" {
 // Magic number: 'P3PS' (P3a PlaySet)
 #define PLAYSET_MAGIC 0x50335053
 
-// Current file format version
-#define PLAYSET_VERSION 10
+// Current file format version (11: hash-based filenames, name in header)
+#define PLAYSET_VERSION 11
 
-// Maximum playset name length (excluding .playset extension)
-#define PLAYSET_MAX_NAME_LEN 32
+// Maximum playset name length (same as PS_PLAYSET_NAME_MAX in play_scheduler_types.h)
+#define PLAYSET_MAX_NAME_LEN PS_PLAYSET_NAME_MAX
 
 /**
- * @brief Playset file header (32 bytes)
+ * @brief Playset file header (64 bytes)
  */
 typedef struct __attribute__((packed)) {
     uint32_t magic;            // 0x50335053 ('P3PS')
-    uint16_t version;          // File format version (10)
+    uint16_t version;          // File format version (11)
     uint16_t flags;            // Reserved (0)
     uint8_t  exposure_mode;    // ps_exposure_mode_t
     uint8_t  pick_mode;        // ps_pick_mode_t
     uint16_t channel_count;    // 1-64
     uint32_t checksum;         // CRC32 (zeroed during calculation)
-    uint8_t  reserved[16];     // Future use
+    char     name[33];         // Playset name (stored in file, not filename)
+    uint8_t  reserved[15];     // Future use
 } playset_header_t;
 
-_Static_assert(sizeof(playset_header_t) == 32, "Playset header must be 32 bytes");
+_Static_assert(sizeof(playset_header_t) == 64, "Playset header must be 64 bytes");
 
 /**
  * @brief Playset channel entry (144 bytes)

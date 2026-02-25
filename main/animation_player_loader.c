@@ -238,63 +238,6 @@ void animation_loader_task(void *arg)
             xSemaphoreGive(s_buffer_mutex);
         }
 
-        // Apply deferred manual cycle (advance/go_back) in the loader task context
-        // to avoid overflowing the touch task stack.
-        if (!ov.valid) {
-            bool do_cycle = false;
-            bool cycle_forward = true;
-            if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-                do_cycle = s_cycle_pending;
-                cycle_forward = s_cycle_forward;
-                s_cycle_pending = false;
-                xSemaphoreGive(s_buffer_mutex);
-            }
-            (void)cycle_forward;
-            if (do_cycle) {
-                // Re-run "swap request ignored" checks here (moved from touch path).
-                if (display_renderer_is_ui_mode()) {
-                    ESP_LOGW(TAG, "Deferred cycle ignored: UI mode active");
-                    discard_failed_swap_request(ESP_ERR_INVALID_STATE);
-                    continue;
-                }
-                if (animation_player_is_sd_export_locked()) {
-                    ESP_LOGW(TAG, "Deferred cycle ignored: SD card is exported over USB");
-                    discard_failed_swap_request(ESP_ERR_INVALID_STATE);
-                    continue;
-                }
-                if (animation_player_is_sd_paused()) {
-                    ESP_LOGW(TAG, "Deferred cycle ignored: SD access paused for OTA");
-                    discard_failed_swap_request(ESP_ERR_INVALID_STATE);
-                    continue;
-                }
-                if (sdio_bus_is_locked()) {
-                    ESP_LOGW(TAG, "Deferred cycle ignored: SDIO bus locked by %s",
-                             sdio_bus_get_holder() ? sdio_bus_get_holder() : "unknown");
-                    discard_failed_swap_request(ESP_ERR_INVALID_STATE);
-                    continue;
-                }
-                if (ota_manager_is_checking()) {
-                    ESP_LOGW(TAG, "Deferred cycle ignored: OTA check in progress");
-                    discard_failed_swap_request(ESP_ERR_INVALID_STATE);
-                    continue;
-                }
-                {
-                    size_t total_available = play_scheduler_get_total_available();
-                    if (total_available == 0) {
-                        ESP_LOGW(TAG, "Deferred cycle ignored: no animations available");
-                        discard_failed_swap_request(ESP_ERR_NOT_FOUND);
-                        continue;
-                    }
-                }
-
-                // Deferred cycle logic removed - navigation now handled by play_scheduler
-                // This code path is deprecated and should not be reached
-                ESP_LOGW(TAG, "Deferred cycle logic deprecated - navigation should use play_scheduler API");
-                discard_failed_swap_request(ESP_ERR_NOT_SUPPORTED);
-                continue;
-            }
-        }
-
         const char *filepath = NULL;
         asset_type_t type = ASSET_TYPE_WEBP;
         ps_channel_type_t channel_type = PS_CHANNEL_TYPE_NAMED;  // default
@@ -318,8 +261,17 @@ void animation_loader_task(void *arg)
             queued_item_t current = {0};
             esp_err_t err = playback_queue_current(&current);
             if (err != ESP_OK || current.request.filepath[0] == '\0') {
-                ESP_LOGE(TAG, "Loader task: No current artwork available");
-                discard_failed_swap_request(ESP_ERR_NOT_FOUND);
+                // No current artwork. This is expected after exiting UI mode
+                // (provisioning/OTA) where metadata was cleared. Silently clear
+                // the swap request instead of showing a "Playback Error" message;
+                // the provisioning exit path triggers play_scheduler_next() to
+                // pick a new animation.
+                ESP_LOGD(TAG, "Loader task: No current artwork (likely post-UI-mode exit)");
+                if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+                    s_swap_requested = false;
+                    s_loader_busy = false;
+                    xSemaphoreGive(s_buffer_mutex);
+                }
                 continue;
             }
             // Use static buffer to hold filepath (play_scheduler_current returns by value)

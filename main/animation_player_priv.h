@@ -60,11 +60,6 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-// Note: ANIMATIONS_PREFERRED_DIR is now deprecated.
-// Use sd_path_get_animations() to get the current animations directory path.
-// This macro is kept for compatibility but should not be used in new code.
-// Note: SD card root is now configurable via sd_path module (default: /p3a)
-// This gets combined with SD mount point at runtime
 #define ANIMATION_SD_REFRESH_STACK (16384)
 
 // asset_type_t is defined in sdcard_channel.h
@@ -142,8 +137,6 @@ extern animation_buffer_t s_back_buffer;
 extern size_t s_next_asset_index;
 extern bool s_swap_requested;
 extern bool s_loader_busy;
-extern volatile bool s_cycle_pending;
-extern volatile bool s_cycle_forward;
 extern TaskHandle_t s_loader_task;
 extern SemaphoreHandle_t s_loader_sem;
 extern SemaphoreHandle_t s_buffer_mutex;

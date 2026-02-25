@@ -14,4 +14,5 @@ idf_component_register(
         play_scheduler
         sdio_bus
         event_bus
+    WHOLE_ARCHIVE
 )

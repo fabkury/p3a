@@ -71,15 +71,14 @@ static esp_err_t ensure_init(void)
  * @brief Map display_rotation_t to ppa_srm_rotation_angle_t.
  *
  * PPA rotation is counter-clockwise.  Our display_rotation_t values represent
- * the desired screen orientation.  When displaying a frame that was decoded
- * upright, the PPA must rotate it CCW by the same angle.
+ * clockwise screen orientation, so 90 CW = 270 CCW and vice versa.
  */
 static ppa_srm_rotation_angle_t map_rotation(display_rotation_t rot)
 {
     switch (rot) {
-        case DISPLAY_ROTATION_90:  return PPA_SRM_ROTATION_ANGLE_90;
+        case DISPLAY_ROTATION_90:  return PPA_SRM_ROTATION_ANGLE_270;
         case DISPLAY_ROTATION_180: return PPA_SRM_ROTATION_ANGLE_180;
-        case DISPLAY_ROTATION_270: return PPA_SRM_ROTATION_ANGLE_270;
+        case DISPLAY_ROTATION_270: return PPA_SRM_ROTATION_ANGLE_90;
         default:                   return PPA_SRM_ROTATION_ANGLE_0;
     }
 }

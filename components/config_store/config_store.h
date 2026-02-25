@@ -364,6 +364,25 @@ esp_err_t config_store_set_shuffle_override(bool enable);
 bool config_store_get_shuffle_override(void);
 
 // ============================================================================
+// Channel Select Mode (persisted)
+// ============================================================================
+
+/**
+ * @brief Set channel selection mode for multi-channel playsets
+ *
+ * @param mode 0=SWRR (default), 1=Stochastic
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_channel_select_mode(uint8_t mode);
+
+/**
+ * @brief Get channel selection mode
+ *
+ * @return 0=SWRR, 1=Stochastic (default)
+ */
+uint8_t config_store_get_channel_select_mode(void);
+
+// ============================================================================
 // LTF (Load Tracker File) Enable/Disable
 // ============================================================================
 

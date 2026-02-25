@@ -297,6 +297,14 @@ body {
             <button class="btn" onclick="saveAutoSwap()">Save</button>
         </div>
     </div>
+    <div class="toggle-row">
+        <label class="toggle-label" for="ch-select-mode">Channel selection</label>
+        <select id="ch-select-mode" onchange="saveChannelSelectMode(this.value)"
+            style="padding:8px 10px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem;background:#fff;color:#333;">
+            <option value="0">SWRR</option>
+            <option value="1">Stochastic</option>
+        </select>
+    </div>
 </div>
 <div class="section">
     <h3>Storage</h3>
@@ -389,6 +397,9 @@ function loadAllConfig() {
                 (typeof cfg.channel_cache_size === 'number') ? cfg.channel_cache_size : 2048;
             // SD card root
             document.getElementById('sd-root').value = cfg.sdcard_root || '/p3a';
+            // Channel select mode
+            var csm = (typeof cfg.channel_select_mode === 'number') ? cfg.channel_select_mode : 1;
+            document.getElementById('ch-select-mode').value = csm;
         }
     };
     xhr.send();
@@ -526,6 +537,14 @@ function saveSeed() {
         }
     };
     xhr.send(JSON.stringify({global_seed: n}));
+}
+function saveChannelSelectMode(val) {
+    mergeConfig({channel_select_mode: parseInt(val, 10)}, function() {
+        showToast(val === '1' ? 'Stochastic mode' : 'SWRR mode', false);
+    }, function() {
+        showToast('Save failed', true);
+        document.getElementById('ch-select-mode').value = val === '1' ? '0' : '1';
+    });
 }
 function saveAutoSwap() {
     var sec = parseInt(document.getElementById('autoswap').value, 10);

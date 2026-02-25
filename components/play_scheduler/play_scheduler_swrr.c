@@ -15,7 +15,7 @@
 #include <limits.h>
 #include <math.h>
 
-static const char *TAG = "ps_swrr";
+static const char *TAG = "ps_chsel";
 
 #define WSUM 65536
 
@@ -96,24 +96,24 @@ static void calculate_weights_manual(ps_state_t *state)
 {
     uint32_t total_weight = 0;
 
-    // Sum manual weights for active channels with available artwork
+    // Sum original spec weights for active channels with available artwork
     for (size_t i = 0; i < state->channel_count; i++) {
         if (has_available_artwork(&state->channels[i])) {
-            total_weight += state->channels[i].weight;
+            total_weight += state->channels[i].spec_weight;
         }
     }
 
     if (total_weight == 0) {
-        // Fall back to equal weights
+        // Fall back to equal weights (e.g., all spec_weight=0)
         calculate_weights_equal(state);
         return;
     }
 
-    // Normalize to WSUM
+    // Normalize spec_weight to WSUM, writing result to weight
     for (size_t i = 0; i < state->channel_count; i++) {
         if (has_available_artwork(&state->channels[i])) {
             state->channels[i].weight =
-                (uint32_t)((uint64_t)state->channels[i].weight * WSUM / total_weight);
+                (uint32_t)((uint64_t)state->channels[i].spec_weight * WSUM / total_weight);
         } else {
             state->channels[i].weight = 0;
         }
@@ -253,8 +253,9 @@ int ps_swrr_select_channel(ps_state_t *state)
         }
     }
 
-    // Find channel with maximum credit
-    int best = -1;
+    // Find channel(s) with maximum credit, break ties randomly
+    int candidates[PS_MAX_CHANNELS];
+    int candidate_count = 0;
     int32_t best_credit = INT32_MIN;
 
     for (size_t i = 0; i < state->channel_count; i++) {
@@ -264,9 +265,19 @@ int ps_swrr_select_channel(ps_state_t *state)
 
         if (state->channels[i].credit > best_credit) {
             best_credit = state->channels[i].credit;
-            best = (int)i;
+            candidates[0] = (int)i;
+            candidate_count = 1;
+        } else if (state->channels[i].credit == best_credit) {
+            candidates[candidate_count++] = (int)i;
         }
-        // Tie-break: lowest channel ID (already in order, so first wins)
+    }
+
+    int best = -1;
+    if (candidate_count == 1) {
+        best = candidates[0];
+    } else if (candidate_count > 1) {
+        uint32_t r = ps_prng_next(&state->prng_pick_state) % (uint32_t)candidate_count;
+        best = candidates[r];
     }
 
     // Deduct WSUM from selected channel
@@ -286,6 +297,98 @@ int ps_swrr_select_channel(ps_state_t *state)
                 ESP_LOGD(TAG, "  SWRR ch[%zu] '%s': credit=%ld, weight=%lu, eff_count=%zu",
                          i, ch->channel_id, (long)ch->credit,
                          (unsigned long)ch->weight, eff_count);
+            }
+        }
+    }
+
+    return best;
+}
+
+// ============================================================================
+// Stochastic Channel Selection
+// ============================================================================
+
+int ps_stochastic_select_channel(ps_state_t *state)
+{
+    if (!state || state->channel_count == 0) {
+        return -1;
+    }
+
+    // Credit accumulation identical to SWRR
+    for (size_t i = 0; i < state->channel_count; i++) {
+        if (state->channels[i].active && state->channels[i].weight > 0) {
+            state->channels[i].credit += (int32_t)state->channels[i].weight;
+        }
+    }
+
+    // Compute selection probability: P(i) = w_i * clamp(1 + alpha * credit_i / WSUM, 0.1, 3.0)
+    const float alpha = 0.8f;
+    const float floor_val = 0.1f;
+    const float ceil_val = 3.0f;
+
+    float probs[PS_MAX_CHANNELS];
+    float sum = 0;
+
+    for (size_t i = 0; i < state->channel_count; i++) {
+        if (!state->channels[i].active || state->channels[i].weight == 0) {
+            probs[i] = 0;
+            continue;
+        }
+
+        float credit_factor = 1.0f + alpha * (float)state->channels[i].credit / (float)WSUM;
+        if (credit_factor < floor_val) credit_factor = floor_val;
+        if (credit_factor > ceil_val) credit_factor = ceil_val;
+
+        probs[i] = (float)state->channels[i].weight * credit_factor;
+        sum += probs[i];
+    }
+
+    if (sum <= 0) {
+        return -1;
+    }
+
+    // Sample using PRNG
+    float r = (float)ps_prng_next(&state->prng_pick_state) / (float)UINT32_MAX * sum;
+    float cumulative = 0;
+    int best = -1;
+
+    for (size_t i = 0; i < state->channel_count; i++) {
+        if (probs[i] <= 0) continue;
+        cumulative += probs[i];
+        if (r <= cumulative) {
+            best = (int)i;
+            break;
+        }
+    }
+
+    // Fallback: last active channel (handles float rounding edge case)
+    if (best < 0) {
+        for (int i = (int)state->channel_count - 1; i >= 0; i--) {
+            if (state->channels[i].active && state->channels[i].weight > 0) {
+                best = i;
+                break;
+            }
+        }
+    }
+
+    // Credit deduction identical to SWRR
+    if (best >= 0) {
+        int32_t prev_credit = state->channels[best].credit;
+        state->channels[best].credit -= WSUM;
+
+        ESP_LOGI(TAG, "Stochastic selected channel[%d] '%s' (credit was %ld, now %ld)",
+                 best, state->channels[best].channel_id,
+                 (long)prev_credit, (long)state->channels[best].credit);
+
+        for (size_t i = 0; i < state->channel_count; i++) {
+            ps_channel_state_t *ch = &state->channels[i];
+            if (ch->active && ch->weight > 0) {
+                size_t eff_count = get_effective_count(ch);
+                ESP_LOGD(TAG, "  Stoch ch[%zu] '%s': credit=%ld, weight=%lu, prob=%.1f%%, eff_count=%zu",
+                         i, ch->channel_id, (long)ch->credit,
+                         (unsigned long)ch->weight,
+                         (double)(probs[i] / sum * 100.0f),
+                         eff_count);
             }
         }
     }

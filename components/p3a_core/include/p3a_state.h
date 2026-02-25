@@ -466,11 +466,6 @@ esp_err_t p3a_state_show_artwork(const char *storage_key, const char *art_url, i
  */
 esp_err_t p3a_state_fallback_to_sdcard(void);
 
-/**
- * @brief Get the default channel (sdcard or last remembered)
- */
-p3a_channel_type_t p3a_state_get_default_channel(void);
-
 // ============================================================================
 // PERSISTENCE
 // ============================================================================
@@ -498,24 +493,6 @@ esp_err_t p3a_state_set_active_playset(const char *name);
  * @return Playset name or empty string if none set
  */
 const char *p3a_state_get_active_playset(void);
-
-/**
- * @brief Save current channel to NVS
- *
- * Called automatically when channel changes.
- *
- * @deprecated Use p3a_state_set_active_playset() instead
- */
-esp_err_t p3a_state_persist_channel(void);
-
-/**
- * @brief Load channel from NVS
- *
- * Called during init. Returns P3A_CHANNEL_SDCARD if no saved channel.
- *
- * @deprecated Channel persistence is being replaced by playset persistence
- */
-esp_err_t p3a_state_load_channel(p3a_channel_info_t *out_info);
 
 // ============================================================================
 // CALLBACKS (for integration with other components)

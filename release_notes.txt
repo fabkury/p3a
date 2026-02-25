@@ -1,0 +1,4 @@
+0.8.4-dev
+ - Fix provisioning UI vs download UI bug
+ - Playset names now can be anything
+ - Bug fixes

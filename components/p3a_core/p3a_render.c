@@ -264,6 +264,16 @@ void p3a_render_set_channel_message(const char *channel_name,
                                      const char *detail)
 {
     if (!s_render.initialized) return;
+
+    // Channel messages only apply during animation playback.
+    // Reject when in provisioning, OTA, or other exclusive UI states
+    // to prevent download progress from overwriting the active UI screen.
+    p3a_state_t state = p3a_state_get();
+    if (state != P3A_STATE_ANIMATION_PLAYBACK) {
+        ESP_LOGD(TAG, "Ignoring channel message in state %s",
+                 p3a_state_get_name(state));
+        return;
+    }
     
     if (channel_name) {
         snprintf(s_render.channel_name, sizeof(s_render.channel_name), "%s", channel_name);

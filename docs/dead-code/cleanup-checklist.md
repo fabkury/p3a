@@ -2,136 +2,97 @@
 
 A prioritized list of cleanup tasks for dead code removal.
 
+**Last updated:** 2026-02-24
+
 ---
 
 ## Quick Wins (5-10 minutes each)
 
-### 1. Remove Unused Image Assets
+### 1. Remove Unused Image Assets -- DONE
 
-```bash
-# Files to delete:
-rm images/PICO-8_logo.png
-rm images/PICO-8_logo_35p.gif
-rm webui/static/pico8_logo.png
-```
-
-**Impact:** Reduces repository size  
-**Risk:** None - files have no references
+Removed `images/PICO-8_logo.png`, `images/PICO-8_logo_35p.gif`, `webui/static/pico8_logo.png`.
 
 ---
 
-### 2. Fix Duplicate Declaration
+### 2. Fix Duplicate Declaration -- DONE
 
-**File:** `main/include/animation_player.h`
-
-The function `animation_player_request_swap_current()` is declared at both line 93 and line 113.
-
-Remove lines 92-93:
-```c
-// Remove this duplicate:
-/**
- * @deprecated Use play_scheduler_play_named_channel instead
- */
-esp_err_t animation_player_request_swap_current(void);
-```
-
-Keep lines 104-113 which have the correct documentation.
+Removed both declarations of `animation_player_request_swap_current()` from `main/include/animation_player.h` (function was dead -- zero callers). Also removed the implementation from `animation_player.c`.
 
 ---
 
 ## Medium Effort (30-60 minutes each)
 
-### 4. Remove Unused `content_source` Component
+### 3. Remove Deprecated `animation_player_cycle_animation()` -- DONE
 
-**Directory:** `components/content_source/`
-
-1. First, verify no references exist:
-   ```bash
-   # Verify the component is truly unused
-   grep -r "content_source" --include="*.c" --include="*.h" main/ components/ | grep -v "content_source/"
-   ```
-
-2. If no references found, delete the directory:
-   ```bash
-   # Preview what will be deleted
-   ls -la components/content_source/
-   
-   # Delete after verification
-   rm -rf components/content_source/
-   ```
-
-3. Check if any CMakeLists.txt references it (none found in analysis)
-
-4. Update any documentation referencing this component (only found in `docs/first-principles/v2/high-level/03-content-pipeline-refactoring.md`)
+Removed function declaration, implementation, `s_cycle_pending`/`s_cycle_forward` globals,
+their extern declarations in `animation_player_priv.h`, and the entire deferred-cycle block
+in `animation_player_loader.c` (which was already a dead path logging "deprecated").
 
 ---
 
-### 5. Clean Up Unused Kconfig Option
+### 4. Remove Unused `content_source` Component -- DONE
 
-**File:** `components/play_scheduler/Kconfig`
-
-Either:
-- **Remove** the `CONFIG_PLAY_SCHEDULER_RANDOM_WINDOW` option
-- **Implement** its usage in `play_scheduler_pick.c` for RandomPick mode
+Deleted `components/content_source/` (3 files). No callers existed outside the component.
 
 ---
 
-### 6. Add Deprecation Attributes
+### 5. Clean Up Unused Kconfig Options -- DONE
 
-**Files to update:**
-- `components/channel_manager/sdcard_channel_impl.c`
-- `components/channel_manager/makapix_channel_impl.c`
+- Removed `CONFIG_PLAY_SCHEDULER_RANDOM_WINDOW` from `components/play_scheduler/Kconfig` (defined but never referenced in code).
+- Removed `CONFIG_CHANNEL_DEFAULT_ANIMATIONS_DIR` from `components/channel_manager/Kconfig` and the `ANIMATIONS_DEFAULT_DIR` macro from `sdcard_channel.h`. Migrated the two call sites in `sdcard_channel.c` and `sdcard_channel_impl.c` to use `sd_path_get_animations()`.
 
-Add explicit deprecation warnings to navigation functions:
+---
 
-```c
-// Before
-static esp_err_t sdcard_impl_next_item(channel_handle_t channel, channel_item_ref_t *out_item);
+### 6. Remove Deprecated Navigation Functions -- DONE
 
-// After
-__attribute__((deprecated("Use play_scheduler_next() instead")))
-static esp_err_t sdcard_impl_next_item(channel_handle_t channel, channel_item_ref_t *out_item);
-```
+Removed `next_item`/`prev_item`/`current_item` function pointers from `channel_ops_t` in `channel_interface.h`, the three convenience macros, and all implementations in `sdcard_channel_impl.c`, `makapix_channel_impl.c`, and `makapix_single_artwork.c`. All implementations were stubs returning `ESP_ERR_NOT_SUPPORTED`. Navigation is handled by Play Scheduler.
+
+---
+
+### 7. Remove Deprecated `animation_player_submit_pico8_frame()` -- DONE
+
+Removed declaration from `animation_player.h` and wrapper implementation from `animation_player.c`. All callers already use `pico8_render_submit_frame()` directly.
+
+---
+
+### 8. Remove Deprecated `app_lcd_draw()` -- DONE
+
+Removed declaration from `app_lcd.h` and empty stub from `app_lcd_p4.c`.
+
+---
+
+### 9. Remove Stale Comments -- DONE
+
+Removed orphaned `ANIMATIONS_PREFERRED_DIR` deprecation comment from `animation_player_priv.h`.
 
 ---
 
 ## Low Priority (When Refactoring)
 
-### 7. Archive Old Releases
+### 10. Archive Old Releases
 
 **Directory:** `release/`
 
-Consider moving old releases (v0.6.x, early v0.7.x) to a separate archive or removing them:
-
-```bash
-# First, list what will be moved
-ls -d release/v0.6.* release/v0.7.0-dev release/v0.7.1-dev 2>/dev/null
-
-# Create archive and move (after verifying the list above)
-mkdir -p release/archive
-mv release/v0.6.0-dev release/archive/
-mv release/v0.6.1-dev release/archive/
-mv release/v0.6.2-dev release/archive/
-mv release/v0.6.3-dev release/archive/
-mv release/v0.6.4-dev release/archive/
-mv release/v0.6.5-dev release/archive/
-mv release/v0.7.0-dev release/archive/
-mv release/v0.7.1-dev release/archive/
-```
-
-**Note:** Verify the exact list of release directories before moving. The versions above are examples based on the analysis.
+v0.6.x releases have already been removed. Consider archiving v0.7.x releases when convenient.
 
 ---
 
-### 8. Remove Legacy Migration Code (After Transition Period)
+### 11. Remove Legacy Migration Code -- DONE
 
-**File:** `components/channel_manager/channel_cache.c`
+Removed `is_legacy_format()` and `load_legacy_format()` from `channel_cache.c`.
+Simplified `channel_cache_load()` to only attempt the current format; invalid/legacy files
+are deleted and an empty cache is created from scratch.
 
-Functions:
-- `is_legacy_format()`
-- `load_legacy_format()`
+---
 
-These can be removed once all users have migrated to the new format (consider adding telemetry or version check).
+### 12. Remove Deprecated `p3a_state` Functions -- DONE
+
+Removed `p3a_state_persist_channel()`, `p3a_state_load_channel()`, and
+`p3a_state_get_default_channel()` from `p3a_state.c` / `p3a_state.h`.
+Removed the NVS key constants `NVS_KEY_CHANNEL_TYPE` / `NVS_KEY_CHANNEL_IDENT` and the
+helper functions `channel_type_to_string()` / `string_to_channel_type()`.
+Replaced the legacy channel load in `p3a_state_init()` with a fresh SD card default.
+Channel persistence is now handled entirely by the playset system.
 
 ---
 
@@ -159,14 +120,3 @@ After any cleanup, verify:
 - [ ] OTA update mechanism unaffected
 - [ ] HTTP API still responds
 - [ ] PICO-8 streaming still works (if enabled)
-
----
-
-## Estimated Total Cleanup Time
-
-| Category | Tasks | Time |
-|----------|-------|------|
-| Quick Wins | 3 | 15-30 min |
-| Medium Effort | 3 | 1.5-3 hours |
-| Low Priority | 3 | 1-2 hours |
-| **Total** | **9** | **3-5 hours** |

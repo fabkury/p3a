@@ -44,9 +44,6 @@ static void makapix_impl_unload(channel_handle_t channel);
 static esp_err_t makapix_impl_start_playback(channel_handle_t channel, 
                                               channel_order_mode_t order_mode,
                                               const channel_filter_config_t *filter);
-static esp_err_t makapix_impl_next_item(channel_handle_t channel, channel_item_ref_t *out_item);
-static esp_err_t makapix_impl_prev_item(channel_handle_t channel, channel_item_ref_t *out_item);
-static esp_err_t makapix_impl_current_item(channel_handle_t channel, channel_item_ref_t *out_item);
 static esp_err_t makapix_impl_request_reshuffle(channel_handle_t channel);
 static esp_err_t makapix_impl_request_refresh(channel_handle_t channel);
 static esp_err_t makapix_impl_get_stats(channel_handle_t channel, channel_stats_t *out_stats);
@@ -60,9 +57,6 @@ static const channel_ops_t s_makapix_ops = {
     .load = makapix_impl_load,
     .unload = makapix_impl_unload,
     .start_playback = makapix_impl_start_playback,
-    .next_item = makapix_impl_next_item,
-    .prev_item = makapix_impl_prev_item,
-    .current_item = makapix_impl_current_item,
     .request_reshuffle = makapix_impl_request_reshuffle,
     .request_refresh = makapix_impl_request_refresh,
     .get_stats = makapix_impl_get_stats,
@@ -180,30 +174,6 @@ static esp_err_t makapix_impl_start_playback(channel_handle_t channel,
 
     ESP_LOGD(TAG, "start_playback called but navigation now handled by Play Scheduler");
     return ESP_OK;
-}
-
-static esp_err_t makapix_impl_next_item(channel_handle_t channel, channel_item_ref_t *out_item)
-{
-    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
-    (void)channel;
-    (void)out_item;
-    return ESP_ERR_NOT_SUPPORTED;
-}
-
-static esp_err_t makapix_impl_prev_item(channel_handle_t channel, channel_item_ref_t *out_item)
-{
-    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
-    (void)channel;
-    (void)out_item;
-    return ESP_ERR_NOT_SUPPORTED;
-}
-
-static esp_err_t makapix_impl_current_item(channel_handle_t channel, channel_item_ref_t *out_item)
-{
-    // DEPRECATED: Navigation is now handled by Play Scheduler directly.
-    (void)channel;
-    (void)out_item;
-    return ESP_ERR_NOT_SUPPORTED;
 }
 
 static esp_err_t makapix_impl_request_reshuffle(channel_handle_t channel)

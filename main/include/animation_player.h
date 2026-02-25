@@ -78,39 +78,12 @@ esp_err_t animation_player_request_swap(const swap_request_t *request);
  */
 void animation_player_display_message(const char *title, const char *body);
 
-// ============================================================================
-// DEPRECATED API (to be removed after refactor)
-// ============================================================================
-
-/**
- * @deprecated Use play_scheduler_next/play_scheduler_prev instead
- */
-void animation_player_cycle_animation(bool forward);
-
-/**
- * @deprecated Use play_scheduler_play_named_channel instead
- */
-esp_err_t animation_player_request_swap_current(void);
-
-// ============================================================================
-
 esp_err_t animation_player_start(void);
 void animation_player_deinit(void);
 
 size_t animation_player_get_current_index(void);
 esp_err_t animation_player_add_file(const char *filename, const char *animations_dir, size_t insert_after_index, size_t *out_index);
 esp_err_t animation_player_swap_to_index(size_t index);
-
-/**
- * @brief Request a swap to load the current channel item
- * 
- * Triggers the animation loader to load the current item from the active channel
- * (either sdcard_channel or makapix_channel) without advancing to the next item.
- * Useful when switching channels to immediately display the first item.
- * 
- * @return ESP_OK on success, error if swap already in progress or no items
- */
-esp_err_t animation_player_request_swap_current(void);
 
 esp_err_t animation_player_begin_sd_export(void);
 esp_err_t animation_player_end_sd_export(void);
@@ -157,14 +130,6 @@ bool animation_player_is_sd_paused(void);
  * @return true if animation is ready, false if still loading or no animation loaded
  */
 bool animation_player_is_animation_ready(void);
-
-/**
- * @brief Submit a PICO-8 frame for rendering
- * 
- * @deprecated Use pico8_render_submit_frame() instead
- */
-esp_err_t animation_player_submit_pico8_frame(const uint8_t *palette_rgb, size_t palette_len,
-                                              const uint8_t *pixel_data, size_t pixel_len);
 
 // Screen rotation types - use display_renderer types
 typedef display_rotation_t screen_rotation_t;

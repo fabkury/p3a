@@ -203,6 +203,24 @@ void play_scheduler_set_shuffle_override(bool enable);
  */
 bool play_scheduler_get_shuffle_override(void);
 
+/**
+ * @brief Set channel selection mode
+ *
+ * Switches between SWRR (deterministic) and Stochastic (randomized) channel
+ * selection for multi-channel playsets. Persists to NVS and takes effect
+ * immediately on the next pick.
+ *
+ * @param mode PS_CHANNEL_SELECT_SWRR or PS_CHANNEL_SELECT_STOCHASTIC
+ */
+void play_scheduler_set_channel_select_mode(ps_channel_select_mode_t mode);
+
+/**
+ * @brief Get channel selection mode
+ *
+ * @return Current channel selection mode
+ */
+ps_channel_select_mode_t play_scheduler_get_channel_select_mode(void);
+
 // ============================================================================
 // Cache Management
 // ============================================================================
@@ -408,6 +426,22 @@ void play_scheduler_touch_next(void);
 void play_scheduler_touch_back(void);
 
 // ============================================================================
+// Display Helpers
+// ============================================================================
+
+/**
+ * @brief Get user-friendly display name from channel_id
+ *
+ * Converts internal channel IDs (e.g., "by_user_uvz", "giphy_search_cats")
+ * into human-readable display names (e.g., "User: uvz", "Giphy: cats").
+ *
+ * @param channel_id Internal channel identifier
+ * @param out_name Output buffer for display name
+ * @param max_len Size of output buffer
+ */
+void ps_get_display_name(const char *channel_id, char *out_name, size_t max_len);
+
+// ============================================================================
 // Status & Debugging
 // ============================================================================
 
@@ -418,6 +452,21 @@ void play_scheduler_touch_back(void);
  * @return ESP_OK on success
  */
 esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats);
+
+/**
+ * @brief Get per-channel detail snapshots for all active channels
+ *
+ * Copies channel state into caller-provided array under mutex.
+ * Includes entry/available counts, refresh state, and last_refresh
+ * timestamp from channel metadata sidecar files.
+ *
+ * @param out_channels  Caller-allocated array to receive details
+ * @param max_count     Capacity of out_channels array
+ * @param out_count     Receives actual number of channels written
+ * @return ESP_OK on success, ESP_ERR_INVALID_STATE if not initialized
+ */
+esp_err_t play_scheduler_get_channel_details(
+    ps_channel_detail_t *out_channels, size_t max_count, size_t *out_count);
 
 /**
  * @brief Reset the scheduler

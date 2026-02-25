@@ -397,16 +397,22 @@ esp_err_t makapix_mqtt_init(const char *player_key, const char *host, uint16_t p
 
     xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
 
-    // Clean up existing client if any (with proper state transitions)
+    // Clean up existing client if any.
+    // Release mutex during stop/destroy to avoid the same deadlock as in
+    // deinit() — see comment there for details.
     if (s_mqtt_client) {
-        if (s_mqtt_state == MQTT_CLIENT_RUNNING) {
-            s_mqtt_state = MQTT_CLIENT_STOPPING;
-            esp_mqtt_client_stop(s_mqtt_client);
-        }
-        esp_mqtt_client_destroy(s_mqtt_client);
+        esp_mqtt_client_handle_t old_client = s_mqtt_client;
+        bool needs_stop = (s_mqtt_state == MQTT_CLIENT_RUNNING);
         s_mqtt_client = NULL;
         s_mqtt_connected = false;
         s_mqtt_state = MQTT_CLIENT_NONE;
+
+        xSemaphoreGive(s_mqtt_mutex);
+        if (needs_stop) {
+            esp_mqtt_client_stop(old_client);
+        }
+        esp_mqtt_client_destroy(old_client);
+        xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
     }
 
     strncpy(s_player_key, player_key, sizeof(s_player_key) - 1);
@@ -530,23 +536,37 @@ void makapix_mqtt_deinit(void)
         return;
     }
 
-    xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
+    esp_mqtt_client_handle_t client = NULL;
+    bool needs_stop = false;
 
+    // Grab the client handle and clear shared state under the mutex.
+    // Setting s_mqtt_client = NULL prevents other code paths from using
+    // the client while we stop/destroy it outside the lock.
+    xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
     if (s_mqtt_client) {
-        // Only stop if running
-        if (s_mqtt_state == MQTT_CLIENT_RUNNING) {
-            s_mqtt_state = MQTT_CLIENT_STOPPING;
-            esp_mqtt_client_stop(s_mqtt_client);
-        }
-        // Destroy if not already destroyed
-        if (s_mqtt_state != MQTT_CLIENT_NONE) {
-            esp_mqtt_client_destroy(s_mqtt_client);
-            s_mqtt_client = NULL;
-            s_mqtt_state = MQTT_CLIENT_NONE;
-        }
+        client = s_mqtt_client;
+        needs_stop = (s_mqtt_state == MQTT_CLIENT_RUNNING);
+        s_mqtt_client = NULL;
         s_mqtt_connected = false;
+        s_mqtt_state = MQTT_CLIENT_NONE;
+    }
+    xSemaphoreGive(s_mqtt_mutex);
+
+    // Stop and destroy OUTSIDE the mutex to avoid deadlock.
+    // esp_mqtt_client_stop() blocks until the MQTT task exits. On exit the
+    // MQTT task posts MQTT_EVENT_DISCONNECTED to its internal event loop.
+    // Our event handler needs s_mqtt_mutex. If we held it here,
+    // esp_mqtt_client_destroy() -> esp_event_loop_delete() would wait for
+    // the event loop task (which is blocked on s_mqtt_mutex) — deadlock.
+    if (client) {
+        if (needs_stop) {
+            esp_mqtt_client_stop(client);
+        }
+        esp_mqtt_client_destroy(client);
     }
 
+    // Reassembly buffer cleanup — safe without mutex since the event loop
+    // (the only other accessor) has been destroyed above.
     if (s_reassembly_buffer) {
         free(s_reassembly_buffer);
         s_reassembly_buffer = NULL;
@@ -556,8 +576,6 @@ void makapix_mqtt_deinit(void)
     s_reassembly_in_progress = false;
     s_reassembly_drop = false;
     s_reassembly_topic[0] = '\0';
-
-    xSemaphoreGive(s_mqtt_mutex);
 }
 
 bool makapix_mqtt_is_connected(void)

@@ -7,7 +7,6 @@
 #include "event_bus.h"
 #include "makapix_channel_internal.h"
 #include "makapix_channel_utils.h"
-#include "vault_storage.h"
 #include "playlist_manager.h"
 #include "giphy.h"
 #include "play_scheduler_types.h"   // PS_MAX_CHANNELS

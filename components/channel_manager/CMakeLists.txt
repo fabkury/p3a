@@ -5,7 +5,6 @@ idf_component_register(
          "makapix_channel_utils.c"
          "makapix_channel_refresh.c"
          "makapix_channel_events.c"
-         "vault_storage.c"
          "animation_metadata.c"
          "playlist_manager.c"
          "download_manager.c"

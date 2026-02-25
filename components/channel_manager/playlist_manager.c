@@ -2,7 +2,6 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "playlist_manager.h"
-#include "vault_storage.h"
 #include "makapix_api.h"
 #include "sd_path.h"
 #include "psram_alloc.h"

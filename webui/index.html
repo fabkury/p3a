@@ -171,6 +171,7 @@ body {
 .ps-ch-id { color: rgba(255,255,255,0.65); font-size: 0.65rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80px; }
 .ps-ch-count { white-space: nowrap; color: rgba(255,255,255,0.85); flex-shrink: 0; }
 .ps-ch-time { white-space: nowrap; color: rgba(255,255,255,0.55); font-size: 0.6rem; flex-shrink: 0; }
+.ps-ch-loading { text-align: center; color: rgba(255,255,255,0.6); font-size: 0.75rem; padding: 6px 0; }
 .channel-btn {
     background: rgba(255,255,255,0.95);
     border: none;
@@ -958,7 +959,15 @@ function playsetDisplayName(name) {
 }
 function togglePlaysetCard() {
     var card = document.getElementById('playset-card');
+    var wasCollapsed = card.classList.contains('collapsed');
     card.classList.toggle('collapsed');
+    if (wasCollapsed) {
+        var container = document.getElementById('playset-channels');
+        if (!container.querySelector('.ps-ch-row')) {
+            container.innerHTML = '<div class="ps-ch-loading">Loading\u2026</div>';
+        }
+        pollActivePlayset();
+    }
 }
 function typeBadgeLetter(type) {
     var m = {named:'N',user:'U',hashtag:'H',sdcard:'S',giphy:'G',artwork:'A'};

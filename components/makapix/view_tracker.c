@@ -363,7 +363,7 @@ static void send_view_event(void)
         ESP_LOGI(TAG, "View event sent: post_id=%" PRId32 ", intent=%s, channel=%s, play_order=%u, ack=%s",
                  s_state.current_post_id, intent, channel_name, play_order, request_ack ? "true" : "false");
     } else {
-        ESP_LOGW(TAG, "Failed to send view event: %s", esp_err_to_name(err));
+        ESP_LOGD(TAG, "Failed to send view event: %s", esp_err_to_name(err));
     }
 }
 

@@ -272,6 +272,7 @@ typedef struct {
     bool refresh_pending;       // Queued for background refresh
     bool refresh_in_progress;   // Currently refreshing
     bool refresh_async_pending; // Waiting for Makapix async completion
+    uint32_t refresh_start_tick;    // Tick when refresh_in_progress was set (for async timeout)
     uint32_t total_count;       // From server (for PrE)
     uint32_t recent_count;      // From server (for PrE), 0 for SD card
 

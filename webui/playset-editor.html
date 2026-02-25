@@ -236,7 +236,7 @@
         .sqid-input-row {
             display: flex;
             gap: 8px;
-            align-items: flex-start;
+            align-items: stretch;
         }
         .sqid-input-row .form-input {
             flex: 1;
@@ -1516,8 +1516,10 @@
                 try {
                     var data = JSON.parse(xhr.responseText);
                     var handle = data.handle || sqid;
-                    var avatarHtml = data.avatar_url ?
-                        '<img class="avatar" src="' + escapeAttr(data.avatar_url) + '" alt="avatar">' : '';
+                    var avatarUrl = data.avatar_url && data.avatar_url.charAt(0) === '/' ?
+                        'https://makapix.club' + data.avatar_url : data.avatar_url;
+                    var avatarHtml = avatarUrl ?
+                        '<img class="avatar" src="' + escapeAttr(avatarUrl) + '" alt="avatar">' : '';
                     var rep = data.reputation !== undefined ? data.reputation : '?';
                     var artworks = data.artwork_count !== undefined ? data.artwork_count : '?';
                     el.className = 'check-results has-data';

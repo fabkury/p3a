@@ -17,7 +17,7 @@ static channel_handle_t s_refresh_handle_all = NULL;
 static channel_handle_t s_refresh_handle_promoted = NULL;
 
 // Track user/hashtag refresh handles for cancellation
-#define MAX_TRACKED_REFRESH_HANDLES 4
+#define MAX_TRACKED_REFRESH_HANDLES PS_MAX_CHANNELS
 static channel_handle_t s_tracked_refresh_handles[MAX_TRACKED_REFRESH_HANDLES] = {NULL};
 static size_t s_tracked_refresh_count = 0;
 
@@ -57,7 +57,7 @@ esp_err_t makapix_cancel_all_refreshes(void)
 // Play Scheduler refresh completion tracking
 // ---------------------------------------------------------------------------
 
-#define MAX_PS_PENDING_REFRESH 8
+#define MAX_PS_PENDING_REFRESH PS_MAX_CHANNELS
 
 typedef struct {
     char channel_id[64];

@@ -42,6 +42,23 @@ static const char *TAG = "ps_refresh";
 // Periodic refresh configuration
 #define REFRESH_INTERVAL_SECONDS 3600  // 1 hour
 
+// Concurrency control
+#define REFRESH_MAX_CONCURRENT 2
+
+/**
+ * @brief Compute async refresh timeout in milliseconds
+ *
+ * 60 seconds per 256 items in the max channel cache size (runtime-configurable),
+ * with a floor of 60 seconds.  Larger caches take longer to refresh because each
+ * MQTT page round-trip adds latency.
+ */
+static inline uint32_t refresh_async_timeout_ms(void)
+{
+    uint32_t max_entries = channel_cache_get_max_entries();
+    uint32_t timeout = (max_entries / 256) * 60000;
+    return timeout > 60000 ? timeout : 60000;
+}
+
 // Event bits
 #define REFRESH_EVENT_WORK_AVAILABLE   (1 << 0)
 #define REFRESH_EVENT_SHUTDOWN         (1 << 1)
@@ -291,9 +308,27 @@ static esp_err_t refresh_makapix_channel(ps_channel_state_t *ch)
 }
 
 /**
+ * @brief Count channels with refresh currently in progress
+ *
+ * @param state Scheduler state (caller must hold mutex)
+ * @return Number of channels with refresh_in_progress set
+ */
+static int count_in_flight_refreshes(ps_state_t *state)
+{
+    int count = 0;
+    for (size_t i = 0; i < state->channel_count; i++) {
+        if (state->channels[i].refresh_in_progress) {
+            count++;
+        }
+    }
+    return count;
+}
+
+/**
  * @brief Background refresh task
  *
- * Runs continuously, processing pending channel refreshes one at a time.
+ * Runs continuously, processing pending channel refreshes up to
+ * REFRESH_MAX_CONCURRENT at a time.
  */
 static void refresh_task(void *arg)
 {
@@ -385,6 +420,21 @@ static void refresh_task(void *arg)
                     }
                 }
             }
+
+            // Timeout check: detect async refreshes that never signal completion
+            uint32_t async_timeout = refresh_async_timeout_ms();
+            for (size_t i = 0; i < state->channel_count; i++) {
+                ps_channel_state_t *tch = &state->channels[i];
+                if (tch->refresh_async_pending &&
+                    (xTaskGetTickCount() - tch->refresh_start_tick) > pdMS_TO_TICKS(async_timeout)) {
+                    ESP_LOGW(TAG, "Channel '%s' async refresh timed out after %lu ms",
+                             tch->channel_id, (unsigned long)async_timeout);
+                    tch->refresh_async_pending = false;
+                    tch->refresh_in_progress = false;
+                    tch->refresh_pending = true;  // Re-queue for retry
+                }
+            }
+
             xSemaphoreGive(state->mutex);
 
             // Trigger playback once outside the loop and mutex
@@ -403,8 +453,14 @@ static void refresh_task(void *arg)
             }
         }
 
-        // Find next pending refresh
+        // Concurrency gate: limit simultaneous refreshes
         xSemaphoreTake(state->mutex, portMAX_DELAY);
+        if (count_in_flight_refreshes(state) >= REFRESH_MAX_CONCURRENT) {
+            xSemaphoreGive(state->mutex);
+            continue;  // Back to top — will poll async completions next iteration
+        }
+
+        // Find next pending refresh (already under mutex)
         int ch_idx = find_next_pending_refresh(state);
 
         if (ch_idx < 0) {
@@ -443,6 +499,7 @@ static void refresh_task(void *arg)
 
         ps_channel_state_t *ch = &state->channels[ch_idx];
         ch->refresh_in_progress = true;
+        ch->refresh_start_tick = xTaskGetTickCount();
         ch->refresh_pending = false;
 
         // Copy what we need before releasing mutex

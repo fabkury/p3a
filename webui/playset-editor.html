@@ -224,7 +224,7 @@
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
-        .form-input:read-only {
+        input.form-input:read-only {
             background: #f5f5f5;
             cursor: not-allowed;
         }
@@ -654,10 +654,10 @@
             <div class="form-group">
                 <label class="form-label">Channel Type</label>
                 <select id="channelType" class="form-input" onchange="updateChannelTypeFields()">
-                    <option value="named">Named Channel</option>
-                    <option value="user">Artist</option>
-                    <option value="hashtag">Hashtag</option>
-                    <option value="sdcard">SD Card</option>
+                    <option value="named">Makapix Named Channel</option>
+                    <option value="user">Makapix Artist</option>
+                    <option value="hashtag">Makapix Hashtag</option>
+                    <option value="sdcard">Local SD Card</option>
                     <option value="giphy">Giphy</option>
                 </select>
             </div>
@@ -704,7 +704,7 @@
         var exposureModeDescriptions = {
             equal: 'All channels get the same play time. Weights are ignored.',
             manual: 'Each channel has an explicit weight controlling how often it plays relative to others.',
-            proportional: 'Channels are automatically weighted by how much recent content they have. Weights are ignored.'
+            proportional: 'Channels are automatically weighted by their size. Channels with more artworks get more exposure.'
         };
 
         var pickModeDescriptions = {

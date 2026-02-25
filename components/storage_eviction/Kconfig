@@ -1,0 +1,27 @@
+menu "Storage Eviction"
+
+    config STORAGE_EVICTION_TARGET_MIB
+        int "Free space target in MiB"
+        default 1024
+        help
+            Target amount of free space on the SD card in MiB.
+            When free space falls below this threshold, old cached
+            artwork files are evicted based on last-access time.
+
+    config STORAGE_EVICTION_INITIAL_AGE_DAYS
+        int "Initial age threshold in days"
+        default 30
+        help
+            First eviction pass deletes files not accessed within
+            this many days. If more space is needed, the threshold
+            is halved on each subsequent pass.
+
+    config STORAGE_EVICTION_MIN_AGE_HOURS
+        int "Minimum age threshold in hours"
+        default 4
+        help
+            Floor for the age threshold. Files accessed more recently
+            than this are never deleted, even if the free space target
+            has not been reached.
+
+endmenu

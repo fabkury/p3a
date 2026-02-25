@@ -18,6 +18,7 @@
 
 #include "download_manager.h"
 #include "play_scheduler.h"
+#include "storage_eviction.h"
 #include "esp_heap_caps.h"
 #include "makapix_channel_impl.h"
 #include "makapix_channel_utils.h"
@@ -726,6 +727,9 @@ static void download_task(void *arg)
                     fclose(f);
                     ESP_LOGD(TAG, "Created 404 marker: %s", s_task_marker_path);
                 }
+            } else {
+                // Non-404 failure: may be disk full — check and evict if needed
+                storage_eviction_check_and_run();
             }
 
             // Don't wait - backoff is handled by ltf_can_download_now()

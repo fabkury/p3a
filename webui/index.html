@@ -1029,6 +1029,10 @@ function updateChannelRow(row, ch) {
 function renderChannelRows(channels) {
     var container = document.getElementById('playset-channels');
     if (!channels || !channels.length) { container.innerHTML = ''; return; }
+    // Clear loading indicator or any non-channel-row content
+    if (container.firstElementChild && !container.firstElementChild.classList.contains('ps-ch-row')) {
+        container.innerHTML = '';
+    }
     var existing = container.children;
     for (var i = 0; i < channels.length; i++) {
         if (i < existing.length) {

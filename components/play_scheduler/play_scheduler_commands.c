@@ -332,7 +332,11 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
     }
 
     // Register for debounced persistence
-    channel_cache_register(ch->cache);
+    esp_err_t reg_err = channel_cache_register(ch->cache);
+    if (reg_err != ESP_OK) {
+        ESP_LOGW(TAG, "Channel '%s': cache register failed: %s (persistence disabled)",
+                 ch->channel_id, esp_err_to_name(reg_err));
+    }
 
     // If cache was migrated from legacy format (dirty flag set), schedule save in new format
     if (ch->cache->dirty) {

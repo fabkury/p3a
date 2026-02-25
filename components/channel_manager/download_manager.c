@@ -62,7 +62,7 @@ static void dl_get_display_name(const char *channel_id, char *out_name, size_t m
 // Download Manager State (decoupled from Play Scheduler)
 // ============================================================================
 
-#define DL_MAX_CHANNELS 16
+#define DL_MAX_CHANNELS PS_MAX_CHANNELS
 
 typedef struct {
     char channel_id[64];
@@ -870,6 +870,10 @@ bool download_manager_get_active_channel(char *out_channel_id, size_t max_len)
 void download_manager_set_channels(const char **channel_ids, size_t count)
 {
     if (s_mutex && xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        if (count > DL_MAX_CHANNELS) {
+            ESP_LOGW(TAG, "Channel count %zu exceeds DL_MAX_CHANNELS (%d), truncated",
+                     count, DL_MAX_CHANNELS);
+        }
         s_dl_channel_count = (count < DL_MAX_CHANNELS) ? count : DL_MAX_CHANNELS;
         s_dl_round_robin_idx = 0;
 

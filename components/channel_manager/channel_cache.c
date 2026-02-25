@@ -10,6 +10,7 @@
 #include "vault_storage.h"
 #include "playlist_manager.h"
 #include "giphy.h"
+#include "play_scheduler_types.h"   // PS_MAX_CHANNELS
 #include "esp_log.h"
 #include <string.h>
 #include <stdlib.h>
@@ -36,7 +37,7 @@ uint32_t channel_cache_get_max_entries(void)
 // Global State
 // ============================================================================
 
-#define MAX_REGISTERED_CACHES 8
+#define MAX_REGISTERED_CACHES PS_MAX_CHANNELS
 
 static struct {
     bool initialized;

@@ -408,6 +408,35 @@ static void refresh_task(void *arg)
         int ch_idx = find_next_pending_refresh(state);
 
         if (ch_idx < 0) {
+            // No channels pending — check if periodic refresh is due
+            bool any_in_progress = false;
+            for (size_t i = 0; i < state->channel_count; i++) {
+                if (state->channels[i].refresh_async_pending || state->channels[i].refresh_in_progress) {
+                    any_in_progress = true;
+                    break;
+                }
+            }
+
+            if (!any_in_progress && state->channel_count > 0) {
+                time_t now = time(NULL);
+                if (s_last_full_refresh_complete == 0) {
+                    s_last_full_refresh_complete = now;
+                    ESP_LOGI(TAG, "All channels refreshed. Next periodic refresh in %d seconds.",
+                             REFRESH_INTERVAL_SECONDS);
+                } else if (now - s_last_full_refresh_complete >= REFRESH_INTERVAL_SECONDS) {
+                    ESP_LOGI(TAG, "Starting periodic refresh cycle (%d seconds elapsed)",
+                             REFRESH_INTERVAL_SECONDS);
+                    for (size_t i = 0; i < state->channel_count; i++) {
+                        state->channels[i].refresh_pending = true;
+                    }
+                    s_last_full_refresh_complete = 0;
+                    xSemaphoreGive(state->mutex);
+                    ps_refresh_signal_work();
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                    continue;
+                }
+            }
+
             xSemaphoreGive(state->mutex);
             continue;
         }
@@ -601,42 +630,6 @@ static void refresh_task(void *arg)
         if (err != ESP_OK && err != ESP_ERR_NOT_FINISHED) {
             ESP_LOGW(TAG, "Channel '%s' refresh failed: %s", channel_id, esp_err_to_name(err));
         }
-
-        // Check if all channels have completed refresh (for periodic refresh timing)
-        xSemaphoreTake(state->mutex, portMAX_DELAY);
-        int pending_idx = find_next_pending_refresh(state);
-
-        // Also check if any channel is still in async refresh
-        bool any_async_pending = false;
-        for (size_t i = 0; i < state->channel_count; i++) {
-            if (state->channels[i].refresh_async_pending || state->channels[i].refresh_in_progress) {
-                any_async_pending = true;
-                break;
-            }
-        }
-
-        if (pending_idx < 0 && !any_async_pending && state->channel_count > 0) {
-            // All channels done (no pending AND no async in progress)
-            time_t now = time(NULL);
-
-            if (s_last_full_refresh_complete == 0) {
-                // First time completing all refreshes
-                s_last_full_refresh_complete = now;
-                ESP_LOGI(TAG, "All channels refreshed. Next refresh in %d seconds.", REFRESH_INTERVAL_SECONDS);
-            } else if (now - s_last_full_refresh_complete >= REFRESH_INTERVAL_SECONDS) {
-                // Time for periodic refresh
-                ESP_LOGI(TAG, "Starting periodic refresh cycle (1 hour elapsed)");
-                for (size_t i = 0; i < state->channel_count; i++) {
-                    state->channels[i].refresh_pending = true;
-                }
-                s_last_full_refresh_complete = 0;  // Reset to track next completion
-                xSemaphoreGive(state->mutex);
-                ps_refresh_signal_work();
-                vTaskDelay(pdMS_TO_TICKS(100));
-                continue;  // Skip to next iteration
-            }
-        }
-        xSemaphoreGive(state->mutex);
 
         // Brief delay between refreshes to avoid overloading
         vTaskDelay(pdMS_TO_TICKS(100));

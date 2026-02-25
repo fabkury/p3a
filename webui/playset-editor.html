@@ -635,8 +635,8 @@
                     <!-- Action Buttons -->
                     <div class="button-group">
                         <button type="button" class="btn btn-secondary" onclick="cancelEdit()">Cancel</button>
-                        <button type="button" class="btn btn-primary" onclick="savePlayset()">Save</button>
-                        <button type="button" class="btn btn-primary" onclick="saveAndPlay()">Save &amp; Play</button>
+                        <button type="button" class="btn btn-primary" id="saveBtn" onclick="savePlayset()">Save</button>
+                        <button type="button" class="btn btn-primary" id="saveAndPlayBtn" onclick="saveAndPlay()">Save &amp; Play</button>
                     </div>
                 </form>
             </div>
@@ -780,38 +780,35 @@
             var input = document.getElementById('playsetName');
             var error = document.getElementById('nameError');
             var value = input.value;
+            var valid = true;
 
             if (!value) {
                 error.textContent = 'Name is required';
                 error.classList.remove('hidden');
                 input.classList.add('error');
-                return false;
-            }
-
-            if (/[\x00-\x1f]/.test(value)) {
+                valid = false;
+            } else if (/[\x00-\x1f]/.test(value)) {
                 error.textContent = 'Name must not contain control characters';
                 error.classList.remove('hidden');
                 input.classList.add('error');
-                return false;
-            }
-
-            if (value === 'active') {
+                valid = false;
+            } else if (value === 'active') {
                 error.textContent = 'The name "active" is reserved';
                 error.classList.remove('hidden');
                 input.classList.add('error');
-                return false;
-            }
-
-            if (isProtectedPlayset(value) && !(state.isEditing && value === state.editingName)) {
+                valid = false;
+            } else if (isProtectedPlayset(value) && !(state.isEditing && value === state.editingName)) {
                 error.textContent = 'This name is reserved and cannot be used';
                 error.classList.remove('hidden');
                 input.classList.add('error');
-                return false;
+                valid = false;
+            } else {
+                error.classList.add('hidden');
+                input.classList.remove('error');
             }
 
-            error.classList.add('hidden');
-            input.classList.remove('error');
-            return true;
+            updateSaveButtons();
+            return valid;
         }
 
         function isProtectedPlayset(name) {
@@ -1099,6 +1096,28 @@
             return true;
         }
 
+        function updateSaveButtons() {
+            var saveBtn = document.getElementById('saveBtn');
+            var saveAndPlayBtn = document.getElementById('saveAndPlayBtn');
+            if (!saveBtn || !saveAndPlayBtn) return;
+
+            var name = document.getElementById('playsetName').value;
+            var disabled = false;
+
+            if (state.channels.length === 0) {
+                disabled = true;
+            } else if (!name) {
+                disabled = true;
+            } else if (name === 'active') {
+                disabled = true;
+            } else if (isProtectedPlayset(name) && !(state.isEditing && name === state.editingName)) {
+                disabled = true;
+            }
+
+            saveBtn.disabled = disabled;
+            saveAndPlayBtn.disabled = disabled;
+        }
+
         function updateCreateButton() {
             var btn = document.getElementById('createNewBtn');
             if (btn) {
@@ -1128,25 +1147,20 @@
                 return;
             }
 
-            state.channels = [{
-                type: 'named',
-                name: 'all',
-                identifier: '',
-                display_name: 'All Recent Artworks',
-                weight: 100
-            }];
+            state.channels = [];
             state.isEditing = false;
             state.editingName = null;
 
             document.getElementById('playsetName').value = '';
             document.getElementById('playsetName').readOnly = false;
             document.getElementById('exposureEqual').checked = true;
-            document.getElementById('pickRecency').checked = true;
+            document.getElementById('pickRandom').checked = true;
 
             updateExposureDescription();
             updatePickDescription();
             updateWeightVisibility();
             renderChannels();
+            updateSaveButtons();
             showEditorView();
         }
 
@@ -1249,6 +1263,7 @@
 
             if (state.channels.length === 0) {
                 list.innerHTML = '<div class="empty-state"><p>No channels yet</p></div>';
+                updateSaveButtons();
                 return;
             }
 
@@ -1261,6 +1276,7 @@
             if (showWeights) {
                 updateWeightVisualization();
             }
+            updateSaveButtons();
         }
 
         function renderChannelCard(index, showWeights) {
@@ -1282,8 +1298,7 @@
                 (index === 0 ? 'disabled' : '') + ' title="Move up">&#8593;</button>' +
                 '<button class="btn-icon" onclick="moveChannel(' + index + ', 1)" ' +
                 (index === state.channels.length - 1 ? 'disabled' : '') + ' title="Move down">&#8595;</button>' +
-                '<button class="btn btn-danger" onclick="removeChannel(' + index + ')" ' +
-                (state.channels.length === 1 ? 'disabled' : '') + '>Remove</button>' +
+                '<button class="btn btn-danger" onclick="removeChannel(' + index + ')">Remove</button>' +
                 '</div>' +
                 '</div>' +
                 '<div class="channel-fields">';
@@ -1422,10 +1437,6 @@
         }
 
         function removeChannel(index) {
-            if (state.channels.length === 1) {
-                showToast('Cannot remove the last channel', 'error');
-                return;
-            }
             state.channels.splice(index, 1);
             renderChannels();
         }

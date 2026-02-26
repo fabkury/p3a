@@ -26,7 +26,6 @@
 #include "makapix_channel_events.h"
 #include "giphy.h"
 #include "channel_cache.h"
-#include "load_tracker.h"
 #include "sd_path.h"
 #include "sdio_bus.h"
 #include "p3a_state.h"
@@ -258,7 +257,6 @@ static void dl_commit_state(const dl_snapshot_t *snapshot, size_t new_round_robi
 // Static buffers for dl_get_next_download to reduce stack usage
 // Safe because only one download task exists (single-threaded access)
 static char s_dl_filepath[256];
-static char s_dl_vault_base[128];
 static char s_dl_storage_key[40];
 static uint8_t s_dl_sha256[32];
 
@@ -275,7 +273,6 @@ static makapix_channel_entry_t s_batch_entries[DL_BATCH_SIZE];
  * Scans channels in round-robin order, finding the first entry that:
  * - Is an artwork (not playlist) and not in LAi
  * - Does not have a .404 marker
- * - Is not blocked by LTF (load-to-failure tracking)
  *
  * @param out_request Output download request
  * @param snapshot Snapshot of channel state (will be modified with cursor updates)
@@ -382,23 +379,6 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                 continue;
             }
 
-            // Get base path for LTF check
-            if (is_giphy) {
-                if (sd_path_get_giphy(s_dl_vault_base, sizeof(s_dl_vault_base)) != ESP_OK) {
-                    strlcpy(s_dl_vault_base, "/sdcard/p3a/giphy", sizeof(s_dl_vault_base));
-                }
-            } else {
-                if (sd_path_get_vault(s_dl_vault_base, sizeof(s_dl_vault_base)) != ESP_OK) {
-                    strlcpy(s_dl_vault_base, "/sdcard/p3a/vault", sizeof(s_dl_vault_base));
-                }
-            }
-
-            // Skip if LTF is terminal or in backoff
-            if (!ltf_can_download_now(s_dl_storage_key, s_dl_vault_base)) {
-                ESP_LOGD(TAG, "SKIP post_id=%d: LTF terminal or in backoff (key=%.8s...)", entry->post_id, s_dl_storage_key);
-                continue;
-            }
-
             // Found entry needing download
             memset(out_request, 0, sizeof(*out_request));
             strlcpy(out_request->storage_key, s_dl_storage_key, sizeof(out_request->storage_key));
@@ -463,7 +443,6 @@ static download_request_t s_dl_req;
 static dl_snapshot_t s_dl_snapshot;
 static char s_task_temp_path[264];    // For temp file checks
 static char s_task_out_path[256];     // For download output path
-static char s_task_vault_base[128];   // For LTF operations
 static char s_task_marker_path[264];  // For 404 marker creation
 static char s_task_display_name[64];  // For UI display name
 
@@ -598,19 +577,11 @@ static void download_task(void *arg)
             continue;
         }
 
-        // Get vault base path for LTF operations (used by both existing file check and download)
-        if (sd_path_get_vault(s_task_vault_base, sizeof(s_task_vault_base)) != ESP_OK) {
-            strlcpy(s_task_vault_base, "/sdcard/p3a/vault", sizeof(s_task_vault_base));
-        }
-
         // Check if file already exists (e.g., from previous session before LAi was rebuilt)
         // Treat this the same as a successful download - update LAi and signal availability
         if (file_exists(s_dl_req.filepath)) {
             ESP_LOGI(TAG, "File already exists, updating LAi: %s", s_dl_req.storage_key);
             s_all_downloaded_logged = false;
-
-            // Clear any previous LTF failures since file is valid
-            ltf_clear(s_dl_req.storage_key, s_task_vault_base);
 
             // Update LAi via play_scheduler (same as successful download)
             play_scheduler_on_download_complete(s_dl_req.channel_id, s_dl_req.post_id);
@@ -685,9 +656,6 @@ static void download_task(void *arg)
         set_busy(false, NULL);
 
         if (err == ESP_OK) {
-            // Clear any previous LTF failures for this file
-            ltf_clear(s_dl_req.storage_key, s_task_vault_base);
-
             // Signal play_scheduler to update LAi using O(1) post_id lookup
             play_scheduler_on_download_complete(s_dl_req.channel_id, s_dl_req.post_id);
 
@@ -714,9 +682,6 @@ static void download_task(void *arg)
                 http_status = 404;
             }
 
-            // Record in LTF for exponential backoff
-            ltf_record_download_failure(s_dl_req.storage_key, s_task_vault_base, err, http_status);
-
             if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_SIZE) {
                 // Keep .404 marker for fast stat() checks (avoids LTF file read)
                 snprintf(s_task_marker_path, sizeof(s_task_marker_path), "%s.404", s_dl_req.filepath);
@@ -732,7 +697,6 @@ static void download_task(void *arg)
                 storage_eviction_check_and_run();
             }
 
-            // Don't wait - backoff is handled by ltf_can_download_now()
             // Signal to check for next file immediately
             makapix_channel_signal_downloads_needed();
         }

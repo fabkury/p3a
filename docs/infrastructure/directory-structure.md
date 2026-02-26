@@ -113,7 +113,6 @@ p3a/
 │   │   ├── channel_metadata.c     # Channel metadata
 │   │   ├── channel_settings.c     # Channel settings
 │   │   ├── download_manager.c     # Download coordination
-│   │   ├── load_tracker.c         # Load tracking
 │   │   ├── playlist_manager.c     # Playlist management
 │   │   ├── include/
 │   │   │   ├── channel_interface.h
@@ -128,7 +127,6 @@ p3a/
 │   │   │   ├── channel_metadata.h
 │   │   │   ├── channel_settings.h
 │   │   │   ├── download_manager.h
-│   │   │   ├── load_tracker.h
 │   │   │   ├── playlist_manager.h
 │   │   │   ├── animation_swap_request.h
 │   │   │   ├── psram_alloc.h

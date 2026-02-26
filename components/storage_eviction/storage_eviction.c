@@ -54,7 +54,7 @@ static bool is_artwork_ext(const char *name)
 }
 
 /**
- * @brief Try to unlink a sidecar file (.ltf or .404) next to an artwork
+ * @brief Try to unlink a sidecar file (.404) next to an artwork
  */
 static void remove_sidecar(const char *artwork_path, const char *suffix)
 {
@@ -118,7 +118,6 @@ static void evict_leaf(const char *leaf_path, time_t cutoff, evict_stats_t *stat
             if (unlink(filepath) == 0) {
                 stats->files_deleted++;
                 stats->bytes_freed += size;
-                remove_sidecar(filepath, ".ltf");
                 remove_sidecar(filepath, ".404");
             }
         }

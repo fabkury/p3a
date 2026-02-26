@@ -383,30 +383,6 @@ esp_err_t config_store_set_channel_select_mode(uint8_t mode);
 uint8_t config_store_get_channel_select_mode(void);
 
 // ============================================================================
-// LTF (Load Tracker File) Enable/Disable
-// ============================================================================
-
-/**
- * @brief Set LTF system enabled state
- *
- * When disabled, the LTF system is bypassed entirely - all downloads are
- * allowed and no failures are recorded. Useful for testing.
- *
- * @param enable True to enable LTF, false to disable
- * @return ESP_OK on success
- */
-esp_err_t config_store_set_ltf_enabled(bool enable);
-
-/**
- * @brief Get LTF system enabled state
- *
- * Uses in-memory caching for minimal overhead when called frequently.
- *
- * @return True if LTF enabled (defaults to true)
- */
-bool config_store_get_ltf_enabled(void);
-
-// ============================================================================
 // Giphy Settings (persisted)
 // ============================================================================
 

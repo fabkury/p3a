@@ -15,11 +15,7 @@
 #include "play_scheduler.h"
 #include "play_scheduler_internal.h"
 #include "channel_cache.h"
-#include "load_tracker.h"
 #include "makapix_channel_utils.h"
-#include "p3a_state.h"
-#include "sd_path.h"
-#include "content_cache.h"
 #include "event_bus.h"
 #include "esp_log.h"
 #include <string.h>
@@ -316,116 +312,6 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
     }
 
     xSemaphoreGive(s_state->mutex);
-}
-
-// ============================================================================
-// Load Failure Handling
-// ============================================================================
-
-void play_scheduler_on_load_failed(const char *storage_key, const char *channel_id, int32_t post_id, const char *reason)
-{
-    ps_state_t *s_state = ps_get_state();
-
-    if (!s_state->initialized || !storage_key) {
-        return;
-    }
-
-    // Get vault path for LTF
-    char vault_path[128];
-    if (sd_path_get_vault(vault_path, sizeof(vault_path)) != ESP_OK) {
-        strlcpy(vault_path, "/sdcard/p3a/vault", sizeof(vault_path));
-    }
-
-    // Record failure in LTF
-    ltf_record_failure(storage_key, vault_path, reason ? reason : "unknown");
-
-    // Build filepath and delete the corrupted file
-    uint8_t sha256[32];
-    if (ps_storage_key_sha256(storage_key, sha256) == ESP_OK) {
-        // Build path: {vault}/{sha[0]:02x}/{sha[1]:02x}/{sha[2]:02x}/{storage_key}.{ext}
-        // We need to try all extensions since we don't know which one it is
-        const char *exts[] = {".webp", ".gif", ".png", ".jpg"};
-        for (int i = 0; i < 4; i++) {
-            char filepath[256];
-            snprintf(filepath, sizeof(filepath), "%s/%02x/%02x/%02x/%s%s",
-                     vault_path,
-                     sha256[0], sha256[1], sha256[2],
-                     storage_key, exts[i]);
-
-            struct stat st;
-            if (stat(filepath, &st) == 0) {
-                unlink(filepath);
-                ESP_LOGI(TAG, "Deleted corrupted file: %s", filepath);
-                break;
-            }
-        }
-    }
-
-    // Remove from LAi if channel is known and we have a valid post_id
-    if (channel_id && post_id != 0) {
-        xSemaphoreTake(s_state->mutex, portMAX_DELAY);
-
-        int ch_idx = ps_find_channel_index(s_state, channel_id);
-        if (ch_idx >= 0) {
-            ps_channel_state_t *ch = &s_state->channels[ch_idx];
-            
-            // Look up cache for O(1) ci_index lookup
-            channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
-            if (!cache) {
-                cache = ch->cache;
-            }
-            
-            if (cache) {
-                uint32_t ci_index = ci_find_by_post_id(cache, post_id);
-                size_t prev_available = ch->cache ? ch->cache->available_count : ch->available_count;
-                if (ci_index != UINT32_MAX && ps_lai_remove(ch, ci_index)) {
-                    size_t new_available = ch->cache ? ch->cache->available_count : ch->available_count;
-                    size_t ci_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
-                    ESP_LOGI(TAG, ">>> LAi REMOVE: ch='%s' post_id=%ld ci=%lu, LAi: %zu -> %zu (Ci=%zu)",
-                             channel_id, (long)post_id, (unsigned long)ci_index,
-                             prev_available, new_available, ci_count);
-                }
-            }
-        }
-
-        // Check if we need to try another artwork
-        size_t total_available = 0;
-        for (size_t i = 0; i < s_state->channel_count; i++) {
-            ps_channel_state_t *c = &s_state->channels[i];
-            total_available += (c->cache ? c->cache->available_count : c->available_count);
-        }
-
-        xSemaphoreGive(s_state->mutex);
-
-        // Try to pick another artwork if any available
-        if (total_available > 0) {
-            ESP_LOGI(TAG, "Trying another artwork after load failure");
-            play_scheduler_next(NULL);
-        } else {
-            ESP_LOGW(TAG, "No artworks available after load failure");
-            // Show appropriate message (only if we have WiFi)
-            if (p3a_state_has_wifi()) {
-                extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
-                                                           int progress_percent, const char *detail);
-                bool cache_busy = content_cache_is_busy();
-                
-                // Get display name for first channel
-                char ch_display_name[64] = "Channel";
-                xSemaphoreTake(s_state->mutex, portMAX_DELAY);
-                if (s_state->channel_count > 0) {
-                    ps_get_display_name(s_state->channels[0].channel_id, ch_display_name, sizeof(ch_display_name));
-                }
-                xSemaphoreGive(s_state->mutex);
-                
-                if (cache_busy) {
-                    p3a_render_set_channel_message(ch_display_name, 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1,
-                                                    "Downloading artwork...");
-                } else {
-                    p3a_render_set_channel_message(NULL, 0, -1, NULL);
-                }
-            }
-        }
-    }
 }
 
 // ============================================================================

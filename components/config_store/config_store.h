@@ -478,6 +478,46 @@ bool config_store_get_giphy_full_refresh(void);
 void config_store_invalidate_giphy_full_refresh(void);
 
 // ============================================================================
+// Device Name (persisted)
+// ============================================================================
+
+#define CONFIG_STORE_MAX_DEVICE_NAME_LEN 16
+
+/**
+ * @brief Set device name for multi-device LAN identification
+ *
+ * The device name is used to derive the mDNS/DHCP hostname:
+ *   - Empty name (default) -> hostname "p3a" -> p3a.local
+ *   - Name "bedroom" -> hostname "p3a-bedroom" -> p3a-bedroom.local
+ *
+ * @param name Device name ([a-z0-9-], max 16 chars, no leading/trailing hyphen).
+ *             Empty string clears the name.
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG if name is invalid
+ */
+esp_err_t config_store_set_device_name(const char *name);
+
+/**
+ * @brief Get device name
+ *
+ * @param out Buffer to receive device name
+ * @param max_len Buffer size (should be at least 17)
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_get_device_name(char *out, size_t max_len);
+
+/**
+ * @brief Get effective hostname derived from device name
+ *
+ * If device_name is empty: writes "p3a"
+ * If device_name is "bedroom": writes "p3a-bedroom"
+ *
+ * @param out Buffer to receive hostname
+ * @param max_len Buffer size (should be at least 21: "p3a-" + 16 + null)
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_get_hostname(char *out, size_t max_len);
+
+// ============================================================================
 // PPA Upscale (persisted, Giphy-only hardware upscaling)
 // ============================================================================
 

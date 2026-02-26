@@ -465,6 +465,9 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     if (strcmp(uri, "/api/storage") == 0) {
         return h_get_storage_info(req);
     }
+    if (strcmp(uri, "/api/device-name") == 0) {
+        return h_get_device_name(req);
+    }
     if (strcmp(uri, "/channel") == 0) {
         return h_get_channel(req);
     }
@@ -522,6 +525,9 @@ static esp_err_t h_post_router(httpd_req_t *req) {
     }
     if (strcmp(uri, "/channel") == 0) {
         return h_post_channel(req);
+    }
+    if (strcmp(uri, "/api/device-name") == 0) {
+        return h_post_device_name(req);
     }
     if (strcmp(uri, "/action/show_url") == 0) {
         return h_post_show_url(req);

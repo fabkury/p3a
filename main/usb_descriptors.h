@@ -43,6 +43,14 @@ enum {
 #endif
 };
 
+/**
+ * @brief Initialize USB descriptors (populates MAC-based serial number)
+ *
+ * Call before tinyusb_driver_install(). If not called explicitly,
+ * usb_desc_get_string_table() will auto-initialize.
+ */
+void usb_desc_init(void);
+
 // Descriptor accessors for tinyusb_driver_install()
 #include "tusb.h"
 

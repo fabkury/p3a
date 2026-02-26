@@ -4,8 +4,10 @@
 #include "usb_descriptors.h"
 
 #include <string.h>
+#include <stdio.h>
 
 #include "tusb.h"
+#include "esp_mac.h"
 
 #define P3A_USB_VID 0x303A
 #define P3A_USB_PID 0x80A8
@@ -70,17 +72,43 @@ static tusb_desc_device_qualifier_t const s_device_qualifier = {
 };
 #endif
 
-static const char *const s_string_desc[] = {
+// MAC-derived serial number (populated by usb_desc_init)
+static char s_usb_serial[13] = "000000000000";
+
+static const char *const s_string_desc_base[] = {
     (const char[]){0x09, 0x04},  // English (United States)
     "FabKury",
     "P3A Composite Bridge",
-    "0001",
+    NULL,  // Serial: filled dynamically from s_usb_serial
     "P3A CDC Console",
     "P3A SD Drive",
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     "P3A PICO-8 Stream",
 #endif
 };
+
+// Writable copy that points to s_usb_serial for the serial string
+static const char *s_string_desc[sizeof(s_string_desc_base) / sizeof(s_string_desc_base[0])];
+static bool s_desc_initialized = false;
+
+void usb_desc_init(void)
+{
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(s_usb_serial, sizeof(s_usb_serial), "%02X%02X%02X%02X%02X%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    // Build string descriptor table with dynamic serial
+    size_t count = sizeof(s_string_desc_base) / sizeof(s_string_desc_base[0]);
+    for (size_t i = 0; i < count; i++) {
+        if (i == P3A_STRID_SERIAL) {
+            s_string_desc[i] = s_usb_serial;
+        } else {
+            s_string_desc[i] = s_string_desc_base[i];
+        }
+    }
+    s_desc_initialized = true;
+}
 
 // Descriptor accessors for tinyusb_driver_install()
 const tusb_desc_device_t *usb_desc_get_device(void)
@@ -95,6 +123,9 @@ const uint8_t *usb_desc_get_fs_configuration(void)
 
 const char **usb_desc_get_string_table(size_t *count)
 {
+    if (!s_desc_initialized) {
+        usb_desc_init();
+    }
     if (count) {
         *count = sizeof(s_string_desc) / sizeof(s_string_desc[0]);
     }

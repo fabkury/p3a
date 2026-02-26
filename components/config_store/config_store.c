@@ -1504,6 +1504,59 @@ void config_store_invalidate_giphy_full_refresh(void)
 }
 
 // ============================================================================
+// Device Name (persisted)
+// ============================================================================
+
+/**
+ * Validate device name: [a-z0-9-], max 16 chars, no leading/trailing hyphen.
+ * Empty string is allowed (clears the name).
+ */
+static bool validate_device_name(const char *name)
+{
+    if (!name) return false;
+    size_t len = strlen(name);
+    if (len == 0) return true;  // Empty = clear
+    if (len > CONFIG_STORE_MAX_DEVICE_NAME_LEN) return false;
+    if (name[0] == '-' || name[len - 1] == '-') return false;
+    for (size_t i = 0; i < len; i++) {
+        char c = name[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+esp_err_t config_store_set_device_name(const char *name)
+{
+    if (!name) return ESP_ERR_INVALID_ARG;
+    if (!validate_device_name(name)) return ESP_ERR_INVALID_ARG;
+    return cfg_set_string("device_name", name);
+}
+
+esp_err_t config_store_get_device_name(char *out, size_t max_len)
+{
+    if (!out || max_len == 0) return ESP_ERR_INVALID_ARG;
+    cfg_get_string("device_name", "", out, max_len);
+    return ESP_OK;
+}
+
+esp_err_t config_store_get_hostname(char *out, size_t max_len)
+{
+    if (!out || max_len == 0) return ESP_ERR_INVALID_ARG;
+
+    char device_name[CONFIG_STORE_MAX_DEVICE_NAME_LEN + 1];
+    config_store_get_device_name(device_name, sizeof(device_name));
+
+    if (device_name[0] == '\0') {
+        strlcpy(out, "p3a", max_len);
+    } else {
+        snprintf(out, max_len, "p3a-%s", device_name);
+    }
+    return ESP_OK;
+}
+
+// ============================================================================
 // PPA Upscale (Giphy-only hardware upscaling)
 // ============================================================================
 

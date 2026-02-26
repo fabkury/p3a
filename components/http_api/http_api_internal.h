@@ -131,6 +131,8 @@ esp_err_t h_get_status(httpd_req_t *req);
 esp_err_t h_get_api_state(httpd_req_t *req);
 esp_err_t h_get_channels_stats(httpd_req_t *req);
 esp_err_t h_get_storage_info(httpd_req_t *req);
+esp_err_t h_get_device_name(httpd_req_t *req);
+esp_err_t h_post_device_name(httpd_req_t *req);
 esp_err_t h_get_config(httpd_req_t *req);
 esp_err_t h_put_config(httpd_req_t *req);
 esp_err_t h_get_channel(httpd_req_t *req);

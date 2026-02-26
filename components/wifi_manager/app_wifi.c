@@ -39,6 +39,7 @@
 #include "p3a_state.h"
 #include "event_bus.h"
 #include "esp_heap_caps.h"
+#include "config_store.h"
 
 #define EXAMPLE_ESP_WIFI_SSID      CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
@@ -648,13 +649,16 @@ static void event_handler(void* arg, esp_event_base_t event_base,
 /* Start mDNS in STA mode so p3a.local works on the LAN */
 static esp_err_t start_mdns_sta(void)
 {
+    char hostname[24];
+    config_store_get_hostname(hostname, sizeof(hostname));
+
     esp_err_t err = mdns_init();
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         return err;
     }
 
-    mdns_hostname_set("p3a");
-    mdns_instance_name_set("p3a");
+    mdns_hostname_set(hostname);
+    mdns_instance_name_set(hostname);
     
     // Only add service if not already added
     if (!s_mdns_service_added) {
@@ -688,9 +692,11 @@ static bool wifi_init_sta(const char *ssid, const char *password)
     // Set a hostname on the STA netif as a secondary discovery mechanism (DHCP/DNS on some networks).
     // This does NOT replace mDNS (.local), but helps on LANs that publish DHCP hostnames.
     {
+        char hostname[24];
+        config_store_get_hostname(hostname, sizeof(hostname));
         esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey(WIFI_STA_NETIF_KEY);
         if (sta_netif) {
-            esp_err_t herr = esp_netif_set_hostname(sta_netif, "p3a");
+            esp_err_t herr = esp_netif_set_hostname(sta_netif, hostname);
             if (herr != ESP_OK) {
                 ESP_LOGW(TAG, "esp_netif_set_hostname failed: %s", esp_err_to_name(herr));
             }
@@ -909,6 +915,31 @@ static esp_err_t serve_success_page_with_ssid(httpd_req_t *req, const char *ssid
         }
     }
 
+    // Replace all {HOSTNAME} placeholders with effective hostname
+    {
+        char hn[24];
+        config_store_get_hostname(hn, sizeof(hn));
+        const char *hn_placeholder = "{HOSTNAME}";
+        size_t hn_placeholder_len = strlen(hn_placeholder);
+        size_t hn_len = strlen(hn);
+
+        char *pos;
+        while ((pos = strstr(html, hn_placeholder)) != NULL) {
+            size_t before_len = pos - html;
+            size_t after_len = bytes_read - before_len - hn_placeholder_len;
+            size_t new_size = before_len + hn_len + after_len + 1;
+            char *new_html = malloc(new_size);
+            if (!new_html) break;
+            memcpy(new_html, html, before_len);
+            memcpy(new_html + before_len, hn, hn_len);
+            memcpy(new_html + before_len + hn_len, pos + hn_placeholder_len, after_len);
+            new_html[new_size - 1] = '\0';
+            free(html);
+            html = new_html;
+            bytes_read = new_size - 1;
+        }
+    }
+
     // Send the HTML response
     httpd_resp_set_type(req, "text/html");
     esp_err_t ret = httpd_resp_send(req, html, bytes_read);
@@ -978,7 +1009,8 @@ static esp_err_t root_get_handler(httpd_req_t *req)
 
 static esp_err_t save_post_handler(httpd_req_t *req)
 {
-    char content[200];
+    #define MAX_DEVICE_NAME_LEN 17  // 16 + null
+    char content[280];
     size_t recv_size = sizeof(content) - 1;
 
     int ret = httpd_req_recv(req, content, recv_size);
@@ -990,13 +1022,15 @@ static esp_err_t save_post_handler(httpd_req_t *req)
     }
     content[ret] = '\0';
 
-    // Parse SSID and password from form data
+    // Parse SSID, password, and device_name from form data
     char ssid[MAX_SSID_LEN] = {0};
     char password[MAX_PASSWORD_LEN] = {0};
+    char device_name[MAX_DEVICE_NAME_LEN] = {0};
 
     // Simple form parsing
     char *ssid_start = strstr(content, "ssid=");
     char *password_start = strstr(content, "password=");
+    char *device_name_start = strstr(content, "device_name=");
 
     if (ssid_start) {
         ssid_start += 5; // Skip "ssid="
@@ -1026,6 +1060,25 @@ static esp_err_t save_post_handler(httpd_req_t *req)
         }
         // Properly decode URL-encoded password
         url_decode(password);
+    }
+
+    if (device_name_start) {
+        device_name_start += 12; // Skip "device_name="
+        char *device_name_end = strchr(device_name_start, '&');
+        if (device_name_end) {
+            int len = device_name_end - device_name_start;
+            if (len > MAX_DEVICE_NAME_LEN - 2) len = MAX_DEVICE_NAME_LEN - 2;
+            strncpy(device_name, device_name_start, len);
+            device_name[len] = '\0';
+        } else {
+            strncpy(device_name, device_name_start, MAX_DEVICE_NAME_LEN - 2);
+        }
+        url_decode(device_name);
+        // Save device name (config_store validates format)
+        esp_err_t dn_err = config_store_set_device_name(device_name);
+        if (dn_err != ESP_OK) {
+            ESP_LOGW(TAG, "Invalid device_name '%s', ignoring", device_name);
+        }
     }
 
     if (strlen(ssid) > 0) {
@@ -1276,6 +1329,9 @@ static void start_captive_portal(void)
 /* Start mDNS in AP mode so p3a.local works during WiFi setup */
 static esp_err_t start_mdns_ap(void)
 {
+    char hostname[24];
+    config_store_get_hostname(hostname, sizeof(hostname));
+
     esp_err_t err = mdns_init();
     bool mdns_was_already_initialized = (err == ESP_ERR_INVALID_STATE);
 
@@ -1287,13 +1343,15 @@ static esp_err_t start_mdns_ap(void)
         ESP_LOGW(TAG, "mDNS already initialized; reconfiguring for AP");
     }
 
-    err = mdns_hostname_set("p3a");
+    err = mdns_hostname_set(hostname);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "mDNS hostname set failed: %s", esp_err_to_name(err));
         return err;
     }
 
-    err = mdns_instance_name_set("p3a WiFi Setup");
+    char instance_name[48];
+    snprintf(instance_name, sizeof(instance_name), "%s WiFi Setup", hostname);
+    err = mdns_instance_name_set(instance_name);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "mDNS instance name set failed: %s", esp_err_to_name(err));
         return err;
@@ -1314,7 +1372,7 @@ static esp_err_t start_mdns_ap(void)
         }
     }
 
-    ESP_LOGD(TAG, "mDNS started in AP mode: http://p3a.local/");
+    ESP_LOGD(TAG, "mDNS started in AP mode: http://%s.local/", hostname);
     return ESP_OK;
 }
 

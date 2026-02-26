@@ -331,6 +331,16 @@ esp_err_t h_get_status(httpd_req_t *req) {
     uint32_t queue_depth = s_cmdq ? uxQueueMessagesWaiting(s_cmdq) : 0;
     cJSON_AddNumberToObject(data, "queue_depth", (double)queue_depth);
 
+    // Device identity
+    {
+        char device_name[CONFIG_STORE_MAX_DEVICE_NAME_LEN + 1];
+        char hostname[24];
+        config_store_get_device_name(device_name, sizeof(device_name));
+        config_store_get_hostname(hostname, sizeof(hostname));
+        cJSON_AddStringToObject(data, "device_name", device_name);
+        cJSON_AddStringToObject(data, "hostname", hostname);
+    }
+
     // API version for compatibility checking
 #ifdef P3A_API_VERSION
     cJSON_AddNumberToObject(data, "api_version", P3A_API_VERSION);
@@ -446,6 +456,101 @@ esp_err_t h_get_channels_stats(httpd_req_t *req) {
              all_total, all_cached, promoted_total, promoted_cached,
              giphy_trending_total, giphy_trending_cached,
              is_registered ? "true" : "false");
+    send_json(req, 200, response);
+    return ESP_OK;
+}
+
+// ---------- Device Name Handlers ----------
+
+/**
+ * GET /api/device-name
+ * Returns device name and effective hostname
+ */
+esp_err_t h_get_device_name(httpd_req_t *req)
+{
+    char device_name[CONFIG_STORE_MAX_DEVICE_NAME_LEN + 1];
+    char hostname[24];
+    config_store_get_device_name(device_name, sizeof(device_name));
+    config_store_get_hostname(hostname, sizeof(hostname));
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    cJSON_AddBoolToObject(root, "ok", true);
+    cJSON_AddStringToObject(root, "device_name", device_name);
+    cJSON_AddStringToObject(root, "hostname", hostname);
+
+    char *json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!json) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, json);
+    free(json);
+    return ESP_OK;
+}
+
+/**
+ * POST /api/device-name
+ * Sets device name. Accepts {"device_name": "bedroom"} or {"device_name": ""} to clear.
+ * Takes effect after reboot.
+ */
+esp_err_t h_post_device_name(httpd_req_t *req)
+{
+    if (!ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+
+    int err_status;
+    size_t len;
+    char *body = recv_body_json(req, &len, &err_status);
+    if (!body) {
+        send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_ParseWithLength(body, len);
+    free(body);
+    if (!root || !cJSON_IsObject(root)) {
+        if (root) cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
+        return ESP_OK;
+    }
+
+    cJSON *name_item = cJSON_GetObjectItem(root, "device_name");
+    if (!name_item || !cJSON_IsString(name_item)) {
+        cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing 'device_name' string\",\"code\":\"INVALID_REQUEST\"}");
+        return ESP_OK;
+    }
+
+    const char *name = cJSON_GetStringValue(name_item);
+    esp_err_t err = config_store_set_device_name(name);
+    cJSON_Delete(root);
+
+    if (err == ESP_ERR_INVALID_ARG) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid device name. Use [a-z0-9-], max 16 chars, no leading/trailing hyphen.\",\"code\":\"INVALID_NAME\"}");
+        return ESP_OK;
+    }
+    if (err != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"SAVE_FAILED\",\"code\":\"SAVE_FAILED\"}");
+        return ESP_OK;
+    }
+
+    // Return the new effective hostname
+    char hostname[24];
+    config_store_get_hostname(hostname, sizeof(hostname));
+
+    char response[128];
+    snprintf(response, sizeof(response),
+             "{\"ok\":true,\"device_name\":\"%s\",\"hostname\":\"%s\",\"reboot_required\":true}",
+             name, hostname);
     send_json(req, 200, response);
     return ESP_OK;
 }

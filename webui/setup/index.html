@@ -73,6 +73,7 @@ input[type=text]:focus, input[type=password]:focus { border-color: #667eea; box-
 .btn-secondary { background: #ff6b6b; box-shadow: 0 4px 12px rgba(255,107,107,0.25); }
 .help { margin: 10px 0 0; font-size: 0.85rem; color: #555; line-height: 1.35; }
 .help code { background: rgba(102,126,234,0.12); padding: 2px 6px; border-radius: 8px; }
+.hint { margin: 4px 0 0; font-size: 0.78rem; color: #888; }
 .divider { height: 1px; background: #eee; margin: 12px 0; }
 </style>
 </head>
@@ -92,13 +93,32 @@ input[type=text]:focus, input[type=password]:focus { border-color: #667eea; box-
         <label for="password">Password (optional)</label>
         <input type="password" id="password" name="password" maxlength="64" placeholder="Wi-Fi password">
       </div>
+      <div class="field">
+        <label for="device_name">Device name (optional)</label>
+        <input type="text" id="device_name" name="device_name" maxlength="16"
+               pattern="[a-z0-9-]*" autocapitalize="none" spellcheck="false"
+               placeholder="e.g. bedroom">
+        <p class="hint">For multi-device setups. Lowercase letters, numbers, and hyphens only.</p>
+      </div>
       <button class="btn" type="submit">Save &amp; connect</button>
     </form>
-    <p class="help">After saving, p3a will reboot and join your Wi-Fi network. Then open <code>http://p3a.local/</code> to control your p3a.</p>
+    <p class="help">After saving, p3a will reboot and join your Wi-Fi network. Then open <code id="post-url">http://p3a.local/</code> to control your p3a.</p>
     <div class="divider"></div>
     <form action="/erase" method="POST" onsubmit="return confirm('Erase saved Wi-Fi credentials? p3a will reboot into setup mode.');">
       <button class="btn btn-secondary" type="submit">Erase Wi-Fi credentials</button>
     </form>
   </div>
+  <script>
+  (function(){
+    var dn = document.getElementById('device_name');
+    var url = document.getElementById('post-url');
+    dn.addEventListener('input', function() {
+      this.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      var name = this.value.trim();
+      var host = name ? 'p3a-' + name : 'p3a';
+      url.textContent = 'http://' + host + '.local/';
+    });
+  })();
+  </script>
 </body>
 </html>

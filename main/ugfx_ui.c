@@ -8,6 +8,7 @@
 #include "bsp/display.h"
 #include "makapix_mqtt.h"
 #include "makapix.h"
+#include "config_store.h"
 #include <string.h>
 #include <time.h>
 #include "freertos/FreeRTOS.h"
@@ -133,8 +134,14 @@ static void ugfx_ui_draw_captive_ap_info(void)
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
 
     y_pos += 45;
-    gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, "3. Go to: http://p3a.local",
-                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    {
+        char hn[24];
+        char url_buf[48];
+        config_store_get_hostname(hn, sizeof(hn));
+        snprintf(url_buf, sizeof(url_buf), "3. Go to: http://%s.local", hn);
+        gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, url_buf,
+                         gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    }
 
     y_pos += 45;
     gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, "or http://192.168.4.1",

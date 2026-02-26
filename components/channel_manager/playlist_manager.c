@@ -13,140 +13,9 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/stat.h>
-#include <dirent.h>
 #include <time.h>
 
 static const char *TAG = "playlist_mgr";
-
-typedef struct {
-    char storage_key[96];
-    char filepath[256];
-    uint32_t refcount;
-} refcount_entry_t;
-
-// Forward declare for refcount rebuild (definition below)
-static esp_err_t load_playlist_json(const char *filepath, playlist_metadata_t **out_playlist);
-
-static bool is_vault_filepath(const char *path)
-{
-    if (!path) return false;
-    return (strstr(path, "/vault/") != NULL);
-}
-
-static char *build_meta_path_from_asset_path(const char *filepath)
-{
-    if (!filepath) return NULL;
-    size_t len = strlen(filepath);
-    const char *dot = strrchr(filepath, '.');
-    const char *slash = strrchr(filepath, '/');
-    if (dot && slash && dot < slash) {
-        dot = NULL;
-    }
-    size_t stem_len = dot ? (size_t)(dot - filepath) : len;
-    size_t out_len = stem_len + 9 + 1; // "_meta.json"
-    char *out = (char *)malloc(out_len);
-    if (!out) return NULL;
-    memcpy(out, filepath, stem_len);
-    strcpy(out + stem_len, "_meta.json");
-    return out;
-}
-
-static esp_err_t write_refcount_meta(const char *asset_filepath, uint32_t refcount)
-{
-    if (!asset_filepath) return ESP_ERR_INVALID_ARG;
-    if (!is_vault_filepath(asset_filepath)) return ESP_OK;
-
-    struct stat st;
-    if (stat(asset_filepath, &st) != 0) return ESP_ERR_NOT_FOUND;
-
-    char *meta_path = build_meta_path_from_asset_path(asset_filepath);
-    if (!meta_path) return ESP_ERR_NO_MEM;
-
-    FILE *f = fopen(meta_path, "w");
-    if (!f) {
-        free(meta_path);
-        return ESP_FAIL;
-    }
-
-    fprintf(f, "{\"refcount\":%lu,\"size\":%lu}\n", (unsigned long)refcount, (unsigned long)st.st_size);
-    fclose(f);
-    free(meta_path);
-    return ESP_OK;
-}
-
-static esp_err_t rebuild_vault_refcounts_from_playlists(void)
-{
-    char playlists_dir[128];
-    if (sd_path_get_playlists(playlists_dir, sizeof(playlists_dir)) != ESP_OK) {
-        return ESP_FAIL;
-    }
-
-    DIR *dir = opendir(playlists_dir);
-    if (!dir) return ESP_OK;
-
-    refcount_entry_t *entries = NULL;
-    size_t entry_count = 0;
-    size_t entry_cap = 0;
-
-    struct dirent *de;
-    while ((de = readdir(dir)) != NULL) {
-        if (de->d_name[0] == '.') continue;
-        size_t nlen = strlen(de->d_name);
-        if (nlen < 6 || strcasecmp(de->d_name + nlen - 5, ".json") != 0) continue;
-
-        char path[256];
-        int w = snprintf(path, sizeof(path), "%s/%s", playlists_dir, de->d_name);
-        if (w < 0 || w >= (int)sizeof(path)) continue;
-
-        playlist_metadata_t *pl = NULL;
-        if (load_playlist_json(path, &pl) != ESP_OK || !pl) continue;
-
-        for (int32_t i = 0; i < pl->loaded_artworks; i++) {
-            const artwork_ref_t *a = &pl->artworks[i];
-            if (!is_vault_filepath(a->filepath)) continue;
-            if (a->storage_key[0] == '\0') continue;
-
-            // Find or insert by storage_key
-            size_t j;
-            for (j = 0; j < entry_count; j++) {
-                if (strcmp(entries[j].storage_key, a->storage_key) == 0) {
-                    entries[j].refcount++;
-                    break;
-                }
-            }
-            if (j == entry_count) {
-                if (entry_count == entry_cap) {
-                    size_t new_cap = entry_cap ? entry_cap * 2 : 32;
-                    refcount_entry_t *tmp = (refcount_entry_t *)realloc(entries, new_cap * sizeof(refcount_entry_t));
-                    if (!tmp) {
-                        playlist_free(pl);
-                        free(entries);
-                        closedir(dir);
-                        return ESP_ERR_NO_MEM;
-                    }
-                    entries = tmp;
-                    entry_cap = new_cap;
-                }
-                memset(&entries[entry_count], 0, sizeof(entries[entry_count]));
-                strlcpy(entries[entry_count].storage_key, a->storage_key, sizeof(entries[entry_count].storage_key));
-                strlcpy(entries[entry_count].filepath, a->filepath, sizeof(entries[entry_count].filepath));
-                entries[entry_count].refcount = 1;
-                entry_count++;
-            }
-        }
-
-        playlist_free(pl);
-    }
-
-    closedir(dir);
-
-    for (size_t i = 0; i < entry_count; i++) {
-        (void)write_refcount_meta(entries[i].filepath, entries[i].refcount);
-    }
-
-    free(entries);
-    return ESP_OK;
-}
 
 // Current cached playlist
 static playlist_metadata_t *s_current_playlist = NULL;
@@ -255,9 +124,6 @@ esp_err_t playlist_manager_init(void)
         }
     }
     
-    // Best-effort: rebuild vault refcount sidecars from cached playlists.
-    (void)rebuild_vault_refcounts_from_playlists();
-
     ESP_LOGI(TAG, "Playlist manager initialized");
     return ESP_OK;
 }
@@ -473,12 +339,7 @@ esp_err_t playlist_save_to_disk(playlist_metadata_t *playlist)
         return err;
     }
     
-    esp_err_t save_err = save_playlist_json(playlist, filepath);
-    if (save_err == ESP_OK) {
-        // Update refcount sidecars in a single pass (avoids per-playlist incremental drift).
-        (void)rebuild_vault_refcounts_from_playlists();
-    }
-    return save_err;
+    return save_playlist_json(playlist, filepath);
 }
 
 // Continued in next part...

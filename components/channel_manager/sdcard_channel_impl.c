@@ -332,10 +332,6 @@ static esp_err_t sdcard_impl_load(channel_handle_t channel)
         }
 
         if (len >= 5 && strcasecmp(entry->d_name + len - 5, ".json") == 0) {
-            // Ignore metadata sidecars (new convention)
-            if (len >= 9 && strcasecmp(entry->d_name + len - 9, "_meta.json") == 0) {
-                continue;
-            }
             // Candidate playlist
             count++;
         }
@@ -372,10 +368,6 @@ static esp_err_t sdcard_impl_load(channel_handle_t channel)
 
         size_t name_len = strlen(entry->d_name);
         bool is_json = (name_len >= 5 && strcasecmp(entry->d_name + name_len - 5, ".json") == 0);
-        if (is_json && name_len >= 9 && strcasecmp(entry->d_name + name_len - 9, "_meta.json") == 0) {
-            // metadata sidecar: ignore
-            continue;
-        }
 
         bool type_ok = false;
         asset_type_t type = asset_type_from_name(entry->d_name, &type_ok);

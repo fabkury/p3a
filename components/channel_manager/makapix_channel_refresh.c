@@ -11,6 +11,7 @@
 #include "channel_cache.h"
 #include "channel_metadata.h"  // For generic metadata save/load
 #include "p3a_state.h"      // For PICO-8 mode check
+#include "sntp_sync.h"      // For sntp_sync_is_synchronized()
 #include "esp_log.h"
 #include "esp_timer.h"
 
@@ -355,10 +356,10 @@ void refresh_task_impl(void *pvParameters)
         
         free(resp);
 
-        // Save metadata
-        time_t now = time(NULL);
-        save_channel_metadata(ch, query_req.has_cursor ? query_req.cursor : "", now);
-        ch->last_refresh_time = now;
+        // Save metadata (only persist a valid timestamp if SNTP is synchronized)
+        time_t refresh_ts = sntp_sync_is_synchronized() ? time(NULL) : 0;
+        save_channel_metadata(ch, query_req.has_cursor ? query_req.cursor : "", refresh_ts);
+        ch->last_refresh_time = refresh_ts;
 
         // Check for shutdown after metadata save
         if (!ch->refreshing) break;

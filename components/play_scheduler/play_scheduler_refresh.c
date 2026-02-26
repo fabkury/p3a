@@ -359,10 +359,14 @@ static void refresh_task(void *arg)
         // on-disk last_refresh from the previous session.
         if (!s_sntp_synced_observed && sntp_sync_is_synchronized()) {
             s_sntp_synced_observed = true;
-            ESP_LOGI(TAG, "SNTP synchronized - re-evaluating Giphy channels");
+            ESP_LOGI(TAG, "SNTP synchronized - re-evaluating channel freshness");
             xSemaphoreTake(state->mutex, portMAX_DELAY);
             for (size_t i = 0; i < state->channel_count; i++) {
-                if (state->channels[i].type == PS_CHANNEL_TYPE_GIPHY &&
+                ps_channel_type_t t = state->channels[i].type;
+                if ((t == PS_CHANNEL_TYPE_GIPHY ||
+                     t == PS_CHANNEL_TYPE_NAMED ||
+                     t == PS_CHANNEL_TYPE_USER ||
+                     t == PS_CHANNEL_TYPE_HASHTAG) &&
                     !state->channels[i].refresh_in_progress &&
                     !state->channels[i].refresh_pending) {
                     state->channels[i].refresh_pending = true;
@@ -601,7 +605,34 @@ static void refresh_task(void *arg)
             }
             }
         } else {
-            err = refresh_makapix_channel(ch);
+            // Gate 1: Require SNTP synchronization.
+            // Without a valid clock, time comparisons are meaningless and any
+            // saved timestamp would be garbage. Channels are re-queued once
+            // SNTP synchronizes (one-shot below).
+            if (!sntp_sync_is_synchronized()) {
+                ESP_LOGI(TAG, "Makapix channel '%s' deferred (SNTP not synchronized)", channel_id);
+                err = ESP_OK;
+            } else {
+                // Gate 2: Check if channel was refreshed recently enough.
+                char mkx_ch_path[128];
+                if (sd_path_get_channel(mkx_ch_path, sizeof(mkx_ch_path)) != ESP_OK) {
+                    strlcpy(mkx_ch_path, "/sdcard/p3a/channel", sizeof(mkx_ch_path));
+                }
+                channel_metadata_t mkx_meta;
+                channel_metadata_load(channel_id, mkx_ch_path, &mkx_meta);
+
+                time_t now = time(NULL);
+                uint32_t interval = config_store_get_refresh_interval_sec();
+                if (cache_has_entries &&
+                    mkx_meta.last_refresh > 0 &&
+                    (now - mkx_meta.last_refresh) < (time_t)interval) {
+                    ESP_LOGI(TAG, "Makapix channel '%s' still fresh (last refresh %lds ago, interval %lus), skipping",
+                             channel_id, (long)(now - mkx_meta.last_refresh), (unsigned long)interval);
+                    err = ESP_OK;
+                } else {
+                    err = refresh_makapix_channel(ch);
+                }
+            }
         }
 
         // Update state after refresh

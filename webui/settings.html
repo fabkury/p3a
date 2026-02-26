@@ -311,12 +311,12 @@ body {
     <div id="storage-info" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;align-items:baseline;">
             <span style="font-size:0.85rem;color:#333;" id="storage-summary">Loading...</span>
-            <span style="font-size:0.75rem;color:#667eea;font-weight:500;" id="storage-pct"></span>
+            <span class="file-name" id="storage-pct" style="min-height:0;"></span>
         </div>
         <div style="height:6px;background:#e9ecef;border-radius:3px;overflow:hidden;">
             <div id="storage-bar" style="height:100%;background:#667eea;border-radius:3px;width:0%;transition:width 0.4s ease;"></div>
         </div>
-        <div class="file-name" id="storage-detail"></div>
+        <div style="font-size:0.75rem;color:#667eea;font-weight:500;" id="storage-detail"></div>
     </div>
     <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
         <label class="toggle-label" for="cache-size">Channel cache size</label>

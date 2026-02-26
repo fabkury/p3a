@@ -166,8 +166,8 @@ static void upscale_frame_to_display(const animation_buffer_t *buf,
                                      const uint8_t *src, uint8_t *dst)
 {
 #if CONFIG_P3A_PPA_UPSCALE_ENABLE
-    if (config_store_get_ppa_upscale() &&
-        buf->channel_type == PS_CHANNEL_TYPE_GIPHY) {
+    if (buf->channel_type == PS_CHANNEL_TYPE_GIPHY &&
+        config_store_get_ppa_upscale()) {
         static bool s_ppa_first_attempt = true;
         if (s_ppa_first_attempt) {
             ESP_LOGI(TAG, "PPA upscale: first attempt (src=%dx%d dst=%dx%d)",

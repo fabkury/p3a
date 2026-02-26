@@ -473,7 +473,7 @@ body {
 </div>
 <div class="footer">
     <button class="footer-btn" onclick="window.location.href='/config/network'">Network</button>
-    <button class="footer-btn" id="pico8-btn" style="display:none" onclick="window.location.href='/pico8'">PICO-8</button>
+    <button class="footer-btn" id="pico8-btn" onclick="window.location.href='/pico8'">PICO-8</button>
     <button class="footer-btn" onclick="window.location.href='/settings'">Settings</button>
     <button class="footer-btn" onclick="window.location.href='/giphy'">Giphy</button>
     <button class="footer-btn" onclick="window.location.href='/playset-editor'">Playsets</button>
@@ -493,8 +493,8 @@ fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
     if (data.ui_config) {
         LCD_MAX_WIDTH = data.ui_config.lcd_width || 720;
         LCD_MAX_HEIGHT = data.ui_config.lcd_height || 720;
-        if (data.ui_config.pico8_enabled) {
-            document.getElementById('pico8-btn').style.display = '';
+        if (!data.ui_config.pico8_enabled) {
+            document.getElementById('pico8-btn').style.display = 'none';
         }
     }
     // Channel stats

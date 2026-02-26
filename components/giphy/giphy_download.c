@@ -11,6 +11,7 @@
 
 #include "giphy.h"
 #include "giphy_types.h"
+#include "p3a_limits.h"
 #include "config_store.h"
 #include "sd_path.h"
 #include "sdio_bus.h"
@@ -255,6 +256,16 @@ esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t ext
         return ESP_FAIL;
     }
 
+    // Reject files larger than 16 MiB
+    if (content_length > P3A_MAX_ARTWORK_SIZE) {
+        ESP_LOGW(TAG, "Giphy file too large: %lld bytes, skipping: %s",
+                 content_length, giphy_id);
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        free(chunk_buffer);
+        return ESP_ERR_INVALID_SIZE;
+    }
+
     // Open temp file for writing
     FILE *f = fopen(temp_path, "wb");
     if (!f) {
@@ -296,6 +307,12 @@ esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t ext
         }
 
         total_written += written;
+
+        if (total_written > P3A_MAX_ARTWORK_SIZE) {
+            ESP_LOGW(TAG, "Giphy download exceeded 16 MiB, aborting: %s", giphy_id);
+            download_ok = false;
+            break;
+        }
 
         if (progress_cb) {
             progress_cb(total_written,

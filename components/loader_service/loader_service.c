@@ -2,6 +2,7 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "loader_service.h"
+#include "p3a_limits.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
@@ -33,6 +34,12 @@ static esp_err_t read_file_to_buffer(const char *filepath, uint8_t **data_out, s
 
     if (file_size <= 0) {
         ESP_LOGE(TAG, "Invalid file size: %ld", file_size);
+        fclose(f);
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    if (file_size > P3A_MAX_ARTWORK_SIZE) {
+        ESP_LOGW(TAG, "File too large to load: %ld bytes (limit %d)", file_size, P3A_MAX_ARTWORK_SIZE);
         fclose(f);
         return ESP_ERR_INVALID_SIZE;
     }

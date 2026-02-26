@@ -2,6 +2,7 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "makapix_artwork.h"
+#include "p3a_limits.h"
 #include "sd_path.h"
 #include "sdio_bus.h"
 #include "esp_http_client.h"
@@ -276,6 +277,16 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
     
     ESP_LOGD(TAG, "HTTP 200 OK, Content-Length: %lld bytes", content_length);
 
+    // Reject files larger than 16 MiB
+    if (content_length > P3A_MAX_ARTWORK_SIZE) {
+        ESP_LOGW(TAG, "File too large: %lld bytes (limit %d), skipping: %s",
+                 content_length, P3A_MAX_ARTWORK_SIZE, storage_key);
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        free(chunk_buffer);
+        return ESP_ERR_INVALID_SIZE;
+    }
+
     // Open temp file for writing
     FILE *fp = fopen(temp_path, "wb");
     if (!fp) {
@@ -348,7 +359,14 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
         
         // Update progress
         progress.total_received += chunk_received;
-        
+
+        // Guard against chunked transfers with no Content-Length
+        if (progress.total_received > P3A_MAX_ARTWORK_SIZE) {
+            ESP_LOGW(TAG, "Download exceeded 16 MiB during transfer, aborting: %s", storage_key);
+            download_error = true;
+            break;
+        }
+
         if (progress.progress_cb && progress.content_length > 0) {
             int percent = (int)((progress.total_received * 100) / progress.content_length);
             if (percent != progress.last_percent) {

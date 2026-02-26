@@ -710,14 +710,14 @@ static void download_task(void *arg)
         } else {
             // Record failure with error classification for backoff
             int http_status = 0;
-            if (err == ESP_ERR_NOT_FOUND) {
+            if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_SIZE) {
                 http_status = 404;
             }
 
             // Record in LTF for exponential backoff
             ltf_record_download_failure(s_dl_req.storage_key, s_task_vault_base, err, http_status);
 
-            if (err == ESP_ERR_NOT_FOUND) {
+            if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_SIZE) {
                 // Keep .404 marker for fast stat() checks (avoids LTF file read)
                 snprintf(s_task_marker_path, sizeof(s_task_marker_path), "%s.404", s_dl_req.filepath);
                 FILE *f = fopen(s_task_marker_path, "w");

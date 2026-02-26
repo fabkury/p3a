@@ -228,6 +228,7 @@ esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
     if (!dec) {
         ESP_LOGE(TAG, "Failed to allocate decoder");
         free(png_data->rgba_buffer);
+        free(png_data->rgb_buffer);
         free(png_data);
         return ESP_ERR_NO_MEM;
     }

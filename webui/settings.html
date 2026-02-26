@@ -308,6 +308,16 @@ body {
 </div>
 <div class="section">
     <h3>Storage</h3>
+    <div id="storage-info" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;">
+            <span style="font-size:0.85rem;color:#333;" id="storage-summary">Loading...</span>
+            <span style="font-size:0.75rem;color:#667eea;font-weight:500;" id="storage-pct"></span>
+        </div>
+        <div style="height:6px;background:#e9ecef;border-radius:3px;overflow:hidden;">
+            <div id="storage-bar" style="height:100%;background:#667eea;border-radius:3px;width:0%;transition:width 0.4s ease;"></div>
+        </div>
+        <div class="file-name" id="storage-detail"></div>
+    </div>
     <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
         <label class="toggle-label" for="cache-size">Channel cache size</label>
         <div style="display:flex;gap:8px;align-items:center;">
@@ -610,8 +620,43 @@ function saveCacheSize() {
         showToast('Save failed', true);
     });
 }
+function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+function loadStorageInfo() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/storage', true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        try {
+            var r = JSON.parse(xhr.responseText);
+            if (!r.ok || !r.data) throw 0;
+            var total = r.data.total_bytes;
+            var free = r.data.free_bytes;
+            var used = total - free;
+            var freePct = total > 0 ? (free / total * 100) : 0;
+            var usedPct = total > 0 ? (used / total * 100) : 0;
+            document.getElementById('storage-summary').textContent =
+                formatBytes(free) + ' free of ' + formatBytes(total);
+            document.getElementById('storage-pct').textContent =
+                freePct.toFixed(1) + '% free';
+            document.getElementById('storage-bar').style.width = usedPct.toFixed(1) + '%';
+            document.getElementById('storage-detail').textContent =
+                formatBytes(used) + ' used';
+        } catch (e) {
+            document.getElementById('storage-summary').textContent = 'Unable to read storage';
+            document.getElementById('storage-pct').textContent = '';
+            document.getElementById('storage-detail').textContent = '';
+        }
+    };
+    xhr.send();
+}
 loadAllConfig();
 loadSeed();
+loadStorageInfo();
 </script>
 </body>
 </html>

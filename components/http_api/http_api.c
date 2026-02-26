@@ -462,6 +462,9 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     if (strcmp(uri, "/channels/stats") == 0) {
         return h_get_channels_stats(req);
     }
+    if (strcmp(uri, "/api/storage") == 0) {
+        return h_get_storage_info(req);
+    }
     if (strcmp(uri, "/channel") == 0) {
         return h_get_channel(req);
     }

@@ -39,6 +39,15 @@ esp_err_t storage_eviction_check_and_run(void);
  */
 esp_err_t storage_eviction_get_free_space(uint64_t *out_free_bytes);
 
+/**
+ * @brief Get total and free space on /sdcard
+ *
+ * @param[out] out_total_bytes Receives the total size in bytes (NULL to skip)
+ * @param[out] out_free_bytes  Receives the free space in bytes (NULL to skip)
+ * @return ESP_OK on success, ESP_FAIL on filesystem error
+ */
+esp_err_t storage_eviction_get_storage_info(uint64_t *out_total_bytes, uint64_t *out_free_bytes);
+
 #ifdef __cplusplus
 }
 #endif

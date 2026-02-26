@@ -71,7 +71,12 @@ static void remove_sidecar(const char *artwork_path, const char *suffix)
 
 esp_err_t storage_eviction_get_free_space(uint64_t *out_free_bytes)
 {
-    if (!out_free_bytes) return ESP_ERR_INVALID_ARG;
+    return storage_eviction_get_storage_info(NULL, out_free_bytes);
+}
+
+esp_err_t storage_eviction_get_storage_info(uint64_t *out_total_bytes, uint64_t *out_free_bytes)
+{
+    if (!out_total_bytes && !out_free_bytes) return ESP_ERR_INVALID_ARG;
 
     uint64_t total_bytes = 0, free_bytes = 0;
     esp_err_t err = esp_vfs_fat_info("/sdcard", &total_bytes, &free_bytes);
@@ -80,7 +85,8 @@ esp_err_t storage_eviction_get_free_space(uint64_t *out_free_bytes)
         return ESP_FAIL;
     }
 
-    *out_free_bytes = free_bytes;
+    if (out_total_bytes) *out_total_bytes = total_bytes;
+    if (out_free_bytes)  *out_free_bytes  = free_bytes;
     return ESP_OK;
 }
 

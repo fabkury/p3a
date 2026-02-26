@@ -16,6 +16,7 @@
  */
 
 #include "http_api_internal.h"
+#include "storage_eviction.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include "esp_wifi_remote.h"
@@ -445,6 +446,28 @@ esp_err_t h_get_channels_stats(httpd_req_t *req) {
              all_total, all_cached, promoted_total, promoted_cached,
              giphy_trending_total, giphy_trending_cached,
              is_registered ? "true" : "false");
+    send_json(req, 200, response);
+    return ESP_OK;
+}
+
+/**
+ * GET /api/storage
+ * Returns SD card storage information (total bytes, free bytes)
+ */
+esp_err_t h_get_storage_info(httpd_req_t *req)
+{
+    uint64_t total_bytes = 0, free_bytes = 0;
+    esp_err_t err = storage_eviction_get_storage_info(&total_bytes, &free_bytes);
+    if (err != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"STORAGE_QUERY\",\"code\":\"STORAGE_QUERY\"}");
+        return ESP_OK;
+    }
+
+    char response[128];
+    snprintf(response, sizeof(response),
+             "{\"ok\":true,\"data\":{\"total_bytes\":%llu,\"free_bytes\":%llu}}",
+             (unsigned long long)total_bytes,
+             (unsigned long long)free_bytes);
     send_json(req, 200, response);
     return ESP_OK;
 }

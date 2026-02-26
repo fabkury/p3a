@@ -338,7 +338,7 @@ static void refresh_task(void *arg)
 
     ESP_LOGI(TAG, "Refresh task started");
     s_task_running = true;
-    uint32_t min_time_to_stale = UINT32_MAX;
+    time_t earliest_stale_time = 0;  // Absolute time when soonest channel goes stale
 
     while (s_task_running) {
         // Wait for work or shutdown
@@ -485,13 +485,16 @@ static void refresh_task(void *arg)
                 if (s_last_full_refresh_complete == 0) {
                     s_last_full_refresh_complete = now;
                     // Compute adaptive delay from freshness tracking
-                    if (min_time_to_stale != UINT32_MAX) {
-                        s_next_refresh_delay = min_time_to_stale;
-                        if (s_next_refresh_delay < REFRESH_MIN_DELAY_SECONDS) {
+                    // Use absolute stale time so elapsed processing time is
+                    // automatically accounted for (no stale relative deltas).
+                    if (earliest_stale_time > 0 && now > 0) {
+                        int32_t remaining_sec = (int32_t)(earliest_stale_time - now);
+                        if (remaining_sec < (int32_t)REFRESH_MIN_DELAY_SECONDS) {
                             s_next_refresh_delay = REFRESH_MIN_DELAY_SECONDS;
-                        }
-                        if (s_next_refresh_delay > REFRESH_INTERVAL_SECONDS) {
+                        } else if ((uint32_t)remaining_sec > REFRESH_INTERVAL_SECONDS) {
                             s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
+                        } else {
+                            s_next_refresh_delay = (uint32_t)remaining_sec;
                         }
                     } else {
                         s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
@@ -506,7 +509,7 @@ static void refresh_task(void *arg)
                     }
                     s_last_full_refresh_complete = 0;
                     s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
-                    min_time_to_stale = UINT32_MAX;
+                    earliest_stale_time = 0;
                     xSemaphoreGive(state->mutex);
                     ps_refresh_signal_work();
                     vTaskDelay(pdMS_TO_TICKS(100));
@@ -571,7 +574,8 @@ static void refresh_task(void *arg)
                 giphy_meta.last_refresh > 0 && now > 0 &&
                 (now - giphy_meta.last_refresh) < (time_t)interval) {
                 uint32_t remaining = interval - (uint32_t)(now - giphy_meta.last_refresh);
-                if (remaining < min_time_to_stale) min_time_to_stale = remaining;
+                time_t stale_at = giphy_meta.last_refresh + (time_t)interval;
+                if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
                 ESP_LOGI(TAG, "Giphy channel '%s' still fresh (last refresh %lds ago, interval %lus, stale in %lus), skipping",
                          channel_id, (long)(now - giphy_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
                 err = ESP_OK;  // Treat as successful (no-op)
@@ -603,7 +607,8 @@ static void refresh_task(void *arg)
                 }
                 if (err == ESP_OK) {
                     config_store_set_giphy_refresh_allow_override(false);
-                    if (interval < min_time_to_stale) min_time_to_stale = interval;
+                    time_t stale_at = time(NULL) + (time_t)interval;
+                    if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
                 } else if (err == ESP_ERR_NOT_ALLOWED) {
                     // Check if this is a cancellation (from giphy_cancel_refresh)
                     // vs an invalid API key (HTTP 401/403 from giphy_fetch_page)
@@ -647,14 +652,16 @@ static void refresh_task(void *arg)
                     mkx_meta.last_refresh > 0 &&
                     (now - mkx_meta.last_refresh) < (time_t)interval) {
                     uint32_t remaining = interval - (uint32_t)(now - mkx_meta.last_refresh);
-                    if (remaining < min_time_to_stale) min_time_to_stale = remaining;
+                    time_t stale_at = mkx_meta.last_refresh + (time_t)interval;
+                    if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
                     ESP_LOGI(TAG, "Makapix channel '%s' still fresh (last refresh %lds ago, interval %lus, stale in %lus), skipping",
                              channel_id, (long)(now - mkx_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
                     err = ESP_OK;
                 } else {
                     err = refresh_makapix_channel(ch);
-                    if (err == ESP_ERR_NOT_FINISHED && interval < min_time_to_stale) {
-                        min_time_to_stale = interval;
+                    if (err == ESP_ERR_NOT_FINISHED) {
+                        time_t stale_at = time(NULL) + (time_t)interval;
+                        if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
                     }
                 }
             }

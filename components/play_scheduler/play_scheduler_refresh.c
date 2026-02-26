@@ -37,11 +37,11 @@ static const char *TAG = "ps_refresh";
 
 // Task configuration
 #define REFRESH_TASK_STACK_SIZE 8192
-#define REFRESH_CHECK_INTERVAL_MS 1000
+#define REFRESH_CHECK_INTERVAL_MS 2000
 
 // Periodic refresh configuration
 #define REFRESH_INTERVAL_SECONDS 3600  // 1 hour
-#define REFRESH_MIN_DELAY_SECONDS 60   // Floor to prevent tight loops
+#define REFRESH_MIN_DELAY_SECONDS 20   // Floor to prevent tight loops
 
 // Concurrency control
 #define REFRESH_MAX_CONCURRENT 2

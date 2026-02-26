@@ -41,6 +41,7 @@ static const char *TAG = "ps_refresh";
 
 // Periodic refresh configuration
 #define REFRESH_INTERVAL_SECONDS 3600  // 1 hour
+#define REFRESH_MIN_DELAY_SECONDS 60   // Floor to prevent tight loops
 
 // Concurrency control
 #define REFRESH_MAX_CONCURRENT 2
@@ -68,6 +69,7 @@ static EventGroupHandle_t s_refresh_events = NULL;
 static volatile bool s_task_running = false;
 static volatile bool s_sntp_synced_observed = false;
 static time_t s_last_full_refresh_complete = 0;
+static uint32_t s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
 
 // PSRAM-backed stack for refresh task
 static StackType_t *s_refresh_stack = NULL;
@@ -336,6 +338,7 @@ static void refresh_task(void *arg)
 
     ESP_LOGI(TAG, "Refresh task started");
     s_task_running = true;
+    uint32_t min_time_to_stale = UINT32_MAX;
 
     while (s_task_running) {
         // Wait for work or shutdown
@@ -481,15 +484,29 @@ static void refresh_task(void *arg)
                 time_t now = time(NULL);
                 if (s_last_full_refresh_complete == 0) {
                     s_last_full_refresh_complete = now;
-                    ESP_LOGI(TAG, "All channels refreshed. Next periodic refresh in %d seconds.",
-                             REFRESH_INTERVAL_SECONDS);
-                } else if (now - s_last_full_refresh_complete >= REFRESH_INTERVAL_SECONDS) {
-                    ESP_LOGI(TAG, "Starting periodic refresh cycle (%d seconds elapsed)",
-                             REFRESH_INTERVAL_SECONDS);
+                    // Compute adaptive delay from freshness tracking
+                    if (min_time_to_stale != UINT32_MAX) {
+                        s_next_refresh_delay = min_time_to_stale;
+                        if (s_next_refresh_delay < REFRESH_MIN_DELAY_SECONDS) {
+                            s_next_refresh_delay = REFRESH_MIN_DELAY_SECONDS;
+                        }
+                        if (s_next_refresh_delay > REFRESH_INTERVAL_SECONDS) {
+                            s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
+                        }
+                    } else {
+                        s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
+                    }
+                    ESP_LOGI(TAG, "All channels refreshed. Next periodic refresh in %lu seconds.",
+                             (unsigned long)s_next_refresh_delay);
+                } else if (now - s_last_full_refresh_complete >= (time_t)s_next_refresh_delay) {
+                    ESP_LOGI(TAG, "Starting periodic refresh cycle (%lu seconds elapsed)",
+                             (unsigned long)s_next_refresh_delay);
                     for (size_t i = 0; i < state->channel_count; i++) {
                         state->channels[i].refresh_pending = true;
                     }
                     s_last_full_refresh_complete = 0;
+                    s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
+                    min_time_to_stale = UINT32_MAX;
                     xSemaphoreGive(state->mutex);
                     ps_refresh_signal_work();
                     vTaskDelay(pdMS_TO_TICKS(100));
@@ -553,8 +570,10 @@ static void refresh_task(void *arg)
                 cache_has_entries &&
                 giphy_meta.last_refresh > 0 && now > 0 &&
                 (now - giphy_meta.last_refresh) < (time_t)interval) {
-                ESP_LOGI(TAG, "Giphy channel '%s' still fresh (last refresh %lds ago, interval %lus), skipping",
-                         channel_id, (long)(now - giphy_meta.last_refresh), (unsigned long)interval);
+                uint32_t remaining = interval - (uint32_t)(now - giphy_meta.last_refresh);
+                if (remaining < min_time_to_stale) min_time_to_stale = remaining;
+                ESP_LOGI(TAG, "Giphy channel '%s' still fresh (last refresh %lds ago, interval %lus, stale in %lus), skipping",
+                         channel_id, (long)(now - giphy_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
                 err = ESP_OK;  // Treat as successful (no-op)
             } else {
                 if (allow_override) {
@@ -584,6 +603,7 @@ static void refresh_task(void *arg)
                 }
                 if (err == ESP_OK) {
                     config_store_set_giphy_refresh_allow_override(false);
+                    if (interval < min_time_to_stale) min_time_to_stale = interval;
                 } else if (err == ESP_ERR_NOT_ALLOWED) {
                     // Check if this is a cancellation (from giphy_cancel_refresh)
                     // vs an invalid API key (HTTP 401/403 from giphy_fetch_page)
@@ -626,11 +646,16 @@ static void refresh_task(void *arg)
                 if (cache_has_entries &&
                     mkx_meta.last_refresh > 0 &&
                     (now - mkx_meta.last_refresh) < (time_t)interval) {
-                    ESP_LOGI(TAG, "Makapix channel '%s' still fresh (last refresh %lds ago, interval %lus), skipping",
-                             channel_id, (long)(now - mkx_meta.last_refresh), (unsigned long)interval);
+                    uint32_t remaining = interval - (uint32_t)(now - mkx_meta.last_refresh);
+                    if (remaining < min_time_to_stale) min_time_to_stale = remaining;
+                    ESP_LOGI(TAG, "Makapix channel '%s' still fresh (last refresh %lds ago, interval %lus, stale in %lus), skipping",
+                             channel_id, (long)(now - mkx_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
                     err = ESP_OK;
                 } else {
                     err = refresh_makapix_channel(ch);
+                    if (err == ESP_ERR_NOT_FINISHED && interval < min_time_to_stale) {
+                        min_time_to_stale = interval;
+                    }
                 }
             }
         }
@@ -810,6 +835,7 @@ void ps_refresh_reset_timer(void)
     // Reset the periodic refresh timer - called when a new scheduler command is executed
     // This ensures immediate refresh happens and the 1-hour timer starts fresh
     s_last_full_refresh_complete = 0;
+    s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
     s_sntp_synced_observed = false;
     ESP_LOGD(TAG, "Refresh timer reset");
 }

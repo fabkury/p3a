@@ -362,6 +362,9 @@ static void refresh_task(void *arg)
         // on-disk last_refresh from the previous session.
         if (!s_sntp_synced_observed && sntp_sync_is_synchronized()) {
             s_sntp_synced_observed = true;
+            // Reset periodic timer so the SNTP-triggered round recalculates
+            // the adaptive delay with valid timestamps.
+            s_last_full_refresh_complete = 0;
             ESP_LOGI(TAG, "SNTP synchronized - re-evaluating channel freshness");
             xSemaphoreTake(state->mutex, portMAX_DELAY);
             for (size_t i = 0; i < state->channel_count; i++) {

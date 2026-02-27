@@ -458,8 +458,9 @@ static void refresh_task(void *arg)
                 extern void download_manager_rescan(void);
                 download_manager_rescan();
 
-                play_scheduler_next(NULL);
-                state->playback_triggered = true;
+                if (play_scheduler_next(NULL) == ESP_OK) {
+                    state->playback_triggered = true;
+                }
             }
         }
 
@@ -746,8 +747,9 @@ static void refresh_task(void *arg)
             }
 
             // Trigger playback
-            play_scheduler_next(NULL);
-            state->playback_triggered = true;
+            if (play_scheduler_next(NULL) == ESP_OK) {
+                state->playback_triggered = true;
+            }
         }
 
         if (err != ESP_OK && err != ESP_ERR_NOT_FINISHED) {

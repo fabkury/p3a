@@ -82,11 +82,13 @@ typedef struct {
     dl_channel_state_t channels[DL_MAX_CHANNELS];
     size_t channel_count;
     size_t round_robin_idx;
+    uint32_t epoch;
 } dl_snapshot_t;
 
 static dl_channel_state_t s_dl_channels[DL_MAX_CHANNELS];
 static size_t s_dl_channel_count = 0;
 static size_t s_dl_round_robin_idx = 0;
+static uint32_t s_dl_epoch = 0;  // Incremented on channel/cursor changes; guards stale commits
 
 static TaskHandle_t s_task = NULL;
 static SemaphoreHandle_t s_mutex = NULL;
@@ -204,6 +206,7 @@ static bool dl_take_snapshot(dl_snapshot_t *out_snapshot)
         if (s_dl_channel_count > 0) {
             out_snapshot->channel_count = s_dl_channel_count;
             out_snapshot->round_robin_idx = s_dl_round_robin_idx;
+            out_snapshot->epoch = s_dl_epoch;
             memcpy(out_snapshot->channels, s_dl_channels,
                    s_dl_channel_count * sizeof(dl_channel_state_t));
             success = true;
@@ -233,9 +236,9 @@ static void dl_commit_state(const dl_snapshot_t *snapshot, size_t new_round_robi
     if (!snapshot) return;
 
     if (s_mutex && xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        // Only commit if channel count hasn't changed
-        // This indicates no channel switch occurred during our operation
-        if (s_dl_channel_count == snapshot->channel_count) {
+        // Only commit if epoch matches — any channel switch, cursor reset,
+        // or rescan since our snapshot invalidates our state
+        if (s_dl_epoch == snapshot->epoch) {
             s_dl_round_robin_idx = new_round_robin_idx;
 
             // Also update cursor positions for channels we scanned
@@ -791,6 +794,7 @@ void download_manager_rescan(void)
     // Reset cursors AND wake the download task to rescan from beginning.
     // Use this ONLY when new content has been added to the channel index.
     if (s_mutex && xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        s_dl_epoch++;
         ESP_LOGD(TAG, "rescan: resetting cursors for %zu channel(s)", s_dl_channel_count);
         for (size_t i = 0; i < s_dl_channel_count; i++) {
             s_dl_channels[i].dl_cursor = 0;
@@ -844,6 +848,7 @@ void download_manager_set_channels(const char **channel_ids, size_t count)
         }
         s_dl_channel_count = (count < DL_MAX_CHANNELS) ? count : DL_MAX_CHANNELS;
         s_dl_round_robin_idx = 0;
+        s_dl_epoch++;
 
         for (size_t i = 0; i < s_dl_channel_count; i++) {
             strlcpy(s_dl_channels[i].channel_id, channel_ids[i], sizeof(s_dl_channels[i].channel_id));
@@ -865,6 +870,7 @@ void download_manager_set_channels(const char **channel_ids, size_t count)
 void download_manager_reset_cursors(void)
 {
     if (s_mutex && xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        s_dl_epoch++;
         for (size_t i = 0; i < s_dl_channel_count; i++) {
             s_dl_channels[i].dl_cursor = 0;
             s_dl_channels[i].scan_epoch_start = 0;

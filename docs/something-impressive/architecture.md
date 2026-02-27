@@ -53,31 +53,6 @@ critical subsystems fail.
 
 ---
 
-### 2. Play Scheduler Empty Playlist Deadlock
-
-**File:** `components/play_scheduler/play_scheduler_navigation.c:150-192`
-
-After 10 consecutive missing files, the scheduler gives up with
-`ESP_ERR_NOT_FOUND` and no fallback:
-
-```c
-#define PS_MAX_MISSING_FILE_RETRIES 10
-while (missing_retries < PS_MAX_MISSING_FILE_RETRIES) {
-    // ... evict and retry
-}
-if (missing_retries >= PS_MAX_MISSING_FILE_RETRIES) {
-    result = ESP_ERR_NOT_FOUND;  // gives up
-}
-```
-
-No automatic switch to SD card files. No error UI.
-
-**Impact:** Blank screen with no user feedback when channel metadata is stale.
-
-**Recommendation:** Add automatic SD card fallback or persistent error UI.
-
----
-
 ## Medium
 
 ### 3. `P3A_STATE_BOOT` is Unreachable
@@ -91,54 +66,6 @@ function. Line 398 in `p3a_state.c` initializes directly to
 **Impact:** Dead code. Confusing for maintainers reading the state diagram.
 
 **Recommendation:** Remove it, or implement a proper boot state transition.
-
----
-
-### 4. Unsafe Mutex Fallback in Frame Callback Setter
-
-**File:** `main/display_renderer.c:270-280`
-
-```c
-void display_renderer_set_frame_callback(...) {
-    if (g_display_mutex && xSemaphoreTake(...) == pdTRUE) {
-        g_display_frame_callback = callback;
-        xSemaphoreGive(g_display_mutex);
-    } else {
-        g_display_frame_callback = callback;  // WRITES WITHOUT LOCK
-    }
-}
-```
-
-If the mutex take fails, the function writes the callback pointer anyway without
-synchronization. This races with the render task.
-
-**Impact:** Potential function pointer corruption.
-
-**Recommendation:** Return an error instead of proceeding without the lock.
-
----
-
-### 5. Connectivity State Race
-
-**File:** `components/p3a_core/p3a_state.c:888-949`
-
-```c
-void p3a_state_on_wifi_connected(void) {
-    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
-    set_connectivity_locked(P3A_CONNECTIVITY_NO_INTERNET);
-    xSemaphoreGive(s_state.mutex);
-    p3a_state_check_internet();  // OUTSIDE MUTEX
-}
-```
-
-The internet check runs after releasing the mutex. Other threads can read an
-inconsistent connectivity level between lines 897-899. Same pattern in
-`on_mqtt_disconnected` (lines 925-950).
-
-**Impact:** Race condition producing inconsistent connectivity state reads.
-
-**Recommendation:** Either run the internet check inside the mutex, or use an
-event-driven pattern that doesn't expose intermediate state.
 
 ---
 
@@ -218,11 +145,6 @@ independently.
 ### Initialization Order (p3a_main.c:398-562)
 
 Notable ordering concerns:
-
-1. **Scheduler starts before LCD init:** `playback_service_init()` (line 471)
-   starts the play scheduler. `app_lcd_init()` happens later (line 500). The
-   scheduler may try to swap animations before the display is ready. Mitigated
-   by a weak NULL check on `display_panel`, but fragile.
 
 2. **Event bus subscribers registered before producers:** Event bus handlers are
    registered (lines 446-461) before WiFi and MQTT are initialized (line 528).

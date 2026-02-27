@@ -74,27 +74,6 @@ leak exists.
 
 ## Medium
 
-### 6. Unchecked `snprintf` Return Values
-
-**File:** `main/animation_player_loader.c:116, 393-397, 452`
-
-`snprintf()` return values are not checked for truncation:
-
-```c
-snprintf(temp_path, sizeof(temp_path), "%s/upload_%llu.tmp", DOWNLOADS_DIR,
-         (unsigned long long)(esp_timer_get_time() / 1000));
-```
-
-If `DOWNLOADS_DIR` path is long, the timestamp is silently truncated. Same issue
-at lines 393 (`full_path[512]`) and 452 (`subdir_path[512]`) with recursive
-subdirectory paths.
-
-**Impact:** Silent path truncation leading to file operations on wrong paths —
-potential corruption or security issues.
-
-**Fix:** Check `ret >= sizeof(buf)` and return an error on truncation.
-
----
 
 ### 7. Stack Overflow Risk in Directory Traversal
 

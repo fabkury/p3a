@@ -450,9 +450,6 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     if (strcmp(uri, "/settings/dwell_time") == 0) {
         return h_get_dwell_time(req);
     }
-    if (strcmp(uri, "/settings/global_seed") == 0) {
-        return h_get_global_seed(req);
-    }
     if (strcmp(uri, "/settings/play_order") == 0) {
         return h_get_play_order(req);
     }
@@ -578,9 +575,6 @@ static esp_err_t h_put_router(httpd_req_t *req) {
     }
     if (strcmp(uri, "/settings/dwell_time") == 0) {
         return h_put_dwell_time(req);
-    }
-    if (strcmp(uri, "/settings/global_seed") == 0) {
-        return h_put_global_seed(req);
     }
     if (strcmp(uri, "/settings/play_order") == 0) {
         return h_put_play_order(req);

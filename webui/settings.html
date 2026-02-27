@@ -147,18 +147,6 @@ body {
     background: #ccc;
     cursor: not-allowed;
 }
-.seed-row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-.seed-input {
-    flex: 1;
-    padding: 8px 10px;
-    border-radius: 8px;
-    border: 1px solid #ddd;
-    font-size: 0.9rem;
-}
 .btn {
     background: #667eea;
     color: white;
@@ -330,14 +318,6 @@ body {
     <div class="file-name" id="sd-hint" style="margin-bottom:12px;">Storage path on SD card. Reboot required. Existing files will not be moved.</div>
     <button class="btn danger-btn" id="reboot-btn" onclick="reboot()">Reboot</button>
 </div>
-<div class="section">
-    <h3>Global Seed</h3>
-    <div class="seed-row">
-        <input class="seed-input" id="seed" type="number" min="0" step="1" placeholder="Seed (uint32)">
-        <button class="btn" id="seed-save" onclick="saveSeed()">Save</button>
-    </div>
-    <div class="file-name">Persisted, takes effect after reboot</div>
-</div>
 <div class="footer">
     <button class="footer-btn" onclick="window.location.href='/'">Home</button>
 </div>
@@ -491,55 +471,6 @@ function saveSdRoot() {
         showToast('Save failed (HTTP ' + status + ')', true);
     });
 }
-function loadSeed() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/settings/global_seed', true);
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            try {
-                var r = JSON.parse(xhr.responseText);
-                if (xhr.status >= 200 && xhr.status < 300 && r.ok) {
-                    document.getElementById('seed').value = r.data.global_seed;
-                } else {
-                    showToast('Failed to load seed', true);
-                }
-            } catch (e) {
-                showToast('Parse error', true);
-            }
-        }
-    };
-    xhr.send();
-}
-function saveSeed() {
-    var btn = document.getElementById('seed-save');
-    btn.disabled = true;
-    var v = document.getElementById('seed').value;
-    var n = parseInt(v, 10);
-    if (isNaN(n) || n < 0) {
-        showToast('Invalid seed', true);
-        btn.disabled = false;
-        return;
-    }
-    var xhr = new XMLHttpRequest();
-    xhr.open('PUT', '/settings/global_seed', true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            btn.disabled = false;
-            try {
-                var r = JSON.parse(xhr.responseText);
-                if (xhr.status >= 200 && xhr.status < 300 && r.ok) {
-                    showToast('Saved. Reboot to apply.', false);
-                } else {
-                    showToast('Save failed', true);
-                }
-            } catch (e) {
-                showToast('Parse error', true);
-            }
-        }
-    };
-    xhr.send(JSON.stringify({global_seed: n}));
-}
 function saveChannelSelectMode(val) {
     mergeConfig({channel_select_mode: parseInt(val, 10)}, function() {
         showToast(val === '1' ? 'Stochastic mode' : 'SWRR mode', false);
@@ -647,7 +578,6 @@ function loadStorageInfo() {
     xhr.send();
 }
 loadAllConfig();
-loadSeed();
 loadStorageInfo();
 </script>
 </body>

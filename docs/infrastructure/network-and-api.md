@@ -69,8 +69,6 @@ The HTTP server is implemented across multiple source files in `components/http_
 |--------|----------|-------------|
 | GET | `/settings/dwell_time` | Get dwell time |
 | PUT | `/settings/dwell_time` | Set dwell time |
-| GET | `/settings/global_seed` | Get global seed |
-| PUT | `/settings/global_seed` | Set global seed |
 | GET | `/settings/play_order` | Get play order |
 | PUT | `/settings/play_order` | Set play order |
 | GET | `/settings/giphy_refresh_override` | Get Giphy refresh override |

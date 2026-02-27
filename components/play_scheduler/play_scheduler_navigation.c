@@ -21,12 +21,8 @@
 #include "content_cache.h"
 #include "channel_cache.h"
 #include "download_manager.h"
-#include "sntp_sync.h"
 #include "esp_log.h"
 #include <string.h>
-#include <sys/stat.h>
-#include <utime.h>
-#include <time.h>
 
 static const char *TAG = "ps_navigation";
 
@@ -106,16 +102,11 @@ static esp_err_t prepare_and_request_swap(ps_state_t *state, const ps_artwork_t 
     }
 
     if (animation_player_request_swap) {
-        esp_err_t err = animation_player_request_swap(&request);
-        if (err == ESP_OK) {
-            // Update file mtime for LRU tracking (only with valid system time)
-            if (sntp_sync_is_synchronized()) {
-                time_t now = time(NULL);
-                struct utimbuf times = { now, now };
-                utime(artwork->filepath, &times);
-            }
-        }
-        return err;
+        // File mtime is updated for LRU tracking by the loader task AFTER
+        // the file bytes are successfully read and decoded.  This ensures
+        // files that fail to load are not touched and become natural
+        // candidates for storage eviction.
+        return animation_player_request_swap(&request);
     } else {
         ESP_LOGW(TAG, "animation_player_request_swap not available");
         return ESP_ERR_NOT_SUPPORTED;

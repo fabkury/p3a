@@ -14,7 +14,10 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <utime.h>
+#include <time.h>
 #include "freertos/task.h"
+#include "sntp_sync.h"
 
 // Some tooling configurations may not resolve component include paths reliably for C files.
 // Keep explicit prototypes here to avoid "implicit declaration" diagnostics.
@@ -351,6 +354,15 @@ void animation_loader_task(void *arg)
             // Clean up and display error
             discard_failed_swap_request(err);
             continue;
+        }
+
+        // Touch file mtime for LRU tracking AFTER successful load.
+        // This ensures files that fail to load (corrupt, too large) are not
+        // touched, making them natural candidates for storage eviction.
+        if (filepath && sntp_sync_is_synchronized()) {
+            time_t now = time(NULL);
+            struct utimbuf times = { now, now };
+            utime(filepath, &times);
         }
 
         if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {

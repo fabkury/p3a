@@ -223,12 +223,6 @@ body {
     background: #f44336;
     color: white;
 }
-.danger-zone {
-    border: 1px solid #e74c3c;
-}
-.danger-zone h3 {
-    color: #c0392b;
-}
 .danger-btn {
     background: #e74c3c;
     width: 100%;
@@ -319,17 +313,15 @@ body {
         <div style="font-size:0.75rem;color:#667eea;font-weight:500;" id="storage-detail"></div>
     </div>
     <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
-        <label class="toggle-label" for="cache-size">Channel cache size</label>
+        <label class="toggle-label" for="cache-size">Makapix channel cache size</label>
         <div style="display:flex;gap:8px;align-items:center;">
             <input class="bg-input" id="cache-size" type="number" min="32" max="4096" style="max-width:90px;" aria-label="Channel cache size">
             <span style="color:#666;font-size:0.8rem;">artworks</span>
             <button class="btn" onclick="saveCacheSize()">Save</button>
         </div>
     </div>
-    <div class="file-name" id="cache-hint">Max artworks per channel (32-4096). Reboot recommended after change.</div>
-</div>
-<div class="section danger-zone">
-    <h3>Danger Zone</h3>
+    <div class="file-name" id="cache-hint">Max artworks per channel (32-4096). Reboot required after change.</div>
+    <h4 style="margin:12px 0 6px;font-size:0.8rem;font-weight:500;color:#333;text-transform:uppercase;letter-spacing:0.05em;">Storage path</h4>
     <div class="file-name" style="margin-bottom:12px;color:#b8860b;">Changing the path below does not delete any files. To delete the folder, you have to do so manually. You can access your p3a's SD card by connecting to USB-C using the USB-HS port (the port close to the buttons).</div>
     <div class="bg-row">
         <input class="bg-input" id="sd-root" type="text" style="flex:1;max-width:none;" placeholder="/p3a">

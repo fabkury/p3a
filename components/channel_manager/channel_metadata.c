@@ -72,18 +72,44 @@ esp_err_t channel_metadata_save(const char *channel_id,
     free(json_str);
 
     // On FAT filesystems (SD card), rename() fails if destination exists.
-    // Delete the destination first, then rename.
+    // Use a backup approach so the old metadata is preserved when rename fails:
+    //   1. Rename old file to .bak
+    //   2. Rename temp to final
+    //   3. On success delete .bak; on failure restore .bak
+    char bak_path[264];
+    snprintf(bak_path, sizeof(bak_path), "%s.bak", meta_path);
+    unlink(bak_path);  // clean stale backup
+
+    bool had_backup = false;
     struct stat st;
     if (stat(meta_path, &st) == 0) {
-        if (unlink(meta_path) != 0) {
-            ESP_LOGW(TAG, "Failed to remove old metadata file: %s (errno=%d)", meta_path, errno);
+        if (rename(meta_path, bak_path) == 0) {
+            had_backup = true;
+        } else {
+            // rename-to-backup failed; fall back to unlink (old behaviour)
+            ESP_LOGW(TAG, "Backup rename failed (%s -> %s, errno=%d), falling back to unlink",
+                     meta_path, bak_path, errno);
+            unlink(meta_path);
         }
     }
 
     if (rename(temp_path, meta_path) != 0) {
         ESP_LOGE(TAG, "Rename failed: %s -> %s (errno=%d)", temp_path, meta_path, errno);
         unlink(temp_path);
+        if (had_backup) {
+            // Restore old metadata so last_refresh is not lost
+            if (rename(bak_path, meta_path) != 0) {
+                ESP_LOGE(TAG, "Backup restore also failed: %s -> %s (errno=%d)",
+                         bak_path, meta_path, errno);
+            } else {
+                ESP_LOGW(TAG, "Restored previous metadata from backup");
+            }
+        }
         return ESP_FAIL;
+    }
+
+    if (had_backup) {
+        unlink(bak_path);
     }
 
     return ESP_OK;
@@ -103,14 +129,9 @@ esp_err_t channel_metadata_load(const char *channel_id,
     char meta_path[256];
     snprintf(meta_path, sizeof(meta_path), "%s/%s.json", channels_path, channel_id);
 
-    // Clean up orphan .tmp file if it exists (lazy cleanup)
-    char tmp_path[260];
-    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", meta_path);
-    struct stat tmp_st;
-    if (stat(tmp_path, &tmp_st) == 0 && S_ISREG(tmp_st.st_mode)) {
-        ESP_LOGD(TAG, "Removing orphan temp file: %s", tmp_path);
-        unlink(tmp_path);
-    }
+    // Note: orphan .tmp files are cleaned up by the save function (line 59)
+    // before each write. Do NOT clean them up here — concurrent loads would
+    // race with an in-progress save and delete its temp file mid-rename.
 
     FILE *f = fopen(meta_path, "r");
     if (!f) {

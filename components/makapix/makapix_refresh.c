@@ -214,6 +214,25 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
         }
         handle = s_refresh_handle_promoted;
     } else {
+        // Check for existing handle with the same channel_id
+        for (size_t i = 0; i < s_tracked_refresh_count; i++) {
+            if (s_tracked_refresh_handles[i] &&
+                strcmp(makapix_channel_get_id(s_tracked_refresh_handles[i]), channel_id) == 0) {
+                if (makapix_channel_is_refreshing(s_tracked_refresh_handles[i])) {
+                    // Refresh already in progress for this channel — skip
+                    ESP_LOGI(MAKAPIX_TAG, "Refresh already in progress for %s, skipping", channel_id);
+                    return ESP_OK;
+                }
+                // Old task exited — stop+destroy the stale handle and remove from array
+                ESP_LOGD(MAKAPIX_TAG, "Cleaning up stale refresh handle for %s (slot %zu)", channel_id, i);
+                makapix_channel_stop_refresh(s_tracked_refresh_handles[i]);
+                channel_destroy(s_tracked_refresh_handles[i]);
+                s_tracked_refresh_handles[i] = s_tracked_refresh_handles[--s_tracked_refresh_count];
+                s_tracked_refresh_handles[s_tracked_refresh_count] = NULL;
+                break;
+            }
+        }
+
         // For user/hashtag channels, create a handle and track it for cancellation
         handle = makapix_channel_create(channel_id, channel_name, vault_path, channels_path);
         if (!handle) {

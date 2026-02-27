@@ -11,7 +11,6 @@
 #include "pico8_render.h"
 #include "app_lcd.h"
 #include "play_scheduler.h"
-#include "makapix_channel_events.h"
 #include "download_manager.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -210,9 +209,6 @@ void pico8_stream_exit_mode(void)
 
     // Resume auto-swap timer
     play_scheduler_resume_auto_swap();
-
-    // Trigger immediate channel refresh (wakes refresh task from wait interval)
-    makapix_channel_signal_refresh_immediate();
 
     // Wake download task to resume downloads
     download_manager_wake();

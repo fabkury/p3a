@@ -226,9 +226,6 @@ void refresh_task_impl(void *pvParameters)
 
     const size_t TARGET_COUNT = config_store_get_channel_cache_size();
     
-    // Get refresh interval from NVS (defaults to 3600 = 1 hour)
-    uint32_t refresh_interval_sec = config_store_get_refresh_interval_sec();
-    
     while (ch->refreshing) {
         // Check for PICO-8 mode - exit refresh cycle cleanly
         if (p3a_state_get() == P3A_STATE_PICO8_STREAMING) {
@@ -385,28 +382,7 @@ void refresh_task_impl(void *pvParameters)
         // Signal Play Scheduler that this channel's refresh is complete
         makapix_ps_refresh_mark_complete(ch->channel_id);
 
-        // Wait for next refresh cycle - can be woken by REFRESH_IMMEDIATE signal
-        uint32_t elapsed = 0;
-        while (elapsed < refresh_interval_sec && ch->refreshing) {
-            // Check for immediate refresh request (e.g., after PICO-8 exit)
-            if (makapix_channel_check_and_clear_refresh_immediate()) {
-                ESP_LOGI(TAG, "Immediate refresh requested, starting now");
-                break;
-            }
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            elapsed++;
-        }
-        
-        if (!ch->refreshing) {
-            break;
-        }
-        
-        // If MQTT disconnected, wait for reconnection (also wakes on shutdown signal)
-        if (!makapix_channel_is_mqtt_ready()) {
-            if (!makapix_channel_wait_for_mqtt_or_shutdown(portMAX_DELAY)) {
-                break;
-            }
-        }
+        break;  // Exit after single cycle — Play Scheduler handles re-scheduling
     }
     
     ch->refreshing = false;

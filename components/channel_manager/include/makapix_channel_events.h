@@ -32,7 +32,6 @@ extern "C" {
 #define MAKAPIX_EVENT_FILE_AVAILABLE    (1 << 8)
 #define MAKAPIX_EVENT_REFRESH_SHUTDOWN  (1 << 9)
 #define MAKAPIX_EVENT_PS_CHANNEL_REFRESH_DONE (1 << 10)  // Play Scheduler channel refresh complete
-#define MAKAPIX_EVENT_REFRESH_IMMEDIATE       (1 << 11)  // Request immediate channel refresh (PICO-8 exit)
 
 /**
  * @brief Initialize the Makapix channel events system
@@ -274,23 +273,6 @@ bool makapix_channel_wait_for_ps_refresh_done(uint32_t timeout_ms);
  */
 void makapix_channel_clear_ps_refresh_done(void);
 
-/**
- * @brief Signal that an immediate channel refresh is requested
- *
- * Called when exiting PICO-8 mode to trigger immediate refresh
- * instead of waiting for the normal refresh interval.
- */
-void makapix_channel_signal_refresh_immediate(void);
-
-/**
- * @brief Check and clear the immediate refresh flag
- *
- * Called by refresh task to check if immediate refresh was requested.
- * Atomically checks and clears the flag.
- *
- * @return true if immediate refresh was requested
- */
-bool makapix_channel_check_and_clear_refresh_immediate(void);
 
 #ifdef __cplusplus
 }

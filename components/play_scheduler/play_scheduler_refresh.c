@@ -68,6 +68,7 @@ static TaskHandle_t s_refresh_task = NULL;
 static EventGroupHandle_t s_refresh_events = NULL;
 static volatile bool s_task_running = false;
 static volatile bool s_sntp_synced_observed = false;
+static bool s_pico8_was_active = false;
 static time_t s_last_full_refresh_complete = 0;
 static uint32_t s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
 
@@ -379,6 +380,30 @@ static void refresh_task(void *arg)
                 }
             }
             xSemaphoreGive(state->mutex);
+        }
+
+        // One-shot: when PICO-8 mode ends, re-queue Makapix channels for refresh.
+        // The refresh tasks exit after one cycle, so after PICO-8 paused them
+        // the Play Scheduler must re-trigger them.
+        {
+            bool pico8_active = (p3a_state_get() == P3A_STATE_PICO8_STREAMING);
+            if (s_pico8_was_active && !pico8_active) {
+                ESP_LOGI(TAG, "PICO-8 mode ended - re-evaluating channel freshness");
+                s_last_full_refresh_complete = 0;
+                xSemaphoreTake(state->mutex, portMAX_DELAY);
+                for (size_t i = 0; i < state->channel_count; i++) {
+                    ps_channel_type_t t = state->channels[i].type;
+                    if ((t == PS_CHANNEL_TYPE_USER ||
+                         t == PS_CHANNEL_TYPE_HASHTAG ||
+                         t == PS_CHANNEL_TYPE_NAMED) &&
+                        !state->channels[i].refresh_in_progress &&
+                        !state->channels[i].refresh_pending) {
+                        state->channels[i].refresh_pending = true;
+                    }
+                }
+                xSemaphoreGive(state->mutex);
+            }
+            s_pico8_was_active = pico8_active;
         }
 
         // Check for async Makapix refresh completions (non-blocking poll)
@@ -849,6 +874,7 @@ void ps_refresh_reset_timer(void)
     s_last_full_refresh_complete = 0;
     s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
     s_sntp_synced_observed = false;
+    s_pico8_was_active = false;
     ESP_LOGD(TAG, "Refresh timer reset");
 }
 

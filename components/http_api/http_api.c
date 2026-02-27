@@ -283,18 +283,24 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
 
         ESP_LOGI(HTTP_API_TAG, "play_channel: switched to %s (playset=%s)", channel, playset_name);
     } else if (strcmp(command_type, "show_artwork") == 0) {
-        cJSON *art_url = cJSON_GetObjectItem(payload, "art_url");
         cJSON *storage_key = cJSON_GetObjectItem(payload, "storage_key");
+        cJSON *storage_shard = cJSON_GetObjectItem(payload, "storage_shard");
+        cJSON *native_format = cJSON_GetObjectItem(payload, "native_format");
         cJSON *post_id = cJSON_GetObjectItem(payload, "post_id");
-        
-        if (art_url && cJSON_IsString(art_url) && 
-            storage_key && cJSON_IsString(storage_key)) {
-            
-            const char *url = cJSON_GetStringValue(art_url);
+
+        if (storage_key && cJSON_IsString(storage_key) &&
+            storage_shard && cJSON_IsString(storage_shard) &&
+            native_format && cJSON_IsString(native_format)) {
+
             const char *key = cJSON_GetStringValue(storage_key);
+            const char *shard = cJSON_GetStringValue(storage_shard);
+            const char *fmt = cJSON_GetStringValue(native_format);
             int32_t pid = post_id && cJSON_IsNumber(post_id) ? (int32_t)cJSON_GetNumberValue(post_id) : 0;
-            
-            makapix_show_artwork(pid, key, url);
+
+            char art_url[256];
+            snprintf(art_url, sizeof(art_url), "/api/vault/%s/%s.%s", shard, key, fmt);
+
+            makapix_show_artwork(pid, key, art_url);
         }
     } else if (strcmp(command_type, "show_url") == 0) {
         cJSON *artwork_url = cJSON_GetObjectItem(payload, "artwork_url");

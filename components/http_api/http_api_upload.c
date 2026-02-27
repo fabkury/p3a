@@ -372,6 +372,21 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
         send_json(req, 400, "{\"ok\":false,\"error\":\"No filename in upload\",\"code\":\"NO_FILENAME\"}");
         return ESP_OK;
     }
+
+    // Sanitize filename: strip to basename to prevent path traversal (e.g. "../../evil.webp")
+    char *slash = strrchr(filename, '/');
+    if (slash) {
+        memmove(filename, slash + 1, strlen(slash + 1) + 1);
+    }
+    slash = strrchr(filename, '\\');
+    if (slash) {
+        memmove(filename, slash + 1, strlen(slash + 1) + 1);
+    }
+    if (strlen(filename) == 0 || strstr(filename, "..") != NULL) {
+        unlink(temp_path);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid filename\",\"code\":\"INVALID_FILENAME\"}");
+        return ESP_OK;
+    }
     
     // Validate file extension
     const char *ext = strrchr(filename, '.');

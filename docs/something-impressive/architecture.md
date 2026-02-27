@@ -92,24 +92,6 @@ Callers cannot distinguish between these cases.
 **Recommendation:** Define specific error codes or add an error string output
 parameter.
 
----
-
-### 7. Kconfig Semantic Conflict
-
-**File:** `main/Kconfig.projbuild:5, 91`
-
-`P3A_AUTO_SWAP_INTERVAL_SECONDS` (default 30) and `P3A_MAX_SPEED_PLAYBACK`
-(default enabled) have a semantic conflict:
-
-- Max speed playback ignores frame delays.
-- Auto-swap timing relies on frame delays.
-
-Both can be enabled simultaneously with unclear resulting behavior.
-
-**Recommendation:** Add a Kconfig warning or mutual exclusion between the two
-options.
-
----
 
 ## Rendering Pipeline
 

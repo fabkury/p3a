@@ -74,7 +74,6 @@ leak exists.
 
 ## Medium
 
-
 ### 7. Stack Overflow Risk in Directory Traversal
 
 **File:** `main/animation_player_loader.c:393, 452`

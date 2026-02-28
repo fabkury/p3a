@@ -197,8 +197,8 @@ void makapix_mqtt_connection_callback(bool connected)
 #define MAX_AUTH_FAILURES 3
 
 // Exponential backoff parameters for reconnection
-#define RECONNECT_DELAY_INITIAL_MS  5000
-#define RECONNECT_DELAY_MAX_MS      60000
+#define RECONNECT_DELAY_INITIAL_MS  15000
+#define RECONNECT_DELAY_MAX_MS      120000
 
 // Cert buffers allocated on heap to avoid 12KB stack usage
 typedef struct {

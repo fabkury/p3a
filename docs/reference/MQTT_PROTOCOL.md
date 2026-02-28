@@ -495,21 +495,22 @@ Display a specific artwork on the player.
 {
   "post_id": 123,
   "storage_key": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  "art_url": "https://cdn.makapix.club/art/...",
-  "canvas": "64x64"
+  "storage_shard": "ab/cd/ef",
+  "native_format": "webp"
 }
 ```
 
 **Fields**:
-- `post_id`: Integer, post ID
-- `storage_key`: UUID, storage identifier
-- `art_url`: String, URL to artwork file
-- `canvas`: String, canvas size
+- `storage_key`: UUID, storage identifier (required)
+- `storage_shard`: String, pre-computed shard path for vault storage (required)
+- `native_format`: String, file extension without dot, e.g. `"webp"`, `"gif"`, `"png"` (required)
+- `post_id`: Integer, post ID for view tracking (optional, defaults to 0)
 
 **Expected Player Behavior**:
-1. Download artwork from `art_url`
-2. Display artwork on screen
-3. Update current_post_id in status updates
+1. Construct download path from components: `/api/vault/{storage_shard}/{storage_key}.{native_format}`
+2. Download artwork if not already cached in vault
+3. Display artwork on screen
+4. Update current_post_id in status updates
 
 ##### 2. Swap Next
 

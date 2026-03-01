@@ -25,7 +25,7 @@
 ┌────▼──────┐ ┌────▼──────────┐ ┌───────▼────────┐
 │play       │ │content_cache  │ │wifi_manager    │
 │_scheduler │ │loader_service │ │ota_manager     │
-│           │ │content_source │ │makapix         │
+│           │ │storage_evictio│ │makapix         │
 │playback   │ └───────────────┘ └────────────────┘
 │  _queue   │
 └────┬──────┘

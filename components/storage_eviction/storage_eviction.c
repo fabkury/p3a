@@ -311,24 +311,37 @@ static bool is_active_channel(const char *stem,
 esp_err_t channel_eviction_check_and_run(void)
 {
     if (!sntp_sync_is_synchronized()) {
-        ESP_LOGD(TAG, "SNTP not synced, skipping channel eviction");
+        ESP_LOGW(TAG, "Channel eviction: SNTP not synced, skipping");
         return ESP_ERR_INVALID_STATE;
     }
 
     char channel_dir[128];
     esp_err_t err = sd_path_get_channel(channel_dir, sizeof(channel_dir));
-    if (err != ESP_OK) return err;
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Channel eviction: failed to get channel dir");
+        return err;
+    }
 
     const char *active_ids[PS_MAX_CHANNELS];
     size_t active_count = play_scheduler_get_active_channel_ids(active_ids, PS_MAX_CHANNELS);
 
-    time_t cutoff = time(NULL) - CHANNEL_AGE_S;
+    time_t now = time(NULL);
+    time_t cutoff = now - CHANNEL_AGE_S;
+
+    ESP_LOGI(TAG, "Channel eviction: scanning %s (threshold %ld days, %zu active channels protected)",
+             channel_dir, (long)CONFIG_CHANNEL_EVICTION_AGE_DAYS, active_count);
 
     DIR *d = opendir(channel_dir);
-    if (!d) return ESP_OK;
+    if (!d) {
+        ESP_LOGW(TAG, "Channel eviction: cannot open %s", channel_dir);
+        return ESP_OK;
+    }
 
     struct dirent *de;
+    uint32_t channels_scanned = 0;
     uint32_t channels_evicted = 0;
+    uint32_t channels_protected = 0;
+    uint32_t channels_fresh = 0;
     uint32_t files_deleted = 0;
 
     while ((de = readdir(d)) != NULL) {
@@ -344,8 +357,18 @@ esp_err_t channel_eviction_check_and_run(void)
         memcpy(stem, de->d_name, stem_len);
         stem[stem_len] = '\0';
 
-        if (strcmp(stem, "sdcard") == 0) continue;
-        if (is_active_channel(stem, active_ids, active_count)) continue;
+        channels_scanned++;
+
+        if (strcmp(stem, "sdcard") == 0) {
+            ESP_LOGD(TAG, "  '%s': protected (sdcard)", stem);
+            channels_protected++;
+            continue;
+        }
+        if (is_active_channel(stem, active_ids, active_count)) {
+            ESP_LOGD(TAG, "  '%s': protected (active)", stem);
+            channels_protected++;
+            continue;
+        }
 
         /* Check mtime of the .cache file */
         char cache_path[256];
@@ -354,7 +377,15 @@ esp_err_t channel_eviction_check_and_run(void)
 
         struct stat st;
         if (stat(cache_path, &st) != 0) continue;
-        if (st.st_mtime >= cutoff) continue;
+
+        long age_days = (long)(now - st.st_mtime) / 86400;
+        if (st.st_mtime >= cutoff) {
+            ESP_LOGD(TAG, "  '%s': fresh (%ld days old)", stem, age_days);
+            channels_fresh++;
+            continue;
+        }
+
+        ESP_LOGI(TAG, "  '%s': evicting (%ld days old)", stem, age_days);
 
         /* Evict: delete the .cache file and all companions */
         if (unlink(cache_path) == 0) files_deleted++;
@@ -367,10 +398,10 @@ esp_err_t channel_eviction_check_and_run(void)
 
     closedir(d);
 
-    if (channels_evicted > 0) {
-        ESP_LOGI(TAG, "Channel eviction: %lu channels evicted (%lu files deleted)",
-                 (unsigned long)channels_evicted, (unsigned long)files_deleted);
-    }
+    ESP_LOGI(TAG, "Channel eviction done: %lu scanned, %lu protected, %lu fresh, %lu evicted (%lu files deleted)",
+             (unsigned long)channels_scanned, (unsigned long)channels_protected,
+             (unsigned long)channels_fresh, (unsigned long)channels_evicted,
+             (unsigned long)files_deleted);
 
     return ESP_OK;
 }

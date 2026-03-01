@@ -149,8 +149,6 @@ p3a is in active development. The following features are implemented:
 - Send "likes" to artworks with long-press gesture
 - Swipe up to view artwork comments from the Makapix community
 
-See [ROADMAP.md](docs/ROADMAP.md) for the full development plan.
-
 ## Troubleshooting
 
 If your device is crashing or behaving unexpectedly, try changing the **root directory** in the web UI settings. The default is `/p3a`. Changing this creates a fresh directory with new index files, which can resolve issues caused by corrupted data. You can always switch back to the original directory later.
@@ -161,14 +159,12 @@ If your device is crashing or behaving unexpectedly, try changing the **root dir
 |----------|-------------|
 | [HOW-TO-USE.md](docs/HOW-TO-USE.md) | Detailed usage instructions |
 | [flash-p3a.md](docs/flash-p3a.md) | How to flash the firmware |
-| [OTA_IMPLEMENTATION_PLAN.md](docs/OTA_IMPLEMENTATION_PLAN.md) | Over-the-Air update system design |
 | [INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) | Technical architecture for developers |
-| [ROADMAP.md](docs/ROADMAP.md) | Development roadmap and milestones |
 
 ## Repository layout
 
 - `main/` — Application entry point, display/touch drivers, animation player, format decoders
-- `components/` — Custom components: app state, config store, HTTP API, Makapix integration, OTA manager, decoders
+- `components/` — Custom components: state machine, config store, HTTP API, Makapix integration, OTA manager, decoders
 - `managed_components/` — ESP-IDF Component Registry dependencies
 - `webui/` — Web interface files (compiled into SPIFFS)
 - `docs/` — Documentation

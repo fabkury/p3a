@@ -94,7 +94,6 @@ Dual OTA slots (8MB each), NVS, LittleFS (4MB), and a 2MB partition for ESP32-C6
 - `docs/INFRASTRUCTURE.md` - Comprehensive technical architecture
 - `docs/HOW-TO-USE.md` - User guide
 - `docs/flash-p3a.md` - Flashing instructions
-- `docs/ROADMAP.md` - Development plan
 
 ## Additional comments
 

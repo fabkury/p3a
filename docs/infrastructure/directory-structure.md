@@ -45,7 +45,7 @@ p3a/
 │       ├── ugfx_ui.h
 │       └── version.h
 │
-├── components/                      # Custom components (24 total)
+├── components/                      # Custom components (25 total)
 │   ├── p3a_core/                   # Unified state machine and lifecycle
 │   │   ├── p3a_state.c            # Global state machine
 │   │   ├── p3a_render.c           # State-aware rendering dispatch
@@ -256,10 +256,11 @@ p3a/
 │   │   ├── include/content_cache.h
 │   │   └── CMakeLists.txt
 │   │
-│   ├── content_source/             # Channel content source abstraction
-│   │   ├── content_source.c
-│   │   ├── include/content_source.h
-│   │   └── CMakeLists.txt
+│   ├── storage_eviction/             # SD card space management
+│   │   ├── storage_eviction.c
+│   │   ├── include/storage_eviction.h
+│   │   ├── CMakeLists.txt
+│   │   └── Kconfig
 │   │
 │   ├── loader_service/             # Animation file loader
 │   │   ├── loader_service.c
@@ -286,7 +287,6 @@ p3a/
 │   │   ├── debug_http_log.h
 │   │   └── CMakeLists.txt
 │   │
-│   ├── app_state/                  # Application state (legacy, see p3a_core)
 │   ├── ugfx/                       # uGFX graphics library
 │   └── libwebp_decoder/            # libwebp wrapper
 │

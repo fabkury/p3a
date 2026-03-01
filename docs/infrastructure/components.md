@@ -1,6 +1,6 @@
 # Component Architecture
 
-All 24 custom components live under `components/`. This document describes each one.
+All 25 custom components live under `components/`. This document describes each one.
 
 ---
 
@@ -178,12 +178,17 @@ All 24 custom components live under `components/`. This document describes each 
 - **Public API**: `content_cache.h`
 - **Key functions**: `content_cache_init()`, `content_cache_deinit()`, `content_cache_is_busy()`, `content_cache_set_channels()`, `content_cache_reset_cursors()`, `content_cache_rescan()`
 
-## 17. content_source — Channel Content Source Abstraction
+## 17. storage_eviction — SD Card Space Management
 
-- **Purpose**: Simple wrapper around `channel_handle_t` for content retrieval
-- **Key files**: `content_source.c`
-- **Public API**: `content_source.h`
-- **Key functions**: `content_source_init_from_channel()`, `content_source_refresh()`, `content_source_get_post()`, `content_source_get_count()`
+- **Purpose**: Age-based eviction of cached artwork and stale channel files from SD card
+- **Key files**: `storage_eviction.c`
+- **Public API**: `storage_eviction.h`
+- **Key functions**:
+  - `storage_eviction_check_and_run()` — multi-pass age-based eviction of vault/giphy files
+  - `storage_eviction_get_free_space()` — query free bytes on /sdcard
+  - `storage_eviction_get_storage_info()` — query total and free bytes
+  - `channel_eviction_check_and_run()` — evict stale channel metadata files
+- **Kconfig**: `STORAGE_EVICTION_TARGET_MIB` (default 1024 MiB), `STORAGE_EVICTION_INITIAL_AGE_DAYS` (default 30), `STORAGE_EVICTION_MIN_AGE_HOURS` (default 4), `CHANNEL_EVICTION_AGE_DAYS` (default 60)
 
 ## 18. loader_service — Animation File Loader
 
@@ -228,12 +233,7 @@ All 24 custom components live under `components/`. This document describes each 
 - **Statistics**: decode time, upscale time, total render time, late frames, alpha usage
 - When disabled, all functions are no-ops with zero overhead.
 
-## 23. app_state — Application State (Legacy)
-
-- **Purpose**: Simple centralized application state (ready, processing, error)
-- **Note**: The primary state management is now handled by `p3a_core`. This component remains for backward compatibility.
-
-## 24. Supporting Libraries
+## 23. Supporting Libraries
 
 | Component | Purpose |
 |-----------|---------|

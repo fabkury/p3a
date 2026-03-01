@@ -294,8 +294,7 @@ static void giphy_evict_orphans(channel_cache_t *cache, si_node_t *si_hash)
 }
 
 // Response buffer size for Giphy API (allocated in PSRAM).
-// Each GIF object is ~8KB of JSON; at 25 items/page this is ~200KB.
-#define GIPHY_RESPONSE_BUF_SIZE (256 * 1024)
+#define GIPHY_RESPONSE_BUF_SIZE (384 * 1024)
 
 esp_err_t giphy_refresh_channel(const char *channel_id, const char *query)
 {

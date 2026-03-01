@@ -408,7 +408,7 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
             break;
         }
 
-        // Allow the cache to temporarily exceed the cap so new API entries
+        // Allow the cache to temporarily exceed the cap so new API entries 
         // aren't dropped — the eviction pass after the loop compacts it back.
         size_t merge_limit = cache_size * 3;
         esp_err_t merge_err = giphy_merge_entries(cache, page_entries, page_count, merge_limit);

@@ -14,6 +14,7 @@
 #include "makapix_channel_impl.h"
 #include "config_store.h"
 #include "sd_path.h"
+#include "sntp_sync.h"
 #include "esp_log.h"
 
 #include <dirent.h>
@@ -233,21 +234,26 @@ esp_err_t ps_touch_cache_file(const char *channel_id)
 {
     if (!channel_id) return ESP_ERR_INVALID_ARG;
 
+    if (!sntp_sync_is_synchronized()) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
     char channel_path[128];
     esp_err_t err = sd_path_get_channel(channel_path, sizeof(channel_path));
     if (err != ESP_OK) return err;
 
     char path[192];
-    snprintf(path, sizeof(path), "%s/%s.bin", channel_path, channel_id);
+    if (strcmp(channel_id, "sdcard") == 0) {
+        snprintf(path, sizeof(path), "%s/%s.bin", channel_path, channel_id);
+    } else {
+        snprintf(path, sizeof(path), "%s/%s.cache", channel_path, channel_id);
+    }
 
-    // Read current times, then set both to now
     struct stat st;
     if (stat(path, &st) != 0) {
         return ESP_ERR_NOT_FOUND;
     }
 
-    // Touch file by opening for append and closing
-    // This updates mtime on most filesystems
     FILE *f = fopen(path, "ab");
     if (f) {
         fclose(f);

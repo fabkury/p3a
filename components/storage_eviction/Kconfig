@@ -24,4 +24,13 @@ menu "Storage Eviction"
             than this are never deleted, even if the free space target
             has not been reached.
 
+    config CHANNEL_EVICTION_AGE_DAYS
+        int "Channel cache eviction age in days"
+        default 60
+        help
+            Channel cache files (.cache, .json, .settings.json) that
+            have not been loaded for playback within this many days
+            are deleted. Channels in the active playset are always
+            protected regardless of age.
+
 endmenu

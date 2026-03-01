@@ -3,7 +3,7 @@
 
 /**
  * @file storage_eviction.c
- * @brief Age-based eviction of cached artwork from SD card
+ * @brief Age-based eviction of cached artwork and channel files from SD card
  *
  * When the SD card runs low on space, this module scans the vault and
  * giphy cache directories and deletes files whose mtime is older than
@@ -11,9 +11,15 @@
  * CONFIG_STORAGE_EVICTION_INITIAL_AGE_DAYS and halves on each pass
  * until the free-space target is met or the floor
  * (CONFIG_STORAGE_EVICTION_MIN_AGE_HOURS) is reached.
+ *
+ * Channel eviction deletes stale channel metadata files (.cache, .json,
+ * .settings.json, .bin) from the channel directory when they haven't
+ * been loaded for playback within CONFIG_CHANNEL_EVICTION_AGE_DAYS.
+ * Channels in the active playset are always protected.
  */
 
 #include "storage_eviction.h"
+#include "play_scheduler.h"
 #include "sd_path.h"
 #include "sntp_sync.h"
 #include "esp_log.h"
@@ -29,9 +35,10 @@
 
 static const char *TAG = "storage_evict";
 
-#define TARGET_BYTES  ((uint64_t)CONFIG_STORAGE_EVICTION_TARGET_MIB * 1024ULL * 1024ULL)
-#define INITIAL_AGE_S ((time_t)CONFIG_STORAGE_EVICTION_INITIAL_AGE_DAYS * 86400)
-#define MIN_AGE_S     ((time_t)CONFIG_STORAGE_EVICTION_MIN_AGE_HOURS * 3600)
+#define TARGET_BYTES   ((uint64_t)CONFIG_STORAGE_EVICTION_TARGET_MIB * 1024ULL * 1024ULL)
+#define INITIAL_AGE_S  ((time_t)CONFIG_STORAGE_EVICTION_INITIAL_AGE_DAYS * 86400)
+#define MIN_AGE_S      ((time_t)CONFIG_STORAGE_EVICTION_MIN_AGE_HOURS * 3600)
+#define CHANNEL_AGE_S  ((time_t)CONFIG_CHANNEL_EVICTION_AGE_DAYS * 86400)
 
 /** Counters passed through the eviction scan */
 typedef struct {
@@ -258,6 +265,112 @@ esp_err_t storage_eviction_check_and_run(void)
     ESP_LOGI(TAG, "Eviction done: %lu files deleted, %llu MiB freed",
              (unsigned long)stats.files_deleted,
              (unsigned long long)(stats.bytes_freed / (1024 * 1024)));
+
+    return ESP_OK;
+}
+
+/* --------------------------------------------------------------------- */
+/*  Channel eviction                                                      */
+/* --------------------------------------------------------------------- */
+
+static bool str_ends_with(const char *str, const char *suffix)
+{
+    size_t str_len = strlen(str);
+    size_t suf_len = strlen(suffix);
+    if (suf_len > str_len) return false;
+    return strcmp(str + str_len - suf_len, suffix) == 0;
+}
+
+/**
+ * @brief Try to delete a companion file for a channel stem
+ *
+ * @return true if the file existed and was deleted
+ */
+static bool unlink_companion(const char *dir, const char *stem, const char *ext)
+{
+    char path[256];
+    int ret = snprintf(path, sizeof(path), "%s/%s%s", dir, stem, ext);
+    if (ret < 0 || ret >= (int)sizeof(path)) return false;
+    return (unlink(path) == 0);
+}
+
+/**
+ * @brief Check if a channel stem matches any of the active channel IDs
+ */
+static bool is_active_channel(const char *stem,
+                              const char **active_ids, size_t active_count)
+{
+    for (size_t i = 0; i < active_count; i++) {
+        if (strcmp(stem, active_ids[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+esp_err_t channel_eviction_check_and_run(void)
+{
+    if (!sntp_sync_is_synchronized()) {
+        ESP_LOGD(TAG, "SNTP not synced, skipping channel eviction");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    char channel_dir[128];
+    esp_err_t err = sd_path_get_channel(channel_dir, sizeof(channel_dir));
+    if (err != ESP_OK) return err;
+
+    const char *active_ids[PS_MAX_CHANNELS];
+    size_t active_count = play_scheduler_get_active_channel_ids(active_ids, PS_MAX_CHANNELS);
+
+    time_t cutoff = time(NULL) - CHANNEL_AGE_S;
+
+    DIR *d = opendir(channel_dir);
+    if (!d) return ESP_OK;
+
+    struct dirent *de;
+    uint32_t channels_evicted = 0;
+    uint32_t files_deleted = 0;
+
+    while ((de = readdir(d)) != NULL) {
+        if (de->d_name[0] == '.') continue;
+        if (!str_ends_with(de->d_name, ".cache")) continue;
+
+        /* Extract the stem (channel_id) by stripping ".cache" */
+        size_t name_len = strlen(de->d_name);
+        size_t stem_len = name_len - 6;  /* strlen(".cache") == 6 */
+        if (stem_len == 0 || stem_len >= 64) continue;
+
+        char stem[64];
+        memcpy(stem, de->d_name, stem_len);
+        stem[stem_len] = '\0';
+
+        if (strcmp(stem, "sdcard") == 0) continue;
+        if (is_active_channel(stem, active_ids, active_count)) continue;
+
+        /* Check mtime of the .cache file */
+        char cache_path[256];
+        int ret = snprintf(cache_path, sizeof(cache_path), "%s/%s", channel_dir, de->d_name);
+        if (ret < 0 || ret >= (int)sizeof(cache_path)) continue;
+
+        struct stat st;
+        if (stat(cache_path, &st) != 0) continue;
+        if (st.st_mtime >= cutoff) continue;
+
+        /* Evict: delete the .cache file and all companions */
+        if (unlink(cache_path) == 0) files_deleted++;
+        if (unlink_companion(channel_dir, stem, ".json")) files_deleted++;
+        if (unlink_companion(channel_dir, stem, ".settings.json")) files_deleted++;
+        if (unlink_companion(channel_dir, stem, ".bin")) files_deleted++;
+
+        channels_evicted++;
+    }
+
+    closedir(d);
+
+    if (channels_evicted > 0) {
+        ESP_LOGI(TAG, "Channel eviction: %lu channels evicted (%lu files deleted)",
+                 (unsigned long)channels_evicted, (unsigned long)files_deleted);
+    }
 
     return ESP_OK;
 }

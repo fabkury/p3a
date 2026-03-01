@@ -68,6 +68,7 @@ static TaskHandle_t s_refresh_task = NULL;
 static EventGroupHandle_t s_refresh_events = NULL;
 static volatile bool s_task_running = false;
 static volatile bool s_sntp_synced_observed = false;
+static volatile bool s_sntp_cache_touched = false;
 static bool s_pico8_was_active = false;
 static time_t s_last_full_refresh_complete = 0;
 static uint32_t s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
@@ -357,6 +358,23 @@ static void refresh_task(void *arg)
         }
 
         // One-shot: when SNTP first synchronizes, re-queue Giphy channels.
+        // A pre-SNTP refresh may have bypassed cooldown (check-side guard) and
+        // skipped the metadata save (save-side guard). Re-queuing lets the
+        // cooldown logic re-evaluate with a valid clock and the preserved
+        // on-disk last_refresh from the previous session.
+        // Once per boot: as soon as SNTP syncs, touch all active channel cache
+        // files. Channels loaded before SNTP sync had their touch skipped (the
+        // clock was unusable), so this retroactively marks them as recently used.
+        if (!s_sntp_cache_touched && sntp_sync_is_synchronized()) {
+            s_sntp_cache_touched = true;
+            xSemaphoreTake(state->mutex, portMAX_DELAY);
+            for (size_t i = 0; i < state->channel_count; i++) {
+                ps_touch_cache_file(state->channels[i].channel_id);
+            }
+            xSemaphoreGive(state->mutex);
+        }
+
+        // Once per boot: when SNTP first synchronizes, re-queue channels.
         // A pre-SNTP refresh may have bypassed cooldown (check-side guard) and
         // skipped the metadata save (save-side guard). Re-queuing lets the
         // cooldown logic re-evaluate with a valid clock and the preserved
@@ -873,7 +891,6 @@ void ps_refresh_reset_timer(void)
     // This ensures immediate refresh happens and the 1-hour timer starts fresh
     s_last_full_refresh_complete = 0;
     s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
-    s_sntp_synced_observed = false;
     s_pico8_was_active = false;
     ESP_LOGD(TAG, "Refresh timer reset");
 }

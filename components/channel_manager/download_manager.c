@@ -19,6 +19,7 @@
 #include "download_manager.h"
 #include "play_scheduler.h"
 #include "storage_eviction.h"
+#include "sntp_sync.h"
 #include "esp_heap_caps.h"
 #include "makapix_channel_impl.h"
 #include "makapix_channel_utils.h"
@@ -471,6 +472,8 @@ static void download_task(void *arg)
     ESP_LOGI(TAG, "Download task started");
 
     int loop_count = 0;
+    time_t last_channel_eviction = 0;
+    const time_t channel_eviction_interval = 18 * 3600;
 
     while (true) {
         // Every 100 iterations, log stack high water mark
@@ -479,6 +482,15 @@ static void download_task(void *arg)
             if (hwm < 4096) {  // Warn if less than 16KB free (4096 * 4 bytes on ESP32)
                 ESP_LOGW(TAG, "Stack HWM low: %lu words free (~%lu bytes)",
                          (unsigned long)hwm, (unsigned long)(hwm * sizeof(StackType_t)));
+            }
+        }
+
+        // Periodic channel eviction (every 18 hours, only with valid clock)
+        if (sntp_sync_is_synchronized()) {
+            time_t now_evict = time(NULL);
+            if ((now_evict - last_channel_eviction) >= channel_eviction_interval) {
+                last_channel_eviction = now_evict;
+                channel_eviction_check_and_run();
             }
         }
 
@@ -698,6 +710,7 @@ static void download_task(void *arg)
             } else {
                 // Non-404 failure: may be disk full — check and evict if needed
                 storage_eviction_check_and_run();
+                channel_eviction_check_and_run();
             }
 
             // Signal to check for next file immediately

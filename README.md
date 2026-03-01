@@ -149,10 +149,6 @@ p3a is in active development. The following features are implemented:
 - Send "likes" to artworks with long-press gesture
 - Swipe up to view artwork comments from the Makapix community
 
-## Troubleshooting
-
-If your device is crashing or behaving unexpectedly, try changing the **root directory** in the web UI settings. The default is `/p3a`. Changing this creates a fresh directory with new index files, which can resolve issues caused by corrupted data. You can always switch back to the original directory later.
-
 ## Documentation
 
 | Document | Description |

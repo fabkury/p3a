@@ -1376,67 +1376,6 @@ bool config_store_get_giphy_refresh_allow_override(void)
 }
 
 // ============================================================================
-// Giphy Full Refresh Mode
-// ============================================================================
-
-static bool s_giphy_full_refresh = true;  // Default: enabled
-static bool s_giphy_full_refresh_loaded = false;
-
-esp_err_t config_store_set_giphy_full_refresh(bool enable)
-{
-    cJSON *cfg = NULL;
-    esp_err_t err = config_store_load(&cfg);
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    cJSON *item = cJSON_GetObjectItem(cfg, "giphy_full_refresh");
-    if (item) {
-        cJSON_DeleteItemFromObject(cfg, "giphy_full_refresh");
-    }
-    cJSON_AddBoolToObject(cfg, "giphy_full_refresh", enable);
-
-    err = config_store_save(cfg);
-    cJSON_Delete(cfg);
-
-    if (err == ESP_OK) {
-        s_giphy_full_refresh = enable;
-        s_giphy_full_refresh_loaded = true;
-        ESP_LOGI(TAG, "Giphy full refresh: %s", enable ? "ON" : "OFF");
-    }
-
-    return err;
-}
-
-bool config_store_get_giphy_full_refresh(void)
-{
-    if (s_giphy_full_refresh_loaded) {
-        return s_giphy_full_refresh;  // Fast path - no NVS read
-    }
-
-    cJSON *cfg = NULL;
-    esp_err_t err = config_store_load(&cfg);
-    if (err != ESP_OK) {
-        s_giphy_full_refresh_loaded = true;
-        return s_giphy_full_refresh;  // Return default (true)
-    }
-
-    cJSON *item = cJSON_GetObjectItem(cfg, "giphy_full_refresh");
-    if (item && cJSON_IsBool(item)) {
-        s_giphy_full_refresh = cJSON_IsTrue(item);
-    }
-
-    s_giphy_full_refresh_loaded = true;
-    cJSON_Delete(cfg);
-    return s_giphy_full_refresh;
-}
-
-void config_store_invalidate_giphy_full_refresh(void)
-{
-    s_giphy_full_refresh_loaded = false;
-}
-
-// ============================================================================
 // Device Name (persisted)
 // ============================================================================
 

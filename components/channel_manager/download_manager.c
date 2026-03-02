@@ -473,7 +473,7 @@ static void download_task(void *arg)
 
     int loop_count = 0;
     time_t last_channel_eviction = 0;
-    const time_t channel_eviction_interval = 18 * 3600;
+    const time_t channel_eviction_interval = 8 * 3600;
 
     while (true) {
         // Every 100 iterations, log stack high water mark
@@ -485,10 +485,12 @@ static void download_task(void *arg)
             }
         }
 
-        // Periodic channel eviction (every 18 hours, only with valid clock)
+        // Periodic channel eviction (every 8 hours, only with valid clock)
         if (sntp_sync_is_synchronized()) {
             time_t now_evict = time(NULL);
-            if ((now_evict - last_channel_eviction) >= channel_eviction_interval) {
+            if (last_channel_eviction == 0) {
+                last_channel_eviction = now_evict;  // seed timer on first sync
+            } else if ((now_evict - last_channel_eviction) >= channel_eviction_interval) {
                 last_channel_eviction = now_evict;
                 channel_eviction_check_and_run();
             }

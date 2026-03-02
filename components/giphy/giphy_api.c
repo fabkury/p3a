@@ -19,11 +19,8 @@
 
 static const char *TAG = "giphy_api";
 
-// Maximum items per API call.
-// Giphy beta key allows up to 50, but each GIF object is ~8KB of JSON,
-// so 50 items produces ~400KB responses that exceed reasonable buffers.
-// 25 (Giphy's own default) keeps responses under ~200KB.
-#define GIPHY_PAGE_LIMIT 25
+// Maximum items per Giphy API call.
+#define GIPHY_PAGE_LIMIT 48
 
 /**
  * @brief Parse a single GIF object from the Giphy API response

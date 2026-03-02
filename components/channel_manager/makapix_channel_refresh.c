@@ -356,6 +356,14 @@ void refresh_task_impl(void *pvParameters)
         
         free(resp);
 
+        // Check for shutdown BEFORE saving metadata — a cancelled refresh must not
+        // update the timestamp, otherwise the freshness check will skip the next refresh.
+        if (!ch->refreshing) {
+            ESP_LOGW(TAG, "Refresh cancelled for channel '%s', not updating refresh timestamp",
+                     ch->channel_id);
+            break;
+        }
+
         if (query_succeeded) {
             // Save metadata (only persist a valid timestamp if SNTP is synchronized)
             time_t refresh_ts = sntp_sync_is_synchronized() ? time(NULL) : 0;
@@ -365,9 +373,6 @@ void refresh_task_impl(void *pvParameters)
             ESP_LOGW(TAG, "Refresh failed for channel '%s', preserving previous refresh timestamp",
                      ch->channel_id);
         }
-
-        // Check for shutdown after metadata save
-        if (!ch->refreshing) break;
 
         // Count how many are artworks vs playlists using cache lookup
         {

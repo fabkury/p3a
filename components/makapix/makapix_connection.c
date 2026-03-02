@@ -212,12 +212,12 @@ typedef struct {
  */
 void makapix_mqtt_reconnect_task(void *pvParameters)
 {
-    (void)pvParameters;
+    bool start_immediate = (pvParameters != NULL);
     char player_key[37];
     char mqtt_host[64];
     uint16_t mqtt_port;
     char wifi_ip[16];
-    uint32_t delay_ms = RECONNECT_DELAY_INITIAL_MS;
+    uint32_t delay_ms = start_immediate ? 100 : RECONNECT_DELAY_INITIAL_MS;
 
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(delay_ms));

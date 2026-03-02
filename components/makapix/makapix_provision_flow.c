@@ -199,6 +199,7 @@ void makapix_credentials_poll_task(void *pvParameters)
                 s_pending_mqtt_port = 0;
 
                 ESP_LOGD(MAKAPIX_TAG, "Certificates saved successfully, initiating MQTT connection");
+                makapix_mqtt_deinit();  // Tear down old MQTT client before connecting with new certs
                 makapix_set_state(MAKAPIX_STATE_CONNECTING);
                 
                 // Update connectivity state - device is now registered

@@ -213,17 +213,9 @@ esp_err_t makapix_start_provisioning(void)
     // Set initial status message before transitioning state
     snprintf(s_provisioning_status, sizeof(s_provisioning_status), "Starting...");
 
-    // Set state to PROVISIONING BEFORE disconnecting MQTT
-    // This prevents the disconnect callback from starting a reconnection task
+    // Set state to PROVISIONING so the disconnect callback won't start a reconnection task
     makapix_set_state(MAKAPIX_STATE_PROVISIONING);
     s_provisioning_cancelled = false;  // Reset cancellation flag
-
-    // Stop MQTT client to free network resources for provisioning
-    // This prevents MQTT reconnection attempts from interfering with HTTP requests
-    if (makapix_mqtt_is_connected()) {
-        ESP_LOGD(MAKAPIX_TAG, "Stopping MQTT client for provisioning...");
-        makapix_mqtt_disconnect();
-    }
 
     // Start provisioning task
     BaseType_t ret = xTaskCreate(makapix_provisioning_task, "makapix_prov", 8192, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, NULL);
@@ -246,17 +238,21 @@ void makapix_cancel_provisioning(void)
         memset(s_provisioning_status, 0, sizeof(s_provisioning_status));
 
         // If the device already has valid credentials in NVS (i.e. was previously registered),
-        // transition to DISCONNECTED and spawn the reconnect task to restore MQTT.
-        // Fix 1 (deferred NVS writes) guarantees NVS still has the original valid credentials.
+        // check whether MQTT is still connected (it's no longer torn down on provisioning entry).
         if (makapix_store_has_player_key() && makapix_store_has_certificates()) {
-            ESP_LOGI(MAKAPIX_TAG, "Device has valid credentials, reconnecting MQTT after cancelled provisioning");
-            makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
+            if (makapix_mqtt_is_connected()) {
+                ESP_LOGI(MAKAPIX_TAG, "MQTT still connected, restoring CONNECTED state");
+                makapix_set_state(MAKAPIX_STATE_CONNECTED);
+            } else {
+                ESP_LOGI(MAKAPIX_TAG, "Device has valid credentials, reconnecting MQTT immediately");
+                makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
 
-            if (s_reconnect_task_handle == NULL) {
-                if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", 16384, NULL,
-                                CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_reconnect_task_handle) != pdPASS) {
-                    s_reconnect_task_handle = NULL;
-                    ESP_LOGE(MAKAPIX_TAG, "Failed to create reconnect task after provisioning cancel");
+                if (s_reconnect_task_handle == NULL) {
+                    if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", 16384, (void *)1,
+                                    CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_reconnect_task_handle) != pdPASS) {
+                        s_reconnect_task_handle = NULL;
+                        ESP_LOGE(MAKAPIX_TAG, "Failed to create reconnect task after provisioning cancel");
+                    }
                 }
             }
         } else {

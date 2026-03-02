@@ -375,8 +375,18 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
 
     extern void download_manager_rescan(void);
 
-    // Per-page entry buffer on the stack (must hold GIPHY_PAGE_LIMIT entries)
-    giphy_channel_entry_t page_entries[GIPHY_PAGE_LIMIT];
+    // Per-page entry buffer (heap-allocated to avoid ~3KB on the stack,
+    // which is too large for the ps_refresh task alongside TLS operations).
+    giphy_channel_entry_t *page_entries = heap_caps_malloc(
+        GIPHY_PAGE_LIMIT * sizeof(giphy_channel_entry_t), MALLOC_CAP_SPIRAM);
+    if (!page_entries) {
+        page_entries = malloc(GIPHY_PAGE_LIMIT * sizeof(giphy_channel_entry_t));
+        if (!page_entries) {
+            ESP_LOGE(TAG, "Failed to allocate page_entries buffer");
+            free(ctx.response_buf);
+            return ESP_ERR_NO_MEM;
+        }
+    }
     size_t total_fetched = 0;
     int offset = 0;
     esp_err_t last_err = ESP_OK;
@@ -464,6 +474,7 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
     }
 
     free(ctx.response_buf);
+    free(page_entries);
 
     // Eviction: remove entries not seen in this refresh cycle
     if (refresh_completed && si_hash) {

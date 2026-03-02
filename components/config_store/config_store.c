@@ -1362,17 +1362,17 @@ void config_store_invalidate_giphy_refresh_interval(void)
     s_giphy_refresh_interval_loaded = false;
 }
 
-static bool s_giphy_refresh_allow_override = false;
+static bool s_refresh_allow_override = false;
 
-void config_store_set_giphy_refresh_allow_override(bool allow)
+void config_store_set_refresh_allow_override(bool allow)
 {
-    s_giphy_refresh_allow_override = allow;
-    ESP_LOGI(TAG, "Giphy refresh allow override: %s", allow ? "ON" : "OFF");
+    s_refresh_allow_override = allow;
+    ESP_LOGI(TAG, "Refresh allow override: %s", allow ? "ON" : "OFF");
 }
 
-bool config_store_get_giphy_refresh_allow_override(void)
+bool config_store_get_refresh_allow_override(void)
 {
-    return s_giphy_refresh_allow_override;
+    return s_refresh_allow_override;
 }
 
 // ============================================================================

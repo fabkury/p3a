@@ -531,6 +531,10 @@ static void refresh_task(void *arg)
                 time_t now = time(NULL);
                 if (s_last_full_refresh_complete == 0) {
                     s_last_full_refresh_complete = now;
+                    // Auto-reset refresh override now that the full cycle is complete
+                    if (config_store_get_refresh_allow_override()) {
+                        config_store_set_refresh_allow_override(false);
+                    }
                     // Compute adaptive delay from freshness tracking
                     // Use absolute stale time so elapsed processing time is
                     // automatically accounted for (no stale relative deltas).
@@ -614,7 +618,7 @@ static void refresh_task(void *arg)
 
             time_t now = time(NULL);
             uint32_t interval = config_store_get_giphy_refresh_interval();
-            bool allow_override = config_store_get_giphy_refresh_allow_override();
+            bool allow_override = config_store_get_refresh_allow_override();
             if (!allow_override &&
                 // sntp_sync_is_synchronized() && // Giphy channels are re-checked on SNTP sync
                 cache_has_entries &&
@@ -628,7 +632,7 @@ static void refresh_task(void *arg)
                 err = ESP_OK;  // Treat as successful (no-op)
             } else {
                 if (allow_override) {
-                    ESP_LOGI(TAG, "Giphy channel '%s' refresh override active, bypassing interval check",
+                    ESP_LOGI(TAG, "Channel '%s' refresh override active, bypassing interval check",
                              channel_id);
                 } else if (!cache_has_entries && giphy_meta.last_refresh > 0) {
                     ESP_LOGI(TAG, "Giphy channel '%s' cache is empty, forcing refresh despite interval",
@@ -653,7 +657,6 @@ static void refresh_task(void *arg)
                     err = giphy_refresh_channel(channel_id, query);
                 }
                 if (err == ESP_OK) {
-                    config_store_set_giphy_refresh_allow_override(false);
                     time_t stale_at = time(NULL) + (time_t)interval;
                     if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
                 } else if (err == ESP_ERR_NOT_ALLOWED) {
@@ -695,7 +698,9 @@ static void refresh_task(void *arg)
 
                 time_t now = time(NULL);
                 uint32_t interval = config_store_get_refresh_interval_sec();
-                if (cache_has_entries &&
+                bool mkx_allow_override = config_store_get_refresh_allow_override();
+                if (!mkx_allow_override &&
+                    cache_has_entries &&
                     mkx_meta.last_refresh > 0 &&
                     (now - mkx_meta.last_refresh) < (time_t)interval) {
                     uint32_t remaining = interval - (uint32_t)(now - mkx_meta.last_refresh);
@@ -705,6 +710,10 @@ static void refresh_task(void *arg)
                              channel_id, (long)(now - mkx_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
                     err = ESP_OK;
                 } else {
+                    if (mkx_allow_override) {
+                        ESP_LOGI(TAG, "Channel '%s' refresh override active, bypassing interval check",
+                                 channel_id);
+                    }
                     err = refresh_makapix_channel(ch);
                     if (err == ESP_ERR_NOT_FINISHED) {
                         time_t stale_at = time(NULL) + (time_t)interval;

@@ -324,6 +324,13 @@ body {
     <div class="file-name" id="sd-hint" style="margin-bottom:12px;">Storage path on SD card. Reboot required. Existing files will not be moved.</div>
     <button class="btn danger-btn" id="reboot-btn" onclick="reboot()">Reboot</button>
 </div>
+<div class="section">
+    <h3>Makapix Club</h3>
+    <p class="file-name" id="provision-status">Loading...</p>
+    <button class="btn" id="provision-btn" onclick="toggleProvisioning()">
+        Enter Provisioning Mode
+    </button>
+</div>
 <div class="footer">
     <button class="footer-btn" onclick="window.location.href='/'">Home</button>
 </div>
@@ -613,8 +620,60 @@ function loadStorageInfo() {
     };
     xhr.send();
 }
+var provisioningActive = false;
+function loadProvisionState() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/state', true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        try {
+            var r = JSON.parse(xhr.responseText);
+            if (r.ok && r.data && r.data.p3a_state === 'PROVISIONING') {
+                provisioningActive = true;
+                document.getElementById('provision-btn').textContent = 'Exit Provisioning Mode';
+                document.getElementById('provision-status').textContent = 'Device is in provisioning mode';
+            } else {
+                provisioningActive = false;
+                document.getElementById('provision-btn').textContent = 'Enter Provisioning Mode';
+                document.getElementById('provision-status').textContent = 'Link this device to your Makapix Club account';
+            }
+        } catch (e) {
+            document.getElementById('provision-status').textContent = 'Unable to check state';
+        }
+    };
+    xhr.send();
+}
+function toggleProvisioning() {
+    var btn = document.getElementById('provision-btn');
+    btn.disabled = true;
+    var enable = !provisioningActive;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/action/provision', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        btn.disabled = false;
+        try {
+            var r = JSON.parse(xhr.responseText);
+            if (r.ok) {
+                provisioningActive = enable;
+                btn.textContent = enable ? 'Exit Provisioning Mode' : 'Enter Provisioning Mode';
+                document.getElementById('provision-status').textContent = enable
+                    ? 'Device is in provisioning mode'
+                    : 'Link this device to your Makapix Club account';
+                showToast(enable ? 'Provisioning started' : 'Provisioning stopped', false);
+            } else {
+                showToast(r.error || 'Failed', true);
+            }
+        } catch (e) {
+            showToast('Request failed', true);
+        }
+    };
+    xhr.send(JSON.stringify({enable: enable}));
+}
 loadAllConfig();
 loadStorageInfo();
+loadProvisionState();
 </script>
 </body>
 </html>

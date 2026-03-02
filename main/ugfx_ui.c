@@ -13,6 +13,13 @@
 #include <time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "version.h"
+#include "esp_timer.h"
+#include "p3a_state.h"
+#include "esp_wifi_remote.h"
+#include "giphy.h"
+#include "storage_eviction.h"
+#include "esp_heap_caps.h"
 
 // Include µGFX headers
 #include "gfx.h"
@@ -28,7 +35,8 @@ typedef enum {
     UI_MODE_CAPTIVE_AP_INFO,   // Captive portal setup info
     UI_MODE_OTA_PROGRESS,      // OTA update progress
     UI_MODE_CHANNEL_MESSAGE,   // Channel loading/download status
-    UI_MODE_CONNECTIVITY_ERROR // Connectivity error (no internet, etc.)
+    UI_MODE_CONNECTIVITY_ERROR, // Connectivity error (no internet, etc.)
+    UI_MODE_INFO_SCREEN         // System info overlay
 } ui_mode_t;
 
 // UI state
@@ -364,6 +372,190 @@ static void ugfx_ui_draw_channel_message(void)
 }
 
 /**
+ * @brief Map Makapix state to display string
+ */
+static const char *makapix_state_to_string(makapix_state_t state)
+{
+    switch (state) {
+        case MAKAPIX_STATE_IDLE:                  return "Idle";
+        case MAKAPIX_STATE_PROVISIONING:          return "Provisioning";
+        case MAKAPIX_STATE_SHOW_CODE:             return "Show Code";
+        case MAKAPIX_STATE_CONNECTING:            return "Connecting";
+        case MAKAPIX_STATE_CONNECTED:             return "Connected";
+        case MAKAPIX_STATE_DISCONNECTED:          return "Disconnected";
+        case MAKAPIX_STATE_REGISTRATION_INVALID:  return "Invalid Registration";
+        default:                                  return "Unknown";
+    }
+}
+
+/**
+ * @brief Draw the system info screen
+ */
+static void ugfx_ui_draw_info_screen(void)
+{
+    gdispClear(GFX_BLACK);
+
+    gCoord screen_w = gdispGetWidth();
+    gFont font_title = gdispOpenFont("* DejaVu Sans 24");
+    gFont font_main  = gdispOpenFont("* DejaVu Sans 20");
+    gFont font_hint  = gdispOpenFont("* DejaVu Sans 16");
+
+    color_t gray   = HTML2COLOR(0x888888);
+    color_t green  = HTML2COLOR(0x00FF00);
+    color_t yellow = HTML2COLOR(0xFFFF00);
+    color_t red    = HTML2COLOR(0xFF6666);
+
+    gCoord lx = 40;       // label x
+    gCoord vx = 280;      // value x
+    gCoord vw = screen_w - vx - 20;  // value width
+    gCoord lw = vx - lx - 10;        // label width
+
+    // Title
+    gdispFillStringBox(0, 50, screen_w, 35, "SYSTEM INFO",
+                       font_title, GFX_WHITE, GFX_BLACK, gJustifyCenter);
+
+    // --- Row 1: Firmware ---
+    gCoord y = 120;
+    gdispFillStringBox(lx, y, lw, 30, "Firmware", font_main, gray, GFX_BLACK, gJustifyLeft);
+    {
+        char fw_buf[48];
+        snprintf(fw_buf, sizeof(fw_buf), "v%s", FW_VERSION);
+        gdispFillStringBox(vx, y, vw, 30, fw_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
+    }
+
+    // --- Row 2: Uptime ---
+    y = 170;
+    gdispFillStringBox(lx, y, lw, 30, "Uptime", font_main, gray, GFX_BLACK, gJustifyLeft);
+    {
+        int64_t us = esp_timer_get_time();
+        int total_sec = (int)(us / 1000000);
+        int days  = total_sec / 86400;
+        int hours = (total_sec % 86400) / 3600;
+        int mins  = (total_sec % 3600) / 60;
+        char uptime_buf[32];
+        if (days > 0) {
+            snprintf(uptime_buf, sizeof(uptime_buf), "%dd %dh %dm", days, hours, mins);
+        } else if (hours > 0) {
+            snprintf(uptime_buf, sizeof(uptime_buf), "%dh %dm", hours, mins);
+        } else {
+            snprintf(uptime_buf, sizeof(uptime_buf), "%dm", mins);
+        }
+        gdispFillStringBox(vx, y, vw, 30, uptime_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
+    }
+
+    // --- Row 3: Connectivity ---
+    y = 220;
+    gdispFillStringBox(lx, y, lw, 30, "Connectivity", font_main, gray, GFX_BLACK, gJustifyLeft);
+    {
+        p3a_connectivity_level_t conn = p3a_state_get_connectivity();
+        const char *conn_msg = p3a_state_get_connectivity_message();
+        color_t conn_color;
+        switch (conn) {
+            case P3A_CONNECTIVITY_ONLINE:           conn_color = green;  break;
+            case P3A_CONNECTIVITY_NO_MQTT:
+            case P3A_CONNECTIVITY_NO_REGISTRATION:  conn_color = yellow; break;
+            default:                                conn_color = red;    break;
+        }
+        gdispFillStringBox(vx, y, vw, 30, conn_msg ? conn_msg : "Unknown",
+                           font_main, conn_color, GFX_BLACK, gJustifyLeft);
+    }
+
+    // --- Row 4: WiFi Signal ---
+    y = 270;
+    gdispFillStringBox(lx, y, lw, 30, "WiFi Signal", font_main, gray, GFX_BLACK, gJustifyLeft);
+    {
+        wifi_ap_record_t ap = {0};
+        if (esp_wifi_remote_sta_get_ap_info(&ap) == ESP_OK) {
+            const char *quality;
+            color_t rssi_color;
+            if (ap.rssi >= -50) {
+                quality = "Excellent"; rssi_color = green;
+            } else if (ap.rssi >= -60) {
+                quality = "Good";      rssi_color = green;
+            } else if (ap.rssi >= -70) {
+                quality = "Fair";      rssi_color = yellow;
+            } else {
+                quality = "Weak";      rssi_color = red;
+            }
+            char rssi_buf[40];
+            snprintf(rssi_buf, sizeof(rssi_buf), "%d dBm (%s)", ap.rssi, quality);
+            gdispFillStringBox(vx, y, vw, 30, rssi_buf, font_main, rssi_color, GFX_BLACK, gJustifyLeft);
+        } else {
+            gdispFillStringBox(vx, y, vw, 30, "N/A", font_main, gray, GFX_BLACK, gJustifyLeft);
+        }
+    }
+
+    // --- Row 5: Makapix ---
+    y = 320;
+    gdispFillStringBox(lx, y, lw, 30, "Makapix", font_main, gray, GFX_BLACK, gJustifyLeft);
+    {
+        makapix_state_t mstate = makapix_get_state();
+        const char *mstr = makapix_state_to_string(mstate);
+        color_t mcolor;
+        switch (mstate) {
+            case MAKAPIX_STATE_CONNECTED:            mcolor = green;  break;
+            case MAKAPIX_STATE_CONNECTING:
+            case MAKAPIX_STATE_DISCONNECTED:
+            case MAKAPIX_STATE_SHOW_CODE:
+            case MAKAPIX_STATE_PROVISIONING:         mcolor = yellow; break;
+            case MAKAPIX_STATE_REGISTRATION_INVALID:
+            case MAKAPIX_STATE_IDLE:                 mcolor = red;    break;
+            default:                                 mcolor = gray;   break;
+        }
+        gdispFillStringBox(vx, y, vw, 30, mstr, font_main, mcolor, GFX_BLACK, gJustifyLeft);
+    }
+
+    // --- Row 6: Giphy ---
+    y = 370;
+    gdispFillStringBox(lx, y, lw, 30, "Giphy", font_main, gray, GFX_BLACK, gJustifyLeft);
+    {
+        giphy_refresh_status_t gs = giphy_get_last_refresh_status();
+        const char *gs_str;
+        color_t gs_color;
+        switch (gs) {
+            case GIPHY_REFRESH_OK:            gs_str = "OK";      gs_color = green; break;
+            case GIPHY_REFRESH_FAILED:        gs_str = "Failed";  gs_color = red;   break;
+            default:                          gs_str = "N/A";     gs_color = gray;  break;
+        }
+        gdispFillStringBox(vx, y, vw, 30, gs_str, font_main, gs_color, GFX_BLACK, gJustifyLeft);
+    }
+
+    // --- Row 7: SD Card ---
+    y = 420;
+    gdispFillStringBox(lx, y, lw, 30, "SD Card", font_main, gray, GFX_BLACK, gJustifyLeft);
+    {
+        uint64_t total_bytes = 0, free_bytes = 0;
+        if (storage_eviction_get_storage_info(&total_bytes, &free_bytes) == ESP_OK && total_bytes > 0) {
+            int free_pct = (int)((free_bytes * 100) / total_bytes);
+            float free_gb = (float)free_bytes / (1024.0f * 1024.0f * 1024.0f);
+            float total_gb = (float)total_bytes / (1024.0f * 1024.0f * 1024.0f);
+            char sd_buf[48];
+            snprintf(sd_buf, sizeof(sd_buf), "%d%% free (%.1f / %.1f GB)", free_pct, free_gb, total_gb);
+            color_t sd_color = (free_pct > 20) ? green : (free_pct > 5) ? yellow : red;
+            gdispFillStringBox(vx, y, vw, 30, sd_buf, font_main, sd_color, GFX_BLACK, gJustifyLeft);
+        } else {
+            gdispFillStringBox(vx, y, vw, 30, "Not mounted", font_main, red, GFX_BLACK, gJustifyLeft);
+        }
+    }
+
+    // --- Row 8: Free Heap ---
+    y = 470;
+    gdispFillStringBox(lx, y, lw, 30, "Free Heap", font_main, gray, GFX_BLACK, gJustifyLeft);
+    {
+        size_t free_heap = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+        float free_kb = (float)free_heap / 1024.0f;
+        char heap_buf[32];
+        snprintf(heap_buf, sizeof(heap_buf), "%.0f KB free", free_kb);
+        color_t heap_color = (free_kb > 100) ? green : (free_kb > 30) ? yellow : red;
+        gdispFillStringBox(vx, y, vw, 30, heap_buf, font_main, heap_color, GFX_BLACK, gJustifyLeft);
+    }
+
+    // Dismiss hint at bottom
+    gdispFillStringBox(0, gdispGetHeight() - 60, screen_w, 25, "Long-press to dismiss",
+                       font_hint, HTML2COLOR(0x555555), GFX_BLACK, gJustifyCenter);
+}
+
+/**
  * @brief Draw the UI layout to the current framebuffer
  */
 static void ugfx_ui_draw_layout(int32_t remaining_secs)
@@ -466,6 +658,25 @@ void ugfx_ui_deinit(void)
     memset(s_status_message, 0, sizeof(s_status_message));
     s_ui_mode = UI_MODE_NONE;
     ugfx_framebuffer_ptr = NULL;
+}
+
+esp_err_t ugfx_ui_show_info_screen(void)
+{
+    s_ui_mode = UI_MODE_INFO_SCREEN;
+    s_ui_active = true;
+
+    ESP_LOGD(TAG, "Info screen UI activated");
+    return ESP_OK;
+}
+
+void ugfx_ui_hide_info_screen(void)
+{
+    if (s_ui_mode == UI_MODE_INFO_SCREEN) {
+        s_ui_active = false;
+        s_ui_mode = UI_MODE_NONE;
+
+        ESP_LOGD(TAG, "Info screen UI deactivated");
+    }
 }
 
 esp_err_t ugfx_ui_show_provisioning_status(const char *status_message)
@@ -667,7 +878,11 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
         case UI_MODE_CONNECTIVITY_ERROR:
             ugfx_ui_draw_connectivity_error();
             return 100;
-            
+
+        case UI_MODE_INFO_SCREEN:
+            ugfx_ui_draw_info_screen();
+            return 500;
+
         case UI_MODE_OTA_PROGRESS:
             ugfx_ui_draw_ota_progress();
             return 50;  // Faster refresh for smooth progress updates

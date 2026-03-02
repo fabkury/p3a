@@ -40,6 +40,7 @@ typedef struct {
 } si_node_t;
 
 static volatile bool s_refresh_cancel = false;
+static giphy_refresh_status_t s_last_refresh_status = GIPHY_REFRESH_NOT_ATTEMPTED;
 
 void giphy_cancel_refresh(void)
 {
@@ -523,7 +524,16 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
              channel_id, refresh_completed ? "complete" : "incomplete",
              total_fetched, cache->entry_count);
 
-    if (total_fetched > 0) return ESP_OK;
+    if (total_fetched > 0) {
+        s_last_refresh_status = GIPHY_REFRESH_OK;
+        return ESP_OK;
+    }
     // Propagate specific error (e.g. ESP_ERR_NOT_ALLOWED for invalid API key)
+    s_last_refresh_status = GIPHY_REFRESH_FAILED;
     return (last_err != ESP_OK) ? last_err : ESP_FAIL;
+}
+
+giphy_refresh_status_t giphy_get_last_refresh_status(void)
+{
+    return s_last_refresh_status;
 }

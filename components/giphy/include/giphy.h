@@ -230,6 +230,24 @@ void giphy_cancel_refresh(void);
  */
 bool giphy_is_refresh_cancelled(void);
 
+// ============================================================================
+// Refresh Status
+// ============================================================================
+
+/**
+ * @brief Last refresh outcome for display on info screen
+ */
+typedef enum {
+    GIPHY_REFRESH_NOT_ATTEMPTED,
+    GIPHY_REFRESH_OK,
+    GIPHY_REFRESH_FAILED,
+} giphy_refresh_status_t;
+
+/**
+ * @brief Get the result of the most recent Giphy refresh
+ */
+giphy_refresh_status_t giphy_get_last_refresh_status(void);
+
 #ifdef __cplusplus
 }
 #endif

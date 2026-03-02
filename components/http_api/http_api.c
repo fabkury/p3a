@@ -538,6 +538,9 @@ static esp_err_t h_post_router(httpd_req_t *req) {
     if (strcmp(uri, "/action/swap_to") == 0) {
         return h_post_swap_to(req);
     }
+    if (strcmp(uri, "/action/provision") == 0) {
+        return h_post_provision(req);
+    }
     // Playset endpoint: /playset/{name} (activate-only, existing)
     if (strncmp(uri, "/playset/", 9) == 0) {
         return h_post_playset(req);

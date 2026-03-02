@@ -386,6 +386,7 @@ esp_err_t h_get_api_state(httpd_req_t *req)
     }
 
     cJSON_AddStringToObject(data, "state", p3a_state_get_app_status_name(p3a_state_get_app_status()));
+    cJSON_AddStringToObject(data, "p3a_state", p3a_state_get_name(p3a_state_get()));
     cJSON_AddNumberToObject(data, "uptime_ms", (double)(esp_timer_get_time() / 1000ULL));
     cJSON_AddNumberToObject(data, "heap_free", (double)esp_get_free_heap_size());
     if (rssi_ok) {

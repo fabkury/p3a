@@ -241,10 +241,27 @@ void makapix_cancel_provisioning(void)
     if (s_makapix_state == MAKAPIX_STATE_PROVISIONING || s_makapix_state == MAKAPIX_STATE_SHOW_CODE) {
         ESP_LOGD(MAKAPIX_TAG, "Cancelling provisioning");
         s_provisioning_cancelled = true;  // Set flag to abort provisioning task
-        makapix_set_state(MAKAPIX_STATE_IDLE);
         memset(s_registration_code, 0, sizeof(s_registration_code));
         memset(s_registration_expires, 0, sizeof(s_registration_expires));
         memset(s_provisioning_status, 0, sizeof(s_provisioning_status));
+
+        // If the device already has valid credentials in NVS (i.e. was previously registered),
+        // transition to DISCONNECTED and spawn the reconnect task to restore MQTT.
+        // Fix 1 (deferred NVS writes) guarantees NVS still has the original valid credentials.
+        if (makapix_store_has_player_key() && makapix_store_has_certificates()) {
+            ESP_LOGI(MAKAPIX_TAG, "Device has valid credentials, reconnecting MQTT after cancelled provisioning");
+            makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
+
+            if (s_reconnect_task_handle == NULL) {
+                if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", 16384, NULL,
+                                CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_reconnect_task_handle) != pdPASS) {
+                    s_reconnect_task_handle = NULL;
+                    ESP_LOGE(MAKAPIX_TAG, "Failed to create reconnect task after provisioning cancel");
+                }
+            }
+        } else {
+            makapix_set_state(MAKAPIX_STATE_IDLE);
+        }
     }
 }
 

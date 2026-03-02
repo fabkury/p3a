@@ -17,6 +17,13 @@
 static StackType_t *s_cred_poll_stack = NULL;
 static StaticTask_t s_cred_poll_task_buffer;
 
+// Pending credentials: held in memory during provisioning, only persisted to NVS
+// after the user completes registration and TLS certificates are received.
+// This prevents overwriting valid credentials when provisioning is cancelled.
+static char s_pending_player_key[37] = {0};
+static char s_pending_mqtt_host[64] = {0};
+static uint16_t s_pending_mqtt_port = 0;
+
 /**
  * @brief Provisioning task
  */
@@ -47,51 +54,51 @@ void makapix_provisioning_task(void *pvParameters)
             return;
         }
 
-        // Save credentials (player_key and broker info)
-        // Note: Old registration data will be cleared later when credentials are successfully received
-        err = makapix_store_save_credentials(result.player_key, result.mqtt_host, result.mqtt_port);
-        if (err == ESP_OK) {
-            // Final check before updating state
-            if (!s_provisioning_cancelled) {
-                // Store registration code for display
-                snprintf(s_registration_code, sizeof(s_registration_code), "%s", result.registration_code);
-                snprintf(s_registration_expires, sizeof(s_registration_expires), "%s", result.expires_at);
-                
-                makapix_set_state(MAKAPIX_STATE_SHOW_CODE);
-                ESP_LOGD(MAKAPIX_TAG, "Provisioning successful, registration code: %s", s_registration_code);
-                ESP_LOGD(MAKAPIX_TAG, "Starting credential polling task...");
-                
-                // Start credential polling task
-                // Stack size needs to be large enough for makapix_credentials_result_t (3x 4096 byte arrays = ~12KB)
-                const size_t cred_poll_stack_size = 16384;
-                if (!s_cred_poll_stack) {
-                    s_cred_poll_stack = heap_caps_malloc(cred_poll_stack_size * sizeof(StackType_t),
-                                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-                }
+        // Hold credentials in memory only — don't persist to NVS yet.
+        // NVS is written only after the user completes registration and TLS certs arrive.
+        // This prevents overwriting valid credentials when provisioning is cancelled.
+        snprintf(s_pending_player_key, sizeof(s_pending_player_key), "%s", result.player_key);
+        snprintf(s_pending_mqtt_host, sizeof(s_pending_mqtt_host), "%s", result.mqtt_host);
+        s_pending_mqtt_port = result.mqtt_port;
+        ESP_LOGD(MAKAPIX_TAG, "Pending credentials stored in memory (not yet in NVS)");
 
-                BaseType_t poll_ret = pdFAIL;
-                if (s_cred_poll_stack) {
-                    s_poll_task_handle = xTaskCreateStatic(makapix_credentials_poll_task, "cred_poll",
-                                                            cred_poll_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
-                                                            s_cred_poll_stack, &s_cred_poll_task_buffer);
-                    poll_ret = (s_poll_task_handle != NULL) ? pdPASS : pdFAIL;
-                }
-                if (poll_ret != pdPASS) {
-                    poll_ret = xTaskCreate(makapix_credentials_poll_task, "cred_poll",
-                                           cred_poll_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_poll_task_handle);
-                }
-                if (poll_ret != pdPASS) {
-                    ESP_LOGE(MAKAPIX_TAG, "Failed to create credential polling task");
-                    makapix_set_state(MAKAPIX_STATE_IDLE);
-                    s_poll_task_handle = NULL;
-                }
-            } else {
-                ESP_LOGD(MAKAPIX_TAG, "Provisioning was cancelled, discarding results");
-                s_provisioning_cancelled = false;
+        // Final check before updating state
+        if (!s_provisioning_cancelled) {
+            // Store registration code for display
+            snprintf(s_registration_code, sizeof(s_registration_code), "%s", result.registration_code);
+            snprintf(s_registration_expires, sizeof(s_registration_expires), "%s", result.expires_at);
+
+            makapix_set_state(MAKAPIX_STATE_SHOW_CODE);
+            ESP_LOGD(MAKAPIX_TAG, "Provisioning successful, registration code: %s", s_registration_code);
+            ESP_LOGD(MAKAPIX_TAG, "Starting credential polling task...");
+
+            // Start credential polling task
+            // Stack size needs to be large enough for makapix_credentials_result_t (3x 4096 byte arrays = ~12KB)
+            const size_t cred_poll_stack_size = 16384;
+            if (!s_cred_poll_stack) {
+                s_cred_poll_stack = heap_caps_malloc(cred_poll_stack_size * sizeof(StackType_t),
+                                                      MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            }
+
+            BaseType_t poll_ret = pdFAIL;
+            if (s_cred_poll_stack) {
+                s_poll_task_handle = xTaskCreateStatic(makapix_credentials_poll_task, "cred_poll",
+                                                        cred_poll_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
+                                                        s_cred_poll_stack, &s_cred_poll_task_buffer);
+                poll_ret = (s_poll_task_handle != NULL) ? pdPASS : pdFAIL;
+            }
+            if (poll_ret != pdPASS) {
+                poll_ret = xTaskCreate(makapix_credentials_poll_task, "cred_poll",
+                                       cred_poll_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_poll_task_handle);
+            }
+            if (poll_ret != pdPASS) {
+                ESP_LOGE(MAKAPIX_TAG, "Failed to create credential polling task");
+                makapix_set_state(MAKAPIX_STATE_IDLE);
+                s_poll_task_handle = NULL;
             }
         } else {
-            ESP_LOGE(MAKAPIX_TAG, "Failed to save credentials: %s", esp_err_to_name(err));
-            makapix_set_state(MAKAPIX_STATE_IDLE);
+            ESP_LOGD(MAKAPIX_TAG, "Provisioning was cancelled, discarding results");
+            s_provisioning_cancelled = false;
         }
     } else {
         ESP_LOGE(MAKAPIX_TAG, "Provisioning failed: %s", esp_err_to_name(err));
@@ -114,13 +121,14 @@ void makapix_credentials_poll_task(void *pvParameters)
 {
     (void)pvParameters;
     char player_key[37];
-    
-    // Get player_key from store
-    if (makapix_store_get_player_key(player_key, sizeof(player_key)) != ESP_OK) {
-        ESP_LOGE(MAKAPIX_TAG, "Failed to get player_key for credential polling");
+
+    // Get player_key from pending (in-memory) credentials, not NVS
+    if (strlen(s_pending_player_key) == 0) {
+        ESP_LOGE(MAKAPIX_TAG, "No pending player_key for credential polling");
         vTaskDelete(NULL);
         return;
     }
+    snprintf(player_key, sizeof(player_key), "%s", s_pending_player_key);
 
     ESP_LOGD(MAKAPIX_TAG, "Starting credential polling for player_key: %s", player_key);
 
@@ -143,15 +151,12 @@ void makapix_credentials_poll_task(void *pvParameters)
         if (err == ESP_OK) {
             ESP_LOGD(MAKAPIX_TAG, "Credentials received! Saving to NVS...");
             
-            // Preserve broker info before clearing (from initial provisioning response)
-            // The credentials response may not include broker info, so we need to keep what we have
-            char preserved_mqtt_host[64] = {0};
-            uint16_t preserved_mqtt_port = 0;
-            bool has_preserved_broker = false;
-            if (makapix_store_get_mqtt_host(preserved_mqtt_host, sizeof(preserved_mqtt_host)) == ESP_OK &&
-                makapix_store_get_mqtt_port(&preserved_mqtt_port) == ESP_OK) {
-                has_preserved_broker = true;
-                ESP_LOGD(MAKAPIX_TAG, "Preserved broker info: %s:%d", preserved_mqtt_host, preserved_mqtt_port);
+            // Use pending (in-memory) broker info from the provisioning response.
+            // The credentials response may not include broker info, so we fall back to what
+            // was returned during the initial provisioning request.
+            bool has_pending_broker = (strlen(s_pending_mqtt_host) > 0 && s_pending_mqtt_port > 0);
+            if (has_pending_broker) {
+                ESP_LOGD(MAKAPIX_TAG, "Pending broker info from provisioning: %s:%d", s_pending_mqtt_host, s_pending_mqtt_port);
             }
             
             // Clear old registration data before saving new credentials (only if re-registering)
@@ -175,19 +180,24 @@ void makapix_credentials_poll_task(void *pvParameters)
                     mqtt_host_to_save = creds.mqtt_host;
                     mqtt_port_to_save = creds.mqtt_port;
                     ESP_LOGD(MAKAPIX_TAG, "Using broker info from credentials response: %s:%d", mqtt_host_to_save, mqtt_port_to_save);
-                } else if (has_preserved_broker) {
-                    mqtt_host_to_save = preserved_mqtt_host;
-                    mqtt_port_to_save = preserved_mqtt_port;
-                    ESP_LOGD(MAKAPIX_TAG, "Using preserved broker info: %s:%d", mqtt_host_to_save, mqtt_port_to_save);
+                } else if (has_pending_broker) {
+                    mqtt_host_to_save = s_pending_mqtt_host;
+                    mqtt_port_to_save = s_pending_mqtt_port;
+                    ESP_LOGD(MAKAPIX_TAG, "Using pending broker info: %s:%d", mqtt_host_to_save, mqtt_port_to_save);
                 } else {
                     mqtt_host_to_save = CONFIG_MAKAPIX_CLUB_HOST;
                     mqtt_port_to_save = CONFIG_MAKAPIX_CLUB_MQTT_PORT;
                     ESP_LOGD(MAKAPIX_TAG, "Using CONFIG broker info: %s:%d", mqtt_host_to_save, mqtt_port_to_save);
                 }
                 
-                // Save broker info (player_key is still valid from this task's scope)
+                // NOW persist credentials to NVS — registration is confirmed
                 makapix_store_save_credentials(player_key, mqtt_host_to_save, mqtt_port_to_save);
-                
+
+                // Clear pending state
+                memset(s_pending_player_key, 0, sizeof(s_pending_player_key));
+                memset(s_pending_mqtt_host, 0, sizeof(s_pending_mqtt_host));
+                s_pending_mqtt_port = 0;
+
                 ESP_LOGD(MAKAPIX_TAG, "Certificates saved successfully, initiating MQTT connection");
                 makapix_set_state(MAKAPIX_STATE_CONNECTING);
                 

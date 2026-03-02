@@ -217,8 +217,8 @@ body {
 <script>
 // Valid formats per rendition (matches backend s_rendition_map)
 var RENDITION_FORMATS = {
-    'fixed_height':     ['webp', 'gif'],
-    'original':         ['webp', 'gif']
+    'fixed_height':     ['gif', 'webp'],
+    'original':         ['gif', 'webp']
 };
 
 var FORMAT_LABELS = { 'webp': 'WebP', 'gif': 'GIF' };
@@ -239,7 +239,7 @@ function updateFormatOptions() {
     var renditionSel = document.getElementById('giphy-rendition');
     var formatSel = document.getElementById('giphy-format');
     var current = formatSel.value;
-    var allowed = RENDITION_FORMATS[renditionSel.value] || ['webp', 'gif'];
+    var allowed = RENDITION_FORMATS[renditionSel.value] || ['gif', 'webp'];
 
     // Clear options
     formatSel.length = 0;
@@ -269,7 +269,7 @@ function loadSettings() {
                 document.getElementById('giphy-api-key').value = cfg.giphy_api_key || '';
                 document.getElementById('giphy-rendition').value = cfg.giphy_rendition || 'fixed_height';
                 updateFormatOptions();
-                document.getElementById('giphy-format').value = cfg.giphy_format || 'webp';
+                document.getElementById('giphy-format').value = cfg.giphy_format || 'gif';
                 // Re-run in case the loaded format isn't valid for the loaded rendition
                 updateFormatOptions();
                 document.getElementById('giphy-rating').value = cfg.giphy_rating || 'pg-13';

@@ -20,6 +20,7 @@
 #include "giphy.h"
 #include "storage_eviction.h"
 #include "esp_heap_caps.h"
+#include "play_scheduler.h"
 
 // Include µGFX headers
 #include "gfx.h"
@@ -678,6 +679,7 @@ esp_err_t ugfx_ui_show_info_screen(void)
 {
     s_ui_mode = UI_MODE_INFO_SCREEN;
     s_ui_active = true;
+    play_scheduler_pause_auto_swap();
 
     ESP_LOGD(TAG, "Info screen UI activated");
     return ESP_OK;
@@ -688,6 +690,7 @@ void ugfx_ui_hide_info_screen(void)
     if (s_ui_mode == UI_MODE_INFO_SCREEN) {
         s_ui_active = false;
         s_ui_mode = UI_MODE_NONE;
+        play_scheduler_resume_auto_swap();
 
         ESP_LOGD(TAG, "Info screen UI deactivated");
     }
@@ -820,6 +823,12 @@ void ugfx_ui_hide_ota_progress(void)
 
 esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *message, int progress_percent)
 {
+    // Don't let channel messages overwrite the info screen
+    if (s_ui_mode == UI_MODE_INFO_SCREEN) {
+        ESP_LOGD(TAG, "Channel message ignored: info screen is active");
+        return ESP_ERR_INVALID_STATE;
+    }
+
     if (channel_name) {
         strncpy(s_channel_name, channel_name, sizeof(s_channel_name) - 1);
         s_channel_name[sizeof(s_channel_name) - 1] = '\0';

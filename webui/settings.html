@@ -287,6 +287,12 @@ body {
             <option value="1">Stochastic</option>
         </select>
     </div>
+    <div class="toggle-row">
+        <label class="toggle-label" for="refresh-override" style="cursor:pointer;">
+            <input type="checkbox" id="refresh-override" onchange="saveRefreshOverride(this.checked)" style="margin-right:6px;vertical-align:middle;">
+            Allow refresh override (one-time bypass for all channels)
+        </label>
+    </div>
 </div>
 <div class="section">
     <h3>Storage</h3>
@@ -385,6 +391,20 @@ function loadAllConfig() {
         }
     };
     xhr.send();
+    // Load refresh override flag (separate endpoint)
+    var xhr2 = new XMLHttpRequest();
+    xhr2.open('GET', '/settings/refresh_override', true);
+    xhr2.onreadystatechange = function() {
+        if (xhr2.readyState === 4) {
+            try {
+                var resp = JSON.parse(xhr2.responseText || '{}');
+                if (resp && resp.ok && resp.data) {
+                    document.getElementById('refresh-override').checked = !!resp.data.refresh_allow_override;
+                }
+            } catch (e) { /* ignore */ }
+        }
+    };
+    xhr2.send();
 }
 function mergeConfig(partial, onSuccess, onError) {
     var xhr = new XMLHttpRequest();
@@ -478,6 +498,22 @@ function saveChannelSelectMode(val) {
         showToast('Save failed', true);
         document.getElementById('ch-select-mode').value = val === '1' ? '0' : '1';
     });
+}
+function saveRefreshOverride(checked) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('PUT', '/settings/refresh_override', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                showToast('Refresh override ' + (checked ? 'enabled' : 'disabled'), false);
+            } else {
+                showToast('Save failed', true);
+                document.getElementById('refresh-override').checked = !checked;
+            }
+        }
+    };
+    xhr.send(JSON.stringify({refresh_allow_override: checked}));
 }
 function saveAutoSwap() {
     var sec = parseInt(document.getElementById('autoswap').value, 10);

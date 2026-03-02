@@ -147,17 +147,6 @@ body {
 }
 .status.success { background: #4CAF50; color: white; }
 .status.error { background: #f44336; color: white; }
-.checkbox-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 0;
-}
-.checkbox-label {
-    font-size: 0.9rem;
-    color: #333;
-    cursor: pointer;
-}
 </style>
 </head>
 <body>
@@ -217,13 +206,6 @@ body {
         <input class="setting-input" id="giphy-cache-size" type="number" min="32" max="500" step="1" value="400">
     </div>
     <div class="setting-hint">Refresh interval controls how often Giphy channels fetch new content. Cache size sets the max number of items kept per channel (32–500).</div>
-    <div class="checkbox-row">
-        <input type="checkbox" id="refresh-override">
-        <label class="checkbox-label" for="refresh-override">
-            Allow refresh override (one-time bypass for all channels)
-        </label>
-    </div>
-    <div class="setting-hint">When checked, the next refresh cycle will ignore the interval for all channels. Automatically unchecks after the cycle completes.</div>
 </div>
 <div class="section">
     <button class="btn save-all" id="save-btn" onclick="saveAll()">Save All Settings</button>
@@ -302,20 +284,6 @@ function loadSettings() {
         }
     };
     xhr.send();
-
-    var xhr2 = new XMLHttpRequest();
-    xhr2.open('GET', '/settings/refresh_override', true);
-    xhr2.onreadystatechange = function() {
-        if (xhr2.readyState === 4) {
-            try {
-                var resp = JSON.parse(xhr2.responseText || '{}');
-                if (resp && resp.ok && resp.data) {
-                    document.getElementById('refresh-override').checked = !!resp.data.refresh_allow_override;
-                }
-            } catch (e) { /* ignore */ }
-        }
-    };
-    xhr2.send();
 }
 
 function saveAll() {
@@ -349,13 +317,6 @@ function saveAll() {
         if (xhr.readyState === 4) {
             btn.disabled = false;
             if (xhr.status >= 200 && xhr.status < 300) {
-                // Save override flag
-                var xhrOvr = new XMLHttpRequest();
-                xhrOvr.open('PUT', '/settings/refresh_override', true);
-                xhrOvr.setRequestHeader('Content-Type', 'application/json');
-                xhrOvr.send(JSON.stringify({
-                    refresh_allow_override: document.getElementById('refresh-override').checked
-                }));
                 showToast('Giphy settings saved', false);
             } else {
                 showToast('Save failed (HTTP ' + xhr.status + ')', true);
@@ -367,14 +328,6 @@ function saveAll() {
 
 // Wire up rendition change to refresh format options
 document.getElementById('giphy-rendition').addEventListener('change', updateFormatOptions);
-
-// Auto-check refresh override when interval or cache size changes
-document.getElementById('giphy-refresh').addEventListener('change', function() {
-    document.getElementById('refresh-override').checked = true;
-});
-document.getElementById('giphy-cache-size').addEventListener('input', function() {
-    document.getElementById('refresh-override').checked = true;
-});
 
 loadSettings();
 </script>

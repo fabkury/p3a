@@ -375,8 +375,8 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
 
     extern void download_manager_rescan(void);
 
-    // Per-page entry buffer on the stack (25 entries x 64 bytes = 1600 bytes)
-    giphy_channel_entry_t page_entries[25];
+    // Per-page entry buffer on the stack (must hold GIPHY_PAGE_LIMIT entries)
+    giphy_channel_entry_t page_entries[GIPHY_PAGE_LIMIT];
     size_t total_fetched = 0;
     int offset = 0;
     esp_err_t last_err = ESP_OK;

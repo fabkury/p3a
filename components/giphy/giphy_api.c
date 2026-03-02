@@ -19,9 +19,6 @@
 
 static const char *TAG = "giphy_api";
 
-// Maximum items per Giphy API call.
-#define GIPHY_PAGE_LIMIT 48
-
 /**
  * @brief Parse a single GIF object from the Giphy API response
  *

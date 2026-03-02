@@ -151,6 +151,7 @@ static esp_err_t giphy_merge_entries(channel_cache_t *cache,
     return ESP_OK;
 }
 
+
 /**
  * @brief Rebuild LAi for Giphy channel by checking file existence
  *
@@ -231,10 +232,17 @@ static void giphy_evict_orphans(channel_cache_t *cache, si_node_t *si_hash)
 {
     if (!cache) return;
 
+    // Collect evicted post_ids so we can update LAi outside the mutex
+    int32_t *evicted_ids = NULL;
+    size_t evicted = 0;
+
     xSemaphoreTake(cache->mutex, portMAX_DELAY);
 
+    if (cache->entry_count > 0) {
+        evicted_ids = psram_malloc(cache->entry_count * sizeof(int32_t));
+    }
+
     size_t kept = 0;
-    size_t evicted = 0;
 
     for (size_t i = 0; i < cache->entry_count; i++) {
         si_node_t *found = NULL;
@@ -254,6 +262,9 @@ static void giphy_evict_orphans(channel_cache_t *cache, si_node_t *si_hash)
             giphy_build_filepath(ge->giphy_id, ge->extension,
                                  filepath, sizeof(filepath));
             unlink(filepath);
+            if (evicted_ids) {
+                evicted_ids[evicted] = ge->post_id;
+            }
             evicted++;
         }
     }
@@ -280,8 +291,11 @@ static void giphy_evict_orphans(channel_cache_t *cache, si_node_t *si_hash)
     cache->dirty = true;
     xSemaphoreGive(cache->mutex);
 
-    // Rebuild LAi from surviving files
-    giphy_lai_rebuild(cache);
+    // Remove evicted entries from LAi (outside mutex — lai_remove_entry locks internally)
+    for (size_t i = 0; i < evicted; i++) {
+        lai_remove_entry(cache, evicted_ids[i]);
+    }
+    free(evicted_ids);
 
     // Save cache to disk
     char channels_path[128];
@@ -358,11 +372,6 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
             return ESP_ERR_NO_MEM;
         }
     }
-
-    // Rebuild LAi BEFORE the loop so the download manager recognizes
-    // files already on disk from previous sessions
-    size_t available = giphy_lai_rebuild(cache);
-    ESP_LOGI(TAG, "LAi rebuilt: %zu files already available", available);
 
     extern void download_manager_rescan(void);
 
@@ -470,6 +479,11 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
         }
         si_hash = NULL;
     }
+
+    // Rebuild LAi from final Ci state so it reflects files on disk after all
+    // merges and evictions. This runs once per refresh, not per page.
+    size_t available = giphy_lai_rebuild(cache);
+    ESP_LOGI(TAG, "LAi rebuilt after refresh: %zu files available", available);
 
     // Only persist last_refresh timestamp when the refresh ran to completion.
     // Cancelled or failed refreshes must not update the timestamp, otherwise

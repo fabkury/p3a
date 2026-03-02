@@ -751,7 +751,6 @@ static void refresh_task(void *arg)
             ch->refresh_in_progress = false;
 
             // Update active flag based on available artwork count
-            // (Giphy channels set available_count during giphy_lai_rebuild)
             if (ch->cache) {
                 ch->active = (ch->cache->available_count > 0);
             }

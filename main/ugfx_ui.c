@@ -410,22 +410,27 @@ static void ugfx_ui_draw_info_screen(void)
     gCoord vw = screen_w - vx - 20;  // value width
     gCoord lw = vx - lx - 10;        // label width
 
-    // Title
-    gdispFillStringBox(0, 50, screen_w, 35, "SYSTEM INFO",
+    // Title – show device name (e.g. "p3a" or "p3a-kitchen")
+    char title_buf[64];
+    if (config_store_get_hostname(title_buf, sizeof(title_buf)) != ESP_OK) {
+        snprintf(title_buf, sizeof(title_buf), "p3a");
+    }
+    gdispFillStringBox(0, 50, screen_w, 35, title_buf,
                        font_title, GFX_WHITE, GFX_BLACK, gJustifyCenter);
 
     // --- Row 1: Firmware ---
     gCoord y = 120;
-    gdispFillStringBox(lx, y, lw, 30, "Firmware", font_main, gray, GFX_BLACK, gJustifyLeft);
+    gCoord rh = 36;   // row height – enough for descenders (p, y, g…)
+    gdispFillStringBox(lx, y, lw, rh, "Firmware", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         char fw_buf[48];
         snprintf(fw_buf, sizeof(fw_buf), "v%s", FW_VERSION);
-        gdispFillStringBox(vx, y, vw, 30, fw_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
+        gdispFillStringBox(vx, y, vw, rh, fw_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
     }
 
     // --- Row 2: Uptime ---
     y = 170;
-    gdispFillStringBox(lx, y, lw, 30, "Uptime", font_main, gray, GFX_BLACK, gJustifyLeft);
+    gdispFillStringBox(lx, y, lw, rh, "Uptime", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         int64_t us = esp_timer_get_time();
         int total_sec = (int)(us / 1000000);
@@ -440,12 +445,12 @@ static void ugfx_ui_draw_info_screen(void)
         } else {
             snprintf(uptime_buf, sizeof(uptime_buf), "%dm", mins);
         }
-        gdispFillStringBox(vx, y, vw, 30, uptime_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
+        gdispFillStringBox(vx, y, vw, rh, uptime_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
     }
 
     // --- Row 3: Connectivity ---
     y = 220;
-    gdispFillStringBox(lx, y, lw, 30, "Connectivity", font_main, gray, GFX_BLACK, gJustifyLeft);
+    gdispFillStringBox(lx, y, lw, rh, "Connectivity", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         p3a_connectivity_level_t conn = p3a_state_get_connectivity();
         const char *conn_msg = p3a_state_get_connectivity_message();
@@ -456,13 +461,13 @@ static void ugfx_ui_draw_info_screen(void)
             case P3A_CONNECTIVITY_NO_REGISTRATION:  conn_color = yellow; break;
             default:                                conn_color = red;    break;
         }
-        gdispFillStringBox(vx, y, vw, 30, conn_msg ? conn_msg : "Unknown",
+        gdispFillStringBox(vx, y, vw, rh, conn_msg ? conn_msg : "Unknown",
                            font_main, conn_color, GFX_BLACK, gJustifyLeft);
     }
 
     // --- Row 4: WiFi Signal ---
     y = 270;
-    gdispFillStringBox(lx, y, lw, 30, "WiFi Signal", font_main, gray, GFX_BLACK, gJustifyLeft);
+    gdispFillStringBox(lx, y, lw, rh, "WiFi Signal", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         wifi_ap_record_t ap = {0};
         if (esp_wifi_remote_sta_get_ap_info(&ap) == ESP_OK) {
@@ -479,15 +484,15 @@ static void ugfx_ui_draw_info_screen(void)
             }
             char rssi_buf[40];
             snprintf(rssi_buf, sizeof(rssi_buf), "%d dBm (%s)", ap.rssi, quality);
-            gdispFillStringBox(vx, y, vw, 30, rssi_buf, font_main, rssi_color, GFX_BLACK, gJustifyLeft);
+            gdispFillStringBox(vx, y, vw, rh, rssi_buf, font_main, rssi_color, GFX_BLACK, gJustifyLeft);
         } else {
-            gdispFillStringBox(vx, y, vw, 30, "N/A", font_main, gray, GFX_BLACK, gJustifyLeft);
+            gdispFillStringBox(vx, y, vw, rh, "N/A", font_main, gray, GFX_BLACK, gJustifyLeft);
         }
     }
 
     // --- Row 5: Makapix ---
     y = 320;
-    gdispFillStringBox(lx, y, lw, 30, "Makapix", font_main, gray, GFX_BLACK, gJustifyLeft);
+    gdispFillStringBox(lx, y, lw, rh, "Makapix", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         makapix_state_t mstate = makapix_get_state();
         const char *mstr = makapix_state_to_string(mstate);
@@ -502,12 +507,12 @@ static void ugfx_ui_draw_info_screen(void)
             case MAKAPIX_STATE_IDLE:                 mcolor = red;    break;
             default:                                 mcolor = gray;   break;
         }
-        gdispFillStringBox(vx, y, vw, 30, mstr, font_main, mcolor, GFX_BLACK, gJustifyLeft);
+        gdispFillStringBox(vx, y, vw, rh, mstr, font_main, mcolor, GFX_BLACK, gJustifyLeft);
     }
 
     // --- Row 6: Giphy ---
     y = 370;
-    gdispFillStringBox(lx, y, lw, 30, "Giphy", font_main, gray, GFX_BLACK, gJustifyLeft);
+    gdispFillStringBox(lx, y, lw, rh, "Giphy", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         giphy_refresh_status_t gs = giphy_get_last_refresh_status();
         const char *gs_str;
@@ -517,12 +522,12 @@ static void ugfx_ui_draw_info_screen(void)
             case GIPHY_REFRESH_FAILED:        gs_str = "Failed";  gs_color = red;   break;
             default:                          gs_str = "N/A";     gs_color = gray;  break;
         }
-        gdispFillStringBox(vx, y, vw, 30, gs_str, font_main, gs_color, GFX_BLACK, gJustifyLeft);
+        gdispFillStringBox(vx, y, vw, rh, gs_str, font_main, gs_color, GFX_BLACK, gJustifyLeft);
     }
 
     // --- Row 7: SD Card ---
     y = 420;
-    gdispFillStringBox(lx, y, lw, 30, "SD Card", font_main, gray, GFX_BLACK, gJustifyLeft);
+    gdispFillStringBox(lx, y, lw, rh, "SD Card", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         uint64_t total_bytes = 0, free_bytes = 0;
         if (storage_eviction_get_storage_info(&total_bytes, &free_bytes) == ESP_OK && total_bytes > 0) {
@@ -532,26 +537,35 @@ static void ugfx_ui_draw_info_screen(void)
             char sd_buf[48];
             snprintf(sd_buf, sizeof(sd_buf), "%d%% free (%.1f / %.1f GB)", free_pct, free_gb, total_gb);
             color_t sd_color = (free_pct > 20) ? green : (free_pct > 5) ? yellow : red;
-            gdispFillStringBox(vx, y, vw, 30, sd_buf, font_main, sd_color, GFX_BLACK, gJustifyLeft);
+            gdispFillStringBox(vx, y, vw, rh, sd_buf, font_main, sd_color, GFX_BLACK, gJustifyLeft);
         } else {
-            gdispFillStringBox(vx, y, vw, 30, "Not mounted", font_main, red, GFX_BLACK, gJustifyLeft);
+            gdispFillStringBox(vx, y, vw, rh, "Not mounted", font_main, red, GFX_BLACK, gJustifyLeft);
         }
     }
 
     // --- Row 8: Free Heap ---
     y = 470;
-    gdispFillStringBox(lx, y, lw, 30, "Free Heap", font_main, gray, GFX_BLACK, gJustifyLeft);
+    gdispFillStringBox(lx, y, lw, rh, "Free Heap", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         size_t free_heap = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
         float free_kb = (float)free_heap / 1024.0f;
         char heap_buf[32];
         snprintf(heap_buf, sizeof(heap_buf), "%.0f KB free", free_kb);
         color_t heap_color = (free_kb > 100) ? green : (free_kb > 30) ? yellow : red;
-        gdispFillStringBox(vx, y, vw, 30, heap_buf, font_main, heap_color, GFX_BLACK, gJustifyLeft);
+        gdispFillStringBox(vx, y, vw, rh, heap_buf, font_main, heap_color, GFX_BLACK, gJustifyLeft);
+    }
+
+    // --- Row 9: Web UI ---
+    y = 520;
+    gdispFillStringBox(lx, y, lw, rh, "Web UI", font_main, gray, GFX_BLACK, gJustifyLeft);
+    {
+        char url_buf[80];
+        snprintf(url_buf, sizeof(url_buf), "http://%s.local/", title_buf);
+        gdispFillStringBox(vx, y, vw, rh, url_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
     }
 
     // Dismiss hint at bottom
-    gdispFillStringBox(0, gdispGetHeight() - 60, screen_w, 25, "Long-press to dismiss",
+    gdispFillStringBox(0, gdispGetHeight() - 60, screen_w, 30, "Long-press to dismiss",
                        font_hint, HTML2COLOR(0x555555), GFX_BLACK, gJustifyCenter);
 }
 

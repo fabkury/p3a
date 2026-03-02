@@ -620,16 +620,19 @@ static void refresh_task(void *arg)
             uint32_t interval = config_store_get_giphy_refresh_interval();
             bool allow_override = config_store_get_refresh_allow_override();
             if (!allow_override &&
-                // sntp_sync_is_synchronized() && // Giphy channels are re-checked on SNTP sync
                 cache_has_entries &&
                 giphy_meta.last_refresh > 0 && now > 0 &&
                 (now - giphy_meta.last_refresh) < (time_t)interval) {
-                uint32_t remaining = interval - (uint32_t)(now - giphy_meta.last_refresh);
-                time_t stale_at = giphy_meta.last_refresh + (time_t)interval;
-                if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
-                ESP_LOGI(TAG, "Giphy channel '%s' still fresh (last refresh %lds ago, interval %lus, stale in %lus), skipping",
-                         channel_id, (long)(now - giphy_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
-                err = ESP_OK;  // Treat as successful (no-op)
+                if (!sntp_sync_is_synchronized()) {
+                    ESP_LOGI(TAG, "Giphy channel '%s' deferred (SNTP not synchronized)", channel_id); // Channels are re-checked on SNTP sync
+                } else {
+                    uint32_t remaining = interval - (uint32_t)(now - giphy_meta.last_refresh);
+                    time_t stale_at = giphy_meta.last_refresh + (time_t)interval;
+                    if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
+                    ESP_LOGI(TAG, "Giphy channel '%s' still fresh (last refresh %lds ago, interval %lus, stale in %lus), skipping",
+                            channel_id, (long)(now - giphy_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
+                }
+                err = ESP_OK;  // Treat as successful no-op
             } else {
                 if (allow_override) {
                     ESP_LOGI(TAG, "Channel '%s' refresh override active, bypassing interval check",

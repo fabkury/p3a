@@ -566,7 +566,7 @@ static void ugfx_ui_draw_info_screen(void)
     }
 
     // Dismiss hint at bottom
-    gdispFillStringBox(0, gdispGetHeight() - 60, screen_w, 30, "Long-press to dismiss",
+    gdispFillStringBox(0, gdispGetHeight() - 60, screen_w, rh, "Long-press to dismiss",
                        font_hint, HTML2COLOR(0x555555), GFX_BLACK, gJustifyCenter);
 }
 

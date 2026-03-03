@@ -8,8 +8,7 @@
 #include "makapix_channel_internal.h"
 #include "makapix_channel_utils.h"
 #include "playlist_manager.h"
-#include "giphy.h"
-#include "play_scheduler_types.h"   // PS_MAX_CHANNELS
+#include "play_scheduler_types.h"   // PS_MAX_CHANNELS, ps_channel_type_t
 #include "esp_log.h"
 #include <string.h>
 #include <stdlib.h>
@@ -193,20 +192,8 @@ void channel_cache_build_path(const char *channel_id,
                               const char *channels_path,
                               char *out, size_t out_len)
 {
-    // Sanitize channel_id (replace non-alphanumeric with underscore)
-    char safe_id[64];
-    size_t j = 0;
-    for (size_t i = 0; channel_id[i] && j < sizeof(safe_id) - 1; i++) {
-        char c = channel_id[i];
-        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-            (c >= '0' && c <= '9') || c == '-' || c == '_') {
-            safe_id[j++] = c;
-        }
-    }
-    safe_id[j] = '\0';
-
-    // Use .cache extension - this is the unified persistence format with header + Ci + LAi
-    snprintf(out, out_len, "%s/%s.cache", channels_path, safe_id);
+    // channel_id is a hex hash — always filesystem-safe, no sanitization needed
+    snprintf(out, out_len, "%s/%s.cache", channels_path, channel_id);
 }
 
 /**
@@ -292,7 +279,7 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
         // Validate loaded entries for corruption
         // Giphy channels use negative post_ids (DJB2 hash, negated)
         // Makapix channels use positive post_ids
-        bool is_giphy = giphy_is_giphy_channel(cache->channel_id);
+        bool is_giphy = (cache->channel_type == PS_CHANNEL_TYPE_GIPHY);
         for (size_t i = 0; i < cache->entry_count; i++) {
             makapix_channel_entry_t *e = &cache->entries[i];
 
@@ -453,6 +440,7 @@ void channel_cache_deinit(void)
 }
 
 esp_err_t channel_cache_load(const char *channel_id,
+                             uint8_t channel_type,
                              const char *channels_path,
                              const char *vault_path,
                              channel_cache_t *cache)
@@ -470,6 +458,7 @@ esp_err_t channel_cache_load(const char *channel_id,
     // Initialize cache structure
     memset(cache, 0, sizeof(*cache));
     strncpy(cache->channel_id, channel_id, sizeof(cache->channel_id) - 1);
+    cache->channel_type = channel_type;
     cache->cache_version = CHANNEL_CACHE_VERSION;
 
     cache->mutex = xSemaphoreCreateMutex();

@@ -267,24 +267,18 @@ static esp_err_t refresh_sdcard_channel(ps_channel_state_t *ch)
  */
 static esp_err_t refresh_makapix_channel(ps_channel_state_t *ch)
 {
-    ESP_LOGI(TAG, "Refreshing Makapix channel: %s", ch->channel_id);
+    ESP_LOGI(TAG, "Refreshing Makapix channel: %s (type=%d)", ch->channel_id, ch->type);
 
-    // Parse channel_id to determine Makapix channel type and identifier
-    // Channel IDs: "all", "promoted", "by_user_{sqid}", "hashtag_{tag}"
-
+    // Use type and spec fields directly — no channel_id string parsing needed
     esp_err_t err = ESP_OK;
-    if (strcmp(ch->channel_id, "all") == 0) {
-        err = makapix_refresh_channel_index("all", NULL);
-    } else if (strcmp(ch->channel_id, "promoted") == 0) {
-        err = makapix_refresh_channel_index("promoted", NULL);
-    } else if (strncmp(ch->channel_id, "by_user_", 8) == 0) {
-        const char *sqid = ch->channel_id + 8;
-        err = makapix_refresh_channel_index("by_user", sqid);
-    } else if (strncmp(ch->channel_id, "hashtag_", 8) == 0) {
-        const char *tag = ch->channel_id + 8;
-        err = makapix_refresh_channel_index("hashtag", tag);
+    if (ch->type == PS_CHANNEL_TYPE_NAMED) {
+        err = makapix_refresh_channel_index(ch->spec_name, NULL);
+    } else if (ch->type == PS_CHANNEL_TYPE_USER) {
+        err = makapix_refresh_channel_index("by_user", ch->identifier);
+    } else if (ch->type == PS_CHANNEL_TYPE_HASHTAG) {
+        err = makapix_refresh_channel_index("hashtag", ch->identifier);
     } else {
-        ESP_LOGW(TAG, "Unknown Makapix channel type: %s", ch->channel_id);
+        ESP_LOGW(TAG, "Unknown Makapix channel type: %d", ch->type);
         return ESP_ERR_NOT_SUPPORTED;
     }
 
@@ -379,7 +373,7 @@ static void refresh_task(void *arg)
             s_sntp_cache_touched = true;
             xSemaphoreTake(state->mutex, portMAX_DELAY);
             for (size_t i = 0; i < state->channel_count; i++) {
-                ps_touch_cache_file(state->channels[i].channel_id);
+                ps_touch_cache_file(state->channels[i].channel_id, state->channels[i].type);
             }
             xSemaphoreGive(state->mutex);
         }
@@ -593,6 +587,8 @@ static void refresh_task(void *arg)
         strlcpy(channel_id, ch->channel_id, sizeof(channel_id));
         char identifier[33];
         strlcpy(identifier, ch->identifier, sizeof(identifier));
+        char spec_name[33];
+        strlcpy(spec_name, ch->spec_name, sizeof(spec_name));
         bool cache_has_entries = (ch->cache != NULL && ch->cache->entry_count > 0);
 
         xSemaphoreGive(state->mutex);
@@ -611,7 +607,7 @@ static void refresh_task(void *arg)
             if (giphy_key_check[0] == '\0') {
                 ESP_LOGW(TAG, "Giphy channel '%s' skipped: no API key configured", channel_id);
                 char giphy_display_name[64];
-                ps_get_display_name(channel_id, giphy_display_name, sizeof(giphy_display_name));
+                ps_get_display_name_from_spec(type, spec_name, identifier, giphy_display_name, sizeof(giphy_display_name));
                 p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1,
                                                "No Giphy API key configured");
                 err = ESP_ERR_NOT_FOUND;
@@ -658,7 +654,7 @@ static void refresh_task(void *arg)
                 // skipped because WiFi wasn't ready yet.
                 extern bool animation_player_is_animation_ready(void);
                 char giphy_display_name[64];
-                ps_get_display_name(channel_id, giphy_display_name, sizeof(giphy_display_name));
+                ps_get_display_name_from_spec(type, spec_name, identifier, giphy_display_name, sizeof(giphy_display_name));
                 if (!animation_player_is_animation_ready()) {
                     p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_LOADING, -1,
                                                    "Loading channel...");
@@ -679,13 +675,13 @@ static void refresh_task(void *arg)
                         ESP_LOGI(TAG, "Giphy channel '%s' refresh cancelled", channel_id);
                     } else {
                         char giphy_display_name[64];
-                        ps_get_display_name(channel_id, giphy_display_name, sizeof(giphy_display_name));
+                        ps_get_display_name_from_spec(type, spec_name, identifier, giphy_display_name, sizeof(giphy_display_name));
                         p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1,
                                                        "Invalid Giphy API key");
                     }
                 } else {
                     char giphy_display_name[64];
-                    ps_get_display_name(channel_id, giphy_display_name, sizeof(giphy_display_name));
+                    ps_get_display_name_from_spec(type, spec_name, identifier, giphy_display_name, sizeof(giphy_display_name));
                     const char *detail = "Giphy refresh failed";
                     if (err == ESP_ERR_INVALID_RESPONSE) detail = "Giphy API rate limited";
                     p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1, detail);
@@ -924,15 +920,6 @@ void ps_build_cache_path_internal(const char *channel_id, char *out_path, size_t
         strlcpy(channel_dir, "/sdcard/p3a/channel", sizeof(channel_dir));
     }
 
-    // Replace : with _ for filesystem safety
-    char safe_id[64];
-    size_t j = 0;
-    for (size_t i = 0; channel_id[i] && j < sizeof(safe_id) - 1; i++) {
-        safe_id[j++] = (channel_id[i] == ':') ? '_' : channel_id[i];
-    }
-    safe_id[j] = '\0';
-
-    // NOTE: Callers should use a sufficiently large output buffer (>= 512 bytes)
-    // to avoid path truncation warnings treated as errors under -Wformat-truncation.
-    snprintf(out_path, max_len, "%s/%s.bin", channel_dir, safe_id);
+    // channel_id is a hex hash — always filesystem-safe, no sanitization needed
+    snprintf(out_path, max_len, "%s/%s.bin", channel_dir, channel_id);
 }

@@ -230,7 +230,7 @@ esp_err_t ps_build_sdcard_index(void)
     return ESP_OK;
 }
 
-esp_err_t ps_touch_cache_file(const char *channel_id)
+esp_err_t ps_touch_cache_file(const char *channel_id, ps_channel_type_t type)
 {
     if (!channel_id) return ESP_ERR_INVALID_ARG;
 
@@ -243,8 +243,8 @@ esp_err_t ps_touch_cache_file(const char *channel_id)
     if (err != ESP_OK) return err;
 
     char path[192];
-    if (strcmp(channel_id, "sdcard") == 0) {
-        snprintf(path, sizeof(path), "%s/%s.bin", channel_path, channel_id);
+    if (type == PS_CHANNEL_TYPE_SDCARD) {
+        snprintf(path, sizeof(path), "%s/sdcard.bin", channel_path);
     } else {
         snprintf(path, sizeof(path), "%s/%s.cache", channel_path, channel_id);
     }

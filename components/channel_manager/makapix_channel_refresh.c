@@ -165,23 +165,20 @@ void refresh_task_impl(void *pvParameters)
         return;
     }
     
-    // Build a user-friendly channel name from channel_id for UI display
+    // Build a user-friendly channel name from spec fields for UI display
     char display_name[64];
-    if (strcmp(ch->channel_id, "all") == 0) {
-        snprintf(display_name, sizeof(display_name), "All Artworks");
-    } else if (strcmp(ch->channel_id, "promoted") == 0) {
-        snprintf(display_name, sizeof(display_name), "Promoted");
-    } else if (strcmp(ch->channel_id, "user") == 0) {
-        snprintf(display_name, sizeof(display_name), "My Channel");
-    } else if (strncmp(ch->channel_id, "by_user_", 8) == 0) {
-        // Truncate user ID to fit in display buffer
-        snprintf(display_name, sizeof(display_name), "User: %.48s", ch->channel_id + 8);
-    } else if (strncmp(ch->channel_id, "hashtag_", 8) == 0) {
-        // Truncate hashtag to fit in display buffer
-        snprintf(display_name, sizeof(display_name), "#%.56s", ch->channel_id + 8);
+    if (strcmp(ch->channel_key, "all") == 0) {
+        strlcpy(display_name, "All Artworks", sizeof(display_name));
+    } else if (strcmp(ch->channel_key, "promoted") == 0) {
+        strlcpy(display_name, "Promoted", sizeof(display_name));
+    } else if (strcmp(ch->channel_key, "user") == 0) {
+        strlcpy(display_name, "My Channel", sizeof(display_name));
+    } else if (strcmp(ch->channel_key, "by_user") == 0) {
+        snprintf(display_name, sizeof(display_name), "User: %.48s", ch->identifier);
+    } else if (strcmp(ch->channel_key, "hashtag") == 0) {
+        snprintf(display_name, sizeof(display_name), "#%.56s", ch->identifier);
     } else {
-        // Truncate channel_id to fit in display buffer
-        snprintf(display_name, sizeof(display_name), "Channel: %.52s", ch->channel_id);
+        snprintf(display_name, sizeof(display_name), "Channel: %.52s", ch->channel_key);
     }
     
     // Update UI message to indicate we're updating the index
@@ -195,24 +192,24 @@ void refresh_task_impl(void *pvParameters)
     
     bool first_query_completed = false;  // Track if we've completed the first query
     
-    // Determine channel type from channel_id
+    // Determine channel type from stored spec fields
     makapix_channel_type_t channel_type = MAKAPIX_CHANNEL_ALL;
     makapix_query_request_t query_req = {0};
-    
-    if (strcmp(ch->channel_id, "all") == 0) {
+
+    if (strcmp(ch->channel_key, "all") == 0) {
         channel_type = MAKAPIX_CHANNEL_ALL;
-    } else if (strcmp(ch->channel_id, "promoted") == 0) {
+    } else if (strcmp(ch->channel_key, "promoted") == 0) {
         channel_type = MAKAPIX_CHANNEL_PROMOTED;
-    } else if (strcmp(ch->channel_id, "user") == 0) {
+    } else if (strcmp(ch->channel_key, "user") == 0) {
         channel_type = MAKAPIX_CHANNEL_USER;
-    } else if (strncmp(ch->channel_id, "by_user_", 8) == 0) {
+    } else if (strcmp(ch->channel_key, "by_user") == 0) {
         channel_type = MAKAPIX_CHANNEL_BY_USER;
-        strncpy(query_req.user_sqid, ch->channel_id + 8, sizeof(query_req.user_sqid) - 1);
-    } else if (strncmp(ch->channel_id, "hashtag_", 8) == 0) {
+        strlcpy(query_req.user_sqid, ch->identifier, sizeof(query_req.user_sqid));
+    } else if (strcmp(ch->channel_key, "hashtag") == 0) {
         channel_type = MAKAPIX_CHANNEL_HASHTAG;
-        strncpy(query_req.hashtag, ch->channel_id + 8, sizeof(query_req.hashtag) - 1);
-    } else if (strncmp(ch->channel_id, "artwork_", 8) == 0) {
-        // Single artwork channel - handled separately
+        strlcpy(query_req.hashtag, ch->identifier, sizeof(query_req.hashtag));
+    } else if (ch->channel_key[0] == '\0') {
+        // No spec set (e.g. single artwork channel) - skip refresh
         ch->refreshing = false;
         ch->refresh_task = NULL;
         vTaskDelete(NULL);

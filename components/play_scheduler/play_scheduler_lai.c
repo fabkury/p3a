@@ -445,29 +445,43 @@ bool play_scheduler_is_makapix_channel(const char *channel_id)
         return false;
     }
 
-    // SD card channel is the only non-Makapix channel
-    if (strcmp(channel_id, "sdcard") == 0) {
-        return false;
+    // Look up channel type from active state
+    for (size_t i = 0; i < s_state->channel_count; i++) {
+        if (strcmp(s_state->channels[i].channel_id, channel_id) == 0) {
+            ps_channel_type_t t = s_state->channels[i].type;
+            return (t != PS_CHANNEL_TYPE_SDCARD &&
+                    t != PS_CHANNEL_TYPE_GIPHY &&
+                    t != PS_CHANNEL_TYPE_ARTWORK);
+        }
     }
-
-    // Giphy channels are not Makapix channels (they have their own download path)
-    if (strncmp(channel_id, "giphy_", 6) == 0) {
-        return false;
-    }
-
-    // All other channels (all, promoted, user, by_user_*, hashtag_*) are Makapix channels
-    return true;
+    return false;
 }
 
 bool play_scheduler_needs_download(const char *channel_id)
 {
-    if (!channel_id) return false;
+    ps_state_t *s_state = ps_get_state();
 
-    // SD card channel has local files, no download needed
-    if (strcmp(channel_id, "sdcard") == 0) {
-        return false;
+    if (!channel_id || !s_state->initialized) return false;
+
+    // Look up channel type — SD card has local files, no download needed
+    for (size_t i = 0; i < s_state->channel_count; i++) {
+        if (strcmp(s_state->channels[i].channel_id, channel_id) == 0) {
+            return (s_state->channels[i].type != PS_CHANNEL_TYPE_SDCARD);
+        }
     }
+    return false;
+}
 
-    // Both Makapix and Giphy channels need downloads
-    return true;
+bool play_scheduler_is_giphy_channel(const char *channel_id)
+{
+    ps_state_t *s_state = ps_get_state();
+
+    if (!channel_id || !s_state->initialized) return false;
+
+    for (size_t i = 0; i < s_state->channel_count; i++) {
+        if (strcmp(s_state->channels[i].channel_id, channel_id) == 0) {
+            return (s_state->channels[i].type == PS_CHANNEL_TYPE_GIPHY);
+        }
+    }
+    return false;
 }

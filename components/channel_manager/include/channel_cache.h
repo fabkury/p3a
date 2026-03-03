@@ -141,7 +141,8 @@ typedef struct channel_cache_s {
     lai_post_id_node_t *lai_hash;       // Hash set for O(1) membership check
 
     // Metadata
-    char channel_id[64];                // Full channel ID
+    char channel_id[64];                // Full channel ID (hex hash)
+    uint8_t channel_type;               // ps_channel_type_t for type-based checks (giphy validation etc.)
     uint32_t cache_version;             // Version from last load
     bool dirty;                         // Needs persistence
 
@@ -176,7 +177,8 @@ void channel_cache_deinit(void);
  * is corrupted, initializes an empty cache. If the file uses the legacy
  * format (no header), migrates it to the new format with LAi rebuilt.
  *
- * @param channel_id Channel identifier (e.g., "all", UUID)
+ * @param channel_id Channel identifier (hex hash)
+ * @param channel_type Channel type enum (ps_channel_type_t), stored for type-based validation
  * @param channels_path Base path for channel files (e.g., "/sdcard/p3a/channel")
  * @param vault_path Base path for vault files (e.g., "/sdcard/p3a/vault")
  * @param cache Pre-allocated cache structure to fill
@@ -185,6 +187,7 @@ void channel_cache_deinit(void);
  *         ESP_ERR_INVALID_ARG if parameters invalid
  */
 esp_err_t channel_cache_load(const char *channel_id,
+                             uint8_t channel_type,
                              const char *channels_path,
                              const char *vault_path,
                              channel_cache_t *cache);

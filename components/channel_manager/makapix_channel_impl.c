@@ -478,6 +478,18 @@ const char *makapix_channel_get_id(channel_handle_t channel)
     return ch ? ch->channel_id : NULL;
 }
 
+void makapix_channel_set_spec(channel_handle_t channel, const char *channel_key, const char *identifier)
+{
+    makapix_channel_t *ch = (makapix_channel_t *)channel;
+    if (!ch) return;
+    if (channel_key) {
+        strlcpy(ch->channel_key, channel_key, sizeof(ch->channel_key));
+    }
+    if (identifier) {
+        strlcpy(ch->identifier, identifier, sizeof(ch->identifier));
+    }
+}
+
 bool makapix_channel_is_refreshing(channel_handle_t channel)
 {
     makapix_channel_t *ch = (makapix_channel_t *)channel;

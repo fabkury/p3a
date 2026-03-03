@@ -165,21 +165,21 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
         return ESP_ERR_INVALID_STATE;
     }
 
-    // Build channel_id from type and identifier
+    // Build channel_id from type and identifier using hash
     char channel_id[128] = {0};
     char channel_name[64] = {0};
 
     if (strcmp(channel_type, "all") == 0) {
-        strncpy(channel_id, "all", sizeof(channel_id) - 1);
-        strncpy(channel_name, "All", sizeof(channel_name) - 1);
+        ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "all", "", channel_id, sizeof(channel_id));
+        strlcpy(channel_name, "All", sizeof(channel_name));
     } else if (strcmp(channel_type, "promoted") == 0) {
-        strncpy(channel_id, "promoted", sizeof(channel_id) - 1);
-        strncpy(channel_name, "Promoted", sizeof(channel_name) - 1);
+        ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "promoted", "", channel_id, sizeof(channel_id));
+        strlcpy(channel_name, "Promoted", sizeof(channel_name));
     } else if (strcmp(channel_type, "by_user") == 0 && identifier) {
-        snprintf(channel_id, sizeof(channel_id), "by_user_%s", identifier);
+        ps_compute_channel_id(PS_CHANNEL_TYPE_USER, "user", identifier, channel_id, sizeof(channel_id));
         snprintf(channel_name, sizeof(channel_name), "User %s", identifier);
     } else if (strcmp(channel_type, "hashtag") == 0 && identifier) {
-        snprintf(channel_id, sizeof(channel_id), "hashtag_%s", identifier);
+        ps_compute_channel_id(PS_CHANNEL_TYPE_HASHTAG, "hashtag", identifier, channel_id, sizeof(channel_id));
         snprintf(channel_name, sizeof(channel_name), "#%s", identifier);
     } else {
         ESP_LOGW(MAKAPIX_TAG, "Unknown channel type: %s", channel_type);
@@ -206,11 +206,13 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
     if (strcmp(channel_type, "all") == 0) {
         if (!s_refresh_handle_all) {
             s_refresh_handle_all = makapix_channel_create(channel_id, channel_name, vault_path, channels_path);
+            if (s_refresh_handle_all) makapix_channel_set_spec(s_refresh_handle_all, channel_type, identifier);
         }
         handle = s_refresh_handle_all;
     } else if (strcmp(channel_type, "promoted") == 0) {
         if (!s_refresh_handle_promoted) {
             s_refresh_handle_promoted = makapix_channel_create(channel_id, channel_name, vault_path, channels_path);
+            if (s_refresh_handle_promoted) makapix_channel_set_spec(s_refresh_handle_promoted, channel_type, identifier);
         }
         handle = s_refresh_handle_promoted;
     } else {
@@ -235,6 +237,7 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
 
         // For user/hashtag channels, create a handle and track it for cancellation
         handle = makapix_channel_create(channel_id, channel_name, vault_path, channels_path);
+        if (handle) makapix_channel_set_spec(handle, channel_type, identifier);
         if (!handle) {
             ESP_LOGE(MAKAPIX_TAG, "Failed to create channel for refresh: %s", channel_id);
             return ESP_ERR_NO_MEM;

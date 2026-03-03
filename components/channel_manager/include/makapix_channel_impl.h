@@ -82,6 +82,18 @@ channel_handle_t makapix_channel_create(const char *channel_id,
 const char *makapix_channel_get_id(channel_handle_t channel);
 
 /**
+ * @brief Set channel spec fields (channel_key and identifier)
+ *
+ * Call after makapix_channel_create() to store the original channel key
+ * (e.g. "all", "by_user", "hashtag") and identifier for use in refresh tasks.
+ *
+ * @param channel Channel handle
+ * @param channel_key Original channel key (e.g. "all", "by_user", "hashtag")
+ * @param identifier Identifier string (user sqid, hashtag, etc.) or NULL
+ */
+void makapix_channel_set_spec(channel_handle_t channel, const char *channel_key, const char *identifier);
+
+/**
  * @brief Check if a background refresh is in progress
  *
  * @param channel Channel handle

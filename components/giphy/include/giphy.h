@@ -114,13 +114,7 @@ void giphy_build_entry_filepath(const giphy_channel_entry_t *entry,
  */
 int32_t giphy_id_to_post_id(const char *giphy_id);
 
-/**
- * @brief Check if a channel_id belongs to Giphy
- *
- * @param channel_id Channel ID string
- * @return true if channel_id starts with "giphy_"
- */
-bool giphy_is_giphy_channel(const char *channel_id);
+// giphy_is_giphy_channel() removed — use play_scheduler_is_giphy_channel() or type enum instead
 
 // ============================================================================
 // Download

@@ -38,117 +38,51 @@ static const char *TAG = "ps_commands";
 // ============================================================================
 
 /**
- * @brief Sanitize an identifier for filesystem safety
+ * @brief Compute channel_id as first 16 hex chars of SHA256("{type}:{name}:{identifier}")
  *
- * Replaces non-alphanumeric characters with underscore.
+ * Produces an opaque, filesystem-safe identifier. The resulting 16-char hex
+ * string fits comfortably in existing char channel_id[64] buffers.
  */
-static void ps_sanitize_identifier(const char *input, char *output, size_t max_len)
+void ps_compute_channel_id(ps_channel_type_t type, const char *name,
+                           const char *identifier, char *out_id, size_t max_len)
 {
-    size_t i = 0;
-    size_t j = 0;
-    while (input[i] && j < max_len - 1) {
-        char c = input[i];
-        if ((c >= 'a' && c <= 'z') ||
-            (c >= 'A' && c <= 'Z') ||
-            (c >= '0' && c <= '9')) {
-            output[j++] = c;
-        } else {
-            output[j++] = '_';
-        }
-        i++;
+    if (!out_id || max_len == 0) return;
+    if (!name) name = "";
+    if (!identifier) identifier = "";
+
+    // Build canonical string "{type_int}:{name}:{identifier}"
+    char canonical[256];
+    int len = snprintf(canonical, sizeof(canonical), "%d:%s:%s", (int)type, name, identifier);
+    if (len < 0) len = 0;
+    if ((size_t)len >= sizeof(canonical)) len = sizeof(canonical) - 1;
+
+    // Compute SHA256
+    uint8_t sha256[32];
+    if (mbedtls_sha256((const unsigned char *)canonical, (size_t)len, sha256, 0) != 0) {
+        // Fallback: use truncated canonical string
+        strlcpy(out_id, canonical, max_len);
+        return;
     }
-    output[j] = '\0';
+
+    // Format first 8 bytes as 16 hex chars
+    size_t hex_len = 16;
+    if (hex_len >= max_len) hex_len = max_len - 1;
+    for (size_t i = 0; i < hex_len / 2 && i < 8; i++) {
+        snprintf(out_id + i * 2, max_len - i * 2, "%02x", sha256[i]);
+    }
+    out_id[hex_len] = '\0';
 }
 
 void ps_ensure_display_name(ps_channel_spec_t *spec)
 {
     if (spec->display_name[0] != '\0') return;
 
-    switch (spec->type) {
-        case PS_CHANNEL_TYPE_NAMED:
-            if (strcmp(spec->name, "all") == 0) {
-                strlcpy(spec->display_name, "All Artworks", sizeof(spec->display_name));
-            } else if (strcmp(spec->name, "promoted") == 0) {
-                strlcpy(spec->display_name, "Promoted", sizeof(spec->display_name));
-            } else {
-                strlcpy(spec->display_name, spec->name, sizeof(spec->display_name));
-            }
-            break;
-        case PS_CHANNEL_TYPE_USER:
-            snprintf(spec->display_name, sizeof(spec->display_name), "User: %.48s", spec->identifier);
-            break;
-        case PS_CHANNEL_TYPE_HASHTAG:
-            snprintf(spec->display_name, sizeof(spec->display_name), "#%.56s", spec->identifier);
-            break;
-        case PS_CHANNEL_TYPE_SDCARD:
-            strlcpy(spec->display_name, "microSD Card", sizeof(spec->display_name));
-            break;
-        case PS_CHANNEL_TYPE_ARTWORK:
-            strlcpy(spec->display_name, "Single Artwork", sizeof(spec->display_name));
-            break;
-        case PS_CHANNEL_TYPE_GIPHY:
-            if (strcmp(spec->name, "search") == 0 && spec->identifier[0] != '\0') {
-                snprintf(spec->display_name, sizeof(spec->display_name), "Giphy: %.50s", spec->identifier);
-            } else {
-                strlcpy(spec->display_name, "Giphy: Trending", sizeof(spec->display_name));
-            }
-            break;
-        default:
-            strlcpy(spec->display_name, "Channel", sizeof(spec->display_name));
-            break;
-    }
+    // Delegate to the canonical display name builder
+    ps_get_display_name_from_spec(spec->type, spec->name, spec->identifier,
+                                  spec->display_name, sizeof(spec->display_name));
 }
 
-/**
- * @brief Build channel_id from channel spec
- *
- * Format:
- * - NAMED: "{name}" -> "all", "promoted"
- * - USER: "by_user_{sqid}" -> "by_user_uvz"
- * - HASHTAG: "hashtag_{tag}" -> "hashtag_sunset"
- * - SDCARD: "sdcard"
- */
-static void ps_build_channel_id(const ps_channel_spec_t *spec, char *out_id, size_t max_len)
-{
-    char sanitized[33];
-
-    switch (spec->type) {
-        case PS_CHANNEL_TYPE_NAMED:
-            snprintf(out_id, max_len, "%s", spec->name);
-            break;
-
-        case PS_CHANNEL_TYPE_USER:
-            ps_sanitize_identifier(spec->identifier, sanitized, sizeof(sanitized));
-            snprintf(out_id, max_len, "by_user_%s", sanitized);
-            break;
-
-        case PS_CHANNEL_TYPE_HASHTAG:
-            ps_sanitize_identifier(spec->identifier, sanitized, sizeof(sanitized));
-            snprintf(out_id, max_len, "hashtag_%s", sanitized);
-            break;
-
-        case PS_CHANNEL_TYPE_SDCARD:
-            snprintf(out_id, max_len, "sdcard");
-            break;
-
-        case PS_CHANNEL_TYPE_ARTWORK:
-            snprintf(out_id, max_len, "artwork");
-            break;
-
-        case PS_CHANNEL_TYPE_GIPHY:
-            if (spec->identifier[0] != '\0') {
-                ps_sanitize_identifier(spec->identifier, sanitized, sizeof(sanitized));
-                snprintf(out_id, max_len, "giphy_%s_%s", spec->name, sanitized);
-            } else {
-                snprintf(out_id, max_len, "giphy_%s", spec->name);
-            }
-            break;
-
-        default:
-            snprintf(out_id, max_len, "unknown");
-            break;
-    }
-}
+// ps_build_channel_id() removed — replaced by ps_compute_channel_id() above
 
 // ============================================================================
 // Cache Path Building
@@ -161,17 +95,8 @@ void ps_build_cache_path(const char *channel_id, char *out_path, size_t max_len)
         strlcpy(channel_dir, "/sdcard/p3a/channel", sizeof(channel_dir));
     }
 
-    // For user/hashtag channels, replace : with _ in filename
-    char safe_id[64];
-    size_t j = 0;
-    for (size_t i = 0; channel_id[i] && j < sizeof(safe_id) - 1; i++) {
-        safe_id[j++] = (channel_id[i] == ':') ? '_' : channel_id[i];
-    }
-    safe_id[j] = '\0';
-
-    // NOTE: Callers should use a sufficiently large output buffer (>= 512 bytes)
-    // to avoid path truncation warnings treated as errors under -Wformat-truncation.
-    snprintf(out_path, max_len, "%s/%s.bin", channel_dir, safe_id);
+    // channel_id is a hex hash — always filesystem-safe, no sanitization needed
+    snprintf(out_path, max_len, "%s/%s.bin", channel_dir, channel_id);
 }
 
 // ============================================================================
@@ -260,7 +185,7 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
     ch->active = (ch->entry_count > 0);
     ch->entry_format = PS_ENTRY_FORMAT_SDCARD;
 
-    ps_touch_cache_file(ch->channel_id);
+    ps_touch_cache_file(ch->channel_id, PS_CHANNEL_TYPE_SDCARD);
 
     ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries (sdcard format) into memory",
              ch->channel_id, ch->entry_count);
@@ -316,7 +241,7 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
     }
 
     // Load cache (handles legacy format migration, CRC validation, LAi persistence)
-    esp_err_t err = channel_cache_load(ch->channel_id, channels_path, vault_path, ch->cache);
+    esp_err_t err = channel_cache_load(ch->channel_id, (uint8_t)ch->type, channels_path, vault_path, ch->cache);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Channel '%s': channel_cache_load failed: %s",
                  ch->channel_id, esp_err_to_name(err));
@@ -355,7 +280,7 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
     ch->active = (ch->cache->available_count > 0);
     ch->entry_format = PS_ENTRY_FORMAT_MAKAPIX;
 
-    ps_touch_cache_file(ch->channel_id);
+    ps_touch_cache_file(ch->channel_id, ch->type);
 
     ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries, %zu available (makapix format)",
              ch->channel_id, ch->cache->entry_count, ch->cache->available_count);
@@ -466,16 +391,18 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         const ps_channel_spec_t *spec = &command->channels[i];
         ps_channel_state_t *ch = &s_state->channels[i];
 
-        // Build channel_id from spec and preserve original identifier
-        ps_build_channel_id(spec, ch->channel_id, sizeof(ch->channel_id));
+        // Build channel_id as hash of spec and preserve original fields
+        ps_compute_channel_id(spec->type, spec->name, spec->identifier,
+                              ch->channel_id, sizeof(ch->channel_id));
         strlcpy(ch->identifier, spec->identifier, sizeof(ch->identifier));
+        ch->type = spec->type;
+        strlcpy(ch->spec_name, spec->name, sizeof(ch->spec_name));
         if (spec->display_name[0] != '\0') {
             strlcpy(ch->display_name, spec->display_name, sizeof(ch->display_name));
         } else {
-            ps_get_display_name(ch->channel_id, ch->display_name, sizeof(ch->display_name));
+            ps_get_display_name_from_spec(spec->type, spec->name, spec->identifier,
+                                          ch->display_name, sizeof(ch->display_name));
         }
-        ch->type = spec->type;
-        strlcpy(ch->spec_name, spec->name, sizeof(ch->spec_name));
 
         // Reset SWRR state
         ch->credit = 0;
@@ -570,7 +497,9 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     }
     // Get first channel's display name for UI
     if (s_state->channel_count > 0) {
-        ps_get_display_name(s_state->channels[0].channel_id, first_channel_display_name, sizeof(first_channel_display_name));
+        ps_channel_state_t *ch0 = &s_state->channels[0];
+        ps_get_display_name_from_spec(ch0->type, ch0->spec_name, ch0->identifier,
+                                      first_channel_display_name, sizeof(first_channel_display_name));
     }
 
     s_state->playback_triggered = false;

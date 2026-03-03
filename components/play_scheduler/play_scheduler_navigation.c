@@ -228,7 +228,9 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
             // Get display name for first channel
             char display_name[64] = "Channel";
             if (s_state->channel_count > 0) {
-                ps_get_display_name(s_state->channels[0].channel_id, display_name, sizeof(display_name));
+                ps_channel_state_t *ch0 = &s_state->channels[0];
+                ps_get_display_name_from_spec(ch0->type, ch0->spec_name, ch0->identifier,
+                                              display_name, sizeof(display_name));
             }
 
             // Only show loading/downloading messages if we have WiFi connectivity

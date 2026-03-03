@@ -416,12 +416,40 @@ void play_scheduler_touch_back(void);
 // ============================================================================
 
 /**
- * @brief Get user-friendly display name from channel_id
+ * @brief Compute channel_id = first 16 hex chars of SHA256("{type}:{name}:{identifier}")
  *
- * Converts internal channel IDs (e.g., "by_user_uvz", "giphy_search_cats")
- * into human-readable display names (e.g., "User: uvz", "Giphy: cats").
+ * Produces an opaque, filesystem-safe identifier from channel spec fields.
  *
- * @param channel_id Internal channel identifier
+ * @param type Channel type enum
+ * @param name Channel name (e.g. "all", "trending")
+ * @param identifier Channel identifier (e.g. user sqid, hashtag)
+ * @param out_id Output buffer for channel_id (17 chars used, but existing 64-char buffers are fine)
+ * @param max_len Size of output buffer
+ */
+void ps_compute_channel_id(ps_channel_type_t type, const char *name,
+                           const char *identifier, char *out_id, size_t max_len);
+
+/**
+ * @brief Build display name from channel spec fields
+ *
+ * Assembles a human-readable display name from type, name, and identifier.
+ *
+ * @param type Channel type enum
+ * @param spec_name Channel sub-type name (e.g. "all", "trending", "search")
+ * @param identifier Channel identifier (e.g. user sqid, hashtag, search query)
+ * @param out_name Output buffer for display name
+ * @param max_len Size of output buffer
+ */
+void ps_get_display_name_from_spec(ps_channel_type_t type, const char *spec_name,
+                                   const char *identifier, char *out_name, size_t max_len);
+
+/**
+ * @brief Get user-friendly display name from channel_id (lookup version)
+ *
+ * Finds the channel in the active scheduler state by channel_id and returns
+ * its display name. Falls back to the raw channel_id if not found.
+ *
+ * @param channel_id Internal channel identifier (hex hash)
  * @param out_name Output buffer for display name
  * @param max_len Size of output buffer
  */
@@ -519,6 +547,14 @@ bool play_scheduler_is_makapix_channel(const char *channel_id);
  * @return true if this channel needs downloads from network
  */
 bool play_scheduler_needs_download(const char *channel_id);
+
+/**
+ * @brief Check if a channel is a Giphy channel
+ *
+ * @param channel_id Channel ID
+ * @return true if this is a Giphy channel
+ */
+bool play_scheduler_is_giphy_channel(const char *channel_id);
 
 #ifdef __cplusplus
 }

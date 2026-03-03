@@ -44,9 +44,12 @@ esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *mes
 void ugfx_ui_hide_channel_message(void);
 // play_scheduler forward declarations
 // Note: For full declarations with proper types, include play_scheduler.h
+#include "play_scheduler_types.h"  // ps_channel_type_t enum
 esp_err_t play_scheduler_play_named_channel(const char *name);
 esp_err_t play_scheduler_play_user_channel(const char *user_sqid);
 esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag);
+void ps_compute_channel_id(ps_channel_type_t type, const char *name,
+                           const char *identifier, char *out_id, size_t max_len);
 
 // Shared TAG for logging
 extern const char *MAKAPIX_TAG;
@@ -84,7 +87,11 @@ extern volatile bool s_channel_loading;
 extern volatile bool s_channel_load_abort;
 extern char s_loading_channel_id[128];
 extern char s_current_channel_id[128];
+extern char s_current_channel_key[64];
+extern char s_current_identifier[64];
 extern char s_previous_channel_id[128];
+extern char s_previous_channel_key[64];
+extern char s_previous_identifier[64];
 
 // Pending channel request
 extern char s_pending_channel[64];

@@ -41,9 +41,13 @@ typedef struct {
     struct channel_s base;           // Base channel (must be first)
 
     // Configuration
-    char *channel_id;                // UUID of channel
+    char *channel_id;                // Opaque channel ID (hex hash)
     char *vault_path;                // Base vault path
     char *channels_path;             // Base channels path
+
+    // Channel spec fields (for type-based routing in refresh task)
+    char channel_key[33];            // Original channel key: "all", "by_user", "hashtag", etc.
+    char identifier[33];             // User sqid, hashtag, etc.
 
     // Legacy playback fields (kept for binary compatibility, no longer used)
     uint32_t channel_dwell_override_ms;

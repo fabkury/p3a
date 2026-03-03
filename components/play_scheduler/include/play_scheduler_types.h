@@ -68,12 +68,12 @@ typedef enum {
  * @brief Channel types
  */
 typedef enum {
-    PS_CHANNEL_TYPE_NAMED,    // "all", "promoted"
-    PS_CHANNEL_TYPE_USER,     // "by_user_{sqid}"
-    PS_CHANNEL_TYPE_HASHTAG,  // "hashtag_{tag}"
-    PS_CHANNEL_TYPE_SDCARD,   // "sdcard"
+    PS_CHANNEL_TYPE_NAMED,    // Named channels: spec_name = "all", "promoted"
+    PS_CHANNEL_TYPE_USER,     // User channels: identifier = sqid
+    PS_CHANNEL_TYPE_HASHTAG,  // Hashtag channels: identifier = tag
+    PS_CHANNEL_TYPE_SDCARD,   // Local SD card files
     PS_CHANNEL_TYPE_ARTWORK,  // Single artwork (in-memory only)
-    PS_CHANNEL_TYPE_GIPHY,    // "giphy_trending", "giphy_search_*", etc.
+    PS_CHANNEL_TYPE_GIPHY,    // Giphy channels: spec_name = "trending", "search"; identifier = query
 } ps_channel_type_t;
 
 /**
@@ -234,7 +234,7 @@ typedef struct {
  * @brief Per-channel state
  */
 typedef struct {
-    char channel_id[64];      // Derived: "all", "by_user_uvz", "hashtag_sunset", etc.
+    char channel_id[64];      // SHA256 hex hash (16 chars) of "{type}:{name}:{identifier}"
     char identifier[33];      // Original identifier from spec (USER: sqid, HASHTAG: tag, GIPHY search: query)
     char display_name[65];    // Human-readable display name
     char spec_name[33];       // Original name from ps_channel_spec_t (sub-type: "all", "trending", etc.)

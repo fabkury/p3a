@@ -265,7 +265,7 @@ esp_err_t ps_build_sdcard_index(void);
  * @param channel_id Channel ID
  * @return ESP_OK on success
  */
-esp_err_t ps_touch_cache_file(const char *channel_id);
+esp_err_t ps_touch_cache_file(const char *channel_id, ps_channel_type_t type);
 
 // ============================================================================
 // Refresh Operations (play_scheduler_refresh.c)
@@ -341,7 +341,13 @@ void ps_build_vault_filepath(const makapix_channel_entry_t *entry,
 bool ps_file_exists(const char *path);
 
 /**
- * @brief Get user-friendly display name from channel_id
+ * @brief Build display name from channel spec fields
+ */
+void ps_get_display_name_from_spec(ps_channel_type_t type, const char *spec_name,
+                                   const char *identifier, char *out_name, size_t max_len);
+
+/**
+ * @brief Get user-friendly display name from channel_id (lookup in scheduler state)
  */
 void ps_get_display_name(const char *channel_id, char *out_name, size_t max_len);
 

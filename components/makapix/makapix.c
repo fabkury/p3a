@@ -46,7 +46,11 @@ volatile bool s_channel_loading = false;          // True while a channel is bei
 volatile bool s_channel_load_abort = false;       // Signal to abort current load
 char s_loading_channel_id[128] = {0};             // Channel ID currently being loaded
 char s_current_channel_id[128] = {0};             // Channel ID currently active (for download cancellation)
+char s_current_channel_key[64] = {0};             // Channel key (e.g. "all", "by_user") for current channel
+char s_current_identifier[64] = {0};              // Identifier (sqid, hashtag) for current channel
 char s_previous_channel_id[128] = {0};            // Previous channel ID (for error fallback)
+char s_previous_channel_key[64] = {0};            // Channel key for previous channel
+char s_previous_identifier[64] = {0};             // Identifier for previous channel
 
 void makapix_set_state(makapix_state_t new_state)
 {

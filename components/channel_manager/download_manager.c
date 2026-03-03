@@ -364,7 +364,7 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             makapix_channel_entry_t *entry = &s_batch_entries[batch_idx++];
 
             // Build filepath and storage key based on channel type
-            bool is_giphy = giphy_is_giphy_channel(ch->channel_id);
+            bool is_giphy = play_scheduler_is_giphy_channel(ch->channel_id);
 
             if (is_giphy) {
                 // Giphy channel: entry is giphy_channel_entry_t (same size as makapix_channel_entry_t)
@@ -653,7 +653,7 @@ static void download_task(void *arg)
         memset(s_task_out_path, 0, sizeof(s_task_out_path));
         ESP_LOGI(TAG, "Downloading: %s", s_dl_req.art_url);
         esp_err_t err;
-        if (giphy_is_giphy_channel(s_dl_req.channel_id)) {
+        if (play_scheduler_is_giphy_channel(s_dl_req.channel_id)) {
             // Giphy channel: use giphy_download_artwork
             // Determine extension from the filepath
             uint8_t ext = 0;  // default webp

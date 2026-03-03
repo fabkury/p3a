@@ -359,10 +359,15 @@ esp_err_t channel_eviction_check_and_run(void)
 
         channels_scanned++;
 
-        if (strcmp(stem, "sdcard") == 0) {
-            ESP_LOGD(TAG, "  '%s': protected (sdcard)", stem);
-            channels_protected++;
-            continue;
+        /* Protect the sdcard channel — compute its hash-based channel_id */
+        {
+            char sdcard_id[17];
+            ps_compute_channel_id(PS_CHANNEL_TYPE_SDCARD, "sdcard", "", sdcard_id, sizeof(sdcard_id));
+            if (strcmp(stem, sdcard_id) == 0) {
+                ESP_LOGD(TAG, "  '%s': protected (sdcard)", stem);
+                channels_protected++;
+                continue;
+            }
         }
         if (is_active_channel(stem, active_ids, active_count)) {
             ESP_LOGD(TAG, "  '%s': protected (active)", stem);

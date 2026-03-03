@@ -167,12 +167,17 @@ esp_err_t h_get_api_init(httpd_req_t *req) {
 #endif
 
     // channel_stats: per-channel cached/total counts (O(1) from LAi)
+    // Compute channel_id hashes to look up stats
+    char all_id[17], promoted_id[17], giphy_id[17];
+    ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "all", "", all_id, sizeof(all_id));
+    ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "promoted", "", promoted_id, sizeof(promoted_id));
+    ps_compute_channel_id(PS_CHANNEL_TYPE_GIPHY, "trending", "", giphy_id, sizeof(giphy_id));
     size_t all_total = 0, all_cached = 0;
     size_t promoted_total = 0, promoted_cached = 0;
     size_t giphy_trending_total = 0, giphy_trending_cached = 0;
-    play_scheduler_get_channel_stats("all", &all_total, &all_cached);
-    play_scheduler_get_channel_stats("promoted", &promoted_total, &promoted_cached);
-    play_scheduler_get_channel_stats("giphy_trending", &giphy_trending_total, &giphy_trending_cached);
+    play_scheduler_get_channel_stats(all_id, &all_total, &all_cached);
+    play_scheduler_get_channel_stats(promoted_id, &promoted_total, &promoted_cached);
+    play_scheduler_get_channel_stats(giphy_id, &giphy_trending_total, &giphy_trending_cached);
     bool is_registered = makapix_store_has_player_key();
 
     cJSON *stats = cJSON_AddObjectToObject(data, "channel_stats");
@@ -441,14 +446,18 @@ esp_err_t h_get_api_state(httpd_req_t *req)
  */
 esp_err_t h_get_channels_stats(httpd_req_t *req) {
     // Get stats from Play Scheduler (O(1) lookup from LAi)
+    // Compute channel_id hashes to look up stats
+    char all_id[17], promoted_id[17], giphy_id[17];
+    ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "all", "", all_id, sizeof(all_id));
+    ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "promoted", "", promoted_id, sizeof(promoted_id));
+    ps_compute_channel_id(PS_CHANNEL_TYPE_GIPHY, "trending", "", giphy_id, sizeof(giphy_id));
     size_t all_total = 0, all_cached = 0;
     size_t promoted_total = 0, promoted_cached = 0;
     size_t giphy_trending_total = 0, giphy_trending_cached = 0;
 
-    // Use new LAi-based API for instant stats
-    play_scheduler_get_channel_stats("all", &all_total, &all_cached);
-    play_scheduler_get_channel_stats("promoted", &promoted_total, &promoted_cached);
-    play_scheduler_get_channel_stats("giphy_trending", &giphy_trending_total, &giphy_trending_cached);
+    play_scheduler_get_channel_stats(all_id, &all_total, &all_cached);
+    play_scheduler_get_channel_stats(promoted_id, &promoted_total, &promoted_cached);
+    play_scheduler_get_channel_stats(giphy_id, &giphy_trending_total, &giphy_trending_cached);
 
     // Check if Makapix is registered (has player_key)
     bool is_registered = makapix_store_has_player_key();

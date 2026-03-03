@@ -61,31 +61,70 @@ bool ps_file_exists(const char *path)
     return (stat(path, &st) == 0);
 }
 
+void ps_get_display_name_from_spec(ps_channel_type_t type, const char *spec_name,
+                                   const char *identifier, char *out_name, size_t max_len)
+{
+    if (!out_name || max_len == 0) return;
+    if (!spec_name) spec_name = "";
+    if (!identifier) identifier = "";
+
+    switch (type) {
+        case PS_CHANNEL_TYPE_NAMED:
+            if (strcmp(spec_name, "all") == 0) {
+                strlcpy(out_name, "All Artworks", max_len);
+            } else if (strcmp(spec_name, "promoted") == 0) {
+                strlcpy(out_name, "Promoted", max_len);
+            } else {
+                strlcpy(out_name, spec_name, max_len);
+            }
+            break;
+        case PS_CHANNEL_TYPE_USER:
+            snprintf(out_name, max_len, "User: %.48s", identifier);
+            break;
+        case PS_CHANNEL_TYPE_HASHTAG:
+            snprintf(out_name, max_len, "#%.56s", identifier);
+            break;
+        case PS_CHANNEL_TYPE_SDCARD:
+            strlcpy(out_name, "microSD Card", max_len);
+            break;
+        case PS_CHANNEL_TYPE_ARTWORK:
+            strlcpy(out_name, "Single Artwork", max_len);
+            break;
+        case PS_CHANNEL_TYPE_GIPHY:
+            if (strcmp(spec_name, "search") == 0 && identifier[0] != '\0') {
+                snprintf(out_name, max_len, "Giphy: %.50s", identifier);
+            } else {
+                strlcpy(out_name, "Giphy: Trending", max_len);
+            }
+            break;
+        default:
+            strlcpy(out_name, "Channel", max_len);
+            break;
+    }
+}
+
 void ps_get_display_name(const char *channel_id, char *out_name, size_t max_len)
 {
     if (!channel_id || !out_name || max_len == 0) return;
-    
-    if (strcmp(channel_id, "all") == 0) {
-        snprintf(out_name, max_len, "All Artworks");
-    } else if (strcmp(channel_id, "promoted") == 0) {
-        snprintf(out_name, max_len, "Promoted");
-    } else if (strcmp(channel_id, "user") == 0) {
-        snprintf(out_name, max_len, "My Channel");
-    } else if (strcmp(channel_id, "sdcard") == 0) {
-        snprintf(out_name, max_len, "microSD Card");
-    } else if (strncmp(channel_id, "by_user_", 8) == 0) {
-        snprintf(out_name, max_len, "User: %.48s", channel_id + 8);
-    } else if (strncmp(channel_id, "hashtag_", 8) == 0) {
-        snprintf(out_name, max_len, "#%.56s", channel_id + 8);
-    } else if (strcmp(channel_id, "giphy_trending") == 0) {
-        snprintf(out_name, max_len, "Giphy: Trending");
-    } else if (strncmp(channel_id, "giphy_search_", 13) == 0) {
-        snprintf(out_name, max_len, "Giphy: %.50s", channel_id + 13);
-    } else if (strncmp(channel_id, "giphy_", 6) == 0) {
-        snprintf(out_name, max_len, "Giphy: %.56s", channel_id + 6);
-    } else {
-        snprintf(out_name, max_len, "%.63s", channel_id);
+
+    // Look up channel in active scheduler state by channel_id
+    for (size_t i = 0; i < s_state.channel_count; i++) {
+        if (strcmp(s_state.channels[i].channel_id, channel_id) == 0) {
+            // Use stored display_name if populated
+            if (s_state.channels[i].display_name[0] != '\0') {
+                strlcpy(out_name, s_state.channels[i].display_name, max_len);
+            } else {
+                ps_get_display_name_from_spec(s_state.channels[i].type,
+                                              s_state.channels[i].spec_name,
+                                              s_state.channels[i].identifier,
+                                              out_name, max_len);
+            }
+            return;
+        }
     }
+
+    // Not found in active channels — return truncated channel_id
+    snprintf(out_name, max_len, "%.63s", channel_id);
 }
 
 esp_err_t ps_storage_key_sha256(const char *storage_key, uint8_t out_sha256[32])
@@ -117,15 +156,16 @@ esp_err_t ps_storage_key_sha256(const char *storage_key, uint8_t out_sha256[32])
 
 static channel_handle_t s_sdcard_channel = NULL;
 
-static esp_err_t load_channel_by_id(const char *channel_id, channel_handle_t *out_handle)
+static esp_err_t load_channel_by_id(const ps_channel_state_t *ch_state, channel_handle_t *out_handle)
 {
-    if (!channel_id || !out_handle) {
+    if (!ch_state || !out_handle) {
         return ESP_ERR_INVALID_ARG;
     }
+    const char *channel_id = ch_state->channel_id;
 
     *out_handle = NULL;
 
-    if (strcmp(channel_id, "sdcard") == 0) {
+    if (ch_state->type == PS_CHANNEL_TYPE_SDCARD) {
         // SD Card channel
         if (!s_sdcard_channel) {
             s_sdcard_channel = sdcard_channel_create("SD Card", NULL);
@@ -139,8 +179,9 @@ static esp_err_t load_channel_by_id(const char *channel_id, channel_handle_t *ou
     }
 
     // Makapix channels
-    if (strcmp(channel_id, "all") == 0 ||
-        strcmp(channel_id, "promoted") == 0) {
+    if (ch_state->type == PS_CHANNEL_TYPE_NAMED ||
+        ch_state->type == PS_CHANNEL_TYPE_USER ||
+        ch_state->type == PS_CHANNEL_TYPE_HASHTAG) {
         char vault_path[256] = {0};
         char channel_path[256] = {0};
         if (sd_path_get_vault(vault_path, sizeof(vault_path)) != ESP_OK ||
@@ -149,19 +190,18 @@ static esp_err_t load_channel_by_id(const char *channel_id, channel_handle_t *ou
             return ESP_FAIL;
         }
 
-        const char *channel_name = (strcmp(channel_id, "all") == 0) ? "Recent Artworks" : "Promoted";
-
-        channel_handle_t ch = makapix_channel_create(channel_id, channel_name, vault_path, channel_path);
-        if (!ch) {
+        channel_handle_t handle = makapix_channel_create(channel_id, ch_state->display_name, vault_path, channel_path);
+        if (!handle) {
             ESP_LOGE(TAG, "Failed to create Makapix channel '%s'", channel_id);
             return ESP_ERR_NO_MEM;
         }
+        makapix_channel_set_spec(handle, ch_state->spec_name, ch_state->identifier);
 
-        *out_handle = ch;
+        *out_handle = handle;
         return ESP_OK;
     }
 
-    ESP_LOGW(TAG, "Unknown channel_id: %s", channel_id);
+    ESP_LOGW(TAG, "Unknown channel type %d for channel_id: %s", ch_state->type, channel_id);
     return ESP_ERR_NOT_FOUND;
 }
 
@@ -172,7 +212,7 @@ static esp_err_t activate_channel(size_t channel_index)
     if (!ch->handle) {
         // Load channel
         channel_handle_t handle = NULL;
-        esp_err_t err = load_channel_by_id(ch->channel_id, &handle);
+        esp_err_t err = load_channel_by_id(ch, &handle);
         if (err != ESP_OK) {
             ch->active = false;
             ch->entry_count = 0;

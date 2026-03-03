@@ -1485,7 +1485,7 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
 
     // Defer save via debounce timer to avoid blocking SD card I/O on every
     // MQTT response.  The merged data is safely in RAM; the periodic flush
-    // (10 s debounce / 120 s max delay) will persist it to disk.
+    // (15 s debounce / 120 s max delay) will persist it to disk.
     channel_cache_schedule_save(cache);
 
     return ret;

@@ -142,12 +142,7 @@ static esp_err_t giphy_merge_entries(channel_cache_t *cache,
 
     xSemaphoreGive(cache->mutex);
 
-    // Save cache
-    char channels_path[128];
-    if (sd_path_get_channel(channels_path, sizeof(channels_path)) != ESP_OK) {
-        strlcpy(channels_path, "/sdcard/p3a/channel", sizeof(channels_path));
-    }
-    channel_cache_save(cache, channels_path);
+    channel_cache_schedule_save(cache);
 
     return ESP_OK;
 }
@@ -298,12 +293,7 @@ static void giphy_evict_orphans(channel_cache_t *cache, si_node_t *si_hash)
     }
     free(evicted_ids);
 
-    // Save cache to disk
-    char channels_path[128];
-    if (sd_path_get_channel(channels_path, sizeof(channels_path)) != ESP_OK) {
-        strlcpy(channels_path, "/sdcard/p3a/channel", sizeof(channels_path));
-    }
-    channel_cache_save(cache, channels_path);
+    channel_cache_schedule_save(cache);
 
     ESP_LOGI(TAG, "Full refresh: evicted %zu orphaned entries, %zu kept", evicted, kept);
 }

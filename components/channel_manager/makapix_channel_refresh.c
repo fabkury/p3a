@@ -11,6 +11,7 @@
 #include "channel_cache.h"
 #include "channel_metadata.h"  // For generic metadata save/load
 #include "p3a_state.h"      // For PICO-8 mode check
+#include "play_scheduler.h" // For ps_get_display_name()
 #include "sntp_sync.h"      // For sntp_sync_is_synchronized()
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -292,13 +293,17 @@ void refresh_task_impl(void *pvParameters)
             esp_err_t merge_err = merge_refresh_batch(ch, resp->posts, resp->post_count);
             if (merge_err == ESP_OK) {
                 channel_cache_t *diag_cache = channel_cache_registry_find(ch->channel_id);
+                char _dn[64];
+                ps_get_display_name(ch->channel_id, _dn, sizeof(_dn));
                 ESP_LOGI(TAG, "Batch merged: ch='%s' entry_count=%zu available=%zu",
-                         ch->channel_id,
+                         _dn,
                          diag_cache ? diag_cache->entry_count : 0,
                          diag_cache ? diag_cache->available_count : 0);
             } else {
+                char _dn[64];
+                ps_get_display_name(ch->channel_id, _dn, sizeof(_dn));
                 ESP_LOGW(TAG, "Batch merge failed: ch='%s' err=%s",
-                         ch->channel_id, esp_err_to_name(merge_err));
+                         _dn, esp_err_to_name(merge_err));
             }
 
             // Check for shutdown after index update

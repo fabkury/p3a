@@ -130,7 +130,9 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
     esp_err_t result = ESP_OK;
     ps_artwork_t artwork;
     bool found = false;
+    bool fresh_pick = false;
     int missing_retries = 0;
+    int32_t saved_credits[PS_MAX_CHANNELS];
 
     // If walking forward through history, return from history
     if (ps_history_can_go_forward(s_state)) {
@@ -140,20 +142,18 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
     // Retry loop: handles missing files by evicting and picking again
     while (missing_retries < PS_MAX_MISSING_FILE_RETRIES) {
         if (!found) {
+            // Save SWRR credits before the pick so we can roll back if the
+            // file turns out to be missing from disk.  Without this, the
+            // channel that had a missing file is penalised on the retry
+            // because its credit was already debited by the SWRR round.
+            for (size_t i = 0; i < s_state->channel_count; i++) {
+                saved_credits[i] = s_state->channels[i].credit;
+            }
+
             // Compute fresh: pick next available artwork using availability masking
             // This iterates through channel entries, skipping files that don't exist
             found = ps_pick_next_available(s_state, &artwork);
-            if (found) {
-                ps_history_push(s_state, &artwork);
-                s_state->last_played_id = artwork.artwork_id;
-
-                // Log summary of successful pick
-                // ESP_LOGI(TAG, "=== PICK RESULT: post_id=%ld, ch_idx=%d ('%s'), file=%s",
-                //          (long)artwork.post_id, artwork.channel_index,
-                //          (artwork.channel_index < s_state->channel_count)
-                //              ? s_state->channels[artwork.channel_index].channel_id : "?",
-                //          artwork.filepath);
-            }
+            fresh_pick = found;
         }
 
         if (!found) {
@@ -165,14 +165,28 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
         result = prepare_and_request_swap(s_state, &artwork);
 
         if (result == ESP_OK) {
-            // Success
+            // Success - commit history entry and last_played_id now that the
+            // file is confirmed to exist on disk
+            if (fresh_pick) {
+                ps_history_push(s_state, &artwork);
+                s_state->last_played_id = artwork.artwork_id;
+            }
             break;
         }
 
         if (result == ESP_ERR_NOT_FOUND) {
-            // File missing - already evicted by prepare_and_request_swap, retry
+            // File missing - already evicted by prepare_and_request_swap.
+            // Roll back SWRR credits so the retry starts from an unbiased
+            // state (the channel with the missing file shouldn't be penalised).
+            if (fresh_pick) {
+                for (size_t i = 0; i < s_state->channel_count; i++) {
+                    s_state->channels[i].credit = saved_credits[i];
+                }
+                ESP_LOGI(TAG, "Rolled back SWRR credits after missing file");
+            }
             missing_retries++;
             found = false;  // Force fresh pick
+            fresh_pick = false;
             ESP_LOGW(TAG, "File missing, retrying pick (%d/%d)",
                      missing_retries, PS_MAX_MISSING_FILE_RETRIES);
             continue;

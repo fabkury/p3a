@@ -49,6 +49,8 @@ extern gBool ugfx_ui_is_active(void) __attribute__((weak));
 extern void ugfx_ui_hide_registration(void) __attribute__((weak));
 extern esp_err_t ugfx_ui_show_captive_ap_info(void) __attribute__((weak));
 extern esp_err_t ugfx_ui_show_connectivity_error(void) __attribute__((weak));
+extern esp_err_t ugfx_ui_show_info_screen(void) __attribute__((weak));
+extern void ugfx_ui_hide_info_screen(void) __attribute__((weak));
 
 // Playback service (from playback_service.c via weak symbol)
 extern bool playback_service_is_paused(void) __attribute__((weak));
@@ -120,50 +122,19 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
         }
             
         case P3A_TOUCH_EVENT_LONG_PRESS: {
-            // If already in UI mode, dismiss the overlay and return to playback
+            // If already in UI mode (info-screen or other overlay), dismiss it
             if (app_lcd_is_ui_mode && app_lcd_is_ui_mode()) {
-                ESP_LOGI(TAG, "Long press while in UI mode - dismissing");
+                ESP_LOGI(TAG, "Long press while in UI mode - dismissing info screen");
+                if (ugfx_ui_hide_info_screen) ugfx_ui_hide_info_screen();
                 if (ugfx_ui_hide_registration) ugfx_ui_hide_registration();
                 if (app_lcd_exit_ui_mode) app_lcd_exit_ui_mode();
                 return ESP_OK;
             }
 
-            // Not in UI mode - action depends on connectivity level
-            p3a_connectivity_level_t conn = p3a_state_get_connectivity();
-
-            if (conn == P3A_CONNECTIVITY_NO_WIFI) {
-                // No Wi-Fi: show Wi-Fi setup instructions
-                ESP_LOGI(TAG, "Long press with no Wi-Fi - showing setup instructions");
-                if (app_lcd_enter_ui_mode) app_lcd_enter_ui_mode();
-                if (ugfx_ui_show_captive_ap_info) ugfx_ui_show_captive_ap_info();
-            } else if (conn == P3A_CONNECTIVITY_NO_INTERNET) {
-                // Wi-Fi connected but no internet: show error screen
-                ESP_LOGI(TAG, "Long press with no internet - showing connectivity error");
-                if (app_lcd_enter_ui_mode) app_lcd_enter_ui_mode();
-                if (ugfx_ui_show_connectivity_error) ugfx_ui_show_connectivity_error();
-            } else {
-                // Has internet: start provisioning flow
-                ESP_LOGI(TAG, "Long press detected - attempting to start provisioning");
-
-                if (!makapix_start_provisioning) {
-                    ESP_LOGW(TAG, "Provisioning not available (makapix_start_provisioning is NULL)");
-                } else {
-                    esp_err_t err = p3a_state_enter_provisioning();
-                    if (err == ESP_OK) {
-                        ESP_LOGI(TAG, "State transition to provisioning successful, starting provisioning");
-                        makapix_start_provisioning();
-                    } else {
-                        ESP_LOGW(TAG, "State transition to provisioning denied: %s (current state: %s)",
-                                esp_err_to_name(err), p3a_state_get_name(p3a_state_get()));
-                        // Force start provisioning anyway if we're in animation playback state
-                        // This handles the edge case where substate might be blocking
-                        if (p3a_state_get() == P3A_STATE_ANIMATION_PLAYBACK) {
-                            ESP_LOGI(TAG, "Forcing provisioning start from animation playback state");
-                            makapix_start_provisioning();
-                        }
-                    }
-                }
-            }
+            // Enter info-screen
+            ESP_LOGI(TAG, "Long press detected - showing info screen");
+            if (app_lcd_enter_ui_mode) app_lcd_enter_ui_mode();
+            if (ugfx_ui_show_info_screen) ugfx_ui_show_info_screen();
             return ESP_OK;
         }
             

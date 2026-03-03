@@ -10,7 +10,7 @@
  * - GET/PUT /settings/dwell_time - Dwell time settings
  * - GET/PUT /settings/play_order - Play order settings
  * - GET/POST /rotation - Screen rotation
- * - GET/PUT /settings/giphy_refresh_override - Giphy refresh override
+ * - GET/PUT /settings/refresh_override - Refresh override
  */
 
 #include "http_api_internal.h"
@@ -402,20 +402,20 @@ esp_err_t h_post_rotation(httpd_req_t *req) {
     return ESP_OK;
 }
 
-// ---------- Giphy Refresh Override ----------
+// ---------- Refresh Override ----------
 
-esp_err_t h_get_giphy_refresh_override(httpd_req_t *req)
+esp_err_t h_get_refresh_override(httpd_req_t *req)
 {
-    bool val = config_store_get_giphy_refresh_allow_override();
+    bool val = config_store_get_refresh_allow_override();
     char response[128];
     snprintf(response, sizeof(response),
-             "{\"ok\":true,\"data\":{\"giphy_refresh_allow_override\":%s}}",
+             "{\"ok\":true,\"data\":{\"refresh_allow_override\":%s}}",
              val ? "true" : "false");
     send_json(req, 200, response);
     return ESP_OK;
 }
 
-esp_err_t h_put_giphy_refresh_override(httpd_req_t *req)
+esp_err_t h_put_refresh_override(httpd_req_t *req)
 {
     if (!ensure_json_content(req)) {
         send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
@@ -442,17 +442,17 @@ esp_err_t h_put_giphy_refresh_override(httpd_req_t *req)
         return ESP_OK;
     }
 
-    cJSON *item = cJSON_GetObjectItem(root, "giphy_refresh_allow_override");
+    cJSON *item = cJSON_GetObjectItem(root, "refresh_allow_override");
     if (!item || !cJSON_IsBool(item)) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'giphy_refresh_allow_override' field\",\"code\":\"INVALID_REQUEST\"}");
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'refresh_allow_override' field\",\"code\":\"INVALID_REQUEST\"}");
         return ESP_OK;
     }
 
     bool val = cJSON_IsTrue(item);
     cJSON_Delete(root);
 
-    config_store_set_giphy_refresh_allow_override(val);
+    config_store_set_refresh_allow_override(val);
     send_json(req, 200, "{\"ok\":true}");
     return ESP_OK;
 }

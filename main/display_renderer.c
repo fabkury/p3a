@@ -530,7 +530,7 @@ void display_render_task(void *arg)
         int8_t back_buffer_idx;
         uint8_t *back_buffer;
 
-        if (use_triple_buffering && !ui_mode) {
+        if (use_triple_buffering) {
             // Triple buffering: find any FREE buffer
             back_buffer_idx = acquire_free_buffer(portMAX_DELAY);
             if (back_buffer_idx < 0) {
@@ -645,7 +645,7 @@ void display_render_task(void *arg)
         // ================================================================
         g_last_display_buffer = (uint8_t)back_buffer_idx;
 
-        if (use_triple_buffering && !ui_mode) {
+        if (use_triple_buffering) {
             xSemaphoreTake(g_display_vsync_sem, 0);
             xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
 
@@ -662,7 +662,7 @@ void display_render_task(void *arg)
         g_last_frame_present_us = esp_timer_get_time();
         
 
-        if (!use_vsync || ui_mode) {
+        if (!use_vsync) {
             vTaskDelay(5);
         }
     }

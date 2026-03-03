@@ -459,8 +459,8 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     if (strcmp(uri, "/settings/play_order") == 0) {
         return h_get_play_order(req);
     }
-    if (strcmp(uri, "/settings/giphy_refresh_override") == 0) {
-        return h_get_giphy_refresh_override(req);
+    if (strcmp(uri, "/settings/refresh_override") == 0) {
+        return h_get_refresh_override(req);
     }
     if (strcmp(uri, "/channels/stats") == 0) {
         return h_get_channels_stats(req);
@@ -538,6 +538,9 @@ static esp_err_t h_post_router(httpd_req_t *req) {
     if (strcmp(uri, "/action/swap_to") == 0) {
         return h_post_swap_to(req);
     }
+    if (strcmp(uri, "/action/provision") == 0) {
+        return h_post_provision(req);
+    }
     // Playset endpoint: /playset/{name} (activate-only, existing)
     if (strncmp(uri, "/playset/", 9) == 0) {
         return h_post_playset(req);
@@ -585,8 +588,8 @@ static esp_err_t h_put_router(httpd_req_t *req) {
     if (strcmp(uri, "/settings/play_order") == 0) {
         return h_put_play_order(req);
     }
-    if (strcmp(uri, "/settings/giphy_refresh_override") == 0) {
-        return h_put_giphy_refresh_override(req);
+    if (strcmp(uri, "/settings/refresh_override") == 0) {
+        return h_put_refresh_override(req);
     }
 
     httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");

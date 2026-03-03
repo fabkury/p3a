@@ -19,12 +19,6 @@
 
 static const char *TAG = "giphy_api";
 
-// Maximum items per API call.
-// Giphy beta key allows up to 50, but each GIF object is ~8KB of JSON,
-// so 50 items produces ~400KB responses that exceed reasonable buffers.
-// 25 (Giphy's own default) keeps responses under ~200KB.
-#define GIPHY_PAGE_LIMIT 25
-
 /**
  * @brief Parse a single GIF object from the Giphy API response
  *
@@ -147,13 +141,15 @@ esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
         char encoded_query[192];
         url_encode(ctx->query, encoded_query, sizeof(encoded_query));
         snprintf(url, sizeof(url),
-                 "https://api.giphy.com/v1/gifs/search?api_key=%s&q=%s&limit=%d&offset=%d&rating=%s",
-                 ctx->api_key, encoded_query, GIPHY_PAGE_LIMIT, offset, ctx->rating);
+                 "https://api.giphy.com/v1/gifs/search?api_key=%s&q=%s&limit=%d&offset=%d&rating=%s"
+                 "&fields=id,trending_datetime,import_datetime,images.%s",
+                 ctx->api_key, encoded_query, GIPHY_PAGE_LIMIT, offset, ctx->rating, ctx->rendition);
         ESP_LOGI(TAG, "Fetching search q=\"%s\": offset=%d, limit=%d", ctx->query, offset, GIPHY_PAGE_LIMIT);
     } else {
         snprintf(url, sizeof(url),
-                 "https://api.giphy.com/v1/gifs/trending?api_key=%s&limit=%d&offset=%d&rating=%s",
-                 ctx->api_key, GIPHY_PAGE_LIMIT, offset, ctx->rating);
+                 "https://api.giphy.com/v1/gifs/trending?api_key=%s&limit=%d&offset=%d&rating=%s"
+                 "&fields=id,trending_datetime,import_datetime,images.%s",
+                 ctx->api_key, GIPHY_PAGE_LIMIT, offset, ctx->rating, ctx->rendition);
         ESP_LOGI(TAG, "Fetching trending: offset=%d, limit=%d", offset, GIPHY_PAGE_LIMIT);
     }
 

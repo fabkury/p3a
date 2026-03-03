@@ -8,6 +8,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+/// Maximum items per Giphy API call.
+#define GIPHY_PAGE_LIMIT 48
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -55,12 +58,12 @@ typedef struct {
  * When ctx->query is non-empty, fetches from /v1/gifs/search with that query.
  *
  * Builds the request URL, performs the HTTP GET, parses the JSON response,
- * and fills the output array with up to 25 entries. The caller is responsible
+ * and fills the output array with up to GIPHY_PAGE_LIMIT entries. The caller is responsible
  * for pagination, cancellation checks, and inter-page delays.
  *
  * @param ctx        Fetch context (API config + shared response buffer)
  * @param offset     Pagination offset (0-based)
- * @param out_entries Output array (must hold at least 25 entries)
+ * @param out_entries Output array (must hold at least GIPHY_PAGE_LIMIT entries)
  * @param out_count  Number of entries parsed from this page
  * @param out_has_more Set to true if more pages are likely available
  * @return ESP_OK on success, ESP_ERR_NOT_ALLOWED on HTTP 401/403,
@@ -226,6 +229,24 @@ void giphy_cancel_refresh(void);
  * @brief Check if refresh cancellation has been requested
  */
 bool giphy_is_refresh_cancelled(void);
+
+// ============================================================================
+// Refresh Status
+// ============================================================================
+
+/**
+ * @brief Last refresh outcome for display on info screen
+ */
+typedef enum {
+    GIPHY_REFRESH_NOT_ATTEMPTED,
+    GIPHY_REFRESH_OK,
+    GIPHY_REFRESH_FAILED,
+} giphy_refresh_status_t;
+
+/**
+ * @brief Get the result of the most recent Giphy refresh
+ */
+giphy_refresh_status_t giphy_get_last_refresh_status(void);
 
 #ifdef __cplusplus
 }

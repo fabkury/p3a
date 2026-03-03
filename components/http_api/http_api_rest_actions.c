@@ -18,6 +18,8 @@
 #include "play_scheduler.h"
 #include "p3a_state.h"
 #include "show_url.h"
+#include "makapix.h"
+#include "event_bus.h"
 #include <sys/stat.h>
 
 // Processing notification (from display_renderer_priv.h via weak symbol)
@@ -459,5 +461,79 @@ esp_err_t h_post_swap_to(httpd_req_t *req) {
     }
 
     send_json(req, 200, "{\"ok\":true,\"data\":{\"action\":\"swap_to\"}}");
+    return ESP_OK;
+}
+
+// ---------- Provisioning Handler ----------
+
+/**
+ * POST /action/provision
+ * Enter or exit Makapix provisioning mode.
+ * Body: { "enable": true } or { "enable": false }
+ */
+esp_err_t h_post_provision(httpd_req_t *req) {
+    if (!ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+
+    int err_status = 0;
+    size_t body_len = 0;
+    char *body = recv_body_json(req, &body_len, &err_status);
+    if (!body) {
+        send_json(req, err_status ? err_status : 400,
+                  "{\"ok\":false,\"error\":\"Failed to read body\",\"code\":\"BODY_READ_ERROR\"}");
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_Parse(body);
+    free(body);
+
+    if (!root) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid JSON\",\"code\":\"INVALID_JSON\"}");
+        return ESP_OK;
+    }
+
+    cJSON *enable_item = cJSON_GetObjectItem(root, "enable");
+    if (!enable_item || !cJSON_IsBool(enable_item)) {
+        cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing 'enable' boolean\",\"code\":\"MISSING_FIELD\"}");
+        return ESP_OK;
+    }
+
+    bool enable = cJSON_IsTrue(enable_item);
+    cJSON_Delete(root);
+
+    if (enable) {
+        // Enter provisioning
+        p3a_state_t current = p3a_state_get();
+        if (current != P3A_STATE_ANIMATION_PLAYBACK) {
+            send_json(req, 409,
+                      "{\"ok\":false,\"error\":\"Device must be in playback state\",\"code\":\"INVALID_STATE\"}");
+            return ESP_OK;
+        }
+
+        esp_err_t err = p3a_state_enter_provisioning();
+        if (err != ESP_OK) {
+            // Force start if we're in animation playback
+            if (current == P3A_STATE_ANIMATION_PLAYBACK) {
+                ESP_LOGW("HTTP", "State transition denied, forcing provisioning from playback");
+            } else {
+                send_json(req, 409,
+                          "{\"ok\":false,\"error\":\"State transition denied\",\"code\":\"INVALID_STATE\"}");
+                return ESP_OK;
+            }
+        }
+
+        makapix_start_provisioning();
+        send_json(req, 200, "{\"ok\":true,\"data\":{\"action\":\"provision\",\"enabled\":true}}");
+    } else {
+        // Exit provisioning
+        makapix_cancel_provisioning();
+        p3a_state_exit_to_playback();
+        event_bus_emit_simple(P3A_EVENT_SWAP_NEXT);
+        send_json(req, 200, "{\"ok\":true,\"data\":{\"action\":\"provision\",\"enabled\":false}}");
+    }
+
     return ESP_OK;
 }

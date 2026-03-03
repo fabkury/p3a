@@ -71,8 +71,8 @@ The HTTP server is implemented across multiple source files in `components/http_
 | PUT | `/settings/dwell_time` | Set dwell time |
 | GET | `/settings/play_order` | Get play order |
 | PUT | `/settings/play_order` | Set play order |
-| GET | `/settings/giphy_refresh_override` | Get Giphy refresh override |
-| PUT | `/settings/giphy_refresh_override` | Set Giphy refresh override |
+| GET | `/settings/refresh_override` | Get refresh override |
+| PUT | `/settings/refresh_override` | Set refresh override |
 | GET | `/rotation` | Get screen rotation |
 | POST | `/rotation` | Set screen rotation |
 

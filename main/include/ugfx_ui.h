@@ -121,6 +121,20 @@ esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *mes
 void ugfx_ui_hide_channel_message(void);
 
 /**
+ * @brief Show system info screen overlay
+ *
+ * Displays device health/status information. Dismissed by long-press.
+ *
+ * @return ESP_OK on success
+ */
+esp_err_t ugfx_ui_show_info_screen(void);
+
+/**
+ * @brief Hide info screen overlay
+ */
+void ugfx_ui_hide_info_screen(void);
+
+/**
  * @brief Check if UI is currently active
  * 
  * @return gTrue if UI is active, gFalse otherwise

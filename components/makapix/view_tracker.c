@@ -8,6 +8,7 @@
 #include "p3a_state.h"
 #include "makapix.h"
 #include "sntp_sync.h"
+#include "event_bus.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
@@ -62,6 +63,9 @@ typedef struct {
 
 static view_tracker_state_t s_state = {0};
 
+// Cached player_key presence — avoids NVS lookup on every swap
+static bool s_has_player_key = false;
+
 // PSRAM-backed stack for view tracker task
 static StackType_t *s_view_tracker_stack = NULL;
 static StaticTask_t s_view_tracker_task_buffer;
@@ -73,6 +77,13 @@ static void process_swap_event(void);
 static void send_view_event(void);
 static const char *get_channel_name_for_view(p3a_channel_type_t channel_type);
 static const char *get_intent_string(bool is_intentional);
+static void on_registration_changed(const p3a_event_t *event, void *ctx);
+
+static void on_registration_changed(const p3a_event_t *event, void *ctx)
+{
+    (void)ctx;
+    s_has_player_key = (event->payload.i32 != 0);
+}
 
 esp_err_t view_tracker_init(void)
 {
@@ -83,6 +94,9 @@ esp_err_t view_tracker_init(void)
     
     memset(&s_state, 0, sizeof(s_state));
     memset(&s_pending_swap, 0, sizeof(s_pending_swap));
+
+    s_has_player_key = makapix_store_has_player_key();
+    event_bus_subscribe(P3A_EVENT_REGISTRATION_CHANGED, on_registration_changed, NULL);
 
     // Create dedicated task for processing (6KB stack - enough for MQTT/JSON/logging)
     // Use SPIRAM-backed stack to free internal RAM
@@ -279,7 +293,13 @@ static void process_swap_event(void)
         view_tracker_stop();
         return;
     }
-    
+
+    if (!s_has_player_key) {
+        ESP_LOGD(TAG, "No player_key, skipping view tracking");
+        view_tracker_stop();
+        return;
+    }
+
     // Get intent
     bool is_intentional = makapix_get_and_clear_view_intent();
     

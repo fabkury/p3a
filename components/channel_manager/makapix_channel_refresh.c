@@ -234,6 +234,7 @@ void refresh_task_impl(void *pvParameters)
         }
 
         size_t total_queried = 0;
+        bool query_succeeded = false;
         query_req.has_cursor = false;
         query_req.cursor[0] = '\0';
 
@@ -282,6 +283,8 @@ void refresh_task_impl(void *pvParameters)
                          resp->error_code[0] ? resp->error_code : "(none)");
                 break;
             }
+
+            query_succeeded = true;
 
             if (resp->post_count == 0) {
                 ESP_LOGD(TAG, "No more posts available");
@@ -353,13 +356,23 @@ void refresh_task_impl(void *pvParameters)
         
         free(resp);
 
-        // Save metadata (only persist a valid timestamp if SNTP is synchronized)
-        time_t refresh_ts = sntp_sync_is_synchronized() ? time(NULL) : 0;
-        save_channel_metadata(ch, query_req.has_cursor ? query_req.cursor : "", refresh_ts);
-        ch->last_refresh_time = refresh_ts;
+        // Check for shutdown BEFORE saving metadata — a cancelled refresh must not
+        // update the timestamp, otherwise the freshness check will skip the next refresh.
+        if (!ch->refreshing) {
+            ESP_LOGW(TAG, "Refresh cancelled for channel '%s', not updating refresh timestamp",
+                     ch->channel_id);
+            break;
+        }
 
-        // Check for shutdown after metadata save
-        if (!ch->refreshing) break;
+        if (query_succeeded) {
+            // Save metadata (only persist a valid timestamp if SNTP is synchronized)
+            time_t refresh_ts = sntp_sync_is_synchronized() ? time(NULL) : 0;
+            save_channel_metadata(ch, query_req.has_cursor ? query_req.cursor : "", refresh_ts);
+            ch->last_refresh_time = refresh_ts;
+        } else {
+            ESP_LOGW(TAG, "Refresh failed for channel '%s', preserving previous refresh timestamp",
+                     ch->channel_id);
+        }
 
         // Count how many are artworks vs playlists using cache lookup
         {

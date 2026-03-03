@@ -40,6 +40,7 @@ typedef struct {
 } si_node_t;
 
 static volatile bool s_refresh_cancel = false;
+static giphy_refresh_status_t s_last_refresh_status = GIPHY_REFRESH_NOT_ATTEMPTED;
 
 void giphy_cancel_refresh(void)
 {
@@ -151,6 +152,7 @@ static esp_err_t giphy_merge_entries(channel_cache_t *cache,
     return ESP_OK;
 }
 
+
 /**
  * @brief Rebuild LAi for Giphy channel by checking file existence
  *
@@ -231,10 +233,17 @@ static void giphy_evict_orphans(channel_cache_t *cache, si_node_t *si_hash)
 {
     if (!cache) return;
 
+    // Collect evicted post_ids so we can update LAi outside the mutex
+    int32_t *evicted_ids = NULL;
+    size_t evicted = 0;
+
     xSemaphoreTake(cache->mutex, portMAX_DELAY);
 
+    if (cache->entry_count > 0) {
+        evicted_ids = psram_malloc(cache->entry_count * sizeof(int32_t));
+    }
+
     size_t kept = 0;
-    size_t evicted = 0;
 
     for (size_t i = 0; i < cache->entry_count; i++) {
         si_node_t *found = NULL;
@@ -254,6 +263,9 @@ static void giphy_evict_orphans(channel_cache_t *cache, si_node_t *si_hash)
             giphy_build_filepath(ge->giphy_id, ge->extension,
                                  filepath, sizeof(filepath));
             unlink(filepath);
+            if (evicted_ids) {
+                evicted_ids[evicted] = ge->post_id;
+            }
             evicted++;
         }
     }
@@ -280,8 +292,11 @@ static void giphy_evict_orphans(channel_cache_t *cache, si_node_t *si_hash)
     cache->dirty = true;
     xSemaphoreGive(cache->mutex);
 
-    // Rebuild LAi from surviving files
-    giphy_lai_rebuild(cache);
+    // Remove evicted entries from LAi (outside mutex — lai_remove_entry locks internally)
+    for (size_t i = 0; i < evicted; i++) {
+        lai_remove_entry(cache, evicted_ids[i]);
+    }
+    free(evicted_ids);
 
     // Save cache to disk
     char channels_path[128];
@@ -359,15 +374,20 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
         }
     }
 
-    // Rebuild LAi BEFORE the loop so the download manager recognizes
-    // files already on disk from previous sessions
-    size_t available = giphy_lai_rebuild(cache);
-    ESP_LOGI(TAG, "LAi rebuilt: %zu files already available", available);
-
     extern void download_manager_rescan(void);
 
-    // Per-page entry buffer on the stack (25 entries x 64 bytes = 1600 bytes)
-    giphy_channel_entry_t page_entries[25];
+    // Per-page entry buffer (heap-allocated to avoid ~3KB on the stack,
+    // which is too large for the ps_refresh task alongside TLS operations).
+    giphy_channel_entry_t *page_entries = heap_caps_malloc(
+        GIPHY_PAGE_LIMIT * sizeof(giphy_channel_entry_t), MALLOC_CAP_SPIRAM);
+    if (!page_entries) {
+        page_entries = malloc(GIPHY_PAGE_LIMIT * sizeof(giphy_channel_entry_t));
+        if (!page_entries) {
+            ESP_LOGE(TAG, "Failed to allocate page_entries buffer");
+            free(ctx.response_buf);
+            return ESP_ERR_NO_MEM;
+        }
+    }
     size_t total_fetched = 0;
     int offset = 0;
     esp_err_t last_err = ESP_OK;
@@ -455,6 +475,7 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
     }
 
     free(ctx.response_buf);
+    free(page_entries);
 
     // Eviction: remove entries not seen in this refresh cycle
     if (refresh_completed && si_hash) {
@@ -470,6 +491,11 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
         }
         si_hash = NULL;
     }
+
+    // Rebuild LAi from final Ci state so it reflects files on disk after all
+    // merges and evictions. This runs once per refresh, not per page.
+    size_t available = giphy_lai_rebuild(cache);
+    ESP_LOGI(TAG, "LAi rebuilt after refresh: %zu files available", available);
 
     // Only persist last_refresh timestamp when the refresh ran to completion.
     // Cancelled or failed refreshes must not update the timestamp, otherwise
@@ -498,7 +524,16 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
              channel_id, refresh_completed ? "complete" : "incomplete",
              total_fetched, cache->entry_count);
 
-    if (total_fetched > 0) return ESP_OK;
+    if (total_fetched > 0) {
+        s_last_refresh_status = GIPHY_REFRESH_OK;
+        return ESP_OK;
+    }
     // Propagate specific error (e.g. ESP_ERR_NOT_ALLOWED for invalid API key)
+    s_last_refresh_status = GIPHY_REFRESH_FAILED;
     return (last_err != ESP_OK) ? last_err : ESP_FAIL;
+}
+
+giphy_refresh_status_t giphy_get_last_refresh_status(void)
+{
+    return s_last_refresh_status;
 }

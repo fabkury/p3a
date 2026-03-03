@@ -112,7 +112,17 @@ static int find_next_pending_refresh(ps_state_t *state)
 
         // For Makapix channels, only proceed if MQTT is connected
         if (ch->type != PS_CHANNEL_TYPE_SDCARD && !mqtt_ready) {
-            continue;  // Skip Makapix channels until MQTT is ready
+            // If Makapix is permanently unavailable (no registration or invalid
+            // credentials), clear refresh_pending so the channel doesn't stay
+            // stuck in "refreshing" state in the UI forever.
+            makapix_state_t mstate = makapix_get_state();
+            if (mstate == MAKAPIX_STATE_IDLE ||
+                mstate == MAKAPIX_STATE_REGISTRATION_INVALID) {
+                ch->refresh_pending = false;
+                ESP_LOGI(TAG, "Channel '%s' refresh skipped (no Makapix connection)",
+                         ch->channel_id);
+            }
+            continue;
         }
 
         return (int)i;

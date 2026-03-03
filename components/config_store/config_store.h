@@ -510,6 +510,22 @@ bool config_store_get_ppa_upscale(void);
  */
 void config_store_invalidate_ppa_upscale(void);
 
+// ============================================================================
+// WiFi Recovery Reboot Counters (persisted in NVS)
+// ============================================================================
+
+/** Total WiFi recovery reboots since last firmware update. */
+uint16_t config_store_get_wifi_reboot_total(void);
+void     config_store_increment_wifi_reboot_total(void);
+
+/** Consecutive WiFi recovery reboots without a successful connection. */
+uint16_t config_store_get_wifi_reboot_streak(void);
+void     config_store_increment_wifi_reboot_streak(void);
+void     config_store_reset_wifi_reboot_streak(void);
+
+/** Reset both counters (called on OTA firmware validation). */
+void     config_store_reset_wifi_reboot_counters(void);
+
 #ifdef __cplusplus
 }
 #endif

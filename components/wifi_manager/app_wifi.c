@@ -121,6 +121,12 @@ static StaticTask_t s_wifi_recovery_task_buffer;
 static StackType_t *s_wifi_health_stack = NULL;
 static StaticTask_t s_wifi_health_task_buffer;
 
+// Hard recovery escalation (C6 WiFi stack permanently broken)
+static int s_total_recovery_failures = 0;
+
+// UI function for showing countdown before hard reboot (weak: resolved at link time)
+extern esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *message, int progress_percent) __attribute__((weak));
+
 // Forward declaration (event_handler referenced before definition)
 static void event_handler(void* arg, esp_event_base_t event_base,
                           int32_t event_id, void* event_data);
@@ -321,6 +327,7 @@ static void wifi_recovery_task(void *arg)
         s_retry_num = 0;
 
         bool recovered = false;
+        bool c6_stack_broken = false;
 
         for (int attempt = 0; attempt < max_recovery_attempts && !recovered; attempt++) {
             if (attempt > 0) {
@@ -351,7 +358,8 @@ static void wifi_recovery_task(void *arg)
             err = esp_wifi_remote_init(&cfg);
             if (err != ESP_OK) {
                 ESP_LOGE(TAG, "esp_wifi_remote_init failed during recovery: %s", esp_err_to_name(err));
-                continue;  // Retry the full cycle
+                c6_stack_broken = true;
+                continue;
             }
 
             // Ensure handlers stay registered (registering twice is prevented)
@@ -394,6 +402,7 @@ static void wifi_recovery_task(void *arg)
             err = esp_wifi_remote_set_mode(WIFI_MODE_STA);
             if (err != ESP_OK) {
                 ESP_LOGE(TAG, "esp_wifi_remote_set_mode failed during recovery: %s", esp_err_to_name(err));
+                c6_stack_broken = true;
                 continue;
             }
 
@@ -423,7 +432,35 @@ static void wifi_recovery_task(void *arg)
         }
 
         if (recovered) {
+            s_total_recovery_failures = 0;
             ESP_LOGW(TAG, "WiFi recovery: reinit complete; reconnect will proceed via events");
+        } else if (c6_stack_broken) {
+            s_total_recovery_failures++;
+            ESP_LOGE(TAG, "WiFi recovery: all %d attempts failed (C6 stack broken, failure #%d)",
+                     max_recovery_attempts, s_total_recovery_failures);
+
+            if (s_total_recovery_failures >= 2) {
+                uint16_t streak = config_store_get_wifi_reboot_streak();
+                if (streak >= 1) {
+                    ESP_LOGE(TAG, "WiFi recovery: reboot streak=%u, staying in degraded mode to prevent loop",
+                             streak);
+                } else {
+                    ESP_LOGE(TAG, "WiFi recovery: escalating to hard reboot (streak=%u)", streak);
+                    config_store_increment_wifi_reboot_total();
+                    config_store_increment_wifi_reboot_streak();
+
+                    for (int i = 10; i > 0; i--) {
+                        char msg[64];
+                        snprintf(msg, sizeof(msg), "WiFi chip not responding\nRestarting in %d...", i);
+                        if (ugfx_ui_show_channel_message) {
+                            ugfx_ui_show_channel_message("p3a", msg, -1);
+                        }
+                        ESP_LOGW(TAG, "Hard reboot in %d...", i);
+                        vTaskDelay(pdMS_TO_TICKS(1000));
+                    }
+                    esp_restart();
+                }
+            }
         } else {
             ESP_LOGE(TAG, "WiFi recovery: all %d attempts failed; health monitor will retry later",
                      max_recovery_attempts);
@@ -583,6 +620,8 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "IP: " IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         s_consecutive_wifi_errors = 0;
+        s_total_recovery_failures = 0;
+        config_store_reset_wifi_reboot_streak();
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
         
         makapix_channel_signal_wifi_connected();

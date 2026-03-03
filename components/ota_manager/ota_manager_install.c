@@ -7,6 +7,7 @@
  */
 
 #include "ota_manager_internal.h"
+#include "config_store.h"
 #include "esp_ota_ops.h"
 #include "esp_https_ota.h"
 #include "esp_http_client.h"
@@ -399,6 +400,7 @@ esp_err_t ota_manager_validate_boot(void)
             return err;
         }
 
+        config_store_reset_wifi_reboot_counters();
         ESP_LOGI(TAG, "OTA firmware validated successfully");
     } else if (ota_state == ESP_OTA_IMG_VALID) {
         ESP_LOGD(TAG, "Running validated OTA firmware");

@@ -20,4 +20,5 @@ idf_component_register(
         sdio_bus
     PRIV_REQUIRES
         esp_netif
+        config_store
 )

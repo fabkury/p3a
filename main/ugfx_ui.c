@@ -565,6 +565,18 @@ static void ugfx_ui_draw_info_screen(void)
         gdispFillStringBox(vx, y, vw, rh, url_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
     }
 
+    // --- Row 10: WiFi Recovery Reboots (only shown when > 0) ---
+    {
+        uint16_t wifi_reboots = config_store_get_wifi_reboot_total();
+        if (wifi_reboots > 0) {
+            y = 570;
+            gdispFillStringBox(lx, y, lw, rh, "WiFi Reboots", font_main, gray, GFX_BLACK, gJustifyLeft);
+            char rb_buf[16];
+            snprintf(rb_buf, sizeof(rb_buf), "%u", wifi_reboots);
+            gdispFillStringBox(vx, y, vw, rh, rb_buf, font_main, yellow, GFX_BLACK, gJustifyLeft);
+        }
+    }
+
     // Dismiss hint at bottom
     gdispFillStringBox(0, gdispGetHeight() - 60, screen_w, rh, "Long-press to dismiss",
                        font_hint, HTML2COLOR(0x555555), GFX_BLACK, gJustifyCenter);

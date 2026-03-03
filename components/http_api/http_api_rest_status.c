@@ -331,6 +331,13 @@ esp_err_t h_get_status(httpd_req_t *req) {
     uint32_t queue_depth = s_cmdq ? uxQueueMessagesWaiting(s_cmdq) : 0;
     cJSON_AddNumberToObject(data, "queue_depth", (double)queue_depth);
 
+    uint16_t wifi_reboots = config_store_get_wifi_reboot_total();
+    if (wifi_reboots > 0) {
+        cJSON_AddNumberToObject(data, "wifi_recovery_reboots", (double)wifi_reboots);
+        cJSON_AddNumberToObject(data, "wifi_recovery_reboot_streak",
+                                (double)config_store_get_wifi_reboot_streak());
+    }
+
     // Device identity
     {
         char device_name[CONFIG_STORE_MAX_DEVICE_NAME_LEN + 1];

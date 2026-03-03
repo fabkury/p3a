@@ -1505,3 +1505,64 @@ void config_store_invalidate_ppa_upscale(void)
 {
 }
 #endif
+
+// ============================================================================
+// WiFi Recovery Reboot Counters
+// ============================================================================
+
+#define NVS_KEY_WIFI_RST_TOT "wifi_rst_tot"
+#define NVS_KEY_WIFI_RST_STR "wifi_rst_str"
+
+static uint16_t nvs_read_u16(const char *key)
+{
+    nvs_handle_t h;
+    if (ensure_nvs(&h) != ESP_OK) return 0;
+    uint16_t val = 0;
+    nvs_get_u16(h, key, &val);
+    nvs_close(h);
+    return val;
+}
+
+static void nvs_write_u16(const char *key, uint16_t val)
+{
+    nvs_handle_t h;
+    if (ensure_nvs(&h) != ESP_OK) return;
+    nvs_set_u16(h, key, val);
+    nvs_commit(h);
+    nvs_close(h);
+}
+
+uint16_t config_store_get_wifi_reboot_total(void)
+{
+    return nvs_read_u16(NVS_KEY_WIFI_RST_TOT);
+}
+
+void config_store_increment_wifi_reboot_total(void)
+{
+    uint16_t v = nvs_read_u16(NVS_KEY_WIFI_RST_TOT);
+    if (v < UINT16_MAX) v++;
+    nvs_write_u16(NVS_KEY_WIFI_RST_TOT, v);
+}
+
+uint16_t config_store_get_wifi_reboot_streak(void)
+{
+    return nvs_read_u16(NVS_KEY_WIFI_RST_STR);
+}
+
+void config_store_increment_wifi_reboot_streak(void)
+{
+    uint16_t v = nvs_read_u16(NVS_KEY_WIFI_RST_STR);
+    if (v < UINT16_MAX) v++;
+    nvs_write_u16(NVS_KEY_WIFI_RST_STR, v);
+}
+
+void config_store_reset_wifi_reboot_streak(void)
+{
+    nvs_write_u16(NVS_KEY_WIFI_RST_STR, 0);
+}
+
+void config_store_reset_wifi_reboot_counters(void)
+{
+    nvs_write_u16(NVS_KEY_WIFI_RST_TOT, 0);
+    nvs_write_u16(NVS_KEY_WIFI_RST_STR, 0);
+}

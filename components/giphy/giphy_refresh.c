@@ -513,8 +513,10 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
                  channel_id);
     }
 
+    char _dn[64];
+    ps_get_display_name(channel_id, _dn, sizeof(_dn));
     ESP_LOGI(TAG, "Giphy channel '%s' refresh %s: %zu fetched, %zu in cache",
-             channel_id, refresh_completed ? "complete" : "incomplete",
+             _dn, refresh_completed ? "complete" : "incomplete",
              total_fetched, cache->entry_count);
 
     if (total_fetched > 0) {

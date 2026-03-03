@@ -45,7 +45,7 @@ static const char *TAG = "show_url";
 #define SHOW_URL_MAX_FILE_SIZE      P3A_MAX_ARTWORK_SIZE
 #define SHOW_URL_CHUNK_SIZE         (128 * 1024)         // 128 KB (matches makapix_artwork.c)
 #define SHOW_URL_TASK_STACK_SIZE    6144
-#define SHOW_URL_MAX_URL_LEN        512
+#define SHOW_URL_MAX_URL_LEN        2048
 #define SHOW_URL_MAX_FILENAME_LEN   256
 
 // ============================================================================
@@ -381,6 +381,7 @@ static void show_url_task(void *arg)
             .timeout_ms = 30000,
             .crt_bundle_attach = esp_crt_bundle_attach,
             .buffer_size = 4096,
+            .buffer_size_tx = 2560,
         };
 
         esp_http_client_handle_t client = esp_http_client_init(&config);

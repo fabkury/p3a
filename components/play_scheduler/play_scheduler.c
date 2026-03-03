@@ -186,13 +186,13 @@ static esp_err_t load_channel_by_id(const ps_channel_state_t *ch_state, channel_
         char channel_path[256] = {0};
         if (sd_path_get_vault(vault_path, sizeof(vault_path)) != ESP_OK ||
             sd_path_get_channel(channel_path, sizeof(channel_path)) != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to get SD paths for Makapix channel '%s'", channel_id);
+            ESP_LOGE(TAG, "Failed to get SD paths for Makapix channel '%s'", ch_state->display_name);
             return ESP_FAIL;
         }
 
         channel_handle_t handle = makapix_channel_create(channel_id, ch_state->display_name, vault_path, channel_path);
         if (!handle) {
-            ESP_LOGE(TAG, "Failed to create Makapix channel '%s'", channel_id);
+            ESP_LOGE(TAG, "Failed to create Makapix channel '%s'", ch_state->display_name);
             return ESP_ERR_NO_MEM;
         }
         makapix_channel_set_spec(handle, ch_state->spec_name, ch_state->identifier);
@@ -201,7 +201,7 @@ static esp_err_t load_channel_by_id(const ps_channel_state_t *ch_state, channel_
         return ESP_OK;
     }
 
-    ESP_LOGW(TAG, "Unknown channel type %d for channel_id: %s", ch_state->type, channel_id);
+    ESP_LOGW(TAG, "Unknown channel type %d for channel '%s'", ch_state->type, ch_state->display_name);
     return ESP_ERR_NOT_FOUND;
 }
 
@@ -227,7 +227,7 @@ static esp_err_t activate_channel(size_t channel_index)
     channel_request_refresh(handle);
     esp_err_t err = channel_load(handle);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to load channel '%s': %s", ch->channel_id, esp_err_to_name(err));
+        ESP_LOGW(TAG, "Failed to load channel '%s': %s", ch->display_name, esp_err_to_name(err));
         ch->active = false;
         ch->entry_count = 0;
         return err;
@@ -244,7 +244,7 @@ static esp_err_t activate_channel(size_t channel_index)
 
     err = channel_start_playback(handle, order, NULL);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to start playback for '%s': %s", ch->channel_id, esp_err_to_name(err));
+        ESP_LOGW(TAG, "Failed to start playback for '%s': %s", ch->display_name, esp_err_to_name(err));
     }
 
     // Get stats
@@ -257,7 +257,7 @@ static esp_err_t activate_channel(size_t channel_index)
         ch->active = false;
     }
 
-    ESP_LOGI(TAG, "Channel '%s' activated with %zu entries", ch->channel_id, ch->entry_count);
+    ESP_LOGI(TAG, "Channel '%s' activated with %zu entries", ch->display_name, ch->entry_count);
 
     return ESP_OK;
 }
@@ -490,7 +490,9 @@ esp_err_t play_scheduler_play_channel(const char *channel_id)
         return ESP_ERR_INVALID_ARG;
     }
 
-    ESP_LOGI(TAG, "play_channel: %s", channel_id);
+    char _dn[64];
+    ps_get_display_name(channel_id, _dn, sizeof(_dn));
+    ESP_LOGI(TAG, "play_channel: %s", _dn);
 
     ps_channel_config_t config = {0};
     strncpy(config.channel_id, channel_id, sizeof(config.channel_id) - 1);

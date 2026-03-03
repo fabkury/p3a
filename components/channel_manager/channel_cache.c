@@ -9,6 +9,7 @@
 #include "makapix_channel_utils.h"
 #include "playlist_manager.h"
 #include "play_scheduler_types.h"   // PS_MAX_CHANNELS, ps_channel_type_t
+#include "play_scheduler.h"        // ps_get_display_name()
 #include "esp_log.h"
 #include <string.h>
 #include <stdlib.h>
@@ -489,7 +490,11 @@ esp_err_t channel_cache_load(const char *channel_id,
         return ESP_OK;  // Empty cache is valid
     }
 
-    ESP_LOGI(TAG, "Loading cache for '%s'", channel_id);
+    {
+        char _dn[64];
+        ps_get_display_name(channel_id, _dn, sizeof(_dn));
+        ESP_LOGI(TAG, "Loading cache for '%s'", _dn);
+    }
     esp_err_t err = load_new_format(f, cache);
     fclose(f);
 
@@ -617,8 +622,12 @@ esp_err_t channel_cache_save(const channel_cache_t *cache, const char *channels_
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Saved cache '%s': %zu entries, %zu available",
-             cache->channel_id, cache->entry_count, cache->available_count);
+    {
+        char _dn[64];
+        ps_get_display_name(cache->channel_id, _dn, sizeof(_dn));
+        ESP_LOGI(TAG, "Saved cache '%s': %zu entries, %zu available",
+                 _dn, cache->entry_count, cache->available_count);
+    }
     return ESP_OK;
 }
 
@@ -1461,7 +1470,11 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
                          cache->channel_id, cache->available_capacity, cache->entry_count);
                 cache->available_capacity = cache->entry_count;
             } else {
-                ESP_LOGE(TAG, "Failed to grow available_post_ids for '%s'", cache->channel_id);
+                {
+                    char _dn[64];
+                    ps_get_display_name(cache->channel_id, _dn, sizeof(_dn));
+                    ESP_LOGE(TAG, "Failed to grow available_post_ids for '%s'", _dn);
+                }
             }
         }
     }

@@ -142,7 +142,7 @@ static esp_err_t merge_refresh_batch(makapix_channel_t *ch, const makapix_post_t
     // Find the registered Play Scheduler cache
     channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
     if (!cache) {
-        ESP_LOGW(TAG, "Cache not registered for channel '%s', skipping batch", ch->channel_id);
+        ESP_LOGW(TAG, "Cache not registered for channel '%s', skipping batch", ch->base.name);
         return ESP_ERR_NOT_FOUND;
     }
 

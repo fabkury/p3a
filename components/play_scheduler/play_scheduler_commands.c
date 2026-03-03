@@ -126,7 +126,7 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
 
     if (st.st_size <= 0 || st.st_size % entry_size != 0) {
         ESP_LOGW(TAG, "Channel '%s': invalid cache file size %ld (expected multiple of %zu)",
-                 ch->channel_id, (long)st.st_size, entry_size);
+                 ch->display_name, (long)st.st_size, entry_size);
         ch->cache_loaded = false;
         ch->entry_count = 0;
         ch->active = false;
@@ -144,7 +144,7 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
 
     ch->entries = malloc(ch->entry_count * entry_size);
     if (!ch->entries) {
-        ESP_LOGE(TAG, "Channel '%s': failed to allocate %zu entries", ch->channel_id, ch->entry_count);
+        ESP_LOGE(TAG, "Channel '%s': failed to allocate %zu entries", ch->display_name, ch->entry_count);
         ch->cache_loaded = false;
         ch->entry_count = 0;
         ch->active = false;
@@ -155,7 +155,7 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
 
     FILE *f = fopen(cache_path, "rb");
     if (!f) {
-        ESP_LOGE(TAG, "Channel '%s': failed to open cache file", ch->channel_id);
+        ESP_LOGE(TAG, "Channel '%s': failed to open cache file", ch->display_name);
         free(ch->entries);
         ch->entries = NULL;
         ch->cache_loaded = false;
@@ -170,7 +170,7 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
     fclose(f);
 
     if (read_count != ch->entry_count) {
-        ESP_LOGE(TAG, "Channel '%s': read %zu/%zu entries", ch->channel_id, read_count, ch->entry_count);
+        ESP_LOGE(TAG, "Channel '%s': read %zu/%zu entries", ch->display_name, read_count, ch->entry_count);
         free(ch->entries);
         ch->entries = NULL;
         ch->cache_loaded = false;
@@ -188,7 +188,7 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
     ps_touch_cache_file(ch->channel_id, PS_CHANNEL_TYPE_SDCARD);
 
     ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries (sdcard format) into memory",
-             ch->channel_id, ch->entry_count);
+             ch->display_name, ch->entry_count);
 
     if (ch->entry_count > 0) {
         sdcard_index_entry_t *entries = (sdcard_index_entry_t *)ch->entries;
@@ -230,7 +230,7 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
     // Allocate new cache structure
     ch->cache = malloc(sizeof(channel_cache_t));
     if (!ch->cache) {
-        ESP_LOGE(TAG, "Channel '%s': failed to allocate cache structure", ch->channel_id);
+        ESP_LOGE(TAG, "Channel '%s': failed to allocate cache structure", ch->display_name);
         ch->cache_loaded = false;
         ch->entry_count = 0;
         ch->available_count = 0;
@@ -244,7 +244,7 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
     esp_err_t err = channel_cache_load(ch->channel_id, (uint8_t)ch->type, channels_path, vault_path, ch->cache);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Channel '%s': channel_cache_load failed: %s",
-                 ch->channel_id, esp_err_to_name(err));
+                 ch->display_name, esp_err_to_name(err));
         free(ch->cache);
         ch->cache = NULL;
         ch->cache_loaded = false;
@@ -260,12 +260,12 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
     esp_err_t reg_err = channel_cache_register(ch->cache);
     if (reg_err != ESP_OK) {
         ESP_LOGW(TAG, "Channel '%s': cache register failed: %s (persistence disabled)",
-                 ch->channel_id, esp_err_to_name(reg_err));
+                 ch->display_name, esp_err_to_name(reg_err));
     }
 
     // If cache was migrated from legacy format (dirty flag set), schedule save in new format
     if (ch->cache->dirty) {
-        ESP_LOGI(TAG, "Channel '%s': migrated from legacy format, scheduling save", ch->channel_id);
+        ESP_LOGI(TAG, "Channel '%s': migrated from legacy format, scheduling save", ch->display_name);
         channel_cache_schedule_save(ch->cache);
     }
 
@@ -283,7 +283,7 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
     ps_touch_cache_file(ch->channel_id, ch->type);
 
     ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries, %zu available (makapix format)",
-             ch->channel_id, ch->cache->entry_count, ch->cache->available_count);
+             ch->display_name, ch->cache->entry_count, ch->cache->available_count);
 
     return ESP_OK;
 }

@@ -234,7 +234,9 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
 
         // Entry not found in current in-memory cache - the cache file may have been
         // updated by the refresh task. Reload the cache from disk and try again.
-        ESP_LOGI(TAG, "Entry not in cache, reloading channel '%s' from disk", channel_id);
+        char _dn[64];
+        ps_get_display_name(channel_id, _dn, sizeof(_dn));
+        ESP_LOGI(TAG, "Entry not in cache, reloading channel '%s' from disk", _dn);
         esp_err_t reload_err = ps_load_channel_cache(ch);
         if (reload_err == ESP_OK) {
             // Recalculate SWRR weights after cache reload

@@ -507,7 +507,7 @@ esp_err_t makapix_channel_stop_refresh(channel_handle_t channel)
         return ESP_OK;  // Not refreshing, nothing to stop
     }
 
-    ESP_LOGI(TAG, "Stopping refresh for channel: %s", ch->channel_id ? ch->channel_id : "(unknown)");
+    ESP_LOGI(TAG, "Stopping refresh for channel: %s", ch->base.name ? ch->base.name : "(unknown)");
     ch->refreshing = false;
 
     // Signal shutdown to wake any blocked waits

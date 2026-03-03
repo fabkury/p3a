@@ -120,7 +120,7 @@ static int find_next_pending_refresh(ps_state_t *state)
                 mstate == MAKAPIX_STATE_REGISTRATION_INVALID) {
                 ch->refresh_pending = false;
                 ESP_LOGI(TAG, "Channel '%s' refresh skipped (no Makapix connection)",
-                         ch->channel_id);
+                         ch->display_name);
             }
             continue;
         }
@@ -267,7 +267,7 @@ static esp_err_t refresh_sdcard_channel(ps_channel_state_t *ch)
  */
 static esp_err_t refresh_makapix_channel(ps_channel_state_t *ch)
 {
-    ESP_LOGI(TAG, "Refreshing Makapix channel: %s (type=%d)", ch->channel_id, ch->type);
+    ESP_LOGI(TAG, "Refreshing Makapix channel: %s (type=%d)", ch->display_name, ch->type);
 
     // Use type and spec fields directly — no channel_id string parsing needed
     esp_err_t err = ESP_OK;
@@ -446,19 +446,19 @@ static void refresh_task(void *arg)
                         ch->cache_loaded = true;
                         ch->active = (ch->cache->available_count > 0);
                         ESP_LOGI(TAG, "Channel '%s': keeping in-memory cache (%zu entries, %zu available)",
-                                 ch->channel_id, ch->cache->entry_count, ch->cache->available_count);
+                                 ch->display_name, ch->cache->entry_count, ch->cache->available_count);
 
                         // Mark dirty to ensure eventual persistence
                         if (!ch->cache->dirty) {
                             ch->cache->dirty = true;
                         }
                     } else {
-                        ESP_LOGW(TAG, "Channel '%s': no in-memory cache after refresh", ch->channel_id);
+                        ESP_LOGW(TAG, "Channel '%s': no in-memory cache after refresh", ch->display_name);
                     }
 
                     size_t entry_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
                     ESP_LOGI(TAG, "Channel '%s' async refresh complete: %zu entries, active=%d",
-                             ch->channel_id, entry_count, ch->active);
+                             ch->display_name, entry_count, ch->active);
 
                     // Recalculate weights
                     ps_swrr_calculate_weights(state);
@@ -485,7 +485,7 @@ static void refresh_task(void *arg)
                 if (tch->refresh_async_pending &&
                     (xTaskGetTickCount() - tch->refresh_start_tick) > pdMS_TO_TICKS(async_timeout)) {
                     ESP_LOGW(TAG, "Channel '%s' async refresh timed out after %lu ms",
-                             tch->channel_id, (unsigned long)async_timeout);
+                             tch->display_name, (unsigned long)async_timeout);
                     tch->refresh_async_pending = false;
                     tch->refresh_in_progress = false;
                     tch->refresh_pending = true;  // Re-queue for retry
@@ -589,6 +589,8 @@ static void refresh_task(void *arg)
         strlcpy(identifier, ch->identifier, sizeof(identifier));
         char spec_name[33];
         strlcpy(spec_name, ch->spec_name, sizeof(spec_name));
+        char display_name[65];
+        strlcpy(display_name, ch->display_name, sizeof(display_name));
         bool cache_has_entries = (ch->cache != NULL && ch->cache->entry_count > 0);
 
         xSemaphoreGive(state->mutex);
@@ -605,7 +607,7 @@ static void refresh_task(void *arg)
             char giphy_key_check[128];
             config_store_get_giphy_api_key(giphy_key_check, sizeof(giphy_key_check));
             if (giphy_key_check[0] == '\0') {
-                ESP_LOGW(TAG, "Giphy channel '%s' skipped: no API key configured", channel_id);
+                ESP_LOGW(TAG, "Giphy channel '%s' skipped: no API key configured", display_name);
                 char giphy_display_name[64];
                 ps_get_display_name_from_spec(type, spec_name, identifier, giphy_display_name, sizeof(giphy_display_name));
                 p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1,
@@ -630,22 +632,22 @@ static void refresh_task(void *arg)
                 giphy_meta.last_refresh > 0 && now > 0 &&
                 (now - giphy_meta.last_refresh) < (time_t)interval) {
                 if (!sntp_sync_is_synchronized()) {
-                    ESP_LOGI(TAG, "Giphy channel '%s' deferred (SNTP not synchronized)", channel_id); // Channels are re-checked on SNTP sync
+                    ESP_LOGI(TAG, "Giphy channel '%s' deferred (SNTP not synchronized)", display_name); // Channels are re-checked on SNTP sync
                 } else {
                     uint32_t remaining = interval - (uint32_t)(now - giphy_meta.last_refresh);
                     time_t stale_at = giphy_meta.last_refresh + (time_t)interval;
                     if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
                     ESP_LOGI(TAG, "Giphy channel '%s' still fresh (last refresh %lds ago, interval %lus, stale in %lus), skipping",
-                            channel_id, (long)(now - giphy_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
+                            display_name, (long)(now - giphy_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
                 }
                 err = ESP_OK;  // Treat as successful no-op
             } else {
                 if (allow_override) {
                     ESP_LOGI(TAG, "Channel '%s' refresh override active, bypassing interval check",
-                             channel_id);
+                             display_name);
                 } else if (!cache_has_entries && giphy_meta.last_refresh > 0) {
                     ESP_LOGI(TAG, "Giphy channel '%s' cache is empty, forcing refresh despite interval",
-                             channel_id);
+                             display_name);
                 }
 
                 // Show loading message while Giphy API is being called.
@@ -672,7 +674,7 @@ static void refresh_task(void *arg)
                     // Check if this is a cancellation (from giphy_cancel_refresh)
                     // vs an invalid API key (HTTP 401/403 from giphy_fetch_page)
                     if (giphy_is_refresh_cancelled()) {
-                        ESP_LOGI(TAG, "Giphy channel '%s' refresh cancelled", channel_id);
+                        ESP_LOGI(TAG, "Giphy channel '%s' refresh cancelled", display_name);
                     } else {
                         char giphy_display_name[64];
                         ps_get_display_name_from_spec(type, spec_name, identifier, giphy_display_name, sizeof(giphy_display_name));
@@ -694,7 +696,7 @@ static void refresh_task(void *arg)
             // saved timestamp would be garbage. Channels are re-queued once
             // SNTP synchronizes (one-shot below).
             if (!sntp_sync_is_synchronized()) {
-                ESP_LOGI(TAG, "Makapix channel '%s' deferred (SNTP not synchronized)", channel_id);
+                ESP_LOGI(TAG, "Makapix channel '%s' deferred (SNTP not synchronized)", display_name);
                 err = ESP_OK;
             } else {
                 // Gate 2: Check if channel was refreshed recently enough.
@@ -716,12 +718,12 @@ static void refresh_task(void *arg)
                     time_t stale_at = mkx_meta.last_refresh + (time_t)interval;
                     if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
                     ESP_LOGI(TAG, "Makapix channel '%s' still fresh (last refresh %lds ago, interval %lus, stale in %lus), skipping",
-                             channel_id, (long)(now - mkx_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
+                             display_name, (long)(now - mkx_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
                     err = ESP_OK;
                 } else {
                     if (mkx_allow_override) {
                         ESP_LOGI(TAG, "Channel '%s' refresh override active, bypassing interval check",
-                                 channel_id);
+                                 display_name);
                     }
                     err = refresh_makapix_channel(ch);
                     if (err == ESP_ERR_NOT_FINISHED) {
@@ -738,7 +740,7 @@ static void refresh_task(void *arg)
         // Staleness guard: channel may have been reconfigured while we were refreshing
         if ((size_t)ch_idx >= state->channel_count ||
             strcmp(state->channels[ch_idx].channel_id, channel_id) != 0) {
-            ESP_LOGW(TAG, "Channel '%s' reconfigured during refresh, discarding result", channel_id);
+            ESP_LOGW(TAG, "Channel '%s' reconfigured during refresh, discarding result", display_name);
             xSemaphoreGive(state->mutex);
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
@@ -766,7 +768,7 @@ static void refresh_task(void *arg)
 
             sync_entry_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
             ESP_LOGI(TAG, "Channel '%s' refresh complete: %zu entries, active=%d",
-                     channel_id, sync_entry_count, ch->active);
+                     display_name, sync_entry_count, ch->active);
 
             // Recalculate weights now that this channel has data
             ps_swrr_calculate_weights(state);
@@ -813,7 +815,7 @@ static void refresh_task(void *arg)
         }
 
         if (err != ESP_OK && err != ESP_ERR_NOT_FINISHED) {
-            ESP_LOGW(TAG, "Channel '%s' refresh failed: %s", channel_id, esp_err_to_name(err));
+            ESP_LOGW(TAG, "Channel '%s' refresh failed: %s", display_name, esp_err_to_name(err));
         }
 
         // Brief delay between refreshes to avoid overloading

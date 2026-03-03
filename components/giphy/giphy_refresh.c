@@ -18,6 +18,7 @@
 #include "sntp_sync.h"
 #include "makapix_channel_events.h"
 #include "sd_path.h"
+#include "play_scheduler.h"  // ps_get_display_name()
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "psram_alloc.h"
@@ -313,14 +314,16 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
 {
     if (!channel_id) return ESP_ERR_INVALID_ARG;
 
-    ESP_LOGI(TAG, "Refreshing Giphy channel: %s", channel_id);
+    char _dn[64];
+    ps_get_display_name(channel_id, _dn, sizeof(_dn));
+    ESP_LOGI(TAG, "Refreshing Giphy channel: %s", _dn);
 
     s_refresh_cancel = false;
 
     // Find channel cache early — fail fast before allocating buffers
     channel_cache_t *cache = channel_cache_registry_find(channel_id);
     if (!cache) {
-        ESP_LOGW(TAG, "Channel cache not found for '%s'", channel_id);
+        ESP_LOGW(TAG, "Channel cache not found for '%s'", _dn);
         return ESP_ERR_NOT_FOUND;
     }
 

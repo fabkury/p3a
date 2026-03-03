@@ -295,7 +295,7 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
         size_t new_channel_available = ch->cache ? ch->cache->available_count : ch->available_count;
         size_t ci_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
         ESP_LOGI(TAG, ">>> LAi ADD: ch='%s' post_id=%ld ci=%lu, LAi: %zu -> %zu (Ci=%zu)",
-                 channel_id, (long)post_id, (unsigned long)ci_index,
+                 ch->display_name, (long)post_id, (unsigned long)ci_index,
                  prev_channel_available, new_channel_available, ci_count);
 
         // Check for zero-to-one transition

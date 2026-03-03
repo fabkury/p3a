@@ -44,7 +44,7 @@ static const char *TAG = "show_url";
 #include "p3a_limits.h"
 #define SHOW_URL_MAX_FILE_SIZE      P3A_MAX_ARTWORK_SIZE
 #define SHOW_URL_CHUNK_SIZE         (128 * 1024)         // 128 KB (matches makapix_artwork.c)
-#define SHOW_URL_TASK_STACK_SIZE    6144
+#define SHOW_URL_TASK_STACK_SIZE    8192
 #define SHOW_URL_MAX_URL_LEN        2048
 #define SHOW_URL_MAX_FILENAME_LEN   256
 

@@ -377,7 +377,7 @@ int ps_stochastic_select_channel(ps_state_t *state)
         state->channels[best].credit -= WSUM;
 
         ESP_LOGI(TAG, "Stochastic selected channel[%d] '%s' (credit was %ld, now %ld)",
-                 best, state->channels[best].channel_id,
+                 best, state->channels[best].display_name,
                  (long)prev_credit, (long)state->channels[best].credit);
 
         for (size_t i = 0; i < state->channel_count; i++) {

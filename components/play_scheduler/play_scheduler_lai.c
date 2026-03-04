@@ -212,72 +212,11 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
     }
 
     if (ci_index == UINT32_MAX) {
-        // Check if cache is dirty (unsaved changes) - if so, in-memory state is
-        // authoritative and we must NOT reload from disk (which would lose data).
-        // This can happen when a merge operation modified the cache but the save
-        // failed or is still pending.
-        bool cache_dirty = false;
-        if (cache && cache->mutex) {
-            xSemaphoreTake(cache->mutex, portMAX_DELAY);
-            cache_dirty = cache->dirty;
-            xSemaphoreGive(cache->mutex);
-        }
-
-        if (cache_dirty) {
-            // Cache has unsaved changes - DO NOT reload from disk!
-            // The downloaded file's entry will be picked up on the next refresh cycle.
-            ESP_LOGW(TAG, "Entry not in cache, but cache '%s' is dirty - skipping reload to preserve in-memory state (post_id=%ld)",
-                     channel_id, (long)post_id);
-            xSemaphoreGive(s_state->mutex);
-            return;
-        }
-
-        // Entry not found in current in-memory cache - the cache file may have been
-        // updated by the refresh task. Reload the cache from disk and try again.
-        char _dn[64];
-        ps_get_display_name(channel_id, _dn, sizeof(_dn));
-        ESP_LOGI(TAG, "Entry not in cache, reloading channel '%s' from disk", _dn);
-        esp_err_t reload_err = ps_load_channel_cache(ch);
-        if (reload_err == ESP_OK) {
-            // Recalculate SWRR weights after cache reload
-            ps_swrr_calculate_weights(s_state);
-            // Refresh cache pointer after reload
-            cache = channel_cache_registry_find(ch->channel_id);
-            if (!cache) {
-                cache = ch->cache;
-            }
-            if (cache) {
-                ci_index = ci_find_by_post_id(cache, post_id);
-            }
-        }
-        
-        if (ci_index == UINT32_MAX) {
-            ESP_LOGD(TAG, "Downloaded file still not in Ci after reload: post_id=%ld", (long)post_id);
-            xSemaphoreGive(s_state->mutex);
-            return;
-        }
-        
-        // After reload, LAi is already rebuilt with currently-available files
-        // So the downloaded file should already be in LAi
-        size_t lai_count = ch->cache ? ch->cache->available_count : ch->available_count;
-        ESP_LOGI(TAG, "Cache reloaded, entry found at ci=%lu, LAi has %zu entries",
-                 (unsigned long)ci_index, lai_count);
-
-        // Check for zero-to-one transition and trigger playback if needed
-        size_t total_available = 0;
-        for (size_t i = 0; i < s_state->channel_count; i++) {
-            ps_channel_state_t *c = &s_state->channels[i];
-            total_available += (c->cache ? c->cache->available_count : c->available_count);
-        }
-        
-        if (total_available > 0 && !s_state->playback_triggered) {
-            ESP_LOGI(TAG, "After cache reload - triggering playback (%zu total available)", total_available);
-            s_state->playback_triggered = true;
-            xSemaphoreGive(s_state->mutex);
-            event_bus_emit_simple(P3A_EVENT_SWAP_NEXT);
-            return;
-        }
-        
+        // Entry not in Ci — either evicted during a merge truncation or lost
+        // during a concurrent cache reallocation.  The downloaded file is already
+        // on disk; it will be picked up into LAi on the next refresh cycle.
+        ESP_LOGI(TAG, "Downloaded post_id=%ld not found in Ci for ch='%s', skipping LAi add (file on disk)",
+                 (long)post_id, ch->display_name);
         xSemaphoreGive(s_state->mutex);
         return;
     }

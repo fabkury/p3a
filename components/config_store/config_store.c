@@ -1227,7 +1227,7 @@ esp_err_t config_store_get_giphy_rating(char *out, size_t max_len)
     return cfg_get_string("giphy_rating", "pg-13", out, max_len);
 }
 
-#define GIPHY_CACHE_SIZE_DEFAULT 400
+#define GIPHY_CACHE_SIZE_DEFAULT 192
 #define GIPHY_CACHE_SIZE_MIN     32
 #define GIPHY_CACHE_SIZE_MAX     500
 

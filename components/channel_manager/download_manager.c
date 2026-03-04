@@ -392,7 +392,8 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
 
             if (is_giphy) {
                 // Build Giphy download URL from entry (respects downsized_medium override)
-                giphy_build_download_url_for_entry(ge, out_request->art_url, sizeof(out_request->art_url));
+                giphy_build_download_url_for_entry((const giphy_channel_entry_t *)entry,
+                                                  out_request->art_url, sizeof(out_request->art_url));
             } else {
                 // Build Makapix artwork URL (using static sha256 buffer)
                 memset(s_dl_sha256, 0, sizeof(s_dl_sha256));

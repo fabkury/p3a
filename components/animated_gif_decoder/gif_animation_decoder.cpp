@@ -138,8 +138,8 @@ static void gif_draw_callback(GIFDRAW *pDraw)
     // Merge 8-bit indexed pixels to RGB canvas
     uint8_t *dst_row = impl->canvas_rgb + ((size_t)(frame_y + y) * (size_t)canvas_w + (size_t)frame_x) * 3U;
 
-    // Yield periodically to prevent watchdog timeout (every 256 pixels)
-    const int YIELD_INTERVAL = 256;
+    // Yield periodically to prevent watchdog timeout (every 1024 pixels)
+    const int YIELD_INTERVAL = 1024;
     if (!has_transparency) {
         for (int x = 0; x < frame_w; x++) {
             const uint8_t pixel_index = pDraw->pPixels[x];

@@ -701,6 +701,15 @@ bool animation_player_is_animation_ready(void)
     return ready;
 }
 
+void animation_player_invalidate(void)
+{
+    if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        s_front_buffer.ready = false;
+        xSemaphoreGive(s_buffer_mutex);
+        ESP_LOGD(TAG, "Front buffer invalidated");
+    }
+}
+
 esp_err_t animation_player_start(void)
 {
     return display_renderer_start();

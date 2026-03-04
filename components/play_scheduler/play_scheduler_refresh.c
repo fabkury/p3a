@@ -472,7 +472,9 @@ static void refresh_task(void *arg)
                     download_manager_reset_cursors();
 
                     // Track if we should trigger playback (once, after the loop)
-                    if (entry_count > 0 && !state->playback_triggered) {
+                    // Only trigger if channel is active (has locally-available artworks),
+                    // not just index entries. Matches the sync path check at line 788.
+                    if (ch->active && entry_count > 0 && !state->playback_triggered) {
                         should_trigger = true;
                     }
                 }
@@ -498,13 +500,13 @@ static void refresh_task(void *arg)
             if (should_trigger) {
                 ESP_LOGI(TAG, "Async refresh complete - triggering playback");
 
-                // Clear any loading/error message
-                p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
-
                 // Signal download manager to rescan for any missing files
                 extern void download_manager_rescan(void);
                 download_manager_rescan();
 
+                // Don't clear the loading message here — let the animation player
+                // clear it after the buffer swap completes for seamless transition.
+                // (Same pattern as the sync path at lines 799-801.)
                 if (play_scheduler_next(NULL) == ESP_OK) {
                     state->playback_triggered = true;
                 }

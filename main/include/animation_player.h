@@ -131,6 +131,14 @@ bool animation_player_is_sd_paused(void);
  */
 bool animation_player_is_animation_ready(void);
 
+/**
+ * @brief Invalidate the front buffer so animation_player_is_animation_ready() returns false
+ *
+ * Called during cold-start channel switches to prevent the old channel's
+ * animation from showing through while the new channel loads.
+ */
+void animation_player_invalidate(void);
+
 // Screen rotation types - use display_renderer types
 typedef display_rotation_t screen_rotation_t;
 #define ROTATION_0   DISPLAY_ROTATION_0

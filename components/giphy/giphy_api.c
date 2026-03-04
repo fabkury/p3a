@@ -26,7 +26,8 @@ static const char *TAG = "giphy_api";
  */
 static bool parse_gif_object(const cJSON *gif, giphy_channel_entry_t *out_entry,
                              const char *rendition_name, const char *format_name,
-                             bool prefer_downsized)
+                             bool prefer_downsized,
+                             uint16_t screen_width, uint16_t screen_height)
 {
     if (!gif || !out_entry) return false;
 
@@ -69,13 +70,21 @@ static bool parse_gif_object(const cJSON *gif, giphy_channel_entry_t *out_entry,
                 const cJSON *h = cJSON_GetObjectItem(dm, "height");
                 if (cJSON_IsString(w) && w->valuestring[0] &&
                     cJSON_IsString(h) && h->valuestring[0]) {
-                    out_entry->width = (uint16_t)atoi(w->valuestring);
-                    out_entry->height = (uint16_t)atoi(h->valuestring);
-                    out_entry->extension = 1;  // downsized_medium is always gif
-                    out_entry->reserved[0] = 1;  // Flag: use downsized_medium URL
-                    used_downsized = true;
-                    ESP_LOGD(TAG, "Rendition selected: downsized_medium for %s (%ux%u)",
-                             gif_id, out_entry->width, out_entry->height);
+                    uint16_t dm_w = (uint16_t)atoi(w->valuestring);
+                    uint16_t dm_h = (uint16_t)atoi(h->valuestring);
+                    // Only use downsized_medium if it fits within the screen
+                    if (dm_w <= screen_width && dm_h <= screen_height) {
+                        out_entry->width = dm_w;
+                        out_entry->height = dm_h;
+                        out_entry->extension = 1;  // downsized_medium is always gif
+                        out_entry->reserved[0] = 1;  // Flag: use downsized_medium URL
+                        used_downsized = true;
+                        ESP_LOGD(TAG, "Rendition selected: downsized_medium for %s (%ux%u)",
+                                 gif_id, dm_w, dm_h);
+                    } else {
+                        ESP_LOGD(TAG, "Rendition rejected: downsized_medium for %s (%ux%u exceeds %ux%u)",
+                                 gif_id, dm_w, dm_h, screen_width, screen_height);
+                    }
                 }
             }
         }
@@ -299,7 +308,8 @@ esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
     size_t parsed = 0;
     for (int i = 0; i < array_size; i++) {
         const cJSON *gif = cJSON_GetArrayItem(data, i);
-        if (parse_gif_object(gif, &out_entries[parsed], ctx->rendition, ctx->format, request_downsized)) {
+        if (parse_gif_object(gif, &out_entries[parsed], ctx->rendition, ctx->format,
+                             request_downsized, ctx->screen_width, ctx->screen_height)) {
             parsed++;
         }
     }

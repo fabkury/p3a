@@ -50,6 +50,8 @@ typedef struct {
     char *response_buf;         ///< Caller-allocated buffer (PSRAM recommended)
     size_t response_buf_size;   ///< Size of response_buf in bytes
     bool prefer_downsized;      ///< When true and rendition is fixed_height, prefer downsized_medium
+    uint16_t screen_width;      ///< Display width in pixels (for size-gating downsized_medium)
+    uint16_t screen_height;     ///< Display height in pixels (for size-gating downsized_medium)
 } giphy_fetch_ctx_t;
 
 /**

@@ -13,6 +13,7 @@
 #include "giphy.h"
 #include "giphy_types.h"
 #include "config_store.h"
+#include "p3a_board.h"
 #include "channel_cache.h"
 #include "channel_metadata.h"
 #include "sntp_sync.h"
@@ -349,6 +350,8 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
         strlcpy(ctx.rating, "pg-13", sizeof(ctx.rating));
     }
     ctx.prefer_downsized = config_store_get_giphy_prefer_downsized();
+    ctx.screen_width = P3A_DISPLAY_WIDTH;
+    ctx.screen_height = P3A_DISPLAY_HEIGHT;
 
     if (query && query[0] != '\0') {
         strlcpy(ctx.query, query, sizeof(ctx.query));

@@ -45,6 +45,13 @@ static inline uint8_t blend_chan(uint8_t src, uint8_t bg, uint8_t a)
     return div255_u16(x);
 }
 
+static inline uint8_t blend_chan_premul(uint8_t src_premul, uint8_t bg, uint8_t a)
+{
+    const uint16_t inv = (uint16_t)(255U - (uint16_t)a);
+    const uint16_t x = (uint16_t)src_premul + (uint16_t)bg * inv;
+    return div255_u16(x);
+}
+
 esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decoder_type_t type, const uint8_t *data, size_t size)
 {
     if (!decoder || !data || size == 0) {
@@ -98,8 +105,9 @@ esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decode
             }
             // NOTE: WebPAnimDecoder only supports RGBA-based modes (MODE_RGBA, MODE_BGRA,
             // MODE_rgbA, MODE_bgrA). MODE_RGB is NOT supported and causes buffer misreads.
-            // Always use MODE_RGBA and convert to RGB in decode_next_rgb if needed.
-            dec_opts.color_mode = MODE_RGBA;
+            // Use MODE_rgbA (pre-multiplied alpha) so the blend loop in decode_next_rgb
+            // saves one multiply per channel: src_premul + bg*(255-a) vs src*a + bg*(255-a).
+            dec_opts.color_mode = MODE_rgbA;
             dec_opts.use_threads = 0;
 
             WebPData webp_data_wrapped = {
@@ -386,12 +394,12 @@ esp_err_t animation_decoder_decode_next_rgb(animation_decoder_t *decoder, uint8_
                     dst[i * 3 + 1] = bg_g;
                     dst[i * 3 + 2] = bg_b;
                 } else {
-                    dst[i * 3 + 0] = blend_chan(r, bg_r, a);
-                    dst[i * 3 + 1] = blend_chan(g, bg_g, a);
-                    dst[i * 3 + 2] = blend_chan(b, bg_b, a);
+                    dst[i * 3 + 0] = blend_chan_premul(r, bg_r, a);
+                    dst[i * 3 + 1] = blend_chan_premul(g, bg_g, a);
+                    dst[i * 3 + 2] = blend_chan_premul(b, bg_b, a);
                 }
             }
-            
+
 #if CONFIG_P3A_PERF_DEBUG
             int64_t t_blend_end = debug_timer_now_us();
             // Record decode details with alpha blending

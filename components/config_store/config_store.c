@@ -1507,6 +1507,61 @@ void config_store_invalidate_ppa_upscale(void)
 #endif
 
 // ============================================================================
+// Giphy Prefer Downsized (persisted, cached)
+// ============================================================================
+
+static bool s_giphy_prefer_downsized = true;   // Default: enabled
+static bool s_giphy_prefer_downsized_loaded = false;
+
+esp_err_t config_store_set_giphy_prefer_downsized(bool enable)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) return err;
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "giphy_prefer_downsized");
+    if (item) {
+        cJSON_DeleteItemFromObject(cfg, "giphy_prefer_downsized");
+    }
+    cJSON_AddBoolToObject(cfg, "giphy_prefer_downsized", enable);
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    if (err == ESP_OK) {
+        s_giphy_prefer_downsized = enable;
+        s_giphy_prefer_downsized_loaded = true;
+    }
+    return err;
+}
+
+bool config_store_get_giphy_prefer_downsized(void)
+{
+    if (s_giphy_prefer_downsized_loaded) {
+        return s_giphy_prefer_downsized;
+    }
+
+    cJSON *cfg = NULL;
+    if (config_store_load(&cfg) != ESP_OK) {
+        s_giphy_prefer_downsized_loaded = true;
+        return s_giphy_prefer_downsized;  // Return default (true)
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "giphy_prefer_downsized");
+    if (item && cJSON_IsBool(item)) {
+        s_giphy_prefer_downsized = cJSON_IsTrue(item);
+    }
+
+    s_giphy_prefer_downsized_loaded = true;
+    cJSON_Delete(cfg);
+    return s_giphy_prefer_downsized;
+}
+
+void config_store_invalidate_giphy_prefer_downsized(void)
+{
+    s_giphy_prefer_downsized_loaded = false;
+}
+
+// ============================================================================
 // WiFi Recovery Reboot Counters
 // ============================================================================
 

@@ -147,6 +147,45 @@ body {
 }
 .status.success { background: #4CAF50; color: white; }
 .status.error { background: #f44336; color: white; }
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 26px;
+}
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.3s;
+    border-radius: 26px;
+}
+.toggle-slider:before {
+    position: absolute;
+    content: '';
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+.toggle-switch input:checked + .toggle-slider {
+    background-color: #667eea;
+}
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(22px);
+}
 </style>
 </head>
 <body>
@@ -177,7 +216,14 @@ body {
             <option value="gif">GIF</option>
         </select>
     </div>
-    <div class="setting-hint">GIF is faster and recommended. WebP looks better but can be visibly slow. Original can be large (10+ MB) and sometimes slow too.</div>
+    <div class="setting-row" id="prefer-downsized-row">
+        <label class="setting-label" for="prefer-downsized">Prefer downsized</label>
+        <label class="toggle-switch">
+            <input type="checkbox" id="prefer-downsized" checked>
+            <span class="toggle-slider"></span>
+        </label>
+    </div>
+    <div class="setting-hint">GIF is faster and recommended. WebP looks better but can be visibly slow. Original can be large (10+ MB) and sometimes slow too. "Prefer downsized" uses a higher-quality rendition from Giphy when available (only applies to Fixed Height).</div>
 </div>
 <div class="section">
     <h3>Content</h3>
@@ -278,6 +324,9 @@ function loadSettings() {
                 refreshSel.value = refreshVal;
                 if (!refreshSel.value) refreshSel.value = '3600';
                 document.getElementById('giphy-cache-size').value = cfg.giphy_cache_size || 400;
+                document.getElementById('prefer-downsized').checked =
+                    (typeof cfg.giphy_prefer_downsized === 'boolean') ? cfg.giphy_prefer_downsized : true;
+                updatePreferDownsizedVisibility();
             } catch (e) {
                 showToast('Failed to load settings', true);
             }
@@ -307,7 +356,8 @@ function saveAll() {
         giphy_format: format,
         giphy_rating: rating,
         giphy_refresh_interval: parseInt(document.getElementById('giphy-refresh').value, 10),
-        giphy_cache_size: cacheSize
+        giphy_cache_size: cacheSize,
+        giphy_prefer_downsized: document.getElementById('prefer-downsized').checked
     };
 
     var xhr = new XMLHttpRequest();
@@ -326,8 +376,16 @@ function saveAll() {
     xhr.send(JSON.stringify(partial));
 }
 
-// Wire up rendition change to refresh format options
-document.getElementById('giphy-rendition').addEventListener('change', updateFormatOptions);
+function updatePreferDownsizedVisibility() {
+    var row = document.getElementById('prefer-downsized-row');
+    row.style.display = (document.getElementById('giphy-rendition').value === 'fixed_height') ? '' : 'none';
+}
+
+// Wire up rendition change to refresh format options and toggle visibility
+document.getElementById('giphy-rendition').addEventListener('change', function() {
+    updateFormatOptions();
+    updatePreferDownsizedVisibility();
+});
 
 loadSettings();
 </script>

@@ -49,6 +49,7 @@ typedef struct {
     char query[64];             ///< Search query (empty = trending, non-empty = search)
     char *response_buf;         ///< Caller-allocated buffer (PSRAM recommended)
     size_t response_buf_size;   ///< Size of response_buf in bytes
+    bool prefer_downsized;      ///< When true and rendition is fixed_height, prefer downsized_medium
 } giphy_fetch_ctx_t;
 
 /**
@@ -132,6 +133,21 @@ int32_t giphy_id_to_post_id(const char *giphy_id);
  * @return ESP_OK on success
  */
 esp_err_t giphy_build_download_url(const char *giphy_id, char *out_url, size_t out_len);
+
+/**
+ * @brief Build download URL for a Giphy channel entry
+ *
+ * Checks entry->reserved[0] to select the rendition:
+ * - 0: uses configured rendition/format (delegates to giphy_build_download_url)
+ * - 1: uses downsized_medium (always GIF)
+ *
+ * @param entry Giphy channel entry
+ * @param out_url Output buffer for the full URL
+ * @param out_len Output buffer length
+ * @return ESP_OK on success
+ */
+esp_err_t giphy_build_download_url_for_entry(const giphy_channel_entry_t *entry,
+                                              char *out_url, size_t out_len);
 
 /**
  * @brief Download a Giphy artwork to the giphy/ folder on SD card

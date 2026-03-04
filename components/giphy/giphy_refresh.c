@@ -348,6 +348,7 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
     if (config_store_get_giphy_rating(ctx.rating, sizeof(ctx.rating)) != ESP_OK) {
         strlcpy(ctx.rating, "pg-13", sizeof(ctx.rating));
     }
+    ctx.prefer_downsized = config_store_get_giphy_prefer_downsized();
 
     if (query && query[0] != '\0') {
         strlcpy(ctx.query, query, sizeof(ctx.query));

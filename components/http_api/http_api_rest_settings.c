@@ -155,6 +155,10 @@ esp_err_t h_put_config(httpd_req_t *req) {
     if (ppa && cJSON_IsBool(ppa)) {
         config_store_invalidate_ppa_upscale();
     }
+    cJSON *gpd = cJSON_GetObjectItem(o, "giphy_prefer_downsized");
+    if (gpd && cJSON_IsBool(gpd)) {
+        config_store_invalidate_giphy_prefer_downsized();
+    }
 
     cJSON *csm = cJSON_GetObjectItem(o, "channel_select_mode");
     if (csm && cJSON_IsNumber(csm)) {

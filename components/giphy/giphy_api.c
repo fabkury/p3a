@@ -25,7 +25,8 @@ static const char *TAG = "giphy_api";
  * Extracts id, dimensions, timestamps, and fills a giphy_channel_entry_t.
  */
 static bool parse_gif_object(const cJSON *gif, giphy_channel_entry_t *out_entry,
-                             const char *rendition_name, const char *format_name)
+                             const char *rendition_name, const char *format_name,
+                             bool prefer_downsized)
 {
     if (!gif || !out_entry) return false;
 
@@ -58,13 +59,39 @@ static bool parse_gif_object(const cJSON *gif, giphy_channel_entry_t *out_entry,
 
     // Extract dimensions from the configured rendition
     const cJSON *images = cJSON_GetObjectItem(gif, "images");
+    bool used_downsized = false;
     if (cJSON_IsObject(images)) {
-        const cJSON *rendition = cJSON_GetObjectItem(images, rendition_name);
-        if (cJSON_IsObject(rendition)) {
-            const cJSON *w = cJSON_GetObjectItem(rendition, "width");
-            const cJSON *h = cJSON_GetObjectItem(rendition, "height");
-            if (cJSON_IsString(w)) out_entry->width = (uint16_t)atoi(w->valuestring);
-            if (cJSON_IsString(h)) out_entry->height = (uint16_t)atoi(h->valuestring);
+        // Check for downsized_medium preference
+        if (prefer_downsized) {
+            const cJSON *dm = cJSON_GetObjectItem(images, "downsized_medium");
+            if (cJSON_IsObject(dm)) {
+                const cJSON *w = cJSON_GetObjectItem(dm, "width");
+                const cJSON *h = cJSON_GetObjectItem(dm, "height");
+                if (cJSON_IsString(w) && w->valuestring[0] &&
+                    cJSON_IsString(h) && h->valuestring[0]) {
+                    out_entry->width = (uint16_t)atoi(w->valuestring);
+                    out_entry->height = (uint16_t)atoi(h->valuestring);
+                    out_entry->extension = 1;  // downsized_medium is always gif
+                    out_entry->reserved[0] = 1;  // Flag: use downsized_medium URL
+                    used_downsized = true;
+                    ESP_LOGI(TAG, "Rendition selected: downsized_medium for %s (%ux%u)",
+                             gif_id, out_entry->width, out_entry->height);
+                }
+            }
+        }
+
+        if (!used_downsized) {
+            const cJSON *rendition = cJSON_GetObjectItem(images, rendition_name);
+            if (cJSON_IsObject(rendition)) {
+                const cJSON *w = cJSON_GetObjectItem(rendition, "width");
+                const cJSON *h = cJSON_GetObjectItem(rendition, "height");
+                if (cJSON_IsString(w)) out_entry->width = (uint16_t)atoi(w->valuestring);
+                if (cJSON_IsString(h)) out_entry->height = (uint16_t)atoi(h->valuestring);
+            }
+            if (prefer_downsized) {
+                ESP_LOGD(TAG, "Rendition selected: %s for %s (no downsized_medium)",
+                         rendition_name, gif_id);
+            }
         }
     }
 
@@ -135,21 +162,40 @@ esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
 
     bool is_search = (ctx->query[0] != '\0');
 
+    // When prefer_downsized is active and rendition is fixed_height,
+    // request both renditions so we can pick the best per entry.
+    bool request_downsized = ctx->prefer_downsized &&
+                             strcmp(ctx->rendition, "fixed_height") == 0;
+
     // Build URL
     char url[512];
     if (is_search) {
         char encoded_query[192];
         url_encode(ctx->query, encoded_query, sizeof(encoded_query));
-        snprintf(url, sizeof(url),
-                 "https://api.giphy.com/v1/gifs/search?api_key=%s&q=%s&limit=%d&offset=%d&rating=%s"
-                 "&fields=id,trending_datetime,import_datetime,images.%s",
-                 ctx->api_key, encoded_query, GIPHY_PAGE_LIMIT, offset, ctx->rating, ctx->rendition);
+        if (request_downsized) {
+            snprintf(url, sizeof(url),
+                     "https://api.giphy.com/v1/gifs/search?api_key=%s&q=%s&limit=%d&offset=%d&rating=%s"
+                     "&fields=id,trending_datetime,import_datetime,images.%s,images.downsized_medium",
+                     ctx->api_key, encoded_query, GIPHY_PAGE_LIMIT, offset, ctx->rating, ctx->rendition);
+        } else {
+            snprintf(url, sizeof(url),
+                     "https://api.giphy.com/v1/gifs/search?api_key=%s&q=%s&limit=%d&offset=%d&rating=%s"
+                     "&fields=id,trending_datetime,import_datetime,images.%s",
+                     ctx->api_key, encoded_query, GIPHY_PAGE_LIMIT, offset, ctx->rating, ctx->rendition);
+        }
         ESP_LOGI(TAG, "Fetching search q=\"%s\": offset=%d, limit=%d", ctx->query, offset, GIPHY_PAGE_LIMIT);
     } else {
-        snprintf(url, sizeof(url),
-                 "https://api.giphy.com/v1/gifs/trending?api_key=%s&limit=%d&offset=%d&rating=%s"
-                 "&fields=id,trending_datetime,import_datetime,images.%s",
-                 ctx->api_key, GIPHY_PAGE_LIMIT, offset, ctx->rating, ctx->rendition);
+        if (request_downsized) {
+            snprintf(url, sizeof(url),
+                     "https://api.giphy.com/v1/gifs/trending?api_key=%s&limit=%d&offset=%d&rating=%s"
+                     "&fields=id,trending_datetime,import_datetime,images.%s,images.downsized_medium",
+                     ctx->api_key, GIPHY_PAGE_LIMIT, offset, ctx->rating, ctx->rendition);
+        } else {
+            snprintf(url, sizeof(url),
+                     "https://api.giphy.com/v1/gifs/trending?api_key=%s&limit=%d&offset=%d&rating=%s"
+                     "&fields=id,trending_datetime,import_datetime,images.%s",
+                     ctx->api_key, GIPHY_PAGE_LIMIT, offset, ctx->rating, ctx->rendition);
+        }
         ESP_LOGI(TAG, "Fetching trending: offset=%d, limit=%d", offset, GIPHY_PAGE_LIMIT);
     }
 
@@ -253,7 +299,7 @@ esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
     size_t parsed = 0;
     for (int i = 0; i < array_size; i++) {
         const cJSON *gif = cJSON_GetArrayItem(data, i);
-        if (parse_gif_object(gif, &out_entries[parsed], ctx->rendition, ctx->format)) {
+        if (parse_gif_object(gif, &out_entries[parsed], ctx->rendition, ctx->format, request_downsized)) {
             parsed++;
         }
     }

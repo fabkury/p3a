@@ -441,6 +441,30 @@ void config_store_invalidate_giphy_refresh_interval(void);
 void config_store_set_refresh_allow_override(bool allow);
 bool config_store_get_refresh_allow_override(void);
 
+/**
+ * @brief Set prefer-downsized mode for Giphy downloads
+ *
+ * When enabled and rendition is fixed_height, the API response is checked
+ * for a downsized_medium rendition on each artwork. If present, it is used
+ * instead of fixed_height for better quality on the 720x720 display.
+ *
+ * @param enable True to prefer downsized_medium (default: true)
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_giphy_prefer_downsized(bool enable);
+
+/**
+ * @brief Get prefer-downsized mode for Giphy downloads
+ *
+ * @return True if prefer-downsized enabled (defaults to true)
+ */
+bool config_store_get_giphy_prefer_downsized(void);
+
+/**
+ * @brief Invalidate in-memory cache for Giphy prefer-downsized setting
+ */
+void config_store_invalidate_giphy_prefer_downsized(void);
+
 // ============================================================================
 // Device Name (persisted)
 // ============================================================================

@@ -391,8 +391,8 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             out_request->post_id = entry->post_id;  // Capture post_id for O(1) LAi lookup
 
             if (is_giphy) {
-                // Build Giphy download URL from giphy_id + configured rendition/format
-                giphy_build_download_url(s_dl_storage_key, out_request->art_url, sizeof(out_request->art_url));
+                // Build Giphy download URL from entry (respects downsized_medium override)
+                giphy_build_download_url_for_entry(ge, out_request->art_url, sizeof(out_request->art_url));
             } else {
                 // Build Makapix artwork URL (using static sha256 buffer)
                 memset(s_dl_sha256, 0, sizeof(s_dl_sha256));

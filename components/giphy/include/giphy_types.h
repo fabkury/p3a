@@ -23,7 +23,7 @@ typedef struct __attribute__((packed)) {
     uint32_t created_at;          ///< Unix timestamp (from trending_datetime or import_datetime)
     uint16_t height;              ///< Rendition height in pixels
     char giphy_id[24];            ///< Giphy string ID (null-terminated, max 23 chars)
-    uint8_t reserved[26];         ///< Future use (keeps struct 64 bytes)
+    uint8_t reserved[26];         ///< [0]: rendition override (0=configured, 1=downsized_medium); [1..25]: future use
 } giphy_channel_entry_t;
 
 _Static_assert(sizeof(giphy_channel_entry_t) == 64, "giphy entry must be 64 bytes");

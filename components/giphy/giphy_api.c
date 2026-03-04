@@ -74,7 +74,7 @@ static bool parse_gif_object(const cJSON *gif, giphy_channel_entry_t *out_entry,
                     out_entry->extension = 1;  // downsized_medium is always gif
                     out_entry->reserved[0] = 1;  // Flag: use downsized_medium URL
                     used_downsized = true;
-                    ESP_LOGI(TAG, "Rendition selected: downsized_medium for %s (%ux%u)",
+                    ESP_LOGD(TAG, "Rendition selected: downsized_medium for %s (%ux%u)",
                              gif_id, out_entry->width, out_entry->height);
                 }
             }

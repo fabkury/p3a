@@ -70,12 +70,12 @@ esp_err_t giphy_build_download_url_for_entry(const giphy_channel_entry_t *entry,
         // downsized_medium override — always GIF
         snprintf(out_url, out_len, "https://i.giphy.com/media/%s/giphy-downsized-medium.gif",
                  entry->giphy_id);
-        ESP_LOGI(TAG, "Download URL: downsized_medium for %s", entry->giphy_id);
+        ESP_LOGD(TAG, "Download URL: downsized_medium for %s", entry->giphy_id);
         return ESP_OK;
     }
 
     // Default: use configured rendition/format
-    ESP_LOGI(TAG, "Download URL: configured rendition for %s", entry->giphy_id);
+    ESP_LOGD(TAG, "Download URL: configured rendition for %s", entry->giphy_id);
     return giphy_build_download_url(entry->giphy_id, out_url, out_len);
 }
 

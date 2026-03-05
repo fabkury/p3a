@@ -15,7 +15,9 @@
  */
 
 #include "http_api_internal.h"
+#include "config_store.h"
 #include "makapix_api.h"
+#include "makapix_channel_utils.h"
 #include "makapix_mqtt.h"
 #include "makapix_store.h"
 #include "play_scheduler.h"
@@ -51,6 +53,70 @@ static const char *pick_mode_str(ps_pick_mode_t m) {
         case PS_PICK_RANDOM:  return "random";
         default:              return "unknown";
     }
+}
+
+// ---------- Current Artwork Helper ----------
+
+static const char *asset_type_ext(asset_type_t t) {
+    switch (t) {
+        case ASSET_TYPE_WEBP: return ".webp";
+        case ASSET_TYPE_GIF:  return ".gif";
+        case ASSET_TYPE_PNG:  return ".png";
+        case ASSET_TYPE_JPEG: return ".jpg";
+        default:              return ".webp";
+    }
+}
+
+/**
+ * Build a "current_artwork" cJSON object from the play scheduler state.
+ * Returns NULL if no artwork is playing or URL cannot be built.
+ * Caller must cJSON_Delete the result.
+ */
+cJSON *build_current_artwork_json(void)
+{
+    ps_artwork_t artwork;
+    if (play_scheduler_current(&artwork) != ESP_OK) {
+        return NULL;
+    }
+
+    char url[300] = "";
+
+    switch (artwork.channel_type) {
+        case PS_CHANNEL_TYPE_GIPHY:
+            snprintf(url, sizeof(url),
+                     "https://i.giphy.com/media/%s/giphy.webp",
+                     artwork.storage_key);
+            break;
+
+        case PS_CHANNEL_TYPE_NAMED:
+        case PS_CHANNEL_TYPE_USER:
+        case PS_CHANNEL_TYPE_HASHTAG: {
+            uint8_t sha[32];
+            if (storage_key_sha256(artwork.storage_key, sha) == ESP_OK) {
+                snprintf(url, sizeof(url),
+                         "https://%s/api/vault/%02x/%02x/%02x/%s%s",
+                         CONFIG_MAKAPIX_CLUB_HOST,
+                         (unsigned)sha[0], (unsigned)sha[1], (unsigned)sha[2],
+                         artwork.storage_key, asset_type_ext(artwork.type));
+            }
+            break;
+        }
+
+        case PS_CHANNEL_TYPE_SDCARD:
+        case PS_CHANNEL_TYPE_ARTWORK:
+        default:
+            break;
+    }
+
+    cJSON *obj = cJSON_CreateObject();
+    if (!obj) return NULL;
+
+    cJSON_AddStringToObject(obj, "url", url);
+    cJSON_AddStringToObject(obj, "channel_type",
+                            playset_channel_type_str(artwork.channel_type));
+    cJSON_AddBoolToObject(obj, "ppa_upscale", config_store_get_ppa_upscale());
+
+    return obj;
 }
 
 // ---------- Playset Execute Handler ----------
@@ -243,6 +309,11 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
             }
         }
         free(ch_details);
+    }
+
+    cJSON *ca = build_current_artwork_json();
+    if (ca) {
+        cJSON_AddItemToObject(data, "current_artwork", ca);
     }
 
     char *out = cJSON_PrintUnformatted(root);

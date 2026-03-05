@@ -400,11 +400,35 @@ body {
 }
 .toggle-switch input:checked + .toggle-slider { background-color: rgba(255,255,255,0.9); }
 .toggle-switch input:checked + .toggle-slider:before { transform: translateX(22px); background-color: #667eea; }
+.artwork-area {
+    width: min(420px, 100%);
+    aspect-ratio: 1 / 1;
+    background: rgba(255,255,255,0.12);
+    border-radius: 18px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.artwork-area img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+.artwork-area img.pixelated {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+}
 </style>
 </head>
 <body>
 <div class="header">
     <h1>p3a</h1>
+</div>
+<div class="artwork-area" id="artwork-area">
+    <img id="artwork-img" style="display:none;">
 </div>
 <div class="controls">
     <div class="arrow-row">
@@ -485,6 +509,28 @@ var isPaused = false;
 var LCD_MAX_WIDTH = 720;
 var LCD_MAX_HEIGHT = 720;
 
+function updateArtwork(currentArtwork) {
+    var img = document.getElementById('artwork-img');
+    if (!currentArtwork || !currentArtwork.url) {
+        img.style.display = 'none';
+        return;
+    }
+    var usePixelated = true;
+    if (currentArtwork.channel_type === 'giphy' && currentArtwork.ppa_upscale) {
+        usePixelated = false;
+    }
+    if (usePixelated) {
+        img.classList.add('pixelated');
+    } else {
+        img.classList.remove('pixelated');
+    }
+    if (img.getAttribute('data-url') !== currentArtwork.url) {
+        img.src = currentArtwork.url;
+        img.setAttribute('data-url', currentArtwork.url);
+    }
+    img.style.display = '';
+}
+
 // Load all init data from device in a single request
 fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
     if (!d.ok || !d.data) return;
@@ -524,6 +570,8 @@ fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
         isPaused = true;
         document.getElementById('pause-btn').textContent = 'Resume';
     }
+    // Current artwork
+    updateArtwork(data.current_artwork);
 }).catch(function(e) { console.log('Init fetch failed:', e); });
 
 function showToast(msg, isError) {
@@ -944,6 +992,7 @@ function pollActivePlayset(attempt) {
                     updatePlaysetInfo(resp.data.name, resp.data.playset_info);
                     updateSelectedChannel(resp.data.name);
                 }
+                updateArtwork(resp.data.current_artwork);
             }
         } catch (e) { console.log('Playset poll parse error:', e); retry(); }
     };

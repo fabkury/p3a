@@ -1,7 +1,7 @@
 set(http_api_requires
     esp_http_server mdns json config_store freertos esp_wifi esp_timer esp_netif p3a_core
     makapix ota_manager p3a_core channel_manager play_scheduler event_bus show_url
-    storage_eviction
+    storage_eviction giphy
 )
 
 idf_component_register(SRCS "http_api.c"

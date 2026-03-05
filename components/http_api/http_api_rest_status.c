@@ -214,6 +214,11 @@ esp_err_t h_get_api_init(httpd_req_t *req) {
         cJSON_AddStringToObject(pi, "pick_mode", pick_mode_str(ps_stats.pick_mode));
     }
 
+    cJSON *ca = build_current_artwork_json();
+    if (ca) {
+        cJSON_AddItemToObject(data, "current_artwork", ca);
+    }
+
     char *json = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     if (!json) {

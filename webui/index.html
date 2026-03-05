@@ -648,6 +648,9 @@ function sendCommand(action) {
         }
     };
     xhr.send('{}');
+    if (action === 'swap_next' || action === 'swap_back') {
+        schedulePollAfterSwap();
+    }
 }
 // switchChannel() is deprecated - all buttons now use playPlayset()
 // Keeping for backwards compatibility with external scripts
@@ -1192,7 +1195,14 @@ function loadPlayOrder() {
     xhr.send();
 }
 checkForUpdates();
-setInterval(pollActivePlayset, 4000);
+var pollIntervalId = setInterval(pollActivePlayset, 4000);
+function schedulePollAfterSwap() {
+    clearInterval(pollIntervalId);
+    setTimeout(function() {
+        pollActivePlayset();
+        pollIntervalId = setInterval(pollActivePlayset, 4000);
+    }, 750);
+}
 </script>
 </body>
 </html>

@@ -449,25 +449,8 @@ static void ugfx_ui_draw_info_screen(void)
         gdispFillStringBox(vx, y, vw, rh, uptime_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
     }
 
-    // --- Row 3: Connectivity ---
+    // --- Row 3: WiFi Signal ---
     y = 220;
-    gdispFillStringBox(lx, y, lw, rh, "Connectivity", font_main, gray, GFX_BLACK, gJustifyLeft);
-    {
-        p3a_connectivity_level_t conn = p3a_state_get_connectivity();
-        const char *conn_msg = p3a_state_get_connectivity_message();
-        color_t conn_color;
-        switch (conn) {
-            case P3A_CONNECTIVITY_ONLINE:           conn_color = green;  break;
-            case P3A_CONNECTIVITY_NO_MQTT:
-            case P3A_CONNECTIVITY_NO_REGISTRATION:  conn_color = yellow; break;
-            default:                                conn_color = red;    break;
-        }
-        gdispFillStringBox(vx, y, vw, rh, conn_msg ? conn_msg : "Unknown",
-                           font_main, conn_color, GFX_BLACK, gJustifyLeft);
-    }
-
-    // --- Row 4: WiFi Signal ---
-    y = 270;
     gdispFillStringBox(lx, y, lw, rh, "WiFi Signal", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         wifi_ap_record_t ap = {0};
@@ -491,8 +474,8 @@ static void ugfx_ui_draw_info_screen(void)
         }
     }
 
-    // --- Row 5: Makapix ---
-    y = 320;
+    // --- Row 4: Makapix ---
+    y = 270;
     gdispFillStringBox(lx, y, lw, rh, "Makapix", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         makapix_state_t mstate = makapix_get_state();
@@ -511,8 +494,8 @@ static void ugfx_ui_draw_info_screen(void)
         gdispFillStringBox(vx, y, vw, rh, mstr, font_main, mcolor, GFX_BLACK, gJustifyLeft);
     }
 
-    // --- Row 6: Giphy ---
-    y = 370;
+    // --- Row 5: Giphy ---
+    y = 320;
     gdispFillStringBox(lx, y, lw, rh, "Giphy", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         giphy_refresh_status_t gs = giphy_get_last_refresh_status();
@@ -526,8 +509,8 @@ static void ugfx_ui_draw_info_screen(void)
         gdispFillStringBox(vx, y, vw, rh, gs_str, font_main, gs_color, GFX_BLACK, gJustifyLeft);
     }
 
-    // --- Row 7: SD Card ---
-    y = 420;
+    // --- Row 6: SD Card ---
+    y = 370;
     gdispFillStringBox(lx, y, lw, rh, "SD Card", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         uint64_t total_bytes = 0, free_bytes = 0;
@@ -544,8 +527,8 @@ static void ugfx_ui_draw_info_screen(void)
         }
     }
 
-    // --- Row 8: Free Heap ---
-    y = 470;
+    // --- Row 7: Free Heap ---
+    y = 420;
     gdispFillStringBox(lx, y, lw, rh, "Free Heap", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         size_t free_heap = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
@@ -556,8 +539,8 @@ static void ugfx_ui_draw_info_screen(void)
         gdispFillStringBox(vx, y, vw, rh, heap_buf, font_main, heap_color, GFX_BLACK, gJustifyLeft);
     }
 
-    // --- Row 9: Web UI ---
-    y = 520;
+    // --- Row 8: Web UI ---
+    y = 470;
     gdispFillStringBox(lx, y, lw, rh, "Web UI", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         char url_buf[80];
@@ -565,15 +548,27 @@ static void ugfx_ui_draw_info_screen(void)
         gdispFillStringBox(vx, y, vw, rh, url_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
     }
 
-    // --- Row 10: WiFi Recovery Reboots (only shown when > 0) ---
+    // --- Row 9: WiFi Recovery Reboots (only shown when > 0) ---
     {
         uint16_t wifi_reboots = config_store_get_wifi_reboot_total();
         if (wifi_reboots > 0) {
-            y = 570;
+            y = 520;
             gdispFillStringBox(lx, y, lw, rh, "WiFi Reboots", font_main, gray, GFX_BLACK, gJustifyLeft);
             char rb_buf[16];
             snprintf(rb_buf, sizeof(rb_buf), "%u", wifi_reboots);
             gdispFillStringBox(vx, y, vw, rh, rb_buf, font_main, yellow, GFX_BLACK, gJustifyLeft);
+        }
+    }
+
+    // --- Row 10: IP Address ---
+    y = 570;
+    gdispFillStringBox(lx, y, lw, rh, "IP Address", font_main, gray, GFX_BLACK, gJustifyLeft);
+    {
+        char ip_buf[16];
+        if (app_wifi_get_local_ip(ip_buf, sizeof(ip_buf)) == ESP_OK) {
+            gdispFillStringBox(vx, y, vw, rh, ip_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
+        } else {
+            gdispFillStringBox(vx, y, vw, rh, "N/A", font_main, gray, GFX_BLACK, gJustifyLeft);
         }
     }
 

@@ -6,9 +6,11 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_lcd_touch.h"
+#include "esp_system.h"
 #include "p3a_board.h"
 #include "app_lcd.h"
 #include "app_usb.h"
@@ -20,7 +22,9 @@
 #include "ugfx_ui.h"
 #include "p3a_state.h"
 #include "p3a_touch_router.h"
+#include "config_store.h"
 #include <math.h>
+#include <stdio.h>
 
 // Debug provisioning mode - when enabled, long press doesn't trigger real provisioning
 #define DEBUG_PROVISIONING_ENABLED 0
@@ -481,17 +485,96 @@ static void app_touch_task(void *arg)
     }
 }
 
+#define TOUCH_INIT_TIMEOUT_MS 3000
+
+typedef struct {
+    SemaphoreHandle_t done_sem;
+    esp_lcd_touch_handle_t *tp_handle;
+    esp_err_t result;
+} touch_init_ctx_t;
+
+static void touch_init_task(void *arg)
+{
+    touch_init_ctx_t *ctx = arg;
+    ctx->result = p3a_board_touch_init(ctx->tp_handle);
+    xSemaphoreGive(ctx->done_sem);
+    vTaskDelete(NULL);
+}
+
 esp_err_t app_touch_init(void)
 {
 #if P3A_HAS_TOUCH
-    esp_err_t err = p3a_board_touch_init(&tp);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "touch init failed: %s", esp_err_to_name(err));
-        return err;
+    uint16_t streak = config_store_get_touch_reboot_streak();
+    ESP_LOGI(TAG, "Touch init (reboot streak=%u)", streak);
+
+    // Spawn sacrificial task to attempt touch init with timeout
+    touch_init_ctx_t ctx = {
+        .done_sem = xSemaphoreCreateBinary(),
+        .tp_handle = &tp,
+        .result = ESP_FAIL,
+    };
+    if (ctx.done_sem == NULL) {
+        ESP_LOGE(TAG, "Failed to create touch init semaphore");
+        return ESP_ERR_NO_MEM;
+    }
+
+    BaseType_t created = xTaskCreate(touch_init_task, "touch_init", 4096, &ctx, 5, NULL);
+    if (created != pdPASS) {
+        vSemaphoreDelete(ctx.done_sem);
+        ESP_LOGE(TAG, "Failed to create touch init task");
+        return ESP_FAIL;
+    }
+
+    BaseType_t got = xSemaphoreTake(ctx.done_sem, pdMS_TO_TICKS(TOUCH_INIT_TIMEOUT_MS));
+    vSemaphoreDelete(ctx.done_sem);
+
+    if (got == pdTRUE) {
+        // Task completed (success or error)
+        if (ctx.result != ESP_OK) {
+            ESP_LOGE(TAG, "touch init failed: %s", esp_err_to_name(ctx.result));
+            return ctx.result;
+        }
+
+        // Success — reset streak and proceed normally
+        if (streak > 0) {
+            config_store_reset_touch_reboot_streak();
+            ESP_LOGI(TAG, "Touch recovered after %u reboot(s)", streak);
+        }
+    } else {
+        // Timeout — touch init is stuck (I2C bus lockup)
+        ESP_LOGE(TAG, "Touch init timed out after %d ms (I2C bus lockup suspected)", TOUCH_INIT_TIMEOUT_MS);
+
+        if (streak == 0) {
+            // First failure: reboot once to retry
+            config_store_increment_touch_reboot_total();
+            config_store_increment_touch_reboot_streak();
+            ESP_LOGW(TAG, "Rebooting to retry touch init...");
+
+            for (int i = 10; i > 0; i--) {
+                char msg[48];
+                snprintf(msg, sizeof(msg), "Touch error - rebooting in %ds", i);
+                ugfx_ui_show_channel_message("TOUCH", msg, ((10 - i) * 100) / 10);
+                vTaskDelay(pdMS_TO_TICKS(1000));
+            }
+
+            esp_restart();
+            // Never reached
+        }
+
+        // streak >= 1: already rebooted, enter degraded mode
+        ESP_LOGW(TAG, "Touch still stuck after reboot — entering degraded mode (no touch)");
+        for (int i = 10; i > 0; i--) {
+            char msg[48];
+            snprintf(msg, sizeof(msg), "Touch disabled - continuing in %ds", i);
+            ugfx_ui_show_channel_message("TOUCH", msg, ((10 - i) * 100) / 10);
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+
+        return ESP_ERR_NOT_FINISHED;
     }
 
     // Initialize touch router (for state-aware gesture routing)
-    err = p3a_touch_router_init();
+    esp_err_t err = p3a_touch_router_init();
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "touch router init failed: %s (continuing anyway)", esp_err_to_name(err));
     }
@@ -499,8 +582,8 @@ esp_err_t app_touch_init(void)
     // NOTE: Touch task stack must be large enough for gesture routing + logging.
     // Some tap paths can indirectly trigger deeper call chains (e.g. channel rebuild),
     // and 4KB has proven insufficient (stack overflow faults).
-    const BaseType_t created = xTaskCreate(app_touch_task, "app_touch_task", 8192, NULL,
-                                           CONFIG_P3A_TOUCH_TASK_PRIORITY, NULL);
+    created = xTaskCreate(app_touch_task, "app_touch_task", 8192, NULL,
+                          CONFIG_P3A_TOUCH_TASK_PRIORITY, NULL);
     if (created != pdPASS) {
         ESP_LOGE(TAG, "touch task creation failed");
         return ESP_FAIL;

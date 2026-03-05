@@ -550,6 +550,14 @@ void     config_store_reset_wifi_reboot_streak(void);
 /** Reset both counters (called on OTA firmware validation). */
 void     config_store_reset_wifi_reboot_counters(void);
 
+// Touch Recovery Reboot Counters (persisted in NVS)
+uint16_t config_store_get_touch_reboot_total(void);
+void     config_store_increment_touch_reboot_total(void);
+uint16_t config_store_get_touch_reboot_streak(void);
+void     config_store_increment_touch_reboot_streak(void);
+void     config_store_reset_touch_reboot_streak(void);
+void     config_store_reset_touch_reboot_counters(void);
+
 #ifdef __cplusplus
 }
 #endif

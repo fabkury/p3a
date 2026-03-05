@@ -1621,3 +1621,44 @@ void config_store_reset_wifi_reboot_counters(void)
     nvs_write_u16(NVS_KEY_WIFI_RST_TOT, 0);
     nvs_write_u16(NVS_KEY_WIFI_RST_STR, 0);
 }
+
+// Touch Recovery Reboot Counters
+// ============================================================================
+
+#define NVS_KEY_TOUCH_RST_TOT "touch_rst_tot"
+#define NVS_KEY_TOUCH_RST_STR "touch_rst_str"
+
+uint16_t config_store_get_touch_reboot_total(void)
+{
+    return nvs_read_u16(NVS_KEY_TOUCH_RST_TOT);
+}
+
+void config_store_increment_touch_reboot_total(void)
+{
+    uint16_t v = nvs_read_u16(NVS_KEY_TOUCH_RST_TOT);
+    if (v < UINT16_MAX) v++;
+    nvs_write_u16(NVS_KEY_TOUCH_RST_TOT, v);
+}
+
+uint16_t config_store_get_touch_reboot_streak(void)
+{
+    return nvs_read_u16(NVS_KEY_TOUCH_RST_STR);
+}
+
+void config_store_increment_touch_reboot_streak(void)
+{
+    uint16_t v = nvs_read_u16(NVS_KEY_TOUCH_RST_STR);
+    if (v < UINT16_MAX) v++;
+    nvs_write_u16(NVS_KEY_TOUCH_RST_STR, v);
+}
+
+void config_store_reset_touch_reboot_streak(void)
+{
+    nvs_write_u16(NVS_KEY_TOUCH_RST_STR, 0);
+}
+
+void config_store_reset_touch_reboot_counters(void)
+{
+    nvs_write_u16(NVS_KEY_TOUCH_RST_TOT, 0);
+    nvs_write_u16(NVS_KEY_TOUCH_RST_STR, 0);
+}

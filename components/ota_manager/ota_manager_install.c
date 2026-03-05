@@ -401,6 +401,7 @@ esp_err_t ota_manager_validate_boot(void)
         }
 
         config_store_reset_wifi_reboot_counters();
+        config_store_reset_touch_reboot_counters();
         ESP_LOGI(TAG, "OTA firmware validated successfully");
     } else if (ota_state == ESP_OTA_IMG_VALID) {
         ESP_LOGD(TAG, "Running validated OTA firmware");

@@ -496,7 +496,14 @@ void app_main(void)
 
     // Initialize LCD and touch
     ESP_ERROR_CHECK(app_lcd_init());
-    ESP_ERROR_CHECK(app_touch_init());
+    {
+        esp_err_t touch_err = app_touch_init();
+        if (touch_err == ESP_ERR_NOT_FINISHED) {
+            ESP_LOGW(TAG, "Touch disabled (degraded mode) - continuing boot without touch");
+        } else if (touch_err != ESP_OK && touch_err != ESP_ERR_NOT_SUPPORTED) {
+            ESP_LOGE(TAG, "Touch init failed: %s (continuing without touch)", esp_err_to_name(touch_err));
+        }
+    }
 
 #if P3A_HAS_BUTTONS
     // Initialize BOOT button for pause/resume toggle

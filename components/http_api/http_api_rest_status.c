@@ -343,6 +343,13 @@ esp_err_t h_get_status(httpd_req_t *req) {
                                 (double)config_store_get_wifi_reboot_streak());
     }
 
+    uint16_t touch_reboots = config_store_get_touch_reboot_total();
+    if (touch_reboots > 0) {
+        cJSON_AddNumberToObject(data, "touch_recovery_reboots", (double)touch_reboots);
+        cJSON_AddNumberToObject(data, "touch_recovery_reboot_streak",
+                                (double)config_store_get_touch_reboot_streak());
+    }
+
     // Device identity
     {
         char device_name[CONFIG_STORE_MAX_DEVICE_NAME_LEN + 1];

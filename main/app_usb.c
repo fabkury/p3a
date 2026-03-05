@@ -86,7 +86,14 @@ esp_err_t app_usb_init(void)
         .vbus_monitor_io = -1,
     };
 
-    ESP_RETURN_ON_ERROR(tinyusb_driver_install(&tusb_cfg), TAG, "Failed to install TinyUSB");
+    // ESP32-P4 only has UTMI PHY, but esp_tinyusb always requests internal PHY,
+    // causing a harmless "Using UTMI PHY instead of requested internal PHY" warning.
+    // Suppress it here since there is no API to specify UTMI directly.
+    esp_log_level_t prev_phy_level = esp_log_level_get("usb_phy");
+    esp_log_level_set("usb_phy", ESP_LOG_ERROR);
+    esp_err_t tusb_err = tinyusb_driver_install(&tusb_cfg);
+    esp_log_level_set("usb_phy", prev_phy_level);
+    ESP_RETURN_ON_ERROR(tusb_err, TAG, "Failed to install TinyUSB");
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     ESP_RETURN_ON_ERROR(pico8_stream_init(), TAG, "Failed to start PICO-8 stream task");
 #endif

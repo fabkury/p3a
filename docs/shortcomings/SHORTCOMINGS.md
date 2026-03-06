@@ -4,16 +4,6 @@ An honest assessment of the most impactful weaknesses in the p3a codebase as of 
 
 ---
 
-## 1. No Unit Tests or Integration Tests
-
-The project has **zero** automated tests. There are no `test/` directories, no `*_test.c` files, no test runner configuration, and no testing framework integrated into the build system. The only file with "test" in its name (`gmisc_hittest.c`) is a hit-testing algorithm inside the vendored uGFX library, not a test.
-
-**Impact:** Every change is validated only by manual flashing and observation. Regressions go undetected until a user encounters them. Components like `play_scheduler`, `config_store`, and `channel_manager` contain complex logic (SWRR balancing, NVS atomic saves, playlist resolution) that is well-suited to unit testing but currently relies entirely on ad-hoc verification.
-
-**Remediation:** Adopt the [ESP-IDF unit test framework](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-guides/unit-tests.html) or host-based testing with CMock/Unity. Start with pure-logic components (`play_scheduler`, `config_store`, `playset_json`) that can be tested without hardware.
-
----
-
 ## 2. No CI/CD Pipeline
 
 There is no `.github/` directory, no GitHub Actions workflow, and no other CI configuration. Builds, linting, and release packaging are performed entirely on the developer's local machine.
@@ -43,46 +33,9 @@ Several shared data structures are accessed from multiple FreeRTOS tasks without
 
 **Remediation:** Audit every global/static variable accessed from more than one task. Protect shared state with mutexes (or use atomic operations for simple flags). For `p3a_state_get_active_playset`, return a copy instead of a pointer to internal storage.
 
----
-
-## 4. Mismatched Memory Allocators
-
-The codebase mixes `heap_caps_malloc` (PSRAM-targeted) and `malloc`/`free` inconsistently:
-
-| Location | Issue |
-|----------|-------|
-| `animation_player_loader.c` (lines 516–524 vs 414–415) | `native_frame_b1` / `native_frame_b2` are allocated with `heap_caps_malloc(..., MALLOC_CAP_SPIRAM)` but freed with plain `free()`. |
-| `playlist_manager.c` (line 278 vs 367) | Playlist artworks allocated with `psram_calloc` but freed with `free()`. |
-| `giphy_refresh.c` (line 77 vs 117) | Cache entries allocated with `psram_malloc` but freed with `free()`. |
-| `channel_cache.c` | Mixes `malloc`/`free` and `psram_malloc` for related data structures. |
-
-**Impact:** On the ESP32-P4, `heap_caps_malloc` with `MALLOC_CAP_SPIRAM` returns memory from the PSRAM heap. Passing that pointer to plain `free()` works *only* because ESP-IDF's default allocator unifies heaps — but this is an implementation detail, not a contract. If the heap strategy changes, or if tracing allocators are enabled, these mismatches will surface as corruption or crashes.
-
-**Remediation:** Establish a project convention: either always use `heap_caps_malloc` / `heap_caps_free` for PSRAM, or rely on the unified allocator and use `malloc` / `free` everywhere. Wrapper macros (`p3a_psram_alloc`, `p3a_psram_free`) would make the intent explicit and the policy enforceable.
 
 ---
 
-## 5. Pervasive Hardcoded Magic Numbers
-
-Timeouts, buffer sizes, stack sizes, and limits are scattered as raw numeric literals throughout the code instead of being defined as named constants or Kconfig options:
-
-| Value | Location | Purpose |
-|-------|----------|---------|
-| `8192` | `animation_player.c:346`, `play_scheduler_refresh.c` | Task stack sizes |
-| `4096`, `2048`, `3072` | `display_renderer.c:254,167`, `p3a_main.c:409` | More task stack sizes |
-| `100` (ms) | `animation_player.c:489`, `animation_player_render.c:23` | Timeout, default frame delay |
-| `5000`, `15000`, `120000` | `animation_player_loader.c:216`, `giphy_api.c:165`, `download_manager.c:411` | HTTP / bus timeouts |
-| `256`, `512` | `animation_player_loader.c:282,305` | Path buffer sizes |
-| `5 * 1024 * 1024` | `http_api_upload.c:28` | Max upload file size |
-| `18 * 3600` | `download_manager.c:368` | Channel eviction interval |
-| `3600000` | `animation_player_loader.c:47` | Corrupt file cooldown |
-| `60000`, `300000` | `p3a_state.c` | Internet check, MQTT backoff |
-
-**Impact:** These values cannot be tuned without editing source code and rebuilding. Related constants are defined in different files with no single source of truth — for example, path buffer sizes of 256 and 512 appear independently in multiple files. If one is changed but another is not, truncation or overflow may occur.
-
-**Remediation:** Centralize constants in a project-wide `p3a_constants.h` or, where runtime tuning is desirable, expose them through Kconfig. Group related constants (all task stack sizes, all timeout values, all buffer sizes) so they can be reviewed and adjusted together.
-
----
 
 ## 6. Missing Input Validation and Sanitization
 
@@ -129,40 +82,6 @@ There is no `.clang-tidy`, `.cppcheck`, or other static-analysis configuration i
 
 ---
 
-## 9. Security Hardening Not Enabled
-
-The `sdkconfig` shows that both **Secure Boot** and **Flash Encryption** are disabled:
-
-```
-# CONFIG_SECURE_BOOT is not set
-# CONFIG_SECURE_FLASH_ENC_ENABLED is not set
-```
-
-Additionally:
-- `CONFIG_BOOT_ROM_LOG_ALWAYS_ON=y` — boot ROM logs are always printed, potentially leaking internal details.
-- `CONFIG_ESP_DEBUG_OCDAWARE=y` — JTAG/debug awareness is on.
-- Wi-Fi credentials in sdkconfig (`CONFIG_ESP_WIFI_SSID="myssid"`, `CONFIG_ESP_WIFI_PASSWORD="mypassword"`) are documented as examples but could be mistaken for real credentials.
-
-**Impact:** Without secure boot, a malicious firmware image can be flashed via UART or OTA. Without flash encryption, all firmware and NVS data (including stored Wi-Fi credentials and API keys) are readable by anyone with physical access to the board.
-
-**Remediation:** Enable secure boot and flash encryption before any production deployment. For development builds, document clearly that these are intentionally disabled. Replace the example Wi-Fi credentials in sdkconfig with empty strings and move provisioning to the captive portal flow exclusively.
-
----
-
-## 10. ~~Stale and Inconsistent Documentation~~ (Resolved)
-
-The following documentation issues have been fixed:
-
-- **Missing ROADMAP.md** — Removed broken links from `README.md` and `CLAUDE.md`.
-- **Missing OTA_IMPLEMENTATION_PLAN.md** — Removed broken link from `README.md`.
-- **Phantom `content_source` component** — Removed from `architecture.md`, `components.md`, and `directory-structure.md`.
-- **Undocumented `storage_eviction`** — Added to `components.md` (section 17) and `directory-structure.md`.
-- **Component count mismatch** — Updated from "24" to "25" in `components.md` and `directory-structure.md`.
-- **Legacy `app_state` references** — Removed from `components.md`, `directory-structure.md`, and `README.md`.
-
-**Remaining (not documentation issues):** `p3a_board.h:298` TODO *"Remove these after full migration"* and `playlist_manager.c:217` TODO *"Implement background update queue"* are code-level items tracked separately.
-
----
 
 ## Summary
 

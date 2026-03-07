@@ -37,8 +37,9 @@ typedef enum {
  * @brief Web UI OTA state machine states
  */
 typedef enum {
-    WEBUI_OTA_STATE_IDLE,        ///< No web UI update activity
-    WEBUI_OTA_STATE_DOWNLOADING, ///< Downloading storage.bin
+    WEBUI_OTA_STATE_IDLE,             ///< No web UI update activity
+    WEBUI_OTA_STATE_UPDATE_AVAILABLE, ///< Update found, awaiting user action
+    WEBUI_OTA_STATE_DOWNLOADING,      ///< Downloading storage.bin
     WEBUI_OTA_STATE_UNMOUNTING,  ///< Unmounting LittleFS
     WEBUI_OTA_STATE_ERASING,     ///< Erasing storage partition
     WEBUI_OTA_STATE_WRITING,     ///< Writing to storage partition
@@ -280,6 +281,29 @@ esp_err_t webui_ota_trigger_repair(void);
 esp_err_t webui_ota_install_update(const char *download_url,
                                     const char *expected_sha256,
                                     ota_progress_cb_t progress_cb);
+
+/**
+ * @brief Record that a web UI update is available
+ *
+ * Called by the check task when a newer web UI version is found.
+ * Stores the download info and transitions to UPDATE_AVAILABLE state.
+ *
+ * @param version Available version string (e.g., "1.7")
+ * @param url Download URL for storage.bin
+ * @param sha256 Expected SHA256 hex string (64 chars), may be NULL
+ */
+void webui_ota_set_available_update(const char *version, const char *url, const char *sha256);
+
+/**
+ * @brief Install a previously discovered web UI update
+ *
+ * Uses the URL/SHA256 stored by webui_ota_set_available_update().
+ * Must be in UPDATE_AVAILABLE state.
+ *
+ * @param progress_cb Optional progress callback
+ * @return ESP_OK on success, ESP_ERR_INVALID_STATE if no update pending
+ */
+esp_err_t webui_ota_install_available_update(ota_progress_cb_t progress_cb);
 
 #ifdef __cplusplus
 }

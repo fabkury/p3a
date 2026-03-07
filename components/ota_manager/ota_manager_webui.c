@@ -78,8 +78,9 @@ void webui_ota_deinit(void)
 const char *webui_ota_state_to_string(webui_ota_state_t state)
 {
     switch (state) {
-        case WEBUI_OTA_STATE_IDLE:        return "idle";
-        case WEBUI_OTA_STATE_DOWNLOADING: return "downloading";
+        case WEBUI_OTA_STATE_IDLE:             return "idle";
+        case WEBUI_OTA_STATE_UPDATE_AVAILABLE: return "update_available";
+        case WEBUI_OTA_STATE_DOWNLOADING:      return "downloading";
         case WEBUI_OTA_STATE_UNMOUNTING:  return "unmounting";
         case WEBUI_OTA_STATE_ERASING:     return "erasing";
         case WEBUI_OTA_STATE_WRITING:     return "writing";
@@ -663,6 +664,97 @@ esp_err_t webui_ota_install_update(const char *download_url,
     return ESP_OK;
 }
 
+void webui_ota_set_available_update(const char *version, const char *url, const char *sha256)
+{
+    if (s_webui_ota.mutex) {
+        xSemaphoreTake(s_webui_ota.mutex, portMAX_DELAY);
+    }
+
+    if (version) {
+        strncpy(s_webui_ota.available_version, version, sizeof(s_webui_ota.available_version) - 1);
+        s_webui_ota.available_version[sizeof(s_webui_ota.available_version) - 1] = '\0';
+    }
+    if (url) {
+        strncpy(s_webui_ota.available_url, url, sizeof(s_webui_ota.available_url) - 1);
+        s_webui_ota.available_url[sizeof(s_webui_ota.available_url) - 1] = '\0';
+    }
+    if (sha256) {
+        strncpy(s_webui_ota.available_sha256, sha256, sizeof(s_webui_ota.available_sha256) - 1);
+        s_webui_ota.available_sha256[sizeof(s_webui_ota.available_sha256) - 1] = '\0';
+    } else {
+        s_webui_ota.available_sha256[0] = '\0';
+    }
+
+    s_webui_ota.update_available = true;
+    s_webui_ota.state = WEBUI_OTA_STATE_UPDATE_AVAILABLE;
+
+    ESP_LOGI(TAG, "Web UI update available: %s (url: %.64s...)",
+             version ? version : "?", url ? url : "?");
+
+    if (s_webui_ota.mutex) {
+        xSemaphoreGive(s_webui_ota.mutex);
+    }
+}
+
+static void webui_ota_install_task(void *arg)
+{
+    ota_progress_cb_t progress_cb = (ota_progress_cb_t)arg;
+
+    char url[256];
+    char sha256[65];
+
+    if (s_webui_ota.mutex) {
+        xSemaphoreTake(s_webui_ota.mutex, portMAX_DELAY);
+    }
+    strncpy(url, s_webui_ota.available_url, sizeof(url) - 1);
+    url[sizeof(url) - 1] = '\0';
+    strncpy(sha256, s_webui_ota.available_sha256, sizeof(sha256) - 1);
+    sha256[sizeof(sha256) - 1] = '\0';
+    if (s_webui_ota.mutex) {
+        xSemaphoreGive(s_webui_ota.mutex);
+    }
+
+    esp_err_t err = webui_ota_install_update(url,
+                                              strlen(sha256) > 0 ? sha256 : NULL,
+                                              progress_cb);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Web UI install failed: %s", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "Web UI install completed successfully");
+    }
+
+    s_webui_ota.install_task = NULL;
+    vTaskDelete(NULL);
+}
+
+esp_err_t webui_ota_install_available_update(ota_progress_cb_t progress_cb)
+{
+    if (!s_webui_ota.update_available ||
+        s_webui_ota.state != WEBUI_OTA_STATE_UPDATE_AVAILABLE) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (s_webui_ota.install_task != NULL) {
+        ESP_LOGW(TAG, "Web UI install already in progress");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (strlen(s_webui_ota.available_url) == 0) {
+        ESP_LOGE(TAG, "No download URL stored for web UI update");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    BaseType_t ret = xTaskCreate(webui_ota_install_task, "webui_install",
+                                  8192, (void *)progress_cb, 5,
+                                  &s_webui_ota.install_task);
+    if (ret != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create install task");
+        return ESP_ERR_NO_MEM;
+    }
+
+    return ESP_OK;
+}
+
 static void webui_ota_repair_task(void *arg)
 {
     ESP_LOGI(TAG, "Web UI repair task started");
@@ -771,6 +863,19 @@ esp_err_t webui_ota_install_update(const char *download_url,
                                     const char *expected_sha256,
                                     ota_progress_cb_t progress_cb)
 {
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+void webui_ota_set_available_update(const char *version, const char *url, const char *sha256)
+{
+    (void)version;
+    (void)url;
+    (void)sha256;
+}
+
+esp_err_t webui_ota_install_available_update(ota_progress_cb_t progress_cb)
+{
+    (void)progress_cb;
     return ESP_ERR_NOT_SUPPORTED;
 }
 

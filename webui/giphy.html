@@ -147,45 +147,6 @@ body {
 }
 .status.success { background: #4CAF50; color: white; }
 .status.error { background: #f44336; color: white; }
-.toggle-switch {
-    position: relative;
-    display: inline-block;
-    width: 48px;
-    height: 26px;
-}
-.toggle-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-.toggle-slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #ccc;
-    transition: 0.3s;
-    border-radius: 26px;
-}
-.toggle-slider:before {
-    position: absolute;
-    content: '';
-    height: 20px;
-    width: 20px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    transition: 0.3s;
-    border-radius: 50%;
-}
-.toggle-switch input:checked + .toggle-slider {
-    background-color: #667eea;
-}
-.toggle-switch input:checked + .toggle-slider:before {
-    transform: translateX(22px);
-}
 </style>
 </head>
 <body>
@@ -199,31 +160,6 @@ body {
         <input class="setting-input" id="giphy-api-key" type="text" placeholder="Giphy API Key">
     </div>
     <div class="setting-hint">Enter your Giphy API key. Giphy channels will not work without a valid key.</div>
-</div>
-<div class="section">
-    <h3>Download</h3>
-    <div class="setting-row">
-        <label class="setting-label" for="giphy-rendition">Rendition</label>
-        <select class="setting-select" id="giphy-rendition">
-            <option value="fixed_height">Fixed Height (200px)</option>
-            <option value="original">Original</option>
-        </select>
-    </div>
-    <div class="setting-row">
-        <label class="setting-label" for="giphy-format">Format</label>
-        <select class="setting-select" id="giphy-format">
-            <option value="webp">WebP</option>
-            <option value="gif">GIF</option>
-        </select>
-    </div>
-    <div class="setting-row" id="prefer-downsized-row">
-        <label class="setting-label" for="prefer-downsized">Prefer downsized</label>
-        <label class="toggle-switch">
-            <input type="checkbox" id="prefer-downsized" checked>
-            <span class="toggle-slider"></span>
-        </label>
-    </div>
-    <div class="setting-hint">GIF is faster and recommended. WebP looks better but can be visibly slow. Original can be large (10+ MB) and sometimes slow too. "Prefer downsized" uses a higher-quality rendition from Giphy when available (only applies to Fixed Height).</div>
 </div>
 <div class="section">
     <h3>Content</h3>
@@ -261,47 +197,12 @@ body {
 </div>
 <div class="status" id="status"></div>
 <script>
-// Valid formats per rendition (matches backend s_rendition_map)
-var RENDITION_FORMATS = {
-    'fixed_height':     ['gif', 'webp'],
-    'original':         ['gif', 'webp']
-};
-
-var FORMAT_LABELS = { 'webp': 'WebP', 'gif': 'GIF' };
-
 function showToast(msg, isError) {
     var s = document.getElementById('status');
     s.textContent = msg;
     s.className = isError ? 'status error' : 'status success';
     s.style.display = 'block';
     setTimeout(function() { s.style.display = 'none'; }, 6000);
-}
-
-/**
- * Rebuild the format dropdown based on the selected rendition.
- * Preserves current selection when still valid, otherwise picks first valid.
- */
-function updateFormatOptions() {
-    var renditionSel = document.getElementById('giphy-rendition');
-    var formatSel = document.getElementById('giphy-format');
-    var current = formatSel.value;
-    var allowed = RENDITION_FORMATS[renditionSel.value] || ['gif', 'webp'];
-
-    // Clear options
-    formatSel.length = 0;
-    for (var i = 0; i < allowed.length; i++) {
-        var opt = document.createElement('option');
-        opt.value = allowed[i];
-        opt.textContent = FORMAT_LABELS[allowed[i]] || allowed[i];
-        formatSel.appendChild(opt);
-    }
-
-    // Restore previous selection if still valid, otherwise first option
-    if (allowed.indexOf(current) !== -1) {
-        formatSel.value = current;
-    } else {
-        formatSel.value = allowed[0];
-    }
 }
 
 function loadSettings() {
@@ -313,20 +214,12 @@ function loadSettings() {
                 var resp = JSON.parse(xhr.responseText || '{}');
                 var cfg = (resp && resp.ok && resp.data) ? resp.data : {};
                 document.getElementById('giphy-api-key').value = cfg.giphy_api_key || '';
-                document.getElementById('giphy-rendition').value = cfg.giphy_rendition || 'fixed_height';
-                updateFormatOptions();
-                document.getElementById('giphy-format').value = cfg.giphy_format || 'gif';
-                // Re-run in case the loaded format isn't valid for the loaded rendition
-                updateFormatOptions();
                 document.getElementById('giphy-rating').value = cfg.giphy_rating || 'pg-13';
                 var refreshSel = document.getElementById('giphy-refresh');
                 var refreshVal = String(cfg.giphy_refresh_interval || 3600);
                 refreshSel.value = refreshVal;
                 if (!refreshSel.value) refreshSel.value = '3600';
                 document.getElementById('giphy-cache-size').value = cfg.giphy_cache_size || 400;
-                document.getElementById('prefer-downsized').checked =
-                    (typeof cfg.giphy_prefer_downsized === 'boolean') ? cfg.giphy_prefer_downsized : true;
-                updatePreferDownsizedVisibility();
             } catch (e) {
                 showToast('Failed to load settings', true);
             }
@@ -340,8 +233,6 @@ function saveAll() {
     btn.disabled = true;
 
     var apiKey = document.getElementById('giphy-api-key').value.trim();
-    var rendition = document.getElementById('giphy-rendition').value;
-    var format = document.getElementById('giphy-format').value;
     var rating = document.getElementById('giphy-rating').value;
 
     if (!apiKey) { showToast('API Key is required', true); btn.disabled = false; return; }
@@ -352,12 +243,9 @@ function saveAll() {
 
     var partial = {
         giphy_api_key: apiKey,
-        giphy_rendition: rendition,
-        giphy_format: format,
         giphy_rating: rating,
         giphy_refresh_interval: parseInt(document.getElementById('giphy-refresh').value, 10),
-        giphy_cache_size: cacheSize,
-        giphy_prefer_downsized: document.getElementById('prefer-downsized').checked
+        giphy_cache_size: cacheSize
     };
 
     var xhr = new XMLHttpRequest();
@@ -375,17 +263,6 @@ function saveAll() {
     };
     xhr.send(JSON.stringify(partial));
 }
-
-function updatePreferDownsizedVisibility() {
-    var row = document.getElementById('prefer-downsized-row');
-    row.style.display = (document.getElementById('giphy-rendition').value === 'fixed_height') ? '' : 'none';
-}
-
-// Wire up rendition change to refresh format options and toggle visibility
-document.getElementById('giphy-rendition').addEventListener('change', function() {
-    updateFormatOptions();
-    updatePreferDownsizedVisibility();
-});
 
 loadSettings();
 </script>

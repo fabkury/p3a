@@ -297,6 +297,42 @@ static esp_err_t h_get_webui_ota_status(httpd_req_t *req) {
 }
 
 /**
+ * POST /ota/webui/install
+ * Installs a previously discovered web UI update
+ */
+static esp_err_t h_post_webui_ota_install(httpd_req_t *req) {
+    esp_err_t err = webui_ota_install_available_update(NULL);
+
+    if (err == ESP_ERR_NOT_SUPPORTED) {
+        send_json(req, 501, "{\"ok\":false,\"error\":\"Web UI OTA is disabled\",\"code\":\"NOT_SUPPORTED\"}");
+        return ESP_OK;
+    }
+
+    if (err == ESP_ERR_INVALID_STATE) {
+        webui_ota_status_t status;
+        webui_ota_get_status(&status);
+        if (!status.update_available) {
+            send_json(req, 409, "{\"ok\":false,\"error\":\"No web UI update available\",\"code\":\"NO_UPDATE\"}");
+        } else {
+            send_json(req, 409, "{\"ok\":false,\"error\":\"Install already in progress\",\"code\":\"INSTALL_IN_PROGRESS\"}");
+        }
+        return ESP_OK;
+    }
+
+    if (err != ESP_OK) {
+        char response[128];
+        snprintf(response, sizeof(response),
+                 "{\"ok\":false,\"error\":\"Failed to start install: %s\",\"code\":\"INSTALL_FAIL\"}",
+                 esp_err_to_name(err));
+        send_json(req, 500, response);
+        return ESP_OK;
+    }
+
+    send_json(req, 202, "{\"ok\":true,\"data\":{\"installing\":true,\"message\":\"Web UI update started\"}}");
+    return ESP_OK;
+}
+
+/**
  * POST /ota/webui/repair
  * Triggers a forced re-download of the web UI
  */
@@ -371,6 +407,9 @@ esp_err_t http_api_ota_route_post(httpd_req_t *req) {
     }
     if (strcmp(uri, "/ota/rollback") == 0) {
         return h_post_ota_rollback(req);
+    }
+    if (strcmp(uri, "/ota/webui/install") == 0) {
+        return h_post_webui_ota_install(req);
     }
     if (strcmp(uri, "/ota/webui/repair") == 0) {
         return h_post_webui_ota_repair(req);

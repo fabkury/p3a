@@ -26,9 +26,6 @@ static StaticTask_t s_ota_check_task_buffer;
 // Check interval in microseconds (hours to us)
 #define CHECK_INTERVAL_US (CONFIG_OTA_CHECK_INTERVAL_HOURS * 60ULL * 60ULL * 1000000ULL)
 
-// Web UI OTA max consecutive failures before disabling auto-update
-#define WEBUI_OTA_MAX_FAILURES 4
-
 // OTA state
 ota_internal_state_t s_ota = {
     .state = OTA_STATE_IDLE,
@@ -501,7 +498,6 @@ static void ota_check_task(void *arg)
 
 #if CONFIG_OTA_WEBUI_ENABLE
     // Check for web UI updates (after firmware check)
-    // Use manifest API to get web UI version info
     github_release_manifest_t manifest;
     esp_err_t manifest_err = github_ota_get_release_manifest(&manifest);
     if (manifest_err == ESP_OK && strlen(manifest.webui.version) > 0) {
@@ -509,29 +505,19 @@ static void ota_check_task(void *arg)
         webui_ota_get_current_version(current_webui_ver, sizeof(current_webui_ver));
 
         int webui_cmp = github_ota_compare_webui_versions(manifest.webui.version, current_webui_ver);
-
-        // Check if recovery is needed or update is available
         bool needs_recovery = !webui_ota_is_partition_healthy();
 
-        if (needs_recovery) {
-            ESP_LOGW(TAG, "Web UI recovery needed, downloading latest version");
-            // Check failure circuit breaker
-            webui_ota_status_t webui_status;
-            webui_ota_get_status(&webui_status);
-            if (webui_status.failure_count > WEBUI_OTA_MAX_FAILURES) {
-                ESP_LOGW(TAG, "Web UI OTA disabled due to too many failures (%d)", webui_status.failure_count);
-            } else if (strlen(manifest.webui.download_url) > 0) {
-                webui_ota_install_update(manifest.webui.download_url, manifest.webui.sha256, NULL);
+        if (needs_recovery || webui_cmp > 0) {
+            if (needs_recovery) {
+                ESP_LOGW(TAG, "Web UI recovery needed (latest: %s)", manifest.webui.version);
+            } else {
+                ESP_LOGI(TAG, "Web UI update available: %s -> %s",
+                         current_webui_ver, manifest.webui.version);
             }
-        } else if (webui_cmp > 0) {
-            ESP_LOGI(TAG, "Web UI update available: %s -> %s", current_webui_ver, manifest.webui.version);
-            // Check failure circuit breaker
-            webui_ota_status_t webui_status;
-            webui_ota_get_status(&webui_status);
-            if (webui_status.failure_count > WEBUI_OTA_MAX_FAILURES) {
-                ESP_LOGW(TAG, "Web UI OTA disabled due to too many failures (%d)", webui_status.failure_count);
-            } else if (strlen(manifest.webui.download_url) > 0) {
-                webui_ota_install_update(manifest.webui.download_url, manifest.webui.sha256, NULL);
+            if (strlen(manifest.webui.download_url) > 0) {
+                webui_ota_set_available_update(manifest.webui.version,
+                                               manifest.webui.download_url,
+                                               manifest.webui.sha256);
             }
         } else {
             ESP_LOGI(TAG, "Web UI is up to date (current: %s, latest: %s)",

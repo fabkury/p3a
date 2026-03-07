@@ -125,30 +125,6 @@ After the initial firmware flash via USB-C cable, all subsequent updates can be 
   <img src="images/ESP32-P4-WIFI6-Touch-LCD-4B-details-size.jpg" alt="p3a size" width="100%">
 </p>
 
-## Current status
-
-p3a is in active development. The following features are implemented:
-
-- Display pipeline with multi-buffer rendering for freeze-free playback
-- **Hardware-accelerated upscaling** — PPA bilinear interpolation for Giphy content, nearest-neighbor for pixel art
-- Animation playback with prefetching and robust error handling
-- **Transparency & alpha channel support** for WebP, GIF, and PNG with configurable background color
-- **Aspect ratio preservation** for non-square artworks
-- Touch gestures (tap, swipe, long-press, two-finger rotation)
-- Screen rotation (0°, 90°, 180°, 270°) with persistence
-- Wi-Fi provisioning with captive portal and mDNS (http://p3a.local/)
-- Local web UI and REST API, also with mDNS
-- **Giphy integration** — play trending GIFs from [Giphy](https://giphy.com/) with configurable content rating, rendition, and format
-- **Makapix Club integration** — play individual artworks and entire channels from [makapix.club](https://makapix.club/)
-- **Secure mTLS MQTT client** for device registration and remote control
-- **Over-the-Air (OTA) updates** — install firmware updates wirelessly via web UI with integrity verification and full rollback support
-- **Automatic ESP32-C6 firmware updates** for the Wi-Fi co-processor
-- USB composite device (serial console + mass storage)
-
-**Coming soon:**
-- Send "likes" to artworks with long-press gesture
-- Swipe up to view artwork comments from the Makapix community
-
 ## Documentation
 
 | Document | Description |

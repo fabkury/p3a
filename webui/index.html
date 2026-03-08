@@ -629,18 +629,19 @@ function sendCommand(action) {
             try {
                 var result = JSON.parse(xhr.responseText);
                 if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
-                    status.textContent = 'Command sent successfully';
-                    status.className = 'status success';
+                    // Success: no message shown
                 } else {
                     status.textContent = 'Command failed: ' + (result.error || 'HTTP ' + xhr.status);
                     status.className = 'status error';
+                    status.style.display = 'block';
+                    setTimeout(function() { status.style.display = 'none'; }, 6000);
                 }
             } catch (e) {
                 status.textContent = 'Parse error: ' + e.message;
                 status.className = 'status error';
+                status.style.display = 'block';
+                setTimeout(function() { status.style.display = 'none'; }, 6000);
             }
-            status.style.display = 'block';
-            setTimeout(function() { status.style.display = 'none'; }, 6000);
             backBtn.disabled = false;
             nextBtn.disabled = false;
         }

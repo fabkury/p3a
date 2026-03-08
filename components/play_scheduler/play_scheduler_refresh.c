@@ -18,6 +18,7 @@
 #include "makapix_artwork.h"  // For makapix_artwork_download_with_progress()
 #include "makapix_channel_events.h"  // For async completion events
 #include "giphy.h"             // For giphy_refresh_channel()
+#include "makapix_promoted_https.h"  // For HTTPS fallback refresh
 #include "config_store.h"      // For config_store_get_giphy_refresh_interval()
 #include "channel_metadata.h"  // For channel_metadata_load()
 #include "sntp_sync.h"         // For sntp_sync_is_synchronized()
@@ -108,6 +109,13 @@ static int find_next_pending_refresh(ps_state_t *state)
                 return (int)i;
             }
             continue;  // Skip Giphy channels until WiFi is ready
+        }
+
+        // Promoted named channel can refresh via HTTPS without MQTT
+        if (ch->type == PS_CHANNEL_TYPE_NAMED &&
+            strcmp(ch->spec_name, "promoted") == 0 &&
+            p3a_state_has_wifi()) {
+            return (int)i;
         }
 
         // For Makapix channels, only proceed if MQTT is connected
@@ -727,10 +735,23 @@ static void refresh_task(void *arg)
                         ESP_LOGI(TAG, "Channel '%s' refresh override active, bypassing interval check",
                                  display_name);
                     }
-                    err = refresh_makapix_channel(ch);
-                    if (err == ESP_ERR_NOT_FINISHED) {
-                        time_t stale_at = time(NULL) + (time_t)interval;
-                        if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
+                    // Promoted channel: use HTTPS when MQTT is not connected
+                    if (type == PS_CHANNEL_TYPE_NAMED &&
+                        strcmp(spec_name, "promoted") == 0 &&
+                        !makapix_mqtt_is_connected()) {
+                        ESP_LOGI(TAG, "Using HTTPS fallback for promoted channel");
+                        err = makapix_promoted_https_refresh(channel_id);
+                        // Synchronous — ESP_OK means done, stale_at applies
+                        if (err == ESP_OK) {
+                            time_t stale_at = time(NULL) + (time_t)interval;
+                            if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
+                        }
+                    } else {
+                        err = refresh_makapix_channel(ch);
+                        if (err == ESP_ERR_NOT_FINISHED) {
+                            time_t stale_at = time(NULL) + (time_t)interval;
+                            if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
+                        }
                     }
                 }
             }

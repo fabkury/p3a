@@ -13,6 +13,7 @@ idf_component_register(
         "makapix_connection.c"
         "makapix_certs.c"
         "view_tracker.c"
+        "makapix_promoted_https.c"
     INCLUDE_DIRS 
         "."
     PRIV_INCLUDE_DIRS

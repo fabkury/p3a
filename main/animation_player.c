@@ -222,9 +222,9 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     free(found_animations_dir);
     found_animations_dir = NULL;
 
-    // Determine boot playset: restore from NVS or default to "channel_recent"
+    // Determine boot playset: restore from NVS or default to "channel_promoted"
     const char *active_playset = p3a_state_get_active_playset();
-    const char *boot_channel = "all";  // Default display name mapping
+    const char *boot_channel = "promoted";  // Default display name mapping
 
     // Map playset to boot_channel for display name purposes
     if (active_playset && active_playset[0] != '\0') {
@@ -391,14 +391,14 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
             }
         }
 
-        // If playset restore failed, fall back to channel_recent (all)
+        // If playset restore failed, fall back to channel_promoted
         if (ps_err != ESP_OK) {
-            ESP_LOGI(TAG, "Falling back to default playset: channel_recent");
-            ps_err = ps_create_channel_playset("channel_recent", cmd);
+            ESP_LOGI(TAG, "Falling back to default playset: channel_promoted");
+            ps_err = ps_create_channel_playset("channel_promoted", cmd);
             if (ps_err == ESP_OK) {
                 ps_err = play_scheduler_execute_command(cmd);
                 // Update NVS to reflect the fallback
-                p3a_state_set_active_playset("channel_recent");
+                p3a_state_set_active_playset("channel_promoted");
             }
         }
 
@@ -406,7 +406,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     } else {
         ESP_LOGE(TAG, "Failed to allocate playset command struct");
         // Last resort fallback using legacy API
-        ps_err = play_scheduler_play_named_channel("all");
+        ps_err = play_scheduler_play_named_channel("promoted");
     }
 
     if (ps_err != ESP_OK) {

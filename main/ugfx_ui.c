@@ -124,45 +124,54 @@ static void ugfx_ui_draw_captive_ap_info(void)
 {
     gdispClear(GFX_BLACK);
 
-    // Title
-    gdispFillStringBox(0, 60, gdispGetWidth(), 36, "WiFi Setup Instructions",
-                     gdispOpenFont("* DejaVu Sans 24"), GFX_WHITE, GFX_BLACK, gJustifyCenter);
+    gCoord screen_w = gdispGetWidth();
+    gFont font_title = gdispOpenFont("* DejaVu Sans 24");
+    gFont font_main  = gdispOpenFont("* DejaVu Sans 20");
+    gFont font_hint  = gdispOpenFont("* DejaVu Sans 16");
 
-    // Instructions (multi-line, smaller font)
-    int y_pos = 120;
-    gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, "1. Connect to the WiFi network:",
-                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    color_t gray  = HTML2COLOR(0x888888);
+    color_t green = HTML2COLOR(0x00FF00);
 
-    y_pos += 45;
-    // Using CONFIG_ESP_AP_SSID directly (EXAMPLE_ESP_AP_SSID wrapper is local to app_wifi.c)
-    gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, CONFIG_ESP_AP_SSID,
-                     gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0x00FF00), GFX_BLACK, gJustifyCenter);
+    gCoord lx = 40;       // label x
+    gCoord vx = 280;      // value x
+    gCoord vw = screen_w - vx - 20;  // value width
+    gCoord lw = vx - lx - 10;        // label width
+    gCoord rh = 36;       // row height
 
-    y_pos += 50;
-    gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, "2. Open your web browser",
-                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    // Title – device hostname
+    char title_buf[64];
+    if (config_store_get_hostname(title_buf, sizeof(title_buf)) != ESP_OK) {
+        snprintf(title_buf, sizeof(title_buf), "p3a");
+    }
+    gdispFillStringBox(0, 50, screen_w, 35, title_buf,
+                       font_title, GFX_WHITE, GFX_BLACK, gJustifyCenter);
 
-    y_pos += 45;
+    // Subtitle
+    gdispFillStringBox(0, 90, screen_w, 30, "WiFi Setup",
+                       font_main, gray, GFX_BLACK, gJustifyCenter);
+
+    // Row 1: Network
+    gCoord y = 170;
+    gdispFillStringBox(lx, y, lw, rh, "Network", font_main, gray, GFX_BLACK, gJustifyLeft);
+    gdispFillStringBox(vx, y, vw, rh, CONFIG_ESP_AP_SSID, font_main, green, GFX_BLACK, gJustifyLeft);
+
+    // Row 2: Setup URL
+    y = 230;
+    gdispFillStringBox(lx, y, lw, rh, "Setup URL", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
-        char hn[24];
-        char url_buf[48];
-        config_store_get_hostname(hn, sizeof(hn));
-        snprintf(url_buf, sizeof(url_buf), "3. Go to: http://%s.local", hn);
-        gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, url_buf,
-                         gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+        char url_buf[80];
+        snprintf(url_buf, sizeof(url_buf), "http://%s.local/", title_buf);
+        gdispFillStringBox(vx, y, vw, rh, url_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
     }
 
-    y_pos += 45;
-    gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, "or http://192.168.4.1",
-                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
-
-    y_pos += 50;
-    gdispFillStringBox(0, y_pos, gdispGetWidth(), 36, "4. Enter your WiFi credentials",
-                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    // Row 3: Alt URL
+    y = 290;
+    gdispFillStringBox(lx, y, lw, rh, "Alt URL", font_main, gray, GFX_BLACK, gJustifyLeft);
+    gdispFillStringBox(vx, y, vw, rh, "http://192.168.4.1", font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
 
     // Dismiss hint
-    gdispFillStringBox(0, gdispGetHeight() - 60, gdispGetWidth(), 25, "Long-press to dismiss",
-                     gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0x888888), GFX_BLACK, gJustifyCenter);
+    gdispFillStringBox(0, gdispGetHeight() - 60, screen_w, rh, "Long-press to dismiss",
+                       font_hint, HTML2COLOR(0x555555), GFX_BLACK, gJustifyCenter);
 }
 
 /**
@@ -208,8 +217,9 @@ static void ugfx_ui_draw_status(void)
                      gdispOpenFont("* DejaVu Sans 32"), HTML2COLOR(0xFFFF00), GFX_BLACK, gJustifyCenter);
 
     // Sub-text
-    gdispFillStringBox(0, gdispGetHeight()/2 + 40, gdispGetWidth(), 50, "Please wait...",
-                     gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    // TODO: Add a hint at the bottom of the screen that changes based on context, instead of just "Please wait..."
+    // gdispFillStringBox(0, gdispGetHeight()/2 + 40, gdispGetWidth(), 50, "Please wait...",
+    //                  gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
 }
 
 /**
@@ -368,8 +378,9 @@ static void ugfx_ui_draw_channel_message(void)
     }
 
     // Hint at bottom
-    gdispFillStringBox(0, screen_h - 60, screen_w, 25, "Please wait...",
-                     gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0x888888), GFX_BLACK, gJustifyCenter);
+    // TODO: Add a hint at the bottom of the screen that changes based on context, instead of just "Please wait..."
+    // gdispFillStringBox(0, screen_h - 60, screen_w, 25, "Please wait...",
+                    //  gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0x888888), GFX_BLACK, gJustifyCenter);
 }
 
 /**
@@ -723,11 +734,23 @@ esp_err_t ugfx_ui_show_captive_ap_info(void)
 {
     s_ui_mode = UI_MODE_CAPTIVE_AP_INFO;
     s_ui_active = true;
+    play_scheduler_pause_auto_swap();
     memset(s_current_code, 0, sizeof(s_current_code));
     memset(s_status_message, 0, sizeof(s_status_message));
-    
+
     ESP_LOGD(TAG, "Captive AP info UI activated");
     return ESP_OK;
+}
+
+void ugfx_ui_hide_captive_ap_info(void)
+{
+    if (s_ui_mode == UI_MODE_CAPTIVE_AP_INFO) {
+        s_ui_active = false;
+        s_ui_mode = UI_MODE_NONE;
+        play_scheduler_resume_auto_swap();
+
+        ESP_LOGD(TAG, "Captive AP info UI deactivated");
+    }
 }
 
 esp_err_t ugfx_ui_show_connectivity_error(void)

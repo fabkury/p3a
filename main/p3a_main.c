@@ -222,6 +222,12 @@ static void handle_system_event(const p3a_event_t *event, void *ctx)
     switch (event->type) {
         case P3A_EVENT_WIFI_CONNECTED:
             p3a_state_on_wifi_connected();
+            ugfx_ui_hide_captive_ap_info();
+            app_lcd_exit_ui_mode();
+            break;
+        case P3A_EVENT_SOFTAP_STARTED:
+            app_lcd_enter_ui_mode();
+            ugfx_ui_show_captive_ap_info();
             break;
         case P3A_EVENT_WIFI_DISCONNECTED:
             p3a_state_on_wifi_disconnected();
@@ -453,6 +459,7 @@ void app_main(void)
         event_bus_subscribe(P3A_EVENT_MQTT_DISCONNECTED, handle_system_event, NULL);
         event_bus_subscribe(P3A_EVENT_REGISTRATION_CHANGED, handle_system_event, NULL);
         event_bus_subscribe(P3A_EVENT_INTERNET_CHECK, handle_system_event, NULL);
+        event_bus_subscribe(P3A_EVENT_SOFTAP_STARTED, handle_system_event, NULL);
 
         event_bus_subscribe(P3A_EVENT_MAKAPIX_STATE_CHANGED, handle_makapix_state_event, NULL);
         event_bus_subscribe(P3A_EVENT_PROVISIONING_STATUS_CHANGED, handle_provisioning_status_event, NULL);

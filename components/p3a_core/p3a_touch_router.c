@@ -51,6 +51,8 @@ extern esp_err_t ugfx_ui_show_captive_ap_info(void) __attribute__((weak));
 extern esp_err_t ugfx_ui_show_connectivity_error(void) __attribute__((weak));
 extern esp_err_t ugfx_ui_show_info_screen(void) __attribute__((weak));
 extern void ugfx_ui_hide_info_screen(void) __attribute__((weak));
+extern void ugfx_ui_hide_captive_ap_info(void) __attribute__((weak));
+extern bool app_wifi_is_captive_portal_active(void) __attribute__((weak));
 
 // Playback service (from playback_service.c via weak symbol)
 extern bool playback_service_is_paused(void) __attribute__((weak));
@@ -124,17 +126,25 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
         case P3A_TOUCH_EVENT_LONG_PRESS: {
             // If already in UI mode (info-screen or other overlay), dismiss it
             if (app_lcd_is_ui_mode && app_lcd_is_ui_mode()) {
-                ESP_LOGI(TAG, "Long press while in UI mode - dismissing info screen");
+                ESP_LOGI(TAG, "Long press while in UI mode - dismissing overlay");
                 if (ugfx_ui_hide_info_screen) ugfx_ui_hide_info_screen();
+                if (ugfx_ui_hide_captive_ap_info) ugfx_ui_hide_captive_ap_info();
                 if (ugfx_ui_hide_registration) ugfx_ui_hide_registration();
                 if (app_lcd_exit_ui_mode) app_lcd_exit_ui_mode();
                 return ESP_OK;
             }
 
-            // Enter info-screen
-            ESP_LOGI(TAG, "Long press detected - showing info screen");
-            if (app_lcd_enter_ui_mode) app_lcd_enter_ui_mode();
-            if (ugfx_ui_show_info_screen) ugfx_ui_show_info_screen();
+            // Enter UI mode: show captive AP info if in softAP, otherwise info screen
+            bool in_captive = app_wifi_is_captive_portal_active && app_wifi_is_captive_portal_active();
+            if (in_captive) {
+                ESP_LOGI(TAG, "Long press detected - showing captive AP info");
+                if (app_lcd_enter_ui_mode) app_lcd_enter_ui_mode();
+                if (ugfx_ui_show_captive_ap_info) ugfx_ui_show_captive_ap_info();
+            } else {
+                ESP_LOGI(TAG, "Long press detected - showing info screen");
+                if (app_lcd_enter_ui_mode) app_lcd_enter_ui_mode();
+                if (ugfx_ui_show_info_screen) ugfx_ui_show_info_screen();
+            }
             return ESP_OK;
         }
             

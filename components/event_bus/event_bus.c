@@ -47,6 +47,7 @@ static uint16_t event_type_to_category(uint16_t type)
         case P3A_EVENT_REGISTRATION_CHANGED:
         case P3A_EVENT_INTERNET_CHECK:
         case P3A_EVENT_MAKAPIX_STATE_CHANGED:
+        case P3A_EVENT_SOFTAP_STARTED:
             return P3A_EVENT_CATEGORY_SYSTEM;
         case P3A_EVENT_CACHE_FLUSH:
             return P3A_EVENT_CATEGORY_CONTENT;

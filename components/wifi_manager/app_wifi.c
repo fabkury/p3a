@@ -1510,9 +1510,8 @@ static void wifi_init_softap(void)
         ESP_LOGW(TAG, "mDNS start failed (captive portal still works via IP): %s", esp_err_to_name(mdns_err));
     }
 
-    // NOTE: WiFi setup instructions are NOT auto-displayed on screen.
-    // The user can long-press to see them. This allows offline animation
-    // playback to continue uninterrupted when credentials are invalid.
+    // Notify the system that softAP mode has started
+    event_bus_emit_simple(P3A_EVENT_SOFTAP_STARTED);
 }
 
 esp_err_t app_wifi_init(void)

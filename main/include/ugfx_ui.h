@@ -45,6 +45,11 @@ esp_err_t ugfx_ui_show_provisioning_status(const char *status_message);
 esp_err_t ugfx_ui_show_captive_ap_info(void);
 
 /**
+ * @brief Hide captive portal AP information screen
+ */
+void ugfx_ui_hide_captive_ap_info(void);
+
+/**
  * @brief Show connectivity error screen (e.g. no internet)
  * 
  * Displays an error message when Wi-Fi is connected but there is

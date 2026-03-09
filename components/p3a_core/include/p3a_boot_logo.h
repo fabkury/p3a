@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 /** Duration of initial delay phase (background only) in milliseconds */
-#define P3A_BOOT_LOGO_DELAY_MS     500
+#define P3A_BOOT_LOGO_DELAY_MS     250
 
 /** Duration of fade-in phase in milliseconds */
 #define P3A_BOOT_LOGO_FADE_IN_MS   2000

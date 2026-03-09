@@ -577,16 +577,18 @@ static void ugfx_ui_draw_info_screen(void)
         }
     }
 
-    // --- Row 7: Free Heap ---
+    // --- Row 7: Artworks ---
     y = 420;
-    gdispFillStringBox(lx, y, lw, rh, "Free Heap", font_main, gray, GFX_BLACK, gJustifyLeft);
+    gdispFillStringBox(lx, y, lw, rh, "Artworks", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
-        size_t free_heap = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-        float free_kb = (float)free_heap / 1024.0f;
-        char heap_buf[32];
-        snprintf(heap_buf, sizeof(heap_buf), "%.0f KB free", free_kb);
-        color_t heap_color = (free_kb > 100) ? green : (free_kb > 30) ? yellow : red;
-        gdispFillStringBox(vx, y, vw, rh, heap_buf, font_main, heap_color, GFX_BLACK, gJustifyLeft);
+        ps_stats_t stats;
+        if (play_scheduler_get_stats(&stats) == ESP_OK) {
+            char art_buf[32];
+            snprintf(art_buf, sizeof(art_buf), "%zu / %zu", stats.total_available, stats.total_entries);
+            gdispFillStringBox(vx, y, vw, rh, art_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
+        } else {
+            gdispFillStringBox(vx, y, vw, rh, "N/A", font_main, gray, GFX_BLACK, gJustifyLeft);
+        }
     }
 
     // --- Row 8: Web UI ---

@@ -389,13 +389,18 @@ static void ugfx_ui_draw_channel_message(void)
 static const char *makapix_state_to_string(makapix_state_t state)
 {
     switch (state) {
-        case MAKAPIX_STATE_IDLE:                  return "Idle";
+        case MAKAPIX_STATE_IDLE: {
+            p3a_connectivity_level_t conn = p3a_state_get_connectivity();
+            if (conn == P3A_CONNECTIVITY_NO_WIFI)       return "No WiFi.";
+            if (conn == P3A_CONNECTIVITY_NO_INTERNET)   return "No Internet.";
+            return "No registration.";
+        }
         case MAKAPIX_STATE_PROVISIONING:          return "Provisioning";
         case MAKAPIX_STATE_SHOW_CODE:             return "Show Code";
-        case MAKAPIX_STATE_CONNECTING:            return "Connecting";
-        case MAKAPIX_STATE_CONNECTED:             return "Connected";
-        case MAKAPIX_STATE_DISCONNECTED:          return "Disconnected";
-        case MAKAPIX_STATE_REGISTRATION_INVALID:  return "Invalid Registration";
+        case MAKAPIX_STATE_CONNECTING:
+        case MAKAPIX_STATE_DISCONNECTED:          return "MQTT disconnected.";
+        case MAKAPIX_STATE_CONNECTED:             return "MQTT connected.";
+        case MAKAPIX_STATE_REGISTRATION_INVALID:  return "Invalid registration.";
         default:                                  return "Unknown";
     }
 }

@@ -456,9 +456,6 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     if (strcmp(uri, "/settings/dwell_time") == 0) {
         return h_get_dwell_time(req);
     }
-    if (strcmp(uri, "/settings/play_order") == 0) {
-        return h_get_play_order(req);
-    }
     if (strcmp(uri, "/settings/refresh_override") == 0) {
         return h_get_refresh_override(req);
     }
@@ -587,9 +584,6 @@ static esp_err_t h_put_router(httpd_req_t *req) {
     }
     if (strcmp(uri, "/settings/dwell_time") == 0) {
         return h_put_dwell_time(req);
-    }
-    if (strcmp(uri, "/settings/play_order") == 0) {
-        return h_put_play_order(req);
     }
     if (strcmp(uri, "/settings/refresh_override") == 0) {
         return h_put_refresh_override(req);

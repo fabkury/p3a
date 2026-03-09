@@ -18,7 +18,6 @@
 #include "play_scheduler_internal.h"
 #include "channel_cache.h"
 #include "view_tracker.h"
-#include "config_store.h"
 #include "p3a_state.h"
 #include "sd_path.h"
 #include "content_cache.h"
@@ -569,7 +568,7 @@ esp_err_t ps_create_channel_playset(const char *playset_name, ps_scheduler_comma
     memset(out_cmd, 0, sizeof(*out_cmd));
     out_cmd->channel_count = 1;
     out_cmd->exposure_mode = PS_EXPOSURE_EQUAL;
-    out_cmd->pick_mode = (config_store_get_play_order() == 2) ? PS_PICK_RANDOM : PS_PICK_RECENCY;
+    out_cmd->pick_mode = PS_PICK_RANDOM;
 
     if (strcmp(playset_name, "channel_recent") == 0) {
         out_cmd->channels[0].type = PS_CHANNEL_TYPE_NAMED;
@@ -616,7 +615,7 @@ esp_err_t play_scheduler_play_named_channel(const char *name)
 
     cmd->channel_count = 1;
     cmd->exposure_mode = PS_EXPOSURE_EQUAL;
-    cmd->pick_mode = (config_store_get_play_order() == 2) ? PS_PICK_RANDOM : PS_PICK_RECENCY;
+    cmd->pick_mode = PS_PICK_RANDOM;
 
     // Determine channel type
     if (strcmp(name, "sdcard") == 0) {
@@ -651,7 +650,7 @@ esp_err_t play_scheduler_play_user_channel(const char *user_sqid)
 
     cmd->channel_count = 1;
     cmd->exposure_mode = PS_EXPOSURE_EQUAL;
-    cmd->pick_mode = (config_store_get_play_order() == 2) ? PS_PICK_RANDOM : PS_PICK_RECENCY;
+    cmd->pick_mode = PS_PICK_RANDOM;
 
     cmd->channels[0].type = PS_CHANNEL_TYPE_USER;
     strlcpy(cmd->channels[0].name, "user", sizeof(cmd->channels[0].name));
@@ -681,7 +680,7 @@ esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag)
 
     cmd->channel_count = 1;
     cmd->exposure_mode = PS_EXPOSURE_EQUAL;
-    cmd->pick_mode = (config_store_get_play_order() == 2) ? PS_PICK_RANDOM : PS_PICK_RECENCY;
+    cmd->pick_mode = PS_PICK_RANDOM;
 
     cmd->channels[0].type = PS_CHANNEL_TYPE_HASHTAG;
     strlcpy(cmd->channels[0].name, "hashtag", sizeof(cmd->channels[0].name));

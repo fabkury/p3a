@@ -173,37 +173,6 @@ esp_err_t play_scheduler_set_channels(
 esp_err_t play_scheduler_play_channel(const char *channel_id);
 
 /**
- * @brief Set pick mode for per-channel selection
- *
- * @param mode Pick mode (PS_PICK_RECENCY or PS_PICK_RANDOM)
- */
-void play_scheduler_set_pick_mode(ps_pick_mode_t mode);
-
-/**
- * @brief Get current pick mode
- *
- * @return Current pick mode
- */
-ps_pick_mode_t play_scheduler_get_pick_mode(void);
-
-/**
- * @brief Set shuffle override flag
- *
- * When enabled, forces PS_PICK_RANDOM regardless of the playset's pick_mode.
- * Persists to NVS and takes effect immediately.
- *
- * @param enable true to enable shuffle override
- */
-void play_scheduler_set_shuffle_override(bool enable);
-
-/**
- * @brief Get shuffle override flag
- *
- * @return true if shuffle override is enabled
- */
-bool play_scheduler_get_shuffle_override(void);
-
-/**
  * @brief Set channel selection mode
  *
  * Switches between SWRR (deterministic) and Stochastic (randomized) channel

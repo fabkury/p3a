@@ -7,24 +7,10 @@
  */
 
 #include "makapix_internal.h"
-#include "config_store.h"
 #include "event_bus.h"
 
 // Forward declaration to avoid pulling in play_scheduler.h (which has heavy deps)
 esp_err_t play_scheduler_play_artwork(int32_t post_id, const char *storage_key, const char *art_url);
-
-// Helper to map global play_order setting to channel_order_mode
-static channel_order_mode_t get_global_channel_order(void)
-{
-    uint8_t play_order = config_store_get_play_order();
-    switch (play_order) {
-        case 1: return CHANNEL_ORDER_CREATED;
-        case 2: return CHANNEL_ORDER_RANDOM;
-        case 0:
-        default:
-            return CHANNEL_ORDER_ORIGINAL;
-    }
-}
 
 // --------------------------------------------------------------------------
 // Public API - Channel switching
@@ -62,7 +48,7 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier,
     if (s_current_channel_id[0] && strcmp(s_current_channel_id, channel_id) == 0 && s_current_channel) {
         ESP_LOGI(MAKAPIX_TAG, "Already on channel %s, restarting playback without refresh", channel_id);
         // Restart playback but don't re-trigger refresh
-        esp_err_t err = channel_start_playback(s_current_channel, get_global_channel_order(), NULL);
+        esp_err_t err = channel_start_playback(s_current_channel, CHANNEL_ORDER_RANDOM, NULL);
         if (err != ESP_OK) {
             ESP_LOGW(MAKAPIX_TAG, "Failed to restart playback: %s", esp_err_to_name(err));
         }
@@ -374,7 +360,7 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier,
     // Background downloads will continue adding more artworks
 
     // Start playback with global play order setting
-    err = channel_start_playback(s_current_channel, get_global_channel_order(), NULL);
+    err = channel_start_playback(s_current_channel, CHANNEL_ORDER_RANDOM, NULL);
     if (err != ESP_OK) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to start playback: %s", esp_err_to_name(err));
         channel_destroy(s_current_channel);

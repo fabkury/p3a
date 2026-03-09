@@ -13,9 +13,6 @@ extern "C" {
 #endif
 
 typedef struct {
-    bool play_order_present;
-    uint8_t play_order; // 0..2
-
     bool randomize_playlist_present;
     bool randomize_playlist;
 

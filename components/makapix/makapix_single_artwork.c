@@ -116,7 +116,7 @@ static esp_err_t single_ch_start_playback(channel_handle_t channel, channel_orde
     (void)filter;
     single_artwork_channel_t *ch = (single_artwork_channel_t *)channel;
     if (!ch || !ch->has_item) return ESP_ERR_NOT_FOUND;
-    channel->current_order = CHANNEL_ORDER_ORIGINAL;
+    channel->current_order = CHANNEL_ORDER_CREATED;
     channel->current_filter = filter ? *filter : (channel_filter_config_t){0};
     return ESP_OK;
 }
@@ -168,7 +168,7 @@ static __attribute__((unused)) channel_handle_t create_single_artwork_channel(co
 
     ch->base.ops = &s_single_ops;
     ch->base.loaded = false;
-    ch->base.current_order = CHANNEL_ORDER_ORIGINAL;
+    ch->base.current_order = CHANNEL_ORDER_CREATED;
     ch->base.current_filter.required_flags = CHANNEL_FILTER_FLAG_NONE;
     ch->base.current_filter.excluded_flags = CHANNEL_FILTER_FLAG_NONE;
     ch->base.name = psram_strdup("Artwork");

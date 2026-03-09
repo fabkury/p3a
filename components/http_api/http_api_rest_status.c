@@ -196,10 +196,6 @@ esp_err_t h_get_api_init(httpd_req_t *req) {
     const char *playset = p3a_state_get_active_playset();
     cJSON_AddStringToObject(data, "active_playset", playset ? playset : "");
 
-    // play_order: shuffle mode
-    uint8_t play_order = config_store_get_play_order();
-    cJSON_AddNumberToObject(data, "play_order", (double)play_order);
-
     // paused: current pause state
     cJSON_AddBoolToObject(data, "paused", playback_service_is_paused());
 

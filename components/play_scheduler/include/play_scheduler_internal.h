@@ -58,7 +58,7 @@ typedef struct {
     ps_exposure_mode_t exposure_mode;
     ps_pick_mode_t pick_mode;
     ps_channel_select_mode_t channel_select_mode;
-    bool shuffle_override;  // Forces PS_PICK_RANDOM when true, persisted separately
+
 
     // Channels
     ps_channel_state_t channels[PS_MAX_CHANNELS];

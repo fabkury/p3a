@@ -352,57 +352,6 @@ uint16_t config_store_get_rotation(void)
 // Playback Settings
 // ============================================================================
 
-esp_err_t config_store_set_play_order(uint8_t order)
-{
-    if (order > 2) {
-        ESP_LOGE(TAG, "Invalid play order: %u", order);
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    cJSON *cfg = NULL;
-    esp_err_t err = config_store_load(&cfg);
-    if (err != ESP_OK) {
-        return err;
-    }
-    
-    cJSON *order_item = cJSON_GetObjectItem(cfg, "play_order");
-    if (order_item) {
-        cJSON_SetNumberValue(order_item, (double)order);
-    } else {
-        cJSON_AddNumberToObject(cfg, "play_order", (double)order);
-    }
-    
-    err = config_store_save(cfg);
-    cJSON_Delete(cfg);
-    
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Play order saved: %u", order);
-    }
-    
-    return err;
-}
-
-uint8_t config_store_get_play_order(void)
-{
-    cJSON *cfg = NULL;
-    esp_err_t err = config_store_load(&cfg);
-    if (err != ESP_OK) {
-        return 2;  // Default: random
-    }
-    
-    uint8_t order = 2;
-    cJSON *order_item = cJSON_GetObjectItem(cfg, "play_order");
-    if (order_item && cJSON_IsNumber(order_item)) {
-        int value = (int)cJSON_GetNumberValue(order_item);
-        if (value >= 0 && value <= 2) {
-            order = (uint8_t)value;
-        }
-    }
-    
-    cJSON_Delete(cfg);
-    return order;
-}
-
 esp_err_t config_store_set_randomize_playlist(bool enable)
 {
     cJSON *cfg = NULL;
@@ -1037,52 +986,6 @@ uint16_t config_store_get_proc_notif_size(void)
     s_proc_notif_size_loaded = true;
     cJSON_Delete(cfg);
     return s_proc_notif_size;
-}
-
-// ============================================================================
-// Shuffle Override
-// ============================================================================
-
-esp_err_t config_store_set_shuffle_override(bool enable)
-{
-    cJSON *cfg = NULL;
-    esp_err_t err = config_store_load(&cfg);
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    cJSON *item = cJSON_GetObjectItem(cfg, "shuffle_override");
-    if (item) {
-        cJSON_DeleteItemFromObject(cfg, "shuffle_override");
-    }
-    cJSON_AddBoolToObject(cfg, "shuffle_override", enable);
-
-    err = config_store_save(cfg);
-    cJSON_Delete(cfg);
-
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Shuffle override saved: %s", enable ? "ON" : "OFF");
-    }
-
-    return err;
-}
-
-bool config_store_get_shuffle_override(void)
-{
-    cJSON *cfg = NULL;
-    esp_err_t err = config_store_load(&cfg);
-    if (err != ESP_OK) {
-        return false;  // Default: disabled
-    }
-
-    bool enabled = false;
-    cJSON *item = cJSON_GetObjectItem(cfg, "shuffle_override");
-    if (item && cJSON_IsBool(item)) {
-        enabled = cJSON_IsTrue(item);
-    }
-
-    cJSON_Delete(cfg);
-    return enabled;
 }
 
 // ============================================================================

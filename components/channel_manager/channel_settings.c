@@ -56,15 +56,6 @@ static void parse_settings(cJSON *json, channel_settings_t *out)
     memset(out, 0, sizeof(*out));
     if (!json) return;
 
-    cJSON *order = cJSON_GetObjectItem(json, "play_order");
-    if (cJSON_IsNumber(order)) {
-        int v = (int)cJSON_GetNumberValue(order);
-        if (v >= 0 && v <= 2) {
-            out->play_order_present = true;
-            out->play_order = (uint8_t)v;
-        }
-    }
-
     cJSON *rp = cJSON_GetObjectItem(json, "randomize_playlist");
     if (cJSON_IsBool(rp)) {
         out->randomize_playlist_present = true;

@@ -429,7 +429,7 @@ channel_handle_t makapix_channel_create(const char *channel_id,
     ch->channel_id = psram_strdup(channel_id);
     ch->vault_path = psram_strdup(vault_path);
     ch->channels_path = psram_strdup(channels_path);
-    ch->base.current_order = CHANNEL_ORDER_ORIGINAL;
+    ch->base.current_order = CHANNEL_ORDER_CREATED;
 
     ch->index_io_lock = xSemaphoreCreateMutex();
     if (!ch->index_io_lock) {

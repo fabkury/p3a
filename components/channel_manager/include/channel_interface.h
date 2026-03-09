@@ -19,7 +19,6 @@ extern "C" {
  * @brief Channel order modes for playback
  */
 typedef enum {
-    CHANNEL_ORDER_ORIGINAL,  // Server/on-disk order
     CHANNEL_ORDER_CREATED,   // By creation date (newest first)
     CHANNEL_ORDER_RANDOM,    // Random shuffle (Fisher-Yates)
 } channel_order_mode_t;

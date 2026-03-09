@@ -4,8 +4,12 @@
 #include "view_tracker.h"
 #include "makapix_mqtt.h"
 #include "makapix_store.h"
+#include "play_scheduler_types.h"
 #include "config_store.h"
 #include "p3a_state.h"
+
+// Forward declaration to avoid circular dependency (makapix <-> play_scheduler)
+esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats);
 #include "makapix.h"
 #include "sntp_sync.h"
 #include "event_bus.h"
@@ -343,7 +347,12 @@ static void send_view_event(void)
         return;
     }
     
-    uint8_t play_order = config_store_get_play_order();
+    // Derive legacy play_order value from the active playset's pick_mode
+    uint8_t play_order = 1;  // Default: created/date order
+    ps_stats_t ps_stats;
+    if (play_scheduler_get_stats(&ps_stats) == ESP_OK) {
+        play_order = (ps_stats.pick_mode == PS_PICK_RANDOM) ? 2 : 1;
+    }
     
     p3a_channel_info_t channel_info = {0};
     if (p3a_state_get_channel_info(&channel_info) != ESP_OK) {

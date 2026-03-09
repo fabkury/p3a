@@ -233,14 +233,9 @@ static esp_err_t activate_channel(size_t channel_index)
         return err;
     }
 
-    // Start playback
-    channel_order_mode_t order = CHANNEL_ORDER_CREATED;  // Default to newest first
-    uint8_t play_order = config_store_get_play_order();
-    if (play_order == 2) {
-        order = CHANNEL_ORDER_RANDOM;
-    } else if (play_order == 0) {
-        order = CHANNEL_ORDER_ORIGINAL;
-    }
+    // Start playback - derive order from playset's pick_mode
+    channel_order_mode_t order = (s_state.pick_mode == PS_PICK_RANDOM)
+        ? CHANNEL_ORDER_RANDOM : CHANNEL_ORDER_CREATED;
 
     err = channel_start_playback(handle, order, NULL);
     if (err != ESP_OK) {
@@ -301,8 +296,6 @@ esp_err_t play_scheduler_init(void)
     s_state.last_played_id = 0;  // 0 won't match any valid post_id (Makapix=positive, SDcard=negative)
     s_state.exposure_mode = PS_EXPOSURE_EQUAL;
     s_state.pick_mode = PS_PICK_RECENCY;
-    s_state.shuffle_override = config_store_get_shuffle_override();
-    ESP_LOGI(TAG, "Loaded shuffle_override from NVS: %s", s_state.shuffle_override ? "ON" : "OFF");
     s_state.channel_select_mode = (ps_channel_select_mode_t)config_store_get_channel_select_mode();
     ESP_LOGI(TAG, "Loaded channel_select_mode from NVS: %s",
              s_state.channel_select_mode == PS_CHANNEL_SELECT_STOCHASTIC ? "Stochastic" : "SWRR");
@@ -507,38 +500,6 @@ esp_err_t play_scheduler_play_channel(const char *channel_id)
 
     // Trigger initial generation and swap
     return play_scheduler_next(NULL);
-}
-
-void play_scheduler_set_pick_mode(ps_pick_mode_t mode)
-{
-    if (!s_state.initialized) return;
-    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
-    s_state.pick_mode = mode;
-    xSemaphoreGive(s_state.mutex);
-}
-
-ps_pick_mode_t play_scheduler_get_pick_mode(void)
-{
-    return s_state.pick_mode;
-}
-
-void play_scheduler_set_shuffle_override(bool enable)
-{
-    if (!s_state.initialized) return;
-
-    // Persist to NVS
-    config_store_set_shuffle_override(enable);
-
-    // Update runtime state
-    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
-    s_state.shuffle_override = enable;
-    ESP_LOGI(TAG, "Shuffle override %s", enable ? "enabled" : "disabled");
-    xSemaphoreGive(s_state.mutex);
-}
-
-bool play_scheduler_get_shuffle_override(void)
-{
-    return s_state.shuffle_override;
 }
 
 void play_scheduler_set_channel_select_mode(ps_channel_select_mode_t mode)

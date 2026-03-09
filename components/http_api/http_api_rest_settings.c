@@ -8,7 +8,6 @@
  * Contains handlers for:
  * - GET/PUT /config - Configuration management
  * - GET/PUT /settings/dwell_time - Dwell time settings
- * - GET/PUT /settings/play_order - Play order settings
  * - GET/POST /rotation - Screen rotation
  * - GET/PUT /settings/refresh_override - Refresh override
  */
@@ -236,80 +235,6 @@ esp_err_t h_put_dwell_time(httpd_req_t *req) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to set dwell_time\",\"code\":\"SET_DWELL_TIME_FAILED\"}");
         return ESP_OK;
     }
-
-    send_json(req, 200, "{\"ok\":true}");
-    return ESP_OK;
-}
-
-/**
- * GET /settings/play_order
- */
-esp_err_t h_get_play_order(httpd_req_t *req)
-{
-    uint8_t play_order = config_store_get_play_order();
-    char response[128];
-    snprintf(response, sizeof(response), "{\"ok\":true,\"data\":{\"play_order\":%u}}", (unsigned)play_order);
-    send_json(req, 200, response);
-    return ESP_OK;
-}
-
-/**
- * PUT /settings/play_order
- * Sets play order and hot-swaps it for the current channel
- * Body: {"play_order": 1|2}  (1=created/date, 2=random)
- */
-esp_err_t h_put_play_order(httpd_req_t *req)
-{
-    if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
-        return ESP_OK;
-    }
-
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        if (err_status == 413) {
-            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
-        } else {
-            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        }
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
-
-    cJSON *order_item = cJSON_GetObjectItem(root, "play_order");
-    if (!order_item || !cJSON_IsNumber(order_item)) {
-        cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'play_order' field\",\"code\":\"INVALID_REQUEST\"}");
-        return ESP_OK;
-    }
-
-    int order = (int)cJSON_GetNumberValue(order_item);
-    cJSON_Delete(root);
-
-    if (order < 0 || order > 2) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid play_order (must be 0-2)\",\"code\":\"INVALID_PLAY_ORDER\"}");
-        return ESP_OK;
-    }
-
-    // Save to config store (persists across reboots)
-    esp_err_t err = config_store_set_play_order((uint8_t)order);
-    if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to save play_order\",\"code\":\"SET_PLAY_ORDER_FAILED\"}");
-        return ESP_OK;
-    }
-
-    // Set shuffle override based on play_order
-    // order 2 (random) enables shuffle override, else disables
-    play_scheduler_set_shuffle_override(order == 2);
 
     send_json(req, 200, "{\"ok\":true}");
     return ESP_OK;

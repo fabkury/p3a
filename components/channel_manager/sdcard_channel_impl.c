@@ -580,7 +580,7 @@ channel_handle_t sdcard_channel_create(const char *name, const char *animations_
     ch->base.ops = &s_sdcard_ops;
     ch->base.name = name ? psram_strdup(name) : psram_strdup("SD Card");
     ch->animations_dir = animations_dir ? psram_strdup(animations_dir) : NULL;
-    ch->base.current_order = CHANNEL_ORDER_ORIGINAL;
+    ch->base.current_order = CHANNEL_ORDER_CREATED;
 
     if (!ch->base.name) {
         free(ch);

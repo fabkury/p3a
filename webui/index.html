@@ -369,14 +369,6 @@ body {
 .update-banner:active { transform: scale(0.98); }
 .update-banner h4 { margin: 0 0 4px; font-size: 0.95rem; font-weight: 600; }
 .update-banner p { margin: 0; font-size: 0.8rem; opacity: 0.9; }
-.shuffle-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 4px 0;
-    width: 100%;
-}
-.shuffle-label { font-size: 0.9rem; color: rgba(255,255,255,0.95); font-weight: 500; }
 .toggle-switch { position: relative; display: inline-block; width: 48px; height: 26px; }
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
 .toggle-slider {
@@ -454,13 +446,6 @@ body {
         <button class="channel-btn" id="ch-followed_artists" onclick="playPlayset('followed_artists')">Followed Artists</button>
         <button class="channel-btn" id="ch-channel_sdcard" onclick="playPlayset('channel_sdcard')">SD Card</button>
         <button class="channel-btn" id="ch-giphy_trending" onclick="playPlayset('giphy_trending')">Giphy Trending</button>
-    </div>
-    <div class="shuffle-row">
-        <span class="shuffle-label">Shuffle</span>
-        <label class="toggle-switch">
-            <input type="checkbox" id="shuffle-toggle" onchange="toggleShuffle(this.checked)">
-            <span class="toggle-slider"></span>
-        </label>
     </div>
 </div>
 <div class="upload-section collapsed">
@@ -559,10 +544,6 @@ fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
     // Playset info card
     if (data.active_playset && data.playset_info) {
         updatePlaysetInfo(data.active_playset, data.playset_info);
-    }
-    // Play order (shuffle toggle)
-    if (typeof data.play_order === 'number') {
-        document.getElementById('shuffle-toggle').checked = (data.play_order === 2);
     }
     // Pause state
     if (data.paused) {
@@ -1145,47 +1126,6 @@ function loadCurrentChannel() {
                 }
             } catch (e) {
                 console.log('Failed to parse channel response:', e);
-            }
-        }
-    };
-    xhr.send();
-}
-function toggleShuffle(checked) {
-    var newOrder = checked ? 2 : 1;
-    var xhr = new XMLHttpRequest();
-    xhr.open('PUT', '/settings/play_order', true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            try {
-                var result = JSON.parse(xhr.responseText);
-                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
-                    showToast(checked ? 'Shuffle enabled' : 'Shuffle disabled', false);
-                } else {
-                    showToast('Failed to set shuffle: ' + (result.error || 'HTTP ' + xhr.status), true);
-                    document.getElementById('shuffle-toggle').checked = !checked;
-                }
-            } catch (e) {
-                showToast('Parse error: ' + e.message, true);
-                document.getElementById('shuffle-toggle').checked = !checked;
-            }
-        }
-    };
-    xhr.send(JSON.stringify({play_order: newOrder}));
-}
-function loadPlayOrder() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/settings/play_order', true);
-    xhr.timeout = 5000;
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4 && xhr.status === 200) {
-            try {
-                var resp = JSON.parse(xhr.responseText);
-                if (resp.ok && resp.data) {
-                    document.getElementById('shuffle-toggle').checked = (resp.data.play_order === 2);
-                }
-            } catch (e) {
-                console.log('Failed to parse play_order response:', e);
             }
         }
     };

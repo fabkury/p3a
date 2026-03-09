@@ -93,6 +93,13 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
         return ESP_OK;  // Silently ignore all other gestures
     }
 
+    // While in UI mode, only long-press (to dismiss) is allowed
+    if (app_lcd_is_ui_mode && app_lcd_is_ui_mode()) {
+        if (event->type != P3A_TOUCH_EVENT_LONG_PRESS) {
+            return ESP_OK;  // Silently ignore taps, brightness, rotation
+        }
+    }
+
     switch (event->type) {
         case P3A_TOUCH_EVENT_TAP_LEFT:
             if (proc_notif_start) {

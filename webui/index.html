@@ -550,7 +550,6 @@ fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
         var promBtn = document.getElementById('ch-channel_promoted');
         var followedBtn = document.getElementById('ch-followed_artists');
         if (recentBtn) recentBtn.disabled = !registered;
-        if (promBtn) promBtn.disabled = !registered;
         if (followedBtn) followedBtn.disabled = !registered;
     }
     // Active playset
@@ -990,7 +989,6 @@ function pollActivePlayset(attempt) {
                 var promBtn = document.getElementById('ch-channel_promoted');
                 var followedBtn = document.getElementById('ch-followed_artists');
                 if (recentBtn) recentBtn.disabled = !registered;
-                if (promBtn) promBtn.disabled = !registered;
                 if (followedBtn) followedBtn.disabled = !registered;
                 if (resp.data.name && resp.data.playset_info) {
                     updatePlaysetInfo(resp.data.name, resp.data.playset_info);

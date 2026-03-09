@@ -547,7 +547,7 @@ static void ugfx_ui_draw_info_screen(void)
                     char key_probe[2];
                     config_store_get_giphy_api_key(key_probe, sizeof(key_probe));
                     if (key_probe[0] == '\0') {
-                        gs_str = "No API key."; gs_color = yellow;
+                        gs_str = "No API key."; gs_color = red;
                     } else {
                         gs_str = "N/A";         gs_color = gray;
                     }

@@ -577,9 +577,9 @@ static void ugfx_ui_draw_info_screen(void)
         }
     }
 
-    // --- Row 7: Artworks ---
+    // --- Row 7: Playset ---
     y = 420;
-    gdispFillStringBox(lx, y, lw, rh, "Artworks", font_main, gray, GFX_BLACK, gJustifyLeft);
+    gdispFillStringBox(lx, y, lw, rh, "Playset", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         ps_stats_t stats;
         if (play_scheduler_get_stats(&stats) == ESP_OK) {

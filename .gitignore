@@ -12,3 +12,4 @@ components/makapix/certs/*.pem
 nul
 flasher/.venv/
 .claude/
+release/

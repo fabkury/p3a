@@ -326,10 +326,21 @@ body {
 </div>
 <div class="section">
     <h3>Makapix Club</h3>
-    <p class="file-name" id="provision-status">Loading...</p>
-    <button class="btn" id="provision-btn" onclick="toggleProvisioning()">
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;">
+            <span style="font-size:0.85rem;color:#333;" id="mkx-reg-status">Loading...</span>
+            <span class="file-name" id="mkx-mqtt-status" style="min-height:0;"></span>
+        </div>
+        <div id="mkx-player-key" style="display:none;font-family:monospace;font-size:0.78rem;color:#555;word-break:break-all;background:#f5f5f5;padding:6px 8px;border-radius:6px;"></div>
+    </div>
+    <p class="file-name" id="provision-status" style="display:none;"></p>
+    <button class="btn" id="provision-btn" style="display:none;width:100%;" onclick="toggleProvisioning()">
         Enter Provisioning Mode
     </button>
+    <button class="btn danger-btn" id="mkx-unregister-btn" style="display:none;" onclick="unregisterMakapix()">
+        Remove Makapix Club registration
+    </button>
+    <div class="file-name" id="mkx-unregister-hint" style="display:none;margin-top:4px;">This will disconnect from Makapix Club and delete stored credentials. You can re-register later.</div>
 </div>
 <div class="footer">
     <button class="footer-btn" onclick="window.location.href='/'">Home</button>
@@ -628,20 +639,79 @@ function loadProvisionState() {
         if (xhr.readyState !== 4) return;
         try {
             var r = JSON.parse(xhr.responseText);
-            if (r.ok && r.data && r.data.p3a_state === 'PROVISIONING') {
-                provisioningActive = true;
-                document.getElementById('provision-btn').textContent = 'Exit Provisioning Mode';
-                document.getElementById('provision-status').textContent = 'Device is in provisioning mode';
+            if (!r.ok || !r.data) throw 0;
+            var d = r.data;
+            var registered = !!d.makapix_registered;
+            var mqttStatus = d.makapix_mqtt_status || 'disconnected';
+
+            // Registration status
+            document.getElementById('mkx-reg-status').textContent = registered ? 'Registered' : 'Not registered';
+
+            // MQTT status
+            var mqttLabel = {connected: 'MQTT connected', connecting: 'MQTT connecting...', disconnected: 'MQTT disconnected', invalid: 'Registration invalid'};
+            document.getElementById('mkx-mqtt-status').textContent = registered ? (mqttLabel[mqttStatus] || mqttStatus) : '';
+
+            // Player key
+            var keyEl = document.getElementById('mkx-player-key');
+            if (registered && d.makapix_player_key) {
+                keyEl.textContent = d.makapix_player_key;
+                keyEl.style.display = 'block';
             } else {
-                provisioningActive = false;
-                document.getElementById('provision-btn').textContent = 'Enter Provisioning Mode';
-                document.getElementById('provision-status').textContent = 'Link this device to your Makapix Club account';
+                keyEl.style.display = 'none';
             }
+
+            // Provisioning button (show only when NOT registered)
+            var provBtn = document.getElementById('provision-btn');
+            var provStatus = document.getElementById('provision-status');
+            if (!registered) {
+                provBtn.style.display = 'block';
+                provStatus.style.display = 'block';
+                if (d.p3a_state === 'PROVISIONING') {
+                    provisioningActive = true;
+                    provBtn.textContent = 'Exit Provisioning Mode';
+                    provStatus.textContent = 'Device is in provisioning mode';
+                } else {
+                    provisioningActive = false;
+                    provBtn.textContent = 'Enter Provisioning Mode';
+                    provStatus.textContent = 'Link this device to your Makapix Club account';
+                }
+            } else {
+                provBtn.style.display = 'none';
+                provStatus.style.display = 'none';
+            }
+
+            // Unregister button (show only when registered)
+            document.getElementById('mkx-unregister-btn').style.display = registered ? 'block' : 'none';
+            document.getElementById('mkx-unregister-hint').style.display = registered ? 'block' : 'none';
         } catch (e) {
-            document.getElementById('provision-status').textContent = 'Unable to check state';
+            document.getElementById('mkx-reg-status').textContent = 'Unable to check state';
         }
     };
     xhr.send();
+}
+function unregisterMakapix() {
+    if (!confirm('Are you sure you want to remove Makapix Club registration? You can re-register later.')) return;
+    var btn = document.getElementById('mkx-unregister-btn');
+    btn.disabled = true;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/action/makapix_unregister', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        btn.disabled = false;
+        try {
+            var r = JSON.parse(xhr.responseText);
+            if (r.ok) {
+                showToast('Makapix Club registration removed', false);
+                loadProvisionState();
+            } else {
+                showToast(r.error || 'Unregister failed', true);
+            }
+        } catch (e) {
+            showToast('Request failed', true);
+        }
+    };
+    xhr.send('{}');
 }
 function toggleProvisioning() {
     var btn = document.getElementById('provision-btn');

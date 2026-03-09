@@ -19,6 +19,7 @@
 #include "p3a_state.h"
 #include "show_url.h"
 #include "makapix.h"
+#include "makapix_store.h"
 #include "event_bus.h"
 #include <sys/stat.h>
 
@@ -535,5 +536,27 @@ esp_err_t h_post_provision(httpd_req_t *req) {
         send_json(req, 200, "{\"ok\":true,\"data\":{\"action\":\"provision\",\"enabled\":false}}");
     }
 
+    return ESP_OK;
+}
+
+// ---------- Makapix Unregister Handler ----------
+
+/**
+ * POST /action/makapix_unregister
+ * Remove Makapix Club registration (disconnect MQTT, wipe credentials)
+ */
+esp_err_t h_post_makapix_unregister(httpd_req_t *req) {
+    if (!makapix_store_has_player_key()) {
+        send_json(req, 409, "{\"ok\":false,\"error\":\"Not registered\",\"code\":\"NOT_REGISTERED\"}");
+        return ESP_OK;
+    }
+
+    esp_err_t err = makapix_unregister();
+    if (err != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Unregister failed\",\"code\":\"UNREGISTER_FAILED\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, "{\"ok\":true}");
     return ESP_OK;
 }

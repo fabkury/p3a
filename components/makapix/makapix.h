@@ -100,6 +100,17 @@ void makapix_set_view_intent_intentional(bool intentional);
  * 
  * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no credentials, error code otherwise
  */
+/**
+ * @brief Unregister from Makapix Club
+ *
+ * Disconnects MQTT, clears all stored credentials (player_key, certificates),
+ * and resets state to IDLE. After calling this, the device is no longer
+ * registered with Makapix Club.
+ *
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t makapix_unregister(void);
+
 esp_err_t makapix_connect_if_registered(void);
 
 /**

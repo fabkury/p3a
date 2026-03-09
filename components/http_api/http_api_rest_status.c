@@ -427,6 +427,24 @@ esp_err_t h_get_api_state(httpd_req_t *req)
         cJSON_AddNullToObject(data, "current_post_id");
     }
 
+    // Makapix Club status
+    bool registered = makapix_store_has_player_key();
+    cJSON_AddBoolToObject(data, "makapix_registered", registered);
+
+    if (registered) {
+        char player_key[40];
+        if (makapix_store_get_player_key(player_key, sizeof(player_key)) == ESP_OK) {
+            cJSON_AddStringToObject(data, "makapix_player_key", player_key);
+        }
+    }
+
+    makapix_state_t mstate = makapix_get_state();
+    const char *mqtt_status = "disconnected";
+    if (mstate == MAKAPIX_STATE_CONNECTED) mqtt_status = "connected";
+    else if (mstate == MAKAPIX_STATE_CONNECTING) mqtt_status = "connecting";
+    else if (mstate == MAKAPIX_STATE_REGISTRATION_INVALID) mqtt_status = "invalid";
+    cJSON_AddStringToObject(data, "makapix_mqtt_status", mqtt_status);
+
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         cJSON_Delete(data);

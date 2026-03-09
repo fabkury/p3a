@@ -321,6 +321,45 @@ esp_err_t makapix_get_provisioning_status(char *out_status, size_t max_len)
 }
 
 // --------------------------------------------------------------------------
+// Public API - Unregister
+// --------------------------------------------------------------------------
+
+esp_err_t makapix_unregister(void)
+{
+    ESP_LOGI(MAKAPIX_TAG, "Unregistering from Makapix Club");
+
+    // Stop view tracker first to prevent in-flight view events
+    view_tracker_stop();
+
+    // Tear down MQTT connection
+    makapix_mqtt_disconnect();
+    makapix_mqtt_deinit();
+
+    // Wipe all stored credentials (player_key, certs, MQTT host/port)
+    esp_err_t err = makapix_store_clear();
+    if (err != ESP_OK) {
+        ESP_LOGE(MAKAPIX_TAG, "Failed to clear store: %s", esp_err_to_name(err));
+    }
+
+    // Clear channel state
+    if (s_current_channel) {
+        channel_destroy(s_current_channel);
+        s_current_channel = NULL;
+    }
+    s_current_channel_id[0] = '\0';
+    s_current_channel_key[0] = '\0';
+    s_current_identifier[0] = '\0';
+    s_previous_channel_id[0] = '\0';
+    s_previous_channel_key[0] = '\0';
+    s_previous_identifier[0] = '\0';
+
+    // Reset state
+    makapix_set_state(MAKAPIX_STATE_IDLE);
+
+    return ESP_OK;
+}
+
+// --------------------------------------------------------------------------
 // Public API - Connection
 // --------------------------------------------------------------------------
 

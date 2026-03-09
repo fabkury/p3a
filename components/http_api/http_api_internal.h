@@ -152,6 +152,7 @@ esp_err_t h_post_playset(httpd_req_t *req);
 esp_err_t h_post_show_url(httpd_req_t *req);
 esp_err_t h_post_swap_to(httpd_req_t *req);
 esp_err_t h_post_provision(httpd_req_t *req);
+esp_err_t h_post_makapix_unregister(httpd_req_t *req);
 esp_err_t h_get_active_playset(httpd_req_t *req);
 cJSON *build_current_artwork_json(void);
 esp_err_t h_get_playsets(httpd_req_t *req);

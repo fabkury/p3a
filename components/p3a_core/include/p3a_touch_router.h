@@ -12,10 +12,10 @@
  * - Tap left/right: swap animation backward/forward
  * - Vertical swipe: brightness control
  * - Two-finger rotation: screen rotation
- * - Long press (4s): enter provisioning or toggle AP info
+ * - Long press (3s): enter provisioning or toggle AP info
  * 
  * PROVISIONING:
- * - Long press (4s): cancel provisioning and return to playback
+ * - Long press (3s): cancel provisioning and return to playback
  * - Other gestures: ignored
  * 
  * OTA:
@@ -23,7 +23,7 @@
  * 
  * PICO8_STREAMING:
  * - Touch events forwarded to USB HID
- * - Long press (4s): exit PICO-8 mode
+ * - Long press (3s): exit PICO-8 mode
  */
 
 #ifndef P3A_TOUCH_ROUTER_H
@@ -46,7 +46,7 @@ typedef enum {
     P3A_TOUCH_EVENT_SWIPE_UP,       ///< Vertical swipe upward
     P3A_TOUCH_EVENT_SWIPE_DOWN,     ///< Vertical swipe downward
     P3A_TOUCH_EVENT_BRIGHTNESS,     ///< Brightness adjustment (with delta)
-    P3A_TOUCH_EVENT_LONG_PRESS,     ///< Long press (4 seconds)
+    P3A_TOUCH_EVENT_LONG_PRESS,     ///< Long press (3 seconds)
     P3A_TOUCH_EVENT_ROTATION_CW,    ///< Two-finger clockwise rotation
     P3A_TOUCH_EVENT_ROTATION_CCW,   ///< Two-finger counter-clockwise rotation
     P3A_TOUCH_EVENT_RAW,            ///< Raw touch for PICO-8 forwarding

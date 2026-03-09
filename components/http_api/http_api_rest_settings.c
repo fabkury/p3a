@@ -150,10 +150,6 @@ esp_err_t h_put_config(httpd_req_t *req) {
     if (ri && cJSON_IsNumber(ri)) {
         config_store_invalidate_giphy_refresh_interval();
     }
-    cJSON *ppa = cJSON_GetObjectItem(o, "ppa_upscale");
-    if (ppa && cJSON_IsBool(ppa)) {
-        config_store_invalidate_ppa_upscale();
-    }
     cJSON *gpd = cJSON_GetObjectItem(o, "giphy_prefer_downsized");
     if (gpd && cJSON_IsBool(gpd)) {
         config_store_invalidate_giphy_prefer_downsized();

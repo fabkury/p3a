@@ -157,17 +157,16 @@ static esp_err_t prefetch_first_frame_seeked(animation_buffer_t *buf, uint32_t s
 }
 
 /**
- * @brief Select PPA or CPU upscaling based on channel type and config.
+ * @brief Select PPA or CPU upscaling based on channel type.
  *
- * Giphy channels use PPA bilinear upscaling (when enabled); all other
- * channels use the CPU nearest-neighbor pipeline.
+ * Giphy channels use PPA bilinear upscaling; all other channels use
+ * the CPU nearest-neighbor pipeline.
  */
 static void upscale_frame_to_display(const animation_buffer_t *buf,
                                      const uint8_t *src, uint8_t *dst)
 {
 #if CONFIG_P3A_PPA_UPSCALE_ENABLE
-    if (buf->channel_type == PS_CHANNEL_TYPE_GIPHY &&
-        config_store_get_ppa_upscale()) {
+    if (buf->channel_type == PS_CHANNEL_TYPE_GIPHY) {
         static bool s_ppa_first_attempt = true;
         if (s_ppa_first_attempt) {
             ESP_LOGI(TAG, "PPA upscale: first attempt (src=%dx%d dst=%dx%d)",

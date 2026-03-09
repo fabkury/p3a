@@ -15,7 +15,6 @@
  */
 
 #include "http_api_internal.h"
-#include "config_store.h"
 #include "makapix_api.h"
 #include "makapix_channel_utils.h"
 #include "makapix_mqtt.h"
@@ -114,7 +113,6 @@ cJSON *build_current_artwork_json(void)
     cJSON_AddStringToObject(obj, "url", url);
     cJSON_AddStringToObject(obj, "channel_type",
                             playset_channel_type_str(artwork.channel_type));
-    cJSON_AddBoolToObject(obj, "ppa_upscale", config_store_get_ppa_upscale());
 
     return obj;
 }

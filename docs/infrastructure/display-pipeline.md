@@ -34,7 +34,7 @@
 - **Transparency/alpha blending**: Images with transparent backgrounds are composited over a configurable background color
 - **Aspect ratio preservation**: Non-square images are scaled to fit while maintaining original proportions
 - **Configurable background**: Background color can be set via web UI, REST API, or `render_engine_set_background()`
-- **Channel-aware upscaling**: Giphy content uses PPA hardware-accelerated bilinear interpolation (smooth results for photographic/video content), while pixel art from Makapix and local files uses CPU nearest-neighbor scaling (crisp pixel edges). Configurable via settings.
+- **Channel-aware upscaling**: Giphy content uses PPA hardware-accelerated bilinear interpolation (smooth results for photographic/video content), while pixel art from Makapix and local files uses CPU nearest-neighbor scaling (crisp pixel edges).
 - **Rotation**: 0/90/180/270 degree rotation, handled in both CPU and PPA upscale paths
 
 ## Upscaling Paths

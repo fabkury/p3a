@@ -485,35 +485,6 @@ esp_err_t config_store_get_device_name(char *out, size_t max_len);
 esp_err_t config_store_get_hostname(char *out, size_t max_len);
 
 // ============================================================================
-// PPA Upscale (persisted, Giphy-only hardware upscaling)
-// ============================================================================
-
-/**
- * @brief Set PPA upscale mode for Giphy channels
- *
- * When enabled, Giphy channel frames are upscaled using the ESP32-P4 Pixel
- * Processing Accelerator (bilinear interpolation). Makapix channels always
- * use CPU nearest-neighbor regardless of this setting.
- *
- * @param enable True to enable PPA upscaling for Giphy
- * @return ESP_OK on success
- */
-esp_err_t config_store_set_ppa_upscale(bool enable);
-
-/**
- * @brief Get PPA upscale mode for Giphy channels
- *
- * @return True if PPA upscaling enabled (defaults to true).
- *         Always returns false when CONFIG_P3A_PPA_UPSCALE_ENABLE is disabled.
- */
-bool config_store_get_ppa_upscale(void);
-
-/**
- * @brief Invalidate in-memory cache for PPA upscale setting
- */
-void config_store_invalidate_ppa_upscale(void);
-
-// ============================================================================
 // WiFi Recovery Reboot Counters (persisted in NVS)
 // ============================================================================
 

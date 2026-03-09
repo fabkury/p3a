@@ -64,8 +64,8 @@ menu "Physical Player of Pixel Art (P3A)"
             depends on SOC_PPA_SUPPORTED
             help
                 Use the Pixel Processing Accelerator (PPA) for bilinear upscaling
-                of Giphy channel content. Makapix channels always use CPU
-                nearest-neighbor upscaling. Disable to exclude PPA code entirely.
+                of Giphy channel content. When enabled, Giphy frames are upscaled
+                via PPA hardware. Other channels use CPU nearest-neighbor upscaling.
 
         config P3A_USE_PIE_SIMD
             bool "Enable upscale row duplication optimization"

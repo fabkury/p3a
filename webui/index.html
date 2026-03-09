@@ -500,10 +500,7 @@ function updateArtwork(currentArtwork) {
         img.style.display = 'none';
         return;
     }
-    var usePixelated = true;
-    if (currentArtwork.channel_type === 'giphy' && currentArtwork.ppa_upscale) {
-        usePixelated = false;
-    }
+    var usePixelated = (currentArtwork.channel_type !== 'giphy');
     if (usePixelated) {
         img.classList.add('pixelated');
     } else {

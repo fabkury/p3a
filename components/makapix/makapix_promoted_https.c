@@ -41,6 +41,9 @@ static const char *TAG = "mkx_promoted_https";
 // Maximum entries per page (matches Makapix API limit)
 #define PAGE_LIMIT 50
 
+// Pagination cursor buffer size (base64 cursors can be ~76+ chars)
+#define CURSOR_BUF_SIZE 256
+
 static volatile bool s_cancel = false;
 
 void makapix_promoted_https_cancel(void)
@@ -100,7 +103,7 @@ static bool parse_promoted_item(const cJSON *item, makapix_post_t *out)
  * @param cursor         Pagination cursor (NULL or empty for first page)
  * @param out_posts      Output array (caller-provided, PAGE_LIMIT capacity)
  * @param out_count      Number of posts parsed
- * @param out_next_cursor Output buffer for next_cursor (64 bytes min)
+ * @param out_next_cursor Output buffer for next_cursor (CURSOR_BUF_SIZE bytes min)
  * @param out_has_more   Whether more pages are available
  * @return ESP_OK on success
  */
@@ -212,7 +215,7 @@ static esp_err_t fetch_promoted_page(char *response_buf, size_t buf_size,
     // Extract pagination cursor
     const cJSON *next = cJSON_GetObjectItem(root, "next_cursor");
     if (cJSON_IsString(next) && next->valuestring && next->valuestring[0]) {
-        strlcpy(out_next_cursor, next->valuestring, 64);
+        strlcpy(out_next_cursor, next->valuestring, CURSOR_BUF_SIZE);
         *out_has_more = true;
     }
 
@@ -275,7 +278,7 @@ esp_err_t makapix_promoted_https_refresh(const char *channel_id)
     }
 
     size_t total_fetched = 0;
-    char cursor[64] = {0};
+    char cursor[CURSOR_BUF_SIZE] = {0};
     bool refresh_completed = true;
 
     while (total_fetched < cache_size) {
@@ -286,7 +289,7 @@ esp_err_t makapix_promoted_https_refresh(const char *channel_id)
         }
 
         size_t page_count = 0;
-        char next_cursor[64] = {0};
+        char next_cursor[CURSOR_BUF_SIZE] = {0};
         bool has_more = false;
 
         esp_err_t err = fetch_promoted_page(response_buf, RESPONSE_BUF_SIZE,

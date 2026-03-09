@@ -169,6 +169,20 @@ static void ugfx_ui_draw_captive_ap_info(void)
     gdispFillStringBox(lx, y, lw, rh, "Alt URL", font_main, gray, GFX_BLACK, gJustifyLeft);
     gdispFillStringBox(vx, y, vw, rh, "http://192.168.4.1", font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
 
+    // Row 4: Connected users
+    y = 350;
+    gdispFillStringBox(lx, y, lw, rh, "Connected", font_main, gray, GFX_BLACK, gJustifyLeft);
+    {
+        wifi_sta_list_t sta_list;
+        int num = 0;
+        if (esp_wifi_ap_get_sta_list(&sta_list) == ESP_OK) {
+            num = sta_list.num;
+        }
+        char conn_buf[16];
+        snprintf(conn_buf, sizeof(conn_buf), "%d user%s", num, num == 1 ? "" : "s");
+        gdispFillStringBox(vx, y, vw, rh, conn_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
+    }
+
     // Dismiss hint
     gdispFillStringBox(0, gdispGetHeight() - 60, screen_w, rh, "Long-press to dismiss",
                        font_hint, HTML2COLOR(0x555555), GFX_BLACK, gJustifyCenter);

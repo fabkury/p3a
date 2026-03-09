@@ -387,10 +387,10 @@ uint8_t config_store_get_play_order(void)
     cJSON *cfg = NULL;
     esp_err_t err = config_store_load(&cfg);
     if (err != ESP_OK) {
-        return 0;  // Default: server order
+        return 2;  // Default: random
     }
     
-    uint8_t order = 0;
+    uint8_t order = 2;
     cJSON *order_item = cJSON_GetObjectItem(cfg, "play_order");
     if (order_item && cJSON_IsNumber(order_item)) {
         int value = (int)cJSON_GetNumberValue(order_item);

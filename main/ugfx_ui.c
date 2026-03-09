@@ -543,7 +543,16 @@ static void ugfx_ui_draw_info_screen(void)
                 case GIPHY_REFRESH_NO_API_KEY:      gs_str = "No API key.";      gs_color = yellow; break;
                 case GIPHY_REFRESH_INVALID_API_KEY: gs_str = "Invalid API key."; gs_color = red;    break;
                 case GIPHY_REFRESH_FAILED:          gs_str = "Failed.";          gs_color = red;    break;
-                default:                            gs_str = "N/A";              gs_color = gray;   break;
+                default: {
+                    char key_probe[2];
+                    config_store_get_giphy_api_key(key_probe, sizeof(key_probe));
+                    if (key_probe[0] == '\0') {
+                        gs_str = "No API key."; gs_color = yellow;
+                    } else {
+                        gs_str = "N/A";         gs_color = gray;
+                    }
+                    break;
+                }
             }
         }
         gdispFillStringBox(vx, y, vw, rh, gs_str, font_main, gs_color, GFX_BLACK, gJustifyLeft);

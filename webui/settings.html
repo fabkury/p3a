@@ -331,7 +331,7 @@ body {
             <span style="font-size:0.85rem;color:#333;" id="mkx-reg-status">Loading...</span>
             <span class="file-name" id="mkx-mqtt-status" style="min-height:0;"></span>
         </div>
-        <div id="mkx-player-key" style="display:none;font-family:monospace;font-size:0.78rem;color:#555;word-break:break-all;background:#f5f5f5;padding:6px 8px;border-radius:6px;"></div>
+        <div id="mkx-player-key" style="display:none;font-family:monospace;font-size:0.78rem;color:#555;word-break:break-all;background:#f5f5f5;padding:6px 8px;border-radius:6px;"><span style="font-family:inherit;color:#888;">Player key: </span><span id="mkx-player-key-value"></span></div>
     </div>
     <p class="file-name" id="provision-status" style="display:none;"></p>
     <button class="btn" id="provision-btn" style="display:none;width:100%;" onclick="toggleProvisioning()">
@@ -654,7 +654,7 @@ function loadProvisionState() {
             // Player key
             var keyEl = document.getElementById('mkx-player-key');
             if (registered && d.makapix_player_key) {
-                keyEl.textContent = d.makapix_player_key;
+                document.getElementById('mkx-player-key-value').textContent = d.makapix_player_key;
                 keyEl.style.display = 'block';
             } else {
                 keyEl.style.display = 'none';

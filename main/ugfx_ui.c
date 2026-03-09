@@ -549,7 +549,7 @@ static void ugfx_ui_draw_info_screen(void)
                     if (key_probe[0] == '\0') {
                         gs_str = "No API key."; gs_color = red;
                     } else {
-                        gs_str = "N/A";         gs_color = gray;
+                        gs_str = "Not verified."; gs_color = yellow;
                     }
                     break;
                 }

@@ -514,13 +514,23 @@ static void ugfx_ui_draw_info_screen(void)
     y = 320;
     gdispFillStringBox(lx, y, lw, rh, "Giphy", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
-        giphy_refresh_status_t gs = giphy_get_last_refresh_status();
         const char *gs_str;
         color_t gs_color;
-        switch (gs) {
-            case GIPHY_REFRESH_OK:            gs_str = "OK";      gs_color = green; break;
-            case GIPHY_REFRESH_FAILED:        gs_str = "Failed";  gs_color = red;   break;
-            default:                          gs_str = "N/A";     gs_color = gray;  break;
+        if (!p3a_state_has_wifi()) {
+            gs_str = "No wifi.";
+            gs_color = gray;
+        } else if (!p3a_state_has_internet()) {
+            gs_str = "No Internet.";
+            gs_color = gray;
+        } else {
+            giphy_refresh_status_t gs = giphy_get_last_refresh_status();
+            switch (gs) {
+                case GIPHY_REFRESH_OK:              gs_str = "API key OK.";      gs_color = green;  break;
+                case GIPHY_REFRESH_NO_API_KEY:      gs_str = "No API key.";      gs_color = yellow; break;
+                case GIPHY_REFRESH_INVALID_API_KEY: gs_str = "Invalid API key."; gs_color = red;    break;
+                case GIPHY_REFRESH_FAILED:          gs_str = "Failed.";          gs_color = red;    break;
+                default:                            gs_str = "N/A";              gs_color = gray;   break;
+            }
         }
         gdispFillStringBox(vx, y, vw, rh, gs_str, font_main, gs_color, GFX_BLACK, gJustifyLeft);
     }

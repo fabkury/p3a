@@ -338,6 +338,7 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
     config_store_get_giphy_api_key(ctx.api_key, sizeof(ctx.api_key));
     if (ctx.api_key[0] == '\0') {
         ESP_LOGE(TAG, "No Giphy API key configured");
+        s_last_refresh_status = GIPHY_REFRESH_NO_API_KEY;
         return ESP_ERR_NOT_FOUND;
     }
     if (config_store_get_giphy_rendition(ctx.rendition, sizeof(ctx.rendition)) != ESP_OK) {
@@ -527,7 +528,11 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
         return ESP_OK;
     }
     // Propagate specific error (e.g. ESP_ERR_NOT_ALLOWED for invalid API key)
-    s_last_refresh_status = GIPHY_REFRESH_FAILED;
+    if (last_err == ESP_ERR_NOT_ALLOWED) {
+        s_last_refresh_status = GIPHY_REFRESH_INVALID_API_KEY;
+    } else {
+        s_last_refresh_status = GIPHY_REFRESH_FAILED;
+    }
     return (last_err != ESP_OK) ? last_err : ESP_FAIL;
 }
 

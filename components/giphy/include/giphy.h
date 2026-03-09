@@ -252,6 +252,8 @@ bool giphy_is_refresh_cancelled(void);
 typedef enum {
     GIPHY_REFRESH_NOT_ATTEMPTED,
     GIPHY_REFRESH_OK,
+    GIPHY_REFRESH_NO_API_KEY,
+    GIPHY_REFRESH_INVALID_API_KEY,
     GIPHY_REFRESH_FAILED,
 } giphy_refresh_status_t;
 

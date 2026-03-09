@@ -18,6 +18,7 @@ static const char *TAG = "p3a_boot_logo";
 static struct {
     int64_t start_time_us;
     bool initialized;
+    bool started;
     bool skipped;
 } s_boot_logo = {0};
 
@@ -39,8 +40,8 @@ static float smoothstep(float t)
 
 esp_err_t p3a_boot_logo_init(void)
 {
-    s_boot_logo.start_time_us = esp_timer_get_time();
     s_boot_logo.initialized = true;
+    s_boot_logo.started = false;
     s_boot_logo.skipped = false;
 
     ESP_LOGI(TAG, "Boot logo initialized: delay %dms, fade-in %dms, hold %dms, total %dms",
@@ -55,6 +56,10 @@ bool p3a_boot_logo_is_active(void)
         return false;
     }
 
+    if (!s_boot_logo.started) {
+        return true;  // Initialized but not yet rendered — still active
+    }
+
     int64_t elapsed_us = esp_timer_get_time() - s_boot_logo.start_time_us;
     return elapsed_us < ((int64_t)P3A_BOOT_LOGO_TOTAL_MS * 1000);
 }
@@ -63,6 +68,10 @@ uint32_t p3a_boot_logo_remaining_ms(void)
 {
     if (!s_boot_logo.initialized || s_boot_logo.skipped) {
         return 0;
+    }
+
+    if (!s_boot_logo.started) {
+        return P3A_BOOT_LOGO_TOTAL_MS;
     }
 
     int64_t elapsed_us = esp_timer_get_time() - s_boot_logo.start_time_us;
@@ -75,6 +84,12 @@ int p3a_boot_logo_render(uint8_t *buffer, int width, int height, size_t stride)
 {
     if (!buffer) {
         return -1;
+    }
+
+    if (!s_boot_logo.started) {
+        s_boot_logo.start_time_us = esp_timer_get_time();
+        s_boot_logo.started = true;
+        ESP_LOGI(TAG, "Boot logo timer started on first render");
     }
 
     if (!p3a_boot_logo_is_active()) {

@@ -59,6 +59,81 @@ h1 {
 }
 .status-connected { background: #e8f5e9; color: #2e7d32; }
 .status-disconnected { background: #ffebee; color: #c62828; }
+.name-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.name-input:focus { border-color: #667eea; }
+.hostname-preview {
+    color: #888;
+    font-size: 0.8rem;
+    margin-top: 6px;
+}
+.save-btn {
+    width: 100%;
+    background: #667eea;
+    color: white;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(102,126,234,0.3);
+    transition: transform 0.2s;
+    margin-top: 10px;
+}
+.save-btn:active { transform: scale(0.98); }
+.save-btn:disabled { opacity: 0.5; cursor: default; }
+.reboot-btn {
+    width: 100%;
+    background: #ff9800;
+    color: white;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(255,152,0,0.3);
+    transition: transform 0.2s;
+    margin-top: 8px;
+}
+.reboot-btn:active { transform: scale(0.98); }
+.toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border-radius: 8px;
+    color: white;
+    font-size: 0.9rem;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+}
+.toast.show { opacity: 1; }
+.toast-success { background: #2e7d32; }
+.toast-error { background: #c62828; }
+.name-hint {
+    color: #888;
+    font-size: 0.78rem;
+    margin-top: 6px;
+}
+.name-error {
+    color: #c62828;
+    font-size: 0.78rem;
+    margin-top: 4px;
+    display: none;
+}
 .erase-btn {
     width: 100%;
     background: #ff6b6b;
@@ -120,11 +195,27 @@ h1 {
 </div>
 </div>
 <div class="card">
+<h2>Device Name</h2>
+<div class="info-row">
+<span class="info-label">Hostname</span>
+<span class="info-value" id="hostname-display">Loading...</span>
+</div>
+<input type="text" id="device-name" class="name-input" maxlength="16"
+       autocapitalize="none" spellcheck="false" placeholder="e.g. bedroom"
+       oninput="updateHostnamePreview()">
+<div class="hostname-preview" id="hostname-preview"></div>
+<div class="name-hint">Lowercase letters, numbers, and hyphens only. Leave empty to use default.</div>
+<div class="name-error" id="name-error">Invalid: use only lowercase letters, numbers, and hyphens. No leading/trailing hyphens.</div>
+<button type="button" class="save-btn" id="save-btn" onclick="saveDeviceName()">Save</button>
+<button type="button" class="reboot-btn" id="reboot-btn" style="display:none" onclick="rebootDevice()">Reboot to apply</button>
+</div>
+<div class="card">
 <button type="button" class="erase-btn" onclick="eraseWifi()">Erase Wi-Fi &amp; Reboot</button>
 <p class="warning">Device will restart in configuration mode</p>
 </div>
 <a href="/" class="back-link">&#8592; Back to Home</a>
 </div>
+<div class="toast" id="toast"></div>
 <script>
 function loadNetworkStatus() {
     fetch('/api/network-status')
@@ -182,7 +273,75 @@ function eraseWifi() {
             alert('Failed to erase credentials');
         });
 }
+function showToast(msg, ok) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast ' + (ok ? 'toast-success' : 'toast-error') + ' show';
+    setTimeout(function() { t.className = 'toast'; }, 3000);
+}
+function loadDeviceName() {
+    fetch('/api/device-name')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.ok) return;
+            document.getElementById('device-name').value = d.device_name || '';
+            var host = d.hostname || 'p3a';
+            document.getElementById('hostname-display').textContent = host + '.local';
+            updateHostnamePreview();
+        })
+        .catch(function() {});
+}
+function updateHostnamePreview() {
+    var input = document.getElementById('device-name');
+    input.value = input.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    var name = input.value;
+    var host = name ? 'p3a-' + name : 'p3a';
+    document.getElementById('hostname-preview').textContent = host + '.local';
+    var valid = isNameValid(name);
+    document.getElementById('name-error').style.display = valid ? 'none' : 'block';
+    document.getElementById('save-btn').disabled = !valid;
+}
+function isNameValid(name) {
+    if (name === '') return true;
+    if (name.charAt(0) === '-' || name.charAt(name.length - 1) === '-') return false;
+    return /^[a-z0-9-]*$/.test(name);
+}
+function saveDeviceName() {
+    var name = document.getElementById('device-name').value;
+    if (!isNameValid(name)) return;
+    document.getElementById('save-btn').disabled = true;
+    fetch('/api/device-name', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_name: name })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        document.getElementById('save-btn').disabled = false;
+        if (d.ok) {
+            showToast('Device name saved!', true);
+            var host = name ? 'p3a-' + name : 'p3a';
+            document.getElementById('hostname-display').textContent = host + '.local';
+            if (d.reboot_required) {
+                document.getElementById('reboot-btn').style.display = 'block';
+            }
+        } else {
+            showToast(d.error || 'Failed to save', false);
+        }
+    })
+    .catch(function() {
+        document.getElementById('save-btn').disabled = false;
+        showToast('Request failed', false);
+    });
+}
+function rebootDevice() {
+    if (!confirm('Reboot the device now to apply the new name?')) return;
+    fetch('/action/reboot', { method: 'POST' })
+        .then(function() { showToast('Rebooting...', true); })
+        .catch(function() { showToast('Reboot request failed', false); });
+}
 loadNetworkStatus();
+loadDeviceName();
 </script>
 </body>
 </html>

@@ -204,6 +204,21 @@ esp_err_t config_store_set_view_ack(bool enable);
  */
 bool config_store_get_view_ack(void);
 
+/**
+ * @brief Invalidate in-memory cache for view acknowledgment setting
+ */
+void config_store_invalidate_view_ack(void);
+
+/**
+ * @brief Invalidate in-memory cache for dwell time setting
+ */
+void config_store_invalidate_dwell_time(void);
+
+/**
+ * @brief Invalidate in-memory cache for refresh interval setting
+ */
+void config_store_invalidate_refresh_interval_sec(void);
+
 // ============================================================================
 // SD Card Root Folder (persisted, requires reboot)
 // ============================================================================

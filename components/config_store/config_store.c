@@ -399,6 +399,9 @@ bool config_store_get_randomize_playlist(void)
 // View Acknowledgment
 // ============================================================================
 
+static bool s_view_ack = false;
+static bool s_view_ack_loaded = false;
+
 esp_err_t config_store_set_view_ack(bool enable)
 {
     cJSON *cfg = NULL;
@@ -406,35 +409,54 @@ esp_err_t config_store_set_view_ack(bool enable)
     if (err != ESP_OK) {
         return err;
     }
-    
+
     cJSON *item = cJSON_GetObjectItem(cfg, "view_ack");
     if (item) {
         cJSON_DeleteItemFromObject(cfg, "view_ack");
     }
     cJSON_AddBoolToObject(cfg, "view_ack", enable);
-    
+
     err = config_store_save(cfg);
     cJSON_Delete(cfg);
+
+    if (err == ESP_OK) {
+        s_view_ack = enable;
+        s_view_ack_loaded = true;
+    }
+
     return err;
 }
 
 bool config_store_get_view_ack(void)
 {
+    if (s_view_ack_loaded) {
+        return s_view_ack;
+    }
+
     cJSON *cfg = NULL;
     esp_err_t err = config_store_load(&cfg);
     if (err != ESP_OK) {
-        return false;  // Default: OFF (fire-and-forget)
+        s_view_ack_loaded = true;
+        return s_view_ack;  // Default: OFF (fire-and-forget)
     }
-    
-    bool enable = false;
+
     cJSON *item = cJSON_GetObjectItem(cfg, "view_ack");
     if (item && cJSON_IsBool(item)) {
-        enable = cJSON_IsTrue(item);
+        s_view_ack = cJSON_IsTrue(item);
     }
-    
+
+    s_view_ack_loaded = true;
     cJSON_Delete(cfg);
-    return enable;
+    return s_view_ack;
 }
+
+void config_store_invalidate_view_ack(void)
+{
+    s_view_ack_loaded = false;
+}
+
+static uint32_t s_dwell_time = 30000;
+static bool s_dwell_time_loaded = false;
 
 esp_err_t config_store_set_dwell_time(uint32_t dwell_time_ms)
 {
@@ -443,49 +465,61 @@ esp_err_t config_store_set_dwell_time(uint32_t dwell_time_ms)
         ESP_LOGE(TAG, "Invalid dwell time: %lu ms (max 86400000)", dwell_time_ms);
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     cJSON *cfg = NULL;
     esp_err_t err = config_store_load(&cfg);
     if (err != ESP_OK) {
         return err;
     }
-    
+
     cJSON *item = cJSON_GetObjectItem(cfg, "dwell_time_ms");
     if (item) {
         cJSON_SetNumberValue(item, (double)dwell_time_ms);
     } else {
         cJSON_AddNumberToObject(cfg, "dwell_time_ms", (double)dwell_time_ms);
     }
-    
+
     err = config_store_save(cfg);
     cJSON_Delete(cfg);
-    
+
     if (err == ESP_OK) {
+        s_dwell_time = dwell_time_ms;
+        s_dwell_time_loaded = true;
         ESP_LOGI(TAG, "Dwell time saved: %lu ms", dwell_time_ms);
     }
-    
+
     return err;
 }
 
 uint32_t config_store_get_dwell_time(void)
 {
+    if (s_dwell_time_loaded) {
+        return s_dwell_time;
+    }
+
     cJSON *cfg = NULL;
     esp_err_t err = config_store_load(&cfg);
     if (err != ESP_OK) {
-        return 30000;  // Default: 30 seconds
+        s_dwell_time_loaded = true;
+        return s_dwell_time;  // Default: 30 seconds
     }
 
-    uint32_t dwell_time = 30000;  // Default: 30 seconds
     cJSON *item = cJSON_GetObjectItem(cfg, "dwell_time_ms");
     if (item && cJSON_IsNumber(item)) {
         int value = (int)cJSON_GetNumberValue(item);
         if (value >= 0 && value <= 86400000) {  // 0 = disabled, max 24h
-            dwell_time = (uint32_t)value;
+            s_dwell_time = (uint32_t)value;
         }
     }
 
+    s_dwell_time_loaded = true;
     cJSON_Delete(cfg);
-    return dwell_time;
+    return s_dwell_time;
+}
+
+void config_store_invalidate_dwell_time(void)
+{
+    s_dwell_time_loaded = false;
 }
 
 // ============================================================================
@@ -672,57 +706,72 @@ bool config_store_get_max_speed_playback(void)
 // Refresh Interval (persisted)
 // ============================================================================
 
+static uint32_t s_refresh_interval_sec = 3600;
+static bool s_refresh_interval_sec_loaded = false;
+
 esp_err_t config_store_set_refresh_interval_sec(uint32_t interval_sec)
 {
     // Validate reasonable range: 60 seconds to 24 hours
     if (interval_sec < 60 || interval_sec > 86400) {
-        ESP_LOGE(TAG, "Invalid refresh interval: %lu sec (must be 60-86400)", 
+        ESP_LOGE(TAG, "Invalid refresh interval: %lu sec (must be 60-86400)",
                  (unsigned long)interval_sec);
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     cJSON *cfg = NULL;
     esp_err_t err = config_store_load(&cfg);
     if (err != ESP_OK) {
         return err;
     }
-    
+
     cJSON *item = cJSON_GetObjectItem(cfg, "refresh_interval_sec");
     if (item) {
         cJSON_SetNumberValue(item, (double)interval_sec);
     } else {
         cJSON_AddNumberToObject(cfg, "refresh_interval_sec", (double)interval_sec);
     }
-    
+
     err = config_store_save(cfg);
     cJSON_Delete(cfg);
-    
+
     if (err == ESP_OK) {
+        s_refresh_interval_sec = interval_sec;
+        s_refresh_interval_sec_loaded = true;
         ESP_LOGI(TAG, "Refresh interval saved: %lu seconds", (unsigned long)interval_sec);
     }
-    
+
     return err;
 }
 
 uint32_t config_store_get_refresh_interval_sec(void)
 {
+    if (s_refresh_interval_sec_loaded) {
+        return s_refresh_interval_sec;
+    }
+
     cJSON *cfg = NULL;
     esp_err_t err = config_store_load(&cfg);
     if (err != ESP_OK) {
-        return 3600;  // Default: 1 hour
+        s_refresh_interval_sec_loaded = true;
+        return s_refresh_interval_sec;  // Default: 1 hour
     }
-    
-    uint32_t interval_sec = 3600;  // Default: 1 hour
+
     cJSON *item = cJSON_GetObjectItem(cfg, "refresh_interval_sec");
     if (item && cJSON_IsNumber(item)) {
         double value = cJSON_GetNumberValue(item);
         if (value >= 60 && value <= 86400) {
-            interval_sec = (uint32_t)value;
+            s_refresh_interval_sec = (uint32_t)value;
         }
     }
-    
+
+    s_refresh_interval_sec_loaded = true;
     cJSON_Delete(cfg);
-    return interval_sec;
+    return s_refresh_interval_sec;
+}
+
+void config_store_invalidate_refresh_interval_sec(void)
+{
+    s_refresh_interval_sec_loaded = false;
 }
 
 // ============================================================================

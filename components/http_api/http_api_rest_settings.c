@@ -158,6 +158,18 @@ esp_err_t h_put_config(httpd_req_t *req) {
     if (gpd && cJSON_IsBool(gpd)) {
         config_store_invalidate_giphy_prefer_downsized();
     }
+    cJSON *va = cJSON_GetObjectItem(o, "view_ack");
+    if (va && cJSON_IsBool(va)) {
+        config_store_invalidate_view_ack();
+    }
+    cJSON *dt = cJSON_GetObjectItem(o, "dwell_time_ms");
+    if (dt && cJSON_IsNumber(dt)) {
+        config_store_invalidate_dwell_time();
+    }
+    cJSON *ris = cJSON_GetObjectItem(o, "refresh_interval_sec");
+    if (ris && cJSON_IsNumber(ris)) {
+        config_store_invalidate_refresh_interval_sec();
+    }
 
     cJSON *csm = cJSON_GetObjectItem(o, "channel_select_mode");
     if (csm && cJSON_IsNumber(csm)) {

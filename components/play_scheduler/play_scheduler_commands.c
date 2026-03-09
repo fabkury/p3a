@@ -31,6 +31,16 @@
 #include <strings.h>
 #include <sys/stat.h>
 
+// Forward declaration for gBool type (from uGFX)
+typedef int gBool;
+
+// UI dismiss helpers (from app_lcd.c / ugfx_ui.c via weak symbols)
+// Used to auto-dismiss info screen when a playset is activated by the user
+extern bool app_lcd_is_ui_mode(void) __attribute__((weak));
+extern esp_err_t app_lcd_exit_ui_mode(void) __attribute__((weak));
+extern void ugfx_ui_hide_info_screen(void) __attribute__((weak));
+extern gBool ugfx_ui_is_active(void) __attribute__((weak));
+
 static const char *TAG = "ps_commands";
 
 // ============================================================================
@@ -508,6 +518,16 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
 
     // Reset auto-swap timer so the full dwell interval starts from this new command
     ps_timer_reset(s_state);
+
+    // Dismiss info-screen overlay if active, so playback is visible immediately.
+    // Safe to call at boot (app_lcd_is_ui_mode returns false when no UI is shown).
+    if (app_lcd_is_ui_mode && app_lcd_is_ui_mode()) {
+        if (ugfx_ui_hide_info_screen) ugfx_ui_hide_info_screen();
+        // Only exit UI render mode if no other overlay remains active
+        if (!ugfx_ui_is_active || !ugfx_ui_is_active()) {
+            if (app_lcd_exit_ui_mode) app_lcd_exit_ui_mode();
+        }
+    }
 
     // Only trigger initial playback if we have entries
     // Otherwise, let download manager trigger it when first file is available

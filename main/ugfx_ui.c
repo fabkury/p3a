@@ -37,7 +37,8 @@ typedef enum {
     UI_MODE_OTA_PROGRESS,      // OTA update progress
     UI_MODE_CHANNEL_MESSAGE,   // Channel loading/download status
     UI_MODE_CONNECTIVITY_ERROR, // Connectivity error (no internet, etc.)
-    UI_MODE_INFO_SCREEN         // System info overlay
+    UI_MODE_INFO_SCREEN,        // System info overlay
+    UI_MODE_REGISTRATION_SUCCESS // Registration success message
 } ui_mode_t;
 
 // UI state
@@ -627,6 +628,23 @@ static void ugfx_ui_draw_info_screen(void)
 }
 
 /**
+ * @brief Draw the registration success screen
+ */
+static void ugfx_ui_draw_registration_success(void)
+{
+    gdispClear(GFX_BLACK);
+
+    gCoord screen_w = gdispGetWidth();
+    gCoord screen_h = gdispGetHeight();
+
+    gdispFillStringBox(0, screen_h / 2 - 60, screen_w, 45, "Registration Successful!",
+                     gdispOpenFont("* DejaVu Sans 32"), HTML2COLOR(0x00FF00), GFX_BLACK, gJustifyCenter);
+
+    gdispFillStringBox(0, screen_h / 2 + 10, screen_w, 35, "Connected to Makapix Club",
+                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+}
+
+/**
  * @brief Draw the UI layout to the current framebuffer
  */
 static void ugfx_ui_draw_layout(int32_t remaining_secs)
@@ -819,6 +837,15 @@ esp_err_t ugfx_ui_show_registration(const char *code, const char *expires_at)
     s_ui_active = true;
     
     ESP_LOGD(TAG, "Registration UI activated: code=%s", code);
+    return ESP_OK;
+}
+
+esp_err_t ugfx_ui_show_registration_success(void)
+{
+    s_ui_mode = UI_MODE_REGISTRATION_SUCCESS;
+    s_ui_active = true;
+
+    ESP_LOGI(TAG, "Registration success UI activated");
     return ESP_OK;
 }
 
@@ -1016,7 +1043,11 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
         case UI_MODE_CHANNEL_MESSAGE:
             ugfx_ui_draw_channel_message();
             return 100;
-            
+
+        case UI_MODE_REGISTRATION_SUCCESS:
+            ugfx_ui_draw_registration_success();
+            return 100;
+
         default:
             break;
     }

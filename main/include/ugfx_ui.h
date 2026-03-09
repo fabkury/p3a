@@ -72,8 +72,18 @@ esp_err_t ugfx_ui_show_connectivity_error(void);
 esp_err_t ugfx_ui_show_registration(const char *code, const char *expires_at);
 
 /**
+ * @brief Show registration success screen
+ *
+ * Displays a success message after Makapix Club registration completes.
+ * Call ugfx_ui_hide_registration() to dismiss.
+ *
+ * @return ESP_OK on success
+ */
+esp_err_t ugfx_ui_show_registration_success(void);
+
+/**
  * @brief Deactivate registration code display
- * 
+ *
  * Clears UI state. The screen will show animation on next frame.
  */
 void ugfx_ui_hide_registration(void);

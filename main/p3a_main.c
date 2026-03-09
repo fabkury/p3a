@@ -43,8 +43,12 @@
 #include "channel_cache.h"       // LAi persistence for channel caches
 #include "show_url.h"            // show-url download command
 #include "freertos/task.h"
+#include "esp_timer.h"
 
 static const char *TAG = "p3a";
+
+// Timer for dismissing registration success screen
+static esp_timer_handle_t s_reg_success_timer = NULL;
 
 // Debug provisioning mode - toggle every 5 seconds
 #define DEBUG_PROVISIONING_ENABLED 0
@@ -249,6 +253,16 @@ static void handle_system_event(const p3a_event_t *event, void *ctx)
     }
 }
 
+static void reg_success_timer_cb(void *arg)
+{
+    (void)arg;
+    p3a_state_exit_to_playback();
+    app_lcd_exit_ui_mode();
+    ugfx_ui_hide_registration();
+    app_lcd_cycle_animation();
+    ESP_LOGI(TAG, "Registration success screen dismissed");
+}
+
 static void handle_makapix_state_event(const p3a_event_t *event, void *ctx)
 {
     (void)ctx;
@@ -311,16 +325,32 @@ static void handle_makapix_state_event(const p3a_event_t *event, void *ctx)
     } else if ((last_makapix_state == MAKAPIX_STATE_PROVISIONING || last_makapix_state == MAKAPIX_STATE_SHOW_CODE) &&
                current_makapix_state != MAKAPIX_STATE_PROVISIONING && current_makapix_state != MAKAPIX_STATE_SHOW_CODE) {
         bool still_in_ui = app_lcd_is_ui_mode();
-        if (still_in_ui) {
+        if (still_in_ui && current_makapix_state == MAKAPIX_STATE_CONNECTING) {
+            // Registration succeeded — show success screen for 10 seconds
+            ugfx_ui_show_registration_success();
+
+            // Create timer lazily
+            if (!s_reg_success_timer) {
+                const esp_timer_create_args_t args = {
+                    .callback = reg_success_timer_cb,
+                    .name = "reg_success",
+                };
+                esp_timer_create(&args, &s_reg_success_timer);
+            }
+            esp_timer_start_once(s_reg_success_timer, 10 * 1000 * 1000);  // 10 seconds
+            ESP_LOGI(TAG, "Registration successful, showing success screen for 10s");
+        } else if (still_in_ui) {
+            // Manual cancel or other non-success transition
             p3a_state_exit_to_playback();
             app_lcd_exit_ui_mode();
             ugfx_ui_hide_registration();
+            app_lcd_cycle_animation();
+            ESP_LOGD(TAG, "Registration mode exited (cancelled)");
+        } else {
+            // UI already dismissed
+            app_lcd_cycle_animation();
+            ESP_LOGD(TAG, "Registration mode exited (cleanup already done)");
         }
-        // Resume animation playback (handles both manual cancel and auto-expiry).
-        // The touch router also emits SWAP_NEXT for manual cancel, but a redundant
-        // swap is harmless and this covers the auto-expiry path.
-        app_lcd_cycle_animation();
-        ESP_LOGD(TAG, "Registration mode exited (cleanup was %s)", still_in_ui ? "needed" : "already done");
     }
 
     last_makapix_state = current_makapix_state;

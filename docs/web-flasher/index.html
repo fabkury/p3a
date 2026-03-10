@@ -480,7 +480,9 @@ const CONFIG = {
     BAUD_RATE: 460800,
     FLASH_MODE: 'dio',
     FLASH_FREQ: '80m',
-    FLASH_SIZE: '32MB'
+    FLASH_SIZE: '32MB',
+    // GitHub release asset downloads don't support CORS, so we proxy through corsproxy.io
+    CORS_PROXY: 'https://corsproxy.io/'
 };
 
 // ============================================
@@ -589,8 +591,7 @@ function getAssetUrl(release, filename) {
     if (!asset) {
         throw new Error(`Asset "${filename}" not found in release ${release.tag_name}`);
     }
-    // Use the API endpoint (supports CORS) instead of browser_download_url (blocked by CORS)
-    return `https://api.github.com/repos/${CONFIG.GITHUB_REPO}/releases/assets/${asset.id}`;
+    return `${CONFIG.CORS_PROXY}?${encodeURIComponent(asset.browser_download_url)}`;
 }
 
 async function fetchFlashArgs(release) {
@@ -598,9 +599,7 @@ async function fetchFlashArgs(release) {
     log(`Fetching flash_args from: ${url}`);
 
     try {
-        const response = await fetch(url, {
-            headers: { 'Accept': 'application/octet-stream' }
-        });
+        const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -633,9 +632,7 @@ async function fetchBinary(release, filename) {
     log(`Downloading: ${url}`);
 
     try {
-        const response = await fetch(url, {
-            headers: { 'Accept': 'application/octet-stream' }
-        });
+        const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }

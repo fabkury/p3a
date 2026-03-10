@@ -584,15 +584,16 @@ async function fetchReleases() {
     return data;
 }
 
-function getRawUrl(tag, filename) {
-    // Use raw.githubusercontent.com which supports CORS
-    // Files are stored in release/{tag}/ directory in the repo
-    return `https://raw.githubusercontent.com/${CONFIG.GITHUB_REPO}/main/release/${tag}/${filename}`;
+function getAssetUrl(release, filename) {
+    const asset = release.assets.find(a => a.name === filename);
+    if (!asset) {
+        throw new Error(`Asset "${filename}" not found in release ${release.tag_name}`);
+    }
+    return asset.browser_download_url;
 }
 
 async function fetchFlashArgs(release) {
-    const tag = release.tag_name;
-    const url = getRawUrl(tag, 'flash_args');
+    const url = getAssetUrl(release, 'flash_args');
     log(`Fetching flash_args from: ${url}`);
 
     try {
@@ -625,8 +626,7 @@ function parseFlashArgs(text) {
 }
 
 async function fetchBinary(release, filename) {
-    const tag = release.tag_name;
-    const url = getRawUrl(tag, filename);
+    const url = getAssetUrl(release, filename);
     log(`Downloading: ${url}`);
 
     try {

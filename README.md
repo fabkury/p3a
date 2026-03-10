@@ -25,8 +25,8 @@ p3a is a Wi-Fi pixel art player built on the ESP32-P4. It's a 4-inch smart art f
 3. **Insert the microSD card**: This requires unscrewing the back plate
 4. **Flash the firmware**: Visit the [p3a Web Flasher](https://fabkury.github.io/p3a/web-flasher/) — just connect your device and click to flash. No software installation needed. See the [flashing guide](docs/flash-p3a.md) for alternative methods.
 5. **Connect to Wi-Fi**: On first boot, connect to the `p3a-setup` network and visit http://p3a.local/ to configure your Wi-Fi
-6. **Register it at Makapix Club**: Long press on the screen and follow the instructions
-7. **Play art on it**: Enable [Giphy](https://giphy.com/) trending GIFs from the web UI, browse https://makapix.club/ to send artworks, or copy your own files via USB
+6. **Register it at Makapix Club**: Visit the settings page at http://p3a.local/ and follow the instructions
+7. **Play art on it**: Add a [Giphy](https://giphy.com/) API key to get trending GIFs, browse https://makapix.club/ to send artworks, or copy your own files via USB
 
 > **Note:** The initial flash requires USB and a laptop or desktop (does not work on a smartphone). After that, all updates are wireless via the web UI.
 

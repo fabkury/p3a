@@ -589,7 +589,8 @@ function getAssetUrl(release, filename) {
     if (!asset) {
         throw new Error(`Asset "${filename}" not found in release ${release.tag_name}`);
     }
-    return asset.browser_download_url;
+    // Use the API endpoint (supports CORS) instead of browser_download_url (blocked by CORS)
+    return `https://api.github.com/repos/${CONFIG.GITHUB_REPO}/releases/assets/${asset.id}`;
 }
 
 async function fetchFlashArgs(release) {
@@ -597,7 +598,9 @@ async function fetchFlashArgs(release) {
     log(`Fetching flash_args from: ${url}`);
 
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: { 'Accept': 'application/octet-stream' }
+        });
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -630,7 +633,9 @@ async function fetchBinary(release, filename) {
     log(`Downloading: ${url}`);
 
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: { 'Accept': 'application/octet-stream' }
+        });
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }

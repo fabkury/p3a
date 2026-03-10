@@ -442,26 +442,19 @@ static void ugfx_ui_draw_info_screen(void)
     gCoord vw = screen_w - vx - 20;  // value width
     gCoord lw = vx - lx - 10;        // label width
 
-    // Title – show device name (e.g. "p3a" or "p3a-kitchen")
+    // Title – show device name + firmware version (e.g. "p3a v0.8.5")
     char title_buf[64];
     if (config_store_get_hostname(title_buf, sizeof(title_buf)) != ESP_OK) {
         snprintf(title_buf, sizeof(title_buf), "p3a");
     }
-    gdispFillStringBox(0, 50, screen_w, 35, title_buf,
+    char title_display[96];
+    snprintf(title_display, sizeof(title_display), "%s v%s", title_buf, FW_VERSION);
+    gdispFillStringBox(0, 50, screen_w, 35, title_display,
                        font_title, GFX_WHITE, GFX_BLACK, gJustifyCenter);
 
-    // --- Row 1: Firmware ---
+    // --- Row 1: Uptime ---
     gCoord y = 120;
     gCoord rh = 36;   // row height – enough for descenders (p, y, g…)
-    gdispFillStringBox(lx, y, lw, rh, "Firmware", font_main, gray, GFX_BLACK, gJustifyLeft);
-    {
-        char fw_buf[48];
-        snprintf(fw_buf, sizeof(fw_buf), "v%s", FW_VERSION);
-        gdispFillStringBox(vx, y, vw, rh, fw_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
-    }
-
-    // --- Row 2: Uptime ---
-    y = 170;
     gdispFillStringBox(lx, y, lw, rh, "Uptime", font_main, gray, GFX_BLACK, gJustifyLeft);
     {
         int64_t us = esp_timer_get_time();
@@ -478,6 +471,18 @@ static void ugfx_ui_draw_info_screen(void)
             snprintf(uptime_buf, sizeof(uptime_buf), "%dm", mins);
         }
         gdispFillStringBox(vx, y, vw, rh, uptime_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
+    }
+
+    // --- Row 2: WiFi SSID ---
+    y = 170;
+    gdispFillStringBox(lx, y, lw, rh, "WiFi SSID", font_main, gray, GFX_BLACK, gJustifyLeft);
+    {
+        char ssid_buf[33];
+        if (app_wifi_get_saved_ssid(ssid_buf, sizeof(ssid_buf)) == ESP_OK && ssid_buf[0] != '\0') {
+            gdispFillStringBox(vx, y, vw, rh, ssid_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
+        } else {
+            gdispFillStringBox(vx, y, vw, rh, "N/A", font_main, gray, GFX_BLACK, gJustifyLeft);
+        }
     }
 
     // --- Row 3: WiFi Signal ---
@@ -584,7 +589,7 @@ static void ugfx_ui_draw_info_screen(void)
         ps_stats_t stats;
         if (play_scheduler_get_stats(&stats) == ESP_OK) {
             char art_buf[32];
-            snprintf(art_buf, sizeof(art_buf), "%zu / %zu", stats.total_available, stats.total_entries);
+            snprintf(art_buf, sizeof(art_buf), "%zu / %zu / %zu", stats.channel_count, stats.total_available, stats.total_entries);
             gdispFillStringBox(vx, y, vw, rh, art_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
         } else {
             gdispFillStringBox(vx, y, vw, rh, "N/A", font_main, gray, GFX_BLACK, gJustifyLeft);

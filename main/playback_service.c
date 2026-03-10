@@ -97,8 +97,10 @@ esp_err_t playback_service_resume(void)
     // Restore user brightness
     app_lcd_set_brightness(s_saved_brightness);
 
-    // Restart the auto-swap timer
-    play_scheduler_resume_auto_swap();
+    // Restart the auto-swap timer (but not while UI mode is active)
+    if (!app_lcd_is_ui_mode()) {
+        play_scheduler_resume_auto_swap();
+    }
 
     return ESP_OK;
 }

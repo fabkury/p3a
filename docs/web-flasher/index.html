@@ -480,9 +480,7 @@ const CONFIG = {
     BAUD_RATE: 460800,
     FLASH_MODE: 'dio',
     FLASH_FREQ: '80m',
-    FLASH_SIZE: '32MB',
-    // GitHub release asset downloads don't support CORS, so we proxy through corsproxy.io
-    CORS_PROXY: 'https://corsproxy.io/'
+    FLASH_SIZE: '32MB'
 };
 
 // ============================================
@@ -587,11 +585,10 @@ async function fetchReleases() {
 }
 
 function getAssetUrl(release, filename) {
-    const asset = release.assets.find(a => a.name === filename);
-    if (!asset) {
-        throw new Error(`Asset "${filename}" not found in release ${release.tag_name}`);
-    }
-    return `${CONFIG.CORS_PROXY}?${encodeURIComponent(asset.browser_download_url)}`;
+    // Firmware files are hosted on GitHub Pages (same origin) to avoid CORS issues
+    // with GitHub release asset downloads. A GitHub Action copies release assets
+    // to docs/web-flasher/firmware/{tag}/ on each release.
+    return `./firmware/${release.tag_name}/${filename}`;
 }
 
 async function fetchFlashArgs(release) {

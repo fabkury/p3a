@@ -564,6 +564,11 @@ void display_render_task(void *arg)
         if (brightness_zero && !anim_paused) {
             // User manually set brightness to 0 (not paused): skip callback
             memset(back_buffer, 0, g_display_buffer_bytes);
+        } else if (anim_paused) {
+            // Paused: always output black regardless of render mode
+            memset(back_buffer, 0, g_display_buffer_bytes);
+            frame_delay_ms = 100;
+            g_target_frame_delay_ms = 100;
         } else {
             if (ui_mode) {
                 frame_delay_ms = ugfx_ui_render_to_buffer(back_buffer, g_display_row_stride);

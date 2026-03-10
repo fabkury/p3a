@@ -42,7 +42,7 @@ static const char *TAG = "ps_refresh";
 
 // Periodic refresh configuration
 #define REFRESH_INTERVAL_SECONDS 3600  // 1 hour
-#define REFRESH_MIN_DELAY_SECONDS 20   // Floor to prevent tight loops
+#define REFRESH_MIN_DELAY_SECONDS 10   // Floor to prevent tight loops
 
 // Concurrency control
 #define REFRESH_MAX_CONCURRENT 2

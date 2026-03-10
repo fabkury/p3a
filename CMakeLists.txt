@@ -11,7 +11,7 @@ cmake_minimum_required(VERSION 3.16)
 # - Increment MINOR for new features (backward compatible)
 # - Increment PATCH for bug fixes
 # For testing OTA, use pre-release versions on GitHub
-set(PROJECT_VER "0.8.6-dev")
+set(PROJECT_VER "0.8.7-dev")
 # =============================================================================
 
 # =============================================================================
@@ -27,7 +27,7 @@ set(WEBUI_VERSION "1.7")
 # =============================================================================
 # Bump ONLY when making breaking changes to HTTP API endpoints.
 # New firmware MUST remain backwards-compatible with old Web UI at same api_version.
-set(P3A_API_VERSION 2)
+set(P3A_API_VERSION 3)
 # =============================================================================
 
 # =============================================================================

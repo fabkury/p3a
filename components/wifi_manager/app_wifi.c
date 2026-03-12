@@ -25,10 +25,6 @@
 #include "esp_http_server.h"
 #include "lwip/err.h"
 #include "lwip/sys.h"
-#include "lwip/netdb.h"
-#include "lwip/sockets.h"
-#include "lwip/dns.h"
-#include "lwip/inet.h"
 #include "http_api.h"
 #include "app_wifi.h"
 #include "sntp_sync.h"
@@ -40,20 +36,13 @@
 #include "event_bus.h"
 #include "esp_heap_caps.h"
 #include "config_store.h"
+#include "wifi_manager_internal.h"
 
 #define EXAMPLE_ESP_WIFI_SSID      CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
 #define EXAMPLE_ESP_MAXIMUM_RETRY  CONFIG_ESP_MAXIMUM_RETRY
 #define EXAMPLE_ESP_AP_SSID        CONFIG_ESP_AP_SSID
 #define EXAMPLE_ESP_AP_PASSWORD    CONFIG_ESP_AP_PASSWORD
-#define NVS_NAMESPACE              "wifi_config"
-#define NVS_KEY_SSID               "ssid"
-#define NVS_KEY_PASSWORD           "password"
-#define MAX_SSID_LEN               32
-#define MAX_PASSWORD_LEN           64
-
-// ESP-IDF default interface key for WiFi STA (used by esp_netif_create_default_wifi_sta)
-#define WIFI_STA_NETIF_KEY         "WIFI_STA_DEF"
 
 #if CONFIG_ESP_WPA3_SAE_PWE_HUNT_AND_PECK
 #define ESP_WIFI_SAE_MODE WPA3_SAE_PWE_HUNT_AND_PECK
@@ -84,25 +73,19 @@
 #endif
 
 /* FreeRTOS event group to signal when we are connected*/
-static EventGroupHandle_t s_wifi_event_group;
-
-/* The event group allows multiple bits for each event, but we only care about two events:
- * - we are connected to the AP with an IP
- * - we failed to connect after the maximum amount of retries */
-#define WIFI_CONNECTED_BIT BIT0
-#define WIFI_FAIL_BIT      BIT1
+EventGroupHandle_t s_wifi_event_group;
 
 static const char *TAG = "app_wifi";
 
-static int s_retry_num = 0;
-static httpd_handle_t s_captive_portal_server = NULL;
-static esp_netif_t *ap_netif = NULL;
-static bool s_initial_connection_done = false;  // Track if we've ever successfully connected
-static bool s_services_initialized = false;     // Track if app services have been initialized
-static int s_consecutive_wifi_errors = 0;
-static const int s_max_consecutive_wifi_errors = 10;
-static bool s_mdns_service_added = false;       // Track if mDNS HTTP service has been registered
-static int s_no_ip_health_cycles = 0;           // Health monitor cycles with no IP after initial connection
+int s_retry_num = 0;
+httpd_handle_t s_captive_portal_server = NULL;
+esp_netif_t *ap_netif = NULL;
+bool s_initial_connection_done = false;  // Track if we've ever successfully connected
+bool s_services_initialized = false;     // Track if app services have been initialized
+int s_consecutive_wifi_errors = 0;
+const int s_max_consecutive_wifi_errors = 10;
+bool s_mdns_service_added = false;       // Track if mDNS HTTP service has been registered
+int s_no_ip_health_cycles = 0;           // Health monitor cycles with no IP after initial connection
 
 // Register WiFi/IP event handlers once; repeated registration causes duplicate callbacks.
 static bool s_event_handlers_registered = false;
@@ -111,9 +94,8 @@ static esp_event_handler_instance_t s_instance_ip_any_id;
 
 // WiFi health monitor + recovery worker
 static TaskHandle_t s_wifi_health_task = NULL;
-static TaskHandle_t s_wifi_recovery_task = NULL;
-static bool s_reinit_in_progress = false;
-static const uint32_t s_wifi_health_interval_ms = 120000; // 120 seconds
+TaskHandle_t s_wifi_recovery_task = NULL;
+bool s_reinit_in_progress = false;
 
 // PSRAM-backed stacks for WiFi tasks
 static StackType_t *s_wifi_recovery_stack = NULL;
@@ -122,17 +104,14 @@ static StackType_t *s_wifi_health_stack = NULL;
 static StaticTask_t s_wifi_health_task_buffer;
 
 // Hard recovery escalation (C6 WiFi stack permanently broken)
-static int s_total_recovery_failures = 0;
-
-// UI function for showing countdown before hard reboot (weak: resolved at link time)
-extern esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *message, int progress_percent) __attribute__((weak));
+int s_total_recovery_failures = 0;
 
 // Forward declaration (event_handler referenced before definition)
 static void event_handler(void* arg, esp_event_base_t event_base,
                           int32_t event_id, void* event_data);
 
 /* NVS Credential Storage Functions */
-static esp_err_t wifi_load_credentials(char *ssid, char *password)
+esp_err_t wifi_load_credentials(char *ssid, char *password)
 {
     nvs_handle_t nvs_handle;
     esp_err_t err;
@@ -167,7 +146,7 @@ static esp_err_t wifi_load_credentials(char *ssid, char *password)
     return ESP_OK;
 }
 
-static esp_err_t wifi_save_credentials(const char *ssid, const char *password)
+esp_err_t wifi_save_credentials(const char *ssid, const char *password)
 {
     nvs_handle_t nvs_handle;
     esp_err_t err;
@@ -259,7 +238,7 @@ esp_err_t app_wifi_get_saved_ssid(char *ssid, size_t max_len)
 }
 
 /* Wi-Fi 6 Protocol Configuration */
-static void wifi_set_protocol_11ax(wifi_interface_t interface)
+void wifi_set_protocol_11ax(wifi_interface_t interface)
 {
     uint8_t protocol_bitmap = WIFI_PROTOCOL_11AX | WIFI_PROTOCOL_11N | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11B;
     esp_wifi_remote_set_protocol(interface, protocol_bitmap);
@@ -271,7 +250,7 @@ static void wifi_remote_init(void)
     // esp_hosted component initialization handled by component
 }
 
-static void wifi_register_event_handlers_once(void)
+void wifi_register_event_handlers_once(void)
 {
     if (s_event_handlers_registered) {
         return;
@@ -293,7 +272,7 @@ static void wifi_register_event_handlers_once(void)
     s_event_handlers_registered = true;
 }
 
-static bool wifi_sta_has_ip(void)
+bool wifi_sta_has_ip(void)
 {
     esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey(WIFI_STA_NETIF_KEY);
     if (!sta_netif) {
@@ -307,254 +286,9 @@ static bool wifi_sta_has_ip(void)
     return ip_info.ip.addr != 0;
 }
 
-static void wifi_disable_power_save_best_effort(void)
+void wifi_disable_power_save_best_effort(void)
 {
     esp_wifi_set_ps(WIFI_PS_NONE);
-}
-
-static void wifi_recovery_task(void *arg)
-{
-    (void)arg;
-    char saved_ssid[MAX_SSID_LEN] = {0};
-    char saved_password[MAX_PASSWORD_LEN] = {0};
-    const int max_recovery_attempts = 5;
-
-    while (true) {
-        // Wait until we are notified to perform a full reinit
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
-        // Reset retry counter so post-recovery disconnect events use fresh backoff
-        s_retry_num = 0;
-
-        bool recovered = false;
-        bool c6_stack_broken = false;
-
-        for (int attempt = 0; attempt < max_recovery_attempts && !recovered; attempt++) {
-            if (attempt > 0) {
-                int backoff_ms = 5000 * (1 << (attempt - 1)); // 5s, 10s, 20s, 40s
-                ESP_LOGW(TAG, "WiFi recovery: retry %d/%d (backoff %dms)",
-                         attempt + 1, max_recovery_attempts, backoff_ms);
-                vTaskDelay(pdMS_TO_TICKS(backoff_ms));
-            }
-
-            ESP_LOGW(TAG, "WiFi recovery: performing full WiFi re-initialization (attempt %d/%d)",
-                     attempt + 1, max_recovery_attempts);
-
-            // Best-effort stop/deinit
-            esp_err_t err = esp_wifi_remote_stop();
-            if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_INIT) {
-                ESP_LOGW(TAG, "esp_wifi_remote_stop failed: %s", esp_err_to_name(err));
-            }
-
-            err = esp_wifi_remote_deinit();
-            if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_INIT) {
-                ESP_LOGW(TAG, "esp_wifi_remote_deinit failed: %s", esp_err_to_name(err));
-            }
-
-            vTaskDelay(pdMS_TO_TICKS(1000));
-
-            // Re-init WiFi remote driver
-            wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-            err = esp_wifi_remote_init(&cfg);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "esp_wifi_remote_init failed during recovery: %s", esp_err_to_name(err));
-                c6_stack_broken = true;
-                continue;
-            }
-
-            // Ensure handlers stay registered (registering twice is prevented)
-            wifi_register_event_handlers_once();
-
-            // Reload credentials from NVS (user preference)
-            bool has_credentials = (wifi_load_credentials(saved_ssid, saved_password) == ESP_OK) && (strlen(saved_ssid) > 0);
-            if (!has_credentials) {
-                ESP_LOGE(TAG, "WiFi recovery: no saved credentials; cannot restart STA");
-                break;  // Non-retryable: no point retrying without credentials
-            }
-
-            // Reconfigure STA and restart
-            wifi_config_t wifi_config = {
-                .sta = {
-                    .threshold.authmode = ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD,
-                    .sae_pwe_h2e = ESP_WIFI_SAE_MODE,
-                    .sae_h2e_identifier = EXAMPLE_H2E_IDENTIFIER,
-                },
-            };
-
-            size_t ssid_len = strlen(saved_ssid);
-            size_t password_len = strlen(saved_password);
-            if (ssid_len >= sizeof(wifi_config.sta.ssid)) {
-                ssid_len = sizeof(wifi_config.sta.ssid) - 1;
-            }
-            if (password_len >= sizeof(wifi_config.sta.password)) {
-                password_len = sizeof(wifi_config.sta.password) - 1;
-            }
-            memcpy((char*)wifi_config.sta.ssid, saved_ssid, ssid_len);
-            wifi_config.sta.ssid[ssid_len] = '\0';
-            memcpy((char*)wifi_config.sta.password, saved_password, password_len);
-            wifi_config.sta.password[password_len] = '\0';
-
-            // Clear connection bits before restarting
-            if (s_wifi_event_group) {
-                xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
-            }
-
-            err = esp_wifi_remote_set_mode(WIFI_MODE_STA);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "esp_wifi_remote_set_mode failed during recovery: %s", esp_err_to_name(err));
-                c6_stack_broken = true;
-                continue;
-            }
-
-            err = esp_wifi_remote_set_config(WIFI_IF_STA, &wifi_config);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "esp_wifi_remote_set_config failed during recovery: %s", esp_err_to_name(err));
-                continue;
-            }
-
-            err = esp_wifi_remote_start();
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "esp_wifi_remote_start failed during recovery: %s", esp_err_to_name(err));
-                continue;
-            }
-
-            wifi_disable_power_save_best_effort();
-            wifi_set_protocol_11ax(WIFI_IF_STA);
-
-            // Kick connection attempt
-            err = esp_wifi_remote_connect();
-            if (err == ESP_OK) {
-                recovered = true;
-            } else {
-                ESP_LOGW(TAG, "esp_wifi_remote_connect failed during recovery: %s (attempt %d/%d)",
-                         esp_err_to_name(err), attempt + 1, max_recovery_attempts);
-            }
-        }
-
-        if (recovered) {
-            s_total_recovery_failures = 0;
-            ESP_LOGW(TAG, "WiFi recovery: reinit complete; reconnect will proceed via events");
-        } else if (c6_stack_broken) {
-            s_total_recovery_failures++;
-            ESP_LOGE(TAG, "WiFi recovery: all %d attempts failed (C6 stack broken, failure #%d)",
-                     max_recovery_attempts, s_total_recovery_failures);
-
-            if (s_total_recovery_failures >= 2) {
-                uint16_t streak = config_store_get_wifi_reboot_streak();
-                if (streak >= 1) {
-                    ESP_LOGE(TAG, "WiFi recovery: reboot streak=%u, staying in degraded mode to prevent loop",
-                             streak);
-                } else {
-                    ESP_LOGE(TAG, "WiFi recovery: escalating to hard reboot (streak=%u)", streak);
-                    config_store_increment_wifi_reboot_total();
-                    config_store_increment_wifi_reboot_streak();
-
-                    for (int i = 10; i > 0; i--) {
-                        char msg[64];
-                        snprintf(msg, sizeof(msg), "WiFi chip not responding\nRestarting in %d...", i);
-                        if (ugfx_ui_show_channel_message) {
-                            ugfx_ui_show_channel_message("p3a", msg, -1);
-                        }
-                        ESP_LOGW(TAG, "Hard reboot in %d...", i);
-                        vTaskDelay(pdMS_TO_TICKS(1000));
-                    }
-                    esp_restart();
-                }
-            }
-        } else {
-            ESP_LOGE(TAG, "WiFi recovery: all %d attempts failed; health monitor will retry later",
-                     max_recovery_attempts);
-        }
-        s_reinit_in_progress = false;
-    }
-}
-
-static void wifi_schedule_full_reinit(void)
-{
-    if (s_reinit_in_progress) {
-        ESP_LOGW(TAG, "WiFi recovery: reinit already in progress; ignoring request");
-        return;
-    }
-    if (!s_wifi_recovery_task) {
-        ESP_LOGE(TAG, "WiFi recovery: recovery task not running; cannot reinit");
-        return;
-    }
-
-    s_reinit_in_progress = true;
-    xTaskNotifyGive(s_wifi_recovery_task);
-}
-
-static void wifi_health_monitor_task(void *arg)
-{
-    (void)arg;
-    const char *HTAG = "wifi_health";
-
-    while (true) {
-        vTaskDelay(pdMS_TO_TICKS(s_wifi_health_interval_ms));
-
-        // Only monitor after we have been successfully connected at least once.
-        if (!s_initial_connection_done) {
-            continue;
-        }
-
-        // Skip monitoring while captive portal is active (AP mode)
-        if (s_captive_portal_server != NULL) {
-            continue;
-        }
-
-        // Skip monitoring if we're already performing a recovery reinit
-        if (s_reinit_in_progress) {
-            continue;
-        }
-
-        // Detect prolonged IP loss after initial connection (safety net for failed recovery)
-        if (!wifi_sta_has_ip()) {
-            s_no_ip_health_cycles++;
-            ESP_LOGW(HTAG, "No IP for %d health cycle(s) after initial connection",
-                     s_no_ip_health_cycles);
-            if (s_no_ip_health_cycles >= 3) {
-                ESP_LOGW(HTAG, "Forcing WiFi recovery after prolonged IP loss");
-                s_no_ip_health_cycles = 0;
-                wifi_schedule_full_reinit();
-            }
-            continue;
-        }
-        s_no_ip_health_cycles = 0;
-
-        // DNS-based reachability check (requires internet; chosen by user).
-        // Retry up to 3 times to avoid forcing a WiFi reconnect on transient DNS blips.
-        struct addrinfo hints = {
-            .ai_family = AF_INET,
-            .ai_socktype = SOCK_STREAM,
-        };
-        const int max_dns_attempts = 3;
-        bool dns_ok = false;
-        int last_err = 0;
-
-        for (int attempt = 0; attempt < max_dns_attempts && !dns_ok; attempt++) {
-            struct addrinfo *res = NULL;
-            last_err = getaddrinfo("google.com", "80", &hints, &res);
-            if (last_err == 0 && res != NULL) {
-                dns_ok = true;
-            }
-            if (res) {
-                freeaddrinfo(res);
-            }
-            if (!dns_ok && attempt < max_dns_attempts - 1) {
-                ESP_LOGW(HTAG, "Health check DNS attempt %d/%d failed (err=%d); retrying in 2s",
-                         attempt + 1, max_dns_attempts, last_err);
-                vTaskDelay(pdMS_TO_TICKS(2000));
-            }
-        }
-
-        if (!dns_ok) {
-            ESP_LOGW(HTAG, "Health check failed after %d attempts (last err=%d); forcing WiFi reconnect",
-                     max_dns_attempts, last_err);
-            esp_wifi_remote_disconnect(); // triggers WIFI_EVENT_STA_DISCONNECTED -> reconnect logic
-        } else {
-            ESP_LOGD(HTAG, "Health check OK");
-        }
-    }
 }
 
 static void event_handler(void* arg, esp_event_base_t event_base,
@@ -570,7 +304,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             }
         }
     } else if (event_base == WIFI_REMOTE_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        ESP_LOGW(TAG, "WiFi disconnected (initial_connection_done=%d, retry=%d)", 
+        ESP_LOGW(TAG, "WiFi disconnected (initial_connection_done=%d, retry=%d)",
                  s_initial_connection_done, s_retry_num);
 
         // Signal WiFi disconnection (always, before possible reinit)
@@ -590,7 +324,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             wifi_schedule_full_reinit();
             return;
         }
-        
+
         // For initial connection: use retry limit
         // After initial connection succeeded: always keep trying (persistent reconnection)
         if (!s_initial_connection_done && s_retry_num >= EXAMPLE_ESP_MAXIMUM_RETRY) {
@@ -599,17 +333,17 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         } else {
             // Always try to reconnect
             s_retry_num++;
-            
+
             // Add delay for persistent reconnection to avoid hammering the AP
             if (s_initial_connection_done && s_retry_num > 5) {
                 // After 5 quick retries, slow down to every 5 seconds
                 ESP_LOGD(TAG, "WiFi reconnect attempt %d (with backoff)", s_retry_num);
                 vTaskDelay(pdMS_TO_TICKS(5000));
             } else {
-                ESP_LOGD(TAG, "WiFi reconnect attempt %d/%d", s_retry_num, 
+                ESP_LOGD(TAG, "WiFi reconnect attempt %d/%d", s_retry_num,
                          s_initial_connection_done ? -1 : EXAMPLE_ESP_MAXIMUM_RETRY);
             }
-            
+
             esp_err_t err = esp_wifi_remote_connect();
             if (err != ESP_OK) {
                 ESP_LOGW(TAG, "esp_wifi_remote_connect failed: %s", esp_err_to_name(err));
@@ -623,9 +357,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         s_total_recovery_failures = 0;
         config_store_reset_wifi_reboot_streak();
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-        
+
         makapix_channel_signal_wifi_connected();
-        
+
         // Emit WiFi connected event (will trigger connectivity tracking)
         event_bus_emit_simple(P3A_EVENT_WIFI_CONNECTED);
 
@@ -637,7 +371,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
                                   (mdns_event_actions_t)(MDNS_EVENT_ENABLE_IP4 | MDNS_EVENT_ANNOUNCE_IP4));
             }
         }
-        
+
         // Stop captive portal if running
         if (s_captive_portal_server != NULL) {
             httpd_stop(s_captive_portal_server);
@@ -671,7 +405,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             }
             s_services_initialized = true;
         }
-        
+
         s_initial_connection_done = true;
         makapix_connect_if_registered();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_LOST_IP) {
@@ -698,7 +432,7 @@ static esp_err_t start_mdns_sta(void)
 
     mdns_hostname_set(hostname);
     mdns_instance_name_set(hostname);
-    
+
     // Only add service if not already added
     if (!s_mdns_service_added) {
         err = mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
@@ -713,7 +447,7 @@ static esp_err_t start_mdns_sta(void)
             return err;
         }
     }
-    
+
     return ESP_OK;
 }
 
@@ -775,7 +509,7 @@ static bool wifi_init_sta(const char *ssid, const char *password)
 
     // Recommendation 1: disable WiFi power save for reliability (USB-powered device).
     wifi_disable_power_save_best_effort();
-    
+
     // Enable Wi-Fi 6 protocol (best-effort)
     wifi_set_protocol_11ax(WIFI_IF_STA);
 
@@ -799,719 +533,6 @@ static bool wifi_init_sta(const char *ssid, const char *password)
         ESP_LOGW(TAG, "Connection timeout");
         return false;
     }
-}
-
-/* URL Decode Function - Decodes all %XX hex sequences and converts + to space */
-static void url_decode(char *str)
-{
-    if (!str) return;
-    
-    char *src = str;
-    char *dst = str;
-    
-    while (*src) {
-        if (*src == '+') {
-            *dst++ = ' ';
-            src++;
-        } else if (*src == '%' && src[1] && src[2]) {
-            // Decode %XX hex sequence
-            char hex[3] = {src[1], src[2], '\0'};
-            char *endptr;
-            unsigned long value = strtoul(hex, &endptr, 16);
-            if (*endptr == '\0' && value <= 255) {
-                *dst++ = (char)value;
-                src += 3;
-            } else {
-                // Invalid hex sequence, copy as-is
-                *dst++ = *src++;
-            }
-        } else {
-            *dst++ = *src++;
-        }
-    }
-    *dst = '\0';
-}
-
-/* URL Encode Function - Encodes unsafe characters for URL parameters */
-static void url_encode(const char *in, char *out, size_t out_len) {
-    static const char *hex = "0123456789ABCDEF";
-    size_t o = 0;
-    for (size_t i = 0; in[i] && o + 3 < out_len; i++) {
-        unsigned char c = (unsigned char)in[i];
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-            (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') {
-            out[o++] = c;
-        } else {
-            out[o++] = '%';
-            out[o++] = hex[c >> 4];
-            out[o++] = hex[c & 0xF];
-        }
-    }
-    out[o] = '\0';
-}
-
-/* HTML Escape Function - Escapes special characters for safe HTML display */
-static void html_escape_ssid(const char *in, char *out, size_t out_len) {
-    size_t o = 0;
-    for (size_t i = 0; in[i] && o + 6 < out_len; i++) {
-        unsigned char c = (unsigned char)in[i];
-        switch (c) {
-            case '&':
-                memcpy(out + o, "&amp;", 5);
-                o += 5;
-                break;
-            case '<':
-                memcpy(out + o, "&lt;", 4);
-                o += 4;
-                break;
-            case '>':
-                memcpy(out + o, "&gt;", 4);
-                o += 4;
-                break;
-            case '"':
-                memcpy(out + o, "&quot;", 6);
-                o += 6;
-                break;
-            case '\'':
-                memcpy(out + o, "&#39;", 5);
-                o += 5;
-                break;
-            default:
-                out[o++] = c;
-                break;
-        }
-    }
-    out[o] = '\0';
-}
-
-/* Serve success page with SSID injected - serves HTML directly instead of redirect */
-static esp_err_t serve_success_page_with_ssid(httpd_req_t *req, const char *ssid) {
-    const char *filepath = "/webui/setup/success.html";
-    const char *placeholder = "{SSID}";
-
-    FILE *f = fopen(filepath, "r");
-    if (!f) {
-        ESP_LOGE(TAG, "Failed to open %s", filepath);
-        httpd_resp_set_type(req, "text/html");
-        httpd_resp_send(req,
-            "<html><body style=\"font-family:sans-serif;text-align:center;padding:40px;\">"
-            "<h1>p3a Setup</h1>"
-            "<p>Credentials saved! Device will reboot now.</p>"
-            "</body></html>",
-            HTTPD_RESP_USE_STRLEN);
-        return ESP_OK;
-    }
-
-    // Get file size
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if (size <= 0 || size > 64 * 1024) {
-        fclose(f);
-        httpd_resp_set_status(req, "500 Internal Server Error");
-        httpd_resp_send(req, "Invalid file", HTTPD_RESP_USE_STRLEN);
-        return ESP_FAIL;
-    }
-
-    // Allocate buffer for file content
-    char *html = malloc(size + 1);
-    if (!html) {
-        fclose(f);
-        httpd_resp_set_status(req, "500 Internal Server Error");
-        httpd_resp_send(req, "Memory error", HTTPD_RESP_USE_STRLEN);
-        return ESP_FAIL;
-    }
-
-    size_t bytes_read = fread(html, 1, size, f);
-    fclose(f);
-    html[bytes_read] = '\0';
-
-    // HTML-escape the SSID
-    char ssid_escaped[128];
-    html_escape_ssid(ssid, ssid_escaped, sizeof(ssid_escaped));
-
-    // Find and replace {SSID} placeholder
-    char *placeholder_pos = strstr(html, placeholder);
-    if (placeholder_pos) {
-        size_t placeholder_len = strlen(placeholder);
-        size_t ssid_len = strlen(ssid_escaped);
-        size_t before_len = placeholder_pos - html;
-        size_t after_len = bytes_read - before_len - placeholder_len;
-
-        // Allocate new buffer for modified HTML
-        size_t new_size = before_len + ssid_len + after_len + 1;
-        char *new_html = malloc(new_size);
-        if (new_html) {
-            memcpy(new_html, html, before_len);
-            memcpy(new_html + before_len, ssid_escaped, ssid_len);
-            memcpy(new_html + before_len + ssid_len, placeholder_pos + placeholder_len, after_len);
-            new_html[new_size - 1] = '\0';
-
-            free(html);
-            html = new_html;
-            bytes_read = new_size - 1;
-        }
-    }
-
-    // Replace all {HOSTNAME} placeholders with effective hostname
-    {
-        char hn[24];
-        config_store_get_hostname(hn, sizeof(hn));
-        const char *hn_placeholder = "{HOSTNAME}";
-        size_t hn_placeholder_len = strlen(hn_placeholder);
-        size_t hn_len = strlen(hn);
-
-        char *pos;
-        while ((pos = strstr(html, hn_placeholder)) != NULL) {
-            size_t before_len = pos - html;
-            size_t after_len = bytes_read - before_len - hn_placeholder_len;
-            size_t new_size = before_len + hn_len + after_len + 1;
-            char *new_html = malloc(new_size);
-            if (!new_html) break;
-            memcpy(new_html, html, before_len);
-            memcpy(new_html + before_len, hn, hn_len);
-            memcpy(new_html + before_len + hn_len, pos + hn_placeholder_len, after_len);
-            new_html[new_size - 1] = '\0';
-            free(html);
-            html = new_html;
-            bytes_read = new_size - 1;
-        }
-    }
-
-    // Send the HTML response
-    httpd_resp_set_type(req, "text/html");
-    esp_err_t ret = httpd_resp_send(req, html, bytes_read);
-
-    free(html);
-    return ret;
-}
-
-/* Simple file server for captive portal - serves HTML from LittleFS */
-static esp_err_t serve_file_simple(httpd_req_t *req, const char *filepath) {
-    FILE *f = fopen(filepath, "r");
-    if (!f) {
-        ESP_LOGE(TAG, "Failed to open %s", filepath);
-        // Minimal fallback HTML in case files are missing
-        httpd_resp_set_type(req, "text/html");
-        httpd_resp_send(req,
-            "<html><body style=\"font-family:sans-serif;text-align:center;padding:40px;\">"
-            "<h1>p3a Setup</h1>"
-            "<p>UI files not found. Please reflash the device.</p>"
-            "</body></html>",
-            HTTPD_RESP_USE_STRLEN);
-        return ESP_OK;
-    }
-
-    // Get file size
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if (size <= 0 || size > 64 * 1024) { // Max 64KB for setup pages
-        fclose(f);
-        httpd_resp_set_status(req, "500 Internal Server Error");
-        httpd_resp_send(req, "Invalid file", HTTPD_RESP_USE_STRLEN);
-        return ESP_FAIL;
-    }
-
-    // Set content type
-    httpd_resp_set_type(req, "text/html");
-
-    // Stream file in chunks
-    char chunk[1024];
-    long remaining = size;
-
-    while (remaining > 0) {
-        size_t to_read = (remaining < sizeof(chunk)) ? remaining : sizeof(chunk);
-        size_t bytes_read = fread(chunk, 1, to_read, f);
-        if (bytes_read == 0) break;
-
-        esp_err_t ret = httpd_resp_send_chunk(req, chunk, bytes_read);
-        if (ret != ESP_OK) {
-            fclose(f);
-            return ret;
-        }
-        remaining -= bytes_read;
-    }
-
-    fclose(f);
-    httpd_resp_send_chunk(req, NULL, 0); // End response
-    return ESP_OK;
-}
-
-/* HTTP Server Handlers */
-static esp_err_t root_get_handler(httpd_req_t *req)
-{
-    return serve_file_simple(req, "/webui/setup/index.html");
-}
-
-static esp_err_t save_post_handler(httpd_req_t *req)
-{
-    #define MAX_DEVICE_NAME_LEN 17  // 16 + null
-    char content[280];
-    size_t recv_size = sizeof(content) - 1;
-
-    int ret = httpd_req_recv(req, content, recv_size);
-    if (ret <= 0) {
-        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-            httpd_resp_send_408(req);
-        }
-        return ESP_FAIL;
-    }
-    content[ret] = '\0';
-
-    // Parse SSID, password, and device_name from form data
-    char ssid[MAX_SSID_LEN] = {0};
-    char password[MAX_PASSWORD_LEN] = {0};
-    char device_name[MAX_DEVICE_NAME_LEN] = {0};
-
-    // Simple form parsing
-    char *ssid_start = strstr(content, "ssid=");
-    char *password_start = strstr(content, "password=");
-    char *device_name_start = strstr(content, "device_name=");
-
-    if (ssid_start) {
-        ssid_start += 5; // Skip "ssid="
-        char *ssid_end = strchr(ssid_start, '&');
-        if (ssid_end) {
-            int len = ssid_end - ssid_start;
-            if (len > MAX_SSID_LEN - 1) len = MAX_SSID_LEN - 1;
-            strncpy(ssid, ssid_start, len);
-            ssid[len] = '\0';
-        } else {
-            strncpy(ssid, ssid_start, MAX_SSID_LEN - 1);
-        }
-        // Properly decode URL-encoded SSID
-        url_decode(ssid);
-    }
-
-    if (password_start) {
-        password_start += 9; // Skip "password="
-        char *password_end = strchr(password_start, '&');
-        if (password_end) {
-            int len = password_end - password_start;
-            if (len > MAX_PASSWORD_LEN - 1) len = MAX_PASSWORD_LEN - 1;
-            strncpy(password, password_start, len);
-            password[len] = '\0';
-        } else {
-            strncpy(password, password_start, MAX_PASSWORD_LEN - 1);
-        }
-        // Properly decode URL-encoded password
-        url_decode(password);
-    }
-
-    if (device_name_start) {
-        device_name_start += 12; // Skip "device_name="
-        char *device_name_end = strchr(device_name_start, '&');
-        if (device_name_end) {
-            int len = device_name_end - device_name_start;
-            if (len > MAX_DEVICE_NAME_LEN - 2) len = MAX_DEVICE_NAME_LEN - 2;
-            strncpy(device_name, device_name_start, len);
-            device_name[len] = '\0';
-        } else {
-            strncpy(device_name, device_name_start, MAX_DEVICE_NAME_LEN - 2);
-        }
-        url_decode(device_name);
-        // Save device name (config_store validates format)
-        esp_err_t dn_err = config_store_set_device_name(device_name);
-        if (dn_err != ESP_OK) {
-            ESP_LOGW(TAG, "Invalid device_name '%s', ignoring", device_name);
-        }
-    }
-
-    if (strlen(ssid) > 0) {
-        wifi_save_credentials(ssid, password);
-        ESP_LOGD(TAG, "Saved credentials, serving success page and rebooting...");
-
-        // Serve success page directly with SSID injected
-        esp_err_t ret = serve_success_page_with_ssid(req, ssid);
-
-        // Short delay to ensure response is transmitted before reboot
-        vTaskDelay(pdMS_TO_TICKS(1500));
-        esp_restart();
-        return ret;
-    } else {
-        // SSID required - serve error page
-        return serve_file_simple(req, "/webui/setup/error.html");
-    }
-
-    return ESP_OK;
-}
-
-static esp_err_t erase_post_handler(httpd_req_t *req)
-{
-    app_wifi_erase_credentials();
-    ESP_LOGD(TAG, "Erased credentials, rebooting...");
-
-    // Serve the erased confirmation page
-    esp_err_t ret = serve_file_simple(req, "/webui/setup/erased.html");
-
-    // Delay before reboot to allow the response to be sent and rendered
-    vTaskDelay(pdMS_TO_TICKS(1200));
-    esp_restart();
-    return ret;
-}
-
-// Handler for /setup/ wildcard routes - serves setup pages from LittleFS
-static esp_err_t setup_get_handler(httpd_req_t *req)
-{
-    const char *uri = req->uri;
-
-    // Security: prevent path traversal and limit URI length
-    if (strstr(uri, "..") != NULL || strlen(uri) > 64) {
-        httpd_resp_set_status(req, "400 Bad Request");
-        httpd_resp_send(req, "Invalid path", HTTPD_RESP_USE_STRLEN);
-        return ESP_FAIL;
-    }
-
-    // Map /setup/X to /webui/setup/X
-    char filepath[128];
-    snprintf(filepath, sizeof(filepath), "/webui%.64s", uri);
-
-    return serve_file_simple(req, filepath);
-}
-
-// Captive portal detection handlers for various OS platforms
-// Android connectivity check
-static esp_err_t generate_204_handler(httpd_req_t *req)
-{
-    httpd_resp_set_status(req, "204 No Content");
-    httpd_resp_send(req, NULL, 0);
-    return ESP_OK;
-}
-
-// iOS/macOS captive portal check
-static esp_err_t hotspot_detect_handler(httpd_req_t *req)
-{
-    httpd_resp_set_type(req, "text/html");
-    httpd_resp_send(req, "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>", HTTPD_RESP_USE_STRLEN);
-    return ESP_OK;
-}
-
-// Windows connectivity check
-static esp_err_t connecttest_handler(httpd_req_t *req)
-{
-    httpd_resp_set_type(req, "text/plain");
-    httpd_resp_send(req, "Microsoft Connect Test", HTTPD_RESP_USE_STRLEN);
-    return ESP_OK;
-}
-
-// Firefox captive portal check
-static esp_err_t canonical_handler(httpd_req_t *req)
-{
-    httpd_resp_set_status(req, "200 OK");
-    httpd_resp_send(req, "success\n", HTTPD_RESP_USE_STRLEN);
-    return ESP_OK;
-}
-
-static httpd_uri_t root = {
-    .uri       = "/",
-    .method    = HTTP_GET,
-    .handler   = root_get_handler,
-    .user_ctx  = NULL
-};
-
-static httpd_uri_t save = {
-    .uri       = "/save",
-    .method    = HTTP_POST,
-    .handler   = save_post_handler,
-    .user_ctx  = NULL
-};
-
-static httpd_uri_t erase = {
-    .uri       = "/erase",
-    .method    = HTTP_POST,
-    .handler   = erase_post_handler,
-    .user_ctx  = NULL
-};
-
-static httpd_uri_t setup_pages = {
-    .uri       = "/setup/*",
-    .method    = HTTP_GET,
-    .handler   = setup_get_handler,
-    .user_ctx  = NULL
-};
-
-// Captive portal detection URIs
-static httpd_uri_t generate_204 = {
-    .uri       = "/generate_204",
-    .method    = HTTP_GET,
-    .handler   = generate_204_handler,
-    .user_ctx  = NULL
-};
-
-static httpd_uri_t hotspot_detect = {
-    .uri       = "/hotspot-detect.html",
-    .method    = HTTP_GET,
-    .handler   = hotspot_detect_handler,
-    .user_ctx  = NULL
-};
-
-static httpd_uri_t connecttest = {
-    .uri       = "/connecttest.txt",
-    .method    = HTTP_GET,
-    .handler   = connecttest_handler,
-    .user_ctx  = NULL
-};
-
-static httpd_uri_t canonical = {
-    .uri       = "/canonical.html",
-    .method    = HTTP_GET,
-    .handler   = canonical_handler,
-    .user_ctx  = NULL
-};
-
-/* DNS Server for Captive Portal - responds with AP IP to all queries */
-static void dns_server_task(void *pvParameters)
-{
-    char rx_buffer[128];
-    char tx_buffer[128];
-
-    struct sockaddr_in dest_addr = {
-        .sin_addr.s_addr = htonl(INADDR_ANY),
-        .sin_family = AF_INET,
-        .sin_port = htons(53)
-    };
-
-    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock < 0) {
-        ESP_LOGE(TAG, "Unable to create DNS socket");
-        vTaskDelete(NULL);
-        return;
-    }
-
-    if (bind(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0) {
-        ESP_LOGE(TAG, "DNS socket unable to bind");
-        close(sock);
-        vTaskDelete(NULL);
-        return;
-    }
-
-    ESP_LOGD(TAG, "DNS server started - responding with 192.168.4.1 to all queries");
-
-    while (1) {
-        struct sockaddr_in source_addr;
-        socklen_t socklen = sizeof(source_addr);
-        int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer), 0, 
-                          (struct sockaddr *)&source_addr, &socklen);
-
-        if (len < 12) continue;  // DNS header is 12 bytes minimum
-
-        // Build DNS response - copy request and modify flags
-        memcpy(tx_buffer, rx_buffer, len);
-        
-        // Set response flags: QR=1 (response), AA=1 (authoritative), RCODE=0 (no error)
-        tx_buffer[2] = 0x84;  // QR=1, Opcode=0, AA=1, TC=0, RD=0
-        tx_buffer[3] = 0x00;  // RA=0, Z=0, RCODE=0
-        
-        // Set answer count to 1
-        tx_buffer[6] = 0x00;
-        tx_buffer[7] = 0x01;
-        
-        // Append answer: pointer to name (0xC00C), type A, class IN, TTL, rdlength, IP
-        int answer_offset = len;
-        tx_buffer[answer_offset++] = 0xC0;  // Pointer to question name
-        tx_buffer[answer_offset++] = 0x0C;
-        tx_buffer[answer_offset++] = 0x00;  // Type A
-        tx_buffer[answer_offset++] = 0x01;
-        tx_buffer[answer_offset++] = 0x00;  // Class IN
-        tx_buffer[answer_offset++] = 0x01;
-        tx_buffer[answer_offset++] = 0x00;  // TTL (60 seconds)
-        tx_buffer[answer_offset++] = 0x00;
-        tx_buffer[answer_offset++] = 0x00;
-        tx_buffer[answer_offset++] = 0x3C;
-        tx_buffer[answer_offset++] = 0x00;  // RDLENGTH (4 bytes for IPv4)
-        tx_buffer[answer_offset++] = 0x04;
-        // IP: 192.168.4.1
-        tx_buffer[answer_offset++] = 192;
-        tx_buffer[answer_offset++] = 168;
-        tx_buffer[answer_offset++] = 4;
-        tx_buffer[answer_offset++] = 1;
-
-        sendto(sock, tx_buffer, answer_offset, 0, 
-               (struct sockaddr *)&source_addr, sizeof(source_addr));
-    }
-
-    close(sock);
-    vTaskDelete(NULL);
-}
-
-/* Start Captive Portal */
-static void start_captive_portal(void)
-{
-    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.server_port = 80;
-    config.uri_match_fn = httpd_uri_match_wildcard;  // Enable wildcard URI matching
-
-    if (httpd_start(&s_captive_portal_server, &config) == ESP_OK) {
-        // Register captive portal detection handlers first (various OS platforms)
-        httpd_register_uri_handler(s_captive_portal_server, &generate_204);     // Android
-        httpd_register_uri_handler(s_captive_portal_server, &hotspot_detect);   // iOS/macOS
-        httpd_register_uri_handler(s_captive_portal_server, &connecttest);      // Windows
-        httpd_register_uri_handler(s_captive_portal_server, &canonical);        // Firefox
-        
-        // Register setup page handlers
-        httpd_register_uri_handler(s_captive_portal_server, &root);
-        httpd_register_uri_handler(s_captive_portal_server, &save);
-        httpd_register_uri_handler(s_captive_portal_server, &erase);
-        httpd_register_uri_handler(s_captive_portal_server, &setup_pages);
-        ESP_LOGD(TAG, "HTTP server started on port 80");
-    } else {
-        ESP_LOGE(TAG, "Failed to start HTTP server");
-    }
-
-    // Start DNS server task
-    xTaskCreate(dns_server_task, "dns_server", 4096, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, NULL);
-}
-
-/* Start mDNS in AP mode so p3a.local works during WiFi setup */
-static esp_err_t start_mdns_ap(void)
-{
-    char hostname[24];
-    config_store_get_hostname(hostname, sizeof(hostname));
-
-    esp_err_t err = mdns_init();
-    bool mdns_was_already_initialized = (err == ESP_ERR_INVALID_STATE);
-
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-        ESP_LOGE(TAG, "mDNS init failed: %s", esp_err_to_name(err));
-        return err;
-    }
-    if (mdns_was_already_initialized) {
-        ESP_LOGW(TAG, "mDNS already initialized; reconfiguring for AP");
-    }
-
-    err = mdns_hostname_set(hostname);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "mDNS hostname set failed: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    char instance_name[48];
-    snprintf(instance_name, sizeof(instance_name), "%s WiFi Setup", hostname);
-    err = mdns_instance_name_set(instance_name);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "mDNS instance name set failed: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    // Only add service if not already added (using global flag for idempotency)
-    if (!s_mdns_service_added) {
-        err = mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
-        if (err == ESP_OK) {
-            s_mdns_service_added = true;
-        } else if (err == ESP_ERR_INVALID_ARG) {
-            // Service might already exist - not fatal
-            ESP_LOGW(TAG, "mDNS service may already exist, continuing");
-            s_mdns_service_added = true;
-        } else {
-            ESP_LOGE(TAG, "mDNS service add failed: %s", esp_err_to_name(err));
-            return err;
-        }
-    }
-
-    ESP_LOGD(TAG, "mDNS started in AP mode: http://%s.local/", hostname);
-    return ESP_OK;
-}
-
-/* Soft AP Initialization with Wi-Fi 6 */
-static void wifi_init_softap(void)
-{
-    esp_err_t err;
-    
-    // Check if WiFi is already initialized (from previous STA attempt)
-    wifi_mode_t current_mode;
-    bool wifi_already_initialized = (esp_wifi_remote_get_mode(&current_mode) == ESP_OK);
-    
-    if (wifi_already_initialized) {
-        // WiFi is already initialized from STA mode - just switch modes
-        // This is the standard ESP-IDF approach: stop -> set_mode -> set_config -> start
-        ESP_LOGD(TAG, "WiFi already initialized, switching from STA to AP mode");
-        
-        err = esp_wifi_remote_stop();
-        if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_INIT) {
-            ESP_LOGW(TAG, "esp_wifi_remote_stop failed: %s", esp_err_to_name(err));
-        }
-        
-        // Create AP netif (STA netif can coexist, no need to destroy it)
-        ap_netif = esp_netif_create_default_wifi_ap();
-        
-        wifi_config_t wifi_config = {
-            .ap = {
-                .ssid = EXAMPLE_ESP_AP_SSID,
-                .ssid_len = strlen(EXAMPLE_ESP_AP_SSID),
-                .channel = 1,
-                .password = EXAMPLE_ESP_AP_PASSWORD,
-                .max_connection = 4,
-                .authmode = strlen(EXAMPLE_ESP_AP_PASSWORD) > 0 ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN,
-            },
-        };
-        
-        if (strlen(EXAMPLE_ESP_AP_PASSWORD) == 0) {
-            wifi_config.ap.authmode = WIFI_AUTH_OPEN;
-        }
-
-        ESP_ERROR_CHECK(esp_wifi_remote_set_mode(WIFI_MODE_AP));
-        ESP_ERROR_CHECK(esp_wifi_remote_set_config(WIFI_IF_AP, &wifi_config));
-        ESP_ERROR_CHECK(esp_wifi_remote_start());
-    } else {
-        // WiFi not initialized yet - do fresh initialization for AP mode
-        ESP_LOGD(TAG, "Fresh WiFi initialization for AP mode");
-        
-        ap_netif = esp_netif_create_default_wifi_ap();
-        
-        wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-        ESP_ERROR_CHECK(esp_wifi_remote_init(&cfg));
-
-        wifi_config_t wifi_config = {
-            .ap = {
-                .ssid = EXAMPLE_ESP_AP_SSID,
-                .ssid_len = strlen(EXAMPLE_ESP_AP_SSID),
-                .channel = 1,
-                .password = EXAMPLE_ESP_AP_PASSWORD,
-                .max_connection = 4,
-                .authmode = strlen(EXAMPLE_ESP_AP_PASSWORD) > 0 ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN,
-            },
-        };
-        
-        if (strlen(EXAMPLE_ESP_AP_PASSWORD) == 0) {
-            wifi_config.ap.authmode = WIFI_AUTH_OPEN;
-        }
-
-        ESP_ERROR_CHECK(esp_wifi_remote_set_mode(WIFI_MODE_AP));
-        ESP_ERROR_CHECK(esp_wifi_remote_set_config(WIFI_IF_AP, &wifi_config));
-        ESP_ERROR_CHECK(esp_wifi_remote_start());
-    }
-    
-    // Enable Wi-Fi 6 protocol for AP (best-effort)
-    wifi_set_protocol_11ax(WIFI_IF_AP);
-
-    ESP_LOGD(TAG, "Soft AP initialized. SSID:%s password:%s", EXAMPLE_ESP_AP_SSID, 
-             strlen(EXAMPLE_ESP_AP_PASSWORD) > 0 ? EXAMPLE_ESP_AP_PASSWORD : "none");
-
-    // Configure AP IP address
-    esp_netif_ip_info_t ip_info;
-    IP4_ADDR(&ip_info.ip, 192, 168, 4, 1);
-    IP4_ADDR(&ip_info.gw, 192, 168, 4, 1);
-    IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);
-    esp_netif_dhcps_stop(ap_netif);
-    esp_netif_set_ip_info(ap_netif, &ip_info);
-    esp_netif_dhcps_start(ap_netif);
-
-    ESP_LOGD(TAG, "AP IP address: " IPSTR, IP2STR(&ip_info.ip));
-
-    // Start captive portal
-    start_captive_portal();
-
-    // Start mDNS so p3a.local works in AP mode
-    esp_err_t mdns_err = start_mdns_ap();
-    if (mdns_err != ESP_OK) {
-        ESP_LOGW(TAG, "mDNS start failed (captive portal still works via IP): %s", esp_err_to_name(mdns_err));
-    }
-
-    // Notify the system that softAP mode has started
-    event_bus_emit_simple(P3A_EVENT_SOFTAP_STARTED);
 }
 
 esp_err_t app_wifi_init(void)
@@ -1566,9 +587,9 @@ esp_err_t app_wifi_init(void)
     // Try to load saved credentials
     char saved_ssid[MAX_SSID_LEN] = {0};
     char saved_password[MAX_PASSWORD_LEN] = {0};
-    
+
     bool has_credentials = (wifi_load_credentials(saved_ssid, saved_password) == ESP_OK);
-    
+
     if (has_credentials && strlen(saved_ssid) > 0) {
         bool connected = wifi_init_sta(saved_ssid, saved_password);
         if (connected) {
@@ -1592,9 +613,9 @@ esp_err_t app_wifi_get_local_ip(char *ip_str, size_t max_len)
     if (!ip_str || max_len == 0) {
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     ip_str[0] = '\0';
-    
+
     // Check if in captive portal (AP) mode
     if (s_captive_portal_server != NULL && ap_netif != NULL) {
         esp_netif_ip_info_t ip_info;
@@ -1603,7 +624,7 @@ esp_err_t app_wifi_get_local_ip(char *ip_str, size_t max_len)
             return ESP_OK;
         }
     }
-    
+
     // Check if in STA mode with connection
     esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey(WIFI_STA_NETIF_KEY);
     if (sta_netif != NULL) {
@@ -1615,7 +636,6 @@ esp_err_t app_wifi_get_local_ip(char *ip_str, size_t max_len)
             }
         }
     }
-    
+
     return ESP_ERR_NOT_FOUND;
 }
-

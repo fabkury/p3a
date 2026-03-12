@@ -34,7 +34,7 @@ static const char *TAG = "view_tracker";
 #define VIEW_TRACKER_TICK_MS 1000
 
 // Task poll interval
-#define VIEW_TRACKER_POLL_MS 50
+#define VIEW_TRACKER_POLL_MS 500
 
 // Timing thresholds
 #define VIEW_TRIGGER_SECONDS 5

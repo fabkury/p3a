@@ -284,7 +284,7 @@ void refresh_task_impl(void *pvParameters)
             }
             
             // Delay between queries
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            vTaskDelay(pdMS_TO_TICKS(350));
         }
         
         free(resp);

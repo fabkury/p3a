@@ -2,6 +2,7 @@
 // Copyright 2024-2025 p3a Contributors
 
 #include "makapix_mqtt.h"
+#include "makapix.h"  // makapix_get_current_post_source()
 #include "mqtt_client.h"
 #include "esp_transport.h"
 #include "esp_log.h"
@@ -626,7 +627,8 @@ esp_err_t makapix_mqtt_publish_status(int32_t current_post_id)
 
     cJSON_AddStringToObject(status, "player_key", s_player_key);
     cJSON_AddStringToObject(status, "status", "online");
-    if (current_post_id > 0) {
+    post_source_t source = makapix_get_current_post_source();
+    if (source == POST_SOURCE_MAKAPIX && current_post_id != 0) {
         cJSON_AddNumberToObject(status, "current_post_id", current_post_id);
     } else {
         cJSON_AddNullToObject(status, "current_post_id");

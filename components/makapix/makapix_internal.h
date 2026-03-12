@@ -64,6 +64,7 @@ extern const char *MAKAPIX_TAG;
 // State machine
 extern makapix_state_t s_makapix_state;
 extern int32_t s_current_post_id;
+extern post_source_t s_current_post_source;
 extern bool s_view_intent_intentional;
 
 // Registration/provisioning

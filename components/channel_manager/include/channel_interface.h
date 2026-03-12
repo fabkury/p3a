@@ -10,6 +10,7 @@
 #include <time.h>
 #include "esp_err.h"
 #include "sdcard_channel.h"  // asset_type_t
+#include "play_scheduler_types.h"  // post_source_t
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,7 +51,8 @@ typedef struct {
  * Contains everything needed to load and display an artwork.
  */
 typedef struct {
-    int32_t post_id;          // Post ID for view tracking (0 if not a Makapix artwork)
+    int32_t post_id;          // Post ID for view tracking (0 if not applicable)
+    post_source_t post_source; // Source of the post_id
     char filepath[256];       // Full path to the asset file
     char storage_key[96];     // Vault storage key (SHA256 hex prefix + extension)
     uint32_t item_index;      // Index within the channel

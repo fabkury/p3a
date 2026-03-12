@@ -4,6 +4,7 @@
 #pragma once
 
 #include "esp_err.h"
+#include "play_scheduler_types.h"  // post_source_t
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -65,13 +66,21 @@ void makapix_cancel_provisioning(void);
 int32_t makapix_get_current_post_id(void);
 
 /**
- * @brief Set current post ID
- * 
+ * @brief Set current post ID and source
+ *
  * Called when artwork changes to update the tracked post ID.
- * 
+ *
  * @param post_id Post ID to set (0 for local animations)
+ * @param post_source Source of the post_id
  */
-void makapix_set_current_post_id(int32_t post_id);
+void makapix_set_current_post_id(int32_t post_id, post_source_t post_source);
+
+/**
+ * @brief Get current post source
+ *
+ * @return Current post source
+ */
+post_source_t makapix_get_current_post_source(void);
 
 /**
  * @brief Get and clear view intent flag

@@ -26,7 +26,7 @@ static const char *s_giphy_ext_strings[] = { ".webp", ".gif", ".png", ".jpg" };
 
 int32_t giphy_id_to_post_id(const char *giphy_id)
 {
-    if (!giphy_id || giphy_id[0] == '\0') return -1;
+    if (!giphy_id || giphy_id[0] == '\0') return 0;
 
     uint32_t hash = GIPHY_DJB2_SALT;
     unsigned char c;
@@ -34,8 +34,8 @@ int32_t giphy_id_to_post_id(const char *giphy_id)
         hash = ((hash << 5) + hash) + (uint32_t)c;
     }
 
-    int32_t post_id = -(int32_t)(hash & 0x7FFFFFFF);
-    if (post_id == 0) post_id = -1;  // Avoid 0 (reserved for "no post_id")
+    int32_t post_id = (int32_t)(hash & 0x7FFFFFFF);
+    if (post_id == 0) post_id = 1;  // Avoid 0 (reserved for "no post_id")
     return post_id;
 }
 

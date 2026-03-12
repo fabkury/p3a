@@ -91,6 +91,7 @@ static esp_err_t prepare_and_request_swap(ps_state_t *state, const ps_artwork_t 
     request.type = artwork->type;
     request.channel_type = artwork->channel_type;
     request.post_id = artwork->post_id;
+    request.post_source = artwork->post_source;
 
     // Dwell time: user override > artwork dwell
     if (state->dwell_time_seconds > 0) {

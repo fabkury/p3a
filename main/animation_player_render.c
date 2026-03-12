@@ -585,7 +585,7 @@ skip_prefetch:
             }
             
             // Signal view tracker with the artwork info captured at swap time
-            view_tracker_signal_swap(s_front_buffer.post_id, s_front_buffer.filepath);
+            view_tracker_signal_swap(s_front_buffer.post_id, s_front_buffer.post_source, s_front_buffer.filepath);
         }
         s_use_prefetched = true;
     }

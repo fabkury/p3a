@@ -415,9 +415,9 @@ esp_err_t h_get_api_state(httpd_req_t *req)
         cJSON_AddNullToObject(data, "rssi");
     }
 
-    // Current Makapix post_id if available; NULL for SD card or unknown.
+    // Current Makapix post_id if available; NULL for non-Makapix or unknown.
     int32_t post_id = makapix_get_current_post_id();
-    if (post_id > 0) {
+    if (makapix_get_current_post_source() == POST_SOURCE_MAKAPIX && post_id != 0) {
         cJSON_AddNumberToObject(data, "current_post_id", (double)post_id);
     } else {
         cJSON_AddNullToObject(data, "current_post_id");

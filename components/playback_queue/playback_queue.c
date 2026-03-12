@@ -22,6 +22,7 @@ static esp_err_t map_artwork_to_request(const ps_artwork_t *artwork, queued_item
     out->request.type = artwork->type;
     out->request.channel_type = artwork->channel_type;
     out->request.post_id = artwork->post_id;
+    out->request.post_source = artwork->post_source;
 
     if (artwork->dwell_time_ms > 0) {
         out->request.dwell_time_ms = artwork->dwell_time_ms;

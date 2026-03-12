@@ -44,6 +44,7 @@ static const char *TAG = "view_tracker";
 typedef struct {
     volatile uint32_t pending;
     int32_t post_id;
+    post_source_t post_source;
     char filepath[256];
 } pending_swap_t;
 
@@ -57,6 +58,7 @@ typedef struct {
     
     // Current tracking state
     int32_t current_post_id;
+    post_source_t current_post_source;
     char current_filepath[256];
     bool is_intentional;
     
@@ -169,11 +171,12 @@ void view_tracker_deinit(void)
     ESP_LOGI(TAG, "View tracker deinitialized");
 }
 
-void view_tracker_signal_swap(int32_t post_id, const char *filepath)
+void view_tracker_signal_swap(int32_t post_id, post_source_t post_source, const char *filepath)
 {
     // Store the swap info for the view tracker task to process
     // This captures the post_id and filepath at swap time, before the navigator can advance
     s_pending_swap.post_id = post_id;
+    s_pending_swap.post_source = post_source;
     if (filepath) {
         strlcpy(s_pending_swap.filepath, filepath, sizeof(s_pending_swap.filepath));
     } else {
@@ -195,6 +198,7 @@ void view_tracker_stop(void)
     
     s_state.tracking_active = false;
     s_state.current_post_id = 0;
+    s_state.current_post_source = POST_SOURCE_NONE;
     s_state.elapsed_seconds = 0;
     s_state.current_filepath[0] = '\0';
 }
@@ -281,19 +285,13 @@ static void process_swap_event(void)
 {
     // Read the swap info that was captured at swap time
     int32_t post_id = s_pending_swap.post_id;
+    post_source_t post_source = s_pending_swap.post_source;
     char filepath[256];
     strlcpy(filepath, s_pending_swap.filepath, sizeof(filepath));
-    
-    // Check for valid post_id
-    if (post_id <= 0) {
-        ESP_LOGD(TAG, "No valid post_id for swapped artwork");
-        view_tracker_stop();
-        return;
-    }
-    
-    // Check if this is a Makapix artwork (filepath contains /vault/)
-    if (strstr(filepath, "/vault/") == NULL) {
-        ESP_LOGD(TAG, "Not a Makapix artwork, stopping tracker");
+
+    // Only track views for Makapix artwork
+    if (post_source != POST_SOURCE_MAKAPIX || post_id == 0) {
+        ESP_LOGD(TAG, "Not a Makapix artwork (source=%d), stopping tracker", post_source);
         view_tracker_stop();
         return;
     }
@@ -317,6 +315,7 @@ static void process_swap_event(void)
     
     // New animation - update state and restart timer
     s_state.current_post_id = post_id;
+    s_state.current_post_source = post_source;
     s_state.is_intentional = is_intentional;
     s_state.elapsed_seconds = 0;
     s_state.tracking_active = true;
@@ -333,7 +332,7 @@ static void process_swap_event(void)
 
 static void send_view_event(void)
 {
-    if (!s_state.tracking_active || s_state.current_post_id <= 0) {
+    if (!s_state.tracking_active || s_state.current_post_source != POST_SOURCE_MAKAPIX || s_state.current_post_id == 0) {
         ESP_LOGW(TAG, "Cannot send view: invalid state");
         return;
     }

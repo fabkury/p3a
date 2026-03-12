@@ -779,6 +779,7 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id, const char *storage_key, 
 
     // Set artwork-specific fields
     cmd->channels[0].artwork.post_id = post_id;
+    cmd->channels[0].artwork.post_source = (post_id != 0) ? POST_SOURCE_MAKAPIX : POST_SOURCE_NONE;
     strlcpy(cmd->channels[0].artwork.storage_key, storage_key, sizeof(cmd->channels[0].artwork.storage_key));
     strlcpy(cmd->channels[0].artwork.art_url, art_url, sizeof(cmd->channels[0].artwork.art_url));
 

@@ -119,7 +119,7 @@ esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag);
  * @brief Play a single Makapix artwork via the scheduler
  *
  * Creates a playset with one PS_CHANNEL_TYPE_ARTWORK channel.
- * Downloads if not cached. View tracking enabled if post_id > 0.
+ * Downloads if not cached. View tracking enabled for Makapix sources.
  *
  * @param post_id Post ID for view tracking (0 for no tracking)
  * @param storage_key UUID storage key

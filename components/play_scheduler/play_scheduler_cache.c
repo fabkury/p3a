@@ -156,9 +156,8 @@ esp_err_t ps_build_sdcard_index(void)
         sdcard_index_entry_t *e = &entries[idx];
         memset(e, 0, sizeof(*e));
 
-        // Use negative post_id to identify SD card entries (vs positive for Makapix)
-        // Sequential negative IDs: -1, -2, -3, ...
-        e->post_id = -((int32_t)idx + 1);
+        // Sequential positive IDs: 1, 2, 3, ...
+        e->post_id = (int32_t)(idx + 1);
 
         e->extension = (uint8_t)ext;
         e->kind = 0;  // Artwork

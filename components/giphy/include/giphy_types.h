@@ -13,10 +13,10 @@ extern "C" {
  * @brief Giphy channel entry (64 bytes, same size as makapix_channel_entry_t)
  *
  * Stored in channel_cache_t alongside Ci/LAi infrastructure.
- * The post_id is a salted DJB2 hash of giphy_id (negative).
+ * The post_id is a salted DJB2 hash of giphy_id.
  */
 typedef struct __attribute__((packed)) {
-    int32_t post_id;              ///< DJB2 hash of giphy_id (negative, salt=0x47495048)
+    int32_t post_id;              ///< DJB2 hash of giphy_id (salt=0x47495048)
     uint8_t kind;                 ///< 0 = gif artwork
     uint8_t extension;            ///< 0=webp, 1=gif
     uint16_t width;               ///< Rendition width in pixels
@@ -31,8 +31,8 @@ _Static_assert(sizeof(giphy_channel_entry_t) == 64, "giphy entry must be 64 byte
 /**
  * @brief DJB2 salt for Giphy post_id generation
  *
- * Different from the standard DJB2 seed (5381) used by SD card channel,
- * to avoid post_id collisions when mixing Giphy and SD card in the same playset.
+ * Different from the standard DJB2 seed (5381) to provide distinct hash space
+ * for Giphy IDs.
  * 0x47495048 = "GIPH" in ASCII.
  */
 #define GIPHY_DJB2_SALT 0x47495048u

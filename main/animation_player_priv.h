@@ -129,6 +129,7 @@ typedef struct {
 
     // View tracking: post_id of the artwork being displayed
     int32_t post_id;
+    post_source_t post_source;
 } animation_buffer_t;
 
 // Animation player state (now delegates to display_renderer for LCD operations)
@@ -153,6 +154,7 @@ typedef struct {
     uint64_t start_time_ms;
     uint32_t start_frame;
     int32_t post_id;  // For view tracking
+    post_source_t post_source;
 } animation_load_override_t;
 
 extern animation_load_override_t s_load_override;

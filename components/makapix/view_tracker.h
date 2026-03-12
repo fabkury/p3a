@@ -4,6 +4,7 @@
 #pragma once
 
 #include "esp_err.h"
+#include "play_scheduler_types.h"  // post_source_t
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -38,7 +39,7 @@ void view_tracker_deinit(void);
  * @param post_id   The post ID of the artwork now playing (0 to stop tracking)
  * @param filepath  The filepath of the artwork now playing (NULL to stop tracking)
  */
-void view_tracker_signal_swap(int32_t post_id, const char *filepath);
+void view_tracker_signal_swap(int32_t post_id, post_source_t post_source, const char *filepath);
 
 /**
  * @brief Stop tracking views

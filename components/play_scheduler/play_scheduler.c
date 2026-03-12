@@ -293,7 +293,7 @@ esp_err_t play_scheduler_init(void)
     s_state.nae_count = 0;
     s_state.nae_enabled = true;
     s_state.epoch_id = 0;
-    s_state.last_played_id = 0;  // 0 won't match any valid post_id (Makapix=positive, SDcard=negative)
+    s_state.last_played_id = 0;  // 0 won't match any valid post_id
     s_state.exposure_mode = PS_EXPOSURE_EQUAL;
     s_state.pick_mode = PS_PICK_RECENCY;
     s_state.channel_select_mode = (ps_channel_select_mode_t)config_store_get_channel_select_mode();

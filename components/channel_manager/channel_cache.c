@@ -178,15 +178,12 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
         cache->entry_count = header.ci_count;
 
         // Validate loaded entries for corruption
-        // Giphy channels use negative post_ids (DJB2 hash, negated)
-        // Makapix channels use positive post_ids
-        bool is_giphy = (cache->channel_type == PS_CHANNEL_TYPE_GIPHY);
         for (size_t i = 0; i < cache->entry_count; i++) {
             makapix_channel_entry_t *e = &cache->entries[i];
 
-            // Validate post_id is reasonable
-            if (is_giphy ? (e->post_id >= 0) : (e->post_id <= 0)) {
-                ESP_LOGW(TAG, "Corrupt entry[%zu]: invalid post_id=%ld", i, (long)e->post_id);
+            // Zero post_id is always invalid (reserved for "no post_id")
+            if (e->post_id == 0) {
+                ESP_LOGW(TAG, "Corrupt entry[%zu]: invalid post_id=0", i);
                 free(cache->entries);
                 cache->entries = NULL;
                 cache->entry_count = 0;

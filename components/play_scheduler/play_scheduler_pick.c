@@ -42,6 +42,15 @@ static __attribute__((unused)) bool has_404_marker(const char *filepath)
     return (stat(marker, &st) == 0);
 }
 
+static post_source_t post_source_from_channel_type(ps_channel_type_t type)
+{
+    switch (type) {
+        case PS_CHANNEL_TYPE_SDCARD:  return POST_SOURCE_SDCARD;
+        case PS_CHANNEL_TYPE_GIPHY:   return POST_SOURCE_GIPHY;
+        default:                      return POST_SOURCE_MAKAPIX;
+    }
+}
+
 static asset_type_t get_asset_type_from_extension(uint8_t ext)
 {
     switch (ext) {
@@ -225,6 +234,7 @@ static bool pick_recency_sdcard(ps_state_t *state, size_t channel_index, ps_artw
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
         out_artwork->channel_type = ch->type;
+        out_artwork->post_source = post_source_from_channel_type(ch->type);
 
         return true;
     }
@@ -349,6 +359,7 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
         out_artwork->channel_type = ch->type;
+        out_artwork->post_source = post_source_from_channel_type(ch->type);
 
         return true;
     }
@@ -434,6 +445,7 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
         out_artwork->channel_type = ch->type;
+        out_artwork->post_source = post_source_from_channel_type(ch->type);
 
         return true;
     }
@@ -537,6 +549,7 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         out_artwork->channel_index = (uint8_t)channel_index;
         out_artwork->channel_type = ch->type;
+        out_artwork->post_source = post_source_from_channel_type(ch->type);
 
         return true;
     }

@@ -249,6 +249,8 @@ void animation_loader_task(void *arg)
         uint64_t start_time_ms = 0;
         int32_t post_id = 0;
 
+        post_source_t post_source = POST_SOURCE_NONE;
+
         if (ov.valid) {
             filepath = ov.filepath;
             type = ov.type;
@@ -257,6 +259,7 @@ void animation_loader_task(void *arg)
             start_frame = ov.start_frame;
             start_time_ms = ov.start_time_ms;
             post_id = ov.post_id;
+            post_source = ov.post_source;
             ESP_LOGD(TAG, "Loader task: swap request: %s (type=%d start_frame=%u start_time_ms=%llu post_id=%d)",
                      filepath, (int)type, (unsigned)start_frame, (unsigned long long)start_time_ms, (int)post_id);
         } else if (swap_was_requested) {
@@ -285,6 +288,7 @@ void animation_loader_task(void *arg)
             channel_type = current.request.channel_type;
             name_for_log = current.request.filepath;
             post_id = current.request.post_id;
+            post_source = current.request.post_source;
         } else {
             // No swap request and no override - nothing to do
             // This handles the case where we woke up due to timeout while waiting
@@ -369,6 +373,7 @@ void animation_loader_task(void *arg)
             s_back_buffer.prefetch_pending = true;
             s_back_buffer.ready = false;
             s_back_buffer.post_id = post_id;  // For view tracking
+            s_back_buffer.post_source = post_source;
             if (swap_was_requested) {
                 s_swap_requested = true;
                 ESP_LOGD(TAG, "Loader task: Swap was requested, will swap after prefetch");

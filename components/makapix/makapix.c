@@ -19,6 +19,7 @@ const char *MAKAPIX_TAG = "makapix";
 
 makapix_state_t s_makapix_state = MAKAPIX_STATE_IDLE;
 int32_t s_current_post_id = 0;
+post_source_t s_current_post_source = POST_SOURCE_NONE;
 bool s_view_intent_intentional = false;  // Track if next view should be intentional
 
 char s_registration_code[8] = {0};  // 6 chars + null + padding to avoid warning
@@ -109,6 +110,7 @@ esp_err_t makapix_init(void)
     }
 
     s_current_post_id = 0;
+    s_current_post_source = POST_SOURCE_NONE;
     memset(s_registration_code, 0, sizeof(s_registration_code));
     memset(s_registration_expires, 0, sizeof(s_registration_expires));
 
@@ -164,9 +166,15 @@ int32_t makapix_get_current_post_id(void)
     return s_current_post_id;
 }
 
-void makapix_set_current_post_id(int32_t post_id)
+void makapix_set_current_post_id(int32_t post_id, post_source_t post_source)
 {
     s_current_post_id = post_id;
+    s_current_post_source = post_source;
+}
+
+post_source_t makapix_get_current_post_source(void)
+{
+    return s_current_post_source;
 }
 
 bool makapix_get_and_clear_view_intent(void)

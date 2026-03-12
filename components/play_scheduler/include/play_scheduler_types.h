@@ -40,6 +40,16 @@ extern "C" {
 // ============================================================================
 
 /**
+ * @brief Source of a post_id (replaces sign-based convention)
+ */
+typedef enum {
+    POST_SOURCE_NONE = 0,     // No post_id (unset/unknown)
+    POST_SOURCE_MAKAPIX,      // Makapix platform post
+    POST_SOURCE_GIPHY,        // Giphy trending/search
+    POST_SOURCE_SDCARD,       // Local SD card file
+} post_source_t;
+
+/**
  * @brief Exposure modes for channel weighting
  */
 typedef enum {
@@ -102,7 +112,7 @@ typedef enum {
  * Used in: /sdcard/p3a/channel/sdcard.bin
  */
 typedef struct __attribute__((packed)) {
-    int32_t post_id;              // Sequential negative ID (-1, -2, ...)
+    int32_t post_id;              // Sequential positive ID (1, 2, ...)
     uint8_t extension;            // 0=webp, 1=gif, 2=png, 3=jpg
     uint8_t kind;                 // Always 0 (artwork) for now
     uint8_t reserved1[2];         // Padding for alignment
@@ -121,6 +131,7 @@ _Static_assert(sizeof(sdcard_index_entry_t) == 160, "SD card index entry must be
 typedef struct {
     int32_t artwork_id;           // Globally unique artwork ID
     int32_t post_id;              // Post ID for view tracking
+    post_source_t post_source;    // Source of the post_id
     char filepath[256];           // Local path to file
     char storage_key[96];         // Vault storage key
     uint32_t created_at;          // Unix timestamp
@@ -151,6 +162,7 @@ typedef struct {
     // Artwork-specific fields (only when type == PS_CHANNEL_TYPE_ARTWORK)
     struct {
         int32_t post_id;          // Post ID for view tracking (0 = local file)
+        post_source_t post_source; // Source of the post_id
         char storage_key[64];     // UUID storage key (empty for local files)
         char art_url[256];        // Download URL (empty if cached or local)
         char filepath[256];       // Full path (computed or provided directly)

@@ -1,6 +1,8 @@
 idf_component_register(
     SRCS
         "p3a_state.c"
+        "p3a_state_connectivity.c"
+        "p3a_state_channel.c"
         "p3a_touch_router.c"
         "p3a_render.c"
         "p3a_logo.c"
@@ -9,6 +11,8 @@ idf_component_register(
         "fresh_boot.c"
     INCLUDE_DIRS
         "include"
+    PRIV_INCLUDE_DIRS
+        "."
     REQUIRES
         esp_common
         freertos

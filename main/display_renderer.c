@@ -60,10 +60,6 @@ int g_upscale_row_end_bottom = 0;
 volatile bool g_upscale_worker_top_done = false;
 volatile bool g_upscale_worker_bottom_done = false;
 
-// Buffer management
-uint8_t g_render_buffer_index = 0;
-uint8_t g_last_display_buffer = 0;
-
 // Multi-buffering state tracking (supports up to 3 buffers)
 buffer_info_t g_buffer_info[P3A_MAX_DISPLAY_BUFFERS] = {
     { .state = BUFFER_STATE_FREE },
@@ -119,13 +115,11 @@ esp_err_t display_renderer_init(esp_lcd_panel_handle_t panel,
     g_displaying_idx = -1;
     g_last_submitted_idx = -1;
 
-    // Create semaphore for triple buffering (3+ buffers)
-    if (buffer_count >= 3) {
-        g_buffer_free_sem = xSemaphoreCreateCounting(buffer_count, buffer_count);
-        if (!g_buffer_free_sem) {
-            ESP_LOGE(DISPLAY_TAG, "Failed to create buffer-free semaphore");
-            return ESP_ERR_NO_MEM;
-        }
+    // Create semaphore for triple buffering
+    g_buffer_free_sem = xSemaphoreCreateCounting(buffer_count, buffer_count);
+    if (!g_buffer_free_sem) {
+        ESP_LOGE(DISPLAY_TAG, "Failed to create buffer-free semaphore");
+        return ESP_ERR_NO_MEM;
     }
 
     esp_err_t err = prepare_vsync();
@@ -401,29 +395,20 @@ size_t display_renderer_get_buffer_bytes(void)
 
 static esp_err_t prepare_vsync(void)
 {
-    if (g_display_buffer_count > 1) {
-        if (g_display_vsync_sem == NULL) {
-            g_display_vsync_sem = xSemaphoreCreateBinary();
-        }
-        if (g_display_vsync_sem == NULL) {
-            ESP_LOGE(DISPLAY_TAG, "Failed to allocate VSYNC semaphore");
-            return ESP_ERR_NO_MEM;
-        }
-        (void)xSemaphoreTake(g_display_vsync_sem, 0);
-        xSemaphoreGive(g_display_vsync_sem);
-
-        esp_lcd_dpi_panel_event_callbacks_t cbs = {
-            .on_refresh_done = display_panel_refresh_done_cb,
-        };
-        return esp_lcd_dpi_panel_register_event_callbacks(g_display_panel, &cbs, g_display_vsync_sem);
+    if (g_display_vsync_sem == NULL) {
+        g_display_vsync_sem = xSemaphoreCreateBinary();
     }
-
-    if (g_display_vsync_sem) {
-        vSemaphoreDelete(g_display_vsync_sem);
-        g_display_vsync_sem = NULL;
-        ESP_LOGW(DISPLAY_TAG, "Single LCD frame buffer in use; tearing may occur");
+    if (g_display_vsync_sem == NULL) {
+        ESP_LOGE(DISPLAY_TAG, "Failed to allocate VSYNC semaphore");
+        return ESP_ERR_NO_MEM;
     }
-    return ESP_OK;
+    (void)xSemaphoreTake(g_display_vsync_sem, 0);
+    xSemaphoreGive(g_display_vsync_sem);
+
+    esp_lcd_dpi_panel_event_callbacks_t cbs = {
+        .on_refresh_done = display_panel_refresh_done_cb,
+    };
+    return esp_lcd_dpi_panel_register_event_callbacks(g_display_panel, &cbs, g_display_vsync_sem);
 }
 
 bool display_panel_refresh_done_cb(esp_lcd_panel_handle_t panel,
@@ -434,8 +419,8 @@ bool display_panel_refresh_done_cb(esp_lcd_panel_handle_t panel,
     (void)edata;
     BaseType_t higher_prio_task_woken = pdFALSE;
 
-    // Triple buffering state tracking (when 3+ buffers)
-    if (g_display_buffer_count >= 3) {
+    // Triple buffering state tracking
+    {
         // Free the buffer that was displaying
         int8_t prev_displaying = g_displaying_idx;
 
@@ -455,7 +440,7 @@ bool display_panel_refresh_done_cb(esp_lcd_panel_handle_t panel,
         }
     }
 
-    // Legacy semaphore for 2-buffer mode compatibility
+    // VSYNC signaling for render task
     SemaphoreHandle_t sem = (SemaphoreHandle_t)user_ctx;
     if (sem) {
         xSemaphoreGiveFromISR(sem, &higher_prio_task_woken);
@@ -505,15 +490,7 @@ void display_render_task(void *arg)
 {
     (void)arg;
 
-    const bool use_vsync = (g_display_buffer_count > 1) && (g_display_vsync_sem != NULL);
-    const uint8_t buffer_count = (g_display_buffer_count == 0) ? 1 : g_display_buffer_count;
-    const bool use_triple_buffering = (g_display_buffer_count >= 3) && (g_buffer_free_sem != NULL);
     int64_t frame_processing_start_us = 0;
-
-    // Legacy 2-buffer mode: clear semaphore at start
-    // if (use_vsync && !use_triple_buffering) {
-    //     xSemaphoreTake(g_display_vsync_sem, 0);
-    // }
 
     while (true) {
         display_render_mode_t mode = g_display_mode_request;
@@ -530,23 +507,16 @@ void display_render_task(void *arg)
         int8_t back_buffer_idx;
         uint8_t *back_buffer;
 
-        if (use_triple_buffering) {
-            // Triple buffering: find any FREE buffer
-            back_buffer_idx = acquire_free_buffer(portMAX_DELAY);
-            if (back_buffer_idx < 0) {
-                // Should not happen with portMAX_DELAY, but handle gracefully
-                vTaskDelay(pdMS_TO_TICKS(1));
-                continue;
-            }
-            back_buffer = g_display_buffers[back_buffer_idx];
-        } else {
-            // Legacy 2-buffer mode or UI mode: use rotating index with VSYNC wait
-            back_buffer_idx = (int8_t)g_render_buffer_index;
-            back_buffer = g_display_buffers[back_buffer_idx];
+        back_buffer_idx = acquire_free_buffer(portMAX_DELAY);
+        if (back_buffer_idx < 0) {
+            // Should not happen with portMAX_DELAY, but handle gracefully
+            vTaskDelay(pdMS_TO_TICKS(1));
+            continue;
         }
+        back_buffer = g_display_buffers[back_buffer_idx];
 
         if (!back_buffer) {
-            if (use_triple_buffering && back_buffer_idx >= 0) {
+            if (back_buffer_idx >= 0) {
                 g_buffer_info[back_buffer_idx].state = BUFFER_STATE_FREE;
             }
             vTaskDelay(pdMS_TO_TICKS(10));
@@ -587,14 +557,11 @@ void display_render_task(void *arg)
                     if (frame_delay_ms < 0) {
                         // Callback returned error - release back buffer and skip this frame.
                         // The display continues showing the previously-submitted frame.
-                        // SAFETY: We must NOT fall back to g_last_display_buffer because
-                        // that buffer may still be DISPLAYING (DMA actively reading it).
-                        // Writing overlays to it or resubmitting it would race with DMA.
-                        if (use_triple_buffering) {
-                            g_buffer_info[back_buffer_idx].state = BUFFER_STATE_FREE;
-                            if (g_buffer_free_sem) {
-                                xSemaphoreGive(g_buffer_free_sem);
-                            }
+                        // SAFETY: Release back buffer. The display continues showing
+                        // the previously-submitted frame via DMA.
+                        g_buffer_info[back_buffer_idx].state = BUFFER_STATE_FREE;
+                        if (g_buffer_free_sem) {
+                            xSemaphoreGive(g_buffer_free_sem);
                         }
                         vTaskDelay(pdMS_TO_TICKS(10));
                         continue;
@@ -648,27 +615,15 @@ void display_render_task(void *arg)
         // ================================================================
         // 5. Submit to DMA
         // ================================================================
-        g_last_display_buffer = (uint8_t)back_buffer_idx;
+        xSemaphoreTake(g_display_vsync_sem, 0);
+        xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
 
-        if (use_triple_buffering) {
-            xSemaphoreTake(g_display_vsync_sem, 0);
-            xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
-
-            // Now safe to submit - at most 1 buffer will be PENDING
-            g_buffer_info[back_buffer_idx].state = BUFFER_STATE_PENDING;
-            g_last_submitted_idx = back_buffer_idx;
-        } else {
-            // Legacy mode: update rotating index
-            g_render_buffer_index = ((uint8_t)back_buffer_idx + 1) % buffer_count;
-        }
+        // Now safe to submit - at most 1 buffer will be PENDING
+        g_buffer_info[back_buffer_idx].state = BUFFER_STATE_PENDING;
+        g_last_submitted_idx = back_buffer_idx;
 
         esp_lcd_panel_draw_bitmap(g_display_panel, 0, 0, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, back_buffer);
         
         g_last_frame_present_us = esp_timer_get_time();
-        
-
-        if (!use_vsync) {
-            vTaskDelay(5);
-        }
     }
 }

@@ -96,10 +96,6 @@ extern int g_upscale_row_end_bottom;
 extern volatile bool g_upscale_worker_top_done;
 extern volatile bool g_upscale_worker_bottom_done;
 
-// Buffer management
-extern uint8_t g_render_buffer_index;
-extern uint8_t g_last_display_buffer;
-
 // Multi-buffering state tracking (supports 3+ buffers)
 typedef enum {
     BUFFER_STATE_FREE,       // Safe to write

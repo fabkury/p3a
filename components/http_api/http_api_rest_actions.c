@@ -20,6 +20,7 @@
 #include "show_url.h"
 #include "makapix.h"
 #include "makapix_store.h"
+#include "config_store.h"
 #include "event_bus.h"
 #include <sys/stat.h>
 
@@ -554,6 +555,23 @@ esp_err_t h_post_makapix_unregister(httpd_req_t *req) {
     esp_err_t err = makapix_unregister();
     if (err != ESP_OK) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"Unregister failed\",\"code\":\"UNREGISTER_FAILED\"}");
+        return ESP_OK;
+    }
+
+    send_json(req, 200, "{\"ok\":true}");
+    return ESP_OK;
+}
+
+// ---------- Giphy Reset Random ID Handler ----------
+
+/**
+ * POST /action/giphy_reset_random_id
+ * Delete the persisted Giphy random_id so a new one is obtained on next refresh
+ */
+esp_err_t h_post_giphy_reset_random_id(httpd_req_t *req) {
+    esp_err_t err = config_store_delete_giphy_random_id();
+    if (err != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to delete random_id\",\"code\":\"DELETE_FAILED\"}");
         return ESP_OK;
     }
 

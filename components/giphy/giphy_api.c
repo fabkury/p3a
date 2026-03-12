@@ -158,6 +158,76 @@ static void url_encode(const char *in, char *out, size_t out_len)
     out[o] = '\0';
 }
 
+esp_err_t giphy_fetch_random_id(const char *api_key, char *out_random_id, size_t max_len)
+{
+    if (!api_key || !out_random_id || max_len == 0) return ESP_ERR_INVALID_ARG;
+    out_random_id[0] = '\0';
+
+    char url[256];
+    snprintf(url, sizeof(url), "https://api.giphy.com/v1/randomid?api_key=%s", api_key);
+
+    esp_http_client_config_t config = {
+        .url = url,
+        .timeout_ms = 10000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .buffer_size = 1024,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (!client) {
+        ESP_LOGE(TAG, "random_id: failed to init HTTP client");
+        return ESP_FAIL;
+    }
+
+    esp_err_t err = esp_http_client_open(client, 0);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "random_id: HTTP open failed: %s", esp_err_to_name(err));
+        esp_http_client_cleanup(client);
+        return ESP_FAIL;
+    }
+
+    esp_http_client_fetch_headers(client);
+    int status = esp_http_client_get_status_code(client);
+
+    char buf[256];
+    int total_read = 0;
+    int read_len;
+    while (total_read < (int)sizeof(buf) - 1) {
+        read_len = esp_http_client_read(client, buf + total_read, sizeof(buf) - 1 - total_read);
+        if (read_len <= 0) break;
+        total_read += read_len;
+    }
+    buf[total_read] = '\0';
+
+    esp_http_client_close(client);
+    esp_http_client_cleanup(client);
+
+    if (status != 200) {
+        ESP_LOGE(TAG, "random_id: API returned status %d", status);
+        return ESP_FAIL;
+    }
+
+    cJSON *root = cJSON_Parse(buf);
+    if (!root) {
+        ESP_LOGE(TAG, "random_id: failed to parse JSON");
+        return ESP_FAIL;
+    }
+
+    const cJSON *data = cJSON_GetObjectItem(root, "data");
+    const cJSON *rid = data ? cJSON_GetObjectItem(data, "random_id") : NULL;
+    if (cJSON_IsString(rid) && rid->valuestring[0]) {
+        strlcpy(out_random_id, rid->valuestring, max_len);
+        ESP_LOGI(TAG, "Obtained random_id: %s", out_random_id);
+    } else {
+        ESP_LOGE(TAG, "random_id: missing or empty in response");
+        cJSON_Delete(root);
+        return ESP_FAIL;
+    }
+
+    cJSON_Delete(root);
+    return ESP_OK;
+}
+
 esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
                            giphy_channel_entry_t *out_entries,
                            size_t *out_count, bool *out_has_more)
@@ -206,6 +276,12 @@ esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
                      ctx->api_key, GIPHY_PAGE_LIMIT, offset, ctx->rating, ctx->rendition);
         }
         ESP_LOGI(TAG, "Fetching trending: offset=%d, limit=%d", offset, GIPHY_PAGE_LIMIT);
+    }
+
+    // Append random_id if available
+    if (ctx->random_id[0] != '\0') {
+        size_t url_len = strlen(url);
+        snprintf(url + url_len, sizeof(url) - url_len, "&random_id=%s", ctx->random_id);
     }
 
     // Configure HTTP client

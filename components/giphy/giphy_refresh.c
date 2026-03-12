@@ -354,6 +354,19 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
     ctx.screen_width = P3A_DISPLAY_WIDTH;
     ctx.screen_height = P3A_DISPLAY_HEIGHT;
 
+    // Load or fetch random_id for content personalization
+    ctx.random_id[0] = '\0';
+    if (config_store_get_giphy_random_id(ctx.random_id, sizeof(ctx.random_id)) != ESP_OK
+        || ctx.random_id[0] == '\0') {
+        giphy_fetch_random_id(ctx.api_key, ctx.random_id, sizeof(ctx.random_id));
+        if (ctx.random_id[0] != '\0') {
+            config_store_set_giphy_random_id(ctx.random_id);
+            ESP_LOGI(TAG, "Saved Giphy random_id to NVS");
+        } else {
+            ESP_LOGW(TAG, "Failed to obtain Giphy random_id, proceeding without");
+        }
+    }
+
     if (query && query[0] != '\0') {
         strlcpy(ctx.query, query, sizeof(ctx.query));
         ESP_LOGI(TAG, "Search mode: q=\"%s\"", ctx.query);

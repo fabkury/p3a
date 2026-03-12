@@ -1179,6 +1179,84 @@ esp_err_t config_store_get_giphy_rating(char *out, size_t max_len)
     return cfg_get_string("giphy_rating", "pg-13", out, max_len);
 }
 
+// ============================================================================
+// Giphy Random ID (persisted, cached)
+// ============================================================================
+
+static char s_giphy_random_id[40] = "";
+static bool s_giphy_random_id_loaded = false;
+
+esp_err_t config_store_set_giphy_random_id(const char *random_id)
+{
+    if (!random_id) return ESP_ERR_INVALID_ARG;
+
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) return err;
+
+    cJSON_DeleteItemFromObject(cfg, "giphy_random_id");
+    cJSON_AddStringToObject(cfg, "giphy_random_id", random_id);
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    if (err == ESP_OK) {
+        strlcpy(s_giphy_random_id, random_id, sizeof(s_giphy_random_id));
+        s_giphy_random_id_loaded = true;
+    }
+    return err;
+}
+
+esp_err_t config_store_get_giphy_random_id(char *out, size_t max_len)
+{
+    if (!out || max_len == 0) return ESP_ERR_INVALID_ARG;
+
+    if (s_giphy_random_id_loaded) {
+        if (s_giphy_random_id[0] == '\0') return ESP_ERR_NOT_FOUND;
+        strlcpy(out, s_giphy_random_id, max_len);
+        return ESP_OK;
+    }
+
+    cJSON *cfg = NULL;
+    if (config_store_load(&cfg) != ESP_OK) {
+        s_giphy_random_id_loaded = true;
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "giphy_random_id");
+    if (item && cJSON_IsString(item) && item->valuestring[0]) {
+        strlcpy(s_giphy_random_id, item->valuestring, sizeof(s_giphy_random_id));
+    }
+
+    s_giphy_random_id_loaded = true;
+    cJSON_Delete(cfg);
+
+    if (s_giphy_random_id[0] == '\0') return ESP_ERR_NOT_FOUND;
+    strlcpy(out, s_giphy_random_id, max_len);
+    return ESP_OK;
+}
+
+esp_err_t config_store_delete_giphy_random_id(void)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) return err;
+
+    cJSON_DeleteItemFromObject(cfg, "giphy_random_id");
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+    if (err == ESP_OK) {
+        s_giphy_random_id[0] = '\0';
+        s_giphy_random_id_loaded = true;
+    }
+    return err;
+}
+
+void config_store_invalidate_giphy_random_id(void)
+{
+    s_giphy_random_id_loaded = false;
+}
+
 #define GIPHY_CACHE_SIZE_DEFAULT 192
 #define GIPHY_CACHE_SIZE_MIN     32
 #define GIPHY_CACHE_SIZE_MAX     500

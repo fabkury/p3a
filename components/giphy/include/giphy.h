@@ -52,7 +52,20 @@ typedef struct {
     bool prefer_downsized;      ///< When true and rendition is fixed_height, prefer downsized_medium
     uint16_t screen_width;      ///< Display width in pixels (for size-gating downsized_medium)
     uint16_t screen_height;     ///< Display height in pixels (for size-gating downsized_medium)
+    char random_id[40];         ///< Giphy random_id for personalization (empty = omit)
 } giphy_fetch_ctx_t;
+
+/**
+ * @brief Fetch a random_id from Giphy API for content personalization
+ *
+ * Calls GET /v1/randomid. On failure, sets out_random_id[0] = '\0'.
+ *
+ * @param api_key       Giphy API key
+ * @param out_random_id Output buffer for the random_id string
+ * @param max_len       Size of out_random_id buffer
+ * @return ESP_OK on success, ESP_FAIL on error
+ */
+esp_err_t giphy_fetch_random_id(const char *api_key, char *out_random_id, size_t max_len);
 
 /**
  * @brief Fetch a single page of GIFs from Giphy API (trending or search)

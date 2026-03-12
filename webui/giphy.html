@@ -147,6 +147,26 @@ body {
 }
 .status.success { background: #4CAF50; color: white; }
 .status.error { background: #f44336; color: white; }
+.readonly-value {
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: #333;
+    word-break: break-all;
+}
+.readonly-value.empty { color: #999; font-style: italic; font-family: inherit; }
+.danger-btn {
+    background: #f44336;
+    color: white;
+    border: none;
+    padding: 9px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.danger-btn:active:not(:disabled) { background: #d32f2f; }
+.danger-btn:disabled { background: #ccc; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -160,6 +180,15 @@ body {
         <input class="setting-input" id="giphy-api-key" type="text" placeholder="Giphy API Key">
     </div>
     <div class="setting-hint">Enter your Giphy API key. Giphy channels will not work without a valid key.</div>
+</div>
+<div class="section" id="random-id-section" style="display:none">
+    <h3>Analytics ID</h3>
+    <div class="setting-row">
+        <span class="setting-label">Random ID</span>
+        <span class="readonly-value empty" id="random-id-value">Not set</span>
+    </div>
+    <div class="setting-hint">Giphy uses this anonymous ID to personalize trending results. Resetting it gives you a fresh identity.</div>
+    <button class="danger-btn" style="width:100%;margin-top:8px" id="reset-rid-btn" onclick="resetRandomId()">Reset Random ID</button>
 </div>
 <div class="section">
     <h3>Content</h3>
@@ -220,6 +249,17 @@ function loadSettings() {
                 refreshSel.value = refreshVal;
                 if (!refreshSel.value) refreshSel.value = '3600';
                 document.getElementById('giphy-cache-size').value = cfg.giphy_cache_size || 400;
+                // Random ID display
+                var ridSpan = document.getElementById('random-id-value');
+                var ridSection = document.getElementById('random-id-section');
+                if (cfg.giphy_random_id) {
+                    ridSpan.textContent = cfg.giphy_random_id;
+                    ridSpan.className = 'readonly-value';
+                } else {
+                    ridSpan.textContent = 'Not set';
+                    ridSpan.className = 'readonly-value empty';
+                }
+                ridSection.style.display = '';
             } catch (e) {
                 showToast('Failed to load settings', true);
             }
@@ -262,6 +302,28 @@ function saveAll() {
         }
     };
     xhr.send(JSON.stringify(partial));
+}
+
+function resetRandomId() {
+    if (!confirm('Reset Giphy Random ID? A new one will be obtained on next refresh.')) return;
+    var btn = document.getElementById('reset-rid-btn');
+    btn.disabled = true;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/action/giphy_reset_random_id', true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            btn.disabled = false;
+            if (xhr.status >= 200 && xhr.status < 300) {
+                showToast('Random ID reset', false);
+                var ridSpan = document.getElementById('random-id-value');
+                ridSpan.textContent = 'Not set';
+                ridSpan.className = 'readonly-value empty';
+            } else {
+                showToast('Reset failed (HTTP ' + xhr.status + ')', true);
+            }
+        }
+    };
+    xhr.send();
 }
 
 loadSettings();

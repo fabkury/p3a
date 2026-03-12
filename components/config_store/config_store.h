@@ -376,6 +376,27 @@ esp_err_t config_store_set_giphy_rating(const char *rating);
 esp_err_t config_store_get_giphy_rating(char *out, size_t max_len);
 
 /**
+ * @brief Set Giphy random_id (persisted, cached)
+ */
+esp_err_t config_store_set_giphy_random_id(const char *random_id);
+
+/**
+ * @brief Get Giphy random_id
+ * @return ESP_OK if non-empty, ESP_ERR_NOT_FOUND if absent/empty
+ */
+esp_err_t config_store_get_giphy_random_id(char *out, size_t max_len);
+
+/**
+ * @brief Delete Giphy random_id from NVS
+ */
+esp_err_t config_store_delete_giphy_random_id(void);
+
+/**
+ * @brief Invalidate cached Giphy random_id (forces reload from NVS)
+ */
+void config_store_invalidate_giphy_random_id(void);
+
+/**
  * @brief Set Giphy cache size (max entries per channel)
  *
  * @param size Cache size (32-500, default 400)

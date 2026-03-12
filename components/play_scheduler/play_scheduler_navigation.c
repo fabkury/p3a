@@ -66,8 +66,8 @@ static void ps_handle_missing_file(ps_state_t *state, const ps_artwork_t *artwor
         channel_cache_schedule_save(ch->cache);
     }
 
-    // Wake download manager to re-download this file (no cursor reset needed)
-    download_manager_wake();
+    // Rescan so the download manager re-discovers the evicted file
+    download_manager_rescan();
 }
 
 // ============================================================================

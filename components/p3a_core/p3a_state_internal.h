@@ -17,6 +17,7 @@
 #include "freertos/semphr.h"
 #include "freertos/timers.h"
 #include "freertos/event_groups.h"
+#include <time.h>
 
 #ifdef __cplusplus
 extern "C" {

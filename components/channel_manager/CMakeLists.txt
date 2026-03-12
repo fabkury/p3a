@@ -10,6 +10,8 @@ idf_component_register(
          "download_manager.c"
          "channel_settings.c"
          "channel_cache.c"
+         "channel_cache_ops.c"
+         "channel_cache_merge.c"
          "channel_metadata.c"
     INCLUDE_DIRS "include"
     REQUIRES esp_common json makapix sdio_bus config_store wifi_manager p3a_core play_scheduler event_bus giphy storage_eviction

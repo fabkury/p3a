@@ -12,7 +12,6 @@
 #if CONFIG_P3A_PPA_UPSCALE_ENABLE
 #include "display_ppa_upscaler.h"
 #endif
-#include <sys/time.h>
 
 // Processing notification (from display_renderer_priv.h via weak symbol)
 extern void proc_notif_success(void) __attribute__((weak));
@@ -43,117 +42,6 @@ static inline esp_err_t decode_next_native(animation_buffer_t *buf, uint8_t *dst
     }
     // All decoders output RGB888; alpha is pre-composited against background at decode time
     return animation_decoder_decode_next_rgb(buf->decoder, dst);
-}
-
-static uint64_t wall_clock_ms(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (uint64_t)tv.tv_sec * 1000ULL + (uint64_t)tv.tv_usec / 1000ULL;
-}
-
-static esp_err_t prefetch_first_frame_seeked(animation_buffer_t *buf, uint32_t start_frame, uint64_t start_time_ms)
-{
-    if (!buf || !buf->decoder || !buf->native_frame_b1 || !buf->native_frame_b2) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    const uint32_t frame_count = (uint32_t)buf->decoder_info.frame_count;
-    if (frame_count <= 1) {
-        // Still images: no seeking required; fall back to normal prefetch path.
-        return ESP_ERR_NOT_SUPPORTED;
-    }
-
-    // Derive elapsed time from ideal wall-clock start, if provided.
-    uint32_t elapsed_ms = 0;
-    if (start_time_ms != 0) {
-        const uint64_t now_ms = wall_clock_ms();
-        elapsed_ms = (now_ms > start_time_ms) ? (uint32_t)MIN(now_ms - start_time_ms, (uint64_t)UINT32_MAX) : 0;
-    }
-
-    // If explicit start_frame is provided (and no start_time_ms), use it.
-    bool use_frame_seek = (start_time_ms == 0 && start_frame > 0);
-
-    // Always reset before seeking.
-    esp_err_t err = animation_decoder_reset(buf->decoder);
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    // Compute intrinsic loop duration (ms) so we can modulo large elapsed offsets.
-    uint32_t loop_ms = 0;
-    if (!use_frame_seek && elapsed_ms > 0) {
-        uint64_t total = 0;
-        for (uint32_t i = 0; i < frame_count; i++) {
-            err = decode_next_native(buf, buf->native_frame_b2);
-            if (err != ESP_OK) {
-                break;
-            }
-            uint32_t d = 1;
-            (void)animation_decoder_get_frame_delay(buf->decoder, &d);
-            if (d < 1) d = 1;
-            total += d;
-        }
-        loop_ms = (total > 0) ? (uint32_t)MIN(total, (uint64_t)UINT32_MAX) : 0;
-
-        // Reset again for the actual seek.
-        (void)animation_decoder_reset(buf->decoder);
-        if (err != ESP_OK) {
-            // Fall back to a non-seeked prefetch.
-            return ESP_ERR_NOT_SUPPORTED;
-        }
-        if (loop_ms > 0) {
-            elapsed_ms = elapsed_ms % loop_ms;
-        } else {
-            elapsed_ms = 0;
-        }
-    }
-
-    // Seek by decoding and discarding frames until we reach the desired position.
-    uint32_t spent = 0;
-    uint32_t desired_frame_delay_ms = 1;
-
-    if (use_frame_seek) {
-        const uint32_t target = start_frame % frame_count;
-        for (uint32_t i = 0; i < target; i++) {
-            err = decode_next_native(buf, buf->native_frame_b2);
-            if (err != ESP_OK) return err;
-        }
-    } else if (elapsed_ms > 0) {
-        while (true) {
-            err = decode_next_native(buf, buf->native_frame_b2);
-            if (err != ESP_OK) return err;
-            uint32_t d = 1;
-            (void)animation_decoder_get_frame_delay(buf->decoder, &d);
-            if (d < 1) d = 1;
-            if ((uint64_t)spent + (uint64_t)d > (uint64_t)elapsed_ms) {
-                // This decoded frame is the correct one for the elapsed offset.
-                desired_frame_delay_ms = d;
-                memcpy(buf->native_frame_b1, buf->native_frame_b2, buf->native_frame_size);
-                break;
-            }
-            spent += d;
-        }
-        // We already have the desired first frame in native_frame_b1.
-        buf->prefetched_first_frame_delay_ms = desired_frame_delay_ms;
-        buf->first_frame_ready = true;
-        buf->decoder_at_frame_1 = true;
-        buf->start_time_ms = 0;
-        buf->start_frame = 0;
-        return ESP_OK;
-    }
-
-    // Frame-based seek: decode the desired first frame now.
-    err = decode_next_native(buf, buf->native_frame_b1);
-    if (err != ESP_OK) return err;
-    (void)animation_decoder_get_frame_delay(buf->decoder, &desired_frame_delay_ms);
-    if (desired_frame_delay_ms < 1) desired_frame_delay_ms = 1;
-    buf->prefetched_first_frame_delay_ms = desired_frame_delay_ms;
-    buf->first_frame_ready = true;
-    buf->decoder_at_frame_1 = true;
-    buf->start_time_ms = 0;
-    buf->start_frame = 0;
-    return ESP_OK;
 }
 
 /**
@@ -331,21 +219,6 @@ esp_err_t prefetch_first_frame(animation_buffer_t *buf)
 {
     if (!buf || !buf->decoder || !buf->native_frame_b1) {
         return ESP_ERR_INVALID_ARG;
-    }
-
-    // If a start alignment was provided, prefetch the correctly-aligned first frame.
-    if ((buf->start_time_ms != 0) || (buf->start_frame != 0)) {
-        esp_err_t seek_err = prefetch_first_frame_seeked(buf, buf->start_frame, buf->start_time_ms);
-        if (seek_err == ESP_OK) {
-            ESP_LOGD(TAG, "Prefetched seeked first frame (start_time_ms=%llu start_frame=%u)",
-                     (unsigned long long)buf->start_time_ms, (unsigned)buf->start_frame);
-            return ESP_OK;
-        }
-        // If seek is not supported or fails, fall back to frame 0 prefetch.
-        ESP_LOGW(TAG, "Seeked prefetch failed (%s). Falling back to frame 0.", esp_err_to_name(seek_err));
-        buf->start_time_ms = 0;
-        buf->start_frame = 0;
-        (void)animation_decoder_reset(buf->decoder);
     }
 
     // Decode first frame to native_frame_b1

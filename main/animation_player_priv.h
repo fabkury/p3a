@@ -120,13 +120,6 @@ typedef struct {
     bool static_frame_cached;
     uint32_t static_bg_generation;
 
-    // Start alignment for seeked prefetch
-    // - start_time_ms: ideal wall-clock time when this animation "started" (UTC, ms since epoch).
-    //   Prefetch will align by seeking to (now_ms - start_time_ms).
-    // - start_frame: optional explicit frame seek (frame index); used when start_time_ms == 0.
-    uint64_t start_time_ms;
-    uint32_t start_frame;
-
     // View tracking: post_id of the artwork being displayed
     int32_t post_id;
     post_source_t post_source;
@@ -144,15 +137,12 @@ extern SemaphoreHandle_t s_buffer_mutex;
 extern SemaphoreHandle_t s_prefetch_done_sem;  // Signaled when prefetch completes
 
 // Override for the next load triggered by animation_player_request_swap().
-// If valid, the loader will load this filepath/type instead of play_scheduler current item,
-// and will propagate start_time_ms/start_frame to the back buffer for prefetch alignment.
+// If valid, the loader will load this filepath/type instead of play_scheduler current item.
 typedef struct {
     bool valid;
     char filepath[256];
     asset_type_t type;
     ps_channel_type_t channel_type;  // Channel type for PPA upscale branching
-    uint64_t start_time_ms;
-    uint32_t start_frame;
     int32_t post_id;  // For view tracking
     post_source_t post_source;
 } animation_load_override_t;
@@ -167,8 +157,7 @@ extern bool s_sd_export_active;
 
 // Animation loading functions
 esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, ps_channel_type_t channel_type,
-                                     animation_buffer_t *buf,
-                                     uint32_t start_frame, uint64_t start_time_ms);
+                                     animation_buffer_t *buf);
 void unload_animation_buffer(animation_buffer_t *buf);
 esp_err_t prefetch_first_frame(animation_buffer_t *buf);
 void animation_loader_task(void *arg);

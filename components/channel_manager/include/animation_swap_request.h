@@ -27,8 +27,6 @@ typedef struct swap_request_s {
     int32_t post_id;           // For view tracking (0 if not applicable)
     post_source_t post_source; // Source of the post_id
     uint32_t dwell_time_ms;    // Effective dwell time for this artwork
-    uint64_t start_time_ms;    // Start alignment (0 = ignore)
-    uint32_t start_frame;      // Explicit frame seek (0 = start from beginning)
 } swap_request_t;
 
 #ifdef __cplusplus

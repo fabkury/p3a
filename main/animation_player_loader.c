@@ -245,8 +245,6 @@ void animation_loader_task(void *arg)
         asset_type_t type = ASSET_TYPE_WEBP;
         ps_channel_type_t channel_type = PS_CHANNEL_TYPE_NAMED;  // default
         const char *name_for_log = NULL;
-        uint32_t start_frame = 0;
-        uint64_t start_time_ms = 0;
         int32_t post_id = 0;
 
         post_source_t post_source = POST_SOURCE_NONE;
@@ -256,12 +254,10 @@ void animation_loader_task(void *arg)
             type = ov.type;
             channel_type = ov.channel_type;
             name_for_log = ov.filepath;
-            start_frame = ov.start_frame;
-            start_time_ms = ov.start_time_ms;
             post_id = ov.post_id;
             post_source = ov.post_source;
-            ESP_LOGD(TAG, "Loader task: swap request: %s (type=%d start_frame=%u start_time_ms=%llu post_id=%d)",
-                     filepath, (int)type, (unsigned)start_frame, (unsigned long long)start_time_ms, (int)post_id);
+            ESP_LOGD(TAG, "Loader task: swap request: %s (type=%d post_id=%d)",
+                     filepath, (int)type, (int)post_id);
         } else if (swap_was_requested) {
             // Get current artwork from play_scheduler only if an actual swap was requested
             queued_item_t current = {0};
@@ -335,8 +331,7 @@ void animation_loader_task(void *arg)
         }
 
         esp_err_t err = file_missing ? ESP_ERR_NOT_FOUND : load_animation_into_buffer(filepath, type, channel_type,
-                                                                                      &s_back_buffer,
-                                                                                      start_frame, start_time_ms);
+                                                                                      &s_back_buffer);
         if (err != ESP_OK) {
             bool is_vault_file = filepath && strstr(filepath, "/vault/") != NULL;
             
@@ -568,8 +563,6 @@ void unload_animation_buffer(animation_buffer_t *buf)
     buf->current_frame_delay_ms = 1;
     buf->static_frame_cached = false;
     buf->static_bg_generation = 0;
-    buf->start_time_ms = 0;
-    buf->start_frame = 0;
 
     free(buf->filepath);
     buf->filepath = NULL;
@@ -793,8 +786,7 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf,
 }
 
 esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, ps_channel_type_t channel_type,
-                                     animation_buffer_t *buf,
-                                     uint32_t start_frame, uint64_t start_time_ms)
+                                     animation_buffer_t *buf)
 {
     if (!buf || !filepath) {
         return ESP_ERR_INVALID_ARG;
@@ -858,10 +850,6 @@ esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, ps
     buf->decoder_at_frame_1 = false;
     buf->prefetch_pending = false;
     buf->prefetch_in_progress = false;
-
-    // Propagate start alignment parameters (used by prefetch_first_frame()).
-    buf->start_frame = start_frame;
-    buf->start_time_ms = start_time_ms;
 
     ESP_LOGD(TAG, "Loaded: %s", filepath);
 

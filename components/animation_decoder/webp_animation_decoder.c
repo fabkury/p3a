@@ -108,6 +108,9 @@ esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decode
             // Use MODE_rgbA (pre-multiplied alpha) so the blend loop in decode_next_rgb
             // saves one multiply per channel: src_premul + bg*(255-a) vs src*a + bg*(255-a).
             dec_opts.color_mode = MODE_rgbA;
+            // Multi-threaded decoding disabled: libwebp threading only helps VP8
+            // (lossy) frames >= 512px wide. p3a content is mostly <= 256x256 and
+            // lossless (VP8L), so threading would have no effect.
             dec_opts.use_threads = 0;
 
             WebPData webp_data_wrapped = {

@@ -4,16 +4,58 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PICO-8 Monitor - p3a</title>
+    <link rel="stylesheet" href="/static/common.css">
     <link rel="stylesheet" href="/static/pico8.css">
+    <style>
+    body { justify-content: flex-start; }
+    .container {
+        max-width: min(var(--w-content), 100%);
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: var(--sp-3);
+    }
+    .pico8-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .pico8-header h1 {
+        font-size: clamp(1.4rem, 3vw, 1.8rem);
+        font-weight: 300;
+        color: white;
+        margin: 0;
+    }
+    /* Override pico8.css styles that conflict with common.css */
+    .load-section { background: var(--c-card-bg); padding: var(--sp-4); border-radius: var(--r-lg); box-shadow: var(--c-card-shadow); color: var(--c-text); }
+    .load-section h2 { font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--c-text); margin-bottom: var(--sp-3); }
+    .file-input-label { background: var(--c-primary); border-radius: var(--r-md); padding: var(--sp-3); }
+    .file-input-label:hover { background: var(--c-primary-dark); }
+    .url-input-wrapper input { border: 1.5px solid var(--c-border); border-radius: var(--r-md); font-family: var(--font); padding: var(--sp-2) var(--sp-3); }
+    .url-input-wrapper input:focus { border-color: var(--c-primary); box-shadow: var(--focus-ring); }
+    .url-input-wrapper .btn { background: var(--c-success); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-4); font-family: var(--font); }
+    .url-input-wrapper .btn:hover { background: var(--c-success-dark); }
+    .status-section { background: var(--c-card-bg); padding: var(--sp-4); border-radius: var(--r-lg); box-shadow: var(--c-card-shadow); color: var(--c-text); }
+    .status.success { color: var(--c-success); }
+    .status.error { color: var(--c-danger); }
+    .status.info { color: var(--c-primary); }
+    .canvas-wrapper { border-radius: var(--r-lg); box-shadow: var(--c-card-shadow); min-height: 200px; }
+    .error-message { background: rgba(239,68,68,0.9); border-radius: var(--r-md); }
+    /* Layout: stack on mobile, side-by-side on wide */
+    .main-content { display: flex; flex-direction: column; gap: var(--sp-3); }
+    @media (min-width: 769px) {
+        .container { max-width: 900px; }
+        .main-content { flex-direction: row; }
+        .controls-panel { flex: 0 0 320px; }
+        .canvas-wrapper { flex: 1; }
+    }
+    </style>
 </head>
-<body>
+<body class="has-bottom-nav">
     <div class="container">
-        <header>
+        <div class="pico8-header">
             <h1>PICO-8 Monitor</h1>
-            <nav>
-                <a href="/" class="nav-link" onclick="if(typeof signalExit==='function')signalExit()">← Remote Control</a>
-            </nav>
-        </header>
+        </div>
 
         <div class="main-content">
             <div class="controls-panel">
@@ -45,8 +87,15 @@
         </div>
     </div>
 
+    <nav class="bottom-nav">
+    <a href="/" class="bottom-nav-item" onclick="if(typeof signalExit==='function')signalExit()"><span class="bottom-nav-icon">&#8962;</span><span class="bottom-nav-label">Home</span></a>
+    <a href="/playset-editor" class="bottom-nav-item"><span class="bottom-nav-icon">&#9776;</span><span class="bottom-nav-label">Playsets</span></a>
+    <a href="/settings" class="bottom-nav-item"><span class="bottom-nav-icon">&#9881;</span><span class="bottom-nav-label">Settings</span></a>
+    <a href="/ota" class="bottom-nav-item"><span class="bottom-nav-icon">&#8673;</span><span class="bottom-nav-label">Update</span><span class="bottom-nav-badge" id="update-badge"></span></a>
+    </nav>
+
     <script src="/static/fake08.js"></script>
     <script src="/static/pico8.js"></script>
+    <script>fetch('/ota/status').then(function(r){return r.json()}).then(function(d){if(d.ok&&d.data&&(d.data.state==='update_available'||d.data.available_version)){var b=document.getElementById('update-badge');if(b)b.classList.add('visible');}}).catch(function(){});</script>
 </body>
 </html>
-

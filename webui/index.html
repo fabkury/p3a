@@ -342,6 +342,7 @@ body {
         </div>
     </div>
 </div>
+<a href="/pico8" id="pico8-link" class="pill-item" style="display:none;text-decoration:none;text-align:center;width:min(420px,100%);">PICO-8 Monitor</a>
 <div class="update-banner" id="update-banner" onclick="window.location.href='/ota'">
     <h4>&#x2B06; Update Available</h4>
     <p id="update-version">A new firmware version is ready to install</p>
@@ -441,6 +442,10 @@ fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
     if (data.ui_config) {
         LCD_MAX_WIDTH = data.ui_config.lcd_width || 720;
         LCD_MAX_HEIGHT = data.ui_config.lcd_height || 720;
+        if (data.ui_config.pico8_enabled) {
+            var pico8Link = document.getElementById('pico8-link');
+            if (pico8Link) pico8Link.style.display = '';
+        }
     }
     if (data.channel_stats) {
         isRegistered = data.channel_stats.registered === true;

@@ -582,6 +582,10 @@ body.has-bottom-nav {
     opacity: 0.4;
     cursor: not-allowed;
 }
+@media (min-width: 481px) {
+    .pill-bar { flex-wrap: wrap; overflow-x: visible; }
+    .tab-bar { flex-wrap: wrap; overflow-x: visible; }
+}
 
 /* ── Utilities ── */
 

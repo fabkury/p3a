@@ -1,4 +1,4 @@
-# How to Use p3a (Pixel Pea)
+# How to Use p3a
 
 This guide covers everything you need to know to use your p3a pixel art player, from initial setup to advanced features.
 

@@ -2,7 +2,7 @@
 
 There's something magnetic about pixel art. Maybe it's the deliberate placement of every single dot, or the way a 64x64 grid can hold more personality than a 4K photograph. Either way, pixel art deserves better than a browser tab you'll forget about. It deserves a dedicated screen.
 
-That's why we built **p3a** (Pixel Pea) — a Wi-Fi-connected art frame powered by the ESP32-P4 that plays animated pixel art on a gorgeous 720x720 IPS touchscreen.
+That's why we built **p3a** — a Wi-Fi-connected art frame powered by the ESP32-P4 that plays animated pixel art on a gorgeous 720x720 IPS touchscreen.
 
 ## What It Actually Does
 

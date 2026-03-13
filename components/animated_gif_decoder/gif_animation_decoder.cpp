@@ -135,23 +135,17 @@ static void gif_draw_callback(GIFDRAW *pDraw)
     impl->cur_h = pDraw->iHeight;
     impl->have_cur_rect = true;
 
-    // Merge 8-bit indexed pixels to RGB canvas
+    // Merge 8-bit indexed pixels to RGB canvas (one scanline per callback)
     uint8_t *dst_row = impl->canvas_rgb + ((size_t)(frame_y + y) * (size_t)canvas_w + (size_t)frame_x) * 3U;
 
-    // Yield periodically to prevent watchdog timeout (every 1024 pixels)
-    const int YIELD_INTERVAL = 1024;
     if (!has_transparency) {
         for (int x = 0; x < frame_w; x++) {
             const uint8_t pixel_index = pDraw->pPixels[x];
             const uint8_t *palette_entry = palette24 + (size_t)pixel_index * 3U;
             uint8_t *dst = dst_row + (size_t)x * 3U;
-            dst[0] = palette_entry[0]; // R
-            dst[1] = palette_entry[1]; // G
-            dst[2] = palette_entry[2]; // B
-
-            if ((x % YIELD_INTERVAL) == (YIELD_INTERVAL - 1)) {
-                taskYIELD();
-            }
+            dst[0] = palette_entry[0];
+            dst[1] = palette_entry[1];
+            dst[2] = palette_entry[2];
         }
     } else {
         for (int x = 0; x < frame_w; x++) {
@@ -159,14 +153,9 @@ static void gif_draw_callback(GIFDRAW *pDraw)
             if (pixel_index != transparent) {
                 const uint8_t *palette_entry = palette24 + (size_t)pixel_index * 3U;
                 uint8_t *dst = dst_row + (size_t)x * 3U;
-                dst[0] = palette_entry[0]; // R
-                dst[1] = palette_entry[1]; // G
-                dst[2] = palette_entry[2]; // B
-            }
-            // else: transparent pixel -> leave underlying canvas as-is
-
-            if ((x % YIELD_INTERVAL) == (YIELD_INTERVAL - 1)) {
-                taskYIELD();
+                dst[0] = palette_entry[0];
+                dst[1] = palette_entry[1];
+                dst[2] = palette_entry[2];
             }
         }
     }

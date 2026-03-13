@@ -6,19 +6,16 @@
     <link rel="icon" href="/favicon.ico">
     <script src="/static/compat.js"></script>
     <title>p3a - Playset Editor</title>
+    <link rel="stylesheet" href="/static/common.css">
     <style>
         * {
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-            color: #333;
+            padding: var(--sp-5);
+            color: var(--c-text);
         }
 
         .container {
@@ -26,13 +23,13 @@
             margin: 0 auto;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: var(--sp-5);
         }
 
         h1, h2, h3 {
             font-weight: 300;
             color: white;
-            margin-bottom: 10px;
+            margin-bottom: var(--sp-3);
         }
 
         h1 {
@@ -45,27 +42,27 @@
 
         h3 {
             font-size: clamp(16px, 4vw, 18px);
-            color: #333;
+            color: var(--c-text);
         }
 
         .card {
             background: white;
-            border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: var(--r-lg);
+            padding: var(--sp-6);
+            box-shadow: var(--c-card-shadow);
         }
 
         .header-card {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 16px;
+            gap: var(--sp-4);
         }
 
         .btn {
-            padding: 12px 24px;
+            padding: var(--sp-3) var(--sp-6);
             border: none;
-            border-radius: 12px;
+            border-radius: var(--r-md);
             font-size: 14px;
             font-weight: 500;
             cursor: pointer;
@@ -73,12 +70,12 @@
             text-decoration: none;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: var(--sp-2);
             justify-content: center;
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--c-gradient);
             color: white;
         }
 
@@ -96,7 +93,7 @@
 
         .btn-secondary {
             background: #f0f0f0;
-            color: #333;
+            color: var(--c-text);
         }
 
         .btn-secondary:hover {
@@ -104,28 +101,28 @@
         }
 
         .btn-danger {
-            background: #ef4444;
+            background: var(--c-danger);
             color: white;
-            padding: 8px 16px;
+            padding: var(--sp-2) var(--sp-4);
             font-size: 12px;
-            border-radius: 8px;
+            border-radius: var(--r-sm);
         }
 
         .btn-danger:hover {
-            background: #dc2626;
+            background: var(--c-danger-dark);
         }
 
         .btn-small {
-            padding: 8px 16px;
+            padding: var(--sp-2) var(--sp-4);
             font-size: 12px;
-            border-radius: 8px;
+            border-radius: var(--r-sm);
         }
 
         .btn-icon {
-            padding: 8px;
-            border-radius: 8px;
+            padding: var(--sp-2);
+            border-radius: var(--r-sm);
             background: transparent;
-            border: 1px solid #ddd;
+            border: 1px solid var(--c-border);
             cursor: pointer;
             display: inline-flex;
             align-items: center;
@@ -133,33 +130,33 @@
         }
 
         .btn-icon:hover {
-            background: #f5f5f5;
+            background: var(--c-bg-subtle);
         }
 
         .playset-list {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: var(--sp-3);
         }
 
         .playset-item {
-            padding: 16px;
+            padding: var(--sp-4);
             border: 2px solid #e0e0e0;
-            border-radius: 12px;
+            border-radius: var(--r-md);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 12px;
+            gap: var(--sp-3);
             transition: all 0.2s;
         }
 
         .playset-item:hover {
             background: #f9f9f9;
-            border-color: #667eea;
+            border-color: var(--c-primary);
         }
 
         .playset-item.active-playset {
-            border-color: #10b981;
+            border-color: var(--c-success);
             background: #f0fdf4;
         }
 
@@ -170,19 +167,19 @@
         .playset-name {
             font-weight: 500;
             font-size: 16px;
-            margin-bottom: 4px;
+            margin-bottom: var(--sp-1);
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: var(--sp-2);
         }
 
         .now-playing-badge {
             display: inline-block;
-            padding: 2px 8px;
-            border-radius: 10px;
+            padding: 2px var(--sp-2);
+            border-radius: var(--r-md);
             font-size: 10px;
             font-weight: 600;
-            background: #10b981;
+            background: var(--c-success);
             color: white;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -190,71 +187,71 @@
 
         .playset-meta {
             font-size: 12px;
-            color: #666;
+            color: var(--c-text-light);
         }
 
         .playset-actions {
             display: flex;
-            gap: 8px;
+            gap: var(--sp-2);
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: var(--sp-5);
         }
 
         .form-label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: var(--sp-2);
             font-weight: 500;
             font-size: 14px;
         }
 
         .form-input {
             width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
+            padding: var(--sp-3);
+            border: 1px solid var(--c-border);
+            border-radius: var(--r-sm);
             font-size: 14px;
-            font-family: inherit;
+            font-family: var(--font);
         }
 
         .form-input:focus {
             outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            border-color: var(--c-primary);
+            box-shadow: var(--focus-ring);
         }
 
         input.form-input:read-only {
-            background: #f5f5f5;
+            background: var(--c-bg-subtle);
             cursor: not-allowed;
         }
 
         .form-input.error {
-            border-color: #ef4444;
+            border-color: var(--c-danger);
         }
 
         .sqid-input-row {
             display: flex;
-            gap: 8px;
+            gap: var(--sp-2);
             align-items: stretch;
         }
         .sqid-input-row .form-input {
             flex: 1;
         }
         .check-results {
-            margin-top: 6px;
-            padding: 8px 10px;
+            margin-top: var(--sp-1);
+            padding: var(--sp-2) var(--sp-3);
             font-size: 12px;
             color: #999;
             background: #fafafa;
-            border-radius: 6px;
+            border-radius: var(--r-sm);
             min-height: 24px;
         }
         .check-results.has-data {
-            color: #333;
+            color: var(--c-text);
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: var(--sp-3);
         }
         .check-results .avatar {
             width: 32px;
@@ -272,14 +269,14 @@
         }
 
         .error-message {
-            color: #ef4444;
+            color: var(--c-danger);
             font-size: 12px;
-            margin-top: 4px;
+            margin-top: var(--sp-1);
         }
 
         .radio-group {
             display: flex;
-            gap: 12px;
+            gap: var(--sp-3);
             flex-wrap: wrap;
         }
 
@@ -294,9 +291,9 @@
 
         .radio-label {
             display: block;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
+            padding: var(--sp-3);
+            border: 2px solid var(--c-border);
+            border-radius: var(--r-sm);
             text-align: center;
             cursor: pointer;
             transition: all 0.2s;
@@ -304,35 +301,35 @@
         }
 
         .radio-option input[type="radio"]:checked + .radio-label {
-            border-color: #667eea;
+            border-color: var(--c-primary);
             background: rgba(102, 126, 234, 0.1);
             font-weight: 500;
         }
 
         .radio-label:hover {
-            border-color: #667eea;
+            border-color: var(--c-primary);
         }
 
         .mode-description {
-            margin-top: 8px;
-            padding: 12px;
+            margin-top: var(--sp-2);
+            padding: var(--sp-3);
             background: #f9f9f9;
-            border-radius: 8px;
+            border-radius: var(--r-sm);
             font-size: 13px;
-            color: #666;
+            color: var(--c-text-light);
         }
 
         .channel-list {
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            margin-bottom: 16px;
+            gap: var(--sp-3);
+            margin-bottom: var(--sp-4);
         }
 
         .channel-card {
-            border: 1px solid #ddd;
-            border-radius: 12px;
-            padding: 16px;
+            border: 1px solid var(--c-border);
+            border-radius: var(--r-md);
+            padding: var(--sp-4);
             background: #fafafa;
             transition: all 0.2s;
         }
@@ -342,7 +339,7 @@
         }
 
         .channel-card.drag-over {
-            border-color: #667eea;
+            border-color: var(--c-primary);
             background: rgba(102, 126, 234, 0.05);
         }
 
@@ -350,33 +347,33 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
+            margin-bottom: var(--sp-3);
         }
 
         .channel-type-badge {
             display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
+            padding: var(--sp-1) var(--sp-3);
+            border-radius: var(--r-md);
             font-size: 12px;
             font-weight: 500;
-            background: #667eea;
+            background: var(--c-primary);
             color: white;
         }
 
         .channel-controls {
             display: flex;
-            gap: 8px;
+            gap: var(--sp-2);
         }
 
         .channel-fields {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: var(--sp-3);
         }
 
         .field-row {
             display: flex;
-            gap: 12px;
+            gap: var(--sp-3);
             align-items: flex-start;
         }
 
@@ -389,15 +386,15 @@
         }
 
         .weight-viz-container {
-            margin-bottom: 20px;
+            margin-bottom: var(--sp-5);
         }
 
         .weight-viz {
             display: flex;
             height: 40px;
-            border-radius: 8px;
+            border-radius: var(--r-sm);
             overflow: hidden;
-            margin-top: 8px;
+            margin-top: var(--sp-2);
         }
 
         .weight-bar {
@@ -426,7 +423,7 @@
             z-index: 1000;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: var(--sp-5);
         }
 
         .modal-overlay.active {
@@ -435,8 +432,8 @@
 
         .modal {
             background: white;
-            border-radius: 16px;
-            padding: 24px;
+            border-radius: var(--r-lg);
+            padding: var(--sp-6);
             max-width: 480px;
             width: 100%;
             max-height: 90vh;
@@ -447,7 +444,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: var(--sp-5);
         }
 
         .modal-title {
@@ -460,14 +457,14 @@
             border: none;
             font-size: 24px;
             cursor: pointer;
-            color: #666;
+            color: var(--c-text-light);
             padding: 0;
             width: 32px;
             height: 32px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 8px;
+            border-radius: var(--r-sm);
         }
 
         .close-btn:hover {
@@ -476,12 +473,12 @@
 
         .toast {
             position: fixed;
-            top: 20px;
+            top: var(--sp-5);
             left: 50%;
             transform: translateX(-50%) translateY(-100px);
             background: white;
-            padding: 16px 24px;
-            border-radius: 12px;
+            padding: var(--sp-4) var(--sp-6);
+            border-radius: var(--r-md);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             z-index: 2000;
             opacity: 0;
@@ -489,7 +486,7 @@
             max-width: 90%;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: var(--sp-3);
         }
 
         .toast.show {
@@ -498,32 +495,28 @@
         }
 
         .toast.success {
-            border-left: 4px solid #10b981;
+            border-left: 4px solid var(--c-success);
         }
 
         .toast.error {
-            border-left: 4px solid #ef4444;
-        }
-
-        .hidden {
-            display: none !important;
+            border-left: 4px solid var(--c-danger);
         }
 
         .empty-state {
             text-align: center;
-            padding: 40px 20px;
-            color: #666;
+            padding: 40px var(--sp-5);
+            color: var(--c-text-light);
         }
 
         .empty-state-icon {
             font-size: 48px;
-            margin-bottom: 16px;
+            margin-bottom: var(--sp-4);
         }
 
         .button-group {
             display: flex;
-            gap: 12px;
-            margin-top: 24px;
+            gap: var(--sp-3);
+            margin-top: var(--sp-6);
         }
 
         .button-group .btn {
@@ -532,11 +525,11 @@
 
         @media (max-width: 480px) {
             body {
-                padding: 12px;
+                padding: var(--sp-3);
             }
 
             .card {
-                padding: 16px;
+                padding: var(--sp-4);
             }
 
             .header-card {

@@ -13,27 +13,114 @@ body {
     overflow-x: hidden;
 }
 .header h1 {
-    font-size: clamp(2rem, 4vw, 2.5rem);
+    font-size: clamp(1.4rem, 3vw, 1.8rem);
 }
-.controls {
-    flex: 0 0 auto;
+.artwork-area {
     width: min(420px, 100%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: var(--sp-4);
-    gap: var(--sp-4);
+    aspect-ratio: 1 / 1;
     background: rgba(255,255,255,0.12);
     border-radius: var(--r-lg);
     box-shadow: var(--c-card-shadow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
 }
+.artwork-area img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.artwork-area img.pixelated {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+}
+.now-playing {
+    width: min(420px, 100%);
+    background: var(--c-primary);
+    border-radius: var(--r-md);
+    font-size: 0.8rem;
+    color: white;
+    box-shadow: 0 6px 16px rgba(102,126,234,0.4);
+    overflow: hidden;
+}
+.now-playing-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--sp-2) var(--sp-4);
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+.now-playing-header-text { text-align: center; flex: 1; min-width: 0; }
+.now-playing-name {
+    font-weight: 600;
+    color: white;
+    font-size: 0.85rem;
+    margin-bottom: 2px;
+}
+.now-playing-stats {
+    color: rgba(255,255,255,0.85);
+    font-size: 0.75rem;
+}
+.now-playing-toggle {
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.7);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+    margin-left: var(--sp-2);
+}
+.now-playing.collapsed .now-playing-toggle { transform: rotate(-90deg); }
+.now-playing.collapsed .now-playing-channels { display: none; }
+.now-playing-channels {
+    border-top: 1px solid rgba(255,255,255,0.2);
+    padding: 6px 10px var(--sp-2);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.ps-ch-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+    padding: var(--sp-1) 6px;
+    border-radius: var(--r-sm);
+    background: rgba(255,255,255,0.08);
+    transition: opacity 0.3s;
+}
+.ps-ch-row.refreshing {
+    animation: ps-pulse 1.8s ease-in-out infinite;
+}
+@keyframes ps-pulse {
+    0%, 100% { background: rgba(255,255,255,0.08); }
+    50% { background: rgba(255,255,255,0.22); }
+}
+.ps-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+.ps-badge-type { background: rgba(255,255,255,0.25); color: #fff; }
+.ps-badge-sub { background: rgba(0,0,0,0.18); color: rgba(255,255,255,0.9); }
+.ps-ch-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; }
+.ps-ch-id { color: rgba(255,255,255,0.65); font-size: 0.65rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80px; }
+.ps-ch-count { white-space: nowrap; color: rgba(255,255,255,0.85); flex-shrink: 0; }
+.ps-ch-time { white-space: nowrap; color: rgba(255,255,255,0.55); font-size: 0.6rem; flex-shrink: 0; }
+.ps-ch-loading { text-align: center; color: rgba(255,255,255,0.6); font-size: 0.75rem; padding: 6px 0; }
 .arrow-row {
+    width: min(420px, 100%);
     display: flex;
     gap: 18px;
     align-items: center;
     justify-content: space-between;
-    width: 100%;
 }
 .arrow-btn {
     background: var(--c-card-bg);
@@ -68,107 +155,6 @@ body {
     min-width: 110px;
 }
 .pause-btn:active { transform: scale(0.95); }
-.playset-card {
-    background: var(--c-primary);
-    border-radius: var(--r-md);
-    font-size: 0.8rem;
-    color: white;
-    box-shadow: 0 6px 16px rgba(102,126,234,0.4);
-    width: 100%;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-.playset-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--sp-2) var(--sp-4);
-    cursor: pointer;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-}
-.playset-header-text { text-align: center; flex: 1; min-width: 0; }
-.playset-name {
-    font-weight: 600;
-    color: white;
-    font-size: 0.85rem;
-    margin-bottom: 2px;
-}
-.playset-stats {
-    color: rgba(255,255,255,0.85);
-    font-size: 0.75rem;
-}
-.playset-toggle {
-    font-size: 0.7rem;
-    color: rgba(255,255,255,0.7);
-    transition: transform 0.2s;
-    flex-shrink: 0;
-    margin-left: var(--sp-2);
-}
-.playset-card.collapsed .playset-toggle { transform: rotate(-90deg); }
-.playset-card.collapsed .playset-channels { display: none; }
-.playset-channels {
-    border-top: 1px solid rgba(255,255,255,0.2);
-    padding: var(--sp-sm, 6px) 10px var(--sp-2);
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-.ps-ch-row {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-sm, 6px);
-    font-size: 0.7rem;
-    padding: var(--sp-1) var(--sp-sm, 6px);
-    border-radius: var(--r-sm);
-    background: rgba(255,255,255,0.08);
-    transition: opacity 0.3s;
-}
-.ps-ch-row.refreshing {
-    animation: ps-pulse 1.8s ease-in-out infinite;
-}
-@keyframes ps-pulse {
-    0%, 100% { background: rgba(255,255,255,0.08); }
-    50% { background: rgba(255,255,255,0.22); }
-}
-.ps-badge {
-    display: inline-block;
-    font-size: 0.6rem;
-    font-weight: 700;
-    line-height: 1;
-    padding: 2px 4px;
-    border-radius: 3px;
-    text-transform: uppercase;
-    flex-shrink: 0;
-}
-.ps-badge-type { background: rgba(255,255,255,0.25); color: #fff; }
-.ps-badge-sub { background: rgba(0,0,0,0.18); color: rgba(255,255,255,0.9); }
-.ps-ch-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; }
-.ps-ch-id { color: rgba(255,255,255,0.65); font-size: 0.65rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80px; }
-.ps-ch-count { white-space: nowrap; color: rgba(255,255,255,0.85); flex-shrink: 0; }
-.ps-ch-time { white-space: nowrap; color: rgba(255,255,255,0.55); font-size: 0.6rem; flex-shrink: 0; }
-.ps-ch-loading { text-align: center; color: rgba(255,255,255,0.6); font-size: 0.75rem; padding: var(--sp-sm, 6px) 0; }
-.channel-btn {
-    background: var(--c-card-bg);
-    border: none;
-    border-radius: var(--r-md);
-    padding: var(--sp-3) var(--sp-5);
-    font-size: 0.9rem;
-    font-weight: 500;
-    color: var(--c-primary);
-    cursor: pointer;
-    box-shadow: var(--c-card-shadow);
-    transition: all 0.2s ease;
-    -webkit-tap-highlight-color: transparent;
-    width: 100%;
-}
-.channel-btn:active { transform: scale(0.95); }
-.channel-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.channel-btn.selected {
-    background: var(--c-primary);
-    color: white;
-    box-shadow: 0 6px 16px rgba(102,126,234,0.4);
-}
 .upload-section {
     width: min(420px, 100%);
     background: var(--c-card-bg);
@@ -272,28 +258,9 @@ body {
 }
 .show-url-btn:active:not(:disabled) { background: var(--c-primary-dark); }
 .show-url-btn:disabled { background: #ccc; cursor: not-allowed; }
-.upload-progress { display: none; margin-top: var(--sp-sm, 6px); }
+.upload-progress { display: none; margin-top: 6px; }
 .upload-progress.active { display: block; }
 .progress-fill { background: var(--c-success); }
-@media (max-width: 480px) {
-    .header h1 { font-size: 1.9rem; }
-    .controls { padding: 14px; }
-    .arrow-btn { width: 64px; height: 64px; font-size: 1.6rem; }
-    .arrow-row { gap: 16px; }
-    .pause-btn { padding: 9px 20px; font-size: 0.85rem; }
-}
-@media (max-height: 640px) {
-    .header h1 { font-size: 1.75rem; letter-spacing: 0.08em; }
-    .controls { padding: 12px; gap: 12px; }
-    .arrow-btn { width: 60px; height: 60px; font-size: 1.5rem; }
-    .pause-btn { padding: 8px 18px; font-size: 0.82rem; }
-    .upload-section { padding: 12px; }
-    .footer { padding-top: 4px; }
-}
-@media (min-width: 481px) {
-    .arrow-btn:hover { transform: scale(1.05); }
-    .pause-btn:hover { transform: scale(1.02); }
-}
 .update-banner {
     display: none;
     width: min(420px, 100%);
@@ -308,70 +275,48 @@ body {
 .update-banner:active { transform: scale(0.98); }
 .update-banner h4 { margin: 0 0 4px; font-size: 0.95rem; font-weight: 600; }
 .update-banner p { margin: 0; font-size: 0.8rem; opacity: 0.9; }
-.toggle-slider {
-    background-color: rgba(255,255,255,0.3);
+@media (max-width: 480px) {
+    .arrow-btn { width: 64px; height: 64px; font-size: 1.6rem; }
+    .arrow-row { gap: 16px; }
+    .pause-btn { padding: 9px 20px; font-size: 0.85rem; }
 }
-.toggle-switch input:checked + .toggle-slider { background-color: rgba(255,255,255,0.9); }
-.toggle-switch input:checked + .toggle-slider:before { background-color: var(--c-primary); }
-.artwork-area {
-    width: min(420px, 100%);
-    aspect-ratio: 1 / 1;
-    background: rgba(255,255,255,0.12);
-    border-radius: var(--r-lg);
-    box-shadow: var(--c-card-shadow);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
+@media (max-height: 640px) {
+    .arrow-btn { width: 60px; height: 60px; font-size: 1.5rem; }
+    .pause-btn { padding: 8px 18px; font-size: 0.82rem; }
+    .upload-section { padding: 12px; }
 }
-.artwork-area img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-}
-.artwork-area img.pixelated {
-    image-rendering: pixelated;
-    image-rendering: -moz-crisp-edges;
-    image-rendering: crisp-edges;
+@media (min-width: 481px) {
+    .arrow-btn:hover { transform: scale(1.05); }
+    .pause-btn:hover { transform: scale(1.02); }
 }
 </style>
 </head>
-<body>
+<body class="has-bottom-nav">
 <div class="header">
     <h1>p3a</h1>
 </div>
 <div class="artwork-area" id="artwork-area">
     <img id="artwork-img" style="display:none;">
 </div>
-<div class="controls">
-    <div class="arrow-row">
-        <button class="arrow-btn" id="back-btn" onclick="sendCommand('swap_back')">&#9664;</button>
-        <button class="pause-btn" id="pause-btn" onclick="togglePause()">Pause</button>
-        <button class="arrow-btn" id="next-btn" onclick="sendCommand('swap_next')">&#9654;</button>
-    </div>
-    <div class="playset-card collapsed" id="playset-card" style="display:none;">
-        <div class="playset-header" onclick="togglePlaysetCard()">
-            <div class="playset-header-text">
-                <div class="playset-name" id="playset-name"></div>
-                <div class="playset-stats" id="playset-stats"></div>
-            </div>
-            <span class="playset-toggle" id="playset-toggle">&#9660;</span>
+<div class="now-playing collapsed" id="now-playing" style="display:none;">
+    <div class="now-playing-header" onclick="toggleNowPlaying()">
+        <div class="now-playing-header-text">
+            <div class="now-playing-name" id="now-playing-name"></div>
+            <div class="now-playing-stats" id="now-playing-stats"></div>
         </div>
-        <div class="playset-channels" id="playset-channels"></div>
+        <span class="now-playing-toggle" id="now-playing-toggle">&#9660;</span>
     </div>
+    <div class="now-playing-channels" id="now-playing-channels"></div>
 </div>
-<div class="controls" style="margin-top: 0;">
-    <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
-        <button class="channel-btn" id="ch-channel_recent" onclick="playPlayset('channel_recent')">Recent Artworks</button>
-        <button class="channel-btn" id="ch-channel_promoted" onclick="playPlayset('channel_promoted')">Promoted</button>
-        <button class="channel-btn" id="ch-followed_artists" onclick="playPlayset('followed_artists')">Followed Artists</button>
-        <button class="channel-btn" id="ch-channel_sdcard" onclick="playPlayset('channel_sdcard')">SD Card</button>
-        <button class="channel-btn" id="ch-giphy_trending" onclick="playPlayset('giphy_trending')">Giphy Trending</button>
-    </div>
+<div class="arrow-row">
+    <button class="arrow-btn" id="back-btn" onclick="sendCommand('swap_back')">&#9664;</button>
+    <button class="pause-btn" id="pause-btn" onclick="togglePause()">Pause</button>
+    <button class="arrow-btn" id="next-btn" onclick="sendCommand('swap_next')">&#9654;</button>
 </div>
+<div class="pill-bar" id="pill-bar"></div>
 <div class="upload-section collapsed">
     <div class="upload-header" onclick="toggleUploadPanel()">
-        <h3>Upload</h3>
+        <h3>Play from...</h3>
         <span class="upload-toggle">&#9660;</span>
     </div>
     <div class="upload-content">
@@ -401,19 +346,42 @@ body {
     <h4>&#x2B06; Update Available</h4>
     <p id="update-version">A new firmware version is ready to install</p>
 </div>
-<div class="footer">
-    <button class="footer-btn" onclick="window.location.href='/config/network'">Network</button>
-    <button class="footer-btn" id="pico8-btn" onclick="window.location.href='/pico8'">PICO-8</button>
-    <button class="footer-btn" onclick="window.location.href='/settings'">Settings</button>
-    <button class="footer-btn" onclick="window.location.href='/giphy'">Giphy</button>
-    <button class="footer-btn" onclick="window.location.href='/playset-editor'">Playsets</button>
-    <button class="footer-btn" onclick="window.location.href='/ota'">Update</button>
-</div>
-<div class="status" id="status"></div>
+<nav class="bottom-nav">
+<a href="/" class="bottom-nav-item active"><span class="bottom-nav-icon">&#8962;</span><span class="bottom-nav-label">Home</span></a>
+<a href="/playset-editor" class="bottom-nav-item"><span class="bottom-nav-icon">&#9776;</span><span class="bottom-nav-label">Playsets</span></a>
+<a href="/settings" class="bottom-nav-item"><span class="bottom-nav-icon">&#9881;</span><span class="bottom-nav-label">Settings</span></a>
+<a href="/ota" class="bottom-nav-item"><span class="bottom-nav-icon">&#8673;</span><span class="bottom-nav-label">Update</span><span class="bottom-nav-badge" id="update-badge"></span></a>
+</nav>
 <script>
 var isPaused = false;
 var LCD_MAX_WIDTH = 720;
 var LCD_MAX_HEIGHT = 720;
+var activePlaysetName = '';
+var isRegistered = false;
+var userPlaysets = [];
+
+// Built-in presets
+var builtInPresets = [
+    { id: 'channel_recent', label: 'Recent', needsRegistration: true },
+    { id: 'channel_promoted', label: 'Promoted', needsRegistration: false },
+    { id: 'followed_artists', label: 'Followed', needsRegistration: true },
+    { id: 'channel_sdcard', label: 'SD Card', needsRegistration: false },
+    { id: 'giphy_trending', label: 'Giphy', needsRegistration: false }
+];
+
+function showToast(msg, isError) {
+    var existing = document.querySelector('.toast.show');
+    if (existing) existing.classList.remove('show');
+    var toast = document.createElement('div');
+    toast.className = 'toast ' + (isError ? 'toast-error' : 'toast-success');
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.classList.add('show'); }, 10);
+    setTimeout(function() {
+        toast.classList.remove('show');
+        setTimeout(function() { toast.remove(); }, 300);
+    }, 4000);
+}
 
 function updateArtwork(currentArtwork) {
     var img = document.getElementById('artwork-img');
@@ -434,54 +402,74 @@ function updateArtwork(currentArtwork) {
     img.style.display = '';
 }
 
-// Load all init data from device in a single request
+function buildPillBar() {
+    var bar = document.getElementById('pill-bar');
+    bar.innerHTML = '';
+    builtInPresets.forEach(function(p) {
+        var btn = document.createElement('button');
+        btn.className = 'pill-item';
+        btn.textContent = p.label;
+        btn.setAttribute('data-playset', p.id);
+        if (p.needsRegistration && !isRegistered) btn.disabled = true;
+        if (p.id === activePlaysetName) btn.classList.add('active');
+        btn.addEventListener('click', function() { playPlayset(p.id); });
+        bar.appendChild(btn);
+    });
+    userPlaysets.forEach(function(ps) {
+        var btn = document.createElement('button');
+        btn.className = 'pill-item';
+        btn.textContent = ps.name;
+        btn.setAttribute('data-playset', ps.name);
+        if (ps.name === activePlaysetName) btn.classList.add('active');
+        btn.addEventListener('click', function() { playPlayset(ps.name); });
+        bar.appendChild(btn);
+    });
+}
+
+function updatePillBarActive(name) {
+    activePlaysetName = name || '';
+    var pills = document.querySelectorAll('.pill-item');
+    pills.forEach(function(p) {
+        p.classList.toggle('active', p.getAttribute('data-playset') === name);
+    });
+}
+
+// Load init data
 fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
     if (!d.ok || !d.data) return;
     var data = d.data;
-    // UI config
     if (data.ui_config) {
         LCD_MAX_WIDTH = data.ui_config.lcd_width || 720;
         LCD_MAX_HEIGHT = data.ui_config.lcd_height || 720;
-        if (!data.ui_config.pico8_enabled) {
-            document.getElementById('pico8-btn').style.display = 'none';
-        }
     }
-    // Channel stats
     if (data.channel_stats) {
-        var registered = data.channel_stats.registered === true;
-        var recentBtn = document.getElementById('ch-channel_recent');
-        var promBtn = document.getElementById('ch-channel_promoted');
-        var followedBtn = document.getElementById('ch-followed_artists');
-        if (recentBtn) recentBtn.disabled = !registered;
-        if (followedBtn) followedBtn.disabled = !registered;
+        isRegistered = data.channel_stats.registered === true;
     }
-    // Active playset
     if (data.active_playset) {
-        updateSelectedChannel(data.active_playset);
+        activePlaysetName = data.active_playset;
     }
-    // Playset info card
     if (data.active_playset && data.playset_info) {
-        updatePlaysetInfo(data.active_playset, data.playset_info);
+        updateNowPlaying(data.active_playset, data.playset_info);
     }
-    // Pause state
     if (data.paused) {
         isPaused = true;
         document.getElementById('pause-btn').textContent = 'Resume';
     }
-    // Current artwork
     updateArtwork(data.current_artwork);
-}).catch(function(e) { console.log('Init fetch failed:', e); });
+    // Fetch user playsets then build pill bar
+    fetch('/playsets').then(function(r) { return r.json(); }).then(function(pr) {
+        if (pr.ok && pr.data && pr.data.playsets) {
+            userPlaysets = pr.data.playsets;
+        }
+        buildPillBar();
+    }).catch(function() { buildPillBar(); });
+}).catch(function(e) {
+    console.log('Init fetch failed:', e);
+    buildPillBar();
+});
 
-function showToast(msg, isError) {
-    var status = document.getElementById('status');
-    status.textContent = msg;
-    status.className = isError ? 'status error' : 'status success';
-    status.style.display = 'block';
-    setTimeout(function() { status.style.display = 'none'; }, 6000);
-}
 function togglePause() {
     var action = isPaused ? 'resume' : 'pause';
-    var status = document.getElementById('status');
     var pauseBtn = document.getElementById('pause-btn');
     pauseBtn.disabled = true;
     var xhr = new XMLHttpRequest();
@@ -495,26 +483,20 @@ function togglePause() {
                 if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
                     isPaused = !isPaused;
                     pauseBtn.textContent = isPaused ? 'Resume' : 'Pause';
-                    status.textContent = isPaused ? 'Paused' : 'Resumed';
-                    status.className = 'status success';
+                    showToast(isPaused ? 'Paused' : 'Resumed', false);
                 } else {
-                    status.textContent = 'Command failed: ' + (result.error || 'HTTP ' + xhr.status);
-                    status.className = 'status error';
+                    showToast('Command failed: ' + (result.error || 'HTTP ' + xhr.status), true);
                 }
             } catch (e) {
-                status.textContent = 'Parse error: ' + e.message;
-                status.className = 'status error';
+                showToast('Parse error: ' + e.message, true);
             }
-            status.style.display = 'block';
-            setTimeout(function() { status.style.display = 'none'; }, 6000);
             pauseBtn.disabled = false;
         }
     };
     xhr.send('{}');
 }
+
 function sendCommand(action) {
-    console.log('Sending command:', action);
-    var status = document.getElementById('status');
     var backBtn = document.getElementById('back-btn');
     var nextBtn = document.getElementById('next-btn');
     backBtn.disabled = true;
@@ -526,19 +508,11 @@ function sendCommand(action) {
         if (xhr.readyState === 4) {
             try {
                 var result = JSON.parse(xhr.responseText);
-                if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
-                    // Success: no message shown
-                } else {
-                    status.textContent = 'Command failed: ' + (result.error || 'HTTP ' + xhr.status);
-                    status.className = 'status error';
-                    status.style.display = 'block';
-                    setTimeout(function() { status.style.display = 'none'; }, 6000);
+                if (!(xhr.status >= 200 && xhr.status < 300 && result.ok)) {
+                    showToast('Command failed: ' + (result.error || 'HTTP ' + xhr.status), true);
                 }
             } catch (e) {
-                status.textContent = 'Parse error: ' + e.message;
-                status.className = 'status error';
-                status.style.display = 'block';
-                setTimeout(function() { status.style.display = 'none'; }, 6000);
+                showToast('Parse error: ' + e.message, true);
             }
             backBtn.disabled = false;
             nextBtn.disabled = false;
@@ -549,19 +523,17 @@ function sendCommand(action) {
         schedulePollAfterSwap();
     }
 }
-// switchChannel() is deprecated - all buttons now use playPlayset()
-// Keeping for backwards compatibility with external scripts
-function switchChannel(channel) {
-    // Map legacy channel names to playset names
-    var playset = channel;
-    if (channel === 'all') playset = 'channel_recent';
-    else if (channel === 'promoted') playset = 'channel_promoted';
-    else if (channel === 'sdcard') playset = 'channel_sdcard';
-    playPlayset(playset);
+
+function playsetDisplayName(name) {
+    if (name === 'channel_recent') return 'Recent';
+    if (name === 'channel_promoted') return 'Promoted';
+    if (name === 'channel_sdcard') return 'SD Card';
+    if (name === 'followed_artists') return 'Followed';
+    if (name === 'giphy_trending') return 'Giphy';
+    return name;
 }
+
 function playPlayset(name) {
-    console.log('Playing playset:', name);
-    var status = document.getElementById('status');
     var xhr = new XMLHttpRequest();
     xhr.open('POST', '/playset/' + name, true);
     xhr.setRequestHeader('Content-Type', 'application/json');
@@ -570,17 +542,9 @@ function playPlayset(name) {
             try {
                 var result = JSON.parse(xhr.responseText);
                 if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
-                    // Map playset names to friendly display names
-                    var displayName = name;
-                    if (name === 'channel_recent') displayName = 'Recent Artworks';
-                    else if (name === 'channel_promoted') displayName = 'Promoted';
-                    else if (name === 'channel_sdcard') displayName = 'SD Card';
-                    else if (name === 'followed_artists') displayName = 'Followed Artists';
-                    else if (name === 'giphy_trending') displayName = 'Giphy Trending';
-                    status.textContent = 'Switched to ' + displayName;
-                    status.className = 'status success';
-                    updateSelectedChannel(name);
-                    updatePlaysetInfo(name, {
+                    showToast('Switched to ' + playsetDisplayName(name), false);
+                    updatePillBarActive(name);
+                    updateNowPlaying(name, {
                         channel_count: result.channel_count,
                         total_cached: result.total_cached,
                         total_entries: result.total_entries,
@@ -588,27 +552,15 @@ function playPlayset(name) {
                         pick_mode: result.pick_mode
                     });
                 } else {
-                    status.textContent = result.error || 'Failed to load playset';
-                    status.className = 'status error';
+                    showToast(result.error || 'Failed to load playset', true);
                 }
             } catch (e) {
-                status.textContent = 'Parse error: ' + e.message;
-                status.className = 'status error';
+                showToast('Parse error: ' + e.message, true);
             }
-            status.style.display = 'block';
-            setTimeout(function() { status.style.display = 'none'; }, 6000);
         }
     };
     xhr.send('{}');
 }
-var fileInput = document.getElementById('file-input');
-var fileInfo = document.getElementById('file-info');
-var uploadForm = document.getElementById('upload-form');
-var uploadBtn = document.getElementById('upload-btn');
-var uploadProgress = document.getElementById('upload-progress');
-var progressFill = document.getElementById('progress-fill');
-var statusDiv = document.getElementById('status');
-var dropZone = document.getElementById('drop-zone');
 
 function toggleUploadPanel() {
     var section = document.querySelector('.upload-section');
@@ -621,16 +573,10 @@ var showUrlBtn = document.getElementById('show-url-btn');
 showUrlBtn.addEventListener('click', function() {
     var url = showUrlInput.value.trim();
     if (!url) {
-        statusDiv.textContent = 'Please enter a URL';
-        statusDiv.className = 'status error';
-        statusDiv.style.display = 'block';
-        setTimeout(function() { statusDiv.style.display = 'none'; }, 4000);
+        showToast('Please enter a URL', true);
         return;
     }
     showUrlBtn.disabled = true;
-    statusDiv.textContent = 'Sending...';
-    statusDiv.className = 'status';
-    statusDiv.style.display = 'block';
     var xhr = new XMLHttpRequest();
     xhr.open('POST', '/action/show_url', true);
     xhr.setRequestHeader('Content-Type', 'application/json');
@@ -640,19 +586,14 @@ showUrlBtn.addEventListener('click', function() {
             try {
                 var result = JSON.parse(xhr.responseText);
                 if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
-                    statusDiv.textContent = 'Download started';
-                    statusDiv.className = 'status success';
+                    showToast('Download started', false);
                     showUrlInput.value = '';
                 } else {
-                    statusDiv.textContent = 'Failed: ' + (result.error || 'HTTP ' + xhr.status);
-                    statusDiv.className = 'status error';
+                    showToast('Failed: ' + (result.error || 'HTTP ' + xhr.status), true);
                 }
             } catch (e) {
-                statusDiv.textContent = 'Failed: ' + xhr.statusText;
-                statusDiv.className = 'status error';
+                showToast('Failed: ' + xhr.statusText, true);
             }
-            statusDiv.style.display = 'block';
-            setTimeout(function() { statusDiv.style.display = 'none'; }, 6000);
         }
     };
     xhr.send(JSON.stringify({ artwork_url: url }));
@@ -665,6 +606,14 @@ showUrlInput.addEventListener('keydown', function(e) {
 });
 
 // Drag and drop handlers
+var fileInput = document.getElementById('file-input');
+var fileInfo = document.getElementById('file-info');
+var uploadForm = document.getElementById('upload-form');
+var uploadBtn = document.getElementById('upload-btn');
+var uploadProgress = document.getElementById('upload-progress');
+var progressFill = document.getElementById('progress-fill');
+var dropZone = document.getElementById('drop-zone');
+
 dropZone.addEventListener('click', function(e) {
     if (e.target !== fileInput) fileInput.click();
 });
@@ -774,31 +723,21 @@ uploadForm.addEventListener('submit', function(e) {
     e.preventDefault();
     var file = fileInput.files[0];
     if (!file) {
-        statusDiv.textContent = 'Please select a file';
-        statusDiv.className = 'status error';
-        statusDiv.style.display = 'block';
-        setTimeout(function() { statusDiv.style.display = 'none'; }, 6000);
+        showToast('Please select a file', true);
         return;
     }
     var maxSize = isJpegFile(file) ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
     var maxSizeMB = isJpegFile(file) ? '25MB' : '5MB';
     if (file.size > maxSize) {
-        statusDiv.textContent = 'File too large! Maximum size is ' + maxSizeMB + '.';
-        statusDiv.className = 'status error';
-        statusDiv.style.display = 'block';
-        setTimeout(function() { statusDiv.style.display = 'none'; }, 6000);
+        showToast('File too large! Maximum size is ' + maxSizeMB + '.', true);
         return;
     }
     uploadBtn.disabled = true;
-    statusDiv.textContent = 'Processing...';
-    statusDiv.className = 'status';
-    statusDiv.style.display = 'block';
     var processAndUpload = function(fileToUpload, filename) {
         var formData = new FormData();
         formData.append('file', fileToUpload, filename);
         uploadProgress.classList.add('active');
         progressFill.style.width = '0%';
-        statusDiv.textContent = 'Uploading...';
         var xhr = new XMLHttpRequest();
         xhr.open('POST', '/upload', true);
         xhr.upload.onprogress = function(e) {
@@ -815,21 +754,16 @@ uploadForm.addEventListener('submit', function(e) {
                 try {
                     var result = JSON.parse(xhr.responseText);
                     if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
-                        statusDiv.textContent = 'Upload successful!';
-                        statusDiv.className = 'status success';
+                        showToast('Upload successful!', false);
                         fileInput.value = '';
                         fileInfo.innerHTML = '';
                         fileInfo.classList.remove('has-file');
                     } else {
-                        statusDiv.textContent = 'Upload failed: ' + (result.error || 'HTTP ' + xhr.status);
-                        statusDiv.className = 'status error';
+                        showToast('Upload failed: ' + (result.error || 'HTTP ' + xhr.status), true);
                     }
                 } catch (e) {
-                    statusDiv.textContent = 'Upload failed: ' + xhr.statusText;
-                    statusDiv.className = 'status error';
+                    showToast('Upload failed: ' + xhr.statusText, true);
                 }
-                statusDiv.style.display = 'block';
-                setTimeout(function() { statusDiv.style.display = 'none'; }, 5000);
             }
         };
         xhr.send(formData);
@@ -846,79 +780,39 @@ uploadForm.addEventListener('submit', function(e) {
             }
         }).catch(function(err) {
             uploadBtn.disabled = false;
-            statusDiv.textContent = 'Error processing image: ' + err.message;
-            statusDiv.className = 'status error';
-            statusDiv.style.display = 'block';
-            setTimeout(function() { statusDiv.style.display = 'none'; }, 5000);
+            showToast('Error processing image: ' + err.message, true);
         });
     } else {
         processAndUpload(file, file.name);
     }
 });
+
 function checkForUpdates() {
     fetch('/ota/status').then(function(r) { return r.json(); }).then(function(d) {
-        if (d.ok && d.data.state === 'update_available') {
+        if (d.ok && d.data && (d.data.state === 'update_available' || d.data.available_version)) {
             var banner = document.getElementById('update-banner');
             var verText = document.getElementById('update-version');
             verText.textContent = 'v' + d.data.current_version + ' -> v' + d.data.available_version;
             banner.style.display = 'block';
+            var badge = document.getElementById('update-badge');
+            if (badge) badge.classList.add('visible');
         }
     }).catch(function(e) { console.log('Update check failed:', e); });
 }
-function pollActivePlayset(attempt) {
-    attempt = attempt || 0;
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/playsets/active', true);
-    xhr.timeout = 5000;
-    function retry() {
-        if (attempt < 2) {
-            setTimeout(function() { pollActivePlayset(attempt + 1); }, 500);
-        }
-    }
-    xhr.onerror = retry;
-    xhr.ontimeout = retry;
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState !== 4) return;
-        if (xhr.status !== 200) { retry(); return; }
-        try {
-            var resp = JSON.parse(xhr.responseText);
-            if (resp.ok && resp.data) {
-                var registered = resp.data.registered === true;
-                var recentBtn = document.getElementById('ch-channel_recent');
-                var promBtn = document.getElementById('ch-channel_promoted');
-                var followedBtn = document.getElementById('ch-followed_artists');
-                if (recentBtn) recentBtn.disabled = !registered;
-                if (followedBtn) followedBtn.disabled = !registered;
-                if (resp.data.name && resp.data.playset_info) {
-                    updatePlaysetInfo(resp.data.name, resp.data.playset_info);
-                    updateSelectedChannel(resp.data.name);
-                }
-                updateArtwork(resp.data.current_artwork);
-            }
-        } catch (e) { console.log('Playset poll parse error:', e); retry(); }
-    };
-    xhr.send();
-}
-function playsetDisplayName(name) {
-    if (name === 'channel_recent') return 'Recent Artworks';
-    if (name === 'channel_promoted') return 'Promoted';
-    if (name === 'channel_sdcard') return 'SD Card';
-    if (name === 'followed_artists') return 'Followed Artists';
-    if (name === 'giphy_trending') return 'Giphy Trending';
-    return name;
-}
-function togglePlaysetCard() {
-    var card = document.getElementById('playset-card');
+
+function toggleNowPlaying() {
+    var card = document.getElementById('now-playing');
     var wasCollapsed = card.classList.contains('collapsed');
     card.classList.toggle('collapsed');
     if (wasCollapsed) {
-        var container = document.getElementById('playset-channels');
+        var container = document.getElementById('now-playing-channels');
         if (!container.querySelector('.ps-ch-row')) {
             container.innerHTML = '<div class="ps-ch-loading">Loading\u2026</div>';
         }
         pollActivePlayset();
     }
 }
+
 function typeBadgeLetter(type) {
     var m = {named:'N',user:'U',hashtag:'H',sdcard:'S',giphy:'G',artwork:'A'};
     return m[type] || '?';
@@ -977,9 +871,8 @@ function updateChannelRow(row, ch) {
     row.querySelector('.ps-ch-time').textContent = relativeTime(ch.last_refresh);
 }
 function renderChannelRows(channels) {
-    var container = document.getElementById('playset-channels');
+    var container = document.getElementById('now-playing-channels');
     if (!channels || !channels.length) { container.innerHTML = ''; return; }
-    // Clear loading indicator or any non-channel-row content
     if (container.firstElementChild && !container.firstElementChild.classList.contains('ps-ch-row')) {
         container.innerHTML = '';
     }
@@ -995,11 +888,11 @@ function renderChannelRows(channels) {
         container.removeChild(container.lastChild);
     }
 }
-function updatePlaysetInfo(name, info) {
-    var card = document.getElementById('playset-card');
+function updateNowPlaying(name, info) {
+    var card = document.getElementById('now-playing');
     if (!info) { card.style.display = 'none'; return; }
-    var nameEl = document.getElementById('playset-name');
-    var statsEl = document.getElementById('playset-stats');
+    var nameEl = document.getElementById('now-playing-name');
+    var statsEl = document.getElementById('now-playing-stats');
     nameEl.textContent = playsetDisplayName(name);
     var parts = [];
     if (typeof info.channel_count === 'number') parts.push(info.channel_count + ' ch');
@@ -1013,42 +906,47 @@ function updatePlaysetInfo(name, info) {
     card.style.display = '';
     if (info.channels) renderChannelRows(info.channels);
 }
-function updateSelectedChannel(playsetOrChannel) {
-    var buttons = document.querySelectorAll('.channel-btn');
-    buttons.forEach(function(btn) { btn.classList.remove('selected'); });
 
-    // Map legacy channel names to playset names for backwards compatibility
-    var playset = playsetOrChannel;
-    if (playsetOrChannel === 'all') playset = 'channel_recent';
-    else if (playsetOrChannel === 'promoted') playset = 'channel_promoted';
-    else if (playsetOrChannel === 'sdcard') playset = 'channel_sdcard';
-
-    // Find button by playset name
-    var btn = document.getElementById('ch-' + playset);
-    if (btn) btn.classList.add('selected');
-}
-function loadCurrentChannel() {
+function pollActivePlayset(attempt) {
+    attempt = attempt || 0;
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/channel', true);
+    xhr.open('GET', '/playsets/active', true);
     xhr.timeout = 5000;
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4 && xhr.status === 200) {
-            try {
-                var resp = JSON.parse(xhr.responseText);
-                if (resp.ok && resp.data) {
-                    // Prefer playset name, fall back to channel_name for backwards compatibility
-                    var selected = resp.data.playset || resp.data.channel_name;
-                    if (selected) {
-                        updateSelectedChannel(selected);
-                    }
-                }
-            } catch (e) {
-                console.log('Failed to parse channel response:', e);
-            }
+    function retry() {
+        if (attempt < 2) {
+            setTimeout(function() { pollActivePlayset(attempt + 1); }, 500);
         }
+    }
+    xhr.onerror = retry;
+    xhr.ontimeout = retry;
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        if (xhr.status !== 200) { retry(); return; }
+        try {
+            var resp = JSON.parse(xhr.responseText);
+            if (resp.ok && resp.data) {
+                isRegistered = resp.data.registered === true;
+                // Update pill bar disabled states
+                var pills = document.querySelectorAll('.pill-item');
+                pills.forEach(function(p) {
+                    var pid = p.getAttribute('data-playset');
+                    builtInPresets.forEach(function(bp) {
+                        if (bp.id === pid && bp.needsRegistration) {
+                            p.disabled = !isRegistered;
+                        }
+                    });
+                });
+                if (resp.data.name && resp.data.playset_info) {
+                    updateNowPlaying(resp.data.name, resp.data.playset_info);
+                    updatePillBarActive(resp.data.name);
+                }
+                updateArtwork(resp.data.current_artwork);
+            }
+        } catch (e) { console.log('Playset poll parse error:', e); retry(); }
     };
     xhr.send();
 }
+
 checkForUpdates();
 var pollIntervalId = setInterval(pollActivePlayset, 4000);
 function schedulePollAfterSwap() {

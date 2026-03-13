@@ -91,7 +91,7 @@ button {
 }
 </style>
 </head>
-<body>
+<body class="has-bottom-nav">
 <div class="container">
 <h1>Firmware Update<span class="dev-badge" id="dev-badge" style="display:none">DEV</span></h1>
 <div class="status-message" id="status-msg"></div>
@@ -125,7 +125,12 @@ button {
 <button class="btn-primary" id="check-btn" onclick="checkUpdate()">Check for Updates</button>
 <button class="btn-primary" id="install-btn" onclick="installUpdate()" disabled>Install Update</button>
 <div class="release-notes" id="release-notes"></div>
-<a href="/" class="back-link">&#8592; Back to Home</a>
+<nav class="bottom-nav">
+<a href="/" class="bottom-nav-item"><span class="bottom-nav-icon">&#8962;</span><span class="bottom-nav-label">Home</span></a>
+<a href="/playset-editor" class="bottom-nav-item"><span class="bottom-nav-icon">&#9776;</span><span class="bottom-nav-label">Playsets</span></a>
+<a href="/settings" class="bottom-nav-item"><span class="bottom-nav-icon">&#9881;</span><span class="bottom-nav-label">Settings</span></a>
+<a href="/ota" class="bottom-nav-item active"><span class="bottom-nav-icon">&#8673;</span><span class="bottom-nav-label">Update</span><span class="bottom-nav-badge" id="update-badge"></span></a>
+</nav>
 </div>
 <script>
 var pollInterval = null;

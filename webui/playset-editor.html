@@ -568,7 +568,7 @@
         }
     </style>
 </head>
-<body>
+<body class="has-bottom-nav">
     <div class="container">
         <!-- Header -->
         <div class="header-card card">
@@ -1824,5 +1824,12 @@
                 .replace(/>/g, '&gt;');
         }
     </script>
+<nav class="bottom-nav">
+<a href="/" class="bottom-nav-item"><span class="bottom-nav-icon">&#8962;</span><span class="bottom-nav-label">Home</span></a>
+<a href="/playset-editor" class="bottom-nav-item active"><span class="bottom-nav-icon">&#9776;</span><span class="bottom-nav-label">Playsets</span></a>
+<a href="/settings" class="bottom-nav-item"><span class="bottom-nav-icon">&#9881;</span><span class="bottom-nav-label">Settings</span></a>
+<a href="/ota" class="bottom-nav-item"><span class="bottom-nav-icon">&#8673;</span><span class="bottom-nav-label">Update</span><span class="bottom-nav-badge" id="update-badge"></span></a>
+</nav>
+<script>fetch('/ota/status').then(function(r){return r.json()}).then(function(d){if(d.ok&&d.data&&(d.data.state==='update_available'||d.data.available_version)){var b=document.getElementById('update-badge');if(b)b.classList.add('visible');}}).catch(function(){});</script>
 </body>
 </html>

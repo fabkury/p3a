@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/favicon.ico">
 <script src="/static/compat.js"></script>
 <title>p3a - Settings</title>
 <link rel="stylesheet" href="/static/common.css">
@@ -43,20 +44,13 @@
     cursor: pointer;
     transition: background 0.2s;
 }
-.upload-btn:active:not(:disabled) {
-    background: var(--c-success-dark);
-}
-.upload-btn:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-}
+.upload-btn:active:not(:disabled) { background: var(--c-success-dark); }
+.upload-btn:disabled { background: #ccc; cursor: not-allowed; }
 .danger-btn {
     background: var(--c-danger);
     width: 100%;
 }
-.danger-btn:active:not(:disabled) {
-    background: var(--c-danger-dark);
-}
+.danger-btn:active:not(:disabled) { background: var(--c-danger-dark); }
 .danger-btn.confirm {
     background: var(--c-danger-dark);
     animation: pulse 0.5s ease-in-out infinite alternate;
@@ -65,194 +59,336 @@
     from { opacity: 1; }
     to { opacity: 0.7; }
 }
+/* Network tab styles */
+.name-input {
+    width: 100%;
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-sm);
+    font-size: 0.95rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.name-input:focus { border-color: var(--c-primary); box-shadow: var(--focus-ring); }
+.hostname-preview {
+    color: var(--c-text-lighter);
+    font-size: 0.8rem;
+    margin-top: var(--sp-1);
+}
+.name-hint {
+    color: var(--c-text-lighter);
+    font-size: 0.78rem;
+    margin-top: var(--sp-1);
+}
+.name-error {
+    color: var(--c-danger);
+    font-size: 0.78rem;
+    margin-top: var(--sp-1);
+    display: none;
+}
+.warning {
+    color: var(--c-text-light);
+    font-size: 0.8rem;
+    margin-top: var(--sp-2);
+    text-align: center;
+}
+/* Giphy tab styles */
+.save-all {
+    width: 100%;
+    margin-top: 8px;
+}
 </style>
 </head>
-<body>
+<body class="has-bottom-nav">
 <div class="header">
     <h1>settings</h1>
 </div>
-<div class="section">
-    <h3>Display</h3>
-    <div class="bg-row">
-        <div class="bg-preview" id="bg-preview"></div>
-        <input class="bg-input" id="bg-r" type="number" min="0" max="255" placeholder="R" oninput="updateColorPreview()">
-        <input class="bg-input" id="bg-g" type="number" min="0" max="255" placeholder="G" oninput="updateColorPreview()">
-        <input class="bg-input" id="bg-b" type="number" min="0" max="255" placeholder="B" oninput="updateColorPreview()">
-        <button class="upload-btn bg-save" id="bg-save" type="button" onclick="saveBackgroundColor()">Save</button>
-    </div>
-    <div class="file-name" id="bg-hint" style="margin-bottom:8px;">Background color for transparent artwork</div>
-    <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
-        <label class="toggle-label">Processing indicator size</label>
-        <div style="display:flex;gap:8px;align-items:center;">
-            <input class="bg-input" id="proc-notif-size" type="number" min="0" max="256" style="max-width:90px;">
-            <span style="color:#666;font-size:0.8rem;">px (0=off)</span>
-            <button class="btn" onclick="saveProcNotifSize()">Save</button>
+<div class="tab-bar">
+    <button class="tab-item active" data-tab="display">Display</button>
+    <button class="tab-item" data-tab="network">Network</button>
+    <button class="tab-item" data-tab="giphy">Giphy</button>
+    <button class="tab-item" data-tab="storage">Storage</button>
+    <button class="tab-item" data-tab="makapix">Makapix</button>
+    <button class="tab-item" data-tab="system">System</button>
+</div>
+
+<!-- Display Tab -->
+<div class="tab-content active" id="tab-display">
+    <div class="section">
+        <h3>Background Color</h3>
+        <div class="bg-row">
+            <div class="bg-preview" id="bg-preview"></div>
+            <input class="bg-input" id="bg-r" type="number" min="0" max="255" placeholder="R" oninput="updateColorPreview()">
+            <input class="bg-input" id="bg-g" type="number" min="0" max="255" placeholder="G" oninput="updateColorPreview()">
+            <input class="bg-input" id="bg-b" type="number" min="0" max="255" placeholder="B" oninput="updateColorPreview()">
+            <button class="upload-btn bg-save" id="bg-save" type="button" onclick="saveBackgroundColor()">Save</button>
         </div>
-    </div>
-    <div class="toggle-row">
-        <label for="fps-toggle" class="toggle-label">Show FPS</label>
-        <label class="toggle-switch">
-            <input type="checkbox" id="fps-toggle" onchange="toggleShowFps(this.checked)">
-            <span class="toggle-slider"></span>
-        </label>
-    </div>
-    <div class="toggle-row">
-        <label for="maxspeed-toggle" class="toggle-label">Max Speed Playback</label>
-        <label class="toggle-switch">
-            <input type="checkbox" id="maxspeed-toggle" onchange="toggleMaxSpeedPlayback(this.checked)">
-            <span class="toggle-slider"></span>
-        </label>
-    </div>
-    <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
-        <label class="toggle-label">Auto-swap interval</label>
-        <div style="display:flex;gap:8px;align-items:center;">
-            <input class="bg-input" id="autoswap" type="number" min="0" max="86400" style="max-width:90px;">
-            <span style="color:#666;font-size:0.8rem;">sec (0=off)</span>
-            <button class="btn" onclick="saveAutoSwap()">Save</button>
+        <div class="file-name" id="bg-hint" style="margin-bottom:8px;">Background color for transparent artwork</div>
+        <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
+            <label class="toggle-label">Processing indicator size</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input class="bg-input" id="proc-notif-size" type="number" min="0" max="256" style="max-width:90px;">
+                <span style="color:#666;font-size:0.8rem;">px (0=off)</span>
+                <button class="btn" onclick="saveProcNotifSize()">Save</button>
+            </div>
         </div>
-    </div>
-    <div class="toggle-row">
-        <label class="toggle-label" for="ch-select-mode">Channel selection</label>
-        <select id="ch-select-mode" onchange="saveChannelSelectMode(this.value)"
-            style="padding:8px 10px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem;background:#fff;color:#333;">
-            <option value="0">SWRR</option>
-            <option value="1">Stochastic</option>
-        </select>
-    </div>
-    <div class="toggle-row">
-        <label class="toggle-label" for="refresh-override" style="cursor:pointer;">
-            <input type="checkbox" id="refresh-override" onchange="saveRefreshOverride(this.checked)" style="margin-right:6px;vertical-align:middle;">
-            Allow refresh override (one-time bypass for all channels)
-        </label>
+        <div class="toggle-row">
+            <label for="fps-toggle" class="toggle-label">Show FPS</label>
+            <label class="toggle-switch">
+                <input type="checkbox" id="fps-toggle" onchange="toggleShowFps(this.checked)">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="toggle-row">
+            <label for="maxspeed-toggle" class="toggle-label">Max Speed Playback</label>
+            <label class="toggle-switch">
+                <input type="checkbox" id="maxspeed-toggle" onchange="toggleMaxSpeedPlayback(this.checked)">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
+            <label class="toggle-label">Auto-swap interval</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input class="bg-input" id="autoswap" type="number" min="0" max="86400" style="max-width:90px;">
+                <span style="color:#666;font-size:0.8rem;">sec (0=off)</span>
+                <button class="btn" onclick="saveAutoSwap()">Save</button>
+            </div>
+        </div>
+        <div class="toggle-row">
+            <label class="toggle-label" for="ch-select-mode">Channel selection</label>
+            <select id="ch-select-mode" onchange="saveChannelSelectMode(this.value)"
+                style="padding:8px 10px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem;background:#fff;color:#333;">
+                <option value="0">SWRR</option>
+                <option value="1">Stochastic</option>
+            </select>
+        </div>
+        <div class="toggle-row">
+            <label class="toggle-label" for="refresh-override" style="cursor:pointer;">
+                <input type="checkbox" id="refresh-override" onchange="saveRefreshOverride(this.checked)" style="margin-right:6px;vertical-align:middle;">
+                Allow refresh override (one-time bypass for all channels)
+            </label>
+        </div>
     </div>
 </div>
-<div class="section">
-    <h3>Storage</h3>
-    <div id="storage-info" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;">
-            <span style="font-size:0.85rem;color:#333;" id="storage-summary">Loading...</span>
-            <span class="file-name" id="storage-pct" style="min-height:0;"></span>
+
+<!-- Network Tab -->
+<div class="tab-content" id="tab-network">
+    <div class="section">
+        <h3>Connection</h3>
+        <div class="info-row">
+            <span class="info-label">Status</span>
+            <span class="info-value"><span class="status-badge" id="net-status-badge">Loading...</span></span>
         </div>
-        <div style="height:6px;background:#e9ecef;border-radius:3px;overflow:hidden;">
-            <div id="storage-bar" style="height:100%;background:#667eea;border-radius:3px;width:0%;transition:width 0.4s ease;"></div>
+        <div class="info-row" id="ssid-row" style="display:none;">
+            <span class="info-label">Network (SSID)</span>
+            <span class="info-value" id="ssid-value"></span>
         </div>
-        <div style="font-size:0.75rem;color:#667eea;font-weight:500;" id="storage-detail"></div>
-    </div>
-    <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
-        <label class="toggle-label" for="cache-size">Makapix channel cache size</label>
-        <div style="display:flex;gap:8px;align-items:center;">
-            <input class="bg-input" id="cache-size" type="number" min="32" max="4096" style="max-width:90px;" aria-label="Channel cache size">
-            <span style="color:#666;font-size:0.8rem;">artworks</span>
-            <button class="btn" onclick="saveCacheSize()">Save</button>
+        <div class="info-row" id="ip-row" style="display:none;">
+            <span class="info-label">IP Address</span>
+            <span class="info-value" id="ip-value"></span>
+        </div>
+        <div class="info-row" id="gw-row" style="display:none;">
+            <span class="info-label">Gateway</span>
+            <span class="info-value" id="gw-value"></span>
+        </div>
+        <div class="info-row" id="mask-row" style="display:none;">
+            <span class="info-label">Netmask</span>
+            <span class="info-value" id="mask-value"></span>
+        </div>
+        <div class="info-row" id="rssi-row" style="display:none;">
+            <span class="info-label">Signal Strength (RSSI)</span>
+            <span class="info-value" id="rssi-value"></span>
         </div>
     </div>
-    <div class="file-name" id="cache-hint">Max artworks per channel (32-4096). Reboot required after change.</div>
-    <h4 style="margin:12px 0 6px;font-size:0.8rem;font-weight:500;color:#333;text-transform:uppercase;letter-spacing:0.05em;">Storage path</h4>
-    <div class="file-name" style="margin-bottom:12px;color:#b8860b;">Changing the path below does not delete any files. To delete the folder, you have to do so manually. You can access your p3a's SD card by connecting to USB-C using the USB-HS port (the port close to the buttons).</div>
-    <div class="bg-row">
-        <input class="bg-input" id="sd-root" type="text" style="flex:1;max-width:none;" placeholder="/p3a">
-        <button class="upload-btn bg-save" id="sd-save" type="button" onclick="saveSdRoot()">Save</button>
+    <div class="section">
+        <h3>Device Name</h3>
+        <div class="info-row">
+            <span class="info-label">Hostname</span>
+            <span class="info-value" id="hostname-display">Loading...</span>
+        </div>
+        <input type="text" id="device-name" class="name-input" maxlength="16"
+               autocapitalize="none" spellcheck="false" placeholder="e.g. bedroom"
+               oninput="updateHostnamePreview()">
+        <div class="hostname-preview" id="hostname-preview"></div>
+        <div class="name-hint">Lowercase letters, numbers, and hyphens only. Leave empty to use default.</div>
+        <div class="name-error" id="name-error">Invalid: use only lowercase letters, numbers, and hyphens. No leading/trailing hyphens.</div>
+        <button type="button" class="btn btn-full" id="name-save-btn" onclick="saveDeviceName()" style="margin-top:var(--sp-2);">Save</button>
+        <button type="button" class="btn btn-warning btn-full" id="name-reboot-btn" style="display:none;margin-top:var(--sp-2);" onclick="rebootDevice()">Reboot to apply</button>
     </div>
-    <div class="file-name" id="sd-hint" style="margin-bottom:12px;">Storage path on SD card. Reboot required. Existing files will not be moved.</div>
-    <button class="btn danger-btn" id="reboot-btn" onclick="reboot()">Reboot</button>
+    <div class="section">
+        <button type="button" class="btn danger-btn" onclick="eraseWifi()">Erase Wi-Fi &amp; Reboot</button>
+        <p class="warning">Device will restart in configuration mode</p>
+    </div>
 </div>
-<div class="section">
-    <h3>Makapix Club</h3>
-    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;">
-            <span style="font-size:0.85rem;color:#333;" id="mkx-reg-status">Loading...</span>
-            <span class="file-name" id="mkx-mqtt-status" style="min-height:0;"></span>
+
+<!-- Giphy Tab -->
+<div class="tab-content" id="tab-giphy">
+    <div class="section">
+        <h3>API</h3>
+        <div class="setting-row">
+            <label class="setting-label" for="giphy-api-key">API Key</label>
+            <input class="setting-input" id="giphy-api-key" type="text" placeholder="Giphy API Key">
         </div>
-        <div id="mkx-player-key" style="display:none;font-family:monospace;font-size:0.78rem;color:#555;word-break:break-all;background:#f5f5f5;padding:6px 8px;border-radius:6px;"><span style="font-family:inherit;color:#888;">Player key: </span><span id="mkx-player-key-value"></span></div>
+        <div class="setting-hint">Enter your Giphy API key. Giphy channels will not work without a valid key.</div>
     </div>
-    <p class="file-name" id="provision-status" style="display:none;"></p>
-    <button class="btn" id="provision-btn" style="display:none;width:100%;" onclick="toggleProvisioning()">
-        Enter Provisioning Mode
-    </button>
-    <button class="btn danger-btn" id="mkx-unregister-btn" style="display:none;" onclick="unregisterMakapix()">
-        Remove Makapix Club registration
-    </button>
-    <div class="file-name" id="mkx-unregister-hint" style="display:none;margin-top:4px;">This will disconnect from Makapix Club and delete stored credentials. You can re-register later.</div>
+    <div class="section" id="random-id-section" style="display:none">
+        <h3>Analytics ID</h3>
+        <div class="setting-row">
+            <span class="setting-label">Random ID</span>
+            <span class="readonly-value empty" id="random-id-value">Not set</span>
+        </div>
+        <div class="setting-hint">Giphy uses this anonymous ID to personalize trending results. Resetting it gives you a fresh identity.</div>
+        <button class="btn danger-btn" style="margin-top:8px" id="reset-rid-btn" onclick="resetRandomId()">Reset Random ID</button>
+    </div>
+    <div class="section">
+        <h3>Content</h3>
+        <div class="setting-row">
+            <label class="setting-label" for="giphy-rating">Content Rating</label>
+            <select class="setting-select" id="giphy-rating">
+                <option value="g">G - General Audiences</option>
+                <option value="pg">PG - Parental Guidance</option>
+                <option value="pg-13">PG-13 (default)</option>
+                <option value="r">R - Restricted</option>
+            </select>
+        </div>
+    </div>
+    <div class="section">
+        <h3>Advanced</h3>
+        <div class="setting-row">
+            <label class="setting-label" for="giphy-refresh">Refresh Interval</label>
+            <select class="setting-select" id="giphy-refresh">
+                <option value="3600">1 hour (default)</option>
+                <option value="7200">2 hours</option>
+                <option value="14400">4 hours</option>
+            </select>
+        </div>
+        <div class="setting-row">
+            <label class="setting-label" for="giphy-cache-size">Cache Size</label>
+            <input class="setting-input" id="giphy-cache-size" type="number" min="32" max="500" step="1" value="400">
+        </div>
+        <div class="setting-hint">Refresh interval controls how often Giphy channels fetch new content. Cache size sets the max number of items kept per channel (32-500).</div>
+    </div>
+    <div class="section">
+        <button class="btn save-all" id="giphy-save-btn" onclick="saveGiphyAll()">Save All Giphy Settings</button>
+    </div>
 </div>
-<div class="footer">
-    <button class="footer-btn" onclick="window.location.href='/'">Home</button>
+
+<!-- Storage Tab -->
+<div class="tab-content" id="tab-storage">
+    <div class="section">
+        <h3>SD Card Usage</h3>
+        <div id="storage-info" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;">
+                <span style="font-size:0.85rem;color:#333;" id="storage-summary">Loading...</span>
+                <span class="file-name" id="storage-pct" style="min-height:0;"></span>
+            </div>
+            <div style="height:6px;background:#e9ecef;border-radius:3px;overflow:hidden;">
+                <div id="storage-bar" style="height:100%;background:#667eea;border-radius:3px;width:0%;transition:width 0.4s ease;"></div>
+            </div>
+            <div style="font-size:0.75rem;color:#667eea;font-weight:500;" id="storage-detail"></div>
+        </div>
+        <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
+            <label class="toggle-label" for="cache-size">Makapix channel cache size</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input class="bg-input" id="cache-size" type="number" min="32" max="4096" style="max-width:90px;" aria-label="Channel cache size">
+                <span style="color:#666;font-size:0.8rem;">artworks</span>
+                <button class="btn" onclick="saveCacheSize()">Save</button>
+            </div>
+        </div>
+        <div class="file-name" id="cache-hint">Max artworks per channel (32-4096). Reboot required after change.</div>
+    </div>
+    <div class="section">
+        <h3>Storage Path</h3>
+        <div class="file-name" style="margin-bottom:12px;color:#b8860b;">Changing the path below does not delete any files. To delete the folder, you have to do so manually. You can access your p3a's SD card by connecting to USB-C using the USB-HS port (the port close to the buttons).</div>
+        <div class="bg-row">
+            <input class="bg-input" id="sd-root" type="text" style="flex:1;max-width:none;" placeholder="/p3a">
+            <button class="upload-btn bg-save" id="sd-save" type="button" onclick="saveSdRoot()">Save</button>
+        </div>
+        <div class="file-name" id="sd-hint" style="margin-bottom:12px;">Storage path on SD card. Reboot required. Existing files will not be moved.</div>
+    </div>
 </div>
-<div class="status" id="status"></div>
+
+<!-- Makapix Tab -->
+<div class="tab-content" id="tab-makapix">
+    <div class="section">
+        <h3>Makapix Club</h3>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;">
+                <span style="font-size:0.85rem;color:#333;" id="mkx-reg-status">Loading...</span>
+                <span class="file-name" id="mkx-mqtt-status" style="min-height:0;"></span>
+            </div>
+            <div id="mkx-player-key" style="display:none;font-family:monospace;font-size:0.78rem;color:#555;word-break:break-all;background:#f5f5f5;padding:6px 8px;border-radius:6px;"><span style="font-family:inherit;color:#888;">Player key: </span><span id="mkx-player-key-value"></span></div>
+        </div>
+        <p class="file-name" id="provision-status" style="display:none;"></p>
+        <button class="btn btn-full" id="provision-btn" style="display:none;" onclick="toggleProvisioning()">
+            Enter Provisioning Mode
+        </button>
+        <button class="btn danger-btn" id="mkx-unregister-btn" style="display:none;" onclick="unregisterMakapix()">
+            Remove Makapix Club registration
+        </button>
+        <div class="file-name" id="mkx-unregister-hint" style="display:none;margin-top:4px;">This will disconnect from Makapix Club and delete stored credentials. You can re-register later.</div>
+    </div>
+</div>
+
+<!-- System Tab -->
+<div class="tab-content" id="tab-system">
+    <div class="section">
+        <h3>Firmware</h3>
+        <div class="info-row">
+            <span class="info-label">Version</span>
+            <span class="info-value" id="sys-firmware-ver">Loading...</span>
+        </div>
+        <div class="info-row" id="sys-update-row" style="display:none;">
+            <span class="info-label">Available</span>
+            <span class="info-value" id="sys-available-ver" style="color:var(--c-success);font-weight:600;"></span>
+        </div>
+    </div>
+    <div class="section">
+        <h3>Actions</h3>
+        <button class="btn danger-btn" id="reboot-btn" onclick="reboot()">Reboot</button>
+    </div>
+</div>
+
+<nav class="bottom-nav">
+<a href="/" class="bottom-nav-item"><span class="bottom-nav-icon">&#8962;</span><span class="bottom-nav-label">Home</span></a>
+<a href="/playset-editor" class="bottom-nav-item"><span class="bottom-nav-icon">&#9776;</span><span class="bottom-nav-label">Playsets</span></a>
+<a href="/settings" class="bottom-nav-item active"><span class="bottom-nav-icon">&#9881;</span><span class="bottom-nav-label">Settings</span></a>
+<a href="/ota" class="bottom-nav-item"><span class="bottom-nav-icon">&#8673;</span><span class="bottom-nav-label">Update</span><span class="bottom-nav-badge" id="update-badge"></span></a>
+</nav>
 <script>
+// ── Tab system ──
+function initTabs() {
+    var hash = location.hash.slice(1) || 'display';
+    var tabs = document.querySelectorAll('.tab-item');
+    var contents = document.querySelectorAll('.tab-content');
+    function activate(name) {
+        tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.tab === name); });
+        contents.forEach(function(c) { c.classList.toggle('active', c.id === 'tab-' + name); });
+        history.replaceState(null, '', '#' + name);
+    }
+    tabs.forEach(function(t) {
+        t.addEventListener('click', function() { activate(t.dataset.tab); });
+    });
+    activate(hash);
+}
+initTabs();
+
+// ── Shared utilities ──
 function showToast(msg, isError) {
-    var status = document.getElementById('status');
-    status.textContent = msg;
-    status.className = isError ? 'status error' : 'status success';
-    status.style.display = 'block';
-    setTimeout(function() { status.style.display = 'none'; }, 6000);
+    var existing = document.querySelector('.toast.show');
+    if (existing) existing.classList.remove('show');
+    var toast = document.createElement('div');
+    toast.className = 'toast ' + (isError ? 'toast-error' : 'toast-success');
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.classList.add('show'); }, 10);
+    setTimeout(function() {
+        toast.classList.remove('show');
+        setTimeout(function() { toast.remove(); }, 300);
+    }, 4000);
 }
-function clamp255(x) {
-    x = parseInt(x, 10);
-    if (isNaN(x)) x = 0;
-    if (x < 0) x = 0;
-    if (x > 255) x = 255;
-    return x;
-}
-function updateColorPreview() {
-    var r = clamp255(document.getElementById('bg-r').value);
-    var g = clamp255(document.getElementById('bg-g').value);
-    var b = clamp255(document.getElementById('bg-b').value);
-    document.getElementById('bg-preview').style.background = 'rgb(' + r + ',' + g + ',' + b + ')';
-}
-function loadAllConfig() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/config', true);
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            var cfg = {};
-            try {
-                var resp = JSON.parse(xhr.responseText || '{}');
-                cfg = (resp && resp.ok && resp.data) ? resp.data : {};
-            } catch (e) { cfg = {}; }
-            // Background color
-            var bg = cfg.background_color || {};
-            document.getElementById('bg-r').value = clamp255(bg.r || 0);
-            document.getElementById('bg-g').value = clamp255(bg.g || 0);
-            document.getElementById('bg-b').value = clamp255(bg.b || 0);
-            updateColorPreview();
-            // Processing indicator size
-            document.getElementById('proc-notif-size').value =
-                (typeof cfg.proc_notif_size === 'number') ? cfg.proc_notif_size : 64;
-            // Show FPS
-            document.getElementById('fps-toggle').checked =
-                (typeof cfg.show_fps === 'boolean') ? cfg.show_fps : true;
-            // Max speed playback
-            document.getElementById('maxspeed-toggle').checked =
-                (typeof cfg.max_speed_playback === 'boolean') ? cfg.max_speed_playback : false;
-            // Auto-swap interval
-            var ms = (typeof cfg.dwell_time_ms === 'number') ? cfg.dwell_time_ms : 30000;
-            document.getElementById('autoswap').value = Math.floor(ms / 1000);
-            // Channel cache size
-            document.getElementById('cache-size').value =
-                (typeof cfg.channel_cache_size === 'number') ? cfg.channel_cache_size : 2048;
-            // SD card root
-            document.getElementById('sd-root').value = cfg.sdcard_root || '/p3a';
-            // Channel select mode
-            var csm = (typeof cfg.channel_select_mode === 'number') ? cfg.channel_select_mode : 1;
-            document.getElementById('ch-select-mode').value = csm;
-        }
-    };
-    xhr.send();
-    // Load refresh override flag (separate endpoint)
-    var xhr2 = new XMLHttpRequest();
-    xhr2.open('GET', '/settings/refresh_override', true);
-    xhr2.onreadystatechange = function() {
-        if (xhr2.readyState === 4) {
-            try {
-                var resp = JSON.parse(xhr2.responseText || '{}');
-                if (resp && resp.ok && resp.data) {
-                    document.getElementById('refresh-override').checked = !!resp.data.refresh_allow_override;
-                }
-            } catch (e) { /* ignore */ }
-        }
-    };
-    xhr2.send();
-}
+
 function mergeConfig(partial, onSuccess, onError) {
     var xhr = new XMLHttpRequest();
     xhr.open('PUT', '/config?merge=true', true);
@@ -268,6 +404,30 @@ function mergeConfig(partial, onSuccess, onError) {
     };
     xhr.send(JSON.stringify(partial));
 }
+
+function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+
+function clamp255(x) {
+    x = parseInt(x, 10);
+    if (isNaN(x)) x = 0;
+    if (x < 0) x = 0;
+    if (x > 255) x = 255;
+    return x;
+}
+
+// ── Display tab ──
+function updateColorPreview() {
+    var r = clamp255(document.getElementById('bg-r').value);
+    var g = clamp255(document.getElementById('bg-g').value);
+    var b = clamp255(document.getElementById('bg-b').value);
+    document.getElementById('bg-preview').style.background = 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
 function saveBackgroundColor() {
     var btn = document.getElementById('bg-save');
     btn.disabled = true;
@@ -282,6 +442,7 @@ function saveBackgroundColor() {
         showToast('Save failed (HTTP ' + status + ')', true);
     });
 }
+
 function toggleShowFps(enable) {
     mergeConfig({show_fps: enable}, function() {
         showToast('FPS display ' + (enable ? 'enabled' : 'disabled'), false);
@@ -290,6 +451,7 @@ function toggleShowFps(enable) {
         document.getElementById('fps-toggle').checked = !enable;
     });
 }
+
 function toggleMaxSpeedPlayback(enable) {
     mergeConfig({max_speed_playback: enable}, function() {
         showToast('Max speed playback ' + (enable ? 'enabled' : 'disabled'), false);
@@ -298,6 +460,296 @@ function toggleMaxSpeedPlayback(enable) {
         document.getElementById('maxspeed-toggle').checked = !enable;
     });
 }
+
+function saveAutoSwap() {
+    var sec = parseInt(document.getElementById('autoswap').value, 10);
+    if (isNaN(sec) || sec < 0) sec = 0;
+    if (sec > 86400) sec = 86400;
+    if (sec > 0 && sec < 5) {
+        showToast('Minimum is 5 seconds', true);
+        return;
+    }
+    mergeConfig({dwell_time_ms: sec * 1000}, function() {
+        showToast(sec === 0 ? 'Auto-swap disabled' : 'Auto-swap: ' + sec + 's', false);
+    }, function() {
+        showToast('Save failed', true);
+    });
+}
+
+function saveProcNotifSize() {
+    var size = parseInt(document.getElementById('proc-notif-size').value, 10);
+    if (isNaN(size) || size < 0) size = 0;
+    if (size > 0 && size < 16) size = 16;
+    if (size > 256) size = 256;
+    document.getElementById('proc-notif-size').value = size;
+    mergeConfig({proc_notif_size: size}, function() {
+        showToast(size === 0 ? 'Indicator disabled' : 'Indicator size: ' + size + 'px', false);
+    }, function() {
+        showToast('Save failed', true);
+    });
+}
+
+function saveChannelSelectMode(val) {
+    mergeConfig({channel_select_mode: parseInt(val, 10)}, function() {
+        showToast(val === '1' ? 'Stochastic mode' : 'SWRR mode', false);
+    }, function() {
+        showToast('Save failed', true);
+        document.getElementById('ch-select-mode').value = val === '1' ? '0' : '1';
+    });
+}
+
+function saveRefreshOverride(checked) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('PUT', '/settings/refresh_override', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                showToast('Refresh override ' + (checked ? 'enabled' : 'disabled'), false);
+            } else {
+                showToast('Save failed', true);
+                document.getElementById('refresh-override').checked = !checked;
+            }
+        }
+    };
+    xhr.send(JSON.stringify({refresh_allow_override: checked}));
+}
+
+// ── Network tab ──
+function loadNetworkStatus() {
+    fetch('/api/network-status')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.ok) {
+                document.getElementById('net-status-badge').textContent = 'Error';
+                document.getElementById('net-status-badge').className = 'status-badge status-disconnected';
+                return;
+            }
+            var data = d.data;
+            var badge = document.getElementById('net-status-badge');
+            if (data.connected) {
+                badge.textContent = 'Connected';
+                badge.className = 'status-badge status-connected';
+            } else {
+                badge.textContent = 'Disconnected';
+                badge.className = 'status-badge status-disconnected';
+            }
+            if (data.ssid) {
+                document.getElementById('ssid-row').style.display = 'flex';
+                document.getElementById('ssid-value').textContent = data.ssid;
+            }
+            if (data.ip) {
+                document.getElementById('ip-row').style.display = 'flex';
+                document.getElementById('ip-value').textContent = data.ip;
+            }
+            if (data.gateway) {
+                document.getElementById('gw-row').style.display = 'flex';
+                document.getElementById('gw-value').textContent = data.gateway;
+            }
+            if (data.netmask) {
+                document.getElementById('mask-row').style.display = 'flex';
+                document.getElementById('mask-value').textContent = data.netmask;
+            }
+            if (typeof data.rssi === 'number') {
+                document.getElementById('rssi-row').style.display = 'flex';
+                document.getElementById('rssi-value').textContent = data.rssi + ' dBm';
+            }
+        })
+        .catch(function(e) {
+            console.error('Network status error:', e);
+            document.getElementById('net-status-badge').textContent = 'Error';
+            document.getElementById('net-status-badge').className = 'status-badge status-disconnected';
+        });
+}
+
+function loadDeviceName() {
+    fetch('/api/device-name')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.ok) return;
+            document.getElementById('device-name').value = d.device_name || '';
+            var host = d.hostname || 'p3a';
+            document.getElementById('hostname-display').textContent = host + '.local';
+            updateHostnamePreview();
+        })
+        .catch(function() {});
+}
+
+function updateHostnamePreview() {
+    var input = document.getElementById('device-name');
+    input.value = input.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    var name = input.value;
+    var host = name ? 'p3a-' + name : 'p3a';
+    document.getElementById('hostname-preview').textContent = host + '.local';
+    var valid = isNameValid(name);
+    document.getElementById('name-error').style.display = valid ? 'none' : 'block';
+    document.getElementById('name-save-btn').disabled = !valid;
+}
+
+function isNameValid(name) {
+    if (name === '') return true;
+    if (name.charAt(0) === '-' || name.charAt(name.length - 1) === '-') return false;
+    return /^[a-z0-9-]*$/.test(name);
+}
+
+function saveDeviceName() {
+    var name = document.getElementById('device-name').value;
+    if (!isNameValid(name)) return;
+    document.getElementById('name-save-btn').disabled = true;
+    fetch('/api/device-name', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_name: name })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        document.getElementById('name-save-btn').disabled = false;
+        if (d.ok) {
+            showToast('Device name saved!', false);
+            var host = name ? 'p3a-' + name : 'p3a';
+            document.getElementById('hostname-display').textContent = host + '.local';
+            if (d.reboot_required) {
+                document.getElementById('name-reboot-btn').style.display = 'block';
+            }
+        } else {
+            showToast(d.error || 'Failed to save', true);
+        }
+    })
+    .catch(function() {
+        document.getElementById('name-save-btn').disabled = false;
+        showToast('Request failed', true);
+    });
+}
+
+function rebootDevice() {
+    if (!confirm('Reboot the device now to apply the new name?')) return;
+    fetch('/action/reboot', { method: 'POST' })
+        .then(function() { showToast('Rebooting...', false); })
+        .catch(function() { showToast('Reboot request failed', true); });
+}
+
+function eraseWifi() {
+    if (!confirm('Erase Wi-Fi credentials? Device will reboot into setup mode.')) return;
+    fetch('/erase', { method: 'POST' })
+        .then(function(r) {
+            showToast('Wi-Fi credentials erased. Device will reboot.', false);
+            setTimeout(function() { window.location.href = '/'; }, 2000);
+        })
+        .catch(function(e) {
+            showToast('Failed to erase credentials', true);
+        });
+}
+
+// ── Giphy tab ──
+function loadGiphySettings(cfg) {
+    document.getElementById('giphy-api-key').value = cfg.giphy_api_key || '';
+    document.getElementById('giphy-rating').value = cfg.giphy_rating || 'pg-13';
+    var refreshSel = document.getElementById('giphy-refresh');
+    var refreshVal = String(cfg.giphy_refresh_interval || 3600);
+    refreshSel.value = refreshVal;
+    if (!refreshSel.value) refreshSel.value = '3600';
+    document.getElementById('giphy-cache-size').value = cfg.giphy_cache_size || 400;
+    var ridSpan = document.getElementById('random-id-value');
+    var ridSection = document.getElementById('random-id-section');
+    if (cfg.giphy_random_id) {
+        ridSpan.textContent = cfg.giphy_random_id;
+        ridSpan.className = 'readonly-value';
+    } else {
+        ridSpan.textContent = 'Not set';
+        ridSpan.className = 'readonly-value empty';
+    }
+    ridSection.style.display = '';
+}
+
+function saveGiphyAll() {
+    var btn = document.getElementById('giphy-save-btn');
+    btn.disabled = true;
+    var apiKey = document.getElementById('giphy-api-key').value.trim();
+    var rating = document.getElementById('giphy-rating').value;
+    if (!apiKey) { showToast('API Key is required', true); btn.disabled = false; return; }
+    var cacheSize = parseInt(document.getElementById('giphy-cache-size').value, 10) || 400;
+    if (cacheSize < 32) cacheSize = 32;
+    if (cacheSize > 500) cacheSize = 500;
+    var partial = {
+        giphy_api_key: apiKey,
+        giphy_rating: rating,
+        giphy_refresh_interval: parseInt(document.getElementById('giphy-refresh').value, 10),
+        giphy_cache_size: cacheSize
+    };
+    mergeConfig(partial, function() {
+        btn.disabled = false;
+        showToast('Giphy settings saved', false);
+    }, function(status) {
+        btn.disabled = false;
+        showToast('Save failed (HTTP ' + status + ')', true);
+    });
+}
+
+function resetRandomId() {
+    if (!confirm('Reset Giphy Random ID? A new one will be obtained on next refresh.')) return;
+    var btn = document.getElementById('reset-rid-btn');
+    btn.disabled = true;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/action/giphy_reset_random_id', true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            btn.disabled = false;
+            if (xhr.status >= 200 && xhr.status < 300) {
+                showToast('Random ID reset', false);
+                var ridSpan = document.getElementById('random-id-value');
+                ridSpan.textContent = 'Not set';
+                ridSpan.className = 'readonly-value empty';
+            } else {
+                showToast('Reset failed (HTTP ' + xhr.status + ')', true);
+            }
+        }
+    };
+    xhr.send();
+}
+
+// ── Storage tab ──
+function loadStorageInfo() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/storage', true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        try {
+            var r = JSON.parse(xhr.responseText);
+            if (!r.ok || !r.data) throw 0;
+            var total = r.data.total_bytes;
+            var free = r.data.free_bytes;
+            var used = total - free;
+            var freePct = total > 0 ? (free / total * 100) : 0;
+            var usedPct = total > 0 ? (used / total * 100) : 0;
+            document.getElementById('storage-summary').textContent =
+                formatBytes(free) + ' free of ' + formatBytes(total);
+            document.getElementById('storage-pct').textContent =
+                freePct.toFixed(1) + '% free';
+            document.getElementById('storage-bar').style.width = usedPct.toFixed(1) + '%';
+            document.getElementById('storage-detail').textContent =
+                formatBytes(used) + ' used';
+        } catch (e) {
+            document.getElementById('storage-summary').textContent = 'Unable to read storage';
+            document.getElementById('storage-pct').textContent = '';
+            document.getElementById('storage-detail').textContent = '';
+        }
+    };
+    xhr.send();
+}
+
+function saveCacheSize() {
+    var size = parseInt(document.getElementById('cache-size').value, 10);
+    if (isNaN(size) || size < 32 || size > 4096) {
+        showToast('Invalid size (32-4096)', true);
+        return;
+    }
+    mergeConfig({channel_cache_size: size}, function() {
+        showToast('Cache size: ' + size + ' (reboot recommended)', false);
+    }, function() {
+        showToast('Save failed', true);
+    });
+}
+
 function saveSdRoot() {
     var btn = document.getElementById('sd-save');
     btn.disabled = true;
@@ -330,128 +782,8 @@ function saveSdRoot() {
         showToast('Save failed (HTTP ' + status + ')', true);
     });
 }
-function saveChannelSelectMode(val) {
-    mergeConfig({channel_select_mode: parseInt(val, 10)}, function() {
-        showToast(val === '1' ? 'Stochastic mode' : 'SWRR mode', false);
-    }, function() {
-        showToast('Save failed', true);
-        document.getElementById('ch-select-mode').value = val === '1' ? '0' : '1';
-    });
-}
-function saveRefreshOverride(checked) {
-    var xhr = new XMLHttpRequest();
-    xhr.open('PUT', '/settings/refresh_override', true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                showToast('Refresh override ' + (checked ? 'enabled' : 'disabled'), false);
-            } else {
-                showToast('Save failed', true);
-                document.getElementById('refresh-override').checked = !checked;
-            }
-        }
-    };
-    xhr.send(JSON.stringify({refresh_allow_override: checked}));
-}
-function saveAutoSwap() {
-    var sec = parseInt(document.getElementById('autoswap').value, 10);
-    if (isNaN(sec) || sec < 0) sec = 0;
-    if (sec > 86400) sec = 86400;
-    if (sec > 0 && sec < 5) {
-        showToast('Minimum is 5 seconds', true);
-        return;
-    }
-    mergeConfig({dwell_time_ms: sec * 1000}, function() {
-        showToast(sec === 0 ? 'Auto-swap disabled' : 'Auto-swap: ' + sec + 's', false);
-    }, function() {
-        showToast('Save failed', true);
-    });
-}
-function saveProcNotifSize() {
-    var size = parseInt(document.getElementById('proc-notif-size').value, 10);
-    if (isNaN(size) || size < 0) size = 0;
-    // Clamp: 0 = disabled, 1-15 -> 16, >256 -> 256
-    if (size > 0 && size < 16) size = 16;
-    if (size > 256) size = 256;
-    document.getElementById('proc-notif-size').value = size;
-    mergeConfig({proc_notif_size: size}, function() {
-        showToast(size === 0 ? 'Indicator disabled' : 'Indicator size: ' + size + 'px', false);
-    }, function() {
-        showToast('Save failed', true);
-    });
-}
-var rebootPending = false;
-var rebootTimeout = null;
-function reboot() {
-    var btn = document.getElementById('reboot-btn');
-    if (!rebootPending) {
-        rebootPending = true;
-        btn.textContent = 'Click again to confirm';
-        btn.classList.add('confirm');
-        rebootTimeout = setTimeout(function() {
-            rebootPending = false;
-            btn.textContent = 'Reboot';
-            btn.classList.remove('confirm');
-        }, 2000);
-    } else {
-        clearTimeout(rebootTimeout);
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/action/reboot', true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.send('{}');
-        showToast('Reboot queued', false);
-        rebootPending = false;
-        btn.textContent = 'Reboot';
-        btn.classList.remove('confirm');
-    }
-}
-function saveCacheSize() {
-    var size = parseInt(document.getElementById('cache-size').value, 10);
-    if (isNaN(size) || size < 32 || size > 4096) {
-        showToast('Invalid size (32-4096)', true);
-        return;
-    }
-    mergeConfig({channel_cache_size: size}, function() {
-        showToast('Cache size: ' + size + ' (reboot recommended)', false);
-    }, function() {
-        showToast('Save failed', true);
-    });
-}
-function formatBytes(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-}
-function loadStorageInfo() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/api/storage', true);
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState !== 4) return;
-        try {
-            var r = JSON.parse(xhr.responseText);
-            if (!r.ok || !r.data) throw 0;
-            var total = r.data.total_bytes;
-            var free = r.data.free_bytes;
-            var used = total - free;
-            var freePct = total > 0 ? (free / total * 100) : 0;
-            var usedPct = total > 0 ? (used / total * 100) : 0;
-            document.getElementById('storage-summary').textContent =
-                formatBytes(free) + ' free of ' + formatBytes(total);
-            document.getElementById('storage-pct').textContent =
-                freePct.toFixed(1) + '% free';
-            document.getElementById('storage-bar').style.width = usedPct.toFixed(1) + '%';
-            document.getElementById('storage-detail').textContent =
-                formatBytes(used) + ' used';
-        } catch (e) {
-            document.getElementById('storage-summary').textContent = 'Unable to read storage';
-            document.getElementById('storage-pct').textContent = '';
-            document.getElementById('storage-detail').textContent = '';
-        }
-    };
-    xhr.send();
-}
+
+// ── Makapix tab ──
 var provisioningActive = false;
 function loadProvisionState() {
     var xhr = new XMLHttpRequest();
@@ -464,15 +796,9 @@ function loadProvisionState() {
             var d = r.data;
             var registered = !!d.makapix_registered;
             var mqttStatus = d.makapix_mqtt_status || 'disconnected';
-
-            // Registration status
             document.getElementById('mkx-reg-status').textContent = registered ? 'Registered' : 'Not registered';
-
-            // MQTT status
             var mqttLabel = {connected: 'MQTT connected', connecting: 'MQTT connecting...', disconnected: 'MQTT disconnected', invalid: 'Registration invalid'};
             document.getElementById('mkx-mqtt-status').textContent = registered ? (mqttLabel[mqttStatus] || mqttStatus) : '';
-
-            // Player key
             var keyEl = document.getElementById('mkx-player-key');
             if (registered && d.makapix_player_key) {
                 document.getElementById('mkx-player-key-value').textContent = d.makapix_player_key;
@@ -480,8 +806,6 @@ function loadProvisionState() {
             } else {
                 keyEl.style.display = 'none';
             }
-
-            // Provisioning button (show only when NOT registered)
             var provBtn = document.getElementById('provision-btn');
             var provStatus = document.getElementById('provision-status');
             if (!registered) {
@@ -500,8 +824,6 @@ function loadProvisionState() {
                 provBtn.style.display = 'none';
                 provStatus.style.display = 'none';
             }
-
-            // Unregister button (show only when registered)
             document.getElementById('mkx-unregister-btn').style.display = registered ? 'block' : 'none';
             document.getElementById('mkx-unregister-hint').style.display = registered ? 'block' : 'none';
         } catch (e) {
@@ -510,6 +832,7 @@ function loadProvisionState() {
     };
     xhr.send();
 }
+
 function unregisterMakapix() {
     if (!confirm('Are you sure you want to remove Makapix Club registration? You can re-register later.')) return;
     var btn = document.getElementById('mkx-unregister-btn');
@@ -534,6 +857,7 @@ function unregisterMakapix() {
     };
     xhr.send('{}');
 }
+
 function toggleProvisioning() {
     var btn = document.getElementById('provision-btn');
     btn.disabled = true;
@@ -562,9 +886,110 @@ function toggleProvisioning() {
     };
     xhr.send(JSON.stringify({enable: enable}));
 }
-loadAllConfig();
+
+// ── System tab ──
+var rebootPending = false;
+var rebootTimeout = null;
+function reboot() {
+    var btn = document.getElementById('reboot-btn');
+    if (!rebootPending) {
+        rebootPending = true;
+        btn.textContent = 'Click again to confirm';
+        btn.classList.add('confirm');
+        rebootTimeout = setTimeout(function() {
+            rebootPending = false;
+            btn.textContent = 'Reboot';
+            btn.classList.remove('confirm');
+        }, 2000);
+    } else {
+        clearTimeout(rebootTimeout);
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/action/reboot', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send('{}');
+        showToast('Reboot queued', false);
+        rebootPending = false;
+        btn.textContent = 'Reboot';
+        btn.classList.remove('confirm');
+    }
+}
+
+function loadOtaStatus() {
+    fetch('/ota/status').then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok && d.data) {
+            document.getElementById('sys-firmware-ver').textContent = d.data.current_version || '-';
+            if (d.data.available_version) {
+                document.getElementById('sys-update-row').style.display = 'flex';
+                document.getElementById('sys-available-ver').textContent = d.data.available_version;
+            }
+            if (d.data.state === 'update_available' || d.data.available_version) {
+                var badge = document.getElementById('update-badge');
+                if (badge) badge.classList.add('visible');
+            }
+        }
+    }).catch(function() {
+        document.getElementById('sys-firmware-ver').textContent = 'Error';
+    });
+}
+
+// ── Load all data ──
+// 1. Config (Display + Giphy + Storage)
+var xhr = new XMLHttpRequest();
+xhr.open('GET', '/config', true);
+xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) {
+        var cfg = {};
+        try {
+            var resp = JSON.parse(xhr.responseText || '{}');
+            cfg = (resp && resp.ok && resp.data) ? resp.data : {};
+        } catch (e) { cfg = {}; }
+        // Display tab
+        var bg = cfg.background_color || {};
+        document.getElementById('bg-r').value = clamp255(bg.r || 0);
+        document.getElementById('bg-g').value = clamp255(bg.g || 0);
+        document.getElementById('bg-b').value = clamp255(bg.b || 0);
+        updateColorPreview();
+        document.getElementById('proc-notif-size').value =
+            (typeof cfg.proc_notif_size === 'number') ? cfg.proc_notif_size : 64;
+        document.getElementById('fps-toggle').checked =
+            (typeof cfg.show_fps === 'boolean') ? cfg.show_fps : true;
+        document.getElementById('maxspeed-toggle').checked =
+            (typeof cfg.max_speed_playback === 'boolean') ? cfg.max_speed_playback : false;
+        var ms = (typeof cfg.dwell_time_ms === 'number') ? cfg.dwell_time_ms : 30000;
+        document.getElementById('autoswap').value = Math.floor(ms / 1000);
+        document.getElementById('ch-select-mode').value =
+            (typeof cfg.channel_select_mode === 'number') ? cfg.channel_select_mode : 1;
+        // Storage tab
+        document.getElementById('cache-size').value =
+            (typeof cfg.channel_cache_size === 'number') ? cfg.channel_cache_size : 2048;
+        document.getElementById('sd-root').value = cfg.sdcard_root || '/p3a';
+        // Giphy tab
+        loadGiphySettings(cfg);
+    }
+};
+xhr.send();
+
+// 2. Refresh override (separate endpoint)
+var xhr2 = new XMLHttpRequest();
+xhr2.open('GET', '/settings/refresh_override', true);
+xhr2.onreadystatechange = function() {
+    if (xhr2.readyState === 4) {
+        try {
+            var resp = JSON.parse(xhr2.responseText || '{}');
+            if (resp && resp.ok && resp.data) {
+                document.getElementById('refresh-override').checked = !!resp.data.refresh_allow_override;
+            }
+        } catch (e) { /* ignore */ }
+    }
+};
+xhr2.send();
+
+// 3-7. Parallel fetches
 loadStorageInfo();
 loadProvisionState();
+loadNetworkStatus();
+loadDeviceName();
+loadOtaStatus();
 </script>
 </body>
 </html>

@@ -346,6 +346,14 @@
             <span class="info-label">Version</span>
             <span class="info-value" id="sys-firmware-ver">Loading...</span>
         </div>
+        <div class="info-row">
+            <span class="info-label">IDF</span>
+            <span class="info-value" id="sys-idf-ver">Loading...</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Uptime</span>
+            <span class="info-value" id="sys-uptime">Loading...</span>
+        </div>
         <div class="info-row" id="sys-update-row" style="display:none;">
             <span class="info-label">Available</span>
             <span class="info-value" id="sys-available-ver" style="color:var(--c-success);font-weight:600;"></span>
@@ -930,6 +938,32 @@ function reboot() {
     }
 }
 
+function formatUptime(ms) {
+    var s = Math.floor(ms / 1000);
+    var d = Math.floor(s / 86400); s %= 86400;
+    var h = Math.floor(s / 3600); s %= 3600;
+    var m = Math.floor(s / 60);
+    var parts = [];
+    if (d) parts.push(d + 'd');
+    if (h) parts.push(h + 'h');
+    parts.push(m + 'm');
+    return parts.join(' ');
+}
+
+function loadSystemStatus() {
+    fetch('/status').then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok && d.data) {
+            document.getElementById('sys-uptime').textContent = formatUptime(d.data.uptime_ms);
+            if (d.data.fw && d.data.fw.idf) {
+                document.getElementById('sys-idf-ver').textContent = d.data.fw.idf;
+            }
+        }
+    }).catch(function() {
+        document.getElementById('sys-uptime').textContent = '-';
+        document.getElementById('sys-idf-ver').textContent = '-';
+    });
+}
+
 function loadOtaStatus() {
     fetch('/ota/status').then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok && d.data) {
@@ -1006,6 +1040,7 @@ loadProvisionState();
 loadNetworkStatus();
 loadDeviceName();
 loadOtaStatus();
+loadSystemStatus();
 </script>
 </body>
 </html>

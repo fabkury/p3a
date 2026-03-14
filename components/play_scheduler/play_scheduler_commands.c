@@ -118,7 +118,11 @@ void ps_build_cache_path(const char *channel_id, char *out_path, size_t max_len)
 static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
 {
     char cache_path[512];
-    ps_build_cache_path(ch->channel_id, cache_path, sizeof(cache_path));
+    char channel_dir[256];
+    if (sd_path_get_channel(channel_dir, sizeof(channel_dir)) != ESP_OK) {
+        strlcpy(channel_dir, "/sdcard/p3a/channel", sizeof(channel_dir));
+    }
+    snprintf(cache_path, sizeof(cache_path), "%s/sdcard.bin", channel_dir);
 
     struct stat st;
     if (stat(cache_path, &st) != 0) {

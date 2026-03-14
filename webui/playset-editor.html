@@ -52,13 +52,6 @@
             box-shadow: var(--c-card-shadow);
         }
 
-        .header-card {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: var(--sp-4);
-        }
-
         .btn {
             padding: var(--sp-3) var(--sp-6);
             border: none;
@@ -471,38 +464,6 @@
             background: #f0f0f0;
         }
 
-        .toast {
-            position: fixed;
-            top: var(--sp-5);
-            bottom: auto;
-            left: 50%;
-            transform: translateX(-50%) translateY(-100px);
-            background: white;
-            padding: var(--sp-4) var(--sp-6);
-            border-radius: var(--r-md);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            z-index: 2000;
-            opacity: 0;
-            transition: all 0.3s;
-            max-width: 90%;
-            display: flex;
-            align-items: center;
-            gap: var(--sp-3);
-        }
-
-        .toast.show {
-            transform: translateX(-50%) translateY(0);
-            opacity: 1;
-        }
-
-        .toast.success {
-            border-left: 4px solid var(--c-success);
-        }
-
-        .toast.error {
-            border-left: 4px solid var(--c-danger);
-        }
-
         .empty-state {
             text-align: center;
             padding: 40px var(--sp-5);
@@ -531,11 +492,6 @@
 
             .card {
                 padding: var(--sp-4);
-            }
-
-            .header-card {
-                flex-direction: column;
-                align-items: stretch;
             }
 
             .radio-group {
@@ -571,15 +527,6 @@
 </head>
 <body class="has-bottom-nav">
     <div class="container">
-        <!-- Header -->
-        <div class="header-card card">
-            <div>
-                <h1>Playset Editor</h1>
-                <p style="color: #666; font-size: 14px;">Create and manage playback configurations</p>
-            </div>
-            <a href="/" class="btn btn-secondary btn-small">&#8592; Home</a>
-        </div>
-
         <!-- Playset List View -->
         <div id="listView">
             <div class="card">
@@ -711,10 +658,6 @@
         </div>
     </div>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="toast">
-        <span id="toastMessage"></span>
-    </div>
 
     <script>
         // Constants
@@ -1787,22 +1730,7 @@
             showToast('Channel added', 'success');
         }
 
-        // Toast
-        function showToast(message, type) {
-            var toast = document.getElementById('toast');
-            var messageEl = document.getElementById('toastMessage');
-
-            messageEl.textContent = message;
-            toast.className = 'toast ' + type;
-
-            setTimeout(function() {
-                toast.classList.add('show');
-            }, 10);
-
-            setTimeout(function() {
-                toast.classList.remove('show');
-            }, type === 'error' ? 6000 : 5000);
-        }
+        function showToast() {}
 
         // Utilities
         function capitalize(str) {

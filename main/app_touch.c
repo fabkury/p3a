@@ -531,8 +531,35 @@ esp_err_t app_touch_init(void)
     if (got == pdTRUE) {
         // Task completed (success or error)
         if (ctx.result != ESP_OK) {
-            ESP_LOGE(TAG, "touch init failed: %s", esp_err_to_name(ctx.result));
-            return ctx.result;
+            ESP_LOGE(TAG, "Touch init error: %s", esp_err_to_name(ctx.result));
+
+            if (streak == 0) {
+                // First failure: reboot once to retry
+                config_store_increment_touch_reboot_total();
+                config_store_increment_touch_reboot_streak();
+                ESP_LOGW(TAG, "Rebooting to retry touch init...");
+
+                for (int i = 10; i > 0; i--) {
+                    char msg[48];
+                    snprintf(msg, sizeof(msg), "Touch error - rebooting in %ds", i);
+                    ugfx_ui_show_channel_message("TOUCH", msg, ((10 - i) * 100) / 10);
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                }
+
+                esp_restart();
+                // Never reached
+            }
+
+            // streak >= 1: already rebooted, enter degraded mode
+            ESP_LOGW(TAG, "Touch init error persists after reboot — entering degraded mode (no touch)");
+            for (int i = 10; i > 0; i--) {
+                char msg[48];
+                snprintf(msg, sizeof(msg), "Touch disabled - continuing in %ds", i);
+                ugfx_ui_show_channel_message("TOUCH", msg, ((10 - i) * 100) / 10);
+                vTaskDelay(pdMS_TO_TICKS(1000));
+            }
+
+            return ESP_ERR_NOT_FINISHED;
         }
 
         // Success — reset streak and proceed normally

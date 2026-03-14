@@ -464,7 +464,10 @@ fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
     // Fetch user playsets then build pill bar
     fetch('/playsets').then(function(r) { return r.json(); }).then(function(pr) {
         if (pr.ok && pr.data && pr.data.playsets) {
-            userPlaysets = pr.data.playsets;
+            var builtInIds = builtInPresets.map(function(p) { return p.id; });
+            userPlaysets = pr.data.playsets.filter(function(ps) {
+                return builtInIds.indexOf(ps.name) === -1;
+            });
         }
         buildPillBar();
     }).catch(function() { buildPillBar(); });

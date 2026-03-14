@@ -23,11 +23,20 @@
 #include "p3a_board.h"
 #include "app_lcd.h"
 #include "animation_player.h"
+#include "display_renderer.h"
 #include "play_scheduler.h"
 #include "ugfx_ui.h"
 #include "p3a_boot_logo.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char *TAG = "app_lcd";
+
+static int fatal_error_render_cb(uint8_t *buffer, void *ctx)
+{
+    size_t stride = p3a_board_get_row_stride();
+    return ugfx_ui_render_to_buffer(buffer, stride);
+}
 
 esp_err_t app_lcd_init(void)
 {
@@ -66,6 +75,19 @@ esp_err_t app_lcd_init(void)
     err = animation_player_init(panel, buffers, buffer_count, buffer_bytes, row_stride);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize animation player: %s", esp_err_to_name(err));
+
+        // Re-initialize display renderer (torn down by animation_player_init cleanup)
+        // and show a fatal error screen instead of crashing
+        display_renderer_init(panel, buffers, buffer_count, buffer_bytes, row_stride);
+        display_renderer_set_frame_callback(fatal_error_render_cb, NULL);
+        ugfx_ui_show_fatal_error(
+            "No Storage Detected",
+            "microSD card not detected.\nA microSD card is required.\n\nPlease disconnect from power,\nunscrew the back plate\nand insert a microSD card.");
+        display_renderer_start();
+
+        ESP_LOGE(TAG, "FATAL: No microSD card. Display showing error screen. Main task suspended.");
+        vTaskSuspend(NULL);
+        // Unreachable
         return err;
     }
 

@@ -169,6 +169,18 @@ gBool ugfx_ui_is_active(void);
 int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride);
 
 /**
+ * @brief Show fatal error screen (terminal state)
+ *
+ * Displays a full-screen error message. This is a terminal UI state
+ * that cannot be dismissed.
+ *
+ * @param title Error title (displayed in red)
+ * @param body Error body text (supports \n for line breaks)
+ * @return ESP_OK on success
+ */
+esp_err_t ugfx_ui_show_fatal_error(const char *title, const char *body);
+
+/**
  * @brief Set µGFX UI rotation
  * 
  * Sets the display orientation for µGFX rendering. Must be called after

@@ -38,7 +38,8 @@ typedef enum {
     UI_MODE_CHANNEL_MESSAGE,   // Channel loading/download status
     UI_MODE_CONNECTIVITY_ERROR, // Connectivity error (no internet, etc.)
     UI_MODE_INFO_SCREEN,        // System info overlay
-    UI_MODE_REGISTRATION_SUCCESS // Registration success message
+    UI_MODE_REGISTRATION_SUCCESS, // Registration success message
+    UI_MODE_FATAL_ERROR          // Fatal error (terminal state)
 } ui_mode_t;
 
 // UI state
@@ -60,6 +61,10 @@ static char s_ota_version_to[32] = {0};
 static char s_channel_name[64] = {0};
 static char s_channel_message[128] = {0};
 static int s_channel_progress = -1;
+
+// Fatal error state
+static char s_fatal_title[64] = {0};
+static char s_fatal_body[256] = {0};
 
 // External variables for board_framebuffer.h (used by µGFX driver)
 void *ugfx_framebuffer_ptr = NULL;
@@ -652,6 +657,69 @@ static void ugfx_ui_draw_registration_success(void)
 }
 
 /**
+ * @brief Draw the fatal error screen
+ */
+static void ugfx_ui_draw_fatal_error(void)
+{
+    gdispClear(GFX_BLACK);
+
+    gCoord screen_w = gdispGetWidth();
+    gCoord screen_h = gdispGetHeight();
+
+    // Title in red, near top
+    gdispFillStringBox(0, screen_h / 4 - 20, screen_w, 45, s_fatal_title,
+                     gdispOpenFont("* DejaVu Sans 32"), HTML2COLOR(0xFF4444), GFX_BLACK, gJustifyCenter);
+
+    // Body text in white, multi-line with '\n' support
+    gFont body_font = gdispOpenFont("* DejaVu Sans 24");
+    const char *msg = s_fatal_body;
+
+    // Split into lines on '\n'
+    enum { MAX_LINES = 8 };
+    const char *line_start[MAX_LINES] = {0};
+    size_t line_len[MAX_LINES] = {0};
+    int line_count = 0;
+
+    const char *p = msg;
+    line_start[line_count] = p;
+    while (*p && line_count < MAX_LINES) {
+        if (*p == '\r') { p++; continue; }
+        if (*p == '\n') {
+            line_len[line_count] = (size_t)(p - line_start[line_count]);
+            line_count++;
+            if (line_count >= MAX_LINES) break;
+            p++;
+            line_start[line_count] = p;
+            continue;
+        }
+        p++;
+    }
+    if (line_count < MAX_LINES) {
+        line_len[line_count] = (size_t)(p - line_start[line_count]);
+        line_count++;
+    }
+    if (line_count <= 0) line_count = 1;
+
+    gCoord line_h = gdispGetFontMetric(body_font, gFontLineSpacing);
+    if (line_h <= 0) line_h = 30;
+    gCoord block_h = (gCoord)(line_count * line_h);
+    gCoord start_y = (screen_h / 2) - (block_h / 2) + 40;
+
+    for (int i = 0; i < line_count; i++) {
+        char line_buf[128];
+        size_t n = line_len[i];
+        if (n >= sizeof(line_buf)) n = sizeof(line_buf) - 1;
+        memcpy(line_buf, line_start[i], n);
+        line_buf[n] = '\0';
+
+        // Empty lines (from double \n) render as spacing
+        color_t color = GFX_WHITE;
+        gdispFillStringBox(0, start_y + (gCoord)(i * line_h), screen_w, line_h, line_buf,
+                           body_font, color, GFX_BLACK, gJustifyCenter);
+    }
+}
+
+/**
  * @brief Draw the UI layout to the current framebuffer
  */
 static void ugfx_ui_draw_layout(int32_t remaining_secs)
@@ -856,6 +924,29 @@ esp_err_t ugfx_ui_show_registration_success(void)
     return ESP_OK;
 }
 
+esp_err_t ugfx_ui_show_fatal_error(const char *title, const char *body)
+{
+    if (title) {
+        strncpy(s_fatal_title, title, sizeof(s_fatal_title) - 1);
+        s_fatal_title[sizeof(s_fatal_title) - 1] = '\0';
+    } else {
+        s_fatal_title[0] = '\0';
+    }
+
+    if (body) {
+        strncpy(s_fatal_body, body, sizeof(s_fatal_body) - 1);
+        s_fatal_body[sizeof(s_fatal_body) - 1] = '\0';
+    } else {
+        s_fatal_body[0] = '\0';
+    }
+
+    s_ui_mode = UI_MODE_FATAL_ERROR;
+    s_ui_active = true;
+
+    ESP_LOGI(TAG, "Fatal error UI activated: %s", s_fatal_title);
+    return ESP_OK;
+}
+
 void ugfx_ui_hide_registration(void)
 {
     s_ui_active = false;
@@ -1054,6 +1145,10 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
         case UI_MODE_REGISTRATION_SUCCESS:
             ugfx_ui_draw_registration_success();
             return 100;
+
+        case UI_MODE_FATAL_ERROR:
+            ugfx_ui_draw_fatal_error();
+            return 500;
 
         default:
             break;

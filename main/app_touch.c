@@ -20,6 +20,7 @@
 #include "makapix.h"
 #include "animation_player.h"
 #include "ugfx_ui.h"
+#include "display_renderer.h"
 #include "p3a_state.h"
 #include "p3a_touch_router.h"
 #include "config_store.h"
@@ -539,6 +540,7 @@ esp_err_t app_touch_init(void)
                 config_store_increment_touch_reboot_streak();
                 ESP_LOGW(TAG, "Rebooting to retry touch init...");
 
+                display_renderer_enter_ui_mode();
                 for (int i = 10; i > 0; i--) {
                     char msg[48];
                     snprintf(msg, sizeof(msg), "Touch error - rebooting in %ds", i);
@@ -552,6 +554,7 @@ esp_err_t app_touch_init(void)
 
             // streak >= 1: already rebooted, enter degraded mode
             ESP_LOGW(TAG, "Touch init error persists after reboot — entering degraded mode (no touch)");
+            display_renderer_enter_ui_mode();
             for (int i = 10; i > 0; i--) {
                 char msg[48];
                 snprintf(msg, sizeof(msg), "Touch disabled - continuing in %ds", i);
@@ -559,6 +562,7 @@ esp_err_t app_touch_init(void)
                 vTaskDelay(pdMS_TO_TICKS(1000));
             }
 
+            display_renderer_exit_ui_mode();
             return ESP_ERR_NOT_FINISHED;
         }
 
@@ -577,6 +581,7 @@ esp_err_t app_touch_init(void)
             config_store_increment_touch_reboot_streak();
             ESP_LOGW(TAG, "Rebooting to retry touch init...");
 
+            display_renderer_enter_ui_mode();
             for (int i = 10; i > 0; i--) {
                 char msg[48];
                 snprintf(msg, sizeof(msg), "Touch error - rebooting in %ds", i);
@@ -590,6 +595,7 @@ esp_err_t app_touch_init(void)
 
         // streak >= 1: already rebooted, enter degraded mode
         ESP_LOGW(TAG, "Touch still stuck after reboot — entering degraded mode (no touch)");
+        display_renderer_enter_ui_mode();
         for (int i = 10; i > 0; i--) {
             char msg[48];
             snprintf(msg, sizeof(msg), "Touch disabled - continuing in %ds", i);
@@ -597,6 +603,7 @@ esp_err_t app_touch_init(void)
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
 
+        display_renderer_exit_ui_mode();
         return ESP_ERR_NOT_FINISHED;
     }
 

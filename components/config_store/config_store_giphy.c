@@ -57,6 +57,27 @@ esp_err_t config_store_get_giphy_rating(char *out, size_t max_len)
     return cfg_get_string("giphy_rating", "pg-13", out, max_len);
 }
 
+esp_err_t config_store_set_giphy_country_code(const char *code)
+{
+    if (!code) return ESP_ERR_INVALID_ARG;
+    if (code[0] == '\0') {
+        cJSON *cfg = NULL;
+        esp_err_t err = config_store_load(&cfg);
+        if (err != ESP_OK) return err;
+        cJSON_DeleteItemFromObject(cfg, "giphy_country_code");
+        err = config_store_save(cfg);
+        cJSON_Delete(cfg);
+        return err;
+    }
+    return cfg_set_string("giphy_country_code", code);
+}
+
+esp_err_t config_store_get_giphy_country_code(char *out, size_t max_len)
+{
+    if (!out || max_len == 0) return ESP_ERR_INVALID_ARG;
+    return cfg_get_string("giphy_country_code", "", out, max_len);
+}
+
 // ============================================================================
 // Giphy Random ID (persisted, cached)
 // ============================================================================

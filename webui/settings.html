@@ -252,6 +252,13 @@
                 <option value="r">R - Restricted</option>
             </select>
         </div>
+        <div class="setting-row">
+            <label class="setting-label" for="giphy-country">Country Code</label>
+            <input class="setting-input" id="giphy-country" type="text" maxlength="2"
+                   placeholder="e.g. US" style="max-width:80px;text-transform:uppercase;"
+                   oninput="validateCountryCode()">
+        </div>
+        <div class="setting-hint">Optional 2-letter country code (ISO 3166-1) to influence regional trending content. Leave empty for global results.</div>
     </div>
     <div class="section">
         <h3>Advanced</h3>
@@ -641,9 +648,15 @@ function eraseWifi() {
 }
 
 // ── Giphy tab ──
+function validateCountryCode() {
+    var input = document.getElementById('giphy-country');
+    input.value = input.value.toUpperCase().replace(/[^A-Z]/g, '');
+}
+
 function loadGiphySettings(cfg) {
     document.getElementById('giphy-api-key').value = cfg.giphy_api_key || '';
     document.getElementById('giphy-rating').value = cfg.giphy_rating || 'pg-13';
+    document.getElementById('giphy-country').value = cfg.giphy_country_code || '';
     var refreshSel = document.getElementById('giphy-refresh');
     var refreshVal = String(cfg.giphy_refresh_interval || 3600);
     refreshSel.value = refreshVal;
@@ -667,12 +680,15 @@ function saveGiphyAll() {
     var apiKey = document.getElementById('giphy-api-key').value.trim();
     var rating = document.getElementById('giphy-rating').value;
     if (!apiKey) { showToast('API Key is required', true); btn.disabled = false; return; }
+    var cc = document.getElementById('giphy-country').value.trim().toUpperCase();
+    if (cc && cc.length !== 2) { showToast('Country code must be 2 letters', true); btn.disabled = false; return; }
     var cacheSize = parseInt(document.getElementById('giphy-cache-size').value, 10) || 400;
     if (cacheSize < 32) cacheSize = 32;
     if (cacheSize > 500) cacheSize = 500;
     var partial = {
         giphy_api_key: apiKey,
         giphy_rating: rating,
+        giphy_country_code: cc,
         giphy_refresh_interval: parseInt(document.getElementById('giphy-refresh').value, 10),
         giphy_cache_size: cacheSize
     };

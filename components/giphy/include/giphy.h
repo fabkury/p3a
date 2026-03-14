@@ -53,6 +53,7 @@ typedef struct {
     uint16_t screen_width;      ///< Display width in pixels (for size-gating downsized_medium)
     uint16_t screen_height;     ///< Display height in pixels (for size-gating downsized_medium)
     char random_id[40];         ///< Giphy random_id for personalization (empty = omit)
+    char country_code[4];       ///< 2-letter ISO 3166-1 country code (empty = omit)
 } giphy_fetch_ctx_t;
 
 /**

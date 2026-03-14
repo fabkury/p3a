@@ -284,6 +284,12 @@ esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
         snprintf(url + url_len, sizeof(url) - url_len, "&random_id=%s", ctx->random_id);
     }
 
+    // Append country_code if set
+    if (ctx->country_code[0] != '\0') {
+        size_t url_len = strlen(url);
+        snprintf(url + url_len, sizeof(url) - url_len, "&country_code=%s", ctx->country_code);
+    }
+
     // Configure HTTP client
     esp_http_client_config_t config = {
         .url = url,

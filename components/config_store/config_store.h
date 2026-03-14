@@ -376,6 +376,16 @@ esp_err_t config_store_set_giphy_rating(const char *rating);
 esp_err_t config_store_get_giphy_rating(char *out, size_t max_len);
 
 /**
+ * @brief Set Giphy country code (2-letter ISO 3166-1, or empty to clear)
+ */
+esp_err_t config_store_set_giphy_country_code(const char *code);
+
+/**
+ * @brief Get Giphy country code (defaults to empty = global)
+ */
+esp_err_t config_store_get_giphy_country_code(char *out, size_t max_len);
+
+/**
  * @brief Set Giphy random_id (persisted, cached)
  */
 esp_err_t config_store_set_giphy_random_id(const char *random_id);

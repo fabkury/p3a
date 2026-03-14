@@ -353,6 +353,7 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
     ctx.prefer_downsized = config_store_get_giphy_prefer_downsized();
     ctx.screen_width = P3A_DISPLAY_WIDTH;
     ctx.screen_height = P3A_DISPLAY_HEIGHT;
+    config_store_get_giphy_country_code(ctx.country_code, sizeof(ctx.country_code));
 
     // Load or fetch random_id for content personalization
     ctx.random_id[0] = '\0';

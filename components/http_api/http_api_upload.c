@@ -448,9 +448,8 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     // Refresh the play_scheduler SD card cache (builds sdcard.bin with filenames stored in entries)
     play_scheduler_refresh_sdcard_cache();
 
-    // Switch to SD card channel - this triggers playback automatically if entries exist
-    // (play_scheduler_execute_command calls play_scheduler_next internally when has_entries=true)
-    esp_err_t play_err = play_scheduler_play_named_channel("sdcard");
+    // Play the uploaded file directly
+    esp_err_t play_err = play_scheduler_play_local_file(final_path);
 
     if (play_err != ESP_OK) {
         ESP_LOGW(HTTP_API_TAG, "Failed to trigger playback: %s", esp_err_to_name(play_err));

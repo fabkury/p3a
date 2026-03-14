@@ -7,6 +7,7 @@ and blit functions with clipping support.
 
 Usage:
     python png2blit.py input.png --name logo --outdir ./gen
+    python png2blit.py input.png --name logo --chroma-key 128,128,128 --outdir ./gen
 
 Example generated structure:
 
@@ -56,21 +57,21 @@ def sanitize_c_identifier(name: str) -> str:
     """
     # Replace any non-alphanumeric characters with underscores
     sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', name)
-    
+
     # Collapse multiple underscores
     sanitized = re.sub(r'_+', '_', sanitized)
-    
+
     # Remove leading/trailing underscores
     sanitized = sanitized.strip('_')
-    
+
     # If empty after sanitization, use a default
     if not sanitized:
         sanitized = "image"
-    
+
     # Ensure it doesn't start with a digit
     if sanitized[0].isdigit():
         sanitized = '_' + sanitized
-    
+
     return sanitized.lower()
 
 
@@ -90,7 +91,7 @@ def format_pixel_array(pixels: bytes, bytes_per_line: int = 16) -> str:
 def generate_header(name: str, width: int, height: int) -> str:
     """Generate the .h header file content."""
     guard = f'{name.upper()}_H'
-    
+
     lines = [
         f'#ifndef {guard}',
         f'#define {guard}',
@@ -98,12 +99,12 @@ def generate_header(name: str, width: int, height: int) -> str:
         '#include <stdint.h>',
         '',
     ]
-    
+
     # Dimension externs
     lines.append(f'extern const int {name}_w;')
     lines.append(f'extern const int {name}_h;')
     lines.append('')
-    
+
     # Memcpy blit function prototype
     lines.extend([
         '/**',
@@ -129,7 +130,7 @@ def generate_header(name: str, width: int, height: int) -> str:
         ');',
         '',
     ])
-    
+
     # Pixelwise blit function prototype
     lines.extend([
         '/**',
@@ -167,21 +168,42 @@ def generate_header(name: str, width: int, height: int) -> str:
         ');',
         '',
     ])
-    
+
     lines.append(f'#endif /* {guard} */')
     lines.append('')
-    
+
     return '\n'.join(lines)
 
 
-def generate_source(name: str, width: int, height: int, pixels: bytes) -> str:
-    """Generate the .c source file content."""
+def generate_source(name: str, width: int, height: int, pixels: bytes,
+                    chroma_key: tuple = None) -> str:
+    """Generate the .c source file content.
+
+    Args:
+        chroma_key: Optional (R, G, B) tuple. When set, pixels matching this
+                    color in the source data are treated as transparent.
+    """
     pixel_array = format_pixel_array(pixels)
-    
+    upper = name.upper()
+
     lines = [
         f'#include "{name}.h"',
         '#include <string.h>',
         '',
+    ]
+
+    # Chroma key defines
+    if chroma_key:
+        ck_r, ck_g, ck_b = chroma_key
+        lines.extend([
+            '/* Chroma key color (BGR): pixels matching this color are transparent */',
+            f'#define {upper}_CHROMA_KEY_B 0x{ck_b:02x}',
+            f'#define {upper}_CHROMA_KEY_G 0x{ck_g:02x}',
+            f'#define {upper}_CHROMA_KEY_R 0x{ck_r:02x}',
+            '',
+        ])
+
+    lines.extend([
         f'const int {name}_w = {width};',
         f'const int {name}_h = {height};',
         '',
@@ -189,10 +211,11 @@ def generate_source(name: str, width: int, height: int, pixels: bytes) -> str:
         pixel_array,
         '};',
         '',
-    ]
-    
+    ])
+
     # Memcpy blit function (efficient row copy)
     lines.extend([
+        '/* Note: memcpy blit does not support chroma key transparency. */',
         f'void {name}_blit_memcpy_bgr888(',
         '    uint8_t *dst,',
         '    int dst_w,',
@@ -252,7 +275,7 @@ def generate_source(name: str, width: int, height: int, pixels: bytes) -> str:
         '}',
         '',
     ])
-    
+
     # Pixelwise blit function (with alpha and scaling)
     lines.extend([
         f'void {name}_blit_pixelwise_bgr888(',
@@ -317,6 +340,18 @@ def generate_source(name: str, width: int, height: int, pixels: bytes) -> str:
         '                int src_x_idx = (dx - x) / scale;',
         f'                const uint8_t *src_px = {name}_pixels + (src_y_idx * src_w + src_x_idx) * 3;',
         '',
+    ])
+
+    # Chroma key: skip transparent pixels (caller pre-clears buffer with bg color)
+    if chroma_key:
+        lines.extend([
+            f'                if (src_px[0] == {upper}_CHROMA_KEY_B &&',
+            f'                    src_px[1] == {upper}_CHROMA_KEY_G &&',
+            f'                    src_px[2] == {upper}_CHROMA_KEY_R) continue;',
+            '',
+        ])
+
+    lines.extend([
         '                uint8_t *dst_px = dst_row + dx * 3;',
         '                dst_px[0] = src_px[0];  /* B */',
         '                dst_px[1] = src_px[1];  /* G */',
@@ -335,6 +370,24 @@ def generate_source(name: str, width: int, height: int, pixels: bytes) -> str:
         '                int src_x_idx = (dx - x) / scale;',
         f'                const uint8_t *src_px = {name}_pixels + (src_y_idx * src_w + src_x_idx) * 3;',
         '',
+    ])
+
+    # Chroma key: write bg color for transparent pixels in blend path
+    if chroma_key:
+        lines.extend([
+            f'                if (src_px[0] == {upper}_CHROMA_KEY_B &&',
+            f'                    src_px[1] == {upper}_CHROMA_KEY_G &&',
+            f'                    src_px[2] == {upper}_CHROMA_KEY_R) {{',
+            '                    uint8_t *dst_px = dst_row + dx * 3;',
+            '                    dst_px[0] = bg_b;',
+            '                    dst_px[1] = bg_g;',
+            '                    dst_px[2] = bg_r;',
+            '                    continue;',
+            '                }',
+            '',
+        ])
+
+    lines.extend([
         '                uint8_t *dst_px = dst_row + dx * 3;',
         '                /* Composite: out = src * alpha + bg * (1 - alpha) */',
         '                dst_px[0] = (uint8_t)((src_px[0] * alpha + bg_b * inv_alpha + 127) / 255);',
@@ -346,11 +399,12 @@ def generate_source(name: str, width: int, height: int, pixels: bytes) -> str:
         '}',
         '',
     ])
-    
+
     return '\n'.join(lines)
 
 
-def convert_png_to_blit(input_path: str, name: str, outdir: str) -> None:
+def convert_png_to_blit(input_path: str, name: str, outdir: str,
+                        chroma_key: tuple = None) -> None:
     """
     Convert a PNG image to C source files with embedded BGR888 data
     and blit functions.
@@ -359,24 +413,24 @@ def convert_png_to_blit(input_path: str, name: str, outdir: str) -> None:
     if not os.path.isfile(input_path):
         print(f"Error: Input file '{input_path}' not found.")
         sys.exit(1)
-    
+
     # Try to open the image
     try:
         img = Image.open(input_path)
     except Exception as e:
         print(f"Error: Could not open image '{input_path}': {e}")
         sys.exit(1)
-    
+
     # Get image info
     width, height = img.size
     original_mode = img.mode
-    
+
     # Convert to RGB (discards alpha if present)
     img = img.convert('RGB')
-    
+
     # Get raw pixel data as bytes (RGB order, row-major)
     rgb_pixels = img.tobytes()
-    
+
     # Convert RGB to BGR
     bgr_pixels = bytearray(len(rgb_pixels))
     for i in range(0, len(rgb_pixels), 3):
@@ -384,41 +438,59 @@ def convert_png_to_blit(input_path: str, name: str, outdir: str) -> None:
         bgr_pixels[i + 1] = rgb_pixels[i + 1]  # G stays
         bgr_pixels[i + 2] = rgb_pixels[i]      # R <- B position
     bgr_pixels = bytes(bgr_pixels)
-    
+
     # Sanitize name for C identifier
     c_name = sanitize_c_identifier(name)
     if c_name != name:
         print(f"Note: Name sanitized from '{name}' to '{c_name}'")
-    
+
     # Create output directory if needed
     if outdir and not os.path.exists(outdir):
         os.makedirs(outdir)
         print(f"Created output directory: {outdir}")
-    
+
     # Generate file paths
     header_path = os.path.join(outdir, f'{c_name}.h') if outdir else f'{c_name}.h'
     source_path = os.path.join(outdir, f'{c_name}.c') if outdir else f'{c_name}.c'
-    
+
     # Generate content
     header_content = generate_header(c_name, width, height)
-    source_content = generate_source(c_name, width, height, bgr_pixels)
-    
+    source_content = generate_source(c_name, width, height, bgr_pixels,
+                                     chroma_key=chroma_key)
+
     # Write files
     with open(header_path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(header_content)
-    
+
     with open(source_path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(source_content)
-    
+
     # Print summary
     total_bytes = len(bgr_pixels)
     print(f"Input:  {input_path}")
     print(f"Size:   {width}x{height} pixels")
     print(f"Mode:   {original_mode} -> BGR888")
+    if chroma_key:
+        print(f"Chroma: RGB({chroma_key[0]},{chroma_key[1]},{chroma_key[2]}) -> transparent")
     print(f"Funcs:  blit_memcpy_bgr888, blit_pixelwise_bgr888")
     print(f"Output: {header_path}")
     print(f"        {source_path}")
     print(f"Bytes:  {total_bytes} ({total_bytes / 1024:.1f} KB)")
+
+
+def parse_chroma_key(value: str) -> tuple:
+    """Parse a chroma key string like '128,128,128' into an (R,G,B) tuple."""
+    try:
+        parts = [int(x.strip()) for x in value.split(',')]
+        if len(parts) != 3:
+            raise ValueError
+        for p in parts:
+            if not (0 <= p <= 255):
+                raise ValueError
+        return tuple(parts)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"Invalid chroma key '{value}'. Expected R,G,B with values 0-255 (e.g. 128,128,128)")
 
 
 def main():
@@ -428,6 +500,7 @@ def main():
         epilog='''
 Examples:
     python png2blit.py logo.png --name logo --outdir ./gen
+    python png2blit.py logo.png --name logo --chroma-key 128,128,128 --outdir ./gen
 
 This generates:
     ./gen/logo.h  - Header with extern declarations and function prototypes
@@ -438,31 +511,41 @@ Generated functions:
     logo_blit_pixelwise_bgr888() - Pixel-by-pixel with alpha blend & scaling
 '''
     )
-    
+
     parser.add_argument(
         'input',
         help='Input PNG file path'
     )
-    
+
     parser.add_argument(
         '--name', '-n',
         default=None,
         help='Base name for output files and C identifiers (default: input filename without extension)'
     )
-    
+
     parser.add_argument(
         '--outdir', '-o',
         default='.',
         help='Output directory for generated files (default: current directory)'
     )
-    
+
+    parser.add_argument(
+        '--chroma-key',
+        type=parse_chroma_key,
+        default=None,
+        metavar='R,G,B',
+        help='RGB color to treat as transparent (e.g. 128,128,128). '
+             'Pixels matching this color will show the background color instead.'
+    )
+
     args = parser.parse_args()
-    
+
     # Derive name from input filename if not provided
     if args.name is None:
         args.name = os.path.splitext(os.path.basename(args.input))[0]
-    
-    convert_png_to_blit(args.input, args.name, args.outdir)
+
+    convert_png_to_blit(args.input, args.name, args.outdir,
+                        chroma_key=args.chroma_key)
 
 
 if __name__ == '__main__':

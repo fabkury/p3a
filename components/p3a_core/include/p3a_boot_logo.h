@@ -38,8 +38,8 @@ extern "C" {
 /** Total boot logo duration (delay + fade-in + hold) */
 #define P3A_BOOT_LOGO_TOTAL_MS     (P3A_BOOT_LOGO_DELAY_MS + P3A_BOOT_LOGO_FADE_IN_MS + P3A_BOOT_LOGO_HOLD_MS)
 
-/** Target frame duration during logo display (20 FPS) */
-#define P3A_BOOT_LOGO_FRAME_MS     50
+/** Target frame duration during logo display (25 FPS) */
+#define P3A_BOOT_LOGO_FRAME_MS     40
 
 /**
  * @brief Initialize boot logo manager

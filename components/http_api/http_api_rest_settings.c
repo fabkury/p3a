@@ -47,6 +47,9 @@ esp_err_t h_get_config(httpd_req_t *req) {
     }
     cJSON_AddItemToObject(root, "data", data);
 
+    cJSON_AddBoolToObject(data, "refresh_allow_override",
+                          config_store_get_refresh_allow_override());
+
     char *out = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     free(json);

@@ -531,64 +531,6 @@ function saveRefreshOverride(checked) {
 }
 
 // ── Network tab ──
-function loadNetworkStatus() {
-    fetch('/api/network-status')
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            if (!d.ok) {
-                document.getElementById('net-status-badge').textContent = 'Error';
-                document.getElementById('net-status-badge').className = 'status-badge status-disconnected';
-                return;
-            }
-            var data = d.data;
-            var badge = document.getElementById('net-status-badge');
-            if (data.connected) {
-                badge.textContent = 'Connected';
-                badge.className = 'status-badge status-connected';
-            } else {
-                badge.textContent = 'Disconnected';
-                badge.className = 'status-badge status-disconnected';
-            }
-            if (data.ssid) {
-                document.getElementById('ssid-row').style.display = 'flex';
-                document.getElementById('ssid-value').textContent = data.ssid;
-            }
-            if (data.ip) {
-                document.getElementById('ip-row').style.display = 'flex';
-                document.getElementById('ip-value').textContent = data.ip;
-            }
-            if (data.gateway) {
-                document.getElementById('gw-row').style.display = 'flex';
-                document.getElementById('gw-value').textContent = data.gateway;
-            }
-            if (data.netmask) {
-                document.getElementById('mask-row').style.display = 'flex';
-                document.getElementById('mask-value').textContent = data.netmask;
-            }
-            if (typeof data.rssi === 'number') {
-                document.getElementById('rssi-row').style.display = 'flex';
-                document.getElementById('rssi-value').textContent = data.rssi + ' dBm';
-            }
-        })
-        .catch(function(e) {
-            console.error('Network status error:', e);
-            document.getElementById('net-status-badge').textContent = 'Error';
-            document.getElementById('net-status-badge').className = 'status-badge status-disconnected';
-        });
-}
-
-function loadDeviceName() {
-    fetch('/api/device-name')
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            if (!d.ok) return;
-            document.getElementById('device-name').value = d.device_name || '';
-            var host = d.hostname || 'p3a';
-            document.getElementById('hostname-display').textContent = host + '.local';
-            updateHostnamePreview();
-        })
-        .catch(function() {});
-}
 
 function updateHostnamePreview() {
     var input = document.getElementById('device-name');
@@ -732,34 +674,6 @@ function resetRandomId() {
 }
 
 // ── Storage tab ──
-function loadStorageInfo() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/api/storage', true);
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState !== 4) return;
-        try {
-            var r = JSON.parse(xhr.responseText);
-            if (!r.ok || !r.data) throw 0;
-            var total = r.data.total_bytes;
-            var free = r.data.free_bytes;
-            var used = total - free;
-            var freePct = total > 0 ? (free / total * 100) : 0;
-            var usedPct = total > 0 ? (used / total * 100) : 0;
-            document.getElementById('storage-summary').textContent =
-                formatBytes(free) + ' free of ' + formatBytes(total);
-            document.getElementById('storage-pct').textContent =
-                freePct.toFixed(1) + '% free';
-            document.getElementById('storage-bar').style.width = usedPct.toFixed(1) + '%';
-            document.getElementById('storage-detail').textContent =
-                formatBytes(used) + ' used';
-        } catch (e) {
-            document.getElementById('storage-summary').textContent = 'Unable to read storage';
-            document.getElementById('storage-pct').textContent = '';
-            document.getElementById('storage-detail').textContent = '';
-        }
-    };
-    xhr.send();
-}
 
 function saveCacheSize() {
     var size = parseInt(document.getElementById('cache-size').value, 10);
@@ -809,52 +723,39 @@ function saveSdRoot() {
 
 // ── Makapix tab ──
 var provisioningActive = false;
-function loadProvisionState() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/api/state', true);
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState !== 4) return;
-        try {
-            var r = JSON.parse(xhr.responseText);
-            if (!r.ok || !r.data) throw 0;
-            var d = r.data;
-            var registered = !!d.makapix_registered;
-            var mqttStatus = d.makapix_mqtt_status || 'disconnected';
-            document.getElementById('mkx-reg-status').textContent = registered ? 'Registered' : 'Not registered';
-            var mqttLabel = {connected: 'MQTT connected', connecting: 'MQTT connecting...', disconnected: 'MQTT disconnected', invalid: 'Registration invalid'};
-            document.getElementById('mkx-mqtt-status').textContent = registered ? (mqttLabel[mqttStatus] || mqttStatus) : '';
-            var keyEl = document.getElementById('mkx-player-key');
-            if (registered && d.makapix_player_key) {
-                document.getElementById('mkx-player-key-value').textContent = d.makapix_player_key;
-                keyEl.style.display = 'block';
-            } else {
-                keyEl.style.display = 'none';
-            }
-            var provBtn = document.getElementById('provision-btn');
-            var provStatus = document.getElementById('provision-status');
-            if (!registered) {
-                provBtn.style.display = 'block';
-                provStatus.style.display = 'block';
-                if (d.p3a_state === 'PROVISIONING') {
-                    provisioningActive = true;
-                    provBtn.textContent = 'Exit Provisioning Mode';
-                    provStatus.textContent = 'Device is in provisioning mode';
-                } else {
-                    provisioningActive = false;
-                    provBtn.textContent = 'Enter Provisioning Mode';
-                    provStatus.textContent = 'Link this device to your Makapix Club account';
-                }
-            } else {
-                provBtn.style.display = 'none';
-                provStatus.style.display = 'none';
-            }
-            document.getElementById('mkx-unregister-btn').style.display = registered ? 'block' : 'none';
-            document.getElementById('mkx-unregister-hint').style.display = registered ? 'block' : 'none';
-        } catch (e) {
-            document.getElementById('mkx-reg-status').textContent = 'Unable to check state';
+function populateMakapixState(mkx) {
+    var registered = !!mkx.registered;
+    var mqttStatus = mkx.mqtt_status || 'disconnected';
+    document.getElementById('mkx-reg-status').textContent = registered ? 'Registered' : 'Not registered';
+    var mqttLabel = {connected: 'MQTT connected', connecting: 'MQTT connecting...', disconnected: 'MQTT disconnected', invalid: 'Registration invalid'};
+    document.getElementById('mkx-mqtt-status').textContent = registered ? (mqttLabel[mqttStatus] || mqttStatus) : '';
+    var keyEl = document.getElementById('mkx-player-key');
+    if (registered && mkx.player_key) {
+        document.getElementById('mkx-player-key-value').textContent = mkx.player_key;
+        keyEl.style.display = 'block';
+    } else {
+        keyEl.style.display = 'none';
+    }
+    var provBtn = document.getElementById('provision-btn');
+    var provStatus = document.getElementById('provision-status');
+    if (!registered) {
+        provBtn.style.display = 'block';
+        provStatus.style.display = 'block';
+        if (mkx.p3a_state === 'PROVISIONING') {
+            provisioningActive = true;
+            provBtn.textContent = 'Exit Provisioning Mode';
+            provStatus.textContent = 'Device is in provisioning mode';
+        } else {
+            provisioningActive = false;
+            provBtn.textContent = 'Enter Provisioning Mode';
+            provStatus.textContent = 'Link this device to your Makapix Club account';
         }
-    };
-    xhr.send();
+    } else {
+        provBtn.style.display = 'none';
+        provStatus.style.display = 'none';
+    }
+    document.getElementById('mkx-unregister-btn').style.display = registered ? 'block' : 'none';
+    document.getElementById('mkx-unregister-hint').style.display = registered ? 'block' : 'none';
 }
 
 function unregisterMakapix() {
@@ -871,7 +772,7 @@ function unregisterMakapix() {
             var r = JSON.parse(xhr.responseText);
             if (r.ok) {
                 showToast('Makapix Club registration removed', false);
-                loadProvisionState();
+                loadStatus();
             } else {
                 showToast(r.error || 'Unregister failed', true);
             }
@@ -950,15 +851,75 @@ function formatUptime(ms) {
     return parts.join(' ');
 }
 
-function loadSystemStatus() {
+function loadStatus() {
     fetch('/status').then(function(r) { return r.json(); }).then(function(d) {
-        if (d.ok && d.data) {
-            document.getElementById('sys-uptime').textContent = formatUptime(d.data.uptime_ms);
-            if (d.data.fw && d.data.fw.idf) {
-                document.getElementById('sys-idf-ver').textContent = d.data.fw.idf;
-            }
+        if (!d.ok || !d.data) return;
+        var data = d.data;
+
+        // System tab
+        document.getElementById('sys-uptime').textContent = formatUptime(data.uptime_ms);
+        if (data.fw && data.fw.idf)
+            document.getElementById('sys-idf-ver').textContent = data.fw.idf;
+
+        // Network tab
+        var net = data.net || {};
+        var badge = document.getElementById('net-status-badge');
+        if (net.connected) {
+            badge.textContent = 'Connected';
+            badge.className = 'status-badge status-connected';
+        } else {
+            badge.textContent = 'Disconnected';
+            badge.className = 'status-badge status-disconnected';
+        }
+        if (net.ssid) {
+            document.getElementById('ssid-row').style.display = 'flex';
+            document.getElementById('ssid-value').textContent = net.ssid;
+        }
+        if (net.ip) {
+            document.getElementById('ip-row').style.display = 'flex';
+            document.getElementById('ip-value').textContent = net.ip;
+        }
+        if (net.gateway) {
+            document.getElementById('gw-row').style.display = 'flex';
+            document.getElementById('gw-value').textContent = net.gateway;
+        }
+        if (net.netmask) {
+            document.getElementById('mask-row').style.display = 'flex';
+            document.getElementById('mask-value').textContent = net.netmask;
+        }
+        if (typeof net.rssi === 'number') {
+            document.getElementById('rssi-row').style.display = 'flex';
+            document.getElementById('rssi-value').textContent = net.rssi + ' dBm';
+        }
+
+        // Network tab — device name + hostname
+        if (data.device_name !== undefined)
+            document.getElementById('device-name').value = data.device_name;
+        document.getElementById('hostname-display').textContent = (data.hostname || 'p3a') + '.local';
+        updateHostnamePreview();
+
+        // Makapix tab
+        var mkx = data.makapix || {};
+        populateMakapixState(mkx);
+
+        // Storage tab
+        if (data.storage) {
+            var total = data.storage.total_bytes;
+            var free = data.storage.free_bytes;
+            var used = total - free;
+            var freePct = total > 0 ? (free / total * 100) : 0;
+            var usedPct = total > 0 ? (used / total * 100) : 0;
+            document.getElementById('storage-summary').textContent =
+                formatBytes(free) + ' free of ' + formatBytes(total);
+            document.getElementById('storage-pct').textContent =
+                freePct.toFixed(1) + '% free';
+            document.getElementById('storage-bar').style.width = usedPct.toFixed(1) + '%';
+            document.getElementById('storage-detail').textContent =
+                formatBytes(used) + ' used';
         }
     }).catch(function() {
+        document.getElementById('net-status-badge').textContent = 'Error';
+        document.getElementById('net-status-badge').className = 'status-badge status-disconnected';
         document.getElementById('sys-uptime').textContent = '-';
         document.getElementById('sys-idf-ver').textContent = '-';
     });
@@ -1013,34 +974,17 @@ xhr.onreadystatechange = function() {
         document.getElementById('cache-size').value =
             (typeof cfg.channel_cache_size === 'number') ? cfg.channel_cache_size : 2048;
         document.getElementById('sd-root').value = cfg.sdcard_root || '/p3a';
+        // Refresh override (now included in /config response)
+        document.getElementById('refresh-override').checked = !!cfg.refresh_allow_override;
         // Giphy tab
         loadGiphySettings(cfg);
     }
 };
 xhr.send();
 
-// 2. Refresh override (separate endpoint)
-var xhr2 = new XMLHttpRequest();
-xhr2.open('GET', '/settings/refresh_override', true);
-xhr2.onreadystatechange = function() {
-    if (xhr2.readyState === 4) {
-        try {
-            var resp = JSON.parse(xhr2.responseText || '{}');
-            if (resp && resp.ok && resp.data) {
-                document.getElementById('refresh-override').checked = !!resp.data.refresh_allow_override;
-            }
-        } catch (e) { /* ignore */ }
-    }
-};
-xhr2.send();
-
-// 3-7. Parallel fetches
-loadStorageInfo();
-loadProvisionState();
-loadNetworkStatus();
-loadDeviceName();
+// 2-3. Consolidated fetches
+loadStatus();
 loadOtaStatus();
-loadSystemStatus();
 </script>
 </body>
 </html>

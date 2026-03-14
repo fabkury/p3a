@@ -361,6 +361,67 @@ esp_err_t h_get_status(httpd_req_t *req) {
         cJSON_AddStringToObject(data, "hostname", hostname);
     }
 
+    // Network info
+    {
+        cJSON *net = cJSON_CreateObject();
+        if (net) {
+            esp_netif_t *sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+            if (!sta) sta = esp_netif_get_handle_from_ifkey("WIFI_STA_RMT");
+            esp_netif_ip_info_t ip_info;
+            bool has_ip = (sta && esp_netif_get_ip_info(sta, &ip_info) == ESP_OK && ip_info.ip.addr != 0);
+            cJSON_AddBoolToObject(net, "connected", has_ip);
+            char saved_ssid[33] = {0};
+            if (app_wifi_get_saved_ssid(saved_ssid, sizeof(saved_ssid)) == ESP_OK && strlen(saved_ssid) > 0)
+                cJSON_AddStringToObject(net, "ssid", saved_ssid);
+            if (has_ip) {
+                char s[16];
+                snprintf(s, sizeof(s), IPSTR, IP2STR(&ip_info.ip));
+                cJSON_AddStringToObject(net, "ip", s);
+                snprintf(s, sizeof(s), IPSTR, IP2STR(&ip_info.gw));
+                cJSON_AddStringToObject(net, "gateway", s);
+                snprintf(s, sizeof(s), IPSTR, IP2STR(&ip_info.netmask));
+                cJSON_AddStringToObject(net, "netmask", s);
+            }
+            if (rssi_ok) cJSON_AddNumberToObject(net, "rssi", ap.rssi);
+            cJSON_AddItemToObject(data, "net", net);
+        }
+    }
+
+    // Makapix state
+    {
+        cJSON *mkx = cJSON_CreateObject();
+        if (mkx) {
+            cJSON_AddStringToObject(mkx, "p3a_state", p3a_state_get_name(p3a_state_get()));
+            bool registered = makapix_store_has_player_key();
+            cJSON_AddBoolToObject(mkx, "registered", registered);
+            if (registered) {
+                char pk[40];
+                if (makapix_store_get_player_key(pk, sizeof(pk)) == ESP_OK)
+                    cJSON_AddStringToObject(mkx, "player_key", pk);
+            }
+            makapix_state_t ms = makapix_get_state();
+            const char *mqtt = "disconnected";
+            if (ms == MAKAPIX_STATE_CONNECTED) mqtt = "connected";
+            else if (ms == MAKAPIX_STATE_CONNECTING) mqtt = "connecting";
+            else if (ms == MAKAPIX_STATE_REGISTRATION_INVALID) mqtt = "invalid";
+            cJSON_AddStringToObject(mkx, "mqtt_status", mqtt);
+            cJSON_AddItemToObject(data, "makapix", mkx);
+        }
+    }
+
+    // Storage info
+    {
+        uint64_t total = 0, avail = 0;
+        if (storage_eviction_get_storage_info(&total, &avail) == ESP_OK) {
+            cJSON *st = cJSON_CreateObject();
+            if (st) {
+                cJSON_AddNumberToObject(st, "total_bytes", (double)total);
+                cJSON_AddNumberToObject(st, "free_bytes", (double)avail);
+                cJSON_AddItemToObject(data, "storage", st);
+            }
+        }
+    }
+
     // API version for compatibility checking
 #ifdef P3A_API_VERSION
     cJSON_AddNumberToObject(data, "api_version", P3A_API_VERSION);

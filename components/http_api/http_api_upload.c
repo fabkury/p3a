@@ -10,6 +10,7 @@
  */
 
 #include "http_api_internal.h"
+#include "esp_heap_caps.h"
 #include "sd_path.h"
 #include "esp_timer.h"
 #include "animation_player.h"
@@ -143,7 +144,11 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     
     // Buffer for reading - need extra space for boundary matching across chunks
     const size_t BUF_SIZE = RECV_CHUNK + boundary_line_len + 16; // Extra space for overlap
-    char *recv_buf = malloc(BUF_SIZE);
+    // Allocate from SPIRAM for DMA-safe cache-line alignment (ESP32-P4 needs 128-byte alignment)
+    char *recv_buf = heap_caps_malloc(BUF_SIZE, MALLOC_CAP_SPIRAM);
+    if (!recv_buf) {
+        recv_buf = malloc(BUF_SIZE);  // Fallback to internal RAM
+    }
     if (!recv_buf) {
         if (fp) {
             fclose(fp);
@@ -167,6 +172,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     
     size_t buf_len = 0;  // Total valid data in recv_buf
     bool boundary_found = false;
+    bool write_error = false;
     
     while ((total_received < content_len || buf_len > 0) && state != STATE_DONE) {
         // Read more data if buffer has space and we haven't received all content
@@ -307,6 +313,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
                     size_t written = fwrite(recv_buf, 1, write_end, fp);
                     if (written != write_end) {
                         ESP_LOGE(HTTP_API_TAG, "Failed to write file data");
+                        write_error = true;
                         break;
                     }
                 }
@@ -323,6 +330,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
                         size_t written = fwrite(recv_buf, 1, buf_len, fp);
                         if (written != buf_len) {
                             ESP_LOGE(HTTP_API_TAG, "Failed to write file data");
+                            write_error = true;
                         }
                         buf_len = 0;
                     }
@@ -337,6 +345,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
                         size_t written = fwrite(recv_buf, 1, safe_write_len, fp);
                         if (written != safe_write_len) {
                             ESP_LOGE(HTTP_API_TAG, "Failed to write file data");
+                            write_error = true;
                             break;
                         }
                         // Move remaining data to start of buffer
@@ -360,7 +369,13 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     fclose(fp);
     free(recv_buf);
     
-    // Validate that we found the boundary and filename
+    // Validate upload completed without errors
+    if (write_error) {
+        unlink(temp_path);
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to write file to SD card\",\"code\":\"WRITE_ERROR\"}");
+        return ESP_OK;
+    }
+
     if (!boundary_found) {
         unlink(temp_path);
         send_json(req, 400, "{\"ok\":false,\"error\":\"Boundary not found or incomplete upload\",\"code\":\"MALFORMED_DATA\"}");

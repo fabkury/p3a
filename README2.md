@@ -1,9 +1,9 @@
 <img src="images/p3a-alpha-x2-128p.png" alt="p3a" align="left" width="128" height="128" />
 
-# p3a — A Smart Art Frame for Pixel Art
+# p3a — Pixel Art Player
 
 **An open-source, Wi-Fi-connected pixel art player built on the ESP32-P4.**
-Plays animated artworks from [Makapix Club](https://makapix.club/), trending GIFs from [Giphy](https://giphy.com/), and your own files — on a 4-inch 720x720 IPS display you control by touch, web browser, or from anywhere in the world.
+Plays animated artworks from [Makapix Club](https://makapix.club/), trending GIFs from [Giphy](https://giphy.com/), and your own files — on a 4-inch 720x720 IPS display you control by touch, web browser, or from REST API.
 
 <br clear="left"/>
 
@@ -25,9 +25,9 @@ Plays animated artworks from [Makapix Club](https://makapix.club/), trending GIF
 
 ## What Is p3a?
 
-p3a turns a small ESP32-P4 development board into a desk-sized animated art display. Think of it as a digital picture frame — but instead of static family photos, it plays animated pixel art, trending GIFs, and anything else you throw at it.
+p3a turns a small ESP32-P4 development board into a desk-sized animated art display. Think of it as a 4-inch digital picture frame — but instead of static photos, it plays animated pixel art, trending GIFs, and anything else you throw at it.
 
-It connects to Wi-Fi, so you can send it new artwork from the [Makapix Club](https://makapix.club/) pixel art community, let it cycle through [Giphy](https://giphy.com/) trending content, or simply load your own files via USB. Everything is controlled from the touchscreen, a local web interface, a REST API, or remotely through Makapix Club's secure cloud backend.
+It connects to Wi-Fi, so you can send it new artwork from the [Makapix Club](https://makapix.club/) pixel art community, let it cycle through [Giphy](https://giphy.com/) trending content, or simply load your own files via USB or Wi-Fi. Everything is controlled from the touchscreen, a local web interface, a REST API, or remotely through Makapix Club's secure cloud backend.
 
 <p align="center">
   <img src="images/p3a_10fps.gif" alt="p3a playing animated artworks" height="300">
@@ -95,10 +95,9 @@ Mix all three in a single playlist for an ever-changing display.
 ### Wireless Updates
 
 After the first USB flash, everything is over-the-air:
-- Automatic update checks every 2 hours
-- One-click install from the web UI, with progress shown on both screen and browser
+- One-click install of update from the web UI, with progress shown on both screen and browser
 - Automatic rollback if the new firmware fails to boot
-- Web UI itself is also updatable over the air (since v0.7.5)
+- Web UI itself is also separately updatable over the air
 - ESP32-C6 co-processor firmware updates automatically when needed
 
 <p align="center">

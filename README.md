@@ -64,7 +64,7 @@ For full usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 |--------|-------------|
 | **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" or "Recent Artworks." Control your device remotely from anywhere. |
 | **[Giphy](https://giphy.com/)** | Automatically fetches and cycles through trending GIFs. Configurable content rating, format, resolution, and refresh interval. |
-| **Local files** | Copy your own WebP, GIF, PNG, or JPEG files via USB. They play alongside cloud content or on their own. |
+| **Local files** | Copy your own WebP, GIF, PNG, or JPEG files via USB or via Wi-Fi. They play alongside cloud content or on their own. |
 
 Mix all three in a single playlist for an ever-changing display.
 

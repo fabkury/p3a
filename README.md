@@ -2,168 +2,198 @@
 
 # p3a — Pixel Art Player
 
-p3a is a Wi-Fi pixel art player built on the ESP32-P4. It's a 4-inch smart art frame that plays animated artworks ("gifs") from [Makapix Club](https://makapix.club/) (a pixel art social network), from [Giphy](https://giphy.com/), and your own files—all from one tiny device you can control via touchscreen, web browser, REST API, or securely from anywhere through Makapix Club's MQTTS backend.
-> **Join the community:** Connect with other p3a users and discuss pixel art on the [Makapix Club Discord](https://discord.gg/xk9umcujXV).
+**An open-source, Wi-Fi-connected pixel art player built on the ESP32-P4.**
+Plays animated artworks from [Makapix Club](https://makapix.club/), trending GIFs from [Giphy](https://giphy.com/), and your own files — on a 4-inch 720x720 IPS display you control by touch, web browser, or from REST API.
 
-## Photos
+<br clear="left"/>
 
 <p align="center">
-  <img src="images/p3a-1.jpg" alt="p3a front" height="320">
-  <img src="images/p3a-7.jpg" alt="p3a angled" height="320">
-  <img src="images/p3a-4-giphy.jpg" alt="p3a playing a Giphy GIF" height="320">
-  <img src="images/p3a-5.jpg" alt="p3a in hand" height="320">
-  <img src="images/p3a-6.jpg" alt="p3a in hand" height="320">
+  <img src="images/p3a-1.jpg" alt="p3a displaying pixel art" height="280">
+  &nbsp;
+  <img src="images/p3a-7.jpg" alt="p3a angled view" height="280">
+  &nbsp;
+  <img src="images/p3a-4-giphy.jpg" alt="p3a playing a Giphy GIF" height="280">
 </p>
 
-## Quick start
+<p align="center">
+  <a href="https://discord.gg/xk9umcujXV"><img alt="Discord" src="https://img.shields.io/badge/Discord-Makapix_Club-5865F2?logo=discord&logoColor=white"></a>&nbsp;
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg"></a>&nbsp;
+  <a href="https://github.com/fabkury/p3a/releases"><img alt="Release" src="https://img.shields.io/github/v/release/fabkury/p3a?include_prereleases&label=Latest%20Release"></a>
+</p>
 
-1. **Get the hardware**:
-    - [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416)
-    - [microSD card](https://www.waveshare.com/micro-sd-card-16gb-kawau.htm?sku=18191)
-    - USB-C cable
-    - a small screwdriver
-3. **Insert the microSD card**: This requires unscrewing the back plate
-4. **Flash the firmware**: Visit the [p3a Web Flasher](https://fabkury.github.io/p3a/web-flasher/) — just connect your device and click to flash. No software installation needed. See the [flashing guide](docs/flash-p3a.md) for alternative methods.
-5. **Connect to Wi-Fi**: On first boot, connect to the `p3a-setup` network and visit http://p3a.local/ to configure your Wi-Fi
-6. **Register it at Makapix Club**: Visit the settings page at http://p3a.local/ and follow the instructions
-7. **Play art on it**: Add a [Giphy](https://giphy.com/) API key to get trending GIFs, browse https://makapix.club/ to send artworks, or copy your own files via USB
+---
 
-> **Note:** The initial flash requires USB and a laptop or desktop (does not work on a smartphone). After that, all updates are wireless via the web UI.
+## What Is p3a?
 
-For detailed usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
+p3a turns a small ESP32-P4 development board into a desk-sized animated art display. Think of it as a 4-inch digital picture frame — but instead of static photos, it plays animated pixel art, trending GIFs, and anything else you throw at it.
+
+It connects to Wi-Fi, so you can send it new artwork from the [Makapix Club](https://makapix.club/) pixel art community, let it cycle through [Giphy](https://giphy.com/) trending content, or simply load your own files via USB or Wi-Fi. Everything is controlled from the touchscreen, a local web interface, a REST API, or remotely through Makapix Club's secure cloud backend.
+
+<p align="center">
+  <img src="images/p3a_10fps.gif" alt="p3a playing animated artworks" height="300">
+</p>
+
+---
+
+## Quick Start
+
+**What you need:**
+- [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) board
+- [microSD card](https://www.waveshare.com/micro-sd-card-16gb-kawau.htm?sku=18191)
+- USB-C data cable
+- A small screwdriver
+
+**Setup steps:**
+
+1. **Insert the microSD card** (requires unscrewing the back plate)
+2. **Flash the firmware** using the [p3a Web Flasher](https://fabkury.github.io/p3a/web-flasher/) — connect, click, done. No software to install. ([Alternative methods](docs/flash-p3a.md))
+3. **Connect to Wi-Fi** — on first boot, join the `p3a-setup` network and configure your Wi-Fi at `http://p3a.local/`
+4. **Start playing art** — add a [Giphy API key](https://developers.giphy.com/) for trending GIFs, browse [makapix.club](https://makapix.club/) to send artworks, or copy your own files via USB
+
+> The initial flash requires a computer with USB. After that, all updates are wireless.
+
+For full usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
+
+---
 
 ## Features
 
-### Makapix Club Integration
+### Three Sources of Content
 
-- **Play artworks and channels**: Play individual artworks or entire channels (e.g., "Promoted Artworks", "Recent Artworks") directly from [Makapix Club](https://makapix.club/) to your p3a
-- **4 ways to control**: Touchscreen, local web UI at `http://p3a.local/`, REST API, or remotely via Makapix Club's secure MQTTS (MQTT over TLS) backend
-- **Cloud connectivity**: Register your device at [makapix.club](https://makapix.club/) to unlock remote control from anywhere
-- **Join the community**: Connect with other p3a users and discuss pixel art players on the [Makapix Club Discord](https://discord.gg/xk9umcujXV)
-- **Coming soon**: Send a "like" to the artwork by touching the screen, swipe up to view artwork comments from the Makapix community
+| Source | What it does |
+|--------|-------------|
+| **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" or "Recent Artworks." Control your device remotely from anywhere. |
+| **[Giphy](https://giphy.com/)** | Automatically fetches and cycles through trending GIFs. Configurable content rating, format, resolution, and refresh interval. |
+| **Local files** | Copy your own WebP, GIF, PNG, or JPEG files via USB or via Wi-Fi. They play alongside cloud content or on their own. |
 
-<p align="center">
-  <img src="images/p3a-2.jpg" alt="p3a angled" height="320">
-</p>
-
-### Giphy Integration
-- **Trending GIFs on your desk**: p3a fetches trending GIFs directly from the [Giphy](https://giphy.com/) API and plays them in a continuous loop — animated memes, reactions, and pop culture moments cycling on your display all day long
-- **Configurable content**: Choose your preferred rendition size, file format (WebP or GIF), and content rating (G through R) from the built-in Giphy settings page
-- **Automatic refresh**: p3a periodically checks Giphy for fresh trending content so the feed stays current without any manual intervention
-- **Mix and match**: Combine Giphy channels with Makapix artwork channels in the same playset for a varied, ever-changing display
+Mix all three in a single playlist for an ever-changing display.
 
 <p align="center">
-  <img src="images/p3a-3-giphy.jpg" alt="p3a playing a Giphy GIF" height="320">
+  <img src="images/p3a-5.jpg" alt="p3a in hand" height="260">
+  &nbsp;
+  <img src="images/p3a-3-giphy.jpg" alt="p3a playing a Giphy GIF" height="260">
+  &nbsp;
+  <img src="images/p3a-6.jpg" alt="p3a close-up" height="260">
 </p>
 
-### Seamless Playback
+### Smooth, Gapless Playback
 
-- **Freeze-free, gapless playback**: Robust multi-buffer rendering handles animations smoothly, even with corrupt or problematic files
-- **Full format support**: Animated WebP and GIF, and still PNG all with transparency and alpha channel support, plus hardware-accelerated JPEG support
-- **Smart upscaling**: Giphy content is upscaled with hardware-accelerated bilinear interpolation (PPA) for smooth results, while pixel art from Makapix and local files uses nearest-neighbor scaling to preserve crisp pixel edges
-- **Aspect ratio preservation**: Non-square artworks display without distortion, properly centered with configurable background color
+- **Animated WebP, GIF, PNG, and JPEG** — with full transparency and alpha channel support
+- **Hardware-accelerated scaling** — bilinear interpolation for Giphy; nearest-neighbor for pixel art to keep edges crisp
+- **Triple-buffered rendering** with VSYNC — no tearing, no freezing, even with problematic files
+- **Aspect ratio preservation** — non-square art is centered on the display with a configurable background color
 
-<p align="center">
-  <img src="images/p3a_10fps.gif" alt="p3a playing two animated artworks" height="320">
-</p>
+### Four Ways to Control
 
-### Control & Customization
+| Method | Scope |
+|--------|-------|
+| **Touchscreen** | Tap to change art, swipe for brightness, two-finger rotate |
+| **Web UI** | Full dashboard at `http://p3a.local/` (LAN only) |
+| **REST API** | JSON endpoints for scripting and automation |
+| **Makapix Club** | Remote control from anywhere via secure MQTTS |
 
-- **Touch controls**: Tap to change artwork, swipe to adjust brightness, rotate with two fingers
-- **Screen rotation**: Rotate the display 0°, 90°, 180°, or 270° via touch gesture or web API
-- **Web interface**: Full device control from any browser at `http://p3a.local/` (only accessible in LAN, not Internet)
-- **Over-the-Air updates**: After initial USB flash, update firmware wirelessly via the web UI with automatic rollback protection
+### Wireless Updates
 
-### Hardware & Connectivity
-
-- **USB access**: Connect via USB-C to access the microSD card as a storage device. Copy you own private, offline files to p3a
-- **Auto co-processor updates**: p3a automatically flashes the ESP32-C6 Wi-Fi 6 co-processor firmware when needed
-- **PICO-8 Monitor**: Stream PICO-8 games to the display via Wi-Fi
-
-<p align="center">
-  <img src="images/pico-8-gameplay-2.gif" alt="p3a PICO-8 gameplay">
-</p>
-
-## Over-the-Air Updates
-
-After the initial firmware flash via USB-C cable, all subsequent updates can be installed wirelessly. p3a automatically checks for firmware updates from GitHub Releases, and you can install them directly from the web interface.
-
-**Update features:**
-- **Wireless updates** — no need to reconnect USB after the first flash
-- **Automatic checks** every 2 hours (or check manually via web UI)
-- **One-click install** from the web interface at `http://p3a.local/ota`
-- **Progress display** on both the device screen and web interface
-- **Automatic rollback** if the new firmware fails to boot 3 times
-- **Manual rollback** to previous version via web UI
-- **SHA256 verification** ensures firmware integrity
-- **ESP32-C6 auto-update** — the Wi-Fi co-processor firmware is updated automatically when needed
-- **Web UI updates** — starting with v0.7.5, the web interface can also be updated over-the-air
-
-> **Note:** Version 0.7.5 requires a full flash (use the [web flasher](https://fabkury.github.io/p3a/web-flasher/) or see [alternative methods](docs/flash-p3a.md)). This version adds OTA updates for the web UI, so future updates should rarely require a full flash.
+After the first USB flash, everything is over-the-air:
+- One-click install of update from the web UI, with progress shown on both screen and browser
+- Automatic rollback if the new firmware fails to boot
+- Web UI itself is also separately updatable over the air
+- ESP32-C6 co-processor firmware updates automatically when needed
 
 <p align="center">
   <a href="images/PXL_20251206_184110573_red.mp4">
-    <img src="images/ota_updates.png" alt="OTA update web interface" width="400">
+    <img src="images/ota_updates.png" alt="OTA update interface" width="380">
   </a>
   <br>
-  <em>OTA update page (click image to watch video)</em>
+  <em>OTA update page (click to watch video)</em>
 </p>
 
-## Hardware specs
+### PICO-8 Game Streaming
+
+Stream [PICO-8](https://www.lexaloffle.com/pico-8.php) games to the display over Wi-Fi. A WebAssembly emulator runs in your browser and sends frames at 30 FPS to the device, upscaled to 720x720. The display returns to artwork playback after 30 seconds of inactivity.
+
+<p align="center">
+  <img src="images/pico-8-gameplay-2.gif" alt="PICO-8 gameplay on p3a">
+</p>
+
+---
+
+## Hardware
+
+p3a runs on the **Waveshare ESP32-P4-WIFI6-Touch-LCD-4B**, an off-the-shelf development board:
 
 | Component | Details |
 |-----------|---------|
-| **Board** | [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) |
-| **MCU** | Dual-core ESP32-P4 + ESP32-C6 for Wi-Fi 6/BLE |
-| **Display** | 4" square 720×720 IPS, 24-bit color, dimmable backlight |
-| **Touch** | 5-point capacitive touchscreen |
-| **Memory** | 32MB PSRAM, 32MB flash |
+| **MCU** | Dual-core ESP32-P4 + ESP32-C6 co-processor (Wi-Fi 6 / BLE) |
+| **Display** | 4" 720x720 IPS, 24-bit color, dimmable backlight |
+| **Touch** | 5-point capacitive (GT911) |
+| **Memory** | 32 MB PSRAM, 32 MB flash |
 | **Storage** | microSD card slot |
-| **Power** | USB-C (no battery) |
+| **Power** | USB-C (no battery needed) |
 
 <p align="center">
-  <img src="images/ESP32-P4-WIFI6-Touch-LCD-4B-details-size.jpg" alt="p3a size" width="100%">
+  <img src="images/ESP32-P4-WIFI6-Touch-LCD-4B-details-size.jpg" alt="Board dimensions and layout" width="100%">
 </p>
+
+---
+
+## Makapix Club
+
+<p align="center">
+  <img src="images/p3a-2.jpg" alt="p3a displaying Makapix artwork" height="300">
+</p>
+
+[Makapix Club](https://makapix.club/) is a pixel art social network where artists share animated creations. Register your p3a to unlock:
+
+- **Browse and send** artworks or entire channels directly to your device
+- **Remote control** from any browser — change artwork, adjust brightness, pause/resume
+- **Secure connection** via mutual TLS (mTLS) with per-device certificates
+- **Coming soon** — like artworks from the touchscreen, view community comments
+
+**To register:** long-press the touchscreen to get a 6-character code, then enter it at [makapix.club](https://makapix.club/). The device connects automatically via encrypted MQTT.
+
+> [Join the Makapix Club Discord](https://discord.gg/xk9umcujXV) to connect with other p3a users and the pixel art community.
+
+---
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [HOW-TO-USE.md](docs/HOW-TO-USE.md) | Detailed usage instructions |
-| [flash-p3a.md](docs/flash-p3a.md) | How to flash the firmware |
-| [INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) | Technical architecture for developers |
+| [HOW-TO-USE.md](docs/HOW-TO-USE.md) | Full user guide — setup, touch controls, Wi-Fi, web UI, REST API, Giphy, PICO-8 |
+| [flash-p3a.md](docs/flash-p3a.md) | Flashing instructions (web flasher and alternatives) |
+| [INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) | Technical architecture for developers and contributors |
 
-## Repository layout
+---
 
-- `main/` — Application entry point, display/touch drivers, animation player, format decoders
-- `components/` — Custom components: state machine, config store, HTTP API, Makapix integration, OTA manager, decoders
-- `managed_components/` — ESP-IDF Component Registry dependencies
-- `webui/` — Web interface files (compiled into SPIFFS)
-- `docs/` — Documentation
+## Project Structure
 
-## Makapix Club integration
+```
+main/               Application core — boot, display, animation player, decoders
+components/          Custom ESP-IDF components — state machine, HTTP API, OTA,
+                     Makapix integration, Giphy, config store, Wi-Fi manager
+managed_components/  Third-party ESP-IDF dependencies
+webui/               Web interface (served from LittleFS)
+docs/                Documentation
+```
 
-[Makapix Club](https://makapix.club/) is a pixel-art social network where artists share their creations. Register your p3a at [makapix.club](https://makapix.club/) to:
+**Storage layout on device:**
+- **LittleFS** `/webui` (4 MB) — web UI assets
+- **SD card** `/sdcard/p3a/animations/` — local files; `/sdcard/p3a/vault/` — cached Makapix art; `/sdcard/p3a/giphy/` — cached Giphy content
+- **NVS** (24 KB) — Wi-Fi credentials, settings, device state
 
-- **Play artworks and channels**: Stream individual artworks or entire channels (like "Promoted Artworks" or "Recent Artworks") directly to your p3a
-- **Remote control**: Control your device from anywhere via secure MQTTS (MQTT over TLS) connection
-- **Real-time updates**: Receive artwork notifications instantly
-- **Coming soon**: Send "likes" to artworks with a long-press, swipe up to view community comments
-
-**Join the discussion**: Visit the [Makapix Club Discord](https://discord.gg/xk9umcujXV) to connect with other p3a users, share tips, and discuss pixel art players integrated with Makapix Club.
-
-## License
-
-p3a is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for the full license text.
-
-For detailed information about all dependencies and their licenses, see [LICENSING.md](LICENSING.md).
+---
 
 ## Contributing
 
-Contributions are welcome! By contributing to p3a, you agree that your contributions will be licensed under the Apache License 2.0.
+Contributions are welcome. By contributing, you agree that your work will be licensed under the Apache License 2.0.
 
-See the [INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) for technical details about the codebase.
+Start with [INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) for technical details about the codebase.
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE). For dependency licenses, see [LICENSING.md](LICENSING.md).
 
 ## Acknowledgements
 
-Thanks to ByteWelder from the *Espressif MCUs* Discord channel for advice very early in the p3a project.
+Thanks to ByteWelder from the *Espressif MCUs* Discord channel for advice in the early days of p3a.

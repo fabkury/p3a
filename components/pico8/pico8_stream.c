@@ -9,7 +9,6 @@
 #include <stdbool.h>
 
 #include "pico8_render.h"
-#include "app_lcd.h"
 #include "play_scheduler.h"
 #include "download_manager.h"
 #include "esp_log.h"
@@ -172,9 +171,6 @@ void pico8_stream_enter_mode(void)
     s_pico8_mode_active = true;
     s_last_frame_time_us = esp_timer_get_time();
 
-    // Pause animation playback
-    app_lcd_set_animation_paused(true);
-
     // Stop auto-swap timer
     play_scheduler_pause_auto_swap();
 
@@ -203,9 +199,6 @@ void pico8_stream_exit_mode(void)
     if (s_timeout_timer) {
         esp_timer_stop(s_timeout_timer);
     }
-
-    // Resume animation playback
-    app_lcd_set_animation_paused(false);
 
     // Resume auto-swap timer
     play_scheduler_resume_auto_swap();

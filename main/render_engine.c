@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file render_engine.c
+ * @brief Thin facade for display rotation and background color configuration
+ */
 
 #include "render_engine.h"
 #include "config_store.h"

@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file animation_player_loader.c
+ * @brief Background animation file loader with corruption safeguards and retry logic
+ */
 
 #include "animation_player_priv.h"
 #include "animation_player.h"

@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file makapix_api.h
+ * @brief Makapix API types and functions for channel/artwork queries via MQTT
+ */
 
 #pragma once
 

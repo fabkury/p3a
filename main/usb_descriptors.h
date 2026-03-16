@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
 
-/*
- * USB descriptor definitions for the P3A composite device.
+/**
+ * @file usb_descriptors.h
+ * @brief USB descriptor constants: endpoint addresses, interface numbers, string IDs
  */
 
 #pragma once

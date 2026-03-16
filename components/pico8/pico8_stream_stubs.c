@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
 /**
  * @file pico8_stream_stubs.c
  * @brief Stub implementations for PICO-8 functions when feature is disabled

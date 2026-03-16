@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file animation_player.h
+ * @brief Animation player public API: mode switching, swap, metadata queries
+ */
 
 #ifndef ANIMATION_PLAYER_H
 #define ANIMATION_PLAYER_H

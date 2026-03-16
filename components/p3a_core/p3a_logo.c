@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file p3a_logo.c
+ * @brief Embedded p3a logo pixel data (46x54 BGR888) with chroma-key blit
+ */
 
 #include "p3a_logo.h"
 #include <string.h>

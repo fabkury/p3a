@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file channel_interface.h
+ * @brief Abstract channel interface: order modes, filters, item references
+ */
 
 #ifndef CHANNEL_INTERFACE_H
 #define CHANNEL_INTERFACE_H

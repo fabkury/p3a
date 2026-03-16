@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file ugfx_ui.c
+ * @brief uGFX-based on-screen UI: provisioning, OTA progress, channel status, info screen
+ */
 
 #include "ugfx_ui.h"
 #include "esp_log.h"

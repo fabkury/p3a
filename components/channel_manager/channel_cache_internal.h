@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file channel_cache_internal.h
+ * @brief Internal hash table helpers for channel_cache split files
+ */
 
 #ifndef CHANNEL_CACHE_INTERNAL_H
 #define CHANNEL_CACHE_INTERNAL_H

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
 /**
  * @file p3a_board_display.c
  * @brief Display hardware implementation for EP44B board

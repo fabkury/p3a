@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file animation_player_priv.h
+ * @brief Animation player private internals: buffer structures, shared state
+ */
 
 #ifndef ANIMATION_PLAYER_PRIV_H
 #define ANIMATION_PLAYER_PRIV_H

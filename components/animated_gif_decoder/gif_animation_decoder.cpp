@@ -1,7 +1,9 @@
-/*
- * SPDX-FileCopyrightText: 2024 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file gif_animation_decoder.cpp
+ * @brief GIF animation decoder: C wrapper around AnimatedGIF library
  */
 
 #include "animation_decoder.h"

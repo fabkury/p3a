@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file makapix_certs.c
+ * @brief Embedded TLS certificates for Makapix HTTPS provisioning
+ */
 
 #include "makapix_certs.h"
 #include "esp_log.h"

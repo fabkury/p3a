@@ -1,7 +1,9 @@
-/*
- * SPDX-FileCopyrightText: 2024 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file animation_decoder_internal.h
+ * @brief Internal decoder structure definitions shared across format decoders
  */
 
 #ifndef ANIMATION_DECODER_INTERNAL_H

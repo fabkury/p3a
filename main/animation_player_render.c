@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file animation_player_render.c
+ * @brief Animation frame decoding and upscale dispatch for the render loop
+ */
 
 #include "animation_player_priv.h"
 #include "pico8_stream.h"

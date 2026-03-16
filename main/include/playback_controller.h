@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file playback_controller.h
+ * @brief Playback source controller: arbitrates between animation and PICO-8
+ */
 
 #ifndef PLAYBACK_CONTROLLER_H
 #define PLAYBACK_CONTROLLER_H

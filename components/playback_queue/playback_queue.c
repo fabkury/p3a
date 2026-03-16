@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file playback_queue.c
+ * @brief Playback queue: maps play scheduler artworks to swap requests
+ */
 
 #include "playback_queue.h"
 #include "play_scheduler.h"

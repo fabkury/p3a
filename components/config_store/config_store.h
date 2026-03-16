@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file config_store.h
+ * @brief Configuration store public interface: JSON-based NVS persistence
+ */
 
 #pragma once
 

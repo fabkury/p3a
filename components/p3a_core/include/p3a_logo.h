@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file p3a_logo.h
+ * @brief p3a logo image dimensions and blit function interface
+ */
 
 #ifndef P3A_LOGO_H
 #define P3A_LOGO_H

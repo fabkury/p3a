@@ -1,8 +1,5 @@
-/*
- * SPDX-FileCopyrightText: 2024 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Apache-2.0
- */
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
 
 /**
  * @file app_lcd_p4.c

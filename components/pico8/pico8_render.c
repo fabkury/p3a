@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file pico8_render.c
+ * @brief PICO-8 frame rendering: palette conversion, nearest-neighbor upscale, and logo overlay
+ */
+
 #include "pico8_render.h"
 #include "display_renderer.h"
 #include "pico8_logo_data.h"

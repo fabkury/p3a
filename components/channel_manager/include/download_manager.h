@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file download_manager.h
+ * @brief Download manager interface: round-robin file fetching across channels
+ */
 
 #ifndef DOWNLOAD_MANAGER_H
 #define DOWNLOAD_MANAGER_H

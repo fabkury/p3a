@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file sd_path.c
+ * @brief SD card path resolver: configurable root with subdirectory helpers
+ */
 
 #include "sd_path.h"
 #include "config_store.h"

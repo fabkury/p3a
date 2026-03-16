@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
 /**
  * @file sdio_bus.c
  * @brief SDIO Bus Coordinator implementation

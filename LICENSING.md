@@ -8,7 +8,7 @@ This document provides a comprehensive overview of the licensing status of the p
 
 - **License**: Apache License, Version 2.0
 - **License File**: [LICENSE](LICENSE)
-- **Copyright**: 2024-2025 p3a Contributors
+- **Copyright**: 2025-2026 p3a Contributors
 - **SPDX Identifier**: Apache-2.0
 
 The Apache 2.0 license is a permissive open source license that:
@@ -296,7 +296,7 @@ To maintain full compliance with all licenses in the p3a project:
 2. **Headers**: Add SPDX license identifiers to new source files:
    ```c
    // SPDX-License-Identifier: Apache-2.0
-   // Copyright 2024-2025 p3a Contributors
+   // Copyright 2025-2026 p3a Contributors
    ```
 3. **Third-Party Code**: 
    - Clearly document any third-party code additions

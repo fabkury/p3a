@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file makapix_mqtt.h
+ * @brief Makapix MQTT client interface: mTLS connection, pub/sub, view acknowledgment
+ */
 
 #pragma once
 

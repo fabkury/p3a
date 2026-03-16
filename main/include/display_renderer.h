@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file display_renderer.h
+ * @brief Display renderer public API: modes, rotation, frame callbacks, VSYNC
+ */
 
 #ifndef DISPLAY_RENDERER_H
 #define DISPLAY_RENDERER_H

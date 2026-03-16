@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file sd_path.h
+ * @brief SD card path configuration and directory accessor interface
+ */
 
 #pragma once
 

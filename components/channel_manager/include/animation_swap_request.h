@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file animation_swap_request.h
+ * @brief Swap request structure passed from play scheduler to animation player
+ */
 
 #pragma once
 

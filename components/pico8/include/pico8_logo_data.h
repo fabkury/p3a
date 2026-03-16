@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file pico8_logo_data.h
+ * @brief Embedded PICO-8 logo RGBA pixel data (35x9)
+ */
+
 #pragma once
 #include <stdint.h>
 #include <stddef.h>

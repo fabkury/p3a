@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file play_scheduler_types.h
+ * @brief Play scheduler type definitions: channel specs, artwork refs, stats, commands
+ */
 
 #ifndef PLAY_SCHEDULER_TYPES_H
 #define PLAY_SCHEDULER_TYPES_H

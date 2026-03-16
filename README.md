@@ -28,7 +28,7 @@
 
 ## What Is p3a?
 
-p3a turns a [$40 development board](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) into a dedicated pixel art display. Think of it as a tiny gallery on your desk — it cycles through artwork automatically, picks up trending GIFs throughout the day, and lets artists send creations directly to it from [Makapix Club](https://makapix.club/), a pixel art social network.
+p3a turns a [$40 development board](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) into a dedicated pixel art display. Think of it as a tiny gallery on your desk — it cycles through artworks automatically, picks up trending GIFs throughout the day, and lets users send artworks directly to it from [Makapix Club](https://makapix.club/), a pixel art social network.
 
 It's open source, self-contained, and designed to be as simple to use as a picture frame — while still exposing a full REST API for those who want to automate and tinker.
 
@@ -51,8 +51,7 @@ It's open source, self-contained, and designed to be as simple to use as a pictu
 1. **Insert the microSD card** (requires unscrewing the back plate)
 2. **Flash the firmware** using the [p3a Web Flasher](https://fabkury.github.io/p3a/web-flasher/) — connect, click, done. No software to install. ([Alternative methods](docs/flash-p3a.md))
 3. **Connect to Wi-Fi** — on first boot, join the `p3a-setup` network and configure your Wi-Fi at `http://p3a.local/`
-4. **Start playing art** — add a [Giphy API key](https://developers.giphy.com/) for trending GIFs, browse [makapix.club](https://makapix.club/) to send artworks, or copy your own files via USB
-5. **Register at Makapix Club** (optional) — follow the instructions in the settings page to unlock cloud features and remote control
+4. **Start playing art** — add a [Giphy API key](https://developers.giphy.com/) for trending GIFs, register at [makapix.club](https://makapix.club/) to send artworks, or copy your own files via USB
 
 > The initial flash requires a computer with USB. After that, all updates are wireless.
 
@@ -66,11 +65,11 @@ For full usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 
 | Source | What it does |
 |--------|-------------|
-| **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" or "Recent Artworks." Control your device remotely from anywhere. |
-| **[Giphy](https://giphy.com/)** | Automatically fetches and cycles through trending GIFs. Configurable content rating (G through R), format (WebP or GIF), rendition size, and refresh interval. |
+| **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" or "#nintendo" Control your device remotely from anywhere. |
+| **[Giphy](https://giphy.com/)** | Automatically fetches and cycles through trending GIFs. Configurable content rating (G through R) and refresh interval. |
 | **Local files** | Copy your own WebP, GIF, PNG, or JPEG files via USB or Wi-Fi. No cloud account needed, no internet required. |
 
-Mix all three in a single playlist for an ever-changing display.
+Mix all three in a single "playset" for an ever-changing display.
 
 <p align="center">
   <img src="images/p3a-5.jpg" alt="p3a in hand" height="260">
@@ -98,7 +97,7 @@ Mix all three in a single playlist for an ever-changing display.
 | Two-finger rotate | Rotate screen (0° / 90° / 180° / 270°) |
 | Long press | Start device registration |
 
-Rotation persists across reboots. All controls are also available via the web UI and REST API.
+All controls are also available via the web UI and REST API.
 
 ### Web Interface & REST API
 

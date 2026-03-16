@@ -180,7 +180,7 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 - **Secure connection** via mutual TLS (mTLS) with per-device certificates
 - **Real-time updates** — your device receives artworks and commands instantly over encrypted MQTT
 
-**To register:** long-press the touchscreen to get a 6-character code, then enter it at [makapix.club](https://makapix.club/). The device connects automatically.
+**To register:** open the Settings page of the web UI (http://p3a.local/), go to the "Makapix" tab, and click "Enter provisioning mode". The device will display a 6-character code, enter it at [makapix.club](https://makapix.club/). After thet point, the device connects automatically.
 
 > [Join the Makapix Club Discord](https://discord.gg/xk9umcujXV) to connect with other p3a users and the pixel art community.
 

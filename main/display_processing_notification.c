@@ -60,6 +60,29 @@ static void draw_checkerboard_triangle(uint8_t *buffer, uint8_t r, uint8_t g, ui
 {
     if (!buffer || size < 16) return;
 
+    // Precompute coordinate mapping so the triangle appears in the user's
+    // bottom-right corner regardless of rotation: screen = base + dir * local
+    int base_x, base_y, dir_x, dir_y;
+    switch (rotation) {
+        default:
+        case DISPLAY_ROTATION_0:
+            base_x = EXAMPLE_LCD_H_RES - size; dir_x =  1;
+            base_y = EXAMPLE_LCD_V_RES - size; dir_y =  1;
+            break;
+        case DISPLAY_ROTATION_90:
+            base_x = size - 1;                 dir_x = -1;
+            base_y = EXAMPLE_LCD_V_RES - size; dir_y =  1;
+            break;
+        case DISPLAY_ROTATION_180:
+            base_x = size - 1;                 dir_x = -1;
+            base_y = size - 1;                 dir_y = -1;
+            break;
+        case DISPLAY_ROTATION_270:
+            base_x = EXAMPLE_LCD_H_RES - size; dir_x =  1;
+            base_y = size - 1;                 dir_y = -1;
+            break;
+    }
+
     // Iterate over local coordinates within the bounding box
     for (int ly = 0; ly < size; ly++) {
         for (int lx = 0; lx < size; lx++) {
@@ -68,29 +91,8 @@ static void draw_checkerboard_triangle(uint8_t *buffer, uint8_t r, uint8_t g, ui
             if ((size - 1 - lx) <= ly) {
                 // Checkerboard pattern
                 if ((lx + ly) % 2 == 0) {
-                    // Map local coordinates to screen coordinates based on rotation
-                    // so the triangle always appears in the user's bottom-right corner
-                    int screen_x, screen_y;
-                    switch (rotation) {
-                        default:
-                        case DISPLAY_ROTATION_0:
-                            screen_x = (EXAMPLE_LCD_H_RES - size) + lx;
-                            screen_y = (EXAMPLE_LCD_V_RES - size) + ly;
-                            break;
-                        case DISPLAY_ROTATION_90:
-                            screen_x = (size - 1) - lx;
-                            screen_y = (EXAMPLE_LCD_V_RES - size) + ly;
-                            break;
-                        case DISPLAY_ROTATION_180:
-                            screen_x = (size - 1) - lx;
-                            screen_y = (size - 1) - ly;
-                            break;
-                        case DISPLAY_ROTATION_270:
-                            screen_x = (EXAMPLE_LCD_H_RES - size) + lx;
-                            screen_y = (size - 1) - ly;
-                            break;
-                    }
-                    pn_draw_pixel(buffer, screen_x, screen_y, r, g, b);
+                    pn_draw_pixel(buffer, base_x + dir_x * lx,
+                                  base_y + dir_y * ly, r, g, b);
                 }
             }
         }

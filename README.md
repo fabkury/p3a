@@ -105,11 +105,9 @@ Rotation persists across reboots. All controls are also available via the web UI
 Open `http://p3a.local/` from any browser on the same Wi-Fi network for a full dashboard — playback controls, configuration, firmware updates, Giphy settings, and more.
 
 <p align="center">
-  <a href="images/PXL_20251206_184110573_red.mp4">
-    <img src="images/ota_updates.png" alt="OTA update interface" width="380">
-  </a>
+  <img src="images/p3a-web-ui.png" alt="p3a web UI" width="350">
   <br>
-  <em>OTA update page (click to watch video)</em>
+  <em>p3a web UI: control everything from the browser</em>
 </p>
 
 Every action is also exposed as a JSON API endpoint for scripting and automation.

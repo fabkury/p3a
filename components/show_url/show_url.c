@@ -341,9 +341,9 @@ static void show_url_task(void *arg)
         // Resolve paths
         // ------------------------------------------------------------------
         char animations_dir[128];
-        char downloads_dir[128];
+        char temp_dir[128];
         if (sd_path_get_animations(animations_dir, sizeof(animations_dir)) != ESP_OK ||
-            sd_path_get_downloads(downloads_dir, sizeof(downloads_dir)) != ESP_OK) {
+            sd_path_get_temporary(temp_dir, sizeof(temp_dir)) != ESP_OK) {
             report_failure(blocking, "Failed to get SD paths");
             play_scheduler_resume_auto_swap();
             s_busy = false;
@@ -352,8 +352,8 @@ static void show_url_task(void *arg)
 
         // Ensure directories exist
         struct stat st;
-        if (stat(downloads_dir, &st) != 0) {
-            mkdir(downloads_dir, 0755);
+        if (stat(temp_dir, &st) != 0) {
+            mkdir(temp_dir, 0755);
         }
         if (stat(animations_dir, &st) != 0) {
             mkdir(animations_dir, 0755);
@@ -364,7 +364,7 @@ static void show_url_task(void *arg)
         // ------------------------------------------------------------------
         char temp_path[512];
         snprintf(temp_path, sizeof(temp_path), "%s/show_url_%llu.tmp",
-                 downloads_dir, (unsigned long long)(esp_timer_get_time() / 1000));
+                 temp_dir, (unsigned long long)(esp_timer_get_time() / 1000));
 
         // ------------------------------------------------------------------
         // Show initial progress (blocking mode)

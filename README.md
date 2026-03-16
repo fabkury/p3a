@@ -189,24 +189,6 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 
 ## For Developers
 
-### Architecture at a Glance
-
-p3a is a C/C++ firmware project built on ESP-IDF v5.5 with 24 custom components. The core pipeline:
-
-```
-Boot → NVS/LittleFS → LCD/Touch/USB/WiFi → HTTP Server → Makapix MQTT
-         ↓
-   Play Scheduler → Animation Loader → Decoder (WebP/GIF/PNG/JPEG)
-         ↓
-   Triple-buffered Renderer → VSYNC → Display
-```
-
-Key entry points:
-- **`main/p3a_main.c`** — boot sequence and initialization
-- **`main/animation_player.c`** — decode/render pipeline
-- **`main/display_renderer.c`** — triple-buffered frame management
-- **`main/playback_controller.c`** — switches between animation, PICO-8, and UI render sources
-
 ### Key Components
 
 | Layer | Components |
@@ -219,18 +201,6 @@ Key entry points:
 | **System** | `ota_manager`, `slave_ota` (C6 firmware), `p3a_board_ep44b` (HAL), `sdio_bus` |
 | **Extras** | `pico8` (game streaming), `show_url` (URL artwork download), `ugfx` (graphics primitives) |
 
-### Repository Layout
-
-```
-main/               Application core — boot, display, animation player, decoders
-components/          Custom ESP-IDF components — state machine, HTTP API, OTA,
-                     Makapix integration, Giphy, config store, Wi-Fi manager
-managed_components/  Third-party ESP-IDF dependencies
-webui/               Web interface (served from LittleFS)
-docs/                Documentation
-release/             Release binaries
-```
-
 ### Storage Layout
 
 | Partition | Mount | Size | Purpose |
@@ -242,24 +212,6 @@ release/             Release binaries
 | **SD Card** | `/sdcard` | — | All artwork storage |
 
 SD card layout: `/sdcard/p3a/animations/` (local files), `/sdcard/p3a/vault/` (Makapix cache, SHA256-sharded), `/sdcard/p3a/giphy/` (Giphy cache).
-
-### Building from Source
-
-If you just want to use p3a, you don't need to build anything — use the [web flasher](https://fabkury.github.io/p3a/web-flasher/).
-
-```bash
-# Activate ESP-IDF environment (example for Windows PowerShell)
-C:\Users\Fab\esp\v5.5.1\esp-idf\export.ps1
-
-# Set target (first time only)
-idf.py set-target esp32p4
-
-# Build
-idf.py build
-
-# Flash and monitor
-idf.py flash monitor
-```
 
 ---
 

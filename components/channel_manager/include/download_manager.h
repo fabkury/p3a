@@ -70,7 +70,7 @@ void download_manager_set_next_callback(download_get_next_cb_t cb, void *user_ct
  *
  * Lightweight signal that just wakes the download task without resetting
  * any state. Use this when:
- * - Download failures need retry (LTF backoff controls timing)
+ * - Download failures need retry
  * - You want to resume downloads after a pause (e.g., exiting PICO-8)
  *
  * @see download_manager_rescan() when new content requires full rescan

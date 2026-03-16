@@ -55,24 +55,41 @@ static inline void pn_draw_pixel(uint8_t *buffer, int x, int y, uint8_t r, uint8
  * @param b Blue component (0-255)
  * @param size Triangle size in pixels
  */
-static void draw_checkerboard_triangle(uint8_t *buffer, uint8_t r, uint8_t g, uint8_t b, uint16_t size)
+static void draw_checkerboard_triangle(uint8_t *buffer, uint8_t r, uint8_t g, uint8_t b,
+                                       uint16_t size, display_rotation_t rotation)
 {
     if (!buffer || size < 16) return;
-    
-    // Calculate top-left corner of the bounding box in screen coordinates
-    int base_x = EXAMPLE_LCD_H_RES - size;
-    int base_y = EXAMPLE_LCD_V_RES - size;
-    
+
     // Iterate over local coordinates within the bounding box
     for (int ly = 0; ly < size; ly++) {
         for (int lx = 0; lx < size; lx++) {
             // Triangle condition: (N - 1 - lx) <= ly
-            // This fills the lower-right triangle
+            // This fills the lower-right triangle in local space
             if ((size - 1 - lx) <= ly) {
                 // Checkerboard pattern
                 if ((lx + ly) % 2 == 0) {
-                    int screen_x = base_x + lx;
-                    int screen_y = base_y + ly;
+                    // Map local coordinates to screen coordinates based on rotation
+                    // so the triangle always appears in the user's bottom-right corner
+                    int screen_x, screen_y;
+                    switch (rotation) {
+                        default:
+                        case DISPLAY_ROTATION_0:
+                            screen_x = (EXAMPLE_LCD_H_RES - size) + lx;
+                            screen_y = (EXAMPLE_LCD_V_RES - size) + ly;
+                            break;
+                        case DISPLAY_ROTATION_90:
+                            screen_x = (size - 1) - lx;
+                            screen_y = (EXAMPLE_LCD_V_RES - size) + ly;
+                            break;
+                        case DISPLAY_ROTATION_180:
+                            screen_x = (size - 1) - lx;
+                            screen_y = (size - 1) - ly;
+                            break;
+                        case DISPLAY_ROTATION_270:
+                            screen_x = (EXAMPLE_LCD_H_RES - size) + lx;
+                            screen_y = (size - 1) - ly;
+                            break;
+                    }
                     pn_draw_pixel(buffer, screen_x, screen_y, r, g, b);
                 }
             }
@@ -155,7 +172,7 @@ void processing_notification_update_and_draw(uint8_t *buffer)
                 // Fall through to draw red triangle
             } else {
                 // Draw blue triangle (processing)
-                draw_checkerboard_triangle(buffer, 0, 0, 255, s_size_cached);
+                draw_checkerboard_triangle(buffer, 0, 0, 255, s_size_cached, g_screen_rotation);
                 return;
             }
             // Fall through to FAILED case
@@ -171,7 +188,7 @@ void processing_notification_update_and_draw(uint8_t *buffer)
                 return;
             }
             // Draw red triangle (failed)
-            draw_checkerboard_triangle(buffer, 255, 0, 0, s_size_cached);
+            draw_checkerboard_triangle(buffer, 255, 0, 0, s_size_cached, g_screen_rotation);
             break;
     }
 }

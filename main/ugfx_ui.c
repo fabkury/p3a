@@ -153,7 +153,7 @@ static void ugfx_ui_draw_captive_ap_info(void)
                        font_title, GFX_WHITE, GFX_BLACK, gJustifyCenter);
 
     // Subtitle
-    gdispFillStringBox(0, 90, screen_w, 30, "WiFi Setup",
+    gdispFillStringBox(0, 90, screen_w, 36, "WiFi Setup",
                        font_main, gray, GFX_BLACK, gJustifyCenter);
 
     // Row 1: Network

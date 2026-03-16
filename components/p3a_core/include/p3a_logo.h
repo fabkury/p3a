@@ -32,12 +32,16 @@ void p3a_logo_blit_memcpy_bgr888(
 );
 
 /**
- * Blit the p3a_logo image with alpha blending and scaling to a BGR888 buffer.
+ * Blit the p3a_logo image with alpha blending, scaling, and rotation to a BGR888 buffer.
  *
  * Pixel-by-pixel blit with three optimized code paths:
  * - alpha = 255: Direct pixel copy (opaque)
  * - alpha = 0: Fill with background color only
  * - 0 < alpha < 255: Alpha-blend source with background color
+ *
+ * When rotation is 90 or 270, the output dimensions are swapped
+ * (width becomes height and vice versa). The caller must account for
+ * this when computing the blit position.
  *
  * @param dst              Pointer to destination buffer (BGR888 format)
  * @param dst_w            Width of destination buffer in pixels
@@ -50,6 +54,7 @@ void p3a_logo_blit_memcpy_bgr888(
  * @param bg_g             Background green component (0-255)
  * @param bg_r             Background red component (0-255)
  * @param scale            Scale factor (1 = no scaling, 2-16 = scale up)
+ * @param rotation         Rotation in degrees clockwise (0, 90, 180, or 270)
  */
 void p3a_logo_blit_pixelwise_bgr888(
     uint8_t *dst,
@@ -62,7 +67,8 @@ void p3a_logo_blit_pixelwise_bgr888(
     uint8_t bg_b,
     uint8_t bg_g,
     uint8_t bg_r,
-    int scale
+    int scale,
+    int rotation
 );
 
 #endif /* P3A_LOGO_H */

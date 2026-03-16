@@ -174,6 +174,21 @@ gBool ugfx_ui_is_active(void);
 int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride);
 
 /**
+ * @brief Show USB Mass Storage screen
+ *
+ * Displays a message indicating the SD card is exposed via USB.
+ * Shown when USB-HS is connected and MSC is active.
+ *
+ * @return ESP_OK on success
+ */
+esp_err_t ugfx_ui_show_usb_msc(void);
+
+/**
+ * @brief Hide USB Mass Storage screen
+ */
+void ugfx_ui_hide_usb_msc(void);
+
+/**
  * @brief Show fatal error screen (terminal state)
  *
  * Displays a full-screen error message. This is a terminal UI state

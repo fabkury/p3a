@@ -2,7 +2,7 @@
 
 # p3a — Pixel Art Player
 
-**A 4-inch smart art frame powered by ESP32-P4.** Plays animated pixel art from [Makapix Club](https://makapix.club/), trending GIFs from [Giphy](https://giphy.com/), and your own files — all on a vivid 720x720 IPS touchscreen you control from anywhere.
+**A 4-inch smart art frame powered by ESP32-P4.** Plays animated pixel art from [Makapix Club](https://makapix.club/), trending GIFs from [Giphy](https://giphy.com/), and your own files on a 24-bit 720x720 IPS touchscreen you control from anywhere.
 
 <br clear="left"/>
 
@@ -28,7 +28,7 @@
 
 ## What Is p3a?
 
-p3a turns a [$60 development board](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) into a dedicated pixel art display. Think of it as a tiny gallery on your desk — it cycles through artwork automatically, picks up trending GIFs throughout the day, and lets artists send creations directly to it from [Makapix Club](https://makapix.club/), a pixel art social network.
+p3a turns a [$40 development board](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) into a dedicated pixel art display. Think of it as a tiny gallery on your desk — it cycles through artwork automatically, picks up trending GIFs throughout the day, and lets artists send creations directly to it from [Makapix Club](https://makapix.club/), a pixel art social network.
 
 It's open source, self-contained, and designed to be as simple to use as a picture frame — while still exposing a full REST API for those who want to automate and tinker.
 
@@ -41,8 +41,8 @@ It's open source, self-contained, and designed to be as simple to use as a pictu
 ## Quick Start
 
 **What you need:**
-- [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) board
-- [microSD card](https://www.waveshare.com/micro-sd-card-16gb-kawau.htm?sku=18191)
+- [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) board ($39.99)
+- [microSD card](https://www.waveshare.com/micro-sd-card-16gb-kawau.htm?sku=18191) ($7.99)
 - USB-C data cable
 - A small screwdriver
 
@@ -102,7 +102,17 @@ Rotation persists across reboots. All controls are also available via the web UI
 
 ### Web Interface & REST API
 
-Open `http://p3a.local/` from any browser on the same Wi-Fi network for a full dashboard — playback controls, configuration, firmware updates, Giphy settings, and more. Every action is also exposed as a JSON API endpoint for scripting and automation.
+Open `http://p3a.local/` from any browser on the same Wi-Fi network for a full dashboard — playback controls, configuration, firmware updates, Giphy settings, and more.
+
+<p align="center">
+  <a href="images/PXL_20251206_184110573_red.mp4">
+    <img src="images/ota_updates.png" alt="OTA update interface" width="380">
+  </a>
+  <br>
+  <em>OTA update page (click to watch video)</em>
+</p>
+
+Every action is also exposed as a JSON API endpoint for scripting and automation.
 
 ```bash
 curl http://p3a.local/status                        # Device status
@@ -124,14 +134,6 @@ After the first USB flash, everything is over-the-air:
 - **SHA256 verification** of every download
 - **ESP32-C6 co-processor** firmware updates automatically when needed
 - **Web UI updates** are also delivered over-the-air (since v0.7.5)
-
-<p align="center">
-  <a href="images/PXL_20251206_184110573_red.mp4">
-    <img src="images/ota_updates.png" alt="OTA update interface" width="380">
-  </a>
-  <br>
-  <em>OTA update page (click to watch video)</em>
-</p>
 
 ### PICO-8 Game Streaming
 

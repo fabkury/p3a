@@ -125,16 +125,16 @@ curl -X POST http://p3a.local/api/rotation \
 
 After the first USB flash, everything is over-the-air:
 - **One-click install** from the web UI, with progress shown on both screen and browser
-- **Automatic update checks** every 2 hours — updates are never installed without your approval
+- **Automatic update checks** every 8 hours — updates are never installed without your approval
 - **Automatic rollback** if the new firmware fails to boot three times
 - **Manual rollback** to the previous version at any time
 - **SHA256 verification** of every download
 - **ESP32-C6 co-processor** firmware updates automatically when needed
-- **Web UI updates** are also delivered over-the-air (since v0.7.5)
+- **Web UI updates** are also delivered over-the-air
 
 ### PICO-8 Game Streaming
 
-Stream [PICO-8](https://www.lexaloffle.com/pico-8.php) games to the display over Wi-Fi. A WebAssembly emulator runs in your browser and sends frames at 30 FPS to the device via WebSocket, upscaled to 720x720. The 720x720 screen is a perfect square canvas for PICO-8's 128x128 output. The display returns to artwork playback after 30 seconds of inactivity.
+Stream [PICO-8](https://www.lexaloffle.com/pico-8.php) games to the display over Wi-Fi. A WebAssembly emulator runs in your browser and sends frames to the device via WebSocket, which upscales them to 720x720. The 720x720 screen is a perfect square canvas for PICO-8's 128x128 output. The device returns to artwork playback when you exit PICO-8 mode.
 
 <p align="center">
   <img src="images/pico-8-gameplay-2.gif" alt="PICO-8 gameplay on p3a">

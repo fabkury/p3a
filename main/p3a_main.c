@@ -231,10 +231,15 @@ static void handle_system_event(const p3a_event_t *event, void *ctx)
             ugfx_ui_hide_captive_ap_info();
             app_lcd_exit_ui_mode();
             break;
-        case P3A_EVENT_SOFTAP_STARTED:
-            app_lcd_enter_ui_mode();
-            ugfx_ui_show_captive_ap_info();
+        case P3A_EVENT_SOFTAP_STARTED: {
+            static bool softap_info_shown = false;
+            if (!softap_info_shown) {
+                softap_info_shown = true;
+                app_lcd_enter_ui_mode();
+                ugfx_ui_show_captive_ap_info();
+            }
             break;
+        }
         case P3A_EVENT_WIFI_DISCONNECTED:
             p3a_state_on_wifi_disconnected();
             break;

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
 
 /**
  * @file http_api_upload.c
@@ -22,7 +22,7 @@
 
 /**
  * POST /upload
- * Handles multipart/form-data file upload, saves to downloads dir, then moves to animations dir
+ * Handles multipart/form-data file upload, saves to temporary dir, then moves to animations dir
  * Maximum file size: 5 MB
  * Supported formats: WebP, GIF, JPG, JPEG, PNG
  */
@@ -30,9 +30,9 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     const size_t MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
     
     // Get dynamic paths
-    char DOWNLOADS_DIR[128];
+    char TEMP_DIR[128];
     char ANIMATIONS_DIR[128];
-    if (sd_path_get_downloads(DOWNLOADS_DIR, sizeof(DOWNLOADS_DIR)) != ESP_OK ||
+    if (sd_path_get_temporary(TEMP_DIR, sizeof(TEMP_DIR)) != ESP_OK ||
         sd_path_get_animations(ANIMATIONS_DIR, sizeof(ANIMATIONS_DIR)) != ESP_OK) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to get SD paths\",\"code\":\"PATH_ERROR\"}");
         return ESP_OK;
@@ -92,12 +92,12 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     }
     
     struct stat st;
-    // Ensure downloads directory exists
-    if (stat(DOWNLOADS_DIR, &st) != 0) {
-        ESP_LOGI(HTTP_API_TAG, "Creating downloads directory: %s", DOWNLOADS_DIR);
-        if (mkdir(DOWNLOADS_DIR, 0755) != 0) {
-            ESP_LOGE(HTTP_API_TAG, "Failed to create downloads directory: %s", strerror(errno));
-            send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to create downloads directory\",\"code\":\"DIR_CREATE_FAIL\"}");
+    // Ensure temporary directory exists
+    if (stat(TEMP_DIR, &st) != 0) {
+        ESP_LOGI(HTTP_API_TAG, "Creating temporary directory: %s", TEMP_DIR);
+        if (mkdir(TEMP_DIR, 0755) != 0) {
+            ESP_LOGE(HTTP_API_TAG, "Failed to create temporary directory: %s", strerror(errno));
+            send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to create temporary directory\",\"code\":\"DIR_CREATE_FAIL\"}");
             return ESP_OK;
         }
     }
@@ -112,9 +112,9 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
         }
     }
     
-    // Temporary file path in downloads directory
+    // Temporary file path
     char temp_path[512];
-    snprintf(temp_path, sizeof(temp_path), "%s/upload_%llu.tmp", DOWNLOADS_DIR, (unsigned long long)(esp_timer_get_time() / 1000));
+    snprintf(temp_path, sizeof(temp_path), "%s/upload_%llu.tmp", TEMP_DIR, (unsigned long long)(esp_timer_get_time() / 1000));
     
     FILE *fp = NULL;
     if (!sd_locked) {

@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file display_renderer_priv.h
+ * @brief Display renderer private internals: shared state, macros, upscale workers
+ */
 
 #ifndef DISPLAY_RENDERER_PRIV_H
 #define DISPLAY_RENDERER_PRIV_H

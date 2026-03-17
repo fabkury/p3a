@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file playlist_manager.h
+ * @brief Playlist manager: artwork references, JSON persistence, load/save
+ */
 
 #ifndef PLAYLIST_MANAGER_H
 #define PLAYLIST_MANAGER_H

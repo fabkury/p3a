@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file makapix.h
+ * @brief Makapix core module public interface: init, states, channel operations
+ */
 
 #pragma once
 

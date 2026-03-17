@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file giphy_types.h
+ * @brief Giphy channel entry structure (64-byte packed, matching makapix entry size)
+ */
 
 #pragma once
 

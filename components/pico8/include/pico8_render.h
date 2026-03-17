@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file pico8_render.h
+ * @brief PICO-8 frame rendering interface and constants
+ */
+
 #ifndef PICO8_RENDER_H
 #define PICO8_RENDER_H
 

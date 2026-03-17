@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file ugfx_ui.h
+ * @brief uGFX UI public interface: provisioning, OTA, channel messages, info screen
+ */
 
 #pragma once
 
@@ -167,6 +172,21 @@ gBool ugfx_ui_is_active(void);
  * @return Frame delay in ms (100 for UI), or -1 on error
  */
 int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride);
+
+/**
+ * @brief Show USB Mass Storage screen
+ *
+ * Displays a message indicating the SD card is exposed via USB.
+ * Shown when USB-HS is connected and MSC is active.
+ *
+ * @return ESP_OK on success
+ */
+esp_err_t ugfx_ui_show_usb_msc(void);
+
+/**
+ * @brief Hide USB Mass Storage screen
+ */
+void ugfx_ui_hide_usb_msc(void);
 
 /**
  * @brief Show fatal error screen (terminal state)

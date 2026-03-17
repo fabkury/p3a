@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file sd_path.h
+ * @brief SD card path configuration and directory accessor interface
+ */
 
 #pragma once
 
@@ -91,13 +96,13 @@ esp_err_t sd_path_get_channel(char *out_path, size_t out_len);
 esp_err_t sd_path_get_playlists(char *out_path, size_t out_len);
 
 /**
- * @brief Get the downloads directory path (for temporary uploads)
- * 
+ * @brief Get the temporary directory path (staging area for uploads/downloads)
+ *
  * @param out_path Output buffer for the path
  * @param out_len Size of output buffer
  * @return ESP_OK on success
  */
-esp_err_t sd_path_get_downloads(char *out_path, size_t out_len);
+esp_err_t sd_path_get_temporary(char *out_path, size_t out_len);
 
 /**
  * @brief Get the giphy directory path (for Giphy artwork cache)
@@ -126,7 +131,7 @@ esp_err_t sd_path_set_root(const char *root_path);
 /**
  * @brief Create all required subdirectories under the p3a root
  * 
- * Creates: animations, vault, channel, playlists, downloads
+ * Creates: animations, vault, channel, playlists, temporary
  * 
  * @return ESP_OK on success, or error if directory creation fails
  */

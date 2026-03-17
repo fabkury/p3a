@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file sdcard_channel_impl.h
+ * @brief SD card channel interface implementation declarations
+ */
 
 #ifndef SDCARD_CHANNEL_IMPL_H
 #define SDCARD_CHANNEL_IMPL_H

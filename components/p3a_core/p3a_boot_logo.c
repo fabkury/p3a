@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
 
 /**
  * @file p3a_boot_logo.c
@@ -114,10 +114,19 @@ int p3a_boot_logo_render(uint8_t *buffer, int width, int height, size_t stride)
         }
     }
 
-    // Calculate centered position for scaled logo
+    // Get current screen rotation
+    uint16_t rotation = config_store_get_rotation();
+
+    // Calculate centered position for scaled logo (dimensions swap for 90/270)
     const int scale = 3;
-    const int logo_w = p3a_logo_w * scale;
-    const int logo_h = p3a_logo_h * scale;
+    int logo_w, logo_h;
+    if (rotation == 90 || rotation == 270) {
+        logo_w = p3a_logo_h * scale;
+        logo_h = p3a_logo_w * scale;
+    } else {
+        logo_w = p3a_logo_w * scale;
+        logo_h = p3a_logo_h * scale;
+    }
     int logo_x = (width - logo_w) / 2;
     int logo_y = (height - logo_h) / 2;
 
@@ -130,13 +139,13 @@ int p3a_boot_logo_render(uint8_t *buffer, int width, int height, size_t stride)
         float smooth_t = smoothstep(t);
         uint8_t alpha = (uint8_t)(smooth_t * 255.0f);
 
-        // Use alpha blending with scale (BGR888 format)
+        // Use alpha blending with scale and rotation (BGR888 format)
         p3a_logo_blit_pixelwise_bgr888(
             buffer, width, height, stride,
             logo_x, logo_y,
             alpha,
             bg_b, bg_g, bg_r,
-            scale
+            scale, rotation
         );
     } else {
         // Phase 2: Full opacity hold
@@ -145,7 +154,7 @@ int p3a_boot_logo_render(uint8_t *buffer, int width, int height, size_t stride)
             logo_x, logo_y,
             255,
             bg_b, bg_g, bg_r,
-            scale
+            scale, rotation
         );
     }
 

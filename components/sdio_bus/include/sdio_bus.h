@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
 /**
  * @file sdio_bus.h
  * @brief SDIO Bus Coordinator for ESP32-P4

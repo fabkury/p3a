@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file config_store_settings.c
+ * @brief Config store settings: background color, brightness, display caching
+ */
 
 #include "config_store_internal.h"
 

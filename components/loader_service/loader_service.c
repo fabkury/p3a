@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file loader_service.c
+ * @brief Animation file loader: reads file to PSRAM buffer and initializes decoder
+ */
 
 #include "loader_service.h"
 #include "p3a_limits.h"

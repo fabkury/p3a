@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
 /**
  * @file slave_ota.c
  * @brief ESP32-C6 Co-processor OTA Update via ESP-Hosted

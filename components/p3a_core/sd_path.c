@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file sd_path.c
+ * @brief SD card path resolver: configurable root with subdirectory helpers
+ */
 
 #include "sd_path.h"
 #include "config_store.h"
@@ -101,9 +106,9 @@ esp_err_t sd_path_get_playlists(char *out_path, size_t out_len)
     return sd_path_get_subdir("playlists", out_path, out_len);
 }
 
-esp_err_t sd_path_get_downloads(char *out_path, size_t out_len)
+esp_err_t sd_path_get_temporary(char *out_path, size_t out_len)
 {
-    return sd_path_get_subdir("downloads", out_path, out_len);
+    return sd_path_get_subdir("temporary", out_path, out_len);
 }
 
 esp_err_t sd_path_get_giphy(char *out_path, size_t out_len)
@@ -193,7 +198,7 @@ esp_err_t sd_path_ensure_directories(void)
     }
 
     // Create subdirectories
-    const char *subdirs[] = {"animations", "vault", "channel", "playlists", "downloads", "giphy"};
+    const char *subdirs[] = {"animations", "vault", "channel", "playlists", "temporary", "giphy"};
     for (size_t i = 0; i < sizeof(subdirs) / sizeof(subdirs[0]); i++) {
         snprintf(path, sizeof(path), "%s/%s", root, subdirs[i]);
         err = ensure_directory(path);

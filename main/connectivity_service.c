@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file connectivity_service.c
+ * @brief Thin service facade for WiFi initialization and OTA management
+ */
 
 #include "connectivity_service.h"
 #include "app_wifi.h"

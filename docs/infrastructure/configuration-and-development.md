@@ -49,7 +49,7 @@ All p3a data is stored under a configurable root folder (`/sdcard/p3a` by defaul
 ├── giphy/         # Cached Giphy GIFs (sharded by SHA256)
 ├── channel/       # Channel settings and index files
 ├── playlists/     # Playlist cache files
-└── downloads/     # Temporary upload storage
+└── temporary/     # Staging area for uploads and downloads
 ```
 
 - **Root folder**: Configurable via web UI (e.g., `/p3a`, `/data`). The `/sdcard` prefix is prepended automatically at runtime. Changes require reboot.

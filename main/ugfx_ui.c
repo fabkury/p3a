@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file ugfx_ui.c
+ * @brief uGFX-based on-screen UI: provisioning, OTA progress, channel status, info screen
+ */
 
 #include "ugfx_ui.h"
 #include "esp_log.h"
@@ -39,7 +44,8 @@ typedef enum {
     UI_MODE_CONNECTIVITY_ERROR, // Connectivity error (no internet, etc.)
     UI_MODE_INFO_SCREEN,        // System info overlay
     UI_MODE_REGISTRATION_SUCCESS, // Registration success message
-    UI_MODE_FATAL_ERROR          // Fatal error (terminal state)
+    UI_MODE_FATAL_ERROR,         // Fatal error (terminal state)
+    UI_MODE_USB_MSC              // SD card exposed via USB
 } ui_mode_t;
 
 // UI state
@@ -153,7 +159,7 @@ static void ugfx_ui_draw_captive_ap_info(void)
                        font_title, GFX_WHITE, GFX_BLACK, gJustifyCenter);
 
     // Subtitle
-    gdispFillStringBox(0, 90, screen_w, 30, "WiFi Setup",
+    gdispFillStringBox(0, 90, screen_w, 36, "WiFi Setup",
                        font_main, gray, GFX_BLACK, gJustifyCenter);
 
     // Row 1: Network
@@ -884,6 +890,74 @@ void ugfx_ui_hide_captive_ap_info(void)
     }
 }
 
+/**
+ * @brief Draw the USB Mass Storage info screen
+ */
+static void ugfx_ui_draw_usb_msc(void)
+{
+    gdispClear(GFX_BLACK);
+
+    gCoord screen_w = gdispGetWidth();
+    gCoord screen_h = gdispGetHeight();
+
+    gFont font_title = gdispOpenFont("* DejaVu Sans 24");
+    gFont font_body  = gdispOpenFont("* DejaVu Sans 20");
+    gFont font_hint  = gdispOpenFont("* DejaVu Sans 16");
+
+    color_t amber = HTML2COLOR(0xFFBB33);
+
+    // Title
+    gdispFillStringBox(0, screen_h / 2 - 150, screen_w, 45,
+                       "microSD Card Exposed via USB",
+                       font_title, amber, GFX_BLACK, gJustifyCenter);
+
+    // Body lines
+    gCoord y = screen_h / 2 - 60;
+    gCoord line_h = 40;
+
+    gdispFillStringBox(0, y, screen_w, line_h,
+                       "p3a is currently sharing the microSD card",
+                       font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
+    gdispFillStringBox(0, y + line_h, screen_w, line_h,
+                       "over the USB-HS connection.",
+                       font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
+
+    gdispFillStringBox(0, y + line_h * 3, screen_w, line_h,
+                       "To resume normal operation,",
+                       font_body, HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    gdispFillStringBox(0, y + line_h * 4, screen_w, line_h,
+                       "disconnect from USB-HS and use",
+                       font_body, HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+    gdispFillStringBox(0, y + line_h * 5, screen_w, line_h,
+                       "the USB-UART port instead.",
+                       font_body, HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+
+    // USB icon hint
+    gdispFillStringBox(0, screen_h - 60, screen_w, 36,
+                       "USB Mass Storage active",
+                       font_hint, HTML2COLOR(0x555555), GFX_BLACK, gJustifyCenter);
+}
+
+esp_err_t ugfx_ui_show_usb_msc(void)
+{
+    s_ui_mode = UI_MODE_USB_MSC;
+    s_ui_active = true;
+
+    ESP_LOGI(TAG, "USB MSC UI activated");
+    return ESP_OK;
+}
+
+void ugfx_ui_hide_usb_msc(void)
+{
+    if (s_ui_mode != UI_MODE_USB_MSC) {
+        return;
+    }
+    s_ui_active = false;
+    s_ui_mode = UI_MODE_NONE;
+
+    ESP_LOGI(TAG, "USB MSC UI deactivated");
+}
+
 esp_err_t ugfx_ui_show_connectivity_error(void)
 {
     s_ui_mode = UI_MODE_CONNECTIVITY_ERROR;
@@ -1148,6 +1222,10 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
 
         case UI_MODE_FATAL_ERROR:
             ugfx_ui_draw_fatal_error();
+            return 500;
+
+        case UI_MODE_USB_MSC:
+            ugfx_ui_draw_usb_msc();
             return 500;
 
         default:

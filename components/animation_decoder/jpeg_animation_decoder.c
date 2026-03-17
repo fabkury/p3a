@@ -1,7 +1,9 @@
-/*
- * SPDX-FileCopyrightText: 2024 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file jpeg_animation_decoder.c
+ * @brief JPEG decoder using ESP32-P4 hardware JPEG engine with RGB888 output
  */
 
 #include "animation_decoder.h"

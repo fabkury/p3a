@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file makapix_store.c
+ * @brief NVS persistence for Makapix credentials (player_key, TLS certs, broker config)
+ */
 
 #include "makapix_store.h"
 #include "nvs_flash.h"

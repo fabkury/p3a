@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file pcg32_reversible.h
+ * @brief Reversible and skippable PCG32 PRNG for deterministic shuffling
+ */
 
 /*
  * pcg32_reversible.h

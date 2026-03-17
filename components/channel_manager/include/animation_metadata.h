@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file animation_metadata.h
+ * @brief Animation metadata structure and JSON sidecar interface
+ */
 
 #ifndef ANIMATION_METADATA_H
 #define ANIMATION_METADATA_H

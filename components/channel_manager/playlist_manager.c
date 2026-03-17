@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file playlist_manager.c
+ * @brief Playlist persistence: JSON load/save and artwork reference management
+ */
 
 #include "playlist_manager.h"
 #include "makapix_api.h"

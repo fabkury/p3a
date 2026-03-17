@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
 /**
  * @file p3a_board.h
  * @brief P3A Board Abstraction Layer - EP44B Implementation

@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file channel_cache_ops.c
+ * @brief Channel cache hash table entry operations (add, remove, lookup)
+ */
 
 #include "channel_cache.h"
 #include "channel_cache_internal.h"

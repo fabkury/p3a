@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file p3a_board_fs.c
+ * @brief LittleFS mount and web UI health check for the EP44B board
+ */
+
 #include "p3a_board.h"
 #include "esp_log.h"
 #include "esp_littlefs.h"

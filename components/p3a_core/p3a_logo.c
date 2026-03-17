@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file p3a_logo.c
+ * @brief Embedded p3a logo pixel data (46x54 BGR888) with chroma-key blit
+ */
 
 #include "p3a_logo.h"
 #include <string.h>
@@ -551,7 +556,8 @@ void p3a_logo_blit_pixelwise_bgr888(
     uint8_t bg_b,
     uint8_t bg_g,
     uint8_t bg_r,
-    int scale
+    int scale,
+    int rotation
 )
 {
     const int src_w = p3a_logo_w;
@@ -560,8 +566,15 @@ void p3a_logo_blit_pixelwise_bgr888(
     /* Treat scale <= 1 as no scaling */
     if (scale <= 1) scale = 1;
 
-    const int scaled_w = src_w * scale;
-    const int scaled_h = src_h * scale;
+    /* For 90/270 rotation, output dimensions are swapped */
+    int scaled_w, scaled_h;
+    if (rotation == 90 || rotation == 270) {
+        scaled_w = src_h * scale;
+        scaled_h = src_w * scale;
+    } else {
+        scaled_w = src_w * scale;
+        scaled_h = src_h * scale;
+    }
 
     /* Compute clipping in scaled coordinates */
     int dst_x0 = x;
@@ -580,6 +593,24 @@ void p3a_logo_blit_pixelwise_bgr888(
         return;
     }
 
+    /* Precompute rotation coefficients so the branch runs once, not per-pixel.
+     * src_x_idx = base_sx + cx_ox * ox + cx_oy * oy
+     * src_y_idx = base_sy + cy_ox * ox + cy_oy * oy */
+    int base_sx, cx_ox, cx_oy, base_sy, cy_ox, cy_oy;
+    if (rotation == 90) {
+        base_sx = 0;         cx_ox =  0; cx_oy = 1;
+        base_sy = src_h - 1; cy_ox = -1; cy_oy = 0;
+    } else if (rotation == 180) {
+        base_sx = src_w - 1; cx_ox = -1; cx_oy =  0;
+        base_sy = src_h - 1; cy_ox =  0; cy_oy = -1;
+    } else if (rotation == 270) {
+        base_sx = src_w - 1; cx_ox = 0; cx_oy = -1;
+        base_sy = 0;         cy_ox = 1; cy_oy =  0;
+    } else {
+        base_sx = 0; cx_ox = 1; cx_oy = 0;
+        base_sy = 0; cy_ox = 0; cy_oy = 1;
+    }
+
     /* Optimized code paths based on alpha value */
     if (alpha == 0) {
         /* Alpha = 0: Fill region with background color only */
@@ -595,11 +626,13 @@ void p3a_logo_blit_pixelwise_bgr888(
     } else if (alpha == 255) {
         /* Alpha = 255: Opaque blit, no blending needed */
         for (int dy = dst_y0; dy < dst_y1; dy++) {
-            int src_y_idx = (dy - y) / scale;
             uint8_t *dst_row = dst + dy * dst_stride_bytes;
 
             for (int dx = dst_x0; dx < dst_x1; dx++) {
-                int src_x_idx = (dx - x) / scale;
+                int ox = (dx - x) / scale;
+                int oy = (dy - y) / scale;
+                int src_x_idx = base_sx + cx_ox * ox + cx_oy * oy;
+                int src_y_idx = base_sy + cy_ox * ox + cy_oy * oy;
                 const uint8_t *src_px = p3a_logo_pixels + (src_y_idx * src_w + src_x_idx) * 3;
 
                 if (src_px[0] == P3A_LOGO_CHROMA_KEY_B &&
@@ -617,11 +650,13 @@ void p3a_logo_blit_pixelwise_bgr888(
         const int inv_alpha = 255 - alpha;
 
         for (int dy = dst_y0; dy < dst_y1; dy++) {
-            int src_y_idx = (dy - y) / scale;
             uint8_t *dst_row = dst + dy * dst_stride_bytes;
 
             for (int dx = dst_x0; dx < dst_x1; dx++) {
-                int src_x_idx = (dx - x) / scale;
+                int ox = (dx - x) / scale;
+                int oy = (dy - y) / scale;
+                int src_x_idx = base_sx + cx_ox * ox + cx_oy * oy;
+                int src_y_idx = base_sy + cy_ox * ox + cy_oy * oy;
                 const uint8_t *src_px = p3a_logo_pixels + (src_y_idx * src_w + src_x_idx) * 3;
 
                 if (src_px[0] == P3A_LOGO_CHROMA_KEY_B &&

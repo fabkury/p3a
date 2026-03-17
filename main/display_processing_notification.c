@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
 
 /**
  * @file display_processing_notification.c
@@ -55,25 +55,44 @@ static inline void pn_draw_pixel(uint8_t *buffer, int x, int y, uint8_t r, uint8
  * @param b Blue component (0-255)
  * @param size Triangle size in pixels
  */
-static void draw_checkerboard_triangle(uint8_t *buffer, uint8_t r, uint8_t g, uint8_t b, uint16_t size)
+static void draw_checkerboard_triangle(uint8_t *buffer, uint8_t r, uint8_t g, uint8_t b,
+                                       uint16_t size, display_rotation_t rotation)
 {
     if (!buffer || size < 16) return;
-    
-    // Calculate top-left corner of the bounding box in screen coordinates
-    int base_x = EXAMPLE_LCD_H_RES - size;
-    int base_y = EXAMPLE_LCD_V_RES - size;
-    
+
+    // Precompute coordinate mapping so the triangle appears in the user's
+    // bottom-right corner regardless of rotation: screen = base + dir * local
+    int base_x, base_y, dir_x, dir_y;
+    switch (rotation) {
+        default:
+        case DISPLAY_ROTATION_0:
+            base_x = EXAMPLE_LCD_H_RES - size; dir_x =  1;
+            base_y = EXAMPLE_LCD_V_RES - size; dir_y =  1;
+            break;
+        case DISPLAY_ROTATION_90:
+            base_x = size - 1;                 dir_x = -1;
+            base_y = EXAMPLE_LCD_V_RES - size; dir_y =  1;
+            break;
+        case DISPLAY_ROTATION_180:
+            base_x = size - 1;                 dir_x = -1;
+            base_y = size - 1;                 dir_y = -1;
+            break;
+        case DISPLAY_ROTATION_270:
+            base_x = EXAMPLE_LCD_H_RES - size; dir_x =  1;
+            base_y = size - 1;                 dir_y = -1;
+            break;
+    }
+
     // Iterate over local coordinates within the bounding box
     for (int ly = 0; ly < size; ly++) {
         for (int lx = 0; lx < size; lx++) {
             // Triangle condition: (N - 1 - lx) <= ly
-            // This fills the lower-right triangle
+            // This fills the lower-right triangle in local space
             if ((size - 1 - lx) <= ly) {
                 // Checkerboard pattern
                 if ((lx + ly) % 2 == 0) {
-                    int screen_x = base_x + lx;
-                    int screen_y = base_y + ly;
-                    pn_draw_pixel(buffer, screen_x, screen_y, r, g, b);
+                    pn_draw_pixel(buffer, base_x + dir_x * lx,
+                                  base_y + dir_y * ly, r, g, b);
                 }
             }
         }
@@ -155,7 +174,7 @@ void processing_notification_update_and_draw(uint8_t *buffer)
                 // Fall through to draw red triangle
             } else {
                 // Draw blue triangle (processing)
-                draw_checkerboard_triangle(buffer, 0, 0, 255, s_size_cached);
+                draw_checkerboard_triangle(buffer, 0, 0, 255, s_size_cached, g_screen_rotation);
                 return;
             }
             // Fall through to FAILED case
@@ -171,7 +190,7 @@ void processing_notification_update_and_draw(uint8_t *buffer)
                 return;
             }
             // Draw red triangle (failed)
-            draw_checkerboard_triangle(buffer, 255, 0, 0, s_size_cached);
+            draw_checkerboard_triangle(buffer, 255, 0, 0, s_size_cached, g_screen_rotation);
             break;
     }
 }

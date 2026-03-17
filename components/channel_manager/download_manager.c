@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
 
 /**
  * @file download_manager.c
@@ -701,7 +701,7 @@ static void download_task(void *arg)
             }
 
             if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_SIZE) {
-                // Keep .404 marker for fast stat() checks (avoids LTF file read)
+                // Keep .404 marker for fast stat() checks
                 snprintf(s_task_marker_path, sizeof(s_task_marker_path), "%s.404", s_dl_req.filepath);
                 FILE *f = fopen(s_task_marker_path, "w");
                 if (f) {

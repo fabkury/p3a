@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file download_manager.h
+ * @brief Download manager interface: round-robin file fetching across channels
+ */
 
 #ifndef DOWNLOAD_MANAGER_H
 #define DOWNLOAD_MANAGER_H
@@ -70,7 +75,7 @@ void download_manager_set_next_callback(download_get_next_cb_t cb, void *user_ct
  *
  * Lightweight signal that just wakes the download task without resetting
  * any state. Use this when:
- * - Download failures need retry (LTF backoff controls timing)
+ * - Download failures need retry
  * - You want to resume downloads after a pause (e.g., exiting PICO-8)
  *
  * @see download_manager_rescan() when new content requires full rescan

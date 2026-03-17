@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file makapix_channel_impl.h
+ * @brief Makapix channel interface: vault-backed artwork discovery over MQTT
+ */
 
 #ifndef MAKAPIX_CHANNEL_IMPL_H
 #define MAKAPIX_CHANNEL_IMPL_H

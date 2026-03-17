@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file makapix_artwork.c
+ * @brief Makapix artwork HTTP download to vault with SHA256-sharded storage
+ */
 
 #include "makapix_artwork.h"
 #include "p3a_limits.h"

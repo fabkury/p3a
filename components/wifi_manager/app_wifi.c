@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file app_wifi.c
+ * @brief WiFi station with captive portal fallback and credential persistence
+ */
 
 /* WiFi station Example with Captive Portal
 

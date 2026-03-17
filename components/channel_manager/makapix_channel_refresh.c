@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file makapix_channel_refresh.c
+ * @brief Makapix channel server refresh: paginated queries and cache update
+ */
 
 #include "makapix_channel_internal.h"
 #include "makapix_api.h"

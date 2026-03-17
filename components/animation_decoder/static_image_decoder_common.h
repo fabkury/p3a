@@ -1,7 +1,9 @@
-/*
- * SPDX-FileCopyrightText: 2024 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file static_image_decoder_common.h
+ * @brief Common utilities and forward declarations for static image decoders
  */
 
 #ifndef STATIC_IMAGE_DECODER_COMMON_H

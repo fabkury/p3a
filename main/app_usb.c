@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file app_usb.c
+ * @brief USB composite device: Mass Storage (SD card), CDC serial, and PICO-8 vendor endpoint
+ */
 
 #include "app_usb.h"
 
@@ -23,6 +28,8 @@
 #include "class/cdc/cdc_device.h"
 #include "class/msc/msc_device.h"
 #include "usb_descriptors.h"
+#include "ugfx_ui.h"
+#include "app_lcd.h"
 
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
 #include "pico8_stream.h"
@@ -262,12 +269,16 @@ void tud_mount_cb(void)
     }
 
     s_usb_active = true;
+    app_lcd_enter_ui_mode();
+    ugfx_ui_show_usb_msc();
 }
 
 void tud_umount_cb(void)
 {
     ESP_LOGI(TAG, "USB host disconnected");
     s_usb_active = false;
+    ugfx_ui_hide_usb_msc();
+    app_lcd_exit_ui_mode();
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     pico8_stream_reset();
 #endif
@@ -278,6 +289,8 @@ void tud_suspend_cb(bool remote_wakeup_en)
 {
     (void)remote_wakeup_en;
     s_usb_active = false;
+    ugfx_ui_hide_usb_msc();
+    app_lcd_exit_ui_mode();
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     pico8_stream_reset();
 #endif

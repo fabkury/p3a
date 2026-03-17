@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file pico8_stream.c
+ * @brief PICO-8 WebSocket stream parser: frame decoding and mode management
+ */
+
 #include "pico8_stream.h"
 
 #define PICO8_FRAME_WIDTH        128

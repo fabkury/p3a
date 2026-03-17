@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file content_cache.c
+ * @brief Content cache facade delegating to download_manager
+ */
 
 #include "content_cache.h"
 #include "download_manager.h"

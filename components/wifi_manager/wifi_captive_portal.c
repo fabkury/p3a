@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2024-2025 p3a Contributors
+// Copyright 2025-2026 p3a Contributors
+
+/**
+ * @file wifi_captive_portal.c
+ * @brief Captive portal Soft AP: DNS hijack, HTML config page, credential storage
+ */
 
 #include <string.h>
 #include <stdlib.h>
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
@@ -264,10 +270,82 @@ static esp_err_t serve_file_simple(httpd_req_t *req, const char *filepath) {
     return ESP_OK;
 }
 
+/* Serve setup index page with {DEVICE_NAME} placeholder replaced */
+static esp_err_t serve_setup_index_page(httpd_req_t *req) {
+    const char *filepath = "/webui/setup/index.html";
+    const char *placeholder = "{DEVICE_NAME}";
+
+    FILE *f = fopen(filepath, "r");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open %s", filepath);
+        httpd_resp_set_type(req, "text/html");
+        httpd_resp_send(req,
+            "<html><body style=\"font-family:sans-serif;text-align:center;padding:40px;\">"
+            "<h1>p3a Setup</h1>"
+            "<p>UI files not found. Please reflash the device.</p>"
+            "</body></html>",
+            HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (size <= 0 || size > 64 * 1024) {
+        fclose(f);
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "Invalid file", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    char *html = heap_caps_malloc(size + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!html) {
+        fclose(f);
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "Memory error", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    size_t bytes_read = fread(html, 1, size, f);
+    fclose(f);
+    html[bytes_read] = '\0';
+
+    // Get current device name
+    char device_name[CONFIG_STORE_MAX_DEVICE_NAME_LEN + 1];
+    config_store_get_device_name(device_name, sizeof(device_name));
+
+    // Replace {DEVICE_NAME} placeholder
+    char *pos = strstr(html, placeholder);
+    if (pos) {
+        size_t ph_len = strlen(placeholder);
+        size_t dn_len = strlen(device_name);
+        size_t before_len = pos - html;
+        size_t after_len = bytes_read - before_len - ph_len;
+        size_t new_size = before_len + dn_len + after_len + 1;
+
+        char *new_html = heap_caps_malloc(new_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (new_html) {
+            memcpy(new_html, html, before_len);
+            memcpy(new_html + before_len, device_name, dn_len);
+            memcpy(new_html + before_len + dn_len, pos + ph_len, after_len);
+            new_html[new_size - 1] = '\0';
+            free(html);
+            html = new_html;
+            bytes_read = new_size - 1;
+        }
+    }
+
+    httpd_resp_set_type(req, "text/html");
+    esp_err_t ret = httpd_resp_send(req, html, bytes_read);
+    free(html);
+    return ret;
+}
+
 /* HTTP Server Handlers */
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
-    return serve_file_simple(req, "/webui/setup/index.html");
+    return serve_setup_index_page(req);
 }
 
 static esp_err_t save_post_handler(httpd_req_t *req)
@@ -589,12 +667,12 @@ static void start_captive_portal(void)
     xTaskCreate(dns_server_task, "dns_server", 4096, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, NULL);
 }
 
-/* Start mDNS in AP mode so p3a.local works during WiFi setup */
+/* Start mDNS in AP mode so p3a.local works during WiFi setup.
+ * When a device name is configured the primary hostname is always "p3a"
+ * (well-known setup address) and "p3a-<device_name>" is added as a
+ * delegate so that both p3a.local and p3a-<name>.local resolve. */
 static esp_err_t start_mdns_ap(void)
 {
-    char hostname[24];
-    config_store_get_hostname(hostname, sizeof(hostname));
-
     esp_err_t err = mdns_init();
     bool mdns_was_already_initialized = (err == ESP_ERR_INVALID_STATE);
 
@@ -606,14 +684,37 @@ static esp_err_t start_mdns_ap(void)
         ESP_LOGW(TAG, "mDNS already initialized; reconfiguring for AP");
     }
 
-    err = mdns_hostname_set(hostname);
+    // Primary hostname is always "p3a" in AP mode
+    err = mdns_hostname_set("p3a");
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "mDNS hostname set failed: %s", esp_err_to_name(err));
         return err;
     }
 
+    // If a device name is configured, also respond to p3a-<name>.local
+    char device_name[CONFIG_STORE_MAX_DEVICE_NAME_LEN + 1];
+    config_store_get_device_name(device_name, sizeof(device_name));
+
+    if (device_name[0] != '\0') {
+        char full_hostname[24];
+        snprintf(full_hostname, sizeof(full_hostname), "p3a-%s", device_name);
+
+        // Build address list pointing to the softAP gateway (192.168.4.1)
+        mdns_ip_addr_t addr = {
+            .addr = { .type = ESP_IPADDR_TYPE_V4, .u_addr = { .ip4 = { .addr = PP_HTONL(0xC0A80401) } } },
+            .next = NULL,
+        };
+
+        esp_err_t del_err = mdns_delegate_hostname_add(full_hostname, &addr);
+        if (del_err == ESP_OK) {
+            ESP_LOGI(TAG, "mDNS delegate: http://%s.local/", full_hostname);
+        } else {
+            ESP_LOGW(TAG, "mDNS delegate hostname add failed: %s", esp_err_to_name(del_err));
+        }
+    }
+
     char instance_name[48];
-    snprintf(instance_name, sizeof(instance_name), "%s WiFi Setup", hostname);
+    snprintf(instance_name, sizeof(instance_name), "p3a WiFi Setup");
     err = mdns_instance_name_set(instance_name);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "mDNS instance name set failed: %s", esp_err_to_name(err));
@@ -635,7 +736,7 @@ static esp_err_t start_mdns_ap(void)
         }
     }
 
-    ESP_LOGD(TAG, "mDNS started in AP mode: http://%s.local/", hostname);
+    ESP_LOGD(TAG, "mDNS started in AP mode: http://p3a.local/");
     return ESP_OK;
 }
 

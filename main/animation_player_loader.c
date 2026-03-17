@@ -23,6 +23,9 @@
 #include <time.h>
 #include "freertos/task.h"
 #include "sntp_sync.h"
+#include "play_scheduler_internal.h"
+#include "channel_cache.h"
+#include "download_manager.h"
 
 // Some tooling configurations may not resolve component include paths reliably for C files.
 // Keep explicit prototypes here to avoid "implicit declaration" diagnostics.
@@ -33,24 +36,20 @@ bool ota_manager_is_checking(void);
 // ============================================================================
 // Corrupt file deletion safeguard
 // ============================================================================
-// 
-// SAFEGUARD MEASURE: This mechanism prevents accidental cascade deletion of
-// good files. It tracks the last time a file was deleted due to corruption
-// and only allows deletion if:
-//   1. It's the first deletion since boot, OR
-//   2. More than 1 hour has passed since the last deletion
 //
-// This is a conservative safeguard that may need revision based on real-world
-// usage patterns. Future improvements could include:
-//   - Per-file deletion tracking (to allow re-deletion after re-download)
-//   - More sophisticated corruption detection
-//   - User-configurable deletion policies
+// SAFEGUARD MEASURE: This mechanism prevents accidental cascade deletion of
+// good files due to transient errors. It tracks the last time a cached file
+// (vault or giphy) was deleted due to corruption and only allows one deletion
+// every 5 minutes.
+//
+// After successful deletion, the entry is also evicted from LAi so the
+// scheduler doesn't re-pick the missing file before the next channel refresh.
 //
 // ============================================================================
 
 // Track last time a corrupt file was deleted (milliseconds since boot)
 static uint64_t s_last_corrupt_deletion_ms = 0;
-static const uint64_t CORRUPT_DELETION_COOLDOWN_MS = 3600000ULL;  // 1 hour
+static const uint64_t CORRUPT_DELETION_COOLDOWN_MS = 300000ULL;  // 5 minutes
 
 // ============================================================================
 // Auto-retry safeguard
@@ -110,14 +109,46 @@ static void discard_ignored_swap_request(void)
     }
 }
 
-// Exposed for prefetch-time corruption handling.
-bool animation_loader_try_delete_corrupt_vault_file(const char *filepath, esp_err_t error)
+// Evict a post_id from LAi across all active channels.
+// Uses O(1) hash lookups per channel, so misses are cheap.
+static void animation_loader_evict_from_lai(int32_t post_id)
 {
-    if (!filepath || strstr(filepath, "/vault/") == NULL) {
+    if (post_id == 0) {
+        return;
+    }
+
+    ps_state_t *state = ps_get_state();
+    if (!state || !state->mutex) {
+        return;
+    }
+
+    xSemaphoreTake(state->mutex, portMAX_DELAY);
+    for (size_t i = 0; i < state->channel_count; i++) {
+        channel_cache_t *cache = state->channels[i].cache;
+        if (!cache) {
+            continue;
+        }
+        // lai_remove_entry takes its own mutex
+        if (lai_remove_entry(cache, post_id)) {
+            ESP_LOGW(TAG, "Evicted corrupt entry from LAi: post_id=%ld, channel=%zu",
+                     (long)post_id, i);
+            channel_cache_schedule_save(cache);
+        }
+    }
+    xSemaphoreGive(state->mutex);
+
+    download_manager_rescan();
+}
+
+// Exposed for prefetch-time corruption handling.
+// Handles both vault (/vault/) and giphy (/giphy/) cached files.
+bool animation_loader_try_delete_corrupt_cached_file(const char *filepath, esp_err_t error, int32_t post_id)
+{
+    if (!filepath || (strstr(filepath, "/vault/") == NULL && strstr(filepath, "/giphy/") == NULL)) {
         return false;
     }
 
-    // SAFEGUARD: Only delete if first time since boot OR more than 1 hour since last deletion
+    // SAFEGUARD: Only delete if first time since boot OR cooldown has elapsed
     uint64_t current_time_ms = (uint64_t)xTaskGetTickCount() * portTICK_PERIOD_MS;
     bool can_delete = false;
 
@@ -140,7 +171,7 @@ bool animation_loader_try_delete_corrupt_vault_file(const char *filepath, esp_er
     }
 
     ESP_LOGE(TAG, "========================================");
-    ESP_LOGE(TAG, "DELETING CORRUPT VAULT FILE");
+    ESP_LOGE(TAG, "DELETING CORRUPT CACHED FILE");
     ESP_LOGE(TAG, "File: %s", filepath);
     ESP_LOGE(TAG, "Error: %s", esp_err_to_name(error));
     ESP_LOGE(TAG, "Reason: File failed to decode/prefetch, marking as corrupt");
@@ -150,6 +181,10 @@ bool animation_loader_try_delete_corrupt_vault_file(const char *filepath, esp_er
     if (unlink(filepath) == 0) {
         s_last_corrupt_deletion_ms = current_time_ms;
         ESP_LOGI(TAG, "Successfully deleted corrupt file. Will be re-downloaded on next channel refresh.");
+
+        // Remove from LAi so the scheduler doesn't re-pick this entry
+        animation_loader_evict_from_lai(post_id);
+
         return true;
     }
 
@@ -338,18 +373,18 @@ void animation_loader_task(void *arg)
         esp_err_t err = file_missing ? ESP_ERR_NOT_FOUND : load_animation_into_buffer(filepath, type, channel_type,
                                                                                       &s_back_buffer);
         if (err != ESP_OK) {
-            bool is_vault_file = filepath && strstr(filepath, "/vault/") != NULL;
-            
-            if (is_vault_file && file_missing) {
+            bool is_cached_file = filepath && (strstr(filepath, "/vault/") != NULL || strstr(filepath, "/giphy/") != NULL);
+
+            if (is_cached_file && file_missing) {
                 // File doesn't exist - advance to next and let background refresh re-download it
                 // Phase 3: No navigation on load failure
-                ESP_LOGW(TAG, "Missing vault file: %s", filepath);
+                ESP_LOGW(TAG, "Missing cached file: %s", filepath);
             } else if (file_missing) {
                 // Phase 3: No navigation on load failure
                 ESP_LOGW(TAG, "Missing file: %s", filepath ? filepath : "(null)");
-            } else if (is_vault_file) {
+            } else if (is_cached_file) {
                 // File exists but failed to decode - it's corrupt
-                (void)animation_loader_try_delete_corrupt_vault_file(filepath, err);
+                (void)animation_loader_try_delete_corrupt_cached_file(filepath, err, post_id);
             } else {
                 // Phase 3: No navigation on load failure
                 ESP_LOGW(TAG, "Decode failed: %s", filepath ? filepath : "(null)");

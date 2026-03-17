@@ -343,6 +343,7 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
         
         esp_err_t prefetch_err = prefetch_first_frame(&s_back_buffer);
         char failed_path[256] = {0};
+        int32_t failed_post_id = 0;
 
         if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
             s_back_buffer.prefetch_pending = false;
@@ -354,6 +355,7 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
             if (s_back_buffer.filepath) {
                 strlcpy(failed_path, s_back_buffer.filepath, sizeof(failed_path));
             }
+            failed_post_id = s_back_buffer.post_id;
 
             // If prefetch failed, clear swap request so we don't get stuck.
             if (prefetch_err != ESP_OK) {
@@ -370,9 +372,9 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
         if (prefetch_err != ESP_OK) {
             ESP_LOGW(TAG, "Prefetch failed: %s", esp_err_to_name(prefetch_err));
 
-            // Attempt to delete corrupt vault files (safeguarded).
+            // Attempt to delete corrupt cached files (safeguarded).
             if (failed_path[0] != '\0') {
-                (void)animation_loader_try_delete_corrupt_vault_file(failed_path, prefetch_err);
+                (void)animation_loader_try_delete_corrupt_cached_file(failed_path, prefetch_err, failed_post_id);
             }
 
             // Clean up back buffer contents so future attempts are clean.

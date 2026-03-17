@@ -359,6 +359,18 @@
             <span class="info-value" id="sys-available-ver" style="color:var(--c-success);font-weight:600;"></span>
         </div>
     </div>
+    <div class="section" id="crash-reboots-section" style="display:none;">
+        <h3>Crash Reboots</h3>
+        <div id="wifi-reboots-rows" style="display:none;">
+            <div class="info-row"><span class="info-label">WiFi Total</span><span class="info-value" id="wifi-rst-total">0</span></div>
+            <div class="info-row"><span class="info-label">WiFi Streak</span><span class="info-value" id="wifi-rst-streak">0</span></div>
+        </div>
+        <div id="touch-reboots-rows" style="display:none;">
+            <div class="info-row"><span class="info-label">Touch Total</span><span class="info-value" id="touch-rst-total">0</span></div>
+            <div class="info-row"><span class="info-label">Touch Streak</span><span class="info-value" id="touch-rst-streak">0</span></div>
+        </div>
+        <p style="font-size:0.75rem;color:#888;margin-top:8px;line-height:1.4;">When the WiFi co-processor or touch controller stops responding, the device reboots to reset it. Streaks reset once the component reconnects. All counters reset on firmware update.</p>
+    </div>
     <div class="section">
         <h3>Actions</h3>
         <button class="btn danger-btn" id="reboot-btn" onclick="reboot()">Reboot</button>
@@ -860,6 +872,22 @@ function loadStatus() {
         document.getElementById('sys-uptime').textContent = formatUptime(data.uptime_ms);
         if (data.fw && data.fw.idf)
             document.getElementById('sys-idf-ver').textContent = data.fw.idf;
+
+        // System tab — crash reboots
+        var showCrash = false;
+        if (data.wifi_recovery_reboots) {
+            document.getElementById('wifi-rst-total').textContent = data.wifi_recovery_reboots;
+            document.getElementById('wifi-rst-streak').textContent = data.wifi_recovery_reboot_streak || 0;
+            document.getElementById('wifi-reboots-rows').style.display = 'block';
+            showCrash = true;
+        }
+        if (data.touch_recovery_reboots) {
+            document.getElementById('touch-rst-total').textContent = data.touch_recovery_reboots;
+            document.getElementById('touch-rst-streak').textContent = data.touch_recovery_reboot_streak || 0;
+            document.getElementById('touch-reboots-rows').style.display = 'block';
+            showCrash = true;
+        }
+        if (showCrash) document.getElementById('crash-reboots-section').style.display = 'block';
 
         // Network tab
         var net = data.net || {};

@@ -616,14 +616,21 @@ static void ugfx_ui_draw_info_screen(void)
         gdispFillStringBox(vx, y, vw, rh, url_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
     }
 
-    // --- Row 9: WiFi Recovery Reboots (only shown when > 0) ---
+    // --- Row 9: Crash Reboots (only shown when > 0) ---
     {
         uint16_t wifi_reboots = config_store_get_wifi_reboot_total();
-        if (wifi_reboots > 0) {
+        uint16_t touch_reboots = config_store_get_touch_reboot_total();
+        if (wifi_reboots > 0 || touch_reboots > 0) {
             y = 520;
-            gdispFillStringBox(lx, y, lw, rh, "WiFi Reboots", font_main, gray, GFX_BLACK, gJustifyLeft);
-            char rb_buf[16];
-            snprintf(rb_buf, sizeof(rb_buf), "%u", wifi_reboots);
+            gdispFillStringBox(lx, y, lw, rh, "Crash Reboots", font_main, gray, GFX_BLACK, gJustifyLeft);
+            char rb_buf[40];
+            if (wifi_reboots > 0 && touch_reboots > 0) {
+                snprintf(rb_buf, sizeof(rb_buf), "WiFi: %u, Touch: %u", wifi_reboots, touch_reboots);
+            } else if (wifi_reboots > 0) {
+                snprintf(rb_buf, sizeof(rb_buf), "WiFi: %u", wifi_reboots);
+            } else {
+                snprintf(rb_buf, sizeof(rb_buf), "Touch: %u", touch_reboots);
+            }
             gdispFillStringBox(vx, y, vw, rh, rb_buf, font_main, yellow, GFX_BLACK, gJustifyLeft);
         }
     }

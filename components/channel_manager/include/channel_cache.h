@@ -78,7 +78,7 @@ typedef struct {
 
 // Magic number: 'P3AC' (p3a Cache)
 #define CHANNEL_CACHE_MAGIC     0x50334143
-#define CHANNEL_CACHE_VERSION   23  // Bumped: post_ids no longer negated for Giphy channels
+#define CHANNEL_CACHE_VERSION   24  // Bumped: invalidate all caches for rebuild
 
 // Default maximum entries per channel (configurable via config_store)
 #define CHANNEL_CACHE_DEFAULT_MAX_ENTRIES 2048

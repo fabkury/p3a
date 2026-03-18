@@ -202,7 +202,7 @@ static esp_err_t makapix_impl_request_refresh(channel_handle_t channel)
 
     // Try static stack allocation first (fragmentation-resistant)
     // Pin to Core 0 to avoid interfering with animation rendering on Core 1
-    if (ch->refresh_stack && ch->refresh_stack_allocated) {
+    if (ch->refresh_stack && ch->refresh_stack_allocated && ch->refresh_task_buffer) {
         ch->refresh_task = xTaskCreateStaticPinnedToCore(
             refresh_task_impl,
             "makapix_refresh",
@@ -210,7 +210,7 @@ static esp_err_t makapix_impl_request_refresh(channel_handle_t channel)
             ch,
             CONFIG_P3A_NETWORK_TASK_PRIORITY,
             ch->refresh_stack,
-            &ch->refresh_task_buffer,
+            ch->refresh_task_buffer,
             0  // Core 0
         );
         if (ch->refresh_task != NULL) {
@@ -388,11 +388,15 @@ static void makapix_impl_destroy(channel_handle_t channel)
         ch->index_io_lock = NULL;
     }
 
-    // Free pre-allocated refresh task stack
+    // Free pre-allocated refresh task resources
     if (ch->refresh_stack_allocated && ch->refresh_stack) {
         free(ch->refresh_stack);
         ch->refresh_stack = NULL;
         ch->refresh_stack_allocated = false;
+    }
+    if (ch->refresh_task_buffer) {
+        heap_caps_free(ch->refresh_task_buffer);
+        ch->refresh_task_buffer = NULL;
     }
 
     free(ch->channel_id);
@@ -457,20 +461,24 @@ channel_handle_t makapix_channel_create(const char *channel_id,
         return NULL;
     }
 
-    // Pre-allocate static stack buffer for refresh task (fragmentation mitigation)
+    // Pre-allocate static task resources for refresh task (fragmentation mitigation)
     // This is allocated once at channel creation to avoid heap fragmentation
     // issues after long operation periods (42+ hours).
-    // Try SPIRAM first to preserve internal RAM for other allocations.
+    // TCB must be in internal RAM (FreeRTOS requirement), stack can be in SPIRAM.
+    ch->refresh_task_buffer = heap_caps_malloc(sizeof(StaticTask_t),
+                                                MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     ch->refresh_stack = heap_caps_malloc(MAKAPIX_REFRESH_TASK_STACK_SIZE * sizeof(StackType_t),
                                           MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!ch->refresh_stack) {
-        // Fallback to internal RAM if SPIRAM not available or full
         ch->refresh_stack = heap_caps_malloc(MAKAPIX_REFRESH_TASK_STACK_SIZE * sizeof(StackType_t),
                                               MALLOC_CAP_8BIT);
     }
-    ch->refresh_stack_allocated = (ch->refresh_stack != NULL);
+    ch->refresh_stack_allocated = (ch->refresh_stack != NULL && ch->refresh_task_buffer != NULL);
     if (!ch->refresh_stack_allocated) {
-        ESP_LOGW(TAG, "Could not pre-allocate refresh task stack - will use dynamic allocation");
+        ESP_LOGW(TAG, "Could not pre-allocate refresh task resources - will use dynamic allocation");
+        // Clean up partial allocation
+        if (ch->refresh_stack) { free(ch->refresh_stack); ch->refresh_stack = NULL; }
+        if (ch->refresh_task_buffer) { heap_caps_free(ch->refresh_task_buffer); ch->refresh_task_buffer = NULL; }
     }
 
     ESP_LOGD(TAG, "Created channel: %s (id=%s)", ch->base.name, ch->channel_id);

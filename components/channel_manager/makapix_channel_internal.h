@@ -65,8 +65,8 @@ typedef struct {
     // Static task resources for refresh task (fragmentation mitigation)
     // Pre-allocated at channel creation to avoid heap fragmentation issues
     // after long operation periods
-    StackType_t *refresh_stack;          // Pre-allocated stack buffer
-    StaticTask_t refresh_task_buffer;    // Static task control block
+    StackType_t *refresh_stack;          // Pre-allocated stack buffer (PSRAM ok)
+    StaticTask_t *refresh_task_buffer;   // TCB - must be in internal RAM
     bool refresh_stack_allocated;        // Track if we own the stack buffer
 
     // Serialize channel index load/write to avoid races during unlink+rename window

@@ -95,10 +95,11 @@ input[type=text]:focus, input[type=password]:focus { border-color: #667eea; box-
       </div>
       <div class="field">
         <label for="device_name">Device name (optional)</label>
+        <p class="hint">Device names are useful if you have more than one p3a. If you have just one, it's more convenient to leave it empty.</p>
         <input type="text" id="device_name" name="device_name" maxlength="16"
                pattern="[a-z0-9-]*" autocapitalize="none" spellcheck="false"
                placeholder="e.g. bedroom" value="{DEVICE_NAME}">
-        <p class="hint">Leave empty, or use a small name. This name will become part of the device's LAN host name. Lowercase letters, numbers, and hyphens only.</p>
+        <p class="hint">This name will become part of the device's LAN host name. Lowercase letters, numbers, and hyphens only.</p>
       </div>
       <button class="btn" type="submit">Save &amp; connect</button>
     </form>

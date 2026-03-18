@@ -60,7 +60,7 @@ void wifi_recovery_task(void *arg)
     (void)arg;
     char saved_ssid[MAX_SSID_LEN] = {0};
     char saved_password[MAX_PASSWORD_LEN] = {0};
-    const int max_recovery_attempts = 5;
+    const int max_recovery_attempts = 3;
 
     while (true) {
         // Wait until we are notified to perform a full reinit
@@ -182,27 +182,29 @@ void wifi_recovery_task(void *arg)
             ESP_LOGE(TAG, "WiFi recovery: all %d attempts failed (C6 stack broken, failure #%d)",
                      max_recovery_attempts, s_total_recovery_failures);
 
-            if (s_total_recovery_failures >= 2) {
-                uint16_t streak = config_store_get_wifi_reboot_streak();
-                if (streak >= 1) {
-                    ESP_LOGE(TAG, "WiFi recovery: reboot streak=%u, staying in degraded mode to prevent loop",
-                             streak);
-                } else {
-                    ESP_LOGE(TAG, "WiFi recovery: escalating to hard reboot (streak=%u)", streak);
-                    config_store_increment_wifi_reboot_total();
-                    config_store_increment_wifi_reboot_streak();
+            // When the C6 stack is confirmed broken (ESP_ERR_WIFI_NOT_INIT on
+            // every attempt), no amount of retrying from the P4 side will fix it.
+            // Escalate to hard reboot immediately instead of waiting for the
+            // health monitor to trigger another futile recovery cycle.
+            uint16_t streak = config_store_get_wifi_reboot_streak();
+            if (streak >= 1) {
+                ESP_LOGE(TAG, "WiFi recovery: reboot streak=%u, staying in degraded mode to prevent loop",
+                         streak);
+            } else {
+                ESP_LOGE(TAG, "WiFi recovery: escalating to hard reboot (streak=%u)", streak);
+                config_store_increment_wifi_reboot_total();
+                config_store_increment_wifi_reboot_streak();
 
-                    for (int i = 10; i > 0; i--) {
-                        char msg[64];
-                        snprintf(msg, sizeof(msg), "WiFi chip not responding\nRestarting in %d...", i);
-                        if (ugfx_ui_show_channel_message) {
-                            ugfx_ui_show_channel_message("p3a", msg, -1);
-                        }
-                        ESP_LOGW(TAG, "Hard reboot in %d...", i);
-                        vTaskDelay(pdMS_TO_TICKS(1000));
+                for (int i = 10; i > 0; i--) {
+                    char msg[64];
+                    snprintf(msg, sizeof(msg), "WiFi chip not responding\nRestarting in %d...", i);
+                    if (ugfx_ui_show_channel_message) {
+                        ugfx_ui_show_channel_message("p3a", msg, -1);
                     }
-                    esp_restart();
+                    ESP_LOGW(TAG, "Hard reboot in %d...", i);
+                    vTaskDelay(pdMS_TO_TICKS(1000));
                 }
+                esp_restart();
             }
         } else {
             ESP_LOGE(TAG, "WiFi recovery: all %d attempts failed; health monitor will retry later",

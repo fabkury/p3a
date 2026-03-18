@@ -339,11 +339,17 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             // Always try to reconnect
             s_retry_num++;
 
-            // Add delay for persistent reconnection to avoid hammering the AP
-            if (s_initial_connection_done && s_retry_num > 5) {
-                // After 5 quick retries, slow down to every 5 seconds
-                ESP_LOGD(TAG, "WiFi reconnect attempt %d (with backoff)", s_retry_num);
-                vTaskDelay(pdMS_TO_TICKS(5000));
+            // Exponential backoff for persistent reconnection to avoid hammering the AP
+            // while covering slow router reboots (~1-2 minutes):
+            //   Retries 1-3: immediate (~2.4s from event timing)
+            //   Retry 4: 2s,  Retry 5: 4s,  Retry 6: 8s,  Retry 7: 16s,
+            //   Retries 8-10: capped at 20s
+            // Total span: ~3*2.4 + 2+4+8+16 + 3*20 = ~97s before escalation
+            if (s_initial_connection_done && s_retry_num > 3) {
+                int backoff_ms = 2000 * (1 << (s_retry_num - 4)); // 2s, 4s, 8s, 16s, 32s...
+                if (backoff_ms > 20000) backoff_ms = 20000;
+                ESP_LOGD(TAG, "WiFi reconnect attempt %d (backoff %dms)", s_retry_num, backoff_ms);
+                vTaskDelay(pdMS_TO_TICKS(backoff_ms));
             } else {
                 ESP_LOGD(TAG, "WiFi reconnect attempt %d/%d", s_retry_num,
                          s_initial_connection_done ? -1 : EXAMPLE_ESP_MAXIMUM_RETRY);

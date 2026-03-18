@@ -24,10 +24,22 @@ jobs:
           gh release download "${TAG}" --pattern "flash_args" --dir "${DIR}"
 
           # Download each binary listed in flash_args
+          # Skip option lines (starting with --) and strip directory prefixes
           while read -r addr filename; do
-            echo "Downloading ${filename}..."
-            gh release download "${TAG}" --pattern "${filename}" --dir "${DIR}"
+            # Skip lines that aren't address/filename pairs
+            [[ "${addr}" == --* ]] && continue
+            [[ -z "${filename}" ]] && continue
+            # Strip directory prefix to get the bare asset name
+            asset="$(basename "${filename}")"
+            echo "Downloading ${asset}..."
+            gh release download "${TAG}" --pattern "${asset}" --dir "${DIR}"
           done < "${DIR}/flash_args"
+
+          # Normalize flash_args: remove option lines and strip directory prefixes
+          grep '^0x' "${DIR}/flash_args" | while read -r addr path; do
+            echo "${addr} $(basename "${path}")"
+          done > "${DIR}/flash_args.tmp"
+          mv "${DIR}/flash_args.tmp" "${DIR}/flash_args"
 
           echo "Files downloaded:"
           ls -lh "${DIR}/"

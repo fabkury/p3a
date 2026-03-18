@@ -23,7 +23,7 @@ jobs:
           mkdir -p "${DIR}"
 
           # Download flash_args first to know which files to fetch
-          gh release download "${TAG}" --pattern "flash_args" --dir "${DIR}"
+          gh release download "${TAG}" --pattern "flash_args" --dir "${DIR}" --clobber
 
           # Strip Windows \r\n line endings (flash_args may be built on Windows)
           sed -i 's/\r$//' "${DIR}/flash_args"
@@ -35,7 +35,7 @@ jobs:
             [[ -z "${filename}" ]] && continue
             asset="$(basename "${filename}")"
             echo "Downloading ${asset}..."
-            gh release download "${TAG}" --pattern "${asset}" --dir "${DIR}"
+            gh release download "${TAG}" --pattern "${asset}" --dir "${DIR}" --clobber
           done < "${DIR}/flash_args"
 
           # Normalize flash_args: remove option lines and strip directory prefixes

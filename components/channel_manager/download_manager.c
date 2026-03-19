@@ -711,9 +711,8 @@ static void download_task(void *arg)
                     ESP_LOGD(TAG, "Created 404 marker: %s", s_task_marker_path);
                 }
             } else {
-                // Non-404 failure: may be disk full — check and evict if needed
+                // Non-404 failure (network error, disk full, etc.) — reclaim space if low
                 storage_eviction_check_and_run();
-                channel_eviction_check_and_run();
             }
 
             // Signal to check for next file immediately

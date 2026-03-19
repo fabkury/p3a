@@ -52,10 +52,21 @@ void makapix_mqtt_deinit(void);
 
 /**
  * @brief Check if MQTT client is connected
- * 
+ *
  * @return true if connected, false otherwise
  */
 bool makapix_mqtt_is_connected(void);
+
+/**
+ * @brief Check if MQTT client has been started (connecting or connected)
+ *
+ * Returns true if the MQTT client task is running, which means either
+ * a TLS/TCP connection attempt is in progress or the client is connected.
+ * Use this to avoid clobbering an in-progress connection attempt.
+ *
+ * @return true if the client task is running, false otherwise
+ */
+bool makapix_mqtt_is_started(void);
 
 /**
  * @brief Check if MQTT client is ready to send/receive requests

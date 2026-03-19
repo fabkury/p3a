@@ -248,52 +248,62 @@ void makapix_mqtt_reconnect_task(void *pvParameters)
         if (makapix_store_get_player_key(player_key, sizeof(player_key)) == ESP_OK &&
             makapix_store_has_certificates()) {
 
-            if (!makapix_mqtt_is_connected()) {
-                ESP_LOGI(MAKAPIX_TAG, "Reconnecting to MQTT (backoff: %lums)...", (unsigned long)delay_ms);
-                makapix_set_state(MAKAPIX_STATE_CONNECTING);
+            if (makapix_mqtt_is_connected()) {
+                ESP_LOGI(MAKAPIX_TAG, "Reconnect task exiting: already connected");
+                break;
+            }
 
-                mqtt_certs_t *certs = heap_caps_malloc(sizeof(mqtt_certs_t), MALLOC_CAP_SPIRAM);
-                if (!certs) {
-                    ESP_LOGE(MAKAPIX_TAG, "Failed to allocate cert buffers from PSRAM");
-                    makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
-                    vTaskDelay(pdMS_TO_TICKS(5000));
-                    continue;
-                }
+            // If the MQTT client is already running (connection attempt in
+            // progress — either from a previous iteration or started by
+            // makapix_connect_if_registered on GOT_IP), wait for the async
+            // result instead of clobbering the in-progress connection.
+            if (makapix_mqtt_is_started()) {
+                continue;
+            }
 
-                if (makapix_store_get_ca_cert(certs->ca, sizeof(certs->ca)) != ESP_OK ||
-                    makapix_store_get_client_cert(certs->cert, sizeof(certs->cert)) != ESP_OK ||
-                    makapix_store_get_client_key(certs->key, sizeof(certs->key)) != ESP_OK) {
-                    ESP_LOGE(MAKAPIX_TAG, "Failed to load certificates, will retry");
-                    free(certs);
-                    makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
-                    continue;
-                }
+            ESP_LOGI(MAKAPIX_TAG, "Reconnecting to MQTT (backoff: %lums)...", (unsigned long)delay_ms);
+            makapix_set_state(MAKAPIX_STATE_CONNECTING);
 
-                makapix_mqtt_deinit();
+            mqtt_certs_t *certs = heap_caps_malloc(sizeof(mqtt_certs_t), MALLOC_CAP_SPIRAM);
+            if (!certs) {
+                ESP_LOGE(MAKAPIX_TAG, "Failed to allocate cert buffers from PSRAM");
+                makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
+                vTaskDelay(pdMS_TO_TICKS(5000));
+                continue;
+            }
 
-                esp_err_t err = makapix_mqtt_init(player_key, mqtt_host, mqtt_port,
-                                                  certs->ca, certs->cert, certs->key);
+            if (makapix_store_get_ca_cert(certs->ca, sizeof(certs->ca)) != ESP_OK ||
+                makapix_store_get_client_cert(certs->cert, sizeof(certs->cert)) != ESP_OK ||
+                makapix_store_get_client_key(certs->key, sizeof(certs->key)) != ESP_OK) {
+                ESP_LOGE(MAKAPIX_TAG, "Failed to load certificates, will retry");
                 free(certs);
+                makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
+                continue;
+            }
 
+            makapix_mqtt_deinit();
+
+            esp_err_t err = makapix_mqtt_init(player_key, mqtt_host, mqtt_port,
+                                              certs->ca, certs->cert, certs->key);
+            free(certs);
+
+            if (err == ESP_OK) {
+                err = makapix_mqtt_connect();
                 if (err == ESP_OK) {
-                    err = makapix_mqtt_connect();
-                    if (err == ESP_OK) {
-                        // Successful connection attempt — reset backoff
-                        delay_ms = RECONNECT_DELAY_INITIAL_MS;
-                    } else {
-                        ESP_LOGW(MAKAPIX_TAG, "MQTT connect failed: %s", esp_err_to_name(err));
-                        makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
-                        // Increase backoff on failure
-                        delay_ms = (delay_ms * 2 > RECONNECT_DELAY_MAX_MS) ? RECONNECT_DELAY_MAX_MS : delay_ms * 2;
-                    }
+                    // Connection attempt started asynchronously (TLS handshake
+                    // in progress). Increase backoff for the next attempt in
+                    // case this one fails; if it succeeds, the task exits on
+                    // the next iteration so the higher delay is harmless.
+                    delay_ms = (delay_ms * 2 > RECONNECT_DELAY_MAX_MS) ? RECONNECT_DELAY_MAX_MS : delay_ms * 2;
                 } else {
-                    ESP_LOGW(MAKAPIX_TAG, "MQTT init failed: %s", esp_err_to_name(err));
+                    ESP_LOGW(MAKAPIX_TAG, "MQTT connect failed: %s", esp_err_to_name(err));
                     makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
                     delay_ms = (delay_ms * 2 > RECONNECT_DELAY_MAX_MS) ? RECONNECT_DELAY_MAX_MS : delay_ms * 2;
                 }
             } else {
-                ESP_LOGI(MAKAPIX_TAG, "Reconnect task exiting: already connected");
-                break;
+                ESP_LOGW(MAKAPIX_TAG, "MQTT init failed: %s", esp_err_to_name(err));
+                makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
+                delay_ms = (delay_ms * 2 > RECONNECT_DELAY_MAX_MS) ? RECONNECT_DELAY_MAX_MS : delay_ms * 2;
             }
         } else {
             ESP_LOGW(MAKAPIX_TAG, "No credentials available for MQTT reconnect, will retry");

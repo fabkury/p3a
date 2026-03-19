@@ -524,6 +524,11 @@ void makapix_mqtt_disconnect(void)
         return;
     }
 
+    // We hold the mutex through stop() here. Unlike deinit(), this is safe
+    // because disconnect() does not call destroy()/esp_event_loop_delete(),
+    // which is what causes the deadlock described in the deinit() comment.
+    // The MQTT_EVENT_DISCONNECTED handler will briefly block on the mutex
+    // until we release it below.
     xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
 
     if (s_mqtt_client && s_mqtt_state == MQTT_CLIENT_RUNNING) {
@@ -594,6 +599,17 @@ bool makapix_mqtt_is_connected(void)
     connected = s_mqtt_connected;
     ESP_LOGD(TAG, "makapix_mqtt_is_connected(): returning %s", connected ? "true" : "false");
     return connected;
+}
+
+bool makapix_mqtt_is_started(void)
+{
+    if (!s_mqtt_mutex) {
+        return false;
+    }
+    xSemaphoreTake(s_mqtt_mutex, portMAX_DELAY);
+    bool started = (s_mqtt_client != NULL && s_mqtt_state == MQTT_CLIENT_RUNNING);
+    xSemaphoreGive(s_mqtt_mutex);
+    return started;
 }
 
 bool makapix_mqtt_is_ready(void)

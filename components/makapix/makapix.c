@@ -380,8 +380,17 @@ esp_err_t makapix_connect_if_registered(void)
     }
 
     if (s_makapix_state == MAKAPIX_STATE_CONNECTED || s_makapix_state == MAKAPIX_STATE_CONNECTING) {
-        ESP_LOGW(MAKAPIX_TAG, "MQTT already connected or connecting");
-        return ESP_OK;
+        // Verify MQTT is actually active. If the state is stale (e.g., the
+        // disconnect callback was missed during WiFi recovery), correct it
+        // and fall through to attempt connection.
+        if (!makapix_mqtt_is_connected() && !makapix_mqtt_is_started()) {
+            ESP_LOGW(MAKAPIX_TAG, "State is %d but MQTT is not active — correcting stale state",
+                     s_makapix_state);
+            makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
+        } else {
+            ESP_LOGW(MAKAPIX_TAG, "MQTT already connected or connecting");
+            return ESP_OK;
+        }
     }
 
     char player_key[37];

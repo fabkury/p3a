@@ -130,6 +130,7 @@ button {
 <script>
 var pollInterval = null;
 var lastState = null;
+var fwLastCheck = null;
 function showStatus(msg, type) {
     var el = document.getElementById('status-msg');
     el.textContent = msg;
@@ -141,18 +142,19 @@ function hideStatus() {
     document.getElementById('status-msg').style.display = 'none';
 }
 function updateUI(data) {
+    fwLastCheck = data.last_check;
     document.getElementById('current-ver').textContent = data.current_version || '-';
     var availVerEl = document.getElementById('available-ver');
-    var verText = data.available_version || 'Up to date';
+    var verText = data.available_version || (data.last_check ? 'Up to date' : 'Not yet checked');
     if (data.available_version && data.is_prerelease) verText += ' (pre-release)';
     availVerEl.textContent = verText;
     availVerEl.className = 'version-value' + (data.available_version ? ' update-available' : '');
     var stateEl = document.getElementById('state');
     var stateText = data.state.replace('_', ' ');
     if (data.state === 'checking') stateText = 'Checking...';
-    else if (data.state === 'idle' && !data.available_version) stateText = 'Up to date';
+    else if (data.state === 'idle' && !data.available_version) stateText = data.last_check ? 'Up to date' : 'Not yet checked';
     stateEl.textContent = stateText;
-    stateEl.style.color = (data.state === 'idle' && !data.available_version) ? '#4CAF50' : '';
+    stateEl.style.color = (data.state === 'idle' && !data.available_version && data.last_check) ? '#4CAF50' : '';
     document.getElementById('dev-badge').style.display = data.dev_mode ? 'inline-block' : 'none';
     var checkBtn = document.getElementById('check-btn');
     var installBtn = document.getElementById('install-btn');
@@ -225,7 +227,7 @@ function updateWebuiUI(data) {
         availVerEl.textContent = data.available_version;
         availVerEl.className = 'version-value update-available';
     } else {
-        availVerEl.textContent = 'Up to date';
+        availVerEl.textContent = fwLastCheck ? 'Up to date' : 'Not yet checked';
         availVerEl.className = 'version-value';
     }
 
@@ -273,8 +275,8 @@ function updateWebuiUI(data) {
             statusEl.textContent = 'Updates disabled (failures: ' + data.failure_count + ')';
             statusEl.style.color = '#ff9800';
         } else {
-            statusEl.textContent = 'Up to date';
-            statusEl.style.color = '#4CAF50';
+            statusEl.textContent = fwLastCheck ? 'Up to date' : 'Not yet checked';
+            statusEl.style.color = fwLastCheck ? '#4CAF50' : '';
         }
         statusEl.className = 'version-value';
 

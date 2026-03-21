@@ -17,6 +17,9 @@
 #include <stdbool.h>
 
 #include "pico8_render.h"
+#if CONFIG_P3A_PICO8_AUDIO_ENABLE
+#include "pico8_audio.h"
+#endif
 #include "play_scheduler.h"
 #include "download_manager.h"
 #include "esp_log.h"
@@ -190,6 +193,11 @@ void pico8_stream_enter_mode(void)
         ESP_LOGW(TAG, "Timeout timer not available");
     }
 
+    // Start audio pipeline (actual playback starts when first samples arrive)
+#if CONFIG_P3A_PICO8_AUDIO_ENABLE
+    pico8_audio_start();
+#endif
+
     // Note: Channel refresh and download tasks will notice P3A_STATE_PICO8_STREAMING
     // on their next iteration and stop cleanly
 }
@@ -202,6 +210,11 @@ void pico8_stream_exit_mode(void)
 
     ESP_LOGI(TAG, "Exiting PICO-8 mode");
     s_pico8_mode_active = false;
+
+    // Stop audio playback
+#if CONFIG_P3A_PICO8_AUDIO_ENABLE
+    pico8_audio_stop();
+#endif
 
     // Stop timeout timer
     if (s_timeout_timer) {

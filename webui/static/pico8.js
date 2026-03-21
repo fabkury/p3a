@@ -23,6 +23,19 @@ let palettePtr = 0;
 let paletteView = null;
 let currentPalette = PICO8_PALETTE.map(color => color.slice());
 
+// Audio state (ephemeral — reset on every page load)
+let browserAudio = false;    // "Play sound here" — default OFF
+let deviceAudio = true;      // "Play sound on p3a" — default ON
+let browserVolume = 0.75;    // Browser volume (0.0–1.0)
+let deviceVolume = 0.75;     // Device volume (0.0–1.0)
+let audioCtx = null;         // Web Audio context (lazy)
+let gainNode = null;         // Gain node for browser output
+let audioSampleRate = 22050;
+let hasAudioSupport = false;
+let nextPlayTime = 0;        // Scheduling for gapless browser playback
+let audioPtr = 0;            // Pre-allocated WASM audio buffer pointer
+let audioSamplesPerFrame = 0;
+
 // Adaptive frame rate control
 const MIN_SKIP = 2;          // Maximum 30fps send rate
 const MAX_SKIP = 12;         // Minimum ~5fps send rate
@@ -90,6 +103,16 @@ async function initWasm() {
         if (!palettePtr) {
             palettePtr = Module._malloc(PICO_PALETTE_SIZE * 4);
             paletteView = new Uint8Array(Module.HEAPU8.buffer, palettePtr, PICO_PALETTE_SIZE * 4);
+        }
+
+        // Detect audio support in WASM build
+        hasAudioSupport = typeof Module._f08_fill_audio_buffer === 'function';
+        if (hasAudioSupport) {
+            audioSampleRate = Module._f08_get_audio_sample_rate();
+            document.getElementById('sound-section').style.display = '';
+            document.getElementById('device-sound-toggle').checked = true;
+            document.getElementById('browser-sound-toggle').checked = false;
+            initAudioControls();
         }
 
         updateStatus('Ready. Load a cart to start.', 'success');
@@ -400,6 +423,26 @@ function startEmulation() {
         Module._f08_step_frame();
         refreshPalette();
 
+        // Generate and route audio samples
+        if (hasAudioSupport && (browserAudio || deviceAudio)) {
+            try {
+                if (!audioPtr) {
+                    audioSamplesPerFrame = Math.ceil(audioSampleRate / 60);
+                    audioPtr = Module._malloc(audioSamplesPerFrame * 2);
+                }
+                const written = Module._f08_fill_audio_buffer(audioPtr, audioSamplesPerFrame);
+                if (written > 0) {
+                    const samples = new Int16Array(Module.HEAPU8.buffer, audioPtr, written);
+                    if (browserAudio) playLocalAudio(samples);
+                    if (deviceAudio && ws && ws.readyState === WebSocket.OPEN) sendAudioPacket(samples);
+                }
+            } catch (e) {
+                console.error('Audio error, disabling:', e);
+                hasAudioSupport = false;
+                document.getElementById('sound-section').style.display = 'none';
+            }
+        }
+
         // Read framebuffer
         const imageData = ctx.createImageData(PICO_WIDTH, PICO_HEIGHT);
         
@@ -572,6 +615,103 @@ function stopEmulation() {
     rttMs = 20;
     pingSentAt = 0;
     signalExit();
+    suspendAudioContext();
+    if (audioPtr && Module) {
+        Module._free(audioPtr);
+        audioPtr = 0;
+    }
+}
+
+// ── Audio: Browser sink (Web Audio API) ──
+
+function ensureAudioContext() {
+    if (audioCtx) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        return;
+    }
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: audioSampleRate });
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = browserVolume;
+    gainNode.connect(audioCtx.destination);
+    nextPlayTime = 0;
+}
+
+function suspendAudioContext() {
+    if (audioCtx && audioCtx.state === 'running') {
+        audioCtx.suspend();
+    }
+    nextPlayTime = 0;
+}
+
+function playLocalAudio(samples) {
+    if (!audioCtx || audioCtx.state !== 'running') return;
+
+    const buf = audioCtx.createBuffer(1, samples.length, audioSampleRate);
+    const chan = buf.getChannelData(0);
+    for (let i = 0; i < samples.length; i++) {
+        chan[i] = samples[i] / 32768;
+    }
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(gainNode);
+
+    const now = audioCtx.currentTime;
+    if (nextPlayTime < now) nextPlayTime = now;
+    src.start(nextPlayTime);
+    nextPlayTime += buf.duration;
+}
+
+// ── Audio: Device sink (WebSocket p8A packet) ──
+
+function sendAudioPacket(samples) {
+    const scaled = new Int16Array(samples.length);
+    for (let i = 0; i < samples.length; i++) {
+        scaled[i] = Math.round(samples[i] * deviceVolume);
+    }
+    const pcmBytes = new Uint8Array(scaled.buffer);
+    const packet = new Uint8Array(6 + pcmBytes.length);
+    packet[0] = 0x70; packet[1] = 0x38; packet[2] = 0x41; // "p8A"
+    packet[3] = pcmBytes.length & 0xFF;
+    packet[4] = (pcmBytes.length >> 8) & 0xFF;
+    packet[5] = 0x00;
+    packet.set(pcmBytes, 6);
+    ws.send(packet.buffer);
+}
+
+// ── Audio: Toggle and volume controls ──
+
+function initAudioControls() {
+    const browserToggle = document.getElementById('browser-sound-toggle');
+    const deviceToggle = document.getElementById('device-sound-toggle');
+    const browserVolumeSlider = document.getElementById('browser-volume');
+    const deviceVolumeSlider = document.getElementById('device-volume');
+
+    browserToggle.addEventListener('change', (e) => {
+        browserAudio = e.target.checked;
+        if (browserAudio) {
+            ensureAudioContext();
+        } else if (!deviceAudio) {
+            suspendAudioContext();
+        }
+    });
+
+    deviceToggle.addEventListener('change', (e) => {
+        deviceAudio = e.target.checked;
+        if (!deviceAudio && !browserAudio) {
+            suspendAudioContext();
+        }
+    });
+
+    browserVolumeSlider.addEventListener('input', (e) => {
+        browserVolume = e.target.value / 100;
+        if (gainNode) {
+            gainNode.gain.setValueAtTime(browserVolume, audioCtx.currentTime);
+        }
+    });
+
+    deviceVolumeSlider.addEventListener('input', (e) => {
+        deviceVolume = e.target.value / 100;
+    });
 }
 
 // Event listeners

@@ -28,6 +28,34 @@ menu "PICO-8 Streaming"
                 Add vendor-specific USB interface for PICO-8 frame streaming.
                 Requires USB MSC to be enabled.
 
+        config P3A_PICO8_AUDIO_ENABLE
+            bool "Enable PICO-8 audio streaming"
+            default y
+            help
+                Enable streaming PICO-8 game audio to the on-board speaker.
+                Requires the ES8311 audio codec and NS4150B amplifier.
+
+        if P3A_PICO8_AUDIO_ENABLE
+
+            config P3A_PICO8_AUDIO_VOLUME
+                int "Default PICO-8 audio volume (0-100)"
+                default 60
+                range 0 100
+                help
+                    Default hardware volume for PICO-8 audio playback.
+                    Acts as a master ceiling; the browser applies per-session
+                    volume scaling on top.
+
+            config P3A_PICO8_AUDIO_BUFFER_SIZE
+                int "Audio ring buffer size (bytes)"
+                default 4096
+                range 2048 16384
+                help
+                    Size of the ring buffer for audio sample delivery.
+                    Larger values absorb more jitter but add latency.
+
+        endif # P3A_PICO8_AUDIO_ENABLE
+
     endif # P3A_PICO8_ENABLE
 
 endmenu # PICO-8 Streaming

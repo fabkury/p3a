@@ -12,6 +12,9 @@
 
 #if CONFIG_P3A_PICO8_ENABLE
 #include "pico8_stream.h"
+#if CONFIG_P3A_PICO8_AUDIO_ENABLE
+#include "pico8_audio.h"
+#endif
 #include "playback_controller.h"
 #include <sys/stat.h>
 
@@ -197,7 +200,8 @@ esp_err_t h_ws_pico_stream(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    if (frame.payload[0] != 0x70 || frame.payload[1] != 0x38 || frame.payload[2] != 0x46) {
+    // Identify packet type by third magic byte
+    if (frame.payload[0] != 0x70 || frame.payload[1] != 0x38) {
         if (payload_allocated) {
             free(payload_buf);
         }
@@ -205,6 +209,28 @@ esp_err_t h_ws_pico_stream(httpd_req_t *req) {
     }
 
     s_ws_client_connected = true;
+
+#if CONFIG_P3A_PICO8_AUDIO_ENABLE
+    // Audio packet: "p8A" (0x70 0x38 0x41)
+    if (frame.payload[2] == 0x41 && frame.len >= 6) {
+        uint16_t audio_len = (uint16_t)frame.payload[3] | ((uint16_t)frame.payload[4] << 8);
+        if (frame.len >= 6 + audio_len && audio_len > 0) {
+            pico8_audio_feed((const int16_t *)(frame.payload + 6), audio_len / 2);
+        }
+        if (payload_allocated) {
+            free(payload_buf);
+        }
+        return ESP_OK;
+    }
+#endif
+
+    // Video frame: "p8F" (0x70 0x38 0x46)
+    if (frame.payload[2] != 0x46) {
+        if (payload_allocated) {
+            free(payload_buf);
+        }
+        return ESP_OK;
+    }
 
     esp_err_t feed_ret = pico8_stream_feed_packet(frame.payload, frame.len);
     if (feed_ret != ESP_OK) {

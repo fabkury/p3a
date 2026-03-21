@@ -39,6 +39,16 @@
     .status.success { color: var(--c-success); }
     .status.error { color: var(--c-danger); }
     .status.info { color: var(--c-primary); }
+    .sound-control { margin-bottom: var(--sp-2); }
+    .volume-slider {
+        width: 100%;
+        margin-top: var(--sp-1);
+        accent-color: var(--c-primary);
+        transition: opacity 0.2s;
+    }
+    .sound-control:has(input[type="checkbox"]:not(:checked)) .volume-slider {
+        opacity: 0.4;
+    }
     .canvas-wrapper { border-radius: var(--r-lg); box-shadow: var(--c-card-shadow); min-height: 200px; }
     .error-message { background: rgba(239,68,68,0.9); border-radius: var(--r-md); }
     /* Layout: stack on mobile, side-by-side on wide */
@@ -70,6 +80,30 @@
                         <button id="load-url-btn" class="btn">Load from URL</button>
                     </div>
                     <div id="file-name" class="file-name"></div>
+                </div>
+
+                <div class="load-section" id="sound-section" style="display:none;">
+                    <h2>Sound</h2>
+                    <div class="sound-control">
+                        <div class="toggle-row">
+                            <label for="browser-sound-toggle" class="toggle-label">Play sound here</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="browser-sound-toggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <input type="range" id="browser-volume" class="volume-slider" min="0" max="100" value="75">
+                    </div>
+                    <div class="sound-control">
+                        <div class="toggle-row">
+                            <label for="device-sound-toggle" class="toggle-label">Play sound on p3a</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="device-sound-toggle" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <input type="range" id="device-volume" class="volume-slider" min="0" max="100" value="75">
+                    </div>
                 </div>
 
                 <div class="status-section">

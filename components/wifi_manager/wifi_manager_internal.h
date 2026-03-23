@@ -27,6 +27,10 @@
 #define NVS_KEY_SSID     "ssid"
 #define NVS_KEY_PASSWORD "password"
 
+// Health monitor intervals (adaptive: fast when recovering, normal when connected)
+#define WIFI_HEALTH_INTERVAL_NORMAL_MS  120000
+#define WIFI_HEALTH_INTERVAL_FAST_MS     30000
+
 // Shared state (defined in app_wifi.c)
 extern EventGroupHandle_t s_wifi_event_group;
 extern int s_retry_num;
@@ -40,6 +44,9 @@ extern int s_no_ip_health_cycles;
 extern httpd_handle_t s_captive_portal_server;
 extern esp_netif_t *ap_netif;
 extern TaskHandle_t s_wifi_recovery_task;
+extern TaskHandle_t s_wifi_health_task;
+extern uint32_t s_wifi_health_interval_ms;
+extern TickType_t s_reinit_started_tick;
 extern bool s_mdns_service_added;
 
 // Internal functions (app_wifi.c)

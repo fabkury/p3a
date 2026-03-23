@@ -50,7 +50,8 @@
 
 static const char *TAG = "wifi_recovery";
 
-static const uint32_t s_wifi_health_interval_ms = 120000; // 120 seconds
+// Health interval is now adaptive: see wifi_manager_internal.h defines.
+// s_wifi_health_interval_ms is defined in app_wifi.c and externed via the header.
 
 // UI function for showing countdown before hard reboot (weak: resolved at link time)
 extern esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *message, int progress_percent) __attribute__((weak));
@@ -211,6 +212,17 @@ void wifi_recovery_task(void *arg)
                      max_recovery_attempts);
         }
         s_reinit_in_progress = false;
+
+        // If recovery didn't restore IP, accelerate health monitoring
+        if (!wifi_sta_has_ip()) {
+            s_wifi_health_interval_ms = WIFI_HEALTH_INTERVAL_FAST_MS;
+            ESP_LOGW(TAG, "WiFi recovery: no IP after reinit; health interval -> %dms",
+                     WIFI_HEALTH_INTERVAL_FAST_MS);
+        }
+        // Wake health monitor immediately so it can act on the new state
+        if (s_wifi_health_task) {
+            xTaskNotifyGive(s_wifi_health_task);
+        }
     }
 }
 
@@ -226,6 +238,7 @@ void wifi_schedule_full_reinit(void)
     }
 
     s_reinit_in_progress = true;
+    s_reinit_started_tick = xTaskGetTickCount();
     xTaskNotifyGive(s_wifi_recovery_task);
 }
 
@@ -235,7 +248,7 @@ void wifi_health_monitor_task(void *arg)
     const char *HTAG = "wifi_health";
 
     while (true) {
-        vTaskDelay(pdMS_TO_TICKS(s_wifi_health_interval_ms));
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(s_wifi_health_interval_ms));
 
         // Only monitor after we have been successfully connected at least once.
         if (!s_initial_connection_done) {
@@ -248,8 +261,15 @@ void wifi_health_monitor_task(void *arg)
         }
 
         // Skip monitoring if we're already performing a recovery reinit
+        // (with safety timeout in case the recovery task hangs)
         if (s_reinit_in_progress) {
-            continue;
+            TickType_t elapsed = xTaskGetTickCount() - s_reinit_started_tick;
+            if (elapsed > pdMS_TO_TICKS(120000)) {
+                ESP_LOGE(HTAG, "s_reinit_in_progress stuck for >120s; force-clearing");
+                s_reinit_in_progress = false;
+            } else {
+                continue;
+            }
         }
 
         // Detect prolonged IP loss after initial connection (safety net for failed recovery)
@@ -259,7 +279,6 @@ void wifi_health_monitor_task(void *arg)
                      s_no_ip_health_cycles);
             if (s_no_ip_health_cycles >= 3) {
                 ESP_LOGW(HTAG, "Forcing WiFi recovery after prolonged IP loss");
-                s_no_ip_health_cycles = 0;
                 wifi_schedule_full_reinit();
             }
             continue;

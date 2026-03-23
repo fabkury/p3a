@@ -91,6 +91,7 @@ int s_consecutive_wifi_errors = 0;
 const int s_max_consecutive_wifi_errors = 10;
 bool s_mdns_service_added = false;       // Track if mDNS HTTP service has been registered
 int s_no_ip_health_cycles = 0;           // Health monitor cycles with no IP after initial connection
+uint32_t s_wifi_health_interval_ms = WIFI_HEALTH_INTERVAL_NORMAL_MS;
 
 // Register WiFi/IP event handlers once; repeated registration causes duplicate callbacks.
 static bool s_event_handlers_registered = false;
@@ -98,9 +99,10 @@ static esp_event_handler_instance_t s_instance_wifi_any_id;
 static esp_event_handler_instance_t s_instance_ip_any_id;
 
 // WiFi health monitor + recovery worker
-static TaskHandle_t s_wifi_health_task = NULL;
+TaskHandle_t s_wifi_health_task = NULL;
 TaskHandle_t s_wifi_recovery_task = NULL;
 bool s_reinit_in_progress = false;
+TickType_t s_reinit_started_tick = 0;
 
 // PSRAM-backed stacks for WiFi tasks
 static StackType_t *s_wifi_recovery_stack = NULL;
@@ -366,6 +368,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         s_retry_num = 0;
         s_consecutive_wifi_errors = 0;
         s_total_recovery_failures = 0;
+        s_wifi_health_interval_ms = WIFI_HEALTH_INTERVAL_NORMAL_MS;
         config_store_reset_wifi_reboot_streak();
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
 

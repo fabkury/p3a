@@ -10,6 +10,7 @@
 
 #include "esp_wifi.h"
 #include "esp_http_server.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "esp_netif.h"
@@ -48,6 +49,7 @@ extern TaskHandle_t s_wifi_health_task;
 extern uint32_t s_wifi_health_interval_ms;
 extern TickType_t s_reinit_started_tick;
 extern bool s_mdns_service_added;
+extern esp_timer_handle_t s_reconnect_timer;
 
 // Internal functions (app_wifi.c)
 esp_err_t wifi_load_credentials(char *ssid, char *password);

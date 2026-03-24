@@ -616,13 +616,13 @@ static void ugfx_ui_draw_info_screen(void)
         gdispFillStringBox(vx, y, vw, rh, url_buf, font_main, GFX_WHITE, GFX_BLACK, gJustifyLeft);
     }
 
-    // --- Row 9: Crash Reboots (only shown when > 0) ---
+    // --- Row 9: Reboots (only shown when > 0) ---
     {
         uint16_t wifi_reboots = config_store_get_wifi_reboot_total();
         uint16_t touch_reboots = config_store_get_touch_reboot_total();
         if (wifi_reboots > 0 || touch_reboots > 0) {
             y = 520;
-            gdispFillStringBox(lx, y, lw, rh, "Crash Reboots", font_main, gray, GFX_BLACK, gJustifyLeft);
+            gdispFillStringBox(lx, y, lw, rh, "Reboots", font_main, gray, GFX_BLACK, gJustifyLeft);
             char rb_buf[40];
             if (wifi_reboots > 0 && touch_reboots > 0) {
                 snprintf(rb_buf, sizeof(rb_buf), "WiFi: %u, Touch: %u", wifi_reboots, touch_reboots);

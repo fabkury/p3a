@@ -40,6 +40,7 @@
 #include "p3a_state.h"
 #include "event_bus.h"
 #include "esp_heap_caps.h"
+#include "esp_timer.h"
 #include "config_store.h"
 #include "wifi_manager_internal.h"
 
@@ -91,6 +92,7 @@ int s_consecutive_wifi_errors = 0;
 const int s_max_consecutive_wifi_errors = 10;
 bool s_mdns_service_added = false;       // Track if mDNS HTTP service has been registered
 int s_no_ip_health_cycles = 0;           // Health monitor cycles with no IP after initial connection
+uint32_t s_wifi_health_interval_ms = WIFI_HEALTH_INTERVAL_NORMAL_MS;
 
 // Register WiFi/IP event handlers once; repeated registration causes duplicate callbacks.
 static bool s_event_handlers_registered = false;
@@ -98,9 +100,10 @@ static esp_event_handler_instance_t s_instance_wifi_any_id;
 static esp_event_handler_instance_t s_instance_ip_any_id;
 
 // WiFi health monitor + recovery worker
-static TaskHandle_t s_wifi_health_task = NULL;
+TaskHandle_t s_wifi_health_task = NULL;
 TaskHandle_t s_wifi_recovery_task = NULL;
 bool s_reinit_in_progress = false;
+TickType_t s_reinit_started_tick = 0;
 
 // PSRAM-backed stacks for WiFi tasks
 static StackType_t *s_wifi_recovery_stack = NULL;
@@ -110,6 +113,21 @@ static StaticTask_t s_wifi_health_task_buffer;
 
 // Hard recovery escalation (C6 WiFi stack permanently broken)
 int s_total_recovery_failures = 0;
+
+// Non-blocking reconnection timer (replaces vTaskDelay in event handler)
+esp_timer_handle_t s_reconnect_timer = NULL;
+
+static void reconnect_timer_cb(void *arg)
+{
+    (void)arg;
+    if (s_reinit_in_progress) {
+        return;
+    }
+    esp_err_t err = esp_wifi_remote_connect();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "esp_wifi_remote_connect failed: %s", esp_err_to_name(err));
+    }
+}
 
 // Forward declaration (event_handler referenced before definition)
 static void event_handler(void* arg, esp_event_base_t event_base,
@@ -312,12 +330,18 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         ESP_LOGW(TAG, "WiFi disconnected (initial_connection_done=%d, retry=%d)",
                  s_initial_connection_done, s_retry_num);
 
-        // Signal WiFi disconnection (always, before possible reinit)
+        // Signal WiFi disconnection (always, even during recovery — needed for UI state)
         makapix_channel_signal_wifi_disconnected();
         event_bus_emit_simple(P3A_EVENT_WIFI_DISCONNECTED);
         if (s_initial_connection_done) {
             ESP_LOGD(TAG, "Stopping MQTT client due to WiFi disconnect");
             makapix_mqtt_disconnect();
+        }
+
+        // During recovery, the recovery task owns reconnection — don't interfere.
+        if (s_reinit_in_progress) {
+            ESP_LOGD(TAG, "Disconnect during recovery - skipping reconnect (recovery task handles)");
+            return;
         }
 
         // Track consecutive errors and attempt a full reinit if we get stuck cycling.
@@ -336,8 +360,13 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             ESP_LOGD(TAG, "Initial connection failed after %d attempts", EXAMPLE_ESP_MAXIMUM_RETRY);
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         } else {
-            // Always try to reconnect
+            // Always try to reconnect (non-blocking via timer)
             s_retry_num++;
+
+            // Cancel any pending reconnect timer before scheduling a new one
+            if (s_reconnect_timer) {
+                esp_timer_stop(s_reconnect_timer);
+            }
 
             // Exponential backoff for persistent reconnection to avoid hammering the AP
             // while covering slow router reboots (~1-2 minutes):
@@ -345,19 +374,19 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             //   Retry 4: 2s,  Retry 5: 4s,  Retry 6: 8s,  Retry 7: 16s,
             //   Retries 8-10: capped at 20s
             // Total span: ~3*2.4 + 2+4+8+16 + 3*20 = ~97s before escalation
+            int delay_us = 1000; // 1ms — effectively immediate but yields event loop
             if (s_initial_connection_done && s_retry_num > 3) {
                 int backoff_ms = 2000 * (1 << (s_retry_num - 4)); // 2s, 4s, 8s, 16s, 32s...
                 if (backoff_ms > 20000) backoff_ms = 20000;
+                delay_us = backoff_ms * 1000;
                 ESP_LOGD(TAG, "WiFi reconnect attempt %d (backoff %dms)", s_retry_num, backoff_ms);
-                vTaskDelay(pdMS_TO_TICKS(backoff_ms));
             } else {
                 ESP_LOGD(TAG, "WiFi reconnect attempt %d/%d", s_retry_num,
                          s_initial_connection_done ? -1 : EXAMPLE_ESP_MAXIMUM_RETRY);
             }
 
-            esp_err_t err = esp_wifi_remote_connect();
-            if (err != ESP_OK) {
-                ESP_LOGW(TAG, "esp_wifi_remote_connect failed: %s", esp_err_to_name(err));
+            if (s_reconnect_timer) {
+                esp_timer_start_once(s_reconnect_timer, (uint64_t)delay_us);
             }
         }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
@@ -366,7 +395,13 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         s_retry_num = 0;
         s_consecutive_wifi_errors = 0;
         s_total_recovery_failures = 0;
+        s_no_ip_health_cycles = 0;
+        s_wifi_health_interval_ms = WIFI_HEALTH_INTERVAL_NORMAL_MS;
         config_store_reset_wifi_reboot_streak();
+        // Cancel any pending reconnect timer — we're connected
+        if (s_reconnect_timer) {
+            esp_timer_stop(s_reconnect_timer);
+        }
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
 
         makapix_channel_signal_wifi_connected();
@@ -550,6 +585,15 @@ esp_err_t app_wifi_init(void)
 {
     // Initialize Wi-Fi remote module (ESP32-C6 via SDIO)
     wifi_remote_init();
+
+    // Create non-blocking reconnection timer (used by disconnect handler)
+    if (!s_reconnect_timer) {
+        const esp_timer_create_args_t timer_args = {
+            .callback = reconnect_timer_cb,
+            .name = "wifi_reconnect",
+        };
+        esp_timer_create(&timer_args, &s_reconnect_timer);
+    }
 
     // Start recovery worker once (used by Recommendation 3) with SPIRAM-backed stack
     if (!s_wifi_recovery_task) {

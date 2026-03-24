@@ -12,6 +12,7 @@
 #include "esp_wifi.h"
 #include "esp_wifi_remote.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "lwip/netdb.h"
 #include "config_store.h"
 #include "wifi_manager_internal.h"
@@ -50,7 +51,8 @@
 
 static const char *TAG = "wifi_recovery";
 
-static const uint32_t s_wifi_health_interval_ms = 120000; // 120 seconds
+// Health interval is now adaptive: see wifi_manager_internal.h defines.
+// s_wifi_health_interval_ms is defined in app_wifi.c and externed via the header.
 
 // UI function for showing countdown before hard reboot (weak: resolved at link time)
 extern esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *message, int progress_percent) __attribute__((weak));
@@ -66,8 +68,10 @@ void wifi_recovery_task(void *arg)
         // Wait until we are notified to perform a full reinit
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        // Reset retry counter so post-recovery disconnect events use fresh backoff
+        // Reset counters so post-recovery disconnect events use fresh backoff
+        // and don't immediately re-trigger recovery
         s_retry_num = 0;
+        s_consecutive_wifi_errors = 0;
 
         bool recovered = false;
         bool c6_stack_broken = false;
@@ -164,10 +168,20 @@ void wifi_recovery_task(void *arg)
             wifi_disable_power_save_best_effort();
             wifi_set_protocol_11ax(WIFI_IF_STA);
 
-            // Kick connection attempt
+            // Kick connection attempt and wait for it to establish
             err = esp_wifi_remote_connect();
             if (err == ESP_OK) {
-                recovered = true;
+                // Wait for IP to confirm connection (association + DHCP takes time)
+                EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
+                    WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(15000));
+                if (bits & WIFI_CONNECTED_BIT) {
+                    recovered = true;
+                    ESP_LOGI(TAG, "WiFi recovery: connection established on attempt %d/%d",
+                             attempt + 1, max_recovery_attempts);
+                } else {
+                    ESP_LOGW(TAG, "WiFi recovery: no IP after 15s on attempt %d/%d",
+                             attempt + 1, max_recovery_attempts);
+                }
             } else {
                 ESP_LOGW(TAG, "esp_wifi_remote_connect failed during recovery: %s (attempt %d/%d)",
                          esp_err_to_name(err), attempt + 1, max_recovery_attempts);
@@ -211,6 +225,17 @@ void wifi_recovery_task(void *arg)
                      max_recovery_attempts);
         }
         s_reinit_in_progress = false;
+
+        // Set health monitoring interval based on recovery outcome.
+        // Don't wake health monitor immediately — let it sleep its full interval
+        // to give the WiFi connection time to establish.
+        if (recovered && wifi_sta_has_ip()) {
+            s_wifi_health_interval_ms = WIFI_HEALTH_INTERVAL_NORMAL_MS;
+        } else {
+            s_wifi_health_interval_ms = WIFI_HEALTH_INTERVAL_FAST_MS;
+            ESP_LOGW(TAG, "WiFi recovery: no IP after reinit; health interval -> %dms",
+                     WIFI_HEALTH_INTERVAL_FAST_MS);
+        }
     }
 }
 
@@ -226,6 +251,14 @@ void wifi_schedule_full_reinit(void)
     }
 
     s_reinit_in_progress = true;
+    s_reinit_started_tick = xTaskGetTickCount();
+    // Reset health counter so the health monitor starts fresh after recovery
+    // (prevents immediate re-trigger when recovery completes)
+    s_no_ip_health_cycles = 0;
+    // Cancel any pending reconnect timer — recovery task owns reconnection now
+    if (s_reconnect_timer) {
+        esp_timer_stop(s_reconnect_timer);
+    }
     xTaskNotifyGive(s_wifi_recovery_task);
 }
 
@@ -235,7 +268,7 @@ void wifi_health_monitor_task(void *arg)
     const char *HTAG = "wifi_health";
 
     while (true) {
-        vTaskDelay(pdMS_TO_TICKS(s_wifi_health_interval_ms));
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(s_wifi_health_interval_ms));
 
         // Only monitor after we have been successfully connected at least once.
         if (!s_initial_connection_done) {
@@ -248,8 +281,15 @@ void wifi_health_monitor_task(void *arg)
         }
 
         // Skip monitoring if we're already performing a recovery reinit
+        // (with safety timeout in case the recovery task hangs)
         if (s_reinit_in_progress) {
-            continue;
+            TickType_t elapsed = xTaskGetTickCount() - s_reinit_started_tick;
+            if (elapsed > pdMS_TO_TICKS(120000)) {
+                ESP_LOGE(HTAG, "s_reinit_in_progress stuck for >120s; force-clearing");
+                s_reinit_in_progress = false;
+            } else {
+                continue;
+            }
         }
 
         // Detect prolonged IP loss after initial connection (safety net for failed recovery)
@@ -259,7 +299,6 @@ void wifi_health_monitor_task(void *arg)
                      s_no_ip_health_cycles);
             if (s_no_ip_health_cycles >= 3) {
                 ESP_LOGW(HTAG, "Forcing WiFi recovery after prolonged IP loss");
-                s_no_ip_health_cycles = 0;
                 wifi_schedule_full_reinit();
             }
             continue;

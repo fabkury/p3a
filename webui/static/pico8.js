@@ -36,6 +36,14 @@ let nextPlayTime = 0;        // Scheduling for gapless browser playback
 let audioPtr = 0;            // Pre-allocated WASM audio buffer pointer
 let audioSamplesPerFrame = 0;
 
+// Device audio processing chain (Web Audio API nodes for volume boost)
+let deviceHighPass = null;
+let deviceGainNode = null;
+let deviceCompressor = null;
+let deviceCapture = null;
+let deviceSilencer = null;
+let deviceNextPlayTime = 0;
+
 // Adaptive frame rate control
 const MIN_SKIP = 2;          // Maximum 30fps send rate
 const MAX_SKIP = 12;         // Minimum ~5fps send rate
@@ -434,7 +442,7 @@ function startEmulation() {
                 if (written > 0) {
                     const samples = new Int16Array(Module.HEAPU8.buffer, audioPtr, written);
                     if (browserAudio) playLocalAudio(samples);
-                    if (deviceAudio && ws && ws.readyState === WebSocket.OPEN) sendAudioPacket(samples);
+                    if (deviceAudio && ws && ws.readyState === WebSocket.OPEN) feedDeviceAudio(samples);
                 }
             } catch (e) {
                 console.error('Audio error, disabling:', e);
@@ -630,10 +638,45 @@ function ensureAudioContext() {
         return;
     }
     audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: audioSampleRate });
+
+    // Browser output chain (untouched audio)
     gainNode = audioCtx.createGain();
     gainNode.gain.value = browserVolume;
     gainNode.connect(audioCtx.destination);
+
+    // Device processing chain: highpass → gain → compressor → capture
+    // Removes frequencies the tiny speaker can't reproduce, reclaiming headroom
+    // for the gain boost, then limits peaks to prevent harsh clipping.
+    deviceHighPass = audioCtx.createBiquadFilter();
+    deviceHighPass.type = 'highpass';
+    deviceHighPass.frequency.value = 250;
+
+    deviceGainNode = audioCtx.createGain();
+    deviceGainNode.gain.value = deviceVolume;
+
+    deviceCompressor = audioCtx.createDynamicsCompressor();
+    deviceCompressor.threshold.value = -6;
+    deviceCompressor.knee.value = 3;
+    deviceCompressor.ratio.value = 20;
+    deviceCompressor.attack.value = 0.003;
+    deviceCompressor.release.value = 0.15;
+
+    deviceCapture = audioCtx.createScriptProcessor(512, 1, 1);
+    deviceCapture.onaudioprocess = onDeviceAudioProcess;
+
+    // Connect capture through a silent gain so ScriptProcessor fires
+    // but processed audio doesn't play through browser speakers.
+    deviceSilencer = audioCtx.createGain();
+    deviceSilencer.gain.value = 0;
+
+    deviceHighPass.connect(deviceGainNode);
+    deviceGainNode.connect(deviceCompressor);
+    deviceCompressor.connect(deviceCapture);
+    deviceCapture.connect(deviceSilencer);
+    deviceSilencer.connect(audioCtx.destination);
+
     nextPlayTime = 0;
+    deviceNextPlayTime = 0;
 }
 
 function suspendAudioContext() {
@@ -641,6 +684,7 @@ function suspendAudioContext() {
         audioCtx.suspend();
     }
     nextPlayTime = 0;
+    deviceNextPlayTime = 0;
 }
 
 function playLocalAudio(samples) {
@@ -666,9 +710,63 @@ function playLocalAudio(samples) {
 function sendAudioPacket(samples) {
     const scaled = new Int16Array(samples.length);
     for (let i = 0; i < samples.length; i++) {
-        scaled[i] = Math.round(samples[i] * deviceVolume);
+        const s = Math.round(samples[i] * deviceVolume);
+        scaled[i] = s < -32768 ? -32768 : (s > 32767 ? 32767 : s);
     }
     const pcmBytes = new Uint8Array(scaled.buffer);
+    const packet = new Uint8Array(6 + pcmBytes.length);
+    packet[0] = 0x70; packet[1] = 0x38; packet[2] = 0x41; // "p8A"
+    packet[3] = pcmBytes.length & 0xFF;
+    packet[4] = (pcmBytes.length >> 8) & 0xFF;
+    packet[5] = 0x00;
+    packet.set(pcmBytes, 6);
+    ws.send(packet.buffer);
+}
+
+// Feed WASM audio into the device processing chain (highpass + gain + compressor).
+// Falls back to direct send when AudioContext isn't available yet.
+function feedDeviceAudio(samples) {
+    if (!audioCtx || audioCtx.state !== 'running' || !deviceHighPass) {
+        sendAudioPacket(samples);
+        return;
+    }
+
+    const buf = audioCtx.createBuffer(1, samples.length, audioSampleRate);
+    const chan = buf.getChannelData(0);
+    for (let i = 0; i < samples.length; i++) {
+        chan[i] = samples[i] / 32768;
+    }
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(deviceHighPass);
+
+    const now = audioCtx.currentTime;
+    if (deviceNextPlayTime < now) deviceNextPlayTime = now;
+    src.start(deviceNextPlayTime);
+    deviceNextPlayTime += buf.duration;
+}
+
+// ScriptProcessor callback: capture processed audio and send to device.
+function onDeviceAudioProcess(e) {
+    if (!deviceAudio || !ws || ws.readyState !== WebSocket.OPEN) return;
+    const input = e.inputBuffer.getChannelData(0);
+
+    // Skip silence to avoid wasting bandwidth
+    let peak = 0;
+    for (let i = 0; i < input.length; i++) {
+        const v = input[i] > 0 ? input[i] : -input[i];
+        if (v > peak) peak = v;
+    }
+    if (peak < 0.0001) return;
+
+    // Convert float32 [-1,1] to int16
+    const int16 = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i++) {
+        const s = Math.round(input[i] * 32767);
+        int16[i] = s < -32768 ? -32768 : (s > 32767 ? 32767 : s);
+    }
+
+    const pcmBytes = new Uint8Array(int16.buffer);
     const packet = new Uint8Array(6 + pcmBytes.length);
     packet[0] = 0x70; packet[1] = 0x38; packet[2] = 0x41; // "p8A"
     packet[3] = pcmBytes.length & 0xFF;
@@ -697,7 +795,9 @@ function initAudioControls() {
 
     deviceToggle.addEventListener('change', (e) => {
         deviceAudio = e.target.checked;
-        if (!deviceAudio && !browserAudio) {
+        if (deviceAudio) {
+            ensureAudioContext();
+        } else if (!browserAudio) {
             suspendAudioContext();
         }
     });
@@ -711,6 +811,12 @@ function initAudioControls() {
 
     deviceVolumeSlider.addEventListener('input', (e) => {
         deviceVolume = e.target.value / 100;
+        ensureAudioContext();
+        if (deviceGainNode && audioCtx) {
+            deviceGainNode.gain.setValueAtTime(deviceVolume, audioCtx.currentTime);
+        }
+        const label = document.getElementById('device-volume-label');
+        if (label) label.textContent = e.target.value + '%';
     });
 }
 
@@ -718,6 +824,7 @@ function initAudioControls() {
 fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file && Module) {
+        if (hasAudioSupport) ensureAudioContext();
         loadLocalCart(file);
     }
 });
@@ -725,12 +832,14 @@ fileInput.addEventListener('change', (e) => {
 loadUrlBtn.addEventListener('click', () => {
     const url = urlInput.value.trim();
     if (url && Module) {
+        if (hasAudioSupport) ensureAudioContext();
         loadCartFromUrl(url);
     }
 });
 
 urlInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter' && Module) {
+        if (hasAudioSupport) ensureAudioContext();
         loadCartFromUrl(urlInput.value.trim());
     }
 });

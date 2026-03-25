@@ -49,6 +49,13 @@
     .sound-control:has(input[type="checkbox"]:not(:checked)) .volume-slider {
         opacity: 0.4;
     }
+    .volume-label {
+        display: block;
+        font-size: 0.75rem;
+        color: var(--c-text-secondary, #999);
+        text-align: right;
+        margin-top: 2px;
+    }
     .canvas-wrapper { border-radius: var(--r-lg); box-shadow: var(--c-card-shadow); min-height: 200px; }
     .error-message { background: rgba(239,68,68,0.9); border-radius: var(--r-md); }
     /* Layout: stack on mobile, side-by-side on wide */
@@ -102,7 +109,9 @@
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
-                        <input type="range" id="device-volume" class="volume-slider" min="0" max="100" value="75">
+                        <input type="range" id="device-volume" class="volume-slider" min="0" max="250" value="75" list="device-volume-marks">
+                        <datalist id="device-volume-marks"><option value="100"></option></datalist>
+                        <span id="device-volume-label" class="volume-label">75%</span>
                     </div>
                 </div>
 

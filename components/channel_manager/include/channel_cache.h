@@ -315,6 +315,20 @@ void channel_cache_schedule_save(channel_cache_t *cache);
  */
 void channel_cache_flush_all(const char *channels_path);
 
+/**
+ * @brief Force save a single dirty cache immediately
+ *
+ * If the cache is dirty, writes it to disk and clears the dirty flag.
+ * Use this when the cache must be persisted before a dependent write
+ * (e.g. metadata timestamp) to prevent power-loss desynchronization.
+ *
+ * @param cache          Cache to flush
+ * @param channels_path  Base path for channel files
+ * @return ESP_OK on success or if cache was not dirty,
+ *         error code if the save failed (dirty flag is NOT cleared)
+ */
+esp_err_t channel_cache_flush_one(channel_cache_t *cache, const char *channels_path);
+
 // ============================================================================
 // Global Cache Registry
 // ============================================================================

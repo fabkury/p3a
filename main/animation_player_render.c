@@ -481,6 +481,14 @@ skip_prefetch:
         s_target_frame_delay_ms = (uint32_t)frame_delay_ms;
         return frame_delay_ms;
     }
+
+    // Complete deferred PICO-8 timeout exit.  The timeout timer only does a
+    // lightweight stream exit (safe in esp_timer's small stack).  The full
+    // exit — playback controller state transition + p3a_state change — runs
+    // here in the render task which has sufficient stack.
+    if (pico8_stream_check_and_clear_timeout_exit()) {
+        playback_controller_exit_pico8_mode();
+    }
 #endif
 
     // Render animation frame

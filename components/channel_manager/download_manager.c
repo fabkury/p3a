@@ -500,6 +500,9 @@ static void download_task(void *arg)
         // Skip download cycle if PICO-8 mode is active
         if (p3a_state_get() == P3A_STATE_PICO8_STREAMING) {
             ESP_LOGD(TAG, "PICO-8 mode active, skipping download cycle");
+            // Clear event before waiting to prevent a tight loop when the event
+            // was already signaled (e.g. by download_manager_wake during exit).
+            makapix_channel_clear_downloads_needed();
             makapix_channel_wait_for_downloads_needed(pdMS_TO_TICKS(5000));
             continue;
         }

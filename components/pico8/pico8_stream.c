@@ -31,10 +31,6 @@
 #define PICO8_STREAM_FLAG_PALETTE 0x01
 #define PICO8_MODE_TIMEOUT_MS 30000  // 30 seconds
 
-// Weak reference to playback controller for full cleanup on timeout.
-// Avoids circular build dependency (pico8 ↔ playback_controller).
-extern void playback_controller_exit_pico8_mode(void) __attribute__((weak));
-
 static const char *TAG = "pico8_stream";
 static SemaphoreHandle_t s_stream_mutex = NULL;
 static uint8_t s_palette_data[PICO8_PALETTE_COLORS * 3];
@@ -42,18 +38,19 @@ static uint8_t s_frame_data[PICO8_FRAME_BYTES];
 static bool s_pico8_mode_active = false;
 static esp_timer_handle_t s_timeout_timer = NULL;
 static int64_t s_last_frame_time_us = 0;
+static volatile bool s_timeout_exit_pending = false;
 
 static void timeout_timer_callback(void* arg)
 {
     (void)arg;
-    ESP_LOGI(TAG, "PICO-8 mode timeout, exiting mode");
-    // Use the full exit path (playback controller → stream → state machine)
-    // so that p3a_state, pico8_render, and playback source are all cleaned up.
-    if (playback_controller_exit_pico8_mode) {
-        playback_controller_exit_pico8_mode();
-    } else {
-        pico8_stream_exit_mode();
-    }
+    ESP_LOGI(TAG, "PICO-8 mode timeout, deferring full exit to render task");
+    // Only do the lightweight stream-level exit here (safe in timer context).
+    // The full exit (playback controller state transition, p3a_state change) is
+    // deferred to the render callback which runs in a task with sufficient stack.
+    // The esp_timer task has only 3584 bytes of stack — the full exit chain
+    // (audio teardown + state transition + notify callbacks) overflows it.
+    pico8_stream_exit_mode();
+    s_timeout_exit_pending = true;
 }
 
 static void submit_frame(bool has_palette, size_t frame_len)
@@ -186,6 +183,9 @@ void pico8_stream_enter_mode(void)
 
     ESP_LOGI(TAG, "Entering PICO-8 mode");
 
+    // Clear any stale timeout exit flag from a previous session
+    s_timeout_exit_pending = false;
+
     // Reset frame state to ensure logo is shown (not stale frame from previous session)
     pico8_render_reset_frame_state();
 
@@ -241,4 +241,13 @@ void pico8_stream_exit_mode(void)
 bool pico8_stream_is_active(void)
 {
     return s_pico8_mode_active;
+}
+
+bool pico8_stream_check_and_clear_timeout_exit(void)
+{
+    if (s_timeout_exit_pending) {
+        s_timeout_exit_pending = false;
+        return true;
+    }
+    return false;
 }

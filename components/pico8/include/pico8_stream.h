@@ -64,10 +64,23 @@ void pico8_stream_exit_mode(void);
 
 /**
  * @brief Check if PICO-8 mode is active
- * 
+ *
  * @return true if PICO-8 mode is active, false otherwise
  */
 bool pico8_stream_is_active(void);
+
+/**
+ * @brief Check and clear the deferred timeout exit flag
+ *
+ * The PICO-8 timeout fires in the esp_timer task which has insufficient stack
+ * for the full exit sequence (state transition + callbacks).  The timer only
+ * does a lightweight stream exit and sets a pending flag.  The render callback
+ * polls this function each frame and completes the full exit in a task with
+ * sufficient stack.
+ *
+ * @return true if a timeout exit is pending (flag is cleared), false otherwise
+ */
+bool pico8_stream_check_and_clear_timeout_exit(void);
 
 #ifdef __cplusplus
 }

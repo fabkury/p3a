@@ -9,6 +9,7 @@
 #include "playback_controller.h"
 #include "animation_metadata.h"
 #include "pico8_stream.h"
+#include "view_tracker.h"
 #include "p3a_state.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -105,7 +106,10 @@ esp_err_t playback_controller_enter_pico8_mode(void)
     }
     
     ESP_LOGI(TAG, "Entering PICO-8 mode (was: %d)", s_controller.current_source);
-    
+
+    // Stop sending view events - user is gaming, not viewing artwork
+    view_tracker_stop();
+
     // Note: We don't clear animation metadata here - it's preserved for resumption
     s_controller.current_source = PLAYBACK_SOURCE_PICO8_STREAM;
     

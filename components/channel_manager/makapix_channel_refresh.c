@@ -303,6 +303,23 @@ void refresh_task_impl(void *pvParameters)
         }
 
         if (query_succeeded) {
+            // Flush dirty cache to disk BEFORE saving the metadata timestamp.
+            // Both files live on the SD card but are written independently; if
+            // power is lost after the metadata (.json) is saved but before the
+            // cache (.cache) is flushed, the device would boot with a "fresh"
+            // timestamp yet stale/incomplete cache data — skipping the refresh
+            // it actually needs.  Flushing the cache first guarantees the .cache
+            // on disk is at least as recent as the .json timestamp.
+            channel_cache_t *flush_cache = channel_cache_registry_find(ch->channel_id);
+            if (flush_cache) {
+                esp_err_t flush_err = channel_cache_flush_one(flush_cache, ch->channels_path);
+                if (flush_err != ESP_OK) {
+                    ESP_LOGW(TAG, "Cache flush failed for '%s', skipping metadata save",
+                             ch->channel_id);
+                    break;
+                }
+            }
+
             // Save metadata (only persist a valid timestamp if SNTP is synchronized)
             time_t refresh_ts = sntp_sync_is_synchronized() ? time(NULL) : 0;
             save_channel_metadata(ch, query_req.has_cursor ? query_req.cursor : "", refresh_ts);

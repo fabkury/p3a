@@ -594,6 +594,21 @@ void channel_cache_schedule_save(channel_cache_t *cache)
     }
 }
 
+esp_err_t channel_cache_flush_one(channel_cache_t *cache, const char *channels_path)
+{
+    if (!cache || !channels_path) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!cache->dirty) {
+        return ESP_OK;
+    }
+    esp_err_t err = channel_cache_save(cache, channels_path);
+    if (err == ESP_OK) {
+        cache->dirty = false;
+    }
+    return err;
+}
+
 void channel_cache_flush_all(const char *channels_path)
 {
     if (!s_cache_state.registry_mutex) return;

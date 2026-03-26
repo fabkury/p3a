@@ -816,7 +816,7 @@ function initAudioControls() {
             deviceGainNode.gain.setValueAtTime(deviceVolume, audioCtx.currentTime);
         }
         const label = document.getElementById('device-volume-label');
-        if (label) label.textContent = e.target.value + '%';
+        if (label) label.textContent = Math.round(e.target.value * 0.4) + '%';
     });
 }
 

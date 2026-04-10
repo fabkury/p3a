@@ -194,5 +194,48 @@ static inline uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b)
                       ((uint16_t)b >> 3));
 }
 
+// ============================================================================
+// Reaction Overlay (display_reaction_overlay.c)
+// ============================================================================
+
+/**
+ * @brief Reaction overlay state
+ */
+typedef enum {
+    REACTION_OVERLAY_IDLE,       ///< Not showing
+    REACTION_OVERLAY_SUBMIT,     ///< Showing thumbs-up (submit reaction)
+    REACTION_OVERLAY_REVOKE      ///< Showing thumbs-down (revoke reaction)
+} reaction_overlay_state_t;
+
+// State variables (defined in display_renderer.c)
+extern volatile reaction_overlay_state_t g_reaction_overlay_state;
+extern volatile int64_t g_reaction_overlay_start_us;
+
+/**
+ * @brief Show submit reaction overlay (thumbs up)
+ *
+ * If already showing SUBMIT, ignored (dedup).
+ * If showing REVOKE, replaces it immediately.
+ */
+void reaction_overlay_show_submit(void);
+
+/**
+ * @brief Show revoke reaction overlay (thumbs down)
+ *
+ * If already showing REVOKE, ignored (dedup).
+ * If showing SUBMIT, replaces it immediately.
+ */
+void reaction_overlay_show_revoke(void);
+
+/**
+ * @brief Update and draw reaction overlay
+ *
+ * Called each frame from display_render_task. Handles timing
+ * and draws the overlay image if active.
+ *
+ * @param buffer Frame buffer to draw into
+ */
+void reaction_overlay_update_and_draw(uint8_t *buffer);
+
 #endif // DISPLAY_RENDERER_PRIV_H
 

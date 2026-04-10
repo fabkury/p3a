@@ -463,6 +463,16 @@ def convert_png_to_blit(input_path: str, name: str, outdir: str,
     width, height = img.size
     original_mode = img.mode
 
+    # If the image has an alpha channel and a chroma key is specified,
+    # composite transparent pixels onto the chroma-key color so they
+    # become the designated transparent color in the output BGR888 data.
+    if img.mode in ('RGBA', 'LA', 'PA') and chroma_key:
+        img = img.convert('RGBA')
+        bg = Image.new('RGBA', img.size, (chroma_key[0], chroma_key[1], chroma_key[2], 255))
+        bg.paste(img, mask=img)
+        img = bg
+        print(f"Alpha:  Flattened alpha onto chroma key RGB({chroma_key[0]},{chroma_key[1]},{chroma_key[2]})")
+
     # Convert to RGB (discards alpha if present)
     img = img.convert('RGB')
 

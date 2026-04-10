@@ -126,12 +126,20 @@ esp_err_t makapix_api_get_post(int32_t post_id, makapix_post_t *out_post);
 esp_err_t makapix_api_submit_view(int32_t post_id, makapix_view_intent_t intent);
 
 /**
- * @brief Stub: submit reaction
+ * @brief Submit an emoji reaction to a post
+ *
+ * @param post_id Post ID to react to
+ * @param emoji Emoji string (e.g. "\xF0\x9F\x91\x8D" for thumbs up)
+ * @return ESP_OK on success
  */
 esp_err_t makapix_api_submit_reaction(int32_t post_id, const char *emoji);
 
 /**
- * @brief Stub: revoke reaction
+ * @brief Revoke an emoji reaction from a post
+ *
+ * @param post_id Post ID to remove reaction from
+ * @param emoji Emoji string to revoke
+ * @return ESP_OK on success
  */
 esp_err_t makapix_api_revoke_reaction(int32_t post_id, const char *emoji);
 

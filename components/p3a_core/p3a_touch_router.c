@@ -10,8 +10,12 @@
 #include "p3a_state.h"
 #include "event_bus.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <string.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <inttypes.h>
 
 // Processing notification (from display_renderer_priv.h via weak symbol)
 extern void proc_notif_start(void) __attribute__((weak));
@@ -57,6 +61,21 @@ extern bool app_wifi_is_captive_portal_active(void) __attribute__((weak));
 // Playback service (from playback_service.c via weak symbol)
 extern bool playback_service_is_paused(void) __attribute__((weak));
 
+// Reaction overlay (from display_reaction_overlay.c via weak symbols)
+extern void reaction_overlay_show_submit(void) __attribute__((weak));
+extern void reaction_overlay_show_revoke(void) __attribute__((weak));
+
+// Makapix API reaction functions (from makapix_api.c via weak symbols)
+extern esp_err_t makapix_api_submit_reaction(int32_t post_id, const char *emoji) __attribute__((weak));
+extern esp_err_t makapix_api_revoke_reaction(int32_t post_id, const char *emoji) __attribute__((weak));
+
+// Current post info (from makapix.c via weak symbols)
+extern int32_t makapix_get_current_post_id(void) __attribute__((weak));
+// Returns post_source_t; declared as int to avoid play_scheduler_types.h dependency
+extern int makapix_get_current_post_source(void) __attribute__((weak));
+// POST_SOURCE_MAKAPIX == 1 (from play_scheduler_types.h)
+#define REACTION_POST_SOURCE_MAKAPIX 1
+
 // USB touch forwarding (from app_usb.c via weak symbols)
 typedef struct {
     uint8_t report_id;
@@ -73,6 +92,57 @@ extern void app_usb_report_touch(const pico8_touch_report_t *report) __attribute
 // ============================================================================
 
 static bool s_initialized = false;
+
+// ============================================================================
+// Reaction MQTT task
+// ============================================================================
+
+typedef struct {
+    int32_t post_id;
+    bool is_submit;
+} reaction_task_params_t;
+
+static void reaction_mqtt_task(void *arg)
+{
+    reaction_task_params_t *p = (reaction_task_params_t *)arg;
+    esp_err_t err;
+    if (p->is_submit) {
+        if (makapix_api_submit_reaction) {
+            err = makapix_api_submit_reaction(p->post_id, "\xF0\x9F\x91\x8D");
+        } else {
+            err = ESP_ERR_NOT_SUPPORTED;
+        }
+    } else {
+        if (makapix_api_revoke_reaction) {
+            err = makapix_api_revoke_reaction(p->post_id, "\xF0\x9F\x91\x8D");
+        } else {
+            err = ESP_ERR_NOT_SUPPORTED;
+        }
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Reaction %s failed: %s",
+                 p->is_submit ? "submit" : "revoke", esp_err_to_name(err));
+    }
+    free(p);
+    vTaskDelete(NULL);
+}
+
+static void reaction_task_spawn(int32_t post_id, bool is_submit)
+{
+    reaction_task_params_t *p = malloc(sizeof(reaction_task_params_t));
+    if (!p) {
+        ESP_LOGE(TAG, "Failed to allocate reaction task params");
+        return;
+    }
+    p->post_id = post_id;
+    p->is_submit = is_submit;
+
+    BaseType_t ret = xTaskCreate(reaction_mqtt_task, "reaction_mqtt", 4096, p, 5, NULL);
+    if (ret != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create reaction MQTT task");
+        free(p);
+    }
+}
 
 // ============================================================================
 // State-specific handlers
@@ -119,15 +189,45 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
             }
             return ESP_OK;
             
-        case P3A_TOUCH_EVENT_SWIPE_UP:
-            // TODO: OPERATION_A (stub - to be implemented)
-            ESP_LOGI(TAG, "OPERATION_A triggered (swipe up) - stub");
+        case P3A_TOUCH_EVENT_SWIPE_UP: {
+            // Submit emoji reaction to current Makapix post
+            if (!makapix_get_current_post_source ||
+                makapix_get_current_post_source() != REACTION_POST_SOURCE_MAKAPIX) {
+                ESP_LOGI(TAG, "Swipe up ignored - not a Makapix post");
+                return ESP_OK;
+            }
+            int32_t post_id = makapix_get_current_post_id ? makapix_get_current_post_id() : 0;
+            if (post_id <= 0) {
+                ESP_LOGI(TAG, "Swipe up ignored - no valid post_id");
+                return ESP_OK;
+            }
+            if (reaction_overlay_show_submit) {
+                reaction_overlay_show_submit();
+            }
+            reaction_task_spawn(post_id, true);
+            ESP_LOGI(TAG, "Submit reaction: post_id=%" PRId32, post_id);
             return ESP_OK;
+        }
 
-        case P3A_TOUCH_EVENT_SWIPE_DOWN:
-            // TODO: OPERATION_B (stub - to be implemented)
-            ESP_LOGI(TAG, "OPERATION_B triggered (swipe down) - stub");
+        case P3A_TOUCH_EVENT_SWIPE_DOWN: {
+            // Revoke emoji reaction from current Makapix post
+            if (!makapix_get_current_post_source ||
+                makapix_get_current_post_source() != REACTION_POST_SOURCE_MAKAPIX) {
+                ESP_LOGI(TAG, "Swipe down ignored - not a Makapix post");
+                return ESP_OK;
+            }
+            int32_t post_id = makapix_get_current_post_id ? makapix_get_current_post_id() : 0;
+            if (post_id <= 0) {
+                ESP_LOGI(TAG, "Swipe down ignored - no valid post_id");
+                return ESP_OK;
+            }
+            if (reaction_overlay_show_revoke) {
+                reaction_overlay_show_revoke();
+            }
+            reaction_task_spawn(post_id, false);
+            ESP_LOGI(TAG, "Revoke reaction: post_id=%" PRId32, post_id);
             return ESP_OK;
+        }
 
         case P3A_TOUCH_EVENT_BRIGHTNESS:
             // Brightness is now controlled via web UI only

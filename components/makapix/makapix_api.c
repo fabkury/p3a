@@ -567,18 +567,79 @@ esp_err_t makapix_api_submit_view(int32_t post_id, makapix_view_intent_t intent)
     return err;
 }
 
-// Stubs for future implementation
 esp_err_t makapix_api_submit_reaction(int32_t post_id, const char *emoji)
 {
-    (void)post_id;
-    (void)emoji;
+    if (!emoji || post_id <= 0) return ESP_ERR_INVALID_ARG;
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return ESP_ERR_NO_MEM;
+
+    cJSON_AddStringToObject(root, "request_type", "submit_reaction");
+    cJSON_AddNumberToObject(root, "post_id", (double)post_id);
+    cJSON_AddStringToObject(root, "emoji", emoji);
+
+    cJSON *response_json = NULL;
+    esp_err_t err = publish_and_wait(root, &response_json);
+    cJSON_Delete(root);
+
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "submit_reaction request failed: %s", esp_err_to_name(err));
+        if (response_json) cJSON_Delete(response_json);
+        return err;
+    }
+
+    if (response_json) {
+        cJSON *success = cJSON_GetObjectItem(response_json, "success");
+        if (!cJSON_IsBool(success) || !cJSON_IsTrue(success)) {
+            cJSON *error = cJSON_GetObjectItem(response_json, "error");
+            if (cJSON_IsString(error)) {
+                ESP_LOGW(TAG, "submit_reaction error: %s", cJSON_GetStringValue(error));
+            }
+            cJSON_Delete(response_json);
+            return ESP_FAIL;
+        }
+        ESP_LOGI(TAG, "submit_reaction OK: post_id=%" PRId32 " emoji=%s", post_id, emoji);
+        cJSON_Delete(response_json);
+    }
+
     return ESP_OK;
 }
 
 esp_err_t makapix_api_revoke_reaction(int32_t post_id, const char *emoji)
 {
-    (void)post_id;
-    (void)emoji;
+    if (!emoji || post_id <= 0) return ESP_ERR_INVALID_ARG;
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return ESP_ERR_NO_MEM;
+
+    cJSON_AddStringToObject(root, "request_type", "revoke_reaction");
+    cJSON_AddNumberToObject(root, "post_id", (double)post_id);
+    cJSON_AddStringToObject(root, "emoji", emoji);
+
+    cJSON *response_json = NULL;
+    esp_err_t err = publish_and_wait(root, &response_json);
+    cJSON_Delete(root);
+
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "revoke_reaction request failed: %s", esp_err_to_name(err));
+        if (response_json) cJSON_Delete(response_json);
+        return err;
+    }
+
+    if (response_json) {
+        cJSON *success = cJSON_GetObjectItem(response_json, "success");
+        if (!cJSON_IsBool(success) || !cJSON_IsTrue(success)) {
+            cJSON *error = cJSON_GetObjectItem(response_json, "error");
+            if (cJSON_IsString(error)) {
+                ESP_LOGW(TAG, "revoke_reaction error: %s", cJSON_GetStringValue(error));
+            }
+            cJSON_Delete(response_json);
+            return ESP_FAIL;
+        }
+        ESP_LOGI(TAG, "revoke_reaction OK: post_id=%" PRId32 " emoji=%s", post_id, emoji);
+        cJSON_Delete(response_json);
+    }
+
     return ESP_OK;
 }
 

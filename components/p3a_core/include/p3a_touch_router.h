@@ -10,8 +10,8 @@
  * 
  * ANIMATION_PLAYBACK:
  * - Tap left/right: swap animation backward/forward
- * - Swipe up: OPERATION_A (stub)
- * - Swipe down: OPERATION_B (stub)
+ * - Swipe up: submit emoji reaction (Makapix posts only)
+ * - Swipe down: revoke emoji reaction (Makapix posts only)
  * - Two-finger rotation: screen rotation
  * - Long press (3s): enter provisioning or toggle AP info
  * 

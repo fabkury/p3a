@@ -3,7 +3,7 @@
 
 /**
  * @file app_touch.c
- * @brief Touch input handling: gesture detection, brightness, rotation, and provisioning triggers
+ * @brief Touch input handling: gesture detection, vertical swipe, rotation, and provisioning triggers
  */
 
 #include "freertos/FreeRTOS.h"
@@ -44,15 +44,15 @@ static esp_lcd_touch_handle_t tp = NULL;
 
 /**
  * @brief Gesture state machine states
- * 
+ *
  * The touch handler distinguishes between tap gestures (for animation swapping),
- * swipe gestures (for brightness control), and two-finger rotation gestures
- * (for screen rotation) based on touch count and movement patterns.
+ * vertical swipe gestures (OPERATION_A up / OPERATION_B down), and two-finger
+ * rotation gestures (for screen rotation) based on touch count and movement patterns.
  */
 typedef enum {
     GESTURE_STATE_IDLE,              // No active touch
     GESTURE_STATE_TAP,              // Potential tap/swap gesture (minimal movement)
-    GESTURE_STATE_BRIGHTNESS,       // Brightness control gesture (vertical swipe detected)
+    GESTURE_STATE_VERTICAL_SWIPE,   // Vertical swipe detected (OPERATION_A/B)
     GESTURE_STATE_LONG_PRESS_PENDING, // Finger down, counting to 3s for provisioning
     GESTURE_STATE_ROTATION          // Two-finger rotation gesture
 } gesture_state_t;
@@ -112,23 +112,15 @@ static __attribute__((unused)) screen_rotation_t get_next_rotation_ccw(screen_ro
 
 /**
  * @brief Touch task implementing gesture recognition
- * 
+ *
  * This task polls the touch controller and implements a state machine to distinguish
  * between:
  * - Tap gestures: Used for animation swapping (left/right half of screen)
- * - Vertical swipe gestures: Used for brightness control
- * 
+ * - Vertical swipe gestures: Swipe up triggers OPERATION_A, swipe down triggers OPERATION_B
+ *
  * Gesture classification:
- * - If vertical movement >= CONFIG_P3A_TOUCH_SWIPE_MIN_HEIGHT_PERCENT, it's a brightness gesture
+ * - If vertical movement >= CONFIG_P3A_TOUCH_SWIPE_MIN_HEIGHT_PERCENT, it's a vertical swipe
  * - Otherwise, on release it's treated as a tap gesture for animation swapping
- * 
- * Brightness control:
- * - Swipe up (lower to higher Y) increases brightness
- * - Swipe down (higher to lower Y) decreases brightness
- * - Brightness change is proportional to vertical distance
- * - Maximum change per full-screen swipe is CONFIG_P3A_TOUCH_BRIGHTNESS_MAX_DELTA_PERCENT
- * - Brightness updates continuously as finger moves during swipe
- * - Auto-swap timer is reset when brightness gesture starts
  */
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
 static uint16_t scale_to_pico8(uint16_t value, uint16_t max_src, uint16_t max_dst)
@@ -197,13 +189,10 @@ static void app_touch_task(void *arg)
     gesture_state_t gesture_state = GESTURE_STATE_IDLE;
     uint16_t touch_start_x = 0;      // Raw coordinate for tap position detection
     uint16_t touch_start_y = 0;      // Raw coordinate for tap position detection
-    uint16_t brightness_start_y = 0; // Visual Y coordinate for brightness baseline
     TickType_t touch_start_time = 0;
-    int brightness_start = 100;  // Brightness at gesture start
     const uint16_t screen_height = P3A_DISPLAY_HEIGHT;
     const uint16_t screen_width = P3A_DISPLAY_WIDTH;
     const uint16_t min_swipe_height = (screen_height * CONFIG_P3A_TOUCH_SWIPE_MIN_HEIGHT_PERCENT) / 100;
-    const int max_brightness_delta = CONFIG_P3A_TOUCH_BRIGHTNESS_MAX_DELTA_PERCENT;
     const TickType_t long_press_duration = pdMS_TO_TICKS(3000); // 3 seconds
     const uint32_t long_press_movement_threshold = ( (uint32_t)MIN(screen_height, screen_width) * 65U + 500U ) / 1000U; // 6.5% of smallest dimension, rounded
     
@@ -236,9 +225,9 @@ static void app_touch_task(void *arg)
         }
 
         // NOTE: We use RAW (untransformed) coordinates for gesture detection
-        // (swipe direction, brightness control) because gestures should work
-        // in physical screen space. Only transform for position-based actions
-        // (tap location for left/right half detection).
+        // (swipe direction) because gestures should work in physical screen
+        // space. Only transform for position-based actions (tap location for
+        // left/right half detection).
 
         // Two-finger rotation gesture detection (use raw coordinates)
         if (pressed && touch_count >= 2) {
@@ -297,8 +286,8 @@ static void app_touch_task(void *arg)
         prev_touch_count = touch_count;
 
         if (pressed && touch_count > 0) {
-            // Transform coordinates to visual space for brightness gesture detection
-            // (rotation gesture uses raw coordinates, brightness uses visual coordinates)
+            // Transform coordinates to visual space for swipe gesture detection
+            // (rotation gesture uses raw coordinates, swipes use visual coordinates)
             uint16_t visual_x = x[0];
             uint16_t visual_y = y[0];
             screen_rotation_t rotation = app_get_screen_rotation();
@@ -315,17 +304,16 @@ static void app_touch_task(void *arg)
                 touch_start_x = x[0];
                 touch_start_y = y[0];
                 touch_start_time = xTaskGetTickCount();
-                brightness_start = app_lcd_get_brightness();
                 gesture_state = GESTURE_STATE_TAP;
                 ESP_LOGD(TAG, "touch start @(%u,%u)", touch_start_x, touch_start_y);
             } else {
                 // Touch is active, check for gesture classification
-                // Transform start coordinates to visual space for brightness gesture detection
+                // Transform start coordinates to visual space for swipe gesture detection
                 uint16_t visual_start_x = touch_start_x;
                 uint16_t visual_start_y = touch_start_y;
                 transform_touch_coordinates(&visual_start_x, &visual_start_y, rotation);
                 
-                // Calculate deltas in visual space for brightness gesture
+                // Calculate deltas in visual space for swipe gesture
                 int16_t delta_x = (int16_t)visual_x - (int16_t)visual_start_x;
                 int16_t delta_y = (int16_t)visual_y - (int16_t)visual_start_y;
                 uint16_t abs_delta_x = (delta_x < 0) ? -delta_x : delta_x;
@@ -360,48 +348,16 @@ static void app_touch_task(void *arg)
                     }
                 }
                 
-                // Transition to brightness control if vertical distance exceeds threshold
-                // Use visual coordinates so brightness gesture rotates with screen
+                // Transition to vertical swipe if vertical distance exceeds threshold
                 if (gesture_state == GESTURE_STATE_TAP && abs_delta_y >= min_swipe_height) {
-                    gesture_state = GESTURE_STATE_BRIGHTNESS;
-                    brightness_start = app_lcd_get_brightness();
-                    // Store visual Y as baseline for brightness calculation
-                    brightness_start_y = visual_y;
-                    delta_y = 0;
-                    ESP_LOGD(TAG, "brightness gesture started @(%u,%u) visual", visual_x, visual_y);
-                }
-
-                if (gesture_state == GESTURE_STATE_BRIGHTNESS) {
-                    // Check if brightness gestures are enabled in current state
-                    if (!p3a_touch_router_is_gesture_enabled(P3A_TOUCH_EVENT_BRIGHTNESS)) {
-                        // Reset to tap state if brightness not allowed
-                        gesture_state = GESTURE_STATE_TAP;
-                    } else {
-                    // Recompute delta against brightness baseline using visual coordinates
-                    delta_y = (int16_t)visual_y - (int16_t)brightness_start_y;
-
-                    // Calculate brightness change based on vertical distance
-                    // Formula: brightness_delta = (-delta_y * max_brightness_delta) / screen_height
-                    // - Full screen height (screen_height pixels) = max_brightness_delta percent change
-                    // - delta_y is positive when swiping down (y increases), negative when swiping up (y decreases)
-                    // - We negate delta_y so swipe up (negative delta_y) increases brightness
-                    // - Result is proportional: half screen swipe = half max delta
-                    int brightness_delta = (-delta_y * max_brightness_delta) / screen_height;
-                    int target_brightness = brightness_start + brightness_delta;
-                    
-                    // Clamp to valid range
-                    if (target_brightness < 0) {
-                        target_brightness = 0;
-                    } else if (target_brightness > 100) {
-                        target_brightness = 100;
-                    }
-                    
-                    // Update brightness if it changed
-                    int current_brightness = app_lcd_get_brightness();
-                    if (target_brightness != current_brightness) {
-                        app_lcd_set_brightness(target_brightness);
-                        ESP_LOGD(TAG, "brightness: %d%% (delta_y=%d)", target_brightness, delta_y);
-                        }
+                    // Determine swipe direction: delta_y < 0 = swipe up, > 0 = swipe down
+                    p3a_touch_event_type_t swipe_type = (delta_y < 0) ?
+                        P3A_TOUCH_EVENT_SWIPE_UP : P3A_TOUCH_EVENT_SWIPE_DOWN;
+                    gesture_state = GESTURE_STATE_VERTICAL_SWIPE;
+                    if (p3a_touch_router_is_gesture_enabled(swipe_type)) {
+                        p3a_touch_event_t touch_event = { .type = swipe_type };
+                        p3a_touch_router_handle_event(&touch_event);
+                        ESP_LOGI(TAG, "vertical swipe: %s", (delta_y < 0) ? "up" : "down");
                     }
                 }
             }
@@ -462,9 +418,9 @@ static void app_touch_task(void *arg)
                 } else if (gesture_state == GESTURE_STATE_ROTATION) {
                     // Rotation gesture ended (action already taken if threshold was reached)
                     ESP_LOGD(TAG, "rotation gesture ended");
-                } else {
-                    // It was a brightness gesture, already handled
-                    ESP_LOGD(TAG, "brightness gesture ended");
+                } else if (gesture_state == GESTURE_STATE_VERTICAL_SWIPE) {
+                    // Vertical swipe ended (action already fired at threshold crossing)
+                    ESP_LOGD(TAG, "vertical swipe gesture ended");
                 }
                 gesture_state = GESTURE_STATE_IDLE;
             }

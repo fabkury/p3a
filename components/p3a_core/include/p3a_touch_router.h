@@ -10,7 +10,8 @@
  * 
  * ANIMATION_PLAYBACK:
  * - Tap left/right: swap animation backward/forward
- * - Vertical swipe: brightness control
+ * - Swipe up: OPERATION_A (stub)
+ * - Swipe down: OPERATION_B (stub)
  * - Two-finger rotation: screen rotation
  * - Long press (3s): enter provisioning or toggle AP info
  * 

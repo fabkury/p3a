@@ -49,6 +49,7 @@ esp_err_t h_get_config(httpd_req_t *req) {
 
     cJSON_AddBoolToObject(data, "refresh_allow_override",
                           config_store_get_refresh_allow_override());
+    cJSON_AddNumberToObject(data, "brightness", (double)app_lcd_get_brightness());
 
     char *out = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -176,6 +177,14 @@ esp_err_t h_put_config(httpd_req_t *req) {
         if (mode >= 0 && mode <= 1) {
             play_scheduler_set_channel_select_mode((ps_channel_select_mode_t)mode);
         }
+    }
+
+    cJSON *br = cJSON_GetObjectItem(o, "brightness");
+    if (br && cJSON_IsNumber(br)) {
+        int brightness = (int)cJSON_GetNumberValue(br);
+        if (brightness < 0) brightness = 0;
+        if (brightness > 100) brightness = 100;
+        app_lcd_set_brightness(brightness);
     }
 
     cJSON_Delete(o);

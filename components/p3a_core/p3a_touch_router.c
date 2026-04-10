@@ -119,16 +119,19 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
             }
             return ESP_OK;
             
-        case P3A_TOUCH_EVENT_BRIGHTNESS: {
-            if (app_lcd_get_brightness && app_lcd_set_brightness) {
-                int current = app_lcd_get_brightness();
-                int target = current + event->brightness.delta_percent;
-                if (target < 0) target = 0;
-                if (target > 100) target = 100;
-                app_lcd_set_brightness(target);
-            }
+        case P3A_TOUCH_EVENT_SWIPE_UP:
+            // TODO: OPERATION_A (stub - to be implemented)
+            ESP_LOGI(TAG, "OPERATION_A triggered (swipe up) - stub");
             return ESP_OK;
-        }
+
+        case P3A_TOUCH_EVENT_SWIPE_DOWN:
+            // TODO: OPERATION_B (stub - to be implemented)
+            ESP_LOGI(TAG, "OPERATION_B triggered (swipe down) - stub");
+            return ESP_OK;
+
+        case P3A_TOUCH_EVENT_BRIGHTNESS:
+            // Brightness is now controlled via web UI only
+            return ESP_ERR_NOT_SUPPORTED;
             
         case P3A_TOUCH_EVENT_LONG_PRESS: {
             // If already in UI mode (info-screen or other overlay), dismiss it

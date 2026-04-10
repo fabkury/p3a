@@ -98,6 +98,21 @@
     width: 100%;
     margin-top: 8px;
 }
+.brightness-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.brightness-row input[type="range"] {
+    flex: 1;
+    min-width: 0;
+}
+.brightness-value {
+    min-width: 38px;
+    text-align: right;
+    font-size: 0.9rem;
+    color: var(--c-text-light);
+}
 </style>
 </head>
 <body class="has-bottom-nav">
@@ -115,6 +130,14 @@
 
 <!-- Display Tab -->
 <div class="tab-content active" id="tab-display">
+    <div class="section">
+        <h3>Brightness</h3>
+        <div class="brightness-row">
+            <input type="range" id="brightness-slider" min="0" max="100" value="100" oninput="updateBrightnessLabel()">
+            <span class="brightness-value" id="brightness-value">100%</span>
+            <button class="upload-btn bg-save" id="brightness-save" type="button" onclick="saveBrightness()">Save</button>
+        </div>
+    </div>
     <div class="section">
         <h3>Background Color</h3>
         <div class="bg-row">
@@ -449,6 +472,25 @@ function clamp255(x) {
 }
 
 // ── Display tab ──
+function updateBrightnessLabel() {
+    document.getElementById('brightness-value').textContent = document.getElementById('brightness-slider').value + '%';
+}
+
+function saveBrightness() {
+    var btn = document.getElementById('brightness-save');
+    btn.disabled = true;
+    var val = parseInt(document.getElementById('brightness-slider').value, 10);
+    if (isNaN(val) || val < 0) val = 0;
+    if (val > 100) val = 100;
+    mergeConfig({brightness: val}, function() {
+        btn.disabled = false;
+        showToast('Brightness: ' + val + '%', false);
+    }, function(status) {
+        btn.disabled = false;
+        showToast('Save failed (HTTP ' + status + ')', true);
+    });
+}
+
 function updateColorPreview() {
     var r = clamp255(document.getElementById('bg-r').value);
     var g = clamp255(document.getElementById('bg-g').value);
@@ -984,6 +1026,9 @@ xhr.onreadystatechange = function() {
             cfg = (resp && resp.ok && resp.data) ? resp.data : {};
         } catch (e) { cfg = {}; }
         // Display tab
+        var brightness = (typeof cfg.brightness === 'number') ? cfg.brightness : 100;
+        document.getElementById('brightness-slider').value = brightness;
+        updateBrightnessLabel();
         var bg = cfg.background_color || {};
         document.getElementById('bg-r').value = clamp255(bg.r || 0);
         document.getElementById('bg-g').value = clamp255(bg.g || 0);

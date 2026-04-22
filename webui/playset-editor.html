@@ -1469,14 +1469,24 @@
                         '<div class="user-info"><strong>' + escapeAttr(handle) + '</strong><br>' +
                         'Rep: ' + escapeAttr(String(rep)) + ' &middot; Artworks: ' + escapeAttr(String(artworks)) + '</div>';
 
-                    // Auto-fill display name
+                    // Auto-fill display name; append "'s reactions" for reactions channels
+                    var isReactions;
+                    if (channelIndex !== null) {
+                        isReactions = !!(state.channels[channelIndex] &&
+                                         state.channels[channelIndex].type === 'reactions');
+                    } else {
+                        var typeSel = document.getElementById('channelType');
+                        isReactions = !!(typeSel && typeSel.value === 'reactions');
+                    }
+                    var autoDisplayName = isReactions ? (handle + "'s reactions") : handle;
+
                     if (displayNameTarget && typeof displayNameTarget === 'string') {
                         var dnInput = document.getElementById(displayNameTarget);
-                        if (dnInput) dnInput.value = handle;
+                        if (dnInput) dnInput.value = autoDisplayName;
                     } else if (channelIndex !== null) {
                         var dnCard = document.getElementById('displayName_' + channelIndex);
-                        if (dnCard) dnCard.value = handle;
-                        state.channels[channelIndex].display_name = handle;
+                        if (dnCard) dnCard.value = autoDisplayName;
+                        state.channels[channelIndex].display_name = autoDisplayName;
                     }
                 } catch (e) {
                     el.className = 'check-results';

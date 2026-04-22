@@ -1340,9 +1340,16 @@
                 case 'hashtag':
                     html += '<div class="form-group" style="margin-bottom: 0;">' +
                         '<label class="form-label" style="font-size: 12px;">Hashtag (without #)</label>' +
-                        '<input type="text" class="form-input" placeholder="pixelart" maxlength="32" ' +
+                        '<div class="sqid-input-row">' +
+                        '<input type="text" class="form-input" id="hashtagInput_' + index + '" placeholder="pixelart" maxlength="64" ' +
                         'value="' + escapeAttr(channel.identifier || '') + '" ' +
+                        'oninput="updateCardHashtagCheckButton(' + index + ')" ' +
                         'onchange="updateChannelField(' + index + ', \'identifier\', this.value)">' +
+                        '<button type="button" class="btn btn-secondary btn-small" id="hashtagCheckBtn_' + index + '" ' +
+                        'onclick="verifyHashtag(document.getElementById(\'hashtagInput_' + index + '\').value, \'hashtagResults_' + index + '\', null, ' + index + ')" ' +
+                        (isValidHashtag(channel.identifier) ? '' : 'disabled') + '>Check</button>' +
+                        '</div>' +
+                        '<div class="check-results" id="hashtagResults_' + index + '">Enter hashtag to check.</div>' +
                         '</div>';
                     break;
 
@@ -1412,6 +1419,11 @@
             return !!value && /^[a-zA-Z0-9]+$/.test(value);
         }
 
+        function isValidHashtag(value) {
+            var v = (value || '').trim();
+            return v.length > 0 && v.length <= 64 && !/\s/.test(v);
+        }
+
         function updateModalCheckButton() {
             var btn = document.getElementById('modalCheckBtn');
             if (btn) {
@@ -1430,24 +1442,85 @@
             }
         }
 
-        function verifyArtist(sqid, resultsId, displayNameTarget, channelIndex) {
-            sqid = (sqid || '').trim();
-            var el = document.getElementById(resultsId);
+        function updateModalHashtagCheckButton() {
+            var btn = document.getElementById('modalHashtagCheckBtn');
+            if (btn) {
+                var val = document.getElementById('hashtagIdentifier').value.trim();
+                btn.disabled = !isValidHashtag(val);
+            }
+        }
+
+        function updateCardHashtagCheckButton(index) {
+            var input = document.getElementById('hashtagInput_' + index);
+            var btn = document.getElementById('hashtagCheckBtn_' + index);
+            if (input && btn) {
+                var val = input.value.trim();
+                btn.disabled = !isValidHashtag(val);
+                updateChannelField(index, 'identifier', val);
+            }
+        }
+
+        var verifyCooldownUntil = 0;
+        var VERIFY_COOLDOWN_MS = 5000;
+
+        function buildVaultUrl(url) {
+            if (!url) return '';
+            return url.charAt(0) === '/' ? 'https://makapix.club' + url : url;
+        }
+
+        function formatCount(n, capped, noun) {
+            if (!n) return 'No ' + noun + ' yet';
+            if (capped) return '100+ ' + noun;
+            return n + ' ' + noun;
+        }
+
+        function setDisplayName(displayNameTarget, channelIndex, name) {
+            if (displayNameTarget && typeof displayNameTarget === 'string') {
+                var dnInput = document.getElementById(displayNameTarget);
+                if (dnInput) dnInput.value = name;
+            } else if (channelIndex !== null && channelIndex !== undefined) {
+                var dnCard = document.getElementById('displayName_' + channelIndex);
+                if (dnCard) dnCard.value = name;
+                if (state.channels[channelIndex]) {
+                    state.channels[channelIndex].display_name = name;
+                }
+            }
+        }
+
+        function runVerify(config) {
+            var el = document.getElementById(config.resultsId);
             if (!el) return;
-            if (!isValidSqid(sqid)) {
+            var input = (config.input || '').trim();
+
+            if (!config.isValid(input)) {
                 el.className = 'check-results';
-                el.innerHTML = 'Enter sqid to check.';
+                el.innerHTML = config.placeholder;
                 return;
             }
+
+            var now = Date.now();
+            if (now < verifyCooldownUntil) {
+                var wait = Math.ceil((verifyCooldownUntil - now) / 1000);
+                el.className = 'check-results';
+                el.innerHTML = 'Rate limited &mdash; wait ' + wait + 's.';
+                return;
+            }
+
             el.className = 'check-results';
             el.innerHTML = 'Querying Makapix Club...';
 
             var xhr = new XMLHttpRequest();
-            xhr.open('GET', 'https://makapix.club/api/player/verify-user/' + encodeURIComponent(sqid), true);
+            xhr.open('GET', 'https://makapix.club' + config.endpoint + encodeURIComponent(input), true);
             xhr.onload = function() {
                 if (xhr.status === 404) {
                     el.className = 'check-results';
-                    el.innerHTML = 'User not found.';
+                    el.innerHTML = config.notFoundMessage;
+                    return;
+                }
+                if (xhr.status === 429) {
+                    verifyCooldownUntil = Date.now() + VERIFY_COOLDOWN_MS;
+                    el.className = 'check-results';
+                    el.innerHTML = 'Rate limited &mdash; wait ' + Math.ceil(VERIFY_COOLDOWN_MS / 1000) + 's.';
                     return;
                 }
                 if (xhr.status !== 200) {
@@ -1457,37 +1530,7 @@
                 }
                 try {
                     var data = JSON.parse(xhr.responseText);
-                    var handle = data.handle || sqid;
-                    var avatarUrl = data.avatar_url && data.avatar_url.charAt(0) === '/' ?
-                        'https://makapix.club' + data.avatar_url : data.avatar_url;
-                    var avatarHtml = avatarUrl ?
-                        '<img class="avatar" src="' + escapeAttr(avatarUrl) + '" alt="avatar">' : '';
-                    var rep = data.reputation !== undefined ? data.reputation : '?';
-                    var artworks = data.artwork_count !== undefined ? data.artwork_count : '?';
-                    el.className = 'check-results has-data';
-                    el.innerHTML = avatarHtml +
-                        '<div class="user-info"><strong>' + escapeAttr(handle) + '</strong><br>' +
-                        'Rep: ' + escapeAttr(String(rep)) + ' &middot; Artworks: ' + escapeAttr(String(artworks)) + '</div>';
-
-                    // Auto-fill display name; append "'s reactions" for reactions channels
-                    var isReactions;
-                    if (channelIndex !== null) {
-                        isReactions = !!(state.channels[channelIndex] &&
-                                         state.channels[channelIndex].type === 'reactions');
-                    } else {
-                        var typeSel = document.getElementById('channelType');
-                        isReactions = !!(typeSel && typeSel.value === 'reactions');
-                    }
-                    var autoDisplayName = isReactions ? (handle + "'s reactions") : handle;
-
-                    if (displayNameTarget && typeof displayNameTarget === 'string') {
-                        var dnInput = document.getElementById(displayNameTarget);
-                        if (dnInput) dnInput.value = autoDisplayName;
-                    } else if (channelIndex !== null) {
-                        var dnCard = document.getElementById('displayName_' + channelIndex);
-                        if (dnCard) dnCard.value = autoDisplayName;
-                        state.channels[channelIndex].display_name = autoDisplayName;
-                    }
+                    config.renderSuccess(el, data);
                 } catch (e) {
                     el.className = 'check-results';
                     el.innerHTML = 'Invalid response.';
@@ -1498,6 +1541,92 @@
                 el.innerHTML = 'Network error.';
             };
             xhr.send();
+        }
+
+        function verifyUser(sqid, resultsId, displayNameTarget, channelIndex) {
+            runVerify({
+                input: sqid,
+                isValid: isValidSqid,
+                placeholder: 'Enter sqid to check.',
+                endpoint: '/api/player/verify-user/',
+                notFoundMessage: 'User not found.',
+                resultsId: resultsId,
+                renderSuccess: function(el, data) {
+                    var handle = data.handle || sqid;
+                    var avatarUrl = buildVaultUrl(data.avatar_url);
+                    var avatarHtml = avatarUrl ?
+                        '<img class="avatar" src="' + escapeAttr(avatarUrl) + '" alt="avatar">' : '';
+                    var rep = data.reputation !== undefined ? data.reputation : '?';
+                    var artworks = data.artwork_count !== undefined ? data.artwork_count : '?';
+                    el.className = 'check-results has-data';
+                    el.innerHTML = avatarHtml +
+                        '<div class="user-info"><strong>' + escapeAttr(handle) + '</strong><br>' +
+                        'Rep: ' + escapeAttr(String(rep)) + ' &middot; Artworks: ' + escapeAttr(String(artworks)) + '</div>';
+                    setDisplayName(displayNameTarget, channelIndex, handle);
+                }
+            });
+        }
+
+        function verifyReactions(sqid, resultsId, displayNameTarget, channelIndex) {
+            runVerify({
+                input: sqid,
+                isValid: isValidSqid,
+                placeholder: 'Enter sqid to check.',
+                endpoint: '/api/player/verify-reactions/',
+                notFoundMessage: 'User not found.',
+                resultsId: resultsId,
+                renderSuccess: function(el, data) {
+                    var handle = data.handle || sqid;
+                    var thumbUrl = buildVaultUrl(data.latest_artwork_url);
+                    var thumbHtml = thumbUrl ?
+                        '<img class="avatar" src="' + escapeAttr(thumbUrl) + '" alt="preview">' : '';
+                    var count = formatCount(data.artwork_count || 0, !!data.artwork_count_capped, 'reactions');
+                    el.className = 'check-results has-data';
+                    el.innerHTML = thumbHtml +
+                        '<div class="user-info"><strong>' + escapeAttr(handle) + '</strong><br>' +
+                        escapeAttr(count) + '</div>';
+                    setDisplayName(displayNameTarget, channelIndex, handle + "'s reactions");
+                }
+            });
+        }
+
+        function verifyHashtag(tag, resultsId, displayNameTarget, channelIndex) {
+            runVerify({
+                input: tag,
+                isValid: isValidHashtag,
+                placeholder: 'Enter hashtag to check.',
+                endpoint: '/api/player/verify-hashtag/',
+                notFoundMessage: 'Hashtag not found.',
+                resultsId: resultsId,
+                renderSuccess: function(el, data) {
+                    var normalizedTag = data.tag || (tag || '').trim();
+                    var thumbUrl = buildVaultUrl(data.latest_artwork_url);
+                    var thumbHtml = thumbUrl ?
+                        '<img class="avatar" src="' + escapeAttr(thumbUrl) + '" alt="preview">' : '';
+                    var count = formatCount(data.artwork_count || 0, !!data.artwork_count_capped, 'artworks');
+                    el.className = 'check-results has-data';
+                    el.innerHTML = thumbHtml +
+                        '<div class="user-info"><strong>#' + escapeAttr(normalizedTag) + '</strong><br>' +
+                        escapeAttr(count) + '</div>';
+                    setDisplayName(displayNameTarget, channelIndex, '#' + normalizedTag);
+                }
+            });
+        }
+
+        function verifyArtist(sqid, resultsId, displayNameTarget, channelIndex) {
+            var isReactions;
+            if (channelIndex !== null && channelIndex !== undefined) {
+                isReactions = !!(state.channels[channelIndex] &&
+                                 state.channels[channelIndex].type === 'reactions');
+            } else {
+                var typeSel = document.getElementById('channelType');
+                isReactions = !!(typeSel && typeSel.value === 'reactions');
+            }
+            if (isReactions) {
+                verifyReactions(sqid, resultsId, displayNameTarget, channelIndex);
+            } else {
+                verifyUser(sqid, resultsId, displayNameTarget, channelIndex);
+            }
         }
 
         function handleGiphyModeChange(index, mode) {
@@ -1632,7 +1761,13 @@
                 case 'hashtag':
                     html = '<div class="form-group">' +
                         '<label class="form-label">Hashtag (without #)</label>' +
-                        '<input type="text" id="hashtagIdentifier" class="form-input" placeholder="pixelart" maxlength="32">' +
+                        '<div class="sqid-input-row">' +
+                        '<input type="text" id="hashtagIdentifier" class="form-input" placeholder="pixelart" maxlength="64" ' +
+                        'oninput="updateModalHashtagCheckButton()">' +
+                        '<button type="button" class="btn btn-secondary btn-small" id="modalHashtagCheckBtn" ' +
+                        'onclick="verifyHashtag(document.getElementById(\'hashtagIdentifier\').value, \'modalHashtagResults\', \'channelDisplayName\', null)" disabled>Check</button>' +
+                        '</div>' +
+                        '<div class="check-results" id="modalHashtagResults">Enter hashtag to check.</div>' +
                         '</div>';
                     break;
 

@@ -53,6 +53,7 @@ static const char *channel_to_string(makapix_channel_type_t channel)
     case MAKAPIX_CHANNEL_PROMOTED: return "promoted";
     case MAKAPIX_CHANNEL_USER: return "user";
     case MAKAPIX_CHANNEL_BY_USER: return "by_user";
+    case MAKAPIX_CHANNEL_REACTIONS: return "reactions";
     case MAKAPIX_CHANNEL_HASHTAG: return "hashtag";
     case MAKAPIX_CHANNEL_ARTWORK_SINGLE: return "artwork";
     default: return "all";
@@ -516,7 +517,8 @@ esp_err_t makapix_api_query_posts(const makapix_query_request_t *req, makapix_qu
     cJSON_AddStringToObject(root, "channel", channel_to_string(req->channel));
     cJSON_AddStringToObject(root, "sort", sort_to_string(req->sort));
 
-    if (req->channel == MAKAPIX_CHANNEL_BY_USER) {
+    if (req->channel == MAKAPIX_CHANNEL_BY_USER ||
+        req->channel == MAKAPIX_CHANNEL_REACTIONS) {
         cJSON_AddStringToObject(root, "user_sqid", req->user_sqid);
     } else if (req->channel == MAKAPIX_CHANNEL_HASHTAG) {
         cJSON_AddStringToObject(root, "hashtag", req->hashtag);

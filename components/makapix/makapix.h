@@ -167,10 +167,10 @@ esp_err_t makapix_get_provisioning_status(char *out_status, size_t max_len);
 /**
  * @brief Switch to a remote channel
  *
- * Creates or switches to a Makapix remote channel (all, promoted, user, by_user).
+ * Creates or switches to a Makapix remote channel (all, promoted, user, by_user, reactions).
  *
- * @param channel Channel name ("all", "promoted", "user", "by_user", or "hashtag")
- * @param identifier User sqid (for "by_user") or hashtag (for "hashtag"), NULL otherwise
+ * @param channel Channel name ("all", "promoted", "user", "by_user", "reactions", or "hashtag")
+ * @param identifier User sqid (for "by_user"/"reactions") or hashtag (for "hashtag"), NULL otherwise
  * @param display_handle Display name for UI (e.g., user's display name), NULL to use identifier
  * @return ESP_OK on success, error code otherwise
  */
@@ -226,8 +226,8 @@ void makapix_abort_channel_load(void);
  * If no channel is loading, this triggers an immediate switch via the
  * command queue.
  *
- * @param channel Channel name ("all", "promoted", "user", "by_user", or "hashtag")
- * @param identifier User sqid (for "by_user") or hashtag (for "hashtag"), NULL otherwise
+ * @param channel Channel name ("all", "promoted", "user", "by_user", "reactions", or "hashtag")
+ * @param identifier User sqid (for "by_user"/"reactions") or hashtag (for "hashtag"), NULL otherwise
  * @param display_handle Display name for UI (e.g., user's display name), NULL to use identifier
  * @return ESP_OK on success
  */
@@ -273,8 +273,8 @@ void makapix_clear_current_channel(void);
  * Does NOT change the "current channel" or trigger navigation.
  * This is called by Play Scheduler to refresh channels in the background.
  *
- * @param channel_type Channel type: "all", "promoted", "by_user", "hashtag"
- * @param identifier User sqid for "by_user", hashtag for "hashtag", NULL otherwise
+ * @param channel_type Channel type: "all", "promoted", "by_user", "reactions", "hashtag"
+ * @param identifier User sqid for "by_user"/"reactions", hashtag for "hashtag", NULL otherwise
  * @return ESP_OK on success
  */
 esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *identifier);

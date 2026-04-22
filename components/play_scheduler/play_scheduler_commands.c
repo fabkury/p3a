@@ -475,6 +475,8 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
             }
         } else if (spec->type == PS_CHANNEL_TYPE_USER) {
             p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_BY_USER, spec->identifier);
+        } else if (spec->type == PS_CHANNEL_TYPE_REACTIONS) {
+            p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_REACTIONS, spec->identifier);
         } else if (spec->type == PS_CHANNEL_TYPE_HASHTAG) {
             p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_HASHTAG, spec->identifier);
         } else if (spec->type == PS_CHANNEL_TYPE_ARTWORK) {
@@ -658,6 +660,36 @@ esp_err_t play_scheduler_play_user_channel(const char *user_sqid)
 
     cmd->channels[0].type = PS_CHANNEL_TYPE_USER;
     strlcpy(cmd->channels[0].name, "user", sizeof(cmd->channels[0].name));
+    strlcpy(cmd->channels[0].identifier, user_sqid, sizeof(cmd->channels[0].identifier));
+    cmd->channels[0].weight = 1;
+    ps_ensure_display_name(&cmd->channels[0]);
+
+    esp_err_t result = play_scheduler_execute_command(cmd);
+    free(cmd);
+    return result;
+}
+
+esp_err_t play_scheduler_play_reactions_channel(const char *user_sqid)
+{
+    if (!user_sqid) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(TAG, "play_reactions_channel: %s", user_sqid);
+
+    // Heap allocate to avoid ~4.6KB stack usage (called from 8KB stack tasks)
+    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
+    if (!cmd) {
+        ESP_LOGE(TAG, "Failed to allocate command struct");
+        return ESP_ERR_NO_MEM;
+    }
+
+    cmd->channel_count = 1;
+    cmd->exposure_mode = PS_EXPOSURE_EQUAL;
+    cmd->pick_mode = PS_PICK_RANDOM;
+
+    cmd->channels[0].type = PS_CHANNEL_TYPE_REACTIONS;
+    strlcpy(cmd->channels[0].name, "reactions", sizeof(cmd->channels[0].name));
     strlcpy(cmd->channels[0].identifier, user_sqid, sizeof(cmd->channels[0].identifier));
     cmd->channels[0].weight = 1;
     ps_ensure_display_name(&cmd->channels[0]);

@@ -34,6 +34,7 @@ ps_channel_type_t playset_parse_channel_type(const char *type_str)
 {
     if (!type_str) return PS_CHANNEL_TYPE_NAMED;
     if (strcmp(type_str, "user") == 0) return PS_CHANNEL_TYPE_USER;
+    if (strcmp(type_str, "reactions") == 0) return PS_CHANNEL_TYPE_REACTIONS;
     if (strcmp(type_str, "hashtag") == 0) return PS_CHANNEL_TYPE_HASHTAG;
     if (strcmp(type_str, "sdcard") == 0) return PS_CHANNEL_TYPE_SDCARD;
     if (strcmp(type_str, "giphy") == 0) return PS_CHANNEL_TYPE_GIPHY;
@@ -65,6 +66,7 @@ const char *playset_channel_type_str(ps_channel_type_t type)
 {
     switch (type) {
     case PS_CHANNEL_TYPE_USER:    return "user";
+    case PS_CHANNEL_TYPE_REACTIONS: return "reactions";
     case PS_CHANNEL_TYPE_HASHTAG: return "hashtag";
     case PS_CHANNEL_TYPE_SDCARD:  return "sdcard";
     case PS_CHANNEL_TYPE_GIPHY:   return "giphy";
@@ -142,6 +144,9 @@ esp_err_t playset_json_parse(const cJSON *json, ps_scheduler_command_t *out)
             switch (spec->type) {
             case PS_CHANNEL_TYPE_USER:
                 strncpy(spec->name, "user", sizeof(spec->name) - 1);
+                break;
+            case PS_CHANNEL_TYPE_REACTIONS:
+                strncpy(spec->name, "reactions", sizeof(spec->name) - 1);
                 break;
             case PS_CHANNEL_TYPE_HASHTAG:
                 strncpy(spec->name, "hashtag", sizeof(spec->name) - 1);

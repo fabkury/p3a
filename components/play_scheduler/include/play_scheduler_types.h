@@ -85,6 +85,7 @@ typedef enum {
 typedef enum {
     PS_CHANNEL_TYPE_NAMED,    // Named channels: spec_name = "all", "promoted"
     PS_CHANNEL_TYPE_USER,     // User channels: identifier = sqid
+    PS_CHANNEL_TYPE_REACTIONS,// Reactions channels: identifier = sqid of target user
     PS_CHANNEL_TYPE_HASHTAG,  // Hashtag channels: identifier = tag
     PS_CHANNEL_TYPE_SDCARD,   // Local SD card files
     PS_CHANNEL_TYPE_ARTWORK,  // Single artwork (in-memory only)

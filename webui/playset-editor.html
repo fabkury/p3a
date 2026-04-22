@@ -635,6 +635,7 @@
                 <select id="channelType" class="form-input" onchange="updateChannelTypeFields()">
                     <option value="named">Makapix Named Channel</option>
                     <option value="user">Makapix Artist</option>
+                    <option value="reactions">Makapix Artist Reactions</option>
                     <option value="hashtag">Makapix Hashtag</option>
                     <option value="sdcard">Local SD Card</option>
                     <option value="giphy">Giphy</option>
@@ -690,6 +691,7 @@
         var channelTypeLabels = {
             named: 'Named',
             user: 'Artist',
+            reactions: 'Artist Reactions',
             hashtag: 'Hashtag',
             sdcard: 'SD Card',
             giphy: 'Giphy'
@@ -1319,6 +1321,7 @@
                     break;
 
                 case 'user':
+                case 'reactions':
                     html += '<div class="form-group" style="margin-bottom: 0;">' +
                         '<label class="form-label" style="font-size: 12px;">Artist ID (sqid)</label>' +
                         '<div class="sqid-input-row">' +
@@ -1381,6 +1384,8 @@
                     return channel.name === 'all' ? 'All Recent Artworks' : 'Promoted Artworks';
                 case 'user':
                     return 'Artist: ' + (channel.identifier || 'unknown');
+                case 'reactions':
+                    return 'Reactions: ' + (channel.identifier || 'unknown');
                 case 'hashtag':
                     return '#' + (channel.identifier || 'tag');
                 case 'sdcard':
@@ -1601,6 +1606,7 @@
                     break;
 
                 case 'user':
+                case 'reactions':
                     html = '<div class="form-group">' +
                         '<label class="form-label">Artist ID (sqid)</label>' +
                         '<div class="sqid-input-row">' +
@@ -1682,6 +1688,15 @@
 
                 case 'user':
                     channel.name = 'user';
+                    channel.identifier = document.getElementById('userIdentifier').value.trim();
+                    if (!channel.identifier) {
+                        showToast('Please enter an artist ID', 'error');
+                        return;
+                    }
+                    break;
+
+                case 'reactions':
+                    channel.name = 'reactions';
                     channel.identifier = document.getElementById('userIdentifier').value.trim();
                     if (!channel.identifier) {
                         showToast('Please enter an artist ID', 'error');

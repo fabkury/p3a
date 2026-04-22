@@ -254,6 +254,15 @@ static void makapix_command_handler(const char *command_type, cJSON *payload)
             const char *sqid = cJSON_GetStringValue(user_sqid);
             err = play_scheduler_play_user_channel(sqid);
             snprintf(playset_name, sizeof(playset_name), "by_user_%s", sqid);
+        } else if (strcmp(channel, "reactions") == 0) {
+            cJSON *user_sqid = cJSON_GetObjectItem(payload, "user_sqid");
+            if (!user_sqid || !cJSON_IsString(user_sqid)) {
+                ESP_LOGE(HTTP_API_TAG, "play_channel reactions: missing user_sqid");
+                return;
+            }
+            const char *sqid = cJSON_GetStringValue(user_sqid);
+            err = play_scheduler_play_reactions_channel(sqid);
+            snprintf(playset_name, sizeof(playset_name), "reactions_%s", sqid);
         } else if (strcmp(channel, "hashtag") == 0) {
             cJSON *hashtag = cJSON_GetObjectItem(payload, "hashtag");
             if (!hashtag || !cJSON_IsString(hashtag)) {

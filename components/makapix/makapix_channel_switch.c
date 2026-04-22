@@ -32,6 +32,13 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier,
         }
         ch_type = PS_CHANNEL_TYPE_USER;
         ps_compute_channel_id(ch_type, "user", identifier, channel_id, sizeof(channel_id));
+    } else if (strcmp(channel, "reactions") == 0) {
+        if (!identifier || strlen(identifier) == 0) {
+            ESP_LOGE(MAKAPIX_TAG, "identifier required for reactions channel");
+            return ESP_ERR_INVALID_ARG;
+        }
+        ch_type = PS_CHANNEL_TYPE_REACTIONS;
+        ps_compute_channel_id(ch_type, "reactions", identifier, channel_id, sizeof(channel_id));
     } else if (strcmp(channel, "hashtag") == 0) {
         if (!identifier || strlen(identifier) == 0) {
             ESP_LOGE(MAKAPIX_TAG, "identifier required for hashtag channel");
@@ -67,6 +74,9 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier,
     } else if (strcmp(channel, "by_user") == 0) {
         const char *display = (display_handle && display_handle[0]) ? display_handle : identifier;
         snprintf(channel_name, sizeof(channel_name), "@%s's Artworks", display);
+    } else if (strcmp(channel, "reactions") == 0) {
+        const char *display = (display_handle && display_handle[0]) ? display_handle : identifier;
+        snprintf(channel_name, sizeof(channel_name), "@%s's Reactions", display);
     } else if (strcmp(channel, "hashtag") == 0) {
         snprintf(channel_name, sizeof(channel_name), "#%s", identifier);
     } else {
@@ -377,6 +387,8 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier,
     // Switch play_scheduler to this channel and start playback
     if (strcmp(channel, "by_user") == 0 && identifier) {
         err = play_scheduler_play_user_channel(identifier);
+    } else if (strcmp(channel, "reactions") == 0 && identifier) {
+        err = play_scheduler_play_reactions_channel(identifier);
     } else if (strcmp(channel, "hashtag") == 0 && identifier) {
         err = play_scheduler_play_hashtag_channel(identifier);
     } else {
@@ -402,6 +414,8 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier,
         (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_USER, NULL);
     } else if (strcmp(channel, "by_user") == 0) {
         (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_BY_USER, identifier);
+    } else if (strcmp(channel, "reactions") == 0) {
+        (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_REACTIONS, identifier);
     } else if (strcmp(channel, "hashtag") == 0) {
         (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_HASHTAG, identifier);
     } else {
@@ -506,6 +520,8 @@ esp_err_t makapix_request_channel_switch(const char *channel, const char *identi
     char new_channel_id[128] = {0};
     if (strcmp(channel, "by_user") == 0 && identifier) {
         ps_compute_channel_id(PS_CHANNEL_TYPE_USER, "user", identifier, new_channel_id, sizeof(new_channel_id));
+    } else if (strcmp(channel, "reactions") == 0 && identifier) {
+        ps_compute_channel_id(PS_CHANNEL_TYPE_REACTIONS, "reactions", identifier, new_channel_id, sizeof(new_channel_id));
     } else if (strcmp(channel, "hashtag") == 0 && identifier) {
         ps_compute_channel_id(PS_CHANNEL_TYPE_HASHTAG, "hashtag", identifier, new_channel_id, sizeof(new_channel_id));
     } else {

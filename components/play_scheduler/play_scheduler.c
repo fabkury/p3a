@@ -81,6 +81,9 @@ void ps_get_display_name_from_spec(ps_channel_type_t type, const char *spec_name
         case PS_CHANNEL_TYPE_USER:
             snprintf(out_name, max_len, "User: %.48s", identifier);
             break;
+        case PS_CHANNEL_TYPE_REACTIONS:
+            snprintf(out_name, max_len, "Reactions: %.48s", identifier);
+            break;
         case PS_CHANNEL_TYPE_HASHTAG:
             snprintf(out_name, max_len, "#%.56s", identifier);
             break;
@@ -181,6 +184,7 @@ static esp_err_t load_channel_by_id(const ps_channel_state_t *ch_state, channel_
     // Makapix channels
     if (ch_state->type == PS_CHANNEL_TYPE_NAMED ||
         ch_state->type == PS_CHANNEL_TYPE_USER ||
+        ch_state->type == PS_CHANNEL_TYPE_REACTIONS ||
         ch_state->type == PS_CHANNEL_TYPE_HASHTAG) {
         char vault_path[256] = {0};
         char channel_path[256] = {0};

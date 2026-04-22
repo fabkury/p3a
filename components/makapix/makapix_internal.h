@@ -47,6 +47,7 @@ void ugfx_ui_hide_channel_message(void);
 #include "play_scheduler_types.h"  // ps_channel_type_t enum
 esp_err_t play_scheduler_play_named_channel(const char *name);
 esp_err_t play_scheduler_play_user_channel(const char *user_sqid);
+esp_err_t play_scheduler_play_reactions_channel(const char *user_sqid);
 esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag);
 void ps_compute_channel_id(ps_channel_type_t type, const char *name,
                            const char *identifier, char *out_id, size_t max_len);

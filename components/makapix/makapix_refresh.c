@@ -178,6 +178,10 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
     } else if (strcmp(channel_type, "by_user") == 0 && identifier) {
         ps_compute_channel_id(PS_CHANNEL_TYPE_USER, "user", identifier, channel_id, sizeof(channel_id));
         snprintf(channel_name, sizeof(channel_name), "User %s", identifier);
+    } else if (strcmp(channel_type, "reactions") == 0 && identifier) {
+        ps_compute_channel_id(PS_CHANNEL_TYPE_REACTIONS, "reactions", identifier,
+                              channel_id, sizeof(channel_id));
+        snprintf(channel_name, sizeof(channel_name), "Reactions: %s", identifier);
     } else if (strcmp(channel_type, "hashtag") == 0 && identifier) {
         ps_compute_channel_id(PS_CHANNEL_TYPE_HASHTAG, "hashtag", identifier, channel_id, sizeof(channel_id));
         snprintf(channel_name, sizeof(channel_name), "#%s", identifier);

@@ -371,7 +371,9 @@ static void send_view_event(void)
     const char *channel_user_sqid = NULL;
     const char *channel_hashtag = NULL;
     
-    if (channel_info.type == P3A_CHANNEL_MAKAPIX_BY_USER && channel_info.identifier[0] != '\0') {
+    if ((channel_info.type == P3A_CHANNEL_MAKAPIX_BY_USER ||
+         channel_info.type == P3A_CHANNEL_MAKAPIX_REACTIONS) &&
+        channel_info.identifier[0] != '\0') {
         channel_user_sqid = channel_info.identifier;
     } else if (channel_info.type == P3A_CHANNEL_MAKAPIX_HASHTAG && channel_info.identifier[0] != '\0') {
         channel_hashtag = channel_info.identifier;
@@ -413,6 +415,8 @@ static const char *get_channel_name_for_view(p3a_channel_type_t channel_type)
             return "by_user";  // Server calls this "by_user"
         case P3A_CHANNEL_MAKAPIX_BY_USER:
             return "by_user";
+        case P3A_CHANNEL_MAKAPIX_REACTIONS:
+            return "reactions";
         case P3A_CHANNEL_MAKAPIX_HASHTAG:
             return "hashtag";
         case P3A_CHANNEL_MAKAPIX_ARTWORK:

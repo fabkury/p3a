@@ -39,7 +39,9 @@ esp_err_t p3a_state_switch_channel(p3a_channel_type_t type, const char *identifi
     // Update channel info
     s_state.current_channel.type = type;
 
-    if (identifier && (type == P3A_CHANNEL_MAKAPIX_BY_USER || type == P3A_CHANNEL_MAKAPIX_HASHTAG)) {
+    if (identifier && (type == P3A_CHANNEL_MAKAPIX_BY_USER ||
+                       type == P3A_CHANNEL_MAKAPIX_REACTIONS ||
+                       type == P3A_CHANNEL_MAKAPIX_HASHTAG)) {
         snprintf(s_state.current_channel.identifier, sizeof(s_state.current_channel.identifier),
                  "%s", identifier);
     } else {

@@ -89,6 +89,7 @@ cJSON *build_current_artwork_json(void)
 
         case PS_CHANNEL_TYPE_NAMED:
         case PS_CHANNEL_TYPE_USER:
+        case PS_CHANNEL_TYPE_REACTIONS:
         case PS_CHANNEL_TYPE_HASHTAG: {
             uint8_t sha[32];
             if (storage_key_sha256(artwork.storage_key, sha) == ESP_OK) {

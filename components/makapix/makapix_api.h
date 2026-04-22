@@ -23,6 +23,7 @@ typedef enum {
     MAKAPIX_CHANNEL_PROMOTED,
     MAKAPIX_CHANNEL_USER,
     MAKAPIX_CHANNEL_BY_USER,
+    MAKAPIX_CHANNEL_REACTIONS,      // Posts a user has reacted to (identifier = user_sqid)
     MAKAPIX_CHANNEL_HASHTAG,        // Used for hashtag channels
     MAKAPIX_CHANNEL_ARTWORK_SINGLE, // Used for show_artwork
 } makapix_channel_type_t;
@@ -40,7 +41,7 @@ typedef enum {
 
 typedef struct {
     makapix_channel_type_t channel;
-    char user_sqid[64];     // Required when channel == BY_USER
+    char user_sqid[64];     // Required when channel == BY_USER or REACTIONS
     char hashtag[64];       // Required when channel == HASHTAG
     makapix_sort_mode_t sort;
     bool has_cursor;

@@ -38,8 +38,9 @@ Query N posts from a channel with sorting and pagination.
   "request_id": "unique-request-id",
   "request_type": "query_posts",
   "player_key": "player-uuid",
-  "channel": "all",  // "all", "promoted", "user", or "by_user"
-  "user_handle": "artist123",  // required when channel="by_user"
+  "channel": "all",  // "all", "promoted", "user", "by_user", or "reactions"
+  "user_handle": "artist123",  // required when channel="by_user" or "reactions"
+  "user_sqid": "abc123",  // alternative/authoritative identifier; preferred over user_handle when both are sent
   "sort": "server_order",  // "server_order", "created_at", or "random"
   "random_seed": 12345,  // optional, only used when sort="random"
   "cursor": null,  // optional, for pagination
@@ -51,7 +52,8 @@ Query N posts from a channel with sorting and pagination.
 - `all`: Recent posts from all users (respects visibility settings)
 - `promoted`: Only promoted posts (editor picks, frontpage, etc.)
 - `user`: Posts from the player owner's account
-- `by_user`: Posts from an arbitrary user specified by `user_handle`
+- `by_user`: Posts from an arbitrary user specified by `user_handle`/`user_sqid`
+- `reactions`: Posts that an arbitrary user (specified by `user_handle`/`user_sqid`) has reacted to. Deduped per post, latest-reaction-first. The `next_cursor` for this channel is an opaque base64 keyset string — echo it back verbatim, do not parse.
 
 **Sort Options:**
 - `server_order`: Original insertion order (by post ID)

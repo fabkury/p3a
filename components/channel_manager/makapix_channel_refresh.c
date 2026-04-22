@@ -112,6 +112,8 @@ void refresh_task_impl(void *pvParameters)
         strlcpy(display_name, "My Channel", sizeof(display_name));
     } else if (strcmp(ch->channel_key, "by_user") == 0) {
         snprintf(display_name, sizeof(display_name), "User: %.48s", ch->identifier);
+    } else if (strcmp(ch->channel_key, "reactions") == 0) {
+        snprintf(display_name, sizeof(display_name), "Reactions: %.48s", ch->identifier);
     } else if (strcmp(ch->channel_key, "hashtag") == 0) {
         snprintf(display_name, sizeof(display_name), "#%.56s", ch->identifier);
     } else {
@@ -141,6 +143,9 @@ void refresh_task_impl(void *pvParameters)
         channel_type = MAKAPIX_CHANNEL_USER;
     } else if (strcmp(ch->channel_key, "by_user") == 0) {
         channel_type = MAKAPIX_CHANNEL_BY_USER;
+        strlcpy(query_req.user_sqid, ch->identifier, sizeof(query_req.user_sqid));
+    } else if (strcmp(ch->channel_key, "reactions") == 0) {
+        channel_type = MAKAPIX_CHANNEL_REACTIONS;
         strlcpy(query_req.user_sqid, ch->identifier, sizeof(query_req.user_sqid));
     } else if (strcmp(ch->channel_key, "hashtag") == 0) {
         channel_type = MAKAPIX_CHANNEL_HASHTAG;

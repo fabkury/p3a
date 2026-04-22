@@ -56,6 +56,10 @@ void p3a_state_update_channel_display_name(p3a_channel_info_t *info)
             // "Makapix: @" is 11 bytes, so we have 64 - 11 = 53 bytes for identifier
             snprintf(info->display_name, sizeof(info->display_name), "Makapix: @%.53s", info->identifier);
             break;
+        case P3A_CHANNEL_MAKAPIX_REACTIONS:
+            // "Reactions: @" leaves 64 - 12 = 52 bytes for identifier
+            snprintf(info->display_name, sizeof(info->display_name), "Reactions: @%.52s", info->identifier);
+            break;
         case P3A_CHANNEL_MAKAPIX_HASHTAG:
             // "Makapix: #" is 11 bytes, so we have 64 - 11 = 53 bytes for identifier
             snprintf(info->display_name, sizeof(info->display_name), "Makapix: #%.53s", info->identifier);

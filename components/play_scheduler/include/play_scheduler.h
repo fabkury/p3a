@@ -108,6 +108,14 @@ esp_err_t play_scheduler_play_named_channel(const char *name);
 esp_err_t play_scheduler_play_user_channel(const char *user_sqid);
 
 /**
+ * @brief Convenience: Play a reactions channel (posts a user has reacted to)
+ *
+ * @param user_sqid Target user's sqid
+ * @return ESP_OK on success
+ */
+esp_err_t play_scheduler_play_reactions_channel(const char *user_sqid);
+
+/**
  * @brief Convenience: Play a hashtag channel
  *
  * @param hashtag Hashtag (without #)

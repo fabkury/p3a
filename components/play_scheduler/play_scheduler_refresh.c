@@ -283,6 +283,8 @@ static esp_err_t refresh_makapix_channel(ps_channel_state_t *ch)
         err = makapix_refresh_channel_index(ch->spec_name, NULL);
     } else if (ch->type == PS_CHANNEL_TYPE_USER) {
         err = makapix_refresh_channel_index("by_user", ch->identifier);
+    } else if (ch->type == PS_CHANNEL_TYPE_REACTIONS) {
+        err = makapix_refresh_channel_index("reactions", ch->identifier);
     } else if (ch->type == PS_CHANNEL_TYPE_HASHTAG) {
         err = makapix_refresh_channel_index("hashtag", ch->identifier);
     } else {
@@ -403,6 +405,7 @@ static void refresh_task(void *arg)
                 if ((t == PS_CHANNEL_TYPE_GIPHY ||
                      t == PS_CHANNEL_TYPE_NAMED ||
                      t == PS_CHANNEL_TYPE_USER ||
+                     t == PS_CHANNEL_TYPE_REACTIONS ||
                      t == PS_CHANNEL_TYPE_HASHTAG) &&
                     !state->channels[i].refresh_in_progress &&
                     !state->channels[i].refresh_pending) {
@@ -424,6 +427,7 @@ static void refresh_task(void *arg)
                 for (size_t i = 0; i < state->channel_count; i++) {
                     ps_channel_type_t t = state->channels[i].type;
                     if ((t == PS_CHANNEL_TYPE_USER ||
+                         t == PS_CHANNEL_TYPE_REACTIONS ||
                          t == PS_CHANNEL_TYPE_HASHTAG ||
                          t == PS_CHANNEL_TYPE_NAMED) &&
                         !state->channels[i].refresh_in_progress &&

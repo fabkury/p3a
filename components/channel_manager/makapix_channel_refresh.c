@@ -54,7 +54,7 @@ esp_err_t load_channel_metadata(makapix_channel_t *ch, char *out_cursor, time_t 
 
     if (out_cursor) {
         if (err == ESP_OK) {
-            strlcpy(out_cursor, meta.cursor, 64);
+            strlcpy(out_cursor, meta.cursor, sizeof(meta.cursor));
         } else {
             out_cursor[0] = '\0';
         }
@@ -177,8 +177,8 @@ void refresh_task_impl(void *pvParameters)
         query_req.has_cursor = false;
         query_req.cursor[0] = '\0';
 
-        // Load saved cursor if exists
-        char saved_cursor[64] = {0};
+        // Load saved cursor if exists; buffer matches channel_metadata_t.cursor size
+        char saved_cursor[256] = {0};
         time_t last_refresh_time = 0;
         load_channel_metadata(ch, saved_cursor, &last_refresh_time);
         if (strlen(saved_cursor) > 0) {

@@ -26,7 +26,7 @@ extern "C" {
  */
 typedef struct {
     time_t last_refresh;    ///< Unix timestamp of last successful server query (0 = never)
-    char cursor[64];        ///< Pagination cursor (empty string if unused)
+    char cursor[256];       ///< Pagination cursor (empty string if unused); opaque — may be base64 keyset
 } channel_metadata_t;
 
 /**

@@ -45,7 +45,7 @@ typedef struct {
     char hashtag[64];       // Required when channel == HASHTAG
     makapix_sort_mode_t sort;
     bool has_cursor;
-    char cursor[64];
+    char cursor[256];       // Opaque; reactions uses base64 keyset (~76 bytes), others use short decimal offsets
     uint8_t limit;          // 1-50
     bool random_seed_present;
     uint32_t random_seed;
@@ -100,7 +100,7 @@ typedef struct {
     makapix_post_t posts[MAKAPIX_MAX_POSTS_PER_RESPONSE];
     size_t post_count;
     bool has_more;
-    char next_cursor[64];
+    char next_cursor[256];
 } makapix_query_response_t;
 
 /**

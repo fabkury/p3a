@@ -435,16 +435,19 @@ esp_err_t p3a_state_wait_for_wifi(TickType_t timeout_ms);
 
 /**
  * @brief Switch to a channel
- * 
+ *
  * Performs a "cross-channel swap" - the next artwork displayed comes from
  * the new channel. If the channel has no artworks available, enters
  * CHANNEL_MESSAGE sub-state with appropriate message.
- * 
- * @param type Channel type
- * @param user_handle User handle (required for BY_USER, ignored otherwise)
+ *
+ * @param type         Channel type
+ * @param identifier   Identifier for BY_USER/REACTIONS (sqid) or HASHTAG (tag); NULL otherwise
+ * @param display_name Optional user-friendly name to display (e.g. artist handle, playset
+ *                     channel label). Pass NULL or "" to auto-derive from type+identifier.
  * @return ESP_OK on success
  */
-esp_err_t p3a_state_switch_channel(p3a_channel_type_t type, const char *identifier);
+esp_err_t p3a_state_switch_channel(p3a_channel_type_t type, const char *identifier,
+                                   const char *display_name);
 
 /**
  * @brief Switch to single-artwork channel (for show_artwork command)
@@ -462,7 +465,7 @@ esp_err_t p3a_state_show_artwork(const char *storage_key, const char *art_url, i
 /**
  * @brief Fall back to SD card channel
  * 
- * Convenience function equivalent to p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL).
+ * Convenience function equivalent to p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL, NULL).
  * Used when artwork download fails after retries.
  */
 esp_err_t p3a_state_fallback_to_sdcard(void);

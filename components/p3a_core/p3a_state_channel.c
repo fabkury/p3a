@@ -28,7 +28,8 @@ extern bool animation_player_is_animation_ready(void) __attribute__((weak));
 // Channel Management
 // ============================================================================
 
-esp_err_t p3a_state_switch_channel(p3a_channel_type_t type, const char *identifier)
+esp_err_t p3a_state_switch_channel(p3a_channel_type_t type, const char *identifier,
+                                   const char *display_name)
 {
     if (!s_state.initialized) return ESP_ERR_INVALID_STATE;
 
@@ -49,7 +50,13 @@ esp_err_t p3a_state_switch_channel(p3a_channel_type_t type, const char *identifi
     }
 
     memset(s_state.current_channel.storage_key, 0, sizeof(s_state.current_channel.storage_key));
-    p3a_state_update_channel_display_name(&s_state.current_channel);
+
+    if (display_name && display_name[0] != '\0') {
+        snprintf(s_state.current_channel.display_name, sizeof(s_state.current_channel.display_name),
+                 "%s", display_name);
+    } else {
+        p3a_state_update_channel_display_name(&s_state.current_channel);
+    }
 
     // Copy display name for logging after mutex release
     snprintf(display_name_copy, sizeof(display_name_copy), "%s", s_state.current_channel.display_name);
@@ -88,7 +95,7 @@ esp_err_t p3a_state_fallback_to_sdcard(void)
 {
     ESP_LOGI(TAG, "Falling back to SD card channel");
 
-    esp_err_t err = p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL);
+    esp_err_t err = p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL, NULL);
 
     // Switch play_scheduler to sdcard channel
     if (play_scheduler_play_named_channel) {

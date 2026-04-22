@@ -466,23 +466,23 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         // Update p3a_state with the new channel for view tracker and status API
         const ps_channel_spec_t *spec = &command->channels[0];
         if (spec->type == PS_CHANNEL_TYPE_SDCARD) {
-            p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL);
+            p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL, NULL);
         } else if (spec->type == PS_CHANNEL_TYPE_NAMED) {
             if (strcmp(spec->name, "all") == 0) {
-                p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_ALL, NULL);
+                p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_ALL, NULL, NULL);
             } else if (strcmp(spec->name, "promoted") == 0) {
-                p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_PROMOTED, NULL);
+                p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_PROMOTED, NULL, NULL);
             }
         } else if (spec->type == PS_CHANNEL_TYPE_USER) {
-            p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_BY_USER, spec->identifier);
+            p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_BY_USER, spec->identifier, spec->display_name);
         } else if (spec->type == PS_CHANNEL_TYPE_REACTIONS) {
-            p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_REACTIONS, spec->identifier);
+            p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_REACTIONS, spec->identifier, spec->display_name);
         } else if (spec->type == PS_CHANNEL_TYPE_HASHTAG) {
-            p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_HASHTAG, spec->identifier);
+            p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_HASHTAG, spec->identifier, spec->display_name);
         } else if (spec->type == PS_CHANNEL_TYPE_ARTWORK) {
-            p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_ARTWORK, NULL);
+            p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_ARTWORK, NULL, NULL);
         } else if (spec->type == PS_CHANNEL_TYPE_GIPHY) {
-            p3a_state_switch_channel(P3A_CHANNEL_GIPHY_TRENDING, NULL);
+            p3a_state_switch_channel(P3A_CHANNEL_GIPHY_TRENDING, NULL, NULL);
         }
     }
 

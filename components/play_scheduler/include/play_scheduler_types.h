@@ -83,13 +83,15 @@ typedef enum {
  * @brief Channel types
  */
 typedef enum {
-    PS_CHANNEL_TYPE_NAMED,    // Named channels: spec_name = "all", "promoted"
-    PS_CHANNEL_TYPE_USER,     // User channels: identifier = sqid
-    PS_CHANNEL_TYPE_REACTIONS,// Reactions channels: identifier = sqid of target user
-    PS_CHANNEL_TYPE_HASHTAG,  // Hashtag channels: identifier = tag
-    PS_CHANNEL_TYPE_SDCARD,   // Local SD card files
-    PS_CHANNEL_TYPE_ARTWORK,  // Single artwork (in-memory only)
-    PS_CHANNEL_TYPE_GIPHY,    // Giphy channels: spec_name = "trending", "search"; identifier = query
+    // NOTE: ordinals are persisted in playset files (playset_store.c stores as uint8_t).
+    // Only append new values at the end. Do not reorder or insert mid-enum.
+    PS_CHANNEL_TYPE_NAMED = 0,    // Named channels: spec_name = "all", "promoted"
+    PS_CHANNEL_TYPE_USER = 1,     // User channels: identifier = sqid
+    PS_CHANNEL_TYPE_HASHTAG = 2,  // Hashtag channels: identifier = tag
+    PS_CHANNEL_TYPE_SDCARD = 3,   // Local SD card files
+    PS_CHANNEL_TYPE_ARTWORK = 4,  // Single artwork (in-memory only)
+    PS_CHANNEL_TYPE_GIPHY = 5,    // Giphy channels: spec_name = "trending", "search"; identifier = query
+    PS_CHANNEL_TYPE_REACTIONS = 6,// Reactions channels: identifier = sqid of target user
 } ps_channel_type_t;
 
 /**

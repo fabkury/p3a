@@ -340,8 +340,12 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
                 }
                 free(cache->available_post_ids);
                 cache->available_post_ids = new_arr;
-                ESP_LOGI(TAG, "Grew available_post_ids for '%s': %zu -> %zu",
-                         cache->channel_id, cache->available_capacity, cache->entry_count);
+                {
+                    char _dn[64];
+                    ps_get_display_name(cache->channel_id, _dn, sizeof(_dn));
+                    ESP_LOGI(TAG, "Grew available_post_ids for '%s': %zu -> %zu",
+                             _dn, cache->available_capacity, cache->entry_count);
+                }
                 cache->available_capacity = cache->entry_count;
             } else {
                 {

@@ -18,6 +18,7 @@ set(srcs
     "display_reaction_overlay.c"
     "reaction_submit_img.c"
     "reaction_revoke_img.c"
+    "reaction_error_img.c"
 )
 
 if(CONFIG_P3A_PPA_UPSCALE_ENABLE)

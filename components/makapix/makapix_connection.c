@@ -13,6 +13,7 @@
 #include "makapix_channel_events.h"
 #include "makapix_api.h"
 #include "event_bus.h"
+#include "p3a_current_post.h"
 #include "esp_heap_caps.h"
 
 /**
@@ -88,7 +89,7 @@ void makapix_status_publish_task(void *pvParameters)
         
         // Publish status if MQTT is connected
         if (makapix_mqtt_is_connected()) {
-            makapix_mqtt_publish_status(makapix_get_current_post_id());
+            makapix_mqtt_publish_status(p3a_current_post_get_id());
         }
     }
 }
@@ -144,7 +145,7 @@ void makapix_mqtt_connection_callback(bool connected)
         event_bus_emit_simple(P3A_EVENT_MQTT_CONNECTED);
         
         // Publish initial status
-        makapix_mqtt_publish_status(makapix_get_current_post_id());
+        makapix_mqtt_publish_status(p3a_current_post_get_id());
 
         // Create status publish task if needed
         if (s_status_publish_task_handle == NULL) {

@@ -8,6 +8,7 @@
 
 #include "p3a_touch_router.h"
 #include "p3a_state.h"
+#include "p3a_current_post.h"
 #include "event_bus.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -64,16 +65,17 @@ extern bool playback_service_is_paused(void) __attribute__((weak));
 // Reaction overlay (from display_reaction_overlay.c via weak symbols)
 extern void reaction_overlay_show_submit(void) __attribute__((weak));
 extern void reaction_overlay_show_revoke(void) __attribute__((weak));
+extern void reaction_overlay_show_error(void) __attribute__((weak));
 
 // Makapix API reaction functions (from makapix_api.c via weak symbols)
 extern esp_err_t makapix_api_submit_reaction(int32_t post_id, const char *emoji) __attribute__((weak));
 extern esp_err_t makapix_api_revoke_reaction(int32_t post_id, const char *emoji) __attribute__((weak));
 
-// Current post info (from makapix.c via weak symbols)
-extern int32_t makapix_get_current_post_id(void) __attribute__((weak));
-// Returns post_source_t; declared as int to avoid play_scheduler_types.h dependency
-extern int makapix_get_current_post_source(void) __attribute__((weak));
-// POST_SOURCE_MAKAPIX == 1 (from play_scheduler_types.h)
+// MQTT connection probe (from makapix_mqtt.c via weak symbol)
+extern bool makapix_mqtt_is_connected(void) __attribute__((weak));
+
+// POST_SOURCE_MAKAPIX == 1 (from play_scheduler_types.h). Kept as a macro here
+// so p3a_core does not take a dependency on play_scheduler.
 #define REACTION_POST_SOURCE_MAKAPIX 1
 
 // USB touch forwarding (from app_usb.c via weak symbols)
@@ -120,6 +122,9 @@ static void reaction_mqtt_task(void *arg)
         }
     }
     if (err != ESP_OK) {
+        if (reaction_overlay_show_error) {
+            reaction_overlay_show_error();
+        }
         ESP_LOGW(TAG, "Reaction %s failed: %s",
                  p->is_submit ? "submit" : "revoke", esp_err_to_name(err));
     }
@@ -191,14 +196,17 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
             
         case P3A_TOUCH_EVENT_SWIPE_UP: {
             // Submit emoji reaction to current Makapix post
-            if (!makapix_get_current_post_source ||
-                makapix_get_current_post_source() != REACTION_POST_SOURCE_MAKAPIX) {
+            if (p3a_current_post_get_source() != REACTION_POST_SOURCE_MAKAPIX) {
                 ESP_LOGI(TAG, "Swipe up ignored - not a Makapix post");
                 return ESP_OK;
             }
-            int32_t post_id = makapix_get_current_post_id ? makapix_get_current_post_id() : 0;
+            int32_t post_id = p3a_current_post_get_id();
             if (post_id <= 0) {
                 ESP_LOGI(TAG, "Swipe up ignored - no valid post_id");
+                return ESP_OK;
+            }
+            if (!makapix_mqtt_is_connected || !makapix_mqtt_is_connected()) {
+                ESP_LOGI(TAG, "Swipe up ignored - MQTT not connected");
                 return ESP_OK;
             }
             if (reaction_overlay_show_submit) {
@@ -211,14 +219,17 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
 
         case P3A_TOUCH_EVENT_SWIPE_DOWN: {
             // Revoke emoji reaction from current Makapix post
-            if (!makapix_get_current_post_source ||
-                makapix_get_current_post_source() != REACTION_POST_SOURCE_MAKAPIX) {
+            if (p3a_current_post_get_source() != REACTION_POST_SOURCE_MAKAPIX) {
                 ESP_LOGI(TAG, "Swipe down ignored - not a Makapix post");
                 return ESP_OK;
             }
-            int32_t post_id = makapix_get_current_post_id ? makapix_get_current_post_id() : 0;
+            int32_t post_id = p3a_current_post_get_id();
             if (post_id <= 0) {
                 ESP_LOGI(TAG, "Swipe down ignored - no valid post_id");
+                return ESP_OK;
+            }
+            if (!makapix_mqtt_is_connected || !makapix_mqtt_is_connected()) {
+                ESP_LOGI(TAG, "Swipe down ignored - MQTT not connected");
                 return ESP_OK;
             }
             if (reaction_overlay_show_revoke) {

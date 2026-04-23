@@ -59,11 +59,10 @@ All 25 custom components live under `components/`. This document describes each 
   - `sdcard_channel_impl.h` — SD card file scanning and playback
   - `makapix_channel_impl.h` — Makapix Club channel implementation
   - `vault_storage.h` — SHA256-sharded artwork storage
-  - `animation_metadata.h` — JSON sidecar metadata parsing
   - `download_manager.h` — download coordination
   - `playlist_manager.h` — playlist management
   - `channel_cache.h` — channel cache
-- **Key files**: `sdcard_channel.c`, `sdcard_channel_impl.c`, `makapix_channel_impl.c`, `makapix_channel_events.c`, `makapix_channel_refresh.c`, `makapix_channel_utils.c`, `vault_storage.c`, `animation_metadata.c`, `channel_cache.c`, `channel_metadata.c`, `channel_settings.c`, `download_manager.c`, `playlist_manager.c`
+- **Key files**: `sdcard_channel.c`, `sdcard_channel_impl.c`, `makapix_channel_impl.c`, `makapix_channel_events.c`, `makapix_channel_refresh.c`, `makapix_channel_utils.c`, `vault_storage.c`, `channel_cache.c`, `channel_metadata.c`, `channel_settings.c`, `download_manager.c`, `playlist_manager.c`
 - **Kconfig**: `CHANNEL_MANAGER_PAGE_SIZE` (default 32)
 
 ## 6. wifi_manager — Connectivity

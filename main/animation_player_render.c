@@ -11,6 +11,7 @@
 #include "pico8_render.h"
 #include "ugfx_ui.h"
 #include "view_tracker.h"
+#include "p3a_current_post.h"
 #include "play_scheduler.h"
 #include "config_store.h"
 #include "debug_http_log.h"
@@ -459,12 +460,14 @@ skip_prefetch:
             // Mark successful swap for auto-retry safeguard
             animation_loader_mark_swap_successful();
             
-            // Update playback controller with new animation metadata
-            if (s_front_buffer.filepath) {
-                playback_controller_set_animation_metadata(s_front_buffer.filepath, true);
-            }
+            // Notify playback controller that a local animation is playing
+            // (used to decide whether to resume after exiting PICO-8 mode).
+            playback_controller_notify_animation_active();
             
-            // Signal view tracker with the artwork info captured at swap time
+            // Publish the current artwork so the touch router (reaction gestures) and
+            // /status REST endpoint can see what's on screen. The view tracker also
+            // needs this info to decide whether/when to emit view events.
+            p3a_current_post_set(s_front_buffer.post_id, (int)s_front_buffer.post_source);
             view_tracker_signal_swap(s_front_buffer.post_id, s_front_buffer.post_source, s_front_buffer.filepath);
         }
         s_use_prefetched = true;

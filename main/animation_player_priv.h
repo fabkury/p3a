@@ -13,7 +13,6 @@
 #include "animation_decoder.h"
 #include "display_renderer.h"
 #include "playback_controller.h"
-#include "animation_metadata.h"
 #include "p3a_board.h"
 #include "app_lcd.h"
 #include "sdcard_channel.h"  // For asset_type_t (canonical definition)

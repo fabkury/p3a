@@ -108,7 +108,6 @@ p3a/
 │   │   ├── makapix_channel_refresh.c  # Makapix channel refresh
 │   │   ├── makapix_channel_utils.c    # Makapix channel utilities
 │   │   ├── vault_storage.c        # SHA256-sharded artwork storage
-│   │   ├── animation_metadata.c   # JSON sidecar metadata
 │   │   ├── channel_cache.c        # Channel cache
 │   │   ├── channel_metadata.c     # Channel metadata
 │   │   ├── channel_settings.c     # Channel settings
@@ -122,7 +121,6 @@ p3a/
 │   │   │   ├── makapix_channel_events.h
 │   │   │   ├── makapix_channel_utils.h
 │   │   │   ├── vault_storage.h
-│   │   │   ├── animation_metadata.h
 │   │   │   ├── channel_cache.h
 │   │   │   ├── channel_metadata.h
 │   │   │   ├── channel_settings.h

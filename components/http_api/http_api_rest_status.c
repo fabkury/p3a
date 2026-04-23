@@ -25,6 +25,7 @@
 #include "config_store.h"
 #include "makapix.h"
 #include "makapix_store.h"
+#include "p3a_current_post.h"
 #include "play_scheduler.h"
 #include "playback_service.h"
 #include "version.h"
@@ -477,8 +478,8 @@ esp_err_t h_get_api_state(httpd_req_t *req)
     }
 
     // Current Makapix post_id if available; NULL for non-Makapix or unknown.
-    int32_t post_id = makapix_get_current_post_id();
-    if (makapix_get_current_post_source() == POST_SOURCE_MAKAPIX && post_id != 0) {
+    int32_t post_id = p3a_current_post_get_id();
+    if (p3a_current_post_get_source() == POST_SOURCE_MAKAPIX && post_id != 0) {
         cJSON_AddNumberToObject(data, "current_post_id", (double)post_id);
     } else {
         cJSON_AddNullToObject(data, "current_post_id");

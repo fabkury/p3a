@@ -61,33 +61,6 @@ esp_err_t makapix_start_provisioning(void);
 void makapix_cancel_provisioning(void);
 
 /**
- * @brief Get current post ID being displayed
- * 
- * Returns 0 when playing local animations from the local animations folder.
- * Will return actual post_id when playing from the vault (Makapix artworks).
- * 
- * @return Current post ID, or 0 for local animations
- */
-int32_t makapix_get_current_post_id(void);
-
-/**
- * @brief Set current post ID and source
- *
- * Called when artwork changes to update the tracked post ID.
- *
- * @param post_id Post ID to set (0 for local animations)
- * @param post_source Source of the post_id
- */
-void makapix_set_current_post_id(int32_t post_id, post_source_t post_source);
-
-/**
- * @brief Get current post source
- *
- * @return Current post source
- */
-post_source_t makapix_get_current_post_source(void);
-
-/**
  * @brief Get and clear view intent flag
  *
  * Returns whether the next view should be marked as intentional.

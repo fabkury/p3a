@@ -801,8 +801,8 @@ esp_err_t animation_player_enter_ui_mode(void)
         xSemaphoreGive(s_buffer_mutex);
     }
     
-    // Clear metadata since we're not playing an animation
-    playback_controller_clear_metadata();
+    // Mark animation playback as stopped (no longer a resumption candidate)
+    playback_controller_notify_animation_stopped();
     
     ESP_LOGD(TAG, "UI mode active");
     return ESP_OK;

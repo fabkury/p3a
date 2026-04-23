@@ -195,18 +195,29 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
             return ESP_OK;
             
         case P3A_TOUCH_EVENT_SWIPE_UP: {
-            // Submit emoji reaction to current Makapix post
+            // Submit emoji reaction to current Makapix post. Every failure
+            // path below shows the error icon so the user always gets
+            // feedback that the gesture itself was recognized.
             if (p3a_current_post_get_source() != REACTION_POST_SOURCE_MAKAPIX) {
-                ESP_LOGI(TAG, "Swipe up ignored - not a Makapix post");
+                ESP_LOGI(TAG, "Swipe up on non-Makapix post - showing error");
+                if (reaction_overlay_show_error) {
+                    reaction_overlay_show_error();
+                }
                 return ESP_OK;
             }
             int32_t post_id = p3a_current_post_get_id();
             if (post_id <= 0) {
-                ESP_LOGI(TAG, "Swipe up ignored - no valid post_id");
+                ESP_LOGI(TAG, "Swipe up with no valid post_id - showing error");
+                if (reaction_overlay_show_error) {
+                    reaction_overlay_show_error();
+                }
                 return ESP_OK;
             }
             if (!makapix_mqtt_is_connected || !makapix_mqtt_is_connected()) {
-                ESP_LOGI(TAG, "Swipe up ignored - MQTT not connected");
+                ESP_LOGI(TAG, "Swipe up while MQTT not connected - showing error");
+                if (reaction_overlay_show_error) {
+                    reaction_overlay_show_error();
+                }
                 return ESP_OK;
             }
             if (reaction_overlay_show_submit) {
@@ -218,18 +229,29 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
         }
 
         case P3A_TOUCH_EVENT_SWIPE_DOWN: {
-            // Revoke emoji reaction from current Makapix post
+            // Revoke emoji reaction from current Makapix post. Every failure
+            // path below shows the error icon so the user always gets
+            // feedback that the gesture itself was recognized.
             if (p3a_current_post_get_source() != REACTION_POST_SOURCE_MAKAPIX) {
-                ESP_LOGI(TAG, "Swipe down ignored - not a Makapix post");
+                ESP_LOGI(TAG, "Swipe down on non-Makapix post - showing error");
+                if (reaction_overlay_show_error) {
+                    reaction_overlay_show_error();
+                }
                 return ESP_OK;
             }
             int32_t post_id = p3a_current_post_get_id();
             if (post_id <= 0) {
-                ESP_LOGI(TAG, "Swipe down ignored - no valid post_id");
+                ESP_LOGI(TAG, "Swipe down with no valid post_id - showing error");
+                if (reaction_overlay_show_error) {
+                    reaction_overlay_show_error();
+                }
                 return ESP_OK;
             }
             if (!makapix_mqtt_is_connected || !makapix_mqtt_is_connected()) {
-                ESP_LOGI(TAG, "Swipe down ignored - MQTT not connected");
+                ESP_LOGI(TAG, "Swipe down while MQTT not connected - showing error");
+                if (reaction_overlay_show_error) {
+                    reaction_overlay_show_error();
+                }
                 return ESP_OK;
             }
             if (reaction_overlay_show_revoke) {

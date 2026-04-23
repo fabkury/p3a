@@ -204,7 +204,8 @@ static inline uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b)
 typedef enum {
     REACTION_OVERLAY_IDLE,       ///< Not showing
     REACTION_OVERLAY_SUBMIT,     ///< Showing thumbs-up (submit reaction)
-    REACTION_OVERLAY_REVOKE      ///< Showing thumbs-down (revoke reaction)
+    REACTION_OVERLAY_REVOKE,     ///< Showing thumbs-down (revoke reaction)
+    REACTION_OVERLAY_ERROR       ///< Showing error icon (MQTT submit/revoke failed)
 } reaction_overlay_state_t;
 
 // State variables (defined in display_renderer.c)
@@ -226,6 +227,14 @@ void reaction_overlay_show_submit(void);
  * If showing SUBMIT, replaces it immediately.
  */
 void reaction_overlay_show_revoke(void);
+
+/**
+ * @brief Show error reaction overlay (MQTT submit/revoke failed)
+ *
+ * Overrides any in-flight SUBMIT/REVOKE/ERROR and (re)starts the 4 s timer
+ * unconditionally, so the error icon always gets its own full display window.
+ */
+void reaction_overlay_show_error(void);
 
 /**
  * @brief Update and draw reaction overlay

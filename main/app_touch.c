@@ -116,10 +116,11 @@ static __attribute__((unused)) screen_rotation_t get_next_rotation_ccw(screen_ro
  * This task polls the touch controller and implements a state machine to distinguish
  * between:
  * - Tap gestures: Used for animation swapping (left/right half of screen)
- * - Vertical swipe gestures: Swipe up triggers OPERATION_A, swipe down triggers OPERATION_B
+ * - Vertical swipe gestures: Swipe up submits / swipe down revokes an emoji reaction
+ *   on the currently-displayed Makapix artwork.
  *
  * Gesture classification:
- * - If vertical movement >= CONFIG_P3A_TOUCH_SWIPE_MIN_HEIGHT_PERCENT, it's a vertical swipe
+ * - If vertical movement >= CONFIG_P3A_REACTION_SWIPE_MIN_HEIGHT_PERCENT, it's a vertical swipe
  * - Otherwise, on release it's treated as a tap gesture for animation swapping
  */
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
@@ -192,7 +193,7 @@ static void app_touch_task(void *arg)
     TickType_t touch_start_time = 0;
     const uint16_t screen_height = P3A_DISPLAY_HEIGHT;
     const uint16_t screen_width = P3A_DISPLAY_WIDTH;
-    const uint16_t min_swipe_height = (screen_height * CONFIG_P3A_TOUCH_SWIPE_MIN_HEIGHT_PERCENT) / 100;
+    const uint16_t min_swipe_height = (screen_height * CONFIG_P3A_REACTION_SWIPE_MIN_HEIGHT_PERCENT) / 100;
     const TickType_t long_press_duration = pdMS_TO_TICKS(3000); // 3 seconds
     const uint32_t long_press_movement_threshold = ( (uint32_t)MIN(screen_height, screen_width) * 65U + 500U ) / 1000U; // 6.5% of smallest dimension, rounded
     

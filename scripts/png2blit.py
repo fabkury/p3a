@@ -463,10 +463,17 @@ def convert_png_to_blit(input_path: str, name: str, outdir: str,
     width, height = img.size
     original_mode = img.mode
 
-    # If the image has an alpha channel and a chroma key is specified,
-    # composite transparent pixels onto the chroma-key color so they
-    # become the designated transparent color in the output BGR888 data.
-    if img.mode in ('RGBA', 'LA', 'PA') and chroma_key:
+    # If the image has transparency and a chroma key is specified, composite
+    # transparent pixels onto the chroma-key color so they become the
+    # designated transparent color in the output BGR888 data. We need to
+    # catch not just explicit alpha channels (RGBA/LA/PA) but also palette
+    # images (P) that declare transparency via a tRNS chunk — converting
+    # those to RGBA via Pillow applies tRNS as an alpha channel.
+    has_transparency = (
+        img.mode in ('RGBA', 'LA', 'PA')
+        or (img.mode == 'P' and 'transparency' in img.info)
+    )
+    if has_transparency and chroma_key:
         img = img.convert('RGBA')
         bg = Image.new('RGBA', img.size, (chroma_key[0], chroma_key[1], chroma_key[2], 255))
         bg.paste(img, mask=img)

@@ -30,6 +30,16 @@ h1 {
     vertical-align: middle;
 }
 .card { margin-bottom: var(--sp-3); }
+.section-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--c-text-light);
+    margin: 0 0 var(--sp-2);
+    padding-bottom: var(--sp-2);
+    border-bottom: 1px solid #eee;
+}
 .version-row {
     display: flex;
     justify-content: space-between;
@@ -69,6 +79,21 @@ button {
     box-shadow: 0 4px 12px rgba(239,68,68,0.3);
 }
 .btn-danger:active { transform: scale(0.97); }
+.btn-secondary {
+    background: rgba(255,255,255,0.2);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.5);
+    box-shadow: none;
+}
+.btn-secondary:active { transform: scale(0.97); }
+.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+.card-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    margin-top: var(--sp-3);
+}
+.card-actions button { margin-bottom: 0; }
 .progress-container {
     display: none;
     background: var(--c-card-bg);
@@ -76,6 +101,12 @@ button {
     padding: var(--sp-4);
     margin-bottom: var(--sp-3);
     box-shadow: var(--c-card-shadow);
+}
+.card .progress-container {
+    background: transparent;
+    box-shadow: none;
+    padding: var(--sp-3) 0 0;
+    margin-bottom: 0;
 }
 .release-notes {
     max-height: 150px;
@@ -89,37 +120,60 @@ button {
     display: none;
     color: var(--c-text);
 }
+.last-checked {
+    text-align: center;
+    color: rgba(255,255,255,0.75);
+    font-size: 0.75rem;
+    margin-top: var(--sp-2);
+}
+.footer-tip {
+    text-align: center;
+    color: rgba(255,255,255,0.75);
+    font-size: 0.75rem;
+    margin-top: var(--sp-4);
+    line-height: 1.4;
+}
 </style>
 </head>
 <body class="has-bottom-nav">
 <div class="container">
 <h1>Firmware Update<span class="dev-badge" id="dev-badge" style="display:none">DEV</span></h1>
 <div class="status-message" id="status-msg"></div>
+
 <div class="card">
-<div class="version-row"><span class="version-label">Firmware Version</span><span class="version-value" id="current-ver">-</span></div>
+<div class="section-header">Firmware</div>
+<div class="version-row"><span class="version-label">Installed</span><span class="version-value" id="current-ver">-</span></div>
 <div class="version-row"><span class="version-label">Available</span><span class="version-value" id="available-ver">-</span></div>
 <div class="version-row"><span class="version-label">Status</span><span class="version-value" id="state">-</span></div>
-</div>
-<button class="btn-danger" id="rollback-btn" onclick="rollback()" style="display:none">Rollback to Previous</button>
-<div style="text-align:center;color:rgba(255,255,255,0.85);font-size:0.8rem;margin:4px 0 8px;line-height:1.4">For the best experience, always keep both firmware and web UI updated.</div>
-<div class="card">
-<div class="version-row"><span class="version-label">Web UI Version</span><span class="version-value" id="webui-ver">-</span></div>
-<div class="version-row"><span class="version-label">Available</span><span class="version-value" id="webui-available-ver">-</span></div>
-<div class="version-row"><span class="version-label">Status</span><span class="version-value" id="webui-status">-</span></div>
-</div>
-<button class="btn-primary" id="webui-install-btn" onclick="installWebuiUpdate()" style="display:none" disabled>Install Web UI Update</button>
-
-<div class="progress-container" id="webui-progress">
-<div class="progress-bar"><div class="progress-fill" id="webui-progress-fill"></div></div>
-<div class="progress-text" id="webui-progress-text">0%</div>
-</div>
 <div class="progress-container" id="progress">
 <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
 <div class="progress-text" id="progress-text">0%</div>
 </div>
-<button class="btn-primary" id="check-btn" onclick="checkUpdate()">Check for Updates</button>
-<button class="btn-primary" id="install-btn" onclick="installUpdate()" disabled>Install Update</button>
 <div class="release-notes" id="release-notes"></div>
+<div class="card-actions">
+<button class="btn-primary" id="install-btn" onclick="installUpdate()" disabled>Install Update</button>
+<button class="btn-danger" id="rollback-btn" onclick="rollback()" style="display:none">Rollback to Previous</button>
+</div>
+</div>
+
+<div class="card">
+<div class="section-header">Web UI</div>
+<div class="version-row"><span class="version-label">Installed</span><span class="version-value" id="webui-ver">-</span></div>
+<div class="version-row"><span class="version-label">Available</span><span class="version-value" id="webui-available-ver">-</span></div>
+<div class="version-row"><span class="version-label">Status</span><span class="version-value" id="webui-status">-</span></div>
+<div class="progress-container" id="webui-progress">
+<div class="progress-bar"><div class="progress-fill" id="webui-progress-fill"></div></div>
+<div class="progress-text" id="webui-progress-text">0%</div>
+</div>
+<div class="card-actions">
+<button class="btn-primary" id="webui-install-btn" onclick="installWebuiUpdate()" style="display:none" disabled>Install Web UI Update</button>
+</div>
+</div>
+
+<button class="btn-secondary" id="check-btn" onclick="checkUpdate()">Check for Updates</button>
+<div class="last-checked" id="last-checked">Last checked: never</div>
+<div class="footer-tip">For the best experience, keep both firmware and web UI updated. If both need updating, update the firmware first, then come back to update the web UI.</div>
+
 <nav class="bottom-nav">
 <a href="/" class="bottom-nav-item"><span class="bottom-nav-icon">&#8962;</span><span class="bottom-nav-label">Home</span></a>
 <a href="/playset-editor" class="bottom-nav-item"><span class="bottom-nav-icon">&#9776;</span><span class="bottom-nav-label">Playsets</span></a>
@@ -131,6 +185,7 @@ button {
 var pollInterval = null;
 var lastState = null;
 var fwLastCheck = null;
+var lastCheckedLocal = null;
 function showStatus(msg, type) {
     var el = document.getElementById('status-msg');
     el.textContent = msg;
@@ -140,6 +195,27 @@ function showStatus(msg, type) {
 }
 function hideStatus() {
     document.getElementById('status-msg').style.display = 'none';
+}
+function formatRelative(date) {
+    var diffMs = Date.now() - date.getTime();
+    var diffSec = Math.floor(diffMs / 1000);
+    if (diffSec < 10) return 'just now';
+    if (diffSec < 60) return diffSec + ' seconds ago';
+    var diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return diffMin + (diffMin === 1 ? ' minute ago' : ' minutes ago');
+    var diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return diffHr + (diffHr === 1 ? ' hour ago' : ' hours ago');
+    return date.toLocaleString();
+}
+function renderLastChecked() {
+    var lc = document.getElementById('last-checked');
+    if (lastCheckedLocal) {
+        lc.textContent = 'Last checked: ' + formatRelative(lastCheckedLocal);
+    } else if (fwLastCheck) {
+        lc.textContent = 'Last checked: earlier';
+    } else {
+        lc.textContent = 'Last checked: never';
+    }
 }
 function updateUI(data) {
     fwLastCheck = data.last_check;
@@ -182,6 +258,7 @@ function updateUI(data) {
     }
     if (lastState === 'checking' && data.state !== 'checking') {
         hideStatus();
+        lastCheckedLocal = new Date();
         if (data.state === 'update_available') {
             showStatus('Update available!', 'success');
         }
@@ -189,6 +266,7 @@ function updateUI(data) {
     }
     if (data.error_message) showStatus(data.error_message, 'error');
     lastState = data.state;
+    renderLastChecked();
 }
 function fetchStatus() {
     fetch('/ota/status').then(function(r) { return r.json(); }).then(function(d) {
@@ -361,6 +439,7 @@ function startPolling() {
 }
 fetchStatus();
 setInterval(fetchStatus, 5000);
+setInterval(renderLastChecked, 30000);
 
 </script>
 </body>

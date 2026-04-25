@@ -50,14 +50,24 @@ p3a supports these image formats:
 
 ### File organization
 
-The firmware looks for artwork in this order:
-1. `/animations` folder on the microSD card (preferred)
-2. If that folder is empty or missing, it searches the entire card for a folder containing image files
+Your own files live inside a single folder on the microSD card. By default that folder is:
+
+```
+/p3a/animations/
+```
+
+The firmware looks **only** in this folder for local artwork — it does not scan the rest of the card. If the folder is missing or empty, the local channel just shows zero artworks (it does not fall back to other locations).
+
+**Important — the `p3a` folder is configurable.** `p3a` is the device's "root" (or master) folder, and it can be renamed from the web interface at `http://p3a.local/settings.html` → **Storage** tab → *SD Card Storage*. Whatever you set there (e.g. `/p3a`, `/myart`, `/data`) is the folder p3a uses for **all** of its data — local files, Makapix vault, Giphy cache, playlists, etc. Changes require a reboot.
+
+Before manually placing files on the SD card, **always check the Storage tab to confirm the current root folder** — if it has been changed from the default, dropping files into `/p3a/animations/` will have no effect. Place them under `<your-root>/animations/` instead.
 
 **Recommended setup:**
-1. Create a folder called `animations` on your microSD card
-2. Copy your artwork files into that folder
-3. Files are played in alphabetical order by filename
+1. Open `http://p3a.local/settings.html` → **Storage** tab and note the current SD card path (default: `/p3a`)
+2. On the microSD card, create an `animations` subfolder inside that root folder (e.g. `/p3a/animations/`)
+3. Copy your artwork files into that `animations` subfolder
+
+You can copy files directly over USB: connect a USB-C cable from the **HS port** to your computer and the SD card appears as a removable drive (see [USB SD Card Access](#usb-sd-card-access) below). You can also upload files through the web interface — uploads are saved into the same `<root>/animations/` folder automatically.
 
 ### Image guidelines
 

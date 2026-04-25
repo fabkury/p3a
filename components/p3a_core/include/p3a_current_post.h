@@ -21,13 +21,20 @@
 #define P3A_CURRENT_POST_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/** Publish the post currently on screen. `source` is a post_source_t value. */
-void p3a_current_post_set(int32_t post_id, int source);
+/**
+ * Publish the post currently on screen. `source` is a post_source_t value.
+ *
+ * @param giphy_id Original Giphy string ID (null-terminated, max 23 chars).
+ *                 Pass NULL or "" for non-Giphy sources; the field is then
+ *                 cleared so a stale value cannot leak into a later swipe.
+ */
+void p3a_current_post_set(int32_t post_id, int source, const char *giphy_id);
 
 /** Reset to "nothing on screen" (post_id=0, source=POST_SOURCE_NONE). */
 void p3a_current_post_clear(void);
@@ -37,6 +44,15 @@ int32_t p3a_current_post_get_id(void);
 
 /** Returns the most recently published source (0 / POST_SOURCE_NONE if none). */
 int p3a_current_post_get_source(void);
+
+/**
+ * Copy the most recently published Giphy ID into out (null-terminated).
+ * Empty string when the current source is not GIPHY or no ID was published.
+ *
+ * @param out     Output buffer (always written; empty on no-ID).
+ * @param max_len Size of out (must be >= 1).
+ */
+void p3a_current_post_get_giphy_id(char *out, size_t max_len);
 
 #ifdef __cplusplus
 }

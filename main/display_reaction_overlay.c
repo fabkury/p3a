@@ -18,6 +18,7 @@
 #include "reaction_submit_img.h"
 #include "reaction_revoke_img.h"
 #include "reaction_error_img.h"
+#include "submit_click_img.h"
 
 #define REACTION_OVERLAY_DURATION_MS    4000
 #define REACTION_OVERLAY_CENTER_INSET   32   // Distance from user-visual edges to image center
@@ -51,6 +52,15 @@ void reaction_overlay_show_error(void)
     // No dedup: the error always (re)starts the 4 s timer so it gets its own
     // full display window regardless of what was showing before.
     g_reaction_overlay_state = REACTION_OVERLAY_ERROR;
+    g_reaction_overlay_start_us = esp_timer_get_time();
+}
+
+void reaction_overlay_show_click(void)
+{
+    if (g_reaction_overlay_state == REACTION_OVERLAY_CLICK) {
+        return;  // Dedup: already showing click
+    }
+    g_reaction_overlay_state = REACTION_OVERLAY_CLICK;
     g_reaction_overlay_start_us = esp_timer_get_time();
 }
 
@@ -88,6 +98,11 @@ void reaction_overlay_update_and_draw(uint8_t *buffer)
             blit_fn = reaction_error_img_blit_pixelwise_bgr888;
             img_w = reaction_error_img_w;
             img_h = reaction_error_img_h;
+            break;
+        case REACTION_OVERLAY_CLICK:
+            blit_fn = submit_click_img_blit_pixelwise_bgr888;
+            img_w = submit_click_img_w;
+            img_h = submit_click_img_h;
             break;
         default:
             return;

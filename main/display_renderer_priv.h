@@ -205,7 +205,8 @@ typedef enum {
     REACTION_OVERLAY_IDLE,       ///< Not showing
     REACTION_OVERLAY_SUBMIT,     ///< Showing thumbs-up (submit reaction)
     REACTION_OVERLAY_REVOKE,     ///< Showing thumbs-down (revoke reaction)
-    REACTION_OVERLAY_ERROR       ///< Showing error icon (MQTT submit/revoke failed)
+    REACTION_OVERLAY_ERROR,      ///< Showing error icon (MQTT submit/revoke failed)
+    REACTION_OVERLAY_CLICK       ///< Showing click icon (Giphy onclick registered)
 } reaction_overlay_state_t;
 
 // State variables (defined in display_renderer.c)
@@ -235,6 +236,14 @@ void reaction_overlay_show_revoke(void);
  * unconditionally, so the error icon always gets its own full display window.
  */
 void reaction_overlay_show_error(void);
+
+/**
+ * @brief Show click reaction overlay (Giphy onclick registered)
+ *
+ * Optimistic display on swipe-up over a Giphy GIF. If the registration
+ * subsequently fails, the overlay is overridden with the error icon.
+ */
+void reaction_overlay_show_click(void);
 
 /**
  * @brief Update and draw reaction overlay

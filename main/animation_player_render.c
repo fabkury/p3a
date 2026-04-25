@@ -467,7 +467,20 @@ skip_prefetch:
             // Publish the current artwork so the touch router (reaction gestures) and
             // /status REST endpoint can see what's on screen. The view tracker also
             // needs this info to decide whether/when to emit view events.
-            p3a_current_post_set(s_front_buffer.post_id, (int)s_front_buffer.post_source);
+            // Derive giphy_id from the filepath when the source is GIPHY.
+            // The Giphy cache layout is /sdcard/p3a/giphy/xx/yy/zz/<id>.<ext>,
+            // so the basename minus its final extension is the Giphy ID.
+            char giphy_id_buf[24] = "";
+            if (s_front_buffer.post_source == POST_SOURCE_GIPHY && s_front_buffer.filepath) {
+                const char *base = strrchr(s_front_buffer.filepath, '/');
+                base = base ? base + 1 : s_front_buffer.filepath;
+                const char *dot = strrchr(base, '.');
+                size_t n = dot ? (size_t)(dot - base) : strlen(base);
+                if (n >= sizeof(giphy_id_buf)) n = sizeof(giphy_id_buf) - 1;
+                memcpy(giphy_id_buf, base, n);
+                giphy_id_buf[n] = '\0';
+            }
+            p3a_current_post_set(s_front_buffer.post_id, (int)s_front_buffer.post_source, giphy_id_buf);
             view_tracker_signal_swap(s_front_buffer.post_id, s_front_buffer.post_source, s_front_buffer.filepath);
         }
         s_use_prefetched = true;

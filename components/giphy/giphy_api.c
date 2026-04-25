@@ -11,6 +11,7 @@
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "cJSON.h"
 #include <string.h>
 #include <stdio.h>
@@ -225,6 +226,145 @@ esp_err_t giphy_fetch_random_id(const char *api_key, char *out_random_id, size_t
     }
 
     cJSON_Delete(root);
+    return ESP_OK;
+}
+
+/**
+ * @brief Drain an esp_http_client response body into out (null-terminated).
+ *
+ * Reads up to out_size-1 bytes; further bytes are silently dropped (caller is
+ * responsible for sizing). Returns total bytes read.
+ */
+static int drain_response(esp_http_client_handle_t client, char *out, size_t out_size)
+{
+    int total = 0;
+    while (total < (int)out_size - 1) {
+        int n = esp_http_client_read(client, out + total, out_size - 1 - total);
+        if (n <= 0) break;
+        total += n;
+    }
+    out[total] = '\0';
+    return total;
+}
+
+esp_err_t giphy_register_click(const char *api_key,
+                               const char *random_id,
+                               const char *giphy_id)
+{
+    if (!api_key || !api_key[0] ||
+        !random_id || !random_id[0] ||
+        !giphy_id || !giphy_id[0]) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // -- Step 1: fetch analytics for this GIF -------------------------------
+    char url[512];
+    snprintf(url, sizeof(url),
+             "https://api.giphy.com/v1/gifs/%s?api_key=%s&fields=id,analytics&random_id=%s",
+             giphy_id, api_key, random_id);
+
+    esp_http_client_config_t cfg = {
+        .url = url,
+        .timeout_ms = 10000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .buffer_size = 2048,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    if (!client) {
+        ESP_LOGE(TAG, "register_click: HTTP init failed");
+        return ESP_FAIL;
+    }
+
+    esp_err_t err = esp_http_client_open(client, 0);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "register_click: HTTP open failed: %s", esp_err_to_name(err));
+        esp_http_client_cleanup(client);
+        return ESP_FAIL;
+    }
+
+    esp_http_client_fetch_headers(client);
+    int status = esp_http_client_get_status_code(client);
+
+    char body[2048];
+    int total = drain_response(client, body, sizeof(body));
+    esp_http_client_close(client);
+    esp_http_client_cleanup(client);
+
+    if (status != 200) {
+        ESP_LOGW(TAG, "register_click: lookup HTTP %d for %s", status, giphy_id);
+        if (status == 401 || status == 403) return ESP_ERR_NOT_ALLOWED;
+        if (status == 429) return ESP_ERR_INVALID_RESPONSE;
+        return ESP_FAIL;
+    }
+    if (total == 0) {
+        ESP_LOGW(TAG, "register_click: empty lookup response");
+        return ESP_FAIL;
+    }
+
+    cJSON *root = cJSON_Parse(body);
+    if (!root) {
+        ESP_LOGW(TAG, "register_click: failed to parse lookup JSON");
+        return ESP_FAIL;
+    }
+
+    const cJSON *data = cJSON_GetObjectItem(root, "data");
+    const cJSON *analytics = data ? cJSON_GetObjectItem(data, "analytics") : NULL;
+    const cJSON *onclick = analytics ? cJSON_GetObjectItem(analytics, "onclick") : NULL;
+    const cJSON *url_node = onclick ? cJSON_GetObjectItem(onclick, "url") : NULL;
+    if (!cJSON_IsString(url_node) || !url_node->valuestring[0]) {
+        ESP_LOGW(TAG, "register_click: missing analytics.onclick.url for %s", giphy_id);
+        cJSON_Delete(root);
+        return ESP_FAIL;
+    }
+
+    // Compose pingback URL: <onclick_url>&random_id=<rid>&ts=<unix_ms>
+    char ping_url[640];
+    int64_t now_us = esp_timer_get_time();  // monotonic microseconds since boot
+    // Giphy expects unix_ms but tolerates any monotonically increasing value;
+    // prefer real wall time when available so analytics line up server-side.
+    int64_t unix_ms = (int64_t)time(NULL) * 1000LL + (now_us / 1000LL) % 1000LL;
+    int wrote = snprintf(ping_url, sizeof(ping_url),
+                         "%s&random_id=%s&ts=%lld",
+                         url_node->valuestring, random_id, (long long)unix_ms);
+    cJSON_Delete(root);
+    if (wrote <= 0 || wrote >= (int)sizeof(ping_url)) {
+        ESP_LOGW(TAG, "register_click: pingback URL overflow");
+        return ESP_FAIL;
+    }
+
+    // -- Step 2: fire the pingback -----------------------------------------
+    esp_http_client_config_t pcfg = {
+        .url = ping_url,
+        .timeout_ms = 10000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .buffer_size = 1024,
+    };
+    esp_http_client_handle_t pclient = esp_http_client_init(&pcfg);
+    if (!pclient) {
+        ESP_LOGE(TAG, "register_click: pingback HTTP init failed");
+        return ESP_FAIL;
+    }
+
+    err = esp_http_client_open(pclient, 0);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "register_click: pingback HTTP open failed: %s", esp_err_to_name(err));
+        esp_http_client_cleanup(pclient);
+        return ESP_FAIL;
+    }
+
+    esp_http_client_fetch_headers(pclient);
+    int pstatus = esp_http_client_get_status_code(pclient);
+    char pbody[64];
+    drain_response(pclient, pbody, sizeof(pbody));
+    esp_http_client_close(pclient);
+    esp_http_client_cleanup(pclient);
+
+    if (pstatus != 200) {
+        ESP_LOGW(TAG, "register_click: pingback HTTP %d for %s", pstatus, giphy_id);
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "register_click: ok for %s", giphy_id);
     return ESP_OK;
 }
 

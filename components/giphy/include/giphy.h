@@ -74,6 +74,30 @@ typedef struct {
 esp_err_t giphy_fetch_random_id(const char *api_key, char *out_random_id, size_t max_len);
 
 /**
+ * @brief Register an onclick analytics event for a Giphy artwork
+ *
+ * Two-step pure-lazy flow:
+ *   1. GET /v1/gifs/<giphy_id>?api_key=&fields=id,analytics&random_id=
+ *      → parse data.analytics.onclick.url (a pre-signed pingback URL).
+ *   2. GET <onclick_url>&random_id=&ts= → expects HTTP 200.
+ *
+ * Both calls are short and synchronous; intended to run from a short-lived
+ * background task spawned in response to a user gesture.
+ *
+ * @param api_key   Giphy API key (required)
+ * @param random_id Giphy random_id for personalization (required)
+ * @param giphy_id  Giphy string ID of the artwork being clicked
+ * @return ESP_OK if the pingback was accepted (HTTP 200);
+ *         ESP_ERR_INVALID_ARG on missing inputs;
+ *         ESP_ERR_NOT_ALLOWED on HTTP 401/403 (bad API key);
+ *         ESP_ERR_INVALID_RESPONSE on HTTP 429 (quota exhausted);
+ *         ESP_FAIL on any other error.
+ */
+esp_err_t giphy_register_click(const char *api_key,
+                               const char *random_id,
+                               const char *giphy_id);
+
+/**
  * @brief Fetch a single page of GIFs from Giphy API (trending or search)
  *
  * When ctx->query is empty, fetches from /v1/gifs/trending.

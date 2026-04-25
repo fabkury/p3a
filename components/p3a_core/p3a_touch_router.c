@@ -66,6 +66,7 @@ extern bool playback_service_is_paused(void) __attribute__((weak));
 extern void reaction_overlay_show_submit(void) __attribute__((weak));
 extern void reaction_overlay_show_revoke(void) __attribute__((weak));
 extern void reaction_overlay_show_error(void) __attribute__((weak));
+extern void reaction_overlay_show_click(void) __attribute__((weak));
 
 // Makapix API reaction functions (from makapix_api.c via weak symbols)
 extern esp_err_t makapix_api_submit_reaction(int32_t post_id, const char *emoji) __attribute__((weak));
@@ -74,9 +75,16 @@ extern esp_err_t makapix_api_revoke_reaction(int32_t post_id, const char *emoji)
 // MQTT connection probe (from makapix_mqtt.c via weak symbol)
 extern bool makapix_mqtt_is_connected(void) __attribute__((weak));
 
-// POST_SOURCE_MAKAPIX == 1 (from play_scheduler_types.h). Kept as a macro here
+// Giphy click registration + config accessors (from giphy / config_store via weak symbols)
+extern esp_err_t giphy_register_click(const char *api_key, const char *random_id,
+                                      const char *giphy_id) __attribute__((weak));
+extern esp_err_t config_store_get_giphy_api_key(char *out_key, size_t max_len) __attribute__((weak));
+extern esp_err_t config_store_get_giphy_random_id(char *out, size_t max_len) __attribute__((weak));
+
+// POST_SOURCE_{MAKAPIX,GIPHY} (from play_scheduler_types.h). Kept as macros here
 // so p3a_core does not take a dependency on play_scheduler.
 #define REACTION_POST_SOURCE_MAKAPIX 1
+#define REACTION_POST_SOURCE_GIPHY   2
 
 // USB touch forwarding (from app_usb.c via weak symbols)
 typedef struct {
@@ -150,6 +158,54 @@ static void reaction_task_spawn(int32_t post_id, bool is_submit)
 }
 
 // ============================================================================
+// Giphy click task
+// ============================================================================
+
+typedef struct {
+    char api_key[128];
+    char random_id[40];
+    char giphy_id[24];
+} giphy_click_params_t;
+
+static void giphy_click_task(void *arg)
+{
+    giphy_click_params_t *p = (giphy_click_params_t *)arg;
+    esp_err_t err = ESP_ERR_NOT_SUPPORTED;
+    if (giphy_register_click) {
+        err = giphy_register_click(p->api_key, p->random_id, p->giphy_id);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Giphy click failed for %s: %s", p->giphy_id, esp_err_to_name(err));
+        if (reaction_overlay_show_error) {
+            reaction_overlay_show_error();
+        }
+    } else {
+        ESP_LOGI(TAG, "Giphy click registered: %s", p->giphy_id);
+    }
+    free(p);
+    vTaskDelete(NULL);
+}
+
+static void giphy_click_task_spawn(const char *api_key, const char *random_id,
+                                   const char *giphy_id)
+{
+    giphy_click_params_t *p = malloc(sizeof(giphy_click_params_t));
+    if (!p) {
+        ESP_LOGE(TAG, "Failed to allocate giphy click params");
+        return;
+    }
+    strlcpy(p->api_key, api_key, sizeof(p->api_key));
+    strlcpy(p->random_id, random_id, sizeof(p->random_id));
+    strlcpy(p->giphy_id, giphy_id, sizeof(p->giphy_id));
+    // Stack: HTTPS handshake + JSON parse can spike past 4 KB.
+    BaseType_t ret = xTaskCreate(giphy_click_task, "giphy_click", 8192, p, 5, NULL);
+    if (ret != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create giphy click task");
+        free(p);
+    }
+}
+
+// ============================================================================
 // State-specific handlers
 // ============================================================================
 
@@ -195,10 +251,46 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
             return ESP_OK;
             
         case P3A_TOUCH_EVENT_SWIPE_UP: {
-            // Submit emoji reaction to current Makapix post. Every failure
-            // path below shows the error icon so the user always gets
-            // feedback that the gesture itself was recognized.
-            if (p3a_current_post_get_source() != REACTION_POST_SOURCE_MAKAPIX) {
+            // Branch by current post source. Every failure path below shows
+            // the error icon so the user always gets feedback that the
+            // gesture itself was recognized.
+            int source = p3a_current_post_get_source();
+
+            // Giphy: register an onclick analytics event with the Giphy API.
+            // Optimistic UX — show the click icon immediately; the background
+            // task overrides it with the error icon if the API call fails.
+            if (source == REACTION_POST_SOURCE_GIPHY) {
+                char giphy_id[24];
+                p3a_current_post_get_giphy_id(giphy_id, sizeof(giphy_id));
+                if (giphy_id[0] == '\0') {
+                    ESP_LOGI(TAG, "Swipe up on Giphy post with no giphy_id - showing error");
+                    if (reaction_overlay_show_error) reaction_overlay_show_error();
+                    return ESP_OK;
+                }
+                char api_key[128] = "";
+                char random_id[40] = "";
+                if (!config_store_get_giphy_api_key ||
+                    config_store_get_giphy_api_key(api_key, sizeof(api_key)) != ESP_OK ||
+                    api_key[0] == '\0') {
+                    ESP_LOGI(TAG, "Swipe up on Giphy post without API key - showing error");
+                    if (reaction_overlay_show_error) reaction_overlay_show_error();
+                    return ESP_OK;
+                }
+                if (!config_store_get_giphy_random_id ||
+                    config_store_get_giphy_random_id(random_id, sizeof(random_id)) != ESP_OK ||
+                    random_id[0] == '\0') {
+                    ESP_LOGI(TAG, "Swipe up on Giphy post without random_id - showing error");
+                    if (reaction_overlay_show_error) reaction_overlay_show_error();
+                    return ESP_OK;
+                }
+                if (reaction_overlay_show_click) reaction_overlay_show_click();
+                giphy_click_task_spawn(api_key, random_id, giphy_id);
+                ESP_LOGI(TAG, "Giphy click: id=%s", giphy_id);
+                return ESP_OK;
+            }
+
+            // All other non-Makapix sources: error icon (legacy behaviour).
+            if (source != REACTION_POST_SOURCE_MAKAPIX) {
                 ESP_LOGI(TAG, "Swipe up on non-Makapix post - showing error");
                 if (reaction_overlay_show_error) {
                     reaction_overlay_show_error();

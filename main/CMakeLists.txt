@@ -19,6 +19,7 @@ set(srcs
     "reaction_submit_img.c"
     "reaction_revoke_img.c"
     "reaction_error_img.c"
+    "submit_click_img.c"
 )
 
 if(CONFIG_P3A_PPA_UPSCALE_ENABLE)

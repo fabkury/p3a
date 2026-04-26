@@ -349,9 +349,19 @@
         <div class="file-name" id="mkx-unregister-hint" style="display:none;margin-top:4px;">This will disconnect from Makapix Club and delete stored credentials. You can re-register later.</div>
     </div>
     <div class="section">
-        <h3>Channel Cache Size</h3>
+        <h3>Advanced</h3>
+        <div class="toggle-row">
+            <label class="toggle-label" for="mkx-refresh">Refresh Interval</label>
+            <select id="mkx-refresh" onchange="saveMakapixRefresh(this.value)"
+                style="padding:8px 10px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem;background:#fff;color:#333;">
+                <option value="3600">1 hour (default)</option>
+                <option value="7200">2 hours</option>
+                <option value="14400">4 hours</option>
+                <option value="28800">8 hours</option>
+            </select>
+        </div>
         <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
-            <label class="toggle-label" for="cache-size">Makapix channel cache size</label>
+            <label class="toggle-label" for="cache-size">Channel cache size</label>
             <div style="display:flex;gap:8px;align-items:center;">
                 <input class="bg-input" id="cache-size" type="number" min="32" max="4096" style="max-width:90px;" aria-label="Channel cache size">
                 <span style="color:#666;font-size:0.8rem;">artworks</span>
@@ -743,6 +753,18 @@ function saveCacheSize() {
     });
 }
 
+function saveMakapixRefresh(val) {
+    var sec = parseInt(val, 10);
+    var prev = document.getElementById('mkx-refresh').dataset.prev || '3600';
+    mergeConfig({refresh_interval_sec: sec}, function() {
+        document.getElementById('mkx-refresh').dataset.prev = String(sec);
+        showToast('Makapix refresh interval: ' + (sec / 3600) + 'h', false);
+    }, function() {
+        showToast('Save failed', true);
+        document.getElementById('mkx-refresh').value = prev;
+    });
+}
+
 function saveSdRoot() {
     var btn = document.getElementById('sd-save');
     btn.disabled = true;
@@ -1048,6 +1070,12 @@ xhr.onreadystatechange = function() {
         document.getElementById('cache-size').value =
             (typeof cfg.channel_cache_size === 'number') ? cfg.channel_cache_size : 2048;
         document.getElementById('sd-root').value = cfg.sdcard_root || '/p3a';
+        // Makapix refresh interval
+        var mkxRefreshSel = document.getElementById('mkx-refresh');
+        var mkxRefreshVal = String(cfg.refresh_interval_sec || 3600);
+        mkxRefreshSel.value = mkxRefreshVal;
+        if (!mkxRefreshSel.value) mkxRefreshSel.value = '3600';
+        mkxRefreshSel.dataset.prev = mkxRefreshSel.value;
         // Refresh override (now included in /config response)
         document.getElementById('refresh-override').checked = !!cfg.refresh_allow_override;
         // Giphy tab

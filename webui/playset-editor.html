@@ -358,6 +358,23 @@
             gap: var(--sp-2);
         }
 
+        .channel-color-swatch {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            margin-right: var(--sp-2);
+            vertical-align: middle;
+            flex-shrink: 0;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .channel-header-left {
+            display: flex;
+            align-items: center;
+            min-width: 0;
+        }
+
         .channel-fields {
             display: flex;
             flex-direction: column;
@@ -1269,7 +1286,14 @@
                 'ondragleave="handleDragLeave(event)" ' +
                 'ondragend="handleDragEnd(event)">' +
                 '<div class="channel-header">' +
+                '<div class="channel-header-left">' +
+                (showWeights
+                    ? '<span class="channel-color-swatch" style="background:' +
+                        channelColors[index % channelColors.length] +
+                        '" title="Channel color in balance graph"></span>'
+                    : '') +
                 '<span class="channel-type-badge">' + typeName + '</span>' +
+                '</div>' +
                 '<div class="channel-controls">' +
                 '<button class="btn-icon" onclick="moveChannel(' + index + ', -1)" ' +
                 (index === 0 ? 'disabled' : '') + ' title="Move up">&#8593;</button>' +

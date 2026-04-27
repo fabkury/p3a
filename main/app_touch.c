@@ -190,6 +190,7 @@ static void app_touch_task(void *arg)
     gesture_state_t gesture_state = GESTURE_STATE_IDLE;
     uint16_t touch_start_x = 0;      // Raw coordinate for tap position detection
     uint16_t touch_start_y = 0;      // Raw coordinate for tap position detection
+    uint16_t max_total_movement = 0; // Peak L1 displacement during the current touch (for tap dead-zone)
     TickType_t touch_start_time = 0;
     const uint16_t screen_height = P3A_DISPLAY_HEIGHT;
     const uint16_t screen_width = P3A_DISPLAY_WIDTH;
@@ -305,6 +306,7 @@ static void app_touch_task(void *arg)
                 touch_start_x = x[0];
                 touch_start_y = y[0];
                 touch_start_time = xTaskGetTickCount();
+                max_total_movement = 0;
                 gesture_state = GESTURE_STATE_TAP;
                 ESP_LOGD(TAG, "touch start @(%u,%u)", touch_start_x, touch_start_y);
             } else {
@@ -323,6 +325,9 @@ static void app_touch_task(void *arg)
                 // Check for long press: finger held at same position for 3 seconds
                 TickType_t elapsed = xTaskGetTickCount() - touch_start_time;
                 uint16_t total_movement = abs_delta_x + abs_delta_y;
+                if (total_movement > max_total_movement) {
+                    max_total_movement = total_movement;
+                }
                 
                 if (gesture_state == GESTURE_STATE_TAP || gesture_state == GESTURE_STATE_LONG_PRESS_PENDING) {
                     if (total_movement <= long_press_movement_threshold) {
@@ -398,23 +403,31 @@ static void app_touch_task(void *arg)
                     // Long press was triggered, provisioning is in progress
                     ESP_LOGD(TAG, "Long press gesture ended (provisioning in progress)");
                 } else if (gesture_state == GESTURE_STATE_TAP) {
-                    // It was a tap, route through state-aware handler
-                    // Transform tap position to determine left/right in user's visual space
-                    uint16_t tap_x = touch_start_x;
-                    uint16_t tap_y = touch_start_y;
-                    transform_touch_coordinates(&tap_x, &tap_y, app_get_screen_rotation());
-
-                    const uint16_t screen_midpoint = P3A_DISPLAY_WIDTH / 2;
-                    p3a_touch_event_type_t tap_type = (tap_x < screen_midpoint) ?
-                        P3A_TOUCH_EVENT_TAP_LEFT : P3A_TOUCH_EVENT_TAP_RIGHT;
-
-                    // Check if tap gestures are enabled in current state
-                    if (!p3a_touch_router_is_gesture_enabled(tap_type)) {
-                        ESP_LOGD(TAG, "tap gesture ignored - not enabled in current state");
+                    // Dead-zone check: a touch that drifted beyond the tap radius (R1) but never
+                    // reached the swipe threshold is an aborted swipe, not a tap. Drop it silently
+                    // so it doesn't fall back to a swap command.
+                    if (max_total_movement > long_press_movement_threshold) {
+                        ESP_LOGD(TAG, "tap rejected: movement %u exceeds R1 %lu (aborted swipe)",
+                                 max_total_movement, (unsigned long)long_press_movement_threshold);
                     } else {
-                        p3a_touch_event_t touch_event = { .type = tap_type };
-                        p3a_touch_router_handle_event(&touch_event);
-                        ESP_LOGD(TAG, "tap gesture: routed to state handler (tap_x=%u)", tap_x);
+                        // It was a tap, route through state-aware handler
+                        // Transform tap position to determine left/right in user's visual space
+                        uint16_t tap_x = touch_start_x;
+                        uint16_t tap_y = touch_start_y;
+                        transform_touch_coordinates(&tap_x, &tap_y, app_get_screen_rotation());
+
+                        const uint16_t screen_midpoint = P3A_DISPLAY_WIDTH / 2;
+                        p3a_touch_event_type_t tap_type = (tap_x < screen_midpoint) ?
+                            P3A_TOUCH_EVENT_TAP_LEFT : P3A_TOUCH_EVENT_TAP_RIGHT;
+
+                        // Check if tap gestures are enabled in current state
+                        if (!p3a_touch_router_is_gesture_enabled(tap_type)) {
+                            ESP_LOGD(TAG, "tap gesture ignored - not enabled in current state");
+                        } else {
+                            p3a_touch_event_t touch_event = { .type = tap_type };
+                            p3a_touch_router_handle_event(&touch_event);
+                            ESP_LOGD(TAG, "tap gesture: routed to state handler (tap_x=%u)", tap_x);
+                        }
                     }
                 } else if (gesture_state == GESTURE_STATE_ROTATION) {
                     // Rotation gesture ended (action already taken if threshold was reached)

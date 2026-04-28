@@ -156,6 +156,7 @@
                 <button class="btn" onclick="saveProcNotifSize()">Save</button>
             </div>
         </div>
+        <div class="setting-hint">Processing indicator is small triangle drawn in the bottom-right corner when an artwork swap is requested — blue while working, red if it fails. Set to 0 to hide it.</div>
         <div class="toggle-row">
             <label for="fps-toggle" class="toggle-label">Show FPS</label>
             <label class="toggle-switch">
@@ -170,6 +171,7 @@
                 <span class="toggle-slider"></span>
             </label>
         </div>
+        <div class="setting-hint">Ignores each frame's intended duration and renders as fast as the device can.</div>
         <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
             <label class="toggle-label">Auto-swap interval</label>
             <div style="display:flex;gap:8px;align-items:center;">
@@ -186,12 +188,14 @@
                 <option value="1">Stochastic</option>
             </select>
         </div>
+        <div class="setting-hint">How the next channel is chosen when a playset has more than one. <b>SWRR</b> (Smooth Weighted Round Robin) rotates channels in a fixed, predictable order that exactly matches their weights — you'll see each channel come up on a tight schedule. <b>Stochastic</b> picks randomly with the same weights but nudges any channel that has fallen behind, so the long-run mix still matches the weights while the short-term order feels less repetitive.</div>
         <div class="toggle-row">
             <label class="toggle-label" for="refresh-override" style="cursor:pointer;">
                 <input type="checkbox" id="refresh-override" onchange="saveRefreshOverride(this.checked)" style="margin-right:6px;vertical-align:middle;">
                 Allow refresh override (one-time bypass for all channels)
             </label>
         </div>
+        <div class="setting-hint">Forces every channel to refresh on the next cycle, ignoring its normal refresh interval. Auto-disables once the cycle completes.</div>
     </div>
 </div>
 
@@ -254,7 +258,7 @@
             <label class="setting-label" for="giphy-api-key">API Key</label>
             <input class="setting-input" id="giphy-api-key" type="text" placeholder="Giphy API Key">
         </div>
-        <div class="setting-hint">Enter your Giphy API key. Giphy channels will not work without a valid key.</div>
+        <div class="setting-hint">Enter your Giphy API key. Giphy channels will not work without a valid key. You can create a key for free at <a href="https://developers.giphy.com/" target="_blank" rel="noopener">https://developers.giphy.com/</a>.</div>
     </div>
     <div class="section" id="random-id-section" style="display:none">
         <h3>Analytics ID</h3>
@@ -282,7 +286,7 @@
                    placeholder="e.g. US" style="max-width:80px;text-transform:uppercase;"
                    oninput="validateCountryCode()">
         </div>
-        <div class="setting-hint">Optional 2-letter country code (ISO 3166-1) to influence regional trending content. Leave empty for global results.</div>
+        <div class="setting-hint">Optional 2-letter country code (ISO 3166-1) to influence regional trending content. Leave empty for global results. See <a href="https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes" target="_blank" rel="noopener">country codes</a> on Wikipedia.</div>
     </div>
     <div class="section">
         <h3>Advanced</h3>

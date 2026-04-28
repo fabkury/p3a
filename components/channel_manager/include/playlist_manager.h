@@ -100,16 +100,6 @@ void playlist_release(playlist_metadata_t *playlist);
 bool playlist_needs_update(int32_t post_id, time_t server_modified_at);
 
 /**
- * @brief Queue background update for a playlist
- * 
- * Non-blocking. Update happens asynchronously.
- * 
- * @param post_id Playlist post ID
- * @return ESP_OK on success (update queued)
- */
-esp_err_t playlist_queue_update(int32_t post_id);
-
-/**
  * @brief Get specific artwork from playlist
  * 
  * @param playlist Playlist metadata

@@ -217,15 +217,7 @@ bool playlist_needs_update(int32_t post_id, time_t server_modified_at)
     return false;  // Cached, no per-playlist update tracking
 }
 
-esp_err_t playlist_queue_update(int32_t post_id)
-{
-    // TODO: Implement background update queue
-    // For now, just log
-    ESP_LOGI(TAG, "Queued update for playlist %ld (not yet implemented)", post_id);
-    return ESP_OK;
-}
-
-esp_err_t playlist_get_artwork(playlist_metadata_t *playlist, uint32_t index, 
+esp_err_t playlist_get_artwork(playlist_metadata_t *playlist, uint32_t index,
                                artwork_ref_t **out_artwork)
 {
     if (!playlist || !out_artwork) {

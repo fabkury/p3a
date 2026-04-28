@@ -565,7 +565,6 @@ them, and how to pick artwork within each channel.
       "display_name": "#pixelart"
     }
   ],
-  "exposure_mode": "equal",
   "pick_mode": "recency"
 }
 ```
@@ -580,7 +579,7 @@ them, and how to pick artwork within each channel.
 | `name` | string | Conditional | For `named` type only: `"all"` or `"promoted"` |
 | `identifier` | string | Conditional | For `user`: sqid. For `hashtag`: tag (without #) |
 | `display_name` | string | No | Friendly display name for UI (e.g., user handle, hashtag with #) |
-| `weight` | integer | No | Weight for `manual` exposure mode (0 = auto-calculate). Default: 0 |
+| `weight` | integer | No | Channel weight. If every channel is 0, the scheduler distributes plays equally. Default: 0 |
 
 Channel type requirements:
 - `"named"`: Requires `name` field (`"all"` or `"promoted"`)
@@ -588,13 +587,11 @@ Channel type requirements:
 - `"hashtag"`: Requires `identifier` field (hashtag without #)
 - `"sdcard"`: No additional fields required (plays local SD card files)
 
-`exposure_mode` (optional, string):
-
-| Value | Description |
-|-------|-------------|
-| `"equal"` | (Default) Equal exposure across all channels |
-| `"manual"` | Use the `weight` values from each channel |
-| `"proportional"` | Proportional to content count with recency bias |
+> **Note**: Earlier protocol versions had an `exposure_mode` field (`"equal"`,
+> `"manual"`, or `"proportional"`). It has been removed; clients sending it
+> will have the field silently ignored. Per-channel `weight` is now the only
+> control over channel balance, with the all-zeros fallback covering what
+> used to be `"equal"` mode.
 
 `pick_mode` (optional, string):
 
@@ -614,7 +611,7 @@ Single channel (equivalent to `play_channel`):
 }
 ```
 
-Multi-channel with equal exposure:
+Multi-channel (all weights default to 0 → equal distribution):
 ```json
 {
   "channels": [
@@ -622,7 +619,6 @@ Multi-channel with equal exposure:
     { "type": "user", "identifier": "uvz", "display_name": "ArtistName" },
     { "type": "hashtag", "identifier": "pixelart", "display_name": "#pixelart" }
   ],
-  "exposure_mode": "equal",
   "pick_mode": "random"
 }
 ```
@@ -634,8 +630,7 @@ Weighted multi-channel:
     { "type": "named", "name": "promoted", "weight": 50 },
     { "type": "user", "identifier": "uvz", "weight": 30 },
     { "type": "hashtag", "identifier": "sunset", "weight": 20 }
-  ],
-  "exposure_mode": "manual"
+  ]
 }
 ```
 
@@ -698,7 +693,6 @@ Players can request named playsets from the server using the `get_playset` reque
             "weight": 0
         }
     ],
-    "exposure_mode": "equal",
     "pick_mode": "recency"
 }
 ```
@@ -720,7 +714,6 @@ Players can request named playsets from the server using the `get_playset` reque
 | `request_id` | string | Correlated with request |
 | `success` | boolean | Whether the request succeeded |
 | `channels` | array | Array of channel configurations (same format as `play_playset`) |
-| `exposure_mode` | string | `"equal"`, `"manual"`, or `"proportional"` |
 | `pick_mode` | string | `"recency"` or `"random"` |
 | `error` | string | Error message (only if `success` is false) |
 | `error_code` | string | Machine-readable error code |

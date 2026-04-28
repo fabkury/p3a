@@ -369,8 +369,8 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
 
     xSemaphoreTake(s_state->mutex, portMAX_DELAY);
 
-    ESP_LOGI(TAG, "Executing scheduler command: %zu channel(s), exposure=%d, pick=%d",
-             command->channel_count, command->exposure_mode, command->pick_mode);
+    ESP_LOGI(TAG, "Executing scheduler command: %zu channel(s), pick=%d",
+             command->channel_count, command->pick_mode);
 
     // Free old channel entries before reconfiguring
     for (size_t i = 0; i < s_state->channel_count; i++) {
@@ -392,7 +392,6 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     }
 
     // Store command parameters
-    s_state->exposure_mode = command->exposure_mode;
     s_state->pick_mode = command->pick_mode;
     s_state->channel_count = command->channel_count;
 
@@ -420,7 +419,7 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         // Reset SWRR state
         ch->credit = 0;
         ch->weight = spec->weight;  // Will be recalculated after cache load
-        ch->spec_weight = spec->weight;  // Preserve original for MaE recalculation
+        ch->spec_weight = spec->weight;  // Preserve original for weight recalculation
 
         // Reset pick state
         ch->cursor = 0;
@@ -432,8 +431,6 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         // Reset refresh state
         ch->refresh_pending = true;  // Queue for background refresh
         ch->refresh_in_progress = false;
-        ch->total_count = 0;
-        ch->recent_count = 0;
 
         // Initialize artwork-specific state if this is an artwork channel
         if (spec->type == PS_CHANNEL_TYPE_ARTWORK) {
@@ -573,7 +570,6 @@ esp_err_t ps_create_channel_playset(const char *playset_name, ps_scheduler_comma
 
     memset(out_cmd, 0, sizeof(*out_cmd));
     out_cmd->channel_count = 1;
-    out_cmd->exposure_mode = PS_EXPOSURE_EQUAL;
     out_cmd->pick_mode = PS_PICK_RANDOM;
 
     if (strcmp(playset_name, "channel_recent") == 0) {
@@ -620,7 +616,6 @@ esp_err_t play_scheduler_play_named_channel(const char *name)
     }
 
     cmd->channel_count = 1;
-    cmd->exposure_mode = PS_EXPOSURE_EQUAL;
     cmd->pick_mode = PS_PICK_RANDOM;
 
     // Determine channel type
@@ -655,7 +650,6 @@ esp_err_t play_scheduler_play_user_channel(const char *user_sqid)
     }
 
     cmd->channel_count = 1;
-    cmd->exposure_mode = PS_EXPOSURE_EQUAL;
     cmd->pick_mode = PS_PICK_RANDOM;
 
     cmd->channels[0].type = PS_CHANNEL_TYPE_USER;
@@ -685,7 +679,6 @@ esp_err_t play_scheduler_play_reactions_channel(const char *user_sqid)
     }
 
     cmd->channel_count = 1;
-    cmd->exposure_mode = PS_EXPOSURE_EQUAL;
     cmd->pick_mode = PS_PICK_RANDOM;
 
     cmd->channels[0].type = PS_CHANNEL_TYPE_REACTIONS;
@@ -715,7 +708,6 @@ esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag)
     }
 
     cmd->channel_count = 1;
-    cmd->exposure_mode = PS_EXPOSURE_EQUAL;
     cmd->pick_mode = PS_PICK_RANDOM;
 
     cmd->channels[0].type = PS_CHANNEL_TYPE_HASHTAG;
@@ -806,7 +798,6 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id, const char *storage_key, 
     }
 
     cmd->channel_count = 1;
-    cmd->exposure_mode = PS_EXPOSURE_EQUAL;
     cmd->pick_mode = PS_PICK_RECENCY;
 
     cmd->channels[0].type = PS_CHANNEL_TYPE_ARTWORK;
@@ -845,7 +836,6 @@ esp_err_t play_scheduler_play_local_file(const char *filepath)
     }
 
     cmd->channel_count = 1;
-    cmd->exposure_mode = PS_EXPOSURE_EQUAL;
     cmd->pick_mode = PS_PICK_RECENCY;
 
     cmd->channels[0].type = PS_CHANNEL_TYPE_ARTWORK;

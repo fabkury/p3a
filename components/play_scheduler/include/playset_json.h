@@ -22,13 +22,11 @@ extern "C" {
 
 // ---------- String ↔ Enum Parsers ----------
 
-ps_exposure_mode_t playset_parse_exposure_mode(const char *mode_str);
 ps_pick_mode_t     playset_parse_pick_mode(const char *mode_str);
 ps_channel_type_t  playset_parse_channel_type(const char *type_str);
 
 // ---------- Enum → String Serializers ----------
 
-const char *playset_exposure_mode_str(ps_exposure_mode_t mode);
 const char *playset_pick_mode_str(ps_pick_mode_t mode);
 const char *playset_channel_type_str(ps_channel_type_t type);
 
@@ -37,12 +35,12 @@ const char *playset_channel_type_str(ps_channel_type_t type);
 /**
  * @brief Parse a cJSON object into a ps_scheduler_command_t
  *
- * Expects fields: "exposure_mode" (string), "pick_mode" (string),
- * "channels" (array of objects with "type", "name", "identifier",
- * "display_name", "weight").
+ * Expects fields: "pick_mode" (string), "channels" (array of objects with
+ * "type", "name", "identifier", "display_name", "weight").
  *
- * Missing top-level fields get defaults (equal exposure, recency pick).
- * The "channels" array is required and must have 1–PS_MAX_CHANNELS entries.
+ * Missing top-level fields get defaults (recency pick). The "channels" array
+ * is required and must have 1–PS_MAX_CHANNELS entries. Unknown fields (such
+ * as a legacy "exposure_mode" from older clients) are silently ignored.
  *
  * @param json  cJSON object to parse (not modified)
  * @param out   Output scheduler command (zeroed then populated)
@@ -53,8 +51,8 @@ esp_err_t playset_json_parse(const cJSON *json, ps_scheduler_command_t *out);
 /**
  * @brief Serialize a ps_scheduler_command_t to a cJSON object
  *
- * Creates a new cJSON object with "exposure_mode", "pick_mode", and
- * "channels" array. Caller owns the returned object and must call
+ * Creates a new cJSON object with "pick_mode" and "channels" array.
+ * Caller owns the returned object and must call
  * cJSON_Delete() when done.
  *
  * @param cmd  Scheduler command to serialize

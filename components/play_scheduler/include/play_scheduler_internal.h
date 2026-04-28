@@ -55,7 +55,6 @@ typedef struct {
  */
 typedef struct {
     // Configuration
-    ps_exposure_mode_t exposure_mode;
     ps_pick_mode_t pick_mode;
     ps_channel_select_mode_t channel_select_mode;
 

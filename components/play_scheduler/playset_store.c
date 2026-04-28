@@ -108,7 +108,7 @@ esp_err_t playset_store_save(const char *name, const ps_scheduler_command_t *cmd
     header.magic = PLAYSET_MAGIC;
     header.version = PLAYSET_VERSION;
     header.flags = 0;
-    header.exposure_mode = (uint8_t)cmd->exposure_mode;
+    header._reserved_exposure_mode = 0;  // Legacy field; preserved for binary compat with v11
     header.pick_mode = (uint8_t)cmd->pick_mode;
     header.channel_count = (uint16_t)cmd->channel_count;
     strlcpy(header.name, name, sizeof(header.name));
@@ -259,7 +259,6 @@ esp_err_t playset_store_load(const char *name, ps_scheduler_command_t *out_cmd)
 
     memset(out_cmd, 0, sizeof(*out_cmd));
     strlcpy(out_cmd->name, header.name, sizeof(out_cmd->name));
-    out_cmd->exposure_mode = (ps_exposure_mode_t)header.exposure_mode;
     out_cmd->pick_mode = (ps_pick_mode_t)header.pick_mode;
     out_cmd->channel_count = header.channel_count;
 
@@ -364,7 +363,6 @@ esp_err_t playset_store_list(playset_list_entry_t *out, size_t max, size_t *out_
         playset_list_entry_t *entry = &out[count];
         strlcpy(entry->name, header.name, sizeof(entry->name));
         entry->channel_count = header.channel_count;
-        entry->exposure_mode = (ps_exposure_mode_t)header.exposure_mode;
         entry->pick_mode = (ps_pick_mode_t)header.pick_mode;
         count++;
     }

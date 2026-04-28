@@ -556,7 +556,6 @@ function playPlayset(name) {
                         channel_count: result.channel_count,
                         total_cached: result.total_cached,
                         total_entries: result.total_entries,
-                        exposure_mode: result.exposure_mode,
                         pick_mode: result.pick_mode
                     });
                 } else {
@@ -906,10 +905,7 @@ function updateNowPlaying(name, info) {
     if (typeof info.channel_count === 'number') parts.push(info.channel_count + ' ch');
     if (typeof info.total_cached === 'number' && typeof info.total_entries === 'number')
         parts.push(info.total_cached + '/' + info.total_entries + ' artworks');
-    var modes = [];
-    if (info.exposure_mode) modes.push(info.exposure_mode.charAt(0).toUpperCase() + info.exposure_mode.slice(1));
-    if (info.pick_mode) modes.push(info.pick_mode.charAt(0).toUpperCase() + info.pick_mode.slice(1));
-    if (modes.length) parts.push(modes.join(' \u00b7 '));
+    if (info.pick_mode) parts.push(info.pick_mode.charAt(0).toUpperCase() + info.pick_mode.slice(1));
     statsEl.textContent = parts.join(' \u00b7 ');
     card.style.display = '';
     if (info.channels) renderChannelRows(info.channels);

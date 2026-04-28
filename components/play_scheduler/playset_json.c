@@ -15,14 +15,6 @@ static const char *TAG = "playset_json";
 
 // ---------- String ↔ Enum Parsers ----------
 
-ps_exposure_mode_t playset_parse_exposure_mode(const char *mode_str)
-{
-    if (!mode_str) return PS_EXPOSURE_EQUAL;
-    if (strcmp(mode_str, "manual") == 0) return PS_EXPOSURE_MANUAL;
-    if (strcmp(mode_str, "proportional") == 0) return PS_EXPOSURE_PROPORTIONAL;
-    return PS_EXPOSURE_EQUAL;
-}
-
 ps_pick_mode_t playset_parse_pick_mode(const char *mode_str)
 {
     if (!mode_str) return PS_PICK_RECENCY;
@@ -42,16 +34,6 @@ ps_channel_type_t playset_parse_channel_type(const char *type_str)
 }
 
 // ---------- Enum → String Serializers ----------
-
-const char *playset_exposure_mode_str(ps_exposure_mode_t mode)
-{
-    switch (mode) {
-    case PS_EXPOSURE_MANUAL:       return "manual";
-    case PS_EXPOSURE_PROPORTIONAL: return "proportional";
-    case PS_EXPOSURE_EQUAL:
-    default:                       return "equal";
-    }
-}
 
 const char *playset_pick_mode_str(ps_pick_mode_t mode)
 {
@@ -88,14 +70,6 @@ esp_err_t playset_json_parse(const cJSON *json, ps_scheduler_command_t *out)
     const cJSON *name_field = cJSON_GetObjectItemCaseSensitive(json, "name");
     if (cJSON_IsString(name_field)) {
         strlcpy(out->name, cJSON_GetStringValue(name_field), sizeof(out->name));
-    }
-
-    // Parse exposure_mode (optional, defaults to equal)
-    const cJSON *exposure_mode = cJSON_GetObjectItemCaseSensitive(json, "exposure_mode");
-    if (cJSON_IsString(exposure_mode)) {
-        out->exposure_mode = playset_parse_exposure_mode(cJSON_GetStringValue(exposure_mode));
-    } else {
-        out->exposure_mode = PS_EXPOSURE_EQUAL;
     }
 
     // Parse pick_mode (optional, defaults to recency)
@@ -194,7 +168,6 @@ cJSON *playset_json_serialize(const ps_scheduler_command_t *cmd)
     if (cmd->name[0] != '\0') {
         cJSON_AddStringToObject(root, "name", cmd->name);
     }
-    cJSON_AddStringToObject(root, "exposure_mode", playset_exposure_mode_str(cmd->exposure_mode));
     cJSON_AddStringToObject(root, "pick_mode", playset_pick_mode_str(cmd->pick_mode));
 
     cJSON *channels = cJSON_AddArrayToObject(root, "channels");

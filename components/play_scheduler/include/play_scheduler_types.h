@@ -55,15 +55,6 @@ typedef enum {
 } post_source_t;
 
 /**
- * @brief Exposure modes for channel weighting
- */
-typedef enum {
-    PS_EXPOSURE_EQUAL,        // EqE: Equal exposure across channels
-    PS_EXPOSURE_MANUAL,       // MaE: Manual weights
-    PS_EXPOSURE_PROPORTIONAL, // PrE: Proportional with recency bias
-} ps_exposure_mode_t;
-
-/**
  * @brief Pick modes for per-channel artwork selection
  */
 typedef enum {
@@ -165,7 +156,7 @@ typedef struct {
                                   //   HASHTAG: tag
                                   //   GIPHY (search): search query (verbatim, spaces allowed)
     char display_name[65];        // Optional: friendly display name (e.g., user handle, hashtag)
-    uint32_t weight;              // For MaE mode (0 = auto-calculate)
+    uint32_t weight;              // Channel weight; if all channels are 0, the scheduler distributes equally
 
     // Artwork-specific fields (only when type == PS_CHANNEL_TYPE_ARTWORK)
     struct {
@@ -183,7 +174,7 @@ typedef struct {
  * A playset is a declarative configuration that tells the Play Scheduler what
  * to play. It contains all parameters needed to produce a play queue:
  * - Which channels to include (up to PS_MAX_CHANNELS)
- * - How to balance exposure across channels (exposure_mode)
+ * - Per-channel weights (channels[i].weight; all-zero falls back to equal)
  * - How to pick artwork within each channel (pick_mode)
  *
  * Executing a playset resets channel state (cursors, SWRR credits) but
@@ -204,7 +195,6 @@ typedef struct {
     char name[PS_PLAYSET_NAME_MAX + 1]; // Playset name (empty for transient/anonymous commands)
     ps_channel_spec_t channels[PS_MAX_CHANNELS];
     size_t channel_count;
-    ps_exposure_mode_t exposure_mode;
     ps_pick_mode_t pick_mode;
 } ps_scheduler_command_t;
 
@@ -213,9 +203,7 @@ typedef struct {
  */
 typedef struct {
     char channel_id[64];          // "all", "promoted", "sdcard", etc.
-    uint32_t weight;              // For MaE mode (0 = auto-calculate)
-    uint32_t total_count;         // From server or local scan
-    uint32_t recent_count;        // From server (0 for SD card)
+    uint32_t weight;              // Channel weight; if all channels are 0, the scheduler distributes equally
 } ps_channel_config_t;
 
 /**
@@ -227,7 +215,6 @@ typedef struct {
     size_t nae_pool_count;
     uint32_t epoch_id;
     const char *current_channel_id;
-    ps_exposure_mode_t exposure_mode;
     ps_pick_mode_t pick_mode;
     size_t total_available;             // Sum of |LAi| across channels
     size_t total_entries;               // Sum of |Ci| across channels
@@ -264,7 +251,7 @@ typedef struct {
     // SWRR state
     int32_t credit;
     uint32_t weight;          // Normalized weight (out of 65536)
-    uint32_t spec_weight;     // Original weight from playset spec (for MaE recalculation)
+    uint32_t spec_weight;     // Original weight from playset spec (for weight recalculation)
 
     // Pick state
     uint32_t cursor;          // For RecencyPick
@@ -293,8 +280,6 @@ typedef struct {
     bool refresh_in_progress;   // Currently refreshing
     bool refresh_async_pending; // Waiting for Makapix async completion
     uint32_t refresh_start_tick;    // Tick when refresh_in_progress was set (for async timeout)
-    uint32_t total_count;       // From server (for PrE)
-    uint32_t recent_count;      // From server (for PrE), 0 for SD card
 
     // Artwork channel state (only when type == PS_CHANNEL_TYPE_ARTWORK)
     struct {

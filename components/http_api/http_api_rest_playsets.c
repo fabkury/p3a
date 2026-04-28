@@ -37,15 +37,6 @@ static bool is_valid_playset_name(const char *name, size_t len)
 
 // ---------- Playset Mode String Helpers ----------
 
-static const char *exposure_mode_str(ps_exposure_mode_t m) {
-    switch (m) {
-        case PS_EXPOSURE_EQUAL:        return "equal";
-        case PS_EXPOSURE_MANUAL:       return "manual";
-        case PS_EXPOSURE_PROPORTIONAL: return "proportional";
-        default:                       return "unknown";
-    }
-}
-
 static const char *pick_mode_str(ps_pick_mode_t m) {
     switch (m) {
         case PS_PICK_RECENCY: return "recency";
@@ -230,7 +221,6 @@ esp_err_t h_post_playset(httpd_req_t *req)
     cJSON_AddNumberToObject(root, "channel_count", (double)command->channel_count);
     cJSON_AddBoolToObject(root, "from_cache", from_cache);
     cJSON_AddBoolToObject(root, "builtin", is_builtin);
-    cJSON_AddStringToObject(root, "exposure_mode", exposure_mode_str(command->exposure_mode));
     cJSON_AddStringToObject(root, "pick_mode", pick_mode_str(command->pick_mode));
 
     // Compute artwork sums from live scheduler state (caches loaded by execute_command)
@@ -285,7 +275,6 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
         cJSON_AddNumberToObject(pi, "channel_count", (double)ps_stats.channel_count);
         cJSON_AddNumberToObject(pi, "total_cached", (double)ps_stats.total_available);
         cJSON_AddNumberToObject(pi, "total_entries", (double)ps_stats.total_entries);
-        cJSON_AddStringToObject(pi, "exposure_mode", exposure_mode_str(ps_stats.exposure_mode));
         cJSON_AddStringToObject(pi, "pick_mode", pick_mode_str(ps_stats.pick_mode));
 
         ps_channel_detail_t *ch_details = calloc(PS_MAX_CHANNELS, sizeof(ps_channel_detail_t));
@@ -364,7 +353,6 @@ esp_err_t h_get_playsets(httpd_req_t *req)
         if (!item) continue;
         cJSON_AddStringToObject(item, "name", entries[i].name);
         cJSON_AddNumberToObject(item, "channel_count", (double)entries[i].channel_count);
-        cJSON_AddStringToObject(item, "exposure_mode", playset_exposure_mode_str(entries[i].exposure_mode));
         cJSON_AddStringToObject(item, "pick_mode", playset_pick_mode_str(entries[i].pick_mode));
         cJSON_AddItemToArray(arr, item);
     }

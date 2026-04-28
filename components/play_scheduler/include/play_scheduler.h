@@ -16,8 +16,8 @@
  * - Deterministic and reproducible via reversible PRNGs
  *
  * Terminology: A "playset" is the preferred term for a scheduler command
- * (ps_scheduler_command_t). It describes what to play: which channels, how to
- * balance exposure, and how to pick artwork within channels.
+ * (ps_scheduler_command_t). It describes what to play: which channels (with
+ * per-channel weights) and how to pick artwork within channels.
  *
  * @see docs/play-scheduler/SPECIFICATION.md for full details
  */
@@ -64,7 +64,7 @@ void play_scheduler_deinit(void);
  *
  * This is the primary API for changing what the scheduler plays. A "playset"
  * is the preferred term for a scheduler command - it describes a declarative
- * configuration of channels, exposure mode, and pick mode.
+ * configuration of channels (with per-channel weights) and pick mode.
  *
  * Resets channel state, preserves history, begins new play queue.
  *
@@ -92,7 +92,7 @@ esp_err_t ps_create_channel_playset(const char *playset_name, ps_scheduler_comma
 /**
  * @brief Convenience: Play a single named channel
  *
- * Creates a command with one channel in EqE mode with RecencyPick.
+ * Creates a command with one channel using RecencyPick.
  *
  * @param name "all", "promoted", or "sdcard"
  * @return ESP_OK on success
@@ -149,29 +149,26 @@ esp_err_t play_scheduler_play_local_file(const char *filepath);
 // ============================================================================
 
 /**
- * @brief Set the active channel set and exposure mode
+ * @brief Set the active channel set
  *
  * Rebuilds the play queue. History is preserved across this call.
  * Resets: cursors, SWRR credits, NAE pool.
  *
  * @param channels Array of channel configurations
  * @param count Number of channels (1-64)
- * @param mode Exposure mode (EqE, MaE, or PrE)
  * @return ESP_OK on success
  *
  * @deprecated Use play_scheduler_execute_command() instead
  */
 esp_err_t play_scheduler_set_channels(
     const ps_channel_config_t *channels,
-    size_t count,
-    ps_exposure_mode_t mode
+    size_t count
 );
 
 /**
  * @brief Switch to a single channel (N=1 use case)
  *
  * Convenience wrapper for play_scheduler_set_channels() with count=1.
- * Uses PS_EXPOSURE_EQUAL mode.
  *
  * @param channel_id Channel identifier ("all", "promoted", "sdcard", etc.)
  * @return ESP_OK on success

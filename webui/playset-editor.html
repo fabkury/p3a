@@ -574,28 +574,6 @@
                         <div class="error-message hidden" id="nameError"></div>
                     </div>
 
-                    <!-- Exposure Mode -->
-                    <div class="form-group">
-                        <label class="form-label">Balance Mode</label>
-                        <div class="radio-group">
-                            <div class="radio-option">
-                                <input type="radio" id="exposureEqual" name="exposureMode" value="equal" checked>
-                                <label class="radio-label" for="exposureEqual">Equal</label>
-                            </div>
-                            <div class="radio-option">
-                                <input type="radio" id="exposureManual" name="exposureMode" value="manual">
-                                <label class="radio-label" for="exposureManual">Manual</label>
-                            </div>
-                            <div class="radio-option">
-                                <input type="radio" id="exposureProportional" name="exposureMode" value="proportional">
-                                <label class="radio-label" for="exposureProportional">Proportional</label>
-                            </div>
-                        </div>
-                        <div class="mode-description" id="exposureDescription">
-                            All channels get the same play time. Weights are ignored.
-                        </div>
-                    </div>
-
                     <!-- Pick Mode -->
                     <div class="form-group">
                         <label class="form-label">Selection Mode</label>
@@ -615,7 +593,7 @@
                     </div>
 
                     <!-- Weight Visualization -->
-                    <div id="weightVizContainer" class="weight-viz-container hidden">
+                    <div id="weightVizContainer" class="weight-viz-container">
                         <label class="form-label">Channel Balance</label>
                         <div id="weightViz" class="weight-viz"></div>
                     </div>
@@ -694,12 +672,6 @@
         };
 
         // Mode descriptions
-        var exposureModeDescriptions = {
-            equal: 'All channels get the same play time. Weights are ignored.',
-            manual: 'Each channel has an explicit weight controlling how often it plays relative to others.',
-            proportional: 'Channels are automatically weighted by their size. Channels with more artworks get more exposure.'
-        };
-
         var pickModeDescriptions = {
             recency: 'Plays artwork from newest to oldest in order.',
             random: 'Randomly selects artwork within each channel.'
@@ -724,16 +696,6 @@
         });
 
         function setupEventListeners() {
-            // Exposure mode change
-            var exposureModes = document.getElementsByName('exposureMode');
-            for (var i = 0; i < exposureModes.length; i++) {
-                exposureModes[i].addEventListener('change', function() {
-                    updateExposureDescription();
-                    updateWeightVisibility();
-                    renderChannels();
-                });
-            }
-
             // Pick mode change
             var pickModes = document.getElementsByName('pickMode');
             for (var i = 0; i < pickModes.length; i++) {
@@ -744,22 +706,9 @@
             document.getElementById('playsetName').addEventListener('input', validateName);
         }
 
-        function updateExposureDescription() {
-            var mode = getSelectedExposureMode();
-            document.getElementById('exposureDescription').textContent = exposureModeDescriptions[mode];
-        }
-
         function updatePickDescription() {
             var mode = getSelectedPickMode();
             document.getElementById('pickDescription').textContent = pickModeDescriptions[mode];
-        }
-
-        function getSelectedExposureMode() {
-            var modes = document.getElementsByName('exposureMode');
-            for (var i = 0; i < modes.length; i++) {
-                if (modes[i].checked) return modes[i].value;
-            }
-            return 'equal';
         }
 
         function getSelectedPickMode() {
@@ -880,15 +829,12 @@
                             document.getElementById('playsetName').readOnly = false;
 
                             // Set modes
-                            var expEl = document.getElementById('exposure' + capitalize(playset.exposure_mode));
-                            if (expEl) expEl.checked = true;
                             var pickEl = document.getElementById('pick' + capitalize(playset.pick_mode));
                             if (pickEl) pickEl.checked = true;
 
-                            updateExposureDescription();
                             updatePickDescription();
-                            updateWeightVisibility();
                             renderChannels();
+                            updateWeightVisualization();
 
                             showEditorView();
                         } else {
@@ -907,7 +853,6 @@
 
         function buildPlaysetPayload(activate) {
             var payload = {
-                exposure_mode: getSelectedExposureMode(),
                 pick_mode: getSelectedPickMode(),
                 channels: state.channels
             };
@@ -1147,13 +1092,11 @@
 
             document.getElementById('playsetName').value = '';
             document.getElementById('playsetName').readOnly = false;
-            document.getElementById('exposureEqual').checked = true;
             document.getElementById('pickRandom').checked = true;
 
-            updateExposureDescription();
             updatePickDescription();
-            updateWeightVisibility();
             renderChannels();
+            updateWeightVisualization();
             updateSaveButtons();
             showEditorView();
         }
@@ -1183,7 +1126,6 @@
                     '</div>' +
                     '<div class="playset-meta">' +
                     p.channel_count + ' channels &middot; ' +
-                    capitalize(p.exposure_mode) + ' balance &middot; ' +
                     capitalize(p.pick_mode) + ' selection' +
                     '</div>' +
                     '</div>' +
@@ -1198,22 +1140,7 @@
             updateCreateButton();
         }
 
-        function updateWeightVisibility() {
-            var mode = getSelectedExposureMode();
-            var container = document.getElementById('weightVizContainer');
-
-            if (mode === 'manual') {
-                container.classList.remove('hidden');
-                updateWeightVisualization();
-            } else {
-                container.classList.add('hidden');
-            }
-        }
-
         function updateWeightVisualization() {
-            var mode = getSelectedExposureMode();
-            if (mode !== 'manual') return;
-
             var viz = document.getElementById('weightViz');
             var total = 0;
 
@@ -1249,31 +1176,28 @@
 
         function renderChannels() {
             var list = document.getElementById('channelList');
-            var mode = getSelectedExposureMode();
-            var showWeights = mode === 'manual';
 
             document.getElementById('channelCount').textContent = state.channels.length;
             document.getElementById('addChannelBtn').disabled = state.channels.length >= 64;
 
             if (state.channels.length === 0) {
                 list.innerHTML = '<div class="empty-state"><p>No channels yet</p></div>';
+                updateWeightVisualization();
                 updateSaveButtons();
                 return;
             }
 
             var html = '';
             for (var i = 0; i < state.channels.length; i++) {
-                html += renderChannelCard(i, showWeights);
+                html += renderChannelCard(i);
             }
             list.innerHTML = html;
 
-            if (showWeights) {
-                updateWeightVisualization();
-            }
+            updateWeightVisualization();
             updateSaveButtons();
         }
 
-        function renderChannelCard(index, showWeights) {
+        function renderChannelCard(index) {
             var channel = state.channels[index];
             var typeName = channelTypeLabels[channel.type] || channel.type;
             var displayName = channel.display_name || getDefaultChannelName(channel);
@@ -1287,11 +1211,9 @@
                 'ondragend="handleDragEnd(event)">' +
                 '<div class="channel-header">' +
                 '<div class="channel-header-left">' +
-                (showWeights
-                    ? '<span class="channel-color-swatch" style="background:' +
-                        channelColors[index % channelColors.length] +
-                        '" title="Channel color in balance graph"></span>'
-                    : '') +
+                '<span class="channel-color-swatch" style="background:' +
+                    channelColors[index % channelColors.length] +
+                    '" title="Channel color in balance graph"></span>' +
                 '<span class="channel-type-badge">' + typeName + '</span>' +
                 '</div>' +
                 '<div class="channel-controls">' +
@@ -1314,17 +1236,15 @@
             // Type-specific fields
             html += renderChannelSpecificFields(channel, index);
 
-            // Weight (only in manual mode)
-            if (showWeights) {
-                html += '<div class="field-row">' +
-                    '<div class="form-group" style="margin: 0;">' +
-                    '<label class="form-label" style="font-size: 12px;">Weight (0 = auto)</label>' +
-                    '<input type="number" class="form-input" min="0" max="4294967295" ' +
-                    'value="' + (channel.weight || 0) + '" ' +
-                    'onchange="updateChannelField(' + index + ', \'weight\', parseInt(this.value) || 0)">' +
-                    '</div>' +
-                    '</div>';
-            }
+            // Weight
+            html += '<div class="field-row">' +
+                '<div class="form-group" style="margin: 0;">' +
+                '<label class="form-label" style="font-size: 12px;">Weight (0 = mute this channel; if every channel is 0, all play equally)</label>' +
+                '<input type="number" class="form-input" min="0" max="4294967295" ' +
+                'value="' + (channel.weight || 0) + '" ' +
+                'onchange="updateChannelField(' + index + ', \'weight\', parseInt(this.value) || 0)">' +
+                '</div>' +
+                '</div>';
 
             html += '</div></div>';
             return html;

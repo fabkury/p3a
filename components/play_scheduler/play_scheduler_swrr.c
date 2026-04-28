@@ -60,160 +60,45 @@ static inline bool has_available_artwork(const ps_channel_state_t *ch)
 // ============================================================================
 
 /**
- * @brief Calculate EqE (Equal Exposure) weights
+ * @brief Compute per-channel weights from spec_weights
+ *
+ * Sums spec_weights of active channels with available artwork. If the sum is
+ * zero (e.g. user never set any weights), distributes WSUM equally among
+ * active channels — the universal default. Otherwise normalizes spec_weights
+ * to WSUM proportionally. Inactive or unavailable channels get weight 0.
  */
-static void calculate_weights_equal(ps_state_t *state)
+void ps_swrr_calculate_weights(ps_state_t *state)
 {
-    size_t active_count = 0;
+    if (!state) return;
 
-    // Count active channels with available artwork
+    uint32_t total_weight = 0;
+    size_t active_count = 0;
     for (size_t i = 0; i < state->channel_count; i++) {
         if (has_available_artwork(&state->channels[i])) {
+            total_weight += state->channels[i].spec_weight;
             active_count++;
         }
     }
 
     if (active_count == 0) {
-        return;
-    }
-
-    // Equal weight for each active channel with available artwork
-    uint32_t weight_per_channel = WSUM / active_count;
-
-    for (size_t i = 0; i < state->channel_count; i++) {
-        if (has_available_artwork(&state->channels[i])) {
-            state->channels[i].weight = weight_per_channel;
-        } else {
-            state->channels[i].weight = 0;
+        // Nothing to do; leave weights as-is.
+    } else if (total_weight == 0) {
+        // Fall back to equal distribution
+        uint32_t weight_per_channel = WSUM / active_count;
+        for (size_t i = 0; i < state->channel_count; i++) {
+            state->channels[i].weight = has_available_artwork(&state->channels[i])
+                ? weight_per_channel : 0;
         }
-    }
-}
-
-/**
- * @brief Calculate MaE (Manual Exposure) weights
- */
-static void calculate_weights_manual(ps_state_t *state)
-{
-    uint32_t total_weight = 0;
-
-    // Sum original spec weights for active channels with available artwork
-    for (size_t i = 0; i < state->channel_count; i++) {
-        if (has_available_artwork(&state->channels[i])) {
-            total_weight += state->channels[i].spec_weight;
-        }
-    }
-
-    if (total_weight == 0) {
-        // Fall back to equal weights (e.g., all spec_weight=0)
-        calculate_weights_equal(state);
-        return;
-    }
-
-    // Normalize spec_weight to WSUM, writing result to weight
-    for (size_t i = 0; i < state->channel_count; i++) {
-        if (has_available_artwork(&state->channels[i])) {
-            state->channels[i].weight =
-                (uint32_t)((uint64_t)state->channels[i].spec_weight * WSUM / total_weight);
-        } else {
-            state->channels[i].weight = 0;
-        }
-    }
-}
-
-/**
- * @brief Calculate PrE (Proportional Exposure) weights with recency bias
- *
- * Parameters from specification:
- * - α = 0.35 (recency blend factor)
- * - p_min = 0.02
- * - p_max = 0.40
- *
- * Uses available_count (LAi) for Makapix channels to ensure weights
- * reflect what can actually be played.
- */
-static void calculate_weights_proportional(ps_state_t *state)
-{
-    const float alpha = 0.35f;
-    const float p_min = 0.02f;
-    const float p_max = 0.40f;
-
-    // Calculate totals using effective counts (available for Makapix)
-    uint64_t sum_total = 0;
-    uint64_t sum_recent = 0;
-
-    for (size_t i = 0; i < state->channel_count; i++) {
-        if (has_available_artwork(&state->channels[i])) {
-            size_t eff_count = get_effective_count(&state->channels[i]);
-            sum_total += eff_count;
-            // For now, use eff_count as recent_count approximation
-            // In future, this should come from server data
-            sum_recent += eff_count / 4;  // Assume 25% is recent
-        }
-    }
-
-    if (sum_total == 0) {
-        return;
-    }
-
-    float weights[PS_MAX_CHANNELS] = {0};
-    float sum_clamped = 0;
-
-    for (size_t i = 0; i < state->channel_count; i++) {
-        if (!has_available_artwork(&state->channels[i])) {
-            weights[i] = 0;
-            continue;
-        }
-
-        size_t eff_count = get_effective_count(&state->channels[i]);
-
-        // Normalize using effective counts
-        float p_total = (float)eff_count / (float)sum_total;
-        float p_recent = (sum_recent > 0)
-            ? (float)(eff_count / 4) / (float)sum_recent
-            : 0;
-
-        // Blend
-        float p_raw = (1.0f - alpha) * p_total + alpha * p_recent;
-
-        // Clamp
-        if (p_raw < p_min) p_raw = p_min;
-        if (p_raw > p_max) p_raw = p_max;
-
-        weights[i] = p_raw;
-        sum_clamped += p_raw;
-    }
-
-    // Renormalize and convert to integer weights
-    if (sum_clamped > 0) {
+    } else {
+        // Normalize spec_weight to WSUM
         for (size_t i = 0; i < state->channel_count; i++) {
             if (has_available_artwork(&state->channels[i])) {
-                state->channels[i].weight = (uint32_t)(weights[i] / sum_clamped * WSUM);
+                state->channels[i].weight =
+                    (uint32_t)((uint64_t)state->channels[i].spec_weight * WSUM / total_weight);
             } else {
                 state->channels[i].weight = 0;
             }
         }
-    }
-}
-
-void ps_swrr_calculate_weights(ps_state_t *state)
-{
-    if (!state) return;
-
-    ESP_LOGD(TAG, "Calculating weights for mode %d", state->exposure_mode);
-
-    switch (state->exposure_mode) {
-        case PS_EXPOSURE_EQUAL:
-            calculate_weights_equal(state);
-            break;
-        case PS_EXPOSURE_MANUAL:
-            calculate_weights_manual(state);
-            break;
-        case PS_EXPOSURE_PROPORTIONAL:
-            calculate_weights_proportional(state);
-            break;
-        default:
-            calculate_weights_equal(state);
-            break;
     }
 
     // Log weights

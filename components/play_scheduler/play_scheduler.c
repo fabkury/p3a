@@ -298,7 +298,6 @@ esp_err_t play_scheduler_init(void)
     s_state.nae_enabled = true;
     s_state.epoch_id = 0;
     s_state.last_played_id = 0;  // 0 won't match any valid post_id
-    s_state.exposure_mode = PS_EXPOSURE_EQUAL;
     s_state.pick_mode = PS_PICK_RECENCY;
     s_state.channel_select_mode = (ps_channel_select_mode_t)config_store_get_channel_select_mode();
     ESP_LOGI(TAG, "Loaded channel_select_mode from NVS: %s",
@@ -402,8 +401,7 @@ bool play_scheduler_is_initialized(void)
 
 esp_err_t play_scheduler_set_channels(
     const ps_channel_config_t *channels,
-    size_t count,
-    ps_exposure_mode_t mode)
+    size_t count)
 {
     if (!s_state.initialized) {
         return ESP_ERR_INVALID_STATE;
@@ -414,7 +412,7 @@ esp_err_t play_scheduler_set_channels(
 
     xSemaphoreTake(s_state.mutex, portMAX_DELAY);
 
-    ESP_LOGI(TAG, "Setting %zu channel(s), mode=%d", count, mode);
+    ESP_LOGI(TAG, "Setting %zu channel(s)", count);
 
     // Free old channel entries before reconfiguring
     for (size_t i = 0; i < s_state.channel_count; i++) {
@@ -435,7 +433,6 @@ esp_err_t play_scheduler_set_channels(
         }
     }
 
-    s_state.exposure_mode = mode;
     s_state.channel_count = count;
 
     // Copy channel configurations
@@ -494,10 +491,8 @@ esp_err_t play_scheduler_play_channel(const char *channel_id)
     ps_channel_config_t config = {0};
     strncpy(config.channel_id, channel_id, sizeof(config.channel_id) - 1);
     config.weight = 1;
-    config.total_count = 0;
-    config.recent_count = 0;
 
-    esp_err_t err = play_scheduler_set_channels(&config, 1, PS_EXPOSURE_EQUAL);
+    esp_err_t err = play_scheduler_set_channels(&config, 1);
     if (err != ESP_OK) {
         return err;
     }
@@ -543,7 +538,6 @@ esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats)
     out_stats->current_channel_id = s_state.channel_count > 0
         ? s_state.current_channel_id
         : NULL;
-    out_stats->exposure_mode = s_state.exposure_mode;
     out_stats->pick_mode = s_state.pick_mode;
 
     size_t total_avail = 0, total_entries = 0;

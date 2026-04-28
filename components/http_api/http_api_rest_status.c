@@ -34,15 +34,6 @@
 
 // ---------- Playset Mode String Helpers ----------
 
-static const char *exposure_mode_str(ps_exposure_mode_t m) {
-    switch (m) {
-        case PS_EXPOSURE_EQUAL:        return "equal";
-        case PS_EXPOSURE_MANUAL:       return "manual";
-        case PS_EXPOSURE_PROPORTIONAL: return "proportional";
-        default:                       return "unknown";
-    }
-}
-
 static const char *pick_mode_str(ps_pick_mode_t m) {
     switch (m) {
         case PS_PICK_RECENCY: return "recency";
@@ -207,7 +198,6 @@ esp_err_t h_get_api_init(httpd_req_t *req) {
         cJSON_AddNumberToObject(pi, "channel_count", (double)ps_stats.channel_count);
         cJSON_AddNumberToObject(pi, "total_cached", (double)ps_stats.total_available);
         cJSON_AddNumberToObject(pi, "total_entries", (double)ps_stats.total_entries);
-        cJSON_AddStringToObject(pi, "exposure_mode", exposure_mode_str(ps_stats.exposure_mode));
         cJSON_AddStringToObject(pi, "pick_mode", pick_mode_str(ps_stats.pick_mode));
     }
 

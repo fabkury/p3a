@@ -41,7 +41,7 @@ typedef struct __attribute__((packed)) {
     uint32_t magic;            // 0x50335053 ('P3PS')
     uint16_t version;          // File format version (11)
     uint16_t flags;            // Reserved (0)
-    uint8_t  exposure_mode;    // ps_exposure_mode_t
+    uint8_t  _reserved_exposure_mode; // Legacy field (was ps_exposure_mode_t in v11); preserved for binary compat, always written as 0, ignored on read
     uint8_t  pick_mode;        // ps_pick_mode_t
     uint16_t channel_count;    // 1-64
     uint32_t checksum;         // CRC32 (zeroed during calculation)
@@ -59,7 +59,7 @@ typedef struct __attribute__((packed)) {
     char     name[33];         // e.g., "all", "promoted"
     char     identifier[33];   // For USER/HASHTAG
     char     display_name[65]; // Human-readable
-    uint32_t weight;           // For MANUAL mode
+    uint32_t weight;           // Channel weight; if all channels are 0, the scheduler distributes equally
     uint8_t  reserved[8];
 } playset_channel_entry_t;
 
@@ -115,7 +115,6 @@ esp_err_t playset_store_delete(const char *name);
 typedef struct {
     char name[PLAYSET_MAX_NAME_LEN + 1];
     size_t channel_count;
-    ps_exposure_mode_t exposure_mode;
     ps_pick_mode_t pick_mode;
 } playset_list_entry_t;
 

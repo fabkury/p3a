@@ -175,7 +175,7 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 
 [Makapix Club](https://makapix.club/) is a pixel art social network where artists share animated creations. Register your p3a to unlock:
 
-- **Browse and send** artworks or entire channels (e.g. "Promoted Artworks", "Recent Artworks") directly to your device
+- **Browse and send** artworks or entire channels (e.g. "Promoted Artworks", "All Artworks") directly to your device
 - **Remote control** from any browser — change artwork, adjust brightness, pause/resume from anywhere
 - **Secure connection** via mutual TLS (mTLS) with per-device certificates
 - **Real-time updates** — your device receives artworks and commands instantly over encrypted MQTT

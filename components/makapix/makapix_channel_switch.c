@@ -66,7 +66,7 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier,
     // For by_user: use display_handle if provided, otherwise fall back to identifier
     char channel_name[128] = {0};
     if (strcmp(channel, "all") == 0) {
-        strcpy(channel_name, "Recent");
+        strcpy(channel_name, "All");
     } else if (strcmp(channel, "promoted") == 0) {
         strcpy(channel_name, "Promoted");
     } else if (strcmp(channel, "user") == 0) {

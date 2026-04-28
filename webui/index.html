@@ -363,7 +363,7 @@ var userPlaysets = [];
 
 // Built-in presets
 var builtInPresets = [
-    { id: 'channel_recent', label: 'Recent', needsRegistration: true },
+    { id: 'channel_recent', label: 'All Makapix', needsRegistration: true },
     { id: 'channel_promoted', label: 'Promoted', needsRegistration: false },
     { id: 'followed_artists', label: 'Followed', needsRegistration: true },
     { id: 'channel_sdcard', label: 'SD Card', needsRegistration: false },
@@ -533,7 +533,7 @@ function sendCommand(action) {
 }
 
 function playsetDisplayName(name) {
-    if (name === 'channel_recent') return 'Recent';
+    if (name === 'channel_recent') return 'All Makapix';
     if (name === 'channel_promoted') return 'Promoted';
     if (name === 'channel_sdcard') return 'SD Card';
     if (name === 'followed_artists') return 'Followed';

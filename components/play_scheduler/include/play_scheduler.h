@@ -77,11 +77,28 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command);
  * @brief Create a built-in single-channel playset
  *
  * Generates a scheduler command for built-in playset names:
- * - "channel_recent": Single channel with "all" (Recent Artworks)
+ * - "channel_recent": Single channel with "all" (user-facing: "All Makapix" /
+ *                     "All Artworks") -- see naming note below
  * - "channel_promoted": Single channel with "promoted"
  * - "channel_sdcard": Single channel with sdcard
  *
  * These playsets are created locally without requiring server fetch.
+ *
+ * Naming note ("channel_recent" vs "all"):
+ *   The built-in playset key is "channel_recent" but the underlying Makapix
+ *   channel name is "all" and the user-facing label is "All Makapix" /
+ *   "All Artworks". The "recent" wording is a legacy from when the channel
+ *   was framed as time-sorted; it is in fact a list of all artworks. The
+ *   playset key is preserved verbatim because it is persisted in NVS on
+ *   existing devices (key "playset" under namespace "p3a_state") and is part
+ *   of the wire format for POST /playset/{name}; renaming it would require an
+ *   NVS migration / alias. The mapping channel_recent <-> "all" is hard-coded
+ *   in:
+ *     - components/play_scheduler/play_scheduler_commands.c (ps_create_channel_playset)
+ *     - components/http_api/http_api.c (legacy POST /channel)
+ *     - components/http_api/http_api_rest_actions.c (GET /channel)
+ *     - main/animation_player.c (boot-restore display name)
+ *     - webui/index.html (pill bar id + label mapping)
  *
  * @param playset_name Name of the built-in playset
  * @param out_cmd Output scheduler command (caller must allocate)

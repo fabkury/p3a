@@ -1258,7 +1258,7 @@
                     html += '<div class="form-group" style="margin-bottom: 0;">' +
                         '<label class="form-label" style="font-size: 12px;">Channel</label>' +
                         '<select class="form-input" onchange="updateChannelField(' + index + ', \'name\', this.value)">' +
-                        '<option value="all"' + (channel.name === 'all' ? ' selected' : '') + '>All Recent Artworks</option>' +
+                        '<option value="all"' + (channel.name === 'all' ? ' selected' : '') + '>All Artworks</option>' +
                         '<option value="promoted"' + (channel.name === 'promoted' ? ' selected' : '') + '>Promoted Artworks</option>' +
                         '</select>' +
                         '</div>';
@@ -1332,7 +1332,7 @@
         function getDefaultChannelName(channel) {
             switch (channel.type) {
                 case 'named':
-                    return channel.name === 'all' ? 'All Recent Artworks' : 'Promoted Artworks';
+                    return channel.name === 'all' ? 'All Artworks' : 'Promoted Artworks';
                 case 'user':
                     return 'Artist: ' + (channel.identifier || 'unknown');
                 case 'reactions':
@@ -1682,7 +1682,7 @@
                     html = '<div class="form-group">' +
                         '<label class="form-label">Channel</label>' +
                         '<select id="namedChannelValue" class="form-input">' +
-                        '<option value="all">All Recent Artworks</option>' +
+                        '<option value="all">All Artworks</option>' +
                         '<option value="promoted">Promoted Artworks</option>' +
                         '</select>' +
                         '</div>';

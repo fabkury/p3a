@@ -29,6 +29,7 @@
 #include "fresh_boot.h"
 #include "render_engine.h"
 #include "playback_queue.h"
+#include "event_bus.h"
 
 // Animation player state
 animation_buffer_t s_front_buffer = {0};
@@ -837,6 +838,7 @@ esp_err_t app_set_screen_rotation(screen_rotation_t rotation)
     esp_err_t err = render_engine_set_rotation(rotation);
     if (err == ESP_OK) {
         animation_player_render_on_rotation_changed(rotation);
+        event_bus_emit_i32(P3A_EVENT_ROTATION_CHANGED, (int32_t)rotation);
     }
     return err;
 }

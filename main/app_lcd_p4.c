@@ -24,6 +24,7 @@
 #include "play_scheduler.h"
 #include "ugfx_ui.h"
 #include "p3a_boot_logo.h"
+#include "event_bus.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -147,12 +148,22 @@ int app_lcd_get_brightness(void)
 
 esp_err_t app_lcd_set_brightness(int brightness_percent)
 {
-    return p3a_board_set_brightness(brightness_percent);
+    esp_err_t err = p3a_board_set_brightness(brightness_percent);
+    if (err == ESP_OK) {
+        event_bus_emit_i32(P3A_EVENT_BRIGHTNESS_CHANGED,
+                           p3a_board_get_brightness());
     }
-    
+    return err;
+}
+
 esp_err_t app_lcd_adjust_brightness(int delta_percent)
 {
-    return p3a_board_adjust_brightness(delta_percent);
+    esp_err_t err = p3a_board_adjust_brightness(delta_percent);
+    if (err == ESP_OK) {
+        event_bus_emit_i32(P3A_EVENT_BRIGHTNESS_CHANGED,
+                           p3a_board_get_brightness());
+    }
+    return err;
 }
 
 // ============================================================================

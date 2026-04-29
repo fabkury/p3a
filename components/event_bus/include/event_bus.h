@@ -42,6 +42,8 @@ typedef enum {
     P3A_EVENT_PAUSE,
     P3A_EVENT_RESUME,
     P3A_EVENT_TOGGLE_PAUSE,
+    P3A_EVENT_BRIGHTNESS_CHANGED,  // payload.i32 = brightness percent (0-100)
+    P3A_EVENT_ROTATION_CHANGED,    // payload.i32 = rotation degrees (0/90/180/270)
 
     // UI events
     P3A_EVENT_PROVISIONING_STATUS_CHANGED = 300,

@@ -60,6 +60,9 @@ static uint16_t event_type_to_category(uint16_t type)
         case P3A_EVENT_SWAP_BACK:
         case P3A_EVENT_PAUSE:
         case P3A_EVENT_RESUME:
+        case P3A_EVENT_TOGGLE_PAUSE:
+        case P3A_EVENT_BRIGHTNESS_CHANGED:
+        case P3A_EVENT_ROTATION_CHANGED:
             return P3A_EVENT_CATEGORY_PLAYBACK;
         case P3A_EVENT_PROVISIONING_STATUS_CHANGED:
             return P3A_EVENT_CATEGORY_UI;

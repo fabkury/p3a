@@ -17,7 +17,9 @@ The build commands are listed below for your information, but you must NOT build
 $env:PYTHONUTF8="1"
 
 # Activate ESP-IDF (Windows PowerShell): avoid running this command multiple times because you don't want to leave open sessions behind. Instead, run the export command once, and reuse the environment on subsequent commands
-C:\Users\Fab\esp\v5.5.1\esp-idf\export.ps1
+# Choose either one of:
+# C:\Users\Fab\esp\v5.5.1\esp-idf\export.ps1 # ESP-IDF v5.5.1
+# C:\Espressif\Initialize-Idf.ps1 -IdfId esp-idf-b29c58f93b4ca0f49cdfc4c3ef43b562 # ESP-IDF v5.5.2
 
 # Set target (first time only)
 idf.py set-target esp32p4

@@ -22,11 +22,11 @@
                     │
      ┌──────────────┼────────────────────┐
      │              │                    │
-┌────▼──────┐ ┌────▼──────────┐ ┌───────▼────────┐
-│play       │ │content_cache  │ │wifi_manager    │
-│_scheduler │ │loader_service │ │ota_manager     │
-│           │ │storage_evictio│ │makapix         │
-│playback   │ └───────────────┘ └────────────────┘
+┌────▼──────┐ ┌────▼─────────────┐ ┌───────▼────────┐
+│play       │ │content_cache     │ │wifi_manager    │
+│_scheduler │ │loader_service    │ │ota_manager     │
+│           │ │storage_eviction  │ │makapix         │
+│playback   │ └──────────────────┘ └────────────────┘
 │  _queue   │
 └────┬──────┘
      │
@@ -47,9 +47,9 @@
 The `app_main()` function in `main/p3a_main.c` executes the following boot sequence:
 
 1. **NVS flash init** — initialize non-volatile storage; erase and retry on corruption
-2. **Timezone and seed** — set UTC timezone, generate hardware random seed, store in config
+2. **Timezone** — set UTC timezone via `setenv("TZ", "UTC")` and `tzset()`
 3. **`sdio_bus_init()`** — SDIO bus mutex coordinator (shared between WiFi and SD card)
-4. **`p3a_state_init()`** — unified state machine; loads remembered channel, sets initial state
+4. **`p3a_state_init()`** — unified state machine; loads remembered playset name from NVS, sets initial state (channel restore happens later during animation player init)
 5. **`event_bus_init()`** — async event pub/sub bus; subscribes to playback, system, and Makapix events
 6. **`content_service_init()`** — channel cache subsystem (LAi persistence, debounced saves)
 7. **`playback_service_init()`** — deterministic playback engine (play scheduler)
@@ -72,7 +72,7 @@ The `app_main()` function in `main/p3a_main.c` executes the following boot seque
 - **play_scheduler** executes the active playset to select artwork across channels
 - **event_bus** delivers events between decoupled components (playback, connectivity, UI)
 - **animation_player** task renders decoded frames to the LCD via the display renderer
-- **p3a_touch_router** routes touch gestures based on current state (navigation, brightness)
+- **p3a_touch_router** routes touch gestures based on current state (navigation, Makapix reactions, info screen, screen rotation)
 - **connectivity_service** manages Wi-Fi connection and triggers OTA checks
 - **HTTP server** handles REST API requests, WebSocket connections, and static file serving
 - **makapix** MQTT client handles cloud commands and artwork receiving

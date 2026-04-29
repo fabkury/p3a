@@ -11,10 +11,10 @@
 
 ## Key Features
 
-- Animated WebP, GIF, PNG, and JPEG playback
+- Animated WebP and GIF, plus static PNG and JPEG playback
 - **Transparency support** for WebP, GIF, and PNG with configurable background color
 - **Aspect ratio preservation** for non-square artworks
-- Touch gestures for navigation and brightness control
+- Touch gestures for navigation, Makapix reactions, info screen, and screen rotation
 - Web-based control panel at `http://p3a.local/`
 - **Giphy integration** — play trending GIFs from [Giphy](https://giphy.com/) with configurable content rating, rendition, and automatic refresh
 - **Makapix Club integration** — send artworks directly from [makapix.club](https://makapix.club/)
@@ -30,5 +30,5 @@
 ## Codebase Statistics
 
 - **Custom components**: 24 ESP-IDF components under `components/`
-- **Main application files**: ~17 C source files + ~13 headers
-- **Build artifacts**: ~22MB (compiled binaries + LittleFS image)
+- **Main application files**: ~24 C source files + 21 headers
+- **Build artifacts**: ~7 MB (firmware ~2 MB + LittleFS web UI ~4 MB + ESP32-C6 firmware ~1 MB); reserves ~22 MB total flash including the second OTA slot

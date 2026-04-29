@@ -5,7 +5,7 @@
 ### CPU and Memory
 
 - **Main MCU**: Dual-core ESP32-P4 (RISC-V)
-- **Wi-Fi/BLE MCU**: ESP32-C6-MINI-1 (managed by ESP-Hosted)
+- **Wi-Fi MCU**: ESP32-C6-MINI-1 (managed by ESP-Hosted; BLE-capable in hardware but unused by p3a firmware — `CONFIG_BT_ENABLED` is not set)
 - **PSRAM**: 32MB external SDRAM
 - **Flash**: 32MB NOR flash
 - **Interconnect**: ESP-P4 ↔ ESP-C6 via SDIO (coordinated by `sdio_bus` component)
@@ -24,7 +24,7 @@
 - **Controller**: GT911 capacitive touch
 - **Interface**: I2C
 - **Features**: 5-point multitouch, gestures
-- **Routing**: Touch events are routed through `p3a_touch_router` (in `p3a_core`) based on the current application state — tap left/right for navigation, swipe for brightness, long press for actions
+- **Routing**: Touch events are routed through `p3a_touch_router` (in `p3a_core`) based on the current application state — tap left/right for navigation, swipe up/down for Makapix reactions (Giphy click on swipe up), long press for info screen / overlay dismissal, two-finger gesture for screen rotation. Brightness is controlled via the web UI only.
 
 ### Buttons
 

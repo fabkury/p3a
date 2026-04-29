@@ -23,4 +23,4 @@ Comprehensive technical documentation for the **p3a** firmware — an ESP32-P4-p
 
 ---
 
-*Last updated: February 2026*
+*Last updated: April 2026*

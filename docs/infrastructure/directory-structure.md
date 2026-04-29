@@ -2,35 +2,40 @@
 
 ```
 p3a/
-├── main/                             # Main application component
-│   ├── p3a_main.c                   # Application entry point
-│   ├── app_lcd_p4.c                 # LCD initialization and control
-│   ├── app_touch.c                  # Touch input handling
-│   ├── app_usb.c                    # USB composite device (conditional: P3A_USB_MSC_ENABLE)
-│   ├── usb_descriptors.c           # USB device descriptors (conditional: P3A_USB_MSC_ENABLE)
-│   ├── usb_descriptors.h           # USB descriptor definitions
-│   ├── tusb_config.h               # TinyUSB configuration
-│   ├── display_renderer.c          # Frame buffer management, vsync
-│   ├── display_renderer_priv.h     # Display renderer private definitions
-│   ├── display_upscaler.c          # Parallel CPU nearest-neighbor upscaling with rotation
-│   ├── display_ppa_upscaler.c      # PPA hardware-accelerated bilinear upscaling (conditional: P3A_PPA_UPSCALE_ENABLE)
-│   ├── display_fps_overlay.c       # FPS counter overlay
-│   ├── display_processing_notification.c  # Swap processing/failure visual indicator
-│   ├── render_engine.c             # Display rotation and background color API
-│   ├── animation_player.c          # Core animation engine
-│   ├── animation_player_render.c   # Frame rendering and composition
-│   ├── animation_player_loader.c   # Asset loading
-│   ├── animation_player_priv.h     # Animation player private definitions
-│   ├── playback_controller.c       # Playback source management (animation, PICO-8, UI)
-│   ├── connectivity_service.c      # Wi-Fi and OTA service wrapper
-│   ├── content_service.c           # Content cache service wrapper
-│   ├── playback_service.c          # Play scheduler service wrapper
-│   ├── ugfx_ui.c                   # uGFX-based UI rendering
-│   ├── CMakeLists.txt              # Main component build config
-│   ├── Kconfig.projbuild           # Configuration menu items
-│   ├── idf_component.yml           # ESP Component Registry manifest
-│   ├── component.mk               # Legacy make compatibility
-│   └── include/                    # Public headers
+├── main/                                # Main application component
+│   ├── p3a_main.c                       # Application entry point
+│   ├── app_lcd_p4.c                     # LCD initialization and control
+│   ├── app_touch.c                      # Touch input handling
+│   ├── app_usb.c                        # USB composite device (conditional: P3A_USB_MSC_ENABLE)
+│   ├── usb_descriptors.c                # USB device descriptors (conditional: P3A_USB_MSC_ENABLE)
+│   ├── usb_descriptors.h                # USB descriptor definitions
+│   ├── tusb_config.h                    # TinyUSB configuration
+│   ├── display_renderer.c               # Frame buffer management, vsync
+│   ├── display_renderer_priv.h          # Display renderer private definitions
+│   ├── display_upscaler.c               # Parallel CPU nearest-neighbor upscaling
+│   ├── display_ppa_upscaler.c           # PPA hardware bilinear upscaling (conditional: P3A_PPA_UPSCALE_ENABLE)
+│   ├── display_fps_overlay.c            # FPS counter overlay
+│   ├── display_processing_notification.c  # Swap processing/failure indicator
+│   ├── display_reaction_overlay.c       # Reaction submit/revoke overlay
+│   ├── render_engine.c                  # Display rotation and background color API
+│   ├── animation_player.c               # Core animation engine
+│   ├── animation_player_render.c        # Frame rendering (decode + upscale routing)
+│   ├── animation_player_loader.c        # Asset loading and aspect-ratio map building
+│   ├── animation_player_priv.h          # Animation player private definitions
+│   ├── playback_controller.c            # Source switching (animation, PICO-8)
+│   ├── connectivity_service.c           # Wi-Fi and OTA service wrapper
+│   ├── content_service.c                # Content cache service wrapper
+│   ├── playback_service.c               # Play scheduler service wrapper
+│   ├── ugfx_ui.c                        # uGFX-based on-screen text/UI rendering
+│   ├── reaction_submit_img.c/.h         # Embedded thumbs-up overlay image
+│   ├── reaction_revoke_img.c/.h         # Embedded revoke overlay image
+│   ├── reaction_error_img.c/.h          # Embedded error overlay image
+│   ├── submit_click_img.c/.h            # Embedded Giphy click overlay image
+│   ├── CMakeLists.txt                   # Main component build config
+│   ├── Kconfig.projbuild                # Project-level Kconfig menu
+│   ├── idf_component.yml                # ESP Component Registry manifest
+│   ├── component.mk                     # Legacy make compatibility
+│   └── include/                         # Public headers
 │       ├── animation_player.h
 │       ├── app_lcd.h
 │       ├── app_touch.h
@@ -45,39 +50,45 @@ p3a/
 │       ├── ugfx_ui.h
 │       └── version.h
 │
-├── components/                      # Custom components (25 total)
-│   ├── p3a_core/                   # Unified state machine and lifecycle
-│   │   ├── p3a_state.c            # Global state machine
-│   │   ├── p3a_render.c           # State-aware rendering dispatch
-│   │   ├── p3a_touch_router.c     # Touch event routing by state
-│   │   ├── p3a_logo.c             # Logo blitting utilities
-│   │   ├── p3a_boot_logo.c        # Boot logo with fade-in
-│   │   ├── sd_path.c              # SD card path management
-│   │   ├── fresh_boot.c           # Debug NVS/SD erase utilities
+├── components/                          # Custom components (24 total)
+│   ├── p3a_core/                        # Unified state machine and lifecycle
+│   │   ├── p3a_state.c                  # Global state machine
+│   │   ├── p3a_state_channel.c          # Channel-related state transitions
+│   │   ├── p3a_state_connectivity.c     # Connectivity-related state transitions
+│   │   ├── p3a_state_internal.h
+│   │   ├── p3a_render.c                 # State-aware rendering dispatch
+│   │   ├── p3a_touch_router.c           # Touch event routing by state
+│   │   ├── p3a_current_post.c           # Current post tracking
+│   │   ├── p3a_logo.c                   # Logo blitting utilities
+│   │   ├── p3a_boot_logo.c              # Boot logo with fade-in
+│   │   ├── sd_path.c                    # Configurable SD card root path
+│   │   ├── fresh_boot.c                 # Debug NVS/SD erase utilities
 │   │   ├── include/
 │   │   │   ├── p3a_state.h
 │   │   │   ├── p3a_render.h
 │   │   │   ├── p3a_touch_router.h
+│   │   │   ├── p3a_current_post.h
 │   │   │   ├── p3a_logo.h
 │   │   │   ├── p3a_boot_logo.h
+│   │   │   ├── p3a_limits.h
 │   │   │   ├── sd_path.h
 │   │   │   └── fresh_boot.h
 │   │   └── CMakeLists.txt
 │   │
-│   ├── play_scheduler/             # Deterministic multi-channel playback engine
-│   │   ├── play_scheduler.c       # Core scheduler logic
-│   │   ├── play_scheduler_swrr.c  # Smooth Weighted Round Robin
-│   │   ├── play_scheduler_commands.c  # Command execution
-│   │   ├── play_scheduler_pick.c  # Artwork picking
+│   ├── play_scheduler/                  # Deterministic multi-channel playback engine
+│   │   ├── play_scheduler.c             # Core scheduler logic
+│   │   ├── play_scheduler_swrr.c        # Smooth Weighted Round Robin
+│   │   ├── play_scheduler_commands.c    # Command execution
+│   │   ├── play_scheduler_pick.c        # Artwork picking
 │   │   ├── play_scheduler_navigation.c  # Next/prev navigation
-│   │   ├── play_scheduler_timer.c # Dwell time timer
-│   │   ├── play_scheduler_nae.c   # New Artwork Events
-│   │   ├── play_scheduler_lai.c   # Last Access Index tracking
-│   │   ├── play_scheduler_refresh.c   # Channel refresh
-│   │   ├── play_scheduler_buffers.c   # Buffer management
-│   │   ├── play_scheduler_cache.c # Cache integration
-│   │   ├── playset_store.c        # Playset persistence (NVS)
-│   │   ├── playset_json.c         # Playset JSON serialization
+│   │   ├── play_scheduler_timer.c       # Dwell time timer
+│   │   ├── play_scheduler_nae.c         # New Artwork Events
+│   │   ├── play_scheduler_lai.c         # Locally Available index tracking
+│   │   ├── play_scheduler_refresh.c     # Channel refresh
+│   │   ├── play_scheduler_buffers.c     # Buffer management
+│   │   ├── play_scheduler_cache.c       # Cache integration
+│   │   ├── playset_store.c              # Playset persistence (NVS)
+│   │   ├── playset_json.c               # Playset JSON serialization
 │   │   ├── include/
 │   │   │   ├── play_scheduler.h
 │   │   │   ├── play_scheduler_internal.h
@@ -87,32 +98,36 @@ p3a/
 │   │   ├── CMakeLists.txt
 │   │   └── Kconfig
 │   │
-│   ├── event_bus/                  # Asynchronous event pub/sub
+│   ├── event_bus/                       # Asynchronous event pub/sub
 │   │   ├── event_bus.c
 │   │   ├── include/event_bus.h
 │   │   └── CMakeLists.txt
 │   │
-│   ├── p3a_board_ep44b/           # Board abstraction (EP44B hardware)
-│   │   ├── p3a_board_display.c    # Display hardware init
-│   │   ├── p3a_board_fs.c         # LittleFS and SD card
-│   │   ├── p3a_board_button.c     # BOOT button support
-│   │   ├── include/p3a_board.h    # Public board API
+│   ├── p3a_board_ep44b/                 # Board abstraction (EP44B hardware)
+│   │   ├── p3a_board_display.c          # Display hardware init and brightness
+│   │   ├── p3a_board_fs.c               # LittleFS and SD card mount
+│   │   ├── p3a_board_button.c           # BOOT button support
+│   │   ├── include/p3a_board.h          # Public board API
 │   │   ├── CMakeLists.txt
 │   │   └── Kconfig
 │   │
-│   ├── channel_manager/            # Channel/playlist management
-│   │   ├── sdcard_channel.c       # SD card channel
-│   │   ├── sdcard_channel_impl.c  # SD card implementation
-│   │   ├── makapix_channel_impl.c # Makapix channel implementation
-│   │   ├── makapix_channel_events.c   # Makapix event handling
-│   │   ├── makapix_channel_refresh.c  # Makapix channel refresh
-│   │   ├── makapix_channel_utils.c    # Makapix channel utilities
-│   │   ├── vault_storage.c        # SHA256-sharded artwork storage
-│   │   ├── channel_cache.c        # Channel cache
-│   │   ├── channel_metadata.c     # Channel metadata
-│   │   ├── channel_settings.c     # Channel settings
-│   │   ├── download_manager.c     # Download coordination
-│   │   ├── playlist_manager.c     # Playlist management
+│   ├── channel_manager/                 # Channel/playlist management (vault path logic lives here too)
+│   │   ├── sdcard_channel.c             # SD card channel
+│   │   ├── sdcard_channel_impl.c        # SD card implementation
+│   │   ├── makapix_channel_impl.c       # Makapix channel implementation
+│   │   ├── makapix_channel_events.c     # Makapix event handling
+│   │   ├── makapix_channel_refresh.c    # Makapix channel refresh
+│   │   ├── makapix_channel_utils.c      # Makapix channel utilities
+│   │   ├── makapix_channel_internal.h
+│   │   ├── channel_cache.c              # Channel cache
+│   │   ├── channel_cache_ops.c          # Vault path / per-asset cache ops (3-level SHA256 sharding)
+│   │   ├── channel_cache_merge.c        # Cache merge logic
+│   │   ├── channel_cache_internal.h
+│   │   ├── channel_metadata.c           # Per-channel metadata
+│   │   ├── channel_settings.c           # Channel settings
+│   │   ├── download_manager.c           # Download coordination
+│   │   ├── playlist_manager.c           # Playlist management (incl. vault path helpers)
+│   │   ├── pcg32_reversible.h
 │   │   ├── include/
 │   │   │   ├── channel_interface.h
 │   │   │   ├── sdcard_channel.h
@@ -120,7 +135,6 @@ p3a/
 │   │   │   ├── makapix_channel_impl.h
 │   │   │   ├── makapix_channel_events.h
 │   │   │   ├── makapix_channel_utils.h
-│   │   │   ├── vault_storage.h
 │   │   │   ├── channel_cache.h
 │   │   │   ├── channel_metadata.h
 │   │   │   ├── channel_settings.h
@@ -130,24 +144,25 @@ p3a/
 │   │   │   ├── psram_alloc.h
 │   │   │   ├── pcg32_reversible.h
 │   │   │   └── uthash.h
-│   │   ├── makapix_channel_internal.h
-│   │   ├── pcg32_reversible.h
 │   │   ├── CMakeLists.txt
 │   │   └── Kconfig
 │   │
-│   ├── wifi_manager/               # Wi-Fi and SNTP
-│   │   ├── app_wifi.c             # Wi-Fi STA/AP, captive portal
-│   │   ├── sntp_sync.c            # NTP time synchronization
+│   ├── wifi_manager/                    # Wi-Fi, captive portal, recovery, SNTP
+│   │   ├── app_wifi.c                   # Wi-Fi STA/AP, mDNS
+│   │   ├── wifi_captive_portal.c        # Captive portal AP, DNS hijack, /save form
+│   │   ├── wifi_recovery.c              # Reconnection / WPA3 fallback
+│   │   ├── wifi_manager_internal.h
+│   │   ├── sntp_sync.c                  # NTP time synchronization
 │   │   ├── include/
 │   │   │   ├── app_wifi.h
 │   │   │   └── sntp_sync.h
 │   │   ├── CMakeLists.txt
 │   │   └── Kconfig
 │   │
-│   ├── animation_decoder/          # Image/animation decoders
-│   │   ├── webp_animation_decoder.c
-│   │   ├── png_animation_decoder.c
-│   │   ├── jpeg_animation_decoder.c
+│   ├── animation_decoder/               # Image/animation decoders
+│   │   ├── webp_animation_decoder.c     # Animated WebP via libwebp
+│   │   ├── png_animation_decoder.c      # PNG (single-frame) via libpng
+│   │   ├── jpeg_animation_decoder.c     # JPEG via ESP-IDF hardware JPEG
 │   │   ├── static_image_decoder_common.h
 │   │   ├── include/
 │   │   │   ├── animation_decoder.h
@@ -155,37 +170,41 @@ p3a/
 │   │   ├── CMakeLists.txt
 │   │   └── Kconfig
 │   │
-│   ├── animated_gif_decoder/       # GIF decoder (C++ wrapper)
+│   ├── animated_gif_decoder/            # GIF decoder (C++ wrapper around AnimatedGIF)
 │   │   ├── AnimatedGIF.cpp
 │   │   ├── gif_animation_decoder.cpp
 │   │   ├── gif.inl
+│   │   ├── include/
+│   │   │   ├── AnimatedGIF.h
+│   │   │   └── arduino_compat.h
 │   │   └── CMakeLists.txt
 │   │
-│   ├── giphy/                      # Giphy API integration
-│   │   ├── giphy_api.c            # API calls
-│   │   ├── giphy_cache.c          # SD card cache
-│   │   ├── giphy_download.c       # Download with atomic writes
-│   │   ├── giphy_refresh.c        # Periodic refresh
+│   ├── giphy/                           # Giphy API integration
+│   │   ├── giphy_api.c                  # API calls
+│   │   ├── giphy_cache.c                # SD card cache (3-level SHA256-sharded)
+│   │   ├── giphy_download.c             # Download with atomic writes
+│   │   ├── giphy_refresh.c              # Periodic refresh
 │   │   ├── include/
 │   │   │   ├── giphy.h
 │   │   │   └── giphy_types.h
 │   │   ├── CMakeLists.txt
 │   │   └── Kconfig
 │   │
-│   ├── makapix/                    # Makapix Club integration
-│   │   ├── makapix.c              # Module init and lifecycle
-│   │   ├── makapix_mqtt.c         # MQTT client
-│   │   ├── makapix_provision.c    # Device provisioning
-│   │   ├── makapix_provision_flow.c   # Provisioning state machine
-│   │   ├── makapix_store.c        # NVS credential storage
-│   │   ├── makapix_api.c          # HTTPS API calls
-│   │   ├── makapix_artwork.c      # Artwork receiving
-│   │   ├── makapix_certs.c        # TLS certificates
-│   │   ├── makapix_connection.c   # Connection management
-│   │   ├── makapix_channel_switch.c   # Channel switching
-│   │   ├── makapix_refresh.c      # Channel refresh
-│   │   ├── makapix_single_artwork.c   # Single artwork playback
-│   │   ├── view_tracker.c         # View tracking analytics
+│   ├── makapix/                         # Makapix Club integration
+│   │   ├── makapix.c                    # Module init and lifecycle
+│   │   ├── makapix_mqtt.c               # MQTT client (mTLS over TLS 1.2)
+│   │   ├── makapix_provision.c          # Device provisioning
+│   │   ├── makapix_provision_flow.c     # Provisioning state machine
+│   │   ├── makapix_store.c              # NVS credential storage
+│   │   ├── makapix_api.c                # HTTPS API calls
+│   │   ├── makapix_artwork.c            # Artwork receiving (vault writer)
+│   │   ├── makapix_certs.c              # TLS certificate handling
+│   │   ├── makapix_connection.c         # Connection management
+│   │   ├── makapix_channel_switch.c     # Channel switching
+│   │   ├── makapix_promoted_https.c     # Promoted-channel HTTPS fetcher
+│   │   ├── makapix_refresh.c            # Channel refresh
+│   │   ├── makapix_single_artwork.c     # Single artwork playback
+│   │   ├── view_tracker.c               # View tracking analytics
 │   │   ├── makapix.h
 │   │   ├── makapix_internal.h
 │   │   ├── makapix_mqtt.h
@@ -194,148 +213,170 @@ p3a/
 │   │   ├── makapix_api.h
 │   │   ├── makapix_artwork.h
 │   │   ├── makapix_certs.h
+│   │   ├── makapix_promoted_https.h
 │   │   ├── view_tracker.h
+│   │   ├── include/view_tracker.h
+│   │   ├── certs/
+│   │   │   └── makapix_ca_cert.inc      # Embedded broker CA certificate
 │   │   ├── .gitignore
 │   │   ├── CMakeLists.txt
 │   │   └── Kconfig
 │   │
-│   ├── http_api/                   # HTTP server and REST API
-│   │   ├── http_api.c             # Server init, routing
-│   │   ├── http_api_rest_status.c # Status endpoint
-│   │   ├── http_api_rest_actions.c    # Action endpoints
-│   │   ├── http_api_rest_settings.c   # Settings endpoints
-│   │   ├── http_api_rest_playsets.c   # Playset CRUD endpoints
-│   │   ├── http_api_ota.c         # OTA endpoints
-│   │   ├── http_api_upload.c      # File upload
-│   │   ├── http_api_pages.c       # HTML page serving
-│   │   ├── http_api_pico8.c       # PICO-8 WebSocket
-│   │   ├── http_api_utils.c       # Utility functions
+│   ├── http_api/                        # HTTP server, REST API, WebSocket
+│   │   ├── http_api.c                   # Server init, routing
+│   │   ├── http_api_rest_status.c       # /status and /api/* endpoints
+│   │   ├── http_api_rest_actions.c      # /action/* endpoints
+│   │   ├── http_api_rest_settings.c     # /settings/* and /config endpoints
+│   │   ├── http_api_rest_playsets.c     # /playsets/* CRUD
+│   │   ├── http_api_ota.c               # /ota/* endpoints
+│   │   ├── http_api_upload.c            # /upload (multipart, 5 MB cap)
+│   │   ├── http_api_pages.c             # HTML page serving
+│   │   ├── http_api_pico8.c             # /pico_stream WebSocket handler
+│   │   ├── http_api_utils.c             # Utility functions
 │   │   ├── http_api.h
 │   │   ├── http_api_internal.h
-│   │   ├── favicon_data.h
-│   │   ├── pico8_logo_data.h
-│   │   ├── surrogate_ui.h
+│   │   ├── favicon_data.h               # Embedded favicon
+│   │   ├── pico8_logo_data.h            # Embedded PICO-8 logo
+│   │   ├── surrogate_ui.h               # Fallback UI when LittleFS web UI is missing
 │   │   └── CMakeLists.txt
 │   │
-│   ├── config_store/               # NVS-backed configuration
-│   │   ├── config_store.c
+│   ├── config_store/                    # NVS-backed configuration
+│   │   ├── config_store.c               # Core API
+│   │   ├── config_store_settings.c      # General settings (rotation, dwell, etc.)
+│   │   ├── config_store_giphy.c         # Giphy-specific settings
+│   │   ├── config_store_internal.h
 │   │   ├── config_store.h
 │   │   └── CMakeLists.txt
 │   │
-│   ├── ota_manager/                # OTA firmware updates
-│   │   ├── ota_manager.c          # Manager lifecycle, periodic checks
-│   │   ├── ota_manager_install.c  # Firmware installation
-│   │   ├── ota_manager_webui.c    # Web UI OTA updates
-│   │   ├── github_ota.c           # GitHub Releases API
+│   ├── ota_manager/                     # OTA firmware and web UI updates
+│   │   ├── ota_manager.c                # Lifecycle, periodic checks (default 12h)
+│   │   ├── ota_manager_install.c        # Firmware installation
+│   │   ├── ota_manager_webui.c          # Web UI (LittleFS) OTA
+│   │   ├── github_ota.c                 # GitHub Releases API
 │   │   ├── ota_manager_internal.h
 │   │   ├── github_ota.h
 │   │   ├── include/ota_manager.h
 │   │   ├── CMakeLists.txt
 │   │   └── Kconfig
 │   │
-│   ├── slave_ota/                  # ESP32-C6 co-processor firmware
+│   ├── slave_ota/                       # ESP32-C6 co-processor firmware auto-flash
 │   │   ├── slave_ota.c
+│   │   ├── firmware/
+│   │   │   └── network_adapter.bin      # Embedded ESP32-C6 firmware blob
 │   │   ├── include/slave_ota.h
 │   │   └── CMakeLists.txt
 │   │
-│   ├── pico8/                      # PICO-8 streaming support
-│   │   ├── pico8_stream.c         # WebSocket streaming
-│   │   ├── pico8_render.c         # 128x128 frame rendering
-│   │   ├── pico8_stream_stubs.c   # Stubs when disabled
+│   ├── pico8/                           # PICO-8 streaming support
+│   │   ├── pico8_stream.c               # WebSocket frame ingestion
+│   │   ├── pico8_render.c               # 128x128 → 720x720 nearest-neighbor render
+│   │   ├── pico8_audio.c                # Audio streaming (P3A_PICO8_AUDIO_ENABLE)
+│   │   ├── pico8_stream_stubs.c         # Stubs when disabled
 │   │   ├── include/
 │   │   │   ├── pico8_stream.h
 │   │   │   ├── pico8_render.h
+│   │   │   ├── pico8_audio.h
 │   │   │   └── pico8_logo_data.h
 │   │   ├── CMakeLists.txt
 │   │   └── Kconfig
 │   │
-│   ├── content_cache/              # Channel cache wrapper
+│   ├── content_cache/                   # Channel cache wrapper
 │   │   ├── content_cache.c
 │   │   ├── include/content_cache.h
 │   │   └── CMakeLists.txt
 │   │
-│   ├── storage_eviction/             # SD card space management
+│   ├── storage_eviction/                # SD card space management
 │   │   ├── storage_eviction.c
 │   │   ├── include/storage_eviction.h
 │   │   ├── CMakeLists.txt
 │   │   └── Kconfig
 │   │
-│   ├── loader_service/             # Animation file loader
+│   ├── loader_service/                  # Animation file loader
 │   │   ├── loader_service.c
 │   │   ├── include/loader_service.h
 │   │   └── CMakeLists.txt
 │   │
-│   ├── playback_queue/             # Play scheduler to animation player adapter
+│   ├── playback_queue/                  # Play scheduler → animation player adapter
 │   │   ├── playback_queue.c
 │   │   ├── include/playback_queue.h
 │   │   └── CMakeLists.txt
 │   │
-│   ├── sdio_bus/                   # SDIO bus coordinator
+│   ├── sdio_bus/                        # SDIO bus mutex coordinator
 │   │   ├── sdio_bus.c
 │   │   ├── include/sdio_bus.h
 │   │   └── CMakeLists.txt
 │   │
-│   ├── show_url/                   # URL artwork downloader
+│   ├── show_url/                        # URL artwork downloader
 │   │   ├── show_url.c
 │   │   ├── include/show_url.h
 │   │   └── CMakeLists.txt
 │   │
-│   ├── debug_http_log/             # Performance instrumentation (compile-time optional)
+│   ├── debug_http_log/                  # Performance instrumentation (compile-time optional)
 │   │   ├── debug_http_log.c
 │   │   ├── debug_http_log.h
 │   │   └── CMakeLists.txt
 │   │
-│   ├── ugfx/                       # uGFX graphics library
-│   └── libwebp_decoder/            # libwebp wrapper
+│   ├── ugfx/                            # uGFX text/font rendering subset (DejaVu Sans 16/24/32)
+│   └── libwebp_decoder/                 # libwebp v1.4.0 wrapper (FetchContent)
 │
-├── webui/                          # Web interface files
-│   ├── index.html                 # Main control page
-│   ├── settings.html              # Settings page
-│   ├── giphy.html                 # Giphy settings page
-│   ├── ota.html                   # OTA update page
-│   ├── playset-editor.html        # Playset editor page
-│   ├── metadata.json              # Web UI version and API compatibility
+├── webui/                               # Web interface assets (packed into LittleFS)
+│   ├── index.html                       # Main control page
+│   ├── settings.html                    # Settings page
+│   ├── giphy.html                       # Redirect stub → /settings#giphy
+│   ├── ota.html                         # OTA update page
+│   ├── playset-editor.html              # Playset editor page
+│   ├── favicon.ico
+│   ├── version.txt                      # Generated at configure time
+│   ├── metadata.json                    # Generated at configure time (web UI version + API)
 │   ├── config/
-│   │   └── network.html           # Network configuration page
-│   ├── setup/                     # Captive portal pages
-│   │   ├── index.html             # Wi-Fi setup form
+│   │   └── network.html                 # Network configuration page
+│   ├── setup/                           # Captive portal pages
+│   │   ├── index.html                   # Wi-Fi setup form (POSTs to /save)
 │   │   ├── success.html
 │   │   ├── error.html
 │   │   └── erased.html
-│   ├── static/                    # Static assets
+│   ├── static/                          # Static assets
+│   │   ├── common.css
 │   │   ├── compat.js
 │   │   ├── pico8.css
-│   │   └── pico8.js
+│   │   ├── pico8.js
+│   │   ├── pico8_logo.png
+│   │   ├── fake08.js                    # FAKE-08 emulator JS loader
+│   │   └── fake08.wasm                  # FAKE-08 PICO-8 emulator (WebAssembly)
 │   └── pico8/
-│       └── index.html             # PICO-8 web interface
+│       └── index.html                   # PICO-8 monitor page
 │
-├── docs/                           # Documentation
-│   ├── infrastructure/            # Technical infrastructure docs (this folder)
-│   ├── BOARD-CAPABILITIES.md
-│   ├── HOW-TO-USE.md
-│   ├── flash-p3a.md
-│   ├── state-diagrams/            # State machine diagrams
-│   ├── reference/                 # Protocol references (MQTT)
-│   ├── playset-editor/            # Playset editor spec
-│   ├── instructables/             # Instructables article
-│   ├── web-flasher/               # Web flasher tool
-│   ├── first-principles/          # Architecture design docs
-│   └── dead-code/                 # Dead code analysis
+├── docs/                                # Documentation
+│   ├── INFRASTRUCTURE.md                # Stub redirecting to docs/infrastructure/
+│   ├── infrastructure/                  # Technical infrastructure docs (this folder)
+│   ├── BOARD-CAPABILITIES.md            # Hardware capability sheet
+│   ├── HOW-TO-USE.md                    # User guide
+│   ├── flash-p3a.md                     # Flashing instructions
+│   ├── deferred-features.md             # Tracker for doc claims pending implementation
+│   ├── concurrent-tls-eagain-tabled.md  # Tabled-for-later technical note
+│   ├── reference/                       # Protocol references (e.g., MQTT)
+│   └── web-flasher/                     # Web flasher tool source
 │
-├── build/                          # Build output directory
-├── release/                        # Release binaries (per version)
-├── managed_components/             # Auto-downloaded ESP-IDF components
-├── CMakeLists.txt                 # Root CMake configuration
-├── partitions.csv                 # Flash partition layout
-├── sdkconfig                      # ESP-IDF configuration (generated)
-├── README.md                      # User-facing documentation
-├── LICENSE
-├── CLAUDE.md                      # AI assistant guidance
-└── AGENTS.md                      # AI agent instructions
+├── flasher/                             # Optional Windows flasher build (P3A_BUILD_FLASHER)
+├── certs/                               # Provisioning certificate authority material
+├── images/                              # Project images, screenshots, gifs
+├── scripts/                             # Build / development helper scripts
+├── build/                               # Build output directory
+├── release/                             # Per-version release binaries
+├── managed_components/                  # Auto-downloaded ESP-IDF components (from idf_component.yml)
+├── CMakeLists.txt                       # Root CMake configuration
+├── partitions.csv                       # Flash partition layout
+├── sdkconfig                            # ESP-IDF configuration (generated)
+├── dependencies.lock                    # Pinned managed-component versions
+├── README.md                            # User-facing documentation
+├── LICENSE                              # Apache License 2.0
+├── LICENSING.md                         # Dependency license report
+├── CLAUDE.md                            # AI assistant guidance
+└── AGENTS.md                            # AI agent instructions
 ```
 
 ## Key Files
 
-- **CMakeLists.txt** (root): Build configuration, versioning, LittleFS image creation, release packaging
-- **partitions.csv**: Flash memory layout (NVS, dual OTA, LittleFS, slave firmware)
-- **sdkconfig**: ESP-IDF project configuration (auto-generated from menuconfig)
+- **CMakeLists.txt** (root): Build configuration, version variables (`PROJECT_VER`, `WEBUI_VERSION`, `P3A_API_VERSION`), LittleFS image creation, release packaging hook
+- **partitions.csv**: Flash memory layout (NVS, dual OTA, LittleFS web UI, slave firmware)
+- **sdkconfig**: ESP-IDF project configuration (generated from `menuconfig`)
+- **dependencies.lock**: Authoritative pinned versions for ESP-IDF and managed components

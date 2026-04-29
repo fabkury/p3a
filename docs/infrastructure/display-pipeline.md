@@ -12,10 +12,10 @@
 ┌──────────────┐     ┌────────────────┐     ┌──────────────┐
 │   Decoder    │────>│ animation_     │────>│ Upscaler     │
 │ (WebP/GIF/   │     │ player_render  │     │ (CPU or PPA) │
-│  PNG/JPEG)   │     │ (composition,  │     └──────┬───────┘
-└──────────────┘     │  aspect ratio) │            │
-                     └────────────────┘            ▼
-                                            ┌─────────────┐
+│  PNG/JPEG)   │     │ (decode,       │     └──────┬───────┘
+└──────────────┘     │  upscale       │            │
+                     │  routing)      │            ▼
+                     └────────────────┘     ┌─────────────┐
                                             │ display_    │
                                             │ renderer    │
 ┌──────────────────────────┐                │ (vsync,     │
@@ -75,5 +75,6 @@
 | `display_fps_overlay.c` | FPS counter overlay |
 | `display_processing_notification.c` | Swap processing/failure visual indicator |
 | `render_engine.c` | Display rotation and background color API |
-| `animation_player_render.c` | Frame decoding, aspect ratio calculation, PPA/CPU upscale routing |
-| `playback_controller.c` | Source switching (animation, PICO-8, UI) |
+| `animation_player_render.c` | Frame decoding and PPA/CPU upscale routing (aspect-ratio maps are built in `animation_player_loader.c`) |
+| `animation_player_loader.c` | Aspect-ratio-preserving upscale map building, frame decode setup |
+| `playback_controller.c` | Source switching between animation and PICO-8 (UI mode is gated separately by `display_renderer_enter_ui_mode()`) |

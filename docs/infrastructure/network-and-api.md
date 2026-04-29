@@ -12,13 +12,13 @@
 
 1. **Boot**: Attempts to connect using saved NVS credentials
 2. **Failure**: Starts captive portal AP mode (`p3a-setup`)
-3. **Configuration**: User submits SSID/password via web form at `/setup/`
-4. **Reconnection**: Device saves credentials to NVS and reconnects
+3. **Configuration**: User submits SSID/password via the captive portal form (served at `/`, posts to `/save`)
+4. **Reconnection**: Device saves credentials to NVS and reboots into STA mode
 
 ### mDNS
 
-- **Hostname**: `p3a.local`
-- **Service**: `_http._tcp` advertised
+- **Hostname**: `p3a.local` by default; `p3a-<device_name>.local` when a device name is configured (in AP/setup mode, both resolve via a delegate hostname)
+- **Service**: `_http._tcp` advertised on port 80
 
 ### Kconfig
 
@@ -51,7 +51,7 @@ The HTTP server is implemented across multiple source files in `components/http_
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/status` | Device status (uptime, heap, RSSI, firmware info) |
-| GET | `/api/init` | Combined init payload (ui_config, channel_stats, active_playset, play_order) |
+| GET | `/api/init` | Combined init payload (ui_config, channel_stats, active_playset, paused, playset_info, current_artwork) |
 | GET | `/api/ui-config` | UI configuration (LCD dimensions, feature flags) |
 | GET | `/api/network-status` | Network connection info (IP, SSID, RSSI) |
 | GET | `/api/state` | Lightweight state snapshot |
@@ -69,12 +69,12 @@ The HTTP server is implemented across multiple source files in `components/http_
 |--------|----------|-------------|
 | GET | `/settings/dwell_time` | Get dwell time |
 | PUT | `/settings/dwell_time` | Set dwell time |
-| GET | `/settings/play_order` | Get play order |
-| PUT | `/settings/play_order` | Set play order |
 | GET | `/settings/refresh_override` | Get refresh override |
 | PUT | `/settings/refresh_override` | Set refresh override |
 | GET | `/rotation` | Get screen rotation |
 | POST | `/rotation` | Set screen rotation |
+
+> Pick mode (recency vs random) is part of each playset definition (POST `/playsets/{name}`) — there is no dedicated `/settings/play_order` endpoint.
 
 ### Actions
 
@@ -122,6 +122,7 @@ The HTTP server is implemented across multiple source files in `components/http_
 | POST | `/ota/check` | Trigger OTA update check |
 | POST | `/ota/install` | Start firmware installation |
 | POST | `/ota/rollback` | Rollback to previous firmware |
+| POST | `/ota/webui/install` | Install pending web UI update |
 | POST | `/ota/webui/repair` | Force re-download of web UI |
 
 ### Wi-Fi
@@ -165,7 +166,7 @@ Static HTML pages served from the LittleFS partition:
 
 ## MQTT (makapix component)
 
-- **Protocol**: MQTT over TLS with mTLS authentication
+- **Protocol**: MQTT over TLS 1.2 with mTLS authentication (TLS 1.3 is disabled in `sdkconfig`)
 - **Broker**: Makapix Club cloud
-- **Features**: Remote commands (swap, pause), artwork receiving, view tracking, status publishing
+- **Features**: Remote commands (`swap_next`, `swap_back`, `play_channel`, `show_artwork`, `show_url`, `swap_to`, `execute_playset`, `set_background_color`), artwork receiving, view tracking, status publishing via MQTT LWT
 - See [Components — makapix](components.md#10-makapix--makapix-club-integration) for details.

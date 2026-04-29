@@ -16,13 +16,13 @@ The root `CMakeLists.txt` manages three independent version numbers and the buil
 cmake_minimum_required(VERSION 3.16)
 
 # Firmware version (semantic versioning, embedded in binary, used by OTA)
-set(PROJECT_VER "0.8.4-dev")
+set(PROJECT_VER "<MAJOR>.<MINOR>.<PATCH>[-suffix]")
 
 # Web UI version (X.Y format, independent from firmware, auto-updated during OTA)
-set(WEBUI_VERSION "1.3")
+set(WEBUI_VERSION "<X>.<Y>")
 
 # API version (bump only for breaking HTTP API changes)
-set(P3A_API_VERSION 2)
+set(P3A_API_VERSION <integer>)
 
 # Optional: Windows flasher executable build
 set(P3A_BUILD_FLASHER OFF)
@@ -31,6 +31,8 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 add_compile_options(-Wno-ignored-qualifiers)
 project(p3a)
 ```
+
+Concrete values live in the root `CMakeLists.txt`; they move with each release, so the snippet above shows the shape only.
 
 Key features beyond the boilerplate:
 
@@ -52,6 +54,7 @@ set(srcs
     "display_renderer.c"
     "display_fps_overlay.c"
     "display_processing_notification.c"
+    "display_reaction_overlay.c"
     "display_upscaler.c"
     "render_engine.c"
     "content_service.c"
@@ -62,6 +65,10 @@ set(srcs
     "animation_player_loader.c"
     "playback_controller.c"
     "ugfx_ui.c"
+    "reaction_submit_img.c"
+    "reaction_revoke_img.c"
+    "reaction_error_img.c"
+    "submit_click_img.c"
 )
 
 # Conditional: PPA hardware upscaling
@@ -84,7 +91,7 @@ idf_component_register(
              ota_manager slave_ota channel_manager wifi_manager pico8
              p3a_core sdio_bus debug_http_log play_scheduler event_bus
              content_cache playback_queue loader_service show_url
-             giphy esp_driver_ppa
+             giphy esp_driver_ppa storage_eviction
     PRIV_REQUIRES esp_mm
 )
 
@@ -132,9 +139,16 @@ idf.py fullclean
 
 ## ESP Component Registry Dependencies
 
+Direct dependencies declared in `main/idf_component.yml`:
+
 - **waveshare/esp32_p4_wifi6_touch_lcd_4b**: BSP for the hardware board
 - **espressif/esp_lcd_touch**: Touch controller abstraction
 - **espressif/libpng**: PNG decoding library
 - **espressif/mdns**: mDNS responder
-- **espressif/esp_tinyusb**: USB stack wrapper
 - **espressif/esp_hosted**: ESP32-C6 hosted mode driver
+- **espressif/esp_wifi_remote**: Wi-Fi remote driver routed over ESP-Hosted
+- **espressif/tinyusb**: TinyUSB stack
+- **espressif/esp_tinyusb**: USB stack wrapper around TinyUSB
+- **joltwallet/littlefs**: LittleFS filesystem for the web UI partition
+
+Many additional managed components (e.g., `espressif/esp_lcd_touch_gt911`, `waveshare/esp_lcd_st7703`, `lvgl/lvgl`, `espressif/esp_codec_dev`, `espressif/cmake_utilities`) are pulled in transitively. The full pinned tree lives in `dependencies.lock`.

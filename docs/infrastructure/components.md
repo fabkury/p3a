@@ -1,15 +1,15 @@
 # Component Architecture
 
-All 25 custom components live under `components/`. This document describes each one.
+All 24 custom components live under `components/`. This document describes each one.
 
 ---
 
 ## 1. p3a_core — Unified State Machine and Lifecycle
 
 - **Purpose**: Central state machine, touch routing, rendering dispatch, SD path management, and boot utilities
-- **Key files**: `p3a_state.c`, `p3a_render.c`, `p3a_touch_router.c`, `sd_path.c`, `p3a_boot_logo.c`, `p3a_logo.c`, `fresh_boot.c`
-- **Public API**: `p3a_state.h`, `p3a_render.h`, `p3a_touch_router.h`, `sd_path.h`, `p3a_boot_logo.h`, `fresh_boot.h`
-- **States**: `ANIMATION_PLAYBACK`, `PROVISIONING`, `OTA`, `PICO8_STREAMING`
+- **Key files**: `p3a_state.c`, `p3a_state_channel.c`, `p3a_state_connectivity.c`, `p3a_render.c`, `p3a_touch_router.c`, `p3a_current_post.c`, `sd_path.c`, `p3a_boot_logo.c`, `p3a_logo.c`, `fresh_boot.c`
+- **Public API**: `p3a_state.h`, `p3a_render.h`, `p3a_touch_router.h`, `p3a_current_post.h`, `p3a_logo.h`, `p3a_boot_logo.h`, `p3a_limits.h`, `sd_path.h`, `fresh_boot.h`
+- **States**: `BOOT`, `ANIMATION_PLAYBACK`, `PROVISIONING`, `OTA`, `PICO8_STREAMING`, `ERROR`
 - **Key functions**:
   - `p3a_state_init()`, `p3a_state_get()`, `p3a_state_switch_channel()`, `p3a_state_enter_*()` — state transitions
   - `p3a_touch_router_init()`, `p3a_touch_router_handle_event()` — state-aware touch routing
@@ -26,7 +26,7 @@ All 25 custom components live under `components/`. This document describes each 
   - **Channel weights**: Each channel has a `weight`. SWRR distributes plays proportionally; if every weight is 0, plays are distributed equally.
   - **Pick modes**: Recency-based, Random
   - **NAE**: New Artwork Events — react to freshly downloaded content
-  - **LAi**: Last Access Index — persistence of playback position per channel
+  - **LAi**: Locally Available index — persistence of playback position per channel
 - **Key functions**: `play_scheduler_init()`, `play_scheduler_execute_command()`, `play_scheduler_next()`, `play_scheduler_prev()`, `play_scheduler_peek_next()`, `play_scheduler_play_named_channel()`, `play_scheduler_play_artwork()`
 - **Kconfig**: `components/play_scheduler/Kconfig`
 
@@ -55,20 +55,20 @@ All 25 custom components live under `components/`. This document describes each 
 
 - **Purpose**: Manages animation channels, playlists, vault storage, and download coordination
 - **Key interfaces**:
-  - `channel_interface.h` — generic channel abstraction (`load`, `next_item`, `start_playback`)
+  - `channel_interface.h` — generic channel abstraction (`load`, `unload`, `start_playback`, `request_reshuffle`, `request_refresh`, `get_stats`, `get_post_count`, `get_post`, `get_navigator`, `destroy`)
   - `sdcard_channel_impl.h` — SD card file scanning and playback
   - `makapix_channel_impl.h` — Makapix Club channel implementation
-  - `vault_storage.h` — SHA256-sharded artwork storage
   - `download_manager.h` — download coordination
-  - `playlist_manager.h` — playlist management
+  - `playlist_manager.h` — playlist management (also implements vault path/sharding helpers)
   - `channel_cache.h` — channel cache
-- **Key files**: `sdcard_channel.c`, `sdcard_channel_impl.c`, `makapix_channel_impl.c`, `makapix_channel_events.c`, `makapix_channel_refresh.c`, `makapix_channel_utils.c`, `vault_storage.c`, `channel_cache.c`, `channel_metadata.c`, `channel_settings.c`, `download_manager.c`, `playlist_manager.c`
+- **Key files**: `sdcard_channel.c`, `sdcard_channel_impl.c`, `makapix_channel_impl.c`, `makapix_channel_events.c`, `makapix_channel_refresh.c`, `makapix_channel_utils.c`, `channel_cache.c`, `channel_cache_ops.c`, `channel_cache_merge.c`, `channel_metadata.c`, `channel_settings.c`, `download_manager.c`, `playlist_manager.c`
+- **Vault sharding**: 3-level shard derived from the first three SHA256 bytes of the storage key, e.g. `/sdcard/p3a/vault/aa/bb/cc/<storage_key>.<ext>`. Path-building lives in `playlist_manager.c` and `channel_cache_ops.c` (no separate `vault_storage` module).
 - **Kconfig**: `CHANNEL_MANAGER_PAGE_SIZE` (default 32)
 
 ## 6. wifi_manager — Connectivity
 
-- **Purpose**: Wi-Fi STA/AP mode, captive portal, SNTP synchronization
-- **Key files**: `app_wifi.c`, `sntp_sync.c`
+- **Purpose**: Wi-Fi STA/AP mode, captive portal, recovery, SNTP synchronization
+- **Key files**: `app_wifi.c`, `wifi_captive_portal.c`, `wifi_recovery.c`, `sntp_sync.c`
 - **Features**:
   - Auto-connect to saved credentials
   - Fallback to captive portal AP mode (`p3a-setup`)
@@ -114,12 +114,12 @@ All 25 custom components live under `components/`. This document describes each 
 ## 10. makapix — Makapix Club Integration
 
 - **Purpose**: Makapix Club MQTT integration for cloud-connected artwork sharing
-- **Key files**: `makapix.c`, `makapix_mqtt.c`, `makapix_provision.c`, `makapix_provision_flow.c`, `makapix_store.c`, `makapix_api.c`, `makapix_artwork.c`, `makapix_certs.c`, `makapix_connection.c`, `makapix_channel_switch.c`, `makapix_refresh.c`, `makapix_single_artwork.c`, `view_tracker.c`
+- **Key files**: `makapix.c`, `makapix_mqtt.c`, `makapix_provision.c`, `makapix_provision_flow.c`, `makapix_store.c`, `makapix_api.c`, `makapix_artwork.c`, `makapix_certs.c`, `makapix_connection.c`, `makapix_channel_switch.c`, `makapix_promoted_https.c`, `makapix_refresh.c`, `makapix_single_artwork.c`, `view_tracker.c`
 - **Features**:
   - Device provisioning via HTTPS (`makapix_provision.c`, `makapix_provision_flow.c`)
   - TLS MQTT with mTLS authentication (`makapix_mqtt.c`, `makapix_certs.c`)
   - Artwork receiving and playback (`makapix_artwork.c`, `makapix_single_artwork.c`)
-  - Remote command receiving (swap_next, swap_back, etc.)
+  - Remote command receiving — exactly: `swap_next`, `swap_back`, `set_background_color`, `play_channel`, `show_artwork`, `show_url`, `swap_to`, `execute_playset`
   - Channel switching and refresh (`makapix_channel_switch.c`, `makapix_refresh.c`)
   - View tracking analytics (`view_tracker.c`)
   - NVS credential storage (`makapix_store.c`)
@@ -135,20 +135,22 @@ All 25 custom components live under `components/`. This document describes each 
 ## 12. config_store — NVS-Backed Configuration
 
 - **Purpose**: Persistent configuration with NVS backend
-- **Key files**: `config_store.c`, `config_store.h`
-- **Stores**: Wi-Fi credentials, brightness, auto-swap interval, rotation, background color, Giphy settings, play order, dwell time, global seed
+- **Key files**: `config_store.c`, `config_store_settings.c`, `config_store_giphy.c`, plus internal headers
+- **Public API**: `config_store.h`
+- **Stores**: rotation, background color, dwell time, refresh interval, randomize playlist, show FPS, max-speed playback, view-ack, SD card root, channel-cache size, processing-notification options, channel-selection mode, Giphy fields (api_key, rendition, format, rating, country code, random_id, cache size, refresh interval, prefer-downsized), device name and hostname, Wi-Fi/touch recovery counters
+- **Stored elsewhere**: Wi-Fi credentials live in NVS namespaces handled by `wifi_manager`; brightness is owned by `p3a_board`; Makapix credentials live in `makapix_store`; playsets are persisted by `playset_store`.
 
 ## 13. ota_manager — Over-the-Air Updates
 
 - **Purpose**: Wireless firmware and web UI updates from GitHub Releases
 - **Key files**: `ota_manager.c`, `ota_manager_install.c`, `ota_manager_webui.c`, `github_ota.c`
 - **Features**:
-  - Automatic periodic update checks (every 2 hours)
+  - Automatic periodic update checks (default every 12 hours, configurable via `CONFIG_OTA_CHECK_INTERVAL_HOURS`)
+  - Updates are never installed automatically — installation is gated on a user POST to `/ota/install`
   - Separate firmware and web UI update paths
-  - Web UI for manual check, install, and rollback
-  - SHA256 checksum verification
-  - Progress display on LCD during updates
-  - Automatic rollback if firmware fails to boot 3 times
+  - Web UI for manual check, install, and rollback (rollback button label is "Rollback to <previous-version>")
+  - SHA256 checksum verification of every download
+  - Progress display on both LCD and web UI during updates
 - **Kconfig**: `components/ota_manager/Kconfig`
 
 ## 14. slave_ota — ESP32-C6 Co-processor Firmware
@@ -162,13 +164,14 @@ All 25 custom components live under `components/`. This document describes each 
 
 ## 15. pico8 — PICO-8 Streaming
 
-- **Purpose**: PICO-8 game streaming over WebSocket
-- **Key files**: `pico8_stream.c`, `pico8_render.c`, `pico8_stream_stubs.c`
+- **Purpose**: PICO-8 game streaming over WebSocket (with optional audio)
+- **Key files**: `pico8_stream.c`, `pico8_render.c`, `pico8_audio.c`, `pico8_stream_stubs.c`
 - **Features**:
   - 128x128 indexed pixel frames with 16-color palette
   - Nearest-neighbor upscaling to 720x720
-  - Auto-timeout after 30 seconds
-- **Kconfig**: `P3A_PICO8_ENABLE`, `P3A_PICO8_USB_STREAM_ENABLE`
+  - Audio streaming (when `CONFIG_P3A_PICO8_AUDIO_ENABLE`)
+  - Auto-timeout after 30 seconds of inactivity
+- **Kconfig**: `P3A_PICO8_ENABLE`, `P3A_PICO8_USB_STREAM_ENABLE`, `P3A_PICO8_AUDIO_ENABLE`
 
 ## 16. content_cache — Channel Cache Wrapper
 
@@ -236,5 +239,5 @@ All 25 custom components live under `components/`. This document describes each 
 
 | Component | Purpose |
 |-----------|---------|
-| `ugfx` | uGFX graphics library for UI rendering |
+| `ugfx` | uGFX text/font rendering subset (DejaVu Sans 16/24/32 only; no graphics primitives enabled) |
 | `libwebp_decoder` | libwebp wrapper for WebP decoding |

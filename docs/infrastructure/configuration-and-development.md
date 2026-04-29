@@ -2,20 +2,21 @@
 
 ## Kconfig Structure
 
-Configuration is organized into component-specific Kconfig files under a unified "Physical Player of Pixel Art (P3A)" menu:
+Configuration is organized into a project-level Kconfig (`main/Kconfig.projbuild`, which appears under the "Physical Player of Pixel Art (P3A)" menu) plus several component-specific Kconfig menus. They appear as siblings in `idf.py menuconfig`, not under a single unified menu.
 
 | Kconfig File | Scope |
 |-------------|-------|
 | `main/Kconfig.projbuild` | General, Display, Animation, Touch, Task Priorities, Wi-Fi, USB |
 | `components/p3a_board_ep44b/Kconfig` | Pixel format (RGB888/RGB565), board-specific options |
 | `components/pico8/Kconfig` | PICO-8 streaming options |
-| `components/wifi_manager/Kconfig` | WiFi manager enable/disable |
+| `components/wifi_manager/Kconfig` | WiFi manager enable/disable, SNTP server |
 | `components/channel_manager/Kconfig` | Channel/playlist options |
 | `components/animation_decoder/Kconfig` | Decoder options |
 | `components/giphy/Kconfig` | Giphy API key, rendition, format defaults |
 | `components/ota_manager/Kconfig` | OTA update options |
 | `components/play_scheduler/Kconfig` | Play scheduler options |
 | `components/makapix/Kconfig` | Makapix Club options |
+| `components/storage_eviction/Kconfig` | Storage eviction / cache cleanup options |
 
 ## Key Options
 
@@ -45,9 +46,9 @@ All p3a data is stored under a configurable root folder (`/sdcard/p3a` by defaul
 ```
 /sdcard/p3a/
 ├── animations/    # Local animation files (WebP, GIF, PNG, JPEG)
-├── vault/         # Cached artwork from Makapix (sharded by SHA256: ab/cd/<hash>.<ext>)
-├── giphy/         # Cached Giphy GIFs (sharded by SHA256)
-├── channel/       # Channel settings and index files
+├── vault/         # Cached artwork from Makapix (3-level SHA256-sharded: aa/bb/cc/<storage_key>.<ext>)
+├── giphy/         # Cached Giphy GIFs (3-level SHA256-sharded)
+├── channel/       # Per-channel JSON metadata files
 ├── playlists/     # Playlist cache files
 └── temporary/     # Staging area for uploads and downloads
 ```
@@ -57,8 +58,8 @@ All p3a data is stored under a configurable root folder (`/sdcard/p3a` by defaul
 
 ### Vault Storage
 
-- **Layout**: `/sdcard/p3a/vault/ab/cd/<sha256>.<ext>` (SHA256-sharded)
-- **Sidecar**: `.json` metadata files alongside assets
+- **Layout**: `/sdcard/p3a/vault/aa/bb/cc/<storage_key>.<ext>` (3-level shard from the first three bytes of the SHA256 of the storage key; the filename is the storage key UUID)
+- **Sidecar**: `.404` markers indicate prior failed downloads (placed next to where the asset would have lived). Per-channel JSON metadata files live in `/sdcard/p3a/channel/{channel_id}.json`, not in the vault.
 - **Atomic writes**: `.tmp` + `fsync` + `rename`
 
 ### NVS (Non-Volatile Storage)
@@ -79,7 +80,7 @@ All p3a data is stored under a configurable root folder (`/sdcard/p3a` by defaul
 ### Prerequisites
 
 1. **ESP-IDF**: v5.5.x
-2. **Python**: 3.8+
+2. **Python**: 3.9+ (required by ESP-IDF v5.5.x)
 3. **Hardware**: Waveshare ESP32-P4-WIFI6-Touch-LCD-4B + microSD card
 
 ### Setup

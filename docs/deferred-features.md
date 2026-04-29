@@ -22,30 +22,7 @@ Identified during the verification reviews of `README.md` and `docs/HOW-TO-USE.m
 
 ---
 
-## 2. Makapix MQTT brightness command
-
-**Doc claims affected**:
-- `docs/HOW-TO-USE.md` — Device Registration: "Remote control — change artwork, adjust brightness from anywhere"
-- `docs/HOW-TO-USE.md` — Makapix Club Features → Remote control: "Adjust brightness"
-
-**Reality**: `components/http_api/http_api.c:177-426` (the Makapix MQTT command dispatcher) accepts only `swap_next`, `swap_back`, `set_background_color`, `play_channel`, `show_artwork`, `show_url`, `swap_to`, `execute_playset`. Brightness is exposed only via the local REST API.
-
-**To implement**: Add a `set_brightness` MQTT command that dispatches to the existing brightness setter (`components/http_api/http_api_rest_settings.c:182-187` shows the REST equivalent). The makapix.club server-side will need a corresponding control in its UI.
-
----
-
-## 3. Makapix MQTT pause/resume commands
-
-**Doc claims affected**:
-- `docs/HOW-TO-USE.md` — Makapix Club Features → Remote control: "Control playback (pause/resume)"
-
-**Reality**: `CMD_PAUSE` and `CMD_RESUME` exist as REST endpoints (`/action/pause`, `/action/resume`) and emit `P3A_EVENT_PAUSE` / `P3A_EVENT_RESUME` on the event bus, but they are not wired into the Makapix MQTT command dispatcher.
-
-**To implement**: Add `pause` and `resume` cases to the MQTT command dispatcher in `components/http_api/http_api.c` that emit the same event-bus events the REST handlers already emit.
-
----
-
-## 4. Makapix swipe-reaction surface (REST and/or MQTT)
+## 2. Makapix swipe-reaction surface (REST and/or MQTT)
 
 **Doc claims affected**:
 - `README.md` — REST API section: "Every action is also exposed as a JSON API endpoint for scripting and automation."

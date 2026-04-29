@@ -95,6 +95,14 @@ esp_err_t makapix_init(void)
         ESP_LOGW(MAKAPIX_TAG, "makapix_api_init failed (likely no player_key yet): %s", esp_err_to_name(api_err));
     }
 
+    // Initialize Optional Player Commands (OPC) module. Subscribes to event-bus
+    // events so that brightness/rotation/pause changes from any source are
+    // reflected on the retained Makapix `state` topic once MQTT connects.
+    esp_err_t opc_err = makapix_opc_init();
+    if (opc_err != ESP_OK) {
+        ESP_LOGW(MAKAPIX_TAG, "makapix_opc_init failed: %s", esp_err_to_name(opc_err));
+    }
+
     // Initialize view tracker for timed view events
     esp_err_t view_err = view_tracker_init();
     if (view_err != ESP_OK) {

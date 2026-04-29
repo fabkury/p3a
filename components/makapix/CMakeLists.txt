@@ -4,6 +4,7 @@ idf_component_register(
         "makapix_provision.c"
         "makapix_mqtt.c"
         "makapix_api.c"
+        "makapix_opc.c"
         "makapix_artwork.c"
         "makapix.c"
         "makapix_channel_switch.c"

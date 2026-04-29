@@ -131,19 +131,24 @@ void makapix_mqtt_connection_callback(bool connected)
 {
     if (connected) {
         makapix_set_state(MAKAPIX_STATE_CONNECTED);
-        
+
         // Reinitialize API to load player_key (especially important after fresh registration)
         esp_err_t api_init_err = makapix_api_init();
         if (api_init_err != ESP_OK) {
             ESP_LOGW(MAKAPIX_TAG, "makapix_api_init failed after MQTT connect: %s", esp_err_to_name(api_init_err));
         }
-        
+
         // Signal waiting refresh tasks
         makapix_channel_signal_mqtt_connected();
-        
+
         // Update connectivity state
         event_bus_emit_simple(P3A_EVENT_MQTT_CONNECTED);
-        
+
+        // Optional Player Commands: publish capabilities (retained) and state
+        // (retained) before the regular status message, per the OPC spec.
+        makapix_opc_publish_capabilities();
+        makapix_opc_publish_state_full();
+
         // Publish initial status
         makapix_mqtt_publish_status(p3a_current_post_get_id());
 

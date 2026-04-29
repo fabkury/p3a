@@ -13,6 +13,7 @@
 #include "makapix_provision.h"
 #include "makapix_mqtt.h"
 #include "makapix_api.h"
+#include "makapix_opc.h"
 #include "view_tracker.h"
 #include "makapix_channel_impl.h"
 #include "makapix_channel_events.h"

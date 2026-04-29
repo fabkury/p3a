@@ -39,7 +39,7 @@ static char s_lwt_payload[128] = {0};     // Static buffer for LWT payload
 static bool s_mqtt_connected = false;     // Track connection state manually
 static bool s_response_subscribed = false;  // Track if response topic subscription confirmed
 static int s_pending_response_sub_msg_id = -1;  // Message ID of pending response subscription
-static void (*s_command_callback)(const char *command_type, cJSON *payload) = NULL;
+static void (*s_command_callback)(const char *command_type, cJSON *payload, const char *command_id) = NULL;
 static void (*s_connection_callback)(bool connected) = NULL;
 static void (*s_response_callback)(const char *topic, char *data, int data_len) = NULL;
 
@@ -263,10 +263,13 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                     if (json) {
                         cJSON *command_type = cJSON_GetObjectItem(json, "command_type");
                         cJSON *payload = cJSON_GetObjectItem(json, "payload");
+                        cJSON *command_id = cJSON_GetObjectItem(json, "command_id");
 
                         if (command_type && cJSON_IsString(command_type) && s_command_callback) {
                             const char *cmd_type = cJSON_GetStringValue(command_type);
-                            ESP_LOGD(TAG, "Command: %s", cmd_type);
+                            const char *cmd_id = (command_id && cJSON_IsString(command_id))
+                                                  ? cJSON_GetStringValue(command_id) : NULL;
+                            ESP_LOGD(TAG, "Command: %s (id=%s)", cmd_type, cmd_id ? cmd_id : "(none)");
 
                             cJSON *payload_to_pass = payload;
                             cJSON *empty_payload = NULL;
@@ -275,7 +278,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                                 payload_to_pass = empty_payload;
                             }
 
-                            s_command_callback(cmd_type, payload_to_pass);
+                            s_command_callback(cmd_type, payload_to_pass, cmd_id);
 
                             if (empty_payload) {
                                 cJSON_Delete(empty_payload);
@@ -709,7 +712,7 @@ esp_err_t makapix_mqtt_publish_status(int32_t current_post_id)
     return ESP_OK;
 }
 
-void makapix_mqtt_set_command_callback(void (*cb)(const char *command_type, cJSON *payload))
+void makapix_mqtt_set_command_callback(void (*cb)(const char *command_type, cJSON *payload, const char *command_id))
 {
     s_command_callback = cb;
 }
@@ -726,22 +729,34 @@ void makapix_mqtt_set_response_callback(void (*cb)(const char *topic, char *data
 
 esp_err_t makapix_mqtt_publish_raw(const char *topic, const char *payload, int qos)
 {
+    return makapix_mqtt_publish_with_retain(topic, payload, qos, false);
+}
+
+esp_err_t makapix_mqtt_publish_with_retain(const char *topic, const char *payload,
+                                            int qos, bool retain)
+{
     if (!s_mqtt_client || !topic || !payload) {
-        ESP_LOGE(TAG, "publish_raw: invalid args (client=%p, topic=%p, payload=%p)", 
+        ESP_LOGE(TAG, "publish: invalid args (client=%p, topic=%p, payload=%p)",
                  (void*)s_mqtt_client, (void*)topic, (void*)payload);
         return ESP_ERR_INVALID_ARG;
     }
     if (!s_mqtt_connected) {
-        ESP_LOGW(TAG, "publish_raw: MQTT not connected, cannot publish to %s", topic);
+        ESP_LOGW(TAG, "publish: MQTT not connected, cannot publish to %s", topic);
         return ESP_ERR_INVALID_STATE;
     }
-    ESP_LOGD(TAG, "Publishing to %s (qos=%d, len=%zu)", topic, qos, strlen(payload));
-    int msg_id = esp_mqtt_client_publish(s_mqtt_client, topic, payload, 0, qos, 0);
+    size_t payload_len = strlen(payload);
+    ESP_LOGD(TAG, "Publishing to %s (qos=%d, retain=%d, len=%zu)",
+             topic, qos, retain ? 1 : 0, payload_len);
+    // esp_mqtt_client_publish: pass len=0 lets the client compute strlen, but
+    // when retain==true and payload_len==0 we want the explicit empty payload
+    // (used to clear a retained message), so pass len explicitly.
+    int msg_id = esp_mqtt_client_publish(s_mqtt_client, topic, payload,
+                                         (int)payload_len, qos, retain ? 1 : 0);
     if (msg_id < 0) {
-        ESP_LOGE(TAG, "publish_raw: esp_mqtt_client_publish returned %d", msg_id);
+        ESP_LOGE(TAG, "publish: esp_mqtt_client_publish returned %d", msg_id);
         return ESP_FAIL;
     }
-    ESP_LOGD(TAG, "publish_raw: msg_id=%d", msg_id);
+    ESP_LOGD(TAG, "publish: msg_id=%d", msg_id);
     return ESP_OK;
 }
 

@@ -88,10 +88,13 @@ esp_err_t makapix_mqtt_publish_status(int32_t current_post_id);
 
 /**
  * @brief Set callback function for received commands
- * 
- * @param cb Callback function: void callback(const char *command_type, cJSON *payload)
+ *
+ * @param cb Callback function:
+ *           void callback(const char *command_type, cJSON *payload, const char *command_id)
+ *           command_id is NULL if the incoming command lacked a "command_id" field.
  */
-void makapix_mqtt_set_command_callback(void (*cb)(const char *command_type, cJSON *payload));
+void makapix_mqtt_set_command_callback(void (*cb)(const char *command_type, cJSON *payload,
+                                                  const char *command_id));
 
 /**
  * @brief Set callback function for connection state changes
@@ -114,13 +117,28 @@ void makapix_mqtt_set_response_callback(void (*cb)(const char *topic, char *data
 
 /**
  * @brief Publish raw payload to a topic with QoS
- * 
+ *
  * @param topic Topic string
  * @param payload Null-terminated payload (JSON)
  * @param qos QoS level (0 or 1)
  * @return ESP_OK on success
  */
 esp_err_t makapix_mqtt_publish_raw(const char *topic, const char *payload, int qos);
+
+/**
+ * @brief Publish raw payload with retain flag
+ *
+ * Same as makapix_mqtt_publish_raw, but allows setting the MQTT `retain` flag.
+ * Used for the optional-player-command capabilities and state topics.
+ *
+ * @param topic Topic string
+ * @param payload Null-terminated payload (may be empty string for retained-clear)
+ * @param qos QoS level (0 or 1)
+ * @param retain true to set the retain flag
+ * @return ESP_OK on success
+ */
+esp_err_t makapix_mqtt_publish_with_retain(const char *topic, const char *payload,
+                                            int qos, bool retain);
 
 /**
  * @brief Subscribe to a topic

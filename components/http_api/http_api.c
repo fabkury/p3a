@@ -41,6 +41,7 @@
 #include "version.h"
 #include "makapix.h"
 #include "makapix_mqtt.h"
+#include "makapix_opc.h"
 #include "makapix_artwork.h"
 #include "makapix_channel_impl.h"
 #include "show_url.h"
@@ -174,8 +175,14 @@ bool api_enqueue_resume(void) {
 /**
  * @brief Handle MQTT commands
  */
-static void makapix_command_handler(const char *command_type, cJSON *payload)
+static void makapix_command_handler(const char *command_type, cJSON *payload, const char *command_id)
 {
+    // Optional Player Commands: pause/brightness/rotation/mirror. The OPC
+    // module owns ack publishing for any command it claims, so we return early.
+    if (makapix_opc_handle_command(command_type, payload, command_id)) {
+        return;
+    }
+
     if (strcmp(command_type, "swap_next") == 0) {
         if (api_enqueue_swap_next()) {
             // Start processing notification after confirming swap was queued

@@ -65,7 +65,7 @@ For full usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 
 | Source | What it does |
 |--------|-------------|
-| **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" or "#nintendo" Control your device remotely from anywhere. |
+| **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" and "All Artworks", or hashtags like "#nintendo". Control your device remotely from anywhere. |
 | **[Giphy](https://giphy.com/)** | Automatically fetches and cycles through trending GIFs. Configurable content rating (G through R) and refresh interval. |
 | **Local files** | Copy your own WebP, GIF, PNG, or JPEG files via USB or Wi-Fi. No cloud account needed, no internet required. |
 
@@ -81,7 +81,7 @@ Mix all three in a single "playset" for an ever-changing display.
 
 ### Smooth, Gapless Playback
 
-- **Animated WebP, GIF, PNG, and JPEG** — with full transparency and alpha channel support
+- **Animated WebP and GIF; static PNG and JPEG** — with alpha/transparency where the format supports it
 - **Smart upscaling** — pixel art uses nearest-neighbor scaling to keep edges crisp; Giphy content uses hardware-accelerated bilinear interpolation for smooth results
 - **Triple-buffered rendering** with VSYNC — no tearing, no freezing, even with problematic files
 - **Aspect ratio preservation** — non-square art is centered on the display with a configurable background color
@@ -93,9 +93,9 @@ Mix all three in a single "playset" for an ever-changing display.
 |---------|--------|
 | Tap right half | Next artwork |
 | Tap left half | Previous artwork |
-| Swipe up / down | Adjust brightness |
+| Swipe up / down | Like / unlike current Makapix artwork |
 | Two-finger rotate | Rotate screen (0° / 90° / 180° / 270°) |
-| Long press | Start device registration |
+| Long press | Show device info / dismiss overlay |
 
 All controls are also available via the web UI and REST API.
 
@@ -114,7 +114,7 @@ Every action is also exposed as a JSON API endpoint for scripting and automation
 ```bash
 curl http://p3a.local/status                        # Device status
 curl -X POST http://p3a.local/action/swap_next      # Next artwork
-curl -X POST http://p3a.local/api/rotation \
+curl -X POST http://p3a.local/rotation \
   -H "Content-Type: application/json" \
   -d '{"rotation": 90}'                             # Rotate screen
 ```
@@ -125,8 +125,7 @@ curl -X POST http://p3a.local/api/rotation \
 
 After the first USB flash, everything is over-the-air:
 - **One-click install** from the web UI, with progress shown on both screen and browser
-- **Automatic update checks** every 8 hours — updates are never installed without your approval
-- **Automatic rollback** if the new firmware fails to boot three times
+- **Automatic update checks** every 12 hours — updates are never installed without your approval
 - **Manual rollback** to the previous version at any time
 - **SHA256 verification** of every download
 - **ESP32-C6 co-processor** firmware updates automatically when needed
@@ -176,11 +175,11 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 [Makapix Club](https://makapix.club/) is a pixel art social network where artists share animated creations. Register your p3a to unlock:
 
 - **Browse and send** artworks or entire channels (e.g. "Promoted Artworks", "All Artworks") directly to your device
-- **Remote control** from any browser — change artwork, adjust brightness, pause/resume from anywhere
+- **Remote control** from any browser — change artwork and switch channels from anywhere
 - **Secure connection** via mutual TLS (mTLS) with per-device certificates
 - **Real-time updates** — your device receives artworks and commands instantly over encrypted MQTT
 
-**To register:** open the Settings page of the web UI (http://p3a.local/), go to the "Makapix" tab, and click "Enter provisioning mode". The device will display a 6-character code, enter it at [makapix.club](https://makapix.club/). After thet point, the device connects automatically.
+**To register:** open the Settings page of the web UI (http://p3a.local/), go to the "Makapix" tab, and click "Enter provisioning mode". The device will display a 6-character code, enter it at [makapix.club](https://makapix.club/). After that point, the device connects automatically.
 
 > [Join the Makapix Club Discord](https://discord.gg/xk9umcujXV) to connect with other p3a users and the pixel art community.
 
@@ -198,7 +197,7 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 | **Connectivity** | `wifi_manager` (provisioning, captive portal, mDNS), `http_api` (REST + WebSocket), `makapix` (MQTT/TLS) |
 | **Content** | `giphy` (API + SD caching), `content_cache`, `loader_service`, `storage_eviction` |
 | **System** | `ota_manager`, `slave_ota` (C6 firmware), `p3a_board_ep44b` (HAL), `sdio_bus` |
-| **Extras** | `pico8` (game streaming), `show_url` (URL artwork download), `ugfx` (graphics primitives) |
+| **Extras** | `pico8` (game streaming), `show_url` (URL artwork download), `ugfx` (on-screen text/font rendering) |
 
 ### Storage Layout
 

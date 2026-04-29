@@ -180,10 +180,10 @@ curl -X POST http://p3a.local/action/reboot
 
 ```bash
 # Get current rotation
-curl http://p3a.local/api/rotation
+curl http://p3a.local/rotation
 
 # Set rotation (0, 90, 180, or 270 degrees)
-curl -X POST http://p3a.local/api/rotation -H "Content-Type: application/json" -d '{"rotation": 90}'
+curl -X POST http://p3a.local/rotation -H "Content-Type: application/json" -d '{"rotation": 90}'
 ```
 
 ### File management

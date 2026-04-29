@@ -87,10 +87,10 @@ The 720×720 touchscreen recognizes these gestures:
 |---------|--------|
 | **Tap right half** | Advance to next artwork |
 | **Tap left half** | Go back to previous artwork |
-| **Swipe up** | Increase brightness |
-| **Swipe down** | Decrease brightness |
+| **Swipe up** | Like the current Makapix artwork (or register a Giphy click) |
+| **Swipe down** | Revoke a Makapix like |
 | **Two-finger rotate** | Rotate screen (clockwise or counter-clockwise) |
-| **Long press** | Start device registration (for Makapix Club) |
+| **Long press** | Show device info / dismiss overlay |
 
 ### Screen Rotation
 
@@ -107,7 +107,7 @@ You can also set rotation via the web interface or REST API (see [REST API](#res
 
 ### Auto-advance
 
-When idle (no touch or API interaction), the device automatically advances to a random artwork every 30 seconds. This interval is configurable at compile time.
+When idle (no touch or API interaction), the device automatically advances to the next artwork roughly every 30 seconds. The next artwork is chosen by the active playset's pick mode (recency or random). The interval is configurable at runtime via the web interface or REST API, with a compile-time default of 30 seconds.
 
 ---
 
@@ -120,7 +120,7 @@ If the device can't connect to a saved network, it starts a captive portal:
 1. **Connect to the Wi-Fi network** `p3a-setup` from your phone or computer
 2. **A setup page should open automatically.** If not, open `http://p3a.local/` or `http://192.168.4.1` in your browser
 3. **Enter your Wi-Fi credentials** (SSID and password)
-4. **Click "Save & Connect"**
+4. **Click "Save & connect"**
 5. The device reboots and connects to your network
 
 ### After connection
@@ -136,7 +136,7 @@ Once connected, you can access the device at:
 Open `http://p3a.local/` in any browser on the same Wi-Fi network to access the web dashboard.
 
 The web interface provides:
-- **Device status** — current artwork, Wi-Fi info, uptime
+- **Device status** — current artwork (Wi-Fi info and uptime are on the Settings → Network tab)
 - **Playback controls** — next, previous, pause, resume
 - **Configuration** — brightness, screen rotation, settings
 - **PICO-8 button** (if the feature is enabled in firmware)
@@ -155,7 +155,7 @@ The same endpoints that power the web interface are available as a JSON API for 
 curl http://p3a.local/status
 ```
 
-Returns JSON with current state, animation info, Wi-Fi status, uptime, and memory.
+Returns JSON with playback state, firmware version, network info, uptime, free heap, and storage. For current artwork details, see `GET /api/init` or `GET /playsets/active`.
 
 ### Control playback
 
@@ -188,12 +188,10 @@ curl -X POST http://p3a.local/rotation -H "Content-Type: application/json" -d '{
 
 ### File management
 
-```bash
-# List files on SD card (default p3a root folder: /sdcard/p3a)
-# Note: Root folder is configurable via Settings page
-# Users set a folder name (e.g., /p3a), system prepends /sdcard automatically
-curl "http://p3a.local/files/list?path=/sdcard/p3a/animations"
-```
+File management is not available via the REST API. To add or remove artwork files, use:
+
+- **USB Mass Storage** (see [USB SD Card Access](#usb-sd-card-access)) — connect via USB-C and the SD card mounts as a removable drive
+- **Web UI upload** — drag and drop files onto the dashboard at `http://p3a.local/`
 
 ---
 
@@ -211,7 +209,7 @@ p3a has two USB-C ports, but only one (the High-Speed port) works as a USB stora
 ### Important notes
 
 - While connected as USB storage, the SD card is locked for the device
-- The currently playing animation continues, but you can't change artwork
+- The screen shows a USB-mode indicator while connected; you can't change artwork until disconnected
 - Normal operation resumes after disconnecting the USB cable
 - Works with computers, smartphones (with USB OTG), and tablets
 
@@ -229,7 +227,7 @@ p3a supports Over-the-Air (OTA) firmware updates. After the initial firmware fla
 
 ### Automatic update checks
 
-- The device checks for updates every 2 hours while connected to Wi-Fi
+- The device checks for updates every 12 hours while connected to Wi-Fi
 - Updates are **never installed automatically**—you always approve updates manually
 - A notification appears on the main web page when an update is available
 
@@ -251,12 +249,8 @@ If you need to revert to the previous firmware version:
 
 1. Go to `http://p3a.local/ota`
 2. If a previous version is available, a **"Rollback"** button will appear
-3. Click **"Rollback to Previous"** and confirm
+3. Click the rollback button (labeled **"Rollback to <previous version>"**) and confirm
 4. The device reboots with the previous firmware
-
-### Automatic rollback (safety feature)
-
-If the new firmware fails to boot properly 3 times in a row, the device automatically rolls back to the previous working firmware. This prevents "bricking" the device from a bad update.
 
 ### REST API for updates
 
@@ -286,25 +280,25 @@ To use Giphy, you need a free API key:
 
 1. Go to [developers.giphy.com](https://developers.giphy.com/) and sign up
 2. Create an app and copy the API key
-3. Open the p3a Giphy settings page at `http://p3a.local/giphy.html`
-4. Paste your API key and click **Save All Settings**
+3. Open the p3a settings page at `http://p3a.local/settings#giphy`
+4. Paste your API key and click **Save All Giphy Settings**
 
 ### Configuring Giphy
 
-The settings page at `http://p3a.local/giphy.html` lets you customize:
+The Giphy tab at `http://p3a.local/settings#giphy` lets you customize:
 
 | Setting | Options | Description |
 |---------|---------|-------------|
-| **Rendition** | Fixed Height, Fixed Width, Original, Downsized | Controls the resolution of downloaded GIFs |
-| **Format** | WebP, GIF | WebP is smaller and recommended; some renditions are GIF-only |
 | **Content Rating** | G, PG, PG-13, R | Filters content by age-appropriateness |
-| **Refresh Interval** | 1–24 hours | How often p3a fetches fresh trending content from Giphy |
+| **Refresh Interval** | 1, 2, or 4 hours | How often p3a fetches fresh trending content from Giphy |
 | **Cache Size** | 32–500 items | Maximum number of GIFs kept per Giphy channel |
+
+> Rendition (resolution) and format (WebP/GIF) are build-time defaults set via Kconfig (`CONFIG_GIPHY_RENDITION_DEFAULT`, `CONFIG_GIPHY_FORMAT_DEFAULT`); they are not adjustable from the web UI.
 
 ### How it works
 
 - p3a periodically fetches trending GIFs from the Giphy API and caches them on the SD card
-- Downloaded artworks are stored in `/sdcard/p3a/giphy/` and managed automatically
+- Downloaded artworks are stored in the `giphy/` subfolder of your configured SD card root (default: `/sdcard/p3a/giphy/`) and managed automatically
 - The device downloads GIFs on demand as they come up in the rotation, so the first few plays may take a moment to load
 - Once cached, playback is instant — just like local files
 
@@ -317,21 +311,21 @@ Register your p3a at [makapix.club](https://makapix.club/) to enable cloud featu
 - **Send artworks directly** — browse artworks on the website and send them straight to your p3a
 - **Remote control** — change artwork, adjust brightness from anywhere
 - **Status monitoring** — see your device's online status
-- **(Coming soon)** Send reactions to artworks directly from the device
+- **Send reactions** — swipe up on a Makapix artwork to give it a thumbs-up; swipe down to revoke
 
 ### How to register
 
-1. **Long-press the touchscreen** to start registration mode
+1. **Open the settings page** at `http://p3a.local/settings.html`, go to the Makapix tab, and click **Enter Provisioning Mode**
 2. **A registration code appears** on the display (6 characters)
 3. **Go to [makapix.club](https://makapix.club/)** on your phone or computer
 4. **Enter the registration code** and link it to your account
 5. **The device connects automatically** via secure TLS MQTT
 
-The registration code expires after 15 minutes. If it expires, long-press again to get a new code.
+The registration code expires after 15 minutes. If it expires, click **Enter Provisioning Mode** again from the settings page to get a new code.
 
 ### Security
 
-- Communication uses TLS 1.2+ with mutual certificate authentication (mTLS)
+- Communication uses TLS 1.2 with mutual certificate authentication (mTLS)
 - Each device gets unique client certificates during registration
 - Commands are authenticated and encrypted end-to-end
 
@@ -348,7 +342,7 @@ Once your device is registered at [makapix.club](https://makapix.club/), you can
 3. Click the **"Send to p3a"** button
 4. The artwork is sent directly to your device and displayed immediately
 
-Supported formats: WebP, GIF, PNG, and JPEG — including animations and images with transparency.
+Supported formats: WebP and GIF (animated, with transparency), PNG (still images, with transparency), and JPEG (still images).
 
 ### Remote control
 
@@ -367,11 +361,11 @@ p3a can act as a dedicated PICO-8 game display:
 ### How it works
 
 1. Open `http://p3a.local/` in your browser
-2. Click the **"PICO-8"** button
+2. Click the **"PICO-8 Monitor"** link
 3. Load any `.p8` or `.p8.png` cart file
 4. The game streams wirelessly to the device via WebSocket
 5. The browser runs a WebAssembly PICO-8 emulator (fake-08)
-6. Frames are sent at 30 FPS and upscaled to 720×720
+6. Frames are streamed at up to 30 FPS (adaptive — throttles down under network congestion) and upscaled to 720×720
 
 ### Auto-timeout
 

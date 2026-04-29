@@ -248,7 +248,7 @@ A full camera image processing pipeline (designed for MIPI-CSI camera input).
 
 | Peripheral | Details |
 |-----------|---------|
-| **USB 2.0 HS OTG** | 480 Mbps, Type-A connector |
+| **USB 2.0 HS OTG** | 480 Mbps, Type-C connector |
 | **USB-to-UART** | Type-C, for flashing and debug serial |
 | **SD/MMC (SDIO 3.0)** | 4-wire, default 20 MHz / high-speed 40 MHz |
 | **Wi-Fi 6** | Via ESP32-C6-MINI co-processor over SDIO (2.4 GHz) |

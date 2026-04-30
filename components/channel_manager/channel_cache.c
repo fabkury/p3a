@@ -344,6 +344,7 @@ void channel_cache_deinit(void)
 
 esp_err_t channel_cache_load(const char *channel_id,
                              uint8_t channel_type,
+                             const char *display_name,
                              const char *channels_path,
                              const char *vault_path,
                              channel_cache_t *cache)
@@ -361,6 +362,12 @@ esp_err_t channel_cache_load(const char *channel_id,
     // Initialize cache structure
     memset(cache, 0, sizeof(*cache));
     strncpy(cache->channel_id, channel_id, sizeof(cache->channel_id) - 1);
+    if (display_name && display_name[0] != '\0') {
+        strncpy(cache->display_name, display_name, sizeof(cache->display_name) - 1);
+    } else {
+        // Fallback: try the scheduler lookup, else use the raw id
+        ps_get_display_name(channel_id, cache->display_name, sizeof(cache->display_name));
+    }
     cache->channel_type = channel_type;
     cache->cache_version = CHANNEL_CACHE_VERSION;
 
@@ -380,7 +387,7 @@ esp_err_t channel_cache_load(const char *channel_id,
     // Try to open cache file
     FILE *f = fopen(cache_path, "rb");
     if (!f) {
-        ESP_LOGI(TAG, "No cache for '%s', starting empty (server refresh will populate)", channel_id);
+        ESP_LOGI(TAG, "No cache for '%s', starting empty (server refresh will populate)", cache->display_name);
 
         // Pre-allocate LAi array to support incremental batch updates
         // This allows channel_cache_merge_posts() to work correctly on empty cache
@@ -392,22 +399,18 @@ esp_err_t channel_cache_load(const char *channel_id,
         return ESP_OK;  // Empty cache is valid
     }
 
-    {
-        char _dn[64];
-        ps_get_display_name(channel_id, _dn, sizeof(_dn));
-        ESP_LOGI(TAG, "Loading cache for '%s'", _dn);
-    }
+    ESP_LOGI(TAG, "Loading cache for '%s'", cache->display_name);
     esp_err_t err = load_new_format(f, cache);
     fclose(f);
 
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Loaded cache '%s': %zu entries, %zu available",
-                 channel_id, cache->entry_count, cache->available_count);
+                 cache->display_name, cache->entry_count, cache->available_count);
         return ESP_OK;
     }
 
     ESP_LOGW(TAG, "Cache file invalid for '%s': %s, deleting and starting fresh",
-             channel_id, esp_err_to_name(err));
+             cache->display_name, esp_err_to_name(err));
     unlink(cache_path);
 
     // Cache corrupt or migration failed - start empty
@@ -524,12 +527,8 @@ esp_err_t channel_cache_save(const channel_cache_t *cache, const char *channels_
         return ESP_FAIL;
     }
 
-    {
-        char _dn[64];
-        ps_get_display_name(cache->channel_id, _dn, sizeof(_dn));
-        ESP_LOGI(TAG, "Saved cache '%s': %zu entries, %zu available",
-                 _dn, cache->entry_count, cache->available_count);
-    }
+    ESP_LOGI(TAG, "Saved cache '%s': %zu entries, %zu available",
+             cache->display_name, cache->entry_count, cache->available_count);
     return ESP_OK;
 }
 
@@ -623,7 +622,7 @@ void channel_cache_flush_all(const char *channels_path)
                 cache->dirty = false;
             } else {
                 ESP_LOGW(TAG, "Failed to flush cache '%s': %s",
-                         cache->channel_id, esp_err_to_name(err));
+                         cache->display_name, esp_err_to_name(err));
             }
         }
     }
@@ -677,10 +676,10 @@ void channel_cache_unregister(channel_cache_t *cache)
         esp_err_t err = channel_cache_save(cache, s_cache_state.channels_path);
         if (err == ESP_OK) {
             cache->dirty = false;
-            ESP_LOGD(TAG, "Flushed dirty cache '%s' before unregister", cache->channel_id);
+            ESP_LOGD(TAG, "Flushed dirty cache '%s' before unregister", cache->display_name);
         } else {
             ESP_LOGW(TAG, "Failed to flush cache '%s' before unregister: %s",
-                     cache->channel_id, esp_err_to_name(err));
+                     cache->display_name, esp_err_to_name(err));
         }
     }
 

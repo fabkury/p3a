@@ -254,7 +254,7 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
     }
 
     // Load cache (handles legacy format migration, CRC validation, LAi persistence)
-    esp_err_t err = channel_cache_load(ch->channel_id, (uint8_t)ch->type, channels_path, vault_path, ch->cache);
+    esp_err_t err = channel_cache_load(ch->channel_id, (uint8_t)ch->type, ch->display_name, channels_path, vault_path, ch->cache);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Channel '%s': channel_cache_load failed: %s",
                  ch->display_name, esp_err_to_name(err));

@@ -258,8 +258,9 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
  * Called before triggering refresh to track completion status.
  *
  * @param channel_id Channel ID (e.g., "promoted", "all")
+ * @param display_name Human-readable channel name for logs (may be NULL)
  */
-void makapix_ps_refresh_register(const char *channel_id);
+void makapix_ps_refresh_register(const char *channel_id, const char *display_name);
 
 /**
  * @brief Mark a channel's refresh as complete

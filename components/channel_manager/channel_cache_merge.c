@@ -340,19 +340,11 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
                 }
                 free(cache->available_post_ids);
                 cache->available_post_ids = new_arr;
-                {
-                    char _dn[64];
-                    ps_get_display_name(cache->channel_id, _dn, sizeof(_dn));
-                    ESP_LOGI(TAG, "Grew available_post_ids for '%s': %zu -> %zu",
-                             _dn, cache->available_capacity, cache->entry_count);
-                }
+                ESP_LOGI(TAG, "Grew available_post_ids for '%s': %zu -> %zu",
+                         cache->display_name, cache->available_capacity, cache->entry_count);
                 cache->available_capacity = cache->entry_count;
             } else {
-                {
-                    char _dn[64];
-                    ps_get_display_name(cache->channel_id, _dn, sizeof(_dn));
-                    ESP_LOGE(TAG, "Failed to grow available_post_ids for '%s'", _dn);
-                }
+                ESP_LOGE(TAG, "Failed to grow available_post_ids for '%s'", cache->display_name);
             }
         }
     }

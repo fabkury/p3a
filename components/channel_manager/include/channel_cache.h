@@ -147,6 +147,7 @@ typedef struct channel_cache_s {
 
     // Metadata
     char channel_id[64];                // Full channel ID (hex hash)
+    char display_name[64];              // Human-readable name for logs (e.g. "All Artworks", "#sunset")
     uint8_t channel_type;               // ps_channel_type_t for type-based checks (giphy validation etc.)
     uint32_t cache_version;             // Version from last load
     bool dirty;                         // Needs persistence
@@ -184,6 +185,7 @@ void channel_cache_deinit(void);
  *
  * @param channel_id Channel identifier (hex hash)
  * @param channel_type Channel type enum (ps_channel_type_t), stored for type-based validation
+ * @param display_name Human-readable channel name for logs (may be NULL or empty)
  * @param channels_path Base path for channel files (e.g., "/sdcard/p3a/channel")
  * @param vault_path Base path for vault files (e.g., "/sdcard/p3a/vault")
  * @param cache Pre-allocated cache structure to fill
@@ -193,6 +195,7 @@ void channel_cache_deinit(void);
  */
 esp_err_t channel_cache_load(const char *channel_id,
                              uint8_t channel_type,
+                             const char *display_name,
                              const char *channels_path,
                              const char *vault_path,
                              channel_cache_t *cache);

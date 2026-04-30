@@ -815,8 +815,22 @@ static void refresh_task(void *arg)
         // Check if we should trigger playback after refresh
         bool should_trigger_playback = (err == ESP_OK && sync_entry_count > 0 && ch->active && !state->playback_triggered);
         bool is_artwork_channel = (type == PS_CHANNEL_TYPE_ARTWORK);
+        // SD card channel that refreshed cleanly but found no artworks: the
+        // initial "Loading channel..." message will sit forever otherwise,
+        // because there's no playback to trigger and nothing else clears it.
+        bool sdcard_empty = (type == PS_CHANNEL_TYPE_SDCARD && err == ESP_OK && sync_entry_count == 0);
 
         xSemaphoreGive(state->mutex);
+
+        if (sdcard_empty) {
+            char anim_path[128];
+            if (sd_path_get_animations(anim_path, sizeof(anim_path)) != ESP_OK) {
+                strlcpy(anim_path, "/sdcard/p3a/animations", sizeof(anim_path));
+            }
+            char detail[160];
+            snprintf(detail, sizeof(detail), "No artworks found in\n%s", anim_path);
+            p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_ERROR, -1, detail);
+        }
 
         if (should_trigger_playback) {
             ESP_LOGI(TAG, "%s - triggering playback",

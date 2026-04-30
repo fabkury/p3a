@@ -137,7 +137,25 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
 
     size_t entry_size = sizeof(sdcard_index_entry_t);  // 160 bytes
 
-    if (st.st_size <= 0 || st.st_size % entry_size != 0) {
+    // A 0-byte file is the legitimate "we scanned, found no artworks" marker
+    // written by ps_build_sdcard_index when /<root>/animations/ is empty.
+    // Treat it as a valid empty cache so the SD card channel can advertise
+    // the empty state to the rest of the scheduler.
+    if (st.st_size == 0) {
+        if (ch->entries) {
+            free(ch->entries);
+            ch->entries = NULL;
+        }
+        ch->cache_loaded = true;
+        ch->entry_count = 0;
+        ch->active = false;
+        ch->weight = 0;
+        ch->entry_format = PS_ENTRY_FORMAT_SDCARD;
+        ESP_LOGI(TAG, "Channel '%s': empty SD card cache (no artworks)", ch->display_name);
+        return ESP_OK;
+    }
+
+    if (st.st_size < 0 || st.st_size % entry_size != 0) {
         ESP_LOGW(TAG, "Channel '%s': invalid cache file size %ld (expected multiple of %zu)",
                  ch->display_name, (long)st.st_size, entry_size);
         ch->cache_loaded = false;

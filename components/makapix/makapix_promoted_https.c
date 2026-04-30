@@ -235,11 +235,17 @@ esp_err_t makapix_promoted_https_refresh(const char *channel_id)
 
     s_cancel = false;
 
-    // Find channel cache — fail fast before allocating buffers
-    channel_cache_t *cache = channel_cache_registry_find(channel_id);
-    if (!cache) {
-        ESP_LOGW(TAG, "Channel cache not found for '%s'", display_name);
-        return ESP_ERR_NOT_FOUND;
+    // Verify the cache exists in the registry. We do not keep this pointer —
+    // each per-batch merge below re-resolves under the lifecycle lock so a
+    // concurrent playset switch's channel_cache_free() can't race with us.
+    {
+        channel_cache_lifecycle_lock();
+        bool exists = (channel_cache_registry_find(channel_id) != NULL);
+        channel_cache_lifecycle_unlock();
+        if (!exists) {
+            ESP_LOGW(TAG, "Channel cache not found for '%s'", display_name);
+            return ESP_ERR_NOT_FOUND;
+        }
     }
 
     // Resolve paths
@@ -314,14 +320,24 @@ esp_err_t makapix_promoted_https_refresh(const char *channel_id)
             break;
         }
 
-        // Merge batch into channel cache
-        esp_err_t merge_err = channel_cache_merge_posts(cache, posts, page_count,
-                                                        channels_path, vault_path);
+        // Merge batch into channel cache, holding the lifecycle lock so the
+        // scheduler's free path can't pull the cache out from under us.
+        channel_cache_lifecycle_lock();
+        channel_cache_t *batch_cache = channel_cache_registry_find(channel_id);
+        esp_err_t merge_err = batch_cache
+            ? channel_cache_merge_posts(batch_cache, posts, page_count, channels_path, vault_path)
+            : ESP_ERR_NOT_FOUND;
+        size_t cache_entry_count = batch_cache ? batch_cache->entry_count : 0;
+        size_t cache_available = batch_cache ? batch_cache->available_count : 0;
+        channel_cache_lifecycle_unlock();
+        if (merge_err == ESP_ERR_NOT_FOUND) {
+            ESP_LOGW(TAG, "Cache disappeared mid-refresh, aborting");
+            refresh_completed = false;
+            break;
+        }
         if (merge_err == ESP_OK) {
             ESP_LOGI(TAG, "Batch merged: %zu entries (cache: %zu entries, %zu available)",
-                     page_count,
-                     cache->entry_count,
-                     cache->available_count);
+                     page_count, cache_entry_count, cache_available);
         } else {
             ESP_LOGW(TAG, "Batch merge failed: %s", esp_err_to_name(merge_err));
         }
@@ -358,9 +374,16 @@ esp_err_t makapix_promoted_https_refresh(const char *channel_id)
         ESP_LOGI(TAG, "Clock not synchronized, deferring metadata save");
     }
 
+    size_t final_entry_count = 0;
+    {
+        channel_cache_lifecycle_lock();
+        channel_cache_t *final_cache = channel_cache_registry_find(channel_id);
+        if (final_cache) final_entry_count = final_cache->entry_count;
+        channel_cache_lifecycle_unlock();
+    }
     ESP_LOGI(TAG, "Promoted HTTPS refresh %s: %zu fetched, %zu in cache",
              refresh_completed ? "complete" : "incomplete",
-             total_fetched, cache->entry_count);
+             total_fetched, final_entry_count);
 
     return (total_fetched > 0) ? ESP_OK : ESP_FAIL;
 }

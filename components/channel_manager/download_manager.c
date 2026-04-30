@@ -310,10 +310,17 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             continue;
         }
 
+        // Pin the cache lifecycle for the duration of this channel's scan.
+        // Without this, play_scheduler_execute_command can free the cache
+        // between registry_find and any subsequent cache->... dereference,
+        // turning the rest of this loop into a use-after-free.
+        channel_cache_lifecycle_lock();
+
         // Get channel cache from registry
         channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
         if (!cache) {
             ESP_LOGD(TAG, "Cache not found for '%s'", _dn);
+            channel_cache_lifecycle_unlock();
             continue;
         }
         ESP_LOGD(TAG, "Checking cache '%s': entry_count=%zu available=%zu cursor=%lu epoch_start=%lu wrapped=%d",
@@ -425,11 +432,12 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
         if (found) {
             // Advance round-robin to next channel for fairness and commit to shared state
             size_t new_rr_idx = (ch_idx + 1) % snapshot->channel_count;
-            dl_commit_state(snapshot, new_rr_idx);
             ESP_LOGD(TAG, "Found download: ch=%s key=%s (ci=%lu, cursor now %lu)",
                      ch->channel_id, out_request->storage_key,
                      (unsigned long)(ch->dl_cursor > 0 ? ch->dl_cursor - 1 : 0),
                      (unsigned long)ch->dl_cursor);
+            channel_cache_lifecycle_unlock();
+            dl_commit_state(snapshot, new_rr_idx);
             return ESP_OK;
         }
 
@@ -438,6 +446,7 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
         ESP_LOGD(TAG, "Channel '%s' download scan complete (scanned %d entries, cursor %lu -> %lu, epoch_start=%lu, wrapped=%d, entry_count=%zu)",
                  ch->channel_id, scan_count, (unsigned long)start_cursor, (unsigned long)ch->dl_cursor,
                  (unsigned long)ch->scan_epoch_start, ch->has_wrapped, cache->entry_count);
+        channel_cache_lifecycle_unlock();
     }
 
     // All channels complete - commit the completion state

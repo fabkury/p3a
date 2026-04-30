@@ -51,6 +51,10 @@ static struct {
     size_t registered_count;
     char channels_path[128];  // Stored for timer callback
     SemaphoreHandle_t registry_mutex;
+    // Held by readers (e.g. download manager) around their use of a cache
+    // pointer, and by writers (scheduler) around unregister+free, so the
+    // struct can't be freed mid-iteration.
+    SemaphoreHandle_t lifecycle_mutex;
     TickType_t first_dirty_tick;  // Tick when first cache became dirty (0 = none)
 } s_cache_state = {0};
 
@@ -297,7 +301,10 @@ esp_err_t channel_cache_init(void)
     crc32_init_table();
 
     s_cache_state.registry_mutex = xSemaphoreCreateMutex();
-    if (!s_cache_state.registry_mutex) {
+    s_cache_state.lifecycle_mutex = xSemaphoreCreateMutex();
+    if (!s_cache_state.registry_mutex || !s_cache_state.lifecycle_mutex) {
+        if (s_cache_state.registry_mutex) vSemaphoreDelete(s_cache_state.registry_mutex);
+        if (s_cache_state.lifecycle_mutex) vSemaphoreDelete(s_cache_state.lifecycle_mutex);
         return ESP_ERR_NO_MEM;
     }
 
@@ -311,6 +318,7 @@ esp_err_t channel_cache_init(void)
 
     if (!s_cache_state.save_timer) {
         vSemaphoreDelete(s_cache_state.registry_mutex);
+        vSemaphoreDelete(s_cache_state.lifecycle_mutex);
         return ESP_ERR_NO_MEM;
     }
 
@@ -697,6 +705,20 @@ void channel_cache_unregister(channel_cache_t *cache)
     }
 
     xSemaphoreGive(s_cache_state.registry_mutex);
+}
+
+void channel_cache_lifecycle_lock(void)
+{
+    if (s_cache_state.lifecycle_mutex) {
+        xSemaphoreTake(s_cache_state.lifecycle_mutex, portMAX_DELAY);
+    }
+}
+
+void channel_cache_lifecycle_unlock(void)
+{
+    if (s_cache_state.lifecycle_mutex) {
+        xSemaphoreGive(s_cache_state.lifecycle_mutex);
+    }
 }
 
 size_t channel_cache_get_total_available(void)

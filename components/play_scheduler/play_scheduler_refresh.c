@@ -64,6 +64,7 @@ static inline uint32_t refresh_async_timeout_ms(void)
 // Event bits
 #define REFRESH_EVENT_WORK_AVAILABLE   (1 << 0)
 #define REFRESH_EVENT_SHUTDOWN         (1 << 1)
+#define REFRESH_EVENT_PARKED           (1 << 2)  // Set by task immediately before vTaskSuspend(NULL)
 
 static TaskHandle_t s_refresh_task = NULL;
 static EventGroupHandle_t s_refresh_events = NULL;
@@ -850,7 +851,16 @@ static void refresh_task(void *arg)
     }
 
     ESP_LOGI(TAG, "Refresh task exiting");
-    s_refresh_task = NULL;
+    // Park at a sync point so ps_refresh_stop can delete us externally; this
+    // is the only safe way to free/reuse the static TCB and stack with
+    // configSUPPORT_STATIC_ALLOCATION. Setting s_refresh_task = NULL before
+    // vTaskDelete(NULL) would leave a window where the caller frees state
+    // while FreeRTOS still holds the TCB in xTasksWaitingTermination.
+    if (s_refresh_events) {
+        xEventGroupSetBits(s_refresh_events, REFRESH_EVENT_PARKED);
+    }
+    vTaskSuspend(NULL);
+    // Defensive: never reached.
     vTaskDelete(NULL);
 }
 
@@ -913,10 +923,37 @@ void ps_refresh_stop(void)
         xEventGroupSetBits(s_refresh_events, REFRESH_EVENT_SHUTDOWN);
     }
 
-    // Wait for task to exit (with timeout)
-    for (int i = 0; i < 50 && s_refresh_task != NULL; i++) {
-        vTaskDelay(pdMS_TO_TICKS(100));
+    TaskHandle_t handle = s_refresh_task;
+
+    // Wait for the task to reach the parked sync point. The task sets
+    // REFRESH_EVENT_PARKED immediately before vTaskSuspend(NULL).
+    bool parked = false;
+    if (s_refresh_events) {
+        EventBits_t bits = xEventGroupWaitBits(s_refresh_events, REFRESH_EVENT_PARKED,
+                                                pdFALSE, pdTRUE, pdMS_TO_TICKS(5000));
+        parked = (bits & REFRESH_EVENT_PARKED) != 0;
     }
+
+    if (!parked) {
+        ESP_LOGE(TAG, "ps_refresh task did not park within 5s; leaking task to preserve memory safety");
+        // Leave s_refresh_task non-NULL so a future ps_refresh_start sees it
+        // and skips creating a duplicate.
+        return;
+    }
+
+    // Close the gap between event-set and vTaskSuspend(NULL).
+    for (int i = 0; i < 100 && eTaskGetState(handle) != eSuspended; i++) {
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+
+    s_refresh_task = NULL;
+    vTaskDelete(handle);
+
+    // For static allocation, FreeRTOS does not free the TCB; the application
+    // owns it. After vTaskDelete the task sits in xTasksWaitingTermination
+    // until the pinned core's idle task runs prvCheckTasksWaitingTermination.
+    // Yield for several ticks before this static buffer can be safely reused.
+    vTaskDelay(pdMS_TO_TICKS(20));
 
     if (s_refresh_events) {
         vEventGroupDelete(s_refresh_events);

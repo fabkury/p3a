@@ -76,14 +76,36 @@ static esp_err_t merge_refresh_batch(makapix_channel_t *ch, const makapix_post_t
 {
     if (!ch || !posts || count == 0) return ESP_ERR_INVALID_ARG;
 
-    // Find the registered Play Scheduler cache
+    // Hold the cache lifecycle lock around lookup + merge so the scheduler's
+    // free loop can't pull the cache out from under us mid-merge. (Without this,
+    // a concurrent playset switch's channel_cache_free() can land between the
+    // registry_find and the merge_posts, and merge_posts ends up writing into
+    // freed memory — corrupting whatever the heap has handed out next.)
+    channel_cache_lifecycle_lock();
     channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
     if (!cache) {
         ESP_LOGW(TAG, "Cache not registered for channel '%s', skipping batch", ch->base.name);
+        channel_cache_lifecycle_unlock();
         return ESP_ERR_NOT_FOUND;
     }
 
-    return channel_cache_merge_posts(cache, posts, count, ch->channels_path, ch->vault_path);
+    esp_err_t err = channel_cache_merge_posts(cache, posts, count, ch->channels_path, ch->vault_path);
+    channel_cache_lifecycle_unlock();
+    return err;
+}
+
+// Park the task at a sync point so the reaper can delete it externally.
+// Must be the only path the refresh task takes to exit. Does not return.
+static void park_and_wait_for_reap(makapix_channel_t *ch)
+{
+    ch->refreshing = false;
+    if (ch->refresh_parked_sem) {
+        xSemaphoreGive(ch->refresh_parked_sem);
+    }
+    vTaskSuspend(NULL);
+    // Defensive: if some future code path resumes us, exit cleanly rather than
+    // returning into FreeRTOS task-function-returned undefined behavior.
+    vTaskDelete(NULL);
 }
 
 void refresh_task_impl(void *pvParameters)
@@ -96,9 +118,7 @@ void refresh_task_impl(void *pvParameters)
 
     // Wait for MQTT before first query (also wakes on shutdown signal)
     if (!makapix_channel_wait_for_mqtt_or_shutdown(portMAX_DELAY)) {
-        ch->refreshing = false;
-        ch->refresh_task = NULL;
-        vTaskDelete(NULL);
+        park_and_wait_for_reap(ch);
         return;
     }
     
@@ -152,9 +172,7 @@ void refresh_task_impl(void *pvParameters)
         strlcpy(query_req.hashtag, ch->identifier, sizeof(query_req.hashtag));
     } else if (ch->channel_key[0] == '\0') {
         // No spec set (e.g. single artwork channel) - skip refresh
-        ch->refreshing = false;
-        ch->refresh_task = NULL;
-        vTaskDelete(NULL);
+        park_and_wait_for_reap(ch);
         return;
     }
     
@@ -233,13 +251,15 @@ void refresh_task_impl(void *pvParameters)
             // Merge batch into channel cache
             esp_err_t merge_err = merge_refresh_batch(ch, resp->posts, resp->post_count);
             if (merge_err == ESP_OK) {
+                channel_cache_lifecycle_lock();
                 channel_cache_t *diag_cache = channel_cache_registry_find(ch->channel_id);
+                size_t diag_entry = diag_cache ? diag_cache->entry_count : 0;
+                size_t diag_avail = diag_cache ? diag_cache->available_count : 0;
+                channel_cache_lifecycle_unlock();
                 char _dn[64];
                 ps_get_display_name(ch->channel_id, _dn, sizeof(_dn));
                 ESP_LOGI(TAG, "Batch merged: ch='%s' entry_count=%zu available=%zu",
-                         _dn,
-                         diag_cache ? diag_cache->entry_count : 0,
-                         diag_cache ? diag_cache->available_count : 0);
+                         _dn, diag_entry, diag_avail);
             } else {
                 char _dn[64];
                 ps_get_display_name(ch->channel_id, _dn, sizeof(_dn));
@@ -277,11 +297,13 @@ void refresh_task_impl(void *pvParameters)
             } else {
                 query_req.has_cursor = false;
                 if (resp->has_more) {
+                    channel_cache_lifecycle_lock();
+                    channel_cache_t *diag_cache = channel_cache_registry_find(ch->channel_id);
+                    size_t diag_entry = diag_cache ? diag_cache->entry_count : 0;
+                    channel_cache_lifecycle_unlock();
                     ESP_LOGW(TAG, "has_more=true but next_cursor is empty! Pagination may be broken. "
                              "total_queried=%zu, entry_count=%zu",
-                             total_queried,
-                             channel_cache_registry_find(ch->channel_id)
-                                 ? channel_cache_registry_find(ch->channel_id)->entry_count : 0);
+                             total_queried, diag_entry);
                 }
             }
             
@@ -315,14 +337,17 @@ void refresh_task_impl(void *pvParameters)
             // timestamp yet stale/incomplete cache data — skipping the refresh
             // it actually needs.  Flushing the cache first guarantees the .cache
             // on disk is at least as recent as the .json timestamp.
+            channel_cache_lifecycle_lock();
             channel_cache_t *flush_cache = channel_cache_registry_find(ch->channel_id);
+            esp_err_t flush_err = ESP_OK;
             if (flush_cache) {
-                esp_err_t flush_err = channel_cache_flush_one(flush_cache, ch->channels_path);
-                if (flush_err != ESP_OK) {
-                    ESP_LOGW(TAG, "Cache flush failed for '%s', skipping metadata save",
-                             ch->channel_id);
-                    break;
-                }
+                flush_err = channel_cache_flush_one(flush_cache, ch->channels_path);
+            }
+            channel_cache_lifecycle_unlock();
+            if (flush_cache && flush_err != ESP_OK) {
+                ESP_LOGW(TAG, "Cache flush failed for '%s', skipping metadata save",
+                         ch->channel_id);
+                break;
             }
 
             // Save metadata (only persist a valid timestamp if SNTP is synchronized)
@@ -336,6 +361,7 @@ void refresh_task_impl(void *pvParameters)
 
         // Count how many are artworks vs playlists using cache lookup
         {
+            channel_cache_lifecycle_lock();
             channel_cache_t *stats_cache = channel_cache_registry_find(ch->channel_id);
             size_t entry_count = stats_cache ? stats_cache->entry_count : 0;
             size_t artwork_count = 0;
@@ -346,6 +372,7 @@ void refresh_task_impl(void *pvParameters)
                     }
                 }
             }
+            channel_cache_lifecycle_unlock();
             ESP_LOGD(TAG, "Channel %s: %zu entries (%zu artworks)", ch->base.name, entry_count, artwork_count);
         }
 
@@ -357,9 +384,7 @@ void refresh_task_impl(void *pvParameters)
 
         break;  // Exit after single cycle — Play Scheduler handles re-scheduling
     }
-    
-    ch->refreshing = false;
-    ch->refresh_task = NULL;
-    vTaskDelete(NULL);
+
+    park_and_wait_for_reap(ch);
 }
 

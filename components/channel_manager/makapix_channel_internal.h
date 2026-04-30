@@ -69,6 +69,11 @@ typedef struct {
     StaticTask_t *refresh_task_buffer;   // TCB - must be in internal RAM
     bool refresh_stack_allocated;        // Track if we own the stack buffer
 
+    // Sync point: refresh task gives this immediately before vTaskSuspend(NULL).
+    // Reaper takes it, then deletes the task externally so the static TCB/stack
+    // can be safely reused or freed.
+    SemaphoreHandle_t refresh_parked_sem;
+
     // Serialize channel index load/write to avoid races during unlink+rename window
     SemaphoreHandle_t index_io_lock;
 

@@ -7,6 +7,7 @@
  */
 
 #include "makapix_internal.h"
+#include "freertos/semphr.h"
 
 // ---------------------------------------------------------------------------
 // Background channel index refresh (for Play Scheduler)
@@ -16,10 +17,35 @@
 static channel_handle_t s_refresh_handle_all = NULL;
 static channel_handle_t s_refresh_handle_promoted = NULL;
 
-// Track user/hashtag refresh handles for cancellation
+// Track user/hashtag refresh handles for cancellation.
+//
+// THREADING: s_tracked_refresh_handles[] and s_tracked_refresh_count are read
+// and modified from at least two contexts — the ps_refresh task (via
+// makapix_refresh_channel_index) and whichever task drives playset switches
+// (via makapix_cancel_all_refreshes). Without serialization, one thread can
+// pull a handle out of the array and channel_destroy() it while another is
+// mid-iteration on the same array, leaving the second thread with a dangling
+// pointer. The trailing stop_refresh()/reap then takes a freed semaphore and
+// hangs the spinlock acquire (interrupt watchdog timeout).
+//
+// Rule: hold s_tracked_mutex while reading or writing the array or the count.
+// Never call stop_refresh() or channel_destroy() with the mutex held — both
+// can take seconds. The pattern is: snapshot under the mutex, clear the slot
+// under the mutex, release the mutex, then destroy. After the slot is
+// cleared, no other thread can find that handle in the array.
 #define MAX_TRACKED_REFRESH_HANDLES PS_MAX_CHANNELS
 static channel_handle_t s_tracked_refresh_handles[MAX_TRACKED_REFRESH_HANDLES] = {NULL};
 static size_t s_tracked_refresh_count = 0;
+static SemaphoreHandle_t s_tracked_mutex = NULL;
+
+static SemaphoreHandle_t tracked_mutex(void)
+{
+    static StaticSemaphore_t s_mutex_buf;
+    if (!s_tracked_mutex) {
+        s_tracked_mutex = xSemaphoreCreateMutexStatic(&s_mutex_buf);
+    }
+    return s_tracked_mutex;
+}
 
 // ---------------------------------------------------------------------------
 // Cancel all active refresh tasks
@@ -29,26 +55,38 @@ esp_err_t makapix_cancel_all_refreshes(void)
 {
     ESP_LOGI(MAKAPIX_TAG, "Cancelling all active refresh tasks");
 
-    // Cancel "all" channel refresh
+    // Static handles aren't tracked here — they live for the lifetime of the
+    // process and we only stop them, never destroy them, so there's no
+    // dangling-pointer race to worry about.
     if (s_refresh_handle_all) {
         makapix_channel_stop_refresh(s_refresh_handle_all);
     }
-
-    // Cancel "promoted" channel refresh
     if (s_refresh_handle_promoted) {
         makapix_channel_stop_refresh(s_refresh_handle_promoted);
     }
 
-    // Cancel tracked user/hashtag handles
-    for (size_t i = 0; i < s_tracked_refresh_count; i++) {
-        if (s_tracked_refresh_handles[i]) {
-            makapix_channel_stop_refresh(s_tracked_refresh_handles[i]);
-            // Destroy the temporary handle after stopping
-            channel_destroy(s_tracked_refresh_handles[i]);
-            s_tracked_refresh_handles[i] = NULL;
+    // Snapshot the tracked array under the mutex, then clear it. After this
+    // critical section no other thread can reach these handles, so we can
+    // stop+destroy them outside the lock without racing with concurrent
+    // makapix_refresh_channel_index() callers.
+    channel_handle_t snapshot[MAX_TRACKED_REFRESH_HANDLES];
+    size_t snapshot_count = 0;
+    xSemaphoreTake(tracked_mutex(), portMAX_DELAY);
+    snapshot_count = s_tracked_refresh_count;
+    if (snapshot_count > 0) {
+        memcpy(snapshot, s_tracked_refresh_handles,
+               snapshot_count * sizeof(channel_handle_t));
+    }
+    memset(s_tracked_refresh_handles, 0, sizeof(s_tracked_refresh_handles));
+    s_tracked_refresh_count = 0;
+    xSemaphoreGive(tracked_mutex());
+
+    for (size_t i = 0; i < snapshot_count; i++) {
+        if (snapshot[i]) {
+            makapix_channel_stop_refresh(snapshot[i]);
+            channel_destroy(snapshot[i]);
         }
     }
-    s_tracked_refresh_count = 0;
 
     return ESP_OK;
 }
@@ -243,23 +281,38 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
         }
         handle = s_refresh_handle_promoted;
     } else {
-        // Check for existing handle with the same channel_id
+        // Look for an existing handle for this channel_id under the mutex.
+        // If found and still refreshing, we're done. If found but stale,
+        // pull it out of tracking and destroy it OUTSIDE the mutex so a
+        // concurrent makapix_cancel_all_refreshes can't race with us on the
+        // same slot (and so the slow stop+destroy doesn't block other
+        // tracked-array readers).
+        channel_handle_t stale = NULL;
+        bool already_refreshing = false;
+        xSemaphoreTake(tracked_mutex(), portMAX_DELAY);
         for (size_t i = 0; i < s_tracked_refresh_count; i++) {
             if (s_tracked_refresh_handles[i] &&
                 strcmp(makapix_channel_get_id(s_tracked_refresh_handles[i]), channel_id) == 0) {
                 if (makapix_channel_is_refreshing(s_tracked_refresh_handles[i])) {
-                    // Refresh already in progress for this channel — skip
-                    ESP_LOGI(MAKAPIX_TAG, "Refresh already in progress for %s, skipping", channel_name);
-                    return ESP_OK;
+                    already_refreshing = true;
+                } else {
+                    stale = s_tracked_refresh_handles[i];
+                    s_tracked_refresh_handles[i] = s_tracked_refresh_handles[--s_tracked_refresh_count];
+                    s_tracked_refresh_handles[s_tracked_refresh_count] = NULL;
                 }
-                // Old task exited — stop+destroy the stale handle and remove from array
-                ESP_LOGD(MAKAPIX_TAG, "Cleaning up stale refresh handle for %s (slot %zu)", channel_name, i);
-                makapix_channel_stop_refresh(s_tracked_refresh_handles[i]);
-                channel_destroy(s_tracked_refresh_handles[i]);
-                s_tracked_refresh_handles[i] = s_tracked_refresh_handles[--s_tracked_refresh_count];
-                s_tracked_refresh_handles[s_tracked_refresh_count] = NULL;
                 break;
             }
+        }
+        xSemaphoreGive(tracked_mutex());
+
+        if (already_refreshing) {
+            ESP_LOGI(MAKAPIX_TAG, "Refresh already in progress for %s, skipping", channel_name);
+            return ESP_OK;
+        }
+        if (stale) {
+            ESP_LOGD(MAKAPIX_TAG, "Cleaning up stale refresh handle for %s", channel_name);
+            makapix_channel_stop_refresh(stale);
+            channel_destroy(stale);
         }
 
         // For user/hashtag channels, create a handle and track it for cancellation
@@ -270,30 +323,32 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
             return ESP_ERR_NO_MEM;
         }
 
-        // Track this handle for later cancellation
+        // Insert into tracking AND start the refresh task under the same
+        // critical section. Splitting these would leave a window where the
+        // handle is in the array but ch->refresh_task is still NULL — a
+        // concurrent makapix_cancel_all_refreshes would then call
+        // stop_refresh (which short-circuits on NULL refresh_task without
+        // reaping) and channel_destroy, freeing the struct out from under
+        // our pending channel_load. The "evicted oldest" handle is removed
+        // from tracking under the lock but actually stop+destroyed outside,
+        // since no other thread can see it once it's out of the array.
+        channel_handle_t evicted = NULL;
+        esp_err_t err;
+        xSemaphoreTake(tracked_mutex(), portMAX_DELAY);
         if (s_tracked_refresh_count < MAX_TRACKED_REFRESH_HANDLES) {
             s_tracked_refresh_handles[s_tracked_refresh_count++] = handle;
-            ESP_LOGD(MAKAPIX_TAG, "Tracking refresh handle for %s (slot %zu)",
-                     channel_id, s_tracked_refresh_count - 1);
         } else {
-            // Array full - stop oldest handle to make room
-            ESP_LOGW(MAKAPIX_TAG, "Refresh handle tracking full, stopping oldest");
-            if (s_tracked_refresh_handles[0]) {
-                makapix_channel_stop_refresh(s_tracked_refresh_handles[0]);
-                channel_destroy(s_tracked_refresh_handles[0]);
-            }
-            // Shift array
+            evicted = s_tracked_refresh_handles[0];
             for (size_t i = 0; i < MAX_TRACKED_REFRESH_HANDLES - 1; i++) {
                 s_tracked_refresh_handles[i] = s_tracked_refresh_handles[i + 1];
             }
             s_tracked_refresh_handles[MAX_TRACKED_REFRESH_HANDLES - 1] = handle;
         }
 
-        // Load to trigger the refresh task
-        esp_err_t err = channel_load(handle);
+        err = channel_load(handle);
         if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
-            ESP_LOGW(MAKAPIX_TAG, "Channel load/refresh failed: %s", esp_err_to_name(err));
-            // Remove from tracking and destroy
+            // Pull the freshly-inserted handle back out of tracking before
+            // releasing the mutex so no concurrent caller observes it.
             for (size_t i = 0; i < s_tracked_refresh_count; i++) {
                 if (s_tracked_refresh_handles[i] == handle) {
                     s_tracked_refresh_handles[i] = s_tracked_refresh_handles[--s_tracked_refresh_count];
@@ -301,6 +356,22 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
                     break;
                 }
             }
+        }
+        xSemaphoreGive(tracked_mutex());
+
+        // Outside-the-lock cleanup. `evicted` and (on load failure) `handle`
+        // are no longer in the tracked array, so no other thread can race
+        // with these stop+destroy calls.
+        if (evicted) {
+            ESP_LOGW(MAKAPIX_TAG, "Refresh handle tracking full, evicted oldest");
+            makapix_channel_stop_refresh(evicted);
+            channel_destroy(evicted);
+        } else {
+            ESP_LOGD(MAKAPIX_TAG, "Tracking refresh handle for %s", channel_id);
+        }
+
+        if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
+            ESP_LOGW(MAKAPIX_TAG, "Channel load/refresh failed: %s", esp_err_to_name(err));
             channel_destroy(handle);
             return err;
         }

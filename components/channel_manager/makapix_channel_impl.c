@@ -40,6 +40,65 @@ static const char *TAG = "makapix_channel";
 // heap-allocated response buffers.
 #define MAKAPIX_REFRESH_TASK_STACK_SIZE 12288
 
+// Reap the refresh task and bring its static TCB/stack back to a safe-to-reuse
+// state. The refresh task signals its parked-sem and self-suspends; this helper
+// takes the sem, waits for the task to actually be in eSuspended, deletes it
+// externally, then yields long enough for the idle task to drain the
+// termination list. Safe no-op when no task exists.
+static esp_err_t reap_refresh_task(makapix_channel_t *ch)
+{
+    if (!ch || !ch->refresh_task) return ESP_OK;
+
+    TaskHandle_t handle = ch->refresh_task;
+
+    // If still doing work, ask the task to wind down cooperatively.
+    if (ch->refreshing) {
+        ch->refreshing = false;
+        makapix_channel_signal_refresh_shutdown();
+    }
+
+    // Wait for the task to reach the parked sync point. The task gives this
+    // immediately before vTaskSuspend(NULL), after fully exiting its work loop.
+    bool parked = false;
+    if (ch->refresh_parked_sem) {
+        parked = xSemaphoreTake(ch->refresh_parked_sem, pdMS_TO_TICKS(5000)) == pdTRUE;
+    }
+    makapix_channel_clear_refresh_shutdown();
+
+    if (!parked) {
+        // Task is still in its work loop somewhere — likely blocked in a
+        // network call that didn't observe the shutdown signal. Force-deleting
+        // here would leak its in-flight allocations and possibly leave the
+        // channel cache mutex held, so we leave the task in place and bail.
+        // The static buffers stay owned by it; the next refresh on this handle
+        // will be skipped via the ch->refreshing guard.
+        ESP_LOGE(TAG, "Refresh task did not park within 5s; abandoning reap to avoid corrupting in-flight state");
+        return ESP_ERR_TIMEOUT;
+    }
+
+    // Close the gap between xSemaphoreGive and vTaskSuspend(NULL): wait until
+    // the task is observably suspended on its pinned core.
+    for (int i = 0; i < 100 && eTaskGetState(handle) != eSuspended; i++) {
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+
+    ch->refresh_task = NULL;
+    vTaskDelete(handle);
+
+    // For static allocation, FreeRTOS does not free the TCB itself. After
+    // vTaskDelete, the task sits in xTasksWaitingTermination until the pinned
+    // core's idle task runs prvCheckTasksWaitingTermination and unlinks it.
+    // Until then, the TCB is still in a FreeRTOS internal list and the static
+    // buffer must not be reused/freed. (Note: eTaskGetState cannot distinguish
+    // "in xTasksWaitingTermination" from "fully unlinked" — both return
+    // eDeleted in the SMP variant — so polling that state is not useful here.)
+    // Yielding for several ticks gives the idle task on either core ample
+    // opportunity to drain the termination list before we reuse the buffer.
+    vTaskDelay(pdMS_TO_TICKS(20));
+
+    return ESP_OK;
+}
+
 // Weak symbol for SD pause check
 extern bool animation_player_is_sd_paused(void) __attribute__((weak));
 
@@ -198,6 +257,16 @@ static esp_err_t makapix_impl_request_refresh(channel_handle_t channel)
         return ESP_OK;
     }
 
+    // A previous refresh on this handle may have completed and parked itself
+    // (refreshing=false, refresh_task still set). Reap it so the static TCB
+    // and stack are safe to reuse for the new task.
+    if (ch->refresh_task) {
+        if (reap_refresh_task(ch) != ESP_OK) {
+            ESP_LOGW(TAG, "Could not reap previous refresh task; skipping new refresh");
+            return ESP_ERR_INVALID_STATE;
+        }
+    }
+
     ch->refreshing = true;
 
     // Try static stack allocation first (fragmentation-resistant)
@@ -261,8 +330,10 @@ static esp_err_t makapix_impl_get_stats(channel_handle_t channel, channel_stats_
     if (!ch || !out_stats) return ESP_ERR_INVALID_ARG;
 
     // Look up entry count from registered cache
+    channel_cache_lifecycle_lock();
     channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
     size_t entry_count = cache ? cache->entry_count : 0;
+    channel_cache_lifecycle_unlock();
 
     out_stats->total_items = entry_count;
     out_stats->filtered_items = entry_count;
@@ -277,8 +348,11 @@ static size_t makapix_impl_get_post_count(channel_handle_t channel)
     if (!ch) return 0;
 
     // Look up entry count from registered cache
+    channel_cache_lifecycle_lock();
     channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
-    return cache ? cache->entry_count : 0;
+    size_t count = cache ? cache->entry_count : 0;
+    channel_cache_lifecycle_unlock();
+    return count;
 }
 
 /**
@@ -314,9 +388,12 @@ static esp_err_t makapix_impl_get_post(channel_handle_t channel, size_t post_ind
     if (!ch || !out_post) return ESP_ERR_INVALID_ARG;
     if (!ch->base.loaded) return ESP_ERR_INVALID_STATE;
 
-    // Look up entry from registered cache
+    // Look up entry from registered cache. Hold the lifecycle lock for the
+    // whole field-extraction so the cache can't be freed mid-copy.
+    channel_cache_lifecycle_lock();
     channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
     if (!cache || !cache->entries || post_index >= cache->entry_count) {
+        channel_cache_lifecycle_unlock();
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -346,6 +423,7 @@ static esp_err_t makapix_impl_get_post(channel_handle_t channel, size_t post_ind
 
         out_post->u.artwork.artwork_modified_at = (time_t)entry->artwork_modified_at;
     }
+    channel_cache_lifecycle_unlock();
 
     return ESP_OK;
 }
@@ -355,37 +433,25 @@ static void makapix_impl_destroy(channel_handle_t channel)
     makapix_channel_t *ch = (makapix_channel_t *)channel;
     if (!ch) return;
 
-    // Stop refresh task if running (event-driven shutdown)
-    if (ch->refreshing && ch->refresh_task) {
-        ESP_LOGI(TAG, "Stopping refresh task...");
-        ch->refreshing = false;
-
-        // Signal shutdown to wake any blocked waits
-        makapix_channel_signal_refresh_shutdown();
-
-        // Wait for task to exit gracefully (up to 5 seconds)
-        const int MAX_WAIT_ITERS = 50;  // 50 x 100ms = 5 seconds
-        for (int i = 0; i < MAX_WAIT_ITERS && ch->refresh_task != NULL; i++) {
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
-
-        // Clear shutdown signal for next channel
-        makapix_channel_clear_refresh_shutdown();
-
-        // Only force delete if task didn't exit gracefully
-        if (ch->refresh_task) {
-            ESP_LOGW(TAG, "Refresh task did not exit gracefully, forcing delete");
-            vTaskDelete(ch->refresh_task);
-            ch->refresh_task = NULL;
-        } else {
-            ESP_LOGI(TAG, "Refresh task exited cleanly");
+    // Reap the refresh task before touching its static buffers. If the reap
+    // times out we leak the channel handle rather than risk freeing memory
+    // that FreeRTOS still holds references to.
+    if (ch->refresh_task) {
+        if (reap_refresh_task(ch) != ESP_OK) {
+            ESP_LOGE(TAG, "Refusing to destroy channel '%s' — refresh task is unresponsive; leaking handle to preserve memory safety",
+                     ch->base.name ? ch->base.name : "(unknown)");
+            return;
         }
     }
-    
+
     makapix_impl_unload(channel);
     if (ch->index_io_lock) {
         vSemaphoreDelete(ch->index_io_lock);
         ch->index_io_lock = NULL;
+    }
+    if (ch->refresh_parked_sem) {
+        vSemaphoreDelete(ch->refresh_parked_sem);
+        ch->refresh_parked_sem = NULL;
     }
 
     // Free pre-allocated refresh task resources
@@ -441,7 +507,10 @@ channel_handle_t makapix_channel_create(const char *channel_id,
     ch->base.current_order = CHANNEL_ORDER_CREATED;
 
     ch->index_io_lock = xSemaphoreCreateMutex();
-    if (!ch->index_io_lock) {
+    ch->refresh_parked_sem = xSemaphoreCreateBinary();
+    if (!ch->index_io_lock || !ch->refresh_parked_sem) {
+        if (ch->index_io_lock) vSemaphoreDelete(ch->index_io_lock);
+        if (ch->refresh_parked_sem) vSemaphoreDelete(ch->refresh_parked_sem);
         free(ch->base.name);
         free(ch->channel_id);
         free(ch->vault_path);
@@ -452,7 +521,9 @@ channel_handle_t makapix_channel_create(const char *channel_id,
 
     if (!ch->base.name || !ch->channel_id || !ch->vault_path || !ch->channels_path) {
         vSemaphoreDelete(ch->index_io_lock);
+        vSemaphoreDelete(ch->refresh_parked_sem);
         ch->index_io_lock = NULL;
+        ch->refresh_parked_sem = NULL;
         free(ch->base.name);
         free(ch->channel_id);
         free(ch->vault_path);
@@ -516,33 +587,12 @@ esp_err_t makapix_channel_stop_refresh(channel_handle_t channel)
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (!ch->refreshing) {
-        return ESP_OK;  // Not refreshing, nothing to stop
+    if (!ch->refresh_task) {
+        return ESP_OK;  // No task to reap
     }
 
     ESP_LOGI(TAG, "Stopping refresh for channel: %s", ch->base.name ? ch->base.name : "(unknown)");
-    ch->refreshing = false;
-
-    // Signal shutdown to wake any blocked waits
-    makapix_channel_signal_refresh_shutdown();
-
-    // Wait for graceful exit (up to 5 seconds)
-    const int MAX_WAIT_ITERS = 50;  // 50 x 100ms = 5 seconds
-    for (int i = 0; i < MAX_WAIT_ITERS && ch->refresh_task != NULL; i++) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-
-    // Clear shutdown signal for next operation
-    makapix_channel_clear_refresh_shutdown();
-
-    if (ch->refresh_task != NULL) {
-        ESP_LOGW(TAG, "Refresh task for %s did not exit gracefully",
-                 ch->channel_id ? ch->channel_id : "(unknown)");
-        return ESP_ERR_TIMEOUT;
-    }
-
-    ESP_LOGD(TAG, "Refresh task stopped successfully");
-    return ESP_OK;
+    return reap_refresh_task(ch);
 }
 
 esp_err_t makapix_channel_count_cached(const char *channel_id,
@@ -557,12 +607,15 @@ esp_err_t makapix_channel_count_cached(const char *channel_id,
     (void)vault_path;  // No longer needed - LAi has the count
 
     // Try in-memory cache first (fast path)
+    channel_cache_lifecycle_lock();
     channel_cache_t *cache = channel_cache_registry_find(channel_id);
     if (cache) {
         if (out_total) *out_total = cache->entry_count;
         if (out_cached) *out_cached = cache->available_count;
+        channel_cache_lifecycle_unlock();
         return ESP_OK;
     }
+    channel_cache_lifecycle_unlock();
 
     // Fall back to reading .cache file header
     char cache_path[256];

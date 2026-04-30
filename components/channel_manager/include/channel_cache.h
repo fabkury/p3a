@@ -371,6 +371,21 @@ size_t channel_cache_get_total_available(void);
 channel_cache_t *channel_cache_registry_find(const char *channel_id);
 
 /**
+ * @brief Pin/unpin the cache lifecycle against concurrent unregister+free
+ *
+ * Readers that look up a cache via channel_cache_registry_find() and then
+ * dereference the returned pointer outside of s_state->mutex must hold this
+ * lock for the duration of their cache use. Writers (the play scheduler
+ * during playset reconfiguration) hold the same lock around the
+ * unregister + channel_cache_free + free() sequence so the struct cannot be
+ * freed while a reader is still using it.
+ *
+ * Lock ordering: take s_state->mutex first if both are needed.
+ */
+void channel_cache_lifecycle_lock(void);
+void channel_cache_lifecycle_unlock(void);
+
+/**
  * @brief Get next Ci entry that needs downloading (artwork, not in LAi)
  *
  * Iterates from cursor position to find the next artwork entry that is not

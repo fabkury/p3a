@@ -230,14 +230,17 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
         strlcpy(vault_path, "/sdcard/p3a/vault", sizeof(vault_path));
     }
 
-    // Free existing cache if any (handles channel switch)
+    // Free existing cache if any (handles channel switch). Hold the cache
+    // lifecycle lock so concurrent readers can't be mid-use on the cache.
     if (ch->cache) {
+        channel_cache_lifecycle_lock();
         channel_cache_unregister(ch->cache);
         channel_cache_free(ch->cache);
         free(ch->cache);
         ch->cache = NULL;
         ch->entries = NULL;
         ch->available_post_ids = NULL;
+        channel_cache_lifecycle_unlock();
     }
 
     // Allocate new cache structure
@@ -372,7 +375,10 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     ESP_LOGI(TAG, "Executing scheduler command: %zu channel(s), pick=%d",
              command->channel_count, command->pick_mode);
 
-    // Free old channel entries before reconfiguring
+    // Free old channel entries before reconfiguring. Hold the cache
+    // lifecycle lock so concurrent readers (e.g. download_task) cannot be
+    // mid-iteration on a cache that we're about to free.
+    channel_cache_lifecycle_lock();
     for (size_t i = 0; i < s_state->channel_count; i++) {
         ps_channel_state_t *ch = &s_state->channels[i];
         if (ch->cache) {
@@ -390,6 +396,7 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
             ch->entries = NULL;
         }
     }
+    channel_cache_lifecycle_unlock();
 
     // Store command parameters
     s_state->pick_mode = command->pick_mode;

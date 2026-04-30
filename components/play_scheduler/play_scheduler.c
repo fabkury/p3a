@@ -354,7 +354,9 @@ void play_scheduler_deinit(void)
         xSemaphoreTake(s_state.mutex, portMAX_DELAY);
     }
 
-    // Free channel entries
+    // Free channel entries. Hold the cache lifecycle lock so concurrent
+    // readers (e.g. download_task) can't be mid-use on a cache we free.
+    channel_cache_lifecycle_lock();
     for (size_t i = 0; i < s_state.channel_count; i++) {
         ps_channel_state_t *ch = &s_state.channels[i];
         if (ch->cache) {
@@ -372,6 +374,7 @@ void play_scheduler_deinit(void)
             ch->entries = NULL;
         }
     }
+    channel_cache_lifecycle_unlock();
 
     // Free history buffer
     if (s_state.history) {
@@ -414,7 +417,9 @@ esp_err_t play_scheduler_set_channels(
 
     ESP_LOGI(TAG, "Setting %zu channel(s)", count);
 
-    // Free old channel entries before reconfiguring
+    // Free old channel entries before reconfiguring. Hold the cache
+    // lifecycle lock so concurrent readers can't be mid-use on a cache we free.
+    channel_cache_lifecycle_lock();
     for (size_t i = 0; i < s_state.channel_count; i++) {
         ps_channel_state_t *ch = &s_state.channels[i];
         if (ch->cache) {
@@ -432,6 +437,7 @@ esp_err_t play_scheduler_set_channels(
             ch->entries = NULL;
         }
     }
+    channel_cache_lifecycle_unlock();
 
     s_state.channel_count = count;
 

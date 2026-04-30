@@ -321,9 +321,14 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
 
     s_refresh_cancel = false;
 
-    // Find channel cache early — fail fast before allocating buffers
-    channel_cache_t *cache = channel_cache_registry_find(channel_id);
-    if (!cache) {
+    // Verify the cache exists in the registry. We do not keep this pointer —
+    // every per-page operation below re-resolves under the lifecycle lock,
+    // because a concurrent playset switch can free this cache out from under
+    // us at any time between page fetches.
+    channel_cache_lifecycle_lock();
+    bool cache_exists = (channel_cache_registry_find(channel_id) != NULL);
+    channel_cache_lifecycle_unlock();
+    if (!cache_exists) {
         ESP_LOGW(TAG, "Channel cache not found for '%s'", _dn);
         return ESP_ERR_NOT_FOUND;
     }
@@ -440,10 +445,22 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
             break;
         }
 
-        // Allow the cache to temporarily exceed the cap so new API entries 
+        // Allow the cache to temporarily exceed the cap so new API entries
         // aren't dropped — the eviction pass after the loop compacts it back.
+        // Re-resolve cache under the lifecycle lock so a concurrent playset
+        // switch's channel_cache_free() can't race with the merge.
         size_t merge_limit = cache_size * 3;
-        esp_err_t merge_err = giphy_merge_entries(cache, page_entries, page_count, merge_limit);
+        channel_cache_lifecycle_lock();
+        channel_cache_t *page_cache = channel_cache_registry_find(channel_id);
+        esp_err_t merge_err = page_cache
+            ? giphy_merge_entries(page_cache, page_entries, page_count, merge_limit)
+            : ESP_ERR_NOT_FOUND;
+        channel_cache_lifecycle_unlock();
+        if (merge_err == ESP_ERR_NOT_FOUND) {
+            ESP_LOGW(TAG, "Cache disappeared mid-refresh for '%s', aborting", _dn);
+            refresh_completed = false;
+            break;
+        }
         if (merge_err != ESP_OK) {
             ESP_LOGW(TAG, "Merge failed at offset=%d: %s", offset, esp_err_to_name(merge_err));
             refresh_completed = false;
@@ -489,9 +506,16 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
     free(ctx.response_buf);
     free(page_entries);
 
-    // Eviction: remove entries not seen in this refresh cycle
+    // Eviction: remove entries not seen in this refresh cycle. Re-resolve
+    // the cache under the lifecycle lock — the original pointer captured at
+    // the top of this function is stale-by-construction across HTTP waits.
     if (refresh_completed && si_hash) {
-        giphy_evict_orphans(cache, si_hash);
+        channel_cache_lifecycle_lock();
+        channel_cache_t *evict_cache = channel_cache_registry_find(channel_id);
+        if (evict_cache) {
+            giphy_evict_orphans(evict_cache, si_hash);
+        }
+        channel_cache_lifecycle_unlock();
     }
 
     // Free Si hash (always, even on error/cancel)
@@ -506,7 +530,15 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
 
     // Rebuild LAi from final Ci state so it reflects files on disk after all
     // merges and evictions. This runs once per refresh, not per page.
-    size_t available = giphy_lai_rebuild(cache);
+    size_t available = 0;
+    {
+        channel_cache_lifecycle_lock();
+        channel_cache_t *lai_cache = channel_cache_registry_find(channel_id);
+        if (lai_cache) {
+            available = giphy_lai_rebuild(lai_cache);
+        }
+        channel_cache_lifecycle_unlock();
+    }
     ESP_LOGI(TAG, "LAi rebuilt after refresh: %zu files available", available);
 
     // Only persist last_refresh timestamp when the refresh ran to completion.
@@ -532,10 +564,17 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
                  channel_id);
     }
 
+    size_t final_entry_count = 0;
+    {
+        channel_cache_lifecycle_lock();
+        channel_cache_t *final_cache = channel_cache_registry_find(channel_id);
+        if (final_cache) final_entry_count = final_cache->entry_count;
+        channel_cache_lifecycle_unlock();
+    }
     ps_get_display_name(channel_id, _dn, sizeof(_dn));
     ESP_LOGI(TAG, "Giphy channel '%s' refresh %s: %zu fetched, %zu in cache",
              _dn, refresh_completed ? "complete" : "incomplete",
-             total_fetched, cache->entry_count);
+             total_fetched, final_entry_count);
 
     if (total_fetched > 0) {
         s_last_refresh_status = GIPHY_REFRESH_OK;

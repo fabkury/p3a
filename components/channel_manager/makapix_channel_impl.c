@@ -111,7 +111,7 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
     }
     makapix_cache_recover_and_cleanup(cache_path);
 
-    ESP_LOGD(TAG, "Loading channel: %s", ch->channel_id);
+    ESP_LOGD(TAG, "Loading channel: %s", ch->base.name);
 
     // NOTE: Entry data is now managed by channel_cache_t (loaded by Play Scheduler).
     // This function just marks the channel as loaded and starts the refresh task.
@@ -214,7 +214,7 @@ static esp_err_t makapix_impl_request_refresh(channel_handle_t channel)
             0  // Core 0
         );
         if (ch->refresh_task != NULL) {
-            ESP_LOGD(TAG, "Refresh task started (static, Core 0) for channel %s", ch->channel_id);
+            ESP_LOGD(TAG, "Refresh task started (static, Core 0) for channel %s", ch->base.name);
             return ESP_OK;
         }
         ESP_LOGW(TAG, "Static task creation failed, trying dynamic allocation");
@@ -243,7 +243,7 @@ static esp_err_t makapix_impl_request_refresh(channel_handle_t channel)
             if (i > 0) {
                 ESP_LOGW(TAG, "Refresh task created with reduced stack: %zu bytes (Core 0)", stack_sizes[i]);
             } else {
-                ESP_LOGD(TAG, "Refresh task started (dynamic, Core 0) for channel %s", ch->channel_id);
+                ESP_LOGD(TAG, "Refresh task started (dynamic, Core 0) for channel %s", ch->base.name);
             }
             return ESP_OK;
         }

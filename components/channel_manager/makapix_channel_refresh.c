@@ -346,7 +346,7 @@ void refresh_task_impl(void *pvParameters)
                     }
                 }
             }
-            ESP_LOGD(TAG, "Channel %s: %zu entries (%zu artworks)", ch->channel_id, entry_count, artwork_count);
+            ESP_LOGD(TAG, "Channel %s: %zu entries (%zu artworks)", ch->base.name, entry_count, artwork_count);
         }
 
         // Signal that refresh has completed - this unblocks download manager

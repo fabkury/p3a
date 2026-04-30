@@ -88,7 +88,9 @@ void makapix_ps_refresh_register(const char *channel_id)
             // Already registered, reset completion flag
             s_ps_pending_refreshes[i].completed = false;
             xSemaphoreGive(s_ps_pending_mutex);
-            ESP_LOGD(MAKAPIX_TAG, "PS refresh re-registered: %s", channel_id);
+            char _dn[64];
+            ps_get_display_name(channel_id, _dn, sizeof(_dn));
+            ESP_LOGD(MAKAPIX_TAG, "PS refresh re-registered: %s", _dn);
             return;
         }
     }
@@ -100,13 +102,17 @@ void makapix_ps_refresh_register(const char *channel_id)
                     sizeof(s_ps_pending_refreshes[i].channel_id));
             s_ps_pending_refreshes[i].completed = false;
             xSemaphoreGive(s_ps_pending_mutex);
-            ESP_LOGD(MAKAPIX_TAG, "PS refresh registered: %s", channel_id);
+            char _dn[64];
+            ps_get_display_name(channel_id, _dn, sizeof(_dn));
+            ESP_LOGD(MAKAPIX_TAG, "PS refresh registered: %s", _dn);
             return;
         }
     }
 
     xSemaphoreGive(s_ps_pending_mutex);
-    ESP_LOGW(MAKAPIX_TAG, "PS refresh table full, cannot register: %s", channel_id);
+    char _dn[64];
+    ps_get_display_name(channel_id, _dn, sizeof(_dn));
+    ESP_LOGW(MAKAPIX_TAG, "PS refresh table full, cannot register: %s", _dn);
 }
 
 void makapix_ps_refresh_mark_complete(const char *channel_id)
@@ -119,7 +125,9 @@ void makapix_ps_refresh_mark_complete(const char *channel_id)
         if (strcmp(s_ps_pending_refreshes[i].channel_id, channel_id) == 0) {
             s_ps_pending_refreshes[i].completed = true;
             xSemaphoreGive(s_ps_pending_mutex);
-            ESP_LOGI(MAKAPIX_TAG, "PS refresh complete: %s", channel_id);
+            char _dn[64];
+            ps_get_display_name(channel_id, _dn, sizeof(_dn));
+            ESP_LOGI(MAKAPIX_TAG, "PS refresh complete: %s", _dn);
             // Signal Play Scheduler
             makapix_channel_signal_ps_refresh_done(channel_id);
             return;
@@ -190,7 +198,7 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
         return ESP_ERR_INVALID_ARG;
     }
 
-    ESP_LOGI(MAKAPIX_TAG, "Refreshing channel index: %s (no channel switch)", channel_id);
+    ESP_LOGI(MAKAPIX_TAG, "Refreshing channel index: %s (no channel switch)", channel_name);
 
     // Register for Play Scheduler completion tracking
     makapix_ps_refresh_register(channel_id);
@@ -226,11 +234,11 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
                 strcmp(makapix_channel_get_id(s_tracked_refresh_handles[i]), channel_id) == 0) {
                 if (makapix_channel_is_refreshing(s_tracked_refresh_handles[i])) {
                     // Refresh already in progress for this channel — skip
-                    ESP_LOGI(MAKAPIX_TAG, "Refresh already in progress for %s, skipping", channel_id);
+                    ESP_LOGI(MAKAPIX_TAG, "Refresh already in progress for %s, skipping", channel_name);
                     return ESP_OK;
                 }
                 // Old task exited — stop+destroy the stale handle and remove from array
-                ESP_LOGD(MAKAPIX_TAG, "Cleaning up stale refresh handle for %s (slot %zu)", channel_id, i);
+                ESP_LOGD(MAKAPIX_TAG, "Cleaning up stale refresh handle for %s (slot %zu)", channel_name, i);
                 makapix_channel_stop_refresh(s_tracked_refresh_handles[i]);
                 channel_destroy(s_tracked_refresh_handles[i]);
                 s_tracked_refresh_handles[i] = s_tracked_refresh_handles[--s_tracked_refresh_count];
@@ -243,7 +251,7 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
         handle = makapix_channel_create(channel_id, channel_name, vault_path, channels_path);
         if (handle) makapix_channel_set_spec(handle, channel_type, identifier);
         if (!handle) {
-            ESP_LOGE(MAKAPIX_TAG, "Failed to create channel for refresh: %s", channel_id);
+            ESP_LOGE(MAKAPIX_TAG, "Failed to create channel for refresh: %s", channel_name);
             return ESP_ERR_NO_MEM;
         }
 
@@ -285,7 +293,7 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
     }
 
     if (!handle) {
-        ESP_LOGE(MAKAPIX_TAG, "Failed to create/get channel handle for refresh: %s", channel_id);
+        ESP_LOGE(MAKAPIX_TAG, "Failed to create/get channel handle for refresh: %s", channel_name);
         return ESP_ERR_NO_MEM;
     }
 
@@ -303,6 +311,6 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
         channel_request_refresh(handle);
     }
 
-    ESP_LOGD(MAKAPIX_TAG, "Refresh initiated for %s (background)", channel_id);
+    ESP_LOGD(MAKAPIX_TAG, "Refresh initiated for %s (background)", channel_name);
     return ESP_OK;
 }

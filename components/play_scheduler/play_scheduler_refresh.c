@@ -314,10 +314,10 @@ static esp_err_t refresh_makapix_channel(ps_channel_state_t *ch)
         // Optimistically load any existing cache (may have stale data)
         esp_err_t cache_err = ps_load_channel_cache(ch);
         if (cache_err != ESP_OK && cache_err != ESP_ERR_NOT_FOUND) {
-            ESP_LOGD(TAG, "No existing cache for '%s': %s", ch->channel_id, esp_err_to_name(cache_err));
+            ESP_LOGD(TAG, "No existing cache for '%s': %s", ch->display_name, esp_err_to_name(cache_err));
         }
     } else {
-        ESP_LOGD(TAG, "Cache already loaded for '%s', skipping reload", ch->channel_id);
+        ESP_LOGD(TAG, "Cache already loaded for '%s', skipping reload", ch->display_name);
     }
 
     // Return special code to indicate async in progress
@@ -779,11 +779,11 @@ static void refresh_task(void *arg)
             // MQTT not connected - re-queue for retry when MQTT connects
             ch->refresh_in_progress = false;
             ch->refresh_pending = true;
-            ESP_LOGD(TAG, "Channel '%s' queued for retry (MQTT not connected)", channel_id);
+            ESP_LOGD(TAG, "Channel '%s' queued for retry (MQTT not connected)", display_name);
         } else if (err == ESP_ERR_NOT_FINISHED) {
             // Makapix refresh started asynchronously - keep refresh_in_progress true
             // The async completion handler will update state when done
-            ESP_LOGD(TAG, "Channel '%s' refresh started (async)", channel_id);
+            ESP_LOGD(TAG, "Channel '%s' refresh started (async)", display_name);
             // Note: refresh_async_pending was set in refresh_makapix_channel()
         } else if (err == ESP_OK) {
             ch->refresh_in_progress = false;

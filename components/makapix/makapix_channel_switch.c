@@ -53,7 +53,9 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier,
 
     // Check if we're already on this channel
     if (s_current_channel_id[0] && strcmp(s_current_channel_id, channel_id) == 0 && s_current_channel) {
-        ESP_LOGI(MAKAPIX_TAG, "Already on channel %s, restarting playback without refresh", channel_id);
+        char _dn[64];
+        ps_get_display_name(channel_id, _dn, sizeof(_dn));
+        ESP_LOGI(MAKAPIX_TAG, "Already on channel %s, restarting playback without refresh", _dn);
         // Restart playback but don't re-trigger refresh
         esp_err_t err = channel_start_playback(s_current_channel, CHANNEL_ORDER_RANDOM, NULL);
         if (err != ESP_OK) {

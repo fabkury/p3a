@@ -295,22 +295,25 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
         size_t ch_idx = (snapshot->round_robin_idx + attempt) % snapshot->channel_count;
         dl_channel_state_t *ch = &snapshot->channels[ch_idx];
 
+        char _dn[64];
+        dl_get_display_name(ch->channel_id, _dn, sizeof(_dn));
+
         // Skip channels that don't need downloads (e.g., SD card - local files)
         if (!play_scheduler_needs_download(ch->channel_id)) {
-            ESP_LOGD(TAG, "Skipping local channel '%s'", ch->channel_id);
+            ESP_LOGD(TAG, "Skipping local channel '%s'", _dn);
             continue;
         }
 
         // Skip completed channels
         if (ch->channel_complete) {
-            ESP_LOGD(TAG, "Skipping completed channel '%s'", ch->channel_id);
+            ESP_LOGD(TAG, "Skipping completed channel '%s'", _dn);
             continue;
         }
 
         // Get channel cache from registry
         channel_cache_t *cache = channel_cache_registry_find(ch->channel_id);
         if (!cache) {
-            ESP_LOGD(TAG, "Cache not found for '%s'", ch->channel_id);
+            ESP_LOGD(TAG, "Cache not found for '%s'", _dn);
             continue;
         }
         ESP_LOGD(TAG, "Checking cache '%s': entry_count=%zu available=%zu cursor=%lu epoch_start=%lu wrapped=%d",

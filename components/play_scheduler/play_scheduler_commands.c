@@ -131,7 +131,7 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
         ch->active = false;
         ch->weight = 0;
         ch->entry_format = PS_ENTRY_FORMAT_NONE;
-        ESP_LOGD(TAG, "Channel '%s': no cache file", ch->channel_id);
+        ESP_LOGD(TAG, "Channel '%s': no cache file", ch->display_name);
         return ESP_ERR_NOT_FOUND;
     }
 

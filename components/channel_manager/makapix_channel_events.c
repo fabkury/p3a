@@ -10,6 +10,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
+#include "play_scheduler.h"
 
 static const char *TAG = "makapix_events";
 
@@ -416,7 +417,13 @@ void makapix_channel_signal_ps_refresh_done(const char *channel_id)
         return;
     }
 
-    ESP_LOGD(TAG, "Signaling PS channel refresh done: %s", channel_id ? channel_id : "(null)");
+    if (channel_id) {
+        char _dn[64];
+        ps_get_display_name(channel_id, _dn, sizeof(_dn));
+        ESP_LOGD(TAG, "Signaling PS channel refresh done: %s", _dn);
+    } else {
+        ESP_LOGD(TAG, "Signaling PS channel refresh done: (null)");
+    }
     xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_PS_CHANNEL_REFRESH_DONE);
 }
 

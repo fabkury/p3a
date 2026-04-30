@@ -22,7 +22,10 @@
 #include "makapix_store.h"
 #include "config_store.h"
 #include "event_bus.h"
+#include "p3a_current_post.h"
+#include "p3a_reaction_dispatcher.h"
 #include <sys/stat.h>
+#include <string.h>
 
 // Processing notification (from display_renderer_priv.h via weak symbol)
 extern void proc_notif_start(void) __attribute__((weak));
@@ -558,6 +561,136 @@ esp_err_t h_post_makapix_unregister(httpd_req_t *req) {
         return ESP_OK;
     }
 
+    send_json(req, 200, "{\"ok\":true}");
+    return ESP_OK;
+}
+
+// ---------- Reaction Handler ----------
+
+/**
+ * POST /action/reaction
+ * Submit or revoke a reaction to the currently displayed artwork.
+ *
+ * Body (Makapix):  {"action":"submit"|"revoke", "post_id": <int>}
+ * Body (Giphy):    {"action":"submit", "giphy_id": "<string>"}
+ *
+ * The handler validates that the supplied identifier matches the currently
+ * displayed post and that the action is valid for the source. On success it
+ * dispatches the network call asynchronously and returns 200 immediately.
+ * Failures of the underlying network call surface via the next poll of
+ * /playsets/active (the reaction_submitted flag reverts).
+ */
+esp_err_t h_post_action_reaction(httpd_req_t *req)
+{
+    if (!ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+
+    int err_status;
+    size_t len;
+    char *body = recv_body_json(req, &len, &err_status);
+    if (!body) {
+        send_json(req, err_status ? err_status : 500,
+                  "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_ParseWithLength(body, len);
+    free(body);
+    if (!root || !cJSON_IsObject(root)) {
+        if (root) cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
+        return ESP_OK;
+    }
+
+    cJSON *action_item = cJSON_GetObjectItem(root, "action");
+    cJSON *post_id_item = cJSON_GetObjectItem(root, "post_id");
+    cJSON *giphy_id_item = cJSON_GetObjectItem(root, "giphy_id");
+
+    if (!action_item || !cJSON_IsString(action_item)) {
+        cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'action'\",\"code\":\"INVALID_ACTION\"}");
+        return ESP_OK;
+    }
+    const char *action = cJSON_GetStringValue(action_item);
+    bool is_submit;
+    if (strcmp(action, "submit") == 0) {
+        is_submit = true;
+    } else if (strcmp(action, "revoke") == 0) {
+        is_submit = false;
+    } else {
+        cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"action must be 'submit' or 'revoke'\",\"code\":\"INVALID_ACTION\"}");
+        return ESP_OK;
+    }
+
+    bool has_post_id = post_id_item && cJSON_IsNumber(post_id_item);
+    bool has_giphy_id = giphy_id_item && cJSON_IsString(giphy_id_item) &&
+                        cJSON_GetStringValue(giphy_id_item)[0] != '\0';
+    if (has_post_id == has_giphy_id) {
+        cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"Provide exactly one of post_id or giphy_id\",\"code\":\"INVALID_REQUEST\"}");
+        return ESP_OK;
+    }
+
+    int current_source = p3a_current_post_get_source();
+    esp_err_t derr;
+
+    if (has_post_id) {
+        int32_t post_id = (int32_t)cJSON_GetNumberValue(post_id_item);
+        cJSON_Delete(root);
+        if (post_id <= 0) {
+            send_json(req, 400, "{\"ok\":false,\"error\":\"post_id must be positive\",\"code\":\"INVALID_REQUEST\"}");
+            return ESP_OK;
+        }
+        if (current_source != POST_SOURCE_MAKAPIX || p3a_current_post_get_id() != post_id) {
+            send_json(req, 409, "{\"ok\":false,\"error\":\"post_id does not match the currently displayed artwork\",\"code\":\"STALE_POST\"}");
+            return ESP_OK;
+        }
+        derr = is_submit ? p3a_reaction_dispatch_makapix_submit(post_id)
+                         : p3a_reaction_dispatch_makapix_revoke(post_id);
+        if (derr == ESP_ERR_INVALID_STATE) {
+            send_json(req, 503, "{\"ok\":false,\"error\":\"Makapix MQTT not connected\",\"code\":\"MQTT_NOT_CONNECTED\"}");
+            return ESP_OK;
+        }
+        if (derr != ESP_OK) {
+            send_json(req, 500, "{\"ok\":false,\"error\":\"Dispatch failed\",\"code\":\"DISPATCH_FAILED\"}");
+            return ESP_OK;
+        }
+        send_json(req, 200, "{\"ok\":true}");
+        return ESP_OK;
+    }
+
+    // Giphy path
+    if (!is_submit) {
+        cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"revoke is not supported for Giphy\",\"code\":\"INVALID_ACTION\"}");
+        return ESP_OK;
+    }
+    char giphy_id[24];
+    strlcpy(giphy_id, cJSON_GetStringValue(giphy_id_item), sizeof(giphy_id));
+    cJSON_Delete(root);
+
+    if (current_source != POST_SOURCE_GIPHY) {
+        send_json(req, 409, "{\"ok\":false,\"error\":\"Current artwork is not from Giphy\",\"code\":\"STALE_POST\"}");
+        return ESP_OK;
+    }
+    char current_giphy[24];
+    p3a_current_post_get_giphy_id(current_giphy, sizeof(current_giphy));
+    if (strcmp(current_giphy, giphy_id) != 0) {
+        send_json(req, 409, "{\"ok\":false,\"error\":\"giphy_id does not match the currently displayed artwork\",\"code\":\"STALE_POST\"}");
+        return ESP_OK;
+    }
+    derr = p3a_reaction_dispatch_giphy_click(giphy_id);
+    if (derr == ESP_ERR_INVALID_STATE) {
+        send_json(req, 503, "{\"ok\":false,\"error\":\"Giphy API key or random_id not configured\",\"code\":\"GIPHY_NOT_CONFIGURED\"}");
+        return ESP_OK;
+    }
+    if (derr != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Dispatch failed\",\"code\":\"DISPATCH_FAILED\"}");
+        return ESP_OK;
+    }
     send_json(req, 200, "{\"ok\":true}");
     return ESP_OK;
 }

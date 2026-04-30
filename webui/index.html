@@ -144,7 +144,7 @@ body {
     background: var(--c-card-bg);
     border: none;
     border-radius: var(--r-md);
-    padding: 10px 28px;
+    padding: 10px 22px;
     font-size: 0.95rem;
     font-weight: 500;
     color: var(--c-primary);
@@ -152,9 +152,38 @@ body {
     box-shadow: var(--c-card-shadow);
     transition: all 0.2s ease;
     -webkit-tap-highlight-color: transparent;
-    min-width: 110px;
+    min-width: 88px;
 }
 .pause-btn:active { transform: scale(0.95); }
+.reaction-btn {
+    background: var(--c-card-bg);
+    border: none;
+    border-radius: 50%;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--c-primary);
+    box-shadow: var(--c-card-shadow);
+    transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+    padding: 0;
+}
+.reaction-btn:active { transform: scale(0.92); }
+.reaction-btn.active {
+    background: #fff7d6;
+    box-shadow: 0 0 0 3px rgba(255,193,7,0.55), var(--c-card-shadow);
+}
+.reaction-btn.pulse { animation: reaction-pulse 0.28s ease; }
+@keyframes reaction-pulse {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(0.85); }
+    100% { transform: scale(1); }
+}
 .upload-section {
     width: min(420px, 100%);
     background: var(--c-card-bg);
@@ -277,17 +306,20 @@ body {
 .update-banner p { margin: 0; font-size: 0.8rem; opacity: 0.9; }
 @media (max-width: 480px) {
     .arrow-btn { width: 64px; height: 64px; font-size: 1.6rem; }
-    .arrow-row { gap: 16px; }
-    .pause-btn { padding: 9px 20px; font-size: 0.85rem; }
+    .arrow-row { gap: 12px; }
+    .pause-btn { padding: 9px 16px; font-size: 0.85rem; min-width: 76px; }
+    .reaction-btn { width: 50px; height: 50px; font-size: 1.4rem; }
 }
 @media (max-height: 640px) {
     .arrow-btn { width: 60px; height: 60px; font-size: 1.5rem; }
-    .pause-btn { padding: 8px 18px; font-size: 0.82rem; }
+    .pause-btn { padding: 8px 14px; font-size: 0.82rem; min-width: 72px; }
+    .reaction-btn { width: 46px; height: 46px; font-size: 1.3rem; }
     .upload-section { padding: 12px; }
 }
 @media (min-width: 481px) {
     .arrow-btn:hover { transform: scale(1.05); }
     .pause-btn:hover { transform: scale(1.02); }
+    .reaction-btn:hover { transform: scale(1.05); }
 }
 </style>
 </head>
@@ -310,6 +342,7 @@ body {
 </div>
 <div class="arrow-row">
     <button class="arrow-btn" id="back-btn" onclick="sendCommand('swap_back')">&#9664;</button>
+    <button class="reaction-btn" id="reaction-btn" type="button" style="visibility:hidden;" aria-label="React"></button>
     <button class="pause-btn" id="pause-btn" onclick="togglePause()">Pause</button>
     <button class="arrow-btn" id="next-btn" onclick="sendCommand('swap_next')">&#9654;</button>
 </div>
@@ -388,6 +421,7 @@ function updateArtwork(currentArtwork) {
     var img = document.getElementById('artwork-img');
     if (!currentArtwork || !currentArtwork.url) {
         img.style.display = 'none';
+        updateReactionButton(currentArtwork);
         return;
     }
     var usePixelated = (currentArtwork.channel_type !== 'giphy');
@@ -401,6 +435,102 @@ function updateArtwork(currentArtwork) {
         img.setAttribute('data-url', currentArtwork.url);
     }
     img.style.display = '';
+    updateReactionButton(currentArtwork);
+}
+
+// Pending reaction click whose response we are still waiting for. Until the
+// XHR resolves, we ignore polled state for the reaction button so the
+// optimistic toggle is not clobbered by an in-flight 4s poll.
+var reactionPending = false;
+
+function updateReactionButton(currentArtwork) {
+    var btn = document.getElementById('reaction-btn');
+    if (!btn) return;
+    if (reactionPending) return;
+    if (!currentArtwork) {
+        btn.style.visibility = 'hidden';
+        btn.classList.remove('active');
+        return;
+    }
+    if (typeof currentArtwork.giphy_id === 'string' && currentArtwork.giphy_id) {
+        btn.dataset.source = 'giphy';
+        btn.dataset.id = currentArtwork.giphy_id;
+        btn.textContent = '👆';   // 👆
+        btn.classList.remove('active');
+        btn.style.visibility = '';
+    } else if (typeof currentArtwork.post_id === 'number' && currentArtwork.post_id > 0) {
+        btn.dataset.source = 'makapix';
+        btn.dataset.id = String(currentArtwork.post_id);
+        btn.textContent = '👍';   // 👍
+        btn.classList.toggle('active', currentArtwork.reaction_submitted === true);
+        btn.style.visibility = '';
+    } else {
+        btn.style.visibility = 'hidden';
+        btn.classList.remove('active');
+        delete btn.dataset.source;
+        delete btn.dataset.id;
+    }
+}
+
+function playReactionPulse(btn) {
+    btn.classList.remove('pulse');
+    // Force a reflow so the animation can replay on rapid repeat clicks.
+    void btn.offsetWidth;
+    btn.classList.add('pulse');
+}
+
+function onReactionClick() {
+    var btn = document.getElementById('reaction-btn');
+    var source = btn.dataset.source;
+    var id = btn.dataset.id;
+    if (!source || !id) return;
+
+    if (source === 'giphy') {
+        playReactionPulse(btn);
+        sendReaction({ action: 'submit', giphy_id: id }, function() {
+            showToast('Reaction failed', true);
+        });
+        return;
+    }
+
+    // Makapix: optimistic toggle, revert on HTTP failure.
+    var wasActive = btn.classList.contains('active');
+    btn.classList.toggle('active', !wasActive);
+    reactionPending = true;
+    sendReaction(
+        { action: wasActive ? 'revoke' : 'submit', post_id: parseInt(id, 10) },
+        function onError(msg) {
+            btn.classList.toggle('active', wasActive);
+            showToast(msg || 'Reaction failed', true);
+        },
+        function onDone() {
+            reactionPending = false;
+            // Trigger a faster-than-poll-interval refresh so the failure-revert
+            // (set by the device after the MQTT round-trip) lands quickly.
+            schedulePollSoon();
+        }
+    );
+}
+
+function sendReaction(body, onError, onDone) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/action/reaction', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        var ok = false;
+        var msg = '';
+        try {
+            var result = JSON.parse(xhr.responseText);
+            ok = (xhr.status >= 200 && xhr.status < 300 && result.ok);
+            if (!ok) msg = result.error || ('HTTP ' + xhr.status);
+        } catch (e) {
+            msg = 'Parse error: ' + e.message;
+        }
+        if (!ok && onError) onError(msg);
+        if (onDone) onDone();
+    };
+    xhr.send(JSON.stringify(body));
 }
 
 function buildPillBar() {
@@ -953,13 +1083,15 @@ function pollActivePlayset(attempt) {
 
 checkForUpdates();
 var pollIntervalId = setInterval(pollActivePlayset, 4000);
-function schedulePollAfterSwap() {
+function schedulePollSoon() {
     clearInterval(pollIntervalId);
     setTimeout(function() {
         pollActivePlayset();
         pollIntervalId = setInterval(pollActivePlayset, 4000);
     }, 750);
 }
+function schedulePollAfterSwap() { schedulePollSoon(); }
+document.getElementById('reaction-btn').addEventListener('click', onReactionClick);
 </script>
 </body>
 </html>

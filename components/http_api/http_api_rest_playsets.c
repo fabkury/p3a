@@ -23,6 +23,7 @@
 #include "playset_store.h"
 #include "playset_json.h"
 #include "p3a_state.h"
+#include "p3a_current_post.h"
 
 // ---------- Playset Name Validation ----------
 
@@ -105,6 +106,27 @@ cJSON *build_current_artwork_json(void)
     cJSON_AddStringToObject(obj, "url", url);
     cJSON_AddStringToObject(obj, "channel_type",
                             playset_channel_type_str(artwork.channel_type));
+
+    // Reaction-related fields driven by p3a_current_post (which is the actual
+    // on-screen post, not the next one to be picked). Only include the
+    // identifier and reaction_submitted flag when the source supports
+    // reactions, so the web UI can use field presence as the "this artwork
+    // accepts reactions" signal.
+    int source = p3a_current_post_get_source();
+    if (source == POST_SOURCE_MAKAPIX) {
+        int32_t post_id = p3a_current_post_get_id();
+        if (post_id > 0) {
+            cJSON_AddNumberToObject(obj, "post_id", (double)post_id);
+            cJSON_AddBoolToObject(obj, "reaction_submitted",
+                                  p3a_current_post_get_reaction_submitted());
+        }
+    } else if (source == POST_SOURCE_GIPHY) {
+        char giphy_id[24];
+        p3a_current_post_get_giphy_id(giphy_id, sizeof(giphy_id));
+        if (giphy_id[0]) {
+            cJSON_AddStringToObject(obj, "giphy_id", giphy_id);
+        }
+    }
 
     return obj;
 }

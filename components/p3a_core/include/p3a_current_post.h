@@ -22,6 +22,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,6 +54,18 @@ int p3a_current_post_get_source(void);
  * @param max_len Size of out (must be >= 1).
  */
 void p3a_current_post_get_giphy_id(char *out, size_t max_len);
+
+/**
+ * Set whether the user has submitted a thumbs-up reaction to the currently
+ * displayed Makapix post. Resets to false automatically whenever
+ * p3a_current_post_set() is called with a new post_id (or p3a_current_post_clear()
+ * is called). Used by the touch router and the web UI reaction button so both
+ * UIs converge on the same state.
+ */
+void p3a_current_post_set_reaction_submitted(bool submitted);
+
+/** Returns the reaction-submitted flag for the currently displayed post. */
+bool p3a_current_post_get_reaction_submitted(void);
 
 #ifdef __cplusplus
 }

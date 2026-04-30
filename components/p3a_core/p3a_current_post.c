@@ -17,9 +17,15 @@
 static int32_t s_current_post_id = 0;
 static int     s_current_post_source = 0;  // 0 == POST_SOURCE_NONE
 static char    s_current_giphy_id[24] = "";
+static bool    s_reaction_submitted = false;
 
 void p3a_current_post_set(int32_t post_id, int source, const char *giphy_id)
 {
+    // Reset reaction state when the on-screen post identity changes. Same-id
+    // re-set (e.g. swap_back to the same post) keeps prior state.
+    if (post_id != s_current_post_id || source != s_current_post_source) {
+        s_reaction_submitted = false;
+    }
     s_current_post_id = post_id;
     s_current_post_source = source;
     if (giphy_id && giphy_id[0]) {
@@ -38,6 +44,7 @@ void p3a_current_post_clear(void)
     s_current_post_id = 0;
     s_current_post_source = 0;
     memset(s_current_giphy_id, 0, sizeof(s_current_giphy_id));
+    s_reaction_submitted = false;
 }
 
 int32_t p3a_current_post_get_id(void)
@@ -58,4 +65,14 @@ void p3a_current_post_get_giphy_id(char *out, size_t max_len)
     if (n >= max_len) n = max_len - 1;
     memcpy(out, s_current_giphy_id, n);
     out[n] = '\0';
+}
+
+void p3a_current_post_set_reaction_submitted(bool submitted)
+{
+    s_reaction_submitted = submitted;
+}
+
+bool p3a_current_post_get_reaction_submitted(void)
+{
+    return s_reaction_submitted;
 }

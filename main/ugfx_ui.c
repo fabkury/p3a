@@ -358,9 +358,12 @@ static void ugfx_ui_draw_channel_message(void)
     }
     if (line_count <= 0) line_count = 1;
 
-    // Compute line height and vertical placement (centered around middle)
+    // Compute line height and vertical placement (centered around middle).
+    // Add a few pixels of extra leading so multi-line messages don't look
+    // cramped — the bare font metric leaves the lines too close together.
     gCoord line_h = gdispGetFontMetric(msg_font, gFontLineSpacing);
     if (line_h <= 0) line_h = 28;
+    line_h += 8;
     gCoord block_h = (gCoord)(line_count * line_h);
     gCoord start_y = (screen_h / 2) - (block_h / 2);
 

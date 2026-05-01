@@ -74,6 +74,11 @@ typedef struct {
     // can be safely reused or freed.
     SemaphoreHandle_t refresh_parked_sem;
 
+    // Serializes reap_refresh_task so concurrent callers (cancel + ps_refresh)
+    // can't both wait on the binary parked_sem and have the loser time out
+    // spuriously after the winner already deleted the task.
+    SemaphoreHandle_t reap_lock;
+
     // Serialize channel index load/write to avoid races during unlink+rename window
     SemaphoreHandle_t index_io_lock;
 

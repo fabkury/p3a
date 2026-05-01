@@ -49,6 +49,21 @@ static esp_err_t reap_refresh_task(makapix_channel_t *ch)
 {
     if (!ch || !ch->refresh_task) return ESP_OK;
 
+    // Serialize with any other reap on this handle. Without this, two callers
+    // (e.g. cancel_all_refreshes and ps_refresh's request_refresh) both wait on
+    // the binary refresh_parked_sem; only one Take succeeds and the other times
+    // out 5s later — even though the task has already been deleted.
+    if (ch->reap_lock) {
+        xSemaphoreTake(ch->reap_lock, portMAX_DELAY);
+    }
+
+    // Re-check after acquiring the lock: the previous holder may have already
+    // reaped the task, in which case there's nothing left to do.
+    if (!ch->refresh_task) {
+        if (ch->reap_lock) xSemaphoreGive(ch->reap_lock);
+        return ESP_OK;
+    }
+
     TaskHandle_t handle = ch->refresh_task;
 
     // If still doing work, ask the task to wind down cooperatively.
@@ -73,6 +88,7 @@ static esp_err_t reap_refresh_task(makapix_channel_t *ch)
         // The static buffers stay owned by it; the next refresh on this handle
         // will be skipped via the ch->refreshing guard.
         ESP_LOGE(TAG, "Refresh task did not park within 5s; abandoning reap to avoid corrupting in-flight state");
+        if (ch->reap_lock) xSemaphoreGive(ch->reap_lock);
         return ESP_ERR_TIMEOUT;
     }
 
@@ -96,6 +112,7 @@ static esp_err_t reap_refresh_task(makapix_channel_t *ch)
     // opportunity to drain the termination list before we reuse the buffer.
     vTaskDelay(pdMS_TO_TICKS(20));
 
+    if (ch->reap_lock) xSemaphoreGive(ch->reap_lock);
     return ESP_OK;
 }
 
@@ -453,6 +470,10 @@ static void makapix_impl_destroy(channel_handle_t channel)
         vSemaphoreDelete(ch->refresh_parked_sem);
         ch->refresh_parked_sem = NULL;
     }
+    if (ch->reap_lock) {
+        vSemaphoreDelete(ch->reap_lock);
+        ch->reap_lock = NULL;
+    }
 
     // Free pre-allocated refresh task resources
     if (ch->refresh_stack_allocated && ch->refresh_stack) {
@@ -508,9 +529,11 @@ channel_handle_t makapix_channel_create(const char *channel_id,
 
     ch->index_io_lock = xSemaphoreCreateMutex();
     ch->refresh_parked_sem = xSemaphoreCreateBinary();
-    if (!ch->index_io_lock || !ch->refresh_parked_sem) {
+    ch->reap_lock = xSemaphoreCreateMutex();
+    if (!ch->index_io_lock || !ch->refresh_parked_sem || !ch->reap_lock) {
         if (ch->index_io_lock) vSemaphoreDelete(ch->index_io_lock);
         if (ch->refresh_parked_sem) vSemaphoreDelete(ch->refresh_parked_sem);
+        if (ch->reap_lock) vSemaphoreDelete(ch->reap_lock);
         free(ch->base.name);
         free(ch->channel_id);
         free(ch->vault_path);
@@ -522,8 +545,10 @@ channel_handle_t makapix_channel_create(const char *channel_id,
     if (!ch->base.name || !ch->channel_id || !ch->vault_path || !ch->channels_path) {
         vSemaphoreDelete(ch->index_io_lock);
         vSemaphoreDelete(ch->refresh_parked_sem);
+        vSemaphoreDelete(ch->reap_lock);
         ch->index_io_lock = NULL;
         ch->refresh_parked_sem = NULL;
+        ch->reap_lock = NULL;
         free(ch->base.name);
         free(ch->channel_id);
         free(ch->vault_path);

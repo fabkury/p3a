@@ -383,18 +383,18 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
         return ESP_ERR_NO_MEM;
     }
 
-    // Trigger refresh via channel_load (which starts the refresh task if needed)
+    // Trigger refresh via channel_load (which calls request_refresh internally
+    // and starts the refresh task if needed).
+    //
+    // Do NOT call channel_request_refresh again as a fallback. channel_load
+    // returns ESP_OK even when its internal request_refresh failed (e.g. reap
+    // timeout) — in that window ch->refresh_task is NULL and ch->refreshing is
+    // false, so a second request_refresh would skip the reap, create a fresh
+    // task, and orphan it from any pending cancellation.
     esp_err_t err = channel_load(handle);
     if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
         ESP_LOGW(MAKAPIX_TAG, "Channel load/refresh failed: %s", esp_err_to_name(err));
         return err;
-    }
-
-    // Additionally, explicitly request refresh if the channel is already loaded but not yet refreshing.
-    // This ensures the refresh task queries for new data even if cache already exists.
-    // Skip if already refreshing (channel_load may have started it).
-    if (!makapix_channel_is_refreshing(handle)) {
-        channel_request_refresh(handle);
     }
 
     ESP_LOGD(MAKAPIX_TAG, "Refresh initiated for %s (background)", channel_name);

@@ -456,6 +456,8 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         // Reset refresh state
         ch->refresh_pending = true;  // Queue for background refresh
         ch->refresh_in_progress = false;
+        ch->refresh_async_pending = false;
+        ch->refresh_start_tick = 0;
 
         // Initialize artwork-specific state if this is an artwork channel
         if (spec->type == PS_CHANNEL_TYPE_ARTWORK) {

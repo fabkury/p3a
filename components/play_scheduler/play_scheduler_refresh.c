@@ -493,20 +493,6 @@ static void refresh_task(void *arg)
                 }
             }
 
-            // Timeout check: detect async refreshes that never signal completion
-            uint32_t async_timeout = refresh_async_timeout_ms();
-            for (size_t i = 0; i < state->channel_count; i++) {
-                ps_channel_state_t *tch = &state->channels[i];
-                if (tch->refresh_async_pending &&
-                    (xTaskGetTickCount() - tch->refresh_start_tick) > pdMS_TO_TICKS(async_timeout)) {
-                    ESP_LOGW(TAG, "Channel '%s' async refresh timed out after %lu ms",
-                             tch->display_name, (unsigned long)async_timeout);
-                    tch->refresh_async_pending = false;
-                    tch->refresh_in_progress = false;
-                    tch->refresh_pending = true;  // Re-queue for retry
-                }
-            }
-
             xSemaphoreGive(state->mutex);
 
             // Trigger playback once outside the loop and mutex
@@ -524,6 +510,27 @@ static void refresh_task(void *arg)
                     state->playback_triggered = true;
                 }
             }
+        }
+
+        // Async-refresh timeout sweep — runs every iteration, not gated on a
+        // signal arriving. If a refresh was cancelled or its slot was rebound
+        // by a playset switch, no completion signal will ever match it; only
+        // this elapsed-time check can rescue an orphaned refresh_async_pending.
+        {
+            uint32_t async_timeout = refresh_async_timeout_ms();
+            xSemaphoreTake(state->mutex, portMAX_DELAY);
+            for (size_t i = 0; i < state->channel_count; i++) {
+                ps_channel_state_t *tch = &state->channels[i];
+                if (tch->refresh_async_pending &&
+                    (xTaskGetTickCount() - tch->refresh_start_tick) > pdMS_TO_TICKS(async_timeout)) {
+                    ESP_LOGW(TAG, "Channel '%s' async refresh timed out after %lu ms",
+                             tch->display_name, (unsigned long)async_timeout);
+                    tch->refresh_async_pending = false;
+                    tch->refresh_in_progress = false;
+                    tch->refresh_pending = true;  // Re-queue for retry
+                }
+            }
+            xSemaphoreGive(state->mutex);
         }
 
         // Concurrency gate: limit simultaneous refreshes

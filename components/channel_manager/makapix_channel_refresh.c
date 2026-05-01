@@ -326,6 +326,12 @@ void refresh_task_impl(void *pvParameters)
         if (!ch->refreshing) {
             ESP_LOGW(TAG, "Refresh cancelled for channel '%s', not updating refresh timestamp",
                      ch->channel_id);
+            // Signal Play Scheduler so refresh_async_pending gets cleared.
+            // Without this, a cancelled refresh leaves an orphan entry in
+            // s_ps_pending_refreshes that never matches by channel_id once
+            // the playset switch has rebound the slot.
+            makapix_channel_signal_refresh_done();
+            makapix_ps_refresh_mark_complete(ch->channel_id);
             break;
         }
 

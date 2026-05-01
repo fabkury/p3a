@@ -127,7 +127,7 @@ If the device can't connect to a saved network, it starts a captive portal:
 
 Once connected, you can access the device at:
 - **mDNS**: `http://p3a.local/` (works on most networks)
-- **IP address**: Check your router's DHCP client list if mDNS doesn't work
+- **IP address**: Long-press on the screen to show info screen with the device's IP address
 
 ---
 

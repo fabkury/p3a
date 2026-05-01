@@ -382,7 +382,7 @@ The device automatically exits PICO-8 mode after 30 seconds of inactivity (no fr
 ### Device doesn't appear as `p3a.local`
 
 - mDNS doesn't work on all networks (especially corporate/guest networks)
-- Find the device's IP address from your router's DHCP client list
+- Find the device's IP address from your router's DHCP client list, or by long-pressing on the screen to show info screen
 - Access the device at `http://<IP-ADDRESS>/` instead
 
 ### Touch not responding

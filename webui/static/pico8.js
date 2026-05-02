@@ -64,6 +64,26 @@ let pingIntervalId = null;
 // DOM elements
 const canvas = document.getElementById('pico-canvas');
 const ctx = canvas.getContext('2d');
+
+// Splash: black canvas with centered PICO-8 logo at native size, mirroring the
+// device's idle screen (pico8_render_logo). CSS image-rendering: pixelated on
+// the canvas keeps the on-screen upscale crisp.
+const splashLogo = new Image();
+let splashLogoReady = false;
+splashLogo.onload = () => {
+    splashLogoReady = true;
+    if (!isRunning) drawSplashLogo();
+};
+splashLogo.src = '/static/pico8_logo_1x.png';
+
+function drawSplashLogo() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, PICO_WIDTH, PICO_HEIGHT);
+    if (!splashLogoReady) return;
+    const x = Math.floor((PICO_WIDTH - splashLogo.width) / 2);
+    const y = Math.floor((PICO_HEIGHT - splashLogo.height) / 2);
+    ctx.drawImage(splashLogo, x, y);
+}
 const fileInput = document.getElementById('file-input');
 const urlInput = document.getElementById('url-input');
 const loadUrlBtn = document.getElementById('load-url-btn');
@@ -628,6 +648,7 @@ function stopEmulation() {
         Module._free(audioPtr);
         audioPtr = 0;
     }
+    drawSplashLogo();
 }
 
 // ── Audio: Browser sink (Web Audio API) ──
@@ -846,6 +867,7 @@ urlInput.addEventListener('keypress', (e) => {
 
 // Initialize on page load
 window.addEventListener('load', () => {
+    drawSplashLogo();
     initWasm();
 });
 

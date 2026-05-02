@@ -722,6 +722,12 @@ esp_err_t http_api_start(void) {
     }
 #endif
 
+    // Suppress benign per-connection ECONNRESET warnings (errno 104) from
+    // esp_http_server. They fire whenever a client (browser tab, mDNS-aware
+    // app, monitoring tool) RSTs a keep-alive socket instead of closing
+    // cleanly, which is normal background noise on a LAN.
+    esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
+
     // Start HTTP server
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.stack_size = 8192;

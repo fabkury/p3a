@@ -26,7 +26,7 @@ The web flasher downloads firmware directly from GitHub and flashes it to your d
 
 A standalone Windows application for flashing — useful if you don't have Chrome/Edge or prefer an offline tool.
 
-1. Download `p3a-flasher.exe` from the [releases folder](https://github.com/fabkury/p3a/tree/main/release/)
+1. Download `p3a-flasher.exe` from the [latest GitHub Release](https://github.com/fabkury/p3a/releases/latest)
 2. Connect your p3a via USB-C
 3. Run `p3a-flasher.exe`
 4. Click **Flash Device**
@@ -72,7 +72,7 @@ pip3 install esptool
 ### Step 3: Connect the board
 
 1. Use a **USB-C data cable** (charging-only cables won't work)
-2. Connect to the **Full-Speed (FS) USB-C port** on your board
+2. Connect to the **UART (flashing/serial) USB-C port** on your board — labelled UART/Serial on the silkscreen, not the HS port used for USB storage
 3. Find your serial port:
    - **Windows:** Open Device Manager → Ports → Note the COM number (e.g., `COM5`)
    - **macOS:** Run `ls /dev/cu.usb*` in Terminal
@@ -126,12 +126,12 @@ The device will automatically reboot into p3a:
 
 After the initial flash, update wirelessly:
 1. Open `http://p3a.local/ota` in your browser
-2. Click "Check for updates"
-3. Click "Install" if an update is available
+2. Click "Check for Updates"
+3. Click "Install Update" if an update is available
 
 ### Adding artwork
 
-Copy WebP, GIF, PNG, or JPEG files to an `animations` folder on a microSD card, then insert it into your p3a.
+Copy WebP, GIF, PNG, or JPEG files to a `p3a/animations/` folder on a microSD card (i.e. create a `p3a` folder at the root of the card, and an `animations` folder inside it), then insert it into your p3a.
 
 See [HOW-TO-USE.md](HOW-TO-USE.md) for detailed instructions.
 
@@ -151,11 +151,10 @@ idf.py build
 
 The build automatically creates:
 - `release/v{VERSION}/` — Firmware files for distribution
-- `release/v{VERSION}/p3a-flasher.exe` — Windows flasher with embedded firmware (if built on Windows)
 
-To disable flasher building during development:
+On Windows, you can additionally build the standalone `p3a-flasher.exe` (with embedded firmware) by passing `-DP3A_BUILD_FLASHER=ON`:
 ```bash
-idf.py build -DP3A_BUILD_FLASHER=OFF
+idf.py build -DP3A_BUILD_FLASHER=ON
 ```
 
 Requires [ESP-IDF v5.5.x](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/).

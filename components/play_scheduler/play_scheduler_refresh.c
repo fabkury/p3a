@@ -574,20 +574,8 @@ static void refresh_task(void *arg)
         if (ch_idx < 0) {
             // No channels pending — check if periodic refresh is due
             bool any_in_progress = false;
-            bool giphy_cooldown_active = giphy_is_rate_limited();
             for (size_t i = 0; i < state->channel_count; i++) {
-                ps_channel_state_t *tch = &state->channels[i];
-                if (tch->refresh_async_pending || tch->refresh_in_progress) {
-                    any_in_progress = true;
-                    break;
-                }
-                // Giphy channels still pending behind the rate-limit cooldown
-                // are not "done" — they're deferred. Treat them as in-progress
-                // so the periodic-refresh branch doesn't fire its
-                // "all channels refreshed" side-effects (override auto-reset,
-                // misleading log) while we're still waiting on quota.
-                if (giphy_cooldown_active && tch->refresh_pending &&
-                    tch->type == PS_CHANNEL_TYPE_GIPHY) {
+                if (state->channels[i].refresh_async_pending || state->channels[i].refresh_in_progress) {
                     any_in_progress = true;
                     break;
                 }
@@ -597,8 +585,12 @@ static void refresh_task(void *arg)
                 time_t now = time(NULL);
                 if (s_last_full_refresh_complete == 0) {
                     s_last_full_refresh_complete = now;
-                    // Auto-reset refresh override now that the full cycle is complete
-                    if (config_store_get_refresh_allow_override()) {
+                    // Auto-reset refresh override only if Giphy isn't still
+                    // gated behind a rate-limit cooldown — we don't want to
+                    // discard the user's explicit "force refresh" intent for
+                    // channels that haven't actually been refreshed yet.
+                    if (!giphy_is_rate_limited() &&
+                        config_store_get_refresh_allow_override()) {
                         config_store_set_refresh_allow_override(false);
                     }
                     // Compute adaptive delay from freshness tracking
@@ -857,6 +849,13 @@ static void refresh_task(void *arg)
             makapix_channel_signal_refresh_done();
         } else {
             ch->refresh_in_progress = false;
+            // Giphy rate-limit: keep pending so the channel retries within
+            // ~2s of the cooldown clearing instead of waiting up to a full
+            // periodic cycle. ESP_ERR_INVALID_RESPONSE is only ever returned
+            // by Giphy paths for HTTP 429.
+            if (type == PS_CHANNEL_TYPE_GIPHY && err == ESP_ERR_INVALID_RESPONSE) {
+                ch->refresh_pending = true;
+            }
         }
 
         // Check if we should trigger playback after refresh

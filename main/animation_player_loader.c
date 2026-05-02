@@ -783,7 +783,8 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf,
     }
     if (!buf->native_frame_b1) {
         ESP_LOGE(TAG, "Failed to allocate native frame buffer B1 (%zu bytes)", buf->native_frame_size);
-        animation_decoder_unload(&buf->decoder);
+        // Decoder ownership stays with the caller's `loaded` — see map_err path below.
+        buf->decoder = NULL;
         return ESP_ERR_NO_MEM;
     }
 
@@ -796,7 +797,7 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf,
         ESP_LOGE(TAG, "Failed to allocate native frame buffer B2 (%zu bytes)", buf->native_frame_size);
         free(buf->native_frame_b1);
         buf->native_frame_b1 = NULL;
-        animation_decoder_unload(&buf->decoder);
+        buf->decoder = NULL;
         return ESP_ERR_NO_MEM;
     }
 

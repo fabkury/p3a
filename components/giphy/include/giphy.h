@@ -305,6 +305,32 @@ typedef enum {
  */
 giphy_refresh_status_t giphy_get_last_refresh_status(void);
 
+// ============================================================================
+// Rate-limit cooldown (process-wide)
+// ============================================================================
+
+/**
+ * @brief Mark the Giphy API as rate-limited for the next cooldown_sec seconds.
+ *
+ * A 429 response applies to the API key, not a single request, so any further
+ * Giphy API call within the quota window will also fail. While the cooldown
+ * is active, callers (refresh, register_click, etc.) should short-circuit
+ * before hitting the network. Pass 0 to use the default (1 hour).
+ *
+ * Repeated calls extend but do not shorten the cooldown.
+ */
+void giphy_set_rate_limited(uint32_t cooldown_sec);
+
+/**
+ * @brief True if the Giphy API is currently in rate-limit cooldown.
+ */
+bool giphy_is_rate_limited(void);
+
+/**
+ * @brief Seconds remaining until the rate-limit cooldown expires (0 if none).
+ */
+uint32_t giphy_cooldown_remaining_sec(void);
+
 #ifdef __cplusplus
 }
 #endif

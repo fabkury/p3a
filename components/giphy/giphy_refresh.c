@@ -317,6 +317,18 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
 
     char _dn[64];
     ps_get_display_name(channel_id, _dn, sizeof(_dn));
+
+    // Skip if a previous call hit HTTP 429 — the rate-limit applies to the API
+    // key globally, so any further request would just burn another error and
+    // overwrite UI state for no reason. The play_scheduler refresh task also
+    // gates here, but check again in case some other caller drove us in.
+    if (giphy_is_rate_limited()) {
+        ESP_LOGW(TAG, "Skipping '%s': Giphy rate-limited (%us remaining)",
+                 _dn, (unsigned)giphy_cooldown_remaining_sec());
+        s_last_refresh_status = GIPHY_REFRESH_FAILED;
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+
     ESP_LOGI(TAG, "Refreshing Giphy channel: %s", _dn);
 
     s_refresh_cancel = false;

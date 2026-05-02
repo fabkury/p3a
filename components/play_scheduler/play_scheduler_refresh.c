@@ -113,10 +113,12 @@ static int find_next_pending_refresh(ps_state_t *state)
 
         // Giphy channels need WiFi but not MQTT
         if (ch->type == PS_CHANNEL_TYPE_GIPHY) {
-            if (p3a_state_has_wifi()) {
-                return (int)i;
-            }
-            continue;  // Skip Giphy channels until WiFi is ready
+            if (!p3a_state_has_wifi()) continue;
+            // A 429 from Giphy applies to the API key, not one channel — while
+            // the cooldown is active, leave Giphy channels pending so they
+            // retry naturally once the quota window resets.
+            if (giphy_is_rate_limited()) continue;
+            return (int)i;
         }
 
         // Promoted named channel can refresh via HTTPS without MQTT
@@ -572,8 +574,20 @@ static void refresh_task(void *arg)
         if (ch_idx < 0) {
             // No channels pending — check if periodic refresh is due
             bool any_in_progress = false;
+            bool giphy_cooldown_active = giphy_is_rate_limited();
             for (size_t i = 0; i < state->channel_count; i++) {
-                if (state->channels[i].refresh_async_pending || state->channels[i].refresh_in_progress) {
+                ps_channel_state_t *tch = &state->channels[i];
+                if (tch->refresh_async_pending || tch->refresh_in_progress) {
+                    any_in_progress = true;
+                    break;
+                }
+                // Giphy channels still pending behind the rate-limit cooldown
+                // are not "done" — they're deferred. Treat them as in-progress
+                // so the periodic-refresh branch doesn't fire its
+                // "all channels refreshed" side-effects (override auto-reset,
+                // misleading log) while we're still waiting on quota.
+                if (giphy_cooldown_active && tch->refresh_pending &&
+                    tch->type == PS_CHANNEL_TYPE_GIPHY) {
                     any_in_progress = true;
                     break;
                 }

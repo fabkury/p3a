@@ -20,6 +20,40 @@
 
 static const char *TAG = "giphy_api";
 
+// ============================================================================
+// Process-wide rate-limit cooldown
+// ============================================================================
+// Beta keys get 100 requests/hour; once we see a 429 the whole API key is
+// useless until the bucket resets. We don't know where in the server's hourly
+// window we are, so default to 10 min and accept the chance of another 429
+// rather than block for a full hour after the bucket has already reset.
+#define GIPHY_DEFAULT_COOLDOWN_SEC 600
+
+static int64_t s_cooldown_until_us = 0;
+
+void giphy_set_rate_limited(uint32_t cooldown_sec)
+{
+    if (cooldown_sec == 0) cooldown_sec = GIPHY_DEFAULT_COOLDOWN_SEC;
+    int64_t until = esp_timer_get_time() + (int64_t)cooldown_sec * 1000000LL;
+    if (until > s_cooldown_until_us) {
+        s_cooldown_until_us = until;
+        ESP_LOGW(TAG, "Giphy rate-limit cooldown engaged: %lus",
+                 (unsigned long)cooldown_sec);
+    }
+}
+
+bool giphy_is_rate_limited(void)
+{
+    return esp_timer_get_time() < s_cooldown_until_us;
+}
+
+uint32_t giphy_cooldown_remaining_sec(void)
+{
+    int64_t now = esp_timer_get_time();
+    if (now >= s_cooldown_until_us) return 0;
+    return (uint32_t)((s_cooldown_until_us - now + 999999) / 1000000);
+}
+
 /**
  * @brief Parse a single GIF object from the Giphy API response
  *
@@ -205,6 +239,7 @@ esp_err_t giphy_fetch_random_id(const char *api_key, char *out_random_id, size_t
 
     if (status != 200) {
         ESP_LOGE(TAG, "random_id: API returned status %d", status);
+        if (status == 429) giphy_set_rate_limited(0);
         return ESP_FAIL;
     }
 
@@ -293,7 +328,10 @@ esp_err_t giphy_register_click(const char *api_key,
     if (status != 200) {
         ESP_LOGW(TAG, "register_click: lookup HTTP %d for %s", status, giphy_id);
         if (status == 401 || status == 403) return ESP_ERR_NOT_ALLOWED;
-        if (status == 429) return ESP_ERR_INVALID_RESPONSE;
+        if (status == 429) {
+            giphy_set_rate_limited(0);
+            return ESP_ERR_INVALID_RESPONSE;
+        }
         return ESP_FAIL;
     }
     if (total == 0) {
@@ -466,7 +504,10 @@ esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         if (status == 401 || status == 403) return ESP_ERR_NOT_ALLOWED;
-        if (status == 429) return ESP_ERR_INVALID_RESPONSE;
+        if (status == 429) {
+            giphy_set_rate_limited(0);
+            return ESP_ERR_INVALID_RESPONSE;
+        }
         return ESP_FAIL;
     }
 

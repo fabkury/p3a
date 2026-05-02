@@ -51,19 +51,6 @@ bool ota_manager_is_checking(void);
 static uint64_t s_last_corrupt_deletion_ms = 0;
 static const uint64_t CORRUPT_DELETION_COOLDOWN_MS = 300000ULL;  // 5 minutes
 
-// ============================================================================
-// Auto-retry safeguard
-// ============================================================================
-// Prevents infinite retry loops by only allowing auto-retry after a successful
-// swap. This ensures we don't get stuck retrying the same bad file repeatedly.
-// ============================================================================
-static bool s_last_swap_was_successful = false;
-
-void animation_loader_mark_swap_successful(void)
-{
-    s_last_swap_was_successful = true;
-}
-
 // Simplified discard: No auto-retry, no navigation.
 // Just clean up state and display error.
 static void discard_failed_swap_request(esp_err_t error)
@@ -253,9 +240,10 @@ void animation_loader_task(void *arg)
             if (s_back_buffer.prefetch_pending || s_back_buffer.prefetch_in_progress) {
                 ESP_LOGD(TAG, "Loader task: waiting for prefetch to complete...");
                 xSemaphoreGive(s_buffer_mutex);
-                // Wait for render task to signal prefetch completion (max 5 seconds)
-                if (xSemaphoreTake(s_prefetch_done_sem, pdMS_TO_TICKS(5000)) == pdFALSE) {
-                    ESP_LOGW(TAG, "Loader task: prefetch wait timed out after 5s");
+                // Wait for render task to signal prefetch completion (deadlock breaker;
+                // a single first-frame decode normally completes well under a second).
+                if (xSemaphoreTake(s_prefetch_done_sem, pdMS_TO_TICKS(15000)) == pdFALSE) {
+                    ESP_LOGW(TAG, "Loader task: prefetch wait timed out after 15s");
                 }
                 // Re-queue ourselves to check if prefetch is now done
                 if (s_loader_sem) {

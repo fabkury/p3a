@@ -456,10 +456,7 @@ skip_prefetch:
 
             // Notify play_scheduler that swap succeeded (resets dwell timer)
             play_scheduler_reset_timer();
-            
-            // Mark successful swap for auto-retry safeguard
-            animation_loader_mark_swap_successful();
-            
+
             // Notify playback controller that a local animation is playing
             // (used to decide whether to resume after exiting PICO-8 mode).
             playback_controller_notify_animation_active();

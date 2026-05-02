@@ -166,7 +166,6 @@ void unload_animation_buffer(animation_buffer_t *buf);
 esp_err_t prefetch_first_frame(animation_buffer_t *buf);
 void animation_loader_task(void *arg);
 void animation_loader_wait_for_idle(void);
-void animation_loader_mark_swap_successful(void);
 bool animation_loader_try_delete_corrupt_cached_file(const char *filepath, esp_err_t error, int32_t post_id);
 
 // Rebuild aspect-ratio/rotation-dependent upscale maps for an already-loaded buffer.

@@ -73,6 +73,26 @@ SemaphoreHandle_t g_buffer_free_sem = NULL;
 // Timing
 int64_t g_last_frame_present_us = 0;
 uint32_t g_target_frame_delay_ms = 0;
+// Wall-clock timestamp of the most recent on_refresh_done event, captured in ISR
+// context. Used by the render task to phase-lock submits to vsync edges and to
+// distinguish "fresh" vsync signals from cached ones in the binary semaphore.
+volatile int64_t g_last_vsync_us = 0;
+
+// Panel vsync period. The current panel is configured at 60 Hz
+// (ST7703_720_720_PANEL_60HZ_DPI_CONFIG, see managed_components/.../esp32_p4_wifi6_touch_lcd_4b.c)
+// so one refresh = 1e6 / 60 ≈ 16667 us. If the panel config changes, update this.
+#define VSYNC_PERIOD_US 16667
+
+// Virtual-playhead accumulator (see Frame timing block in display_render_task).
+// File-scope so it persists across iterations.
+static int64_t s_target_present_us = 0;
+
+// If wall clock drifts more than this from the virtual playhead in either
+// direction (ahead or behind), re-baseline rather than chasing. 250 ms was
+// picked as a balance: large enough to absorb a slow decode + SD-I/O burst
+// without resync chatter, small enough that a real stall doesn't visibly
+// fast-forward a long animation when we resume.
+#define FRAME_TIMING_RESYNC_US 250000
 
 // Screen rotation
 display_rotation_t g_screen_rotation = DISPLAY_ROTATION_0;
@@ -423,6 +443,11 @@ bool display_panel_refresh_done_cb(esp_lcd_panel_handle_t panel,
     (void)edata;
     BaseType_t higher_prio_task_woken = pdFALSE;
 
+    // Stamp the moment this vsync event fired. esp_timer_get_time() is documented
+    // ISR-safe. The render task uses this to detect whether a semaphore signal it
+    // just consumed is fresh (just now) or cached (fired earlier and queued).
+    g_last_vsync_us = esp_timer_get_time();
+
     // Triple buffering state tracking
     {
         // Free the buffer that was displaying
@@ -494,16 +519,11 @@ void display_render_task(void *arg)
 {
     (void)arg;
 
-    int64_t frame_processing_start_us = 0;
-
     while (true) {
         display_render_mode_t mode = g_display_mode_request;
         g_display_mode_active = mode;
 
         const bool ui_mode = (mode == DISPLAY_RENDER_MODE_UI);
-
-        // Capture start time as fallback for first frame timing
-        frame_processing_start_us = esp_timer_get_time();
 
         // ================================================================
         // 1. Acquire buffer
@@ -591,44 +611,168 @@ void display_render_task(void *arg)
         
 
         // ================================================================
-        // 4. Frame timing delay (if not max_speed_playback)
+        // 4. Frame timing — virtual playhead with fractional vsync alignment
         // ================================================================
+        //
+        // Semantics: prev_frame_delay_ms is the on-screen duration of the
+        // frame that the upcoming submit will replace (i.e. the frame that
+        // the previous callback decoded and that g_last_frame_present_us was
+        // recorded for).  We advance a virtual playhead by exactly that
+        // duration, then phase-lock the actual submit to the vsync nearest
+        // the playhead.  This gives correct AVERAGE frame rate even when
+        // source delays aren't multiples of the panel's vsync period (16.67 ms
+        // at 60 Hz), at the cost of some per-frame jitter on non-aligned
+        // content (e.g. 50 fps WebPs alternate 16.67 / 33.33 ms presentations
+        // to average 20 ms).
+        //
+        // The legacy implementation slept for `target_delay - elapsed`, then
+        // waited for one fresh vsync.  That ceiling-quantized every frame to
+        // a multiple of the vsync period and lost up to a full vsync per
+        // frame on top.  See git history (commit immediately preceding this
+        // one) for the slowdown table.
+        //
         if (!config_store_get_max_speed_playback()) {
             const int64_t now_us = esp_timer_get_time();
-            const int64_t target_delay_us = (int64_t)prev_frame_delay_ms * 1000;
 
-            // Use frame-to-frame interval for accurate timing
-            // If this is the first frame, fall back to processing time
-            int64_t elapsed_us;
-            if (g_last_frame_present_us > 0) {
-                // Most accurate: measure from when previous frame was submitted to DMA
-                elapsed_us = now_us - g_last_frame_present_us;
+            if (g_last_frame_present_us == 0) {
+                // First frame after init / mode change / long pause: baseline
+                // the playhead to "now" so we present immediately.
+                s_target_present_us = now_us;
             } else {
-                // First frame: use processing time as fallback
-                elapsed_us = now_us - frame_processing_start_us;
-            }
+                // Advance the virtual playhead by the previous frame's
+                // intended duration.  This is the only place we accumulate
+                // source-side timing, so long-term drift is zero.
+                s_target_present_us += (int64_t)prev_frame_delay_ms * 1000;
 
-            if (elapsed_us < target_delay_us) {
-                const int64_t residual_us = target_delay_us - elapsed_us;
-                if (residual_us > 2000) {
-                    vTaskDelay(pdMS_TO_TICKS((residual_us + 500) / 1000));
+                // Drift safeguard — POSITIVE direction only.
+                //
+                // Positive drift (now > target by more than the threshold)
+                // means wall clock ran ahead of the playhead: a stall (slow
+                // decode, SD-card burst, OS preemption) cost us so much time
+                // that the next frame's intended slot is already in the past.
+                // Without resync, the loop would submit several frames
+                // back-to-back to "catch up", which visibly fast-forwards the
+                // animation.  Resync forfeits the lost time and resumes from
+                // "now", which is the only sane recovery.
+                //
+                // NEGATIVE drift (target > now) is the NORMAL state for any
+                // frame whose intended duration exceeds one render-loop
+                // iteration: the sleep block immediately below will sleep
+                // until the playhead catches up.  We MUST NOT resync in that
+                // case — doing so would zero the residual, skip the sleep,
+                // and spin the loop at vsync rate, which is exactly the bug
+                // that the first build of this code exhibited (every
+                // iteration: target += 304 ms, drift ≈ -288 ms, resync,
+                // sleep=0, repeat → 60 fps regardless of source rate).
+                int64_t drift_us = now_us - s_target_present_us;
+                if (drift_us > FRAME_TIMING_RESYNC_US) {
+                    // Logging silenced: this fires routinely on slow decode/
+                    // upscale paths (e.g. large frames, SD-I/O bursts) and
+                    // would flood the monitor.  Re-enable for diagnostics.
+                    // ESP_LOGW(DISPLAY_TAG, "Frame timing fell %lld us behind; resync playhead",
+                    //          (long long)drift_us);
+                    s_target_present_us = now_us;
                 }
             }
+
+            // Sleep until just before the target presentation time, leaving
+            // a small slack (~1.5 ms) so the alignment loop below has a
+            // chance to phase-lock without busy-waiting.  The 3 ms threshold
+            // avoids submitting a 1-tick vTaskDelay (FreeRTOS tick = 1 ms
+            // per CONFIG_FREERTOS_HZ=1000) for trivial residuals where the
+            // alignment loop will block on the vsync sem anyway.
+            int64_t residual_us = s_target_present_us - esp_timer_get_time();
+            if (residual_us > 3000) {
+                int64_t sleep_us = residual_us - 1500;
+                vTaskDelay(pdMS_TO_TICKS((sleep_us + 500) / 1000));
+            }
         }
-        
+
 
         // ================================================================
-        // 5. Submit to DMA
+        // 5. Vsync alignment + submit
         // ================================================================
-        xSemaphoreTake(g_display_vsync_sem, 0);
-        xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
+        //
+        // HISTORICAL NOTE on the commented-out `xSemaphoreTake(..., 0)` below
+        // (the "drain stale vsync" line):
+        //
+        // That drain was added as a last-resort empirical fix for a pernicious
+        // screen-tearing problem.  With the drain in place, the subsequent
+        // `xSemaphoreTake(..., portMAX_DELAY)` always blocks until a FRESH
+        // on_refresh_done event fires, meaning the submit lands inside (or
+        // right at the start of) the panel's vertical-blanking window — the
+        // only moment when swapping the active framebuffer is guaranteed not
+        // to tear.  Empirically the drain fixed tearing even with
+        // max_speed_playback enabled.
+        //
+        // We disable the drain here so the new accumulator-based alignment
+        // (block 4) and the loop below can pick the vsync NEAREST to the
+        // virtual playhead, including consuming a cached vsync signal that
+        // fired during the sleep above.  Without the drain, the first take
+        // in the loop may return immediately on a cached signal; we then
+        // use g_last_vsync_us (captured in the ISR) to know how long ago the
+        // vsync actually fired and decide whether to submit now or wait one
+        // more vsync for tearing safety.
+        //
+        // RISK: this can re-introduce tearing in scenarios where the loop
+        // breaks on a cached signal whose vsync fired well into the previous
+        // refresh.  The `cached_too_late` check below tries to mitigate this
+        // by always preferring a fresh vsync when the cached one is more
+        // than a vblank window past.  If tearing is observed in production,
+        // the simplest revert is to uncomment the drain line.
+        //
+        // xSemaphoreTake(g_display_vsync_sem, 0);  // <-- drain (see HISTORICAL NOTE above)
+
+        if (config_store_get_max_speed_playback()) {
+            // Max-speed: consume one vsync per submit (no playhead, no sleep).
+            xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
+        } else {
+            // Phase-lock the submit to the vsync edge nearest the virtual
+            // playhead.  Loop semantics:
+            //   - Take a vsync signal (may be cached or fresh).
+            //   - Read g_last_vsync_us (ISR-stamped); the actual vsync edge
+            //     is at vsync_us, regardless of whether take() blocked.
+            //   - If vsync_us + half_period >= target, this vsync is the
+            //     closest edge to (or past) target → present here.
+            //   - Otherwise the vsync is more than half a period before
+            //     target → wait for the next one.
+            //
+            // The half-period rounding gives the fractional alignment that
+            // makes 50 fps content average 20 ms (alternating 16.67 / 33.33)
+            // rather than ceiling to 33.33 every frame.
+            //
+            // Tearing safety: if take() returned a cached signal whose
+            // vsync_us is more than ~half a vsync ago, "now" is well into
+            // the next refresh and submitting would tear.  In that case we
+            // skip the cached signal and wait for the next fresh vsync,
+            // even if the cached one would otherwise satisfy the alignment
+            // check.  This costs at most one extra vsync (the accumulator
+            // compensates next frame).
+            const int64_t cached_age_threshold_us = VSYNC_PERIOD_US / 2;
+            while (true) {
+                xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
+                const int64_t vsync_us = g_last_vsync_us;
+                const int64_t now_us = esp_timer_get_time();
+                const bool cached_too_late = (now_us - vsync_us) > cached_age_threshold_us;
+
+                if (vsync_us + (VSYNC_PERIOD_US / 2) >= s_target_present_us) {
+                    if (!cached_too_late) {
+                        break;  // present this vsync edge
+                    }
+                    // else: cached signal stale, refresh is already past;
+                    // wait one more vsync to land in the next vblank.
+                }
+                // else: vsync edge more than half a period before target;
+                // wait for the next one.
+            }
+        }
 
         // Now safe to submit - at most 1 buffer will be PENDING
         g_buffer_info[back_buffer_idx].state = BUFFER_STATE_PENDING;
         g_last_submitted_idx = back_buffer_idx;
 
         esp_lcd_panel_draw_bitmap(g_display_panel, 0, 0, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, back_buffer);
-        
+
         g_last_frame_present_us = esp_timer_get_time();
     }
 }

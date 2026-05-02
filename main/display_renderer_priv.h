@@ -124,6 +124,7 @@ extern SemaphoreHandle_t g_buffer_free_sem;
 // Timing
 extern int64_t g_last_frame_present_us;
 extern uint32_t g_target_frame_delay_ms;
+extern volatile int64_t g_last_vsync_us;
 
 // Screen rotation
 extern display_rotation_t g_screen_rotation;

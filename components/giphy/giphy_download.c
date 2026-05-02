@@ -237,7 +237,7 @@ esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t ext
     // Configure HTTP client
     esp_http_client_config_t config = {
         .url = url,
-        .timeout_ms = 30000,
+        .timeout_ms = 15000,
         .crt_bundle_attach = esp_crt_bundle_attach,
         .buffer_size = 4096,
     };

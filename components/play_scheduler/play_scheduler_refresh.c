@@ -79,6 +79,13 @@ static uint32_t s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
 static StackType_t *s_refresh_stack = NULL;
 static StaticTask_t s_refresh_task_buffer;
 
+// Channel IDs of refreshes that completed in the current iteration; reaped
+// outside the scheduler mutex (reap blocks ~20 ms for FreeRTOS idle to drain
+// the deleted task). Single-instance because only the ps_refresh task touches
+// this; sized to PS_MAX_CHANNELS so a full sweep can collect them all.
+static char s_completed_ids[PS_MAX_CHANNELS][64];
+static size_t s_completed_count = 0;
+
 /**
  * @brief Find next channel that needs refresh
  *
@@ -444,6 +451,7 @@ static void refresh_task(void *arg)
         // Check for async Makapix refresh completions (non-blocking poll)
         if (makapix_channel_wait_for_ps_refresh_done(0)) {
             bool should_trigger = false;
+            s_completed_count = 0;
             xSemaphoreTake(state->mutex, portMAX_DELAY);
             for (size_t i = 0; i < state->channel_count; i++) {
                 ps_channel_state_t *ch = &state->channels[i];
@@ -451,6 +459,15 @@ static void refresh_task(void *arg)
                     // This channel's async refresh completed
                     ch->refresh_async_pending = false;
                     ch->refresh_in_progress = false;
+
+                    // Queue this channel for eager reap after the mutex is
+                    // released. Without reaping, every channel that finishes
+                    // a refresh leaves a parked task behind holding ~12 KB of
+                    // stack and a TCB until the next refresh on that channel.
+                    if (s_completed_count < PS_MAX_CHANNELS) {
+                        strlcpy(s_completed_ids[s_completed_count++], ch->channel_id,
+                                sizeof(s_completed_ids[0]));
+                    }
 
                     // Keep in-memory state - don't reload from disk.
                     // The cache was populated during batch merges and already has the correct state.
@@ -494,6 +511,15 @@ static void refresh_task(void *arg)
             }
 
             xSemaphoreGive(state->mutex);
+
+            // Reap each completed channel's parked refresh task to release
+            // its TCB and 12 KB stack. Done outside the scheduler mutex
+            // because reap blocks tens of ms waiting for FreeRTOS idle to
+            // drain the deleted task's bookkeeping.
+            for (size_t i = 0; i < s_completed_count; i++) {
+                makapix_reap_finished_refresh(s_completed_ids[i]);
+            }
+            s_completed_count = 0;
 
             // Trigger playback once outside the loop and mutex
             if (should_trigger) {

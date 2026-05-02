@@ -297,3 +297,21 @@ bool makapix_ps_refresh_check_and_clear(const char *channel_id);
  */
 esp_err_t makapix_cancel_all_refreshes(void);
 
+/**
+ * @brief Reap a channel's parked refresh task to release its TCB and stack
+ *
+ * Looks up the tracked Makapix refresh handle for `channel_id` and, if its
+ * work loop has finished, deletes the parked task and frees the per-task
+ * static buffers. The handle itself stays in the tracking array — only the
+ * task and its memory are released.
+ *
+ * Intended to be called by the Play Scheduler refresh loop right after it
+ * observes that a channel's async refresh has completed. Without this,
+ * 64 channels accumulate 64 parked tasks holding ~25 KB internal RAM in
+ * TCBs, which is enough to push the SDMMC driver into ESP_ERR_NO_MEM.
+ *
+ * @param channel_id Channel ID to reap
+ * @return ESP_OK if reaped, no-op if not tracked or still refreshing
+ */
+esp_err_t makapix_reap_finished_refresh(const char *channel_id);
+

@@ -92,6 +92,43 @@ esp_err_t makapix_cancel_all_refreshes(void)
 }
 
 // ---------------------------------------------------------------------------
+// Eager reap of finished refresh tasks
+// ---------------------------------------------------------------------------
+
+esp_err_t makapix_reap_finished_refresh(const char *channel_id)
+{
+    if (!channel_id) return ESP_ERR_INVALID_ARG;
+
+    // Snapshot the matching handle under the mutex, then call reap outside
+    // the mutex (reap can block for tens of ms waiting for the task to
+    // self-suspend, and the lock protects array slots, not handle lifetime).
+    // The handle itself is not destroyed by reap — it stays in the tracked
+    // array and will be reused (or evicted) by the next refresh request.
+    channel_handle_t target = NULL;
+
+    if (s_refresh_handle_all &&
+        strcmp(makapix_channel_get_id(s_refresh_handle_all), channel_id) == 0) {
+        target = s_refresh_handle_all;
+    } else if (s_refresh_handle_promoted &&
+               strcmp(makapix_channel_get_id(s_refresh_handle_promoted), channel_id) == 0) {
+        target = s_refresh_handle_promoted;
+    } else {
+        xSemaphoreTake(tracked_mutex(), portMAX_DELAY);
+        for (size_t i = 0; i < s_tracked_refresh_count; i++) {
+            channel_handle_t h = s_tracked_refresh_handles[i];
+            if (h && strcmp(makapix_channel_get_id(h), channel_id) == 0) {
+                target = h;
+                break;
+            }
+        }
+        xSemaphoreGive(tracked_mutex());
+    }
+
+    if (!target) return ESP_OK;  // Not a tracked refresh — nothing to reap
+    return makapix_channel_reap_if_finished(target);
+}
+
+// ---------------------------------------------------------------------------
 // Play Scheduler refresh completion tracking
 // ---------------------------------------------------------------------------
 

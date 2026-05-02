@@ -118,6 +118,22 @@ bool makapix_channel_is_refreshing(channel_handle_t channel);
 esp_err_t makapix_channel_stop_refresh(channel_handle_t channel);
 
 /**
+ * @brief Reap a parked refresh task if its work has finished
+ *
+ * Unlike makapix_channel_stop_refresh(), this does NOT signal the global
+ * shutdown bit, so it's safe to call while other refresh tasks are running.
+ * It only reaps the task (deletes it and frees its TCB + stack) when the
+ * task's work loop has already exited (refreshing == false).
+ *
+ * Intended for ps_refresh to call after observing async completion, so
+ * parked tasks don't sit pinning ~12 KB stack each between refresh cycles.
+ *
+ * @param channel Channel handle
+ * @return ESP_OK if reaped or nothing to do; error from reap on failure
+ */
+esp_err_t makapix_channel_reap_if_finished(channel_handle_t channel);
+
+/**
  * @brief Count cached artworks for a channel
  *
  * This function first checks the in-memory cache registry (fast path).

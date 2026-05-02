@@ -207,8 +207,10 @@ void refresh_task_impl(void *pvParameters)
             query_req.cursor[copy_len] = '\0';
         }
         
-        // Allocate response on heap
-        makapix_query_response_t *resp = malloc(sizeof(makapix_query_response_t));
+        // Response buffer is ~25 KB. Prefer PSRAM so concurrent refreshes don't
+        // pin internal RAM that the SDMMC driver needs for its DMA bounce
+        // buffers; psram_malloc() falls back to internal if PSRAM is exhausted.
+        makapix_query_response_t *resp = psram_malloc(sizeof(makapix_query_response_t));
         if (!resp) {
             ESP_LOGE(TAG, "Failed to allocate response buffer");
             break;
@@ -384,6 +386,13 @@ void refresh_task_impl(void *pvParameters)
 
         // Signal that refresh has completed - this unblocks download manager
         makapix_channel_signal_refresh_done();
+
+        // Mark the work loop done BEFORE notifying Play Scheduler. The
+        // ps_refresh task observes mark_complete and may immediately try to
+        // reap us; if it sees ch->refreshing still true at that point,
+        // reap_refresh_task signals the global shutdown bit, which can abort
+        // other refresh tasks that are still in their MQTT-wait phase.
+        ch->refreshing = false;
 
         // Signal Play Scheduler that this channel's refresh is complete
         makapix_ps_refresh_mark_complete(ch->channel_id);

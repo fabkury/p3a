@@ -40,6 +40,60 @@ static const char *TAG = "makapix_channel";
 // heap-allocated response buffers.
 #define MAKAPIX_REFRESH_TASK_STACK_SIZE 12288
 
+// Release the per-channel static TCB and stack buffers used by the refresh
+// task. Caller must guarantee the task is no longer running on these buffers
+// (i.e. reap_refresh_task has fully completed, or no task was ever created).
+// Safe no-op when the fields are already NULL.
+static void free_refresh_buffers(makapix_channel_t *ch)
+{
+    if (!ch) return;
+    if (ch->refresh_stack_allocated && ch->refresh_stack) {
+        free(ch->refresh_stack);
+    }
+    ch->refresh_stack = NULL;
+    ch->refresh_stack_allocated = false;
+    if (ch->refresh_task_buffer) {
+        heap_caps_free(ch->refresh_task_buffer);
+        ch->refresh_task_buffer = NULL;
+    }
+}
+
+// Allocate the per-channel static TCB and stack on demand for the refresh
+// task. Pre-allocating these at channel-create time pinned ~390 B internal
+// (TCB) + ~12 KB stack per channel; with 64 makapix channels that pressure
+// alone could push the SDMMC driver into ESP_ERR_NO_MEM when it tries to
+// allocate its DMA bounce buffer mid-load.
+//
+// Returns true if both buffers are present and the static-task path is
+// usable; false if any allocation failed (caller should fall back to the
+// dynamic xTaskCreatePinnedToCore path).
+static bool alloc_refresh_buffers(makapix_channel_t *ch)
+{
+    if (!ch) return false;
+
+    if (!ch->refresh_task_buffer) {
+        // TCB must live in internal RAM (FreeRTOS requirement).
+        ch->refresh_task_buffer = heap_caps_malloc(sizeof(StaticTask_t),
+                                                    MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+    if (!ch->refresh_stack) {
+        // Stack prefers PSRAM; fall back to internal RAM if PSRAM is exhausted.
+        ch->refresh_stack = heap_caps_malloc(MAKAPIX_REFRESH_TASK_STACK_SIZE * sizeof(StackType_t),
+                                              MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!ch->refresh_stack) {
+            ch->refresh_stack = heap_caps_malloc(MAKAPIX_REFRESH_TASK_STACK_SIZE * sizeof(StackType_t),
+                                                  MALLOC_CAP_8BIT);
+        }
+    }
+    ch->refresh_stack_allocated = (ch->refresh_stack != NULL && ch->refresh_task_buffer != NULL);
+    if (!ch->refresh_stack_allocated) {
+        // Partial allocation — release whatever we did get so we don't leak it
+        // when the caller falls back to the dynamic path.
+        free_refresh_buffers(ch);
+    }
+    return ch->refresh_stack_allocated;
+}
+
 // Reap the refresh task and bring its static TCB/stack back to a safe-to-reuse
 // state. The refresh task signals its parked-sem and self-suspends; this helper
 // takes the sem, waits for the task to actually be in eSuspended, deletes it
@@ -111,6 +165,12 @@ static esp_err_t reap_refresh_task(makapix_channel_t *ch)
     // Yielding for several ticks gives the idle task on either core ample
     // opportunity to drain the termination list before we reuse the buffer.
     vTaskDelay(pdMS_TO_TICKS(20));
+
+    // The TCB is now fully unlinked; release its static backing memory so
+    // the next refresh on this handle starts from a clean slate. Skipping
+    // this would re-pin ~390 B internal (TCB) + ~12 KB stack per channel
+    // for as long as the handle exists, defeating the on-demand allocation.
+    free_refresh_buffers(ch);
 
     if (ch->reap_lock) xSemaphoreGive(ch->reap_lock);
     return ESP_OK;
@@ -286,9 +346,11 @@ static esp_err_t makapix_impl_request_refresh(channel_handle_t channel)
 
     ch->refreshing = true;
 
-    // Try static stack allocation first (fragmentation-resistant)
+    // Try static allocation first (fragmentation-resistant, PSRAM-backed
+    // stack). Buffers are allocated lazily so 64 channels don't all pin
+    // 12 KB stacks before they're needed.
     // Pin to Core 0 to avoid interfering with animation rendering on Core 1
-    if (ch->refresh_stack && ch->refresh_stack_allocated && ch->refresh_task_buffer) {
+    if (alloc_refresh_buffers(ch)) {
         ch->refresh_task = xTaskCreateStaticPinnedToCore(
             refresh_task_impl,
             "makapix_refresh",
@@ -304,6 +366,9 @@ static esp_err_t makapix_impl_request_refresh(channel_handle_t channel)
             return ESP_OK;
         }
         ESP_LOGW(TAG, "Static task creation failed, trying dynamic allocation");
+        // Static creation failed — release the buffers we just allocated
+        // so they don't sit pinned while the dynamic-fallback task runs.
+        free_refresh_buffers(ch);
     }
 
     // Fallback: try dynamic allocation with progressively smaller stacks
@@ -475,16 +540,9 @@ static void makapix_impl_destroy(channel_handle_t channel)
         ch->reap_lock = NULL;
     }
 
-    // Free pre-allocated refresh task resources
-    if (ch->refresh_stack_allocated && ch->refresh_stack) {
-        free(ch->refresh_stack);
-        ch->refresh_stack = NULL;
-        ch->refresh_stack_allocated = false;
-    }
-    if (ch->refresh_task_buffer) {
-        heap_caps_free(ch->refresh_task_buffer);
-        ch->refresh_task_buffer = NULL;
-    }
+    // Release any refresh task buffers still held (no-op if reap already
+    // freed them, or if no refresh ever ran on this handle).
+    free_refresh_buffers(ch);
 
     free(ch->channel_id);
     free(ch->vault_path);
@@ -557,25 +615,10 @@ channel_handle_t makapix_channel_create(const char *channel_id,
         return NULL;
     }
 
-    // Pre-allocate static task resources for refresh task (fragmentation mitigation)
-    // This is allocated once at channel creation to avoid heap fragmentation
-    // issues after long operation periods (42+ hours).
-    // TCB must be in internal RAM (FreeRTOS requirement), stack can be in SPIRAM.
-    ch->refresh_task_buffer = heap_caps_malloc(sizeof(StaticTask_t),
-                                                MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    ch->refresh_stack = heap_caps_malloc(MAKAPIX_REFRESH_TASK_STACK_SIZE * sizeof(StackType_t),
-                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!ch->refresh_stack) {
-        ch->refresh_stack = heap_caps_malloc(MAKAPIX_REFRESH_TASK_STACK_SIZE * sizeof(StackType_t),
-                                              MALLOC_CAP_8BIT);
-    }
-    ch->refresh_stack_allocated = (ch->refresh_stack != NULL && ch->refresh_task_buffer != NULL);
-    if (!ch->refresh_stack_allocated) {
-        ESP_LOGW(TAG, "Could not pre-allocate refresh task resources - will use dynamic allocation");
-        // Clean up partial allocation
-        if (ch->refresh_stack) { free(ch->refresh_stack); ch->refresh_stack = NULL; }
-        if (ch->refresh_task_buffer) { heap_caps_free(ch->refresh_task_buffer); ch->refresh_task_buffer = NULL; }
-    }
+    // Static task resources (TCB + stack) are allocated on demand at the
+    // first refresh, freed after the task is reaped. With 64 makapix channels
+    // active, pre-allocating these would pin ~25 KB internal RAM (TCBs) and
+    // ~768 KB PSRAM (stacks) before any refresh has even started.
 
     ESP_LOGD(TAG, "Created channel: %s (id=%s)", ch->base.name, ch->channel_id);
     return (channel_handle_t)ch;
@@ -617,6 +660,23 @@ esp_err_t makapix_channel_stop_refresh(channel_handle_t channel)
     }
 
     ESP_LOGI(TAG, "Stopping refresh for channel: %s", ch->base.name ? ch->base.name : "(unknown)");
+    return reap_refresh_task(ch);
+}
+
+esp_err_t makapix_channel_reap_if_finished(channel_handle_t channel)
+{
+    makapix_channel_t *ch = (makapix_channel_t *)channel;
+    if (!ch) return ESP_ERR_INVALID_ARG;
+
+    // Nothing to reap if no task was ever created on this handle.
+    if (!ch->refresh_task) return ESP_OK;
+
+    // Don't disturb a task that's still doing work — only reap when its
+    // work loop has set refreshing=false. reap_refresh_task itself would
+    // otherwise signal the global shutdown bit and disrupt other refresh
+    // tasks that are mid-startup.
+    if (ch->refreshing) return ESP_OK;
+
     return reap_refresh_task(ch);
 }
 

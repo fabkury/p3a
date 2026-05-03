@@ -33,6 +33,11 @@ static const char *TAG = "giphy_dl";
 // Chunk size for serialized download (matches makapix_artwork.c)
 #define DOWNLOAD_CHUNK_SIZE (32 * 1024)
 
+// Retry truncated downloads to ride out transient lwIP/TLS contention.
+// See docs/concurrent-tls-eagain-tabled.md for the failure mode.
+#define DOWNLOAD_MAX_ATTEMPTS 3
+static const uint32_t s_download_backoff_ms[DOWNLOAD_MAX_ATTEMPTS] = { 0, 1000, 3000 };
+
 // Extension strings
 static const char *s_ext_strings[] = { ".webp", ".gif", ".png", ".jpg" };
 
@@ -242,118 +247,155 @@ esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t ext
         .buffer_size = 4096,
     };
 
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (!client) {
-        free(chunk_buffer);
-        return ESP_ERR_NO_MEM;
-    }
-
-    err = esp_http_client_open(client, 0);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(err));
-        esp_http_client_cleanup(client);
-        free(chunk_buffer);
-        return err;
-    }
-
-    esp_http_client_fetch_headers(client);
-    int64_t content_length = esp_http_client_get_content_length(client);
-    int status = esp_http_client_get_status_code(client);
-
-    if (status == 404) {
-        ESP_LOGW(TAG, "Giphy 404: %s", giphy_id);
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-        free(chunk_buffer);
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    if (status != 200) {
-        ESP_LOGE(TAG, "HTTP status %d for %s", status, giphy_id);
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-        free(chunk_buffer);
-        return ESP_FAIL;
-    }
-
-    // Reject files larger than 16 MiB
-    if (content_length > P3A_MAX_ARTWORK_SIZE) {
-        ESP_LOGW(TAG, "Giphy file too large: %lld bytes, skipping: %s",
-                 content_length, giphy_id);
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-        free(chunk_buffer);
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    // Open temp file for writing
+    // Open temp file once; rewind+truncate between retries.
     FILE *f = fopen(temp_path, "wb");
     if (!f) {
         ESP_LOGE(TAG, "Failed to open temp file: %s", temp_path);
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
         free(chunk_buffer);
         return ESP_FAIL;
     }
 
-    // Serialized chunked download
+    bool success = false;
+    esp_err_t fatal_err = ESP_OK;
     size_t total_written = 0;
-    bool download_ok = true;
 
-    while (true) {
-        // Read chunk from network
-        int chunk_received = 0;
-        while (chunk_received < DOWNLOAD_CHUNK_SIZE) {
-            int read_len = esp_http_client_read(client,
-                                                 (char *)chunk_buffer + chunk_received,
-                                                 DOWNLOAD_CHUNK_SIZE - chunk_received);
-            if (read_len < 0) {
-                ESP_LOGE(TAG, "HTTP read error");
-                download_ok = false;
+    for (int attempt = 0; attempt < DOWNLOAD_MAX_ATTEMPTS && !success && fatal_err == ESP_OK; attempt++) {
+        if (attempt > 0) {
+            ESP_LOGW(TAG, "Retrying %s in %lums (attempt %d/%d)",
+                     giphy_id, (unsigned long)s_download_backoff_ms[attempt],
+                     attempt + 1, DOWNLOAD_MAX_ATTEMPTS);
+            vTaskDelay(pdMS_TO_TICKS(s_download_backoff_ms[attempt]));
+            rewind(f);
+            if (ftruncate(fileno(f), 0) != 0) {
+                ESP_LOGE(TAG, "Failed to truncate temp file for retry");
+                fatal_err = ESP_FAIL;
                 break;
             }
-            if (read_len == 0) break;  // End of data
-            chunk_received += read_len;
+            total_written = 0;
         }
 
-        if (!download_ok || chunk_received == 0) break;
+        esp_http_client_handle_t client = esp_http_client_init(&config);
+        if (!client) {
+            continue;
+        }
 
-        // Write chunk to SD card
-        size_t written = fwrite(chunk_buffer, 1, chunk_received, f);
-        if (written != (size_t)chunk_received) {
-            ESP_LOGE(TAG, "Write error: wrote %zu/%d bytes", written, chunk_received);
-            download_ok = false;
+        err = esp_http_client_open(client, 0);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(err));
+            esp_http_client_cleanup(client);
+            continue;
+        }
+
+        esp_http_client_fetch_headers(client);
+        int64_t content_length = esp_http_client_get_content_length(client);
+        int status = esp_http_client_get_status_code(client);
+
+        if (status == 404) {
+            ESP_LOGW(TAG, "Giphy 404: %s", giphy_id);
+            esp_http_client_close(client);
+            esp_http_client_cleanup(client);
+            fatal_err = ESP_ERR_NOT_FOUND;
             break;
         }
 
-        total_written += written;
+        if (status != 200) {
+            ESP_LOGE(TAG, "HTTP status %d for %s", status, giphy_id);
+            esp_http_client_close(client);
+            esp_http_client_cleanup(client);
+            continue;
+        }
 
-        if (total_written > P3A_MAX_ARTWORK_SIZE) {
+        if (content_length > P3A_MAX_ARTWORK_SIZE) {
+            ESP_LOGW(TAG, "Giphy file too large: %lld bytes, skipping: %s",
+                     content_length, giphy_id);
+            esp_http_client_close(client);
+            esp_http_client_cleanup(client);
+            fatal_err = ESP_ERR_INVALID_SIZE;
+            break;
+        }
+
+        bool read_ok = true;
+        bool write_err = false;
+        bool too_large = false;
+
+        while (true) {
+            int chunk_received = 0;
+            while (chunk_received < DOWNLOAD_CHUNK_SIZE) {
+                int read_len = esp_http_client_read(client,
+                                                     (char *)chunk_buffer + chunk_received,
+                                                     DOWNLOAD_CHUNK_SIZE - chunk_received);
+                if (read_len < 0) {
+                    ESP_LOGW(TAG, "HTTP read error for %s", giphy_id);
+                    read_ok = false;
+                    break;
+                }
+                if (read_len == 0) break;  // End of data
+                chunk_received += read_len;
+            }
+
+            if (!read_ok || chunk_received == 0) break;
+
+            size_t written = fwrite(chunk_buffer, 1, chunk_received, f);
+            if (written != (size_t)chunk_received) {
+                ESP_LOGE(TAG, "Write error: wrote %zu/%d bytes", written, chunk_received);
+                write_err = true;
+                break;
+            }
+
+            total_written += written;
+
+            if (total_written > P3A_MAX_ARTWORK_SIZE) {
+                too_large = true;
+                break;
+            }
+
+            if (progress_cb) {
+                progress_cb(total_written,
+                            (content_length > 0) ? (size_t)content_length : 0,
+                            progress_ctx);
+            }
+
+            if (chunk_received < DOWNLOAD_CHUNK_SIZE) break;  // Last chunk
+        }
+
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+
+        if (write_err) {
+            fatal_err = ESP_FAIL;
+            break;
+        }
+        if (too_large) {
             ESP_LOGW(TAG, "Giphy download exceeded 16 MiB, aborting: %s", giphy_id);
-            download_ok = false;
+            fatal_err = ESP_ERR_INVALID_SIZE;
             break;
         }
 
-        if (progress_cb) {
-            progress_cb(total_written,
-                        (content_length > 0) ? (size_t)content_length : 0,
-                        progress_ctx);
+        bool truncated = !read_ok ||
+                         total_written == 0 ||
+                         (content_length > 0 && total_written < (size_t)content_length);
+        if (truncated) {
+            ESP_LOGW(TAG, "Truncated download for %s: got %zu/%lld bytes",
+                     giphy_id, total_written, (long long)content_length);
+            continue;  // retry
         }
 
-        if (chunk_received < DOWNLOAD_CHUNK_SIZE) break;  // Last chunk
+        success = true;
     }
 
     fflush(f);
     fsync(fileno(f));
     fclose(f);
-
-    esp_http_client_close(client);
-    esp_http_client_cleanup(client);
     free(chunk_buffer);
 
-    if (!download_ok || total_written == 0) {
+    if (fatal_err != ESP_OK) {
         unlink(temp_path);
-        ESP_LOGE(TAG, "Download failed for %s", giphy_id);
+        return fatal_err;
+    }
+
+    if (!success) {
+        unlink(temp_path);
+        ESP_LOGE(TAG, "Download failed for %s after %d attempts", giphy_id, DOWNLOAD_MAX_ATTEMPTS);
         return ESP_FAIL;
     }
 

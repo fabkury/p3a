@@ -1,6 +1,6 @@
-# Concurrent TLS EAGAIN During Giphy Refresh — Decision Tabled
+# Concurrent TLS EAGAIN During Giphy Refresh
 
-Status: **decision deferred**. No code change planned for now. This note captures the diagnosis and the options considered so the work can be picked up later without re-investigating.
+Status: **Option 2 implemented** (2026-05-03). Truncated-read retry with backoff is now in `giphy_download.c` and `giphy_api.c::giphy_fetch_page`. Options 3 and 4 remain on the shelf — revisit if Option 2 retries turn out to be frequent in real usage.
 
 ## Symptom
 
@@ -67,9 +67,15 @@ Move the `download_manager_rescan()` call out of the per-page loop so it fires o
 
 **Rejected.** The pipelined trigger is intentional: it lets the first images appear before the full cache is built. Killing the overlap visibly hurts cold-start UX on large channels with no previously cached artwork — exactly the case where the user is most likely to be staring at the screen waiting.
 
-### Option 2 — Retry on truncated read
+### Option 2 — Retry on truncated read **(implemented 2026-05-03)**
 
 In `giphy_fetch_page` (and analogous call sites), compare bytes received against `esp_http_client_get_content_length()`. If short, free, back off briefly, refetch the page. Small backoff schedule (e.g. 1 s → 3 s → give up) so a still-contended retry doesn't tight-loop.
+
+**Implementation notes:**
+- `giphy_download.c` and `giphy_api.c::giphy_fetch_page` wrap the network section in a 3-attempt loop with backoff `{0, 1000, 3000}` ms.
+- Truncation detected when: `esp_http_client_read` returns `< 0`, `total == 0`, or `total < Content-Length`.
+- Fatal (no retry): 404 in download path; 401/403/429 in API path; oversized (>16 MiB); local file write/truncate error; response buffer overflow.
+- Coverage gap: `view_tracker` pingbacks, `register_click`, `fetch_random_id`, and the makapix HTTPS paths still lack retry. They were skipped because (a) view_tracker is one-shot best-effort, (b) the others fire infrequently and weren't in the observed failure window. Extend by following the same pattern if needed.
 
 **Pros**
 - Localized (~20 lines in `giphy_fetch_page`).
@@ -113,13 +119,15 @@ Shared semaphore around `esp_http_client_perform` (or equivalent) capped at 2 co
 
 ## Recommendation Going In
 
-If/when this is picked up: start with **Option 2**, add **Option 3** as a complementary rate-reducer so retries fire rarely. Escalate to **Option 4** only if Option 2 retries turn out to be frequent in real usage.
+If/when this is picked up: start with **Option 2** ✅ done, add **Option 3** as a complementary rate-reducer so retries fire rarely. Escalate to **Option 4** only if Option 2 retries turn out to be frequent in real usage.
 
-## Trigger to Revisit
+## Trigger to Revisit (escalate to Option 3 / Option 4)
 
-Reasons to take this off the shelf:
+Reasons to take Options 3 or 4 off the shelf:
+- Frequent "Retrying %s in ..." log lines from `giphy_dl` or `giphy_api` (means Option 2 is firing often, not just absorbing rare blips).
+- Download retries hitting the 3-attempt cap and giving up regularly.
 - Frequent "Connecting…" flashes reported by users.
-- Truncated-page warnings appearing on most refreshes (currently rare).
+- MQTT keepalive disconnects recurring during refresh bursts (Option 2 doesn't help MQTT).
 - Adding more channels, OTA-during-playback, or any new persistent HTTPS path that increases steady-state concurrency.
 
 ## Key Code References

@@ -13,10 +13,17 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "cJSON.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+
+// Retry truncated page fetches to ride out transient lwIP/TLS contention.
+// See docs/concurrent-tls-eagain-tabled.md for the failure mode.
+#define FETCH_PAGE_MAX_ATTEMPTS 3
+static const uint32_t s_fetch_backoff_ms[FETCH_PAGE_MAX_ATTEMPTS] = { 0, 1000, 3000 };
 
 static const char *TAG = "giphy_api";
 
@@ -476,69 +483,106 @@ esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
         .buffer_size = 4096,
     };
 
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (!client) {
-        ESP_LOGE(TAG, "Failed to init HTTP client");
-        return ESP_ERR_NO_MEM;
-    }
+    int total_read = 0;
+    bool success = false;
+    esp_err_t fatal_err = ESP_OK;
 
-    // Perform request
-    esp_err_t err = esp_http_client_open(client, 0);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(err));
-        esp_http_client_cleanup(client);
-        return err;
-    }
-
-    esp_http_client_fetch_headers(client);
-    int status = esp_http_client_get_status_code(client);
-
-    if (status != 200) {
-        ESP_LOGE(TAG, "Giphy API returned status %d", status);
-        char err_buf[256];
-        int err_read = esp_http_client_read(client, err_buf, sizeof(err_buf) - 1);
-        if (err_read > 0) {
-            err_buf[err_read] = '\0';
-            ESP_LOGW(TAG, "Error response body: %s", err_buf);
+    for (int attempt = 0; attempt < FETCH_PAGE_MAX_ATTEMPTS && !success && fatal_err == ESP_OK; attempt++) {
+        if (attempt > 0) {
+            ESP_LOGW(TAG, "Retrying Giphy page fetch in %lums (attempt %d/%d)",
+                     (unsigned long)s_fetch_backoff_ms[attempt],
+                     attempt + 1, FETCH_PAGE_MAX_ATTEMPTS);
+            vTaskDelay(pdMS_TO_TICKS(s_fetch_backoff_ms[attempt]));
+            total_read = 0;
         }
+
+        esp_http_client_handle_t client = esp_http_client_init(&config);
+        if (!client) {
+            ESP_LOGE(TAG, "Failed to init HTTP client");
+            continue;
+        }
+
+        esp_err_t err = esp_http_client_open(client, 0);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(err));
+            esp_http_client_cleanup(client);
+            continue;
+        }
+
+        esp_http_client_fetch_headers(client);
+        int64_t content_length = esp_http_client_get_content_length(client);
+        int status = esp_http_client_get_status_code(client);
+
+        if (status != 200) {
+            ESP_LOGE(TAG, "Giphy API returned status %d", status);
+            char err_buf[256];
+            int err_read = esp_http_client_read(client, err_buf, sizeof(err_buf) - 1);
+            if (err_read > 0) {
+                err_buf[err_read] = '\0';
+                ESP_LOGW(TAG, "Error response body: %s", err_buf);
+            }
+            esp_http_client_close(client);
+            esp_http_client_cleanup(client);
+            if (status == 401 || status == 403) {
+                fatal_err = ESP_ERR_NOT_ALLOWED;
+            } else if (status == 429) {
+                giphy_set_rate_limited(0);
+                fatal_err = ESP_ERR_INVALID_RESPONSE;
+            }
+            // Other non-200 statuses: retry
+            continue;
+        }
+
+        // Read response body
+        bool read_err = false;
+        while (total_read < (int)ctx->response_buf_size - 1) {
+            int read_len = esp_http_client_read(client, ctx->response_buf + total_read,
+                                                ctx->response_buf_size - 1 - total_read);
+            if (read_len < 0) {
+                ESP_LOGW(TAG, "Giphy API read error after %d bytes", total_read);
+                read_err = true;
+                break;
+            }
+            if (read_len == 0) break;
+            total_read += read_len;
+        }
+
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
-        if (status == 401 || status == 403) return ESP_ERR_NOT_ALLOWED;
-        if (status == 429) {
-            giphy_set_rate_limited(0);
-            return ESP_ERR_INVALID_RESPONSE;
+
+        if (total_read >= (int)ctx->response_buf_size - 1) {
+            ESP_LOGE(TAG, "Response truncated at %d bytes (buffer full)", total_read);
+            fatal_err = ESP_FAIL;
+            break;
         }
-        return ESP_FAIL;
+
+        bool truncated = read_err ||
+                         total_read == 0 ||
+                         (content_length > 0 && total_read < (int)content_length);
+        if (truncated) {
+            ESP_LOGW(TAG, "Truncated Giphy response: got %d/%lld bytes",
+                     total_read, (long long)content_length);
+            continue;  // retry
+        }
+
+        success = true;
     }
 
-    // Read response body
-    int total_read = 0;
-    int read_len;
-    while (total_read < (int)ctx->response_buf_size - 1) {
-        read_len = esp_http_client_read(client, ctx->response_buf + total_read,
-                                        ctx->response_buf_size - 1 - total_read);
-        if (read_len <= 0) break;
-        total_read += read_len;
-    }
     ctx->response_buf[total_read] = '\0';
 
-    esp_http_client_close(client);
-    esp_http_client_cleanup(client);
+    if (fatal_err != ESP_OK) {
+        return fatal_err;
+    }
+
+    if (!success) {
+        ESP_LOGE(TAG, "Giphy page fetch failed after %d attempts", FETCH_PAGE_MAX_ATTEMPTS);
+        return ESP_FAIL;
+    }
 
     ESP_LOGI(TAG, "Received %d bytes from Giphy API", total_read);
 
     if (total_read > 0 && total_read < 150) {
         ESP_LOGW(TAG, "Small response (%d bytes), full body: %s", total_read, ctx->response_buf);
-    }
-
-    if (total_read == 0) {
-        ESP_LOGE(TAG, "Empty response from Giphy API");
-        return ESP_FAIL;
-    }
-
-    if (total_read >= (int)ctx->response_buf_size - 1) {
-        ESP_LOGE(TAG, "Response truncated at %d bytes (buffer full)", total_read);
-        return ESP_FAIL;
     }
 
     // Parse JSON

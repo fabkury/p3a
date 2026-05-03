@@ -14,7 +14,7 @@
 #include <stddef.h>
 
 /// Maximum items per Giphy API call.
-#define GIPHY_PAGE_LIMIT 48
+#define GIPHY_PAGE_LIMIT 50
 
 #ifdef __cplusplus
 extern "C" {

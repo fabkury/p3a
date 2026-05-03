@@ -578,6 +578,17 @@ body.has-bottom-nav {
     border-color: transparent;
     box-shadow: var(--c-card-shadow);
 }
+.pill-item.pending {
+    background: rgba(255,255,255,0.55);
+    color: var(--c-primary);
+    border-color: rgba(255,255,255,0.4);
+    animation: pill-pending-pulse 1.1s ease-in-out infinite;
+    cursor: progress;
+}
+@keyframes pill-pending-pulse {
+    0%, 100% { opacity: 0.65; }
+    50% { opacity: 1; }
+}
 .pill-item:disabled {
     opacity: 0.4;
     cursor: not-allowed;

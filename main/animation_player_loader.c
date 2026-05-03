@@ -513,35 +513,13 @@ esp_err_t find_animations_directory(const char *root_path, char **found_dir_out)
     return ESP_ERR_NOT_FOUND;
 }
 
-esp_err_t enumerate_animation_files(const char *dir_path)
-{
-    esp_err_t err = sdcard_channel_refresh(dir_path);
-    if (err == ESP_OK) {
-        play_scheduler_refresh_sdcard_cache();
-    }
-    return err;
-}
-
 esp_err_t refresh_animation_file_list(void)
 {
     if (!s_sd_mounted) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    char animations_dir[128];
-    esp_err_t path_err = sd_path_get_animations(animations_dir, sizeof(animations_dir));
-    if (path_err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to get animations directory path");
-        return path_err;
-    }
-
-    esp_err_t enum_err = sdcard_channel_refresh(animations_dir);
-
-    if (enum_err == ESP_OK) {
-        play_scheduler_refresh_sdcard_cache();
-    }
-
-    return enum_err;
+    return play_scheduler_refresh_sdcard_cache();
 }
 
 void unload_animation_buffer(animation_buffer_t *buf)

@@ -175,7 +175,6 @@ esp_err_t animation_loader_rebuild_upscale_maps(animation_buffer_t *buf, display
 // Directory enumeration
 bool directory_has_animation_files(const char *dir_path);
 esp_err_t find_animations_directory(const char *root_path, char **found_dir_out);
-esp_err_t enumerate_animation_files(const char *dir_path);
 void free_sd_file_list(void);
 esp_err_t refresh_animation_file_list(void);
 size_t get_next_asset_index(size_t current_index);

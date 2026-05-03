@@ -8,6 +8,7 @@
 
 #include "makapix_channel_events.h"
 #include "esp_log.h"
+#include "event_bus.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "play_scheduler.h"
@@ -280,6 +281,11 @@ void makapix_channel_signal_sd_available(void)
     ESP_LOGD(TAG, "Signaling SD card available - waking download tasks");
     xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_UNAVAILABLE);
     xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_AVAILABLE);
+
+    // Wake the channel-cache flush path: any cache that became dirty while SD
+    // was exported skipped its save with ESP_ERR_INVALID_STATE and is still
+    // marked dirty. This event makes channel_cache_flush_all() retry now.
+    event_bus_emit_simple(P3A_EVENT_CACHE_FLUSH);
 }
 
 void makapix_channel_signal_sd_unavailable(void)

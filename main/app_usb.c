@@ -19,6 +19,7 @@
 #include "esp_vfs_fat.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "sdkconfig.h"
@@ -48,6 +49,13 @@ static size_t s_sector_buffer_size = 0;
 static uint16_t s_block_size = 512;
 static uint32_t s_block_count = 0;
 static bool s_usb_active = false;
+
+// USB enumeration can briefly bounce on physical cable removal: the bus reaches
+// CONFIGURED for a few hundred ms before the disconnect is finalized. Suppress
+// any tud_mount_cb that fires within this window after an unmount/suspend so
+// playback isn't paused twice and the LCD doesn't flash to UI mode and back.
+#define USB_MSC_REMOUNT_DEBOUNCE_US (1500 * 1000)
+static int64_t s_last_unmount_us = 0;
 
 static esp_err_t update_card_capacity(void);
 static int32_t msc_handle_transfer(bool write, uint32_t lba, uint32_t offset, uint8_t *buffer, uint32_t bufsize);
@@ -253,6 +261,15 @@ static int32_t msc_handle_transfer(bool write, uint32_t lba, uint32_t offset, ui
 
 void tud_mount_cb(void)
 {
+    int64_t now_us = esp_timer_get_time();
+    if (s_last_unmount_us != 0 &&
+        (now_us - s_last_unmount_us) < USB_MSC_REMOUNT_DEBOUNCE_US) {
+        ESP_LOGI(TAG, "Ignoring USB mount: bounce %lld ms after unmount",
+                 (long long)((now_us - s_last_unmount_us) / 1000));
+        return;
+    }
+    s_last_unmount_us = 0;
+
     ESP_LOGI(TAG, "USB host mounted");
     esp_err_t err = animation_player_begin_sd_export();
     if (err != ESP_OK) {
@@ -275,6 +292,7 @@ void tud_mount_cb(void)
 
 void tud_umount_cb(void)
 {
+    s_last_unmount_us = esp_timer_get_time();
     ESP_LOGI(TAG, "USB host disconnected");
     s_usb_active = false;
     ugfx_ui_hide_usb_msc();
@@ -288,6 +306,7 @@ void tud_umount_cb(void)
 void tud_suspend_cb(bool remote_wakeup_en)
 {
     (void)remote_wakeup_en;
+    s_last_unmount_us = esp_timer_get_time();
     s_usb_active = false;
     ugfx_ui_hide_usb_msc();
     app_lcd_exit_ui_mode();

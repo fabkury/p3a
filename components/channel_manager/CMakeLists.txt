@@ -1,6 +1,5 @@
 idf_component_register(
-    SRCS "sdcard_channel.c"
-         "sdcard_channel_impl.c"
+    SRCS "sdcard_channel_impl.c"
          "makapix_channel_impl.c"
          "makapix_channel_utils.c"
          "makapix_channel_refresh.c"

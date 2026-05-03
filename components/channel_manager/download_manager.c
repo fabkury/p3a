@@ -708,13 +708,15 @@ static void download_task(void *arg)
                     ESP_LOGD(TAG, "play_scheduler_next after download returned: %s", esp_err_to_name(swap_err));
                 }
             }
+        } else if (err == ESP_ERR_INVALID_STATE) {
+            // Transient: the downloader aborted mid-stream because SD got
+            // exported to USB MSC. No 404 marker, no eviction, no .tmp left
+            // behind (downloader cleaned up). Next loop iteration will block
+            // in wait_for_sd until the host releases the card and then retry.
+            ESP_LOGI(TAG, "Download deferred (SD exported to USB): %s", s_dl_req.storage_key);
+            makapix_channel_signal_downloads_needed();
         } else {
             // Record failure with error classification for backoff
-            int http_status = 0;
-            if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_SIZE) {
-                http_status = 404;
-            }
-
             if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_SIZE) {
                 // Keep .404 marker for fast stat() checks
                 snprintf(s_task_marker_path, sizeof(s_task_marker_path), "%s.404", s_dl_req.filepath);

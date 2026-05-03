@@ -10,6 +10,7 @@
 #include "p3a_limits.h"
 #include "sd_path.h"
 #include "sdio_bus.h"
+#include "makapix_channel_events.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_crt_bundle.h"
@@ -315,7 +316,8 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
     // MAIN DOWNLOAD LOOP: Read chunk → Write chunk (serialized)
     // =========================================================================
     bool download_error = false;
-    
+    bool sd_aborted = false;
+
     while (1) {
         // ---------------------------------------------------------------------
         // PHASE A: Read up to 1MB from WiFi into RAM (only WiFi/SDIO active)
@@ -351,7 +353,13 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
         if (chunk_received == 0) {
             break;
         }
-        
+
+        if (!makapix_channel_is_sd_available()) {
+            ESP_LOGI(TAG, "Aborting download of %s: SD card exported to USB host", storage_key);
+            sd_aborted = true;
+            break;
+        }
+
         // ---------------------------------------------------------------------
         // PHASE B: Write chunk to SD card (only SD/SDMMC active)
         // ---------------------------------------------------------------------
@@ -389,6 +397,12 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
     esp_http_client_cleanup(client);
     free(chunk_buffer);
     chunk_buffer = NULL;
+
+    if (sd_aborted) {
+        fclose(fp);
+        unlink(temp_path);
+        return ESP_ERR_INVALID_STATE;
+    }
 
     // Handle download errors
     if (download_error) {

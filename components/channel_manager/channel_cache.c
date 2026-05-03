@@ -11,6 +11,7 @@
 #include "freertos/task.h"
 #include "config_store.h"
 #include "event_bus.h"
+#include "makapix_channel_events.h"
 #include "makapix_channel_internal.h"
 #include "makapix_channel_utils.h"
 #include "playlist_manager.h"
@@ -435,6 +436,16 @@ esp_err_t channel_cache_save(const channel_cache_t *cache, const char *channels_
 {
     if (!cache || !channels_path) {
         return ESP_ERR_INVALID_ARG;
+    }
+
+    // Skip while SD is exported over USB MSC: writing now would race with the
+    // host's reads on the SDMMC bus. Caller leaves cache->dirty set, and
+    // makapix_channel_signal_sd_available() emits P3A_EVENT_CACHE_FLUSH so the
+    // save retries the moment the host releases the card.
+    if (!makapix_channel_is_sd_available()) {
+        ESP_LOGD(TAG, "Skipping save of '%s': SD card exported to USB host",
+                 cache->channel_id);
+        return ESP_ERR_INVALID_STATE;
     }
 
     // Ensure channels directory exists

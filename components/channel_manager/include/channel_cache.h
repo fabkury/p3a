@@ -68,7 +68,7 @@ typedef struct {
  *   - Enables O(1) random picks without filesystem I/O
  * - **Atomic persistence**: Write to .tmp file, compute CRC32, rename
  * - **Legacy migration**: Detect old format (version < 20), rebuild LAi
- * - **15-second debounce (180s max delay)**: Dirty caches saved after 15s of inactivity
+ * - **30-second debounce (240s max delay)**: Dirty caches saved after 30s of inactivity
  *
  * File format v20 (binary, little-endian):
  *   [header: 44 bytes]
@@ -88,10 +88,10 @@ typedef struct {
 // so repeated calls are fast (single integer return after first load).
 #define CHANNEL_CACHE_MAX_ENTRIES channel_cache_get_max_entries()
 
-// Debounce interval for dirty cache persistence (15 seconds)
-#define CHANNEL_CACHE_SAVE_DEBOUNCE_MS 15000
-// Hard ceiling: flush even under continuous writes (180 seconds)
-#define CHANNEL_CACHE_SAVE_MAX_DELAY_MS 180000
+// Debounce interval for dirty cache persistence (30 seconds)
+#define CHANNEL_CACHE_SAVE_DEBOUNCE_MS 30000
+// Hard ceiling: flush even under continuous writes (240 seconds)
+#define CHANNEL_CACHE_SAVE_MAX_DELAY_MS 240000
 
 /**
  * @brief Get the configured maximum entries per channel
@@ -300,8 +300,8 @@ const makapix_channel_entry_t *ci_get_entry(const channel_cache_t *cache, uint32
 /**
  * @brief Schedule a cache save with debouncing
  *
- * Marks the cache as dirty and resets the 15-second debounce timer.
- * If 180 seconds have elapsed since the first dirty mark, flushes immediately.
+ * Marks the cache as dirty and resets the 30-second debounce timer.
+ * If 240 seconds have elapsed since the first dirty mark, flushes immediately.
  * When the timer fires, all dirty caches are saved.
  *
  * @param cache Cache to mark dirty

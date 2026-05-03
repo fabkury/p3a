@@ -1122,7 +1122,10 @@ function escHtml(s) {
 function createChannelRow(ch) {
     var row = document.createElement('div');
     row.className = 'ps-ch-row';
-    var blocked = giphyCooldownActive && ch.type === 'giphy';
+    // Only Giphy channels still pending under the cooldown count as blocked.
+    // Channels that already completed their refresh have refreshing=false and
+    // shouldn't display the cooldown styling even while the API key is throttled.
+    var blocked = giphyCooldownActive && ch.type === 'giphy' && ch.refreshing;
     if (blocked) row.classList.add('cooldown');
     else if (ch.refreshing) row.classList.add('refreshing');
     var s = '<span class="ps-badge ps-badge-type">' + typeBadgeLetter(ch.type) + '</span>';
@@ -1135,7 +1138,7 @@ function createChannelRow(ch) {
     return row;
 }
 function updateChannelRow(row, ch) {
-    var blocked = giphyCooldownActive && ch.type === 'giphy';
+    var blocked = giphyCooldownActive && ch.type === 'giphy' && ch.refreshing;
     if (blocked) {
         row.classList.add('cooldown');
         row.classList.remove('refreshing');
@@ -1227,9 +1230,16 @@ function pollActivePlayset(attempt) {
                 var cdSec = (resp.data.giphy_cooldown_remaining_sec | 0);
                 giphyCooldownActive = cdSec > 0;
                 var cdBanner = document.getElementById('giphy-cooldown-banner');
-                var hasGiphy = !!(resp.data.playset_info && resp.data.playset_info.channels &&
-                    resp.data.playset_info.channels.some(function(c){ return c.type === 'giphy'; }));
-                cdBanner.style.display = (giphyCooldownActive && hasGiphy) ? 'block' : 'none';
+                // Show the banner only when at least one Giphy channel is
+                // actually waiting on the cooldown — i.e., still queued for
+                // refresh. If every Giphy channel already finished, the
+                // throttle isn't blocking anything visible, so the banner
+                // would just be noise.
+                var giphyWaiting = !!(resp.data.playset_info && resp.data.playset_info.channels &&
+                    resp.data.playset_info.channels.some(function(c){
+                        return c.type === 'giphy' && c.refreshing;
+                    }));
+                cdBanner.style.display = (giphyCooldownActive && giphyWaiting) ? 'block' : 'none';
                 if (resp.data.name && resp.data.playset_info) {
                     updateNowPlaying(resp.data.name, resp.data.playset_info);
                     updatePillBarActive(resp.data.name);

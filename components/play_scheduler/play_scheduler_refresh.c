@@ -90,9 +90,12 @@ static size_t s_completed_count = 0;
  * @brief Decide whether a channel is eligible to refresh right now
  *
  * Applies all type-specific gates: Wi-Fi for Giphy (plus 429 cooldown), MQTT
- * for non-promoted Makapix channels, etc. Side effect: when Makapix is
+ * for non-promoted Makapix channels, etc. Side effects: when Makapix is
  * permanently unavailable, clears refresh_pending so the channel doesn't sit
- * "refreshing" forever in the UI.
+ * "refreshing" forever in the UI; when the channel is still within its
+ * freshness interval, also clears refresh_pending so it falls out of the
+ * queue without ever showing as "refreshing" or being briefly picked just
+ * to be no-op'd by the dispatcher's freshness gate.
  *
  * @return true if the channel should be considered by the picker
  */
@@ -100,6 +103,46 @@ static bool refresh_channel_is_eligible(ps_channel_state_t *ch, bool mqtt_ready)
 {
     if (!ch->refresh_pending || ch->refresh_in_progress) {
         return false;
+    }
+
+    // Pre-empt the per-dispatcher freshness gate. Without this, every channel
+    // queued at playset load (or by the periodic re-cycle) sits at
+    // refreshing=true until the picker rotates through and the dispatcher's
+    // gate skips it as "still fresh". While the Giphy 429 cooldown is active
+    // those channels can't even be picked, so they'd appear queued
+    // indefinitely despite having no real work to do.
+    //
+    // Mirrors the per-type gates in the dispatcher (Giphy: ~line 730,
+    // Makapix: ~line 825). Those gates remain as defense-in-depth — they
+    // read the on-disk sidecar, which is the canonical source and may
+    // legitimately disagree with the in-memory mirror after a partial Giphy
+    // refresh (in-memory bumped, disk save skipped on incomplete fetch).
+    // SDCARD/ARTWORK have no dispatcher-side freshness gate, so we don't
+    // apply one here either — their refreshes are local and cheap.
+    if (sntp_sync_is_synchronized() &&
+        ch->last_refresh > 0 &&
+        !config_store_get_refresh_allow_override()) {
+        uint32_t interval = 0;
+        if (ch->type == PS_CHANNEL_TYPE_GIPHY) {
+            interval = config_store_get_giphy_refresh_interval();
+        } else if (ch->type == PS_CHANNEL_TYPE_NAMED ||
+                   ch->type == PS_CHANNEL_TYPE_USER ||
+                   ch->type == PS_CHANNEL_TYPE_HASHTAG ||
+                   ch->type == PS_CHANNEL_TYPE_REACTIONS) {
+            interval = config_store_get_refresh_interval_sec();
+        }
+        bool cache_has_entries = (ch->cache != NULL && ch->cache->entry_count > 0);
+        if (interval > 0 && cache_has_entries) {
+            time_t now = time(NULL);
+            if (now > 0 && (now - ch->last_refresh) < (time_t)interval) {
+                ch->refresh_pending = false;
+                ESP_LOGI(TAG, "Channel '%s' still fresh (last refresh %lds ago, interval %lus), dropped from queue",
+                         ch->display_name,
+                         (long)(now - ch->last_refresh),
+                         (unsigned long)interval);
+                return false;
+            }
+        }
     }
 
     // Artwork channels don't need MQTT — they download directly

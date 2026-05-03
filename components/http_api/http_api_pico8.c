@@ -187,6 +187,9 @@ esp_err_t h_ws_pico_stream(httpd_req_t *req) {
         // Use synchronous send (safe within handler context; async would risk
         // the stack-local pong_data being freed before the queued send executes)
         httpd_ws_send_frame(req, &pong_frame);
+        // Treat the ping as a liveness signal so an open /pico8 page keeps
+        // PICO-8 mode alive even when no cart is running (no frame packets).
+        pico8_stream_reset_timeout();
         if (payload_allocated) {
             free(payload_buf);
         }

@@ -243,6 +243,14 @@ bool pico8_stream_is_active(void)
     return s_pico8_mode_active;
 }
 
+void pico8_stream_reset_timeout(void)
+{
+    if (s_pico8_mode_active && s_timeout_timer) {
+        esp_timer_stop(s_timeout_timer);
+        esp_timer_start_once(s_timeout_timer, PICO8_MODE_TIMEOUT_MS * 1000);
+    }
+}
+
 bool pico8_stream_check_and_clear_timeout_exit(void)
 {
     if (s_timeout_exit_pending) {

@@ -70,6 +70,15 @@ void pico8_stream_exit_mode(void);
 bool pico8_stream_is_active(void);
 
 /**
+ * @brief Reset the inactivity timeout
+ *
+ * Restarts the timeout countdown without requiring a video frame.  Used by the
+ * WebSocket ping path so an open /pico8 page (which pings even when no cart is
+ * running) keeps PICO-8 mode alive.  No-op when mode is not active.
+ */
+void pico8_stream_reset_timeout(void);
+
+/**
  * @brief Check and clear the deferred timeout exit flag
  *
  * The PICO-8 timeout fires in the esp_timer task which has insufficient stack

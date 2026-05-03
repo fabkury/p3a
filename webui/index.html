@@ -109,6 +109,30 @@ body {
     0%, 100% { background: rgba(255,255,255,0.08); }
     50% { background: rgba(255,255,255,0.22); }
 }
+.ps-ch-row.cooldown {
+    background: rgba(255,152,0,0.18);
+    border-left: 3px solid #ff9800;
+    opacity: 0.75;
+    animation: none;
+}
+.ps-ch-row.cooldown::after {
+    content: '\23F3';
+    margin-left: auto;
+    font-size: 0.75rem;
+    opacity: 0.85;
+}
+.cooldown-banner {
+    display: none;
+    width: min(420px, 100%);
+    background: linear-gradient(135deg, #ef6c00 0%, #ff9800 100%);
+    border-radius: var(--r-md);
+    padding: var(--sp-3) var(--sp-4);
+    color: white;
+    box-shadow: 0 4px 12px rgba(239,108,0,0.3);
+    margin-top: var(--sp-2);
+}
+.cooldown-banner h4 { margin: 0 0 4px; font-size: 0.95rem; font-weight: 600; }
+.cooldown-banner p  { margin: 0; font-size: 0.8rem; opacity: 0.92; }
 .ps-badge {
     display: inline-block;
     font-size: 0.6rem;
@@ -449,6 +473,10 @@ body {
     <h4>&#x2B06; Update Available</h4>
     <p id="update-version">A new firmware version is ready to install</p>
 </div>
+<div class="cooldown-banner" id="giphy-cooldown-banner">
+    <h4>&#9203; Giphy Rate Limited</h4>
+    <p>The Giphy API key hit its limit of 100 requests per hour. Device is now waiting before refreshing Giphy channels.</p>
+</div>
 <nav class="bottom-nav">
 <a href="/" class="bottom-nav-item active"><span class="bottom-nav-icon">&#8962;</span><span class="bottom-nav-label">Home</span></a>
 <a href="/playset-editor" class="bottom-nav-item"><span class="bottom-nav-icon">&#9776;</span><span class="bottom-nav-label">Playsets</span></a>
@@ -457,6 +485,7 @@ body {
 </nav>
 <script>
 var isPaused = false;
+var giphyCooldownActive = false;
 var LCD_MAX_WIDTH = 720;
 var LCD_MAX_HEIGHT = 720;
 var activePlaysetName = '';
@@ -1093,7 +1122,9 @@ function escHtml(s) {
 function createChannelRow(ch) {
     var row = document.createElement('div');
     row.className = 'ps-ch-row';
-    if (ch.refreshing) row.classList.add('refreshing');
+    var blocked = giphyCooldownActive && ch.type === 'giphy';
+    if (blocked) row.classList.add('cooldown');
+    else if (ch.refreshing) row.classList.add('refreshing');
     var s = '<span class="ps-badge ps-badge-type">' + typeBadgeLetter(ch.type) + '</span>';
     s += '<span class="ps-badge ps-badge-sub">' + subTypeBadge(ch.name) + '</span>';
     s += '<span class="ps-ch-name">' + escHtml(ch.display_name || ch.channel_id || '') + '</span>';
@@ -1104,8 +1135,15 @@ function createChannelRow(ch) {
     return row;
 }
 function updateChannelRow(row, ch) {
-    if (ch.refreshing) row.classList.add('refreshing');
-    else row.classList.remove('refreshing');
+    var blocked = giphyCooldownActive && ch.type === 'giphy';
+    if (blocked) {
+        row.classList.add('cooldown');
+        row.classList.remove('refreshing');
+    } else {
+        row.classList.remove('cooldown');
+        if (ch.refreshing) row.classList.add('refreshing');
+        else row.classList.remove('refreshing');
+    }
     row.querySelector('.ps-badge-type').textContent = typeBadgeLetter(ch.type);
     row.querySelector('.ps-badge-sub').textContent = subTypeBadge(ch.name);
     row.querySelector('.ps-ch-name').textContent = ch.display_name || ch.channel_id || '';
@@ -1186,6 +1224,12 @@ function pollActivePlayset(attempt) {
                         }
                     });
                 });
+                var cdSec = (resp.data.giphy_cooldown_remaining_sec | 0);
+                giphyCooldownActive = cdSec > 0;
+                var cdBanner = document.getElementById('giphy-cooldown-banner');
+                var hasGiphy = !!(resp.data.playset_info && resp.data.playset_info.channels &&
+                    resp.data.playset_info.channels.some(function(c){ return c.type === 'giphy'; }));
+                cdBanner.style.display = (giphyCooldownActive && hasGiphy) ? 'block' : 'none';
                 if (resp.data.name && resp.data.playset_info) {
                     updateNowPlaying(resp.data.name, resp.data.playset_info);
                     updatePillBarActive(resp.data.name);

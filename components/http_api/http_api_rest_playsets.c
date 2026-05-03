@@ -24,6 +24,7 @@
 #include "playset_json.h"
 #include "p3a_state.h"
 #include "p3a_current_post.h"
+#include "giphy.h"
 
 // ---------- Playset Name Validation ----------
 
@@ -290,6 +291,9 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     cJSON *data = cJSON_AddObjectToObject(root, "data");
     cJSON_AddStringToObject(data, "name", playset ? playset : "");
     cJSON_AddBoolToObject(data, "registered", makapix_store_has_player_key());
+
+    uint32_t giphy_cd = giphy_is_rate_limited() ? giphy_cooldown_remaining_sec() : 0;
+    cJSON_AddNumberToObject(data, "giphy_cooldown_remaining_sec", (double)giphy_cd);
 
     ps_stats_t ps_stats;
     if (play_scheduler_get_stats(&ps_stats) == ESP_OK) {

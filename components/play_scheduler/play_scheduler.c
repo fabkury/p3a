@@ -27,7 +27,6 @@
 #include "sdcard_channel_impl.h"
 #include "makapix_channel_impl.h"
 #include "config_store.h"
-#include "channel_metadata.h"
 #include "p3a_state.h"
 #include "sd_path.h"
 #include "esp_log.h"
@@ -567,11 +566,6 @@ esp_err_t play_scheduler_get_channel_details(
         return ESP_ERR_INVALID_STATE;
     }
 
-    char ch_path[128];
-    if (sd_path_get_channel(ch_path, sizeof(ch_path)) != ESP_OK) {
-        strlcpy(ch_path, "/sdcard/p3a/channel", sizeof(ch_path));
-    }
-
     xSemaphoreTake(s_state.mutex, portMAX_DELAY);
 
     size_t count = s_state.channel_count;
@@ -594,18 +588,10 @@ esp_err_t play_scheduler_get_channel_details(
         }
 
         d->refreshing = ch->refresh_pending || ch->refresh_in_progress || ch->refresh_async_pending;
-        d->last_refresh = 0;
+        d->last_refresh = ch->last_refresh;
     }
 
     xSemaphoreGive(s_state.mutex);
-
-    // Load last_refresh timestamps outside the mutex (filesystem I/O)
-    for (size_t i = 0; i < count; i++) {
-        channel_metadata_t meta;
-        if (channel_metadata_load(out_channels[i].channel_id, ch_path, &meta) == ESP_OK) {
-            out_channels[i].last_refresh = meta.last_refresh;
-        }
-    }
 
     *out_count = count;
     return ESP_OK;

@@ -17,6 +17,7 @@
 #include "play_scheduler.h"
 #include "play_scheduler_internal.h"
 #include "channel_cache.h"
+#include "channel_metadata.h"
 #include "view_tracker.h"
 #include "p3a_state.h"
 #include "sd_path.h"
@@ -423,6 +424,12 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     // Increment epoch (history is preserved)
     s_state->epoch_id++;
 
+    // Resolve channel sidecar directory once for last_refresh hydration below
+    char ch_meta_path[128];
+    if (sd_path_get_channel(ch_meta_path, sizeof(ch_meta_path)) != ESP_OK) {
+        strlcpy(ch_meta_path, "/sdcard/p3a/channel", sizeof(ch_meta_path));
+    }
+
     // Initialize each channel
     for (size_t i = 0; i < command->channel_count; i++) {
         const ps_channel_spec_t *spec = &command->channels[i];
@@ -458,6 +465,16 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         ch->refresh_in_progress = false;
         ch->refresh_async_pending = false;
         ch->refresh_start_tick = 0;
+
+        // Hydrate last_refresh from on-disk sidecar so the picker can rank
+        // channels by oldest-first across reboots and partial refresh cycles.
+        // SD card / artwork channels have no sidecar — they default to 0,
+        // which makes them refresh first (cheap operations, no quota concern).
+        ch->last_refresh = 0;
+        channel_metadata_t meta_init;
+        if (channel_metadata_load(ch->channel_id, ch_meta_path, &meta_init) == ESP_OK) {
+            ch->last_refresh = meta_init.last_refresh;
+        }
 
         // Initialize artwork-specific state if this is an artwork channel
         if (spec->type == PS_CHANNEL_TYPE_ARTWORK) {

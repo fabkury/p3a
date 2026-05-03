@@ -87,65 +87,97 @@ static char s_completed_ids[PS_MAX_CHANNELS][64];
 static size_t s_completed_count = 0;
 
 /**
+ * @brief Decide whether a channel is eligible to refresh right now
+ *
+ * Applies all type-specific gates: Wi-Fi for Giphy (plus 429 cooldown), MQTT
+ * for non-promoted Makapix channels, etc. Side effect: when Makapix is
+ * permanently unavailable, clears refresh_pending so the channel doesn't sit
+ * "refreshing" forever in the UI.
+ *
+ * @return true if the channel should be considered by the picker
+ */
+static bool refresh_channel_is_eligible(ps_channel_state_t *ch, bool mqtt_ready)
+{
+    if (!ch->refresh_pending || ch->refresh_in_progress) {
+        return false;
+    }
+
+    // Artwork channels don't need MQTT — they download directly
+    if (ch->type == PS_CHANNEL_TYPE_ARTWORK) {
+        return true;
+    }
+
+    // Giphy channels need Wi-Fi but not MQTT
+    if (ch->type == PS_CHANNEL_TYPE_GIPHY) {
+        if (!p3a_state_has_wifi()) return false;
+        // A 429 from Giphy applies to the API key, not one channel — while
+        // the cooldown is active, leave Giphy channels pending so they
+        // retry naturally once the quota window resets.
+        if (giphy_is_rate_limited()) return false;
+        return true;
+    }
+
+    // Promoted named channel can refresh via HTTPS without MQTT
+    if (ch->type == PS_CHANNEL_TYPE_NAMED &&
+        strcmp(ch->spec_name, "promoted") == 0 &&
+        p3a_state_has_wifi()) {
+        return true;
+    }
+
+    // For Makapix channels, only proceed if MQTT is connected
+    if (ch->type != PS_CHANNEL_TYPE_SDCARD && !mqtt_ready) {
+        // If Makapix is permanently unavailable (no registration or invalid
+        // credentials), clear refresh_pending so the channel doesn't stay
+        // stuck in "refreshing" state in the UI forever.
+        makapix_state_t mstate = makapix_get_state();
+        if (mstate == MAKAPIX_STATE_IDLE ||
+            mstate == MAKAPIX_STATE_REGISTRATION_INVALID) {
+            ch->refresh_pending = false;
+            ESP_LOGI(TAG, "Channel '%s' refresh skipped (no Makapix connection)",
+                     ch->display_name);
+        }
+        return false;
+    }
+
+    return true;
+}
+
+/**
  * @brief Find next channel that needs refresh
  *
- * For Makapix channels, only returns them if MQTT is connected.
- * Artwork channels don't need MQTT - they download directly.
- * This avoids repeatedly trying to refresh when MQTT is not ready.
+ * Among all eligible channels (see refresh_channel_is_eligible), returns the
+ * one with the smallest last_refresh timestamp — i.e., the channel that has
+ * gone the longest without a successful refresh. Insertion order breaks ties
+ * (channels at the same last_refresh, including all-zero on first boot, are
+ * picked left-to-right).
  *
- * @param state Scheduler state
- * @return Channel index, or -1 if none pending
+ * Oldest-first matters when the API quota or link bandwidth can't service
+ * every channel in a cycle (e.g., Giphy keys with a 429 cap): the staler
+ * channels get the slot before fresher ones do.
+ *
+ * @param state Scheduler state (caller must hold mutex)
+ * @return Channel index, or -1 if none eligible
  */
 static int find_next_pending_refresh(ps_state_t *state)
 {
     bool mqtt_ready = makapix_mqtt_is_connected();
 
+    int best_idx = -1;
+    time_t best_last_refresh = 0;
+
     for (size_t i = 0; i < state->channel_count; i++) {
         ps_channel_state_t *ch = &state->channels[i];
-        if (!ch->refresh_pending || ch->refresh_in_progress) {
+        if (!refresh_channel_is_eligible(ch, mqtt_ready)) {
             continue;
         }
 
-        // Artwork channels don't need MQTT - they download directly
-        if (ch->type == PS_CHANNEL_TYPE_ARTWORK) {
-            return (int)i;  // Always ready to process
+        if (best_idx < 0 || ch->last_refresh < best_last_refresh) {
+            best_idx = (int)i;
+            best_last_refresh = ch->last_refresh;
         }
-
-        // Giphy channels need WiFi but not MQTT
-        if (ch->type == PS_CHANNEL_TYPE_GIPHY) {
-            if (!p3a_state_has_wifi()) continue;
-            // A 429 from Giphy applies to the API key, not one channel — while
-            // the cooldown is active, leave Giphy channels pending so they
-            // retry naturally once the quota window resets.
-            if (giphy_is_rate_limited()) continue;
-            return (int)i;
-        }
-
-        // Promoted named channel can refresh via HTTPS without MQTT
-        if (ch->type == PS_CHANNEL_TYPE_NAMED &&
-            strcmp(ch->spec_name, "promoted") == 0 &&
-            p3a_state_has_wifi()) {
-            return (int)i;
-        }
-
-        // For Makapix channels, only proceed if MQTT is connected
-        if (ch->type != PS_CHANNEL_TYPE_SDCARD && !mqtt_ready) {
-            // If Makapix is permanently unavailable (no registration or invalid
-            // credentials), clear refresh_pending so the channel doesn't stay
-            // stuck in "refreshing" state in the UI forever.
-            makapix_state_t mstate = makapix_get_state();
-            if (mstate == MAKAPIX_STATE_IDLE ||
-                mstate == MAKAPIX_STATE_REGISTRATION_INVALID) {
-                ch->refresh_pending = false;
-                ESP_LOGI(TAG, "Channel '%s' refresh skipped (no Makapix connection)",
-                         ch->display_name);
-            }
-            continue;
-        }
-
-        return (int)i;
     }
-    return -1;
+
+    return best_idx;
 }
 
 // External: check if download manager is actively downloading
@@ -462,6 +494,14 @@ static void refresh_task(void *arg)
                     ch->refresh_async_pending = false;
                     ch->refresh_in_progress = false;
 
+                    // Mirror the makapix-side save: only stamp a real time when
+                    // SNTP is synced (matches makapix_channel_refresh.c:362).
+                    // The in-memory value may differ from the disk save by up
+                    // to one polling interval (~2s); harmless for picker order.
+                    if (sntp_sync_is_synchronized()) {
+                        ch->last_refresh = time(NULL);
+                    }
+
                     // Queue this channel for eager reap after the mutex is
                     // released. Without reaping, every channel that finishes
                     // a refresh leaves a parked task behind holding ~12 KB of
@@ -651,10 +691,18 @@ static void refresh_task(void *arg)
 
         // Perform refresh (outside mutex to avoid blocking scheduler)
         esp_err_t err = ESP_OK;
+        // did_refresh distinguishes paths that actually invoked a refresh
+        // primitive from no-op success paths (freshness skip, SNTP-deferred,
+        // missing API key). Only the former should bump ch->last_refresh —
+        // otherwise the freshness gate would keep extending the window
+        // without doing any work.
+        bool did_refresh = false;
 
         if (type == PS_CHANNEL_TYPE_SDCARD) {
+            did_refresh = true;
             err = refresh_sdcard_channel(ch);
         } else if (type == PS_CHANNEL_TYPE_ARTWORK) {
+            did_refresh = true;
             err = refresh_artwork_channel(ch);
         } else if (type == PS_CHANNEL_TYPE_GIPHY) {
             // Verify that a Giphy API key is configured before attempting refresh
@@ -711,6 +759,7 @@ static void refresh_task(void *arg)
                 extern bool animation_player_is_animation_ready(void);
                 char giphy_display_name[64];
                 ps_get_display_name_from_spec(type, spec_name, identifier, giphy_display_name, sizeof(giphy_display_name));
+                did_refresh = true;
                 if (!animation_player_is_animation_ready()) {
                     p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_LOADING, -1,
                                                    "Loading channel...");
@@ -796,6 +845,7 @@ static void refresh_task(void *arg)
                         strcmp(spec_name, "promoted") == 0 &&
                         !makapix_mqtt_is_connected()) {
                         ESP_LOGI(TAG, "Using HTTPS fallback for promoted channel");
+                        did_refresh = true;
                         err = makapix_promoted_https_refresh(channel_id);
                         // Synchronous — ESP_OK means done, stale_at applies
                         if (err == ESP_OK) {
@@ -839,6 +889,16 @@ static void refresh_task(void *arg)
             // Note: refresh_async_pending was set in refresh_makapix_channel()
         } else if (err == ESP_OK) {
             ch->refresh_in_progress = false;
+
+            // Bump in-memory last_refresh only when an actual refresh primitive
+            // ran (did_refresh) and the wall clock is trustworthy. Mirrors the
+            // SNTP-gated disk save in giphy_refresh.c and makapix_channel_refresh.c.
+            // Pre-SNTP, time(NULL) returns boot-elapsed seconds — writing that
+            // would make a just-refreshed channel look "older" than channels
+            // refreshed last week with a real clock, breaking oldest-first.
+            if (did_refresh && sntp_sync_is_synchronized()) {
+                ch->last_refresh = time(NULL);
+            }
 
             // Update active flag based on available artwork count
             if (ch->cache) {

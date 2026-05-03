@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <time.h>
 #include "sdcard_channel.h"  // For asset_type_t
 
 #ifdef __cplusplus
@@ -280,6 +281,10 @@ typedef struct {
     bool refresh_in_progress;   // Currently refreshing
     bool refresh_async_pending; // Waiting for Makapix async completion
     uint32_t refresh_start_tick;    // Tick when refresh_in_progress was set (for async timeout)
+    time_t last_refresh;        // Unix timestamp of last successful refresh (0 = never).
+                                // Mirrors the channel_metadata sidecar; loaded at channel
+                                // init and updated by the refresh task on actual refresh
+                                // completion. Drives oldest-first picker fairness.
 
     // Artwork channel state (only when type == PS_CHANNEL_TYPE_ARTWORK)
     struct {

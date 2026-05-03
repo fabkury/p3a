@@ -739,7 +739,19 @@ static void refresh_task(void *arg)
                     char giphy_display_name[64];
                     ps_get_display_name_from_spec(type, spec_name, identifier, giphy_display_name, sizeof(giphy_display_name));
                     const char *detail = "Giphy refresh failed";
-                    if (err == ESP_ERR_INVALID_RESPONSE) detail = "Giphy API rate limited";
+                    char rate_limit_buf[128];
+                    if (err == ESP_ERR_INVALID_RESPONSE) {
+                        uint32_t remaining_min = (giphy_cooldown_remaining_sec() + 59) / 60;
+                        if (remaining_min == 0) remaining_min = 1;
+                        // Renderer caps at 3 lines (see ugfx_ui.c MAX_LINES) — keep
+                        // line breaks aligned with that limit.
+                        snprintf(rate_limit_buf, sizeof(rate_limit_buf),
+                                 "Cannot refresh channel: Giphy API key\n"
+                                 "rate limit reached (error 429).\n"
+                                 "Device will retry in %u min.",
+                                 (unsigned)remaining_min);
+                        detail = rate_limit_buf;
+                    }
                     p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1, detail);
                 }
             }

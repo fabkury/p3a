@@ -692,36 +692,6 @@ void display_render_task(void *arg)
         // ================================================================
         // 5. Vsync alignment + submit
         // ================================================================
-        //
-        // HISTORICAL NOTE on the commented-out `xSemaphoreTake(..., 0)` below
-        // (the "drain stale vsync" line):
-        //
-        // That drain was added as a last-resort empirical fix for a pernicious
-        // screen-tearing problem.  With the drain in place, the subsequent
-        // `xSemaphoreTake(..., portMAX_DELAY)` always blocks until a FRESH
-        // on_refresh_done event fires, meaning the submit lands inside (or
-        // right at the start of) the panel's vertical-blanking window — the
-        // only moment when swapping the active framebuffer is guaranteed not
-        // to tear.  Empirically the drain fixed tearing even with
-        // max_speed_playback enabled.
-        //
-        // We disable the drain here so the new accumulator-based alignment
-        // (block 4) and the loop below can pick the vsync NEAREST to the
-        // virtual playhead, including consuming a cached vsync signal that
-        // fired during the sleep above.  Without the drain, the first take
-        // in the loop may return immediately on a cached signal; we then
-        // use g_last_vsync_us (captured in the ISR) to know how long ago the
-        // vsync actually fired and decide whether to submit now or wait one
-        // more vsync for tearing safety.
-        //
-        // RISK: this can re-introduce tearing in scenarios where the loop
-        // breaks on a cached signal whose vsync fired well into the previous
-        // refresh.  The `cached_too_late` check below tries to mitigate this
-        // by always preferring a fresh vsync when the cached one is more
-        // than a vblank window past.  If tearing is observed in production,
-        // the simplest revert is to uncomment the drain line.
-        //
-        // xSemaphoreTake(g_display_vsync_sem, 0);  // <-- drain (see HISTORICAL NOTE above)
 
         if (config_store_get_max_speed_playback()) {
             // Max-speed: consume one vsync per submit (no playhead, no sleep).

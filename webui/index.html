@@ -486,6 +486,11 @@ body {
 <script>
 var isPaused = false;
 var giphyCooldownActive = false;
+// Refresh intervals (seconds) sent by the backend so the frontend can decide
+// whether a queued channel actually needs work right now. 0 means unknown
+// (older firmware) — fall back to treating channels as always due.
+var giphyRefreshIntervalSec = 0;
+var makapixRefreshIntervalSec = 0;
 var LCD_MAX_WIDTH = 720;
 var LCD_MAX_HEIGHT = 720;
 var activePlaysetName = '';
@@ -688,7 +693,7 @@ function buildPillBar() {
         btn.setAttribute('data-playset', p.id);
         if (p.needsRegistration && !isRegistered) btn.disabled = true;
         if (p.id === activePlaysetName) btn.classList.add('active');
-        btn.addEventListener('click', function() { playPlayset(p.id); });
+        btn.addEventListener('click', function() { playPlayset(p.id, btn); });
         bar.appendChild(btn);
     });
     userPlaysets.forEach(function(ps) {
@@ -697,7 +702,7 @@ function buildPillBar() {
         btn.textContent = ps.name;
         btn.setAttribute('data-playset', ps.name);
         if (ps.name === activePlaysetName) btn.classList.add('active');
-        btn.addEventListener('click', function() { playPlayset(ps.name); });
+        btn.addEventListener('click', function() { playPlayset(ps.name, btn); });
         bar.appendChild(btn);
     });
 }
@@ -706,7 +711,9 @@ function updatePillBarActive(name) {
     activePlaysetName = name || '';
     var pills = document.querySelectorAll('.pill-item');
     pills.forEach(function(p) {
-        p.classList.toggle('active', p.getAttribute('data-playset') === name);
+        var match = p.getAttribute('data-playset') === name;
+        p.classList.toggle('active', match);
+        if (match) p.classList.remove('pending');
     });
 }
 
@@ -816,12 +823,19 @@ function playsetDisplayName(name) {
     return name;
 }
 
-function playPlayset(name) {
+function playPlayset(name, btn) {
+    if (btn) {
+        document.querySelectorAll('.pill-item.pending').forEach(function(p) {
+            p.classList.remove('pending');
+        });
+        btn.classList.add('pending');
+    }
     var xhr = new XMLHttpRequest();
     xhr.open('POST', '/playset/' + name, true);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
+            if (btn) btn.classList.remove('pending');
             try {
                 var result = JSON.parse(xhr.responseText);
                 if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
@@ -1119,15 +1133,34 @@ function escHtml(s) {
     d.appendChild(document.createTextNode(s));
     return d.innerHTML;
 }
+// Whether a channel is past its refresh interval and would actually do work
+// if the picker selected it. The play scheduler queues every channel on
+// playset load regardless of freshness, so refreshing=true alone doesn't
+// mean the channel is genuinely waiting on the cooldown — it may just be
+// sitting in the queue with fresh data and a no-op skip ahead of it.
+// Returns true when the interval is unknown (older firmware) or the channel
+// has never been refreshed.
+function isDueForRefresh(ch) {
+    if (!ch.last_refresh) return true;
+    // sdcard/artwork channels have no dispatcher-side freshness gate — they
+    // always run a real refresh when picked, so treat them as always due.
+    var interval = 0;
+    if (ch.type === 'giphy') interval = giphyRefreshIntervalSec;
+    else if (ch.type === 'named' || ch.type === 'user' ||
+             ch.type === 'hashtag' || ch.type === 'reactions') interval = makapixRefreshIntervalSec;
+    if (!interval) return true;
+    return (Math.floor(Date.now() / 1000) - ch.last_refresh) >= interval;
+}
 function createChannelRow(ch) {
     var row = document.createElement('div');
     row.className = 'ps-ch-row';
-    // Only Giphy channels still pending under the cooldown count as blocked.
-    // Channels that already completed their refresh have refreshing=false and
-    // shouldn't display the cooldown styling even while the API key is throttled.
-    var blocked = giphyCooldownActive && ch.type === 'giphy' && ch.refreshing;
+    // A channel is "actually working" only if it's queued AND past its interval.
+    // Fresh-but-queued channels would be skipped by the dispatcher's freshness
+    // gate, so neither the cooldown styling nor the refresh animation applies.
+    var due = isDueForRefresh(ch);
+    var blocked = giphyCooldownActive && ch.type === 'giphy' && ch.refreshing && due;
     if (blocked) row.classList.add('cooldown');
-    else if (ch.refreshing) row.classList.add('refreshing');
+    else if (ch.refreshing && due) row.classList.add('refreshing');
     var s = '<span class="ps-badge ps-badge-type">' + typeBadgeLetter(ch.type) + '</span>';
     s += '<span class="ps-badge ps-badge-sub">' + subTypeBadge(ch.name) + '</span>';
     s += '<span class="ps-ch-name">' + escHtml(ch.display_name || ch.channel_id || '') + '</span>';
@@ -1138,13 +1171,14 @@ function createChannelRow(ch) {
     return row;
 }
 function updateChannelRow(row, ch) {
-    var blocked = giphyCooldownActive && ch.type === 'giphy' && ch.refreshing;
+    var due = isDueForRefresh(ch);
+    var blocked = giphyCooldownActive && ch.type === 'giphy' && ch.refreshing && due;
     if (blocked) {
         row.classList.add('cooldown');
         row.classList.remove('refreshing');
     } else {
         row.classList.remove('cooldown');
-        if (ch.refreshing) row.classList.add('refreshing');
+        if (ch.refreshing && due) row.classList.add('refreshing');
         else row.classList.remove('refreshing');
     }
     row.querySelector('.ps-badge-type').textContent = typeBadgeLetter(ch.type);
@@ -1229,15 +1263,18 @@ function pollActivePlayset(attempt) {
                 });
                 var cdSec = (resp.data.giphy_cooldown_remaining_sec | 0);
                 giphyCooldownActive = cdSec > 0;
+                giphyRefreshIntervalSec = (resp.data.giphy_refresh_interval_sec | 0);
+                makapixRefreshIntervalSec = (resp.data.refresh_interval_sec | 0);
                 var cdBanner = document.getElementById('giphy-cooldown-banner');
                 // Show the banner only when at least one Giphy channel is
-                // actually waiting on the cooldown — i.e., still queued for
-                // refresh. If every Giphy channel already finished, the
-                // throttle isn't blocking anything visible, so the banner
-                // would just be noise.
+                // actually waiting on the cooldown — i.e., queued AND past
+                // its refresh interval. Channels that are queued but still
+                // fresh would be skipped by the dispatcher even if the
+                // cooldown lifted, so the throttle isn't really blocking
+                // them and the banner would be noise.
                 var giphyWaiting = !!(resp.data.playset_info && resp.data.playset_info.channels &&
                     resp.data.playset_info.channels.some(function(c){
-                        return c.type === 'giphy' && c.refreshing;
+                        return c.type === 'giphy' && c.refreshing && isDueForRefresh(c);
                     }));
                 cdBanner.style.display = (giphyCooldownActive && giphyWaiting) ? 'block' : 'none';
                 if (resp.data.name && resp.data.playset_info) {

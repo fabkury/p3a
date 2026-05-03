@@ -25,6 +25,7 @@
 #include "p3a_state.h"
 #include "p3a_current_post.h"
 #include "giphy.h"
+#include "config_store.h"
 
 // ---------- Playset Name Validation ----------
 
@@ -294,6 +295,13 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
 
     uint32_t giphy_cd = giphy_is_rate_limited() ? giphy_cooldown_remaining_sec() : 0;
     cJSON_AddNumberToObject(data, "giphy_cooldown_remaining_sec", (double)giphy_cd);
+
+    // Refresh intervals so the frontend can derive due-for-refresh from
+    // ch.last_refresh without a backend round trip. Cached statics — cheap.
+    cJSON_AddNumberToObject(data, "giphy_refresh_interval_sec",
+                            (double)config_store_get_giphy_refresh_interval());
+    cJSON_AddNumberToObject(data, "refresh_interval_sec",
+                            (double)config_store_get_refresh_interval_sec());
 
     ps_stats_t ps_stats;
     if (play_scheduler_get_stats(&ps_stats) == ESP_OK) {

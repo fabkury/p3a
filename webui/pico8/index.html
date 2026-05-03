@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PICO-8 Monitor - p3a</title>
     <link rel="stylesheet" href="/static/common.css">
-    <link rel="stylesheet" href="/static/pico8.css">
+    <link rel="stylesheet" href="/pico8/pico8.css">
     <style>
     body { justify-content: flex-start; }
     .container {
@@ -136,8 +136,8 @@
     <a href="/ota" class="bottom-nav-item"><span class="bottom-nav-icon">&#8673;</span><span class="bottom-nav-label">Update</span><span class="bottom-nav-badge" id="update-badge"></span></a>
     </nav>
 
-    <script src="/static/fake08.js"></script>
-    <script src="/static/pico8.js"></script>
+    <script src="/pico8/fake08.js"></script>
+    <script src="/pico8/pico8.js"></script>
     <script>fetch('/ota/status').then(function(r){return r.json()}).then(function(d){if(d.ok&&d.data&&(d.data.state==='update_available'||d.data.available_version)){var b=document.getElementById('update-badge');if(b)b.classList.add('visible');}}).catch(function(){});</script>
 </body>
 </html>

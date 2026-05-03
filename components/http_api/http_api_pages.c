@@ -176,7 +176,7 @@ esp_err_t h_get_settings(httpd_req_t *req) {
  * Serves the network status page from LittleFS
  */
 esp_err_t h_get_network_config(httpd_req_t *req) {
-    return serve_file(req, "/webui/config/network.html");
+    return serve_file(req, "/webui/network.html");
 }
 
 /**
@@ -307,6 +307,15 @@ void http_api_register_page_handlers(httpd_handle_t server) {
     register_uri_handler_or_log(server, &u);
 
 #if CONFIG_P3A_PICO8_ENABLE
+    // /pico8/* serves PICO-8 module assets from /webui/pico8/*. The bare /pico8 URL
+    // (no trailing slash) is unaffected — the wildcard requires "/pico8/" so the page
+    // request still falls through to the catch-all /* router and h_get_pico8.
+    u.uri = "/pico8/*";
+    u.method = HTTP_GET;
+    u.handler = h_get_static;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(server, &u);
+
     // WebSocket endpoint for PICO-8 streaming
     httpd_uri_t ws_uri = {
         .uri = "/pico_stream",

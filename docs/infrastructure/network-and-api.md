@@ -147,12 +147,13 @@ Static HTML pages served from the LittleFS partition:
 |-----|------------|-------------|
 | `/` | `webui/index.html` | Main control page |
 | `/settings` | `webui/settings.html` | Settings page |
-| `/config/network` | `webui/config/network.html` | Network configuration |
+| `/config/network` | `webui/network.html` | Network configuration |
 | `/giphy` | `webui/giphy.html` | Giphy settings |
 | `/playset-editor` | `webui/playset-editor.html` | Playset editor |
 | `/pico8` | `webui/pico8/index.html` | PICO-8 monitor (if enabled) |
+| `/pico8/*` | `webui/pico8/*` | PICO-8 module assets (CSS/JS/WASM/PNG, if enabled) |
 | `/ota` | `webui/ota.html` | OTA update page |
-| `/static/*` | `webui/static/*` | CSS, JS, and other static assets |
+| `/static/*` | `webui/static/*` | Shared CSS, JS, and image assets |
 
 ---
 

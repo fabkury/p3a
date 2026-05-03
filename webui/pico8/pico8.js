@@ -74,7 +74,7 @@ splashLogo.onload = () => {
     splashLogoReady = true;
     if (!isRunning) drawSplashLogo();
 };
-splashLogo.src = '/static/pico8_logo_1x.png';
+splashLogo.src = '/pico8/pico8_logo_1x.png';
 
 function drawSplashLogo() {
     ctx.fillStyle = '#000';
@@ -105,7 +105,7 @@ async function initWasm() {
         Module = await Fake08Module({
             locateFile: (path) => {
                 if (path.endsWith('.wasm')) {
-                    return '/static/fake08.wasm';
+                    return '/pico8/fake08.wasm';
                 }
                 return path;
             }

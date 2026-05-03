@@ -171,7 +171,7 @@ The following components are maintained by Espressif Systems and licensed under 
 
 #### 4.4 Fake08 (PICO-8 Player)
 
-- **Location**: `webui/static/fake08.js`, `webui/static/fake08.wasm`
+- **Location**: `webui/pico8/fake08.js`, `webui/pico8/fake08.wasm`
 - **License**: Unknown/Upstream (MIT expected, but not verified in embedded files)
 - **Homepage**: https://github.com/jtothebell/fake-08
 - **Purpose**: PICO-8 game player (optional feature, can be disabled at compile time)

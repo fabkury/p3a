@@ -76,33 +76,11 @@ if(CONFIG_P3A_PICO8_ENABLE)
     # PICO-8 enabled: use full webui directory
     littlefs_create_partition_image(storage webui FLASH_IN_PROJECT)
 else()
-    # PICO-8 disabled: create filtered webui without PICO-8 assets
+    # PICO-8 disabled: stage webui without the self-contained pico8/ module
     set(WEBUI_STAGING_DIR "${CMAKE_BINARY_DIR}/webui_filtered")
-
-    # Clean and recreate staging directory
     file(REMOVE_RECURSE "${WEBUI_STAGING_DIR}")
-    file(MAKE_DIRECTORY "${WEBUI_STAGING_DIR}")
-    file(MAKE_DIRECTORY "${WEBUI_STAGING_DIR}/static")
-
-    # Copy static files excluding PICO-8 related assets
-    file(GLOB STATIC_FILES "${CMAKE_SOURCE_DIR}/webui/static/*")
-    foreach(STATIC_FILE ${STATIC_FILES})
-        get_filename_component(FILENAME ${STATIC_FILE} NAME)
-        # Exclude PICO-8 related files
-        if(NOT FILENAME MATCHES "^(fake08\\.|pico8\\.)")
-            file(COPY ${STATIC_FILE} DESTINATION "${WEBUI_STAGING_DIR}/static")
-        endif()
-    endforeach()
-
-    # Do not copy pico8/ directory at all
-
-    # Copy root-level files (index.html, settings.html, ota.html, favicon.ico, version.txt)
-    file(GLOB ROOT_FILES "${CMAKE_SOURCE_DIR}/webui/*.html" "${CMAKE_SOURCE_DIR}/webui/*.ico" "${CMAKE_SOURCE_DIR}/webui/*.txt")
-    file(COPY ${ROOT_FILES} DESTINATION "${WEBUI_STAGING_DIR}")
-
-    # Copy config directory
-    file(COPY "${CMAKE_SOURCE_DIR}/webui/config" DESTINATION "${WEBUI_STAGING_DIR}")
-
+    file(COPY "${CMAKE_SOURCE_DIR}/webui/" DESTINATION "${WEBUI_STAGING_DIR}"
+         PATTERN "pico8" EXCLUDE)
     littlefs_create_partition_image(storage "${WEBUI_STAGING_DIR}" FLASH_IN_PROJECT)
 endif()
 

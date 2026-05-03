@@ -221,8 +221,9 @@ function updateUI(data) {
     fwLastCheck = data.last_check;
     document.getElementById('current-ver').textContent = data.current_version || '-';
     var availVerEl = document.getElementById('available-ver');
-    var verText = data.available_version || (data.last_check ? 'Up to date' : 'Not yet checked');
-    if (data.available_version && data.is_prerelease) verText += ' (pre-release)';
+    var remoteVer = data.latest_remote_version || data.available_version;
+    var verText = remoteVer || (data.last_check ? 'Unknown' : 'Not yet checked');
+    if (remoteVer && data.is_prerelease) verText += ' (pre-release)';
     availVerEl.textContent = verText;
     availVerEl.className = 'version-value' + (data.available_version ? ' update-available' : '');
     var stateEl = document.getElementById('state');
@@ -300,12 +301,14 @@ function updateWebuiUI(data) {
     var progressText = document.getElementById('webui-progress-text');
     var installBtn = document.getElementById('webui-install-btn');
 
-    // Available version row
-    if (data.available_version) {
-        availVerEl.textContent = data.available_version;
-        availVerEl.className = 'version-value update-available';
+    // Available version row: show the latest remote version if known,
+    // highlight only when it actually represents an available update.
+    var webuiRemoteVer = data.latest_remote_version || data.available_version;
+    if (webuiRemoteVer) {
+        availVerEl.textContent = webuiRemoteVer;
+        availVerEl.className = 'version-value' + (data.available_version ? ' update-available' : '');
     } else {
-        availVerEl.textContent = fwLastCheck ? 'Up to date' : 'Not yet checked';
+        availVerEl.textContent = fwLastCheck ? 'Unknown' : 'Not yet checked';
         availVerEl.className = 'version-value';
     }
 

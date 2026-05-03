@@ -56,6 +56,7 @@ typedef struct {
     ota_state_t state;              ///< Current OTA state
     char current_version[32];       ///< Currently running firmware version
     char available_version[32];     ///< Available update version (if any)
+    char latest_remote_version[32]; ///< Latest version known on the GitHub server (set after a successful check, even when up to date)
     uint32_t available_size;        ///< Size of available update in bytes
     char release_notes[512];        ///< Release notes (truncated)
     int64_t last_check_time;        ///< Unix timestamp of last check
@@ -73,6 +74,7 @@ typedef struct {
 typedef struct {
     char current_version[16];       ///< Current web UI version (X.Y format)
     char available_version[16];     ///< Available web UI version (if any)
+    char latest_remote_version[16]; ///< Latest web UI version known on the GitHub server (set after a successful check, even when up to date)
     bool update_available;          ///< True if a newer version is available
     bool partition_valid;           ///< True if storage partition is valid
     bool needs_recovery;            ///< True if auto-recovery is pending
@@ -304,6 +306,17 @@ void webui_ota_set_available_update(const char *version, const char *url, const 
  * @return ESP_OK on success, ESP_ERR_INVALID_STATE if no update pending
  */
 esp_err_t webui_ota_install_available_update(ota_progress_cb_t progress_cb);
+
+/**
+ * @brief Record the latest web UI version known on the GitHub server
+ *
+ * Called by the check task after a successful manifest fetch, regardless of
+ * whether the version is newer than the installed one. Used by the OTA UI to
+ * display the actual remote version even when there is no update available.
+ *
+ * @param version Latest remote version string (e.g., "2.0")
+ */
+void webui_ota_set_latest_remote_version(const char *version);
 
 #ifdef __cplusplus
 }

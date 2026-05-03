@@ -39,6 +39,7 @@ static struct {
     uint8_t failure_count;
     char current_version[16];
     char available_version[16];
+    char latest_remote_version[16];
     char available_url[256];
     char available_sha256[65];
     bool update_available;
@@ -273,6 +274,7 @@ esp_err_t webui_ota_get_status(webui_ota_status_t *status)
 
     // Copy cached state
     snprintf(status->available_version, sizeof(status->available_version), "%s", s_webui_ota.available_version);
+    snprintf(status->latest_remote_version, sizeof(status->latest_remote_version), "%s", s_webui_ota.latest_remote_version);
     status->update_available = s_webui_ota.update_available;
     status->partition_valid = s_webui_ota.partition_valid;
     status->needs_recovery = s_webui_ota.needs_recovery;
@@ -664,6 +666,21 @@ esp_err_t webui_ota_install_update(const char *download_url,
     return ESP_OK;
 }
 
+void webui_ota_set_latest_remote_version(const char *version)
+{
+    if (!version) {
+        return;
+    }
+    if (s_webui_ota.mutex) {
+        xSemaphoreTake(s_webui_ota.mutex, portMAX_DELAY);
+    }
+    strncpy(s_webui_ota.latest_remote_version, version, sizeof(s_webui_ota.latest_remote_version) - 1);
+    s_webui_ota.latest_remote_version[sizeof(s_webui_ota.latest_remote_version) - 1] = '\0';
+    if (s_webui_ota.mutex) {
+        xSemaphoreGive(s_webui_ota.mutex);
+    }
+}
+
 void webui_ota_set_available_update(const char *version, const char *url, const char *sha256)
 {
     if (s_webui_ota.mutex) {
@@ -871,6 +888,11 @@ void webui_ota_set_available_update(const char *version, const char *url, const 
     (void)version;
     (void)url;
     (void)sha256;
+}
+
+void webui_ota_set_latest_remote_version(const char *version)
+{
+    (void)version;
 }
 
 esp_err_t webui_ota_install_available_update(ota_progress_cb_t progress_cb)

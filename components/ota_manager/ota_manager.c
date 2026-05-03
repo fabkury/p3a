@@ -304,6 +304,11 @@ esp_err_t ota_manager_get_status(ota_status_t *status)
         snprintf(status->release_notes, sizeof(status->release_notes), "%s", s_ota.release_info.release_notes);
     }
 
+    // Always surface the latest remote version when known (set by the most
+    // recent successful fetch, regardless of whether it counts as an update).
+    snprintf(status->latest_remote_version, sizeof(status->latest_remote_version),
+             "%s", s_ota.release_info.version);
+
     // Check if rollback is available
     const esp_partition_t *running = esp_ota_get_running_partition();
     const esp_partition_t *other = esp_ota_get_next_update_partition(running);
@@ -478,17 +483,19 @@ static void ota_check_task(void *arg)
 
     int cmp = github_ota_compare_versions(release_info.version, current_app->version);
 
+    // Always cache the fetched release info so the OTA UI can display the
+    // latest remote version even when the device is up to date. The install
+    // path still gates on OTA_STATE_UPDATE_AVAILABLE, so this is safe.
+    if (s_ota.mutex) {
+        xSemaphoreTake(s_ota.mutex, portMAX_DELAY);
+    }
+    memcpy(&s_ota.release_info, &release_info, sizeof(release_info));
+    if (s_ota.mutex) {
+        xSemaphoreGive(s_ota.mutex);
+    }
+
     if (cmp > 0) {
         ESP_LOGI(TAG, "Update available: %s -> %s", current_app->version, release_info.version);
-
-        if (s_ota.mutex) {
-            xSemaphoreTake(s_ota.mutex, portMAX_DELAY);
-        }
-        memcpy(&s_ota.release_info, &release_info, sizeof(release_info));
-        if (s_ota.mutex) {
-            xSemaphoreGive(s_ota.mutex);
-        }
-
         set_state(OTA_STATE_UPDATE_AVAILABLE);
     } else {
         ESP_LOGI(TAG, "Firmware is up to date (current: %s, latest: %s)",
@@ -501,6 +508,10 @@ static void ota_check_task(void *arg)
     github_release_manifest_t manifest;
     esp_err_t manifest_err = github_ota_get_release_manifest(&manifest);
     if (manifest_err == ESP_OK && strlen(manifest.webui.version) > 0) {
+        // Always record the latest remote web UI version so the OTA UI can
+        // display it regardless of whether an update is available.
+        webui_ota_set_latest_remote_version(manifest.webui.version);
+
         char current_webui_ver[16] = {0};
         webui_ota_get_current_version(current_webui_ver, sizeof(current_webui_ver));
 

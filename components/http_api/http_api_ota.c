@@ -79,6 +79,12 @@ static esp_err_t h_get_ota_status(httpd_req_t *req) {
         cJSON_AddNullToObject(data, "available_version");
         cJSON_AddNullToObject(data, "available_size");
     }
+
+    if (strlen(status.latest_remote_version) > 0) {
+        cJSON_AddStringToObject(data, "latest_remote_version", status.latest_remote_version);
+    } else {
+        cJSON_AddNullToObject(data, "latest_remote_version");
+    }
     
     if (status.last_check_time > 0) {
         cJSON_AddNumberToObject(data, "last_check", (double)status.last_check_time);
@@ -254,6 +260,12 @@ static esp_err_t h_get_webui_ota_status(httpd_req_t *req) {
             cJSON_AddStringToObject(data, "available_version", status.available_version);
         } else {
             cJSON_AddNullToObject(data, "available_version");
+        }
+
+        if (strlen(status.latest_remote_version) > 0) {
+            cJSON_AddStringToObject(data, "latest_remote_version", status.latest_remote_version);
+        } else {
+            cJSON_AddNullToObject(data, "latest_remote_version");
         }
 
         cJSON_AddBoolToObject(data, "update_available", status.update_available);

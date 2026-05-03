@@ -153,6 +153,24 @@
             background: #f0fdf4;
         }
 
+        .playset-item.pending {
+            border-color: var(--c-primary);
+            background: rgba(102, 126, 234, 0.1);
+            animation: pe-pending-pulse 1.1s ease-in-out infinite;
+            cursor: progress;
+        }
+
+        .btn.pending {
+            animation: pe-pending-pulse 1.1s ease-in-out infinite;
+            cursor: progress;
+            pointer-events: none;
+        }
+
+        @keyframes pe-pending-pulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
         .playset-info {
             flex: 1;
         }
@@ -925,6 +943,15 @@
                 payload.rename_from = state.editingName;
             }
 
+            var saveBtn = document.getElementById('saveBtn');
+            var saveAndPlayBtn = document.getElementById('saveAndPlayBtn');
+            saveAndPlayBtn.classList.add('pending');
+            saveBtn.disabled = true;
+            var clearPending = function() {
+                saveAndPlayBtn.classList.remove('pending');
+                updateSaveButtons();
+            };
+
             var xhr = new XMLHttpRequest();
             xhr.open('POST', '/playsets/' + encodeURIComponent(name), true);
             xhr.setRequestHeader('Content-Type', 'application/json');
@@ -933,21 +960,23 @@
                     try {
                         var result = JSON.parse(xhr.responseText);
                         if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
+                            clearPending();
                             showToast('Playset saved and playing!', 'success');
                             state.activePlayset = name;
-                            setTimeout(function() {
-                                cancelEdit();
-                                loadPlaysets();
-                            }, 1500);
+                            cancelEdit();
+                            loadPlaysets();
                         } else {
+                            clearPending();
                             showToast('Failed to save playset: ' + (result.error || 'Unknown error'), 'error');
                         }
                     } catch (e) {
+                        clearPending();
                         showToast('Error: ' + e.message, 'error');
                     }
                 }
             };
             xhr.onerror = function() {
+                clearPending();
                 showToast('Network error saving playset', 'error');
             };
             xhr.send(JSON.stringify(payload));
@@ -986,7 +1015,13 @@
             xhr.send();
         }
 
-        function playPlayset(name) {
+        function playPlayset(name, btn) {
+            var pendingRow = btn && btn.closest ? btn.closest('.playset-item') : null;
+            document.querySelectorAll('.playset-item.pending').forEach(function(r) {
+                r.classList.remove('pending');
+            });
+            if (pendingRow) pendingRow.classList.add('pending');
+
             var xhr = new XMLHttpRequest();
             xhr.open('POST', '/playset/' + encodeURIComponent(name), true);
             xhr.setRequestHeader('Content-Type', 'application/json');
@@ -999,14 +1034,17 @@
                             state.activePlayset = name;
                             renderPlaysetList();
                         } else {
+                            if (pendingRow) pendingRow.classList.remove('pending');
                             showToast('Failed to play: ' + (result.error || 'Unknown error'), 'error');
                         }
                     } catch (e) {
+                        if (pendingRow) pendingRow.classList.remove('pending');
                         showToast('Error playing playset: ' + e.message, 'error');
                     }
                 }
             };
             xhr.onerror = function() {
+                if (pendingRow) pendingRow.classList.remove('pending');
                 showToast('Network error playing playset', 'error');
             };
             xhr.send('{}');
@@ -1130,7 +1168,7 @@
                     '</div>' +
                     '</div>' +
                     '<div class="playset-actions">' +
-                    '<button class="btn btn-primary btn-small" onclick="playPlayset(\'' + escapeAttr(p.name) + '\')">&#9654; Play</button>' +
+                    '<button class="btn btn-primary btn-small" onclick="playPlayset(\'' + escapeAttr(p.name) + '\', this)">&#9654; Play</button>' +
                     '<button class="btn btn-secondary btn-small" onclick="loadPlayset(\'' + escapeAttr(p.name) + '\')">Edit</button>' +
                     (isProtected ? '' : '<button class="btn btn-danger" onclick="deletePlayset(\'' + escapeAttr(p.name) + '\')">Delete</button>') +
                     '</div>' +

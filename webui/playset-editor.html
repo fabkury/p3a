@@ -1146,16 +1146,23 @@
         function renderPlaysetList() {
             var list = document.getElementById('playsetList');
 
-            if (state.playsets.length === 0) {
+            var visible = [];
+            for (var i = 0; i < state.playsets.length; i++) {
+                if (!isProtectedPlayset(state.playsets[i].name)) {
+                    visible.push(state.playsets[i]);
+                }
+            }
+
+            if (visible.length === 0) {
                 list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#127925;</div><p>No playsets yet. Create your first mix!</p></div>';
+                updateCreateButton();
                 return;
             }
 
             var html = '';
-            for (var i = 0; i < state.playsets.length; i++) {
-                var p = state.playsets[i];
+            for (var i = 0; i < visible.length; i++) {
+                var p = visible[i];
                 var isActive = state.activePlayset && state.activePlayset === p.name;
-                var isProtected = isProtectedPlayset(p.name);
 
                 html += '<div class="playset-item' + (isActive ? ' active-playset' : '') + '">' +
                     '<div class="playset-info">' +
@@ -1170,7 +1177,7 @@
                     '<div class="playset-actions">' +
                     '<button class="btn btn-primary btn-small" onclick="playPlayset(\'' + escapeAttr(p.name) + '\', this)">&#9654; Play</button>' +
                     '<button class="btn btn-secondary btn-small" onclick="loadPlayset(\'' + escapeAttr(p.name) + '\')">Edit</button>' +
-                    (isProtected ? '' : '<button class="btn btn-danger" onclick="deletePlayset(\'' + escapeAttr(p.name) + '\')">Delete</button>') +
+                    '<button class="btn btn-danger" onclick="deletePlayset(\'' + escapeAttr(p.name) + '\')">Delete</button>' +
                     '</div>' +
                     '</div>';
             }

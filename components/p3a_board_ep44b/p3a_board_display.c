@@ -11,6 +11,8 @@
 #include "bsp/display.h"
 #include "esp_log.h"
 #include "esp_lcd_mipi_dsi.h"
+#include "driver/gpio.h"
+#include "esp_rom_sys.h"
 
 static const char *TAG = "p3a_board_display";
 
@@ -179,11 +181,72 @@ esp_err_t p3a_board_adjust_brightness(int delta_percent)
 #if P3A_HAS_TOUCH
 #include "bsp/touch.h"
 
+// If a slave (e.g. the GT911 mid-transaction across a reboot) is holding SDA low,
+// the I2C peripheral will busy-spin forever in i2c_ll_is_bus_busy. Clock-pulse SCL
+// as a raw GPIO before the I2C controller takes over the pins to give the slave a
+// chance to release the bus. Standard SMBus recovery procedure.
+static void i2c_bus_recovery(int scl_gpio, int sda_gpio)
+{
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << scl_gpio) | (1ULL << sda_gpio),
+        .mode = GPIO_MODE_INPUT_OUTPUT_OD,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    if (gpio_config(&io_conf) != ESP_OK) {
+        return;
+    }
+
+    gpio_set_level(scl_gpio, 1);
+    gpio_set_level(sda_gpio, 1);
+    esp_rom_delay_us(10);
+
+    if (gpio_get_level(sda_gpio) == 1) {
+        // Bus is healthy; release pins so the I2C peripheral can take them.
+        gpio_reset_pin(scl_gpio);
+        gpio_reset_pin(sda_gpio);
+        return;
+    }
+
+    ESP_LOGW(TAG, "I2C bus stuck (SDA low on GPIO%d); attempting clock-pulse recovery", sda_gpio);
+
+    int clocks = 0;
+    for (clocks = 0; clocks < 16; clocks++) {
+        gpio_set_level(scl_gpio, 0);
+        esp_rom_delay_us(5);
+        gpio_set_level(scl_gpio, 1);
+        esp_rom_delay_us(5);
+        if (gpio_get_level(sda_gpio) == 1) {
+            break;
+        }
+    }
+
+    // Generate STOP: SDA low->high while SCL high
+    gpio_set_level(sda_gpio, 0);
+    esp_rom_delay_us(5);
+    gpio_set_level(scl_gpio, 1);
+    esp_rom_delay_us(5);
+    gpio_set_level(sda_gpio, 1);
+    esp_rom_delay_us(5);
+
+    bool recovered = (gpio_get_level(sda_gpio) == 1);
+    gpio_reset_pin(scl_gpio);
+    gpio_reset_pin(sda_gpio);
+
+    if (recovered) {
+        ESP_LOGI(TAG, "I2C bus recovered after %d SCL pulse(s)", clocks + 1);
+    } else {
+        ESP_LOGE(TAG, "I2C bus recovery failed; SDA still held low after 16 pulses + STOP");
+    }
+}
+
 esp_err_t p3a_board_touch_init(esp_lcd_touch_handle_t *handle)
 {
     if (!handle) {
         return ESP_ERR_INVALID_ARG;
     }
+    i2c_bus_recovery(BSP_I2C_SCL, BSP_I2C_SDA);
     return bsp_touch_new(NULL, handle);
 }
 #endif

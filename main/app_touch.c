@@ -459,6 +459,11 @@ static void app_touch_task(void *arg)
 }
 
 #define TOUCH_INIT_TIMEOUT_MS 3000
+#define TOUCH_RECOVERY_COUNTDOWN_MS (10 * 1000)
+// Cover the worst-case recovery flow: init timeout + 10s countdown + grace.
+// If main_task is starved by a stuck I2C poll on CPU0, this deadline elapses
+// on CPU1 and the rescue task forces esp_restart().
+#define TOUCH_RESCUE_DEADLINE_MS (TOUCH_INIT_TIMEOUT_MS + TOUCH_RECOVERY_COUNTDOWN_MS + 5000)
 
 typedef struct {
     SemaphoreHandle_t done_sem;
@@ -474,11 +479,50 @@ static void touch_init_task(void *arg)
     vTaskDelete(NULL);
 }
 
+static SemaphoreHandle_t s_rescue_cancel_sem = NULL;
+
+static void touch_rescue_task(void *arg)
+{
+    if (xSemaphoreTake(s_rescue_cancel_sem, pdMS_TO_TICKS(TOUCH_RESCUE_DEADLINE_MS)) == pdFALSE) {
+        ESP_LOGE(TAG, "Touch rescue: deadline exceeded, forcing reboot "
+                      "(main task likely starved by stuck I2C poll on CPU0)");
+        esp_restart();
+    }
+    vSemaphoreDelete(s_rescue_cancel_sem);
+    s_rescue_cancel_sem = NULL;
+    vTaskDelete(NULL);
+}
+
+static void cancel_touch_rescue(void)
+{
+    if (s_rescue_cancel_sem) {
+        xSemaphoreGive(s_rescue_cancel_sem);
+    }
+}
+
 esp_err_t app_touch_init(void)
 {
 #if P3A_HAS_TOUCH
     uint16_t streak = config_store_get_touch_reboot_streak();
     ESP_LOGI(TAG, "Touch init (reboot streak=%u)", streak);
+
+    // Rescue task pinned to CPU1 at very high priority. If touch init wedges the
+    // I2C peripheral on CPU0, main_task gets starved and can't run the recovery
+    // countdown or call esp_restart(). The rescue task lives on CPU1 outside the
+    // starvation zone and forcibly reboots if the recovery flow doesn't complete
+    // in time.
+    s_rescue_cancel_sem = xSemaphoreCreateBinary();
+    if (s_rescue_cancel_sem) {
+        BaseType_t r = xTaskCreatePinnedToCore(touch_rescue_task, "touch_rescue", 2560,
+                                               NULL, configMAX_PRIORITIES - 2, NULL, 1);
+        if (r != pdPASS) {
+            ESP_LOGW(TAG, "Failed to spawn touch rescue task; lockup recovery will be unavailable");
+            vSemaphoreDelete(s_rescue_cancel_sem);
+            s_rescue_cancel_sem = NULL;
+        }
+    } else {
+        ESP_LOGW(TAG, "Failed to create rescue semaphore; lockup recovery will be unavailable");
+    }
 
     // Spawn sacrificial task to attempt touch init with timeout
     touch_init_ctx_t ctx = {
@@ -488,12 +532,14 @@ esp_err_t app_touch_init(void)
     };
     if (ctx.done_sem == NULL) {
         ESP_LOGE(TAG, "Failed to create touch init semaphore");
+        cancel_touch_rescue();
         return ESP_ERR_NO_MEM;
     }
 
     BaseType_t created = xTaskCreate(touch_init_task, "touch_init", 4096, &ctx, 5, NULL);
     if (created != pdPASS) {
         vSemaphoreDelete(ctx.done_sem);
+        cancel_touch_rescue();
         ESP_LOGE(TAG, "Failed to create touch init task");
         return ESP_FAIL;
     }
@@ -535,6 +581,7 @@ esp_err_t app_touch_init(void)
             }
 
             display_renderer_exit_ui_mode();
+            cancel_touch_rescue();
             return ESP_ERR_NOT_FINISHED;
         }
 
@@ -543,6 +590,7 @@ esp_err_t app_touch_init(void)
             config_store_reset_touch_reboot_streak();
             ESP_LOGI(TAG, "Touch recovered after %u reboot(s)", streak);
         }
+        cancel_touch_rescue();
     } else {
         // Timeout — touch init is stuck (I2C bus lockup)
         ESP_LOGE(TAG, "Touch init timed out after %d ms (I2C bus lockup suspected)", TOUCH_INIT_TIMEOUT_MS);
@@ -565,7 +613,11 @@ esp_err_t app_touch_init(void)
             // Never reached
         }
 
-        // streak >= 1: already rebooted, enter degraded mode
+        // streak >= 1: already rebooted, enter degraded mode.
+        // Note: if we reached here, main_task is alive enough to time out, but the
+        // touch_init task is still spinning on CPU0 with priority 5, which will
+        // continue to starve main_task during vTaskDelay below. The rescue task
+        // on CPU1 will fire if this countdown can't make progress.
         ESP_LOGW(TAG, "Touch still stuck after reboot — entering degraded mode (no touch)");
         display_renderer_enter_ui_mode();
         for (int i = 10; i > 0; i--) {
@@ -576,6 +628,7 @@ esp_err_t app_touch_init(void)
         }
 
         display_renderer_exit_ui_mode();
+        cancel_touch_rescue();
         return ESP_ERR_NOT_FINISHED;
     }
 

@@ -16,7 +16,7 @@ static const char *TAG = "sdio_bus";
 
 static SemaphoreHandle_t s_bus_mutex = NULL;
 static volatile bool s_initialized = false;
-static volatile const char *s_current_holder = NULL;
+static const char * volatile s_current_holder = NULL;
 
 esp_err_t sdio_bus_init(void)
 {

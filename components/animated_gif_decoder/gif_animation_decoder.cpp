@@ -235,7 +235,7 @@ esp_err_t gif_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
         return ESP_ERR_NO_MEM;
     }
 
-    GIFINFO gif_info = {0};
+    GIFINFO gif_info = {};
     int info_result = impl->gif->getInfo(&gif_info);
     if (info_result != 1) {
         ESP_LOGE(TAG, "Failed to read GIF metadata via getInfo()");

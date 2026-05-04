@@ -53,3 +53,8 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
     GDISP_INCLUDE_FONT_DEJAVUSANS32=GFXON
 )
 
+# Silence the intentional `#warning` from gos_freertos.c that fires when
+# GFX_OS_NO_INIT=GFXON (it reminds integrators to call vTaskStartScheduler()
+# themselves — which we do).
+target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-cpp)
+

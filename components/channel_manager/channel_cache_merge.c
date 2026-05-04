@@ -66,18 +66,6 @@ static void build_vault_path_from_entry(const makapix_channel_entry_t *entry,
 }
 
 /**
- * @brief Helper: comparison function for qsort (entries by created_at, oldest first)
- */
-static int compare_entries_by_created_at(const void *a, const void *b)
-{
-    const makapix_channel_entry_t *ea = (const makapix_channel_entry_t *)a;
-    const makapix_channel_entry_t *eb = (const makapix_channel_entry_t *)b;
-    if (ea->created_at < eb->created_at) return -1;
-    if (ea->created_at > eb->created_at) return 1;
-    return 0;
-}
-
-/**
  * @brief Helper: comparison function for qsort (entries by created_at, newest first)
  */
 static int compare_entries_by_created_at_desc(const void *a, const void *b)

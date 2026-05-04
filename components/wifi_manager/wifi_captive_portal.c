@@ -62,24 +62,6 @@ static void url_decode(char *str)
     *dst = '\0';
 }
 
-/* URL Encode Function - Encodes unsafe characters for URL parameters */
-static void url_encode(const char *in, char *out, size_t out_len) {
-    static const char *hex = "0123456789ABCDEF";
-    size_t o = 0;
-    for (size_t i = 0; in[i] && o + 3 < out_len; i++) {
-        unsigned char c = (unsigned char)in[i];
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-            (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') {
-            out[o++] = c;
-        } else {
-            out[o++] = '%';
-            out[o++] = hex[c >> 4];
-            out[o++] = hex[c & 0xF];
-        }
-    }
-    out[o] = '\0';
-}
-
 /* HTML Escape Function - Escapes special characters for safe HTML display */
 static void html_escape_ssid(const char *in, char *out, size_t out_len) {
     size_t o = 0;

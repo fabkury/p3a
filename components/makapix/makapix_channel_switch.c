@@ -432,23 +432,6 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier,
 // --------------------------------------------------------------------------
 
 /**
- * @brief Detect asset type from file path extension
- */
-static asset_type_t detect_asset_type_from_path(const char *filepath)
-{
-    if (!filepath) return ASSET_TYPE_WEBP;
-
-    size_t len = strlen(filepath);
-    if (len >= 5 && strcasecmp(filepath + len - 5, ".webp") == 0) return ASSET_TYPE_WEBP;
-    if (len >= 4 && strcasecmp(filepath + len - 4, ".gif") == 0)  return ASSET_TYPE_GIF;
-    if (len >= 4 && strcasecmp(filepath + len - 4, ".png") == 0)  return ASSET_TYPE_PNG;
-    if (len >= 4 && strcasecmp(filepath + len - 4, ".jpg") == 0)  return ASSET_TYPE_JPEG;
-    if (len >= 5 && strcasecmp(filepath + len - 5, ".jpeg") == 0) return ASSET_TYPE_JPEG;
-
-    return ASSET_TYPE_WEBP;  // Default
-}
-
-/**
  * @brief Show a single artwork by storage_key
  *
  * Delegates to play_scheduler_play_artwork() which creates an artwork channel

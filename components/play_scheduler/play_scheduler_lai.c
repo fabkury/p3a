@@ -126,56 +126,6 @@ static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
     return true;
 }
 
-/**
- * @brief Remove an entry from LAi by ci_index (swap-and-pop for O(1))
- *
- * For Makapix channels, delegates to channel_cache module which handles
- * dirty tracking and debounced persistence. The cache API now uses post_id.
- *
- * Thread-safety: Takes cache mutex to validate ci_index and get post_id,
- * as the cache may be reallocated during merge operations.
- */
-static bool ps_lai_remove(ps_channel_state_t *ch, uint32_t ci_index)
-{
-    // For Makapix channels with cache, use channel_cache module
-    if (ch->cache) {
-        // Take mutex to safely validate ci_index and get post_id
-        xSemaphoreTake(ch->cache->mutex, portMAX_DELAY);
-
-        // Validate ci_index against current cache size
-        if (ci_index >= ch->cache->entry_count) {
-            xSemaphoreGive(ch->cache->mutex);
-            return false;
-        }
-
-        // Get post_id under mutex
-        int32_t post_id = ch->cache->entries[ci_index].post_id;
-        xSemaphoreGive(ch->cache->mutex);
-
-        // lai_remove_entry takes its own mutex
-        bool removed = lai_remove_entry(ch->cache, post_id);
-        if (removed) {
-            channel_cache_schedule_save(ch->cache);
-        }
-        return removed;
-    }
-
-    // Fallback for SD card channels
-    if (!ch->available_post_ids || ch->available_count == 0) return false;
-    if (ci_index >= ch->entry_count) return false;
-
-    makapix_channel_entry_t *entries = (makapix_channel_entry_t *)ch->entries;
-    int32_t post_id = entries[ci_index].post_id;
-    for (size_t i = 0; i < ch->available_count; i++) {
-        if (ch->available_post_ids[i] == post_id) {
-            ch->available_post_ids[i] = ch->available_post_ids[ch->available_count - 1];
-            ch->available_count--;
-            return true;
-        }
-    }
-    return false;
-}
-
 // ============================================================================
 // Download Completion Callback
 // ============================================================================

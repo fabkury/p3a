@@ -287,9 +287,16 @@ async function loadCartFromUrl(url) {
 
 // Connect WebSocket
 function connectWebSocket() {
+    // Idempotent: skip if a connection is already in progress or open.
+    // Lets the page open the socket on load (so pings keep PICO-8 mode alive
+    // even before a cart is loaded) without conflicting with startEmulation().
+    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+        return;
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/pico_stream`;
-    
+
     ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
     
@@ -868,6 +875,9 @@ urlInput.addEventListener('keypress', (e) => {
 // Initialize on page load
 window.addEventListener('load', () => {
     drawSplashLogo();
+    // Open the stream WebSocket immediately so its 500 ms ping keeps PICO-8
+    // mode alive on the device even before (or without) a cart being loaded.
+    connectWebSocket();
     initWasm();
 });
 

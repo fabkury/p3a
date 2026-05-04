@@ -676,6 +676,32 @@ static void refresh_task(void *arg)
                         config_store_get_refresh_allow_override()) {
                         config_store_set_refresh_allow_override(false);
                     }
+                    // Sweep current channel state for the soonest stale_at.
+                    // The accumulator only captures channels that traversed
+                    // the dispatcher's per-type freshness check; channels
+                    // skipped earlier at refresh_channel_is_eligible's
+                    // pre-emption gate never contribute. Recomputing from
+                    // ch->last_refresh here makes the adaptive delay correct
+                    // regardless of which path each channel took.
+                    for (size_t i = 0; i < state->channel_count; i++) {
+                        ps_channel_state_t *cch = &state->channels[i];
+                        if (cch->last_refresh <= 0) continue;
+                        uint32_t cinterval = 0;
+                        if (cch->type == PS_CHANNEL_TYPE_GIPHY) {
+                            cinterval = config_store_get_giphy_refresh_interval();
+                        } else if (cch->type == PS_CHANNEL_TYPE_NAMED ||
+                                   cch->type == PS_CHANNEL_TYPE_USER ||
+                                   cch->type == PS_CHANNEL_TYPE_HASHTAG ||
+                                   cch->type == PS_CHANNEL_TYPE_REACTIONS) {
+                            cinterval = config_store_get_refresh_interval_sec();
+                        }
+                        if (cinterval == 0) continue;
+                        time_t cstale = cch->last_refresh + (time_t)cinterval;
+                        if (earliest_stale_time == 0 || cstale < earliest_stale_time) {
+                            earliest_stale_time = cstale;
+                        }
+                    }
+
                     // Compute adaptive delay from freshness tracking
                     // Use absolute stale time so elapsed processing time is
                     // automatically accounted for (no stale relative deltas).

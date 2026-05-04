@@ -41,6 +41,11 @@ typedef struct {
     // Active playset name (persisted to NVS)
     char active_playset[P3A_PLAYSET_MAX_NAME_LEN + 1];
 
+    // In-memory cache of the show_artwork title. Mirrors the NVS key
+    // "aw_title" while the artwork sentinel is active; cleared otherwise.
+    // Mutex-protected like active_playset.
+    char active_artwork_title[P3A_ACTIVE_ARTWORK_TITLE_MAX + 1];
+
     // Channel info
     p3a_channel_info_t current_channel;
 

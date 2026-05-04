@@ -384,11 +384,14 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
                 int32_t post_id = 0;
                 char skey[96] = "";
                 char url[256] = "";
+                char title[P3A_ACTIVE_ARTWORK_TITLE_MAX + 1] = "";
                 if (p3a_state_get_active_artwork(&post_id, skey, sizeof(skey),
-                                                  url, sizeof(url)) == ESP_OK &&
+                                                  url, sizeof(url),
+                                                  title, sizeof(title)) == ESP_OK &&
                     skey[0] != '\0') {
-                    ESP_LOGI(TAG, "Restoring single artwork: post_id=%ld", (long)post_id);
-                    ps_err = play_scheduler_play_artwork(post_id, skey, url);
+                    ESP_LOGI(TAG, "Restoring single artwork: post_id=%ld, title='%s'",
+                             (long)post_id, title);
+                    ps_err = play_scheduler_play_artwork(post_id, skey, url, title);
                 } else {
                     ESP_LOGW(TAG, "Artwork sentinel set but payload missing — falling back");
                 }

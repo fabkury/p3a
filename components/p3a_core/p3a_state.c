@@ -27,6 +27,7 @@ static const char *TAG = "p3a_state";
 #define NVS_KEY_AW_POST_ID     "aw_post_id"  // int32_t
 #define NVS_KEY_AW_STORAGE_KEY "aw_skey"     // string (vault storage_key)
 #define NVS_KEY_AW_ART_URL     "aw_url"      // string (download URL)
+#define NVS_KEY_AW_TITLE       "aw_title"    // string (post title for WebUI)
 #define NVS_KEY_LOCAL_FILEPATH "local_path"  // string (SD-card filepath)
 
 // Global shared state (non-static so other p3a_state_*.c files can access via internal header)
@@ -173,7 +174,8 @@ esp_err_t p3a_state_set_active_playset(const char *name)
         strcmp(name, P3A_PLAYSET_NAME_LOCAL_FILE) != 0) {
         const char *payload_keys[] = {
             NVS_KEY_AW_POST_ID, NVS_KEY_AW_STORAGE_KEY,
-            NVS_KEY_AW_ART_URL, NVS_KEY_LOCAL_FILEPATH,
+            NVS_KEY_AW_ART_URL, NVS_KEY_AW_TITLE,
+            NVS_KEY_LOCAL_FILEPATH,
         };
         for (size_t i = 0; i < sizeof(payload_keys) / sizeof(payload_keys[0]); i++) {
             esp_err_t e = nvs_erase_key(handle, payload_keys[i]);
@@ -181,6 +183,10 @@ esp_err_t p3a_state_set_active_playset(const char *name)
                 ESP_LOGW(TAG, "Failed to erase '%s': %s", payload_keys[i], esp_err_to_name(e));
             }
         }
+        // Drop the cached title too, since we just left the artwork sentinel.
+        xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+        s_state.active_artwork_title[0] = '\0';
+        xSemaphoreGive(s_state.mutex);
     }
 
     if (err == ESP_OK) {
@@ -207,7 +213,10 @@ const char *p3a_state_get_active_playset(void)
     return s_state.active_playset;
 }
 
-esp_err_t p3a_state_set_active_artwork(int32_t post_id, const char *storage_key, const char *art_url)
+esp_err_t p3a_state_set_active_artwork(int32_t post_id,
+                                       const char *storage_key,
+                                       const char *art_url,
+                                       const char *title)
 {
     if (!s_state.initialized || !s_state.mutex) {
         return ESP_ERR_INVALID_STATE;
@@ -216,8 +225,15 @@ esp_err_t p3a_state_set_active_artwork(int32_t post_id, const char *storage_key,
         return ESP_ERR_INVALID_ARG;
     }
 
+    bool has_title = (title != NULL && title[0] != '\0');
+
     xSemaphoreTake(s_state.mutex, portMAX_DELAY);
     strlcpy(s_state.active_playset, P3A_PLAYSET_NAME_ARTWORK, sizeof(s_state.active_playset));
+    if (has_title) {
+        strlcpy(s_state.active_artwork_title, title, sizeof(s_state.active_artwork_title));
+    } else {
+        s_state.active_artwork_title[0] = '\0';
+    }
     xSemaphoreGive(s_state.mutex);
 
     nvs_handle_t handle;
@@ -231,6 +247,16 @@ esp_err_t p3a_state_set_active_artwork(int32_t post_id, const char *storage_key,
     if (err == ESP_OK) err = nvs_set_i32(handle, NVS_KEY_AW_POST_ID, post_id);
     if (err == ESP_OK) err = nvs_set_str(handle, NVS_KEY_AW_STORAGE_KEY, storage_key);
     if (err == ESP_OK) err = nvs_set_str(handle, NVS_KEY_AW_ART_URL, art_url);
+    if (err == ESP_OK) {
+        if (has_title) {
+            err = nvs_set_str(handle, NVS_KEY_AW_TITLE, title);
+        } else {
+            esp_err_t e = nvs_erase_key(handle, NVS_KEY_AW_TITLE);
+            if (e != ESP_OK && e != ESP_ERR_NVS_NOT_FOUND) {
+                ESP_LOGW(TAG, "Failed to erase aw_title: %s", esp_err_to_name(e));
+            }
+        }
+    }
 
     if (err == ESP_OK) {
         esp_err_t e = nvs_erase_key(handle, NVS_KEY_LOCAL_FILEPATH);
@@ -245,8 +271,8 @@ esp_err_t p3a_state_set_active_artwork(int32_t post_id, const char *storage_key,
     nvs_close(handle);
 
     if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Persisted active artwork: post_id=%ld, storage_key=%.16s",
-                 (long)post_id, storage_key);
+        ESP_LOGI(TAG, "Persisted active artwork: post_id=%ld, storage_key=%.16s, title='%s'",
+                 (long)post_id, storage_key, has_title ? title : "");
     } else {
         ESP_LOGW(TAG, "Failed to persist artwork: %s", esp_err_to_name(err));
     }
@@ -277,13 +303,20 @@ esp_err_t p3a_state_set_active_local_file(const char *filepath)
     if (err == ESP_OK) err = nvs_set_str(handle, NVS_KEY_LOCAL_FILEPATH, filepath);
 
     if (err == ESP_OK) {
-        const char *aw_keys[] = { NVS_KEY_AW_POST_ID, NVS_KEY_AW_STORAGE_KEY, NVS_KEY_AW_ART_URL };
+        const char *aw_keys[] = {
+            NVS_KEY_AW_POST_ID, NVS_KEY_AW_STORAGE_KEY,
+            NVS_KEY_AW_ART_URL, NVS_KEY_AW_TITLE,
+        };
         for (size_t i = 0; i < sizeof(aw_keys) / sizeof(aw_keys[0]); i++) {
             esp_err_t e = nvs_erase_key(handle, aw_keys[i]);
             if (e != ESP_OK && e != ESP_ERR_NVS_NOT_FOUND) {
                 ESP_LOGW(TAG, "Failed to erase '%s': %s", aw_keys[i], esp_err_to_name(e));
             }
         }
+        // Switching to a local-file source — drop the cached title.
+        xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+        s_state.active_artwork_title[0] = '\0';
+        xSemaphoreGive(s_state.mutex);
     }
 
     if (err == ESP_OK) {
@@ -301,7 +334,8 @@ esp_err_t p3a_state_set_active_local_file(const char *filepath)
 
 esp_err_t p3a_state_get_active_artwork(int32_t *post_id,
                                        char *storage_key, size_t skey_len,
-                                       char *art_url, size_t url_len)
+                                       char *art_url, size_t url_len,
+                                       char *title, size_t title_len)
 {
     if (!post_id || !storage_key || skey_len == 0 || !art_url || url_len == 0) {
         return ESP_ERR_INVALID_ARG;
@@ -329,9 +363,31 @@ esp_err_t p3a_state_get_active_artwork(int32_t *post_id,
         size_t len = url_len;
         err = nvs_get_str(handle, NVS_KEY_AW_ART_URL, art_url, &len);
     }
+    if (err == ESP_OK && title && title_len > 0) {
+        title[0] = '\0';
+        size_t len = title_len;
+        esp_err_t te = nvs_get_str(handle, NVS_KEY_AW_TITLE, title, &len);
+        if (te != ESP_OK && te != ESP_ERR_NVS_NOT_FOUND) {
+            // Real read error (e.g. ESP_ERR_NVS_INVALID_LENGTH). Don't fail
+            // the whole call — title is best-effort metadata. Log and clear.
+            ESP_LOGW(TAG, "Failed to read aw_title: %s", esp_err_to_name(te));
+            title[0] = '\0';
+        }
+    }
 
     nvs_close(handle);
     return err;
+}
+
+const char *p3a_state_get_active_artwork_title(void)
+{
+    if (!s_state.initialized) {
+        return "";
+    }
+    // Returns pointer to mutex-protected buffer. Reads of a NUL-terminated
+    // C string are safe enough without the mutex because writers only ever
+    // shorten or fully overwrite the buffer in-place.
+    return s_state.active_artwork_title;
 }
 
 esp_err_t p3a_state_get_active_local_file(char *filepath, size_t len)
@@ -378,6 +434,7 @@ esp_err_t p3a_state_init(void)
 
     // Load persisted playset from NVS
     memset(s_state.active_playset, 0, sizeof(s_state.active_playset));
+    memset(s_state.active_artwork_title, 0, sizeof(s_state.active_artwork_title));
     nvs_handle_t handle;
     esp_err_t nvs_err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
     if (nvs_err == ESP_OK) {
@@ -386,9 +443,22 @@ esp_err_t p3a_state_init(void)
         if (nvs_err != ESP_OK && nvs_err != ESP_ERR_NVS_NOT_FOUND) {
             ESP_LOGW(TAG, "Failed to load playset from NVS: %s", esp_err_to_name(nvs_err));
         }
+        // Title cache is only meaningful while the artwork sentinel is the
+        // active playset — for other playsets we leave it empty (older NVS
+        // images may not have the key at all, which is fine).
+        if (strcmp(s_state.active_playset, P3A_PLAYSET_NAME_ARTWORK) == 0) {
+            size_t tlen = sizeof(s_state.active_artwork_title);
+            esp_err_t te = nvs_get_str(handle, NVS_KEY_AW_TITLE,
+                                       s_state.active_artwork_title, &tlen);
+            if (te != ESP_OK && te != ESP_ERR_NVS_NOT_FOUND) {
+                ESP_LOGW(TAG, "Failed to load aw_title from NVS: %s", esp_err_to_name(te));
+                s_state.active_artwork_title[0] = '\0';
+            }
+        }
         nvs_close(handle);
     }
-    ESP_LOGI(TAG, "Loaded active playset: '%s'", s_state.active_playset);
+    ESP_LOGI(TAG, "Loaded active playset: '%s' (title='%s')",
+             s_state.active_playset, s_state.active_artwork_title);
 
     // Default channel until playset system takes over
     s_state.current_channel.type = P3A_CHANNEL_SDCARD;

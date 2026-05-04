@@ -679,7 +679,7 @@ fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
         activePlaysetName = data.active_playset;
     }
     if (data.active_playset && data.playset_info) {
-        updateNowPlaying(data.active_playset, data.playset_info);
+        updateNowPlaying(data.active_playset, data.playset_info, data.active_artwork_title);
     }
     if (data.paused) {
         isPaused = true;
@@ -1161,12 +1161,14 @@ function renderChannelRows(channels) {
         container.removeChild(container.lastChild);
     }
 }
-function updateNowPlaying(name, info) {
+function updateNowPlaying(name, info, displayOverride) {
     var card = document.getElementById('now-playing');
     if (!info) { card.style.display = 'none'; return; }
     var nameEl = document.getElementById('now-playing-name');
     var statsEl = document.getElementById('now-playing-stats');
-    nameEl.textContent = playsetDisplayName(name);
+    nameEl.textContent = (displayOverride && displayOverride.length)
+        ? displayOverride
+        : playsetDisplayName(name);
     var parts = [];
     if (typeof info.channel_count === 'number') parts.push(info.channel_count + ' ch');
     if (typeof info.total_cached === 'number' && typeof info.total_entries === 'number')
@@ -1223,7 +1225,7 @@ function pollActivePlayset(attempt) {
                     }));
                 cdBanner.style.display = (giphyCooldownActive && giphyWaiting) ? 'block' : 'none';
                 if (resp.data.name && resp.data.playset_info) {
-                    updateNowPlaying(resp.data.name, resp.data.playset_info);
+                    updateNowPlaying(resp.data.name, resp.data.playset_info, resp.data.active_artwork_title);
                     updatePillBarActive(resp.data.name);
                 }
                 updateArtwork(resp.data.current_artwork);

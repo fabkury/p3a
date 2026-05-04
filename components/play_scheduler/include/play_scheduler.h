@@ -149,9 +149,15 @@ esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag);
  * @param post_id Post ID for view tracking (0 for no tracking)
  * @param storage_key UUID storage key
  * @param art_url Download URL for the artwork
+ * @param title Optional post title for WebUI display (NULL or "" → no title).
+ *              Caller must have already truncated to
+ *              P3A_ACTIVE_ARTWORK_TITLE_MAX bytes.
  * @return ESP_OK on success
  */
-esp_err_t play_scheduler_play_artwork(int32_t post_id, const char *storage_key, const char *art_url);
+esp_err_t play_scheduler_play_artwork(int32_t post_id,
+                                      const char *storage_key,
+                                      const char *art_url,
+                                      const char *title);
 
 /**
  * @brief Play a local file via the scheduler (no view tracking)

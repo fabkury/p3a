@@ -10,7 +10,10 @@
 #include "event_bus.h"
 
 // Forward declaration to avoid pulling in play_scheduler.h (which has heavy deps)
-esp_err_t play_scheduler_play_artwork(int32_t post_id, const char *storage_key, const char *art_url);
+esp_err_t play_scheduler_play_artwork(int32_t post_id,
+                                      const char *storage_key,
+                                      const char *art_url,
+                                      const char *title);
 
 // --------------------------------------------------------------------------
 // Public API - Channel switching
@@ -437,13 +440,17 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier,
  * Delegates to play_scheduler_play_artwork() which creates an artwork channel
  * and handles download/playback through the unified scheduler path.
  */
-esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const char *art_url)
+esp_err_t makapix_show_artwork(int32_t post_id,
+                               const char *storage_key,
+                               const char *art_url,
+                               const char *title)
 {
     if (!storage_key || !art_url) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    ESP_LOGI(MAKAPIX_TAG, "show_artwork: delegating to play_scheduler (post_id=%ld)", (long)post_id);
+    ESP_LOGI(MAKAPIX_TAG, "show_artwork: delegating to play_scheduler (post_id=%ld, title='%s')",
+             (long)post_id, (title && title[0]) ? title : "");
 
     // Mark that we're now on a single-artwork "channel" - this ensures that
     // subsequent channel switch requests (e.g., back to "promoted") will trigger
@@ -454,7 +461,7 @@ esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const c
         s_current_channel = NULL;
     }
 
-    return play_scheduler_play_artwork(post_id, storage_key, art_url);
+    return play_scheduler_play_artwork(post_id, storage_key, art_url, title);
 }
 
 void makapix_adopt_channel_handle(void *channel)

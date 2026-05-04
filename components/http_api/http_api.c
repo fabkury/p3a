@@ -303,6 +303,7 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
         cJSON *storage_shard = cJSON_GetObjectItem(payload, "storage_shard");
         cJSON *native_format = cJSON_GetObjectItem(payload, "native_format");
         cJSON *post_id = cJSON_GetObjectItem(payload, "post_id");
+        cJSON *title = cJSON_GetObjectItem(payload, "title");
 
         if (storage_key && cJSON_IsString(storage_key) &&
             storage_shard && cJSON_IsString(storage_shard) &&
@@ -313,10 +314,20 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
             const char *fmt = cJSON_GetStringValue(native_format);
             int32_t pid = post_id && cJSON_IsNumber(post_id) ? (int32_t)cJSON_GetNumberValue(post_id) : 0;
 
+            // Truncate the title at the JSON boundary so all downstream code
+            // sees a bounded, NUL-terminated string (≤128 bytes). Byte-level
+            // truncation may clip a UTF-8 multibyte sequence; the WebUI
+            // tolerates that as a replacement char.
+            char title_buf[P3A_ACTIVE_ARTWORK_TITLE_MAX + 1];
+            title_buf[0] = '\0';
+            if (title && cJSON_IsString(title)) {
+                strlcpy(title_buf, cJSON_GetStringValue(title), sizeof(title_buf));
+            }
+
             char art_url[256];
             snprintf(art_url, sizeof(art_url), "/api/vault/%s/%s.%s", shard, key, fmt);
 
-            makapix_show_artwork(pid, key, art_url);
+            makapix_show_artwork(pid, key, art_url, title_buf);
         }
     } else if (strcmp(command_type, "show_url") == 0) {
         cJSON *artwork_url = cJSON_GetObjectItem(payload, "artwork_url");
@@ -387,7 +398,9 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
             const char *skey = cJSON_GetStringValue(storage_key_item);
             const char *aurl = cJSON_GetStringValue(art_url_item);
 
-            esp_err_t err = play_scheduler_play_artwork(pid, skey, aurl);
+            // swap_to has no title context — the WebUI shows the default
+            // sentinel label until a future show_artwork carries one.
+            esp_err_t err = play_scheduler_play_artwork(pid, skey, aurl, NULL);
             if (err != ESP_OK) {
                 ESP_LOGE(HTTP_API_TAG, "swap_to Makapix failed: %s", esp_err_to_name(err));
             }

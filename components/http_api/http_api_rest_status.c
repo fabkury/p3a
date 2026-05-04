@@ -188,6 +188,16 @@ esp_err_t h_get_api_init(httpd_req_t *req) {
     const char *playset = p3a_state_get_active_playset();
     cJSON_AddStringToObject(data, "active_playset", playset ? playset : "");
 
+    // For show_artwork sessions, also expose the post title so the WebUI can
+    // use it as the now-playing display name on first paint (this endpoint
+    // is the page-load init payload). See /playsets/active for the same field.
+    if (playset && strcmp(playset, P3A_PLAYSET_NAME_ARTWORK) == 0) {
+        const char *aw_title = p3a_state_get_active_artwork_title();
+        if (aw_title && aw_title[0] != '\0') {
+            cJSON_AddStringToObject(data, "active_artwork_title", aw_title);
+        }
+    }
+
     // paused: current pause state
     cJSON_AddBoolToObject(data, "paused", playback_service_is_paused());
 

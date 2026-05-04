@@ -822,13 +822,17 @@ static void ps_build_artwork_filepath(const char *storage_key, const char *art_u
              storage_key, ext);
 }
 
-esp_err_t play_scheduler_play_artwork(int32_t post_id, const char *storage_key, const char *art_url)
+esp_err_t play_scheduler_play_artwork(int32_t post_id,
+                                      const char *storage_key,
+                                      const char *art_url,
+                                      const char *title)
 {
     if (!storage_key || !art_url) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    ESP_LOGI(TAG, "play_artwork: post_id=%ld, storage_key=%s", (long)post_id, storage_key);
+    ESP_LOGI(TAG, "play_artwork: post_id=%ld, storage_key=%s, title='%s'",
+             (long)post_id, storage_key, (title && title[0]) ? title : "");
 
     // Set view intent BEFORE execute_command (for view tracking)
     extern void makapix_set_view_intent_intentional(bool intentional);
@@ -864,7 +868,7 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id, const char *storage_key, 
         // Treat the single-artwork session as a first-class active playset so
         // the WebUI shows it correctly, the preview URL builder fires, and
         // boot restore can replay it.
-        p3a_state_set_active_artwork(post_id, storage_key, art_url);
+        p3a_state_set_active_artwork(post_id, storage_key, art_url, title);
     }
     free(cmd);
     return result;

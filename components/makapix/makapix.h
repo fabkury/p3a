@@ -151,15 +151,21 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier,
 
 /**
  * @brief Show a specific artwork (creates artwork-channel)
- * 
+ *
  * Creates an ephemeral channel with a single artwork and switches to it.
- * 
+ *
  * @param post_id Post ID
  * @param storage_key Storage key UUID
  * @param art_url Artwork URL
+ * @param title Optional post title for WebUI display (NULL or "" → no title).
+ *              Caller must have already truncated to
+ *              P3A_ACTIVE_ARTWORK_TITLE_MAX bytes.
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t makapix_show_artwork(int32_t post_id, const char *storage_key, const char *art_url);
+esp_err_t makapix_show_artwork(int32_t post_id,
+                               const char *storage_key,
+                               const char *art_url,
+                               const char *title);
 
 /**
  * @brief Adopt a Makapix channel handle created elsewhere (boot restore path)

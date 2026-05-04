@@ -451,7 +451,8 @@ esp_err_t h_post_swap_to(httpd_req_t *req) {
         const char *storage_key = cJSON_GetStringValue(storage_key_item);
         const char *art_url = cJSON_GetStringValue(art_url_item);
 
-        err = play_scheduler_play_artwork(post_id, storage_key, art_url);
+        // REST swap_to has no post-title context.
+        err = play_scheduler_play_artwork(post_id, storage_key, art_url, NULL);
     }
 
     cJSON_Delete(root);

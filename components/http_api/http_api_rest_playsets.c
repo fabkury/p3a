@@ -307,6 +307,18 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
 
     cJSON *data = cJSON_AddObjectToObject(root, "data");
     cJSON_AddStringToObject(data, "name", playset ? playset : "");
+
+    // Surface the post title for show_artwork sessions so the WebUI can use
+    // it as the playset display name. Field is only emitted when the artwork
+    // sentinel is active and a title was actually carried in the MQTT
+    // payload — absence implies "fall back to the hardcoded default label".
+    if (playset && strcmp(playset, P3A_PLAYSET_NAME_ARTWORK) == 0) {
+        const char *aw_title = p3a_state_get_active_artwork_title();
+        if (aw_title && aw_title[0] != '\0') {
+            cJSON_AddStringToObject(data, "active_artwork_title", aw_title);
+        }
+    }
+
     cJSON_AddBoolToObject(data, "registered", makapix_store_has_player_key());
 
     uint32_t giphy_cd = giphy_is_rate_limited() ? giphy_cooldown_remaining_sec() : 0;

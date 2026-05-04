@@ -51,6 +51,8 @@ The first time the board boots, it doesn't know your Wi-Fi yet, so it broadcasts
 3. Enter your home Wi-Fi name and password, then click **Save & connect**.
 4. The board reboots and joins your Wi-Fi.
 
+> **Heads up about the optional "Device name" field.** If you leave it blank, your p3a's address will be `http://p3a.local/` — that's what every URL in this guide assumes. If you fill it in (say, with `bedroom`), the address changes to `http://p3a-bedroom.local/` and you'll need to use that everywhere instead. The setup page shows the resulting address live as you type, so you can always check there. Skip this field unless you have more than one p3a on the same network.
+
 That's the technical setup done. Your p3a is now online.
 
 ---

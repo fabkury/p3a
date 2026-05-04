@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/xk9umcujXV"><strong>Discord</strong></a> · <a href="https://makapix.club/"><strong>Makapix Club</strong></a> · <a href="docs/HOW-TO-USE.md"><strong>User Guide</strong></a> · <a href="https://fabkury.github.io/p3a/web-flasher/"><strong>Web Flasher</strong></a> · <a href="https://makezine.com/projects/desktop-pixel-art-player-p3a/"><strong>Makezine Article</strong></a> 
+  <a href="docs/QUICK-START.md"><strong>Quick Start</strong></a> · <a href="https://discord.gg/xk9umcujXV"><strong>Discord</strong></a> · <a href="https://makapix.club/"><strong>Makapix Club</strong></a> · <a href="docs/HOW-TO-USE.md"><strong>User Guide</strong></a> · <a href="https://fabkury.github.io/p3a/web-flasher/"><strong>Web Flasher</strong></a> · <a href="https://makezine.com/projects/desktop-pixel-art-player-p3a/"><strong>Makezine Article</strong></a> 
 </p>
 
 ---
@@ -39,6 +39,8 @@ It's open source, self-contained, and designed to be as simple to use as a pictu
 ---
 
 ## Quick Start
+
+> **First time setting up?** Follow the [**Quick Start Guide**](docs/QUICK-START.md) — a step-by-step walkthrough that takes you from box to art on the screen in about 15 minutes.
 
 **What you need:**
 - [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) board ($39.99)

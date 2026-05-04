@@ -379,20 +379,47 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
     if (cmd) {
         if (active_playset && active_playset[0] != '\0') {
+            // Sentinel: single Makapix artwork (ephemeral, payload in NVS)
+            if (strcmp(active_playset, P3A_PLAYSET_NAME_ARTWORK) == 0) {
+                int32_t post_id = 0;
+                char skey[96] = "";
+                char url[256] = "";
+                if (p3a_state_get_active_artwork(&post_id, skey, sizeof(skey),
+                                                  url, sizeof(url)) == ESP_OK &&
+                    skey[0] != '\0') {
+                    ESP_LOGI(TAG, "Restoring single artwork: post_id=%ld", (long)post_id);
+                    ps_err = play_scheduler_play_artwork(post_id, skey, url);
+                } else {
+                    ESP_LOGW(TAG, "Artwork sentinel set but payload missing — falling back");
+                }
+            }
+            // Sentinel: single SD-card / uploaded file
+            else if (strcmp(active_playset, P3A_PLAYSET_NAME_LOCAL_FILE) == 0) {
+                char filepath[256] = "";
+                if (p3a_state_get_active_local_file(filepath, sizeof(filepath)) == ESP_OK &&
+                    filepath[0] != '\0') {
+                    ESP_LOGI(TAG, "Restoring local file: %s", filepath);
+                    ps_err = play_scheduler_play_local_file(filepath);
+                } else {
+                    ESP_LOGW(TAG, "Local-file sentinel set but payload missing — falling back");
+                }
+            }
             // Try built-in playset first
-            ps_err = ps_create_channel_playset(active_playset, cmd);
-            if (ps_err == ESP_OK) {
-                ESP_LOGI(TAG, "Restoring built-in playset: %s", active_playset);
-                ps_err = play_scheduler_execute_command(cmd);
-            } else {
-                // Not a built-in - try loading from cache (for server playsets like followed_artists)
-                ps_err = playset_store_load(active_playset, cmd);
+            else {
+                ps_err = ps_create_channel_playset(active_playset, cmd);
                 if (ps_err == ESP_OK) {
-                    ESP_LOGI(TAG, "Restoring cached playset: %s", active_playset);
+                    ESP_LOGI(TAG, "Restoring built-in playset: %s", active_playset);
                     ps_err = play_scheduler_execute_command(cmd);
                 } else {
-                    ESP_LOGW(TAG, "Failed to load playset '%s': %s, falling back to default",
-                             active_playset, esp_err_to_name(ps_err));
+                    // Not a built-in - try loading from cache (for server playsets like followed_artists)
+                    ps_err = playset_store_load(active_playset, cmd);
+                    if (ps_err == ESP_OK) {
+                        ESP_LOGI(TAG, "Restoring cached playset: %s", active_playset);
+                        ps_err = play_scheduler_execute_command(cmd);
+                    } else {
+                        ESP_LOGW(TAG, "Failed to load playset '%s': %s, falling back to default",
+                                 active_playset, esp_err_to_name(ps_err));
+                    }
                 }
             }
         }

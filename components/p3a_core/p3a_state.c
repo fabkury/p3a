@@ -21,6 +21,14 @@ static const char *TAG = "p3a_state";
 #define NVS_KEY_LAST_STATE "last_state"
 #define NVS_KEY_ACTIVE_PLAYSET "playset"    // Active playset name (e.g., "channel_recent")
 
+// Sentinel playset names for ephemeral single-source playback (Makapix
+// show_artwork or single local file). Not pill-bar entries; mapped to
+// friendly labels by the WebUI. Reserved server-side via protected_playsets[].
+#define NVS_KEY_AW_POST_ID     "aw_post_id"  // int32_t
+#define NVS_KEY_AW_STORAGE_KEY "aw_skey"     // string (vault storage_key)
+#define NVS_KEY_AW_ART_URL     "aw_url"      // string (download URL)
+#define NVS_KEY_LOCAL_FILEPATH "local_path"  // string (SD-card filepath)
+
 // Global shared state (non-static so other p3a_state_*.c files can access via internal header)
 p3a_state_internal_t s_state = {0};
 
@@ -155,6 +163,26 @@ esp_err_t p3a_state_set_active_playset(const char *name)
         }
     }
 
+    // For non-sentinel names, also clear the ephemeral payload keys so a
+    // regular playset selection doesn't leave stale single-artwork or
+    // local-file payload behind. The sentinel setters below write payload
+    // first and then call this function with the sentinel, so we leave
+    // payload alone in that case.
+    if (err == ESP_OK &&
+        strcmp(name, P3A_PLAYSET_NAME_ARTWORK) != 0 &&
+        strcmp(name, P3A_PLAYSET_NAME_LOCAL_FILE) != 0) {
+        const char *payload_keys[] = {
+            NVS_KEY_AW_POST_ID, NVS_KEY_AW_STORAGE_KEY,
+            NVS_KEY_AW_ART_URL, NVS_KEY_LOCAL_FILEPATH,
+        };
+        for (size_t i = 0; i < sizeof(payload_keys) / sizeof(payload_keys[0]); i++) {
+            esp_err_t e = nvs_erase_key(handle, payload_keys[i]);
+            if (e != ESP_OK && e != ESP_ERR_NVS_NOT_FOUND) {
+                ESP_LOGW(TAG, "Failed to erase '%s': %s", payload_keys[i], esp_err_to_name(e));
+            }
+        }
+    }
+
     if (err == ESP_OK) {
         err = nvs_commit(handle);
     }
@@ -177,6 +205,151 @@ const char *p3a_state_get_active_playset(void)
 
     // Return pointer to internal buffer (thread-safe for reading)
     return s_state.active_playset;
+}
+
+esp_err_t p3a_state_set_active_artwork(int32_t post_id, const char *storage_key, const char *art_url)
+{
+    if (!s_state.initialized || !s_state.mutex) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (!storage_key || !art_url) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    strlcpy(s_state.active_playset, P3A_PLAYSET_NAME_ARTWORK, sizeof(s_state.active_playset));
+    xSemaphoreGive(s_state.mutex);
+
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to open NVS for artwork: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = nvs_set_str(handle, NVS_KEY_ACTIVE_PLAYSET, P3A_PLAYSET_NAME_ARTWORK);
+    if (err == ESP_OK) err = nvs_set_i32(handle, NVS_KEY_AW_POST_ID, post_id);
+    if (err == ESP_OK) err = nvs_set_str(handle, NVS_KEY_AW_STORAGE_KEY, storage_key);
+    if (err == ESP_OK) err = nvs_set_str(handle, NVS_KEY_AW_ART_URL, art_url);
+
+    if (err == ESP_OK) {
+        esp_err_t e = nvs_erase_key(handle, NVS_KEY_LOCAL_FILEPATH);
+        if (e != ESP_OK && e != ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGW(TAG, "Failed to erase local_path: %s", esp_err_to_name(e));
+        }
+    }
+
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Persisted active artwork: post_id=%ld, storage_key=%.16s",
+                 (long)post_id, storage_key);
+    } else {
+        ESP_LOGW(TAG, "Failed to persist artwork: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
+esp_err_t p3a_state_set_active_local_file(const char *filepath)
+{
+    if (!s_state.initialized || !s_state.mutex) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (!filepath || filepath[0] == '\0') {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    strlcpy(s_state.active_playset, P3A_PLAYSET_NAME_LOCAL_FILE, sizeof(s_state.active_playset));
+    xSemaphoreGive(s_state.mutex);
+
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to open NVS for local file: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = nvs_set_str(handle, NVS_KEY_ACTIVE_PLAYSET, P3A_PLAYSET_NAME_LOCAL_FILE);
+    if (err == ESP_OK) err = nvs_set_str(handle, NVS_KEY_LOCAL_FILEPATH, filepath);
+
+    if (err == ESP_OK) {
+        const char *aw_keys[] = { NVS_KEY_AW_POST_ID, NVS_KEY_AW_STORAGE_KEY, NVS_KEY_AW_ART_URL };
+        for (size_t i = 0; i < sizeof(aw_keys) / sizeof(aw_keys[0]); i++) {
+            esp_err_t e = nvs_erase_key(handle, aw_keys[i]);
+            if (e != ESP_OK && e != ESP_ERR_NVS_NOT_FOUND) {
+                ESP_LOGW(TAG, "Failed to erase '%s': %s", aw_keys[i], esp_err_to_name(e));
+            }
+        }
+    }
+
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Persisted active local file: %s", filepath);
+    } else {
+        ESP_LOGW(TAG, "Failed to persist local file: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
+esp_err_t p3a_state_get_active_artwork(int32_t *post_id,
+                                       char *storage_key, size_t skey_len,
+                                       char *art_url, size_t url_len)
+{
+    if (!post_id || !storage_key || skey_len == 0 || !art_url || url_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    int32_t pid = 0;
+    err = nvs_get_i32(handle, NVS_KEY_AW_POST_ID, &pid);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        pid = 0;  // post_id=0 is permitted (e.g., Giphy single artwork)
+        err = ESP_OK;
+    }
+    *post_id = pid;
+
+    if (err == ESP_OK) {
+        size_t len = skey_len;
+        err = nvs_get_str(handle, NVS_KEY_AW_STORAGE_KEY, storage_key, &len);
+    }
+    if (err == ESP_OK) {
+        size_t len = url_len;
+        err = nvs_get_str(handle, NVS_KEY_AW_ART_URL, art_url, &len);
+    }
+
+    nvs_close(handle);
+    return err;
+}
+
+esp_err_t p3a_state_get_active_local_file(char *filepath, size_t len)
+{
+    if (!filepath || len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    size_t l = len;
+    err = nvs_get_str(handle, NVS_KEY_LOCAL_FILEPATH, filepath, &l);
+    nvs_close(handle);
+    return err;
 }
 
 // ============================================================================

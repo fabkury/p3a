@@ -860,6 +860,12 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id, const char *storage_key, 
                                sizeof(cmd->channels[0].artwork.filepath));
 
     esp_err_t result = play_scheduler_execute_command(cmd);
+    if (result == ESP_OK) {
+        // Treat the single-artwork session as a first-class active playset so
+        // the WebUI shows it correctly, the preview URL builder fires, and
+        // boot restore can replay it.
+        p3a_state_set_active_artwork(post_id, storage_key, art_url);
+    }
     free(cmd);
     return result;
 }
@@ -868,6 +874,14 @@ esp_err_t play_scheduler_play_local_file(const char *filepath)
 {
     if (!filepath) {
         return ESP_ERR_INVALID_ARG;
+    }
+
+    // If the file is missing (e.g. on boot restore after an SD swap), fail
+    // out so callers (boot restore in animation_player.c) can fall back.
+    struct stat st;
+    if (stat(filepath, &st) != 0) {
+        ESP_LOGW(TAG, "play_local_file: file not found: %s", filepath);
+        return ESP_ERR_NOT_FOUND;
     }
 
     ESP_LOGI(TAG, "play_local_file: %s", filepath);
@@ -893,6 +907,9 @@ esp_err_t play_scheduler_play_local_file(const char *filepath)
     strlcpy(cmd->channels[0].artwork.filepath, filepath, sizeof(cmd->channels[0].artwork.filepath));
 
     esp_err_t result = play_scheduler_execute_command(cmd);
+    if (result == ESP_OK) {
+        p3a_state_set_active_local_file(filepath);
+    }
     free(cmd);
     return result;
 }

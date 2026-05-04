@@ -96,8 +96,24 @@ cJSON *build_current_artwork_json(void)
             break;
         }
 
+        case PS_CHANNEL_TYPE_ARTWORK: {
+            // Single-source ephemeral playback (Makapix show_artwork or local
+            // file). For Makapix, build the same vault URL used by named
+            // channels; for local files (storage_key empty) leave url empty.
+            if (artwork.storage_key[0] != '\0') {
+                uint8_t sha[32];
+                if (storage_key_sha256(artwork.storage_key, sha) == ESP_OK) {
+                    snprintf(url, sizeof(url),
+                             "https://%s/api/vault/%02x/%02x/%02x/%s%s",
+                             CONFIG_MAKAPIX_CLUB_HOST,
+                             (unsigned)sha[0], (unsigned)sha[1], (unsigned)sha[2],
+                             artwork.storage_key, asset_type_ext(artwork.type));
+                }
+            }
+            break;
+        }
+
         case PS_CHANNEL_TYPE_SDCARD:
-        case PS_CHANNEL_TYPE_ARTWORK:
         default:
             break;
     }
@@ -531,8 +547,10 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Protected playsets cannot be overwritten via REST API
-    static const char *protected_playsets[] = { "followed_artists" };
+    // Protected playsets cannot be overwritten via REST API.
+    // The "__"-prefixed names are reserved sentinels for ephemeral
+    // single-source playback (see P3A_PLAYSET_NAME_ARTWORK / _LOCAL_FILE).
+    static const char *protected_playsets[] = { "followed_artists", "__artwork__", "__local__" };
     for (size_t i = 0; i < sizeof(protected_playsets) / sizeof(protected_playsets[0]); i++) {
         if (strcmp(name, protected_playsets[i]) == 0) {
             send_json(req, 403, "{\"ok\":false,\"error\":\"Cannot overwrite protected playset\",\"code\":\"PROTECTED_PLAYSET\"}");

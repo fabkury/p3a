@@ -480,11 +480,24 @@ esp_err_t p3a_state_fallback_to_sdcard(void);
 #define P3A_PLAYSET_MAX_NAME_LEN 32
 
 /**
+ * @brief Reserved sentinel playset names for ephemeral single-source
+ *        playback (Makapix show_artwork or single local file). These are
+ *        first-class active-playset values but do NOT appear in the WebUI
+ *        pill bar, and the playset editor refuses to save under these names.
+ */
+#define P3A_PLAYSET_NAME_ARTWORK    "__artwork__"
+#define P3A_PLAYSET_NAME_LOCAL_FILE "__local__"
+
+/**
  * @brief Set and persist the active playset name to NVS
  *
  * This is the primary persistence mechanism for playback state.
  * Built-in playset names: "channel_recent", "channel_promoted", "channel_sdcard"
  * Server playsets: "followed_artists", etc.
+ *
+ * Side effect: when called with a non-sentinel name, the ephemeral payload
+ * keys (artwork post_id/storage_key/art_url, local filepath) are cleared so
+ * a regular playset selection wipes any leftover single-source state.
  *
  * @param name Playset name (max P3A_PLAYSET_MAX_NAME_LEN chars)
  * @return ESP_OK on success
@@ -497,6 +510,42 @@ esp_err_t p3a_state_set_active_playset(const char *name);
  * @return Playset name or empty string if none set
  */
 const char *p3a_state_get_active_playset(void);
+
+/**
+ * @brief Set the active playset to a single Makapix artwork.
+ *
+ * Sets active_playset = P3A_PLAYSET_NAME_ARTWORK, persists the artwork
+ * payload (post_id, storage_key, art_url) to NVS, and clears the local-file
+ * payload. The runtime call to play_scheduler_play_artwork() should invoke
+ * this after a successful execute_command() so the WebUI and boot restore
+ * see consistent state.
+ */
+esp_err_t p3a_state_set_active_artwork(int32_t post_id,
+                                       const char *storage_key,
+                                       const char *art_url);
+
+/**
+ * @brief Set the active playset to a single SD-card / uploaded file.
+ *
+ * Sets active_playset = P3A_PLAYSET_NAME_LOCAL_FILE, persists filepath, and
+ * clears the artwork payload.
+ */
+esp_err_t p3a_state_set_active_local_file(const char *filepath);
+
+/**
+ * @brief Read the persisted single-artwork payload.
+ *
+ * Returns ESP_OK only if all three fields are present in NVS. post_id may be
+ * 0 (e.g. for sources without a Makapix post). Caller-allocated buffers.
+ */
+esp_err_t p3a_state_get_active_artwork(int32_t *post_id,
+                                       char *storage_key, size_t skey_len,
+                                       char *art_url, size_t url_len);
+
+/**
+ * @brief Read the persisted single-local-file payload.
+ */
+esp_err_t p3a_state_get_active_local_file(char *filepath, size_t len);
 
 // ============================================================================
 // CALLBACKS (for integration with other components)

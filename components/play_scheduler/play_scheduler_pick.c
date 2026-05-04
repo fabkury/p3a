@@ -595,6 +595,12 @@ bool ps_pick_artwork(ps_state_t *state, size_t channel_index, ps_artwork_t *out_
 
         out_artwork->artwork_id = ch->artwork_state.post_id;
         out_artwork->post_id = ch->artwork_state.post_id;
+        // Mirror the discriminator used by play_scheduler_play_artwork(): a
+        // positive post_id means a Makapix artwork (so reactions and view
+        // tracking activate); post_id == 0 is a local file.
+        out_artwork->post_source = (ch->artwork_state.post_id > 0)
+                                       ? POST_SOURCE_MAKAPIX
+                                       : POST_SOURCE_NONE;
         strlcpy(out_artwork->filepath, ch->artwork_state.filepath, sizeof(out_artwork->filepath));
         strlcpy(out_artwork->storage_key, ch->artwork_state.storage_key, sizeof(out_artwork->storage_key));
         out_artwork->created_at = 0;

@@ -55,7 +55,7 @@ It's open source, self-contained, and designed to be as simple to use as a pictu
 
 > The initial flash requires a computer with USB. After that, all updates are wireless.
 
-For full usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
+For a step-by-step walkthrough written for first-time buyers, see the [Quick Start Guide](docs/QUICK-START.md). For full usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
 
 ---
 
@@ -217,6 +217,7 @@ SD card layout: `/sdcard/p3a/animations/` (local files), `/sdcard/p3a/vault/` (M
 
 | Document | Description |
 |----------|-------------|
+| [QUICK-START.md](docs/QUICK-START.md) | Quick Start Guide — the fastest path from box to art on the screen |
 | [HOW-TO-USE.md](docs/HOW-TO-USE.md) | Full user guide — setup, touch controls, Wi-Fi, web UI, REST API, Giphy, PICO-8 |
 | [flash-p3a.md](docs/flash-p3a.md) | Flashing instructions (web flasher and alternatives) |
 | [INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) | Technical architecture for developers and contributors |

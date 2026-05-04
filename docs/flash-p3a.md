@@ -2,6 +2,8 @@
 
 Flash the p3a firmware to your Waveshare ESP32-P4 board. This is a one-time process — after the initial flash, all future updates are installed wirelessly via `http://p3a.local/ota`.
 
+> **Just got your board?** This page is the deep-dive on flashing methods. If you'd rather follow a single end-to-end walkthrough that covers flashing, Wi-Fi setup, and seeing your first artwork, start with the [Quick Start Guide](QUICK-START.md).
+
 ---
 
 ## Option 1: Web Flasher — Recommended

@@ -2,6 +2,8 @@
 
 This guide covers everything you need to know to use your p3a pixel art player, from initial setup to advanced features.
 
+> **First time setting up?** Start with the [Quick Start Guide](QUICK-START.md) — it walks through the bare minimum to see art on the screen in about 15 minutes. Come back here for the deeper details.
+
 ## Table of Contents
 
 1. [Initial Setup](#initial-setup)

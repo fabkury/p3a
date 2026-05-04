@@ -23,11 +23,37 @@ let palettePtr = 0;
 let paletteView = null;
 let currentPalette = PICO8_PALETTE.map(color => color.slice());
 
-// Audio state (ephemeral — reset on every page load)
+// Audio state — defaults below are overridden by loadAudioSettings() at init.
 let browserAudio = false;    // "Play sound here" — default OFF
 let deviceAudio = true;      // "Play sound on p3a" — default ON
 let browserVolume = 0.75;    // Browser volume (0.0–1.0)
-let deviceVolume = 0.75;     // Device volume (0.0–1.0)
+let deviceVolume = 0.75;     // Device volume gain multiplier (0.0–5.0; slider is 0–500, value/100)
+
+const AUDIO_STORAGE_KEY = 'p3a.pico8.audio';
+
+function loadAudioSettings() {
+    try {
+        const raw = localStorage.getItem(AUDIO_STORAGE_KEY);
+        if (!raw) return;
+        const s = JSON.parse(raw);
+        if (typeof s.browserAudio === 'boolean') browserAudio = s.browserAudio;
+        if (typeof s.deviceAudio === 'boolean') deviceAudio = s.deviceAudio;
+        if (typeof s.browserVolume === 'number' && isFinite(s.browserVolume)) browserVolume = s.browserVolume;
+        if (typeof s.deviceVolume === 'number' && isFinite(s.deviceVolume)) deviceVolume = s.deviceVolume;
+    } catch (e) {
+        // Corrupt/inaccessible storage — fall back to defaults
+    }
+}
+
+function saveAudioSettings() {
+    try {
+        localStorage.setItem(AUDIO_STORAGE_KEY, JSON.stringify({
+            browserAudio, deviceAudio, browserVolume, deviceVolume,
+        }));
+    } catch (e) {
+        // Quota exceeded / private mode / disabled storage — ignore
+    }
+}
 let audioCtx = null;         // Web Audio context (lazy)
 let gainNode = null;         // Gain node for browser output
 let audioSampleRate = 22050;
@@ -138,8 +164,6 @@ async function initWasm() {
         if (hasAudioSupport) {
             audioSampleRate = Module._f08_get_audio_sample_rate();
             document.getElementById('sound-section').style.display = '';
-            document.getElementById('device-sound-toggle').checked = true;
-            document.getElementById('browser-sound-toggle').checked = false;
             initAudioControls();
         }
 
@@ -807,10 +831,22 @@ function onDeviceAudioProcess(e) {
 // ── Audio: Toggle and volume controls ──
 
 function initAudioControls() {
+    loadAudioSettings();
+
     const browserToggle = document.getElementById('browser-sound-toggle');
     const deviceToggle = document.getElementById('device-sound-toggle');
     const browserVolumeSlider = document.getElementById('browser-volume');
     const deviceVolumeSlider = document.getElementById('device-volume');
+    const deviceVolumeLabel = document.getElementById('device-volume-label');
+
+    // Hydrate DOM from persisted (or default) state
+    browserToggle.checked = browserAudio;
+    deviceToggle.checked = deviceAudio;
+    browserVolumeSlider.value = String(Math.round(browserVolume * 100));
+    deviceVolumeSlider.value = String(Math.round(deviceVolume * 100));
+    if (deviceVolumeLabel) {
+        deviceVolumeLabel.textContent = Math.round(deviceVolumeSlider.value * 0.2) + '%';
+    }
 
     browserToggle.addEventListener('change', (e) => {
         browserAudio = e.target.checked;
@@ -819,6 +855,7 @@ function initAudioControls() {
         } else if (!deviceAudio) {
             suspendAudioContext();
         }
+        saveAudioSettings();
     });
 
     deviceToggle.addEventListener('change', (e) => {
@@ -828,6 +865,7 @@ function initAudioControls() {
         } else if (!browserAudio) {
             suspendAudioContext();
         }
+        saveAudioSettings();
     });
 
     browserVolumeSlider.addEventListener('input', (e) => {
@@ -835,6 +873,7 @@ function initAudioControls() {
         if (gainNode) {
             gainNode.gain.setValueAtTime(browserVolume, audioCtx.currentTime);
         }
+        saveAudioSettings();
     });
 
     deviceVolumeSlider.addEventListener('input', (e) => {
@@ -843,8 +882,10 @@ function initAudioControls() {
         if (deviceGainNode && audioCtx) {
             deviceGainNode.gain.setValueAtTime(deviceVolume, audioCtx.currentTime);
         }
-        const label = document.getElementById('device-volume-label');
-        if (label) label.textContent = Math.round(e.target.value * 0.2) + '%';
+        if (deviceVolumeLabel) {
+            deviceVolumeLabel.textContent = Math.round(e.target.value * 0.2) + '%';
+        }
+        saveAudioSettings();
     });
 }
 

@@ -356,50 +356,6 @@ body {
     .pause-btn:hover { transform: scale(1.02); }
     .reaction-btn:hover { transform: scale(1.05); }
 }
-/* DEBUG_TOOLS_START - delete this block before next release */
-.debug-tools {
-    width: min(420px, 100%);
-    background: #fff8e1;
-    border: 1.5px dashed #ffb300;
-    border-radius: var(--r-md);
-    padding: var(--sp-3) var(--sp-4);
-    box-shadow: var(--c-card-shadow);
-}
-.debug-tools-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    user-select: none;
-}
-.debug-tools-header h3 {
-    margin: 0;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #b76e00;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-.debug-tools-toggle { font-size: 0.9rem; color: #b76e00; transition: transform 0.2s; }
-.debug-tools.collapsed .debug-tools-toggle { transform: rotate(-90deg); }
-.debug-tools.collapsed .debug-tools-content { display: none; }
-.debug-tools-content { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-2); }
-.debug-tools-note { margin: 0 0 var(--sp-1); font-size: 0.72rem; color: #6b5300; }
-.debug-tools-btn {
-    background: #ffb300;
-    color: #3a2a00;
-    border: none;
-    padding: 8px 12px;
-    border-radius: var(--r-sm);
-    font-size: 0.85rem;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: monospace;
-    transition: background 0.2s;
-}
-.debug-tools-btn:active:not(:disabled) { background: #f59e00; }
-.debug-tools-btn:disabled { background: #ccc; cursor: not-allowed; }
-/* DEBUG_TOOLS_END */
 </style>
 </head>
 <body class="has-bottom-nav">
@@ -456,19 +412,6 @@ body {
     </div>
 </div>
 <a href="/pico8" id="pico8-link" class="pill-item" style="display:none;text-decoration:none;text-align:center;width:min(420px,100%);">PICO-8 Monitor</a>
-<!-- DEBUG_TOOLS_START - Temporary stress-test UI; delete this block before next release -->
-<div class="debug-tools collapsed" id="debug-tools">
-    <div class="debug-tools-header" onclick="toggleDebugTools()">
-        <h3>Debug Tools</h3>
-        <span class="debug-tools-toggle">&#9660;</span>
-    </div>
-    <div class="debug-tools-content">
-        <p class="debug-tools-note">Stress tests. These create+activate a playset with the given name (overwriting any prior version).</p>
-        <button type="button" class="debug-tools-btn" id="debug-giphy-64-btn" onclick="runDebug64('giphy')">giphy_64</button>
-        <button type="button" class="debug-tools-btn" id="debug-makapix-64-btn" onclick="runDebug64('makapix')">makapix_64</button>
-    </div>
-</div>
-<!-- DEBUG_TOOLS_END -->
 <div class="update-banner" id="update-banner" onclick="window.location.href='/ota'">
     <h4>&#x2B06; Update Available</h4>
     <p id="update-version">A new firmware version is ready to install</p>
@@ -1288,93 +1231,6 @@ function pollActivePlayset(attempt) {
     xhr.send();
 }
 
-// DEBUG_TOOLS_START - delete this block before next release
-var DEBUG_GIPHY_64_QUERIES = [
-    'cat','dog','bird','fish','horse','monkey','panda','fox',
-    'wolf','bear','rabbit','lion','tiger','owl','frog','elephant',
-    'happy','sad','angry','love','laugh','cry','dance','sleep',
-    'party','excited','bored','surprised','pizza','burger','sushi','cake',
-    'coffee','tea','bread','donut','taco','fruit','chocolate','popcorn',
-    'rain','snow','wave','fire','star','moon','beach','mountain',
-    'forest','city','music','book','sports','robot','alien','dragon',
-    'sword','magic','ninja','pirate','ghost','monster','dinosaur','wizard'
-];
-var DEBUG_MAKAPIX_64_HASHTAGS = [
-    'pixelart','sunset','cat','dog','robot','space','ocean','forest',
-    'city','retro','game','fantasy','scifi','animal','plant','food',
-    'music','sport','hero','knight','wizard','ninja','samurai','pirate',
-    'alien','zombie','ghost','witch','fairy','mermaid','dinosaur','monster',
-    'vehicle','weapon','castle','tower','bridge','ship','train','car',
-    'plane','rocket','planet','star','comet','galaxy','sun','moon',
-    'beach','mountain','desert','snow','rain','fire','ice','magic',
-    'sword','shield','potion','treasure','dungeon','cave','garden','dragon'
-];
-function buildDebug64Payload(kind) {
-    var channels;
-    if (kind === 'giphy') {
-        channels = DEBUG_GIPHY_64_QUERIES.map(function(q) {
-            return { type: 'giphy', name: 'search', identifier: q, display_name: 'Giphy: ' + q };
-        });
-    } else {
-        channels = DEBUG_MAKAPIX_64_HASHTAGS.map(function(t) {
-            return { type: 'hashtag', name: 'hashtag', identifier: t, display_name: '#' + t };
-        });
-    }
-    return { pick_mode: 'random', channels: channels, activate: true };
-}
-function toggleDebugTools() {
-    document.getElementById('debug-tools').classList.toggle('collapsed');
-}
-function runDebug64(kind) {
-    var name = kind === 'giphy' ? 'giphy_64' : 'makapix_64';
-    var btn = document.getElementById('debug-' + kind + '-64-btn');
-    var giphyBtn = document.getElementById('debug-giphy-64-btn');
-    var makapixBtn = document.getElementById('debug-makapix-64-btn');
-    giphyBtn.disabled = true;
-    makapixBtn.disabled = true;
-    var payload = buildDebug64Payload(kind);
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/playsets/' + encodeURIComponent(name), true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState !== 4) return;
-        giphyBtn.disabled = false;
-        makapixBtn.disabled = false;
-        try {
-            var result = JSON.parse(xhr.responseText);
-            var ok = (xhr.status >= 200 && xhr.status < 300 && result.ok);
-            var activated = ok && result.data && result.data.activated;
-            if (ok && activated) {
-                showToast('Activated ' + name, false);
-                updatePillBarActive(name);
-                // Re-fetch playsets so the new entry appears in the pill bar.
-                fetch('/playsets').then(function(r) { return r.json(); }).then(function(pr) {
-                    if (pr.ok && pr.data && pr.data.playsets) {
-                        var builtInIds = builtInPresets.map(function(p) { return p.id; });
-                        userPlaysets = pr.data.playsets.filter(function(ps) {
-                            return builtInIds.indexOf(ps.name) === -1;
-                        });
-                        buildPillBar();
-                    }
-                }).catch(function() {});
-                schedulePollSoon();
-            } else if (ok) {
-                showToast('Saved ' + name + ' but activation failed', true);
-            } else {
-                showToast('Failed: ' + ((result && result.error) || ('HTTP ' + xhr.status)), true);
-            }
-        } catch (e) {
-            showToast('Parse error: ' + e.message, true);
-        }
-    };
-    xhr.onerror = function() {
-        giphyBtn.disabled = false;
-        makapixBtn.disabled = false;
-        showToast('Network error', true);
-    };
-    xhr.send(JSON.stringify(payload));
-}
-// DEBUG_TOOLS_END
 checkForUpdates();
 var pollIntervalId = setInterval(pollActivePlayset, 4000);
 function schedulePollSoon() {

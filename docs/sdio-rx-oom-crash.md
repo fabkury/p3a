@@ -2,10 +2,11 @@
 
 **Status:** Open. Decision tabled — not yet implemented.
 **First observed:** 2026-05-04.
-**Last observed:** 2026-05-05 (third occurrence — see "Occurrence 3" below).
-**Severity:** Hard crash + reboot. **Now confirmed recurring** — three times in
-two days, all under the same pattern (Giphy refresh paging while at least one
-download is active). Occurrences 2 and 3 are on the same firmware
+**Last observed:** 2026-05-05 (fourth occurrence; see "Occurrence 4" — a
+near-miss, no crash, but same root cause family).
+**Severity:** Hard crash + reboot. **Now confirmed recurring** — three hard
+crashes and one near-miss in two days, all triggered by Giphy refresh paging
+under load. Occurrences 2, 3, and 4 are on the same firmware
 (ELF `969b00418`), so the bug is reproducible-under-load on a fixed build.
 
 ---
@@ -133,20 +134,54 @@ Notable differences from Occurrence 2:
 - Both occurrences are on the *same* firmware build, so this is reproducible
   under load on a fixed binary.
 
-### Pattern across all three occurrences
+### Occurrence 4 — 2026-05-05 (near-miss; no SDIO crash, ~3886 s uptime)
 
-All three crashes share the same fingerprint:
+Same firmware as Occurrences 2 and 3 (ELF `969b00418`). System did **not**
+crash, but the same load trigger surfaced as a different family of failures
+in nearby subsystems, then recovered after backoff.
+
+Timeline (timestamps in ms since boot):
+
+| t (ms)  | Event |
+|---------|-------|
+| 3622734 | First refresh cycle: Giphy Trending paging starts |
+| 3622879–3633699 | Trending paging (offsets 0–250) — clean |
+| 3635250 | (Side issue) brief LAi=0 race after refresh; picker fell back. Tracked separately in `docs/refresh-lai-race.md` |
+| 3637969 | Trending refresh complete. **Next refresh in 53 s** |
+| 3691969 | Second refresh cycle: Giphy Work paging starts |
+| 3694458 | `dl_mgr: All files downloaded ... waiting for signal` — **no concurrent downloads during this refresh** |
+| 3692103–3786966 | Giphy Work paging (offsets 0–150) |
+| 3738111 | `transport_base: esp_tls_conn_read error, errno=No more processes` (errno=11, EAGAIN) |
+| 3866325 | `mqtt_client: No PING_RESP, disconnected` — Makapix MQTT keepalive timed out |
+| 3869273 | Second `esp_tls_conn_read` errno=11 |
+| 3884276 | `giphy_api: Giphy API read error after 32768 bytes` / `Truncated Giphy response: got 32768/96906 bytes` — page fetch had to retry |
+| 3886343 | **`mqtt_client: Error create mqtt task` / `makapix_mqtt: Failed to start: ESP_FAIL`** — `xTaskCreate` returned failure on MQTT reconnect |
+| 3916386 | MQTT reconnect retry (30 s backoff) |
+| 3928268 | MQTT reconnected — system back to Online |
+
+The MQTT task-creation failure at t=3886343 is the headline: `xTaskCreate`
+returning failure means TCB + stack couldn't be allocated. This is the
+**same internal-RAM exhaustion** that takes down the SDIO RX path; this run,
+the heap pressure happened to be observed by `xTaskCreate` first instead of
+`sdio_rx_get_buffer`.
+
+### Pattern across all four occurrences
+
+All four events share the same trigger:
 
 1. A `ps_refresh` cycle is paging through a Giphy endpoint (multiple ~96 KB
    JSON responses over TLS, in quick succession).
-2. **At the same time**, `dl_mgr` has at least one GIF download in flight,
-   each with its own TLS session.
-3. The crash hits in the middle of the API paging, not on the first page.
+2. The crash/symptom hits in the middle of the API paging, not on the first
+   page.
 
-The "back-to-back refresh" in Occurrence 1 wasn't actually load-bearing — in
-Occurrences 2 and 3 there was no back-to-back refresh, just paging + at
-least one concurrent download. Concurrent downloads during a refresh paging
-burst is the load profile to watch.
+What differs is the **victim** of the resource pressure:
+
+| # | Concurrent downloads? | Symptom |
+|---|----------------------|---------|
+| 1 | yes (3 GIFs)         | SDIO RX assert (hard crash) |
+| 2 | yes (multiple GIFs)  | SDIO RX assert (hard crash) |
+| 3 | yes (1 GIF)          | SDIO RX assert (hard crash) |
+| 4 | **no** (`dl_mgr` idle) | MQTT task-create failure + HTTP truncation + TLS EAGAIN; recovered |
 
 #### What Occurrence 3 newly tells us
 
@@ -164,6 +199,27 @@ burst is the load profile to watch.
 - **Reproducibility on fixed firmware** means the next attempt to fix this
   can be evaluated against a known-failing build (no "did the firmware
   change?" confound).
+
+#### What Occurrence 4 newly tells us
+
+- **Refresh paging alone (zero concurrent downloads) is sufficient to push
+  the system to internal-RAM exhaustion.** Previously we believed the
+  trigger required refresh paging *plus* at least one concurrent download.
+  Occurrence 4 disproves that for the broader resource-exhaustion problem;
+  whether the SDIO assert specifically requires concurrent downloads is
+  still consistent with Occurrences 1–3 but not yet falsified.
+- **The "victim" of the heap pressure is non-deterministic.** Occurrences
+  1–3 took down the SDIO RX path; Occurrence 4 took down `xTaskCreate` for
+  the MQTT reconnect, with HTTP truncation and TLS EAGAIN as collateral.
+  This means a fix that only addresses the SDIO assert leaves us exposed to
+  the same root cause manifesting elsewhere — the MQTT/HTTP/task-create
+  failures in Occurrence 4 happened *despite* the SDIO path coping that
+  particular run.
+- **`Error create mqtt task` is a useful observable proxy** for the same
+  heap pressure. It's easier to reproduce on demand than the SDIO assert
+  (it surfaces from refresh paging alone, no downloads needed) and produces
+  a recoverable log line instead of a panic. Useful for instrumentation and
+  for evaluating fixes.
 
 ---
 

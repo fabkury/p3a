@@ -104,14 +104,24 @@ Multiple search channels are explicitly supported. A user may add `(AIC, search,
 ### Refresh task (`aic_refresh.c`)
 
 - **Triggers:** first include in a playset; periodic timer (`CONFIG_AIC_REFRESH_INTERVAL_HOURS`, default 168 = weekly); manual refresh from web UI.
-- **Endpoint:** `GET https://api.artic.edu/api/v1/artworks/search`
-- **Query parameters:**
-  - `query[term][is_public_domain]=true`
-  - `q=<identifier>` (search flavor only)
-  - `fields=id,title,image_id,date_display,source_updated_at`
-  - `sort=source_updated_at:desc` (newest catalog updates first; cache is naturally newest-first)
+- **Endpoint:** `POST https://api.artic.edu/api/v1/artworks/search`
+  - Off-device validation found that the GET form with `sort=field:direction` is rejected with HTTP 400; AIC's ES wrapper interprets the whole string as a literal field name. The working form is to POST an Elasticsearch query DSL body and keep `limit`/`page` as URL params.
+- **URL parameters:**
   - `limit=100`
-  - `page=<random 1..N>` for `public_domain` flavor (samples randomly across the collection without storing all 120k IDs); `page=1` for search flavor
+  - `page=<random 1..MAX_RANDOM_PAGE>` for `public_domain` flavor; `page=1` for search flavor.
+  - **MAX_RANDOM_PAGE is ~10**, not the API-reported `total_pages`. AIC enforces a hard offset cap of approximately 1000 results — page≥11 with `limit=100` returns HTTP 403 "Invalid number of results". The refresh task must clamp `page` to `[1, 10]` regardless of `pagination.total_pages` from the response.
+- **JSON body (Content-Type: application/json):**
+  ```json
+  {
+    "query": { "term": { "is_public_domain": true } },                       // public_domain flavor
+    "query": { "bool": { "must": [
+      { "term": { "is_public_domain": true } },
+      { "query_string": { "query": "<identifier>" } }
+    ] } },                                                                    // search flavor
+    "sort":  [ { "source_updated_at": { "order": "desc" } } ],
+    "fields": ["id", "title", "image_id", "date_display", "source_updated_at"]
+  }
+  ```
 - **Headers:**
   - `User-Agent: p3a/<VERSION> (+<project URL>)` — AIC explicitly requests non-anonymous identification. Exact URL filled in at implementation time.
 - **Processing:**
@@ -275,6 +285,7 @@ Concretely, `aic/` and `apod/` each duplicate ~150–250 lines of boilerplate fr
 | Cache `.bin` magic mismatch or short read     | Treat as empty cache, log warning, refresh from scratch on next cycle.                                                            |
 | SD card full                                  | `storage_eviction` runs age-based sweep across all vaults including `aic/` and `apod/`. Refresh defers if free space < threshold.|
 | Image URL 404 (object withdrawn)              | Mark entry kind=0xFF (dead); scheduler skips dead entries; periodic refresh evicts.                                               |
+| AIC IIIF returns sporadic 403 for an image    | Off-device validation observed ~1% of `default.jpg` fetches return 403 even though `image_id` is non-null. Skip the entry on this fetch (do not mark dead permanently — try again on the next pick); log to wifi_health if rate exceeds threshold. |
 | Image download returns HTML error page        | Magic-byte sniff on first 16 bytes; reject if not in `{JPEG, PNG, GIF, WebP}`; treat as 404.                                      |
 | APOD API key invalid (HTTP 403)               | Log + show "key invalid" banner in `/apod`; refresh task pauses until config changes.                                             |
 | AIC `image_id` is null on object              | Skip during refresh; never enters the cache.                                                                                       |
@@ -322,6 +333,15 @@ PR 1 must merge and bake on a few devices before PR 2 starts, so any scaffolding
 ## 9. Open questions
 
 None. All architectural and product decisions captured during the brainstorm are in this spec.
+
+## 9b. Off-device validation (2026-05-05)
+
+Both pipelines were validated end-to-end with Python prototypes under `scripts/aic_test/` and `scripts/apod_test/` before C implementation. AIC: 4 runs × 25 images (2× public_domain, 2× search "impressionism"). APOD: 2 runs × 25-day backfill (44 image days + 6 video skip-markers across the two runs). Findings folded into §3 and §6 above:
+
+- AIC `sort` param requires POST + ES JSON body (GET form rejected with 400).
+- AIC offset capped at ~1000; random page must be clamped to `[1, 10]` with `limit=100`.
+- AIC IIIF returns sporadic 403; pipeline must skip-and-retry-later, not mark dead.
+- APOD spec verified accurate; magic-byte sniff distinguished a PNG day from JPEG days correctly.
 
 ## 10. Future work (out of scope, noted for context)
 

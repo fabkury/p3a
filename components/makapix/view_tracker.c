@@ -11,7 +11,6 @@
 #include "makapix_store.h"
 #include "play_scheduler_types.h"
 #include "config_store.h"
-#include "p3a_state.h"
 
 // Forward declaration to avoid circular dependency (makapix <-> play_scheduler)
 esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats);
@@ -51,6 +50,9 @@ typedef struct {
     int32_t post_id;
     post_source_t post_source;
     char filepath[256];
+    ps_channel_type_t channel_type;
+    char channel_spec_name[33];
+    char channel_identifier[33];
 } pending_swap_t;
 
 static pending_swap_t s_pending_swap = {0};
@@ -60,13 +62,18 @@ typedef struct {
     bool initialized;
     TimerHandle_t timer;
     TaskHandle_t task;
-    
+
     // Current tracking state
     int32_t current_post_id;
     post_source_t current_post_source;
     char current_filepath[256];
     bool is_intentional;
-    
+
+    // Channel the post was picked from (for view-event reporting)
+    ps_channel_type_t current_channel_type;
+    char current_channel_spec_name[33];
+    char current_channel_identifier[33];
+
     // Timer state
     uint32_t elapsed_seconds;
     bool tracking_active;
@@ -86,7 +93,7 @@ static void timer_callback(TimerHandle_t timer);
 static void view_tracker_task(void *pvParameters);
 static void process_swap_event(void);
 static void send_view_event(void);
-static const char *get_channel_name_for_view(p3a_channel_type_t channel_type);
+static const char *channel_name_for_view(ps_channel_type_t type, const char *spec_name);
 static const char *get_intent_string(bool is_intentional);
 static void on_registration_changed(const p3a_event_t *event, void *ctx);
 
@@ -176,10 +183,16 @@ void view_tracker_deinit(void)
     ESP_LOGI(TAG, "View tracker deinitialized");
 }
 
-void view_tracker_signal_swap(int32_t post_id, post_source_t post_source, const char *filepath)
+void view_tracker_signal_swap(int32_t post_id, post_source_t post_source, const char *filepath,
+                              ps_channel_type_t channel_type,
+                              const char *channel_spec_name,
+                              const char *channel_identifier)
 {
-    // Store the swap info for the view tracker task to process
-    // This captures the post_id and filepath at swap time, before the navigator can advance
+    // Capture the swap info for the view tracker task to process. Capturing at
+    // swap time (rather than re-reading at view-send time) ensures the view
+    // event reports the channel this specific post came from, even if the
+    // playset's stochastic selection picks a different channel before the
+    // view fires.
     s_pending_swap.post_id = post_id;
     s_pending_swap.post_source = post_source;
     if (filepath) {
@@ -187,6 +200,11 @@ void view_tracker_signal_swap(int32_t post_id, post_source_t post_source, const 
     } else {
         s_pending_swap.filepath[0] = '\0';
     }
+    s_pending_swap.channel_type = channel_type;
+    strlcpy(s_pending_swap.channel_spec_name, channel_spec_name ? channel_spec_name : "",
+            sizeof(s_pending_swap.channel_spec_name));
+    strlcpy(s_pending_swap.channel_identifier, channel_identifier ? channel_identifier : "",
+            sizeof(s_pending_swap.channel_identifier));
     // Signal that a swap is pending (memory barrier to ensure data is visible)
     __atomic_store_n(&s_pending_swap.pending, 1, __ATOMIC_RELEASE);
 }
@@ -206,6 +224,9 @@ void view_tracker_stop(void)
     s_state.current_post_source = POST_SOURCE_NONE;
     s_state.elapsed_seconds = 0;
     s_state.current_filepath[0] = '\0';
+    s_state.current_channel_type = PS_CHANNEL_TYPE_NAMED;
+    s_state.current_channel_spec_name[0] = '\0';
+    s_state.current_channel_identifier[0] = '\0';
 }
 
 void view_tracker_pause(void)
@@ -293,6 +314,11 @@ static void process_swap_event(void)
     post_source_t post_source = s_pending_swap.post_source;
     char filepath[256];
     strlcpy(filepath, s_pending_swap.filepath, sizeof(filepath));
+    ps_channel_type_t channel_type = s_pending_swap.channel_type;
+    char channel_spec_name[33];
+    char channel_identifier[33];
+    strlcpy(channel_spec_name, s_pending_swap.channel_spec_name, sizeof(channel_spec_name));
+    strlcpy(channel_identifier, s_pending_swap.channel_identifier, sizeof(channel_identifier));
 
     // Only track views for Makapix artwork
     if (post_source != POST_SOURCE_MAKAPIX || post_id == 0) {
@@ -309,22 +335,25 @@ static void process_swap_event(void)
 
     // Get intent
     bool is_intentional = makapix_get_and_clear_view_intent();
-    
+
     // Check if this is a redundant change (same artwork)
-    if (s_state.tracking_active && 
+    if (s_state.tracking_active &&
         s_state.current_post_id == post_id &&
         strcmp(s_state.current_filepath, filepath) == 0) {
         ESP_LOGD(TAG, "Redundant animation change detected, not resetting timer");
         return;
     }
-    
+
     // New animation - update state and restart timer
     s_state.current_post_id = post_id;
     s_state.current_post_source = post_source;
     s_state.is_intentional = is_intentional;
+    s_state.current_channel_type = channel_type;
+    strlcpy(s_state.current_channel_spec_name, channel_spec_name, sizeof(s_state.current_channel_spec_name));
+    strlcpy(s_state.current_channel_identifier, channel_identifier, sizeof(s_state.current_channel_identifier));
     s_state.elapsed_seconds = 0;
     s_state.tracking_active = true;
-    
+
     strlcpy(s_state.current_filepath, filepath, sizeof(s_state.current_filepath));
     
     // Restart timer
@@ -341,47 +370,43 @@ static void send_view_event(void)
         ESP_LOGW(TAG, "Cannot send view: invalid state");
         return;
     }
-    
+
     ESP_LOGD(TAG, "Sending view at %" PRIu32 " seconds", s_state.elapsed_seconds);
-    
+
     // Gather metadata for view event
     char player_key[37] = {0};
     if (makapix_store_get_player_key(player_key, sizeof(player_key)) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to get player_key, cannot send view");
         return;
     }
-    
+
     // Derive legacy play_order value from the active playset's pick_mode
     uint8_t play_order = 1;  // Default: created/date order
     ps_stats_t ps_stats;
     if (play_scheduler_get_stats(&ps_stats) == ESP_OK) {
         play_order = (ps_stats.pick_mode == PS_PICK_RANDOM) ? 2 : 1;
     }
-    
-    p3a_channel_info_t channel_info = {0};
-    if (p3a_state_get_channel_info(&channel_info) != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to get channel info");
-        // Continue anyway with empty channel name
-    }
-    
-    const char *channel_name = get_channel_name_for_view(channel_info.type);
+
+    const char *channel_name = channel_name_for_view(s_state.current_channel_type,
+                                                     s_state.current_channel_spec_name);
     const char *intent = get_intent_string(s_state.is_intentional);
-    
+
     // Determine channel-specific fields based on channel type
     const char *channel_user_sqid = NULL;
     const char *channel_hashtag = NULL;
-    
-    if ((channel_info.type == P3A_CHANNEL_MAKAPIX_BY_USER ||
-         channel_info.type == P3A_CHANNEL_MAKAPIX_REACTIONS) &&
-        channel_info.identifier[0] != '\0') {
-        channel_user_sqid = channel_info.identifier;
-    } else if (channel_info.type == P3A_CHANNEL_MAKAPIX_HASHTAG && channel_info.identifier[0] != '\0') {
-        channel_hashtag = channel_info.identifier;
+
+    if ((s_state.current_channel_type == PS_CHANNEL_TYPE_USER ||
+         s_state.current_channel_type == PS_CHANNEL_TYPE_REACTIONS) &&
+        s_state.current_channel_identifier[0] != '\0') {
+        channel_user_sqid = s_state.current_channel_identifier;
+    } else if (s_state.current_channel_type == PS_CHANNEL_TYPE_HASHTAG &&
+               s_state.current_channel_identifier[0] != '\0') {
+        channel_hashtag = s_state.current_channel_identifier;
     }
-    
+
     // Get view acknowledgment setting
     bool request_ack = config_store_get_view_ack();
-    
+
     // Send view event via MQTT
     esp_err_t err = makapix_mqtt_publish_view(
         s_state.current_post_id,
@@ -393,7 +418,7 @@ static void send_view_event(void)
         channel_hashtag,
         request_ack
     );
-    
+
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "View event sent: post_id=%" PRId32 ", intent=%s, channel=%s, play_order=%u, ack=%s",
                  s_state.current_post_id, intent, channel_name, play_order, request_ack ? "true" : "false");
@@ -402,28 +427,25 @@ static void send_view_event(void)
     }
 }
 
-static const char *get_channel_name_for_view(p3a_channel_type_t channel_type)
+// Server-facing channel name. PS_CHANNEL_TYPE_NAMED splits into "all" /
+// "promoted" via spec_name; the rest map by channel type. Giphy is included
+// for completeness but Giphy posts don't generate Makapix view events.
+static const char *channel_name_for_view(ps_channel_type_t type, const char *spec_name)
 {
-    switch (channel_type) {
-        case P3A_CHANNEL_SDCARD:
-            return "sdcard";
-        case P3A_CHANNEL_MAKAPIX_ALL:
-            return "all";
-        case P3A_CHANNEL_MAKAPIX_PROMOTED:
-            return "promoted";
-        case P3A_CHANNEL_MAKAPIX_USER:
-            return "by_user";  // Server calls this "by_user"
-        case P3A_CHANNEL_MAKAPIX_BY_USER:
-            return "by_user";
-        case P3A_CHANNEL_MAKAPIX_REACTIONS:
-            return "reactions";
-        case P3A_CHANNEL_MAKAPIX_HASHTAG:
-            return "hashtag";
-        case P3A_CHANNEL_MAKAPIX_ARTWORK:
-            return "artwork";
-        default:
-            return "unknown";
+    switch (type) {
+        case PS_CHANNEL_TYPE_NAMED:
+            if (spec_name && spec_name[0]) {
+                return spec_name;  // "all", "promoted", ...
+            }
+            return "named";
+        case PS_CHANNEL_TYPE_USER:      return "by_user";  // server name
+        case PS_CHANNEL_TYPE_HASHTAG:   return "hashtag";
+        case PS_CHANNEL_TYPE_SDCARD:    return "sdcard";
+        case PS_CHANNEL_TYPE_ARTWORK:   return "artwork";
+        case PS_CHANNEL_TYPE_GIPHY:     return "giphy";
+        case PS_CHANNEL_TYPE_REACTIONS: return "reactions";
     }
+    return "unknown";
 }
 
 static const char *get_intent_string(bool is_intentional)

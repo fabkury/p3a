@@ -26,6 +26,8 @@ static esp_err_t map_artwork_to_request(const ps_artwork_t *artwork, queued_item
     strlcpy(out->request.filepath, artwork->filepath, sizeof(out->request.filepath));
     out->request.type = artwork->type;
     out->request.channel_type = artwork->channel_type;
+    strlcpy(out->request.channel_spec_name, artwork->channel_spec_name, sizeof(out->request.channel_spec_name));
+    strlcpy(out->request.channel_identifier, artwork->channel_identifier, sizeof(out->request.channel_identifier));
     out->request.post_id = artwork->post_id;
     out->request.post_source = artwork->post_source;
 

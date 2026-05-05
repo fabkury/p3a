@@ -274,6 +274,8 @@ void animation_loader_task(void *arg)
         ps_channel_type_t channel_type = PS_CHANNEL_TYPE_NAMED;  // default
         const char *name_for_log = NULL;
         int32_t post_id = 0;
+        const char *channel_spec_name = "";
+        const char *channel_identifier = "";
 
         post_source_t post_source = POST_SOURCE_NONE;
 
@@ -281,6 +283,8 @@ void animation_loader_task(void *arg)
             filepath = ov.filepath;
             type = ov.type;
             channel_type = ov.channel_type;
+            channel_spec_name = ov.channel_spec_name;
+            channel_identifier = ov.channel_identifier;
             name_for_log = ov.filepath;
             post_id = ov.post_id;
             post_source = ov.post_source;
@@ -304,12 +308,20 @@ void animation_loader_task(void *arg)
                 }
                 continue;
             }
-            // Use static buffer to hold filepath (play_scheduler_current returns by value)
+            // Use static buffers to hold strings (play_scheduler_current returns by value)
             static char s_current_filepath[256];
+            static char s_current_channel_spec_name[33];
+            static char s_current_channel_identifier[33];
             strlcpy(s_current_filepath, current.request.filepath, sizeof(s_current_filepath));
+            strlcpy(s_current_channel_spec_name, current.request.channel_spec_name,
+                    sizeof(s_current_channel_spec_name));
+            strlcpy(s_current_channel_identifier, current.request.channel_identifier,
+                    sizeof(s_current_channel_identifier));
             filepath = s_current_filepath;
             type = current.request.type;
             channel_type = current.request.channel_type;
+            channel_spec_name = s_current_channel_spec_name;
+            channel_identifier = s_current_channel_identifier;
             name_for_log = current.request.filepath;
             post_id = current.request.post_id;
             post_source = current.request.post_source;
@@ -397,6 +409,11 @@ void animation_loader_task(void *arg)
             s_back_buffer.ready = false;
             s_back_buffer.post_id = post_id;  // For view tracking
             s_back_buffer.post_source = post_source;
+            s_back_buffer.view_channel_type = channel_type;
+            strlcpy(s_back_buffer.view_channel_spec_name, channel_spec_name,
+                    sizeof(s_back_buffer.view_channel_spec_name));
+            strlcpy(s_back_buffer.view_channel_identifier, channel_identifier,
+                    sizeof(s_back_buffer.view_channel_identifier));
             if (swap_was_requested) {
                 s_swap_requested = true;
                 ESP_LOGD(TAG, "Loader task: Swap was requested, will swap after prefetch");

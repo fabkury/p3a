@@ -250,18 +250,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         }
         ESP_LOGI(TAG, "Boot playset: %s (display: %s)", active_playset, boot_channel);
     } else {
-        // Fallback: check legacy channel info from p3a_state
-        p3a_channel_info_t saved = {0};
-        if (p3a_state_get_channel_info(&saved) == ESP_OK) {
-            if (saved.type == P3A_CHANNEL_MAKAPIX_ALL) {
-                boot_channel = "all";
-            } else if (saved.type == P3A_CHANNEL_MAKAPIX_PROMOTED) {
-                boot_channel = "promoted";
-            } else if (saved.type == P3A_CHANNEL_SDCARD) {
-                boot_channel = "sdcard";
-            }
-        }
-        ESP_LOGI(TAG, "Boot channel (legacy): %s", boot_channel);
+        ESP_LOGI(TAG, "No active playset; boot channel default: %s", boot_channel);
     }
 
     s_buffer_mutex = xSemaphoreCreateMutex();
@@ -533,6 +522,8 @@ esp_err_t animation_player_request_swap(const swap_request_t *request)
         s_load_override.valid = true;
         s_load_override.type = request->type;
         s_load_override.channel_type = request->channel_type;
+        strlcpy(s_load_override.channel_spec_name, request->channel_spec_name, sizeof(s_load_override.channel_spec_name));
+        strlcpy(s_load_override.channel_identifier, request->channel_identifier, sizeof(s_load_override.channel_identifier));
         s_load_override.post_id = request->post_id;
         s_load_override.post_source = request->post_source;
         strlcpy(s_load_override.filepath, request->filepath, sizeof(s_load_override.filepath));

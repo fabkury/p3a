@@ -36,15 +36,23 @@ void view_tracker_deinit(void);
 
 /**
  * @brief Signal that a buffer swap occurred with artwork info
- * 
- * Call this from the render task after a buffer swap. The post_id and filepath
- * are captured at swap time to ensure correct view tracking even if the channel
- * navigator advances before the view tracker processes the event.
- * 
- * @param post_id   The post ID of the artwork now playing (0 to stop tracking)
- * @param filepath  The filepath of the artwork now playing (NULL to stop tracking)
+ *
+ * Call this from the render task after a buffer swap. All fields are captured
+ * at swap time so the view event reports the channel the post was actually
+ * picked from, even when the playset's stochastic selection picks a different
+ * channel on the next swap before the view event fires.
+ *
+ * @param post_id              The post ID of the artwork now playing (0 to stop tracking)
+ * @param post_source          Source of the post_id (Makapix/Giphy/SDCARD)
+ * @param filepath             The filepath of the artwork now playing (NULL to stop tracking)
+ * @param channel_type         Channel the post was picked from
+ * @param channel_spec_name    Channel sub-type ("all", "promoted", "user", "hashtag", "reactions", "sdcard", ...)
+ * @param channel_identifier   USER/REACTIONS sqid or HASHTAG tag (empty otherwise)
  */
-void view_tracker_signal_swap(int32_t post_id, post_source_t post_source, const char *filepath);
+void view_tracker_signal_swap(int32_t post_id, post_source_t post_source, const char *filepath,
+                              ps_channel_type_t channel_type,
+                              const char *channel_spec_name,
+                              const char *channel_identifier);
 
 /**
  * @brief Stop tracking views

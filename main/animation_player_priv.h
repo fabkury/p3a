@@ -127,6 +127,13 @@ typedef struct {
     // View tracking: post_id of the artwork being displayed
     int32_t post_id;
     post_source_t post_source;
+
+    // Channel provenance, captured at swap time so the view tracker reports
+    // the channel the post was actually picked from (matters for multi-channel
+    // playsets where stochastic selection chooses a different channel each pick).
+    ps_channel_type_t view_channel_type;
+    char view_channel_spec_name[33];
+    char view_channel_identifier[33];
 } animation_buffer_t;
 
 // Animation player state (now delegates to display_renderer for LCD operations)
@@ -147,6 +154,8 @@ typedef struct {
     char filepath[256];
     asset_type_t type;
     ps_channel_type_t channel_type;  // Channel type for PPA upscale branching
+    char channel_spec_name[33];      // For view-event reporting
+    char channel_identifier[33];     // For view-event reporting (USER/REACTIONS sqid, HASHTAG tag)
     int32_t post_id;  // For view tracking
     post_source_t post_source;
 } animation_load_override_t;

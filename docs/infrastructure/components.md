@@ -11,7 +11,7 @@ All 24 custom components live under `components/`. This document describes each 
 - **Public API**: `p3a_state.h`, `p3a_render.h`, `p3a_touch_router.h`, `p3a_current_post.h`, `p3a_logo.h`, `p3a_boot_logo.h`, `p3a_limits.h`, `sd_path.h`, `fresh_boot.h`
 - **States**: `BOOT`, `ANIMATION_PLAYBACK`, `PROVISIONING`, `OTA`, `PICO8_STREAMING`, `ERROR`
 - **Key functions**:
-  - `p3a_state_init()`, `p3a_state_get()`, `p3a_state_switch_channel()`, `p3a_state_enter_*()` — state transitions
+  - `p3a_state_init()`, `p3a_state_get()`, `p3a_state_enter_*()`, `p3a_state_fallback_to_sdcard()` — state transitions
   - `p3a_touch_router_init()`, `p3a_touch_router_handle_event()` — state-aware touch routing
   - `p3a_render_init()`, `p3a_render_frame()` — state-aware rendering dispatch
   - `sd_path_init()`, `sd_path_get_*()` — configurable SD card root directory (default `/sdcard/p3a`)

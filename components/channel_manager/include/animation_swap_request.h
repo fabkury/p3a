@@ -28,7 +28,9 @@ extern "C" {
 typedef struct swap_request_s {
     char filepath[256];        // Validated file path (file exists)
     asset_type_t type;         // File type (WebP, GIF, PNG, JPEG)
-    ps_channel_type_t channel_type; // Channel type (for PPA upscale branching)
+    ps_channel_type_t channel_type; // Channel type (for PPA upscale branching and view-event reporting)
+    char channel_spec_name[33];     // Channel sub-type name ("all", "promoted", "user", ...) for view-event reporting
+    char channel_identifier[33];    // USER/REACTIONS: sqid; HASHTAG: tag; empty otherwise
     int32_t post_id;           // For view tracking (0 if not applicable)
     post_source_t post_source; // Source of the post_id
     uint32_t dwell_time_ms;    // Effective dwell time for this artwork

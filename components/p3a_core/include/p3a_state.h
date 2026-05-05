@@ -132,31 +132,6 @@ typedef enum {
 } p3a_app_status_t;
 
 /**
- * @brief Channel types
- */
-typedef enum {
-    P3A_CHANNEL_SDCARD,             ///< Local SD card channel
-    P3A_CHANNEL_MAKAPIX_ALL,        ///< Makapix "all" channel
-    P3A_CHANNEL_MAKAPIX_PROMOTED,   ///< Makapix "promoted" channel
-    P3A_CHANNEL_MAKAPIX_USER,       ///< Makapix "user" (following) channel
-    P3A_CHANNEL_MAKAPIX_BY_USER,    ///< Makapix "by_user" channel (specific artist)
-    P3A_CHANNEL_MAKAPIX_REACTIONS,  ///< Makapix "reactions" channel (posts a specific user has reacted to)
-    P3A_CHANNEL_MAKAPIX_HASHTAG,    ///< Makapix "hashtag" channel (specific hashtag)
-    P3A_CHANNEL_MAKAPIX_ARTWORK,    ///< Transient single-artwork channel
-    P3A_CHANNEL_GIPHY_TRENDING,     ///< Giphy Trending channel
-} p3a_channel_type_t;
-
-/**
- * @brief Current channel information
- */
-typedef struct {
-    p3a_channel_type_t type;
-    char identifier[64];            ///< For BY_USER (user_sqid) or HASHTAG (hashtag) channels
-    char storage_key[64];           ///< For ARTWORK channel
-    char display_name[64];          ///< Human-readable channel name
-} p3a_channel_info_t;
-
-/**
  * @brief Channel message information
  */
 typedef struct {
@@ -259,11 +234,6 @@ p3a_provisioning_substate_t p3a_state_get_provisioning_substate(void);
  * Only valid when global state is P3A_STATE_OTA.
  */
 p3a_ota_substate_t p3a_state_get_ota_substate(void);
-
-/**
- * @brief Get current channel information
- */
-esp_err_t p3a_state_get_channel_info(p3a_channel_info_t *out_info);
 
 /**
  * @brief Get current channel message (if in CHANNEL_MESSAGE sub-state)
@@ -434,39 +404,11 @@ esp_err_t p3a_state_wait_for_wifi(TickType_t timeout_ms);
 // ============================================================================
 
 /**
- * @brief Switch to a channel
- *
- * Performs a "cross-channel swap" - the next artwork displayed comes from
- * the new channel. If the channel has no artworks available, enters
- * CHANNEL_MESSAGE sub-state with appropriate message.
- *
- * @param type         Channel type
- * @param identifier   Identifier for BY_USER/REACTIONS (sqid) or HASHTAG (tag); NULL otherwise
- * @param display_name Optional user-friendly name to display (e.g. artist handle, playset
- *                     channel label). Pass NULL or "" to auto-derive from type+identifier.
- * @return ESP_OK on success
- */
-esp_err_t p3a_state_switch_channel(p3a_channel_type_t type, const char *identifier,
-                                   const char *display_name);
-
-/**
- * @brief Switch to single-artwork channel (for show_artwork command)
- * 
- * Creates a transient in-memory channel with one artwork.
- * Handles download with progress display if artwork not cached.
- * 
- * @param storage_key Artwork storage key UUID
- * @param art_url Artwork download URL
- * @param post_id Post ID for view tracking
- * @return ESP_OK on success
- */
-esp_err_t p3a_state_show_artwork(const char *storage_key, const char *art_url, int32_t post_id);
-
-/**
  * @brief Fall back to SD card channel
- * 
- * Convenience function equivalent to p3a_state_switch_channel(P3A_CHANNEL_SDCARD, NULL, NULL).
- * Used when artwork download fails after retries.
+ *
+ * Switches the play scheduler to the SD card channel and shows a
+ * "no artworks" message if the SD card is also empty. Used when an artwork
+ * download fails after retries.
  */
 esp_err_t p3a_state_fallback_to_sdcard(void);
 

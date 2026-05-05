@@ -410,23 +410,6 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier,
     s_channel_loading = false;
     s_loading_channel_id[0] = '\0';
 
-    // Persist "last channel" selection
-    if (strcmp(channel, "all") == 0) {
-        (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_ALL, NULL, NULL);
-    } else if (strcmp(channel, "promoted") == 0) {
-        (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_PROMOTED, NULL, NULL);
-    } else if (strcmp(channel, "user") == 0) {
-        (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_USER, NULL, NULL);
-    } else if (strcmp(channel, "by_user") == 0) {
-        (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_BY_USER, identifier, channel_name);
-    } else if (strcmp(channel, "reactions") == 0) {
-        (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_REACTIONS, identifier, channel_name);
-    } else if (strcmp(channel, "hashtag") == 0) {
-        (void)p3a_state_switch_channel(P3A_CHANNEL_MAKAPIX_HASHTAG, identifier, channel_name);
-    } else {
-        ESP_LOGW(MAKAPIX_TAG, "Not persisting unknown channel key: %s", channel);
-    }
-
     return ESP_OK;
 }
 

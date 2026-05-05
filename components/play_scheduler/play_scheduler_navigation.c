@@ -90,6 +90,8 @@ static esp_err_t prepare_and_request_swap(ps_state_t *state, const ps_artwork_t 
     strlcpy(request.filepath, artwork->filepath, sizeof(request.filepath));
     request.type = artwork->type;
     request.channel_type = artwork->channel_type;
+    strlcpy(request.channel_spec_name, artwork->channel_spec_name, sizeof(request.channel_spec_name));
+    strlcpy(request.channel_identifier, artwork->channel_identifier, sizeof(request.channel_identifier));
     request.post_id = artwork->post_id;
     request.post_source = artwork->post_source;
 

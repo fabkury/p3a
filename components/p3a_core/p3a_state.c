@@ -46,45 +46,6 @@ void p3a_state_notify_callbacks(p3a_state_t old_state, p3a_state_t new_state)
     }
 }
 
-void p3a_state_update_channel_display_name(p3a_channel_info_t *info)
-{
-    switch (info->type) {
-        case P3A_CHANNEL_SDCARD:
-            snprintf(info->display_name, sizeof(info->display_name), "SD Card");
-            break;
-        case P3A_CHANNEL_MAKAPIX_ALL:
-            snprintf(info->display_name, sizeof(info->display_name), "Makapix: All");
-            break;
-        case P3A_CHANNEL_MAKAPIX_PROMOTED:
-            snprintf(info->display_name, sizeof(info->display_name), "Makapix: Featured");
-            break;
-        case P3A_CHANNEL_MAKAPIX_USER:
-            snprintf(info->display_name, sizeof(info->display_name), "Makapix: Following");
-            break;
-        case P3A_CHANNEL_MAKAPIX_BY_USER:
-            // "Makapix: @" is 11 bytes, so we have 64 - 11 = 53 bytes for identifier
-            snprintf(info->display_name, sizeof(info->display_name), "Makapix: @%.53s", info->identifier);
-            break;
-        case P3A_CHANNEL_MAKAPIX_REACTIONS:
-            // "Reactions: @" is 12 bytes, leaving 64 - 12 - 1 (null) = 51 bytes for identifier
-            snprintf(info->display_name, sizeof(info->display_name), "Reactions: @%.51s", info->identifier);
-            break;
-        case P3A_CHANNEL_MAKAPIX_HASHTAG:
-            // "Makapix: #" is 11 bytes, so we have 64 - 11 = 53 bytes for identifier
-            snprintf(info->display_name, sizeof(info->display_name), "Makapix: #%.53s", info->identifier);
-            break;
-        case P3A_CHANNEL_MAKAPIX_ARTWORK:
-            snprintf(info->display_name, sizeof(info->display_name), "Single Artwork");
-            break;
-        case P3A_CHANNEL_GIPHY_TRENDING:
-            snprintf(info->display_name, sizeof(info->display_name), "Giphy: Trending");
-            break;
-        default:
-            snprintf(info->display_name, sizeof(info->display_name), "Unknown");
-            break;
-    }
-}
-
 // ============================================================================
 // State Entry Rules
 // ============================================================================
@@ -460,10 +421,6 @@ esp_err_t p3a_state_init(void)
     ESP_LOGI(TAG, "Loaded active playset: '%s' (title='%s')",
              s_state.active_playset, s_state.active_artwork_title);
 
-    // Default channel until playset system takes over
-    s_state.current_channel.type = P3A_CHANNEL_SDCARD;
-    p3a_state_update_channel_display_name(&s_state.current_channel);
-
     // Initialize to animation playback state with "Starting..." message
     // This prevents blank screen gap between boot logo and first content
     s_state.current_state = P3A_STATE_ANIMATION_PLAYBACK;
@@ -480,8 +437,7 @@ esp_err_t p3a_state_init(void)
 
     s_state.initialized = true;
 
-    ESP_LOGI(TAG, "State machine initialized, starting in ANIMATION_PLAYBACK with channel: %s",
-             s_state.current_channel.display_name);
+    ESP_LOGI(TAG, "State machine initialized, starting in ANIMATION_PLAYBACK");
 
     return ESP_OK;
 }
@@ -581,18 +537,6 @@ p3a_ota_substate_t p3a_state_get_ota_substate(void)
     xSemaphoreGive(s_state.mutex);
 
     return substate;
-}
-
-esp_err_t p3a_state_get_channel_info(p3a_channel_info_t *out_info)
-{
-    if (!out_info) return ESP_ERR_INVALID_ARG;
-    if (!s_state.initialized) return ESP_ERR_INVALID_STATE;
-
-    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
-    memcpy(out_info, &s_state.current_channel, sizeof(p3a_channel_info_t));
-    xSemaphoreGive(s_state.mutex);
-
-    return ESP_OK;
 }
 
 esp_err_t p3a_state_get_channel_message(p3a_channel_message_t *out_msg)

@@ -51,6 +51,21 @@ static post_source_t post_source_from_channel_type(ps_channel_type_t type)
     }
 }
 
+// Stamp the picked channel's provenance onto the artwork. The view tracker
+// reads these fields off the artwork (via the swap pipeline) instead of
+// inferring the channel from a global state mirror, so multi-channel
+// playsets report the correct channel even after stochastic selection.
+static inline void ps_artwork_stamp_channel(ps_artwork_t *artwork,
+                                            size_t channel_index,
+                                            const ps_channel_state_t *ch)
+{
+    artwork->channel_index = (uint8_t)channel_index;
+    artwork->channel_type = ch->type;
+    artwork->post_source = post_source_from_channel_type(ch->type);
+    strlcpy(artwork->channel_spec_name, ch->spec_name, sizeof(artwork->channel_spec_name));
+    strlcpy(artwork->channel_identifier, ch->identifier, sizeof(artwork->channel_identifier));
+}
+
 static asset_type_t get_asset_type_from_extension(uint8_t ext)
 {
     switch (ext) {
@@ -232,9 +247,7 @@ static bool pick_recency_sdcard(ps_state_t *state, size_t channel_index, ps_artw
         out_artwork->created_at = entry->created_at;
         out_artwork->dwell_time_ms = 0;  // Use global config default
         out_artwork->type = get_asset_type_from_extension(entry->extension);
-        out_artwork->channel_index = (uint8_t)channel_index;
-        out_artwork->channel_type = ch->type;
-        out_artwork->post_source = post_source_from_channel_type(ch->type);
+        ps_artwork_stamp_channel(out_artwork, channel_index, ch);
 
         return true;
     }
@@ -357,9 +370,7 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
         out_artwork->created_at = entry->created_at;
         out_artwork->dwell_time_ms = 0;  // Use global config default
         out_artwork->type = get_asset_type_from_extension(entry->extension);
-        out_artwork->channel_index = (uint8_t)channel_index;
-        out_artwork->channel_type = ch->type;
-        out_artwork->post_source = post_source_from_channel_type(ch->type);
+        ps_artwork_stamp_channel(out_artwork, channel_index, ch);
 
         return true;
     }
@@ -443,9 +454,7 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
         out_artwork->created_at = entry->created_at;
         out_artwork->dwell_time_ms = 0;  // Use global config default
         out_artwork->type = get_asset_type_from_extension(entry->extension);
-        out_artwork->channel_index = (uint8_t)channel_index;
-        out_artwork->channel_type = ch->type;
-        out_artwork->post_source = post_source_from_channel_type(ch->type);
+        ps_artwork_stamp_channel(out_artwork, channel_index, ch);
 
         return true;
     }
@@ -547,9 +556,7 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
         out_artwork->created_at = entry->created_at;
         out_artwork->dwell_time_ms = 0;  // Use global config default
         out_artwork->type = get_asset_type_from_extension(entry->extension);
-        out_artwork->channel_index = (uint8_t)channel_index;
-        out_artwork->channel_type = ch->type;
-        out_artwork->post_source = post_source_from_channel_type(ch->type);
+        ps_artwork_stamp_channel(out_artwork, channel_index, ch);
 
         return true;
     }
@@ -595,19 +602,19 @@ bool ps_pick_artwork(ps_state_t *state, size_t channel_index, ps_artwork_t *out_
 
         out_artwork->artwork_id = ch->artwork_state.post_id;
         out_artwork->post_id = ch->artwork_state.post_id;
-        // Mirror the discriminator used by play_scheduler_play_artwork(): a
-        // positive post_id means a Makapix artwork (so reactions and view
-        // tracking activate); post_id == 0 is a local file.
-        out_artwork->post_source = (ch->artwork_state.post_id > 0)
-                                       ? POST_SOURCE_MAKAPIX
-                                       : POST_SOURCE_NONE;
         strlcpy(out_artwork->filepath, ch->artwork_state.filepath, sizeof(out_artwork->filepath));
         strlcpy(out_artwork->storage_key, ch->artwork_state.storage_key, sizeof(out_artwork->storage_key));
         out_artwork->created_at = 0;
         out_artwork->dwell_time_ms = 0;  // No auto-swap for single artwork
         out_artwork->type = get_asset_type_from_extension(0);  // Default to WEBP, will be detected on load
-        out_artwork->channel_index = (uint8_t)channel_index;
-        out_artwork->channel_type = ch->type;
+        ps_artwork_stamp_channel(out_artwork, channel_index, ch);
+        // Override post_source: an artwork channel with positive post_id is a
+        // Makapix artwork (reactions + view tracking activate); post_id == 0 is
+        // a local file. ps_artwork_stamp_channel maps PS_CHANNEL_TYPE_ARTWORK
+        // to POST_SOURCE_MAKAPIX, which is wrong for local files.
+        out_artwork->post_source = (ch->artwork_state.post_id > 0)
+                                       ? POST_SOURCE_MAKAPIX
+                                       : POST_SOURCE_NONE;
 
         // Detect asset type from filepath
         size_t path_len = strlen(out_artwork->filepath);

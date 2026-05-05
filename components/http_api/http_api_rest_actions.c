@@ -118,10 +118,6 @@ esp_err_t h_get_channel(httpd_req_t *req) {
     // Get the active playset name (primary source of truth)
     const char *playset = p3a_state_get_active_playset();
 
-    // For backwards compatibility, also get channel info
-    p3a_channel_info_t channel_info;
-    esp_err_t err = p3a_state_get_channel_info(&channel_info);
-
     // Map playset to channel_name for backwards compatibility
     const char *channel_name = "other";
     if (playset && playset[0] != '\0') {
@@ -135,25 +131,6 @@ esp_err_t h_get_channel(httpd_req_t *req) {
             channel_name = "followed_artists";
         } else if (strcmp(playset, "giphy_trending") == 0) {
             channel_name = "giphy_trending";
-        }
-    } else if (err == ESP_OK) {
-        // Fallback to channel type if no playset set (legacy)
-        switch (channel_info.type) {
-            case P3A_CHANNEL_SDCARD:
-                channel_name = "sdcard";
-                break;
-            case P3A_CHANNEL_MAKAPIX_ALL:
-                channel_name = "all";
-                break;
-            case P3A_CHANNEL_MAKAPIX_PROMOTED:
-                channel_name = "promoted";
-                break;
-            case P3A_CHANNEL_GIPHY_TRENDING:
-                channel_name = "giphy_trending";
-                break;
-            default:
-                channel_name = "other";
-                break;
         }
     }
 

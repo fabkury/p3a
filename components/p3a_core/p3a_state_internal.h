@@ -46,9 +46,6 @@ typedef struct {
     // Mutex-protected like active_playset.
     char active_artwork_title[P3A_ACTIVE_ARTWORK_TITLE_MAX + 1];
 
-    // Channel info
-    p3a_channel_info_t current_channel;
-
     // Channel message (for CHANNEL_MESSAGE sub-state)
     p3a_channel_message_t channel_message;
 
@@ -87,7 +84,6 @@ typedef struct {
 extern p3a_state_internal_t s_state;
 
 void p3a_state_notify_callbacks(p3a_state_t old_state, p3a_state_t new_state);
-void p3a_state_update_channel_display_name(p3a_channel_info_t *info);
 
 #ifdef __cplusplus
 }

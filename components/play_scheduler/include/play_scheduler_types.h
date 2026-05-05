@@ -139,6 +139,11 @@ typedef struct {
     asset_type_t type;            // WEBP, GIF, PNG, JPEG
     uint8_t channel_index;        // Which channel this came from
     ps_channel_type_t channel_type; // Channel type for downstream use (PPA upscale branching)
+    // Channel provenance, stamped at pick time so the view tracker can report
+    // which channel a post came from even after stochastic selection picks a
+    // different channel from the playset on the next swap.
+    char channel_spec_name[33];   // Channel sub-type name ("all", "promoted", "user", "hashtag", "reactions", "sdcard", "trending", ...)
+    char channel_identifier[33];  // USER/REACTIONS: sqid; HASHTAG: tag; empty otherwise
 } ps_artwork_t;
 
 /**

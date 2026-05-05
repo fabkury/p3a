@@ -1,8 +1,10 @@
 # SDIO RX buffer OOM crash (esp_hosted streaming mode)
 
 **Status:** Open. Decision tabled — not yet implemented.
-**First observed:** 2026-05-04 (single occurrence in monitor log).
-**Severity:** Hard crash + reboot. Frequency unknown (only seen once so far).
+**First observed:** 2026-05-04.
+**Last observed:** 2026-05-05 (second occurrence — see "Occurrence 2" below).
+**Severity:** Hard crash + reboot. **Now confirmed recurring** — happened twice in two
+days, both times under the same pattern (Giphy refresh paging while downloads active).
 
 ---
 
@@ -43,6 +45,8 @@ no fallback, no graceful drop.
 
 ## What was happening at the moment of crash
 
+### Occurrence 1 — 2026-05-04 (uptime ~2608 s)
+
 Timeline of the last ~20 seconds before panic (timestamps in ms since boot):
 
 | t (ms)  | Event |
@@ -70,6 +74,50 @@ After Trending finished, the scheduler logged
 3572s, and 3582s into their 3600s freshness window — so 10s later their
 windows expired and the scheduler went back to work. This is by design but it
 means we get bursts of network activity rather than evenly spaced refreshes.
+
+### Occurrence 2 — 2026-05-05 (uptime ~1404 s)
+
+ELF SHA256: `969b00418…`. Crash text identical (`assert failed:
+sdio_rx_get_buffer sdio_drv.c:830 (*buf)`, MEPC `0x4ff0a7ce`).
+
+Timeline of the last ~10 seconds before panic (timestamps in ms since boot):
+
+| t (ms)  | Event |
+|---------|-------|
+| 1345509 | `ps_refresh` cycle starts; only **Giphy Trending** needs refresh |
+| 1345639 | Trending refresh: 5 paginated HTTPS fetches (97 + 98 + 98 + 98 + 72 KB) |
+| 1355120 | Trending refresh complete; LAi rebuilt (184 files) |
+| 1355960 | `giphy_dl` downloads `Yp9qEExZm3hon67Bn1` (432 KB) |
+| 1357289 | Scheduler logs **"Next periodic refresh in 37 seconds"** |
+| 1368146 | `giphy_dl` downloads `E7oHJ8l4chkC5YvY2J` (1.25 MB) |
+| 1378870 | `giphy_dl` downloads `l0ExayQDzrI2xOb8A` (826 KB) |
+| 1388263 | `giphy_dl` downloads `OMZRxGyZZ6fGo` (870 KB) |
+| 1393469 | **Second** refresh cycle fires (37 s later, as scheduled) for **Giphy Work** |
+| 1393666 | Giphy Work search `q="work"` — page 1 fetch |
+| 1394–1403 | Pages 2–7 fetched back-to-back (offsets 50, 100, 150, 200, 250, 300) |
+| 1398494 | `giphy_dl` finishes `psZPpgNNe5TFK7gAXa` (685 KB), starts `lO6SvVyO3SHBu` |
+| 1403863 | Page 8 fetch starts (`offset=350`) — TLS handshake at 1403997 |
+| —       | **CRASH** during/just after that handshake (no further log line) |
+
+`ps_pick` and `view_tracker` were running throughout. At the moment of the
+crash there was an in-flight Giphy API page fetch **plus** an in-flight GIF
+download (`lO6SvVyO3SHBu`), both holding TLS sessions, while the SDIO RX
+path tried to grow its buffer for an inbound burst from the C6.
+
+### Pattern across both occurrences
+
+Both crashes share the same fingerprint:
+
+1. A `ps_refresh` cycle is paging through a Giphy endpoint (multiple ~96 KB
+   JSON responses over TLS, in quick succession).
+2. **At the same time**, `giphy_dl` has at least one (often multiple) GIF
+   downloads in flight, each with its own TLS session.
+3. The crash hits in the middle of the API paging, not on the first page.
+
+The "back-to-back refresh" in Occurrence 1 wasn't actually load-bearing — in
+Occurrence 2 the second refresh was 37 s after the first, but the underlying
+trigger (paging + concurrent downloads) was the same. Concurrent downloads
+during a refresh paging burst is the load profile to watch.
 
 ---
 
@@ -193,6 +241,37 @@ When picking this back up, decide between:
 - [ ] **D.** Add diagnostics first, decide based on data.
 
 No fix has been applied. `sdkconfig` and source are unchanged.
+
+After the second occurrence, option **D (diagnostics first)** is weaker: we
+already have two data points showing the same fingerprint. Leaning toward
+**A** (config switch) or **C** (A + concurrency tightening), unless someone
+wants to instrument first to confirm fragmentation vs. absolute exhaustion
+before touching Kconfig.
+
+---
+
+## Tracking upstream
+
+This is a known issue, tracked at:
+
+- **espressif/esp-hosted-mcu#144** — *"ESP32P4 + ESP32C6 sdio_rx_get_buffer
+  and transport_drv_sta_tx assert failed (EHM-156)"* — open, actively
+  discussed, Espressif collaborator engaged.
+- Our corroborating comment (2026-05-05) with the p3a load profile:
+  https://github.com/espressif/esp-hosted-mcu/issues/144#issuecomment-4381980103
+- Related thread referenced from #144:
+  https://github.com/espressif/esp-hosted/issues/597 (closed; same heap-pressure
+  family of bugs).
+- Espressif's documented mitigation
+  ("packet mode" — equivalent to RX_NONE / RX_MAX_SIZE Kconfig switch):
+  https://github.com/espressif/esp-hosted-mcu/blob/main/docs/sdio.md#94-switching-to-packet-mode
+
+Espressif's stance so far is to recommend mitigation (packet mode) rather than
+patch the assert. Our comment makes the explicit case for replacing
+`assert(*buf)` with a graceful drop. No commitment from upstream yet.
+
+When picking this back up, check the issue thread for new replies before
+deciding.
 
 ---
 

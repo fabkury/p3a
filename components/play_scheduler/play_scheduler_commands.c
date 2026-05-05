@@ -424,6 +424,13 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     // Increment epoch (history is preserved)
     s_state->epoch_id++;
 
+    // Reset history navigation pointer so the new playset's first pick
+    // becomes the new CURRENT. Without this, if the user had navigated
+    // back N steps before switching playsets, play_scheduler_next() would
+    // see history_position >= 0 and walk forward one slot through stale
+    // history instead of picking fresh from the newly loaded channels.
+    s_state->history_position = -1;
+
     // Resolve channel sidecar directory once for last_refresh hydration below
     char ch_meta_path[128];
     if (sd_path_get_channel(ch_meta_path, sizeof(ch_meta_path)) != ESP_OK) {

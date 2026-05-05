@@ -2,9 +2,11 @@
 
 **Status:** Open. Decision tabled — not yet implemented.
 **First observed:** 2026-05-04.
-**Last observed:** 2026-05-05 (second occurrence — see "Occurrence 2" below).
-**Severity:** Hard crash + reboot. **Now confirmed recurring** — happened twice in two
-days, both times under the same pattern (Giphy refresh paging while downloads active).
+**Last observed:** 2026-05-05 (third occurrence — see "Occurrence 3" below).
+**Severity:** Hard crash + reboot. **Now confirmed recurring** — three times in
+two days, all under the same pattern (Giphy refresh paging while at least one
+download is active). Occurrences 2 and 3 are on the same firmware
+(ELF `969b00418`), so the bug is reproducible-under-load on a fixed build.
 
 ---
 
@@ -104,20 +106,64 @@ crash there was an in-flight Giphy API page fetch **plus** an in-flight GIF
 download (`lO6SvVyO3SHBu`), both holding TLS sessions, while the SDIO RX
 path tried to grow its buffer for an inbound burst from the C6.
 
-### Pattern across both occurrences
+### Occurrence 3 — 2026-05-05 (uptime ~7172 s, ~2 h)
 
-Both crashes share the same fingerprint:
+Same firmware as Occurrence 2 (ELF SHA256 `969b00418…`). Crash text and
+register dump identical (`assert failed: sdio_rx_get_buffer sdio_drv.c:830
+(*buf)`, MEPC `0x4ff0a7ce`).
+
+Timeline of the last ~7 seconds before panic (timestamps in ms since boot):
+
+| t (ms)  | Event |
+|---------|-------|
+| —       | Long stretch of normal `ps_pick`/`view_tracker` activity (no anomalies for ~3500 s prior) |
+| 7165751 | `ps_refresh` cycle starts (3452 s elapsed since previous); only **Giphy Trending** needs refresh |
+| 7165875 | Giphy Trending refresh begins |
+| 7166052 | Page 1 (`offset=0`) — TLS handshake |
+| 7167086 | Page 1 received (97.9 KB); merged at 7167212 |
+| 7167379 | `channel_cache` saves Trending: 264 entries, 252 available |
+| 7167392 | `dl_mgr` starts download `l0ExayQDzrI2xOb8A` (concurrent with API paging) |
+| 7167412–7172528 | Pages 2–5 (`offset=50, 100, 150, 200`) fetched back-to-back |
+| 7172661 | Page 6 fetch (`offset=200`) — TLS handshake |
+| —       | **CRASH** during/just after that handshake (no further log line) |
+
+Notable differences from Occurrence 2:
+- Only **one** concurrent GIF download visible at crash time (vs several in Occ 2)
+- Much longer uptime before crash (~2 h vs ~23 min in Occ 2)
+- Both occurrences are on the *same* firmware build, so this is reproducible
+  under load on a fixed binary.
+
+### Pattern across all three occurrences
+
+All three crashes share the same fingerprint:
 
 1. A `ps_refresh` cycle is paging through a Giphy endpoint (multiple ~96 KB
    JSON responses over TLS, in quick succession).
-2. **At the same time**, `giphy_dl` has at least one (often multiple) GIF
-   downloads in flight, each with its own TLS session.
+2. **At the same time**, `dl_mgr` has at least one GIF download in flight,
+   each with its own TLS session.
 3. The crash hits in the middle of the API paging, not on the first page.
 
 The "back-to-back refresh" in Occurrence 1 wasn't actually load-bearing — in
-Occurrence 2 the second refresh was 37 s after the first, but the underlying
-trigger (paging + concurrent downloads) was the same. Concurrent downloads
-during a refresh paging burst is the load profile to watch.
+Occurrences 2 and 3 there was no back-to-back refresh, just paging + at
+least one concurrent download. Concurrent downloads during a refresh paging
+burst is the load profile to watch.
+
+#### What Occurrence 3 newly tells us
+
+- **Not a slow leak / cumulative fragmentation.** Occurrences 2 (23 min) and
+  3 (~2 h) are on the same firmware, with vastly different uptimes. A leak
+  hypothesis predicts crashes correlated with uptime; instead we see the
+  crash correlated with the load *burst* (refresh + download), regardless of
+  how long the device has been up. This argues for "transient peak demand
+  exceeds DMA-internal heap available right now" rather than "heap slowly
+  drains until it can't satisfy a normal request."
+- **One concurrent download is enough.** Occurrence 2 had several large
+  downloads in parallel; Occurrence 3 had just one visible. Suggests the
+  refresh's own paginated TLS sessions account for most of the pressure on
+  their own — even a single concurrent download tips it over.
+- **Reproducibility on fixed firmware** means the next attempt to fix this
+  can be evaluated against a known-failing build (no "did the firmware
+  change?" confound).
 
 ---
 

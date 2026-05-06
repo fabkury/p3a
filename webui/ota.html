@@ -133,12 +133,50 @@ button {
     margin-top: var(--sp-4);
     line-height: 1.4;
 }
+.both-updates-banner {
+    display: none;
+    background: linear-gradient(135deg, #ef6c00 0%, #ff9800 100%);
+    color: white;
+    border-radius: var(--r-md);
+    padding: var(--sp-3) var(--sp-4);
+    margin-bottom: var(--sp-3);
+    box-shadow: 0 4px 12px rgba(239,108,0,0.35);
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+.both-updates-banner h3 {
+    margin: 0 0 var(--sp-2);
+    font-size: 1.02rem;
+    font-weight: 600;
+}
+.both-updates-banner ol {
+    margin: var(--sp-2) 0;
+    padding-left: 1.3rem;
+}
+.both-updates-banner li { margin-bottom: 4px; }
+.both-updates-banner p { margin: var(--sp-2) 0 0; }
+.both-updates-banner a {
+    color: white;
+    text-decoration: underline;
+    font-weight: 600;
+}
+.both-updates-banner a:active { opacity: 0.8; }
 </style>
 </head>
 <body class="has-bottom-nav">
 <div class="container">
 <h1>Firmware Update<span class="dev-badge" id="dev-badge" style="display:none">DEV</span></h1>
 <div class="status-message" id="status-msg"></div>
+
+<div class="both-updates-banner" id="both-updates-banner">
+<h3>Both firmware and Web UI updates are available</h3>
+<p>You'll need to install them in order:</p>
+<ol>
+<li>Install the firmware update below. The device will reboot.</li>
+<li>Come back to this page and install the Web UI update.</li>
+</ol>
+<p>Or flash both at once: <a href="https://fabkury.github.io/p3a/web-flasher/" target="_blank" rel="noopener">web flasher</a> &middot; <a href="https://github.com/fabkury/p3a/blob/main/docs/flash-p3a.md" target="_blank" rel="noopener">p3a flashing guide</a></p>
+</div>
 
 <div class="card">
 <div class="section-header">Firmware</div>
@@ -172,7 +210,7 @@ button {
 
 <button class="btn-secondary" id="check-btn" onclick="checkUpdate()">Check for Updates</button>
 <div class="last-checked" id="last-checked">Last checked: never</div>
-<div class="footer-tip">For the best experience, keep both firmware and web UI updated. If both need updating, update the firmware first, then come back to update the web UI.</div>
+<div class="footer-tip">For the best experience, keep both firmware and web UI updated.</div>
 
 <nav class="bottom-nav">
 <a href="/" class="bottom-nav-item"><span class="bottom-nav-icon">&#8962;</span><span class="bottom-nav-label">Home</span></a>
@@ -186,6 +224,17 @@ var pollInterval = null;
 var lastState = null;
 var fwLastCheck = null;
 var lastCheckedLocal = null;
+// Tracked across the two parallel status fetches so the both-updates banner
+// reflects the latest known state of each side. Banner shows only while both
+// installs are still in the 'update_available' state — once either begins,
+// the user is acting on the guidance and the banner gets out of the way.
+var fwUpdateReady = false;
+var webuiUpdateReady = false;
+function updateBothUpdatesBanner() {
+    var b = document.getElementById('both-updates-banner');
+    if (!b) return;
+    b.style.display = (fwUpdateReady && webuiUpdateReady) ? 'block' : 'none';
+}
 function showStatus(msg, type) {
     var el = document.getElementById('status-msg');
     el.textContent = msg;
@@ -268,6 +317,8 @@ function updateUI(data) {
     if (data.error_message) showStatus(data.error_message, 'error');
     lastState = data.state;
     renderLastChecked();
+    fwUpdateReady = (data.state === 'update_available');
+    updateBothUpdatesBanner();
 }
 function fetchStatus() {
     fetch('/ota/status').then(function(r) { return r.json(); }).then(function(d) {
@@ -367,6 +418,8 @@ function updateWebuiUI(data) {
     }
 
     lastWebuiState = data.state;
+    webuiUpdateReady = (data.state === 'update_available');
+    updateBothUpdatesBanner();
 }
 
 function startWebuiPolling() {

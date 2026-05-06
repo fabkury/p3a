@@ -499,10 +499,15 @@ esp_err_t channel_cache_load(const char *channel_id,
 
     if (err == ESP_OK) {
         // Validation passed against CHANNEL_CACHE_HARD_CAP. The user's soft
-        // cap (channel_cache_size) is enforced here, not at validation —
-        // exceeding it is a policy mismatch, not corruption, so we trim
-        // rather than reject the file.
-        uint32_t soft_cap = CHANNEL_CACHE_MAX_ENTRIES;
+        // cap is enforced here, not at validation — exceeding it is a policy
+        // mismatch, not corruption, so we trim rather than reject the file.
+        //
+        // Resolve the cap by source: Giphy and Makapix use independent
+        // user-configurable knobs. Other channel types (SD card, etc.) fall
+        // back to channel_cache_size, which is the closest existing cap.
+        uint32_t soft_cap = (channel_type == PS_CHANNEL_TYPE_GIPHY)
+            ? config_store_get_giphy_cache_size()
+            : CHANNEL_CACHE_MAX_ENTRIES;
         if (cache->entry_count > soft_cap) {
             cache_trim_to_cap(cache, vault_path, soft_cap);
         }

@@ -298,9 +298,13 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
                  ch->display_name, esp_err_to_name(reg_err));
     }
 
-    // If cache was migrated from legacy format (dirty flag set), schedule save in new format
+    // Belt-and-suspenders: if the load path left the cache dirty (e.g.
+    // cache_trim_to_cap shrank it to a lowered soft cap), make sure a save
+    // is scheduled. Legacy-format migration no longer runs — old versions
+    // are rejected outright at validation — so trim is currently the only
+    // cause, but any future load-side mutation will also benefit from this.
     if (ch->cache->dirty) {
-        ESP_LOGI(TAG, "Channel '%s': migrated from legacy format, scheduling save", ch->display_name);
+        ESP_LOGI(TAG, "Channel '%s': cache dirty after load, scheduling save", ch->display_name);
         channel_cache_schedule_save(ch->cache);
     }
 

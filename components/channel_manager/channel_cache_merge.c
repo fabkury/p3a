@@ -38,11 +38,14 @@ extern file_extension_t detect_file_type(const char *url);
 // ============================================================================
 
 /**
- * @brief Build vault path from entry without needing makapix_channel_t
+ * @brief Build vault path from entry without needing makapix_channel_t.
+ *
+ * Declared in channel_cache_internal.h so trim-on-load (channel_cache.c) and
+ * merge-time eviction (this file) share the construction.
  */
-static void build_vault_path_from_entry(const makapix_channel_entry_t *entry,
-                                        const char *vault_path,
-                                        char *out, size_t out_len)
+void build_vault_path_from_entry(const makapix_channel_entry_t *entry,
+                                 const char *vault_path,
+                                 char *out, size_t out_len)
 {
     // Convert stored bytes back to UUID string
     char storage_key[40];

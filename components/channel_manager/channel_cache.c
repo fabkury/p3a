@@ -15,8 +15,10 @@
 #include "makapix_channel_internal.h"
 #include "makapix_channel_utils.h"
 #include "playlist_manager.h"
-#include "play_scheduler_types.h"   // PS_MAX_CHANNELS, ps_channel_type_t
+#include "play_scheduler_types.h"   // PS_MAX_CHANNELS, ps_channel_type_t, PS_CHANNEL_TYPE_GIPHY
 #include "play_scheduler.h"        // ps_get_display_name()
+#include "giphy.h"                  // giphy_build_filepath() for trim-on-load dispatch
+#include "giphy_types.h"            // giphy_channel_entry_t for cast at trim time
 #include "esp_log.h"
 #include <string.h>
 #include <stdlib.h>
@@ -134,11 +136,15 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
         return ESP_ERR_NOT_SUPPORTED;
     }
 
-    // Validate counts
-    if (header.ci_count > CHANNEL_CACHE_MAX_ENTRIES ||
+    // Validate counts against the hard cap (sanity check for corruption).
+    // The user-configurable soft cap (channel_cache_size) is enforced at load
+    // time via cache_trim_to_cap() — exceeding it is policy, not corruption,
+    // so we don't reject the file.
+    if (header.ci_count > CHANNEL_CACHE_HARD_CAP ||
         header.lai_count > header.ci_count) {
-        ESP_LOGE(TAG, "Invalid counts: ci=%lu lai=%lu",
-                 (unsigned long)header.ci_count, (unsigned long)header.lai_count);
+        ESP_LOGE(TAG, "Invalid counts: ci=%lu lai=%lu (hard cap=%u)",
+                 (unsigned long)header.ci_count, (unsigned long)header.lai_count,
+                 (unsigned int)CHANNEL_CACHE_HARD_CAP);
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -351,6 +357,85 @@ void channel_cache_deinit(void)
     ESP_LOGI(TAG, "Channel cache subsystem deinitialized");
 }
 
+/**
+ * @brief Trim cache entries beyond the user-configured soft cap.
+ *
+ * Called after a successful load when the persisted file holds more entries
+ * than the current channel_cache_size setting (e.g. the user shrunk the cap
+ * since the cache was last written). Keeps the first `cap` entries (the
+ * persisted order matches server sort, so this preserves the highest-ranked
+ * items). Each dropped entry has its on-disk file unlinked and its post_id
+ * removed from LAi.
+ *
+ * Path construction dispatches on cache->channel_type because Giphy and
+ * Makapix store files under different schemes.
+ */
+static void cache_trim_to_cap(channel_cache_t *cache,
+                              const char *vault_path,
+                              uint32_t cap)
+{
+    if (!cache || cache->entry_count <= cap) return;
+
+    size_t original = cache->entry_count;
+    size_t unlinked = 0;
+    char file_path[512];
+
+    for (size_t i = cap; i < cache->entry_count; i++) {
+        const makapix_channel_entry_t *entry = &cache->entries[i];
+
+        bool have_path = false;
+        if (cache->channel_type == PS_CHANNEL_TYPE_GIPHY) {
+            const giphy_channel_entry_t *ge = (const giphy_channel_entry_t *)entry;
+            if (giphy_build_filepath(ge->giphy_id, ge->extension,
+                                     file_path, sizeof(file_path)) == ESP_OK) {
+                have_path = true;
+            }
+        } else if (entry->kind == MAKAPIX_INDEX_POST_KIND_ARTWORK && vault_path) {
+            // Playlists have a zeroed storage_key_uuid and no vault file.
+            build_vault_path_from_entry(entry, vault_path, file_path, sizeof(file_path));
+            have_path = true;
+        }
+
+        if (have_path) {
+            if (unlink(file_path) == 0) {
+                unlinked++;
+            }
+        }
+
+        // Drop the post_id from LAi (hash + array) if present.
+        int32_t post_id = entry->post_id;
+        lai_post_id_node_t *node = NULL;
+        HASH_FIND_INT(cache->lai_hash, &post_id, node);
+        if (node) {
+            HASH_DEL(cache->lai_hash, node);
+            free(node);
+            if (cache->available_post_ids) {
+                for (size_t k = 0; k < cache->available_count; k++) {
+                    if (cache->available_post_ids[k] == post_id) {
+                        cache->available_post_ids[k] =
+                            cache->available_post_ids[--cache->available_count];
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    cache->entry_count = cap;
+
+    // Indices changed under compaction — rebuild Ci hash from kept entries.
+    ci_rebuild_hash_tables(cache);
+
+    // Schedule a debounced save so the trimmed state reaches disk. This also
+    // sets cache->dirty internally. Safe to call before the cache is added to
+    // the registry — schedule_save only touches the dirty flag and the
+    // debounce timer, not the registry.
+    channel_cache_schedule_save(cache);
+
+    ESP_LOGI(TAG, "Trimmed cache '%s': %zu -> %u entries (cap shrunk; %zu vault file(s) unlinked)",
+             cache->display_name, original, (unsigned)cap, unlinked);
+}
+
 esp_err_t channel_cache_load(const char *channel_id,
                              uint8_t channel_type,
                              const char *display_name,
@@ -413,6 +498,14 @@ esp_err_t channel_cache_load(const char *channel_id,
     fclose(f);
 
     if (err == ESP_OK) {
+        // Validation passed against CHANNEL_CACHE_HARD_CAP. The user's soft
+        // cap (channel_cache_size) is enforced here, not at validation —
+        // exceeding it is a policy mismatch, not corruption, so we trim
+        // rather than reject the file.
+        uint32_t soft_cap = CHANNEL_CACHE_MAX_ENTRIES;
+        if (cache->entry_count > soft_cap) {
+            cache_trim_to_cap(cache, vault_path, soft_cap);
+        }
         ESP_LOGI(TAG, "Loaded cache '%s': %zu entries, %zu available",
                  cache->display_name, cache->entry_count, cache->available_count);
         return ESP_OK;

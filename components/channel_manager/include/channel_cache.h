@@ -83,6 +83,14 @@ typedef struct {
 // Default maximum entries per channel (configurable via config_store)
 #define CHANNEL_CACHE_DEFAULT_MAX_ENTRIES 2048
 
+// Absolute upper bound used at load time to detect a corrupted .cache file
+// (bit-flipped count, malformed header, etc.) — independent of the user's
+// channel_cache_size setting. Must match the UI maximum so a legitimately
+// large persisted cache is never mistaken for corruption when the user later
+// shrinks the soft cap. Soft-cap enforcement (trim-on-load + merge-time
+// truncation) handles policy; this constant only catches genuine corruption.
+#define CHANNEL_CACHE_HARD_CAP 4096
+
 // Legacy macro for backward compatibility - prefer channel_cache_get_max_entries()
 // NOTE: This macro calls a function, but the function uses in-memory caching
 // so repeated calls are fast (single integer return after first load).

@@ -440,13 +440,11 @@
         <h3>Crash Reboots</h3>
         <div id="wifi-reboots-rows" style="display:none;">
             <div class="info-row"><span class="info-label">WiFi Total</span><span class="info-value" id="wifi-rst-total">0</span></div>
-            <div class="info-row"><span class="info-label">WiFi Streak</span><span class="info-value" id="wifi-rst-streak">0</span></div>
         </div>
         <div id="touch-reboots-rows" style="display:none;">
             <div class="info-row"><span class="info-label">Touch Total</span><span class="info-value" id="touch-rst-total">0</span></div>
-            <div class="info-row"><span class="info-label">Touch Streak</span><span class="info-value" id="touch-rst-streak">0</span></div>
         </div>
-        <p style="font-size:0.75rem;color:#888;margin-top:8px;line-height:1.4;">When the WiFi co-processor or touch controller stops responding, the device reboots to reset it. Streaks reset once the component reconnects.</p>
+        <p style="font-size:0.75rem;color:#888;margin-top:8px;line-height:1.4;">When the WiFi co-processor or touch controller stops responding, the device reboots to reset it.</p>
     </div>
     <div class="section">
         <h3>Actions</h3>
@@ -1016,13 +1014,11 @@ function loadStatus() {
         var showCrash = false;
         if (data.wifi_recovery_reboots) {
             document.getElementById('wifi-rst-total').textContent = data.wifi_recovery_reboots;
-            document.getElementById('wifi-rst-streak').textContent = data.wifi_recovery_reboot_streak || 0;
             document.getElementById('wifi-reboots-rows').style.display = 'block';
             showCrash = true;
         }
         if (data.touch_recovery_reboots) {
             document.getElementById('touch-rst-total').textContent = data.touch_recovery_reboots;
-            document.getElementById('touch-rst-streak').textContent = data.touch_recovery_reboot_streak || 0;
             document.getElementById('touch-reboots-rows').style.display = 'block';
             showCrash = true;
         }

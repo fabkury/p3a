@@ -139,6 +139,9 @@
     color: #fff;
     font-weight: 600;
 }
+#display-advanced > .toggle-row:not(:first-of-type) {
+    margin-top: 14px;
+}
 </style>
 </head>
 <body class="has-bottom-nav">
@@ -184,7 +187,7 @@
         </div>
         <div class="file-name" id="bg-hint" style="margin-bottom:8px;">Background color for transparent artwork</div>
     </div>
-    <div class="section">
+    <div class="section" id="display-advanced">
         <h3>Advanced</h3>
         <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
             <label class="toggle-label">Processing indicator size</label>

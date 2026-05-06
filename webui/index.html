@@ -434,6 +434,10 @@ var giphyCooldownActive = false;
 // (older firmware) — fall back to treating channels as always due.
 var giphyRefreshIntervalSec = 0;
 var makapixRefreshIntervalSec = 0;
+// "Allow refresh override (one-time bypass)" — when true the dispatcher
+// refreshes every channel regardless of last_refresh, so isDueForRefresh
+// must short-circuit to true to keep the pulse animation visible.
+var refreshAllowOverride = false;
 var LCD_MAX_WIDTH = 720;
 var LCD_MAX_HEIGHT = 720;
 var activePlaysetName = '';
@@ -1086,6 +1090,16 @@ function escHtml(s) {
 // Returns true when the interval is unknown (older firmware) or the channel
 // has never been refreshed.
 function isDueForRefresh(ch) {
+    // The user enabled "Allow refresh override" — dispatcher bypasses the
+    // freshness gate for every channel until the sweep completes. Treat all
+    // channels as due so the pulse animation tracks the actual work.
+    if (refreshAllowOverride) return true;
+    // Empty cache forces a real refresh on the dispatcher side regardless of
+    // last_refresh (channel_cache had entries wiped, or never populated).
+    // ch.refreshing alone isn't enough — the channel might just be queued
+    // with stale-but-unused timestamp. The dispatcher's "cache_has_entries"
+    // gate at play_scheduler_refresh.c forces refresh when total is 0.
+    if (ch.refreshing && (ch.total | 0) === 0) return true;
     if (!ch.last_refresh) return true;
     // sdcard/artwork channels have no dispatcher-side freshness gate — they
     // always run a real refresh when picked, so treat them as always due.
@@ -1212,6 +1226,7 @@ function pollActivePlayset(attempt) {
                 giphyCooldownActive = cdSec > 0;
                 giphyRefreshIntervalSec = (resp.data.giphy_refresh_interval_sec | 0);
                 makapixRefreshIntervalSec = (resp.data.refresh_interval_sec | 0);
+                refreshAllowOverride = !!resp.data.refresh_allow_override;
                 var cdBanner = document.getElementById('giphy-cooldown-banner');
                 // Show the banner only when at least one Giphy channel is
                 // actually waiting on the cooldown — i.e., queued AND past

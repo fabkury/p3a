@@ -331,6 +331,14 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     cJSON_AddNumberToObject(data, "refresh_interval_sec",
                             (double)config_store_get_refresh_interval_sec());
 
+    // Refresh override (one-time bypass): when true the dispatcher refreshes
+    // every channel regardless of its last_refresh, so the frontend's
+    // freshness-gated pulse animation must also bypass its due-check or the
+    // user sees real refreshes happening with no visual feedback. The flag
+    // auto-resets on the play scheduler side after the sweep completes.
+    cJSON_AddBoolToObject(data, "refresh_allow_override",
+                          config_store_get_refresh_allow_override());
+
     ps_stats_t ps_stats;
     if (play_scheduler_get_stats(&ps_stats) == ESP_OK) {
         cJSON *pi = cJSON_AddObjectToObject(data, "playset_info");

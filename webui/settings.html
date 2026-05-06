@@ -411,7 +411,7 @@
                 <button class="btn" onclick="saveCacheSize()">Save</button>
             </div>
         </div>
-        <div class="file-name" id="cache-hint">Max artworks per channel (32-4096). Reboot required after change.</div>
+        <div class="file-name" id="cache-hint">Max artworks per channel (32-4096). Takes effect at the next channel refresh.</div>
     </div>
 </div>
 
@@ -821,7 +821,7 @@ function saveCacheSize() {
         return;
     }
     mergeConfig({channel_cache_size: size}, function() {
-        showToast('Cache size: ' + size + ' (reboot recommended)', false);
+        showToast('Cache size: ' + size + ' (applies on next refresh)', false);
     }, function() {
         showToast('Save failed', true);
     });

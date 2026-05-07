@@ -27,6 +27,7 @@ typedef struct {
     uint32_t canvas_height;
     uint8_t *rgb_buffer;      // RGB888 buffer from hardware decoder
     size_t rgb_buffer_size;
+    uint32_t aligned_width;   // width padded up to 16 (hardware MCU alignment)
     bool initialized;
     uint32_t current_frame_delay_ms;
     jpeg_dec_output_format_t output_format;  // RGB888
@@ -87,9 +88,16 @@ esp_err_t jpeg_decoder_init(animation_decoder_t **decoder, const uint8_t *data, 
     jpeg_data->canvas_width = info.width;
     jpeg_data->canvas_height = info.height;
 
+    // Hardware JPEG decoder pads output dimensions up to 16-byte MCU boundaries.
+    // Allocate for the padded size, otherwise jpeg_decoder_process returns
+    // ESP_ERR_INVALID_ARG when either dimension isn't already 16-aligned.
+    uint32_t aligned_w = (info.width  + 15u) & ~15u;
+    uint32_t aligned_h = (info.height + 15u) & ~15u;
+    jpeg_data->aligned_width = aligned_w;
+
     // Always decode to RGB888 for p3a's internal pipeline.
     jpeg_data->output_format = JPEG_DECODE_OUT_FORMAT_RGB888;
-    jpeg_data->rgb_buffer_size = (size_t)info.width * info.height * 3;  // RGB888 = 3 bytes per pixel
+    jpeg_data->rgb_buffer_size = (size_t)aligned_w * aligned_h * 3;  // RGB888 = 3 bytes per pixel
 
     // Allocate RGB buffer for hardware decoder output
     jpeg_decode_memory_alloc_cfg_t mem_cfg = {
@@ -180,15 +188,23 @@ esp_err_t jpeg_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_b
         return ESP_ERR_INVALID_STATE;
     }
 
-    // Convert RGB888 -> RGBA8888 on demand (legacy API)
-    const size_t pixel_count = (size_t)jpeg_data->canvas_width * (size_t)jpeg_data->canvas_height;
-    const uint8_t *rgb = jpeg_data->rgb_buffer;
+    // Convert RGB888 -> RGBA8888 on demand (legacy API).
+    // Source rows are at aligned_width stride (hardware pads to MCU boundary);
+    // only the first canvas_width pixels of each row are real image data.
+    const uint32_t w = jpeg_data->canvas_width;
+    const uint32_t h = jpeg_data->canvas_height;
+    const size_t src_stride = (size_t)jpeg_data->aligned_width * 3;
+    const uint8_t *src_row = jpeg_data->rgb_buffer;
     uint8_t *dst = rgba_buffer;
-    for (size_t i = 0; i < pixel_count; i++) {
-        dst[i * 4 + 0] = rgb[i * 3 + 0];
-        dst[i * 4 + 1] = rgb[i * 3 + 1];
-        dst[i * 4 + 2] = rgb[i * 3 + 2];
-        dst[i * 4 + 3] = 255;
+    for (uint32_t y = 0; y < h; y++) {
+        for (uint32_t x = 0; x < w; x++) {
+            dst[x * 4 + 0] = src_row[x * 3 + 0];
+            dst[x * 4 + 1] = src_row[x * 3 + 1];
+            dst[x * 4 + 2] = src_row[x * 3 + 2];
+            dst[x * 4 + 3] = 255;
+        }
+        src_row += src_stride;
+        dst += (size_t)w * 4;
     }
     jpeg_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
 
@@ -206,8 +222,23 @@ esp_err_t jpeg_decoder_decode_next_rgb(animation_decoder_t *decoder, uint8_t *rg
         return ESP_ERR_INVALID_STATE;
     }
 
-    const size_t sz = (size_t)jpeg_data->canvas_width * (size_t)jpeg_data->canvas_height * 3U;
-    memcpy(rgb_buffer, jpeg_data->rgb_buffer, sz);
+    // Hardware buffer is padded to aligned_width; copy row-by-row to strip the
+    // trailing padding columns when the JPEG width isn't 16-aligned.
+    const uint32_t w = jpeg_data->canvas_width;
+    const uint32_t h = jpeg_data->canvas_height;
+    const size_t row_bytes = (size_t)w * 3U;
+    const size_t src_stride = (size_t)jpeg_data->aligned_width * 3U;
+    if (src_stride == row_bytes) {
+        memcpy(rgb_buffer, jpeg_data->rgb_buffer, row_bytes * h);
+    } else {
+        const uint8_t *src = jpeg_data->rgb_buffer;
+        uint8_t *dst = rgb_buffer;
+        for (uint32_t y = 0; y < h; y++) {
+            memcpy(dst, src, row_bytes);
+            src += src_stride;
+            dst += row_bytes;
+        }
+    }
     jpeg_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
     return ESP_OK;
 }

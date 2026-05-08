@@ -14,7 +14,6 @@
 #include "esp_log.h"
 #include <string.h>
 #include <stdlib.h>
-#include <sys/stat.h>
 
 static const char *TAG = "channel_cache";
 
@@ -240,95 +239,6 @@ bool lai_contains(const channel_cache_t *cache, int32_t post_id)
 
     xSemaphoreGive(cache->mutex);
     return node != NULL;
-}
-
-size_t lai_rebuild(channel_cache_t *cache, const char *vault_path)
-{
-    if (!cache || !cache->entries || cache->entry_count == 0) {
-        return 0;
-    }
-
-    // Free existing LAi hash
-    lai_hash_free(cache);
-
-    // Ensure LAi array is allocated and large enough
-    if (!cache->available_post_ids || cache->available_capacity < cache->entry_count) {
-        int32_t *new_arr = psram_malloc(cache->entry_count * sizeof(int32_t));
-        if (!new_arr) {
-            return 0;
-        }
-        free(cache->available_post_ids);  // Safe even if NULL
-        cache->available_post_ids = new_arr;
-        cache->available_capacity = cache->entry_count;
-    }
-
-    cache->available_count = 0;
-    size_t checked = 0;
-    size_t found = 0;
-
-    // Extension strings WITH leading dot (matches actual vault storage)
-    static const char *ext_strings[] = {".webp", ".gif", ".png", ".jpg"};
-
-    // Reusable path buffers - declared outside loop to reduce peak stack usage
-    char file_path[256];
-    char marker_path[264];
-
-    for (size_t i = 0; i < cache->entry_count; i++) {
-        const makapix_channel_entry_t *entry = &cache->entries[i];
-
-        // Skip playlists (they don't have direct files)
-        if (entry->kind == MAKAPIX_INDEX_POST_KIND_PLAYLIST) {
-            continue;
-        }
-
-        // Build vault path for this entry
-        // Format: {vault_path}/{sha256[0]:02x}/{sha256[1]:02x}/{sha256[2]:02x}/{storage_key}.{ext}
-        // This matches makapix_artwork_download() path format exactly
-        char uuid_str[37];
-        bytes_to_uuid(entry->storage_key_uuid, uuid_str, sizeof(uuid_str));
-
-        uint8_t sha256[32];
-        if (storage_key_sha256(uuid_str, sha256) != ESP_OK) {
-            continue;
-        }
-
-        // Build 3-level directory path (matches actual download paths)
-        char dir1[3], dir2[3], dir3[3];
-        snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
-        snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
-        snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
-
-        int ext_idx = (entry->extension < 4) ? entry->extension : 0;
-
-        snprintf(file_path, sizeof(file_path), "%s/%s/%s/%s/%s%s",
-                 vault_path, dir1, dir2, dir3, uuid_str, ext_strings[ext_idx]);
-
-        checked++;
-
-        // Check if file exists
-        struct stat st;
-        if (stat(file_path, &st) == 0 && S_ISREG(st.st_mode)) {
-            // Also check for .404 marker
-            snprintf(marker_path, sizeof(marker_path), "%s.404", file_path);
-            if (stat(marker_path, &st) != 0) {
-                // File exists and no 404 marker - store post_id (not ci_index)
-                cache->available_post_ids[cache->available_count++] = entry->post_id;
-                found++;
-            }
-        }
-
-        // Yield periodically to avoid watchdog
-        if (checked % 100 == 0) {
-            taskYIELD();
-        }
-    }
-
-    // Build LAi hash from array
-    lai_rebuild_hash(cache);
-
-    cache->dirty = true;
-    ESP_LOGI(TAG, "LAi rebuild: checked %zu, found %zu available", checked, found);
-    return found;
 }
 
 // ============================================================================

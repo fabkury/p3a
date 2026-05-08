@@ -151,76 +151,6 @@ static esp_err_t giphy_merge_entries(channel_cache_t *cache,
 
 
 /**
- * @brief Rebuild LAi for Giphy channel by checking file existence
- *
- * Similar to lai_rebuild() but uses giphy_build_filepath instead of vault paths.
- */
-static size_t giphy_lai_rebuild(channel_cache_t *cache)
-{
-    if (!cache) return 0;
-
-    xSemaphoreTake(cache->mutex, portMAX_DELAY);
-
-    // Clear existing LAi
-    lai_post_id_node_t *node, *tmp;
-    HASH_ITER(hh, cache->lai_hash, node, tmp) {
-        HASH_DEL(cache->lai_hash, node);
-        free(node);
-    }
-    cache->lai_hash = NULL;
-
-    if (cache->available_post_ids) {
-        free(cache->available_post_ids);
-        cache->available_post_ids = NULL;
-    }
-    cache->available_count = 0;
-    cache->available_capacity = 0;
-
-    if (!cache->entries || cache->entry_count == 0) {
-        xSemaphoreGive(cache->mutex);
-        return 0;
-    }
-
-    // Allocate LAi array
-    cache->available_post_ids = psram_malloc(cache->entry_count * sizeof(int32_t));
-    if (!cache->available_post_ids) {
-        xSemaphoreGive(cache->mutex);
-        return 0;
-    }
-    cache->available_capacity = cache->entry_count;
-
-    // Check each entry for file existence
-    size_t found = 0;
-    for (size_t i = 0; i < cache->entry_count; i++) {
-        const giphy_channel_entry_t *ge = (const giphy_channel_entry_t *)&cache->entries[i];
-
-        char filepath[256];
-        giphy_build_filepath(ge->giphy_id, ge->extension, filepath, sizeof(filepath));
-
-        struct stat st;
-        if (stat(filepath, &st) == 0 && st.st_size > 0) {
-            cache->available_post_ids[found] = ge->post_id;
-
-            // Add to hash set
-            lai_post_id_node_t *n = psram_malloc(sizeof(lai_post_id_node_t));
-            if (n) {
-                n->post_id = ge->post_id;
-                HASH_ADD_INT(cache->lai_hash, post_id, n);
-            }
-
-            found++;
-        }
-    }
-
-    cache->available_count = found;
-    cache->dirty = true;
-
-    xSemaphoreGive(cache->mutex);
-
-    return found;
-}
-
-/**
  * @brief Evict channel entries not present in the Si hash (full-refresh mode)
  *
  * Compacts the cache in-place, keeping only entries whose post_id exists in
@@ -540,18 +470,10 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
         si_hash = NULL;
     }
 
-    // Rebuild LAi from final Ci state so it reflects files on disk after all
-    // merges and evictions. This runs once per refresh, not per page.
-    size_t available = 0;
-    {
-        channel_cache_lifecycle_lock();
-        channel_cache_t *lai_cache = channel_cache_registry_find(channel_id);
-        if (lai_cache) {
-            available = giphy_lai_rebuild(lai_cache);
-        }
-        channel_cache_lifecycle_unlock();
-    }
-    ESP_LOGI(TAG, "LAi rebuilt after refresh: %zu files available", available);
+    // LAi is maintained incrementally: giphy_evict_orphans() above removes
+    // evicted post_ids, and download_manager picks up newly-merged entries —
+    // its file_exists() path adds already-on-disk files to LAi via
+    // play_scheduler_on_download_complete() without re-downloading them.
 
     // Only persist last_refresh timestamp when the refresh ran to completion.
     // Cancelled or failed refreshes must not update the timestamp, otherwise

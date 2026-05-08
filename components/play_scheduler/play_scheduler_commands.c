@@ -234,8 +234,9 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
 /**
  * @brief Load Makapix channel cache using channel_cache module
  *
- * Uses the unified cache file format with LAi persistence. On first load after
- * firmware upgrade (legacy format), LAi is rebuilt once and saved in new format.
+ * Uses the unified cache file format with LAi persistence. Cache files written
+ * by older firmware versions are rejected at load time and a fresh empty cache
+ * is started; the next refresh + download cycle repopulates Ci and LAi.
  */
 static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
 {
@@ -352,8 +353,9 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
         return ps_load_sdcard_cache(ch);
     }
 
-    // Giphy channels use channel_cache module (same 64-byte entries as Makapix)
-    // but with giphy/ base path for LAi rebuild
+    // Giphy channels use the same channel_cache module as Makapix (64-byte
+    // entries); only the entry_format tag differs so the picker/download
+    // manager can dispatch on giphy/ vs vault/ paths.
     if (ch->type == PS_CHANNEL_TYPE_GIPHY) {
         esp_err_t err = ps_load_makapix_cache(ch);
         if (err == ESP_OK) {

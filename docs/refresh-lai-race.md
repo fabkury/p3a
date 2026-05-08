@@ -1,7 +1,12 @@
 # Channel refresh race: Ci updated before LAi rebuild
 
-**Status:** Open. Observed once so far. No user-visible impact (picker falls
-back to other channels), but a real ordering bug worth fixing.
+**Status:** Resolved on 2026-05-08 by removing the post-refresh full LAi
+rebuild entirely. The race window described below no longer exists because
+there is no rebuild step that lags behind Ci publication. LAi is now
+maintained purely incrementally: `giphy_evict_orphans()` removes evicted
+post_ids during the refresh, and the download manager's `file_exists()` path
+adds already-on-disk files to LAi via `play_scheduler_on_download_complete()`
+without re-downloading them.
 **First observed:** 2026-05-05.
 **Severity:** Low. Two warning log lines per occurrence; one or two picks
 silently retry on a different channel.

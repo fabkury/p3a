@@ -282,6 +282,10 @@ body {
     justify-content: space-between;
     padding: var(--sp-1) 0;
 }
+.toggle-row + .toggle-row,
+.setting-hint + .toggle-row {
+    margin-top: var(--sp-4);
+}
 .toggle-label {
     font-size: 0.9rem;
     color: var(--c-text);

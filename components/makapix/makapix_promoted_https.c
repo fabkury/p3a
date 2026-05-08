@@ -12,13 +12,16 @@
  */
 
 #include "makapix_promoted_https.h"
-#include "makapix_api.h"        // For makapix_post_t, MAKAPIX_MAX_POSTS_PER_RESPONSE
-#include "channel_cache.h"      // For channel_cache_registry_find, channel_cache_merge_posts
-#include "channel_metadata.h"   // For channel_metadata_save
-#include "config_store.h"       // For config_store_get_channel_cache_size, config_store_get_refresh_interval_sec
-#include "download_manager.h"   // For download_manager_rescan
-#include "sd_path.h"            // For sd_path_get_channel, sd_path_get_vault
-#include "sntp_sync.h"          // For sntp_sync_is_synchronized
+#include "makapix_api.h"            // For makapix_post_t, MAKAPIX_MAX_POSTS_PER_RESPONSE
+#include "channel_cache.h"          // For channel_cache_registry_find, channel_cache_merge_posts, channel_cache_flush_one
+#include "channel_cache_evict.h"    // For channel_cache_evict_orphans_makapix, channel_cache_si_node_t
+#include "makapix_channel_impl.h"   // For MAKAPIX_INDEX_POST_KIND_ARTWORK
+#include "channel_metadata.h"       // For channel_metadata_save
+#include "config_store.h"           // For config_store_get_channel_cache_size, config_store_get_refresh_interval_sec
+#include "download_manager.h"       // For download_manager_rescan
+#include "psram_alloc.h"            // For psram_malloc (Si hash nodes)
+#include "sd_path.h"                // For sd_path_get_channel, sd_path_get_vault
+#include "sntp_sync.h"              // For sntp_sync_is_synchronized
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_heap_caps.h"
@@ -287,6 +290,15 @@ esp_err_t makapix_promoted_https_refresh(const char *channel_id)
     char cursor[CURSOR_BUF_SIZE] = {0};
     bool refresh_completed = true;
 
+    // Si hash: every post_id the server returns this cycle. After a successful
+    // complete walk, channel_cache_evict_orphans_makapix removes cache entries
+    // whose post_id is not in Si — that is how deleted, hidden, or banned
+    // artworks leave the local cache. Capped at cache_size so the
+    // post-eviction cache never exceeds the configured limit. Mirrors
+    // components/channel_manager/makapix_channel_refresh.c (MQTT path).
+    channel_cache_si_node_t *si_hash = NULL;
+    size_t si_count = 0;
+
     while (total_fetched < cache_size) {
         if (s_cancel) {
             ESP_LOGI(TAG, "Refresh cancelled");
@@ -336,14 +348,32 @@ esp_err_t makapix_promoted_https_refresh(const char *channel_id)
             break;
         }
         if (merge_err == ESP_OK) {
-            ESP_LOGI(TAG, "Batch merged: %zu entries (cache: %zu entries, %zu available)",
-                     page_count, cache_entry_count, cache_available);
+            ESP_LOGI(TAG, "Batch merged: ch='%s' entry_count=%zu available=%zu",
+                     display_name, cache_entry_count, cache_available);
         } else {
-            ESP_LOGW(TAG, "Batch merge failed: %s", esp_err_to_name(merge_err));
+            ESP_LOGW(TAG, "Batch merge failed: ch='%s' err=%s",
+                     display_name, esp_err_to_name(merge_err));
         }
 
         // Signal download manager — downloads can start while we fetch more pages
         download_manager_rescan();
+
+        // Track each post_id seen this cycle for end-of-cycle eviction. Cap
+        // at cache_size so the post-eviction cache never exceeds the
+        // configured limit. Mirrors makapix_channel_refresh.c.
+        for (size_t pi = 0; pi < page_count && si_count < (size_t)cache_size; pi++) {
+            int32_t pid = posts[pi].post_id;
+            channel_cache_si_node_t *existing = NULL;
+            HASH_FIND_INT(si_hash, &pid, existing);
+            if (!existing) {
+                channel_cache_si_node_t *n = psram_malloc(sizeof(channel_cache_si_node_t));
+                if (n) {
+                    n->post_id = pid;
+                    HASH_ADD_INT(si_hash, post_id, n);
+                    si_count++;
+                }
+            }
+        }
 
         total_fetched += page_count;
 
@@ -360,30 +390,87 @@ esp_err_t makapix_promoted_https_refresh(const char *channel_id)
     free(response_buf);
     free(posts);
 
-    // Save metadata only if refresh completed and clock is synchronized
+    // Eviction: remove cache entries the server didn't return this cycle.
+    // Must run BEFORE the cache flush below so the on-disk state reflects
+    // the post-eviction cache. Re-resolve the cache via the lifecycle lock
+    // since any pointer captured by an earlier batch's merge is stale by
+    // construction across the HTTPS waits. Gated on refresh_completed +
+    // non-empty si_hash so a cancelled or empty-response refresh never wipes
+    // the local cache. Mirrors makapix_channel_refresh.c (MQTT path).
+    if (refresh_completed && si_hash) {
+        channel_cache_lifecycle_lock();
+        channel_cache_t *evict_cache = channel_cache_registry_find(channel_id);
+        if (evict_cache) {
+            channel_cache_evict_orphans_makapix(evict_cache, si_hash, vault_path);
+        }
+        channel_cache_lifecycle_unlock();
+    }
+
+    // Free Si hash unconditionally (success, cancel, or error).
+    {
+        channel_cache_si_node_t *node, *tmp;
+        HASH_ITER(hh, si_hash, node, tmp) {
+            HASH_DEL(si_hash, node);
+            free(node);
+        }
+        si_hash = NULL;
+    }
+
+    // Save metadata only if refresh completed and clock is synchronized.
+    // Flush the (merged + evicted) cache to disk BEFORE saving the metadata
+    // timestamp. Both files live on the SD card but are written
+    // independently; if power is lost after the metadata (.json) is saved
+    // but before the cache (.cache) is flushed, the device would boot with
+    // a "fresh" timestamp yet stale/incomplete cache data — skipping the
+    // refresh it actually needs. Flushing the cache first guarantees the
+    // .cache on disk is at least as recent as the .json timestamp. Mirrors
+    // makapix_channel_refresh.c (MQTT path).
     if (refresh_completed && total_fetched > 0 && sntp_sync_is_synchronized()) {
-        channel_metadata_t meta = {
-            .last_refresh = time(NULL),
-            .cursor = "",
-        };
-        esp_err_t meta_err = channel_metadata_save(channel_id, channels_path, &meta);
-        if (meta_err != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to save channel metadata: %s", esp_err_to_name(meta_err));
+        channel_cache_lifecycle_lock();
+        channel_cache_t *flush_cache = channel_cache_registry_find(channel_id);
+        esp_err_t flush_err = flush_cache
+            ? channel_cache_flush_one(flush_cache, channels_path)
+            : ESP_OK;
+        channel_cache_lifecycle_unlock();
+        if (flush_err != ESP_OK) {
+            ESP_LOGW(TAG, "Cache flush failed for '%s', skipping metadata save",
+                     display_name);
+        } else {
+            channel_metadata_t meta = {
+                .last_refresh = time(NULL),
+                .cursor = "",
+            };
+            esp_err_t meta_err = channel_metadata_save(channel_id, channels_path, &meta);
+            if (meta_err != ESP_OK) {
+                ESP_LOGW(TAG, "Failed to save channel metadata: %s", esp_err_to_name(meta_err));
+            }
         }
     } else if (refresh_completed && total_fetched > 0) {
         ESP_LOGI(TAG, "Clock not synchronized, deferring metadata save");
     }
 
+    // Post-cycle artwork-vs-playlist count log — matches the MQTT path's
+    // diagnostic granularity for cross-path log correlation.
     size_t final_entry_count = 0;
+    size_t final_artwork_count = 0;
     {
         channel_cache_lifecycle_lock();
-        channel_cache_t *final_cache = channel_cache_registry_find(channel_id);
-        if (final_cache) final_entry_count = final_cache->entry_count;
+        channel_cache_t *stats_cache = channel_cache_registry_find(channel_id);
+        if (stats_cache) {
+            final_entry_count = stats_cache->entry_count;
+            if (stats_cache->entries) {
+                for (size_t i = 0; i < stats_cache->entry_count; i++) {
+                    if (stats_cache->entries[i].kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
+                        final_artwork_count++;
+                    }
+                }
+            }
+        }
         channel_cache_lifecycle_unlock();
     }
-    ESP_LOGI(TAG, "Promoted HTTPS refresh %s: %zu fetched, %zu in cache",
+    ESP_LOGI(TAG, "Promoted HTTPS refresh %s: ch='%s' fetched=%zu entry_count=%zu artworks=%zu",
              refresh_completed ? "complete" : "incomplete",
-             total_fetched, final_entry_count);
+             display_name, total_fetched, final_entry_count, final_artwork_count);
 
     return (total_fetched > 0) ? ESP_OK : ESP_FAIL;
 }

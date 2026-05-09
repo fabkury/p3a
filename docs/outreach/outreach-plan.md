@@ -14,6 +14,7 @@ You're not starting cold. The strongest hooks for any pitch:
 - **ESP32-P4** — newer chip with less coverage than classic ESP32. Hackaday's 2025 hardware retrospective flagged ESP32 family as a perennial favorite, but P4 specifically is undercovered.
 - **Makezine credit already in the bag** — that's earned-media credibility you can reference in every subsequent pitch.
 - **Makapix Club integration** — the social-network angle is unusual and gives a recurring content story (most pixel art devices are static once shipped).
+- **Designed to run 24/7** — both the hardware and the firmware are built for continuous operation. "Set it on a shelf and forget it" is the peace-of-mind story that distinguishes p3a from typical hobby ESP32 builds, and it's worth saying out loud in pitches and on the README.
 
 The natural framing is: **"Tidbyt/Pixoo, but $48, open source, sharper display."** Both Tidbyt ($179) and Divoom Pixoo ($80+) are commercial competitors users actively compare. Adding a Tidbyt/Pixoo comparison table to the README costs nothing and dramatically improves how Reddit/HN evaluate the project.
 

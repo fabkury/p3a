@@ -67,7 +67,7 @@ A new artwork appears roughly every 30 seconds. Try a few touch gestures:
 - **Tap the left side** to go back to the previous one.
 - **Press and hold** anywhere to see the device's IP address and Wi-Fi info.
 
-If you're happy with this, you're done. Set it on a shelf and enjoy.
+If you're happy with this, you're done. Set it on a shelf and enjoy — both the hardware and the firmware are designed to run 24/7, so there's no need to power-cycle it between viewings.
 
 ---
 

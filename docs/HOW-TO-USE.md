@@ -4,6 +4,8 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 
 > **First time setting up?** Start with the [Quick Start Guide](QUICK-START.md) — it walks through the bare minimum to see art on the screen in about 15 minutes. Come back here for the deeper details.
 
+> **Built to stay on.** p3a's hardware and firmware are designed for continuous 24/7 operation. Once it's set up, you can leave it running on a shelf or wall indefinitely — no scheduled reboots, no daily power cycle, no babysitting required.
+
 ## Table of Contents
 
 1. [Initial Setup](#initial-setup)

@@ -11,6 +11,7 @@
 
 ## Key Features
 
+- **Designed for 24/7 operation** — both the hardware and the firmware are built to run continuously, with no scheduled reboots or daily power cycle required
 - Animated WebP and GIF, plus static PNG and JPEG playback
 - **Transparency support** for WebP, GIF, and PNG with configurable background color
 - **Aspect ratio preservation** for non-square artworks

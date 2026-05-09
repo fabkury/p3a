@@ -111,7 +111,7 @@ The HTTP server is implemented across multiple source files in `components/http_
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/upload` | Multipart file upload (max 5 MB, saves to animations dir) |
+| POST | `/upload` | Multipart file upload (max 16 MiB, saves to animations dir) |
 
 ### OTA Updates
 

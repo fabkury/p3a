@@ -15,6 +15,7 @@
 #include "esp_timer.h"
 #include "animation_player.h"
 #include "play_scheduler.h"
+#include "p3a_limits.h"
 #include <sys/stat.h>
 #include <dirent.h>
 #include <unistd.h>
@@ -23,11 +24,11 @@
 /**
  * POST /upload
  * Handles multipart/form-data file upload, saves to temporary dir, then moves to animations dir
- * Maximum file size: 5 MB
+ * Maximum file size: P3A_MAX_ARTWORK_SIZE (16 MiB)
  * Supported formats: WebP, GIF, JPG, JPEG, PNG
  */
 static esp_err_t h_post_upload(httpd_req_t *req) {
-    const size_t MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+    const size_t MAX_FILE_SIZE = P3A_MAX_ARTWORK_SIZE;
     
     // Get dynamic paths
     char TEMP_DIR[128];
@@ -87,7 +88,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     // Check Content-Length
     size_t content_len = req->content_len;
     if (content_len == 0 || content_len > MAX_FILE_SIZE) {
-        send_json(req, 413, "{\"ok\":false,\"error\":\"File size exceeds 5MB limit\",\"code\":\"FILE_TOO_LARGE\"}");
+        send_json(req, 413, "{\"ok\":false,\"error\":\"File size exceeds 16MiB limit\",\"code\":\"FILE_TOO_LARGE\"}");
         return ESP_OK;
     }
     

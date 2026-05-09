@@ -229,7 +229,7 @@ p3a/
 │   │   ├── http_api_rest_settings.c     # /settings/* and /config endpoints
 │   │   ├── http_api_rest_playsets.c     # /playsets/* CRUD
 │   │   ├── http_api_ota.c               # /ota/* endpoints
-│   │   ├── http_api_upload.c            # /upload (multipart, 5 MB cap)
+│   │   ├── http_api_upload.c            # /upload (multipart, 16 MiB cap)
 │   │   ├── http_api_pages.c             # HTML page serving
 │   │   ├── http_api_pico8.c             # /pico_stream WebSocket handler
 │   │   ├── http_api_utils.c             # Utility functions

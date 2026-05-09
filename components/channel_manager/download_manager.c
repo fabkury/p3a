@@ -610,8 +610,9 @@ static void download_task(void *arg)
             continue;
         }
 
-        // Check if file already exists (e.g., from previous session before LAi was rebuilt)
-        // Treat this the same as a successful download - update LAi and signal availability
+        // Check if file already exists (e.g., from a previous session, or just
+        // merged into Ci by a refresh while the file was already on disk).
+        // Treat this the same as a successful download - update LAi and signal availability.
         if (file_exists(s_dl_req.filepath)) {
             ESP_LOGI(TAG, "File already exists, updating LAi: %s", s_dl_req.storage_key);
             s_all_downloaded_logged = false;

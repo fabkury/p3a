@@ -67,7 +67,6 @@ typedef struct {
  *   - Hash set for O(1) membership checking (rebuilt on load)
  *   - Enables O(1) random picks without filesystem I/O
  * - **Atomic persistence**: Write to .tmp file, compute CRC32, rename
- * - **Legacy migration**: Detect old format (version < 20), rebuild LAi
  * - **30-second debounce (240s max delay)**: Dirty caches saved after 30s of inactivity
  *
  * File format v20 (binary, little-endian):
@@ -187,9 +186,9 @@ void channel_cache_deinit(void);
 /**
  * @brief Load a channel cache from disk
  *
- * Loads the cache file for the given channel. If the file doesn't exist or
- * is corrupted, initializes an empty cache. If the file uses the legacy
- * format (no header), migrates it to the new format with LAi rebuilt.
+ * Loads the cache file for the given channel. If the file doesn't exist,
+ * is corrupted, or was written by an older firmware version (version mismatch),
+ * initializes an empty cache; the next refresh + download cycle repopulates it.
  *
  * @param channel_id Channel identifier (hex hash)
  * @param channel_type Channel type enum (ps_channel_type_t), stored for type-based validation
@@ -266,18 +265,6 @@ bool lai_remove_entry(channel_cache_t *cache, int32_t post_id);
  * @return true if present in LAi
  */
 bool lai_contains(const channel_cache_t *cache, int32_t post_id);
-
-/**
- * @brief Rebuild LAi by scanning vault for existing files
- *
- * Used during migration from legacy format or when LAi may be stale.
- * Expensive O(n) operation - scans each Ci entry for file existence.
- *
- * @param cache Cache to rebuild
- * @param vault_path Base path for vault files
- * @return Number of available files found
- */
-size_t lai_rebuild(channel_cache_t *cache, const char *vault_path);
 
 // ============================================================================
 // Ci Operations

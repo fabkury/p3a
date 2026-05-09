@@ -112,8 +112,10 @@ void channel_cache_build_path(const char *channel_id,
 /**
  * @brief Load new format with header
  *
- * For version < 20: Return error to trigger LAi rebuild via legacy path
- * For version >= 20: Load LAi as post_ids and rebuild hash tables
+ * Returns ESP_ERR_NOT_SUPPORTED if the on-disk version doesn't match
+ * CHANNEL_CACHE_VERSION (caller discards the file and starts an empty cache).
+ * On a matching version, deserializes Ci entries and the LAi post_ids array
+ * and rebuilds the in-memory hash tables.
  */
 static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
 {

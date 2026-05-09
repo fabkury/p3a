@@ -14,6 +14,7 @@
 #include "config_store.h"
 #include "makapix_channel_events.h"
 #include "channel_cache.h"
+#include "channel_cache_evict.h"  // channel_cache_si_node_t, eviction API
 #include "channel_metadata.h"  // For generic metadata save/load
 #include "p3a_state.h"      // For PICO-8 mode check
 #include "play_scheduler.h" // For ps_get_display_name()
@@ -92,122 +93,6 @@ static esp_err_t merge_refresh_batch(makapix_channel_t *ch, const makapix_post_t
     esp_err_t err = channel_cache_merge_posts(cache, posts, count, ch->channels_path, ch->vault_path);
     channel_cache_lifecycle_unlock();
     return err;
-}
-
-// ============================================================================
-// Full-refresh eviction
-// ============================================================================
-
-/**
- * @brief Si hash node — tracks post_ids seen during the current refresh cycle.
- */
-typedef struct {
-    int32_t post_id;
-    UT_hash_handle hh;
-} si_node_t;
-
-/**
- * @brief Evict cache entries not present in the Si hash (full-refresh model).
- *
- * Compacts cache->entries[] in place, keeping only entries whose post_id is
- * in si_hash. Evicted artwork entries have their vault file unlinked. The
- * evicted post_ids are removed from this channel's LAi; sibling channels'
- * stale LAi is corrected lazily by the existing pre-swap stat() defense in
- * play_scheduler_navigation.c. Mirrors giphy_evict_orphans() in
- * components/giphy/giphy_refresh.c.
- */
-static void makapix_evict_orphans(channel_cache_t *cache,
-                                  si_node_t *si_hash,
-                                  const char *vault_path)
-{
-    if (!cache || !vault_path) return;
-
-    int32_t *evicted_ids = NULL;
-    size_t evicted = 0;
-
-    xSemaphoreTake(cache->mutex, portMAX_DELAY);
-
-    if (cache->entry_count > 0) {
-        evicted_ids = psram_malloc(cache->entry_count * sizeof(int32_t));
-    }
-
-    static const char *ext_strings[] = {".webp", ".gif", ".png", ".jpg"};
-    size_t kept = 0;
-    char file_path[256];
-
-    for (size_t i = 0; i < cache->entry_count; i++) {
-        si_node_t *found = NULL;
-        HASH_FIND_INT(si_hash, &cache->entries[i].post_id, found);
-        if (found) {
-            // Keep — compact in place
-            if (kept != i) {
-                memcpy(&cache->entries[kept], &cache->entries[i],
-                       sizeof(makapix_channel_entry_t));
-            }
-            kept++;
-        } else {
-            // Evict — unlink vault file (artworks only) and record post_id
-            const makapix_channel_entry_t *entry = &cache->entries[i];
-
-            if (entry->kind == MAKAPIX_INDEX_POST_KIND_ARTWORK) {
-                char uuid_str[37];
-                bytes_to_uuid(entry->storage_key_uuid, uuid_str, sizeof(uuid_str));
-
-                uint8_t sha256[32];
-                if (storage_key_sha256(uuid_str, sha256) == ESP_OK) {
-                    int ext_idx = (entry->extension < 4) ? entry->extension : 0;
-                    snprintf(file_path, sizeof(file_path),
-                             "%s/%02x/%02x/%02x/%s%s",
-                             vault_path,
-                             (unsigned int)sha256[0],
-                             (unsigned int)sha256[1],
-                             (unsigned int)sha256[2],
-                             uuid_str, ext_strings[ext_idx]);
-                    unlink(file_path);
-                }
-            }
-
-            if (evicted_ids) {
-                evicted_ids[evicted] = entry->post_id;
-            }
-            evicted++;
-        }
-    }
-
-    cache->entry_count = kept;
-
-    // Rebuild Ci hash (post_id_hash) from compacted entries — indices changed.
-    // Inline rather than calling ci_rebuild_hash_tables so we keep the work
-    // inside the cache mutex without pulling in channel_cache_internal.h.
-    ci_post_id_node_t *cnode, *ctmp;
-    HASH_ITER(hh, cache->post_id_hash, cnode, ctmp) {
-        HASH_DEL(cache->post_id_hash, cnode);
-        free(cnode);
-    }
-    cache->post_id_hash = NULL;
-
-    for (size_t i = 0; i < kept; i++) {
-        ci_post_id_node_t *n = psram_malloc(sizeof(ci_post_id_node_t));
-        if (n) {
-            n->post_id = cache->entries[i].post_id;
-            n->ci_index = (uint32_t)i;
-            HASH_ADD_INT(cache->post_id_hash, post_id, n);
-        }
-    }
-
-    cache->dirty = true;
-    xSemaphoreGive(cache->mutex);
-
-    // LAi cleanup outside the cache mutex — lai_remove_entry locks internally.
-    for (size_t i = 0; i < evicted; i++) {
-        lai_remove_entry(cache, evicted_ids[i]);
-    }
-    free(evicted_ids);
-
-    channel_cache_schedule_save(cache);
-
-    ESP_LOGI(TAG, "Full refresh: evicted %zu orphaned entries, %zu kept (channel '%s')",
-             evicted, kept, cache->display_name);
 }
 
 // Park the task at a sync point so the reaper can delete it externally.
@@ -312,11 +197,11 @@ void refresh_task_impl(void *pvParameters)
         query_req.cursor[0] = '\0';
 
         // Si hash: every post_id the server returns this cycle. After a
-        // successful complete walk, makapix_evict_orphans removes cache
-        // entries whose post_id is not in Si — that is how deleted, hidden,
-        // or banned artworks leave the local cache. Capped at TARGET_COUNT
-        // to bound memory. Mirrors components/giphy/giphy_refresh.c.
-        si_node_t *si_hash = NULL;
+        // successful complete walk, channel_cache_evict_orphans_makapix
+        // removes cache entries whose post_id is not in Si — that is how
+        // deleted, hidden, or banned artworks leave the local cache. Capped
+        // at TARGET_COUNT to bound memory. Mirrors components/giphy/giphy_refresh.c.
+        channel_cache_si_node_t *si_hash = NULL;
         size_t si_count = 0;
 
         // Full-refresh model: walk from the top of the channel each cycle
@@ -399,10 +284,10 @@ void refresh_task_impl(void *pvParameters)
             // the configured limit. Mirrors giphy_refresh.c lines 482-495.
             for (size_t pi = 0; pi < resp->post_count && si_count < (size_t)TARGET_COUNT; pi++) {
                 int32_t pid = resp->posts[pi].post_id;
-                si_node_t *existing = NULL;
+                channel_cache_si_node_t *existing = NULL;
                 HASH_FIND_INT(si_hash, &pid, existing);
                 if (!existing) {
-                    si_node_t *n = psram_malloc(sizeof(si_node_t));
+                    channel_cache_si_node_t *n = psram_malloc(sizeof(channel_cache_si_node_t));
                     if (n) {
                         n->post_id = pid;
                         HASH_ADD_INT(si_hash, post_id, n);
@@ -461,7 +346,7 @@ void refresh_task_impl(void *pvParameters)
         if (!ch->refreshing) {
             // Free Si hash on cancel — eviction is gated on ch->refreshing
             // so it won't run, but we still own the allocation.
-            si_node_t *cnode_si, *ctmp_si;
+            channel_cache_si_node_t *cnode_si, *ctmp_si;
             HASH_ITER(hh, si_hash, cnode_si, ctmp_si) {
                 HASH_DEL(si_hash, cnode_si);
                 free(cnode_si);
@@ -489,14 +374,14 @@ void refresh_task_impl(void *pvParameters)
             channel_cache_lifecycle_lock();
             channel_cache_t *evict_cache = channel_cache_registry_find(ch->channel_id);
             if (evict_cache) {
-                makapix_evict_orphans(evict_cache, si_hash, ch->vault_path);
+                channel_cache_evict_orphans_makapix(evict_cache, si_hash, ch->vault_path);
             }
             channel_cache_lifecycle_unlock();
         }
 
         // Free Si hash unconditionally (whether eviction ran or not).
         {
-            si_node_t *node, *tmp;
+            channel_cache_si_node_t *node, *tmp;
             HASH_ITER(hh, si_hash, node, tmp) {
                 HASH_DEL(si_hash, node);
                 free(node);

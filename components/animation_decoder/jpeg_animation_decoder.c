@@ -237,6 +237,9 @@ esp_err_t jpeg_decoder_get_info_wrapper(animation_decoder_t *decoder, animation_
     info->frame_count = 1; // JPEG is always single frame
     info->has_transparency = false; // JPEG doesn't support transparency
     info->pixel_format = ANIMATION_PIXEL_FORMAT_RGB888;
+    // Both HW and SW JPEG paths consume the entire bitstream synchronously
+    // inside jpeg_decoder_init; nothing references file_data afterwards.
+    info->source_consumed = true;
 
     return ESP_OK;
 }

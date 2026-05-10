@@ -219,6 +219,11 @@ esp_err_t animation_decoder_get_info(animation_decoder_t *decoder, animation_dec
         return ESP_ERR_INVALID_ARG;
     }
 
+    // Default every field to zero so format handlers that don't explicitly
+    // set source_consumed (notably the GIF path) get the safe default
+    // (false = decoder still references file_data, loader must keep it).
+    memset(info, 0, sizeof(*info));
+
     if (decoder->type == ANIMATION_DECODER_TYPE_WEBP) {
         if (!decoder->impl.webp.initialized) {
             return ESP_ERR_INVALID_STATE;
@@ -230,6 +235,10 @@ esp_err_t animation_decoder_get_info(animation_decoder_t *decoder, animation_dec
         info->frame_count = webp_data->info.frame_count;
         info->has_transparency = webp_data->has_alpha_any;
         info->pixel_format = ANIMATION_PIXEL_FORMAT_RGB888;
+        // Static WebPs decode synchronously inside init via WebPDecodeRGB[A]Into;
+        // animated WebPs hand the bytes to WebPAnimDecoderNew, which keeps a
+        // reference for subsequent WebPAnimDecoderGetNext calls.
+        info->source_consumed = !webp_data->is_animation;
 
         return ESP_OK;
     } else if (decoder->type == ANIMATION_DECODER_TYPE_GIF) {
@@ -296,6 +305,10 @@ esp_err_t animation_decoder_decode_next(animation_decoder_t *decoder, uint8_t *r
                     rgba_buffer[i * 4 + 2] = rgb[i * 3 + 2];
                     rgba_buffer[i * 4 + 3] = 255;
                 }
+                // Opaque branch: drop the intermediate. See decode_next_rgb for rationale.
+                free(webp_data->still_rgb);
+                webp_data->still_rgb = NULL;
+                webp_data->still_rgb_size = 0;
             }
             webp_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
         }
@@ -423,6 +436,14 @@ esp_err_t animation_decoder_decode_next_rgb(animation_decoder_t *decoder, uint8_
             if (!webp_data->still_rgb || webp_data->still_rgb_size == 0) return ESP_ERR_INVALID_STATE;
             memcpy(rgb_buffer, webp_data->still_rgb, webp_data->still_rgb_size);
             webp_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
+            // Opaque static WebP never re-decodes (no bg-recompose path), so
+            // the intermediate buffer is dead weight after the caller's b1
+            // holds the pixels. Transparent static WebPs keep still_rgba
+            // alive because the renderer re-invokes decode_next_rgb on
+            // background-color change to recomposite against the new bg.
+            free(webp_data->still_rgb);
+            webp_data->still_rgb = NULL;
+            webp_data->still_rgb_size = 0;
             return ESP_OK;
         }
 

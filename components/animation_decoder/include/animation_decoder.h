@@ -41,6 +41,18 @@ typedef struct {
     size_t frame_count;
     bool has_transparency;
     animation_pixel_format_t pixel_format; // Preferred decoder output format
+    /**
+     * @brief True iff the decoder has fully consumed the input bitstream during
+     *        animation_decoder_init() and no longer references the source bytes.
+     *
+     * Set by formats whose init synchronously decodes the entire file (JPEG,
+     * PNG, static WebP). Left false for formats whose decoder reads chunks
+     * lazily across decode_next_* calls (animated WebP, GIF). The loader uses
+     * this together with frame_count<=1 as a green light to free its in-memory
+     * copy of the file immediately after init - which on this device saves
+     * 0.1-2 MiB of PSRAM per static asset.
+     */
+    bool source_consumed;
 } animation_decoder_info_t;
 
 /**

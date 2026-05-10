@@ -264,6 +264,10 @@ esp_err_t png_decoder_get_info(animation_decoder_t *decoder, animation_decoder_i
     info->frame_count = 1; // PNG is always single frame
     info->has_transparency = png_data->has_transparency;
     info->pixel_format = ANIMATION_PIXEL_FORMAT_RGB888;
+    // libpng reads the entire bitstream synchronously inside png_decoder_init
+    // (png_read_image + png_destroy_read_struct); nothing references
+    // file_data afterwards.
+    info->source_consumed = true;
 
     return ESP_OK;
 }
@@ -296,6 +300,10 @@ esp_err_t png_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_bu
             rgba_buffer[i * 4 + 2] = src[i * 3 + 2];
             rgba_buffer[i * 4 + 3] = 255;
         }
+        // Opaque branch: drop the intermediate. See decode_next_rgb for rationale.
+        free(png_data->rgb_buffer);
+        png_data->rgb_buffer = NULL;
+        png_data->rgb_buffer_size = 0;
     }
     png_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
 
@@ -334,6 +342,15 @@ esp_err_t png_decoder_decode_next_rgb(animation_decoder_t *decoder, uint8_t *rgb
         const size_t sz = (size_t)png_data->canvas_width * (size_t)png_data->canvas_height * 3U;
         memcpy(rgb_buffer, png_data->rgb_buffer, sz);
         png_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
+        // Opaque PNG never re-decodes (no bg-recompose path), so the
+        // intermediate buffer is dead weight after the caller's b1 holds
+        // the pixels. Free it to halve the per-asset PSRAM footprint.
+        // For transparent PNGs we keep rgba_buffer alive because the
+        // renderer's static fast path re-invokes decode_next_rgb on
+        // background-color change to recomposite against the new bg.
+        free(png_data->rgb_buffer);
+        png_data->rgb_buffer = NULL;
+        png_data->rgb_buffer_size = 0;
         return ESP_OK;
     }
 

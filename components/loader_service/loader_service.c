@@ -140,6 +140,19 @@ esp_err_t loader_service_load(const char *filepath,
         return err;
     }
 
+    // For static formats whose decoder has fully consumed the input bitstream
+    // (JPEG, PNG, static WebP - source_consumed=true), the in-memory copy of
+    // the file is dead weight for the entire display lifetime of the asset.
+    // Free it now and zero the pointer/size so the downstream owner sees an
+    // already-released slot. Animated formats (animated WebP, GIF) leave
+    // source_consumed=false because their decoders read chunks lazily across
+    // subsequent decode_next_* calls; they retain file_data until unload.
+    if (out->info.frame_count <= 1 && out->info.source_consumed && out->file_data) {
+        free(out->file_data);
+        out->file_data = NULL;
+        out->file_size = 0;
+    }
+
     return ESP_OK;
 }
 

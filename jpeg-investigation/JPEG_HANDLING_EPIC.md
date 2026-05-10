@@ -15,9 +15,9 @@ The JPEG handling on p3a is fragile in ways that are not surface-visible because
 2. The current p3a host code passes any `.jpg` file straight to that decoder with no pre-validation, no fallback path, and no downscaling.
 3. As a result, a **large majority of real-world JPEGs fail to decode**, but the failures are individually rare in normal playback because (a) most of the SD card content is PNG/WebP/GIF, and (b) the recently-added silent-retry mechanism (3 retries before the loud overlay) masks short failure bursts.
 
-A representative test folder of 92 JPEGs (`jpeg-investigation/animations/`) contains:
+The curated test corpus in `jpeg-investigation/animations/` (90 CC0-licensed JPEGs that exercise the failure modes) contains:
 
-* **90 of 92 files (98%)** with width not divisible by 8 → would trip the HW decoder's alignment guard if exercised.
+* **89 of 90 files (99%)** with width not divisible by 8 → would trip the HW decoder's alignment guard if exercised. The single alignment-satisfying file (`160885.jpg`, 664×893) is retained as the working baseline that proves the constraint is on width, not height.
 * **30 files** that are progressive JPEGs → the HW decoder cannot parse them at all.
 * **30 files** whose RGB output buffer would exceed 28 MiB → too large to allocate even from PSRAM.
 
@@ -107,28 +107,29 @@ Four distinct failure classes have been observed in monitor logs and root-caused
 | **Math** | 149410.jpg = 700×900. Decoder pads to 704×904. `704 × 904 × 3 = 1,909,248` — exact match for the log's "actual jpeg decode output size 1909248". |
 | **Files exercised** | 149410.jpg |
 | **Why C vs D for similarly-misaligned files** | Unclear from file properties alone. Width parity, height, and width%16 do not separate the two C files (697w odd, 748w even) from the one D file (700w even). The split likely depends on internal IDF state — chroma subsampling, JFIF/EXIF marker presence, or the order of internal validation steps. **For mitigation purposes, C and D are the same root cause.** |
-| **All matching files in test set (combined C+D)** | **90 of 92 JPEGs** in the folder have a width not divisible by 8. Only two files satisfy the alignment constraint: `160885.jpg` (664×893) and `iran-news-map-0314-promo-untitled-square640.jpg` (640×640). Effectively **virtually every JPEG in the folder is at risk** of C or D if exercised. |
+| **All matching files in test set (combined C+D)** | **89 of 90 JPEGs** in the curated test corpus have a width not divisible by 8. The single exception is `160885.jpg` (664×893), retained as the working baseline. Effectively **every other JPEG in the folder is at risk** of C or D if exercised. |
 
 ---
 
-## Latent scope (full-folder analysis)
+## Latent scope (test-corpus analysis)
 
-`jpeg-investigation/inspect_jpegs.py` over all 92 JPEGs in the test folder yields:
+`jpeg-investigation/inspect_jpegs.py` over all 90 JPEGs in the curated test corpus yields:
 
 | Property | Count | Implication |
 |----------|------:|-------------|
 | No SOF marker (structurally broken) | 0 | Not a real failure mode in this set |
 | Progressive (SOF2) | **30** | Will hit Issue B if picked |
 | RGB buffer > 5 MB (W·H·3 > 5,000,000) | **30** | Will hit Issue A if picked |
-| Width not divisible by 8 | **90** | Will hit Issue C or D if picked |
-| Height not divisible by 8 | 87 | Tolerated by HW decoder; not a failure source |
+| Width not divisible by 8 | **89** | Will hit Issue C or D if picked |
+| Height not divisible by 8 | 86 | Tolerated by HW decoder; not a failure source |
 
-The three "will-fail" sets overlap meaningfully (most of the giant 264xxx baseline JPEGs are in A and also in width%8≠0 i.e. C/D set). On the test folder, only **a handful** of JPEGs would decode successfully on the HW decoder as-is — at least one confirmed from the logs (`160885.jpg`, 664×893).
+The three "will-fail" sets overlap meaningfully (most of the giant 264xxx baseline JPEGs are both in set A and in the width%8≠0 set). Only one file in the corpus would decode successfully on the HW decoder as-is: `160885.jpg` (664×893), retained as the working baseline.
+
+The corpus was deliberately curated to exercise the failure modes; it is not a sample of typical traffic. In real-world use, the device's `/sdcard/p3a/animations/` folder is mixed media (PNGs, WebPs, GIFs alongside JPEGs), and the live Makapix vault has different content distribution. The numbers above describe the failure classes' *internal structure*, not the rate at which an end user encounters them.
 
 ### Why playback "mostly works" despite this
 
-* The folder is mixed media: 92 JPEGs but also 29 PNGs and 1 WebP. PNG/WebP have different decoders that don't share these failure modes.
-* The picker is stochastic — across thousands of swaps, only a fraction land on JPEGs.
+* Real-world SD-card content is mixed media — PNG, WebP, and GIF have separate decoders and do not share these failure modes. The picker is stochastic, so only a fraction of swaps target JPEGs.
 * Commit `fa98ba7e` (silent-retry burst) absorbs up to two consecutive JPEG failures per cycle without showing an overlay.
 * Users perceive the device as 24/7 reliable; the latent JPEG fragility surfaces only when staring at the monitor or when three failures land in sequence.
 
@@ -139,7 +140,7 @@ This is not a stable equilibrium — any change that increases JPEG share in the
 ## Investigation artefacts
 
 * `jpeg-investigation/inspect_jpegs.py` — Python helper that walks a folder of JPEGs and reports for each file: dimensions (PIL and raw-marker), file size, RGB-output size, SOF marker (SOF0 baseline vs SOF2 progressive), chroma subsampling, EXIF orientation, and width/height divisibility by 8 and 16. Prints a per-file row plus a summary block. Run with no args to scan `./animations/`.
-* `jpeg-investigation/animations/` — exact copy of the SD-card `animations/` folder used during testing (121 files: 92 JPEG, 29 PNG, 1 WebP, 1 metadata file).
+* `jpeg-investigation/animations/` — curated test corpus of **90 CC0-licensed JPEGs** that collectively exercise every failure class catalogued below (plus the working baseline `160885.jpg` for control). Derived from a snapshot of the live SD card and trimmed down to JPEGs only, with all non-CC0 content removed. Safe to commit, redistribute, and use as a regression dataset.
 * Original failure logs (excerpts) — captured in chat history; representative log lines reproduced in each issue row above.
 
 ---
@@ -200,7 +201,7 @@ These are options to weigh; no path has been chosen.
 The epic can be considered closed when:
 
 * No JPEG file copied to `/sdcard/p3a/animations/` causes an on-screen "Failed to load artwork" overlay during normal auto-swap rotation, *or* the file is explicitly flagged as unsupported with a clear, non-error UI treatment.
-* The full 92-file `jpeg-investigation/animations/` test set decodes (or is gracefully skipped) end-to-end without manual intervention.
+* The full 90-file `jpeg-investigation/animations/` test corpus decodes (or is gracefully skipped) end-to-end without manual intervention.
 * The silent-retry burst (`fa98ba7e`) is no longer the primary mechanism hiding JPEG failures — it remains as a safety net for genuinely broken files only.
 * `jpeg-investigation/inspect_jpegs.py` continues to be a useful diagnostic and is referenced from the on-device docs.
 

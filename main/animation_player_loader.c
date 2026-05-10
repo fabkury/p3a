@@ -26,6 +26,7 @@
 #include "play_scheduler_internal.h"
 #include "channel_cache.h"
 #include "download_manager.h"
+#include "event_bus.h"
 
 // Some tooling configurations may not resolve component include paths reliably for C files.
 // Keep explicit prototypes here to avoid "implicit declaration" diagnostics.
@@ -51,31 +52,153 @@ bool ota_manager_is_checking(void);
 static uint64_t s_last_corrupt_deletion_ms = 0;
 static const uint64_t CORRUPT_DELETION_COOLDOWN_MS = 300000ULL;  // 5 minutes
 
-// Simplified discard: No auto-retry, no navigation.
-// Just clean up state and display error.
-static void discard_failed_swap_request(esp_err_t error)
+// ============================================================================
+// Silent auto-swap retry burst
+// ============================================================================
+//
+// When an auto-swap (timer-driven, touch nav, channel switch) fails to load,
+// we silently pick another artwork up to MAX_AUTO_RETRIES times before giving
+// up loudly with an on-screen error. Files that fail during a burst are
+// remembered in a small blocklist so the picker doesn't waste retry attempts
+// on the same broken file. The state is reset on:
+//   - a successful swap (render task, after the back/front buffer flip)
+//   - a user-initiated swap request taking over
+//   - the burst exhausting its retry budget
+//
+// User-initiated swaps (HTTP play_artwork / play_local_file) bypass this
+// mechanism entirely: the user is asking for a specific artwork, so a
+// failure is reported loudly instead of silently swapping past it.
+// ============================================================================
+
+#define MAX_AUTO_RETRIES        3
+#define AUTO_BLOCKLIST_SIZE     MAX_AUTO_RETRIES
+#define MAX_BLOCKLIST_SKIPS     6  // safety: cap consecutive blocklisted picks
+
+static int s_auto_retry_count = 0;
+static int s_auto_retry_skip_count = 0;
+static int32_t s_auto_retry_blocklist[AUTO_BLOCKLIST_SIZE];
+static int s_auto_retry_blocklist_count = 0;
+
+static bool auto_retry_is_blocklisted(int32_t post_id)
+{
+    if (post_id == 0) {
+        return false;
+    }
+    for (int i = 0; i < s_auto_retry_blocklist_count; i++) {
+        if (s_auto_retry_blocklist[i] == post_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void auto_retry_blocklist_add(int32_t post_id)
+{
+    if (post_id == 0 || auto_retry_is_blocklisted(post_id)) {
+        return;
+    }
+    if (s_auto_retry_blocklist_count < AUTO_BLOCKLIST_SIZE) {
+        s_auto_retry_blocklist[s_auto_retry_blocklist_count++] = post_id;
+    }
+}
+
+void animation_loader_reset_auto_retry_state(void)
+{
+    s_auto_retry_count = 0;
+    s_auto_retry_skip_count = 0;
+    s_auto_retry_blocklist_count = 0;
+}
+
+// Extract the filename portion of a path. Returns "(unknown)" for NULL input.
+static const char *basename_of(const char *filepath)
+{
+    if (!filepath || filepath[0] == '\0') {
+        return "(unknown)";
+    }
+    const char *slash = strrchr(filepath, '/');
+    return slash ? slash + 1 : filepath;
+}
+
+static void show_load_error_message(esp_err_t error, const char *filepath)
+{
+    // Two-line body: filename on top, error code below. The renderer splits
+    // on '\n' (see ugfx_ui_draw_channel_message) so the filename is visible
+    // to the user without needing a long single-line message.
+    char error_msg[128];
+    snprintf(error_msg, sizeof(error_msg), "%s\nFailed to load: %s",
+             basename_of(filepath), esp_err_to_name(error));
+    p3a_render_set_channel_message("Playback Error", P3A_CHANNEL_MSG_ERROR, -1, error_msg);
+}
+
+// Clear in-flight swap state and back buffer. Returns true if a swap was
+// actually pending (matches old had_swap_request semantics).
+static bool clear_pending_swap_state(void)
 {
     bool had_swap_request = false;
-    
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
         had_swap_request = s_swap_requested;
         s_swap_requested = false;
         s_loader_busy = false;
-
         if (s_back_buffer.decoder || s_back_buffer.file_data) {
             unload_animation_buffer(&s_back_buffer);
         }
-
         xSemaphoreGive(s_buffer_mutex);
     }
+    return had_swap_request;
+}
 
-    if (had_swap_request) {
-        ESP_LOGW(TAG, "Swap failed (error: %s). Displaying error.", esp_err_to_name(error));
+// SWAP_FAIL_SILENT path: silently retry by emitting a fresh SWAP_NEXT event so
+// the scheduler picks another artwork. Falls back to displaying an error after
+// MAX_AUTO_RETRIES consecutive failures.
+static void discard_failed_silent_swap(esp_err_t error, int32_t post_id, const char *filepath)
+{
+    bool had_swap_request = clear_pending_swap_state();
+    if (!had_swap_request) {
+        return;
+    }
 
-        // Display error message
-        char error_msg[128];
-        snprintf(error_msg, sizeof(error_msg), "Failed to load artwork: %s", esp_err_to_name(error));
-        p3a_render_set_channel_message("Playback Error", P3A_CHANNEL_MSG_ERROR, -1, error_msg);
+    auto_retry_blocklist_add(post_id);
+    s_auto_retry_count++;
+    s_auto_retry_skip_count = 0;
+
+    if (s_auto_retry_count < MAX_AUTO_RETRIES) {
+        ESP_LOGW(TAG, "Silent swap load failed (%s, post_id=%ld, file=%s); retrying (%d/%d)",
+                 esp_err_to_name(error), (long)post_id, basename_of(filepath),
+                 s_auto_retry_count, MAX_AUTO_RETRIES);
+        event_bus_emit_simple(P3A_EVENT_SWAP_NEXT);
+    } else {
+        ESP_LOGE(TAG, "Silent swap load failed (%s, file=%s) %d times; giving up and displaying error",
+                 esp_err_to_name(error), basename_of(filepath), s_auto_retry_count);
+        show_load_error_message(error, filepath);
+        animation_loader_reset_auto_retry_state();
+    }
+}
+
+// SWAP_FAIL_LOUD path: surface the failure on screen (no silent retry).
+static void discard_failed_loud_swap(esp_err_t error, const char *filepath)
+{
+    bool had_swap_request = clear_pending_swap_state();
+    if (!had_swap_request) {
+        return;
+    }
+
+    ESP_LOGW(TAG, "Loud swap failed (%s, file=%s); displaying error.",
+             esp_err_to_name(error), basename_of(filepath));
+    animation_loader_reset_auto_retry_state();
+    show_load_error_message(error, filepath);
+}
+
+static void discard_failed_swap_request(esp_err_t error, swap_fail_mode_t fail_mode,
+                                        int32_t post_id, const char *filepath)
+{
+    switch (fail_mode) {
+        case SWAP_FAIL_LOUD:
+            discard_failed_loud_swap(error, filepath);
+            break;
+        case SWAP_FAIL_SILENT:
+        default:
+            discard_failed_silent_swap(error, post_id, filepath);
+            break;
     }
 }
 
@@ -276,6 +399,7 @@ void animation_loader_task(void *arg)
         int32_t post_id = 0;
         const char *channel_spec_name = "";
         const char *channel_identifier = "";
+        swap_fail_mode_t fail_mode = SWAP_FAIL_SILENT;
 
         post_source_t post_source = POST_SOURCE_NONE;
 
@@ -288,8 +412,9 @@ void animation_loader_task(void *arg)
             name_for_log = ov.filepath;
             post_id = ov.post_id;
             post_source = ov.post_source;
-            ESP_LOGD(TAG, "Loader task: swap request: %s (type=%d post_id=%d)",
-                     filepath, (int)type, (int)post_id);
+            fail_mode = ov.fail_mode;
+            ESP_LOGD(TAG, "Loader task: swap request: %s (type=%d post_id=%d fail_mode=%d)",
+                     filepath, (int)type, (int)post_id, (int)fail_mode);
         } else if (swap_was_requested) {
             // Get current artwork from play_scheduler only if an actual swap was requested
             queued_item_t current = {0};
@@ -355,6 +480,26 @@ void animation_loader_task(void *arg)
             }
         }
 
+        // Silent-retry blocklist: if the picker handed us a post_id we already
+        // know is broken in this burst, skip the load entirely and request
+        // another pick. Doesn't consume the retry budget but is bounded by
+        // MAX_BLOCKLIST_SKIPS to prevent a stuck picker from looping forever.
+        if (fail_mode == SWAP_FAIL_SILENT && auto_retry_is_blocklisted(post_id)) {
+            s_auto_retry_skip_count++;
+            ESP_LOGW(TAG, "Silent swap: skipping blocklisted post_id=%ld (%s) [skip %d/%d]",
+                     (long)post_id, filepath ? filepath : "(null)",
+                     s_auto_retry_skip_count, MAX_BLOCKLIST_SKIPS);
+            (void)clear_pending_swap_state();
+            if (s_auto_retry_skip_count >= MAX_BLOCKLIST_SKIPS) {
+                ESP_LOGE(TAG, "Silent swap: too many blocklist skips, giving up and displaying error");
+                show_load_error_message(ESP_ERR_NOT_FOUND, filepath);
+                animation_loader_reset_auto_retry_state();
+            } else {
+                event_bus_emit_simple(P3A_EVENT_SWAP_NEXT);
+            }
+            continue;
+        }
+
         ESP_LOGD(TAG, "Loader task: Loading animation '%s' into back buffer", name_for_log ? name_for_log : "(null)");
 
         // Check if file exists BEFORE trying to load.
@@ -389,9 +534,10 @@ void animation_loader_task(void *arg)
                 // Phase 3: No navigation on load failure
                 ESP_LOGW(TAG, "Decode failed: %s", filepath ? filepath : "(null)");
             }
-            
-            // Clean up and display error
-            discard_failed_swap_request(err);
+
+            // SWAP_FAIL_SILENT retries up to MAX_AUTO_RETRIES; SWAP_FAIL_LOUD
+            // surfaces the error on screen immediately.
+            discard_failed_swap_request(err, fail_mode, post_id, filepath);
             continue;
         }
 

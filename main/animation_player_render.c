@@ -454,6 +454,9 @@ skip_prefetch:
                 p3a_render_set_channel_message(NULL, 0 /* P3A_CHANNEL_MSG_NONE */, -1, NULL);
             }
 
+            // A successful swap ends any in-progress silent-retry burst.
+            animation_loader_reset_auto_retry_state();
+
             // Notify play_scheduler that swap succeeded (resets dwell timer)
             play_scheduler_reset_timer();
 

@@ -874,6 +874,8 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id,
         return ESP_ERR_INVALID_ARG;
     }
 
+    ps_state_t *s_state = ps_get_state();
+
     ESP_LOGI(TAG, "play_artwork: post_id=%ld, storage_key=%s, title='%s'",
              (long)post_id, storage_key, (title && title[0]) ? title : "");
 
@@ -906,6 +908,11 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id,
                                cmd->channels[0].artwork.filepath,
                                sizeof(cmd->channels[0].artwork.filepath));
 
+    // Mark the upcoming swap loud-fail: the user picked a specific artwork,
+    // so a load failure should surface an on-screen error instead of being
+    // silently retried with a different artwork.
+    s_state->next_swap_fail_mode = SWAP_FAIL_LOUD;
+
     esp_err_t result = play_scheduler_execute_command(cmd);
     if (result == ESP_OK) {
         // Treat the single-artwork session as a first-class active playset so
@@ -931,6 +938,8 @@ esp_err_t play_scheduler_play_local_file(const char *filepath)
         return ESP_ERR_NOT_FOUND;
     }
 
+    ps_state_t *s_state = ps_get_state();
+
     ESP_LOGI(TAG, "play_local_file: %s", filepath);
 
     // Heap allocate to avoid ~4.6KB stack usage
@@ -952,6 +961,11 @@ esp_err_t play_scheduler_play_local_file(const char *filepath)
     cmd->channels[0].artwork.storage_key[0] = '\0';
     cmd->channels[0].artwork.art_url[0] = '\0';
     strlcpy(cmd->channels[0].artwork.filepath, filepath, sizeof(cmd->channels[0].artwork.filepath));
+
+    // Mark the upcoming swap loud-fail: the user picked a specific local file,
+    // so a load failure should surface an on-screen error instead of being
+    // silently retried with a different artwork.
+    s_state->next_swap_fail_mode = SWAP_FAIL_LOUD;
 
     esp_err_t result = play_scheduler_execute_command(cmd);
     if (result == ESP_OK) {

@@ -15,6 +15,7 @@
 #include "play_scheduler_types.h"
 #include "channel_interface.h"
 #include "makapix_channel_impl.h"
+#include "animation_swap_request.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/timers.h"
@@ -98,6 +99,13 @@ typedef struct {
     bool command_active;
     bool playback_triggered;  // prevents multiple swap triggers per command execution
     bool initialized;
+
+    // One-shot fail-mode override consumed by prepare_and_request_swap(): set
+    // to SWAP_FAIL_LOUD by play_scheduler_play_artwork() / play_local_file()
+    // so the resulting swap_request fails loudly on load error. Cleared after
+    // every prepare_and_request_swap() call so subsequent auto-swaps default
+    // back to SWAP_FAIL_SILENT.
+    swap_fail_mode_t next_swap_fail_mode;
 } ps_state_t;
 
 // ============================================================================

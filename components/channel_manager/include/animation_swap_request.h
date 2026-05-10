@@ -19,6 +19,22 @@ extern "C" {
 #endif
 
 /**
+ * @brief How a swap request should report load failures.
+ *
+ * Zero-initialized swap requests default to SWAP_FAIL_SILENT, which matches
+ * the dominant code path (timer auto-swap, touch navigation, channel
+ * switches, boot fallback). Only paths where the user explicitly asked for
+ * a specific artwork (HTTP play_artwork / play_local_file) opt in to
+ * SWAP_FAIL_LOUD.
+ *
+ * Add new modes here as the failure-handling policy gains nuance.
+ */
+typedef enum {
+    SWAP_FAIL_SILENT = 0,  // log only, retry the auto-swap up to 3 times, then escalate
+    SWAP_FAIL_LOUD,        // surface "Failed to load artwork" overlay immediately, no retry
+} swap_fail_mode_t;
+
+/**
  * @brief Swap request structure for animation player
  *
  * This structure contains all information needed for animation_player
@@ -34,6 +50,7 @@ typedef struct swap_request_s {
     int32_t post_id;           // For view tracking (0 if not applicable)
     post_source_t post_source; // Source of the post_id
     uint32_t dwell_time_ms;    // Effective dwell time for this artwork
+    swap_fail_mode_t fail_mode;  // How load failures should be reported (default: SILENT)
 } swap_request_t;
 
 #ifdef __cplusplus

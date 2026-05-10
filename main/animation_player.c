@@ -526,10 +526,16 @@ esp_err_t animation_player_request_swap(const swap_request_t *request)
         strlcpy(s_load_override.channel_identifier, request->channel_identifier, sizeof(s_load_override.channel_identifier));
         s_load_override.post_id = request->post_id;
         s_load_override.post_source = request->post_source;
+        s_load_override.fail_mode = request->fail_mode;
         strlcpy(s_load_override.filepath, request->filepath, sizeof(s_load_override.filepath));
-        
+
         s_swap_requested = true;
         xSemaphoreGive(s_buffer_mutex);
+
+        // A loud-fail (user-initiated) swap supersedes any silent-retry burst.
+        if (request->fail_mode == SWAP_FAIL_LOUD) {
+            animation_loader_reset_auto_retry_state();
+        }
         
         if (s_loader_sem) {
             xSemaphoreGive(s_loader_sem);

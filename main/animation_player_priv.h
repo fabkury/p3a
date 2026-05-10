@@ -158,6 +158,7 @@ typedef struct {
     char channel_identifier[33];     // For view-event reporting (USER/REACTIONS sqid, HASHTAG tag)
     int32_t post_id;  // For view tracking
     post_source_t post_source;
+    swap_fail_mode_t fail_mode;  // Mirrored from swap_request_t to control silent-retry
 } animation_load_override_t;
 
 extern animation_load_override_t s_load_override;
@@ -176,6 +177,10 @@ esp_err_t prefetch_first_frame(animation_buffer_t *buf);
 void animation_loader_task(void *arg);
 void animation_loader_wait_for_idle(void);
 bool animation_loader_try_delete_corrupt_cached_file(const char *filepath, esp_err_t error, int32_t post_id);
+
+// Reset the silent-auto-swap-retry state (counter and per-burst blocklist).
+// Call after a successful swap or whenever the user takes over (user-initiated swap).
+void animation_loader_reset_auto_retry_state(void);
 
 // Rebuild aspect-ratio/rotation-dependent upscale maps for an already-loaded buffer.
 // Call from the render task (or otherwise ensure it doesn't race with render_next_frame()).

@@ -95,6 +95,12 @@ static esp_err_t prepare_and_request_swap(ps_state_t *state, const ps_artwork_t 
     request.post_id = artwork->post_id;
     request.post_source = artwork->post_source;
 
+    // Consume the one-shot fail-mode set by play_artwork/play_local_file.
+    request.fail_mode = state ? state->next_swap_fail_mode : SWAP_FAIL_SILENT;
+    if (state) {
+        state->next_swap_fail_mode = SWAP_FAIL_SILENT;
+    }
+
     // Dwell time: user override > artwork dwell
     if (state->dwell_time_seconds > 0) {
         request.dwell_time_ms = state->dwell_time_seconds * 1000;

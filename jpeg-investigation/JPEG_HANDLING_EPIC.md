@@ -1,9 +1,62 @@
 # JPEG Handling Overhaul — Epic
 
-**Status:** problem statement / investigation phase
-**Owner:** TBD
+**Status:** ✅ shipped 2026-05-10
 **Created:** 2026-05-10
 **Scope:** how p3a loads and decodes JPEG artworks on the ESP32-P4
+
+**Shipping commits (chronological):**
+
+| Commit | Subject |
+|---|---|
+| `ec5661b3` | Extend JPEG inspector with libjpeg-turbo coefficient-buffer estimate |
+| `5d710453` | Add libjpeg-turbo software fallback for the JPEG decode path |
+| `6301bed4` | Provide idf::libjpeg-turbo alias shim for IDF v5.5.1 managed-component naming |
+| `9509fd41` | Pin esp_hosted to ~2.9.3 to avoid SDIO mempool OOM at boot |
+| `77f37071` | Halve the static-image PSRAM footprint |
+
+---
+
+## Outcome (2026-05-10)
+
+The hybrid HW-first / libjpeg-turbo SW-fallback architecture (recommendation **5** from the *Recommended directions* section below) is shipped. End-to-end results from on-device testing against the curated 90-file corpus:
+
+- **0 user-visible "Failed to load artwork" overlays** during normal auto-swap rotation. Every file in the corpus decodes successfully via either the HW path or the libjpeg-turbo SW fallback.
+- **0 silent-retry events on the stress corpus** after the static-image memory optimisation in `77f37071`. (Before that optimisation, back-to-back oversized 3601×2701 picks tripped a silent-retry at ~5–6% rate due to PSRAM fragmentation; the optimisation took peak in-flight working set from ~20 MiB down to ~8 MiB and the silent-retry rate to zero.)
+- **HW-route correctness preserved.** The 12 HW-friendly files in the corpus continue to decode through `esp_driver_jpeg`; only the 78 HW-rejected files take the SW path. Confirmed by manually pinning the SD-card folder to the canonical baseline `160885.jpg` (664×893) and observing `route=HW` in the logs.
+- **Decode latencies within budget.** Largest progressive file (`53973.jpg` 843×1334) decodes in ~1 s SW; largest oversized file (`264986.jpg` 3601×2701, decoded at scale 3/8 → 1351×1013) decodes in ~2.6–2.7 s SW. The "no UI loading affordance needed" assumption holds.
+
+**Architecture in one diagram:**
+
+```
+loader_service_load(path, JPEG)
+  → animation_decoder JPEG entry (jpeg_animation_decoder.c)
+       │
+       ├── HW path  (esp_driver_jpeg)              ← unchanged for happy case
+       │     └── on ESP_OK   → return RGB888 in PSRAM
+       │     └── on any err  ↓
+       │
+       └── SW path  (libjpeg-turbo, jpeg_animation_decoder_sw.c)
+             ├── jpeg_read_header → get native W, H
+             ├── pick_scale(W, H) per smallest-larger-than-screen rule
+             │      (M/8 for M ∈ 1..8; native (M=8) when either dim < 720)
+             ├── allocate scaled RGB output in PSRAM
+             ├── jpeg_start_decompress + scanline loop
+             └── return RGB888 (display pipeline upscales the rest)
+```
+
+The dispatcher in `jpeg_animation_decoder.c::jpeg_decoder_init` is pure catch-all: HW first, fall through to SW on **any** `ESP_ERR_*`. There is no pre-validation pass. HW per-step errors are at `ESP_LOGD`; the dispatcher emits one `ESP_LOGW` per fall-through and logs `route=HW|SW` on success.
+
+**Static-image memory optimisation (`77f37071`).** Two surgical changes that together drop the per-static-asset peak PSRAM demand from ~12 MiB to ~4 MiB on the worst-case 1351×1013 SW-fallback path:
+
+1. The loader skips `native_frame_b2` when `decoder_info.frame_count <= 1`. The renderer's static fast path at `animation_player_render.c:130` already reuses `native_frame_b1` every tick without re-decoding, so `b2` was exclusively a decode-ahead buffer for animated formats and was sitting unused for static assets.
+2. The JPEG decoder frees its internal `rgb_buffer` immediately after the first `decode_next_rgb` / `decode_next` call copies pixels into the caller's buffer. JPEG is always single-frame and the decoder will never be asked to produce another frame, so holding the intermediate copy alive until unload was pure waste.
+
+Both changes are gated on `frame_count <= 1` so animated formats (GIF, animated WebP) remain unaffected.
+
+**Operational notes for future maintainers:**
+
+- The IDF v5.5.1 component manager registers managed-component aliases as `idf::<namespace>__<name>`, so `espressif/libjpeg-turbo` is exposed as `idf::espressif__libjpeg-turbo`. The upstream component's `CMakeLists.txt:10` self-references the bare-name alias `idf::libjpeg-turbo`, which doesn't exist. We provide the missing alias as an empty interface-imported library in the project root `CMakeLists.txt` (`6301bed4`). Remove the shim once IDF either creates bare-name aliases for managed components or upstream libjpeg-turbo self-references via `${COMPONENT_LIB}` instead.
+- `esp_hosted` is pinned to `~2.9.3` (resolved 2.9.7) in `main/idf_component.yml`. Versions 2.10+ enlarged the SDIO RX mempool past the internal-RAM budget on the current sdkconfig and caused `HS_MP "no mem"` at boot followed by a self-imposed SDIO host reset and reboot loop. Loosen the pin once sdkconfig is updated to give `esp_hosted`'s newer mempool the headroom it wants.
 
 ---
 
@@ -72,7 +125,8 @@ Four distinct failure classes have been observed in monitor logs and root-caused
 
 | | |
 |---|---|
-| **Log signature** | `E (xxxxx) jpeg_decoder: Failed to allocate RGB buffer (29332992 bytes)` → `ESP_ERR_NO_MEM` |
+| **Status** | ✅ **Resolved** in `5d710453`. The libjpeg-turbo SW path picks the smallest scaled-IDCT ratio M/8 (M ∈ 1..8) that keeps both decoded dimensions ≥ the 720-px panel; for 3601×2701 sources this yields M=3 → 1351×1013, RGB ≈ 4 MiB instead of 28 MiB. Empirically confirmed across all 30 oversized files in the corpus. |
+| **Log signature** | `E (xxxxx) jpeg_decoder: Failed to allocate RGB buffer (29332992 bytes)` → `ESP_ERR_NO_MEM` (HW path) → dispatcher logs `HW decode failed (ESP_ERR_NO_MEM); trying SW fallback` → `SW JPEG decoded: native=3601x2701 scale=3/8 out=1351x1013 (4105689 bytes)` → `route=SW`. |
 | **Root cause** | Source JPEG dimensions (3601×2701, ~9.7 MP) require ~28 MiB of contiguous PSRAM for the RGB888 output buffer. Allocation fails. |
 | **Math** | The HW decoder pads to 16-byte alignment: 3601→3616, 2701→2704. `3616 × 2704 × 3 = 29,332,992` — exact match for the log byte count. |
 | **Files exercised** | 264986.jpg, 264902.jpg, 264901.jpg, 264988.jpg, 264984.jpg |
@@ -83,7 +137,8 @@ Four distinct failure classes have been observed in monitor logs and root-caused
 
 | | |
 |---|---|
-| **Log signature** | `E (xxxxx) jpeg_decoder: Invalid JPEG dimensions: 0 x 0` → `ESP_ERR_INVALID_SIZE` |
+| **Status** | ✅ **Resolved** in `5d710453`. libjpeg-turbo handles progressive natively. Largest progressive coefficient buffer in the corpus is ~3.22 MiB (843×1334 at 4:2:0), well within the 32 MiB PSRAM headroom. Empirically confirmed across all 30 progressive files. |
+| **Log signature** | `E (xxxxx) jpeg_decoder: Invalid JPEG dimensions: 0 x 0` → `ESP_ERR_INVALID_SIZE` (HW path) → dispatcher → `route=SW`. |
 | **Root cause** | The ESP HW JPEG decoder supports only baseline (SOF0). It cannot parse SOF2's interleaved scans, so it never extracts the dimensions and reports 0×0. |
 | **Math / verification** | `inspect_jpegs.py` raw-marker scan confirms `SOF2` for both observed files. PIL likewise reports `progressive=True`. |
 | **Files exercised** | 138630.jpg (843×586), 61560.jpg (843×1132) |
@@ -94,22 +149,23 @@ Four distinct failure classes have been observed in monitor logs and root-caused
 
 | | |
 |---|---|
-| **Log signature** | `E (xxxxx) jpeg.decoder: Picture sizes not divisible by 8 are not supported` → `jpeg_parse_marker(698): deal sof marker failed` → `ESP_ERR_INVALID_STATE` |
+| **Status** | ✅ **Resolved** in `5d710453` via SW fallback. Note this is a *driver-level* gate, not a silicon constraint — an IDF bump to v5.5.2+ or v6.x removes the check entirely and these 78 files would route through HW. The SW fallback path makes the IDF bump optional rather than load-bearing. |
+| **Log signature** | `E (xxxxx) jpeg.decoder: Picture sizes not divisible by 8 are not supported` → `jpeg_parse_marker(698): deal sof marker failed` → `ESP_ERR_INVALID_STATE` (HW path) → dispatcher → `route=SW`. |
 | **Root cause** | The IDF v5.5.1 driver source `components/esp_driver_jpeg/jpeg_parse_marker.c:106` contains `if ((width * height % 8) != 0) { ... return ESP_ERR_INVALID_STATE; }`. The check is on the **product** of the two dimensions, not on width alone. When violated, parsing fails before any allocation. The check is driver-level only and is absent from upstream master / IDF v6.0.1, which suggests the silicon does not need it. |
 | **Files exercised** | 117032.jpg (697×900, W·H=627 300, %8=4), 94979.jpg (748×893, W·H=667 964, %8=4) |
 | **Working baseline** | 160885.jpg (664×893): 664·893=593 752, %8=0 → passes. (Width 664 is divisible by 8 directly, so the product is too.) Height 893 is **not** divisible by 8; that's tolerated because the predicate is on the product. |
 | **Predicate clarification** | A file with width%8=0 always passes (since 0·anything is divisible by 8). A file with height%8=0 always passes. A file with both odd dimensions almost always fails (odd·odd has at most one factor of 2). The widely-used "width divisible by 8" shorthand is roughly but not exactly correct. |
 
-### Issue D — Output buffer sized for un-padded dimensions (FIXED in `732475d4`)
+### Issue D — Output buffer sized for un-padded dimensions
 
 | | |
 |---|---|
-| **Status** | **Fixed** in commit `732475d4` (2026-05-07): the wrapper now rounds output dimensions up to 16 before allocating, and strips padding columns row-by-row when copying out. Files that pass Issue C's SOF gate but have width%16 ≠ 0 now decode successfully. Listed here for completeness and so the diagnostic still maps cleanly to historical logs. |
-| **Original log signature** | `E (xxxxx) jpeg.decoder: Given buffer size 61440 is smaller than actual jpeg decode output size 1909248 the height and width of output picture size will be adjusted to 16 bytes aligned automatically` → `ESP_ERR_INVALID_ARG` |
-| **Root cause** | Decoder auto-pads its output to a 16-byte MCU grid (for 4:2:0 / 4:2:2 sources) and refuses to write into a buffer sized for the un-padded dimensions. p3a originally allocated `width × height × 3`; the decoder demanded `aligned_w × aligned_h × 3`. |
+| **Status** | ⚠️ **Partially fixed.** Commit `732475d4` (2026-05-07) rounds output dimensions up to 16 before allocating and strips padding columns row-by-row when copying out, fixing the common 4:2:0/4:2:2 case where the wrapper had been allocating un-padded sizes. **However:** on-device testing during the SW-fallback rollout revealed a residual variant — the IDF v5.5.1 driver still reports `Given buffer size 61440 is smaller than actual jpeg decode output size NNN` and returns `ESP_ERR_INVALID_ARG` for files whose dimensions aren't already 16-aligned, *despite* the wrapper allocating the correctly 16-aligned size. Observed on 149410.jpg (700×900), 148758.jpg (678×900), 125104.jpg (900×314). The mysterious `61440` figure (= 60×1024) doesn't correspond to anything we pass; it appears to be a driver bookkeeping bug. **Functionally invisible** because the SW fallback (`5d710453`) catches the failure and decodes correctly. Worth revisiting if/when IDF is bumped past v5.5.1. |
+| **Original log signature** | `E (xxxxx) jpeg.decoder: Given buffer size 61440 is smaller than actual jpeg decode output size 1909248 the height and width of output picture size will be adjusted to 16 bytes aligned automatically` → `ESP_ERR_INVALID_ARG` (HW path) → dispatcher → `route=SW`. |
+| **Root cause** | Decoder auto-pads its output to a 16-byte MCU grid (for 4:2:0 / 4:2:2 sources) and refuses to write into a buffer sized for the un-padded dimensions. p3a originally allocated `width × height × 3`; the decoder demanded `aligned_w × aligned_h × 3`. The `732475d4` fix addressed this for common cases, but the residual `61440`-vs-`actual` mismatch on non-16-aligned sources suggests a deeper IDF-v5.5.1 driver bug. |
 | **Math** | 149410.jpg = 700×900. Decoder pads to 704×904. `704 × 904 × 3 = 1,909,248` — exact match for the log's "actual jpeg decode output size 1909248". |
 | **Files exercised** | 149410.jpg (and any file that satisfies `(W·H) % 8 == 0` but has W%16 ≠ 0 or H%16 ≠ 0). |
-| **Relationship to Issue C** | C and D were originally bucketed as "width not divisible by alignment, caught early vs late." With the v5.5.1 driver source in hand, the split is fully determined by `(W·H) % 8`: files where the product is not /8 are killed at SOF parse (C); files where it is /8 reach the decode stage and used to fail on buffer sizing (D, now fixed). Both share an underlying lineage — encoders padding to MCU at compress time — but they trip different gates and need different fixes. |
+| **Relationship to Issue C** | C and D were originally bucketed as "width not divisible by alignment, caught early vs late." With the v5.5.1 driver source in hand, the split is fully determined by `(W·H) % 8`: files where the product is not /8 are killed at SOF parse (C); files where it is /8 reach the decode stage and trip the buffer-sizing check (D). Both share an underlying lineage — encoders padding to MCU at compress time — but they trip different gates. |
 
 ---
 
@@ -160,9 +216,9 @@ This is not a stable equilibrium — any change that increases JPEG share in the
 
 ---
 
-## Recommended directions (not yet decisions)
+## Recommended directions — chosen path
 
-These are options to weigh; no path has been chosen.
+**Shipped:** option **5** (hybrid HW-first / SW-fallback as universal safety net), implemented via libjpeg-turbo. The decision rationale and trade-offs against the alternatives are captured below for the historical record.
 
 1. **Software JPEG fallback for HW-decoder-rejected files.**
    Detect SOF2 (Issue B) and `(W·H) % 8 != 0` (Issue C) before invoking the HW decoder, or catch `ESP_ERR_INVALID_STATE` from `jpeg_decoder_process` and re-route. Send those files to a software decoder (`libjpeg-turbo` or the much smaller `tjpgd`, or Espressif's `esp-new-jpeg`). One mechanism handles two of the three remaining issue classes (B and C).
@@ -184,8 +240,10 @@ These are options to weigh; no path has been chosen.
    *Cost:* server work, doesn't help SD-card user uploads.
    *Risk:* still need a device-side fallback for user-managed content.
 
-5. **Hybrid: software fallback as the universal safety net + opportunistic HW path.**
+5. **✅ Hybrid: software fallback as the universal safety net + opportunistic HW path.** *(SHIPPED in `5d710453`.)*
    Keep the HW decoder as the fast path for files that satisfy its constraints (the inspect script's predicates, updated to `(W·H) % 8 == 0`, can be reused as a pre-check). Fall back to a software decoder for everything else. Combine with downscaling for Issue A files. This is the most robust direction; it's also the largest scope.
+
+   **As shipped:** chose libjpeg-turbo for the SW path (only candidate that supports both progressive and arbitrary scaled-IDCT ratios). Skipped the pre-check entirely — the dispatcher is pure catch-all, which is simpler and more robust at the cost of one HW attempt per fall-through file. Scaled-IDCT ratio picked by the smallest-larger-than-screen rule (M/8, M ∈ 1..8) handles Issue A inline without needing the PPA-based decode-time downscale of option (2).
 
 6. **ESP-IDF upgrade.**
    The Issue C SOF gate exists in the v5.5.1 driver and has been removed in upstream master / v6.0.1 (and likely earlier patch versions in the v5.5.x line). A bump to v5.5.2 or v5.5.3 may eliminate Issue C entirely without any p3a code changes — to verify, grep `components/esp_driver_jpeg/jpeg_parse_marker.c` in the candidate version for the `Picture sizes not divisible by 8` string. Cheapest possible win if it works.
@@ -199,14 +257,21 @@ These are options to weigh; no path has been chosen.
 
 ---
 
-## Open questions
+## Open questions (resolved or superseded)
 
 * ~~What is the actual upper bound on width alignment — 8 (4:4:4 MCU) or 16 (4:2:0 MCU)?~~ **Resolved.** The IDF v5.5.1 driver enforces `(W·H) % 8 == 0` at SOF parse, regardless of chroma subsampling. The MCU output-padding (16 for 4:2:0/4:2:2, 8 for 4:4:4) is a separate, structural constraint and is now handled in `732475d4`. Per the authoritative Espressif report, the silicon itself imposes neither check on input width — both are wrapper/driver concerns.
-* Does the ESP32-P4 HW JPEG peripheral support decode-time downscaling on IDF v5.5.1? The authoritative Espressif report indicates **no built-in scaled-decode mode** on the silicon — scaling has to happen post-decode via the PPA. Confirm whether the IDF API exposes any helper, and budget PSRAM for the full-resolution intermediate accordingly. Affects feasibility of recommendation (2).
-* Is there an existing software JPEG decoder already pulled in by another component (e.g., LVGL), or would we be adding a new dependency? Influences code-size cost of recommendation (1).
-* Does the IDF JPEG component expose a way to query supported features pre-decode, so we don't have to maintain our own marker-sniffing logic? `jpeg_decoder_get_info` already returns dimensions, so the `(W·H) % 8` and the SOF marker can be checked cheaply in user code; the open question is whether IDF will expose a pre-validation predicate as a documented API in a later version.
-* Does IDF v5.5.2 (or any pre-v6 patch release) drop the `(W·H) % 8` check from `jpeg_parse_marker.c:106`? Determines whether recommendation (6) is the cheap path. Quick to verify by grep against a candidate IDF install.
-* Should pre-validation happen at SD-card index time (paying it once per file) or at swap time (paying it on every play)? Trade-off between index latency and per-swap latency.
+* ~~Does the ESP32-P4 HW JPEG peripheral support decode-time downscaling on IDF v5.5.1?~~ **Superseded.** Moot now that scaled IDCT is handled inside libjpeg-turbo on the SW path. The PPA-based scaling concern from option (2) doesn't apply to our shipped architecture.
+* ~~Is there an existing software JPEG decoder already pulled in by another component (e.g., LVGL)?~~ **Resolved: no.** LVGL v9.4 is in the build but its image-decoder modules aren't enabled. Adding `espressif/libjpeg-turbo` was a new dependency; net firmware size ≈ +150 KB (within OTA partition headroom — final p3a.bin is 2.28 MB against an 8 MB slot, 72% free).
+* ~~Does the IDF JPEG component expose a way to query supported features pre-decode?~~ **Moot.** The catch-all dispatcher doesn't pre-validate; it lets HW fail and falls through. No marker-sniffing logic to maintain.
+* ~~Does IDF v5.5.2 (or any pre-v6 patch release) drop the `(W·H) % 8` check from `jpeg_parse_marker.c:106`?~~ **Deferred.** With the SW fallback in place, an IDF bump is a future cleanup that would shift Issue C files from SW route back to HW route (faster, smaller PSRAM working set), but is no longer load-bearing.
+* ~~Should pre-validation happen at SD-card index time or at swap time?~~ **Moot.** No pre-validation; HW failure is the trigger.
+
+### Net new follow-ups (low priority)
+
+* **PNG / WebP `rgb_buffer`-free-after-copy parity.** The static-image PSRAM optimisation in `77f37071` is JPEG-specific (the JPEG decoder frees its internal `rgb_buffer` after the first `decode_next_rgb` call). The same logic applies to PNG and to non-animated WebP — they too produce a single frame and could free their intermediate buffer once the loader has copied. Estimated saving: ~4 MiB peak per static PNG/WebP asset, same calculation as for JPEG. Not pressing because the PNG/WebP corpus tends to have smaller dimensions and the silent-retry rate on those formats was never observed to fire.
+* **IDF v5.5.1 driver `61440`-vs-actual mismatch on non-16-aligned sources** (Issue D residual). Worth filing upstream once an Espressif IDF channel is identified, or revisited if/when IDF is bumped.
+* **`idf::libjpeg-turbo` alias shim** in the project root `CMakeLists.txt` (`6301bed4`) can be removed once IDF v5.5.x normalises managed-component aliases to bare names, or once upstream libjpeg-turbo self-references via `${COMPONENT_LIB}` instead of the bare-name alias.
+* **`esp_hosted` pin** at `~2.9.3` (`9509fd41`) can be loosened once sdkconfig is updated to give `esp_hosted` 2.10+'s larger SDIO RX mempool the internal-RAM headroom it wants.
 
 ---
 
@@ -214,9 +279,11 @@ These are options to weigh; no path has been chosen.
 
 The epic can be considered closed when:
 
-* No JPEG file copied to `/sdcard/p3a/animations/` causes an on-screen "Failed to load artwork" overlay during normal auto-swap rotation, *or* the file is explicitly flagged as unsupported with a clear, non-error UI treatment.
-* The full 90-file `jpeg-investigation/animations/` test corpus decodes (or is gracefully skipped) end-to-end without manual intervention.
-* The silent-retry burst (`fa98ba7e`) is no longer the primary mechanism hiding JPEG failures — it remains as a safety net for genuinely broken files only.
-* `jpeg-investigation/inspect_jpegs.py` continues to be a useful diagnostic and is referenced from the on-device docs.
+* ✅ No JPEG file copied to `/sdcard/p3a/animations/` causes an on-screen "Failed to load artwork" overlay during normal auto-swap rotation, *or* the file is explicitly flagged as unsupported with a clear, non-error UI treatment. **Met.** Every file in the curated corpus decodes via either HW or SW route. No overlays observed in extensive on-device testing.
+* ✅ The full 90-file `jpeg-investigation/animations/` test corpus decodes (or is gracefully skipped) end-to-end without manual intervention. **Met.** Empirically verified across the full corpus.
+* ✅ The silent-retry burst (`fa98ba7e`) is no longer the primary mechanism hiding JPEG failures — it remains as a safety net for genuinely broken files only. **Met after `77f37071`.** Pre-fix the silent-retry was firing at ~5–6% on stress-corpus rotations; post-fix it fired zero times in the same workload, confirming it's now a safety net rather than load-bearing.
+* ✅ `jpeg-investigation/inspect_jpegs.py` continues to be a useful diagnostic. **Met.** Extended in `ec5661b3` to additionally estimate libjpeg-turbo's DCT coefficient buffer and surface the A∩B intersection — that estimate confirmed empty A∩B in the corpus before implementation began.
+
+**Status: epic closed 2026-05-10.**
 
 ---

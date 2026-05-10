@@ -138,6 +138,20 @@ static esp_err_t decode_via_sw(jpeg_decoder_data_t *jd, const uint8_t *data, siz
 
 esp_err_t jpeg_decoder_init(animation_decoder_t **decoder, const uint8_t *data, size_t size)
 {
+    // The IDF v5.5.1 esp_driver_jpeg component logs per-step errors at ERROR
+    // severity ("Picture sizes not divisible by 8 are not supported",
+    // "deal sof marker failed", etc.) every time the HW decoder rejects a
+    // file. Our dispatcher tries HW first and silently falls through to the
+    // SW path on any error, so those messages are pure noise during normal
+    // operation. Silence the tag once on first call. To debug HW decode
+    // failures specifically, raise this back at runtime via
+    // esp_log_level_set("jpeg.decoder", ESP_LOG_VERBOSE).
+    static bool s_idf_jpeg_tag_silenced = false;
+    if (!s_idf_jpeg_tag_silenced) {
+        esp_log_level_set("jpeg.decoder", ESP_LOG_NONE);
+        s_idf_jpeg_tag_silenced = true;
+    }
+
     if (!decoder || !data || size == 0) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -164,7 +178,13 @@ esp_err_t jpeg_decoder_init(animation_decoder_t **decoder, const uint8_t *data, 
     bool used_sw = false;
     esp_err_t err = decode_via_hw(jpeg_data, data, size);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "HW decode failed (%s); trying SW fallback (%zu-byte file)",
+        // SW fallback is the expected recovery path for any HW rejection
+        // (progressive JPEGs, IDF v5.5.1 (W*H)%8 SOF gate, oversized files,
+        // Issue D residual). Logged at DEBUG so the normal happy-path log
+        // shows only the SW success line plus the final initialization line.
+        // Both-paths-failed emits an ESP_LOGE below, which retains the err
+        // code for diagnosis.
+        ESP_LOGD(TAG, "HW decode failed (%s); trying SW fallback (%zu-byte file)",
                  esp_err_to_name(err), size);
         err = decode_via_sw(jpeg_data, data, size);
         used_sw = true;

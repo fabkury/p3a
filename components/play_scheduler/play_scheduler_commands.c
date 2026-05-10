@@ -129,6 +129,7 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
     if (stat(cache_path, &st) != 0) {
         ch->cache_loaded = false;
         ch->entry_count = 0;
+        ch->available_count = 0;
         ch->active = false;
         ch->weight = 0;
         ch->entry_format = PS_ENTRY_FORMAT_NONE;
@@ -149,6 +150,7 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
         }
         ch->cache_loaded = true;
         ch->entry_count = 0;
+        ch->available_count = 0;
         ch->active = false;
         ch->weight = 0;
         ch->entry_format = PS_ENTRY_FORMAT_SDCARD;
@@ -161,6 +163,7 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
                  ch->display_name, (long)st.st_size, entry_size);
         ch->cache_loaded = false;
         ch->entry_count = 0;
+        ch->available_count = 0;
         ch->active = false;
         ch->weight = 0;
         ch->entry_format = PS_ENTRY_FORMAT_NONE;
@@ -179,6 +182,7 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
         ESP_LOGE(TAG, "Channel '%s': failed to allocate %zu entries", ch->display_name, ch->entry_count);
         ch->cache_loaded = false;
         ch->entry_count = 0;
+        ch->available_count = 0;
         ch->active = false;
         ch->weight = 0;
         ch->entry_format = PS_ENTRY_FORMAT_NONE;
@@ -192,6 +196,7 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
         ch->entries = NULL;
         ch->cache_loaded = false;
         ch->entry_count = 0;
+        ch->available_count = 0;
         ch->active = false;
         ch->weight = 0;
         ch->entry_format = PS_ENTRY_FORMAT_NONE;
@@ -207,12 +212,19 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
         ch->entries = NULL;
         ch->cache_loaded = false;
         ch->entry_count = 0;
+        ch->available_count = 0;
         ch->active = false;
         ch->weight = 0;
         ch->entry_format = PS_ENTRY_FORMAT_NONE;
         return ESP_FAIL;
     }
 
+    // SD-card channels have no LAi suppression — every entry on disk is always
+    // playable, so available_count tracks entry_count one-for-one. Keeping the
+    // field populated here lets play_scheduler_get_total_available() (and any
+    // other consumer that reads ch->available_count when ch->cache is NULL)
+    // see the true count instead of zero.
+    ch->available_count = ch->entry_count;
     ch->cache_loaded = true;
     ch->active = (ch->entry_count > 0);
     ch->entry_format = PS_ENTRY_FORMAT_SDCARD;

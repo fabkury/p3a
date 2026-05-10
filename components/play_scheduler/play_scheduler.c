@@ -219,6 +219,7 @@ static esp_err_t activate_channel(size_t channel_index)
         if (err != ESP_OK) {
             ch->active = false;
             ch->entry_count = 0;
+            ch->available_count = 0;
             return err;
         }
         ch->handle = handle;
@@ -233,6 +234,7 @@ static esp_err_t activate_channel(size_t channel_index)
         ESP_LOGW(TAG, "Failed to load channel '%s': %s", ch->display_name, esp_err_to_name(err));
         ch->active = false;
         ch->entry_count = 0;
+        ch->available_count = 0;
         return err;
     }
 
@@ -249,9 +251,15 @@ static esp_err_t activate_channel(size_t channel_index)
     channel_stats_t stats;
     if (channel_get_stats(handle, &stats) == ESP_OK) {
         ch->entry_count = stats.total_items;
+        // For SD-card channels every entry is always playable; for Makapix
+        // channels ch->cache->available_count is the source of truth and
+        // ch->available_count is unread, so mirroring entry_count here is
+        // correct for SD card and harmless for the others.
+        ch->available_count = stats.total_items;
         ch->active = (stats.total_items > 0);
     } else {
         ch->entry_count = 0;
+        ch->available_count = 0;
         ch->active = false;
     }
 
@@ -450,6 +458,7 @@ esp_err_t play_scheduler_set_channels(
         s_state.channels[i].credit = 0;
         s_state.channels[i].active = false;
         s_state.channels[i].entry_count = 0;
+        s_state.channels[i].available_count = 0;
         s_state.channels[i].handle = NULL;
 
         // Seed per-channel PRNG
@@ -583,9 +592,6 @@ esp_err_t play_scheduler_get_channel_details(
 
         d->entry_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
         d->available_count = ch->cache ? ch->cache->available_count : ch->available_count;
-        if (ch->type == PS_CHANNEL_TYPE_SDCARD) {
-            d->available_count = d->entry_count;
-        }
 
         d->refreshing = ch->refresh_pending || ch->refresh_in_progress || ch->refresh_async_pending;
         d->last_refresh = ch->last_refresh;

@@ -234,12 +234,6 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
     ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries (sdcard format) into memory",
              ch->display_name, ch->entry_count);
 
-    if (ch->entry_count > 0) {
-        sdcard_index_entry_t *entries = (sdcard_index_entry_t *)ch->entries;
-        ESP_LOGI(TAG, "First SD card entry: post_id=%ld, ext=%d, filename='%s'",
-                 (long)entries[0].post_id, entries[0].extension, entries[0].filename);
-    }
-
     return ESP_OK;
 }
 

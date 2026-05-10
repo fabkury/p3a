@@ -55,6 +55,23 @@ set(RELEASE_SUBDIR "release/v${PROJECT_VER}")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 add_compile_options(-Wno-ignored-qualifiers)
+
+# Workaround for IDF v5.5.1 component-name aliasing: managed components are
+# registered under the prefixed alias idf::<namespace>__<name>, so the
+# espressif/libjpeg-turbo component is exposed as idf::espressif__libjpeg-turbo.
+# Its own CMakeLists.txt:10 self-references the bare-name alias idf::libjpeg-turbo
+# inside an ExternalProject_Add genex, which fails to resolve at generate time.
+# Provide the bare-name alias as an empty interface-imported library so the
+# genex resolves to an empty include list - libjpeg-turbo's ExternalProject
+# does not actually need IDF include paths because the toolchain file passed
+# via CMAKE_TOOLCHAIN_FILE supplies the standard C headers it relies on.
+# Remove this shim once the project moves to an IDF release that creates the
+# bare-name alias for managed components, or once upstream libjpeg-turbo
+# self-references via ${COMPONENT_LIB} instead.
+if(NOT TARGET idf::libjpeg-turbo)
+    add_library(idf::libjpeg-turbo INTERFACE IMPORTED)
+endif()
+
 project(p3a)
 
 # =============================================================================

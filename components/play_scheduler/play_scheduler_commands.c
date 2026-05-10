@@ -510,8 +510,8 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
         ps_load_channel_cache(ch);
 
         size_t entries_count = (ch->cache ? ch->cache->entry_count : ch->entry_count);
-        ESP_LOGD(TAG, "Channel[%zu]: id='%s', type=%d, weight=%lu, active=%d, entries=%zu",
-                 i, ch->channel_id, ch->type, (unsigned long)ch->weight,
+        ESP_LOGD(TAG, "Channel[%zu]: '%s', type=%d, weight=%lu, active=%d, entries=%zu",
+                 i, ch->display_name, ch->type, (unsigned long)ch->weight,
                  ch->active, entries_count);
     }
 

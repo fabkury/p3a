@@ -194,7 +194,7 @@ static bool pick_recency_sdcard(ps_state_t *state, size_t channel_index, ps_artw
     }
 
     ESP_LOGD(TAG, "RecencyPick SD[%zu] '%s': pool_size=%zu, start_cursor=%lu",
-             channel_index, ch->channel_id, ch->entry_count, (unsigned long)ch->cursor);
+             channel_index, ch->display_name, ch->entry_count, (unsigned long)ch->cursor);
 
     uint32_t start_cursor = ch->cursor;
     bool wrapped = false;
@@ -288,12 +288,12 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
     // Use LAi for availability masking - no filesystem I/O
     if (!available_post_ids || available_count == 0) {
         ESP_LOGW(TAG, "RecencyPick Makapix[%zu] '%s': FAIL - Ci=%zu but LAi=0 (no downloaded files)",
-                 channel_index, ch->channel_id, entry_count);
+                 channel_index, ch->display_name, entry_count);
         return false;
     }
 
     ESP_LOGD(TAG, "RecencyPick Makapix[%zu] '%s': pool_size(LAi)=%zu, Ci=%zu, start_cursor=%lu",
-             channel_index, ch->channel_id, available_count, entry_count, (unsigned long)ch->cursor);
+             channel_index, ch->display_name, available_count, entry_count, (unsigned long)ch->cursor);
 
     // Cursor operates over available_post_ids (LAi), not full Ci
     uint32_t start_cursor = ch->cursor;
@@ -416,7 +416,7 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
     }
 
     ESP_LOGD(TAG, "RandomPick SD[%zu] '%s': pool_size=%zu",
-             channel_index, ch->channel_id, ch->entry_count);
+             channel_index, ch->display_name, ch->entry_count);
 
     // Sample from all entries for true shuffle
     size_t r_eff = ch->entry_count;
@@ -494,12 +494,12 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
     // Use LAi for O(1) random picks - no filesystem I/O
     if (!available_post_ids || available_count == 0) {
         ESP_LOGW(TAG, "RandomPick Makapix[%zu] '%s': FAIL - Ci=%zu but LAi=0 (no downloaded files)",
-                 channel_index, ch->channel_id, entry_count);
+                 channel_index, ch->display_name, entry_count);
         return false;
     }
 
     ESP_LOGD(TAG, "RandomPick Makapix[%zu] '%s': pool_size(LAi)=%zu, Ci=%zu",
-             channel_index, ch->channel_id, available_count, entry_count);
+             channel_index, ch->display_name, available_count, entry_count);
 
     // Sample from available_post_ids (LAi) directly
     for (int attempt = 0; attempt < 5; attempt++) {
@@ -681,7 +681,7 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
             size_t ci_count = ch->cache->entry_count;
             size_t lai_count = ch->cache->available_count;
             ESP_LOGD(TAG, "  Ch[%zu] '%s': Ci=%zu, LAi=%zu, cursor=%lu, active=%d, weight=%lu",
-                     i, ch->channel_id, ci_count, lai_count,
+                     i, ch->display_name, ci_count, lai_count,
                      (unsigned long)ch->cursor, ch->active, (unsigned long)ch->weight);
             total_ci += ci_count;
             total_lai += lai_count;
@@ -695,7 +695,7 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
         } else {
             // SD card channel or channel without cache
             ESP_LOGI(TAG, "  Ch[%zu] '%s' (SD): entries=%zu, cursor=%lu, active=%d, weight=%lu",
-                     i, ch->channel_id, ch->entry_count,
+                     i, ch->display_name, ch->entry_count,
                      (unsigned long)ch->cursor, ch->active, (unsigned long)ch->weight);
             total_ci += ch->entry_count;
             total_lai += ch->entry_count;  // SD card has no LAi distinction

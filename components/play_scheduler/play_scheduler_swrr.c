@@ -106,14 +106,14 @@ void ps_swrr_calculate_weights(ps_state_t *state)
         ps_channel_state_t *ch = &state->channels[i];
         if ((ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX || ch->entry_format == PS_ENTRY_FORMAT_GIPHY) && ch->cache) {
             ESP_LOGD(TAG, "Channel '%s': weight=%lu, active=%d, entries=%zu, available=%zu",
-                     ch->channel_id,
+                     ch->display_name,
                      (unsigned long)ch->weight,
                      ch->active,
                      ch->cache->entry_count,
                      ch->cache->available_count);
         } else {
             ESP_LOGD(TAG, "Channel '%s': weight=%lu, active=%d, entries=%zu (SD card)",
-                     ch->channel_id,
+                     ch->display_name,
                      (unsigned long)ch->weight,
                      ch->active,
                      ch->entry_count);
@@ -171,7 +171,7 @@ int ps_swrr_select_channel(ps_state_t *state)
 
         // Log SWRR selection with all channel credits
         ESP_LOGI(TAG, "SWRR selected channel[%d] '%s' (credit was %ld, now %ld)",
-                 best, state->channels[best].channel_id,
+                 best, state->channels[best].display_name,
                  (long)(best_credit), (long)state->channels[best].credit);
 
         // Log all channel credits for debugging
@@ -180,7 +180,7 @@ int ps_swrr_select_channel(ps_state_t *state)
             if (ch->active && ch->weight > 0) {
                 size_t eff_count = get_effective_count(ch);
                 ESP_LOGD(TAG, "  SWRR ch[%zu] '%s': credit=%ld, weight=%lu, eff_count=%zu",
-                         i, ch->channel_id, (long)ch->credit,
+                         i, ch->display_name, (long)ch->credit,
                          (unsigned long)ch->weight, eff_count);
             }
         }
@@ -270,7 +270,7 @@ int ps_stochastic_select_channel(ps_state_t *state)
             if (ch->active && ch->weight > 0) {
                 size_t eff_count = get_effective_count(ch);
                 ESP_LOGD(TAG, "  Stoch ch[%zu] '%s': credit=%ld, weight=%lu, prob=%.1f%%, eff_count=%zu",
-                         i, ch->channel_id, (long)ch->credit,
+                         i, ch->display_name, (long)ch->credit,
                          (unsigned long)ch->weight,
                          (double)(probs[i] / sum * 100.0f),
                          eff_count);

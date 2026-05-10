@@ -4,8 +4,17 @@ For each JPEG, prints: filename, width, height, file size, mode, progressive,
 chroma subsampling, EXIF orientation, the (W*H) % 8 value (this is the actual
 IDF v5.5.1 SOF gate from `esp_driver_jpeg/jpeg_parse_marker.c:106` — files
 where (W*H) % 8 != 0 are rejected with `ESP_ERR_INVALID_STATE`), per-dimension
-divisibility by 8/16 for context, and an estimate of the RGB buffer size the
-decoder would allocate (W*H*3 bytes).
+divisibility by 8/16 for context, an estimate of the RGB buffer size the HW
+decoder would allocate (W*H*3 bytes), and an estimate of the DCT coefficient
+buffer size that libjpeg-turbo would need for a progressive decode.
+
+The coefficient-buffer estimate matters because libjpeg-turbo's scaled IDCT
+shrinks the *output* buffer but not the per-component coefficient buffer:
+progressive decode requires the full-resolution DCT coefficients resident
+across all scans. With ~32 MiB PSRAM on the ESP32-P4-WIFI6-Touch-LCD-4B
+(minus what is already pinned for double-buffering and other allocations),
+that is the binding constraint for the largest progressive files, not the
+RGB output buffer.
 
 Usage:
     python inspect_jpegs.py [file_or_dir ...]
@@ -29,6 +38,31 @@ SUBSAMPLING_NAMES = {
     2: "4:2:0",
     -1: "unknown",
 }
+
+# Bytes of DCT coefficient storage per source pixel for libjpeg-turbo's
+# progressive decode path, by chroma subsampling. Each coefficient is int16
+# (JCOEF). Y is full-res; Cb/Cr are sampled at the subsampling ratio. Totals:
+#   4:4:4 -> 3 components * 1.0 * 2 bytes = 6
+#   4:2:2 -> Y full + Cb/Cr at 1/2 width    = 2 * (1 + 0.5 + 0.5) = 4
+#   4:2:0 -> Y full + Cb/Cr at 1/4 area     = 2 * (1 + 0.25 + 0.25) = 3
+COEFF_BYTES_PER_PIXEL = {
+    "4:4:4": 6,
+    "4:2:2": 4,
+    "4:2:0": 3,
+}
+
+
+def coeff_buf_bytes(w, h, subsampling):
+    """Estimate the libjpeg-turbo DCT coefficient buffer for a progressive
+    decode of a JPEG of size w*h with the given chroma subsampling string.
+    Returns None if dimensions are missing. Falls back to 4:2:0 (the dominant
+    web encoding, and the more optimistic estimate) when subsampling is
+    unknown.
+    """
+    if not w or not h:
+        return None
+    bpp = COEFF_BYTES_PER_PIXEL.get(subsampling or "", COEFF_BYTES_PER_PIXEL["4:2:0"])
+    return w * h * bpp
 
 
 def parse_sof_via_raw(path: Path) -> tuple[int, int, str] | None:
@@ -130,6 +164,9 @@ def fmt(info: dict) -> str:
     rgb_bytes = (w * h * 3) if (w and h) else None
     rgb_str = f"{rgb_bytes:>10d}" if rgb_bytes is not None else "         -"
 
+    coeff_bytes = coeff_buf_bytes(w, h, info["subsampling"])
+    coeff_str = f"{coeff_bytes:>10d}" if coeff_bytes is not None else "         -"
+
     wh_mod8 = "          -"
     div8 = "         -"
     div16 = "          -"
@@ -150,6 +187,7 @@ def fmt(info: dict) -> str:
         f"{str(w or '-'):>5}x{str(h or '-'):<5} "
         f"size={info['size']:>9d} "
         f"rgb={rgb_str} "
+        f"coeff={coeff_str} "
         f"sof={sof:<5} "
         f"prog={prog:<3} "
         f"ss={ss:<8} "
@@ -213,6 +251,42 @@ def main(argv: list[str]) -> int:
     print(f"  Width  not divisible by 16 (info): {len(not_div16_w)}")
     print(f"  Height not divisible by 8  (info): {len(not_div8_h)}")
     print(f"  Height not divisible by 16 (info): {len(not_div16_h)}")
+
+    # Critical intersection for the SW-fallback design: any file that is BOTH
+    # progressive (Issue B) AND oversized (Issue A) cannot be decoded by the
+    # HW path (no progressive support) and also stresses libjpeg-turbo's full-
+    # resolution coefficient buffer because progressive decode cannot leverage
+    # scaled IDCT to shrink it. Such files would need a graceful-skip path.
+    prog_and_huge = [r for r in progressive
+                     if (r["pil_w"] or 0) * (r["pil_h"] or 0) * 3 > 5_000_000]
+    print(f"\n  Progressive AND >5MB RGB (A & B) : {len(prog_and_huge)}  "
+          f"{[r['name'] for r in prog_and_huge]}")
+
+    # libjpeg-turbo coefficient-buffer headroom check. The board has ~32 MiB
+    # PSRAM minus what is already pinned for native_frame_b1/b2 and other
+    # allocations; treat 16 MiB as a comfort threshold and 24 MiB as a hard
+    # warning band. These numbers are estimates, not measurements.
+    big_coeff_16 = [r for r in progressive
+                    if (coeff_buf_bytes(r["pil_w"], r["pil_h"], r["subsampling"]) or 0) > 16 * 1024 * 1024]
+    big_coeff_24 = [r for r in progressive
+                    if (coeff_buf_bytes(r["pil_w"], r["pil_h"], r["subsampling"]) or 0) > 24 * 1024 * 1024]
+    print(f"  Progressive with >16 MiB coeff   : {len(big_coeff_16)}  "
+          f"{[r['name'] for r in big_coeff_16]}")
+    print(f"  Progressive with >24 MiB coeff   : {len(big_coeff_24)}  "
+          f"{[r['name'] for r in big_coeff_24]}")
+
+    if progressive:
+        ranked = sorted(
+            progressive,
+            key=lambda r: coeff_buf_bytes(r["pil_w"], r["pil_h"], r["subsampling"]) or 0,
+            reverse=True,
+        )
+        top_n = min(5, len(ranked))
+        print(f"\n  Largest progressive coeff buffers (libjpeg-turbo DCT estimate):")
+        for r in ranked[:top_n]:
+            cb = coeff_buf_bytes(r["pil_w"], r["pil_h"], r["subsampling"]) or 0
+            print(f"    {cb / (1024 * 1024):>6.2f} MiB  "
+                  f"{r['pil_w']}x{r['pil_h']}  ss={r['subsampling']}  {r['name']}")
 
     return 0
 

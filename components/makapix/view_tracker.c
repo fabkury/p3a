@@ -14,6 +14,10 @@
 
 // Forward declaration to avoid circular dependency (makapix <-> play_scheduler)
 esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats);
+
+// Weak extern: app_lcd lives in main/, not a component we can REQUIRE here.
+// Returns true while any info screen / UI overlay is shown instead of artwork.
+extern bool app_lcd_is_ui_mode(void) __attribute__((weak));
 #include "makapix.h"
 #include "sntp_sync.h"
 #include "event_bus.h"
@@ -80,6 +84,13 @@ typedef struct {
 } view_tracker_state_t;
 
 static view_tracker_state_t s_state = {0};
+
+// Pause ref-count. Multiple independent sources (playback pause, info-screen
+// overlay, future contributors) can request a pause; the dwell timer is
+// stopped on the 0->1 transition and restarted on the 1->0 transition. Updated
+// atomically because pause/resume can be invoked from different tasks
+// (playback service vs the view-tracker task itself).
+static volatile int32_t s_pause_count = 0;
 
 // Cached player_key presence — avoids NVS lookup on every swap
 static bool s_has_player_key = false;
@@ -231,28 +242,45 @@ void view_tracker_stop(void)
 
 void view_tracker_pause(void)
 {
-    if (!s_state.initialized || !s_state.tracking_active) {
+    if (!s_state.initialized) {
         return;
     }
-    
-    if (s_state.timer) {
+
+    int32_t new_count = __atomic_add_fetch(&s_pause_count, 1, __ATOMIC_SEQ_CST);
+
+    // Stop the timer only on the 0->1 edge, and only if there's something to
+    // track. Calls made while no artwork is active still count toward the
+    // ref-count so the matching resume() balances correctly.
+    if (new_count == 1 && s_state.tracking_active && s_state.timer) {
         xTimerStop(s_state.timer, 0);
+        ESP_LOGD(TAG, "View tracking paused at %" PRIu32 "s (refcount=1)",
+                 s_state.elapsed_seconds);
     }
-    
-    ESP_LOGD(TAG, "View tracking paused at %" PRIu32 "s", s_state.elapsed_seconds);
 }
 
 void view_tracker_resume(void)
 {
-    if (!s_state.initialized || !s_state.tracking_active) {
+    if (!s_state.initialized) {
         return;
     }
-    
-    if (s_state.timer) {
-        xTimerStart(s_state.timer, 0);
+
+    int32_t prev = __atomic_fetch_sub(&s_pause_count, 1, __ATOMIC_SEQ_CST);
+
+    // Underflow guard: more resumes than pauses indicates a caller bug. Undo
+    // the decrement and warn so the imbalance is visible in logs.
+    if (prev <= 0) {
+        __atomic_add_fetch(&s_pause_count, 1, __ATOMIC_SEQ_CST);
+        ESP_LOGW(TAG, "view_tracker_resume() called without matching pause (count was %" PRId32 ")",
+                 prev);
+        return;
     }
-    
-    ESP_LOGD(TAG, "View tracking resumed at %" PRIu32 "s", s_state.elapsed_seconds);
+
+    // Restart the timer only on the 1->0 edge.
+    if (prev == 1 && s_state.tracking_active && s_state.timer) {
+        xTimerStart(s_state.timer, 0);
+        ESP_LOGD(TAG, "View tracking resumed at %" PRIu32 "s (refcount=0)",
+                 s_state.elapsed_seconds);
+    }
 }
 
 static void timer_callback(TimerHandle_t timer)
@@ -290,7 +318,11 @@ static void timer_callback(TimerHandle_t timer)
 static void view_tracker_task(void *pvParameters)
 {
     (void)pvParameters;
-    
+
+    // Seed with current UI-mode state so we don't fire a spurious pause on the
+    // first iteration if an info screen happens to be up at init time.
+    bool last_ui_mode = (app_lcd_is_ui_mode && app_lcd_is_ui_mode());
+
     while (1) {
         // Check for swap event (poll the atomic flag)
         uint32_t swap_was_pending = __atomic_exchange_n(&s_pending_swap.pending, 0, __ATOMIC_ACQUIRE);
@@ -298,7 +330,20 @@ static void view_tracker_task(void *pvParameters)
             // A swap occurred - process it with our own stack
             process_swap_event();
         }
-        
+
+        // Edge-detect UI mode transitions and pause/resume the dwell timer so
+        // time spent on info screens (USB MSC, provisioning, OTA, ...) does
+        // not count toward view-event triggers.
+        bool now_ui_mode = (app_lcd_is_ui_mode && app_lcd_is_ui_mode());
+        if (now_ui_mode != last_ui_mode) {
+            if (now_ui_mode) {
+                view_tracker_pause();
+            } else {
+                view_tracker_resume();
+            }
+            last_ui_mode = now_ui_mode;
+        }
+
         // Check for view send notification from timer
         uint32_t notification = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(VIEW_TRACKER_POLL_MS));
         if (notification > 0) {
@@ -355,12 +400,21 @@ static void process_swap_event(void)
     s_state.tracking_active = true;
 
     strlcpy(s_state.current_filepath, filepath, sizeof(s_state.current_filepath));
-    
-    // Restart timer
+
+    // Restart timer. If a pause request is currently outstanding (info screen,
+    // playback pause, ...), stop it again immediately — without this, a swap
+    // arriving mid-pause would tick dwell time even though the timer is
+    // supposed to be held.
     xTimerStop(s_state.timer, 0);
     xTimerStart(s_state.timer, 0);
-    
-    ESP_LOGD(TAG, "Started tracking post_id=%" PRId32 ", intent=%s", 
+    int32_t paused = __atomic_load_n(&s_pause_count, __ATOMIC_ACQUIRE);
+    if (paused > 0) {
+        xTimerStop(s_state.timer, 0);
+        ESP_LOGD(TAG, "Swap during pause (refcount=%" PRId32 "); timer kept paused",
+                 paused);
+    }
+
+    ESP_LOGD(TAG, "Started tracking post_id=%" PRId32 ", intent=%s",
              post_id, is_intentional ? "artwork" : "channel");
 }
 
@@ -368,6 +422,14 @@ static void send_view_event(void)
 {
     if (!s_state.tracking_active || s_state.current_post_source != POST_SOURCE_MAKAPIX || s_state.current_post_id == 0) {
         ESP_LOGW(TAG, "Cannot send view: invalid state");
+        return;
+    }
+
+    // Suppress view events while an info screen (USB MSC, provisioning, OTA, ...)
+    // is covering the artwork — the user is not actually viewing it right now.
+    if (app_lcd_is_ui_mode && app_lcd_is_ui_mode()) {
+        ESP_LOGD(TAG, "Suppressing view at %" PRIu32 "s: UI overlay active",
+                 s_state.elapsed_seconds);
         return;
     }
 

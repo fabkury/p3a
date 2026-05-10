@@ -63,18 +63,23 @@ void view_tracker_signal_swap(int32_t post_id, post_source_t post_source, const 
 void view_tracker_stop(void);
 
 /**
- * @brief Pause view tracking
- * 
- * Stops the timer but preserves tracking state (elapsed time, post_id, etc.).
- * Use this when playback is paused. Call view_tracker_resume() to continue tracking.
+ * @brief Pause view tracking (ref-counted)
+ *
+ * Stops the dwell timer but preserves tracking state (elapsed time, post_id,
+ * etc.). Multiple independent sources may pause concurrently — the timer is
+ * stopped on the 0->1 ref-count edge, and only restarted once every paired
+ * resume() has run. Each pause() MUST be matched by exactly one resume() from
+ * the same source. Calls made while no artwork is currently being tracked
+ * still count toward the ref-count, so resume() balances correctly.
  */
 void view_tracker_pause(void);
 
 /**
- * @brief Resume view tracking
- * 
- * Restarts the timer from where it was paused. Tracking state is preserved.
- * Use this when playback is resumed after being paused.
+ * @brief Resume view tracking (ref-counted)
+ *
+ * Decrements the pause ref-count and restarts the dwell timer on the 1->0
+ * edge. Tracking state is preserved across the pause/resume window. Unbalanced
+ * resume() calls are logged and ignored.
  */
 void view_tracker_resume(void);
 

@@ -771,7 +771,47 @@ esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag)
 esp_err_t play_scheduler_refresh_sdcard_cache(void)
 {
     ESP_LOGI(TAG, "Refreshing SD card cache");
-    return ps_build_sdcard_index();
+
+    // Step 1: rebuild the on-disk sdcard.bin index by rescanning /animations.
+    esp_err_t err = ps_build_sdcard_index();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    // Step 2: reload the freshly written index into every active SD-card
+    // channel's in-memory state. Without this, ch->entries / ch->entry_count /
+    // ch->available_count keep their pre-rebuild values and the picker, the
+    // auto-swap availability gate, and the web UI all see a stale count
+    // (e.g. "34/34" after the user copied files up to 124 over USB MSC).
+    //
+    // The scheduler mutex serialises us against play_scheduler_next() and the
+    // background refresh task, both of which read ch->entries under the same
+    // mutex — safe to free() and reallocate the entry buffer here.
+    ps_state_t *s_state = ps_get_state();
+    if (!s_state || !s_state->initialized) {
+        return ESP_OK;
+    }
+
+    xSemaphoreTake(s_state->mutex, portMAX_DELAY);
+    bool reloaded_any = false;
+    for (size_t i = 0; i < s_state->channel_count; i++) {
+        ps_channel_state_t *ch = &s_state->channels[i];
+        if (ch->type != PS_CHANNEL_TYPE_SDCARD) {
+            continue;
+        }
+        esp_err_t load_err = ps_load_channel_cache(ch);
+        if (load_err != ESP_OK && load_err != ESP_ERR_NOT_FOUND) {
+            ESP_LOGW(TAG, "Channel '%s': reload after rebuild failed: %s",
+                     ch->display_name, esp_err_to_name(load_err));
+        }
+        reloaded_any = true;
+    }
+    if (reloaded_any) {
+        ps_swrr_calculate_weights(s_state);
+    }
+    xSemaphoreGive(s_state->mutex);
+
+    return ESP_OK;
 }
 
 // ============================================================================

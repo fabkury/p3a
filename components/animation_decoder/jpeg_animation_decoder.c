@@ -8,6 +8,7 @@
 
 #include "animation_decoder.h"
 #include "animation_decoder_internal.h"
+#include "jpeg_decoder_internal.h"
 #include "static_image_decoder_common.h"
 #include "driver/jpeg_types.h"
 #include "driver/jpeg_decode.h"
@@ -33,13 +34,114 @@ typedef struct {
     jpeg_dec_output_format_t output_format;  // RGB888
 } jpeg_decoder_data_t;
 
+// Decode @p data via the ESP32-P4 HW JPEG peripheral, populating @p jd on
+// success. On error, fully cleans up anything it allocated and returns the
+// error - jd is left in its incoming state. Per-step failure logs are at
+// DEBUG level because ANY HW error is recoverable via the SW fallback;
+// the dispatcher logs a single WARN with the err code if the HW path fails.
+static esp_err_t decode_via_hw(jpeg_decoder_data_t *jd, const uint8_t *data, size_t size)
+{
+    jpeg_decode_engine_cfg_t decode_eng_cfg = {
+        .intr_priority = 0,
+        .timeout_ms = 100,
+    };
+    jpeg_decoder_handle_t engine = NULL;
+    esp_err_t err = jpeg_new_decoder_engine(&decode_eng_cfg, &engine);
+    if (err != ESP_OK) {
+        ESP_LOGD(TAG, "jpeg_new_decoder_engine: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    jpeg_decode_picture_info_t info;
+    err = jpeg_decoder_get_info(data, (uint32_t)size, &info);
+    if (err != ESP_OK) {
+        ESP_LOGD(TAG, "jpeg_decoder_get_info: %s", esp_err_to_name(err));
+        jpeg_del_decoder_engine(engine);
+        return err;
+    }
+
+    if (info.width == 0 || info.height == 0) {
+        ESP_LOGD(TAG, "HW reports invalid dimensions: %ux%u",
+                 (unsigned)info.width, (unsigned)info.height);
+        jpeg_del_decoder_engine(engine);
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    // HW decoder pads output dimensions up to 16-byte MCU boundaries; allocate
+    // for the padded size or jpeg_decoder_process returns ESP_ERR_INVALID_ARG
+    // on inputs that aren't already 16-aligned.
+    const uint32_t aligned_w = (info.width  + 15u) & ~15u;
+    const uint32_t aligned_h = (info.height + 15u) & ~15u;
+
+    size_t rgb_buffer_size = (size_t)aligned_w * aligned_h * 3;
+    jpeg_decode_memory_alloc_cfg_t mem_cfg = {
+        .buffer_direction = JPEG_DEC_ALLOC_OUTPUT_BUFFER,
+    };
+    size_t allocated_size = 0;
+    uint8_t *rgb_buffer = (uint8_t *)jpeg_alloc_decoder_mem(rgb_buffer_size, &mem_cfg, &allocated_size);
+    if (!rgb_buffer) {
+        ESP_LOGD(TAG, "jpeg_alloc_decoder_mem(%zu) failed", rgb_buffer_size);
+        jpeg_del_decoder_engine(engine);
+        return ESP_ERR_NO_MEM;
+    }
+
+    jpeg_decode_cfg_t decode_cfg = {
+        .output_format = JPEG_DECODE_OUT_FORMAT_RGB888,
+        .rgb_order = JPEG_DEC_RGB_ELEMENT_ORDER_RGB,
+    };
+    uint32_t out_size = 0;
+    err = jpeg_decoder_process(engine, &decode_cfg,
+                               (uint8_t *)data, (uint32_t)size,
+                               rgb_buffer, (uint32_t)allocated_size,
+                               &out_size);
+    if (err != ESP_OK) {
+        ESP_LOGD(TAG, "jpeg_decoder_process: %s", esp_err_to_name(err));
+        free(rgb_buffer);
+        jpeg_del_decoder_engine(engine);
+        return err;
+    }
+
+    jd->decoder_engine = engine;
+    jd->rgb_buffer = rgb_buffer;
+    jd->rgb_buffer_size = allocated_size;
+    jd->canvas_width = info.width;
+    jd->canvas_height = info.height;
+    jd->aligned_width = aligned_w;
+    jd->output_format = JPEG_DECODE_OUT_FORMAT_RGB888;
+    return ESP_OK;
+}
+
+// Decode @p data via libjpeg-turbo (SW), populating @p jd on success.
+// SW output is contiguous, so aligned_width == canvas_width and the
+// row-stripping path in jpeg_decoder_decode_next_rgb collapses to a
+// single memcpy. canvas_width/height are the *scaled* dimensions; the
+// loader reads those via animation_decoder_get_info to size buffers
+// and upscale LUTs, so the rest of the pipeline is unaware of scaling.
+static esp_err_t decode_via_sw(jpeg_decoder_data_t *jd, const uint8_t *data, size_t size)
+{
+    uint8_t *rgb_buffer = NULL;
+    uint32_t out_w = 0;
+    uint32_t out_h = 0;
+    esp_err_t err = jpeg_decode_sw_to_rgb888(data, size, &rgb_buffer, &out_w, &out_h);
+    if (err != ESP_OK) {
+        return err;
+    }
+    jd->decoder_engine = NULL;
+    jd->rgb_buffer = rgb_buffer;
+    jd->rgb_buffer_size = (size_t)out_w * out_h * 3u;
+    jd->canvas_width = out_w;
+    jd->canvas_height = out_h;
+    jd->aligned_width = out_w;
+    jd->output_format = JPEG_DECODE_OUT_FORMAT_RGB888;
+    return ESP_OK;
+}
+
 esp_err_t jpeg_decoder_init(animation_decoder_t **decoder, const uint8_t *data, size_t size)
 {
     if (!decoder || !data || size == 0) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    // Verify JPEG signature (starts with FF D8)
     if (size < 2 || data[0] != 0xFF || data[1] != 0xD8) {
         ESP_LOGE(TAG, "Invalid JPEG signature");
         return ESP_ERR_INVALID_ARG;
@@ -55,105 +157,47 @@ esp_err_t jpeg_decoder_init(animation_decoder_t **decoder, const uint8_t *data, 
     jpeg_data->file_size = size;
     jpeg_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
 
-    // Configure decoder engine
-    jpeg_decode_engine_cfg_t decode_eng_cfg = {
-        .intr_priority = 0,
-        .timeout_ms = 100,  // Reasonable timeout for decoding
-    };
-
-    esp_err_t err = jpeg_new_decoder_engine(&decode_eng_cfg, &jpeg_data->decoder_engine);
+    // HW first; on any error fall through to SW. The SW path handles every
+    // file class the HW decoder rejects: progressive JPEGs (SOF2), files
+    // where IDF v5.5.1's (W*H) % 8 SOF gate trips, oversized files whose
+    // RGB output exceeds PSRAM, and corrupt-but-recoverable bitstreams.
+    bool used_sw = false;
+    esp_err_t err = decode_via_hw(jpeg_data, data, size);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to create JPEG decoder engine: %s", esp_err_to_name(err));
-        free(jpeg_data);
-        return err;
+        ESP_LOGW(TAG, "HW decode failed (%s); trying SW fallback (%zu-byte file)",
+                 esp_err_to_name(err), size);
+        err = decode_via_sw(jpeg_data, data, size);
+        used_sw = true;
     }
-
-    // Get JPEG image info first (this function doesn't need decoder engine)
-    jpeg_decode_picture_info_t info;
-    err = jpeg_decoder_get_info(data, (uint32_t)size, &info);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to get JPEG info: %s", esp_err_to_name(err));
-        jpeg_del_decoder_engine(jpeg_data->decoder_engine);
-        free(jpeg_data);
-        return err;
-    }
-
-    if (info.width == 0 || info.height == 0) {
-        ESP_LOGE(TAG, "Invalid JPEG dimensions: %u x %u", (unsigned)info.width, (unsigned)info.height);
-        jpeg_del_decoder_engine(jpeg_data->decoder_engine);
-        free(jpeg_data);
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    jpeg_data->canvas_width = info.width;
-    jpeg_data->canvas_height = info.height;
-
-    // Hardware JPEG decoder pads output dimensions up to 16-byte MCU boundaries.
-    // Allocate for the padded size, otherwise jpeg_decoder_process returns
-    // ESP_ERR_INVALID_ARG when either dimension isn't already 16-aligned.
-    uint32_t aligned_w = (info.width  + 15u) & ~15u;
-    uint32_t aligned_h = (info.height + 15u) & ~15u;
-    jpeg_data->aligned_width = aligned_w;
-
-    // Always decode to RGB888 for p3a's internal pipeline.
-    jpeg_data->output_format = JPEG_DECODE_OUT_FORMAT_RGB888;
-    jpeg_data->rgb_buffer_size = (size_t)aligned_w * aligned_h * 3;  // RGB888 = 3 bytes per pixel
-
-    // Allocate RGB buffer for hardware decoder output
-    jpeg_decode_memory_alloc_cfg_t mem_cfg = {
-        .buffer_direction = JPEG_DEC_ALLOC_OUTPUT_BUFFER,
-    };
-    size_t allocated_size = 0;
-    jpeg_data->rgb_buffer = (uint8_t *)jpeg_alloc_decoder_mem(jpeg_data->rgb_buffer_size, &mem_cfg, &allocated_size);
-    if (!jpeg_data->rgb_buffer) {
-        ESP_LOGE(TAG, "Failed to allocate RGB buffer (%zu bytes)", jpeg_data->rgb_buffer_size);
-        jpeg_del_decoder_engine(jpeg_data->decoder_engine);
-        free(jpeg_data);
-        return ESP_ERR_NO_MEM;
-    }
-    jpeg_data->rgb_buffer_size = allocated_size;  // Use actual allocated size
-
-    // Configure decode parameters
-    jpeg_decode_cfg_t decode_cfg = {
-        .output_format = jpeg_data->output_format,
-        .rgb_order = JPEG_DEC_RGB_ELEMENT_ORDER_RGB,
-    };
-
-    // Decode JPEG image
-    uint32_t out_size = 0;
-    err = jpeg_decoder_process(jpeg_data->decoder_engine, &decode_cfg, 
-                               (uint8_t *)data, (uint32_t)size,
-                               jpeg_data->rgb_buffer, (uint32_t)jpeg_data->rgb_buffer_size,
-                               &out_size);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to decode JPEG: %s", esp_err_to_name(err));
-        free(jpeg_data->rgb_buffer);
-        jpeg_del_decoder_engine(jpeg_data->decoder_engine);
+        ESP_LOGE(TAG, "JPEG decode failed on both HW and SW paths: %s", esp_err_to_name(err));
         free(jpeg_data);
         return err;
     }
 
     jpeg_data->initialized = true;
 
-    // Create decoder structure
     animation_decoder_t *dec = (animation_decoder_t *)calloc(1, sizeof(animation_decoder_t));
     if (!dec) {
         ESP_LOGE(TAG, "Failed to allocate decoder");
-        free(jpeg_data->rgb_buffer);
-        jpeg_del_decoder_engine(jpeg_data->decoder_engine);
+        if (jpeg_data->rgb_buffer) {
+            free(jpeg_data->rgb_buffer);
+        }
+        if (jpeg_data->decoder_engine) {
+            jpeg_del_decoder_engine(jpeg_data->decoder_engine);
+        }
         free(jpeg_data);
         return ESP_ERR_NO_MEM;
     }
 
     dec->type = ANIMATION_DECODER_TYPE_JPEG;
     dec->impl.jpeg.jpeg_decoder = jpeg_data;
-
     *decoder = dec;
 
-    ESP_LOGI(TAG, "JPEG decoder initialized: %ux%u (hardware accelerated)",
+    ESP_LOGI(TAG, "JPEG decoder initialized: %ux%u (route=%s)",
              (unsigned)jpeg_data->canvas_width,
-             (unsigned)jpeg_data->canvas_height);
-
+             (unsigned)jpeg_data->canvas_height,
+             used_sw ? "SW" : "HW");
     return ESP_OK;
 }
 

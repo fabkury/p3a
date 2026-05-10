@@ -1,8 +1,11 @@
 """Inspect JPEG files to identify why each fails on the ESP32 HW JPEG decoder.
 
 For each JPEG, prints: filename, width, height, file size, mode, progressive,
-chroma subsampling, EXIF orientation, divisibility by 8/16, and an estimate
-of the RGB buffer size the decoder would allocate (W*H*3 bytes).
+chroma subsampling, EXIF orientation, the (W*H) % 8 value (this is the actual
+IDF v5.5.1 SOF gate from `esp_driver_jpeg/jpeg_parse_marker.c:106` — files
+where (W*H) % 8 != 0 are rejected with `ESP_ERR_INVALID_STATE`), per-dimension
+divisibility by 8/16 for context, and an estimate of the RGB buffer size the
+decoder would allocate (W*H*3 bytes).
 
 Usage:
     python inspect_jpegs.py [file_or_dir ...]
@@ -127,9 +130,11 @@ def fmt(info: dict) -> str:
     rgb_bytes = (w * h * 3) if (w and h) else None
     rgb_str = f"{rgb_bytes:>10d}" if rgb_bytes is not None else "         -"
 
+    wh_mod8 = "          -"
     div8 = "         -"
     div16 = "          -"
     if w and h:
+        wh_mod8 = f"(w*h)%8={(w*h)%8}"
         div8 = f"w%8={w%8} h%8={h%8}"
         div16 = f"w%16={w%16} h%16={h%16}"
 
@@ -150,7 +155,7 @@ def fmt(info: dict) -> str:
         f"ss={ss:<8} "
         f"mode={mode:<5} "
         f"orient={exif} "
-        f"{div8} {div16}"
+        f"{wh_mod8} {div8} {div16}"
         + (f"  ERR={err}" if err else "")
     )
 
@@ -181,23 +186,33 @@ def main(argv: list[str]) -> int:
     for r in rows:
         print(fmt(r))
 
-    # Summary: any without SOF markers, any progressive, any wide/tall
+    # Summary
+    # The (W*H)%8 row is the actual IDF v5.5.1 SOF gate (Issue C in the epic);
+    # files in that set are rejected by the HW decoder. The per-dimension
+    # divisibility rows are kept as informational context — height misalignment
+    # alone is tolerated by the silicon, and width misalignment alone is
+    # tolerated by the wrapper post-`732475d4` (which rounds the output buffer
+    # up to 16 — Issue D, fixed).
     print("\n# Summary")
     no_sof = [r for r in rows if r["sof"] is None and not r["error"]]
     progressive = [r for r in rows if r["progressive"]]
     huge = [r for r in rows if (r["pil_w"] or 0) * (r["pil_h"] or 0) * 3 > 5_000_000]
+    bad_wh_mod8 = [r for r in rows
+                   if r["pil_w"] and r["pil_h"]
+                   and (r["pil_w"] * r["pil_h"]) % 8 != 0]
     not_div8_w = [r for r in rows if (r["pil_w"] or 0) % 8 != 0]
     not_div16_w = [r for r in rows if (r["pil_w"] or 0) % 16 != 0]
     not_div8_h = [r for r in rows if (r["pil_h"] or 0) % 8 != 0]
     not_div16_h = [r for r in rows if (r["pil_h"] or 0) % 16 != 0]
 
-    print(f"  No SOF marker found            : {len(no_sof)}  {[r['name'] for r in no_sof]}")
-    print(f"  Progressive JPEGs              : {len(progressive)}  {[r['name'] for r in progressive]}")
-    print(f"  >5 MB RGB buffer (W*H*3 > 5MB) : {len(huge)}  {[r['name'] for r in huge]}")
-    print(f"  Width  not divisible by 8      : {len(not_div8_w)}")
-    print(f"  Width  not divisible by 16     : {len(not_div16_w)}")
-    print(f"  Height not divisible by 8      : {len(not_div8_h)}")
-    print(f"  Height not divisible by 16     : {len(not_div16_h)}")
+    print(f"  No SOF marker found              : {len(no_sof)}  {[r['name'] for r in no_sof]}")
+    print(f"  Progressive JPEGs (Issue B)      : {len(progressive)}  {[r['name'] for r in progressive]}")
+    print(f"  >5 MB RGB buffer (Issue A est.)  : {len(huge)}  {[r['name'] for r in huge]}")
+    print(f"  (W*H) % 8 != 0 (Issue C, v5.5.1) : {len(bad_wh_mod8)}  {[r['name'] for r in bad_wh_mod8]}")
+    print(f"  Width  not divisible by 8  (info): {len(not_div8_w)}")
+    print(f"  Width  not divisible by 16 (info): {len(not_div16_w)}")
+    print(f"  Height not divisible by 8  (info): {len(not_div8_h)}")
+    print(f"  Height not divisible by 16 (info): {len(not_div16_h)}")
 
     return 0
 

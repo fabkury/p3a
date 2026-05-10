@@ -22,6 +22,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "sdkconfig.h"
 #include "tinyusb.h"
 #include "tusb.h"
@@ -52,13 +53,21 @@ static bool s_usb_active = false;
 
 // USB enumeration can briefly bounce on physical cable removal: the bus reaches
 // CONFIGURED for a few hundred ms before the disconnect is finalized. Suppress
-// any tud_mount_cb that fires within this window after an unmount/suspend so
+// any tud_mount_cb that fires within this window after a confirmed unmount so
 // playback isn't paused twice and the LCD doesn't flash to UI mode and back.
+// Bus suspend is NOT treated as a disconnect — without VBUS detection it can
+// fire for benign reasons (host idle, enumeration thrash on fresh plug-in)
+// and would otherwise poison the next legitimate mount.
 #define USB_MSC_REMOUNT_DEBOUNCE_US (1500 * 1000)
+#define USB_MSC_MOUNT_RECOVERY_SLACK_US (200 * 1000)
 static int64_t s_last_unmount_us = 0;
+static esp_timer_handle_t s_mount_recovery_timer = NULL;
 
 static esp_err_t update_card_capacity(void);
 static int32_t msc_handle_transfer(bool write, uint32_t lba, uint32_t offset, uint8_t *buffer, uint32_t bufsize);
+static void perform_mount_activation(void);
+static void mount_recovery_timer_cb(void *arg);
+static void mount_recovery_worker(void *arg);
 
 esp_err_t app_usb_init(void)
 {
@@ -81,6 +90,16 @@ esp_err_t app_usb_init(void)
         return ESP_ERR_NO_MEM;
     }
 #endif
+
+    const esp_timer_create_args_t recovery_timer_args = {
+        .callback = mount_recovery_timer_cb,
+        .name = "usb_msc_recover",
+    };
+    esp_err_t timer_err = esp_timer_create(&recovery_timer_args, &s_mount_recovery_timer);
+    if (timer_err != ESP_OK) {
+        ESP_LOGW(TAG, "Mount recovery timer unavailable: %s", esp_err_to_name(timer_err));
+        s_mount_recovery_timer = NULL;
+    }
 
     size_t string_count = 0;
     const char **string_table = usb_desc_get_string_table(&string_count);
@@ -259,17 +278,8 @@ static int32_t msc_handle_transfer(bool write, uint32_t lba, uint32_t offset, ui
     return (err == ESP_OK) ? (int32_t)bufsize : -1;
 }
 
-void tud_mount_cb(void)
+static void perform_mount_activation(void)
 {
-    int64_t now_us = esp_timer_get_time();
-    if (s_last_unmount_us != 0 &&
-        (now_us - s_last_unmount_us) < USB_MSC_REMOUNT_DEBOUNCE_US) {
-        ESP_LOGI(TAG, "Ignoring USB mount: bounce %lld ms after unmount",
-                 (long long)((now_us - s_last_unmount_us) / 1000));
-        return;
-    }
-    s_last_unmount_us = 0;
-
     ESP_LOGI(TAG, "USB host mounted");
     esp_err_t err = animation_player_begin_sd_export();
     if (err != ESP_OK) {
@@ -290,8 +300,63 @@ void tud_mount_cb(void)
     ugfx_ui_show_usb_msc();
 }
 
+static void mount_recovery_worker(void *arg)
+{
+    (void)arg;
+    if (tud_ready() && tud_mounted() && !s_usb_active) {
+        ESP_LOGW(TAG, "Mount recovery: re-activating MSC after debounced mount");
+        s_last_unmount_us = 0;
+        perform_mount_activation();
+    }
+    vTaskDelete(NULL);
+}
+
+// Runs on the esp_timer task; must not block. The activation itself can wait
+// on the loader semaphore, so it is deferred to a one-shot worker task.
+static void mount_recovery_timer_cb(void *arg)
+{
+    (void)arg;
+    if (s_usb_active) {
+        return;
+    }
+    if (!tud_ready() || !tud_mounted()) {
+        ESP_LOGD(TAG, "Mount recovery: device no longer mounted");
+        return;
+    }
+    BaseType_t r = xTaskCreate(mount_recovery_worker, "usb_msc_recv",
+                               4096, NULL, tskIDLE_PRIORITY + 5, NULL);
+    if (r != pdPASS) {
+        ESP_LOGE(TAG, "Mount recovery: failed to spawn worker (no memory)");
+    }
+}
+
+void tud_mount_cb(void)
+{
+    int64_t now_us = esp_timer_get_time();
+    if (s_last_unmount_us != 0 &&
+        (now_us - s_last_unmount_us) < USB_MSC_REMOUNT_DEBOUNCE_US) {
+        ESP_LOGI(TAG, "Ignoring USB mount: bounce %lld ms after unmount",
+                 (long long)((now_us - s_last_unmount_us) / 1000));
+        // If the host actually keeps us configured (legitimate fresh mount that
+        // happened to land in the debounce window), recover after the window
+        // closes. Cheap insurance against a stuck "host thinks configured /
+        // device thinks unmounted" state.
+        if (s_mount_recovery_timer) {
+            esp_timer_stop(s_mount_recovery_timer);
+            esp_timer_start_once(s_mount_recovery_timer,
+                                 USB_MSC_REMOUNT_DEBOUNCE_US + USB_MSC_MOUNT_RECOVERY_SLACK_US);
+        }
+        return;
+    }
+    s_last_unmount_us = 0;
+    perform_mount_activation();
+}
+
 void tud_umount_cb(void)
 {
+    if (s_mount_recovery_timer) {
+        esp_timer_stop(s_mount_recovery_timer);
+    }
     s_last_unmount_us = esp_timer_get_time();
     ESP_LOGI(TAG, "USB host disconnected");
     s_usb_active = false;
@@ -306,7 +371,13 @@ void tud_umount_cb(void)
 void tud_suspend_cb(bool remote_wakeup_en)
 {
     (void)remote_wakeup_en;
-    s_last_unmount_us = esp_timer_get_time();
+    ESP_LOGI(TAG, "USB suspended (remote_wakeup_en=%d)", (int)remote_wakeup_en);
+    if (s_mount_recovery_timer) {
+        esp_timer_stop(s_mount_recovery_timer);
+    }
+    // Deliberately do NOT touch s_last_unmount_us here. A bus suspend is not a
+    // disconnect; conflating the two caused legitimate mounts to be debounced
+    // when a transient suspend fires during the plug-in enumeration cycle.
     s_usb_active = false;
     ugfx_ui_hide_usb_msc();
     app_lcd_exit_ui_mode();
@@ -318,7 +389,10 @@ void tud_suspend_cb(bool remote_wakeup_en)
 
 void tud_resume_cb(void)
 {
-    // Nothing to do here; tud_mount_cb will handle when needed.
+    ESP_LOGI(TAG, "USB resumed");
+    // Resume implies the prior suspend was not a disconnect — clear any stale
+    // debounce timestamp so the next mount isn't suppressed.
+    s_last_unmount_us = 0;
 }
 
 // CDC callbacks

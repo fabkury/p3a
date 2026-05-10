@@ -120,7 +120,10 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
         return (int)buf->prefetched_first_frame_delay_ms;
     }
 
-    if (!buf->native_frame_b1 || !buf->native_frame_b2) {
+    // For static images B2 is intentionally not allocated (see loader). The
+    // static fast path below only reads B1, so allow B2 to be NULL there.
+    const bool needs_b2 = (buf->decoder_info.frame_count > 1);
+    if (!buf->native_frame_b1 || (needs_b2 && !buf->native_frame_b2)) {
         ESP_LOGE(TAG, "Native frame buffers not allocated");
         return -1;
     }

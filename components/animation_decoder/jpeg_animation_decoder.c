@@ -252,6 +252,13 @@ esp_err_t jpeg_decoder_decode_next(animation_decoder_t *decoder, uint8_t *rgba_b
     }
     jpeg_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
 
+    // JPEG is always single-frame; the caller now holds the only copy of the
+    // pixels it will ever need. Drop our internal RGB buffer to halve the
+    // per-asset PSRAM footprint - the decoder shell is preserved for
+    // get_info / get_frame_delay queries but holds no pixel data.
+    free(jpeg_data->rgb_buffer);
+    jpeg_data->rgb_buffer = NULL;
+    jpeg_data->rgb_buffer_size = 0;
     return ESP_OK;
 }
 
@@ -284,6 +291,14 @@ esp_err_t jpeg_decoder_decode_next_rgb(animation_decoder_t *decoder, uint8_t *rg
         }
     }
     jpeg_data->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
+
+    // JPEG is always single-frame; the caller now holds the only copy of the
+    // pixels it will ever need. Drop our internal RGB buffer to halve the
+    // per-asset PSRAM footprint - the decoder shell is preserved for
+    // get_info / get_frame_delay queries but holds no pixel data.
+    free(jpeg_data->rgb_buffer);
+    jpeg_data->rgb_buffer = NULL;
+    jpeg_data->rgb_buffer_size = 0;
     return ESP_OK;
 }
 

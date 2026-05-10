@@ -917,17 +917,26 @@ static esp_err_t init_animation_decoder_for_buffer(animation_buffer_t *buf,
         return ESP_ERR_NO_MEM;
     }
 
-    buf->native_frame_b2 = (uint8_t *)heap_caps_malloc(buf->native_frame_size,
-                                                        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!buf->native_frame_b2) {
-        buf->native_frame_b2 = (uint8_t *)malloc(buf->native_frame_size);
-    }
-    if (!buf->native_frame_b2) {
-        ESP_LOGE(TAG, "Failed to allocate native frame buffer B2 (%zu bytes)", buf->native_frame_size);
-        free(buf->native_frame_b1);
-        buf->native_frame_b1 = NULL;
-        buf->decoder = NULL;
-        return ESP_ERR_NO_MEM;
+    // Allocate B2 only for animated formats. The static-image fast path in
+    // animation_player_render.c renders directly from B1 every tick (no decode-
+    // ahead ping-pong), so B2 would just sit unused. Skipping it for
+    // frame_count <= 1 reclaims one full canvas-sized buffer per static asset
+    // (e.g. ~4 MiB for an oversized JPEG decoded at 3/8 to 1351x1013), which
+    // is the difference between fitting two consecutive large statics in PSRAM
+    // and tripping the silent-retry path on swap.
+    if (buf->decoder_info.frame_count > 1) {
+        buf->native_frame_b2 = (uint8_t *)heap_caps_malloc(buf->native_frame_size,
+                                                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!buf->native_frame_b2) {
+            buf->native_frame_b2 = (uint8_t *)malloc(buf->native_frame_size);
+        }
+        if (!buf->native_frame_b2) {
+            ESP_LOGE(TAG, "Failed to allocate native frame buffer B2 (%zu bytes)", buf->native_frame_size);
+            free(buf->native_frame_b1);
+            buf->native_frame_b1 = NULL;
+            buf->decoder = NULL;
+            return ESP_ERR_NO_MEM;
+        }
     }
 
     buf->native_buffer_active = 0;

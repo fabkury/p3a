@@ -694,7 +694,7 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
             }
         } else {
             // SD card channel or channel without cache
-            ESP_LOGI(TAG, "  Ch[%zu] '%s' (SD): entries=%zu, cursor=%lu, active=%d, weight=%lu",
+            ESP_LOGD(TAG, "  Ch[%zu] '%s' (SD): entries=%zu, cursor=%lu, active=%d, weight=%lu",
                      i, ch->display_name, ch->entry_count,
                      (unsigned long)ch->cursor, ch->active, (unsigned long)ch->weight);
             total_ci += ch->entry_count;

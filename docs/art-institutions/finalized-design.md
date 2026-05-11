@@ -681,9 +681,12 @@ doors.
 
 ## 14. Implementation milestones
 
-Vertical-slice approach: AIC end-to-end first, then Rijks.
+Vertical-slice approach: AIC end-to-end first, then Rijks. **M1 and M2
+landed.** Field-observed fixes that emerged during implementation are
+captured in §15; the milestone descriptions below are kept as the
+original implementation plan for historical reference.
 
-### M1 — AIC end-to-end
+### M1 — AIC end-to-end — LANDED
 
 Smallest shippable surface. After M1 the device can play AIC channels.
 
@@ -722,7 +725,7 @@ Smallest shippable surface. After M1 the device can play AIC channels.
    Artwork-Type channel; picker rotates, downloads succeed, refresh
    completes.
 
-### M2 — Rijksmuseum end-to-end
+### M2 — Rijksmuseum end-to-end — LANDED
 
 Reuses the M1 scaffolding.
 
@@ -745,3 +748,68 @@ Reuses the M1 scaffolding.
 - Settings copy / help text in `webui/settings.html`.
 - Version bump in root `CMakeLists.txt`.
 - `docs/HOW-TO-USE.md` updated with the new channel type.
+
+## 15. Field-observed fixes
+
+Issues that only surfaced once the firmware was running against the
+real museum APIs and the on-device decode pipeline. Each is captured
+here so a future reader doesn't have to git-archeology the rationale
+out of commit messages.
+
+### 15.1 AIC `/artworks/search` returns 403 on deep pages
+
+Empirically AIC returns HTTP 403 on `?page=N` requests past page ~10
+for facets with very large result sets (e.g. `artwork_type_id=1`
+"Painting"), independent of the documented 10 000-record offset cap.
+Treating a 403 (or 401) that lands *after* at least one page merged
+as a partial success — skip orphan eviction, still save
+`last_refresh` so the dispatcher waits the full `ai_refresh_sec`
+window before retrying, return `ESP_OK` so the dispatcher's UI does
+not render a hard error. A 403/401 on the very first page is still
+fatal. See `museums/artic.c` and the commit that introduced it.
+
+### 15.2 Rijks HMO URLs require manual redirect handling
+
+`https://id.rijksmuseum.nl/{id}` returns HTTP 303 with the actual
+Linked-Art document served from the `Location` header (typically
+`data.rijksmuseum.nl/…`). The ESP-IDF HTTP client only follows
+redirects automatically when you call `esp_http_client_perform()`;
+the `open/fetch_headers/read` pattern used elsewhere in this
+codebase does not, and on IDF v5.5.2 the `disable_auto_redirect`
+flag does not prevent `fetch_headers` from internally consuming the
+`Location` header before user code can read it via
+`esp_http_client_get_header()`. `museums/rijksmuseum.c` works around
+this by attaching an `HTTP_EVENT_ON_HEADER` event handler that
+captures `Location` into a per-request scratch struct — the parser
+dispatches the event synchronously during header parsing, regardless
+of how the client later treats the status code.
+
+### 15.3 ESP-IDF JPEG decoder NULL-deref during cleanup
+
+When `jpeg_new_decoder_engine()` fails partway through (observed
+when DMA2D pool acquisition fails under concurrent TLS + JPEG
+pressure), its `err:` cleanup calls `jpeg_del_decoder_engine()`,
+which calls `jpeg_release_codec_handle(decoder_engine->codec_base)`
+with `codec_base` still NULL. The IDF function checks the global
+`s_jpeg_platform.jpeg_codec` (non-NULL — earlier decodes set it) but
+not the parameter, and dereferences NULL on line 94 of
+`jpeg_common.c`. Worked around in
+`components/animation_decoder/idf_jpeg_release_null_fix.c` with a
+linker `--wrap` shim that returns `ESP_OK` on NULL input. Remove
+when IDF fixes the function upstream.
+
+### 15.4 Channel cache loader rejected institution sentinels
+
+`channel_cache.c`'s per-entry validator treated any `extension > 4`
+as corrupt and discarded the whole cache file on the next load. For
+Rijks channels every entry persists with `extension=0xFF` (or
+`0xFE` for tombstones), so the loader was wiping the cache on every
+reboot. Validator now accepts both reserved sentinels alongside the
+0-4 file-type range. Makapix/Giphy entries never use these values,
+so this is a no-op for those channel types.
+
+### 15.5 Cosmetic: `esp-x509-crt-bundle` info spam
+
+Every TLS handshake emitted an info-level "Certificate validated"
+line that drowned out actually-useful events. Lifted to
+`ESP_LOG_WARN` at `app_main` start (warnings/errors still surface).

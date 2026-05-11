@@ -54,6 +54,7 @@ Build artifacts go to `build/`. Release binaries are copied to `release/v{VERSIO
 | `play_scheduler` | Playback engine that executes playsets (scheduler commands) to select artwork |
 | `channel_manager` | Playlist/channel handling, vault storage (SHA256-sharded `/sdcard/p3a/vault/`) |
 | `giphy` | Giphy API integration: trending GIFs, on-demand download, SD card caching (`/sdcard/p3a/giphy/`) |
+| `art_institution` | Museum (AIC, Rijksmuseum) channels via IIIF: per-museum dispatch (refresh, IIIF URL build, Linked-Art resolution for Rijks), shared rate-limit cooldown, vault at `/sdcard/p3a/museum/{museum_id}/`. See `docs/art-institutions/finalized-design.md`. |
 | `animation_decoder` | WebP/PNG/JPEG decoders with transparency support |
 | `animated_gif_decoder` | GIF decoder (C++ wrapper) |
 | `wifi_manager` | Wi-Fi provisioning, captive portal, mDNS (`p3a.local`) |
@@ -69,6 +70,8 @@ Build artifacts go to `build/`. Release binaries are copied to `release/v{VERSIO
 - **SD Card** `/sdcard` - Artwork storage
   - `/sdcard/p3a/animations/` - Local files
   - `/sdcard/p3a/vault/` - Cached Makapix artwork
+  - `/sdcard/p3a/giphy/` - Cached Giphy artwork
+  - `/sdcard/p3a/museum/{museum_id}/` - Cached art-institution artwork
 - **NVS** (24KB) - Wi-Fi credentials, settings, state
 
 ### Flash Partitions (`partitions.csv`)

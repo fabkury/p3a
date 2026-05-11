@@ -1098,6 +1098,43 @@ void ugfx_ui_hide_ota_progress(void)
     }
 }
 
+// Copy src into dst, substituting UTF-8 codepoints the bundled DejaVu Sans
+// font doesn't render. Today the only known offender is U+00B7 MIDDLE DOT
+// (the "·" the museum browse modal uses in display_names like
+// "AIC · Drawing and Watercolor") — DejaVu Sans normally has it, but the
+// subset baked into the LittleFS image is ASCII-only and the renderer
+// substitutes the "missing glyph" box, which looks like "??" to the user.
+//
+// We could expand the font subset instead, but keeping the LCD path
+// ASCII-only is the cheaper option and matches the convention used by
+// every other channel-type display name (Giphy / Makapix use ":" / "#").
+// Web UI, monitor logs, and the persisted display_name keep "·" — only
+// what's drawn on the screen is rewritten.
+//
+// Replacement: " - " (3 ASCII bytes) for "·" (2 UTF-8 bytes). The output
+// is at most ~50% longer than the input; channel_name is 64 bytes and
+// the design caps display_name at 64 chars, so the buffer can't be
+// blown by a malicious string we'd accept elsewhere.
+static void copy_lcd_safe(char *dst, const char *src, size_t dst_size)
+{
+    if (!dst || dst_size == 0) return;
+    if (!src) { dst[0] = '\0'; return; }
+    size_t di = 0;
+    size_t i = 0;
+    while (src[i] != '\0' && di + 1 < dst_size) {
+        if ((unsigned char)src[i] == 0xC2 && (unsigned char)src[i + 1] == 0xB7) {
+            if (di + 3 + 1 > dst_size) break;  // leave room for trailing '\0'
+            dst[di++] = ' ';
+            dst[di++] = '-';
+            dst[di++] = ' ';
+            i += 2;
+        } else {
+            dst[di++] = src[i++];
+        }
+    }
+    dst[di] = '\0';
+}
+
 esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *message, int progress_percent)
 {
     // Don't let channel messages overwrite the info screen
@@ -1106,19 +1143,11 @@ esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *mes
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (channel_name) {
-        strncpy(s_channel_name, channel_name, sizeof(s_channel_name) - 1);
-        s_channel_name[sizeof(s_channel_name) - 1] = '\0';
-    } else {
-        s_channel_name[0] = '\0';
-    }
-    
-    if (message) {
-        strncpy(s_channel_message, message, sizeof(s_channel_message) - 1);
-        s_channel_message[sizeof(s_channel_message) - 1] = '\0';
-    } else {
-        s_channel_message[0] = '\0';
-    }
+    // copy_lcd_safe replaces font-unsupported codepoints (today: "·") so
+    // the renderer doesn't draw "??" boxes. Applies to both inputs in
+    // case an error message ever picks up a "·" too.
+    copy_lcd_safe(s_channel_name, channel_name, sizeof(s_channel_name));
+    copy_lcd_safe(s_channel_message, message, sizeof(s_channel_message));
     
     s_channel_progress = progress_percent;
     s_ui_mode = UI_MODE_CHANNEL_MESSAGE;

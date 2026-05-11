@@ -445,6 +445,13 @@ void app_main(void)
     // Suppress harmless I2C pull-up warning (board has external pull-ups)
     esp_log_level_set("i2c.master", ESP_LOG_ERROR);
 
+    // ESP-IDF logs an info line per validated TLS chain ("Certificate
+    // validated"). With Giphy refresh, Makapix MQTT, art-institution
+    // refresh/resolve/download all in flight that fires several times a
+    // minute and crowds out the actually-useful messages. Warnings and
+    // errors (chain rejection, missing root, etc.) still come through.
+    esp_log_level_set("esp-x509-crt-bundle", ESP_LOG_WARN);
+
     // Initialize NVS
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {

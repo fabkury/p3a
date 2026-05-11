@@ -524,6 +524,35 @@ about breadth-of-collection.
 - **`iiif_key` value:** the micrio short id once resolved; the HMO id
   while unresolved (also fits in 48 bytes).
 
+### 9.3 Victoria and Albert Museum
+
+- **id:** `vam`
+- **display:** `Victoria and Albert Museum`
+- **API base:** `https://api.vam.ac.uk/v2`
+- **IIIF base:** `https://framemark.vam.ac.uk/collections`
+- **No required headers.**
+- **Axes (filterable, in browse order):**
+  `collection`, `category`, `venue`
+- **Filter param map:** `collection` → `id_collection`,
+  `category` → `id_category`, `venue` → `id_venue`.
+- **Listing endpoint:**
+  `GET /objects/search?page=N&page_size=100&images_exist=1&{filter_param}={term_id}`
+- **IIIF URL:** `https://framemark.vam.ac.uk/collections/{image_id}/full/!720,720/0/default.jpg`
+- **`iiif_key` value:** the search record's `_primaryImageId` field —
+  returned inline by the listing endpoint, so no equivalent of Rijks's
+  resolver walk is needed. Refresh stores entries fully resolved with
+  `extension = 3` and the IIIF id straight from the listing.
+- **`extension`:** always 3 (jpg) — V&A's framemark IIIF serves JPEG only.
+- **Venue facet quirk:** the V&A search API returns `count=0` for venue
+  terms when combined with `images_exist=1` (the API doesn't compute that
+  combination). The browse adapter enumerates venue terms without
+  `images_exist=1`, then re-probes each term with the filter to populate
+  per-term counts (bounded concurrency, same shape as AIC's term-count
+  probe). Actual artwork listings inside a venue facet still apply
+  `images_exist=1` so saved channels never include image-less records.
+- **Rate limit:** none published; treated like Rijks (default 60 s
+  cooldown on a 429 with no `Retry-After` header).
+
 ## 10. Image rendition strategy
 
 The device requests `…/full/!720,720/0/default.jpg`. Universally
@@ -537,7 +566,7 @@ museum IIIF servers reliably serve JPEG, less reliably WebP.
 | Wi-Fi offline | Refresh skipped (existing dispatcher behavior). Browse modal shows a "Connect to Wi-Fi to browse museums" hint. |
 | Museum API returns 5xx | Refresh logs the error, leaves cache unchanged, retries on the next cycle. |
 | Museum API returns 429 | Per-museum cooldown engages (§11.1). Browse UI surfaces "rate-limited, try again in N seconds". |
-| TLS handshake failure | Logged. The `esp_crt_bundle` should cover all Tier-1 museum CDNs (`artic.edu`, `iiif.micr.io`, `data.rijksmuseum.nl`). Verification is a gating step before the first C-side commit (§12.3). |
+| TLS handshake failure | Logged. The `esp_crt_bundle` should cover all Tier-1 museum CDNs (`artic.edu`, `iiif.micr.io`, `data.rijksmuseum.nl`, `vam.ac.uk`). Verification is a gating step before the first C-side commit for each museum (§12.3). |
 | Empty cache after refresh | Channel marked inactive (existing pattern). UI shows "no artworks". |
 | Image download 404 | Entry left out of LAi; another entry is picked at playback time. |
 | Channel spec parses but museum is unknown (newer playset on older firmware) | Channel skipped at execute time, logged WARN. |

@@ -17,9 +17,10 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 7. [USB SD Card Access](#usb-sd-card-access)
 8. [Firmware Updates](#firmware-updates)
 9. [Giphy Integration](#giphy-integration)
-10. [Device Registration](#device-registration)
-11. [Makapix Club Features](#makapix-club-features)
-12. [PICO-8 Monitor](#pico-8-monitor-optional)
+10. [Museum Channels (IIIF)](#museum-channels-iiif)
+11. [Device Registration](#device-registration)
+12. [Makapix Club Features](#makapix-club-features)
+13. [PICO-8 Monitor](#pico-8-monitor-optional)
 
 ---
 
@@ -305,6 +306,44 @@ The Giphy tab at `http://p3a.local/settings#giphy` lets you customize:
 - Downloaded artworks are stored in the `giphy/` subfolder of your configured SD card root (default: `/sdcard/p3a/giphy/`) and managed automatically
 - The device downloads GIFs on demand as they come up in the rotation, so the first few plays may take a moment to load
 - Once cached, playback is instant — just like local files
+
+---
+
+## Museum Channels (IIIF)
+
+p3a can play artwork from major museums that publish their collections through the [IIIF Image API](https://iiif.io/api/image/3.0/). Channels are organized by the museum's own facets (collections, departments, sets, ...) and refreshed on a schedule. Three museums ship today:
+
+| Museum | Facets you can pick |
+|---|---|
+| **Art Institute of Chicago** | Departments, Classifications, Subjects, Themes, Galleries, Artwork types |
+| **Rijksmuseum** | Curated Sets (Rijks's own collection groupings) |
+| **Victoria and Albert Museum** | Collections, Categories, Venues |
+
+No API key, no account, no device registration — the museums expose these collections publicly.
+
+### Adding a museum channel
+
+1. **Open the Playset Editor** at `http://p3a.local/playset-editor`
+2. Open or create a playset and click **Add Channel**
+3. Set **Channel Type** to **Museum**
+4. A browse modal opens. Pick the museum, then the facet/axis (skipped for Rijks, which is axis-less), then the term you want
+5. The modal previews up to 8 thumbnails from that term (Rijks shows title/artist/date textually — its thumbnail URLs would require an extra HTTP walk per artwork that isn't worth doing in the browser)
+6. Click **Add channel** to push the channel into the playset, then save the playset normally
+
+The channel saves under a name like `AIC · Arts of Greece, Rome, and Byzantium` or `V&A · Photographs`. The wire encoding is `{museum_id}:{axis}` for the channel name and the facet term id for the identifier — see [finalized-design.md §4.1](art-institutions/finalized-design.md) for the exact format.
+
+### Refresh and download behavior
+
+- **Refresh interval and cache size** are configured in **Settings → Museum** (`http://p3a.local/settings#museum`). Defaults: refresh every 1 day, keep up to 1024 artworks per channel.
+- **First refresh** fetches the listing from the museum's API and stores it in the channel cache. Image downloads happen lazily as the device rotates through the playset — so the first artworks appear within seconds of the channel becoming active, and the rest fill in over the next minutes.
+- **Cached files** live under `/sdcard/p3a/museum/{museum_id}/...` on the SD card. They're SHA256-sharded by IIIF identifier and shared across all channels of the same museum, so two channels that both reference the same artwork only ever pay for it once.
+- **Rijks artworks** require a "Linked Art walk" (three follow-up HTTP requests per artwork) to discover the actual IIIF identifier. The device does this lazily in the background — one walk per download-task iteration — so a fresh Rijks channel takes ~50 minutes to fully populate but the first few artworks appear within seconds.
+- **Rate limits** are honored per-museum. AIC publishes a 60-req/minute cap; the others don't publish one but a 429 still engages a cooldown. The cooldown is shared between the device's refresh and the browser-side browse modal: if you trigger throttling from the browse modal, the device also waits.
+- **Storage management** is automatic. The age-based eviction in `components/storage_eviction/` reclaims museum cache files alongside the Makapix vault and Giphy cache when SD card free space drops below the configured target. No manual cleanup needed.
+
+### Display name
+
+Channel display names use the format `{museum_short} · {term label}` — e.g. `AIC · Drawing and Watercolor`, `Rijks · foto's`, `V&A · Sculpture`. The label is truncated with an ellipsis at the tail if the full string exceeds 64 characters.
 
 ---
 

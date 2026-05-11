@@ -25,6 +25,7 @@
 #include "p3a_state.h"
 #include "p3a_current_post.h"
 #include "giphy.h"
+#include "art_institution.h"
 #include "config_store.h"
 
 // ---------- Playset Name Validation ----------
@@ -109,6 +110,27 @@ cJSON *build_current_artwork_json(void)
                              (unsigned)sha[0], (unsigned)sha[1], (unsigned)sha[2],
                              artwork.storage_key, asset_type_ext(artwork.type));
                 }
+            }
+            break;
+        }
+
+        case PS_CHANNEL_TYPE_INSTITUTION: {
+            // The browser fetches the IIIF URL directly — same origin-URL
+            // pattern Giphy and Makapix use, so the device doesn't proxy
+            // image bytes. channel_spec_name is "{museum_id}:{axis}";
+            // storage_key holds the iiif_key (stamped at pick time, see
+            // play_scheduler_pick.c). Extension is 3 (jpg) for AIC and
+            // for every museum shipped today.
+            char museum_id[16] = {0};
+            char axis_unused[32] = {0};
+            if (artwork.storage_key[0] != '\0' &&
+                art_institution_parse_spec(artwork.channel_spec_name,
+                                           museum_id, sizeof(museum_id),
+                                           axis_unused, sizeof(axis_unused)) == ESP_OK) {
+                institution_channel_entry_t e = {0};
+                e.extension = 3;
+                strlcpy(e.iiif_key, artwork.storage_key, sizeof(e.iiif_key));
+                art_institution_build_iiif_url(museum_id, &e, 720, url, sizeof(url));
             }
             break;
         }

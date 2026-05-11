@@ -219,8 +219,15 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
                 return ESP_ERR_INVALID_STATE;
             }
 
-            // Validate extension is in valid range (0-4 are valid)
-            if (e->extension > 4) {
+            // Validate extension. 0-4 are normal file-type indices (webp,
+            // gif, png, jpg, ...). 0xFE and 0xFF are reserved sentinels
+            // that art_institution channels use for Rijks Linked-Art
+            // entries (0xFF=unresolved, 0xFE=tombstone, see
+            // docs/art-institutions/finalized-design.md §9.2). The cache
+            // loader is type-agnostic — accept both ranges so persisted
+            // institution caches survive across reboots without being
+            // discarded as corrupt.
+            if (e->extension > 4 && e->extension != 0xFE && e->extension != 0xFF) {
                 ESP_LOGW(TAG, "Corrupt entry[%zu]: invalid extension=%d", i, e->extension);
                 free(cache->entries);
                 cache->entries = NULL;

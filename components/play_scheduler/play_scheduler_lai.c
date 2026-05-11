@@ -394,3 +394,24 @@ bool play_scheduler_is_institution_channel(const char *channel_id)
     }
     return false;
 }
+
+esp_err_t play_scheduler_get_channel_spec_name(const char *channel_id,
+                                               char *out_spec_name, size_t max_len)
+{
+    if (!channel_id || !out_spec_name || max_len == 0) return ESP_ERR_INVALID_ARG;
+    out_spec_name[0] = '\0';
+
+    ps_state_t *s_state = ps_get_state();
+    if (!s_state->initialized) return ESP_ERR_INVALID_STATE;
+
+    // No mutex: spec_name is set once at execute_command time and remains
+    // stable for the channel's lifetime. Reads are atomic at the char-buffer
+    // level under x86/RISC-V's natural alignment for char arrays.
+    for (size_t i = 0; i < s_state->channel_count; i++) {
+        if (strcmp(s_state->channels[i].channel_id, channel_id) == 0) {
+            strlcpy(out_spec_name, s_state->channels[i].spec_name, max_len);
+            return ESP_OK;
+        }
+    }
+    return ESP_ERR_NOT_FOUND;
+}

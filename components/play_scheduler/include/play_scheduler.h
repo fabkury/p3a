@@ -561,6 +561,22 @@ bool play_scheduler_is_giphy_channel(const char *channel_id);
  */
 bool play_scheduler_is_institution_channel(const char *channel_id);
 
+/**
+ * @brief Look up the spec_name for a channel by channel_id
+ *
+ * Used by the download manager and other components that need the
+ * playset's original spec_name ("artic:departments", "trending", "all",
+ * ...) to drive type-specific URL / path construction without taking the
+ * scheduler mutex themselves.
+ *
+ * @param channel_id Channel ID
+ * @param out_spec_name Output buffer (33 bytes is sufficient)
+ * @param max_len Size of output buffer
+ * @return ESP_OK if found, ESP_ERR_NOT_FOUND otherwise
+ */
+esp_err_t play_scheduler_get_channel_spec_name(const char *channel_id,
+                                               char *out_spec_name, size_t max_len);
+
 #ifdef __cplusplus
 }
 #endif

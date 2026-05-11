@@ -26,6 +26,7 @@
 #include "makapix_artwork.h"
 #include "makapix_channel_events.h"
 #include "giphy.h"
+#include "art_institution.h"
 #include "channel_cache.h"
 #include "sd_path.h"
 #include "sdio_bus.h"
@@ -375,12 +376,40 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
 
             // Build filepath and storage key based on channel type
             bool is_giphy = play_scheduler_is_giphy_channel(ch->channel_id);
+            bool is_institution = !is_giphy && play_scheduler_is_institution_channel(ch->channel_id);
+
+            // Institution channels need the playset spec_name to derive
+            // {museum}/{shard}/... vault paths and IIIF URLs.
+            char ai_spec_name[33] = {0};
+            char ai_museum_id[16] = {0};
+            char ai_axis_unused[32] = {0};
+            if (is_institution) {
+                if (play_scheduler_get_channel_spec_name(ch->channel_id,
+                                                        ai_spec_name, sizeof(ai_spec_name)) != ESP_OK) {
+                    continue;  // Channel state vanished mid-scan; try next batch slot.
+                }
+                art_institution_parse_spec(ai_spec_name,
+                                           ai_museum_id, sizeof(ai_museum_id),
+                                           ai_axis_unused, sizeof(ai_axis_unused));
+            }
 
             if (is_giphy) {
                 // Giphy channel: entry is giphy_channel_entry_t (same size as makapix_channel_entry_t)
                 const giphy_channel_entry_t *ge = (const giphy_channel_entry_t *)entry;
                 giphy_build_filepath(ge->giphy_id, ge->extension, s_dl_filepath, sizeof(s_dl_filepath));
                 strlcpy(s_dl_storage_key, ge->giphy_id, sizeof(s_dl_storage_key));
+            } else if (is_institution) {
+                // Institution channel: entry is institution_channel_entry_t.
+                const institution_channel_entry_t *ie = (const institution_channel_entry_t *)entry;
+                // M2 sentinel extensions never have a downloadable file — skip.
+                if (ie->extension == 0xFF || ie->extension == 0xFE) {
+                    ESP_LOGD(TAG, "SKIP post_id=%d: institution sentinel ext=0x%02X",
+                             ie->post_id, ie->extension);
+                    continue;
+                }
+                art_institution_build_vault_path_from_spec(ai_spec_name, ie,
+                                                          s_dl_filepath, sizeof(s_dl_filepath));
+                strlcpy(s_dl_storage_key, ie->iiif_key, sizeof(s_dl_storage_key));
             } else {
                 // Makapix channel: standard vault filepath
                 dl_build_vault_filepath(entry, s_dl_filepath, sizeof(s_dl_filepath));
@@ -404,6 +433,10 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                 // Build Giphy download URL from entry (respects downsized_medium override)
                 giphy_build_download_url_for_entry((const giphy_channel_entry_t *)entry,
                                                   out_request->art_url, sizeof(out_request->art_url));
+            } else if (is_institution) {
+                const institution_channel_entry_t *ie = (const institution_channel_entry_t *)entry;
+                art_institution_build_iiif_url(ai_museum_id, ie, 720,
+                                               out_request->art_url, sizeof(out_request->art_url));
             } else {
                 // Build Makapix artwork URL (using static sha256 buffer)
                 memset(s_dl_sha256, 0, sizeof(s_dl_sha256));
@@ -683,10 +716,26 @@ static void download_task(void *arg)
             } else {
                 err = giphy_download_artwork(s_dl_req.storage_key, ext, s_task_out_path, sizeof(s_task_out_path));
             }
+        } else if (play_scheduler_is_institution_channel(s_dl_req.channel_id)) {
+            // Institution channel: museum_id derived from spec_name; the URL
+            // and target path were pre-built in dl_get_next_download.
+            char ai_spec_name[33] = {0};
+            char ai_museum_id[16] = {0};
+            char ai_axis_unused[32] = {0};
+            if (play_scheduler_get_channel_spec_name(s_dl_req.channel_id,
+                                                    ai_spec_name, sizeof(ai_spec_name)) == ESP_OK) {
+                art_institution_parse_spec(ai_spec_name,
+                                           ai_museum_id, sizeof(ai_museum_id),
+                                           ai_axis_unused, sizeof(ai_axis_unused));
+            }
+            err = art_institution_download_to_path(ai_museum_id, s_dl_req.art_url, s_dl_req.filepath);
+            if (err == ESP_OK) {
+                strlcpy(s_task_out_path, s_dl_req.filepath, sizeof(s_task_out_path));
+            }
         } else {
             err = makapix_artwork_download(s_dl_req.art_url, s_dl_req.storage_key, s_task_out_path, sizeof(s_task_out_path));
         }
-        
+
         set_busy(false, NULL);
 
         if (err == ESP_OK) {

@@ -13,5 +13,5 @@ idf_component_register(
          "channel_cache_evict.c"
          "channel_metadata.c"
     INCLUDE_DIRS "include"
-    REQUIRES esp_common json makapix sdio_bus config_store wifi_manager p3a_core play_scheduler event_bus giphy storage_eviction
+    REQUIRES esp_common json makapix sdio_bus config_store wifi_manager p3a_core play_scheduler event_bus giphy art_institution storage_eviction
 )

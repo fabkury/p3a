@@ -47,14 +47,18 @@ typedef struct {
 
     /**
      * Refresh a single saved channel. Implementation walks the museum's
-     * listing API for (axis, term_id), merges into cache, and applies
-     * intra-channel orphan eviction. Returns ESP_OK on full success,
-     * ESP_ERR_INVALID_RESPONSE on HTTP 429 (caller logs cooldown), other
-     * codes for network / parse failures.
+     * listing API for (axis, term_id), pages through it, and merges into
+     * the channel cache. The adapter re-resolves the cache from the
+     * registry between pages under channel_cache_lifecycle_lock() — same
+     * pattern Giphy uses — so a concurrent playset switch can't free the
+     * cache out from under us mid-refresh. Intra-channel orphan eviction
+     * runs at the end. Returns ESP_OK on full success,
+     * ESP_ERR_INVALID_RESPONSE on HTTP 429 (caller surfaces cooldown UI),
+     * other codes for network / parse failures.
      */
-    esp_err_t (*refresh_channel)(const char *axis,
-                                 const char *term_id,
-                                 struct channel_cache_s *cache);
+    esp_err_t (*refresh_channel)(const char *channel_id,
+                                 const char *axis,
+                                 const char *term_id);
 
     /**
      * Build the IIIF JPEG URL for one entry at the requested longest-side
@@ -168,22 +172,54 @@ esp_err_t art_institution_build_vault_path_from_spec(const char *spec_name,
 int32_t art_institution_compute_post_id(const char *museum_id, const char *iiif_key);
 
 /**
- * @brief Download one IIIF JPEG to its vault path
+ * @brief Build the IIIF image URL for one entry (per-museum dispatch)
  *
- * Called by the download manager once per missing entry. On success the
- * file is written to art_institution_build_vault_path() and the caller
- * is expected to add the entry to LAi.
+ * Public wrapper around the dispatch table's build_iiif_url. The download
+ * manager uses this to display the source URL in download_request_t for
+ * logs / future inspection, even though art_institution_download_entry()
+ * internally re-derives the URL.
  *
- * @param museum_id Stable wire id
- * @param entry     Cache entry (iiif_key, extension, ...)
- * @param out_path  Vault path written on success (caller-owned buffer)
- * @param out_len   Size of out_path
- * @return ESP_OK on success, ESP_ERR_NOT_FOUND for HTTP 404,
- *         ESP_ERR_INVALID_RESPONSE for HTTP 429, other codes for I/O errors.
+ * @param museum_id    Stable wire id ("artic", ...)
+ * @param entry        Cache entry
+ * @param longest_side Pixel cap (M1 hardcodes 720)
+ * @param out          Output URL buffer (suggest >= 256 bytes)
+ * @param len          Size of out
+ * @return ESP_OK on success, ESP_ERR_NOT_FOUND for unknown museum.
  */
-esp_err_t art_institution_download_entry(const char *museum_id,
+esp_err_t art_institution_build_iiif_url(const char *museum_id,
                                          const institution_channel_entry_t *entry,
-                                         char *out_path, size_t out_len);
+                                         int longest_side,
+                                         char *out, size_t len);
+
+/**
+ * @brief Stream an IIIF image URL to a vault path
+ *
+ * Called by the download manager once per missing entry. Uses the same
+ * chunked-retry pattern as Giphy's downloader. Handles parent-directory
+ * creation, atomic temp-file rename, SDIO bus contention, and USB-MSC
+ * export aborts.
+ *
+ * The museum_id parameter is consulted for two things:
+ *   - 429 cooldown engagement (art_institution_set_rate_limited).
+ *   - (Future) per-museum download-time headers — none today.
+ *
+ * The URL and out_path are pre-built by the download manager via
+ * art_institution_build_iiif_url() and
+ * art_institution_build_vault_path_from_spec(); this function does no
+ * URL/path construction itself.
+ *
+ * @param museum_id Stable wire id ("artic", ...)
+ * @param url       Full IIIF image URL (already built)
+ * @param out_path  Target vault path (must be writable; parent dirs may be missing)
+ * @return ESP_OK on success, ESP_ERR_NOT_FOUND for HTTP 404,
+ *         ESP_ERR_INVALID_RESPONSE for HTTP 429,
+ *         ESP_ERR_INVALID_SIZE if the body exceeds P3A_MAX_ARTWORK_SIZE,
+ *         ESP_ERR_INVALID_STATE if SD card was exported to USB mid-stream,
+ *         other codes for I/O errors.
+ */
+esp_err_t art_institution_download_to_path(const char *museum_id,
+                                           const char *url,
+                                           const char *out_path);
 
 // ============================================================================
 // Rate-limit cooldown (shared between refresh + download + browser reports)

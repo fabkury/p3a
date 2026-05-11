@@ -168,30 +168,14 @@ esp_err_t art_institution_build_vault_path_from_spec(const char *spec_name,
     return art_institution_build_vault_path(museum, entry, out_path, out_len);
 }
 
-// ----- Stubbed convenience wrappers (filled in stage 3) -------------------
-
-esp_err_t art_institution_refresh_by_spec(const char *channel_id,
-                                          const char *spec_name,
-                                          const char *identifier)
-{
-    // Stage 3 will implement: parse spec, find museum, page through listing,
-    // merge entries (re-resolving cache from registry per page under
-    // channel_cache_lifecycle_lock), run orphan eviction, schedule cache save.
-    (void)channel_id;
-    (void)spec_name;
-    (void)identifier;
-    return ESP_ERR_NOT_SUPPORTED;
-}
-
-esp_err_t art_institution_download_entry(const char *museum_id,
+esp_err_t art_institution_build_iiif_url(const char *museum_id,
                                          const institution_channel_entry_t *entry,
-                                         char *out_path, size_t out_len)
+                                         int longest_side,
+                                         char *out, size_t len)
 {
-    // Stage 3 will implement: build IIIF URL, stream JPEG via esp_http_client
-    // with the giphy_download_artwork chunked-retry pattern, atomic rename
-    // into the vault path.
-    (void)museum_id;
-    (void)entry;
-    if (out_path && out_len > 0) out_path[0] = '\0';
-    return ESP_ERR_NOT_SUPPORTED;
+    if (out && len > 0) out[0] = '\0';
+    if (!museum_id || !entry || !out || len == 0) return ESP_ERR_INVALID_ARG;
+    const art_institution_museum_t *m = art_institution_find(museum_id);
+    if (!m || !m->build_iiif_url) return ESP_ERR_NOT_FOUND;
+    return m->build_iiif_url(entry, longest_side, out, len);
 }

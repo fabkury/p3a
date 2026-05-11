@@ -32,6 +32,7 @@ extern "C" {
  */
 typedef enum {
     ART_INSTITUTION_MUSEUM_ARTIC = 0,
+    ART_INSTITUTION_MUSEUM_RIJKS = 1,
     ART_INSTITUTION_NUM_MUSEUMS  // sentinel; keep last. Distinct from the
                                  // extern const ART_INSTITUTION_MUSEUM_COUNT
                                  // (dispatch-table size) — the two must stay
@@ -63,13 +64,21 @@ typedef struct __attribute__((packed)) {
                              ///<              makapix_channel_entry_t / giphy_channel_entry_t
                              ///<              so the picker's get_asset_type_from_extension
                              ///<              works without a special case). AIC uses 3 (jpg).
-                             ///<              0xFF=unresolved (M2 Rijks),
-                             ///<              0xFE=tombstone (M2 Rijks).
+                             ///<              0xFF=unresolved (Rijks: iiif_key holds the HMO
+                             ///<              id, awaiting Linked-Art walk).
+                             ///<              0xFE=tombstone (Rijks: walk failed 3 times;
+                             ///<              skip forever until next refresh re-adds the HMO
+                             ///<              with a fresh resolve_fails=0 budget).
     uint16_t width;          ///< offset  6 — pixels at requested rendition (0 = unknown)
     uint32_t created_at;     ///< offset  8 — Unix timestamp from museum metadata (0 = unknown)
     uint16_t height;         ///< offset 12 — pixels at requested rendition (0 = unknown)
     char     iiif_key[48];   ///< offset 14 — null-terminated; museum-specific identifier
-    uint8_t  reserved[2];    ///< offset 62 — future use (zeroed on write)
+                             ///<              (AIC image_id, or Rijks HMO id while unresolved,
+                             ///<              or Rijks micrio short id once resolved)
+    uint8_t  resolve_fails;  ///< offset 62 — Rijks: consecutive failed Linked-Art walks for
+                             ///<              this entry. Promotes to extension=0xFE at 3.
+                             ///<              Unused (0) for museums that don't need resolution.
+    uint8_t  _reserved;      ///< offset 63 — future use (zeroed on write)
 } institution_channel_entry_t;
 
 _Static_assert(sizeof(institution_channel_entry_t) == 64, "institution entry must be 64 bytes");

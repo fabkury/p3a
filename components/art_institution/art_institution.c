@@ -26,13 +26,21 @@ static const char *TAG = "art_inst";
 
 const art_institution_museum_t ART_INSTITUTION_MUSEUMS[] = {
     {
-        .id             = "artic",
-        .display        = "Art Institute of Chicago",
-        .museum_enum    = ART_INSTITUTION_MUSEUM_ARTIC,
+        .id              = "artic",
+        .display         = "Art Institute of Chicago",
+        .museum_enum     = ART_INSTITUTION_MUSEUM_ARTIC,
         .refresh_channel = art_institution_artic_refresh_channel,
         .build_iiif_url  = art_institution_artic_build_iiif_url,
+        .resolve_entry   = NULL,  // AIC returns the image_id directly; no resolution needed.
     },
-    // M2 will append Rijksmuseum here.
+    {
+        .id              = "rijks",
+        .display         = "Rijksmuseum",
+        .museum_enum     = ART_INSTITUTION_MUSEUM_RIJKS,
+        .refresh_channel = art_institution_rijks_refresh_channel,
+        .build_iiif_url  = art_institution_rijks_build_iiif_url,
+        .resolve_entry   = art_institution_rijks_resolve_entry,
+    },
 };
 
 const size_t ART_INSTITUTION_MUSEUM_COUNT =

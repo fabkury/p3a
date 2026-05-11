@@ -116,6 +116,20 @@ esp_err_t art_institution_artic_build_iiif_url(const institution_channel_entry_t
                                                int longest_side,
                                                char *out, size_t len);
 
+// ============================================================================
+// Rijksmuseum adapter entry points (defined in museums/rijksmuseum.c)
+// ============================================================================
+
+esp_err_t art_institution_rijks_refresh_channel(const char *channel_id,
+                                                const char *axis,
+                                                const char *term_id);
+
+esp_err_t art_institution_rijks_build_iiif_url(const institution_channel_entry_t *entry,
+                                               int longest_side,
+                                               char *out, size_t len);
+
+esp_err_t art_institution_rijks_resolve_entry(institution_channel_entry_t *entry);
+
 #ifdef __cplusplus
 }
 #endif

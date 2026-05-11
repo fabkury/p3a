@@ -12,10 +12,11 @@
 // `{museum_id}:{axis}`.
 
 import { ArticAdapter } from './artic.js';
+import { RijksmuseumAdapter } from './rijksmuseum.js';
 
 const ADAPTERS = [
     new ArticAdapter(),
-    // M2 will append RijksAdapter here.
+    new RijksmuseumAdapter(),
 ];
 
 export function listAdapters() {

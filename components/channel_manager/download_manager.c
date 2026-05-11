@@ -594,6 +594,14 @@ static void download_task(void *arg)
             continue;  // Skip this cycle
         }
 
+        // Resolve one pending museum entry per iteration. For Rijks
+        // channels every cache entry arrives with extension=0xFF; the
+        // resolver runs the 3-hop Linked-Art walk and mutates the entry
+        // into a downloadable form (extension=3, iiif_key=micrio short
+        // id). Cheap no-op for AIC channels (resolve_entry==NULL) and
+        // for non-institution channels.
+        art_institution_resolve_pending();
+
         // Get next file to download using own round-robin logic
         // Take a snapshot of channel state under mutex to avoid race conditions
         // Note: Using static buffers (s_dl_req, s_dl_snapshot) to reduce stack usage

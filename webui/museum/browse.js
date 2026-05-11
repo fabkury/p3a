@@ -38,6 +38,11 @@ const CSS = `
 .mb-thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 8px 0 12px; }
 .mb-thumb { width: 100%; aspect-ratio: 1 / 1; background: #0f172a; border-radius: 6px;
     object-fit: cover; display: block; }
+.mb-textcards { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 12px; }
+.mb-textcard { background: rgba(255,255,255,0.04); border-radius: 6px; padding: 8px 10px;
+    font-size: 0.82rem; line-height: 1.3; }
+.mb-textcard .mb-tc-title { color: #f3f4f6; font-weight: 500; }
+.mb-textcard .mb-tc-meta  { color: #94a3b8; font-size: 0.78rem; margin-top: 2px; }
 .mb-add-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
     padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); margin-top: 8px; }
 .mb-add-row .mb-add-label { font-size: 0.85rem; color: #cbd5e1; }
@@ -324,19 +329,37 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
         if (items.length === 0) {
             body.appendChild(el('div', { class: 'mb-status', text: 'No previewable artwork. Channel may be empty.' }));
         } else {
-            const strip = el('div', { class: 'mb-thumbs' });
-            for (const it of items) {
-                const img = el('img', {
-                    class: 'mb-thumb',
-                    src: state.adapter.thumbnailUrl(it.imageId, 64),
-                    alt: it.title,
-                    title: it.artist ? `${it.title} — ${it.artist}` : it.title,
-                    loading: 'lazy',
-                });
-                img.addEventListener('error', () => { img.style.opacity = '0.3'; });
-                strip.appendChild(img);
+            // Pick rendering mode: image grid if the adapter resolved
+            // thumbnail URLs (AIC), otherwise a textual card list for
+            // adapters that can't cheaply build thumbs (Rijks needs a
+            // 3-hop Linked-Art walk per artwork — too expensive for an
+            // 8-item preview that costs nothing on the device).
+            const firstUrl = items[0].imageId ? state.adapter.thumbnailUrl(items[0].imageId, 64) : null;
+            if (firstUrl) {
+                const strip = el('div', { class: 'mb-thumbs' });
+                for (const it of items) {
+                    const img = el('img', {
+                        class: 'mb-thumb',
+                        src: state.adapter.thumbnailUrl(it.imageId, 64),
+                        alt: it.title,
+                        title: it.artist ? `${it.title} — ${it.artist}` : it.title,
+                        loading: 'lazy',
+                    });
+                    img.addEventListener('error', () => { img.style.opacity = '0.3'; });
+                    strip.appendChild(img);
+                }
+                body.appendChild(strip);
+            } else {
+                const list = el('div', { class: 'mb-textcards' });
+                for (const it of items) {
+                    const meta = [it.artist, it.date].filter(Boolean).join(' · ');
+                    const card = el('div', { class: 'mb-textcard' });
+                    card.appendChild(el('div', { class: 'mb-tc-title', text: it.title || '(untitled)' }));
+                    if (meta) card.appendChild(el('div', { class: 'mb-tc-meta', text: meta }));
+                    list.appendChild(card);
+                }
+                body.appendChild(list);
             }
-            body.appendChild(strip);
         }
 
         const addRow = el('div', { class: 'mb-add-row' });

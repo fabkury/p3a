@@ -63,10 +63,26 @@ typedef struct {
     /**
      * Build the IIIF JPEG URL for one entry at the requested longest-side
      * pixel cap. Out buffer must hold a full URL (suggest >= 256 bytes).
+     * For museums that need on-demand resolution (e.g. Rijks Linked Art),
+     * returns ESP_ERR_INVALID_STATE if the entry is still unresolved.
      */
     esp_err_t (*build_iiif_url)(const institution_channel_entry_t *entry,
                                 int longest_side,
                                 char *out, size_t len);
+
+    /**
+     * Optional. Resolve one cache entry that arrived in an "unresolved"
+     * state (extension == 0xFF). Called from the resolver loop in the
+     * download task. On ESP_OK the implementation MUST have mutated
+     * `entry` in place: iiif_key updated to the resolved key (e.g. Rijks
+     * micrio short id), extension set to a valid image format (e.g. 3),
+     * and resolve_fails reset to 0. On failure, the caller increments
+     * resolve_fails and tombstones at 3.
+     *
+     * NULL for museums that don't need resolution (AIC and any future
+     * museum that already returns the IIIF id directly).
+     */
+    esp_err_t (*resolve_entry)(institution_channel_entry_t *entry);
 } art_institution_museum_t;
 
 extern const art_institution_museum_t ART_INSTITUTION_MUSEUMS[];
@@ -220,6 +236,29 @@ esp_err_t art_institution_build_iiif_url(const char *museum_id,
 esp_err_t art_institution_download_to_path(const char *museum_id,
                                            const char *url,
                                            const char *out_path);
+
+/**
+ * @brief Resolve one pending unresolved entry across all active channels
+ *
+ * Walks the active institution channels looking for an entry with
+ * extension == 0xFF (and resolve_fails < 3), invokes the museum's
+ * resolve_entry function, and mutates the cache entry in place. On
+ * three consecutive failures the entry is tombstoned (extension =
+ * 0xFE) so the download manager stops considering it.
+ *
+ * Designed to be called once per download_task loop iteration: doing
+ * a single 3-hop Linked-Art walk costs a few hundred ms of HTTP +
+ * JSON-LD parsing, which we interleave with regular downloads instead
+ * of bunching into a long blocking pass.
+ *
+ * Cheap no-op when no museum exposes resolve_entry, or when there are
+ * no unresolved entries.
+ *
+ * @return ESP_OK if an entry was resolved (or tombstoned),
+ *         ESP_ERR_NOT_FOUND if no unresolved entry was found,
+ *         other codes propagated from the resolver.
+ */
+esp_err_t art_institution_resolve_pending(void);
 
 // ============================================================================
 // Rate-limit cooldown (shared between refresh + download + browser reports)

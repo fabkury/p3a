@@ -255,6 +255,10 @@ esp_err_t art_institution_download_to_path(const char *museum_id,
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Downloaded %s (%zu bytes) -> %s", url, total_written, out_path);
+    // ESP_LOGD: the matching "dl_mgr: Downloading: ..." line is already
+    // logged at INFO before this function runs, and "ps_lai: >>> LAi ADD"
+    // confirms a successful landing right after. A third per-artwork
+    // INFO message just crowded out the actually-useful events.
+    ESP_LOGD(TAG, "Downloaded %s (%zu bytes) -> %s", url, total_written, out_path);
     return ESP_OK;
 }

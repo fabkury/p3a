@@ -162,6 +162,11 @@ esp_err_t h_delete_playset(httpd_req_t *req);
 esp_err_t h_get_refresh_override(httpd_req_t *req);
 esp_err_t h_put_refresh_override(httpd_req_t *req);
 
+// Museum (art-institution) rate-limit endpoints — see
+// http_api_rest_museum.c.
+esp_err_t h_get_museum_rate_limits(httpd_req_t *req);
+esp_err_t h_post_museum_report_429(httpd_req_t *req);
+
 #if CONFIG_OTA_DEV_MODE
 esp_err_t h_post_debug(httpd_req_t *req);
 #endif

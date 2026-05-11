@@ -509,6 +509,9 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     if (strncmp(uri, "/playsets/", 10) == 0) {
         return h_get_playset_by_name(req);
     }
+    if (strcmp(uri, "/api/museum/rate-limits") == 0) {
+        return h_get_museum_rate_limits(req);
+    }
 
     // UI/pages module
     esp_err_t pr = http_api_pages_route_get(req);
@@ -583,6 +586,10 @@ static esp_err_t h_post_router(httpd_req_t *req) {
     // Playset CRUD: /playsets/{name}
     if (strncmp(uri, "/playsets/", 10) == 0) {
         return h_post_playset_crud(req);
+    }
+    // Browser-side museum 429 report
+    if (strcmp(uri, "/api/museum/rate-limits/report-429") == 0) {
+        return h_post_museum_report_429(req);
     }
 
     // UI/pages module

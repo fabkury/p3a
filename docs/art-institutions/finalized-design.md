@@ -342,8 +342,8 @@ route. Two small endpoints are added for the rate-limit mechanism
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/v1/museum/rate-limits` | Returns the cooldown table: `{ "artic": { "remaining_sec": N }, "rijks": { "remaining_sec": N } }`. The browse modal polls this before kicking off term-count probes. |
-| `POST` | `/api/v1/museum/rate-limits/report-429` | Browser reports a 429 it received directly from a museum API. Body: `{ "museum": "artic", "retry_after_sec": 38 }`. The device merges this into its cooldown table so the next device-side refresh also waits. |
+| `GET` | `/api/museum/rate-limits` | Returns the cooldown table: `{ "artic": { "remaining_sec": N }, "rijks": { "remaining_sec": N } }`. The browse modal polls this before kicking off term-count probes. |
+| `POST` | `/api/museum/rate-limits/report-429` | Browser reports a 429 it received directly from a museum API. Body: `{ "museum": "artic", "retry_after_sec": 38 }`. The device merges this into its cooldown table so the next device-side refresh also waits. |
 
 An institution channel serializes as:
 
@@ -586,7 +586,7 @@ Process-wide, RAM-only (rebooting clears it, matching Giphy).
 
 - **Browse modal:** before kicking off term-count probes (AIC's
   expensive step), the modal reads cooldown state from the device
-  (`GET /api/v1/museum/rate-limits`). If the picked museum is in
+  (`GET /api/museum/rate-limits`). If the picked museum is in
   cooldown, the modal renders a "rate-limited — try again in N
   seconds" message with a countdown.
 - **Settings page** "Museums" section reuses Giphy's settings-hint
@@ -595,7 +595,7 @@ Process-wide, RAM-only (rebooting clears it, matching Giphy).
   in parallel risks a 429).
 - **Browser-side self-limiting:** AIC's term-count probe is capped at
   concurrency 6. 429 responses received by the browser are reported
-  to the device via `POST /api/v1/museum/rate-limits/report-429` so
+  to the device via `POST /api/museum/rate-limits/report-429` so
   the device's cooldown state stays accurate even when the bandwidth
   came from the browser, not the device. This sharing matters because
   AIC's limit is per-IP — browser-issued and device-issued requests
@@ -696,7 +696,7 @@ Smallest shippable surface. After M1 the device can play AIC channels.
    - New cache entry format `PS_ENTRY_FORMAT_INSTITUTION`.
    - Two new NVS settings (`ai_refresh_sec`, `ai_cache_size = 1024`).
    - Rate-limit infrastructure (§11.1): per-museum cooldown table,
-     public API, `GET /api/v1/museum/rate-limits` endpoint,
+     public API, `GET /api/museum/rate-limits` endpoint,
      browser→device 429 reporting endpoint.
    - Per-museum serialization in the refresh dispatcher (§7.2).
    - Continuous serialized download manager loop (§7.3).
@@ -711,7 +711,7 @@ Smallest shippable surface. After M1 the device can play AIC channels.
      `webui/museum/browse.js`.
    - Playset-editor `<option value="institution">Museum</option>` +
      modal wiring.
-   - Cooldown-aware browse modal (reads `/api/v1/museum/rate-limits`,
+   - Cooldown-aware browse modal (reads `/api/museum/rate-limits`,
      reports its own 429s back to the device).
    - Landing-page channel-list badge logic ("API rate limited" only
      when channel is stale **and** museum is in cooldown — §11.1).

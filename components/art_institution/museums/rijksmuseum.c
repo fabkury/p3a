@@ -57,6 +57,36 @@ static const uint32_t s_fetch_backoff_ms[RIJKS_FETCH_MAX_ATTEMPTS] = { 0, 1000, 
 // External: signal download manager to rescan when new entries land.
 extern void download_manager_rescan(void);
 
+// ----- HTTP event handler: capture Location header ------------------------
+
+/**
+ * @brief Per-request scratch the event handler writes into
+ *
+ * esp_http_client_get_header("Location", ...) doesn't reliably return
+ * the header even with disable_auto_redirect=true (observed on ESP-IDF
+ * v5.5.2: get_header returns ESP_OK with *value=NULL on 3xx responses,
+ * regardless of the flag). Snagging the value via the ON_HEADER
+ * event callback bypasses whatever the higher-level path is doing —
+ * the parser dispatches the event synchronously as it walks the
+ * response, so we always see Location regardless of how the client
+ * later handles the redirect status.
+ */
+typedef struct {
+    char location[512];
+} rijks_fetch_ctx_t;
+
+static esp_err_t rijks_http_event_handler(esp_http_client_event_t *evt)
+{
+    if (evt->event_id != HTTP_EVENT_ON_HEADER) return ESP_OK;
+    rijks_fetch_ctx_t *ctx = (rijks_fetch_ctx_t *)evt->user_data;
+    if (!ctx) return ESP_OK;
+    if (evt->header_key && evt->header_value &&
+        strcasecmp(evt->header_key, "Location") == 0) {
+        strlcpy(ctx->location, evt->header_value, sizeof(ctx->location));
+    }
+    return ESP_OK;
+}
+
 // ----- HTTP fetch helper --------------------------------------------------
 
 /**
@@ -85,20 +115,19 @@ static esp_err_t rijks_fetch_jsonld(const char *url, char *buf, size_t buf_size,
     strlcpy(current_url, url, sizeof(current_url));
 
     for (int redirect_hop = 0; redirect_hop <= RIJKS_MAX_REDIRECTS; redirect_hop++) {
+        rijks_fetch_ctx_t ctx = {0};
         esp_http_client_config_t cfg = {
             .url = current_url,
             .timeout_ms = 15000,
             .crt_bundle_attach = esp_crt_bundle_attach,
             .buffer_size = 4096,
-            // ESP-IDF's fetch_headers() internally calls
-            // esp_http_client_set_redirection() on 3xx when auto-redirect
-            // is enabled (the default), which reads + consumes the
-            // Location header — by the time we get the response back the
-            // header is gone and get_header("Location",...) returns
-            // NOT_FOUND. We want to handle the hop ourselves so we can
-            // re-open the connection cleanly with our retry policy intact;
-            // disable the auto path so the Location stays readable.
+            // disable_auto_redirect keeps fetch_headers() honest. Combined
+            // with the ON_HEADER event handler below, we capture the
+            // Location value reliably regardless of how ESP-IDF would
+            // otherwise process the 3xx response.
             .disable_auto_redirect = true,
+            .event_handler = rijks_http_event_handler,
+            .user_data = &ctx,
         };
 
         esp_err_t fatal_err = ESP_OK;
@@ -151,22 +180,17 @@ static esp_err_t rijks_fetch_jsonld(const char *url, char *buf, size_t buf_size,
                 fatal_err = ESP_ERR_NOT_FOUND;
                 break;
             }
-            // 301/302/303/307/308 — read Location and remember it for the
-            // outer redirect loop. Done outside the retry loop because
-            // redirects aren't transient errors; they're a deliberate
-            // protocol step.
+            // 301/302/303/307/308 — Location was captured by the event
+            // handler during header parsing. We don't use the response
+            // body, so the retry loop is short-circuited here.
             if (status >= 300 && status < 400) {
-                char *location = NULL;
-                if (esp_http_client_get_header(client, "Location", &location) == ESP_OK &&
-                    location && location[0]) {
-                    strlcpy(next_url, location, sizeof(next_url));
+                if (ctx.location[0]) {
+                    strlcpy(next_url, ctx.location, sizeof(next_url));
                 } else {
                     ESP_LOGW(TAG, "Rijks %d for %.80s but no Location header", status, current_url);
                 }
                 esp_http_client_close(client);
                 esp_http_client_cleanup(client);
-                // Treat as success of this inner loop; the outer redirect
-                // loop will handle the hop.
                 success = true;
                 total_read = 0;
                 break;

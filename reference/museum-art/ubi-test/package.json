@@ -1,0 +1,19 @@
+{
+  "name": "ubi-test",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:smk": "playwright test smk",
+    "test:rijks": "playwright test rijksmuseum",
+    "test:vam": "playwright test vam",
+    "test:artic": "playwright test artic",
+    "test:wellcome": "playwright test wellcome",
+    "test:headed": "playwright test --headed",
+    "serve": "python -m http.server 8765"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}

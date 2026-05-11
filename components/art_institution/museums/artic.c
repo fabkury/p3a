@@ -229,7 +229,14 @@ static esp_err_t aic_fetch_page(const char *filter_field,
         }
 
         if (status == 401 || status == 403) {
-            ESP_LOGE(TAG, "AIC returned %d (auth issue)", status);
+            // Logged at WARN: AIC has been observed returning 403 on deeper
+            // pages of certain large-result-set queries (e.g. Painting past
+            // page ~10), independent of the documented offset cap. The
+            // caller decides whether to fail the refresh: if pages 1..N-1
+            // succeeded, treat this as partial success rather than rendering
+            // a hard error.
+            ESP_LOGW(TAG, "AIC returned %d on page %d (filter=%s term=%.32s)",
+                     status, page, filter_field, term_id);
             esp_http_client_close(client);
             esp_http_client_cleanup(client);
             fatal_err = ESP_ERR_NOT_ALLOWED;
@@ -474,8 +481,15 @@ esp_err_t art_institution_artic_refresh_channel(const char *channel_id,
     free(response_buf);
     free(page_entries);
 
-    // Orphan eviction — only when the refresh ran to completion. Partial
-    // refreshes leave Ci as-is; the next attempt will redo.
+    // A partial refresh that still produced entries (typically because
+    // AIC returned 403 on a deep page after several pages of success) is
+    // treated as a soft success: the dispatcher must not render a hard
+    // error and we don't want to retry immediately, but we also must not
+    // run orphan eviction (entries that simply hadn't been re-fetched
+    // would be misidentified as evicted).
+    bool partial_with_content = (!refresh_completed && total_fetched > 0);
+
+    // Orphan eviction — only on a complete walk through the listing.
     if (refresh_completed && si_hash) {
         channel_cache_lifecycle_lock();
         channel_cache_t *evict_cache = channel_cache_registry_find(channel_id);
@@ -494,10 +508,12 @@ esp_err_t art_institution_artic_refresh_channel(const char *channel_id,
         }
     }
 
-    // Persist last_refresh on full success only — partial refreshes must
-    // not extend the freshness window. Require SNTP-synced clock (matches
+    // Persist last_refresh whenever we got any content — partial refreshes
+    // count as fresh enough so the dispatcher doesn't retry every tick.
+    // Skip when total_fetched == 0 so a fully-failed refresh retries on
+    // the next dispatcher cycle. Require SNTP-synced clock (matches
     // giphy_refresh.c and makapix_channel_refresh.c).
-    if (refresh_completed && sntp_sync_is_synchronized()) {
+    if ((refresh_completed || partial_with_content) && sntp_sync_is_synchronized()) {
         char channels_path[128];
         if (sd_path_get_channel(channels_path, sizeof(channels_path)) != ESP_OK) {
             strlcpy(channels_path, "/sdcard/p3a/channel", sizeof(channels_path));
@@ -509,10 +525,16 @@ esp_err_t art_institution_artic_refresh_channel(const char *channel_id,
         }
     }
 
-    ESP_LOGI(TAG, "AIC refresh %s for '%s': %zu fetched",
-             refresh_completed ? "complete" : "incomplete", channel_id, total_fetched);
-
-    if (refresh_completed && total_fetched > 0) return ESP_OK;
-    if (last_err != ESP_OK) return last_err;
-    return refresh_completed ? ESP_OK : ESP_FAIL;
+    if (refresh_completed) {
+        ESP_LOGI(TAG, "AIC refresh complete for '%s': %zu fetched", channel_id, total_fetched);
+        return ESP_OK;
+    }
+    if (partial_with_content) {
+        ESP_LOGW(TAG, "AIC refresh partial for '%s': %zu fetched, last err: %s (treating as success)",
+                 channel_id, total_fetched, esp_err_to_name(last_err));
+        return ESP_OK;
+    }
+    ESP_LOGW(TAG, "AIC refresh failed for '%s': %s",
+             channel_id, esp_err_to_name(last_err != ESP_OK ? last_err : ESP_FAIL));
+    return (last_err != ESP_OK) ? last_err : ESP_FAIL;
 }

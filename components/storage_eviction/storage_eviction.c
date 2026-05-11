@@ -193,8 +193,34 @@ static void evict_from_base_dir(const char *base_path, time_t cutoff, evict_stat
     closedir(d1);
 }
 
+/**
+ * @brief Walk a museum-rooted base directory and evict old files
+ *
+ * Museum vault layout has an extra museum_id segment at the top:
+ *   /sdcard/p3a/museum/{museum_id}/{xx}/{yy}/{zz}/{file}
+ * The existing evict_from_base_dir() walks 3 levels of SHA shards; we
+ * just delegate to it once per museum_id directory found here.
+ */
+static void evict_museum_root(const char *base_path, time_t cutoff, evict_stats_t *stats)
+{
+    DIR *d = opendir(base_path);
+    if (!d) return;
+
+    struct dirent *e;
+    char sub[160];
+
+    while ((e = readdir(d)) != NULL) {
+        if (e->d_name[0] == '.') continue;
+        int r = snprintf(sub, sizeof(sub), "%s/%s", base_path, e->d_name);
+        if (r < 0 || r >= (int)sizeof(sub)) continue;
+        evict_from_base_dir(sub, cutoff, stats);
+    }
+
+    closedir(d);
+}
+
 /* --------------------------------------------------------------------- */
-/*  Top-level eviction over both vault and giphy caches                   */
+/*  Top-level eviction over vault, giphy, and museum caches               */
 /* --------------------------------------------------------------------- */
 
 static void evict_old_files(time_t cutoff, evict_stats_t *stats)
@@ -207,6 +233,10 @@ static void evict_old_files(time_t cutoff, evict_stats_t *stats)
 
     if (sd_path_get_giphy(path, sizeof(path)) == ESP_OK) {
         evict_from_base_dir(path, cutoff, stats);
+    }
+
+    if (sd_path_get_museum(path, sizeof(path)) == ESP_OK) {
+        evict_museum_root(path, cutoff, stats);
     }
 }
 

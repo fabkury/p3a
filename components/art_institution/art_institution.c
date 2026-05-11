@@ -41,6 +41,14 @@ const art_institution_museum_t ART_INSTITUTION_MUSEUMS[] = {
         .build_iiif_url  = art_institution_rijks_build_iiif_url,
         .resolve_entry   = art_institution_rijks_resolve_entry,
     },
+    {
+        .id              = "vam",
+        .display         = "Victoria and Albert Museum",
+        .museum_enum     = ART_INSTITUTION_MUSEUM_VAM,
+        .refresh_channel = art_institution_vam_refresh_channel,
+        .build_iiif_url  = art_institution_vam_build_iiif_url,
+        .resolve_entry   = NULL,  // V&A returns _primaryImageId in the listing — no resolution.
+    },
 };
 
 const size_t ART_INSTITUTION_MUSEUM_COUNT =

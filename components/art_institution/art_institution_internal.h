@@ -130,6 +130,18 @@ esp_err_t art_institution_rijks_build_iiif_url(const institution_channel_entry_t
 
 esp_err_t art_institution_rijks_resolve_entry(institution_channel_entry_t *entry);
 
+// ============================================================================
+// V&A adapter entry points (defined in museums/vam.c)
+// ============================================================================
+
+esp_err_t art_institution_vam_refresh_channel(const char *channel_id,
+                                              const char *axis,
+                                              const char *term_id);
+
+esp_err_t art_institution_vam_build_iiif_url(const institution_channel_entry_t *entry,
+                                             int longest_side,
+                                             char *out, size_t len);
+
 #ifdef __cplusplus
 }
 #endif

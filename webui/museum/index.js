@@ -13,10 +13,12 @@
 
 import { ArticAdapter } from './artic.js';
 import { RijksmuseumAdapter } from './rijksmuseum.js';
+import { VamAdapter } from './vam.js';
 
 const ADAPTERS = [
     new ArticAdapter(),
     new RijksmuseumAdapter(),
+    new VamAdapter(),
 ];
 
 export function listAdapters() {

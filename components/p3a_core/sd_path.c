@@ -116,6 +116,11 @@ esp_err_t sd_path_get_giphy(char *out_path, size_t out_len)
     return sd_path_get_subdir("giphy", out_path, out_len);
 }
 
+esp_err_t sd_path_get_museum(char *out_path, size_t out_len)
+{
+    return sd_path_get_subdir("museum", out_path, out_len);
+}
+
 esp_err_t sd_path_set_root(const char *root_path)
 {
     if (!root_path || root_path[0] == '\0') {
@@ -198,7 +203,7 @@ esp_err_t sd_path_ensure_directories(void)
     }
 
     // Create subdirectories
-    const char *subdirs[] = {"animations", "vault", "channel", "playlists", "temporary", "giphy"};
+    const char *subdirs[] = {"animations", "vault", "channel", "playlists", "temporary", "giphy", "museum"};
     for (size_t i = 0; i < sizeof(subdirs) / sizeof(subdirs[0]); i++) {
         snprintf(path, sizeof(path), "%s/%s", root, subdirs[i]);
         err = ensure_directory(path);

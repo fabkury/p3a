@@ -481,6 +481,54 @@ bool config_store_get_giphy_prefer_downsized(void);
 void config_store_invalidate_giphy_prefer_downsized(void);
 
 // ============================================================================
+// Art Institution (Museums) Settings
+// ============================================================================
+//
+// Two global settings drive every saved museum channel. Per-channel overrides
+// are deferred — see docs/art-institutions/finalized-design.md §1 / §8.
+
+/**
+ * @brief Set the museum-channel refresh interval, in seconds
+ *
+ * @param seconds Refresh interval (28800-345600; 8h to 4d). Web UI offers
+ *                28800 / 86400 / 172800 / 345600.
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG if out of range.
+ */
+esp_err_t config_store_set_ai_refresh_sec(uint32_t seconds);
+
+/**
+ * @brief Get the museum-channel refresh interval
+ *
+ * @return Refresh interval in seconds (defaults to 86400 = 1 day).
+ */
+uint32_t config_store_get_ai_refresh_sec(void);
+
+/**
+ * @brief Invalidate cached ai_refresh_sec (forces reload from NVS)
+ */
+void config_store_invalidate_ai_refresh_sec(void);
+
+/**
+ * @brief Set the museum-channel cache size (max entries per channel)
+ *
+ * @param size Cache size (32-4096). Web UI offers powers of two in that range.
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG if out of range.
+ */
+esp_err_t config_store_set_ai_cache_size(uint32_t size);
+
+/**
+ * @brief Get the museum-channel cache size
+ *
+ * @return Cache size (defaults to 1024).
+ */
+uint32_t config_store_get_ai_cache_size(void);
+
+/**
+ * @brief Invalidate cached ai_cache_size (forces reload from NVS)
+ */
+void config_store_invalidate_ai_cache_size(void);
+
+// ============================================================================
 // Device Name (persisted)
 // ============================================================================
 

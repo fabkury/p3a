@@ -150,19 +150,23 @@ fits the existing 64-byte cache slot, distinguished by a new
 
 ```c
 typedef struct __attribute__((packed)) {
-    int32_t  post_id;        // salted DJB2 hash of "{museum}:{iiif_key}"
-    uint8_t  kind;           // 0 = artwork
-    uint8_t  extension;      // 0=jpg, 1=webp (for IIIF servers that prefer it),
-                             // 0xFF = unresolved (Rijks HMO awaiting Linked-Art walk),
-                             // 0xFE = tombstone (3 resolution attempts failed)
-    uint16_t width;          // pixels at the requested rendition (0 = unknown)
-    uint16_t height;
-    uint32_t created_at;     // Unix timestamp from museum metadata (0 = unknown)
-    char     iiif_key[48];   // null-terminated; museum-specific identifier
-    uint8_t  reserved[4];
+    int32_t  post_id;        // offset  0 — salted DJB2 hash of "{museum}:{iiif_key}"
+    uint8_t  kind;           // offset  4 — 0 = artwork
+    uint8_t  extension;      // offset  5 — 0=jpg, 1=webp (for IIIF servers that prefer it),
+                             //              0xFF = unresolved (Rijks HMO awaiting Linked-Art walk),
+                             //              0xFE = tombstone (3 resolution attempts failed)
+    uint16_t width;          // offset  6 — pixels at requested rendition (0 = unknown)
+    uint32_t created_at;     // offset  8 — Unix timestamp from museum metadata (0 = unknown)
+    uint16_t height;         // offset 12
+    char     iiif_key[48];   // offset 14 — null-terminated; museum-specific identifier
+    uint8_t  reserved[2];    // offset 62
 } institution_channel_entry_t;
 _Static_assert(sizeof(institution_channel_entry_t) == 64, "");
 ```
+
+Field order keeps all multi-byte members naturally aligned under
+`__attribute__((packed))` — same alignment trick `giphy_channel_entry_t`
+uses (`created_at` lives at offset 8 by swapping with `height`).
 
 The 48-byte `iiif_key` covers every Tier-1 museum surveyed:
 

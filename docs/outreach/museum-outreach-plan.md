@@ -198,11 +198,6 @@ Most Tier 1/2 venues in this track need things that don't exist yet:
 3. **Press kit V2** — 3–5 high-res photos of the device displaying
    actual paintings and photographs. The existing pixel-art photos
    don't sell the museum angle.
-4. **"Famous Paintings Sampler" demo playset** — bundled preset JSON
-   users can one-click load (the playset format already serializes to
-   JSON via `POST /playsets/{name}`). Curated mix of AIC + Rijks
-   masterworks. Makes the demo bulletproof for any cold reader who
-   visits the GitHub repo.
 
 ---
 
@@ -210,7 +205,7 @@ Most Tier 1/2 venues in this track need things that don't exist yet:
 
 | Week | Action |
 |------|--------|
-| 0 | Prep assets: museum-mode video, README Museums section, press kit V2, demo playset. **Subscribe to `code4lib-l` now** so the 2–3 week lurk window is already burning down by the time the Week 2 post goes out. |
+| 0 | Prep assets: museum-mode video, README Museums section, press kit V2. **Subscribe to `code4lib-l` now** so the 2–3 week lurk window is already burning down by the time the Week 2 post goes out. |
 | 1 | IIIF Consortium news submission + `discuss.iiif.io` post. AIC digital team email. Bluesky/Mastodon launch wave. |
 | 2 | Rijksstudio team email. Code4Lib mailing list post. PR to `awesome-iiif`. |
 | 3 | V&A digital team email. r/museums (mod-approved). Hyperallergic tip. |

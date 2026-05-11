@@ -61,15 +61,16 @@ For a step-by-step walkthrough written for first-time buyers, see the [Quick Sta
 
 ## Features
 
-### Three Sources of Content
+### Four Sources of Content
 
 | Source | What it does |
 |--------|-------------|
 | **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" and "All Artworks", or hashtags like "#nintendo". Control your device remotely from anywhere. |
 | **[Giphy](https://giphy.com/)** | Automatically fetches and cycles through trending GIFs. Configurable content rating (G through R) and refresh interval. |
+| **Museums** | Pulls paintings and photographs from the Art Institute of Chicago, the Rijksmuseum, and the Victoria and Albert Museum via each museum's open [IIIF](https://iiif.io/) API. No accounts, no cloud middleman — just the museums' public endpoints. |
 | **Local files** | Copy your own WebP, GIF, PNG, or JPEG files via USB or Wi-Fi. No cloud account needed, no internet required. |
 
-Mix all three in a single "playset" for an ever-changing display.
+Mix any of them in a single "playset" for an ever-changing display.
 
 <p align="center">
   <img src="images/p3a-5.jpg" alt="p3a in hand" height="260">

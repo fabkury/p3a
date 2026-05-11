@@ -136,7 +136,7 @@ Institution channels reuse the existing playset binary format
 | `type` | `PS_CHANNEL_TYPE_INSTITUTION = 7` (next ordinal; append-only) |
 | `name` | `"{museum_id}:{axis}"` — e.g. `"artic:departments"`, `"rijks:set"` |
 | `identifier` | `"{term_id}"` — e.g. `"PC-4"`, `"26118"` |
-| `display_name` | `"{museum_short} · {Axis} · {Term label}"`, built by the editor — e.g. `"AIC · Departments · Arts of Greece, Rome, and Byzantium"`. Rijks (axis-less) collapses to `"Rijks · {Set name}"`. The 65-char slot drives the `museum_short` choice ("AIC", "Rijks") because the full names would not fit alongside a long term label. If the assembled string exceeds 64 chars, truncate the term label with an ellipsis at the tail. |
+| `display_name` | `"{museum_short} · {Term label}"`, built by the editor — e.g. `"AIC · Arts of Greece, Rome, and Byzantium"`. Rijks (axis-less) takes the same shape: `"Rijks · {Set name}"`. The axis is intentionally dropped from the displayed label — it's an organizational facet for the browse modal, not user-meaningful in the rendered channel row. The 65-char slot drives the `museum_short` choice ("AIC", "Rijks") because the full names would not fit alongside a long term label. If the assembled string exceeds 64 chars, truncate the term label with an ellipsis at the tail. |
 | `weight` | unchanged |
 
 Future keyword search fits the same shape: `name="artic:search"`,

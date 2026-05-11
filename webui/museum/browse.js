@@ -98,10 +98,11 @@ function truncateForDisplayName(s, max) {
     return s.slice(0, Math.max(1, max - 1)) + '…';
 }
 
-// Per design §4.1: display_name is "{museum_short} · {Axis} · {Term label}",
+// Display name format: "{museum_short} · {Term label}" (axis omitted —
+// it's an organizational facet, not user-meaningful in the channel row),
 // truncated at 64 chars with an ellipsis at the term tail.
-function composeDisplayName(adapter, axisLabel, termLabel) {
-    const prefix = `${adapter.shortName} · ${axisLabel} · `;
+function composeDisplayName(adapter, termLabel) {
+    const prefix = `${adapter.shortName} · `;
     const budget = 64 - prefix.length;
     if (budget <= 1) return truncateForDisplayName(prefix + termLabel, 64);
     return prefix + truncateForDisplayName(termLabel, budget);
@@ -352,12 +353,11 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
     function confirmAdd() {
         if (!state.adapter || !state.term) return;
         const axisName = state.axis ? state.axis.name : 'set';
-        const axisLabel = state.axis ? state.axis.label : 'Set';
         const spec = {
             type: 'institution',
             name: `${state.adapter.id}:${axisName}`,
             identifier: state.term.id,
-            display_name: composeDisplayName(state.adapter, axisLabel, state.term.label),
+            display_name: composeDisplayName(state.adapter, state.term.label),
             weight: 100,
         };
         close_modal(false);

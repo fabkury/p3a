@@ -59,7 +59,12 @@ typedef enum {
 typedef struct __attribute__((packed)) {
     int32_t  post_id;        ///< offset  0 — salted DJB2 hash of "{museum}:{iiif_key}"
     uint8_t  kind;           ///< offset  4 — 0 = artwork (only value used today)
-    uint8_t  extension;      ///< offset  5 — 0=jpg, 1=webp; 0xFF=unresolved (M2), 0xFE=tombstone (M2)
+    uint8_t  extension;      ///< offset  5 — 0=webp, 1=gif, 2=png, 3=jpg (matches
+                             ///<              makapix_channel_entry_t / giphy_channel_entry_t
+                             ///<              so the picker's get_asset_type_from_extension
+                             ///<              works without a special case). AIC uses 3 (jpg).
+                             ///<              0xFF=unresolved (M2 Rijks),
+                             ///<              0xFE=tombstone (M2 Rijks).
     uint16_t width;          ///< offset  6 — pixels at requested rendition (0 = unknown)
     uint32_t created_at;     ///< offset  8 — Unix timestamp from museum metadata (0 = unknown)
     uint16_t height;         ///< offset 12 — pixels at requested rendition (0 = unknown)

@@ -299,8 +299,11 @@ esp_err_t play_scheduler_get_channel_entry(const char *channel_id, size_t index,
     for (size_t i = 0; i < s_state->channel_count; i++) {
         ps_channel_state_t *ch = &s_state->channels[i];
         if (strcmp(ch->channel_id, channel_id) == 0) {
-            // Only Makapix and Giphy channels have makapix_channel_entry_t-compatible format
-            if (ch->entry_format != PS_ENTRY_FORMAT_MAKAPIX && ch->entry_format != PS_ENTRY_FORMAT_GIPHY) {
+            // Makapix, Giphy, and institution channels all share the 64-byte
+            // makapix_channel_entry_t-compatible slot; SD card / artwork don't.
+            if (ch->entry_format != PS_ENTRY_FORMAT_MAKAPIX &&
+                ch->entry_format != PS_ENTRY_FORMAT_GIPHY &&
+                ch->entry_format != PS_ENTRY_FORMAT_INSTITUTION) {
                 result = ESP_ERR_NOT_SUPPORTED;
                 break;
             }
@@ -342,7 +345,8 @@ bool play_scheduler_is_makapix_channel(const char *channel_id)
             ps_channel_type_t t = s_state->channels[i].type;
             return (t != PS_CHANNEL_TYPE_SDCARD &&
                     t != PS_CHANNEL_TYPE_GIPHY &&
-                    t != PS_CHANNEL_TYPE_ARTWORK);
+                    t != PS_CHANNEL_TYPE_ARTWORK &&
+                    t != PS_CHANNEL_TYPE_INSTITUTION);
         }
     }
     return false;
@@ -372,6 +376,20 @@ bool play_scheduler_is_giphy_channel(const char *channel_id)
     for (size_t i = 0; i < s_state->channel_count; i++) {
         if (strcmp(s_state->channels[i].channel_id, channel_id) == 0) {
             return (s_state->channels[i].type == PS_CHANNEL_TYPE_GIPHY);
+        }
+    }
+    return false;
+}
+
+bool play_scheduler_is_institution_channel(const char *channel_id)
+{
+    ps_state_t *s_state = ps_get_state();
+
+    if (!channel_id || !s_state->initialized) return false;
+
+    for (size_t i = 0; i < s_state->channel_count; i++) {
+        if (strcmp(s_state->channels[i].channel_id, channel_id) == 0) {
+            return (s_state->channels[i].type == PS_CHANNEL_TYPE_INSTITUTION);
         }
     }
     return false;

@@ -26,6 +26,7 @@
 #include "channel_cache.h"
 #include "sdcard_channel_impl.h"
 #include "makapix_channel_impl.h"
+#include "art_institution.h"
 #include "config_store.h"
 #include "p3a_state.h"
 #include "sd_path.h"
@@ -99,6 +100,31 @@ void ps_get_display_name_from_spec(ps_channel_type_t type, const char *spec_name
                 strlcpy(out_name, "Giphy: Trending", max_len);
             }
             break;
+        case PS_CHANNEL_TYPE_INSTITUTION: {
+            // spec_name is "{museum_id}:{axis}"; identifier is the term_id.
+            // The browser-side editor normally supplies a rich display_name;
+            // this fallback only fires when that field is empty (e.g. older
+            // playset saved before the editor was updated, or a malformed
+            // POST). Best-effort: pull the museum's display label from the
+            // dispatch table and append the raw identifier.
+            char museum_id[16] = {0};
+            const char *colon = strchr(spec_name, ':');
+            if (colon && colon > spec_name &&
+                (size_t)(colon - spec_name) < sizeof(museum_id)) {
+                size_t mlen = (size_t)(colon - spec_name);
+                memcpy(museum_id, spec_name, mlen);
+                museum_id[mlen] = '\0';
+            }
+            const art_institution_museum_t *m = art_institution_find(museum_id);
+            if (m && identifier[0] != '\0') {
+                snprintf(out_name, max_len, "%s · %s", m->display, identifier);
+            } else if (m) {
+                strlcpy(out_name, m->display, max_len);
+            } else {
+                snprintf(out_name, max_len, "Museum: %s", spec_name);
+            }
+            break;
+        }
         default:
             strlcpy(out_name, "Channel", max_len);
             break;

@@ -152,9 +152,12 @@ fits the existing 64-byte cache slot, distinguished by a new
 typedef struct __attribute__((packed)) {
     int32_t  post_id;        // offset  0 — salted DJB2 hash of "{museum}:{iiif_key}"
     uint8_t  kind;           // offset  4 — 0 = artwork
-    uint8_t  extension;      // offset  5 — 0=jpg, 1=webp (for IIIF servers that prefer it),
-                             //              0xFF = unresolved (Rijks HMO awaiting Linked-Art walk),
-                             //              0xFE = tombstone (3 resolution attempts failed)
+    uint8_t  extension;      // offset  5 — 0=webp, 1=gif, 2=png, 3=jpg (matches the
+                             //              makapix / giphy entry encoding so the picker can
+                             //              use one get_asset_type_from_extension helper).
+                             //              AIC uses 3 (jpg). 0xFF = unresolved (Rijks HMO
+                             //              awaiting Linked-Art walk), 0xFE = tombstone
+                             //              (3 resolution attempts failed).
     uint16_t width;          // offset  6 — pixels at requested rendition (0 = unknown)
     uint32_t created_at;     // offset  8 — Unix timestamp from museum metadata (0 = unknown)
     uint16_t height;         // offset 12
@@ -478,7 +481,7 @@ about breadth-of-collection.
   `&page=N&limit=100&fields=id,title,image_id,artist_title,date_display`
 - **IIIF URL:** `https://www.artic.edu/iiif/2/{image_id}/full/!720,720/0/default.jpg`
 - **`iiif_key` value:** the `image_id` UUID
-- **`extension`:** always 0 (jpg)
+- **`extension`:** always 3 (jpg) — uses the shared makapix/giphy/institution byte encoding
 
 ### 9.2 Rijksmuseum
 

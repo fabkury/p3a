@@ -132,11 +132,16 @@ esp_err_t art_institution_build_vault_path(const char *museum_id,
         return ESP_FAIL;
     }
 
+    // Same byte encoding as makapix_channel_entry_t.extension; AIC artwork
+    // uses 3 (jpg). 0xFE/0xFF sentinels never reach here in M1 — the download
+    // manager filters them out before path construction.
     const char *ext;
     switch (entry->extension) {
-        case 0:  ext = ".jpg";  break;
-        case 1:  ext = ".webp"; break;
-        default: ext = ".jpg";  break;  // 0xFF/0xFE sentinels never reach here in M1
+        case 0:  ext = ".webp"; break;
+        case 1:  ext = ".gif";  break;
+        case 2:  ext = ".png";  break;
+        case 3:  ext = ".jpg";  break;
+        default: ext = ".jpg";  break;
     }
 
     int n = snprintf(out_path, out_len, "%s/%s/%02x/%02x/%02x/%s%s",
@@ -147,17 +152,34 @@ esp_err_t art_institution_build_vault_path(const char *museum_id,
     return ESP_OK;
 }
 
+esp_err_t art_institution_build_vault_path_from_spec(const char *spec_name,
+                                                     const institution_channel_entry_t *entry,
+                                                     char *out_path, size_t out_len)
+{
+    if (!spec_name || !entry || !out_path || out_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    char museum[16] = {0};
+    char axis[32] = {0};
+    esp_err_t err = art_institution_parse_spec(spec_name,
+                                               museum, sizeof(museum),
+                                               axis, sizeof(axis));
+    if (err != ESP_OK) return err;
+    return art_institution_build_vault_path(museum, entry, out_path, out_len);
+}
+
 // ----- Stubbed convenience wrappers (filled in stage 3) -------------------
 
-esp_err_t art_institution_refresh_by_spec(const char *spec_name,
-                                          const char *identifier,
-                                          struct channel_cache_s *cache)
+esp_err_t art_institution_refresh_by_spec(const char *channel_id,
+                                          const char *spec_name,
+                                          const char *identifier)
 {
-    // Stage 3 will implement: parse spec, find museum, call refresh_channel,
-    // merge entries, run orphan eviction, schedule cache save.
+    // Stage 3 will implement: parse spec, find museum, page through listing,
+    // merge entries (re-resolving cache from registry per page under
+    // channel_cache_lifecycle_lock), run orphan eviction, schedule cache save.
+    (void)channel_id;
     (void)spec_name;
     (void)identifier;
-    (void)cache;
     return ESP_ERR_NOT_SUPPORTED;
 }
 

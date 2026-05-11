@@ -18,6 +18,7 @@
 #include "makapix_artwork.h"  // For makapix_artwork_download_with_progress()
 #include "makapix_channel_events.h"  // For async completion events
 #include "giphy.h"             // For giphy_refresh_channel()
+#include "art_institution.h"   // For art_institution_refresh_by_spec()
 #include "makapix_promoted_https.h"  // For HTTPS fallback refresh
 #include "config_store.h"      // For config_store_get_giphy_refresh_interval()
 #include "channel_metadata.h"  // For channel_metadata_load()
@@ -125,6 +126,8 @@ static bool refresh_channel_is_eligible(ps_channel_state_t *ch, bool mqtt_ready)
         uint32_t interval = 0;
         if (ch->type == PS_CHANNEL_TYPE_GIPHY) {
             interval = config_store_get_giphy_refresh_interval();
+        } else if (ch->type == PS_CHANNEL_TYPE_INSTITUTION) {
+            interval = config_store_get_ai_refresh_sec();
         } else if (ch->type == PS_CHANNEL_TYPE_NAMED ||
                    ch->type == PS_CHANNEL_TYPE_USER ||
                    ch->type == PS_CHANNEL_TYPE_HASHTAG ||
@@ -157,6 +160,22 @@ static bool refresh_channel_is_eligible(ps_channel_state_t *ch, bool mqtt_ready)
         // the cooldown is active, leave Giphy channels pending so they
         // retry naturally once the quota window resets.
         if (giphy_is_rate_limited()) return false;
+        return true;
+    }
+
+    // Institution (museum) channels need Wi-Fi but not MQTT. Cooldown is
+    // per-museum (AIC's 60-req/min is the binding constraint); while a
+    // museum is rate-limited, leave its channels pending so they retry
+    // once the cooldown clears. ESP_LOGW happens at dispatch site (see the
+    // INSTITUTION arm below) so this gate stays silent.
+    if (ch->type == PS_CHANNEL_TYPE_INSTITUTION) {
+        if (!p3a_state_has_wifi()) return false;
+        char museum_id[16] = {0};
+        char axis[32] = {0};
+        if (art_institution_parse_spec(ch->spec_name, museum_id, sizeof(museum_id),
+                                       axis, sizeof(axis)) == ESP_OK) {
+            if (art_institution_is_rate_limited(museum_id)) return false;
+        }
         return true;
     }
 
@@ -491,7 +510,8 @@ static void refresh_task(void *arg)
                      t == PS_CHANNEL_TYPE_NAMED ||
                      t == PS_CHANNEL_TYPE_USER ||
                      t == PS_CHANNEL_TYPE_REACTIONS ||
-                     t == PS_CHANNEL_TYPE_HASHTAG) &&
+                     t == PS_CHANNEL_TYPE_HASHTAG ||
+                     t == PS_CHANNEL_TYPE_INSTITUTION) &&
                     !state->channels[i].refresh_in_progress &&
                     !state->channels[i].refresh_pending) {
                     state->channels[i].refresh_pending = true;
@@ -514,7 +534,8 @@ static void refresh_task(void *arg)
                     if ((t == PS_CHANNEL_TYPE_USER ||
                          t == PS_CHANNEL_TYPE_REACTIONS ||
                          t == PS_CHANNEL_TYPE_HASHTAG ||
-                         t == PS_CHANNEL_TYPE_NAMED) &&
+                         t == PS_CHANNEL_TYPE_NAMED ||
+                         t == PS_CHANNEL_TYPE_INSTITUTION) &&
                         !state->channels[i].refresh_in_progress &&
                         !state->channels[i].refresh_pending) {
                         state->channels[i].refresh_pending = true;
@@ -689,6 +710,8 @@ static void refresh_task(void *arg)
                         uint32_t cinterval = 0;
                         if (cch->type == PS_CHANNEL_TYPE_GIPHY) {
                             cinterval = config_store_get_giphy_refresh_interval();
+                        } else if (cch->type == PS_CHANNEL_TYPE_INSTITUTION) {
+                            cinterval = config_store_get_ai_refresh_sec();
                         } else if (cch->type == PS_CHANNEL_TYPE_NAMED ||
                                    cch->type == PS_CHANNEL_TYPE_USER ||
                                    cch->type == PS_CHANNEL_TYPE_HASHTAG ||
@@ -874,6 +897,74 @@ static void refresh_task(void *arg)
                 }
             }
             }
+        } else if (type == PS_CHANNEL_TYPE_INSTITUTION) {
+            // Parse museum id once for cooldown checks and log messages.
+            char museum_id[16] = {0};
+            char axis_unused[32] = {0};
+            art_institution_parse_spec(spec_name, museum_id, sizeof(museum_id),
+                                       axis_unused, sizeof(axis_unused));
+
+            // Defense-in-depth cooldown check — refresh_channel_is_eligible
+            // already filters out rate-limited museums, but the window can
+            // close between eligibility and dispatch.
+            if (art_institution_is_rate_limited(museum_id)) {
+                uint32_t remaining = art_institution_rate_limit_remaining(museum_id);
+                ESP_LOGW(TAG, "Skipping '%s': museum '%s' rate-limited (%us remaining)",
+                         display_name, museum_id, (unsigned)remaining);
+                err = ESP_OK;  // Treat as no-op; refresh_pending stays cleared
+            } else {
+                // Freshness gate (canonical: on-disk sidecar, see giphy block above)
+                char ai_ch_path[128];
+                if (sd_path_get_channel(ai_ch_path, sizeof(ai_ch_path)) != ESP_OK) {
+                    strlcpy(ai_ch_path, "/sdcard/p3a/channel", sizeof(ai_ch_path));
+                }
+                channel_metadata_t ai_meta;
+                channel_metadata_load(channel_id, ai_ch_path, &ai_meta);
+
+                time_t now = time(NULL);
+                uint32_t interval = config_store_get_ai_refresh_sec();
+                bool ai_allow_override = config_store_get_refresh_allow_override();
+                if (!ai_allow_override &&
+                    cache_has_entries &&
+                    ai_meta.last_refresh > 0 && now > 0 &&
+                    (now - ai_meta.last_refresh) < (time_t)interval) {
+                    if (!sntp_sync_is_synchronized()) {
+                        ESP_LOGI(TAG, "Institution channel '%s' deferred (SNTP not synchronized)", display_name);
+                    } else {
+                        uint32_t remaining = interval - (uint32_t)(now - ai_meta.last_refresh);
+                        time_t stale_at = ai_meta.last_refresh + (time_t)interval;
+                        if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
+                        ESP_LOGI(TAG, "Institution channel '%s' still fresh (last refresh %lds ago, interval %lus, stale in %lus), skipping",
+                                 display_name, (long)(now - ai_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
+                    }
+                    err = ESP_OK;  // Treat as successful no-op
+                } else {
+                    if (ai_allow_override) {
+                        ESP_LOGI(TAG, "Channel '%s' refresh override active, bypassing interval check", display_name);
+                    } else if (!cache_has_entries && ai_meta.last_refresh > 0) {
+                        ESP_LOGI(TAG, "Institution channel '%s' cache is empty, forcing refresh despite interval", display_name);
+                    }
+                    did_refresh = true;
+                    err = art_institution_refresh_by_spec(channel_id, spec_name, identifier);
+                    if (err == ESP_OK) {
+                        time_t stale_at = time(NULL) + (time_t)interval;
+                        if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
+                    } else if (err == ESP_ERR_INVALID_RESPONSE) {
+                        // 429 — cooldown already engaged inside the adapter.
+                        uint32_t remaining_sec = art_institution_rate_limit_remaining(museum_id);
+                        char rate_limit_buf[160];
+                        snprintf(rate_limit_buf, sizeof(rate_limit_buf),
+                                 "Cannot refresh channel: %s API\n"
+                                 "rate limit reached (error 429).\n"
+                                 "Device will retry in %u sec.",
+                                 museum_id[0] ? museum_id : "museum",
+                                 (unsigned)remaining_sec);
+                        p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_ERROR, -1, rate_limit_buf);
+                    } else {
+                        p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_ERROR, -1, "Museum refresh failed");
+                    }
+                }
+            }
         } else {
             // Gate 1: Require SNTP synchronization.
             // Without a valid clock, time comparisons are meaningless and any
@@ -990,11 +1081,12 @@ static void refresh_task(void *arg)
             makapix_channel_signal_refresh_done();
         } else {
             ch->refresh_in_progress = false;
-            // Giphy rate-limit: keep pending so the channel retries within
-            // ~2s of the cooldown clearing instead of waiting up to a full
-            // periodic cycle. ESP_ERR_INVALID_RESPONSE is only ever returned
-            // by Giphy paths for HTTP 429.
-            if (type == PS_CHANNEL_TYPE_GIPHY && err == ESP_ERR_INVALID_RESPONSE) {
+            // Giphy / institution rate-limit: keep pending so the channel
+            // retries within ~2s of the cooldown clearing instead of waiting
+            // up to a full periodic cycle. ESP_ERR_INVALID_RESPONSE is only
+            // ever returned by network-paths for HTTP 429.
+            if ((type == PS_CHANNEL_TYPE_GIPHY || type == PS_CHANNEL_TYPE_INSTITUTION) &&
+                err == ESP_ERR_INVALID_RESPONSE) {
                 ch->refresh_pending = true;
             }
         }

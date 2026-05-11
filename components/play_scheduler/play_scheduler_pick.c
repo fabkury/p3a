@@ -14,6 +14,7 @@
 #include "makapix_channel_impl.h"
 #include "makapix_channel_utils.h"
 #include "giphy.h"
+#include "art_institution.h"
 #include "sd_path.h"
 #include "esp_log.h"
 #include <string.h>
@@ -45,9 +46,10 @@ static __attribute__((unused)) bool has_404_marker(const char *filepath)
 static post_source_t post_source_from_channel_type(ps_channel_type_t type)
 {
     switch (type) {
-        case PS_CHANNEL_TYPE_SDCARD:  return POST_SOURCE_SDCARD;
-        case PS_CHANNEL_TYPE_GIPHY:   return POST_SOURCE_GIPHY;
-        default:                      return POST_SOURCE_MAKAPIX;
+        case PS_CHANNEL_TYPE_SDCARD:      return POST_SOURCE_SDCARD;
+        case PS_CHANNEL_TYPE_GIPHY:       return POST_SOURCE_GIPHY;
+        case PS_CHANNEL_TYPE_INSTITUTION: return POST_SOURCE_INSTITUTION;
+        default:                          return POST_SOURCE_MAKAPIX;
     }
 }
 
@@ -353,6 +355,11 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
             const giphy_channel_entry_t *ge = (const giphy_channel_entry_t *)entry;
             giphy_build_entry_filepath(ge, filepath, sizeof(filepath));
             strlcpy(storage_key, ge->giphy_id, sizeof(storage_key));
+        } else if (ch->entry_format == PS_ENTRY_FORMAT_INSTITUTION) {
+            const institution_channel_entry_t *ie = (const institution_channel_entry_t *)entry;
+            art_institution_build_vault_path_from_spec(ch->spec_name, ie,
+                                                      filepath, sizeof(filepath));
+            strlcpy(storage_key, ie->iiif_key, sizeof(storage_key));
         } else {
             ps_build_vault_filepath(entry, filepath, sizeof(filepath));
             bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
@@ -539,6 +546,11 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
             const giphy_channel_entry_t *ge = (const giphy_channel_entry_t *)entry;
             giphy_build_entry_filepath(ge, filepath, sizeof(filepath));
             strlcpy(storage_key, ge->giphy_id, sizeof(storage_key));
+        } else if (ch->entry_format == PS_ENTRY_FORMAT_INSTITUTION) {
+            const institution_channel_entry_t *ie = (const institution_channel_entry_t *)entry;
+            art_institution_build_vault_path_from_spec(ch->spec_name, ie,
+                                                      filepath, sizeof(filepath));
+            strlcpy(storage_key, ie->iiif_key, sizeof(storage_key));
         } else {
             ps_build_vault_filepath(entry, filepath, sizeof(filepath));
             bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
@@ -677,7 +689,7 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
     for (size_t i = 0; i < state->channel_count; i++) {
         ps_channel_state_t *ch = &state->channels[i];
 
-        if ((ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX || ch->entry_format == PS_ENTRY_FORMAT_GIPHY) && ch->cache) {
+        if ((ch->entry_format == PS_ENTRY_FORMAT_MAKAPIX || ch->entry_format == PS_ENTRY_FORMAT_GIPHY || ch->entry_format == PS_ENTRY_FORMAT_INSTITUTION) && ch->cache) {
             size_t ci_count = ch->cache->entry_count;
             size_t lai_count = ch->cache->available_count;
             ESP_LOGD(TAG, "  Ch[%zu] '%s': Ci=%zu, LAi=%zu, cursor=%lu, active=%d, weight=%lu",

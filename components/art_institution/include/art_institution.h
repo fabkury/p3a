@@ -114,17 +114,20 @@ esp_err_t art_institution_parse_spec(const char *spec_name,
 /**
  * @brief Refresh a single institution channel
  *
- * Convenience wrapper that parses the spec, looks up the museum, and
- * dispatches. Called from play_scheduler_refresh.c.
+ * Parses the spec, looks up the museum, paginates the listing API, and
+ * merges entries into the cache (resolving the cache from the registry on
+ * each page under channel_cache_lifecycle_lock() — same pattern Giphy
+ * uses, so a concurrent playset switch can't free the cache mid-refresh).
  *
+ * @param channel_id Channel id (used to re-resolve cache between pages)
  * @param spec_name  Channel spec name ("artic:departments")
  * @param identifier Term id ("PC-4")
- * @param cache      Pre-loaded channel cache
- * @return Adapter return value, or ESP_ERR_NOT_FOUND for unknown museum.
+ * @return ESP_OK on success, ESP_ERR_INVALID_RESPONSE on HTTP 429,
+ *         ESP_ERR_NOT_FOUND for unknown museum, other codes on error.
  */
-esp_err_t art_institution_refresh_by_spec(const char *spec_name,
-                                          const char *identifier,
-                                          struct channel_cache_s *cache);
+esp_err_t art_institution_refresh_by_spec(const char *channel_id,
+                                          const char *spec_name,
+                                          const char *identifier);
 
 /**
  * @brief Build the SD-card vault path for one entry
@@ -142,6 +145,18 @@ esp_err_t art_institution_refresh_by_spec(const char *spec_name,
 esp_err_t art_institution_build_vault_path(const char *museum_id,
                                            const institution_channel_entry_t *entry,
                                            char *out_path, size_t out_len);
+
+/**
+ * @brief Build vault path from a channel spec name + entry
+ *
+ * Convenience wrapper: parses the museum prefix out of spec_name (the
+ * portion before the colon — e.g. "artic" from "artic:departments") and
+ * forwards to art_institution_build_vault_path(). Used by the picker and
+ * download manager so neither needs to know the spec parsing rules.
+ */
+esp_err_t art_institution_build_vault_path_from_spec(const char *spec_name,
+                                                     const institution_channel_entry_t *entry,
+                                                     char *out_path, size_t out_len);
 
 /**
  * @brief Map a museum's iiif_key string to a salted DJB2 post_id

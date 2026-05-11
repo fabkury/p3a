@@ -553,6 +553,14 @@ bool play_scheduler_needs_download(const char *channel_id);
  */
 bool play_scheduler_is_giphy_channel(const char *channel_id);
 
+/**
+ * @brief Check if a channel is an art-institution (museum) channel
+ *
+ * @param channel_id Channel ID
+ * @return true if this is an institution channel
+ */
+bool play_scheduler_is_institution_channel(const char *channel_id);
+
 #ifdef __cplusplus
 }
 #endif

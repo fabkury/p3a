@@ -90,6 +90,15 @@ static esp_err_t rijks_fetch_jsonld(const char *url, char *buf, size_t buf_size,
             .timeout_ms = 15000,
             .crt_bundle_attach = esp_crt_bundle_attach,
             .buffer_size = 4096,
+            // ESP-IDF's fetch_headers() internally calls
+            // esp_http_client_set_redirection() on 3xx when auto-redirect
+            // is enabled (the default), which reads + consumes the
+            // Location header — by the time we get the response back the
+            // header is gone and get_header("Location",...) returns
+            // NOT_FOUND. We want to handle the hop ourselves so we can
+            // re-open the connection cleanly with our retry policy intact;
+            // disable the auto path so the Location stays readable.
+            .disable_auto_redirect = true,
         };
 
         esp_err_t fatal_err = ESP_OK;

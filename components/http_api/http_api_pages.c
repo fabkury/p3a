@@ -306,6 +306,15 @@ void http_api_register_page_handlers(httpd_handle_t server) {
     u.user_ctx = NULL;
     register_uri_handler_or_log(server, &u);
 
+    // /museum/* serves the art-institution browser ES modules from
+    // /webui/museum/* (index.js, artic.js, browse.js, ...). Symmetric
+    // with /static/* and /pico8/*: h_get_static prepends "/webui".
+    u.uri = "/museum/*";
+    u.method = HTTP_GET;
+    u.handler = h_get_static;
+    u.user_ctx = NULL;
+    register_uri_handler_or_log(server, &u);
+
 #if CONFIG_P3A_PICO8_ENABLE
     // /pico8/* serves PICO-8 module assets from /webui/pico8/*. The bare /pico8 URL
     // (no trailing slash) is unaffected — the wildcard requires "/pico8/" so the page

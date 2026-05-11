@@ -170,6 +170,14 @@ esp_err_t h_put_config(httpd_req_t *req) {
     if (ris && cJSON_IsNumber(ris)) {
         config_store_invalidate_refresh_interval_sec();
     }
+    cJSON *air = cJSON_GetObjectItem(o, "ai_refresh_sec");
+    if (air && cJSON_IsNumber(air)) {
+        config_store_invalidate_ai_refresh_sec();
+    }
+    cJSON *aic = cJSON_GetObjectItem(o, "ai_cache_size");
+    if (aic && cJSON_IsNumber(aic)) {
+        config_store_invalidate_ai_cache_size();
+    }
 
     cJSON *csm = cJSON_GetObjectItem(o, "channel_select_mode");
     if (csm && cJSON_IsNumber(csm)) {

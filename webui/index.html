@@ -434,6 +434,11 @@ var giphyCooldownActive = false;
 // (older firmware) — fall back to treating channels as always due.
 var giphyRefreshIntervalSec = 0;
 var makapixRefreshIntervalSec = 0;
+// Institution-channel refresh interval (default 1 day; pulled from /config).
+var aiRefreshSec = 86400;
+// Museum-id -> remaining cooldown seconds, refreshed by pollMuseumRateLimits.
+// Empty map until first /api/museum/rate-limits response lands.
+var museumCooldowns = {};
 // "Allow refresh override (one-time bypass)" — when true the dispatcher
 // refreshes every channel regardless of last_refresh, so isDueForRefresh
 // must short-circuit to true to keep the pulse animation visible.
@@ -1059,13 +1064,24 @@ function toggleNowPlaying() {
 }
 
 function typeBadgeLetter(type) {
-    var m = {named:'N',user:'U',hashtag:'H',sdcard:'S',giphy:'G',artwork:'A'};
+    var m = {named:'N',user:'U',hashtag:'H',sdcard:'S',giphy:'G',artwork:'A',institution:'M'};
     return m[type] || '?';
 }
 function subTypeBadge(name) {
     if (!name) return '';
+    // Institution channels store name as "{museum}:{axis}" — surface the
+    // museum prefix only so the badge fits the column width.
+    var colon = name.indexOf(':');
+    if (colon > 0) return name.substring(0, Math.min(2, colon)).toUpperCase();
     var m = {all:'AL',promoted:'PR',trending:'TR',search:'SE',sdcard:'SD',user:'US',hashtag:'HT',artwork:'AW'};
     return m[name] || name.substring(0,2).toUpperCase();
+}
+// Returns the museum id portion of an institution channel `name` field
+// ("artic:departments" -> "artic"), or '' for non-institution channels.
+function museumIdFromName(name) {
+    if (!name) return '';
+    var colon = name.indexOf(':');
+    return colon > 0 ? name.substring(0, colon) : '';
 }
 function relativeTime(epoch) {
     if (!epoch) return 'never';
@@ -1105,10 +1121,22 @@ function isDueForRefresh(ch) {
     // always run a real refresh when picked, so treat them as always due.
     var interval = 0;
     if (ch.type === 'giphy') interval = giphyRefreshIntervalSec;
+    else if (ch.type === 'institution') interval = aiRefreshSec;
     else if (ch.type === 'named' || ch.type === 'user' ||
              ch.type === 'hashtag' || ch.type === 'reactions') interval = makapixRefreshIntervalSec;
     if (!interval) return true;
     return (Math.floor(Date.now() / 1000) - ch.last_refresh) >= interval;
+}
+// Per design §11.1: institution channels get the "API rate limited"
+// styling only when their cache is stale (would otherwise refresh now)
+// AND the museum is currently in cooldown. Fresh channels aren't blocked
+// even if their museum is throttled, because they have content to play.
+function isMuseumBlocked(ch) {
+    if (ch.type !== 'institution') return false;
+    var mid = museumIdFromName(ch.name);
+    if (!mid) return false;
+    var cd = museumCooldowns[mid] | 0;
+    return cd > 0 && isDueForRefresh(ch);
 }
 function createChannelRow(ch) {
     var row = document.createElement('div');
@@ -1117,7 +1145,8 @@ function createChannelRow(ch) {
     // Fresh-but-queued channels would be skipped by the dispatcher's freshness
     // gate, so neither the cooldown styling nor the refresh animation applies.
     var due = isDueForRefresh(ch);
-    var blocked = giphyCooldownActive && ch.type === 'giphy' && ch.refreshing && due;
+    var blocked = (giphyCooldownActive && ch.type === 'giphy' && ch.refreshing && due)
+               || isMuseumBlocked(ch);
     if (blocked) row.classList.add('cooldown');
     else if (ch.refreshing && due) row.classList.add('refreshing');
     var s = '<span class="ps-badge ps-badge-type">' + typeBadgeLetter(ch.type) + '</span>';
@@ -1131,7 +1160,8 @@ function createChannelRow(ch) {
 }
 function updateChannelRow(row, ch) {
     var due = isDueForRefresh(ch);
-    var blocked = giphyCooldownActive && ch.type === 'giphy' && ch.refreshing && due;
+    var blocked = (giphyCooldownActive && ch.type === 'giphy' && ch.refreshing && due)
+               || isMuseumBlocked(ch);
     if (blocked) {
         row.classList.add('cooldown');
         row.classList.remove('refreshing');
@@ -1252,6 +1282,42 @@ function pollActivePlayset(attempt) {
 
 checkForUpdates();
 var pollIntervalId = setInterval(pollActivePlayset, 4000);
+
+// Poll the per-museum cooldown table so the "API rate limited" badge on
+// institution-channel rows can light up promptly after a 429. 8s cadence
+// matches the channel-list freshness pulse rate; museum cooldowns are
+// short-lived (default 60s) so we want to react within a polling window.
+function pollMuseumRateLimits() {
+    fetch('/api/museum/rate-limits', { cache: 'no-store' }).then(function(r) {
+        if (!r.ok) return null;
+        return r.json();
+    }).then(function(j) {
+        if (!j || typeof j !== 'object') return;
+        var next = {};
+        for (var k in j) {
+            if (Object.prototype.hasOwnProperty.call(j, k) && j[k]) {
+                next[k] = j[k].remaining_sec | 0;
+            }
+        }
+        museumCooldowns = next;
+    }).catch(function() { /* network blip; keep previous map */ });
+}
+pollMuseumRateLimits();
+setInterval(pollMuseumRateLimits, 8000);
+
+// Pull ai_refresh_sec once at boot so isDueForRefresh can reason about
+// institution channels. We don't re-poll because the user changes this
+// only via Settings, and the next page load (or playset switch) refreshes
+// the value naturally.
+fetch('/config', { cache: 'no-store' }).then(function(r) {
+    if (!r.ok) return null;
+    return r.json();
+}).then(function(cfg) {
+    if (cfg && typeof cfg.ai_refresh_sec === 'number' && cfg.ai_refresh_sec > 0) {
+        aiRefreshSec = cfg.ai_refresh_sec;
+    }
+}).catch(function() {});
+
 function schedulePollSoon() {
     clearInterval(pollIntervalId);
     setTimeout(function() {

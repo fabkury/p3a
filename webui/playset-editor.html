@@ -652,6 +652,7 @@
                     <option value="hashtag">Makapix Hashtag</option>
                     <option value="sdcard">Local SD Card</option>
                     <option value="giphy">Giphy</option>
+                    <option value="institution">Museum</option>
                 </select>
             </div>
 
@@ -701,7 +702,8 @@
             reactions: 'Artist Reactions',
             hashtag: 'Hashtag',
             sdcard: 'SD Card',
-            giphy: 'Giphy'
+            giphy: 'Giphy',
+            institution: 'Museum'
         };
 
         var channelColors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b', '#fa709a'];
@@ -1788,9 +1790,53 @@
                         '<input type="text" id="giphySearch" class="form-input" placeholder="cats" maxlength="32">' +
                         '</div>';
                     break;
+
+                case 'institution':
+                    // Museum picks happen through a dedicated four-step modal
+                    // (museum -> axis -> term -> preview) defined in
+                    // /museum/browse.js. The Add Channel modal stays open in
+                    // the background while the user navigates; the browse
+                    // modal closes both modals on confirm.
+                    html = '<div class="mode-description" style="margin-top: 0;">' +
+                        'Opening museum browser…' +
+                        '</div>';
+                    // Defer so the dropdown click handler returns before
+                    // we mount another modal on top.
+                    setTimeout(openMuseumBrowseFromEditor, 0);
+                    break;
             }
 
             container.innerHTML = html;
+        }
+
+        // Bridge to the ES-module museum browser. Populated by the
+        // <script type="module"> block below on page load.
+        function openMuseumBrowseFromEditor() {
+            if (typeof window.__museumBrowseOpen !== 'function') {
+                showToast('Museum browser still loading', 'error');
+                return;
+            }
+            window.__museumBrowseOpen({
+                onAdd: function(spec) {
+                    if (state.channels.length >= 64) {
+                        showToast('Maximum 64 channels allowed', 'error');
+                        return;
+                    }
+                    var override = document.getElementById('channelDisplayName').value.trim();
+                    if (override) spec.display_name = override;
+                    state.channels.push(spec);
+                    renderChannels();
+                    closeAddChannelModal();
+                    showToast('Museum channel added', 'success');
+                },
+                onCancel: function() {
+                    // User backed out of the browse modal. Revert the type
+                    // dropdown to a sane default so the Add Channel modal
+                    // doesn't keep re-triggering the browser on reopen.
+                    document.getElementById('channelType').value = 'named';
+                    updateChannelTypeFields();
+                }
+            });
         }
 
         function updateGiphyFields() {
@@ -1871,6 +1917,15 @@
                         channel.identifier = query;
                     }
                     break;
+
+                case 'institution':
+                    // The browse modal pushes the channel directly via
+                    // its onAdd callback, so clicking the editor's Add
+                    // Channel button while type=Museum has no path to
+                    // produce a valid spec. Bail with a hint instead of
+                    // generating an empty channel.
+                    showToast('Use the museum browser to pick a term first', 'error');
+                    return;
             }
 
             state.channels.push(channel);
@@ -1901,6 +1956,13 @@
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;');
         }
+    </script>
+    <!-- Museum browse modal lives in /museum/*.js as ES modules. The
+         editor's classic <script> above can't `import`, so we mount the
+         entry point onto window.__museumBrowseOpen here. -->
+    <script type="module">
+        import { openMuseumBrowse } from '/museum/browse.js';
+        window.__museumBrowseOpen = openMuseumBrowse;
     </script>
 <nav class="bottom-nav">
 <a href="/" class="bottom-nav-item"><span class="bottom-nav-icon">&#8962;</span><span class="bottom-nav-label">Home</span></a>

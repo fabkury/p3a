@@ -152,6 +152,7 @@
     <button class="tab-item active" data-tab="display">Display</button>
     <button class="tab-item" data-tab="network">Network</button>
     <button class="tab-item" data-tab="giphy">Giphy</button>
+    <button class="tab-item" data-tab="museum">Museum</button>
     <button class="tab-item" data-tab="storage">Storage</button>
     <button class="tab-item" data-tab="makapix">Makapix</button>
     <button class="tab-item" data-tab="system">System</button>
@@ -348,6 +349,48 @@
     </div>
     <div class="section">
         <button class="btn save-all" id="giphy-save-btn" onclick="saveGiphyAll()">Save All Giphy Settings</button>
+    </div>
+</div>
+
+<!-- Museum Tab -->
+<div class="tab-content" id="tab-museum">
+    <div class="section">
+        <h3>Museums</h3>
+        <p class="file-name" style="margin-bottom:10px;">Channels that play artwork from Art Institute of Chicago and (in a future release) Rijksmuseum, via IIIF. Build a museum channel from <a href="/playset-editor">Playsets</a> &gt; Add Channel &gt; Museum.</p>
+        <div class="setting-row">
+            <label class="setting-label" for="ai-refresh-sec">Refresh Interval</label>
+            <select class="setting-select" id="ai-refresh-sec">
+                <option value="28800">8 hours</option>
+                <option value="86400" selected>1 day (default)</option>
+                <option value="172800">2 days</option>
+                <option value="345600">4 days</option>
+            </select>
+        </div>
+        <div class="setting-row">
+            <label class="setting-label" for="ai-cache-size">Cache Size</label>
+            <select class="setting-select" id="ai-cache-size">
+                <option value="32">32</option>
+                <option value="64">64</option>
+                <option value="128">128</option>
+                <option value="256">256</option>
+                <option value="512">512</option>
+                <option value="1024" selected>1024 (default)</option>
+                <option value="2048">2048</option>
+                <option value="4096">4096</option>
+            </select>
+        </div>
+        <div class="setting-hint">
+            Refresh interval controls how often the device re-queries each museum's listing API for new
+            artwork. Cache size caps the entries kept per channel (32-4096).
+            <br><br>
+            <strong>Note on AIC rate limits:</strong> The Art Institute of Chicago caps API usage at
+            60 requests per minute per IP. A single channel refresh issues up to ~41 paginated requests,
+            so 4+ museum channels refreshing simultaneously can trigger throttling. The browse
+            previewer and refresh dispatcher both honor a shared cooldown when a 429 is observed.
+        </div>
+    </div>
+    <div class="section">
+        <button class="btn save-all" id="museum-save-btn" onclick="saveMuseumAll()">Save Museum Settings</button>
     </div>
 </div>
 
@@ -813,6 +856,35 @@ function resetRandomId() {
     xhr.send();
 }
 
+// ── Museum tab ──
+
+function loadMuseumSettings(cfg) {
+    var refreshSel = document.getElementById('ai-refresh-sec');
+    var cacheSel   = document.getElementById('ai-cache-size');
+    var refreshVal = String(cfg.ai_refresh_sec || 86400);
+    var cacheVal   = String(cfg.ai_cache_size  || 1024);
+    refreshSel.value = refreshVal;
+    if (!refreshSel.value) refreshSel.value = '86400';
+    cacheSel.value = cacheVal;
+    if (!cacheSel.value) cacheSel.value = '1024';
+}
+
+function saveMuseumAll() {
+    var btn = document.getElementById('museum-save-btn');
+    btn.disabled = true;
+    var partial = {
+        ai_refresh_sec: parseInt(document.getElementById('ai-refresh-sec').value, 10),
+        ai_cache_size:  parseInt(document.getElementById('ai-cache-size').value, 10)
+    };
+    mergeConfig(partial, function() {
+        btn.disabled = false;
+        showToast('Museum settings saved', false);
+    }, function(status) {
+        btn.disabled = false;
+        showToast('Save failed (HTTP ' + status + ')', true);
+    });
+}
+
 // ── Storage tab ──
 
 function saveCacheSize() {
@@ -1155,6 +1227,8 @@ xhr.onreadystatechange = function() {
         document.getElementById('refresh-override').checked = !!cfg.refresh_allow_override;
         // Giphy tab
         loadGiphySettings(cfg);
+        // Museum tab
+        loadMuseumSettings(cfg);
     }
 };
 xhr.send();

@@ -15,12 +15,14 @@ import { ArticAdapter } from './artic.js';
 import { RijksmuseumAdapter } from './rijksmuseum.js';
 import { VamAdapter } from './vam.js';
 import { WellcomeAdapter } from './wellcome.js';
+import { SmkAdapter } from './smk.js';
 
 const ADAPTERS = [
     new ArticAdapter(),
     new RijksmuseumAdapter(),
     new VamAdapter(),
     new WellcomeAdapter(),
+    new SmkAdapter(),
 ];
 
 export function listAdapters() {

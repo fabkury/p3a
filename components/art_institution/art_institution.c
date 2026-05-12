@@ -57,6 +57,14 @@ const art_institution_museum_t ART_INSTITUTION_MUSEUMS[] = {
         .build_iiif_url  = art_institution_wellcome_build_iiif_url,
         .resolve_entry   = NULL,  // Wellcome returns the IIIF id inline; no walk.
     },
+    {
+        .id              = "smk",
+        .display         = "Statens Museum for Kunst",
+        .museum_enum     = ART_INSTITUTION_MUSEUM_SMK,
+        .refresh_channel = art_institution_smk_refresh_channel,
+        .build_iiif_url  = art_institution_smk_build_iiif_url,
+        .resolve_entry   = NULL,  // SMK returns image_iiif_id inline; no walk.
+    },
 };
 
 const size_t ART_INSTITUTION_MUSEUM_COUNT =

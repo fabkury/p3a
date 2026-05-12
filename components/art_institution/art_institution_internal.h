@@ -154,6 +154,18 @@ esp_err_t art_institution_wellcome_build_iiif_url(const institution_channel_entr
                                                   int longest_side,
                                                   char *out, size_t len);
 
+// ============================================================================
+// SMK adapter entry points (defined in museums/smk.c)
+// ============================================================================
+
+esp_err_t art_institution_smk_refresh_channel(const char *channel_id,
+                                              const char *axis,
+                                              const char *term_id);
+
+esp_err_t art_institution_smk_build_iiif_url(const institution_channel_entry_t *entry,
+                                             int longest_side,
+                                             char *out, size_t len);
+
 #ifdef __cplusplus
 }
 #endif

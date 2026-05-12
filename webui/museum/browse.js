@@ -11,6 +11,10 @@
 
 import { listAdapters, getAdapter } from './index.js';
 
+// PAGE_SIZE — items per listArtworks() round-trip during preview
+// navigation. See spec §4.1 for the trade-off; 20 is the chosen value.
+const PAGE_SIZE = 20;
+
 const STYLE_ID = 'museum-browse-style';
 const CSS = `
 .mb-overlay { position: fixed; inset: 0; background: rgba(15,20,30,0.78); display: flex;
@@ -35,14 +39,27 @@ const CSS = `
 .mb-item .mb-count { color: #94a3b8; font-variant-numeric: tabular-nums; font-size: 0.85rem; }
 .mb-status { padding: 16px 12px; color: #cbd5e1; font-size: 0.9rem; text-align: center; }
 .mb-status.error { color: #fca5a5; }
-.mb-thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 8px 0 12px; }
-.mb-thumb { width: 100%; aspect-ratio: 1 / 1; background: #0f172a; border-radius: 6px;
-    object-fit: cover; display: block; }
-.mb-textcards { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 12px; }
-.mb-textcard { background: rgba(255,255,255,0.04); border-radius: 6px; padding: 8px 10px;
-    font-size: 0.82rem; line-height: 1.3; }
-.mb-textcard .mb-tc-title { color: #f3f4f6; font-weight: 500; }
-.mb-textcard .mb-tc-meta  { color: #94a3b8; font-size: 0.78rem; margin-top: 2px; }
+.mb-preview { display: flex; flex-direction: column; align-items: stretch; margin: 8px 0 12px; }
+.mb-preview-slot { position: relative; width: 100%; aspect-ratio: 1 / 1; background: #0f172a;
+    border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.mb-preview-img { width: 100%; height: 100%; object-fit: contain; display: block;
+    transition: opacity 120ms linear; }
+.mb-preview-img.loading { opacity: 0.4; }
+.mb-preview-spin { position: absolute; bottom: 8px; right: 8px; width: 18px; height: 18px;
+    border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); border-top-color: #cbd5e1;
+    animation: mb-spin 0.9s linear infinite; }
+.mb-preview-spin.hidden { display: none; }
+@keyframes mb-spin { to { transform: rotate(360deg); } }
+.mb-preview-fail { color: #fca5a5; font-size: 0.85rem; text-align: center; padding: 12px; }
+.mb-preview-meta { margin-top: 10px; }
+.mb-preview-meta .mb-meta-title { color: #f3f4f6; font-weight: 500; font-size: 0.92rem; }
+.mb-preview-meta .mb-meta-sub   { color: #94a3b8; font-size: 0.8rem; margin-top: 2px; }
+.mb-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin-top: 10px; }
+.mb-nav button { padding: 6px 14px; border-radius: 8px; border: 0; cursor: pointer;
+    background: rgba(255,255,255,0.08); color: #f3f4f6; font-weight: 500; }
+.mb-nav button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.mb-nav .mb-counter { color: #94a3b8; font-variant-numeric: tabular-nums; font-size: 0.85rem; }
 .mb-add-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
     padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); margin-top: 8px; }
 .mb-add-row .mb-add-label { font-size: 0.85rem; color: #cbd5e1; }
@@ -121,8 +138,8 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
         adapter: null,          // museum adapter once chosen
         axis: null,             // {name, label} once chosen (or null if axes empty)
         term: null,             // {id, label, count}
-        thumbs: [],             // imageId[] for preview
         cooldownTick: null,     // interval id for the cooldown countdown
+        preview: null,          // preview sub-state, populated by renderPreviewStep
     };
 
     const overlay = el('div', { class: 'mb-overlay' });
@@ -296,8 +313,30 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
         renderPreviewStep();
     }
 
+    function computeCursorEnd(prev, gotItemsCount) {
+        // After a fetch returns gotItemsCount items, decide if this is
+        // the end of the stream. See spec §4.3.
+        if (gotItemsCount === 0) return true;
+        if (typeof prev.total === 'number' && prev.nextOffset >= prev.total) return true;
+        // AIC public-tier cap: `from + size <= 1000` (see finalized-design.md §9.1).
+        if (state.adapter && state.adapter.id === 'artic' && prev.nextOffset >= 1000) {
+            return true;
+        }
+        return false;
+    }
+
     async function renderPreviewStep() {
         state.step = 'preview';
+        state.preview = {
+            index: 0,
+            items: [],
+            total: null,
+            nextOffset: 0,
+            cursorEnd: false,
+            loading: true,
+            error: null,
+            renderToken: 0,
+        };
         title.textContent = `${state.adapter.displayName}: preview`;
         crumbs.textContent = state.axis
             ? `${state.adapter.displayName} · ${state.axis.label} · ${state.term.label}`
@@ -305,13 +344,13 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
         back.disabled = false;
         back.onclick = () => renderTermsStep();
         clear(body);
-        body.appendChild(el('div', { class: 'mb-status', text: 'Loading thumbnails…' }));
+        body.appendChild(el('div', { class: 'mb-status', text: 'Loading…' }));
 
         let result;
         try {
             const arg = state.axis
-                ? { offset: 0, rows: 8, axis: state.axis.name }
-                : { offset: 0, rows: 8 };
+                ? { offset: 0, rows: PAGE_SIZE, axis: state.axis.name }
+                : { offset: 0, rows: PAGE_SIZE };
             result = await state.adapter.listArtworks(state.term.id, arg);
         } catch (err) {
             clear(body);
@@ -321,47 +360,65 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
                 return;
             }
             body.appendChild(el('div', { class: 'mb-status error', text: 'Failed to load preview.' }));
+            // Still surface the Add button below so the user can commit
+            // the channel even if the preview load failed (the device
+            // will refresh independently).
+            body.appendChild(buildAddRow());
             return;
         }
 
+        const prev = state.preview;
+        prev.items = result.items || [];
+        prev.total = (typeof result.total === 'number') ? result.total : null;
+        prev.nextOffset = PAGE_SIZE;
+        prev.cursorEnd = computeCursorEnd(prev, prev.items.length);
+
         clear(body);
-        const items = (result.items || []).slice(0, 8);
-        if (items.length === 0) {
-            body.appendChild(el('div', { class: 'mb-status', text: 'No previewable artwork. Channel may be empty.' }));
-        } else {
-            // Pick rendering mode: image grid if the adapter resolved
-            // thumbnail URLs (AIC), otherwise a textual card list for
-            // adapters that can't cheaply build thumbs (Rijks needs a
-            // 3-hop Linked-Art walk per artwork — too expensive for an
-            // 8-item preview that costs nothing on the device).
-            const firstUrl = items[0].imageId ? state.adapter.thumbnailUrl(items[0].imageId, 64) : null;
-            if (firstUrl) {
-                const strip = el('div', { class: 'mb-thumbs' });
-                for (const it of items) {
-                    const img = el('img', {
-                        class: 'mb-thumb',
-                        src: state.adapter.thumbnailUrl(it.imageId, 64),
-                        alt: it.title,
-                        title: it.artist ? `${it.title} — ${it.artist}` : it.title,
-                        loading: 'lazy',
-                    });
-                    img.addEventListener('error', () => { img.style.opacity = '0.3'; });
-                    strip.appendChild(img);
-                }
-                body.appendChild(strip);
-            } else {
-                const list = el('div', { class: 'mb-textcards' });
-                for (const it of items) {
-                    const meta = [it.artist, it.date].filter(Boolean).join(' · ');
-                    const card = el('div', { class: 'mb-textcard' });
-                    card.appendChild(el('div', { class: 'mb-tc-title', text: it.title || '(untitled)' }));
-                    if (meta) card.appendChild(el('div', { class: 'mb-tc-meta', text: meta }));
-                    list.appendChild(card);
-                }
-                body.appendChild(list);
-            }
+        if (prev.items.length === 0) {
+            body.appendChild(el('div', {
+                class: 'mb-status',
+                text: 'No previewable artwork. Channel may be empty.',
+            }));
+            body.appendChild(buildAddRow());
+            return;
         }
 
+        const shell = buildPreviewShell();
+        body.appendChild(shell.root);
+        body.appendChild(buildAddRow());
+        prev.loading = false;
+        await renderPreviewSlot(shell);
+    }
+
+    function buildPreviewShell() {
+        // Construct shell first, populate fields as we go, then wire up
+        // events and assemble parent containers. Click handlers reference
+        // `shell` so the same object can pass through to onPrev/onNext.
+        const shell = {};
+        shell.img      = el('img', { class: 'mb-preview-img', alt: '' });
+        shell.spinner  = el('div', { class: 'mb-preview-spin hidden' });
+        shell.failTile = el('div', { class: 'mb-preview-fail hidden',
+            text: '⚠ couldn’t load this artwork' });
+        shell.metaTitle = el('div', { class: 'mb-meta-title' });
+        shell.metaSub   = el('div', { class: 'mb-meta-sub' });
+        shell.prevBtn   = el('button', { text: '← Previous' });
+        shell.nextBtn   = el('button', { text: 'Next →' });
+        shell.counter   = el('span', { class: 'mb-counter' });
+
+        shell.prevBtn.addEventListener('click', () => onPrev(shell));
+        shell.nextBtn.addEventListener('click', () => onNext(shell));
+
+        const slot = el('div', { class: 'mb-preview-slot' },
+            [shell.img, shell.spinner, shell.failTile]);
+        const meta = el('div', { class: 'mb-preview-meta' },
+            [shell.metaTitle, shell.metaSub]);
+        const nav  = el('div', { class: 'mb-nav' },
+            [shell.prevBtn, shell.counter, shell.nextBtn]);
+        shell.root = el('div', { class: 'mb-preview' }, [slot, meta, nav]);
+        return shell;
+    }
+
+    function buildAddRow() {
         const addRow = el('div', { class: 'mb-add-row' });
         addRow.appendChild(el('span', {
             class: 'mb-add-label',
@@ -370,7 +427,145 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
         const addBtn = el('button', { class: 'mb-add', text: 'Add channel' });
         addBtn.addEventListener('click', confirmAdd);
         addRow.appendChild(addBtn);
-        body.appendChild(addRow);
+        return addRow;
+    }
+
+    function updateNavState(shell) {
+        const prev = state.preview;
+        const atStart = prev.index <= 0;
+        const atEnd   = (prev.index + 1 >= prev.items.length) && prev.cursorEnd;
+        shell.prevBtn.disabled = atStart || prev.loading;
+        shell.nextBtn.disabled = atEnd   || prev.loading;
+        // Counter: "N / total" if total known, else just "N".
+        const human = prev.index + 1;
+        shell.counter.textContent = (typeof prev.total === 'number')
+            ? `${human} / ${prev.total}`
+            : String(human);
+    }
+
+    async function renderPreviewSlot(shell) {
+        const prev = state.preview;
+        const token = (prev.renderToken = (prev.renderToken + 1) | 0);
+        const item = prev.items[prev.index];
+
+        // Caption renders immediately from listArtworks metadata.
+        shell.metaTitle.textContent = item.title || '(untitled)';
+        const sub = [item.artist, item.date].filter(Boolean).join(' · ');
+        shell.metaSub.textContent = sub;
+        shell.metaSub.style.display = sub ? '' : 'none';
+
+        // Loading state: dim current image, show spinner, hide fail tile.
+        prev.loading = true;
+        shell.img.classList.add('loading');
+        shell.spinner.classList.remove('hidden');
+        shell.failTile.classList.add('hidden');
+        updateNavState(shell);
+
+        let url = null;
+        try {
+            url = await state.adapter.previewUrl(item, 400);
+        } catch (_) { url = null; }
+
+        if (token !== prev.renderToken) return; // user clicked again; abandon
+
+        if (!url) {
+            shell.img.removeAttribute('src');
+            shell.img.classList.remove('loading');
+            shell.spinner.classList.add('hidden');
+            shell.failTile.classList.remove('hidden');
+            prev.loading = false;
+            updateNavState(shell);
+            return;
+        }
+
+        // Attach one-shot load/error handlers; check token to bail if a
+        // newer navigation has started.
+        const onLoad = () => {
+            if (token !== prev.renderToken) return;
+            shell.img.classList.remove('loading');
+            shell.spinner.classList.add('hidden');
+            shell.failTile.classList.add('hidden');
+            prev.loading = false;
+            updateNavState(shell);
+        };
+        const onError = () => {
+            if (token !== prev.renderToken) return;
+            shell.img.removeAttribute('src');
+            shell.img.classList.remove('loading');
+            shell.spinner.classList.add('hidden');
+            shell.failTile.classList.remove('hidden');
+            prev.loading = false;
+            updateNavState(shell);
+        };
+        shell.img.onload  = onLoad;
+        shell.img.onerror = onError;
+        shell.img.src     = url;
+    }
+
+    function onPrev(shell) {
+        const prev = state.preview;
+        if (prev.loading) return;
+        if (prev.index <= 0) return;
+        prev.index -= 1;
+        renderPreviewSlot(shell);
+    }
+
+    async function onNext(shell) {
+        const prev = state.preview;
+        if (prev.loading) return;
+        if (prev.index + 1 < prev.items.length) {
+            prev.index += 1;
+            renderPreviewSlot(shell);
+            return;
+        }
+        if (prev.cursorEnd) return;
+
+        // Need a fetch. Disable buttons immediately.
+        prev.loading = true;
+        updateNavState(shell);
+        shell.spinner.classList.remove('hidden');
+
+        let result;
+        try {
+            const arg = state.axis
+                ? { offset: prev.nextOffset, rows: PAGE_SIZE, axis: state.axis.name }
+                : { offset: prev.nextOffset, rows: PAGE_SIZE };
+            result = await state.adapter.listArtworks(state.term.id, arg);
+        } catch (err) {
+            shell.spinner.classList.add('hidden');
+            prev.loading = false;
+            if (err && err.status === 429) {
+                const remain = await fetchCooldown(state.adapter.id);
+                renderCooldown(remain || 60);
+                return;
+            }
+            // Soft failure: stay on the current item, mark cursor end so
+            // we don't loop. User can still retry by clicking Next again
+            // if cursorEnd were not set — but we set it to avoid hammering
+            // a broken endpoint.
+            prev.cursorEnd = true;
+            updateNavState(shell);
+            return;
+        }
+
+        const newItems = (result && Array.isArray(result.items)) ? result.items : [];
+        prev.items.push(...newItems);
+        prev.nextOffset += PAGE_SIZE;
+        if (prev.total == null && result && typeof result.total === 'number') {
+            prev.total = result.total;
+        }
+        prev.cursorEnd = computeCursorEnd(prev, newItems.length);
+
+        if (newItems.length === 0) {
+            // We bumped past the actual end. Nothing new to show.
+            shell.spinner.classList.add('hidden');
+            prev.loading = false;
+            updateNavState(shell);
+            return;
+        }
+
+        prev.index += 1;
+        renderPreviewSlot(shell);
     }
 
     function confirmAdd() {

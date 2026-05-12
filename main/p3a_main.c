@@ -17,9 +17,9 @@
 #include "esp_event.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#if CONFIG_P3A_MEMORY_REPORTING_ENABLE
 #include "esp_heap_caps.h"
-#endif
+#include "esp_rom_sys.h"
+#include <stdatomic.h>
 
 #include "app_lcd.h"
 #include "app_touch.h"
@@ -86,6 +86,53 @@ esp_err_t animation_player_set_dwell_time(uint32_t dwell_time)
 
 // Phase 7: auto_swap_task removed - timer task now in play_scheduler
 
+// esp_hosted SDIO RX requests this exact cap mask in sdio_rx_get_buffer()
+// (see managed_components/.../sdio_drv.c). When *that* allocation returns
+// NULL, the driver asserts and the chip panics — so this is the mask whose
+// free/largest values actually predict the SDIO assert.
+#define HEAP_DIAG_SDIO_RX_CAPS (MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT)
+
+// One-shot guard: only the first failed allocation since boot dumps a
+// snapshot. Prevents recursive logging or flooding if many allocations fail
+// back-to-back during a heap-exhaustion cascade.
+static atomic_flag s_alloc_failed_fired = ATOMIC_FLAG_INIT;
+
+// Heap allocation-failed hook. Registered unconditionally; cost is zero
+// unless an allocation fails. Uses esp_rom_printf so it is safe from any
+// context (task, ISR, critical section). Calls heap_caps query functions,
+// which are documented safe from the failed-alloc callback because the
+// heap mutex is released before the hook is invoked.
+static void heap_diag_alloc_failed_hook(size_t size, uint32_t caps, const char *function_name)
+{
+    if (atomic_flag_test_and_set(&s_alloc_failed_fired)) {
+        return;
+    }
+    const char *task_name = xPortInIsrContext() ? "ISR" : pcTaskGetName(NULL);
+    if (!task_name) task_name = "?";
+
+    esp_rom_printf("\n*** HEAP ALLOC FAILED (one-shot snapshot) ***\n");
+    esp_rom_printf("  func=%s  size=%u  caps=0x%08x  task=%s\n",
+                   function_name ? function_name : "?",
+                   (unsigned)size, (unsigned)caps, task_name);
+    esp_rom_printf("  INT+DMA+8BIT (SDIO RX): free=%u largest=%u total=%u\n",
+                   (unsigned)heap_caps_get_free_size(HEAP_DIAG_SDIO_RX_CAPS),
+                   (unsigned)heap_caps_get_largest_free_block(HEAP_DIAG_SDIO_RX_CAPS),
+                   (unsigned)heap_caps_get_total_size(HEAP_DIAG_SDIO_RX_CAPS));
+    esp_rom_printf("  INTERNAL:               free=%u largest=%u\n",
+                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+    esp_rom_printf("  DMA:                    free=%u largest=%u\n",
+                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA),
+                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA));
+    esp_rom_printf("  SPIRAM:                 free=%u largest=%u\n",
+                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+    esp_rom_printf("  DEFAULT:                free=%u largest=%u\n",
+                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_DEFAULT),
+                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
+    esp_rom_printf("*********************************************\n\n");
+}
+
 #if CONFIG_P3A_MEMORY_REPORTING_ENABLE
 /**
  * @brief Memory reporting task that logs memory statistics every 15 seconds
@@ -129,9 +176,18 @@ static void memory_report_task(void *arg)
         size_t total_8bit = heap_caps_get_total_size(MALLOC_CAP_8BIT);
         size_t used_8bit = total_8bit - free_8bit;
         
+        // SDIO RX cap mask: the one the esp_hosted assert depends on.
+        size_t free_sdio_rx    = heap_caps_get_free_size(HEAP_DIAG_SDIO_RX_CAPS);
+        size_t largest_sdio_rx = heap_caps_get_largest_free_block(HEAP_DIAG_SDIO_RX_CAPS);
+        size_t total_sdio_rx   = heap_caps_get_total_size(HEAP_DIAG_SDIO_RX_CAPS);
+
         // Get task count
         UBaseType_t num_tasks = uxTaskGetNumberOfTasks();
-        
+
+        // Scan-friendly one-liner: this is the value to watch for SDIO RX assert prediction.
+        ESP_LOGI(TAG, "heap[INT+DMA+8BIT] free=%zu largest=%zu / total=%zu  (SDIO RX alloc mask)",
+                 free_sdio_rx, largest_sdio_rx, total_sdio_rx);
+
         // Log memory report (info level for visibility during debugging)
         ESP_LOGI(TAG, "=== Memory Status Report ===");
         ESP_LOGI(TAG, "Overall Heap:");
@@ -441,6 +497,19 @@ static void debug_provisioning_task(void *arg)
 void app_main(void)
 {
     ESP_LOGI(TAG, "Starting p3a");
+
+    // Arm the heap allocation-failed hook as early as possible — well before
+    // WiFi / esp_hosted / SDIO come up. Cost is one function-pointer slot;
+    // the hook only runs when an allocation returns NULL. The first such
+    // failure dumps a one-shot snapshot via esp_rom_printf so the log lands
+    // even if it happens immediately before a driver-level assert/panic.
+    {
+        esp_err_t hook_err = heap_caps_register_failed_alloc_callback(heap_diag_alloc_failed_hook);
+        if (hook_err != ESP_OK) {
+            ESP_LOGW(TAG, "heap_caps_register_failed_alloc_callback failed: %s",
+                     esp_err_to_name(hook_err));
+        }
+    }
 
     // Suppress harmless I2C pull-up warning (board has external pull-ups)
     esp_log_level_set("i2c.master", ESP_LOG_ERROR);

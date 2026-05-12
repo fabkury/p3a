@@ -11,19 +11,20 @@
 // fetches that local copy and uses the Linked-Art search endpoint for
 // per-set artwork listings.
 //
-// Per-artwork thumbnails are intentionally NOT pre-resolved here. The
-// IIIF id is reachable only via a 3-hop Linked-Art walk
-// (HMO -> VisualItem -> DigitalObject -> access_point), which would
-// cost 8 * 3 = 24 HTTP requests to populate the modal's preview strip.
-// listArtworks() instead returns items without imageId; the modal
-// falls back to a textual card layout. The device does the walk lazily
-// at download time (components/art_institution/museums/rijksmuseum.c).
+// Per-artwork IIIF resolution requires a 3-hop Linked-Art walk:
+//   HMO -> VisualItem -> DigitalObject -> access_point
+// listArtworks() returns items without imageId so it doesn't pay 8x3 =
+// 24 requests up front. previewUrl() does the walk lazily for the one
+// currently-displayed item in the preview modal and caches the result
+// per adapter instance. The device does the same walk independently at
+// download time (components/art_institution/museums/rijksmuseum.c).
 
 const BASE = 'https://data.rijksmuseum.nl';
 const ID_PREFIX = 'https://id.rijksmuseum.nl/';
 // The bundled sets file is served by the device's HTTP server at the
 // path below (the route mirrors /pico8/* and /static/*).
 const SETS_URL = '/museum/rijks-sets.json';
+const MICRIO_PREFIX = 'https://iiif.micr.io/';
 
 async function fetchJsonLd(url) {
     const r = await fetch(url, { headers: { 'Accept': 'application/ld+json' } });
@@ -87,6 +88,9 @@ export class RijksmuseumAdapter {
         this._counts = Object.create(null);
         // setSpec -> { items: [...], cursors: [url, ...], next: url|null }
         this._cursors = Object.create(null);
+        // HMO URL -> resolved micrio short id, or null on cached failure.
+        // Scoped to one adapter instance (= one page load).
+        this._resolvedThumbs = new Map();
     }
 
     async _loadSets() {
@@ -174,5 +178,63 @@ export class RijksmuseumAdapter {
     // so the modal renders a placeholder rather than a broken image.
     thumbnailUrl(_imageId, _size) {
         return null;
+    }
+
+    // 3-hop Linked-Art walk. Returns the micrio short id on success, or
+    // null if no micrio access_point is reachable. Throws on network
+    // errors at hop 1 (the failure is treated as transient and not
+    // cached). Hops 2 and 3 are best-effort — a failure on any VisualItem
+    // or DigitalObject just continues to the next sibling.
+    async _resolveLinkedArt(hmoUrl) {
+        const hmo = await fetchJsonLd(hmoUrl);
+        const shows = (hmo && Array.isArray(hmo.shows)) ? hmo.shows : [];
+        for (const s of shows) {
+            if (!s || typeof s.id !== 'string' || !s.id) continue;
+            let visual;
+            try { visual = await fetchJsonLd(s.id); }
+            catch (_) { continue; }
+            const digi = (visual && Array.isArray(visual.digitally_shown_by))
+                ? visual.digitally_shown_by : [];
+            for (const d of digi) {
+                if (!d || typeof d.id !== 'string' || !d.id) continue;
+                let digital;
+                try { digital = await fetchJsonLd(d.id); }
+                catch (_) { continue; }
+                const ap = (digital && Array.isArray(digital.access_point))
+                    ? digital.access_point : [];
+                for (const a of ap) {
+                    if (!a || typeof a.id !== 'string') continue;
+                    if (!a.id.startsWith(MICRIO_PREFIX)) continue;
+                    const rest = a.id.slice(MICRIO_PREFIX.length);
+                    const slash = rest.indexOf('/');
+                    const key = slash >= 0 ? rest.slice(0, slash) : rest;
+                    if (key) return key;
+                }
+            }
+        }
+        return null;
+    }
+
+    // Single-artwork preview URL. Walks Linked Art to resolve the IIIF
+    // id, caches the result (success or failure) per item.id. Returns
+    // a string URL or null.
+    async previewUrl(item, size = 400) {
+        if (!item || !item.id) return null;
+        if (this._resolvedThumbs.has(item.id)) {
+            const cached = this._resolvedThumbs.get(item.id);
+            return cached
+                ? `${MICRIO_PREFIX}${encodeURIComponent(cached)}/full/!${size},${size}/0/default.jpg`
+                : null;
+        }
+        let micrioId;
+        try {
+            micrioId = await this._resolveLinkedArt(item.id);
+        } catch (_) {
+            // Hop-1 failure: don't cache (could be transient network).
+            return null;
+        }
+        this._resolvedThumbs.set(item.id, micrioId || null);
+        if (!micrioId) return null;
+        return `${MICRIO_PREFIX}${encodeURIComponent(micrioId)}/full/!${size},${size}/0/default.jpg`;
     }
 }

@@ -26,7 +26,6 @@ const AXES = [
     { name: 'contributors', label: 'Contributors', filter: 'contributors.agent.label',  agg: 'contributors.agent.label', keyField: 'label' },
 ];
 
-const AGG_BUCKET_SIZE = 100;   // (100) suffix on aggregations=
 const MAX_LABEL_CHARS = 32;    // playset identifier[33] = 32 chars + null
 const PAGE_SIZE = 100;         // matches C-side refresh
 
@@ -128,7 +127,12 @@ export class WellcomeAdapter {
 
     async _loadAggregations() {
         if (this._aggCache) return this._aggCache;
-        const aggList = AXES.map(a => `${a.agg}(${AGG_BUCKET_SIZE})`).join(',');
+        // Wellcome returns up to 20 buckets per aggregation by default with no
+        // documented way to ask for more (verified live against the API: a `(N)`
+        // size suffix returns HTTP 400, and `aggregationsLimit` / `aggregations.size`
+        // params are silently ignored). 20 sorted-by-count buckets per axis is
+        // enough for browse.
+        const aggList = AXES.map(a => a.agg).join(',');
         const url = `${WORKS}?pageSize=1`
             + `&items.locations.locationType=iiif-image`
             + `&aggregations=${encodeURIComponent(aggList)}`;

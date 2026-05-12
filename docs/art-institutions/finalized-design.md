@@ -50,8 +50,10 @@ storage, and feeding the picker.
   saved channels and stores them in a binary cache, mirroring the Giphy
   refresh model.
 - Download artwork JPEGs via IIIF, longest side `≤ 720 px`.
-- 64×64 thumbnail previews of the first 8 artworks per term in the browse
-  UI.
+- Single-artwork preview in the browse UI, navigable via Previous / Next
+  buttons. Per-artwork preview URLs are resolved on demand: AIC and V&A
+  use the inline image id from the listing response; Rijks performs a
+  3-hop Linked-Art walk lazily, one artwork at a time.
 - Two new global NVS settings: `ai_refresh_sec`, `ai_cache_size`.
 - First-class per-museum rate-limit handling shared between browser and
   device (§11.1).
@@ -369,10 +371,12 @@ and `playset_channel_type_str()`.
 3. User picks axis (skipped if `axes` is null). Adapter calls
    `listCollections({axis})`.
 4. Browser shows term list with counts. User clicks a term.
-5. Browser calls `listArtworks(termId, {offset:0, rows:8})` and renders
-   thumbnails at 64×64 via IIIF. Strip shows whatever count is
-   available (≤8), thumbnails only, no captions. Optional hover
-   tooltips on desktop browsers.
+5. Browser calls `listArtworks(termId, {offset:0, rows:20})` and renders
+   a single-artwork preview with Previous / Next navigation. The preview
+   image is rendered at IIIF `!400,400`. Caption shows title, artist,
+   and date. Additional pages are fetched lazily on Next when the local
+   buffer is exhausted. AIC's `from + size ≤ 1000` cap (§9.1, §15.1) is
+   enforced on the browser side so Next disables at the 1000th record.
 6. User clicks "Add" beneath the strip — strip is the confirmation
    step. A channel spec is appended to the playset.
 7. Editor saves the playset normally via `POST /playsets/{name}`.
@@ -842,3 +846,26 @@ so this is a no-op for those channel types.
 Every TLS handshake emitted an info-level "Certificate validated"
 line that drowned out actually-useful events. Lifted to
 `ESP_LOG_WARN` at `app_main` start (warnings/errors still surface).
+
+### 15.6 Browse preview UX: 8-thumbnail grid → single-artwork preview
+
+The original design (§7.1, M1) used an 8-thumbnail 4×2 grid at 64×64.
+Two field-observed issues drove the redesign:
+
+1. Latency. Fetching 8 artworks visibly stalls the preview, especially
+   for Rijks — its IIIF resolution requires a 3-hop Linked-Art walk
+   per artwork, so populating an 8-tile grid would cost 24 extra HTTP
+   requests. The original Rijks implementation worked around this by
+   skipping image previews entirely and rendering a textual card list,
+   which made Rijks's preview qualitatively different from AIC and V&A.
+2. Mobile readability. 64×64 thumbnails in a 4-column grid inside a
+   ≤560 px modal are too small to evaluate the artwork.
+
+The replacement shows one artwork at a time at IIIF `!400,400`, with
+Previous / Next navigation. Per-artwork preview URLs are resolved
+lazily — AIC and V&A use the inline `image_id` from the listing
+response (synchronous); Rijks performs the 3-hop walk on demand and
+caches the resolved micrio id per adapter instance. The Add button
+still commits the channel (museum, axis, term), not the visible
+artwork. See
+`docs/superpowers/specs/2026-05-12-museum-single-artwork-preview-design.md`.

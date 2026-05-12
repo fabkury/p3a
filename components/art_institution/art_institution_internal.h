@@ -142,6 +142,18 @@ esp_err_t art_institution_vam_build_iiif_url(const institution_channel_entry_t *
                                              int longest_side,
                                              char *out, size_t len);
 
+// ============================================================================
+// Wellcome adapter entry points (defined in museums/wellcome.c)
+// ============================================================================
+
+esp_err_t art_institution_wellcome_refresh_channel(const char *channel_id,
+                                                   const char *axis,
+                                                   const char *term_id);
+
+esp_err_t art_institution_wellcome_build_iiif_url(const institution_channel_entry_t *entry,
+                                                  int longest_side,
+                                                  char *out, size_t len);
+
 #ifdef __cplusplus
 }
 #endif

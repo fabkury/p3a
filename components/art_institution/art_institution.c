@@ -49,6 +49,14 @@ const art_institution_museum_t ART_INSTITUTION_MUSEUMS[] = {
         .build_iiif_url  = art_institution_vam_build_iiif_url,
         .resolve_entry   = NULL,  // V&A returns _primaryImageId in the listing — no resolution.
     },
+    {
+        .id              = "wellcome",
+        .display         = "Wellcome Collection",
+        .museum_enum     = ART_INSTITUTION_MUSEUM_WELLCOME,
+        .refresh_channel = art_institution_wellcome_refresh_channel,
+        .build_iiif_url  = art_institution_wellcome_build_iiif_url,
+        .resolve_entry   = NULL,  // Wellcome returns the IIIF id inline; no walk.
+    },
 };
 
 const size_t ART_INSTITUTION_MUSEUM_COUNT =

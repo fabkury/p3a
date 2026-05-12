@@ -9,6 +9,7 @@ idf_component_register(
         "museums/artic.c"
         "museums/rijksmuseum.c"
         "museums/vam.c"
+        "museums/wellcome.c"
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS
         "."

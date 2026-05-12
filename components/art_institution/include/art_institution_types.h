@@ -31,9 +31,10 @@ extern "C" {
  * a new value before ART_INSTITUTION_NUM_MUSEUMS.
  */
 typedef enum {
-    ART_INSTITUTION_MUSEUM_ARTIC = 0,
-    ART_INSTITUTION_MUSEUM_RIJKS = 1,
-    ART_INSTITUTION_MUSEUM_VAM   = 2,
+    ART_INSTITUTION_MUSEUM_ARTIC    = 0,
+    ART_INSTITUTION_MUSEUM_RIJKS    = 1,
+    ART_INSTITUTION_MUSEUM_VAM      = 2,
+    ART_INSTITUTION_MUSEUM_WELLCOME = 3,
     ART_INSTITUTION_NUM_MUSEUMS  // sentinel; keep last. Distinct from the
                                  // extern const ART_INSTITUTION_MUSEUM_COUNT
                                  // (dispatch-table size) — the two must stay

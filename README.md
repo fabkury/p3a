@@ -28,7 +28,7 @@
 
 ## What Is p3a?
 
-p3a turns a [$40 development board](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) into a dedicated pixel art display. Think of it as a tiny gallery on your desk — it cycles through artworks automatically, picks up trending GIFs throughout the day, and lets users send artworks directly to it from [Makapix Club](https://makapix.club/), a pixel art social network.
+p3a turns a [$40 development board](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) into a dedicated pixel art display. Think of it as a tiny gallery on your desk — it cycles through artworks automatically, picks up trending GIFs throughout the day, and lets users send artworks directly to it from [Makapix Club](https://makapix.club/), a pixel art social network. Soon it will also draw from museum collections via IIIF, starting with the Art Institute of Chicago and the Rijksmuseum.
 
 It's open source, self-contained, and designed to be as simple to use as a picture frame — while still exposing a full REST API for those who want to automate and tinker. Both the hardware and the firmware are built for 24/7 operation, so you can leave it running on a shelf or wall indefinitely.
 
@@ -61,15 +61,16 @@ For a step-by-step walkthrough written for first-time buyers, see the [Quick Sta
 
 ## Features
 
-### Three Sources of Content
+### Four Sources of Content
 
 | Source | What it does |
 |--------|-------------|
 | **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" and "All Artworks", or hashtags like "#nintendo". Control your device remotely from anywhere. |
 | **[Giphy](https://giphy.com/)** | Automatically fetches and cycles through trending GIFs. Configurable content rating (G through R) and refresh interval. |
 | **Local files** | Copy your own WebP, GIF, PNG, or JPEG files via USB or Wi-Fi. No cloud account needed, no internet required. |
+| **Museums** *(upcoming)* | Browse and play artworks from museum collections via IIIF, starting with the Art Institute of Chicago and the Rijksmuseum. Pick a department or category and the device refreshes the listing periodically. |
 
-Mix all three in a single "playset" for an ever-changing display.
+Mix them all in a single "playset" for an ever-changing display.
 
 <p align="center">
   <img src="images/p3a-5.jpg" alt="p3a in hand" height="260">

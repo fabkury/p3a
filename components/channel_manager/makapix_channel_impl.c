@@ -233,7 +233,10 @@ static esp_err_t makapix_impl_load(channel_handle_t channel)
     if (!ch) return ESP_ERR_INVALID_ARG;
 
     if (ch->base.loaded) {
-        ESP_LOGW(TAG, "Channel already loaded");
+        // Expected for the persistent static handles in makapix_refresh.c
+        // (s_refresh_handle_all / s_refresh_handle_promoted), which are reused
+        // across every periodic refresh and never explicitly unloaded.
+        ESP_LOGD(TAG, "Re-loading channel (already loaded)");
         makapix_impl_unload(channel);
     }
 

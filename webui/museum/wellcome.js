@@ -132,7 +132,7 @@ export class WellcomeAdapter {
         const url = `${WORKS}?pageSize=1`
             + `&items.locations.locationType=iiif-image`
             + `&aggregations=${encodeURIComponent(aggList)}`;
-        this._aggCache = await getJson(url);
+        this._aggCache = getJson(url);
         return this._aggCache;
     }
 

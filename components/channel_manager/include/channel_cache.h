@@ -23,7 +23,12 @@
 #include "psram_alloc.h"
 
 // Configure uthash to use SPIRAM-preferring allocator
-// This must be defined BEFORE including uthash.h
+// This must be defined BEFORE including uthash.h. The #undef pair guards
+// against a redefinition warning when a consumer has already pulled in
+// uthash.h with its default malloc-based macros — uthash.h wraps its
+// defaults in #ifndef, but the compiler still warns on redefine.
+#undef uthash_malloc
+#undef uthash_free
 #define uthash_malloc(sz) psram_malloc(sz)
 #define uthash_free(ptr, sz) free(ptr)
 

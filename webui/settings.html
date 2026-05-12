@@ -384,8 +384,9 @@
             artwork. Cache size caps the entries kept per channel (32-4096).
             <br><br>
             <strong>Rate limits:</strong> The Art Institute of Chicago publishes a hard limit of
-            60 requests per minute per IP. A single AIC channel refresh issues up to ~41 paginated
-            requests, so 4+ AIC channels refreshing simultaneously can trigger throttling. The other
+            60 requests per minute per IP. A single AIC channel refresh issues up to ~11 paginated
+            requests at the default 1024-entry cache size (or ~41 at the 4096 maximum), so several
+            AIC channels refreshing simultaneously can trigger throttling. The other
             four museums (Rijksmuseum, V&amp;A, Wellcome Collection, SMK) don't publish a limit; p3a
             applies a 60-second defensive cooldown if any of them returns a 429. The browse
             previewer and refresh dispatcher both honor the shared cooldown when a 429 is observed.

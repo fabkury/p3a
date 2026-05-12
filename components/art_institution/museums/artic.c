@@ -108,38 +108,6 @@ static const char *aic_user_agent(void)
 // ----- One-page fetch ------------------------------------------------------
 
 /**
- * @brief Drain an esp_http_client into the response buffer
- *
- * Returns total bytes read. Caller must null-terminate.
- */
-static int drain_body(esp_http_client_handle_t client, char *buf, size_t buf_size)
-{
-    int total = 0;
-    bool read_err = false;
-    while (total < (int)buf_size - 1) {
-        int n = esp_http_client_read(client, buf + total, buf_size - 1 - total);
-        if (n < 0) { read_err = true; break; }
-        if (n == 0) break;
-        total += n;
-    }
-    return read_err ? -1 : total;
-}
-
-/**
- * @brief Parse a Retry-After header value (seconds form only)
- */
-static uint32_t parse_retry_after(const char *value)
-{
-    if (!value) return 0;
-    while (*value == ' ') value++;
-    char *end = NULL;
-    long v = strtol(value, &end, 10);
-    if (end == value || v <= 0) return 0;
-    if (v > 3600) v = 3600;  // sanity cap
-    return (uint32_t)v;
-}
-
-/**
  * @brief Fetch + parse one AIC search page
  *
  * Returns ESP_OK with *out_count set on success (possibly 0). Sets *has_more.
@@ -217,7 +185,7 @@ static esp_err_t aic_fetch_page(const char *filter_field,
             char *retry_after = NULL;
             uint32_t cooldown = 0;
             if (esp_http_client_get_header(client, "Retry-After", &retry_after) == ESP_OK) {
-                cooldown = parse_retry_after(retry_after);
+                cooldown = ai_parse_retry_after(retry_after);
             }
             art_institution_set_rate_limited("artic", cooldown);  // 0 -> default 60s
             ESP_LOGW(TAG, "AIC returned 429 (cooldown %us)",
@@ -250,7 +218,7 @@ static esp_err_t aic_fetch_page(const char *filter_field,
             continue;  // retry
         }
 
-        total_read = drain_body(client, response_buf, response_buf_size);
+        total_read = ai_drain_body(client, response_buf, response_buf_size);
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
 

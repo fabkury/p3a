@@ -95,19 +95,6 @@ esp_err_t art_institution_vam_build_iiif_url(const institution_channel_entry_t *
 
 // ----- One-page fetch ------------------------------------------------------
 
-static int drain_body(esp_http_client_handle_t client, char *buf, size_t buf_size)
-{
-    int total = 0;
-    bool read_err = false;
-    while (total < (int)buf_size - 1) {
-        int n = esp_http_client_read(client, buf + total, buf_size - 1 - total);
-        if (n < 0) { read_err = true; break; }
-        if (n == 0) break;
-        total += n;
-    }
-    return read_err ? -1 : total;
-}
-
 /**
  * @brief Fetch + parse one V&A search page
  *
@@ -202,7 +189,7 @@ static esp_err_t vam_fetch_page(const char *filter_param,
             continue;
         }
 
-        total_read = drain_body(client, response_buf, response_buf_size);
+        total_read = ai_drain_body(client, response_buf, response_buf_size);
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
 

@@ -158,6 +158,13 @@ export class VamAdapter {
     thumbnailUrl(imageId, size = 64) {
         return `${IIIF_HOST}/${encodeURIComponent(imageId)}/full/!${size},${size}/0/default.jpg`;
     }
+
+    // Single-artwork preview URL. V&A returns _primaryImageId inline,
+    // so this is a synchronous thumbnailUrl with a larger size.
+    async previewUrl(item, size = 400) {
+        if (!item || !item.imageId) return null;
+        return this.thumbnailUrl(item.imageId, size);
+    }
 }
 
 // Bounded concurrency runner — same shape as artic.js's helper.

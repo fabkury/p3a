@@ -175,4 +175,12 @@ export class ArticAdapter {
     thumbnailUrl(imageId, size = 64) {
         return `${IIIF_HOST}/${encodeURIComponent(imageId)}/full/!${size},${size}/0/default.jpg`;
     }
+
+    // Single-artwork preview URL. AIC has the IIIF id inline in
+    // listArtworks output, so this is a synchronous thumbnailUrl with a
+    // larger size parameter — same JPEG, different rendition.
+    async previewUrl(item, size = 400) {
+        if (!item || !item.imageId) return null;
+        return this.thumbnailUrl(item.imageId, size);
+    }
 }

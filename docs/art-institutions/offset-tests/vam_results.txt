@@ -1,0 +1,126 @@
+
+==============================================================================
+Test 1 — Baseline page=1&page_size=10 on Prints (THES48903)
+==============================================================================
+  URL: https://api.vam.ac.uk/v2/objects/search?images_exist=1&id_category=THES48903&page=1&page_size=10
+  [200] page=1 page_size=10
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 1, 'page_size': 10, 'pages': 997, 'image_count': 147140}
+    10 ids; first 5: ['O639215', 'O639203', 'O639202', 'O639201', 'O639083']
+
+==============================================================================
+Test 2 — page=2&page_size=10 — confirm non-overlap
+==============================================================================
+  [200] page=2 page_size=10
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 2, 'page_size': 10, 'pages': 997, 'image_count': 147140}
+    10 ids; first 5: ['O639077', 'O639076', 'O639075', 'O639074', 'O639073']
+    overlap with reference: 0
+
+==============================================================================
+Test 3 — page=1&page_size=20 — confirm equals p1+p2
+==============================================================================
+  [200] page=1 page_size=20
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 1, 'page_size': 20, 'pages': 499, 'image_count': 147140}
+    20 ids; first 5: ['O639215', 'O639203', 'O639202', 'O639201', 'O639083']
+  match p1+p2 order? True
+
+==============================================================================
+Test 4 — start=10&page_size=10 (Solr-style)
+==============================================================================
+  [200] start=10 page_size=10
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 1, 'page_size': 10, 'pages': 997, 'image_count': 147140}
+    10 ids; first 5: ['O639215', 'O639203', 'O639202', 'O639201', 'O639083']
+    overlap with reference: 0
+
+==============================================================================
+Test 5 — cursor=*&page_size=10 (cursorMark-style)
+==============================================================================
+  [200] cursor=* page_size=10
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 1, 'page_size': 10, 'pages': 997, 'image_count': 147140}
+    10 ids; first 5: ['O639215', 'O639203', 'O639202', 'O639201', 'O639083']
+    overlap with reference: 10
+    *** EQUIVALENT to reference page ***
+
+==============================================================================
+Test 6 — from=10&page_size=10
+==============================================================================
+  [200] from=10 page_size=10
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 1, 'page_size': 10, 'pages': 997, 'image_count': 147140}
+    10 ids; first 5: ['O639215', 'O639203', 'O639202', 'O639201', 'O639083']
+    overlap with reference: 0
+
+==============================================================================
+Test 7 — offset=10&page_size=10
+==============================================================================
+  [200] offset=10 page_size=10
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 1, 'page_size': 10, 'pages': 997, 'image_count': 147140}
+    10 ids; first 5: ['O639215', 'O639203', 'O639202', 'O639201', 'O639083']
+    overlap with reference: 0
+
+==============================================================================
+Test 8 — Big page=100&page_size=100 (items 9901..10000)
+==============================================================================
+  [200] page=100 page_size=100
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 100, 'page_size': 100, 'pages': 100, 'image_count': 147140}
+    100 ids; first 5: ['O1371601', 'O1371600', 'O1371599', 'O1371598', 'O1371597']
+
+==============================================================================
+Test 9 — Deep-page sweep
+==============================================================================
+  [200] page=10 page_size=100
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 10, 'page_size': 100, 'pages': 100, 'image_count': 147140}
+    100 ids; first 5: ['O629408', 'O629407', 'O629406', 'O629405', 'O629404']
+  [200] page=50 page_size=100
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 50, 'page_size': 100, 'pages': 100, 'image_count': 147140}
+    100 ids; first 5: ['O1009835', 'O1009834', 'O1009833', 'O1009832', 'O1009830']
+  [200] page=100 page_size=100
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 100, 'page_size': 100, 'pages': 100, 'image_count': 147140}
+    100 ids; first 5: ['O1371601', 'O1371600', 'O1371599', 'O1371598', 'O1371597']
+  [500] page=200 page_size=100
+    body head: Internal Server Error
+  [500] page=500 page_size=100
+    body head: Internal Server Error
+  [500] page=1000 page_size=100
+    body head: Internal Server Error
+  [500] page=2000 page_size=100
+    body head: Internal Server Error
+  [500] page=5000 page_size=100
+    body head: Internal Server Error
+
+==============================================================================
+Test 10 — Maximum page_size values
+==============================================================================
+  [200] page=1 page_size=100
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 1, 'page_size': 100, 'pages': 100, 'image_count': 147140}
+    100 ids; first 5: ['O639215', 'O639203', 'O639202', 'O639201', 'O639083']
+  [422] page=1 page_size=200
+    body head: {"detail":[{"loc":["query","page_size"],"msg":"ensure this value is less than or equal to 100","type":"value_error.number.not_le","ctx":{"limit_value":100}}]}
+  [422] page=1 page_size=500
+    body head: {"detail":[{"loc":["query","page_size"],"msg":"ensure this value is less than or equal to 100","type":"value_error.number.not_le","ctx":{"limit_value":100}}]}
+  [422] page=1 page_size=1000
+    body head: {"detail":[{"loc":["query","page_size"],"msg":"ensure this value is less than or equal to 100","type":"value_error.number.not_le","ctx":{"limit_value":100}}]}
+  [422] page=1 page_size=5000
+    body head: {"detail":[{"loc":["query","page_size"],"msg":"ensure this value is less than or equal to 100","type":"value_error.number.not_le","ctx":{"limit_value":100}}]}
+
+==============================================================================
+Test 11 — Sort param availability (does ordering stay deterministic?)
+==============================================================================
+  [200] page=1 page_size=5 sort=systemNumber
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 1, 'page_size': 5, 'pages': 1994, 'image_count': 147140}
+    5 ids; first 5: ['O639215', 'O639203', 'O639202', 'O639201', 'O639083']
+  [200] page=1 page_size=5 sort=_score
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 1, 'page_size': 5, 'pages': 1994, 'image_count': 147140}
+    5 ids; first 5: ['O639215', 'O639203', 'O639202', 'O639201', 'O639083']
+  [200] page=1 page_size=5 sort=+systemNumber
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 1, 'page_size': 5, 'pages': 1994, 'image_count': 147140}
+    5 ids; first 5: ['O639215', 'O639203', 'O639202', 'O639201', 'O639083']
+
+==============================================================================
+Test 12 — Repeated identical requests — is ordering stable?
+==============================================================================
+  [200] call 1
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 1, 'page_size': 5, 'pages': 1994, 'image_count': 147140}
+    5 ids; first 5: ['O639215', 'O639203', 'O639202', 'O639201', 'O639083']
+  [200] call 2
+    info: {'record_count': 104472, 'record_count_exact': True, 'page': 1, 'page_size': 5, 'pages': 1994, 'image_count': 147140}
+    5 ids; first 5: ['O639215', 'O639203', 'O639202', 'O639201', 'O639083']
+  Stable order? True

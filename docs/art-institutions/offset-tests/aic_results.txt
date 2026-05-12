@@ -1,0 +1,120 @@
+
+==============================================================================
+Test 1 — Baseline page=1&limit=10 on small filter (PC-4)
+==============================================================================
+URL: https://api.artic.edu/api/v1/artworks/search?query%5Bterm%5D%5Bdepartment_id%5D=PC-4&fields=id%2Ctitle%2Cimage_id&page=1&limit=10
+Status: 200
+pagination: {
+  "total": 2195,
+  "limit": 10,
+  "offset": 0,
+  "total_pages": 220,
+  "current_page": 1
+}
+first 10 ids: [159136, 246, 185, 454, 158, 614, 616, 164, 181, 191]
+
+==============================================================================
+Test 2 — page=2&limit=10 — confirm non-overlap and ordering
+==============================================================================
+URL: https://api.artic.edu/api/v1/artworks/search?query%5Bterm%5D%5Bdepartment_id%5D=PC-4&fields=id%2Ctitle%2Cimage_id&page=2&limit=10
+Status: 200
+next 10 ids: [161, 166, 160, 679, 182, 162, 155, 183, 61600, 245]
+overlap with page 1: 0 ids
+
+==============================================================================
+Test 3 — page=1&limit=20 — should equal page1_l10 + page2_l10 in order
+==============================================================================
+URL: https://api.artic.edu/api/v1/artworks/search?query%5Bterm%5D%5Bdepartment_id%5D=PC-4&fields=id%2Ctitle%2Cimage_id&page=1&limit=20
+Status: 200
+got 20 ids:   [159136, 246, 185, 454, 158, 614, 616, 164, 181, 191, 161, 166, 160, 679, 182, 162, 155, 183, 61600, 245]
+expected:     [159136, 246, 185, 454, 158, 614, 616, 164, 181, 191, 161, 166, 160, 679, 182, 162, 155, 183, 61600, 245]
+match: True
+
+==============================================================================
+Test 4 — Try ES-style from=10&size=10 (no page param)
+==============================================================================
+URL: https://api.artic.edu/api/v1/artworks/search?query%5Bterm%5D%5Bdepartment_id%5D=PC-4&fields=id%2Ctitle%2Cimage_id&from=10&size=10
+Status: 200
+pagination: {
+  "total": 2195,
+  "limit": 10,
+  "offset": 10,
+  "total_pages": 220,
+  "current_page": 2
+}
+ids: [161, 166, 160, 679, 182, 162, 155, 183, 61600, 245]
+matches page=2&limit=10? True
+
+==============================================================================
+Test 5 — Try offset=10&limit=10
+==============================================================================
+URL: https://api.artic.edu/api/v1/artworks/search?query%5Bterm%5D%5Bdepartment_id%5D=PC-4&fields=id%2Ctitle%2Cimage_id&offset=10&limit=10
+Status: 200
+pagination: {
+  "total": 2195,
+  "limit": 10,
+  "offset": 0,
+  "total_pages": 220,
+  "current_page": 1
+}
+ids: [159136, 246, 185, 454, 158, 614, 616, 164, 181, 191]
+matches page=2&limit=10? False
+
+==============================================================================
+Test 6 — Try from=10&limit=10 (mix)
+==============================================================================
+URL: https://api.artic.edu/api/v1/artworks/search?query%5Bterm%5D%5Bdepartment_id%5D=PC-4&fields=id%2Ctitle%2Cimage_id&from=10&limit=10
+Status: 200
+pagination: {
+  "total": 2195,
+  "limit": 10,
+  "offset": 10,
+  "total_pages": 220,
+  "current_page": 2
+}
+ids: [161, 166, 160, 679, 182, 162, 155, 183, 61600, 245]
+matches page=2&limit=10? True
+
+==============================================================================
+Test 7 — Big-offset legal: page=100&limit=100 (= items 9901..10000) on Painting
+==============================================================================
+URL: https://api.artic.edu/api/v1/artworks/search?query%5Bterm%5D%5Bartwork_type_id%5D=1&fields=id%2Ctitle%2Cimage_id&page=100&limit=100
+Status: 403
+pagination: {}
+got 0 ids; first 5: []
+
+==============================================================================
+Test 8 — At-cap: page=101&limit=100 (= items 10001..10100) on Painting
+==============================================================================
+URL: https://api.artic.edu/api/v1/artworks/search?query%5Bterm%5D%5Bartwork_type_id%5D=1&fields=id%2Ctitle%2Cimage_id&page=101&limit=100
+Status: 403
+pagination: {}
+got 0 ids
+
+==============================================================================
+Test 9 — Reproduce 403 issue: page=11&limit=100 on Painting (artwork_type_id=1)
+==============================================================================
+URL: https://api.artic.edu/api/v1/artworks/search?query%5Bterm%5D%5Bartwork_type_id%5D=1&fields=id%2Ctitle%2Cimage_id&page=11&limit=100
+Status: 403
+pagination: {}
+got 0 ids; first 5: []
+
+==============================================================================
+Test 10 — Sort consistency: page=2&limit=10 vs page=1&limit=10&sort=id (sanity)
+==============================================================================
+URL: https://api.artic.edu/api/v1/artworks/search?query%5Bterm%5D%5Bdepartment_id%5D=PC-4&fields=id%2Ctitle%2Cimage_id&page=1&limit=10&sort=id
+Status: 200
+sorted-asc-by-id first 10: [155, 158, 160, 161, 162, 164, 166, 170, 172, 173]
+
+==============================================================================
+Test 11 — Pagination metadata in big-result response
+==============================================================================
+URL: https://api.artic.edu/api/v1/artworks/search?query%5Bterm%5D%5Bartwork_type_id%5D=1&fields=id%2Ctitle%2Cimage_id&page=1&limit=1
+Status: 200
+pagination: {
+  "total": 3794,
+  "limit": 1,
+  "offset": 0,
+  "total_pages": 3794,
+  "current_page": 1
+}

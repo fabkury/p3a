@@ -1,0 +1,66 @@
+
+==============================================================================
+Step 1 — Painting ID distribution (split [0..300000) into 6 buckets)
+==============================================================================
+    bucket [     0..10000 ): 157 paintings
+    bucket [ 10000..30000 ): 542 paintings
+    bucket [ 30000..60000 ): 523 paintings
+    bucket [ 60000..100000): 720 paintings
+    bucket [100000..150000): 618 paintings
+    bucket [150000..200000): 347 paintings
+    bucket [200000..300000): 887 paintings
+  Sum across buckets: 3794; expected total: 3794
+
+==============================================================================
+Step 2 — Pick the largest bucket and traverse fully
+==============================================================================
+  largest bucket [200000..300000) has 887 records — fits under 1000-cap ✓
+    page 0: got 100 ids (total collected: 100)
+    page 1: got 100 ids (total collected: 200)
+    page 2: got 100 ids (total collected: 300)
+    page 3: got 100 ids (total collected: 400)
+    page 4: got 100 ids (total collected: 500)
+    page 5: got 100 ids (total collected: 600)
+    page 6: got 100 ids (total collected: 700)
+    page 7: got 100 ids (total collected: 800)
+    page 8: got 87 ids (total collected: 887)
+  collected 887 / 887 from bucket
+
+==============================================================================
+Step 3 — Verify deep offset within a bucket (bucket has ~800 records)
+==============================================================================
+  bucket [10000..30000) (n=542) at offset 442: got 100 ids; last 3: [29757, 29759, 29761]
+
+==============================================================================
+Step 4 — Test whether bool+range respects the 1000-cap PER BUCKET
+==============================================================================
+  from=1000 within wide bool: status=403
+    err: {"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}
+
+
+==============================================================================
+Step 5 — OAI-PMH endpoints (revisit, previous probe died on DNS)
+==============================================================================
+  [403] https://www.artic.edu/oai?verb=Identify: <!doctype html> <!--[if lt IE 7]> <html class="no-js ie6 oldie" lang="en-US"> <![endif]--> <!--[if IE 7]>    <html class="no-js ie7 oldie" lang="en-US"> <![endi
+  [403] https://www.artic.edu/api/oai?verb=Identify: <!doctype html> <!--[if lt IE 7]> <html class="no-js ie6 oldie" lang="en-US"> <![endif]--> <!--[if IE 7]>    <html class="no-js ie7 oldie" lang="en-US"> <![endi
+  [403] https://www.artic.edu/api/v1/oai?verb=Identify: <!doctype html> <!--[if lt IE 7]> <html class="no-js ie6 oldie" lang="en-US"> <![endif]--> <!--[if IE 7]>    <html class="no-js ie7 oldie" lang="en-US"> <![endi
+  [-1] https://collections.artic.edu/oai?verb=Identify: <urlopen error [Errno 11001] getaddrinfo failed>
+  [-1] https://collection.artic.edu/oai?verb=Identify: <urlopen error [Errno 11001] getaddrinfo failed>
+  [404] https://api.artic.edu/oai?verb=Identify: {"status":404,"error":"Sorry, something went wrong.","detail":"An unrecognized exception was thrown. Our developers have been alerted to the situation."}
+  [404] https://api.artic.edu/v1/oai?verb=Identify: {"status":404,"error":"Sorry, something went wrong.","detail":"An unrecognized exception was thrown. Our developers have been alerted to the situation."}
+  [404] https://api.artic.edu/api/v1/oai?verb=Identify: {"status":404,"error":"Sorry, something went wrong.","detail":"An unrecognized exception was thrown. Our developers have been alerted to the situation."}
+
+==============================================================================
+Step 6 — Check if an Authorization header is recognized
+==============================================================================
+  [403] with bogus Bearer: {"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}
+
+
+==============================================================================
+Step 7 — Is there a public API key endpoint?
+==============================================================================
+  [404] https://api.artic.edu/api/v1/register: {"status":404,"error":"Sorry, something went wrong.","detail":"An unrecognized exception was thrown. Our developers have been alerted to the situation."}
+  [404] https://api.artic.edu/api/v1/auth: {"status":404,"error":"Sorry, something went wrong.","detail":"An unrecognized exception was thrown. Our developers have been alerted to the situation."}
+  [404] https://api.artic.edu/api/v1/login: {"status":404,"error":"Sorry, something went wrong.","detail":"An unrecognized exception was thrown. Our developers have been alerted to the situation."}
+  [403] https://www.artic.edu/api/access: {"type":"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1010/","title":"Error 1010: Access denied","st
+  [404] https://api.artic.edu/api/v1/me: {"status":404,"error":"Sorry, something went wrong.","detail":"An unrecognized exception was thrown. Our developers have been alerted to the situation."}

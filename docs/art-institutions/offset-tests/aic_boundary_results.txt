@@ -1,0 +1,72 @@
+
+==============================================================================
+Map 403 boundary on Painting (artwork_type_id=1, total ~3794)
+==============================================================================
+  [200] page=1 limit=100: total=3794 cur_page=1 offset=0 got=100
+  [200] page=2 limit=100: total=3794 cur_page=2 offset=100 got=100
+  [200] page=3 limit=100: total=3794 cur_page=3 offset=200 got=100
+  [200] page=5 limit=100: total=3794 cur_page=5 offset=400 got=100
+  [200] page=8 limit=100: total=3794 cur_page=8 offset=700 got=100
+  [200] page=10 limit=100: total=3794 cur_page=10 offset=900 got=100
+  [403] page=11 limit=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] page=15 limit=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] page=20 limit=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] page=30 limit=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] page=38 limit=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+
+==============================================================================
+Same offsets but via from=N&size=100 (ES path)
+==============================================================================
+  [200] from=0 size=100: total=3794 cur_page=1 offset=0 got=100
+  [200] from=100 size=100: total=3794 cur_page=2 offset=100 got=100
+  [200] from=500 size=100: total=3794 cur_page=6 offset=500 got=100
+  [403] from=1000 size=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=1100 size=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=1500 size=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=3000 size=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=5000 size=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=9000 size=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=9900 size=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=10000 size=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=12000 size=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+
+==============================================================================
+Does limit=10 change the boundary? (offset 1000 = page 101 at limit 10)
+==============================================================================
+  [200] page=50 limit=10: total=3794 cur_page=50 offset=490 got=10
+  [200] page=100 limit=10: total=3794 cur_page=100 offset=990 got=10
+  [403] page=101 limit=10: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] page=150 limit=10: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] page=200 limit=10: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] page=300 limit=10: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+
+==============================================================================
+PC-4 dept (total ~2195): page=11&limit=100 should succeed
+==============================================================================
+  [200] page=5 limit=100: total=2195 cur_page=5 offset=400 got=100
+  [200] page=10 limit=100: total=2195 cur_page=10 offset=900 got=100
+  [403] page=11 limit=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] page=15 limit=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] page=20 limit=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] page=22 limit=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+
+==============================================================================
+PC-4 dept: from=N&size=100 should equally succeed
+==============================================================================
+  [200] from=0 size=100: total=2195 cur_page=1 offset=0 got=100
+  [200] from=500 size=100: total=2195 cur_page=6 offset=500 got=100
+  [403] from=1000 size=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=1100 size=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=1500 size=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=2100 size=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=2195 size=100: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+
+==============================================================================
+Does sort= move the boundary on Painting?
+==============================================================================
+  [200] page=10 limit=100 sort=id: total=3794 cur_page=10 offset=900 got=100
+  [403] page=11 limit=100 sort=id: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] page=12 limit=100 sort=id: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=1000 size=100 sort=id: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=1100 size=100 sort=id: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'
+  [403] from=2000 size=100 sort=id: Retry-After=- body='{"status":403,"error":"Invalid number of results","detail":"You have requested too many results. Please refine your parameters."}'

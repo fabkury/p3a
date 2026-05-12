@@ -1,0 +1,54 @@
+
+==============================================================================
+Discover available sets via OAI-PMH ListSets
+==============================================================================
+  first 5 setSpec values: ['261231', '261221', '261222', '261233', '261228']
+  candidate '261231': status=200 total~6740
+
+  Using set: 261231
+
+==============================================================================
+Walk first 3 pages of set 261231; log URL shapes
+==============================================================================
+  hop 1: https://data.rijksmuseum.nl/search/collection?memberOfSetId=https%3A%2F%2Fid.rijksmuseum.nl%2F261231&imageAvailable=true
+    status=200
+    orderedItems: 100, totalItems: 6740, has next: True
+    next: https://data.rijksmuseum.nl/search/collection?memberOfSetId=https%3A%2F%2Fid.rijksmuseum.nl%2F261231&imageAvailable=true&pageToken=eyJ0b2tlbiI6ICJodHRwczovL2lkLnJpamtzbXVzZXVtLm5sLzIwMDExMjcyNyJ9
+  hop 2: https://data.rijksmuseum.nl/search/collection?memberOfSetId=https%3A%2F%2Fid.rijksmuseum.nl%2F261231&imageAvailable=true&pageToken=eyJ0b2tlbiI6ICJodHRwczovL2lkLnJpamtzbXVzZXVtLm5sLzIwMDExMjcyNyJ9
+    status=200
+    orderedItems: 100, totalItems: 6740, has next: True
+    next: https://data.rijksmuseum.nl/search/collection?memberOfSetId=https%3A%2F%2Fid.rijksmuseum.nl%2F261231&imageAvailable=true&pageToken=eyJ0b2tlbiI6ICJodHRwczovL2lkLnJpamtzbXVzZXVtLm5sLzIwMDEyODMifQ
+  hop 3: https://data.rijksmuseum.nl/search/collection?memberOfSetId=https%3A%2F%2Fid.rijksmuseum.nl%2F261231&imageAvailable=true&pageToken=eyJ0b2tlbiI6ICJodHRwczovL2lkLnJpamtzbXVzZXVtLm5sLzIwMDEyODMifQ
+    status=200
+    orderedItems: 100, totalItems: 6740, has next: True
+    next: https://data.rijksmuseum.nl/search/collection?memberOfSetId=https%3A%2F%2Fid.rijksmuseum.nl%2F261231&imageAvailable=true&pageToken=eyJ0b2tlbiI6ICJodHRwczovL2lkLnJpamtzbXVzZXVtLm5sLzIwMDE0MzY1MSJ9
+
+==============================================================================
+Try direct offset-style params on the search/collection endpoint
+==============================================================================
+  [400] from=100: n_items=0 first_id=None
+  [400] offset=100: n_items=0 first_id=None
+  [400] page=2: n_items=0 first_id=None
+  [400] pageNumber=2: n_items=0 first_id=None
+  [400] startIndex=100: n_items=0 first_id=None
+  [400] start=100: n_items=0 first_id=None
+  [400] ps=10: n_items=0 first_id=None
+  [400] pageSize=10: n_items=0 first_id=None
+  [400] p=2: n_items=0 first_id=None
+  [400] skip=10: n_items=0 first_id=None
+  [400] cursor=100: n_items=0 first_id=None
+  [400] pageToken=100: n_items=0 first_id=None
+
+==============================================================================
+Compare next URL shape between hop 0 and hop 1
+==============================================================================
+  hop0 next: https://data.rijksmuseum.nl/search/collection?memberOfSetId=https%3A%2F%2Fid.rijksmuseum.nl%2F261231&imageAvailable=true&pageToken=eyJ0b2tlbiI6ICJodHRwczovL2lkLnJpamtzbXVzZXVtLm5sLzIwMDExMjcyNyJ9
+  hop1 next: https://data.rijksmuseum.nl/search/collection?memberOfSetId=https%3A%2F%2Fid.rijksmuseum.nl%2F261231&imageAvailable=true&pageToken=eyJ0b2tlbiI6ICJodHRwczovL2lkLnJpamtzbXVzZXVtLm5sLzIwMDEyODMifQ
+    hop0 next query: {'memberOfSetId': ['https://id.rijksmuseum.nl/261231'], 'imageAvailable': ['true'], 'pageToken': ['eyJ0b2tlbiI6ICJodHRwczovL2lkLnJpamtzbXVzZXVtLm5sLzIwMDExMjcyNyJ9']}
+    hop1 next query: {'memberOfSetId': ['https://id.rijksmuseum.nl/261231'], 'imageAvailable': ['true'], 'pageToken': ['eyJ0b2tlbiI6ICJodHRwczovL2lkLnJpamtzbXVzZXVtLm5sLzIwMDEyODMifQ']}
+
+==============================================================================
+Probe the legacy rijksmuseum.nl/api/en/collection endpoint
+==============================================================================
+  [410] legacy api p=1 ps=2: head=
+  [410] legacy api p=20 ps=10: head=

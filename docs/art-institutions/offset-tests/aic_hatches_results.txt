@@ -1,0 +1,98 @@
+
+==============================================================================
+HATCH 1 — Range queries on /artworks/search (GET)
+==============================================================================
+  [200] range id [1..50]: got 5 records, total=25, offset=0, first_ids=[11, 27, 4, 9, 16]
+  [400] term Painting + range id [1..1000]: 400 Bad Request: {"error":{"root_cause":[{"type":"parsing_exception","reason":"[term] malformed query, expected [END_OBJECT] but found [FIELD_NAME]","line":1,"col":424}],"type":"x_content_parse_except
+  [400] term Painting + range id [40000..50000]: 400 Bad Request: {"error":{"root_cause":[{"type":"parsing_exception","reason":"[term] malformed query, expected [END_OBJECT] but found [FIELD_NAME]","line":1,"col":424}],"type":"x_content_parse_except
+  [400] Painting + range id [40000..50000] + from=200 size=100: 400 Bad Request: {"error":{"root_cause":[{"type":"parsing_exception","reason":"[term] malformed query, expected [END_OBJECT] but found [FIELD_NAME]","line":1,"col":424}],"type":"x_content_parse_except
+  [400] Painting + range date_start [1900..1950] + from=200 size=10: 400 Bad Request: {"error":{"root_cause":[{"type":"parsing_exception","reason":"[term] malformed query, expected [END_OBJECT] but found [FIELD_NAME]","line":1,"col":424}],"type":"x_content_parse_except
+  [200] range id [1..200000] + from=999 size=1 (cumulative ok?): got 1 records, total=101398, offset=999, first_ids=[6471]
+
+==============================================================================
+HATCH 2 — POST /artworks/search with ES DSL bodies
+==============================================================================
+  [200] bool filter (range) — count check: got 5 records, total=1061, offset=0, first_ids=[28560, 20684, 27992, 24306, 28067]
+  [200] sort + search_after (cursor): got 5 records, total=3794, offset=0, first_ids=[9, 11, 138, 495, 497]
+  [403] from + size deep (should fail same as GET): error='Invalid number of results' detail='You have requested too many results. Please refine your parameters.'
+  [200] scroll (Elasticsearch scroll API style): got 100 records, total=3794, offset=0, first_ids=[129884, 28560, 137125, 229393, 20684]
+  [200] aggregations only — total bucket counts: got 0 records, total=132014, offset=0
+  [200] bool filter to slice — narrow range with from=900: got 65 records, total=965, offset=900, first_ids=[191598, 191599, 192235, 192261, 192605]
+
+==============================================================================
+HATCH 3 — IIIF Collection / Presentation manifests
+==============================================================================
+  [403] https://www.artic.edu/iiif/2/collection: keys=['type', 'title', 'status', 'detail', 'instance', 'error_code', 'error_name', 'error_category']
+  [403] https://www.artic.edu/iiif/2/collection.json: keys=['type', 'title', 'status', 'detail', 'instance', 'error_code', 'error_name', 'error_category']
+  [403] https://www.artic.edu/iiif/3/collection: keys=['type', 'title', 'status', 'detail', 'instance', 'error_code', 'error_name', 'error_category']
+  [403] https://www.artic.edu/iiif/2/111628/manifest.json: keys=['type', 'title', 'status', 'detail', 'instance', 'error_code', 'error_name', 'error_category']
+  [200] https://api.artic.edu/api/v1/artworks/111628/manifest.json: keys=['@context', '@id', '@type', 'label', 'description', 'metadata', 'attribution', 'logo']
+  [404] https://api.artic.edu/api/v1/iiif/collection: keys=['status', 'error', 'detail']
+  [404] https://api.artic.edu/api/v1/departments/PC-4/iiif: keys=['status', 'error', 'detail']
+Traceback (most recent call last):
+  File "C:\Python314\Lib\urllib\request.py", line 1321, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              encode_chunked=req.has_header('Transfer-encoding'))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\http\client.py", line 1338, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\http\client.py", line 1384, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\http\client.py", line 1333, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\http\client.py", line 1093, in _send_output
+    self.send(msg)
+    ~~~~~~~~~^^^^^
+  File "C:\Python314\Lib\http\client.py", line 1037, in send
+    self.connect()
+    ~~~~~~~~~~~~^^
+  File "C:\Python314\Lib\http\client.py", line 1472, in connect
+    super().connect()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Python314\Lib\http\client.py", line 1003, in connect
+    self.sock = self._create_connection(
+                ~~~~~~~~~~~~~~~~~~~~~~~^
+        (self.host,self.port), self.timeout, self.source_address)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\socket.py", line 846, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+               ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\socket.py", line 983, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\fab\OneDrive\F\Estudo\Tecnologia\ESP32\p3a\repo\docs\art-institutions\offset-tests\probe_aic_escape_hatches.py", line 269, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\fab\OneDrive\F\Estudo\Tecnologia\ESP32\p3a\repo\docs\art-institutions\offset-tests\probe_aic_escape_hatches.py", line 243, in main
+    status, parsed, head = get(url, accept="application/json")
+                           ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\fab\OneDrive\F\Estudo\Tecnologia\ESP32\p3a\repo\docs\art-institutions\offset-tests\probe_aic_escape_hatches.py", line 36, in get
+    with urllib.request.urlopen(req, timeout=20) as r:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\urllib\request.py", line 187, in urlopen
+    return opener.open(url, data, timeout)
+           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\urllib\request.py", line 487, in open
+    response = self._open(req, data)
+  File "C:\Python314\Lib\urllib\request.py", line 504, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+                              '_open', req)
+  File "C:\Python314\Lib\urllib\request.py", line 464, in _call_chain
+    result = func(*args)
+  File "C:\Python314\Lib\urllib\request.py", line 1369, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        context=self._context)
+                        ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\urllib\request.py", line 1324, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>

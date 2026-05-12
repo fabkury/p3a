@@ -356,7 +356,7 @@
 <div class="tab-content" id="tab-museum">
     <div class="section">
         <h3>Museums</h3>
-        <p class="file-name" style="margin-bottom:10px;">Channels that play artwork from the Art Institute of Chicago, the Rijksmuseum, and the Victoria and Albert Museum via IIIF. Build a museum channel from <a href="/playset-editor">Playsets</a> &gt; Add Channel &gt; Museum.</p>
+        <p class="file-name" style="margin-bottom:10px;">Channels that play artwork from the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, and the Statens Museum for Kunst (SMK) via IIIF. Build a museum channel from <a href="/playset-editor">Playsets</a> &gt; Add Channel &gt; Museum.</p>
         <div class="setting-row">
             <label class="setting-label" for="ai-refresh-sec">Refresh Interval</label>
             <select class="setting-select" id="ai-refresh-sec">
@@ -383,10 +383,12 @@
             Refresh interval controls how often the device re-queries each museum's listing API for new
             artwork. Cache size caps the entries kept per channel (32-4096).
             <br><br>
-            <strong>Note on AIC rate limits:</strong> The Art Institute of Chicago caps API usage at
-            60 requests per minute per IP. A single channel refresh issues up to ~41 paginated requests,
-            so 4+ museum channels refreshing simultaneously can trigger throttling. The browse
-            previewer and refresh dispatcher both honor a shared cooldown when a 429 is observed.
+            <strong>Rate limits:</strong> The Art Institute of Chicago publishes a hard limit of
+            60 requests per minute per IP. A single AIC channel refresh issues up to ~41 paginated
+            requests, so 4+ AIC channels refreshing simultaneously can trigger throttling. The other
+            four museums (Rijksmuseum, V&amp;A, Wellcome Collection, SMK) don't publish a limit; p3a
+            applies a 60-second defensive cooldown if any of them returns a 429. The browse
+            previewer and refresh dispatcher both honor the shared cooldown when a 429 is observed.
         </div>
     </div>
     <div class="section">

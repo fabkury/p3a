@@ -311,15 +311,19 @@ The Giphy tab at `http://p3a.local/settings#giphy` lets you customize:
 
 ## Museum Channels (IIIF)
 
-p3a can play artwork from major museums that publish their collections through the [IIIF Image API](https://iiif.io/api/image/3.0/). Channels are organized by the museum's own facets (collections, departments, sets, ...) and refreshed on a schedule. Three museums ship today:
+p3a can play artwork from major museums that publish their collections through the [IIIF Image API](https://iiif.io/api/image/3.0/). Channels are organized by the museum's own facets (collections, departments, sets, ...) and refreshed on a schedule. Five museums ship today:
 
 | Museum | Facets you can pick |
 |---|---|
 | **Art Institute of Chicago** | Departments, Classifications, Subjects, Themes, Galleries, Artwork types |
 | **Rijksmuseum** | Curated Sets (Rijks's own collection groupings) |
 | **Victoria and Albert Museum** | Collections, Categories, Venues |
+| **Wellcome Collection** | Work types, Genres, Subjects, Contributors |
+| **Statens Museum for Kunst (SMK)** | Collections |
 
 No API key, no account, no device registration — the museums expose these collections publicly.
+
+A small number of Wellcome terms with very long labels are hidden from the browse modal — see [`docs/deferred/wellcome-long-labels.md`](deferred/wellcome-long-labels.md) for the rationale.
 
 ### Adding a museum channel
 

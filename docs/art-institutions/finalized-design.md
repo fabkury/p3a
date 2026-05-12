@@ -712,6 +712,15 @@ doors.
 - **On-device artist/title/date metadata** (sidecar file) for a "now
   showing" overlay or info screen.
 - **Admin "refresh now" action** for institution channels.
+- **Gallica (BnF):** SRU/XML adapter. Revisit trigger: a lightweight
+  XML parser becomes available in ESP-IDF, or content-diversity value
+  justifies the integration cost. Deferred design notes in
+  [`docs/deferred/gallica.md`](../deferred/gallica.md).
+- **Wellcome long labels:** lifting the 32-char identifier limit so
+  Wellcome terms with longer labels become selectable. Revisit
+  trigger: enough valuable Wellcome terms get hidden in real usage to
+  justify a playset format bump. Deferred design notes in
+  [`docs/deferred/wellcome-long-labels.md`](../deferred/wellcome-long-labels.md).
 
 ## 14. Implementation milestones
 

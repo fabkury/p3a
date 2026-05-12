@@ -375,8 +375,9 @@ and `playset_channel_type_str()`.
    a single-artwork preview with Previous / Next navigation. The preview
    image is rendered at IIIF `!400,400`. Caption shows title, artist,
    and date. Additional pages are fetched lazily on Next when the local
-   buffer is exhausted. AIC's `from + size ≤ 1000` cap (§9.1, §15.1) is
-   enforced on the browser side so Next disables at the 1000th record.
+   buffer is exhausted. AIC's `from + size ≤ 1000` public-caller cap
+   (see `docs/art-institutions/offset-tests/REPORT.md`) is enforced on
+   the browser side so Next disables at the 1000th record.
 6. User clicks "Add" beneath the strip — strip is the confirmation
    step. A channel spec is appended to the playset.
 7. Editor saves the playset normally via `POST /playsets/{name}`.

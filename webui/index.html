@@ -1202,10 +1202,15 @@ function openPinBrowseModal(slug, listName) {
     var offset = 0;
     var total = 0;
 
+    /* Thumbnail strategy: prefer the source-CDN URL the server reconstructs
+       (Makapix vault / Giphy CDN / IIIF). The /local fallback only fires on
+       <img onerror>, so the device's Wi-Fi only serves bytes for items where
+       URL reconstruction failed (e.g. LoC pins with colon-mangled keys) or
+       for offline browsing. */
     function thumbUrl(item) {
-        /* For phase 6 v1 the web UI loads thumbnails from the device's local
-           fallback endpoint. CDN-direct loading (preferred for cost reasons)
-           is a future enhancement. */
+        return item.source_url || localThumbUrl(item);
+    }
+    function localThumbUrl(item) {
         return '/api/pin-lists/' + encodeURIComponent(slug) + '/items/' +
                encodeURIComponent(item.source) + '/' +
                encodeURIComponent(itemSourceId(item)) + '/local';
@@ -1238,6 +1243,13 @@ function openPinBrowseModal(slug, listName) {
                 var img = document.createElement('img');
                 img.alt = '';
                 img.loading = 'lazy';
+                /* One-shot fallback: if the CDN thumbnail fails, try /local.
+                   Clearing onerror prevents a flap if /local also fails. */
+                img.onerror = function() {
+                    img.onerror = null;
+                    var fb = localThumbUrl(item);
+                    if (img.src !== fb) img.src = fb;
+                };
                 img.src = thumbUrl(item);
                 card.appendChild(img);
 

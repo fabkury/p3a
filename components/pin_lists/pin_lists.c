@@ -685,12 +685,13 @@ esp_err_t pin_list_pin(const char *slug,
         return ESP_ERR_NO_MEM;
     }
 
-    /* Mint post_id and stamp into both records. */
-    int32_t pid = manifest.next_post_id;
+    /* The caller has populated order_e->post_id with the ORIGINAL source
+       post_id (Makapix server id, or DJB2 hash for Giphy/museum). pin_list_pin
+       no longer mints a list-local id — manifest.next_post_id stays in the
+       file for forward-compat but is unused. */
     pinned_order_entry_t order_copy = *order_e;
-    order_copy.post_id = pid;
     pinned_entry_file_t file_copy = *file_e;
-    file_copy.post_id = pid;
+    if (file_copy.post_id == 0) file_copy.post_id = order_copy.post_id;
     file_copy.magic = PINNED_ENTRY_MAGIC;
     file_copy.version = PINNED_FORMAT_VERSION;
 
@@ -747,19 +748,16 @@ esp_err_t pin_list_pin(const char *slug,
         return err;
     }
 
-    /* Bump manifest. */
-    manifest.next_post_id = pid + 1;
+    /* Bump manifest count. next_post_id is preserved for forward-compat
+       but no longer used. */
     manifest.count_cache = new_n;
     err = pl_manifest_save(target_slug, &manifest);
-    /* If manifest save fails, the list is still consistent on disk except
-       for next_post_id; next pin to this list will collide and be detected.
-       Log loudly. */
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "pin: manifest save failed slug=%s", target_slug);
     }
 
     ESP_LOGI(TAG, "pinned src=%d source_id=%s -> %s (post_id=%ld, total=%zu)",
-             (int)src, source_id, target_slug, (long)pid, new_n);
+             (int)src, source_id, target_slug, (long)order_copy.post_id, new_n);
     UNLOCK();
     return ESP_OK;
 }
@@ -958,7 +956,10 @@ esp_err_t pin_lists_pin_makapix(const char *slug,
 {
     if (!uuid_36chars || !src_artwork_path) return ESP_ERR_INVALID_ARG;
 
+    if (original_post_id <= 0) return ESP_ERR_INVALID_ARG;
+
     pinned_order_entry_t order = {0};
+    order.post_id = original_post_id;
     order.source = PINNED_SOURCE_MAKAPIX;
     order.extension = extension;
     order.pinned_at = now_unix_seconds();
@@ -969,6 +970,7 @@ esp_err_t pin_lists_pin_makapix(const char *slug,
     pinned_entry_file_t file = {0};
     file.magic = PINNED_ENTRY_MAGIC;
     file.version = PINNED_FORMAT_VERSION;
+    file.post_id = original_post_id;
     file.source = PINNED_SOURCE_MAKAPIX;
     file.extension = extension;
     file.pinned_at = order.pinned_at;
@@ -998,7 +1000,10 @@ esp_err_t pin_lists_pin_giphy(const char *slug,
 {
     if (!giphy_id || !giphy_id[0] || !src_artwork_path) return ESP_ERR_INVALID_ARG;
 
+    if (original_post_id <= 0) return ESP_ERR_INVALID_ARG;
+
     pinned_order_entry_t order = {0};
+    order.post_id = original_post_id;
     order.source = PINNED_SOURCE_GIPHY;
     order.extension = extension;
     order.pinned_at = now_unix_seconds();
@@ -1007,6 +1012,7 @@ esp_err_t pin_lists_pin_giphy(const char *slug,
     pinned_entry_file_t file = {0};
     file.magic = PINNED_ENTRY_MAGIC;
     file.version = PINNED_FORMAT_VERSION;
+    file.post_id = original_post_id;
     file.source = PINNED_SOURCE_GIPHY;
     file.extension = extension;
     file.pinned_at = order.pinned_at;
@@ -1051,7 +1057,10 @@ esp_err_t pin_lists_pin_institution(const char *slug,
         return ESP_ERR_INVALID_ARG;
     }
 
+    if (original_post_id <= 0) return ESP_ERR_INVALID_ARG;
+
     pinned_order_entry_t order = {0};
+    order.post_id = original_post_id;
     order.source = PINNED_SOURCE_INSTITUTION;
     order.extension = extension;
     order.pinned_at = now_unix_seconds();
@@ -1061,6 +1070,7 @@ esp_err_t pin_lists_pin_institution(const char *slug,
     pinned_entry_file_t file = {0};
     file.magic = PINNED_ENTRY_MAGIC;
     file.version = PINNED_FORMAT_VERSION;
+    file.post_id = original_post_id;
     file.source = PINNED_SOURCE_INSTITUTION;
     file.extension = extension;
     file.museum_id = museum_id;

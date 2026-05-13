@@ -53,6 +53,15 @@ static esp_err_t read_header(FILE *f, pinned_order_header_t *hdr)
         ESP_LOGW(TAG, "order.bin: bad magic 0x%08lx", (unsigned long)hdr->magic);
         return ESP_ERR_INVALID_CRC;
     }
+    /* v2 changed the semantics of entry.post_id (list-local monotonic ->
+       original source id). Older files would interpret correctly at the byte
+       level but the post_ids point to the wrong entities — so reject them
+       outright instead of silently misbehaving. Newer versions also rejected. */
+    if (hdr->version != PINNED_FORMAT_VERSION) {
+        ESP_LOGW(TAG, "order.bin: version %lu != expected %u; wipe /sdcard/p3a/pinned/ to upgrade",
+                 (unsigned long)hdr->version, PINNED_FORMAT_VERSION);
+        return ESP_ERR_NOT_SUPPORTED;
+    }
     return ESP_OK;
 }
 

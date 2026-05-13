@@ -48,7 +48,13 @@ extern "C" {
 /*  Format version + magic numbers                                           */
 /* ------------------------------------------------------------------------- */
 
-#define PINNED_FORMAT_VERSION     1u
+/* Bumped to 2 in the phase-7 pinned-channel polish: order.bin now stores
+ * the ORIGINAL source post_id (Makapix server id; synthesized DJB2 for
+ * Giphy/museum) in entry.post_id instead of a list-local monotonic id, so
+ * reactions on a pinned-playing artwork route correctly. The on-disk layout
+ * is unchanged; only the semantics of entry.post_id differ. v1 order.bin
+ * files are now rejected at load — the user wipes /sdcard/p3a/pinned/. */
+#define PINNED_FORMAT_VERSION     2u
 #define PINNED_STATE_MAGIC        0x50535441u  /* 'PSTA' */
 #define PINNED_ORDER_MAGIC        0x504F5244u  /* 'PORD' */
 #define PINNED_ENTRY_MAGIC        0x50454E54u  /* 'PENT' */
@@ -99,7 +105,10 @@ _Static_assert(sizeof(pinned_order_header_t) == 16, "pinned_order_header_t must 
  * entry file at `entries/{source}_{key_hash}.bin`.
  */
 typedef struct __attribute__((packed)) {
-    int32_t  post_id;               /* list-local monotonic id */
+    int32_t  post_id;               /* ORIGINAL source post_id (Makapix server
+                                       id; synthesized DJB2 for Giphy and
+                                       institution, matching the native channel
+                                       entries' post_id convention). */
     uint32_t pinned_at;             /* unix seconds, descending sort key */
     uint8_t  source;                /* pinned_source_t */
     uint8_t  extension;             /* 0=webp, 1=gif, 2=png, 3=jpg */

@@ -25,6 +25,9 @@
 #include "pin_lists.h"
 #include "play_scheduler.h"
 #include "p3a_state.h"
+#include "giphy.h"
+#include "art_institution.h"
+#include "makapix_channel_utils.h"
 #include "esp_log.h"
 #include <ctype.h>
 #include <errno.h>
@@ -184,6 +187,72 @@ static cJSON *json_from_list_info(const pin_list_info_t *info)
     return o;
 }
 
+/* Map a museum enum ordinal to its public string id. The art_institution
+ * enum is documented as append-only with stable ordinals; museums shipped
+ * since v0.1 are listed below in the same order. */
+static const char *museum_id_to_str(uint16_t id)
+{
+    static const char *names[] = { "artic", "rijks", "vam", "wellcome", "smk", "loc" };
+    if (id < (sizeof(names) / sizeof(names[0]))) return names[id];
+    return NULL;
+}
+
+/* Build the source-CDN URL for a pinned entry into `out`. Empty string on
+ * failure (caller falls back to /local on the web UI side).
+ *
+ * - Makapix: https://{makapix_host}/api/vault/{a}/{b}/{c}/{uuid}.{ext}
+ *   (SHA256 prefix derived from the UUID string).
+ * - Giphy:   https://i.giphy.com/media/{giphy_id}/giphy.webp
+ *   (Giphy CDN always serves WebP for trending/search results).
+ * - Museum:  art_institution_build_iiif_url(museum_str, entry-shim).
+ *   Note: LoC iiif_keys contain colons that we replace with underscores
+ *   when vaulting to FAT, so URL reconstruction will fail for LoC pins —
+ *   /local falls in. Other museums round-trip cleanly. */
+static void build_source_url(const pinned_order_entry_t *e, char *out, size_t out_len)
+{
+    if (!e || !out || out_len == 0) return;
+    out[0] = '\0';
+
+    static const char *ext_str[] = { ".webp", ".gif", ".png", ".jpg" };
+    int ext_idx = (e->extension <= 3) ? e->extension : 0;
+
+    switch ((pinned_source_t)e->source) {
+        case PINNED_SOURCE_MAKAPIX: {
+            const uint8_t *u = e->makapix.storage_key_uuid;
+            char uuid[40];
+            snprintf(uuid, sizeof(uuid),
+                     "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+                     u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7],
+                     u[8], u[9], u[10], u[11], u[12], u[13], u[14], u[15]);
+            uint8_t sha[32];
+            if (storage_key_sha256(uuid, sha) != ESP_OK) return;
+            snprintf(out, out_len,
+                     "https://%s/api/vault/%02x/%02x/%02x/%s%s",
+                     CONFIG_MAKAPIX_CLUB_HOST,
+                     (unsigned)sha[0], (unsigned)sha[1], (unsigned)sha[2],
+                     uuid, ext_str[ext_idx]);
+            break;
+        }
+        case PINNED_SOURCE_GIPHY: {
+            char gid[PINNED_GIPHY_ID_MAX + 1];
+            strlcpy(gid, e->giphy.giphy_id, sizeof(gid));
+            snprintf(out, out_len, "https://i.giphy.com/media/%s/giphy.webp", gid);
+            break;
+        }
+        case PINNED_SOURCE_INSTITUTION: {
+            const char *museum_str = museum_id_to_str(e->museum.museum_id);
+            if (!museum_str) return;
+            institution_channel_entry_t shim = {0};
+            shim.extension = e->extension;
+            strlcpy(shim.iiif_key, e->museum.iiif_key, sizeof(shim.iiif_key));
+            (void)art_institution_build_iiif_url(museum_str, &shim, 720, out, out_len);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
 static cJSON *json_from_order_entry(const pinned_order_entry_t *e)
 {
     cJSON *o = cJSON_CreateObject();
@@ -192,6 +261,12 @@ static cJSON *json_from_order_entry(const pinned_order_entry_t *e)
     cJSON_AddNumberToObject(o, "pinned_at", e->pinned_at);
     cJSON_AddStringToObject(o, "source", source_to_string((pinned_source_t)e->source));
     cJSON_AddStringToObject(o, "extension", extension_to_string(e->extension));
+    /* Reconstructed source-CDN URL (empty when reconstruction isn't possible,
+       e.g. LoC iiif_keys whose colons we sanitized for FAT). The web UI uses
+       this as its primary thumbnail src and falls back to /local on error. */
+    char source_url[300];
+    build_source_url(e, source_url, sizeof(source_url));
+    cJSON_AddStringToObject(o, "source_url", source_url);
     switch ((pinned_source_t)e->source) {
         case PINNED_SOURCE_MAKAPIX: {
             const uint8_t *u = e->makapix.storage_key_uuid;
@@ -610,6 +685,9 @@ static esp_err_t h_post_pin_raw(httpd_req_t *req, const char *slug)
     pinned_order_entry_t order = {0};
     pinned_entry_file_t file = {0};
 
+    int32_t original_post_id = (j_origpid && cJSON_IsNumber(j_origpid))
+                               ? (int32_t)cJSON_GetNumberValue(j_origpid) : 0;
+
     order.source = (uint8_t)src;
     order.extension = (uint8_t)ext;
     order.pinned_at = (j_pinned_at && cJSON_IsNumber(j_pinned_at))
@@ -619,8 +697,6 @@ static esp_err_t h_post_pin_raw(httpd_req_t *req, const char *slug)
     file.source = (uint8_t)src;
     file.extension = (uint8_t)ext;
     file.pinned_at = order.pinned_at;
-    file.original_post_id = (j_origpid && cJSON_IsNumber(j_origpid))
-                            ? (int32_t)cJSON_GetNumberValue(j_origpid) : 0;
     file.original_created_at = (j_orig_created && cJSON_IsNumber(j_orig_created))
                                 ? (uint32_t)cJSON_GetNumberValue(j_orig_created) : 0;
     strlcpy(file.source_id, cJSON_GetStringValue(j_src_id), sizeof(file.source_id));
@@ -634,7 +710,10 @@ static esp_err_t h_post_pin_raw(httpd_req_t *req, const char *slug)
         file.museum_id = (uint16_t)cJSON_GetNumberValue(j_museum_id);
     }
 
-    /* Source-specific order-entry variant population. */
+    /* Source-specific order-entry variant population + post_id synthesis
+       when the caller omitted original_post_id (matches the native channels'
+       DJB2 conventions so pinned playback's post_id collides with the same
+       artwork's native-channel post_id). */
     switch (src) {
         case PINNED_SOURCE_MAKAPIX: {
             const char *uuid = j_uuid && cJSON_IsString(j_uuid)
@@ -649,6 +728,12 @@ static esp_err_t h_post_pin_raw(httpd_req_t *req, const char *slug)
                 order.makapix.storage_key_uuid[i] = (uint8_t)v;
                 s += 2;
             }
+            /* Makapix server post_ids cannot be synthesized client-side. */
+            if (original_post_id <= 0) {
+                cJSON_Delete(root);
+                send_json(req, 400, "{\"ok\":false,\"code\":\"MISSING_POST_ID\"}");
+                return ESP_OK;
+            }
             break;
         }
         case PINNED_SOURCE_GIPHY: {
@@ -656,6 +741,9 @@ static esp_err_t h_post_pin_raw(httpd_req_t *req, const char *slug)
                               ? cJSON_GetStringValue(j_giphy)
                               : cJSON_GetStringValue(j_src_id);
             strlcpy(order.giphy.giphy_id, gid, sizeof(order.giphy.giphy_id));
+            if (original_post_id <= 0) {
+                original_post_id = giphy_id_to_post_id(gid);
+            }
             break;
         }
         case PINNED_SOURCE_INSTITUTION: {
@@ -664,11 +752,24 @@ static esp_err_t h_post_pin_raw(httpd_req_t *req, const char *slug)
                                ? cJSON_GetStringValue(j_iiif)
                                : cJSON_GetStringValue(j_src_id);
             strlcpy(order.museum.iiif_key, iiif, sizeof(order.museum.iiif_key));
+            if (original_post_id <= 0) {
+                static const char *museum_names[] = {
+                    "artic", "rijks", "vam", "wellcome", "smk", "loc"
+                };
+                if (file.museum_id < (sizeof(museum_names) / sizeof(museum_names[0]))) {
+                    original_post_id = art_institution_compute_post_id(
+                        museum_names[file.museum_id], iiif);
+                }
+            }
             break;
         }
         default:
             break;
     }
+
+    order.post_id = original_post_id;
+    file.post_id = original_post_id;
+    file.original_post_id = original_post_id;
 
     char src_path[256];
     strlcpy(src_path, cJSON_GetStringValue(j_path), sizeof(src_path));

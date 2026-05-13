@@ -23,6 +23,8 @@
 
 #include "http_api_internal.h"
 #include "pin_lists.h"
+#include "play_scheduler.h"
+#include "p3a_state.h"
 #include "esp_log.h"
 #include <ctype.h>
 #include <errno.h>
@@ -516,6 +518,21 @@ static esp_err_t h_post_set_active(httpd_req_t *req, const char *slug)
     return ESP_OK;
 }
 
+/* POST /api/pin-lists/{slug}/play
+ * Switches playback to the given pinned list as a first-class channel.
+ * Persists the active-playset name as "channel_pinned_{slug}" so the
+ * pill bar can highlight the active list across polls. */
+static esp_err_t h_post_play(httpd_req_t *req, const char *slug)
+{
+    esp_err_t err = play_scheduler_play_pinned_channel(slug);
+    if (err != ESP_OK) { send_pin_err(req, err, "play"); return ESP_OK; }
+    char playset_name[40];
+    snprintf(playset_name, sizeof(playset_name), "channel_pinned_%s", slug);
+    p3a_state_set_active_playset(playset_name);
+    send_json(req, 200, "{\"ok\":true}");
+    return ESP_OK;
+}
+
 /* POST /api/pin-lists/{slug}/items — raw pin (phase 2 testing surface).
  * Body fields (all sources):
  *   source            string  ("makapix"|"giphy"|"museum")
@@ -757,6 +774,9 @@ esp_err_t h_pinned_route_post(httpd_req_t *req)
 
     /* POST /api/pin-lists/{slug}/active */
     if (strcmp(remainder, "active") == 0) return h_post_set_active(req, slug);
+
+    /* POST /api/pin-lists/{slug}/play */
+    if (strcmp(remainder, "play") == 0) return h_post_play(req, slug);
 
     /* POST /api/pin-lists/{slug}/items */
     if (strcmp(remainder, "items") == 0) return h_post_pin_raw(req, slug);

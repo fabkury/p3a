@@ -16,6 +16,7 @@
  */
 
 #include "http_api_internal.h"
+#include "pin_lists.h"
 #include "storage_eviction.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
@@ -214,6 +215,29 @@ esp_err_t h_get_api_init(httpd_req_t *req) {
     cJSON *ca = build_current_artwork_json();
     if (ca) {
         cJSON_AddItemToObject(data, "current_artwork", ca);
+    }
+
+    // pin_lists: enumerate all pin lists + active slug so the web UI can
+    // render a pill per list without an extra request.
+    {
+        pin_list_info_t infos[PIN_LISTS_MAX_LISTS];
+        size_t n = 0;
+        if (pin_lists_enumerate(infos, PIN_LISTS_MAX_LISTS, &n) == ESP_OK) {
+            cJSON *pl = cJSON_AddObjectToObject(data, "pin_lists");
+            cJSON *arr = cJSON_AddArrayToObject(pl, "lists");
+            for (size_t i = 0; i < n; i++) {
+                cJSON *o = cJSON_CreateObject();
+                if (!o) continue;
+                cJSON_AddStringToObject(o, "slug", infos[i].slug);
+                cJSON_AddStringToObject(o, "name", infos[i].name);
+                cJSON_AddNumberToObject(o, "count", (double)infos[i].count);
+                cJSON_AddBoolToObject(o, "is_active", infos[i].is_active);
+                cJSON_AddItemToArray(arr, o);
+            }
+            char active[PIN_LIST_SLUG_LEN] = {0};
+            pin_lists_get_active(active);
+            cJSON_AddStringToObject(pl, "active", active);
+        }
     }
 
     char *json = cJSON_PrintUnformatted(root);

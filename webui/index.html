@@ -47,6 +47,178 @@ body {
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
 }
+.pin-overlay {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    pointer-events: none;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+}
+.pin-btn {
+    width: 46px;
+    height: 46px;
+    font-size: 1.2rem;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.10);
+    color: white;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, background 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.pin-btn.active {
+    background: var(--c-primary);
+    border-color: rgba(255,255,255,0.45);
+}
+.pin-btn.pulse {
+    animation: reaction-pulse 0.32s ease;
+}
+.pin-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: var(--sp-4);
+}
+.pin-modal-overlay.active { display: flex; }
+.pin-modal {
+    background: white;
+    color: #1f2937;
+    border-radius: var(--r-lg);
+    padding: var(--sp-5);
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+}
+.pin-modal h3 {
+    margin: 0 0 var(--sp-4) 0;
+    font-size: 1.1rem;
+    color: #1f2937;
+}
+.pin-modal-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-2) 0;
+    border-bottom: 1px solid #e5e7eb;
+}
+.pin-modal-row:last-child { border-bottom: none; }
+.pin-modal-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pin-modal-row-meta { font-size: 0.78rem; color: #6b7280; margin-left: var(--sp-2); }
+.pin-modal-row button {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    border-radius: var(--r-sm);
+    border: 1px solid #d1d5db;
+    background: white;
+    color: #1f2937;
+    cursor: pointer;
+}
+.pin-modal-row button.danger { color: #b91c1c; border-color: #fecaca; }
+.pin-modal-row button:disabled { opacity: 0.5; cursor: default; }
+.pin-modal-active-badge {
+    font-size: 0.7rem;
+    color: #6b7280;
+    margin-right: var(--sp-2);
+}
+.pin-modal-create {
+    display: flex;
+    gap: var(--sp-2);
+    margin-top: var(--sp-4);
+}
+.pin-modal-create input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: var(--r-sm);
+    font-size: 0.85rem;
+    color: #1f2937;
+}
+.pin-modal-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--sp-4);
+}
+.pin-modal-actions .close-btn {
+    background: #e5e7eb;
+    border: none;
+    padding: 8px 14px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    color: #1f2937;
+}
+.pin-browse-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--sp-3);
+    margin-top: var(--sp-3);
+}
+.pin-browse-card {
+    border: 1px solid #e5e7eb;
+    border-radius: var(--r-md);
+    padding: var(--sp-2);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: white;
+}
+.pin-browse-card img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    background: #f3f4f6;
+    border-radius: var(--r-sm);
+}
+.pin-browse-card .meta {
+    font-size: 0.72rem;
+    color: #6b7280;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pin-browse-card .actions {
+    display: flex;
+    gap: 6px;
+}
+.pin-browse-card .actions button {
+    flex: 1;
+    padding: 4px 6px;
+    font-size: 0.72rem;
+    border-radius: var(--r-sm);
+    border: 1px solid #d1d5db;
+    background: white;
+    color: #1f2937;
+    cursor: pointer;
+}
+.pin-browse-card .actions button.danger { color: #b91c1c; border-color: #fecaca; }
+.pin-browse-pager {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: var(--sp-4);
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+.pin-browse-pager button {
+    padding: 6px 12px;
+    border: 1px solid #d1d5db;
+    background: white;
+    color: #1f2937;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+}
+.pin-browse-pager button:disabled { opacity: 0.4; cursor: default; }
 .now-playing {
     width: min(420px, 100%);
     background: var(--c-primary);
@@ -385,6 +557,7 @@ body {
 <div class="artwork-area" id="artwork-area">
     <img id="artwork-img" style="display:none;">
     <img id="reaction-overlay-img" class="reaction-overlay" alt="" hidden>
+    <img id="pin-overlay-img" class="pin-overlay" alt="" hidden>
 </div>
 <div class="now-playing collapsed" id="now-playing" style="display:none;">
     <div class="now-playing-header" onclick="toggleNowPlaying()">
@@ -402,6 +575,7 @@ body {
 <div class="arrow-row">
     <button class="arrow-btn" id="back-btn" onclick="sendCommand('swap_back')">&#9664;</button>
     <button class="reaction-btn" id="reaction-btn" type="button" style="visibility:hidden;" aria-label="React"></button>
+    <button class="pin-btn" id="pin-btn" type="button" style="visibility:hidden;" aria-label="Pin">&#128204;</button>
     <button class="pause-btn" id="pause-btn" onclick="togglePause()">Pause</button>
     <button class="arrow-btn" id="next-btn" onclick="sendCommand('swap_next')">&#9654;</button>
 </div>
@@ -439,6 +613,9 @@ body {
     <h4>&#x2B06; Update Available</h4>
     <p id="update-version">A new firmware version is ready to install</p>
 </div>
+<div id="pin-modal-overlay" class="pin-modal-overlay" role="dialog" aria-modal="true">
+    <div class="pin-modal" id="pin-modal-content"></div>
+</div>
 <div class="cooldown-banner" id="giphy-cooldown-banner">
     <h4>&#9203; Giphy Rate Limited</h4>
     <p>The Giphy API key hit its limit of 100 requests per hour. Device is now waiting before refreshing Giphy channels.</p>
@@ -471,6 +648,8 @@ var LCD_MAX_HEIGHT = 720;
 var activePlaysetName = '';
 var isRegistered = false;
 var userPlaysets = [];
+var pinLists = [];       // [{slug, name, count, is_active}, ...]
+var activePinSlug = '';
 
 // Built-in presets
 var builtInPresets = [
@@ -500,6 +679,7 @@ function updateArtwork(currentArtwork) {
     if (!currentArtwork || !currentArtwork.url) {
         img.style.display = 'none';
         updateReactionButton(currentArtwork);
+        updatePinButton(currentArtwork);
         return;
     }
     var usePixelated = (currentArtwork.channel_type !== 'giphy');
@@ -514,6 +694,32 @@ function updateArtwork(currentArtwork) {
     }
     img.style.display = '';
     updateReactionButton(currentArtwork);
+    updatePinButton(currentArtwork);
+}
+
+function updatePinButton(currentArtwork) {
+    var btn = document.getElementById('pin-btn');
+    if (!btn) return;
+    /* Pinning is supported for Makapix, Giphy, and museum sources. SD-card
+       posts and an empty stage hide the button. */
+    if (!currentArtwork) {
+        btn.style.visibility = 'hidden';
+        delete btn.dataset.payload;
+        return;
+    }
+    var ct = currentArtwork.channel_type;
+    var hasMakapixId = typeof currentArtwork.post_id === 'number' && currentArtwork.post_id > 0;
+    var hasGiphyId = typeof currentArtwork.giphy_id === 'string' && currentArtwork.giphy_id.length > 0;
+    if (hasGiphyId) {
+        btn.dataset.payload = JSON.stringify({ giphy_id: currentArtwork.giphy_id });
+        btn.style.visibility = '';
+    } else if (hasMakapixId && (ct === 'institution' || ct === 'pinned' || ct === undefined || ct === 'named' || ct === 'user' || ct === 'reactions' || ct === 'hashtag' || ct === 'makapix')) {
+        btn.dataset.payload = JSON.stringify({ post_id: currentArtwork.post_id });
+        btn.style.visibility = '';
+    } else {
+        btn.style.visibility = 'hidden';
+        delete btn.dataset.payload;
+    }
 }
 
 // Pending reaction click whose response we are still waiting for. Until the
@@ -600,6 +806,67 @@ function reactionOverlayHide() {
     if (reactionOverlayTimer) { clearTimeout(reactionOverlayTimer); reactionOverlayTimer = null; }
 }
 
+// Pin overlay (top-LEFT corner of artwork preview). Independent state from
+// the reaction overlay so both can render simultaneously when a swipe-up
+// or web-UI click triggers both a reaction and a pin.
+var PIN_OVERLAY_DURATION_MS = 4000;
+var PIN_OVERLAY_ASSETS = {
+    submit: { src: '/static/reactions/pin.png',            w: 52, h: 59 },
+    error:  { src: '/static/reactions/reaction-error.png', w: 48, h: 48 }
+};
+var pinOverlayState = 'idle';
+var pinOverlayTimer = null;
+
+function pinOverlayShow(state) {
+    var asset = PIN_OVERLAY_ASSETS[state];
+    if (!asset) return;
+    if (pinOverlayState === 'error' && state !== 'error') return;
+    var img = document.getElementById('pin-overlay-img');
+    img.src = asset.src;
+    img.width = asset.w;
+    img.height = asset.h;
+    img.hidden = false;
+    pinOverlayState = state;
+    if (pinOverlayTimer) clearTimeout(pinOverlayTimer);
+    pinOverlayTimer = setTimeout(pinOverlayHide, PIN_OVERLAY_DURATION_MS);
+}
+
+function pinOverlayShowError() { pinOverlayShow('error'); }
+
+function pinOverlayHide() {
+    var img = document.getElementById('pin-overlay-img');
+    img.hidden = true;
+    pinOverlayState = 'idle';
+    if (pinOverlayTimer) { clearTimeout(pinOverlayTimer); pinOverlayTimer = null; }
+}
+
+function onPinClick() {
+    var btn = document.getElementById('pin-btn');
+    if (!btn || !btn.dataset.payload) return;
+    var body;
+    try { body = JSON.parse(btn.dataset.payload); } catch (e) { return; }
+    playReactionPulse(btn);
+    pinOverlayShow('submit');
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/action/pin', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        var ok = false;
+        var msg = '';
+        try {
+            var result = JSON.parse(xhr.responseText);
+            ok = (xhr.status >= 200 && xhr.status < 300 && result.ok);
+            if (!ok) msg = result.error || ('HTTP ' + xhr.status);
+        } catch (e) { msg = 'Parse error: ' + e.message; }
+        if (!ok) {
+            pinOverlayShowError();
+            showToast(msg || 'Pin failed', true);
+        }
+    };
+    xhr.send(JSON.stringify(body));
+}
+
 function onReactionClick() {
     var btn = document.getElementById('reaction-btn');
     var source = btn.dataset.source;
@@ -680,6 +947,370 @@ function buildPillBar() {
         btn.addEventListener('click', function() { playPlayset(ps.name, btn); });
         bar.appendChild(btn);
     });
+    /* Pin lists: one pill per list (active list marked with ★). Long-press
+       opens the per-list browse modal; tap plays the list. A trailing
+       "Manage" pill opens the list-management modal. */
+    pinLists.forEach(function(pl) {
+        var btn = document.createElement('button');
+        btn.className = 'pill-item';
+        btn.textContent = (pl.is_active ? '★ ' : '') + pl.name + ' (' + pl.count + ')';
+        var playsetId = 'channel_pinned_' + pl.slug;
+        var playsetIdGeneric = (pl.is_active ? 'channel_pinned' : null);
+        btn.setAttribute('data-playset', playsetId);
+        btn.setAttribute('data-pin-slug', pl.slug);
+        if (playsetId === activePlaysetName || (playsetIdGeneric && playsetIdGeneric === activePlaysetName)) {
+            btn.classList.add('active');
+        }
+        /* Right-click / long-press → open browse modal. Plain tap → play. */
+        var pressTimer = null;
+        var longPressed = false;
+        btn.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            openPinBrowseModal(pl.slug, pl.name);
+        });
+        btn.addEventListener('touchstart', function(e) {
+            longPressed = false;
+            pressTimer = setTimeout(function() {
+                longPressed = true;
+                openPinBrowseModal(pl.slug, pl.name);
+            }, 500);
+        }, { passive: true });
+        btn.addEventListener('touchend', function() {
+            if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+        });
+        btn.addEventListener('touchmove', function() {
+            if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+        });
+        btn.addEventListener('click', function() {
+            if (longPressed) { longPressed = false; return; }
+            playPinList(pl.slug, btn);
+        });
+        bar.appendChild(btn);
+    });
+    if (pinLists.length > 0 || isRegistered) {
+        var manage = document.createElement('button');
+        manage.className = 'pill-item';
+        manage.textContent = 'Manage pins';
+        manage.setAttribute('data-pin-manage', '1');
+        manage.addEventListener('click', function() { openPinManageModal(); });
+        bar.appendChild(manage);
+    }
+}
+
+/* ------------------------------------------------------------------- */
+/*  Pin-list management modal                                          */
+/* ------------------------------------------------------------------- */
+
+function closePinModal() {
+    var ov = document.getElementById('pin-modal-overlay');
+    ov.classList.remove('active');
+    document.getElementById('pin-modal-content').innerHTML = '';
+}
+
+function refreshPinListsFromInit(done) {
+    fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok && d.data && d.data.pin_lists) {
+            pinLists = d.data.pin_lists.lists || [];
+            activePinSlug = d.data.pin_lists.active || '';
+            buildPillBar();
+        }
+        if (done) done();
+    }).catch(function() { if (done) done(); });
+}
+
+function openPinManageModal() {
+    var ov = document.getElementById('pin-modal-overlay');
+    var body = document.getElementById('pin-modal-content');
+    body.innerHTML = '';
+    var h = document.createElement('h3');
+    h.textContent = 'Pin lists';
+    body.appendChild(h);
+
+    var rows = document.createElement('div');
+    body.appendChild(rows);
+
+    function renderRows() {
+        rows.innerHTML = '';
+        pinLists.forEach(function(pl) {
+            var row = document.createElement('div');
+            row.className = 'pin-modal-row';
+
+            var name = document.createElement('span');
+            name.className = 'pin-modal-row-name';
+            name.textContent = pl.name;
+            row.appendChild(name);
+
+            var meta = document.createElement('span');
+            meta.className = 'pin-modal-row-meta';
+            meta.textContent = '(' + pl.count + ')';
+            row.appendChild(meta);
+
+            if (pl.is_active) {
+                var badge = document.createElement('span');
+                badge.className = 'pin-modal-active-badge';
+                badge.textContent = 'active';
+                row.appendChild(badge);
+            }
+
+            var renameBtn = document.createElement('button');
+            renameBtn.textContent = 'Rename';
+            renameBtn.addEventListener('click', function() { promptRename(pl); });
+            row.appendChild(renameBtn);
+
+            var activeBtn = document.createElement('button');
+            activeBtn.textContent = 'Set active';
+            activeBtn.disabled = !!pl.is_active;
+            activeBtn.addEventListener('click', function() { setActive(pl.slug); });
+            row.appendChild(activeBtn);
+
+            var browseBtn = document.createElement('button');
+            browseBtn.textContent = 'Browse';
+            browseBtn.addEventListener('click', function() {
+                closePinModal();
+                openPinBrowseModal(pl.slug, pl.name);
+            });
+            row.appendChild(browseBtn);
+
+            var delBtn = document.createElement('button');
+            delBtn.className = 'danger';
+            delBtn.textContent = 'Delete';
+            delBtn.disabled = !!pl.is_active;
+            delBtn.addEventListener('click', function() { confirmDelete(pl); });
+            row.appendChild(delBtn);
+
+            rows.appendChild(row);
+        });
+    }
+    renderRows();
+
+    var create = document.createElement('div');
+    create.className = 'pin-modal-create';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'New list name';
+    input.maxLength = 63;
+    var addBtn = document.createElement('button');
+    addBtn.textContent = 'Create';
+    addBtn.addEventListener('click', function() {
+        var name = input.value.trim();
+        if (!name) return;
+        sendJSON('POST', '/api/pin-lists', { name: name }, function(ok, res) {
+            if (!ok) { showToast(res && res.error ? res.error : 'Create failed', true); return; }
+            input.value = '';
+            refreshPinListsFromInit(renderRows);
+        });
+    });
+    create.appendChild(input);
+    create.appendChild(addBtn);
+    body.appendChild(create);
+
+    var actions = document.createElement('div');
+    actions.className = 'pin-modal-actions';
+    var close = document.createElement('button');
+    close.className = 'close-btn';
+    close.textContent = 'Close';
+    close.addEventListener('click', closePinModal);
+    actions.appendChild(close);
+    body.appendChild(actions);
+
+    ov.classList.add('active');
+
+    function promptRename(pl) {
+        var newName = prompt('Rename "' + pl.name + '" to:', pl.name);
+        if (!newName || newName === pl.name) return;
+        sendJSON('POST', '/api/pin-lists/' + encodeURIComponent(pl.slug) + '/rename',
+                 { name: newName }, function(ok, res) {
+            if (!ok) { showToast(res && res.error ? res.error : 'Rename failed', true); return; }
+            refreshPinListsFromInit(renderRows);
+        });
+    }
+
+    function setActive(slug) {
+        sendJSON('POST', '/api/pin-lists/' + encodeURIComponent(slug) + '/active', {},
+                 function(ok, res) {
+            if (!ok) { showToast(res && res.error ? res.error : 'Set active failed', true); return; }
+            refreshPinListsFromInit(renderRows);
+        });
+    }
+
+    function confirmDelete(pl) {
+        if (!confirm('Delete list "' + pl.name + '" (' + pl.count + ' pins)? This cannot be undone.')) return;
+        sendJSON('DELETE', '/api/pin-lists/' + encodeURIComponent(pl.slug), null,
+                 function(ok, res) {
+            if (!ok) { showToast(res && res.error ? res.error : 'Delete failed', true); return; }
+            refreshPinListsFromInit(renderRows);
+        });
+    }
+}
+
+function sendJSON(method, url, body, cb) {
+    var xhr = new XMLHttpRequest();
+    xhr.open(method, url, true);
+    if (body !== null) xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        var ok = (xhr.status >= 200 && xhr.status < 300);
+        var res = null;
+        try { res = JSON.parse(xhr.responseText); } catch (e) {}
+        if (cb) cb(ok && res && res.ok !== false, res);
+    };
+    xhr.send(body === null ? null : JSON.stringify(body));
+}
+
+/* ------------------------------------------------------------------- */
+/*  Pin-list browse modal (paginated)                                  */
+/* ------------------------------------------------------------------- */
+
+var PIN_BROWSE_PAGE_SIZE = 20;
+
+function openPinBrowseModal(slug, listName) {
+    var ov = document.getElementById('pin-modal-overlay');
+    var body = document.getElementById('pin-modal-content');
+    body.innerHTML = '';
+    var h = document.createElement('h3');
+    h.textContent = listName + ' — pinned';
+    body.appendChild(h);
+
+    var grid = document.createElement('div');
+    grid.className = 'pin-browse-grid';
+    body.appendChild(grid);
+
+    var pager = document.createElement('div');
+    pager.className = 'pin-browse-pager';
+    var prev = document.createElement('button');
+    prev.textContent = 'Prev';
+    var label = document.createElement('span');
+    label.textContent = '';
+    var next = document.createElement('button');
+    next.textContent = 'Next';
+    pager.appendChild(prev);
+    pager.appendChild(label);
+    pager.appendChild(next);
+    body.appendChild(pager);
+
+    var actions = document.createElement('div');
+    actions.className = 'pin-modal-actions';
+    var close = document.createElement('button');
+    close.className = 'close-btn';
+    close.textContent = 'Close';
+    close.addEventListener('click', closePinModal);
+    actions.appendChild(close);
+    body.appendChild(actions);
+
+    ov.classList.add('active');
+
+    var offset = 0;
+    var total = 0;
+
+    function thumbUrl(item) {
+        /* For phase 6 v1 the web UI loads thumbnails from the device's local
+           fallback endpoint. CDN-direct loading (preferred for cost reasons)
+           is a future enhancement. */
+        return '/api/pin-lists/' + encodeURIComponent(slug) + '/items/' +
+               encodeURIComponent(item.source) + '/' +
+               encodeURIComponent(itemSourceId(item)) + '/local';
+    }
+
+    function itemSourceId(item) {
+        if (item.source === 'makapix' && item.uuid) return item.uuid;
+        if (item.source === 'giphy' && item.giphy_id) return item.giphy_id;
+        if (item.source === 'museum' && item.iiif_key !== undefined) {
+            return item.museum_id + ':' + item.iiif_key;
+        }
+        return '';
+    }
+
+    function loadPage() {
+        grid.innerHTML = '';
+        label.textContent = 'Loading…';
+        var url = '/api/pin-lists/' + encodeURIComponent(slug) +
+                  '/items?offset=' + offset + '&limit=' + PIN_BROWSE_PAGE_SIZE;
+        fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+            total = d.total || 0;
+            label.textContent = total === 0 ? 'No pins yet' :
+                'Showing ' + (offset + 1) + '-' + Math.min(offset + (d.items || []).length, total) +
+                ' of ' + total;
+            prev.disabled = (offset <= 0);
+            next.disabled = (offset + PIN_BROWSE_PAGE_SIZE >= total);
+            (d.items || []).forEach(function(item) {
+                var card = document.createElement('div');
+                card.className = 'pin-browse-card';
+                var img = document.createElement('img');
+                img.alt = '';
+                img.loading = 'lazy';
+                img.src = thumbUrl(item);
+                card.appendChild(img);
+
+                var meta = document.createElement('div');
+                meta.className = 'meta';
+                meta.textContent = item.source + ' — ' + itemSourceId(item);
+                card.appendChild(meta);
+
+                var actionsRow = document.createElement('div');
+                actionsRow.className = 'actions';
+                var unpin = document.createElement('button');
+                unpin.textContent = 'Unpin';
+                unpin.className = 'danger';
+                unpin.addEventListener('click', function() {
+                    unpinItem(slug, item, function() { loadPage(); });
+                });
+                actionsRow.appendChild(unpin);
+                card.appendChild(actionsRow);
+                grid.appendChild(card);
+            });
+        }).catch(function() {
+            label.textContent = 'Failed to load';
+        });
+    }
+
+    prev.addEventListener('click', function() {
+        if (offset >= PIN_BROWSE_PAGE_SIZE) { offset -= PIN_BROWSE_PAGE_SIZE; loadPage(); }
+    });
+    next.addEventListener('click', function() {
+        if (offset + PIN_BROWSE_PAGE_SIZE < total) { offset += PIN_BROWSE_PAGE_SIZE; loadPage(); }
+    });
+
+    loadPage();
+}
+
+function unpinItem(slug, item, cb) {
+    var sid = '';
+    if (item.source === 'makapix' && item.uuid) sid = item.uuid;
+    else if (item.source === 'giphy' && item.giphy_id) sid = item.giphy_id;
+    else if (item.source === 'museum') sid = item.museum_id + ':' + item.iiif_key;
+    else return;
+    var url = '/api/pin-lists/' + encodeURIComponent(slug) + '/items/' +
+              encodeURIComponent(item.source) + '/' + encodeURIComponent(sid);
+    sendJSON('DELETE', url, null, function(ok, res) {
+        if (!ok) { showToast(res && res.error ? res.error : 'Unpin failed', true); return; }
+        if (cb) cb();
+    });
+}
+
+function playPinList(slug, btn) {
+    if (btn) {
+        document.querySelectorAll('.pill-item.pending').forEach(function(p) {
+            p.classList.remove('pending');
+        });
+        btn.classList.add('pending');
+    }
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/pin-lists/' + encodeURIComponent(slug) + '/play', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        if (btn) btn.classList.remove('pending');
+        var ok = (xhr.status >= 200 && xhr.status < 300);
+        if (ok) {
+            updatePillBarActive('channel_pinned_' + slug);
+            schedulePollSoon();
+        } else {
+            var msg = 'Failed to play list';
+            try { var r = JSON.parse(xhr.responseText); if (r && r.error) msg = r.error; } catch (e) {}
+            showToast(msg, true);
+        }
+    };
+    xhr.send('{}');
 }
 
 function updatePillBarActive(name) {
@@ -716,6 +1347,10 @@ fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
     if (data.paused) {
         isPaused = true;
         document.getElementById('pause-btn').textContent = 'Resume';
+    }
+    if (data.pin_lists) {
+        pinLists = data.pin_lists.lists || [];
+        activePinSlug = data.pin_lists.active || '';
     }
     updateArtwork(data.current_artwork);
     // Fetch user playsets then build pill bar
@@ -1384,6 +2019,7 @@ function schedulePollSoon() {
 }
 function schedulePollAfterSwap() { schedulePollSoon(); }
 document.getElementById('reaction-btn').addEventListener('click', onReactionClick);
+document.getElementById('pin-btn').addEventListener('click', onPinClick);
 </script>
 </body>
 </html>

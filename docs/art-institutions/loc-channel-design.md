@@ -199,7 +199,24 @@ art-bearing facets. The refresh code drops any entry with
 `strlen(iiif_key) >= 48`. The deferred decision around widening this
 slot is captured in [`docs/deferred/loc-iiif-key-48-char.md`](../deferred/loc-iiif-key-48-char.md).
 
-### 5.5 Periodic transport flakiness
+### 5.5 IIIF ids contain colons; FAT32 sanitization needed for the vault filename
+
+LoC's IIIF identifier shape (`service:pnp:highsm:35300:35397`) embeds
+colons as path separators. The cache entry stores the canonical form
+so URL building stays correct, but the SD card uses FAT32 and FatFs
+rejects `:` in filenames (see `ff.c` `create_name()` — the rejection
+set is `* : < > | " ? \x7F`).
+
+`art_institution_build_vault_path` in `art_institution.c` sanitizes
+`:` → `_` in the filename portion only. The fix is in the shared
+vault path builder rather than the LoC adapter because no other
+museum's IIIF key contains FAT-reserved characters — sanitizing
+unconditionally is a no-op for the other five. Other reserved chars
+(`* < > | " ? \x7F`) have not been observed in LoC IIIF ids and are
+not sanitized; if they appear in the future, extend the sanitization
+loop in the same place.
+
+### 5.6 Periodic transport flakiness
 
 The investigation observed `IncompleteRead` and `Read timed out` on
 sustained probing. The existing per-museum fetch retry pattern

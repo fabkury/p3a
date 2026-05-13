@@ -184,10 +184,22 @@ esp_err_t art_institution_build_vault_path(const char *museum_id,
         default: ext = ".jpg";  break;
     }
 
+    // LoC IIIF keys contain ':' (e.g. service:pnp:highsm:35300:35397),
+    // which FatFs rejects in filenames (see ff.c create_name(): the
+    // rejection set is "*:<>|\"\?\x7F"). Sanitize for the filename use
+    // only — the cache entry's iiif_key keeps the original colon form
+    // so URL building stays canonical. Other museums' keys don't
+    // contain reserved characters, so this is a no-op for them.
+    char safe_name[sizeof(entry->iiif_key)];
+    strlcpy(safe_name, entry->iiif_key, sizeof(safe_name));
+    for (char *p = safe_name; *p; p++) {
+        if (*p == ':') *p = '_';
+    }
+
     int n = snprintf(out_path, out_len, "%s/%s/%02x/%02x/%02x/%s%s",
                      base, museum_id,
                      (unsigned)sha[0], (unsigned)sha[1], (unsigned)sha[2],
-                     entry->iiif_key, ext);
+                     safe_name, ext);
     if (n < 0 || (size_t)n >= out_len) return ESP_ERR_INVALID_SIZE;
     return ESP_OK;
 }

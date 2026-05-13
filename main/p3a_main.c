@@ -43,6 +43,7 @@
 #include "connectivity_service.h"
 #include "fresh_boot.h"        // Fresh boot debug helpers
 #include "channel_cache.h"       // LAi persistence for channel caches
+#include "pin_lists.h"           // Pinned-artworks vault init (post-SD)
 #include "show_url.h"            // show-url download command
 #include "freertos/task.h"
 #include "esp_timer.h"
@@ -623,6 +624,17 @@ void app_main(void)
         } else if (touch_err != ESP_OK && touch_err != ESP_ERR_NOT_SUPPORTED) {
             ESP_LOGE(TAG, "Touch init failed: %s (continuing without touch)", esp_err_to_name(touch_err));
         }
+    }
+
+    // Initialize the pinned-artworks vault. Deferred to here (rather than
+    // content_service_init) because pin_lists creates files under
+    // /sdcard/p3a/pinned/, which requires the SD card to be mounted and
+    // sd_path_ensure_directories() to have run. Both happen inside
+    // app_lcd_init -> animation_player_init. Non-fatal on failure —
+    // pinning will be unavailable but the rest of the app continues.
+    esp_err_t pl_err = pin_lists_init();
+    if (pl_err != ESP_OK) {
+        ESP_LOGW(TAG, "pin_lists_init failed: %s", esp_err_to_name(pl_err));
     }
 
 #if P3A_HAS_BUTTONS

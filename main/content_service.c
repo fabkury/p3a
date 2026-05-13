@@ -10,7 +10,6 @@
 #include "content_service.h"
 #include "channel_cache.h"
 #include "art_institution.h"
-#include "pin_lists.h"
 #include "esp_log.h"
 
 static const char *TAG = "content_svc";
@@ -31,13 +30,11 @@ esp_err_t content_service_init(void)
         ESP_LOGW(TAG, "art_institution_init failed: %s", esp_err_to_name(ai_err));
     }
 
-    // Bootstrap the pinned-artworks vault. First-boot will auto-create the
-    // default "My Pins" list. Non-fatal on failure — pinning will be unavailable
-    // but the rest of the app continues.
-    esp_err_t pl_err = pin_lists_init();
-    if (pl_err != ESP_OK) {
-        ESP_LOGW(TAG, "pin_lists_init failed: %s", esp_err_to_name(pl_err));
-    }
+    // pin_lists_init is intentionally NOT called here — content_service_init
+    // runs early in p3a_main, before the SD card is mounted, so any mkdir on
+    // /sdcard/p3a/pinned/ would fail with ENOENT. The pin-lists module is
+    // initialized later from p3a_main, after app_lcd_init (which mounts the
+    // SD card and runs sd_path_ensure_directories).
 
     return ESP_OK;
 }

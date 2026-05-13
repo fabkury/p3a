@@ -256,5 +256,28 @@ void reaction_overlay_show_click(void);
  */
 void reaction_overlay_update_and_draw(uint8_t *buffer);
 
+// ============================================================================
+// Pin Overlay (display_pin_overlay.c)
+// ============================================================================
+
+/**
+ * @brief Pin overlay state
+ *
+ * Independent from reaction_overlay_state_t so a pin and a reaction can
+ * display simultaneously (top-LEFT and top-RIGHT corners respectively).
+ */
+typedef enum {
+    PIN_OVERLAY_IDLE,         ///< Not showing
+    PIN_OVERLAY_SUBMIT,       ///< Showing pin icon (artwork pinned)
+    PIN_OVERLAY_ERROR         ///< Showing error icon (pin failed)
+} pin_overlay_state_t;
+
+extern volatile pin_overlay_state_t g_pin_overlay_state;
+extern volatile int64_t             g_pin_overlay_start_us;
+
+void pin_overlay_show_submit(void);
+void pin_overlay_show_error(void);
+void pin_overlay_update_and_draw(uint8_t *buffer);
+
 #endif // DISPLAY_RENDERER_PRIV_H
 

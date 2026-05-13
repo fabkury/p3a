@@ -192,6 +192,43 @@ esp_err_t pin_list_get_entry(const char *slug, pinned_source_t src, const char *
 esp_err_t pin_list_build_artwork_path(const char *slug, const pinned_order_entry_t *e,
                                       char *out, size_t out_len);
 
+/* ------------------------------------------------------------------------- */
+/*  High-level source-specific helpers (used by p3a_pin_dispatcher)          */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * @brief Pin a Makapix artwork into a list using primitive arguments
+ *
+ * Builds the order entry + entry file from the supplied fields and copies
+ * the bytes from src_artwork_path into the list vault. Intended to be called
+ * from the touch-router / HTTP dispatcher, which receives source-specific
+ * fields without needing to know the struct layouts.
+ *
+ * @param slug                Target list (NULL/empty = active).
+ * @param original_post_id    Makapix server post_id (also stamped into
+ *                            p3a_current_post and used for reaction routing).
+ * @param uuid_36chars        Storage-key UUID as a 36-char hyphenated string.
+ * @param extension           0=webp, 1=gif, 2=png, 3=jpg.
+ * @param title               Display title (empty allowed).
+ * @param creator             Creator handle (empty allowed).
+ * @param original_created_at Unix seconds of the Makapix post's creation
+ *                            (0 if unknown).
+ * @param src_artwork_path    Absolute path on SD card to copy from.
+ */
+esp_err_t pin_lists_pin_makapix(const char *slug,
+                                int32_t original_post_id,
+                                const char *uuid_36chars,
+                                uint8_t extension,
+                                const char *title,
+                                const char *creator,
+                                uint32_t original_created_at,
+                                const char *src_artwork_path);
+
+/**
+ * @brief Unpin a Makapix artwork from a list using its UUID.
+ */
+esp_err_t pin_lists_unpin_makapix(const char *slug, const char *uuid_36chars);
+
 #ifdef __cplusplus
 }
 #endif

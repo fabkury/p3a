@@ -483,7 +483,8 @@ skip_prefetch:
                 memcpy(giphy_id_buf, base, n);
                 giphy_id_buf[n] = '\0';
             }
-            p3a_current_post_set(s_front_buffer.post_id, (int)s_front_buffer.post_source, giphy_id_buf);
+            p3a_current_post_set(s_front_buffer.post_id, (int)s_front_buffer.post_source,
+                                 giphy_id_buf, s_front_buffer.filepath);
             view_tracker_signal_swap(s_front_buffer.post_id, s_front_buffer.post_source, s_front_buffer.filepath,
                                      s_front_buffer.view_channel_type,
                                      s_front_buffer.view_channel_spec_name,

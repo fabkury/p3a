@@ -17,9 +17,11 @@
 static int32_t s_current_post_id = 0;
 static int     s_current_post_source = 0;  // 0 == POST_SOURCE_NONE
 static char    s_current_giphy_id[24] = "";
+static char    s_current_filepath[256] = "";
 static bool    s_reaction_submitted = false;
 
-void p3a_current_post_set(int32_t post_id, int source, const char *giphy_id)
+void p3a_current_post_set(int32_t post_id, int source, const char *giphy_id,
+                          const char *filepath)
 {
     // Reset reaction state when the on-screen post identity changes. Same-id
     // re-set (e.g. swap_back to the same post) keeps prior state.
@@ -37,6 +39,14 @@ void p3a_current_post_set(int32_t post_id, int source, const char *giphy_id)
     } else {
         memset(s_current_giphy_id, 0, sizeof(s_current_giphy_id));
     }
+    if (filepath && filepath[0]) {
+        size_t n = strlen(filepath);
+        if (n >= sizeof(s_current_filepath)) n = sizeof(s_current_filepath) - 1;
+        memcpy(s_current_filepath, filepath, n);
+        memset(s_current_filepath + n, 0, sizeof(s_current_filepath) - n);
+    } else {
+        memset(s_current_filepath, 0, sizeof(s_current_filepath));
+    }
 }
 
 void p3a_current_post_clear(void)
@@ -44,6 +54,7 @@ void p3a_current_post_clear(void)
     s_current_post_id = 0;
     s_current_post_source = 0;
     memset(s_current_giphy_id, 0, sizeof(s_current_giphy_id));
+    memset(s_current_filepath, 0, sizeof(s_current_filepath));
     s_reaction_submitted = false;
 }
 
@@ -64,6 +75,15 @@ void p3a_current_post_get_giphy_id(char *out, size_t max_len)
     size_t n = strnlen(s_current_giphy_id, sizeof(s_current_giphy_id));
     if (n >= max_len) n = max_len - 1;
     memcpy(out, s_current_giphy_id, n);
+    out[n] = '\0';
+}
+
+void p3a_current_post_get_filepath(char *out, size_t max_len)
+{
+    if (!out || max_len == 0) return;
+    size_t n = strnlen(s_current_filepath, sizeof(s_current_filepath));
+    if (n >= max_len) n = max_len - 1;
+    memcpy(out, s_current_filepath, n);
     out[n] = '\0';
 }
 

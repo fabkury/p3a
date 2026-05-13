@@ -107,6 +107,10 @@ volatile int64_t g_proc_notif_fail_time_us = 0;
 volatile reaction_overlay_state_t g_reaction_overlay_state = REACTION_OVERLAY_IDLE;
 volatile int64_t g_reaction_overlay_start_us = 0;
 
+// Pin overlay state (independent from reaction overlay)
+volatile pin_overlay_state_t g_pin_overlay_state = PIN_OVERLAY_IDLE;
+volatile int64_t g_pin_overlay_start_us = 0;
+
 // Forward declarations
 static esp_err_t prepare_vsync(void);
 static void wait_for_render_mode(display_render_mode_t target_mode);
@@ -606,6 +610,7 @@ void display_render_task(void *arg)
             if (!ui_mode) {
                 processing_notification_update_and_draw(back_buffer);
                 reaction_overlay_update_and_draw(back_buffer);
+                pin_overlay_update_and_draw(back_buffer);
             }
         }
         

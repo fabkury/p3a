@@ -10,6 +10,7 @@
 #include "p3a_state.h"
 #include "p3a_current_post.h"
 #include "p3a_reaction_dispatcher.h"
+#include "p3a_pin_dispatcher.h"
 #include "event_bus.h"
 #include "esp_log.h"
 #include <string.h>
@@ -165,6 +166,9 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
                 return ESP_OK;
             }
             p3a_reaction_dispatch_makapix_submit(post_id);
+            /* Pin is decoupled from the reaction — fire-and-forget; failure
+               surfaces via the top-left pin overlay only. */
+            p3a_pin_dispatch_from_current(NULL);
             return ESP_OK;
         }
 
@@ -181,6 +185,9 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
                 return ESP_OK;
             }
             p3a_reaction_dispatch_makapix_revoke(post_id);
+            /* Unpin runs in parallel with reaction-revoke; either may
+               independently no-op (e.g., not pinned in the active list). */
+            p3a_pin_dispatch_unpin_from_current(NULL);
             return ESP_OK;
         }
 

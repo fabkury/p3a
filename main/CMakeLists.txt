@@ -20,6 +20,8 @@ set(srcs
     "reaction_revoke_img.c"
     "reaction_error_img.c"
     "submit_click_img.c"
+    "display_pin_overlay.c"
+    "pin_icon_img.c"
     "ffsystem_aligned.c"
 )
 

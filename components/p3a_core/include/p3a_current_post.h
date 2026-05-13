@@ -34,8 +34,12 @@ extern "C" {
  * @param giphy_id Original Giphy string ID (null-terminated, max 23 chars).
  *                 Pass NULL or "" for non-Giphy sources; the field is then
  *                 cleared so a stale value cannot leak into a later swipe.
+ * @param filepath On-disk path to the currently displayed artwork
+ *                 (e.g., /sdcard/p3a/vault/.../{uuid}.webp). NULL or ""
+ *                 clears the field. Consumed by the pin dispatcher.
  */
-void p3a_current_post_set(int32_t post_id, int source, const char *giphy_id);
+void p3a_current_post_set(int32_t post_id, int source, const char *giphy_id,
+                          const char *filepath);
 
 /** Reset to "nothing on screen" (post_id=0, source=POST_SOURCE_NONE). */
 void p3a_current_post_clear(void);
@@ -54,6 +58,15 @@ int p3a_current_post_get_source(void);
  * @param max_len Size of out (must be >= 1).
  */
 void p3a_current_post_get_giphy_id(char *out, size_t max_len);
+
+/**
+ * Copy the most recently published on-disk filepath into out (null-terminated).
+ * Empty string when no filepath was published. Consumed by the pin dispatcher.
+ *
+ * @param out     Output buffer (always written; empty when no filepath).
+ * @param max_len Size of out (must be >= 1).
+ */
+void p3a_current_post_get_filepath(char *out, size_t max_len);
 
 /**
  * Set whether the user has submitted a thumbs-up reaction to the currently

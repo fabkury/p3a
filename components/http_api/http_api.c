@@ -583,6 +583,12 @@ static esp_err_t h_post_router(httpd_req_t *req) {
     if (strcmp(uri, "/action/reaction") == 0) {
         return h_post_action_reaction(req);
     }
+    if (strcmp(uri, "/action/pin") == 0) {
+        return h_post_action_pin(req);
+    }
+    if (strcmp(uri, "/action/unpin") == 0) {
+        return h_post_action_unpin(req);
+    }
     // Playset endpoint: /playset/{name} (activate-only, existing)
     if (strncmp(uri, "/playset/", 9) == 0) {
         return h_post_playset(req);

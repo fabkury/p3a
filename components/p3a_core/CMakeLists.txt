@@ -6,6 +6,7 @@ idf_component_register(
         "p3a_touch_router.c"
         "p3a_current_post.c"
         "p3a_reaction_dispatcher.c"
+        "p3a_pin_dispatcher.c"
         "p3a_render.c"
         "p3a_logo.c"
         "p3a_boot_logo.c"

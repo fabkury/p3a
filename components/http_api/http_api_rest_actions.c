@@ -24,6 +24,7 @@
 #include "event_bus.h"
 #include "p3a_current_post.h"
 #include "p3a_reaction_dispatcher.h"
+#include "p3a_pin_dispatcher.h"
 #include <sys/stat.h>
 #include <string.h>
 
@@ -688,4 +689,88 @@ esp_err_t h_post_giphy_reset_random_id(httpd_req_t *req) {
 
     send_json(req, 200, "{\"ok\":true}");
     return ESP_OK;
+}
+
+// ---------- Pin / Unpin (convenience: target the currently displayed post) ----------
+
+/**
+ * POST /action/pin
+ * Body: { "post_id": <int>, "list"?: "<slug>" }   for makapix
+ *
+ * Phase 3 supports makapix only. The handler validates post_id against the
+ * currently displayed artwork (same staleness check as /action/reaction) and
+ * dispatches the pin asynchronously. The actual SD-card copy + index update
+ * happens in a worker task; the response is HTTP 200 as soon as the dispatch
+ * succeeds, mirroring /action/reaction.
+ */
+static esp_err_t pin_or_unpin_handler(httpd_req_t *req, bool is_unpin)
+{
+    if (!ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+    int err_status;
+    size_t len;
+    char *body = recv_body_json(req, &len, &err_status);
+    if (!body) {
+        send_json(req, err_status ? err_status : 500,
+                  "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
+        return ESP_OK;
+    }
+    cJSON *root = cJSON_ParseWithLength(body, len);
+    free(body);
+    if (!root || !cJSON_IsObject(root)) {
+        if (root) cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
+        return ESP_OK;
+    }
+    cJSON *post_id_item = cJSON_GetObjectItem(root, "post_id");
+    cJSON *list_item    = cJSON_GetObjectItem(root, "list");
+
+    char slug[12] = {0};
+    if (list_item && cJSON_IsString(list_item)) {
+        strlcpy(slug, cJSON_GetStringValue(list_item), sizeof(slug));
+    }
+
+    if (!post_id_item || !cJSON_IsNumber(post_id_item)) {
+        cJSON_Delete(root);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"post_id required\",\"code\":\"INVALID_REQUEST\"}");
+        return ESP_OK;
+    }
+    int32_t post_id = (int32_t)cJSON_GetNumberValue(post_id_item);
+    cJSON_Delete(root);
+    if (post_id <= 0) {
+        send_json(req, 400, "{\"ok\":false,\"error\":\"post_id must be positive\",\"code\":\"INVALID_REQUEST\"}");
+        return ESP_OK;
+    }
+
+    int current_source = p3a_current_post_get_source();
+    if (current_source != POST_SOURCE_MAKAPIX || p3a_current_post_get_id() != post_id) {
+        send_json(req, 409, "{\"ok\":false,\"error\":\"post_id does not match the currently displayed artwork\",\"code\":\"STALE_POST\"}");
+        return ESP_OK;
+    }
+
+    esp_err_t derr = is_unpin
+        ? p3a_pin_dispatch_makapix_unpin(post_id, slug[0] ? slug : NULL)
+        : p3a_pin_dispatch_makapix_pin(post_id, slug[0] ? slug : NULL);
+    if (derr == ESP_ERR_NOT_SUPPORTED) {
+        send_json(req, 501, "{\"ok\":false,\"error\":\"Source not yet supported\",\"code\":\"NOT_SUPPORTED\"}");
+        return ESP_OK;
+    }
+    if (derr != ESP_OK) {
+        send_json(req, 500, "{\"ok\":false,\"error\":\"Dispatch failed\",\"code\":\"DISPATCH_FAILED\"}");
+        return ESP_OK;
+    }
+    send_json(req, 200, "{\"ok\":true}");
+    return ESP_OK;
+}
+
+esp_err_t h_post_action_pin(httpd_req_t *req)
+{
+    return pin_or_unpin_handler(req, false);
+}
+
+esp_err_t h_post_action_unpin(httpd_req_t *req)
+{
+    return pin_or_unpin_handler(req, true);
 }

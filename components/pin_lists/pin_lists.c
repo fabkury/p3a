@@ -896,3 +896,62 @@ esp_err_t pin_list_get_entry(const char *slug, pinned_source_t src, const char *
     UNLOCK();
     return err;
 }
+
+/* ------------------------------------------------------------------------- */
+/*  High-level source-specific helpers                                       */
+/* ------------------------------------------------------------------------- */
+
+static bool parse_uuid_to_bytes(const char *uuid_str, uint8_t out[16])
+{
+    if (!uuid_str) return false;
+    const char *s = uuid_str;
+    for (int i = 0; i < 16; i++) {
+        while (*s == '-') s++;
+        if (!s[0] || !s[1]) return false;
+        unsigned int v;
+        if (sscanf(s, "%2x", &v) != 1) return false;
+        out[i] = (uint8_t)v;
+        s += 2;
+    }
+    return true;
+}
+
+esp_err_t pin_lists_pin_makapix(const char *slug,
+                                int32_t original_post_id,
+                                const char *uuid_36chars,
+                                uint8_t extension,
+                                const char *title,
+                                const char *creator,
+                                uint32_t original_created_at,
+                                const char *src_artwork_path)
+{
+    if (!uuid_36chars || !src_artwork_path) return ESP_ERR_INVALID_ARG;
+
+    pinned_order_entry_t order = {0};
+    order.source = PINNED_SOURCE_MAKAPIX;
+    order.extension = extension;
+    order.pinned_at = now_unix_seconds();
+    if (!parse_uuid_to_bytes(uuid_36chars, order.makapix.storage_key_uuid)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    pinned_entry_file_t file = {0};
+    file.magic = PINNED_ENTRY_MAGIC;
+    file.version = PINNED_FORMAT_VERSION;
+    file.source = PINNED_SOURCE_MAKAPIX;
+    file.extension = extension;
+    file.pinned_at = order.pinned_at;
+    file.original_post_id = original_post_id;
+    file.original_created_at = original_created_at;
+    strlcpy(file.source_id, uuid_36chars, sizeof(file.source_id));
+    if (title)   strlcpy(file.title, title,   sizeof(file.title));
+    if (creator) strlcpy(file.creator, creator, sizeof(file.creator));
+
+    return pin_list_pin(slug, &order, &file, src_artwork_path);
+}
+
+esp_err_t pin_lists_unpin_makapix(const char *slug, const char *uuid_36chars)
+{
+    if (!uuid_36chars) return ESP_ERR_INVALID_ARG;
+    return pin_list_unpin(slug, PINNED_SOURCE_MAKAPIX, uuid_36chars);
+}

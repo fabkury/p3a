@@ -207,8 +207,8 @@ esp_err_t h_post_playset(httpd_req_t *req)
         return ESP_OK;
     }
 
-    ps_scheduler_command_t *command = calloc(1, sizeof(ps_scheduler_command_t));
-    if (!command) {
+    ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
+    if (!playset) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
@@ -218,26 +218,26 @@ esp_err_t h_post_playset(httpd_req_t *req)
     bool is_builtin = false;
 
     // 1. Check built-in playsets (no I/O needed)
-    err = ps_create_channel_playset(name, command);
+    err = ps_create_channel_playset(name, playset);
     if (err == ESP_OK) {
         is_builtin = true;
         ESP_LOGI("http_api", "Using built-in playset: %s", name);
     } else {
         // 2. Try local cache first (instant, avoids 30s MQTT timeout for user-created playsets)
-        err = playset_store_load(name, command);
+        err = playset_store_load(name, playset);
         if (err == ESP_OK) {
             from_cache = true;
         } else if (makapix_mqtt_is_connected()) {
             // 3. Not cached locally -- try fetching from server
-            err = makapix_api_get_playset(name, command);
+            err = makapix_api_get_playset(name, playset);
             if (err == ESP_OK) {
-                strlcpy(command->name, name, sizeof(command->name));
-                esp_err_t save_err = playset_store_save(name, command);
+                strlcpy(playset->name, name, sizeof(playset->name));
+                esp_err_t save_err = playset_store_save(name, playset);
                 if (save_err != ESP_OK) {
                     ESP_LOGW("http_api", "Failed to cache playset '%s': %s", name, esp_err_to_name(save_err));
                 }
             } else {
-                free(command);
+                free(playset);
                 if (err == ESP_ERR_TIMEOUT) {
                     send_json(req, 504, "{\"ok\":false,\"error\":\"Request timed out\",\"code\":\"MQTT_TIMEOUT\"}");
                 } else {
@@ -246,16 +246,16 @@ esp_err_t h_post_playset(httpd_req_t *req)
                 return ESP_OK;
             }
         } else {
-            free(command);
+            free(playset);
             send_json(req, 503, "{\"ok\":false,\"error\":\"Not connected and no cached playset\",\"code\":\"NOT_CONNECTED\"}");
             return ESP_OK;
         }
     }
 
     // Execute the playset
-    err = play_scheduler_execute_command(command);
+    err = play_scheduler_execute_command(playset);
     if (err != ESP_OK) {
-        free(command);
+        free(playset);
         char error_msg[128];
         snprintf(error_msg, sizeof(error_msg),
                  "{\"ok\":false,\"error\":\"Failed to execute playset: %s\",\"code\":\"EXECUTE_ERROR\"}",
@@ -273,17 +273,17 @@ esp_err_t h_post_playset(httpd_req_t *req)
     // Build response
     cJSON *root = cJSON_CreateObject();
     if (!root) {
-        free(command);
+        free(playset);
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
 
     cJSON_AddBoolToObject(root, "ok", true);
     cJSON_AddStringToObject(root, "playset", name);
-    cJSON_AddNumberToObject(root, "channel_count", (double)command->channel_count);
+    cJSON_AddNumberToObject(root, "channel_count", (double)playset->channel_count);
     cJSON_AddBoolToObject(root, "from_cache", from_cache);
     cJSON_AddBoolToObject(root, "builtin", is_builtin);
-    cJSON_AddStringToObject(root, "pick_mode", pick_mode_str(command->pick_mode));
+    cJSON_AddStringToObject(root, "pick_mode", pick_mode_str(playset->pick_mode));
 
     // Compute artwork sums from live scheduler state (caches loaded by execute_command)
     ps_stats_t ps_stats;
@@ -296,12 +296,12 @@ esp_err_t h_post_playset(httpd_req_t *req)
     cJSON_Delete(root);
 
     if (!out) {
-        free(command);
+        free(playset);
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
 
-    free(command);
+    free(playset);
     send_json(req, 200, out);
     free(out);
     return ESP_OK;
@@ -499,26 +499,26 @@ esp_err_t h_get_playset_by_name(httpd_req_t *req)
         activate = (strstr(qmark, "activate=true") != NULL);
     }
 
-    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
-    if (!cmd) {
+    ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
+    if (!playset) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
 
-    esp_err_t err = playset_store_load(name, cmd);
+    esp_err_t err = playset_store_load(name, playset);
     if (err == ESP_ERR_NOT_FOUND) {
-        free(cmd);
+        free(playset);
         send_json(req, 404, "{\"ok\":false,\"error\":\"Playset not found\",\"code\":\"NOT_FOUND\"}");
         return ESP_OK;
     } else if (err != ESP_OK) {
-        free(cmd);
+        free(playset);
         send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to load playset\",\"code\":\"LOAD_ERROR\"}");
         return ESP_OK;
     }
 
     bool activated = false;
     if (activate) {
-        esp_err_t exec_err = play_scheduler_execute_command(cmd);
+        esp_err_t exec_err = play_scheduler_execute_command(playset);
         if (exec_err == ESP_OK) {
             p3a_state_set_active_playset(name);
             activated = true;
@@ -527,15 +527,15 @@ esp_err_t h_get_playset_by_name(httpd_req_t *req)
 
     cJSON *root = cJSON_CreateObject();
     if (!root) {
-        free(cmd);
+        free(playset);
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
 
     cJSON_AddBoolToObject(root, "ok", true);
 
-    cJSON *data_obj = playset_json_serialize(cmd);
-    free(cmd);
+    cJSON *data_obj = playset_json_serialize(playset);
+    free(playset);
 
     if (!data_obj) {
         cJSON_Delete(root);
@@ -637,26 +637,26 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
     }
 
     // Parse playset
-    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
-    if (!cmd) {
+    ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
+    if (!playset) {
         cJSON_Delete(root);
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
 
-    esp_err_t parse_err = playset_json_parse(root, cmd);
+    esp_err_t parse_err = playset_json_parse(root, playset);
     cJSON_Delete(root);
 
     if (parse_err != ESP_OK) {
-        free(cmd);
+        free(playset);
         send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset definition\",\"code\":\"INVALID_PLAYSET\"}");
         return ESP_OK;
     }
 
-    strlcpy(cmd->name, name, sizeof(cmd->name));
-    esp_err_t save_err = playset_store_save(name, cmd);
+    strlcpy(playset->name, name, sizeof(playset->name));
+    esp_err_t save_err = playset_store_save(name, playset);
     if (save_err != ESP_OK) {
-        free(cmd);
+        free(playset);
         char err_msg[128];
         snprintf(err_msg, sizeof(err_msg),
                  "{\"ok\":false,\"error\":\"Failed to save playset: %s\",\"code\":\"SAVE_ERROR\"}",
@@ -668,14 +668,14 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
     // Activate if requested
     bool activated = false;
     if (activate) {
-        esp_err_t exec_err = play_scheduler_execute_command(cmd);
+        esp_err_t exec_err = play_scheduler_execute_command(playset);
         if (exec_err == ESP_OK) {
             p3a_state_set_active_playset(name);
             activated = true;
         }
     }
 
-    free(cmd);
+    free(playset);
 
     // Handle rename: delete old file if rename_from is set and different from target name
     bool renamed = false;

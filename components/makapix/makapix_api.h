@@ -157,11 +157,11 @@ esp_err_t makapix_api_get_comments(int32_t post_id, const char *cursor, uint8_t 
  * play_scheduler_execute_command().
  *
  * @param playset_name Name of the playset (e.g., "followed_artists")
- * @param out_command Output playset
+ * @param out_playset Output playset
  * @return ESP_OK on success, ESP_ERR_INVALID_STATE if MQTT not connected,
  *         ESP_ERR_TIMEOUT on timeout, ESP_FAIL on server error
  */
-esp_err_t makapix_api_get_playset(const char *playset_name, ps_scheduler_command_t *out_command);
+esp_err_t makapix_api_get_playset(const char *playset_name, ps_playset_t *out_playset);
 
 #ifdef __cplusplus
 }

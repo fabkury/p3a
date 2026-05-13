@@ -15,7 +15,7 @@
  * - New Artwork Events (NAE) for responsive handling of new content
  * - Deterministic and reproducible via reversible PRNGs
  *
- * The primary input is a playset (ps_scheduler_command_t): a declarative
+ * The primary input is a playset (ps_playset_t): a declarative
  * configuration of which channels to include (with per-channel weights) and
  * how to pick artwork within channels.
  *
@@ -68,10 +68,10 @@ void play_scheduler_deinit(void);
  *
  * Resets channel state, preserves history, begins new play queue.
  *
- * @param command Playset parameters
+ * @param playset Playset parameters
  * @return ESP_OK on success
  */
-esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command);
+esp_err_t play_scheduler_execute_command(const ps_playset_t *playset);
 
 /**
  * @brief Create a built-in single-channel playset
@@ -101,15 +101,15 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command);
  *     - webui/index.html (pill bar id + label mapping)
  *
  * @param playset_name Name of the built-in playset
- * @param out_cmd Output playset (caller must allocate)
+ * @param out_playset Output playset (caller must allocate)
  * @return ESP_OK if playset was created, ESP_ERR_NOT_FOUND if not a built-in playset
  */
-esp_err_t ps_create_channel_playset(const char *playset_name, ps_scheduler_command_t *out_cmd);
+esp_err_t ps_create_channel_playset(const char *playset_name, ps_playset_t *out_playset);
 
 /**
  * @brief Convenience: Play a single named channel
  *
- * Creates a command with one channel using RecencyPick.
+ * Creates a playset with one channel using RecencyPick.
  *
  * @param name "all", "promoted", or "sdcard"
  * @return ESP_OK on success

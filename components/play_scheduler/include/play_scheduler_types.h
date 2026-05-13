@@ -138,7 +138,7 @@ typedef struct {
     char filepath[256];           // Local path to file
     char storage_key[96];         // Vault storage key
     uint32_t created_at;          // Unix timestamp
-    uint32_t dwell_time_ms;       // Per-artwork dwell (0 = use default) - CURRENTLY IGNORED, see note on ps_scheduler_command_t
+    uint32_t dwell_time_ms;       // Per-artwork dwell (0 = use default) - CURRENTLY IGNORED, see note on ps_playset_t
     asset_type_t type;            // WEBP, GIF, PNG, JPEG
     uint8_t channel_index;        // Which channel this came from
     ps_channel_type_t channel_type; // Channel type for downstream use (PPA upscale branching)
@@ -202,7 +202,7 @@ typedef struct {
     ps_channel_spec_t channels[PS_MAX_CHANNELS];
     size_t channel_count;
     ps_pick_mode_t pick_mode;
-} ps_scheduler_command_t;
+} ps_playset_t;
 
 /**
  * @brief Channel configuration for set_channels() (legacy)

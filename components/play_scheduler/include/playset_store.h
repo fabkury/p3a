@@ -71,11 +71,11 @@ _Static_assert(sizeof(playset_channel_entry_t) == 144, "Playset channel entry mu
  * Uses atomic write pattern: write to .tmp, fsync, unlink old, rename.
  *
  * @param name Playset name (e.g., "followed_artists")
- * @param cmd Playset to save
+ * @param playset Playset to save
  * @return ESP_OK on success, ESP_ERR_INVALID_ARG if invalid params,
  *         ESP_FAIL on file system error
  */
-esp_err_t playset_store_save(const char *name, const ps_scheduler_command_t *cmd);
+esp_err_t playset_store_save(const char *name, const ps_playset_t *playset);
 
 /**
  * @brief Load a playset from SD card
@@ -84,13 +84,13 @@ esp_err_t playset_store_save(const char *name, const ps_scheduler_command_t *cmd
  * file and returns ESP_ERR_INVALID_VERSION.
  *
  * @param name Playset name (e.g., "followed_artists")
- * @param out_cmd Output playset
+ * @param out_playset Output playset
  * @return ESP_OK on success, ESP_ERR_NOT_FOUND if file doesn't exist,
  *         ESP_ERR_INVALID_VERSION if version mismatch,
  *         ESP_ERR_INVALID_CRC if checksum mismatch,
  *         ESP_FAIL on file system error
  */
-esp_err_t playset_store_load(const char *name, ps_scheduler_command_t *out_cmd);
+esp_err_t playset_store_load(const char *name, ps_playset_t *out_playset);
 
 /**
  * @brief Check if a playset exists on SD card

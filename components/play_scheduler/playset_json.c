@@ -3,7 +3,7 @@
 
 /**
  * @file playset_json.c
- * @brief JSON ↔ ps_scheduler_command_t conversion implementation
+ * @brief JSON ↔ ps_playset_t conversion implementation
  */
 
 #include "playset_json.h"
@@ -62,7 +62,7 @@ const char *playset_channel_type_str(ps_channel_type_t type)
 
 // ---------- High-level Functions ----------
 
-esp_err_t playset_json_parse(const cJSON *json, ps_scheduler_command_t *out)
+esp_err_t playset_json_parse(const cJSON *json, ps_playset_t *out)
 {
     if (!json || !out) return ESP_ERR_INVALID_ARG;
 
@@ -160,17 +160,17 @@ esp_err_t playset_json_parse(const cJSON *json, ps_scheduler_command_t *out)
     return ESP_OK;
 }
 
-cJSON *playset_json_serialize(const ps_scheduler_command_t *cmd)
+cJSON *playset_json_serialize(const ps_playset_t *playset)
 {
-    if (!cmd) return NULL;
+    if (!playset) return NULL;
 
     cJSON *root = cJSON_CreateObject();
     if (!root) return NULL;
 
-    if (cmd->name[0] != '\0') {
-        cJSON_AddStringToObject(root, "name", cmd->name);
+    if (playset->name[0] != '\0') {
+        cJSON_AddStringToObject(root, "name", playset->name);
     }
-    cJSON_AddStringToObject(root, "pick_mode", playset_pick_mode_str(cmd->pick_mode));
+    cJSON_AddStringToObject(root, "pick_mode", playset_pick_mode_str(playset->pick_mode));
 
     cJSON *channels = cJSON_AddArrayToObject(root, "channels");
     if (!channels) {
@@ -178,8 +178,8 @@ cJSON *playset_json_serialize(const ps_scheduler_command_t *cmd)
         return NULL;
     }
 
-    for (size_t i = 0; i < cmd->channel_count; i++) {
-        const ps_channel_spec_t *spec = &cmd->channels[i];
+    for (size_t i = 0; i < playset->channel_count; i++) {
+        const ps_channel_spec_t *spec = &playset->channels[i];
 
         cJSON *ch = cJSON_CreateObject();
         if (!ch) continue;

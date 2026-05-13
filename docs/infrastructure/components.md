@@ -22,7 +22,7 @@ All 24 custom components live under `components/`. This document describes each 
 - **Key files**: `play_scheduler.c`, `play_scheduler_swrr.c`, `play_scheduler_commands.c`, `play_scheduler_pick.c`, `play_scheduler_navigation.c`, `play_scheduler_timer.c`, `play_scheduler_nae.c`, `play_scheduler_lai.c`, `play_scheduler_refresh.c`, `play_scheduler_buffers.c`, `play_scheduler_cache.c`, `playset_store.c`, `playset_json.c`
 - **Public API**: `play_scheduler.h`, `play_scheduler_types.h`, `playset_store.h`, `playset_json.h`
 - **Key concepts**:
-  - **Playset** (`ps_scheduler_command_t`): Specifies which channels to include (with per-channel weights) and pick mode
+  - **Playset** (`ps_playset_t`): Specifies which channels to include (with per-channel weights) and pick mode
   - **Channel weights**: Each channel has a `weight`. SWRR distributes plays proportionally; if every weight is 0, plays are distributed equally.
   - **Pick modes**: Recency-based, Random
   - **NAE**: New Artwork Events — react to freshly downloaded content

@@ -83,14 +83,14 @@ static esp_err_t ensure_directory(void)
     return ESP_OK;
 }
 
-esp_err_t playset_store_save(const char *name, const ps_scheduler_command_t *cmd)
+esp_err_t playset_store_save(const char *name, const ps_playset_t *playset)
 {
-    if (!name || !cmd || strlen(name) == 0 || strlen(name) > PLAYSET_MAX_NAME_LEN) {
+    if (!name || !playset || strlen(name) == 0 || strlen(name) > PLAYSET_MAX_NAME_LEN) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (cmd->channel_count == 0 || cmd->channel_count > PS_MAX_CHANNELS) {
-        ESP_LOGE(TAG, "Invalid channel count: %zu", cmd->channel_count);
+    if (playset->channel_count == 0 || playset->channel_count > PS_MAX_CHANNELS) {
+        ESP_LOGE(TAG, "Invalid channel count: %zu", playset->channel_count);
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -109,18 +109,18 @@ esp_err_t playset_store_save(const char *name, const ps_scheduler_command_t *cmd
     header.version = PLAYSET_VERSION;
     header.flags = 0;
     header._reserved_exposure_mode = 0;  // Legacy field; preserved for binary compat with v11
-    header.pick_mode = (uint8_t)cmd->pick_mode;
-    header.channel_count = (uint16_t)cmd->channel_count;
+    header.pick_mode = (uint8_t)playset->pick_mode;
+    header.channel_count = (uint16_t)playset->channel_count;
     strlcpy(header.name, name, sizeof(header.name));
 
-    playset_channel_entry_t *entries = calloc(cmd->channel_count, sizeof(playset_channel_entry_t));
+    playset_channel_entry_t *entries = calloc(playset->channel_count, sizeof(playset_channel_entry_t));
     if (!entries) {
         ESP_LOGE(TAG, "Failed to allocate entries");
         return ESP_ERR_NO_MEM;
     }
 
-    for (size_t i = 0; i < cmd->channel_count; i++) {
-        const ps_channel_spec_t *src = &cmd->channels[i];
+    for (size_t i = 0; i < playset->channel_count; i++) {
+        const ps_channel_spec_t *src = &playset->channels[i];
         playset_channel_entry_t *dst = &entries[i];
 
         dst->type = (uint8_t)src->type;
@@ -130,7 +130,7 @@ esp_err_t playset_store_save(const char *name, const ps_scheduler_command_t *cmd
         dst->weight = src->weight;
     }
 
-    header.checksum = calculate_checksum(&header, entries, cmd->channel_count);
+    header.checksum = calculate_checksum(&header, entries, playset->channel_count);
 
     FILE *f = fopen(tmp_path, "wb");
     if (!f) {
@@ -146,7 +146,7 @@ esp_err_t playset_store_save(const char *name, const ps_scheduler_command_t *cmd
         write_ok = false;
     }
 
-    if (write_ok && fwrite(entries, sizeof(playset_channel_entry_t), cmd->channel_count, f) != cmd->channel_count) {
+    if (write_ok && fwrite(entries, sizeof(playset_channel_entry_t), playset->channel_count, f) != playset->channel_count) {
         ESP_LOGE(TAG, "Failed to write entries");
         write_ok = false;
     }
@@ -171,13 +171,13 @@ esp_err_t playset_store_save(const char *name, const ps_scheduler_command_t *cmd
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Saved playset '%s' with %zu channels", name, cmd->channel_count);
+    ESP_LOGI(TAG, "Saved playset '%s' with %zu channels", name, playset->channel_count);
     return ESP_OK;
 }
 
-esp_err_t playset_store_load(const char *name, ps_scheduler_command_t *out_cmd)
+esp_err_t playset_store_load(const char *name, ps_playset_t *out_playset)
 {
-    if (!name || !out_cmd || strlen(name) == 0 || strlen(name) > PLAYSET_MAX_NAME_LEN) {
+    if (!name || !out_playset || strlen(name) == 0 || strlen(name) > PLAYSET_MAX_NAME_LEN) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -257,14 +257,14 @@ esp_err_t playset_store_load(const char *name, ps_scheduler_command_t *out_cmd)
         return ESP_ERR_INVALID_CRC;
     }
 
-    memset(out_cmd, 0, sizeof(*out_cmd));
-    strlcpy(out_cmd->name, header.name, sizeof(out_cmd->name));
-    out_cmd->pick_mode = (ps_pick_mode_t)header.pick_mode;
-    out_cmd->channel_count = header.channel_count;
+    memset(out_playset, 0, sizeof(*out_playset));
+    strlcpy(out_playset->name, header.name, sizeof(out_playset->name));
+    out_playset->pick_mode = (ps_pick_mode_t)header.pick_mode;
+    out_playset->channel_count = header.channel_count;
 
     for (size_t i = 0; i < header.channel_count; i++) {
         const playset_channel_entry_t *src = &entries[i];
-        ps_channel_spec_t *dst = &out_cmd->channels[i];
+        ps_channel_spec_t *dst = &out_playset->channels[i];
 
         dst->type = (ps_channel_type_t)src->type;
         strncpy(dst->name, src->name, sizeof(dst->name) - 1);
@@ -275,7 +275,7 @@ esp_err_t playset_store_load(const char *name, ps_scheduler_command_t *out_cmd)
 
     free(entries);
 
-    ESP_LOGI(TAG, "Loaded playset '%s' with %zu channels", name, out_cmd->channel_count);
+    ESP_LOGI(TAG, "Loaded playset '%s' with %zu channels", name, out_playset->channel_count);
     return ESP_OK;
 }
 

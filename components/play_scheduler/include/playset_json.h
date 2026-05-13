@@ -3,7 +3,7 @@
 
 /**
  * @file playset_json.h
- * @brief JSON ↔ ps_scheduler_command_t conversion
+ * @brief JSON ↔ ps_playset_t conversion
  *
  * Shared module for parsing playsets from JSON (used by both MQTT/Makapix API
  * and HTTP REST endpoints) and serializing playsets to JSON (for CRUD read).
@@ -33,7 +33,7 @@ const char *playset_channel_type_str(ps_channel_type_t type);
 // ---------- High-level Functions ----------
 
 /**
- * @brief Parse a cJSON object into a ps_scheduler_command_t
+ * @brief Parse a cJSON object into a ps_playset_t
  *
  * Expects fields: "pick_mode" (string), "channels" (array of objects with
  * "type", "name", "identifier", "display_name", "weight").
@@ -46,19 +46,19 @@ const char *playset_channel_type_str(ps_channel_type_t type);
  * @param out   Output playset (zeroed then populated)
  * @return ESP_OK on success, ESP_ERR_INVALID_ARG on missing/invalid channels
  */
-esp_err_t playset_json_parse(const cJSON *json, ps_scheduler_command_t *out);
+esp_err_t playset_json_parse(const cJSON *json, ps_playset_t *out);
 
 /**
- * @brief Serialize a ps_scheduler_command_t to a cJSON object
+ * @brief Serialize a ps_playset_t to a cJSON object
  *
  * Creates a new cJSON object with "pick_mode" and "channels" array.
  * Caller owns the returned object and must call
  * cJSON_Delete() when done.
  *
- * @param cmd  Playset to serialize
+ * @param playset  Playset to serialize
  * @return cJSON object on success, NULL on OOM
  */
-cJSON *playset_json_serialize(const ps_scheduler_command_t *cmd);
+cJSON *playset_json_serialize(const ps_playset_t *playset);
 
 #ifdef __cplusplus
 }

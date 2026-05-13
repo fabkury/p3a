@@ -411,16 +411,16 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
             return;
         }
 
-        ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
-        if (!cmd) {
+        ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
+        if (!playset) {
             ESP_LOGE(HTTP_API_TAG, "execute_playset: OOM");
             return;
         }
 
-        esp_err_t parse_err = playset_json_parse(payload, cmd);
+        esp_err_t parse_err = playset_json_parse(payload, playset);
         if (parse_err != ESP_OK) {
             ESP_LOGE(HTTP_API_TAG, "execute_playset: parse failed: %s", esp_err_to_name(parse_err));
-            free(cmd);
+            free(playset);
             return;
         }
 
@@ -428,16 +428,16 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
         cJSON *name_item = cJSON_GetObjectItem(payload, "name");
         if (name_item && cJSON_IsString(name_item)) {
             const char *name = cJSON_GetStringValue(name_item);
-            strlcpy(cmd->name, name, sizeof(cmd->name));
-            esp_err_t save_err = playset_store_save(name, cmd);
+            strlcpy(playset->name, name, sizeof(playset->name));
+            esp_err_t save_err = playset_store_save(name, playset);
             if (save_err != ESP_OK) {
                 ESP_LOGW(HTTP_API_TAG, "execute_playset: failed to save '%s': %s", name, esp_err_to_name(save_err));
             }
             p3a_state_set_active_playset(name);
         }
 
-        esp_err_t exec_err = play_scheduler_execute_command(cmd);
-        free(cmd);
+        esp_err_t exec_err = play_scheduler_execute_command(playset);
+        free(playset);
 
         if (exec_err != ESP_OK) {
             ESP_LOGE(HTTP_API_TAG, "execute_playset: execute failed: %s", esp_err_to_name(exec_err));

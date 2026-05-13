@@ -92,7 +92,7 @@ Dual OTA slots (8MB each), NVS, LittleFS (4MB), and a 2MB partition for ESP32-C6
 
 ## Terminology
 
-- **Playset** (`ps_scheduler_command_t`): A declarative configuration that tells the Play Scheduler what to play — which channels to include, how to balance exposure across them, and how to pick artwork within each channel.
+- **Playset** (`ps_playset_t`): A declarative configuration that tells the Play Scheduler what to play — which channels to include, how to balance exposure across them, and how to pick artwork within each channel.
 
 ## Documentation
 

@@ -653,11 +653,11 @@ esp_err_t makapix_api_get_comments(int32_t post_id, const char *cursor, uint8_t 
     return ESP_OK;
 }
 
-esp_err_t makapix_api_get_playset(const char *playset_name, ps_scheduler_command_t *out_command)
+esp_err_t makapix_api_get_playset(const char *playset_name, ps_playset_t *out_playset)
 {
-    if (!playset_name || !out_command) return ESP_ERR_INVALID_ARG;
-    memset(out_command, 0, sizeof(*out_command));
-    strlcpy(out_command->name, playset_name, sizeof(out_command->name));
+    if (!playset_name || !out_playset) return ESP_ERR_INVALID_ARG;
+    memset(out_playset, 0, sizeof(*out_playset));
+    strlcpy(out_playset->name, playset_name, sizeof(out_playset->name));
 
     cJSON *root = cJSON_CreateObject();
     if (!root) return ESP_ERR_NO_MEM;
@@ -690,7 +690,7 @@ esp_err_t makapix_api_get_playset(const char *playset_name, ps_scheduler_command
     }
 
     // Parse playset fields using shared JSON parser
-    esp_err_t parse_err = playset_json_parse(response_json, out_command);
+    esp_err_t parse_err = playset_json_parse(response_json, out_playset);
     cJSON_Delete(response_json);
 
     if (parse_err != ESP_OK) {
@@ -699,8 +699,8 @@ esp_err_t makapix_api_get_playset(const char *playset_name, ps_scheduler_command
     }
 
     ESP_LOGI(TAG, "get_playset '%s': %zu channels, pick=%d",
-             playset_name, out_command->channel_count,
-             out_command->pick_mode);
+             playset_name, out_playset->channel_count,
+             out_playset->pick_mode);
 
     return ESP_OK;
 }

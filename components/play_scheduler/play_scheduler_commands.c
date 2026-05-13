@@ -389,14 +389,14 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
 // Command Execution
 // ============================================================================
 
-esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
+esp_err_t play_scheduler_execute_command(const ps_playset_t *playset)
 {
     ps_state_t *s_state = ps_get_state();
 
     if (!s_state->initialized) {
         return ESP_ERR_INVALID_STATE;
     }
-    if (!command || command->channel_count == 0 || command->channel_count > PS_MAX_CHANNELS) {
+    if (!playset || playset->channel_count == 0 || playset->channel_count > PS_MAX_CHANNELS) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -405,7 +405,7 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     makapix_cancel_all_refreshes();
     giphy_cancel_refresh();
 
-    // Reset the periodic refresh timer so this command triggers immediate refresh
+    // Reset the periodic refresh timer so this playset triggers immediate refresh
     ps_refresh_reset_timer();
 
     // Stop view tracking for the old channel before switching
@@ -415,7 +415,7 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     xSemaphoreTake(s_state->mutex, portMAX_DELAY);
 
     ESP_LOGI(TAG, "Executing playset: %zu channel(s), pick=%d",
-             command->channel_count, command->pick_mode);
+             playset->channel_count, playset->pick_mode);
 
     // Free old channel entries before reconfiguring. Hold the cache
     // lifecycle lock so concurrent readers (e.g. download_task) cannot be
@@ -440,9 +440,9 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     }
     channel_cache_lifecycle_unlock();
 
-    // Store command parameters
-    s_state->pick_mode = command->pick_mode;
-    s_state->channel_count = command->channel_count;
+    // Store playset parameters
+    s_state->pick_mode = playset->pick_mode;
+    s_state->channel_count = playset->channel_count;
 
     // Increment epoch (history is preserved)
     s_state->epoch_id++;
@@ -461,8 +461,8 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     }
 
     // Initialize each channel
-    for (size_t i = 0; i < command->channel_count; i++) {
-        const ps_channel_spec_t *spec = &command->channels[i];
+    for (size_t i = 0; i < playset->channel_count; i++) {
+        const ps_channel_spec_t *spec = &playset->channels[i];
         ps_channel_state_t *ch = &s_state->channels[i];
 
         // Build channel_id as hash of spec and preserve original fields
@@ -530,7 +530,7 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
     ps_swrr_calculate_weights(s_state);
 
     // Store first channel as "current" for status display
-    if (command->channel_count > 0) {
+    if (playset->channel_count > 0) {
         strlcpy(s_state->current_channel_id, s_state->channels[0].channel_id,
                 sizeof(s_state->current_channel_id));
     }
@@ -540,10 +540,10 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
 
     // Update content cache with new channel list for round-robin downloading
     const char *channel_ids[PS_MAX_CHANNELS];
-    for (size_t i = 0; i < command->channel_count; i++) {
+    for (size_t i = 0; i < playset->channel_count; i++) {
         channel_ids[i] = s_state->channels[i].channel_id;
     }
-    content_cache_set_channels(channel_ids, command->channel_count);
+    content_cache_set_channels(channel_ids, playset->channel_count);
 
     // Reset playback_initiated so cache can trigger playback for new channel
     content_cache_reset_playback_initiated();
@@ -570,7 +570,7 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
 
     xSemaphoreGive(s_state->mutex);
 
-    // Reset auto-swap timer so the full dwell interval starts from this new command
+    // Reset auto-swap timer so the full dwell interval starts from this new playset
     ps_timer_reset(s_state);
 
     // Dismiss info-screen overlay if active, so playback is visible immediately.
@@ -614,37 +614,37 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
 // Built-in Playset Creation
 // ============================================================================
 
-esp_err_t ps_create_channel_playset(const char *playset_name, ps_scheduler_command_t *out_cmd)
+esp_err_t ps_create_channel_playset(const char *playset_name, ps_playset_t *out_playset)
 {
-    if (!playset_name || !out_cmd) {
+    if (!playset_name || !out_playset) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    memset(out_cmd, 0, sizeof(*out_cmd));
-    out_cmd->channel_count = 1;
-    out_cmd->pick_mode = PS_PICK_RANDOM;
+    memset(out_playset, 0, sizeof(*out_playset));
+    out_playset->channel_count = 1;
+    out_playset->pick_mode = PS_PICK_RANDOM;
 
     if (strcmp(playset_name, "channel_recent") == 0) {
-        out_cmd->channels[0].type = PS_CHANNEL_TYPE_NAMED;
-        strlcpy(out_cmd->channels[0].name, "all", sizeof(out_cmd->channels[0].name));
-        out_cmd->channels[0].weight = 1;
+        out_playset->channels[0].type = PS_CHANNEL_TYPE_NAMED;
+        strlcpy(out_playset->channels[0].name, "all", sizeof(out_playset->channels[0].name));
+        out_playset->channels[0].weight = 1;
     } else if (strcmp(playset_name, "channel_promoted") == 0) {
-        out_cmd->channels[0].type = PS_CHANNEL_TYPE_NAMED;
-        strlcpy(out_cmd->channels[0].name, "promoted", sizeof(out_cmd->channels[0].name));
-        out_cmd->channels[0].weight = 1;
+        out_playset->channels[0].type = PS_CHANNEL_TYPE_NAMED;
+        strlcpy(out_playset->channels[0].name, "promoted", sizeof(out_playset->channels[0].name));
+        out_playset->channels[0].weight = 1;
     } else if (strcmp(playset_name, "channel_sdcard") == 0) {
-        out_cmd->channels[0].type = PS_CHANNEL_TYPE_SDCARD;
-        strlcpy(out_cmd->channels[0].name, "sdcard", sizeof(out_cmd->channels[0].name));
-        out_cmd->channels[0].weight = 1;
+        out_playset->channels[0].type = PS_CHANNEL_TYPE_SDCARD;
+        strlcpy(out_playset->channels[0].name, "sdcard", sizeof(out_playset->channels[0].name));
+        out_playset->channels[0].weight = 1;
     } else if (strcmp(playset_name, "giphy_trending") == 0) {
-        out_cmd->channels[0].type = PS_CHANNEL_TYPE_GIPHY;
-        strlcpy(out_cmd->channels[0].name, "trending", sizeof(out_cmd->channels[0].name));
-        out_cmd->channels[0].weight = 1;
+        out_playset->channels[0].type = PS_CHANNEL_TYPE_GIPHY;
+        strlcpy(out_playset->channels[0].name, "trending", sizeof(out_playset->channels[0].name));
+        out_playset->channels[0].weight = 1;
     } else {
         return ESP_ERR_NOT_FOUND;
     }
 
-    ps_ensure_display_name(&out_cmd->channels[0]);
+    ps_ensure_display_name(&out_playset->channels[0]);
     return ESP_OK;
 }
 
@@ -661,28 +661,28 @@ esp_err_t play_scheduler_play_named_channel(const char *name)
     ESP_LOGI(TAG, "play_named_channel: %s", name);
 
     // Heap allocate to avoid ~4.6KB stack usage (called from 8KB stack tasks)
-    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
-    if (!cmd) {
-        ESP_LOGE(TAG, "Failed to allocate command struct");
+    ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
+    if (!playset) {
+        ESP_LOGE(TAG, "Failed to allocate playset struct");
         return ESP_ERR_NO_MEM;
     }
 
-    cmd->channel_count = 1;
-    cmd->pick_mode = PS_PICK_RANDOM;
+    playset->channel_count = 1;
+    playset->pick_mode = PS_PICK_RANDOM;
 
     // Determine channel type
     if (strcmp(name, "sdcard") == 0) {
-        cmd->channels[0].type = PS_CHANNEL_TYPE_SDCARD;
-        strlcpy(cmd->channels[0].name, "sdcard", sizeof(cmd->channels[0].name));
+        playset->channels[0].type = PS_CHANNEL_TYPE_SDCARD;
+        strlcpy(playset->channels[0].name, "sdcard", sizeof(playset->channels[0].name));
     } else {
-        cmd->channels[0].type = PS_CHANNEL_TYPE_NAMED;
-        strlcpy(cmd->channels[0].name, name, sizeof(cmd->channels[0].name));
+        playset->channels[0].type = PS_CHANNEL_TYPE_NAMED;
+        strlcpy(playset->channels[0].name, name, sizeof(playset->channels[0].name));
     }
-    cmd->channels[0].weight = 1;
-    ps_ensure_display_name(&cmd->channels[0]);
+    playset->channels[0].weight = 1;
+    ps_ensure_display_name(&playset->channels[0]);
 
-    esp_err_t result = play_scheduler_execute_command(cmd);
-    free(cmd);
+    esp_err_t result = play_scheduler_execute_command(playset);
+    free(playset);
     return result;
 }
 
@@ -695,23 +695,23 @@ esp_err_t play_scheduler_play_user_channel(const char *user_sqid)
     ESP_LOGI(TAG, "play_user_channel: %s", user_sqid);
 
     // Heap allocate to avoid ~4.6KB stack usage (called from 8KB stack tasks)
-    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
-    if (!cmd) {
-        ESP_LOGE(TAG, "Failed to allocate command struct");
+    ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
+    if (!playset) {
+        ESP_LOGE(TAG, "Failed to allocate playset struct");
         return ESP_ERR_NO_MEM;
     }
 
-    cmd->channel_count = 1;
-    cmd->pick_mode = PS_PICK_RANDOM;
+    playset->channel_count = 1;
+    playset->pick_mode = PS_PICK_RANDOM;
 
-    cmd->channels[0].type = PS_CHANNEL_TYPE_USER;
-    strlcpy(cmd->channels[0].name, "user", sizeof(cmd->channels[0].name));
-    strlcpy(cmd->channels[0].identifier, user_sqid, sizeof(cmd->channels[0].identifier));
-    cmd->channels[0].weight = 1;
-    ps_ensure_display_name(&cmd->channels[0]);
+    playset->channels[0].type = PS_CHANNEL_TYPE_USER;
+    strlcpy(playset->channels[0].name, "user", sizeof(playset->channels[0].name));
+    strlcpy(playset->channels[0].identifier, user_sqid, sizeof(playset->channels[0].identifier));
+    playset->channels[0].weight = 1;
+    ps_ensure_display_name(&playset->channels[0]);
 
-    esp_err_t result = play_scheduler_execute_command(cmd);
-    free(cmd);
+    esp_err_t result = play_scheduler_execute_command(playset);
+    free(playset);
     return result;
 }
 
@@ -724,23 +724,23 @@ esp_err_t play_scheduler_play_reactions_channel(const char *user_sqid)
     ESP_LOGI(TAG, "play_reactions_channel: %s", user_sqid);
 
     // Heap allocate to avoid ~4.6KB stack usage (called from 8KB stack tasks)
-    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
-    if (!cmd) {
-        ESP_LOGE(TAG, "Failed to allocate command struct");
+    ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
+    if (!playset) {
+        ESP_LOGE(TAG, "Failed to allocate playset struct");
         return ESP_ERR_NO_MEM;
     }
 
-    cmd->channel_count = 1;
-    cmd->pick_mode = PS_PICK_RANDOM;
+    playset->channel_count = 1;
+    playset->pick_mode = PS_PICK_RANDOM;
 
-    cmd->channels[0].type = PS_CHANNEL_TYPE_REACTIONS;
-    strlcpy(cmd->channels[0].name, "reactions", sizeof(cmd->channels[0].name));
-    strlcpy(cmd->channels[0].identifier, user_sqid, sizeof(cmd->channels[0].identifier));
-    cmd->channels[0].weight = 1;
-    ps_ensure_display_name(&cmd->channels[0]);
+    playset->channels[0].type = PS_CHANNEL_TYPE_REACTIONS;
+    strlcpy(playset->channels[0].name, "reactions", sizeof(playset->channels[0].name));
+    strlcpy(playset->channels[0].identifier, user_sqid, sizeof(playset->channels[0].identifier));
+    playset->channels[0].weight = 1;
+    ps_ensure_display_name(&playset->channels[0]);
 
-    esp_err_t result = play_scheduler_execute_command(cmd);
-    free(cmd);
+    esp_err_t result = play_scheduler_execute_command(playset);
+    free(playset);
     return result;
 }
 
@@ -753,23 +753,23 @@ esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag)
     ESP_LOGI(TAG, "play_hashtag_channel: %s", hashtag);
 
     // Heap allocate to avoid ~4.6KB stack usage (called from 8KB stack tasks)
-    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
-    if (!cmd) {
-        ESP_LOGE(TAG, "Failed to allocate command struct");
+    ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
+    if (!playset) {
+        ESP_LOGE(TAG, "Failed to allocate playset struct");
         return ESP_ERR_NO_MEM;
     }
 
-    cmd->channel_count = 1;
-    cmd->pick_mode = PS_PICK_RANDOM;
+    playset->channel_count = 1;
+    playset->pick_mode = PS_PICK_RANDOM;
 
-    cmd->channels[0].type = PS_CHANNEL_TYPE_HASHTAG;
-    strlcpy(cmd->channels[0].name, "hashtag", sizeof(cmd->channels[0].name));
-    strlcpy(cmd->channels[0].identifier, hashtag, sizeof(cmd->channels[0].identifier));
-    cmd->channels[0].weight = 1;
-    ps_ensure_display_name(&cmd->channels[0]);
+    playset->channels[0].type = PS_CHANNEL_TYPE_HASHTAG;
+    strlcpy(playset->channels[0].name, "hashtag", sizeof(playset->channels[0].name));
+    strlcpy(playset->channels[0].identifier, hashtag, sizeof(playset->channels[0].identifier));
+    playset->channels[0].weight = 1;
+    ps_ensure_display_name(&playset->channels[0]);
 
-    esp_err_t result = play_scheduler_execute_command(cmd);
-    free(cmd);
+    esp_err_t result = play_scheduler_execute_command(playset);
+    free(playset);
     return result;
 }
 
@@ -889,43 +889,43 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id,
     makapix_set_view_intent_intentional(true);
 
     // Heap allocate to avoid ~4.6KB stack usage
-    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
-    if (!cmd) {
-        ESP_LOGE(TAG, "Failed to allocate command struct");
+    ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
+    if (!playset) {
+        ESP_LOGE(TAG, "Failed to allocate playset struct");
         return ESP_ERR_NO_MEM;
     }
 
-    cmd->channel_count = 1;
-    cmd->pick_mode = PS_PICK_RECENCY;
+    playset->channel_count = 1;
+    playset->pick_mode = PS_PICK_RECENCY;
 
-    cmd->channels[0].type = PS_CHANNEL_TYPE_ARTWORK;
-    strlcpy(cmd->channels[0].name, "artwork", sizeof(cmd->channels[0].name));
-    cmd->channels[0].weight = 1;
+    playset->channels[0].type = PS_CHANNEL_TYPE_ARTWORK;
+    strlcpy(playset->channels[0].name, "artwork", sizeof(playset->channels[0].name));
+    playset->channels[0].weight = 1;
 
     // Set artwork-specific fields
-    cmd->channels[0].artwork.post_id = post_id;
-    cmd->channels[0].artwork.post_source = (post_id != 0) ? POST_SOURCE_MAKAPIX : POST_SOURCE_NONE;
-    strlcpy(cmd->channels[0].artwork.storage_key, storage_key, sizeof(cmd->channels[0].artwork.storage_key));
-    strlcpy(cmd->channels[0].artwork.art_url, art_url, sizeof(cmd->channels[0].artwork.art_url));
+    playset->channels[0].artwork.post_id = post_id;
+    playset->channels[0].artwork.post_source = (post_id != 0) ? POST_SOURCE_MAKAPIX : POST_SOURCE_NONE;
+    strlcpy(playset->channels[0].artwork.storage_key, storage_key, sizeof(playset->channels[0].artwork.storage_key));
+    strlcpy(playset->channels[0].artwork.art_url, art_url, sizeof(playset->channels[0].artwork.art_url));
 
     // Compute vault filepath from storage_key
     ps_build_artwork_filepath(storage_key, art_url,
-                               cmd->channels[0].artwork.filepath,
-                               sizeof(cmd->channels[0].artwork.filepath));
+                               playset->channels[0].artwork.filepath,
+                               sizeof(playset->channels[0].artwork.filepath));
 
     // Mark the upcoming swap loud-fail: the user picked a specific artwork,
     // so a load failure should surface an on-screen error instead of being
     // silently retried with a different artwork.
     s_state->next_swap_fail_mode = SWAP_FAIL_LOUD;
 
-    esp_err_t result = play_scheduler_execute_command(cmd);
+    esp_err_t result = play_scheduler_execute_command(playset);
     if (result == ESP_OK) {
         // Treat the single-artwork session as a first-class active playset so
         // the WebUI shows it correctly, the preview URL builder fires, and
         // boot restore can replay it.
         p3a_state_set_active_artwork(post_id, storage_key, art_url, title);
     }
-    free(cmd);
+    free(playset);
     return result;
 }
 
@@ -948,34 +948,34 @@ esp_err_t play_scheduler_play_local_file(const char *filepath)
     ESP_LOGI(TAG, "play_local_file: %s", filepath);
 
     // Heap allocate to avoid ~4.6KB stack usage
-    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
-    if (!cmd) {
-        ESP_LOGE(TAG, "Failed to allocate command struct");
+    ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
+    if (!playset) {
+        ESP_LOGE(TAG, "Failed to allocate playset struct");
         return ESP_ERR_NO_MEM;
     }
 
-    cmd->channel_count = 1;
-    cmd->pick_mode = PS_PICK_RECENCY;
+    playset->channel_count = 1;
+    playset->pick_mode = PS_PICK_RECENCY;
 
-    cmd->channels[0].type = PS_CHANNEL_TYPE_ARTWORK;
-    strlcpy(cmd->channels[0].name, "artwork", sizeof(cmd->channels[0].name));
-    cmd->channels[0].weight = 1;
+    playset->channels[0].type = PS_CHANNEL_TYPE_ARTWORK;
+    strlcpy(playset->channels[0].name, "artwork", sizeof(playset->channels[0].name));
+    playset->channels[0].weight = 1;
 
     // Local files: no view tracking (post_id = 0), storage_key and art_url empty
-    cmd->channels[0].artwork.post_id = 0;
-    cmd->channels[0].artwork.storage_key[0] = '\0';
-    cmd->channels[0].artwork.art_url[0] = '\0';
-    strlcpy(cmd->channels[0].artwork.filepath, filepath, sizeof(cmd->channels[0].artwork.filepath));
+    playset->channels[0].artwork.post_id = 0;
+    playset->channels[0].artwork.storage_key[0] = '\0';
+    playset->channels[0].artwork.art_url[0] = '\0';
+    strlcpy(playset->channels[0].artwork.filepath, filepath, sizeof(playset->channels[0].artwork.filepath));
 
     // Mark the upcoming swap loud-fail: the user picked a specific local file,
     // so a load failure should surface an on-screen error instead of being
     // silently retried with a different artwork.
     s_state->next_swap_fail_mode = SWAP_FAIL_LOUD;
 
-    esp_err_t result = play_scheduler_execute_command(cmd);
+    esp_err_t result = play_scheduler_execute_command(playset);
     if (result == ESP_OK) {
         p3a_state_set_active_local_file(filepath);
     }
-    free(cmd);
+    free(playset);
     return result;
 }

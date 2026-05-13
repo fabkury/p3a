@@ -364,9 +364,9 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     // 3. Call play_scheduler_next() which triggers animation_player_request_swap()
     esp_err_t ps_err = ESP_FAIL;
 
-    // Heap allocate command struct (~9KB)
-    ps_scheduler_command_t *cmd = calloc(1, sizeof(ps_scheduler_command_t));
-    if (cmd) {
+    // Heap allocate playset struct (~9KB)
+    ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
+    if (playset) {
         if (active_playset && active_playset[0] != '\0') {
             // Sentinel: single Makapix artwork (ephemeral, payload in NVS)
             if (strcmp(active_playset, P3A_PLAYSET_NAME_ARTWORK) == 0) {
@@ -398,16 +398,16 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
             }
             // Try built-in playset first
             else {
-                ps_err = ps_create_channel_playset(active_playset, cmd);
+                ps_err = ps_create_channel_playset(active_playset, playset);
                 if (ps_err == ESP_OK) {
                     ESP_LOGI(TAG, "Restoring built-in playset: %s", active_playset);
-                    ps_err = play_scheduler_execute_command(cmd);
+                    ps_err = play_scheduler_execute_command(playset);
                 } else {
                     // Not a built-in - try loading from cache (for server playsets like followed_artists)
-                    ps_err = playset_store_load(active_playset, cmd);
+                    ps_err = playset_store_load(active_playset, playset);
                     if (ps_err == ESP_OK) {
                         ESP_LOGI(TAG, "Restoring cached playset: %s", active_playset);
-                        ps_err = play_scheduler_execute_command(cmd);
+                        ps_err = play_scheduler_execute_command(playset);
                     } else {
                         ESP_LOGW(TAG, "Failed to load playset '%s': %s, falling back to default",
                                  active_playset, esp_err_to_name(ps_err));
@@ -419,17 +419,17 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         // If playset restore failed, fall back to channel_promoted
         if (ps_err != ESP_OK) {
             ESP_LOGI(TAG, "Falling back to default playset: channel_promoted");
-            ps_err = ps_create_channel_playset("channel_promoted", cmd);
+            ps_err = ps_create_channel_playset("channel_promoted", playset);
             if (ps_err == ESP_OK) {
-                ps_err = play_scheduler_execute_command(cmd);
+                ps_err = play_scheduler_execute_command(playset);
                 // Update NVS to reflect the fallback
                 p3a_state_set_active_playset("channel_promoted");
             }
         }
 
-        free(cmd);
+        free(playset);
     } else {
-        ESP_LOGE(TAG, "Failed to allocate playset command struct");
+        ESP_LOGE(TAG, "Failed to allocate playset struct");
         // Last resort fallback using legacy API
         ps_err = play_scheduler_play_named_channel("promoted");
     }

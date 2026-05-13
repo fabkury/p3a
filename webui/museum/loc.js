@@ -112,7 +112,8 @@ export class LocAdapter {
     }
 
     constructor() {
-        this._terms = null;  // cached per session
+        this._terms = null;          // cached per session
+        this._sessions = new Map();  // termId -> { sp, buffer, total, done }
     }
 
     async listCollections({ axis = 'format' } = {}) {
@@ -139,30 +140,53 @@ export class LocAdapter {
 
     async listArtworks(termId, { offset = 0, rows = 20, axis = 'format' } = {}) {
         if (axis !== 'format') throw new Error(`LoC: unknown axis ${axis}`);
-        // LoC uses sp (1-based page) + c (per-page). Translate offset/rows.
-        // We request c = max(rows, 100) so a single fetch typically yields
-        // enough IIIF-bearing items for the preview after filtering. The
-        // browse modal calls back for more when its buffer drains.
-        const c = Math.max(rows, 100);
-        const sp = Math.floor(offset / c) + 1;
-        const url = buildSearchUrl(termId, { c, sp });
-        const d = await getJson(url);
-        const results = Array.isArray(d.results) ? d.results : [];
-        const items = [];
-        for (const r of results) {
-            const iiifId = pickIiifId(r);
-            if (!iiifId) continue;
-            items.push({
-                id: iiifId,
-                imageId: iiifId,
-                title: getTitle(r),
-                artist: getArtist(r),
-                date: getDate(r),
-            });
-            if (items.length >= rows) break;
+
+        // A request with offset=0 means "start over" — discard any prior
+        // session for this term. Any non-zero offset is interpreted as a
+        // continuation that must reuse the running buffer (otherwise we'd
+        // re-walk LoC's first pages and serve duplicates).
+        let session = this._sessions.get(termId);
+        if (!session || offset === 0) {
+            session = { sp: 1, buffer: [], total: 0, done: false };
+            this._sessions.set(termId, session);
         }
-        const total = (d && d.pagination && d.pagination.total) | 0;
-        return { items, total };
+
+        // Top up the buffer from LoC until it can satisfy [offset, offset+rows)
+        // or LoC runs out of pages.
+        const LOC_PAGE_SIZE = 100;
+        while (session.buffer.length < offset + rows && !session.done) {
+            const url = buildSearchUrl(termId, { c: LOC_PAGE_SIZE, sp: session.sp });
+            let d;
+            try {
+                d = await getJson(url);
+            } catch (err) {
+                // Propagate fetch errors (including 429) to the modal.
+                throw err;
+            }
+            const results = Array.isArray(d.results) ? d.results : [];
+            session.total = (d && d.pagination && d.pagination.total) | 0;
+            for (const r of results) {
+                const iiifId = pickIiifId(r);
+                if (!iiifId) continue;
+                session.buffer.push({
+                    id: iiifId,
+                    imageId: iiifId,
+                    title: getTitle(r),
+                    artist: getArtist(r),
+                    date: getDate(r),
+                });
+            }
+            // Detect end of LoC pages: fewer results than requested page
+            // size, or our running cursor has overshot the API's total.
+            const seenSoFar = session.sp * LOC_PAGE_SIZE;
+            if (results.length < LOC_PAGE_SIZE || seenSoFar >= session.total) {
+                session.done = true;
+            }
+            session.sp += 1;
+        }
+
+        const items = session.buffer.slice(offset, offset + rows);
+        return { items, total: session.total };
     }
 
     thumbnailUrl(imageId, size = 64) {

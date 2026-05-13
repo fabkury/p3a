@@ -193,6 +193,33 @@ esp_err_t pin_list_build_artwork_path(const char *slug, const pinned_order_entry
                                       char *out, size_t out_len);
 
 /* ------------------------------------------------------------------------- */
+/*  Channel-cache integration (used by play_scheduler)                       */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * @brief Load all entries of a list into a freshly allocated SPIRAM buffer
+ *
+ * The buffer is sized for at most PIN_LIST_MAX_ENTRIES records and contains
+ * the records in newest-first order. The caller takes ownership of the
+ * returned pointer and must free it with pin_lists_channel_unload() when
+ * the channel is torn down.
+ *
+ * @param slug        List slug (must be valid).
+ * @param out_entries Receives pointer to the allocated array (NULL on error or empty list).
+ * @param out_count   Receives the number of entries (0 if list is empty).
+ * @return ESP_OK on success (including empty list); ESP_ERR_NOT_FOUND if no
+ *         order.bin exists; other esp_err_t on corruption or IO failure.
+ */
+esp_err_t pin_lists_channel_load(const char *slug,
+                                 pinned_order_entry_t **out_entries,
+                                 size_t *out_count);
+
+/**
+ * @brief Free a buffer returned by pin_lists_channel_load.
+ */
+void pin_lists_channel_unload(pinned_order_entry_t *entries);
+
+/* ------------------------------------------------------------------------- */
 /*  High-level source-specific helpers (used by p3a_pin_dispatcher)          */
 /* ------------------------------------------------------------------------- */
 

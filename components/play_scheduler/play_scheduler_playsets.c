@@ -23,6 +23,7 @@
 #include "content_cache.h"
 #include "makapix.h"
 #include "giphy.h"
+#include "pin_lists.h"
 #include "esp_log.h"
 #include "mbedtls/sha256.h"
 #include <stdio.h>
@@ -381,6 +382,31 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
         return err;
     }
 
+    // Pinned channels: the list of pins lives entirely in pin_lists' order.bin.
+    // We load it into the SD-card-style ch->entries slot (heap buffer of
+    // pinned_order_entry_t) since pinned channels have no remote backing and
+    // therefore no LAi cycle.
+    if (ch->type == PS_CHANNEL_TYPE_PINNED) {
+        pinned_order_entry_t *entries = NULL;
+        size_t count = 0;
+        esp_err_t err = pin_lists_channel_load(ch->identifier, &entries, &count);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Pinned channel '%s': load failed: %s",
+                     ch->identifier, esp_err_to_name(err));
+            return err;
+        }
+        ch->entries = entries;
+        ch->entry_count = count;
+        ch->available_post_ids = NULL;
+        ch->available_count = 0;
+        ch->cache = NULL;
+        ch->cache_loaded = true;
+        ch->active = (count > 0);
+        ch->entry_format = PS_ENTRY_FORMAT_PINNED;
+        ESP_LOGI(TAG, "Pinned channel '%s': loaded %zu entries", ch->identifier, count);
+        return ESP_OK;
+    }
+
     // Makapix channels use channel_cache module for LAi persistence
     return ps_load_makapix_cache(ch);
 }
@@ -675,6 +701,37 @@ esp_err_t play_scheduler_play_named_channel(const char *name)
         playset->channels[0].type = PS_CHANNEL_TYPE_NAMED;
         strlcpy(playset->channels[0].name, name, sizeof(playset->channels[0].name));
     }
+    playset->channels[0].weight = 1;
+    ps_ensure_display_name(&playset->channels[0]);
+
+    esp_err_t result = play_scheduler_execute_playset(playset);
+    free(playset);
+    return result;
+}
+
+esp_err_t play_scheduler_play_pinned_channel(const char *slug)
+{
+    /* NULL/empty slug → active list; pin_lists_channel_load handles the
+       fallback internally. We still need a non-null identifier so the
+       channel state has something to render in logs. */
+    char target[PIN_LIST_SLUG_LEN] = {0};
+    if (slug && slug[0]) {
+        strlcpy(target, slug, sizeof(target));
+    } else {
+        if (pin_lists_get_active(target) != ESP_OK) {
+            ESP_LOGW(TAG, "play_pinned_channel: no active list");
+            return ESP_ERR_NOT_FOUND;
+        }
+    }
+
+    ESP_LOGI(TAG, "play_pinned_channel: %s", target);
+
+    ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
+    if (!playset) return ESP_ERR_NO_MEM;
+    playset->channel_count = 1;
+    playset->channels[0].type = PS_CHANNEL_TYPE_PINNED;
+    strlcpy(playset->channels[0].name, "pinned", sizeof(playset->channels[0].name));
+    strlcpy(playset->channels[0].identifier, target, sizeof(playset->channels[0].identifier));
     playset->channels[0].weight = 1;
     ps_ensure_display_name(&playset->channels[0]);
 

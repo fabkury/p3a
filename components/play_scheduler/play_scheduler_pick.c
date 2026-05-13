@@ -16,6 +16,7 @@
 #include "giphy.h"
 #include "art_institution.h"
 #include "sd_path.h"
+#include "pin_lists.h"
 #include "esp_log.h"
 #include <string.h>
 #include <strings.h>
@@ -49,7 +50,46 @@ static post_source_t post_source_from_channel_type(ps_channel_type_t type)
         case PS_CHANNEL_TYPE_SDCARD:      return POST_SOURCE_SDCARD;
         case PS_CHANNEL_TYPE_GIPHY:       return POST_SOURCE_GIPHY;
         case PS_CHANNEL_TYPE_INSTITUTION: return POST_SOURCE_INSTITUTION;
+        case PS_CHANNEL_TYPE_PINNED:      return POST_SOURCE_NONE;  /* overridden per entry below */
         default:                          return POST_SOURCE_MAKAPIX;
+    }
+}
+
+/* Map a pinned entry's source field to the corresponding post_source_t value. */
+static post_source_t post_source_from_pinned_source(uint8_t pinned_source)
+{
+    switch (pinned_source) {
+        case PINNED_SOURCE_MAKAPIX:     return POST_SOURCE_MAKAPIX;
+        case PINNED_SOURCE_GIPHY:       return POST_SOURCE_GIPHY;
+        case PINNED_SOURCE_INSTITUTION: return POST_SOURCE_INSTITUTION;
+        default:                        return POST_SOURCE_NONE;
+    }
+}
+
+/* Build the public-facing "storage_key" for a pinned entry. Mirrors how the
+ * native pickers populate ps_artwork_t.storage_key so downstream consumers
+ * (renderer overlays, view tracker, web UI) see a coherent identifier. */
+static void pinned_storage_key(const pinned_order_entry_t *e, char *out, size_t out_len)
+{
+    if (out_len == 0) return;
+    out[0] = '\0';
+    switch ((pinned_source_t)e->source) {
+        case PINNED_SOURCE_MAKAPIX: {
+            const uint8_t *u = e->makapix.storage_key_uuid;
+            snprintf(out, out_len,
+                     "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+                     u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7],
+                     u[8], u[9], u[10], u[11], u[12], u[13], u[14], u[15]);
+            break;
+        }
+        case PINNED_SOURCE_GIPHY:
+            strlcpy(out, e->giphy.giphy_id, out_len);
+            break;
+        case PINNED_SOURCE_INSTITUTION:
+            strlcpy(out, e->museum.iiif_key, out_len);
+            break;
+        default:
+            break;
     }
 }
 
@@ -388,6 +428,78 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
 }
 
 /**
+ * @brief Pick artwork from a Pinned channel using recency mode
+ *
+ * Cursor-based scan of order.bin entries (newest-first). file_exists() acts
+ * as availability mask; missing files are silently skipped. Stamps the
+ * artwork with the entry's ORIGINAL source so reactions/clicks reach the
+ * native dispatcher unchanged.
+ */
+static bool pick_recency_pinned(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
+{
+    ps_channel_state_t *ch = &state->channels[channel_index];
+    pinned_order_entry_t *entries = (pinned_order_entry_t *)ch->entries;
+
+    if (!entries || ch->entry_count == 0) {
+        ESP_LOGD(TAG, "RecencyPick Pinned[%zu]: no entries", channel_index);
+        return false;
+    }
+
+    uint32_t start_cursor = ch->cursor;
+    bool wrapped = false;
+    int skipped_missing = 0;
+    int skipped_repeat = 0;
+
+    while (true) {
+        if (ch->cursor >= ch->entry_count) {
+            if (wrapped) break;
+            ch->cursor = 0;
+            wrapped = true;
+        }
+        if (wrapped && ch->cursor >= start_cursor) break;
+
+        uint32_t current_index = ch->cursor;
+        pinned_order_entry_t *entry = &entries[ch->cursor];
+        ch->cursor++;
+
+        char filepath[256];
+        if (pin_list_build_artwork_path(ch->identifier, entry, filepath, sizeof(filepath)) != ESP_OK) {
+            skipped_missing++;
+            continue;
+        }
+        if (!file_exists(filepath)) {
+            skipped_missing++;
+            continue;
+        }
+        if (entry->post_id == state->last_played_id && ch->entry_count > 1) {
+            skipped_repeat++;
+            continue;
+        }
+
+        char storage_key[64];
+        pinned_storage_key(entry, storage_key, sizeof(storage_key));
+
+        ESP_LOGI(TAG, ">>> PICKED (RecencyPick Pinned): index=%lu post_id=%ld pool=%zu skipped_missing=%d skipped_repeat=%d",
+                 (unsigned long)current_index, (long)entry->post_id, ch->entry_count,
+                 skipped_missing, skipped_repeat);
+
+        out_artwork->artwork_id = entry->post_id;
+        out_artwork->post_id = entry->post_id;
+        strlcpy(out_artwork->filepath, filepath, sizeof(out_artwork->filepath));
+        strlcpy(out_artwork->storage_key, storage_key, sizeof(out_artwork->storage_key));
+        out_artwork->created_at = entry->pinned_at;
+        out_artwork->dwell_time_ms = 0;
+        out_artwork->type = get_asset_type_from_extension(entry->extension);
+        ps_artwork_stamp_channel(out_artwork, channel_index, ch);
+        out_artwork->post_source = post_source_from_pinned_source(entry->source);
+        return true;
+    }
+    ESP_LOGW(TAG, "RecencyPick Pinned[%zu]: EXHAUSTED (entries=%zu skipped_missing=%d skipped_repeat=%d)",
+             channel_index, ch->entry_count, skipped_missing, skipped_repeat);
+    return false;
+}
+
+/**
  * @brief Pick artwork using recency mode with availability masking
  *
  * Dispatches to format-specific implementation based on entry_format.
@@ -398,6 +510,8 @@ static bool pick_recency(ps_state_t *state, size_t channel_index, ps_artwork_t *
 
     if (ch->entry_format == PS_ENTRY_FORMAT_SDCARD) {
         return pick_recency_sdcard(state, channel_index, out_artwork);
+    } else if (ch->entry_format == PS_ENTRY_FORMAT_PINNED) {
+        return pick_recency_pinned(state, channel_index, out_artwork);
     } else {
         // Both Makapix and Giphy use the same LAi-based pick logic
         // (filepath dispatch handled inside pick_recency_makapix)
@@ -579,6 +693,53 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
 }
 
 /**
+ * @brief Pick random artwork from a Pinned channel
+ */
+static bool pick_random_pinned(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
+{
+    ps_channel_state_t *ch = &state->channels[channel_index];
+    pinned_order_entry_t *entries = (pinned_order_entry_t *)ch->entries;
+
+    if (!entries || ch->entry_count == 0) {
+        ESP_LOGD(TAG, "RandomPick Pinned[%zu]: no entries", channel_index);
+        return false;
+    }
+
+    for (int attempt = 0; attempt < 5; attempt++) {
+        uint32_t r = ps_prng_next(&ch->pick_rng_state);
+        size_t index = (size_t)(r % ch->entry_count);
+        pinned_order_entry_t *entry = &entries[index];
+
+        char filepath[256];
+        if (pin_list_build_artwork_path(ch->identifier, entry, filepath, sizeof(filepath)) != ESP_OK) {
+            continue;
+        }
+        if (!file_exists(filepath)) continue;
+        if (entry->post_id == state->last_played_id && ch->entry_count > 1) continue;
+
+        char storage_key[64];
+        pinned_storage_key(entry, storage_key, sizeof(storage_key));
+
+        ESP_LOGI(TAG, ">>> PICKED (RandomPick Pinned): index=%zu post_id=%ld pool=%zu attempt=%d",
+                 index, (long)entry->post_id, ch->entry_count, attempt);
+
+        out_artwork->artwork_id = entry->post_id;
+        out_artwork->post_id = entry->post_id;
+        strlcpy(out_artwork->filepath, filepath, sizeof(out_artwork->filepath));
+        strlcpy(out_artwork->storage_key, storage_key, sizeof(out_artwork->storage_key));
+        out_artwork->created_at = entry->pinned_at;
+        out_artwork->dwell_time_ms = 0;
+        out_artwork->type = get_asset_type_from_extension(entry->extension);
+        ps_artwork_stamp_channel(out_artwork, channel_index, ch);
+        out_artwork->post_source = post_source_from_pinned_source(entry->source);
+        return true;
+    }
+    /* Random sampling didn't land on a present file; fall back to recency
+       which walks all entries deterministically. */
+    return pick_recency_pinned(state, channel_index, out_artwork);
+}
+
+/**
  * @brief Pick random artwork, dispatches based on entry format
  */
 static bool pick_random(ps_state_t *state, size_t channel_index, ps_artwork_t *out_artwork)
@@ -587,6 +748,8 @@ static bool pick_random(ps_state_t *state, size_t channel_index, ps_artwork_t *o
 
     if (ch->entry_format == PS_ENTRY_FORMAT_SDCARD) {
         return pick_random_sdcard(state, channel_index, out_artwork);
+    } else if (ch->entry_format == PS_ENTRY_FORMAT_PINNED) {
+        return pick_random_pinned(state, channel_index, out_artwork);
     } else {
         return pick_random_makapix(state, channel_index, out_artwork);
     }

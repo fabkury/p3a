@@ -86,6 +86,7 @@ typedef enum {
     PS_CHANNEL_TYPE_GIPHY = 5,    // Giphy channels: spec_name = "trending", "search"; identifier = query
     PS_CHANNEL_TYPE_REACTIONS = 6,// Reactions channels: identifier = sqid of target user
     PS_CHANNEL_TYPE_INSTITUTION = 7, // Art-institution channels: spec_name = "{museum}:{axis}", identifier = term_id
+    PS_CHANNEL_TYPE_PINNED = 8,   // Pinned-artworks list: identifier = list slug
 } ps_channel_type_t;
 
 /**
@@ -99,6 +100,7 @@ typedef enum {
     PS_ENTRY_FORMAT_SDCARD,       // sdcard_index_entry_t (160 bytes)
     PS_ENTRY_FORMAT_GIPHY,        // giphy_channel_entry_t (64 bytes)
     PS_ENTRY_FORMAT_INSTITUTION,  // institution_channel_entry_t (64 bytes)
+    PS_ENTRY_FORMAT_PINNED,       // pinned_order_entry_t (64 bytes)
 } ps_entry_format_t;
 
 // ============================================================================

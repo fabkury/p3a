@@ -117,6 +117,17 @@ esp_err_t ps_create_channel_playset(const char *playset_name, ps_playset_t *out_
 esp_err_t play_scheduler_play_named_channel(const char *name);
 
 /**
+ * @brief Convenience: Play a pinned-artwork list as a first-class channel
+ *
+ * Builds a one-channel playset with type PS_CHANNEL_TYPE_PINNED and the
+ * given slug. The scheduler honours the global pick_mode (recency or random).
+ *
+ * @param slug 8-hex-char list slug, or NULL/"" to play the active list
+ * @return ESP_OK on success
+ */
+esp_err_t play_scheduler_play_pinned_channel(const char *slug);
+
+/**
  * @brief Convenience: Play a user channel
  *
  * @param user_sqid User's sqid

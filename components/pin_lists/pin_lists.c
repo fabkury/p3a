@@ -902,6 +902,33 @@ esp_err_t pin_list_get_entry(const char *slug, pinned_source_t src, const char *
 }
 
 /* ------------------------------------------------------------------------- */
+/*  Channel-cache integration                                                */
+/* ------------------------------------------------------------------------- */
+
+esp_err_t pin_lists_channel_load(const char *slug,
+                                 pinned_order_entry_t **out_entries,
+                                 size_t *out_count)
+{
+    if (!out_entries || !out_count) return ESP_ERR_INVALID_ARG;
+    *out_entries = NULL;
+    *out_count = 0;
+    if (!s_initialized) return ESP_ERR_INVALID_STATE;
+    const char *target_slug = (slug && slug[0]) ? slug : s_active_slug;
+    if (!pl_slug_is_valid(target_slug)) return ESP_ERR_INVALID_ARG;
+
+    LOCK();
+    esp_err_t err = pl_order_read_all(target_slug, out_entries, out_count);
+    UNLOCK();
+    if (err == ESP_ERR_NOT_FOUND) return ESP_OK;  /* empty list */
+    return err;
+}
+
+void pin_lists_channel_unload(pinned_order_entry_t *entries)
+{
+    if (entries) free(entries);
+}
+
+/* ------------------------------------------------------------------------- */
 /*  High-level source-specific helpers                                       */
 /* ------------------------------------------------------------------------- */
 

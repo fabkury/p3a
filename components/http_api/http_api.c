@@ -279,6 +279,19 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
             const char *tag = cJSON_GetStringValue(hashtag);
             err = play_scheduler_play_hashtag_channel(tag);
             snprintf(playset_name, sizeof(playset_name), "hashtag_%s", tag);
+        } else if (strcmp(channel, "pinned") == 0) {
+            /* Optional `slug` selects a specific list; omit it to play the
+               currently active list. Persisted playset name is keyed by slug
+               so different lists don't clobber each other. */
+            cJSON *slug_item = cJSON_GetObjectItem(payload, "slug");
+            const char *slug = (slug_item && cJSON_IsString(slug_item))
+                               ? cJSON_GetStringValue(slug_item) : NULL;
+            err = play_scheduler_play_pinned_channel(slug);
+            if (slug && slug[0]) {
+                snprintf(playset_name, sizeof(playset_name), "channel_pinned_%s", slug);
+            } else {
+                strlcpy(playset_name, "channel_pinned", sizeof(playset_name));
+            }
         } else {
             ESP_LOGW(HTTP_API_TAG, "play_channel: unknown channel '%s'", channel);
             return;

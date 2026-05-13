@@ -19,18 +19,24 @@
 #include "art_institution_internal.h"
 #include "art_institution_types.h"
 #include "esp_log.h"
+#include <stdio.h>
 
 static const char *TAG = "ai_loc";
+
+#define LOC_IIIF_BASE "https://tile.loc.gov/image-services/iiif"
 
 esp_err_t art_institution_loc_build_iiif_url(const institution_channel_entry_t *entry,
                                              int longest_side,
                                              char *out, size_t len)
 {
-    (void)entry;
-    (void)longest_side;
-    if (out && len > 0) out[0] = '\0';
-    ESP_LOGE(TAG, "build_iiif_url stub — implement in Task 5");
-    return ESP_FAIL;
+    if (!entry || !out || len == 0) return ESP_ERR_INVALID_ARG;
+    if (entry->iiif_key[0] == '\0') return ESP_ERR_INVALID_ARG;
+    if (longest_side <= 0) longest_side = 720;
+
+    int n = snprintf(out, len, LOC_IIIF_BASE "/%s/full/!%d,%d/0/default.jpg",
+                     entry->iiif_key, longest_side, longest_side);
+    if (n < 0 || (size_t)n >= len) return ESP_ERR_INVALID_SIZE;
+    return ESP_OK;
 }
 
 esp_err_t art_institution_loc_refresh_channel(const char *channel_id,

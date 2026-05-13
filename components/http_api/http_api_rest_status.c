@@ -18,6 +18,7 @@
 #include "http_api_internal.h"
 #include "pin_lists.h"
 #include "storage_eviction.h"
+#include "esp_heap_caps.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include "esp_wifi_remote.h"
@@ -219,24 +220,32 @@ esp_err_t h_get_api_init(httpd_req_t *req) {
 
     // pin_lists: enumerate all pin lists + active slug so the web UI can
     // render a pill per list without an extra request.
+    // The infos buffer is heap-allocated (PSRAM) — at 64 lists * sizeof(pin_list_info_t)
+    // it's ~5.6 KB, which overflows the ~8 KB http worker task stack when combined
+    // with the rest of this handler's cJSON allocations.
     {
-        pin_list_info_t infos[PIN_LISTS_MAX_LISTS];
-        size_t n = 0;
-        if (pin_lists_enumerate(infos, PIN_LISTS_MAX_LISTS, &n) == ESP_OK) {
-            cJSON *pl = cJSON_AddObjectToObject(data, "pin_lists");
-            cJSON *arr = cJSON_AddArrayToObject(pl, "lists");
-            for (size_t i = 0; i < n; i++) {
-                cJSON *o = cJSON_CreateObject();
-                if (!o) continue;
-                cJSON_AddStringToObject(o, "slug", infos[i].slug);
-                cJSON_AddStringToObject(o, "name", infos[i].name);
-                cJSON_AddNumberToObject(o, "count", (double)infos[i].count);
-                cJSON_AddBoolToObject(o, "is_active", infos[i].is_active);
-                cJSON_AddItemToArray(arr, o);
+        pin_list_info_t *infos = heap_caps_malloc(
+            PIN_LISTS_MAX_LISTS * sizeof(pin_list_info_t),
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (infos) {
+            size_t n = 0;
+            if (pin_lists_enumerate(infos, PIN_LISTS_MAX_LISTS, &n) == ESP_OK) {
+                cJSON *pl = cJSON_AddObjectToObject(data, "pin_lists");
+                cJSON *arr = cJSON_AddArrayToObject(pl, "lists");
+                for (size_t i = 0; i < n; i++) {
+                    cJSON *o = cJSON_CreateObject();
+                    if (!o) continue;
+                    cJSON_AddStringToObject(o, "slug", infos[i].slug);
+                    cJSON_AddStringToObject(o, "name", infos[i].name);
+                    cJSON_AddNumberToObject(o, "count", (double)infos[i].count);
+                    cJSON_AddBoolToObject(o, "is_active", infos[i].is_active);
+                    cJSON_AddItemToArray(arr, o);
+                }
+                char active[PIN_LIST_SLUG_LEN] = {0};
+                pin_lists_get_active(active);
+                cJSON_AddStringToObject(pl, "active", active);
             }
-            char active[PIN_LIST_SLUG_LEN] = {0};
-            pin_lists_get_active(active);
-            cJSON_AddStringToObject(pl, "active", active);
+            free(infos);
         }
     }
 

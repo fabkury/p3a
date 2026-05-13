@@ -28,6 +28,7 @@
 #include "giphy.h"
 #include "art_institution.h"
 #include "makapix_channel_utils.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include <ctype.h>
 #include <errno.h>
@@ -344,10 +345,16 @@ static void send_pin_err(httpd_req_t *req, esp_err_t err, const char *context)
 
 static esp_err_t h_get_collection(httpd_req_t *req)
 {
-    pin_list_info_t infos[PIN_LISTS_MAX_LISTS];
+    /* PSRAM-allocate the info array — at 64 lists * sizeof(pin_list_info_t)
+       it's ~5.6 KB, which overflows the http worker task stack. */
+    pin_list_info_t *infos = heap_caps_malloc(
+        PIN_LISTS_MAX_LISTS * sizeof(pin_list_info_t),
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!infos) { send_json(req, 500, "{\"ok\":false,\"code\":\"OOM\"}"); return ESP_OK; }
+
     size_t n = 0;
     esp_err_t err = pin_lists_enumerate(infos, PIN_LISTS_MAX_LISTS, &n);
-    if (err != ESP_OK) { send_pin_err(req, err, "enumerate"); return ESP_OK; }
+    if (err != ESP_OK) { free(infos); send_pin_err(req, err, "enumerate"); return ESP_OK; }
 
     char active[PIN_LIST_SLUG_LEN] = {0};
     pin_lists_get_active(active);
@@ -359,6 +366,7 @@ static esp_err_t h_get_collection(httpd_req_t *req)
         if (o) cJSON_AddItemToArray(lists, o);
     }
     cJSON_AddStringToObject(root, "active", active);
+    free(infos);
 
     char *out = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);

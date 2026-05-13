@@ -283,13 +283,17 @@ esp_err_t h_post_playset(httpd_req_t *req)
     cJSON_AddNumberToObject(root, "channel_count", (double)playset->channel_count);
     cJSON_AddBoolToObject(root, "from_cache", from_cache);
     cJSON_AddBoolToObject(root, "builtin", is_builtin);
-    cJSON_AddStringToObject(root, "pick_mode", pick_mode_str(playset->pick_mode));
 
-    // Compute artwork sums from live scheduler state (caches loaded by execute_playset)
+    // Compute artwork sums and global pick_mode from live scheduler state
+    // (caches loaded by execute_playset). pick_mode is now a device-wide
+    // setting (config_store) — the field is kept in the response so the
+    // WebUI's now-playing hydration logic keeps working without a separate
+    // fetch.
     ps_stats_t ps_stats;
     if (play_scheduler_get_stats(&ps_stats) == ESP_OK) {
         cJSON_AddNumberToObject(root, "total_cached", (double)ps_stats.total_available);
         cJSON_AddNumberToObject(root, "total_entries", (double)ps_stats.total_entries);
+        cJSON_AddStringToObject(root, "pick_mode", pick_mode_str(ps_stats.pick_mode));
     }
 
     char *out = cJSON_PrintUnformatted(root);
@@ -445,7 +449,6 @@ esp_err_t h_get_playsets(httpd_req_t *req)
         if (!item) continue;
         cJSON_AddStringToObject(item, "name", entries[i].name);
         cJSON_AddNumberToObject(item, "channel_count", (double)entries[i].channel_count);
-        cJSON_AddStringToObject(item, "pick_mode", playset_pick_mode_str(entries[i].pick_mode));
         cJSON_AddItemToArray(arr, item);
     }
 

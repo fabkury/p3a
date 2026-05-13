@@ -414,8 +414,8 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset)
 
     xSemaphoreTake(s_state->mutex, portMAX_DELAY);
 
-    ESP_LOGI(TAG, "Executing playset: %zu channel(s), pick=%d",
-             playset->channel_count, playset->pick_mode);
+    ESP_LOGI(TAG, "Executing playset: %zu channel(s), pick=%d (global)",
+             playset->channel_count, s_state->pick_mode);
 
     // Free old channel entries before reconfiguring. Hold the cache
     // lifecycle lock so concurrent readers (e.g. download_task) cannot be
@@ -440,8 +440,7 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset)
     }
     channel_cache_lifecycle_unlock();
 
-    // Store playset parameters
-    s_state->pick_mode = playset->pick_mode;
+    // Store playset parameters (pick_mode is global; not stored per playset)
     s_state->channel_count = playset->channel_count;
 
     // Increment epoch (history is preserved)
@@ -622,7 +621,6 @@ esp_err_t ps_create_channel_playset(const char *playset_name, ps_playset_t *out_
 
     memset(out_playset, 0, sizeof(*out_playset));
     out_playset->channel_count = 1;
-    out_playset->pick_mode = PS_PICK_RANDOM;
 
     if (strcmp(playset_name, "channel_recent") == 0) {
         out_playset->channels[0].type = PS_CHANNEL_TYPE_NAMED;
@@ -668,7 +666,6 @@ esp_err_t play_scheduler_play_named_channel(const char *name)
     }
 
     playset->channel_count = 1;
-    playset->pick_mode = PS_PICK_RANDOM;
 
     // Determine channel type
     if (strcmp(name, "sdcard") == 0) {
@@ -702,7 +699,6 @@ esp_err_t play_scheduler_play_user_channel(const char *user_sqid)
     }
 
     playset->channel_count = 1;
-    playset->pick_mode = PS_PICK_RANDOM;
 
     playset->channels[0].type = PS_CHANNEL_TYPE_USER;
     strlcpy(playset->channels[0].name, "user", sizeof(playset->channels[0].name));
@@ -731,7 +727,6 @@ esp_err_t play_scheduler_play_reactions_channel(const char *user_sqid)
     }
 
     playset->channel_count = 1;
-    playset->pick_mode = PS_PICK_RANDOM;
 
     playset->channels[0].type = PS_CHANNEL_TYPE_REACTIONS;
     strlcpy(playset->channels[0].name, "reactions", sizeof(playset->channels[0].name));
@@ -760,7 +755,6 @@ esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag)
     }
 
     playset->channel_count = 1;
-    playset->pick_mode = PS_PICK_RANDOM;
 
     playset->channels[0].type = PS_CHANNEL_TYPE_HASHTAG;
     strlcpy(playset->channels[0].name, "hashtag", sizeof(playset->channels[0].name));
@@ -896,7 +890,6 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id,
     }
 
     playset->channel_count = 1;
-    playset->pick_mode = PS_PICK_RECENCY;
 
     playset->channels[0].type = PS_CHANNEL_TYPE_ARTWORK;
     strlcpy(playset->channels[0].name, "artwork", sizeof(playset->channels[0].name));
@@ -955,7 +948,6 @@ esp_err_t play_scheduler_play_local_file(const char *filepath)
     }
 
     playset->channel_count = 1;
-    playset->pick_mode = PS_PICK_RECENCY;
 
     playset->channels[0].type = PS_CHANNEL_TYPE_ARTWORK;
     strlcpy(playset->channels[0].name, "artwork", sizeof(playset->channels[0].name));

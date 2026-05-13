@@ -442,7 +442,7 @@ static void send_view_event(void)
         return;
     }
 
-    // Derive legacy play_order value from the active playset's pick_mode
+    // Derive legacy play_order value from the device's global pick_mode
     uint8_t play_order = 1;  // Default: created/date order
     ps_stats_t ps_stats;
     if (play_scheduler_get_stats(&ps_stats) == ESP_OK) {

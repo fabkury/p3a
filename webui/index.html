@@ -85,6 +85,26 @@ body {
 }
 .now-playing.collapsed .now-playing-toggle { transform: rotate(-90deg); }
 .now-playing.collapsed .now-playing-channels { display: none; }
+.shuffle-btn {
+    background: rgba(255,255,255,0.18);
+    color: rgba(255,255,255,0.85);
+    border: none;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-right: var(--sp-2);
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s, color 0.15s;
+    min-height: 26px;
+}
+.shuffle-btn:hover { background: rgba(255,255,255,0.28); }
+.shuffle-btn.active { background: white; color: #667eea; }
+.shuffle-btn.active:hover { background: rgba(255,255,255,0.92); }
 .now-playing-channels {
     border-top: 1px solid rgba(255,255,255,0.2);
     padding: 6px 10px var(--sp-2);
@@ -368,6 +388,9 @@ body {
 </div>
 <div class="now-playing collapsed" id="now-playing" style="display:none;">
     <div class="now-playing-header" onclick="toggleNowPlaying()">
+        <button type="button" class="shuffle-btn" id="shuffle-btn"
+                onclick="event.stopPropagation(); toggleShuffle();"
+                aria-pressed="false" aria-label="Shuffle">Shuffle</button>
         <div class="now-playing-header-text">
             <div class="now-playing-name" id="now-playing-name"></div>
             <div class="now-playing-stats" id="now-playing-stats"></div>
@@ -1217,10 +1240,44 @@ function updateNowPlaying(name, info, displayOverride) {
     if (typeof info.channel_count === 'number') parts.push(info.channel_count + ' ch');
     if (typeof info.total_cached === 'number' && typeof info.total_entries === 'number')
         parts.push(info.total_cached + '/' + info.total_entries + ' artworks');
-    if (info.pick_mode) parts.push(info.pick_mode.charAt(0).toUpperCase() + info.pick_mode.slice(1));
     statsEl.textContent = parts.join(' \u00b7 ');
+    // Hydrate the Shuffle toggle from the polled pick_mode unless the user is
+    // mid-click on it (pendingShuffle suppresses the next hydration so the
+    // button doesn't flicker back if our PUT hasn't been reflected yet).
+    if (info.pick_mode && !shufflePendingHydrate) {
+        var btn = document.getElementById('shuffle-btn');
+        if (btn) {
+            var on = (info.pick_mode === 'random');
+            btn.classList.toggle('active', on);
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+    }
     card.style.display = '';
     if (info.channels) renderChannelRows(info.channels);
+}
+
+var shufflePendingHydrate = false;
+function toggleShuffle() {
+    var btn = document.getElementById('shuffle-btn');
+    if (!btn) return;
+    var nextOn = !btn.classList.contains('active');
+    btn.classList.toggle('active', nextOn);
+    btn.setAttribute('aria-pressed', nextOn ? 'true' : 'false');
+    shufflePendingHydrate = true;
+    var xhr = new XMLHttpRequest();
+    xhr.open('PUT', '/config?merge=true', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        shufflePendingHydrate = false;
+        if (xhr.status < 200 || xhr.status >= 300) {
+            // Roll back the visual state on failure
+            btn.classList.toggle('active', !nextOn);
+            btn.setAttribute('aria-pressed', (!nextOn) ? 'true' : 'false');
+            showToast('Failed to update Shuffle', true);
+        }
+    };
+    xhr.send(JSON.stringify({ pick_mode: nextOn ? 'random' : 'recency' }));
 }
 
 function pollActivePlayset(attempt) {

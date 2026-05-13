@@ -264,7 +264,7 @@ static esp_err_t activate_channel(size_t channel_index)
         return err;
     }
 
-    // Start playback - derive order from playset's pick_mode
+    // Start playback - derive order from the global pick_mode
     channel_order_mode_t order = (s_state.pick_mode == PS_PICK_RANDOM)
         ? CHANNEL_ORDER_RANDOM : CHANNEL_ORDER_CREATED;
 
@@ -331,7 +331,9 @@ esp_err_t play_scheduler_init(void)
     s_state.nae_enabled = true;
     s_state.epoch_id = 0;
     s_state.last_played_id = 0;  // 0 won't match any valid post_id
-    s_state.pick_mode = PS_PICK_RECENCY;
+    s_state.pick_mode = (ps_pick_mode_t)config_store_get_pick_mode();
+    ESP_LOGI(TAG, "Loaded pick_mode from NVS: %s",
+             s_state.pick_mode == PS_PICK_RANDOM ? "Random" : "Recency");
     s_state.channel_select_mode = (ps_channel_select_mode_t)config_store_get_channel_select_mode();
     ESP_LOGI(TAG, "Loaded channel_select_mode from NVS: %s",
              s_state.channel_select_mode == PS_CHANNEL_SELECT_STOCHASTIC ? "Stochastic" : "SWRR");
@@ -557,6 +559,24 @@ void play_scheduler_set_channel_select_mode(ps_channel_select_mode_t mode)
 ps_channel_select_mode_t play_scheduler_get_channel_select_mode(void)
 {
     return s_state.channel_select_mode;
+}
+
+void play_scheduler_set_pick_mode(ps_pick_mode_t mode)
+{
+    if (!s_state.initialized) return;
+
+    config_store_set_pick_mode((uint8_t)mode);
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    s_state.pick_mode = mode;
+    ESP_LOGI(TAG, "Pick mode set to %s",
+             mode == PS_PICK_RANDOM ? "Random" : "Recency");
+    xSemaphoreGive(s_state.mutex);
+}
+
+ps_pick_mode_t play_scheduler_get_pick_mode(void)
+{
+    return s_state.pick_mode;
 }
 
 // ============================================================================

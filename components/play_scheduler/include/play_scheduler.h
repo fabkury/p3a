@@ -218,6 +218,24 @@ void play_scheduler_set_channel_select_mode(ps_channel_select_mode_t mode);
  */
 ps_channel_select_mode_t play_scheduler_get_channel_select_mode(void);
 
+/**
+ * @brief Set pick mode (per-channel artwork selection)
+ *
+ * Switches between Recency (newest-first cursor) and Random pick modes.
+ * Persists to NVS via config_store and applies on the next swap. The setting
+ * is global — it survives playset switches.
+ *
+ * @param mode PS_PICK_RECENCY or PS_PICK_RANDOM
+ */
+void play_scheduler_set_pick_mode(ps_pick_mode_t mode);
+
+/**
+ * @brief Get pick mode
+ *
+ * @return Current pick mode
+ */
+ps_pick_mode_t play_scheduler_get_pick_mode(void);
+
 // ============================================================================
 // Cache Management
 // ============================================================================

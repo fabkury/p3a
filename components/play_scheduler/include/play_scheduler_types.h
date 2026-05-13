@@ -184,16 +184,15 @@ typedef struct {
  * to play. It contains all parameters needed to produce a play queue:
  * - Which channels to include (up to PS_MAX_CHANNELS)
  * - Per-channel weights (channels[i].weight; all-zero falls back to equal)
- * - How to pick artwork within each channel (pick_mode)
  *
  * Executing a playset resets channel state (cursors, SWRR credits) but
  * preserves playback history for back-navigation.
  *
- * NOTE ON DWELL TIME: Playsets intentionally do NOT include dwell time settings.
- * Currently p3a only supports a single globally-configured dwell time (set via
- * config_store). Per-playset, per-channel, and per-artwork dwell times are
- * deferred until a future design decision is made about dwell time handling.
- * See config_store_get_dwell_time() for the current implementation.
+ * NOTE ON PLAYBACK-STYLE SETTINGS: Playsets intentionally do NOT include
+ * pick_mode or dwell_time. Both are personal preferences about *how* to play
+ * rather than *what* to play, so they live globally in config_store and apply
+ * across playset switches. See config_store_get_pick_mode() and
+ * config_store_get_dwell_time() for the current implementations.
  */
 #define PS_PLAYSET_NAME_MAX 32
 
@@ -201,7 +200,6 @@ typedef struct {
     char name[PS_PLAYSET_NAME_MAX + 1]; // Playset name (empty for transient/anonymous playsets)
     ps_channel_spec_t channels[PS_MAX_CHANNELS];
     size_t channel_count;
-    ps_pick_mode_t pick_mode;
 } ps_playset_t;
 
 /**

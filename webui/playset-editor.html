@@ -592,23 +592,9 @@
                         <div class="error-message hidden" id="nameError"></div>
                     </div>
 
-                    <!-- Pick Mode -->
-                    <div class="form-group">
-                        <label class="form-label">Selection Mode</label>
-                        <div class="radio-group">
-                            <div class="radio-option">
-                                <input type="radio" id="pickRecency" name="pickMode" value="recency" checked>
-                                <label class="radio-label" for="pickRecency">Newest First</label>
-                            </div>
-                            <div class="radio-option">
-                                <input type="radio" id="pickRandom" name="pickMode" value="random">
-                                <label class="radio-label" for="pickRandom">Random</label>
-                            </div>
-                        </div>
-                        <div class="mode-description" id="pickDescription">
-                            Plays artwork from newest to oldest in order.
-                        </div>
-                    </div>
+                    <!-- Selection mode (recency/random) is a global device
+                         setting now — toggle it via the "Shuffle" button on
+                         the landing page's Now Playing card. -->
 
                     <!-- Weight Visualization -->
                     <div id="weightVizContainer" class="weight-viz-container">
@@ -690,12 +676,6 @@
             draggedIndex: null
         };
 
-        // Mode descriptions
-        var pickModeDescriptions = {
-            recency: 'Plays artwork from newest to oldest in order.',
-            random: 'Randomly selects artwork within each channel.'
-        };
-
         var channelTypeLabels = {
             named: 'Named',
             user: 'Artist',
@@ -716,27 +696,8 @@
         });
 
         function setupEventListeners() {
-            // Pick mode change
-            var pickModes = document.getElementsByName('pickMode');
-            for (var i = 0; i < pickModes.length; i++) {
-                pickModes[i].addEventListener('change', updatePickDescription);
-            }
-
             // Name validation
             document.getElementById('playsetName').addEventListener('input', validateName);
-        }
-
-        function updatePickDescription() {
-            var mode = getSelectedPickMode();
-            document.getElementById('pickDescription').textContent = pickModeDescriptions[mode];
-        }
-
-        function getSelectedPickMode() {
-            var modes = document.getElementsByName('pickMode');
-            for (var i = 0; i < modes.length; i++) {
-                if (modes[i].checked) return modes[i].value;
-            }
-            return 'recency';
         }
 
         function validateName() {
@@ -848,11 +809,6 @@
                             document.getElementById('playsetName').value = name;
                             document.getElementById('playsetName').readOnly = false;
 
-                            // Set modes
-                            var pickEl = document.getElementById('pick' + capitalize(playset.pick_mode));
-                            if (pickEl) pickEl.checked = true;
-
-                            updatePickDescription();
                             renderChannels();
                             updateWeightVisualization();
 
@@ -873,7 +829,6 @@
 
         function buildPlaysetPayload(activate) {
             var payload = {
-                pick_mode: getSelectedPickMode(),
                 channels: state.channels
             };
             if (activate) {
@@ -1132,9 +1087,7 @@
 
             document.getElementById('playsetName').value = '';
             document.getElementById('playsetName').readOnly = false;
-            document.getElementById('pickRandom').checked = true;
 
-            updatePickDescription();
             renderChannels();
             updateWeightVisualization();
             updateSaveButtons();
@@ -1172,8 +1125,7 @@
                     (isActive ? ' <span class="now-playing-badge">Now Playing</span>' : '') +
                     '</div>' +
                     '<div class="playset-meta">' +
-                    p.channel_count + ' channels &middot; ' +
-                    capitalize(p.pick_mode) + ' selection' +
+                    p.channel_count + ' channels' +
                     '</div>' +
                     '</div>' +
                     '<div class="playset-actions">' +

@@ -564,8 +564,7 @@ them, and how to pick artwork within each channel.
       "identifier": "pixelart",
       "display_name": "#pixelart"
     }
-  ],
-  "pick_mode": "recency"
+  ]
 }
 ```
 
@@ -593,12 +592,10 @@ Channel type requirements:
 > control over channel balance, with the all-zeros fallback covering what
 > used to be `"equal"` mode.
 
-`pick_mode` (optional, string):
-
-| Value | Description |
-|-------|-------------|
-| `"recency"` | (Default) Newest first, cursor moves toward older |
-| `"random"` | Random selection from a sliding window |
+> **Note**: Earlier protocol versions also had a top-level `pick_mode` field
+> (`"recency"` or `"random"`). Pick mode is now a device-side global setting
+> (toggled by the user on the player's web UI). Clients sending `pick_mode`
+> will have the field silently ignored.
 
 **Examples**:
 
@@ -618,8 +615,7 @@ Multi-channel (all weights default to 0 → equal distribution):
     { "type": "named", "name": "all" },
     { "type": "user", "identifier": "uvz", "display_name": "ArtistName" },
     { "type": "hashtag", "identifier": "pixelart", "display_name": "#pixelart" }
-  ],
-  "pick_mode": "random"
+  ]
 }
 ```
 
@@ -641,9 +637,10 @@ Weighted multi-channel:
 4. Begin playback from the first available artwork
 5. Update status with new channel information
 
-**Note on Dwell Time**: Playsets do NOT include dwell time settings. The player
-uses its globally-configured dwell time for auto-swap. Per-playset dwell time
-control may be added in a future protocol version.
+**Note on Playback-Style Settings**: Playsets do NOT include dwell time or
+pick mode. Both are personal preferences about *how* to play (rather than
+*what* to play) and live globally on the player's `config_store`. The user
+controls them via the web UI; the server has no influence.
 
 ---
 
@@ -692,8 +689,7 @@ Players can request named playsets from the server using the `get_playset` reque
             "display_name": "@AnotherArtist",
             "weight": 0
         }
-    ],
-    "pick_mode": "recency"
+    ]
 }
 ```
 
@@ -714,7 +710,6 @@ Players can request named playsets from the server using the `get_playset` reque
 | `request_id` | string | Correlated with request |
 | `success` | boolean | Whether the request succeeded |
 | `channels` | array | Array of channel configurations (same format as `play_playset`) |
-| `pick_mode` | string | `"recency"` or `"random"` |
 | `error` | string | Error message (only if `success` is false) |
 | `error_code` | string | Machine-readable error code |
 

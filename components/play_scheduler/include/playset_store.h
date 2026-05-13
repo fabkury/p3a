@@ -42,7 +42,7 @@ typedef struct __attribute__((packed)) {
     uint16_t version;          // File format version (11)
     uint16_t flags;            // Reserved (0)
     uint8_t  _reserved_exposure_mode; // Legacy field (was ps_exposure_mode_t in v11); preserved for binary compat, always written as 0, ignored on read
-    uint8_t  pick_mode;        // ps_pick_mode_t
+    uint8_t  _reserved_pick_mode; // Legacy field (was ps_pick_mode_t); pick_mode moved to config_store global; preserved for binary compat, always written as 0, ignored on read
     uint16_t channel_count;    // 1-64
     uint32_t checksum;         // CRC32 (zeroed during calculation)
     char     name[33];         // Playset name (stored in file, not filename)
@@ -115,7 +115,6 @@ esp_err_t playset_store_delete(const char *name);
 typedef struct {
     char name[PLAYSET_MAX_NAME_LEN + 1];
     size_t channel_count;
-    ps_pick_mode_t pick_mode;
 } playset_list_entry_t;
 
 /**

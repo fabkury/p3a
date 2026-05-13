@@ -698,9 +698,8 @@ esp_err_t makapix_api_get_playset(const char *playset_name, ps_playset_t *out_pl
         return ESP_ERR_INVALID_RESPONSE;
     }
 
-    ESP_LOGI(TAG, "get_playset '%s': %zu channels, pick=%d",
-             playset_name, out_playset->channel_count,
-             out_playset->pick_mode);
+    ESP_LOGI(TAG, "get_playset '%s': %zu channels",
+             playset_name, out_playset->channel_count);
 
     return ESP_OK;
 }

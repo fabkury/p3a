@@ -22,7 +22,6 @@ extern "C" {
 
 // ---------- String ↔ Enum Parsers ----------
 
-ps_pick_mode_t     playset_parse_pick_mode(const char *mode_str);
 ps_channel_type_t  playset_parse_channel_type(const char *type_str);
 
 // ---------- Enum → String Serializers ----------
@@ -35,12 +34,12 @@ const char *playset_channel_type_str(ps_channel_type_t type);
 /**
  * @brief Parse a cJSON object into a ps_playset_t
  *
- * Expects fields: "pick_mode" (string), "channels" (array of objects with
- * "type", "name", "identifier", "display_name", "weight").
+ * Expects: "channels" (array of objects with "type", "name", "identifier",
+ * "display_name", "weight").
  *
- * Missing top-level fields get defaults (recency pick). The "channels" array
- * is required and must have 1–PS_MAX_CHANNELS entries. Unknown fields (such
- * as a legacy "exposure_mode" from older clients) are silently ignored.
+ * The "channels" array is required and must have 1–PS_MAX_CHANNELS entries.
+ * Unknown fields (such as a legacy "pick_mode" or "exposure_mode" from older
+ * clients) are silently ignored — pick_mode is now a global device setting.
  *
  * @param json  cJSON object to parse (not modified)
  * @param out   Output playset (zeroed then populated)
@@ -51,9 +50,8 @@ esp_err_t playset_json_parse(const cJSON *json, ps_playset_t *out);
 /**
  * @brief Serialize a ps_playset_t to a cJSON object
  *
- * Creates a new cJSON object with "pick_mode" and "channels" array.
- * Caller owns the returned object and must call
- * cJSON_Delete() when done.
+ * Creates a new cJSON object with the "channels" array. Caller owns the
+ * returned object and must call cJSON_Delete() when done.
  *
  * @param playset  Playset to serialize
  * @return cJSON object on success, NULL on OOM

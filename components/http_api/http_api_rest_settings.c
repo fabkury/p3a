@@ -187,6 +187,14 @@ esp_err_t h_put_config(httpd_req_t *req) {
         }
     }
 
+    cJSON *pm = cJSON_GetObjectItem(o, "pick_mode");
+    if (pm && cJSON_IsString(pm)) {
+        const char *s = cJSON_GetStringValue(pm);
+        ps_pick_mode_t mode = (s && strcmp(s, "random") == 0) ? PS_PICK_RANDOM : PS_PICK_RECENCY;
+        play_scheduler_set_pick_mode(mode);
+        config_store_invalidate_pick_mode();
+    }
+
     cJSON *br = cJSON_GetObjectItem(o, "brightness");
     if (br && cJSON_IsNumber(br)) {
         int brightness = (int)cJSON_GetNumberValue(br);

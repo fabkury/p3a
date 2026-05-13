@@ -335,6 +335,33 @@ esp_err_t config_store_set_channel_select_mode(uint8_t mode);
 uint8_t config_store_get_channel_select_mode(void);
 
 // ============================================================================
+// Pick Mode (persisted)
+// ============================================================================
+
+/**
+ * @brief Set pick mode for in-channel artwork selection
+ *
+ * Stored in NVS as a string ("random" or "recency") to match the existing
+ * REST response shape used by /playsets/active.
+ *
+ * @param mode 0=recency, 1=random
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_pick_mode(uint8_t mode);
+
+/**
+ * @brief Get pick mode for in-channel artwork selection
+ *
+ * @return 0=recency, 1=random (defaults to 1 = random)
+ */
+uint8_t config_store_get_pick_mode(void);
+
+/**
+ * @brief Invalidate in-memory cache for pick mode
+ */
+void config_store_invalidate_pick_mode(void);
+
+// ============================================================================
 // Giphy Settings (persisted)
 // ============================================================================
 

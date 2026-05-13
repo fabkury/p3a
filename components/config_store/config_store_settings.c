@@ -332,6 +332,76 @@ void config_store_invalidate_dwell_time(void)
 }
 
 // ============================================================================
+// Pick Mode
+// ============================================================================
+
+static uint8_t s_pick_mode = 1;  // Default: random
+static bool s_pick_mode_loaded = false;
+
+esp_err_t config_store_set_pick_mode(uint8_t mode)
+{
+    if (mode > 1) {
+        ESP_LOGE(TAG, "Invalid pick_mode: %u (must be 0=recency or 1=random)", mode);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    const char *str = (mode == 1) ? "random" : "recency";
+    cJSON *item = cJSON_GetObjectItem(cfg, "pick_mode");
+    if (item) {
+        cJSON_DeleteItemFromObject(cfg, "pick_mode");
+    }
+    cJSON_AddStringToObject(cfg, "pick_mode", str);
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+
+    if (err == ESP_OK) {
+        s_pick_mode = mode;
+        s_pick_mode_loaded = true;
+        ESP_LOGI(TAG, "Pick mode saved: %s", str);
+    }
+
+    return err;
+}
+
+uint8_t config_store_get_pick_mode(void)
+{
+    if (s_pick_mode_loaded) {
+        return s_pick_mode;
+    }
+
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) {
+        s_pick_mode_loaded = true;
+        return s_pick_mode;  // Default: random
+    }
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "pick_mode");
+    if (item && cJSON_IsString(item)) {
+        const char *str = cJSON_GetStringValue(item);
+        if (str) {
+            s_pick_mode = (strcmp(str, "random") == 0) ? 1 : 0;
+        }
+    }
+
+    s_pick_mode_loaded = true;
+    cJSON_Delete(cfg);
+    return s_pick_mode;
+}
+
+void config_store_invalidate_pick_mode(void)
+{
+    s_pick_mode_loaded = false;
+}
+
+// ============================================================================
 // Background color (persisted)
 // ============================================================================
 

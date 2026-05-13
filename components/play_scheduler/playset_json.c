@@ -15,13 +15,6 @@ static const char *TAG = "playset_json";
 
 // ---------- String ↔ Enum Parsers ----------
 
-ps_pick_mode_t playset_parse_pick_mode(const char *mode_str)
-{
-    if (!mode_str) return PS_PICK_RECENCY;
-    if (strcmp(mode_str, "random") == 0) return PS_PICK_RANDOM;
-    return PS_PICK_RECENCY;
-}
-
 ps_channel_type_t playset_parse_channel_type(const char *type_str)
 {
     if (!type_str) return PS_CHANNEL_TYPE_NAMED;
@@ -74,13 +67,8 @@ esp_err_t playset_json_parse(const cJSON *json, ps_playset_t *out)
         strlcpy(out->name, cJSON_GetStringValue(name_field), sizeof(out->name));
     }
 
-    // Parse pick_mode (optional, defaults to recency)
-    const cJSON *pick_mode = cJSON_GetObjectItemCaseSensitive(json, "pick_mode");
-    if (cJSON_IsString(pick_mode)) {
-        out->pick_mode = playset_parse_pick_mode(cJSON_GetStringValue(pick_mode));
-    } else {
-        out->pick_mode = PS_PICK_RECENCY;
-    }
+    // pick_mode is now a global device setting (config_store). Older clients
+    // may still include it in the payload — silently ignore.
 
     // Parse channels array (required)
     const cJSON *channels = cJSON_GetObjectItemCaseSensitive(json, "channels");
@@ -170,7 +158,6 @@ cJSON *playset_json_serialize(const ps_playset_t *playset)
     if (playset->name[0] != '\0') {
         cJSON_AddStringToObject(root, "name", playset->name);
     }
-    cJSON_AddStringToObject(root, "pick_mode", playset_pick_mode_str(playset->pick_mode));
 
     cJSON *channels = cJSON_AddArrayToObject(root, "channels");
     if (!channels) {

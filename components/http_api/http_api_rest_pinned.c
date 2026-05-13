@@ -378,10 +378,14 @@ static esp_err_t h_get_item_local(httpd_req_t *req, const char *slug,
         case PINNED_SOURCE_GIPHY:
             strlcpy(shim.giphy.giphy_id, entry.source_id, sizeof(shim.giphy.giphy_id));
             break;
-        case PINNED_SOURCE_INSTITUTION:
+        case PINNED_SOURCE_INSTITUTION: {
             shim.museum.museum_id = entry.museum_id;
-            strlcpy(shim.museum.iiif_key, entry.source_id, sizeof(shim.museum.iiif_key));
+            /* source_id is "<museum_id>:<iiif_key>"; strip the prefix. */
+            const char *colon = strchr(entry.source_id, ':');
+            const char *key = colon ? colon + 1 : entry.source_id;
+            strlcpy(shim.museum.iiif_key, key, sizeof(shim.museum.iiif_key));
             break;
+        }
         case PINNED_SOURCE_MAKAPIX: {
             /* UUID string -> 16 bytes */
             const char *s = entry.source_id;

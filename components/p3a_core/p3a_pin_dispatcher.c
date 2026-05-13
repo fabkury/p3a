@@ -28,10 +28,11 @@ static const char *TAG = "p3a_pin_dispatcher";
 
 // Mirrors post_source_t values from play_scheduler_types.h. Re-declared
 // locally so this file doesn't drag in play_scheduler headers.
-#define PIN_DISP_SOURCE_NONE     0
-#define PIN_DISP_SOURCE_MAKAPIX  1
-#define PIN_DISP_SOURCE_GIPHY    2
-#define PIN_DISP_SOURCE_SDCARD   3
+#define PIN_DISP_SOURCE_NONE        0
+#define PIN_DISP_SOURCE_MAKAPIX     1
+#define PIN_DISP_SOURCE_GIPHY       2
+#define PIN_DISP_SOURCE_SDCARD      3
+#define PIN_DISP_SOURCE_INSTITUTION 4
 
 // LCD overlay (defined in main/display_pin_overlay.c)
 extern void pin_overlay_show_submit(void) __attribute__((weak));
@@ -49,6 +50,45 @@ extern esp_err_t pin_lists_pin_makapix(const char *slug,
                                        uint32_t original_created_at,
                                        const char *src_artwork_path) __attribute__((weak));
 extern esp_err_t pin_lists_unpin_makapix(const char *slug, const char *uuid_36chars) __attribute__((weak));
+
+extern esp_err_t pin_lists_pin_giphy(const char *slug,
+                                     int32_t original_post_id,
+                                     const char *giphy_id,
+                                     uint8_t extension,
+                                     const char *title,
+                                     const char *creator,
+                                     uint32_t original_created_at,
+                                     const char *src_artwork_path) __attribute__((weak));
+extern esp_err_t pin_lists_unpin_giphy(const char *slug, const char *giphy_id) __attribute__((weak));
+
+extern esp_err_t pin_lists_pin_institution(const char *slug,
+                                           int32_t original_post_id,
+                                           uint16_t museum_id,
+                                           const char *iiif_key_safe,
+                                           uint8_t extension,
+                                           const char *title,
+                                           const char *creator,
+                                           uint32_t original_created_at,
+                                           const char *src_artwork_path) __attribute__((weak));
+extern esp_err_t pin_lists_unpin_institution(const char *slug,
+                                             uint16_t museum_id,
+                                             const char *iiif_key_safe) __attribute__((weak));
+
+// Map a museum vault-path identifier ("artic", "rijks", …) to its enum
+// ordinal. The art_institution_types.h enum is documented as append-only with
+// stable ordinals, so hardcoding here is safe and avoids dragging in the
+// art_institution header from p3a_core.
+static int museum_id_string_to_enum(const char *s)
+{
+    if (!s) return -1;
+    if (strcmp(s, "artic")    == 0) return 0;
+    if (strcmp(s, "rijks")    == 0) return 1;
+    if (strcmp(s, "vam")      == 0) return 2;
+    if (strcmp(s, "wellcome") == 0) return 3;
+    if (strcmp(s, "smk")      == 0) return 4;
+    if (strcmp(s, "loc")      == 0) return 5;
+    return -1;
+}
 
 // Active artwork title (defined in components/p3a_core/p3a_state.c).
 extern const char *p3a_state_get_active_artwork_title(void) __attribute__((weak));
@@ -95,40 +135,80 @@ static int extension_index_from_path(const char *filepath)
 /* ------------------------------------------------------------------------- */
 
 typedef struct {
-    char     slug[16];
-    int32_t  original_post_id;
-    char     uuid[40];
-    uint8_t  extension;
-    char     title[256];
-    char     creator[128];
-    uint32_t original_created_at;
-    char     src_artwork_path[256];
-    bool     is_unpin;
+    int       source;                     // PIN_DISP_SOURCE_* (1, 2, or 4)
+    char      slug[16];
+    int32_t   original_post_id;
+    uint8_t   extension;
+    uint16_t  museum_id;                  // institution only
+    char      title[256];
+    char      creator[128];
+    uint32_t  original_created_at;
+    char      src_artwork_path[256];
+    /* Source-specific identifier, populated by the resolver. */
+    char      uuid[40];                   // makapix
+    char      giphy_id[40];               // giphy
+    char      iiif_key[48];               // institution (safe form)
+    bool      is_unpin;
 } pin_task_params_t;
 
 static void pin_task(void *arg)
 {
     pin_task_params_t *p = (pin_task_params_t *)arg;
+    const char *slug = p->slug[0] ? p->slug : NULL;
     esp_err_t err = ESP_ERR_NOT_SUPPORTED;
-    if (p->is_unpin) {
-        if (pin_lists_unpin_makapix) {
-            err = pin_lists_unpin_makapix(p->slug[0] ? p->slug : NULL, p->uuid);
-        }
-    } else {
-        if (pin_lists_pin_makapix) {
-            err = pin_lists_pin_makapix(p->slug[0] ? p->slug : NULL,
-                                        p->original_post_id, p->uuid, p->extension,
-                                        p->title, p->creator,
-                                        p->original_created_at, p->src_artwork_path);
-        }
+    const char *id_log = "";
+
+    switch (p->source) {
+        case PIN_DISP_SOURCE_MAKAPIX:
+            id_log = p->uuid;
+            if (p->is_unpin) {
+                if (pin_lists_unpin_makapix) err = pin_lists_unpin_makapix(slug, p->uuid);
+            } else {
+                if (pin_lists_pin_makapix) {
+                    err = pin_lists_pin_makapix(slug, p->original_post_id, p->uuid,
+                                                p->extension, p->title, p->creator,
+                                                p->original_created_at, p->src_artwork_path);
+                }
+            }
+            break;
+        case PIN_DISP_SOURCE_GIPHY:
+            id_log = p->giphy_id;
+            if (p->is_unpin) {
+                if (pin_lists_unpin_giphy) err = pin_lists_unpin_giphy(slug, p->giphy_id);
+            } else {
+                if (pin_lists_pin_giphy) {
+                    err = pin_lists_pin_giphy(slug, p->original_post_id, p->giphy_id,
+                                              p->extension, p->title, p->creator,
+                                              p->original_created_at, p->src_artwork_path);
+                }
+            }
+            break;
+        case PIN_DISP_SOURCE_INSTITUTION:
+            id_log = p->iiif_key;
+            if (p->is_unpin) {
+                if (pin_lists_unpin_institution) {
+                    err = pin_lists_unpin_institution(slug, p->museum_id, p->iiif_key);
+                }
+            } else {
+                if (pin_lists_pin_institution) {
+                    err = pin_lists_pin_institution(slug, p->original_post_id,
+                                                    p->museum_id, p->iiif_key,
+                                                    p->extension, p->title, p->creator,
+                                                    p->original_created_at, p->src_artwork_path);
+                }
+            }
+            break;
+        default:
+            break;
     }
+
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "%s failed for uuid=%s err=%s",
-                 p->is_unpin ? "unpin" : "pin", p->uuid, esp_err_to_name(err));
+        ESP_LOGW(TAG, "%s failed src=%d id=%s err=%s",
+                 p->is_unpin ? "unpin" : "pin", p->source, id_log, esp_err_to_name(err));
         if (pin_overlay_show_error) pin_overlay_show_error();
     } else {
-        ESP_LOGI(TAG, "%s ok uuid=%s slug=%s",
-                 p->is_unpin ? "unpin" : "pin", p->uuid,
+        ESP_LOGI(TAG, "%s ok src=%d id=%s slug=%s",
+                 p->is_unpin ? "unpin" : "pin", p->source, id_log,
                  p->slug[0] ? p->slug : "(active)");
     }
     free(p);
@@ -148,41 +228,111 @@ static esp_err_t spawn_pin_task(pin_task_params_t *p)
 }
 
 /* ------------------------------------------------------------------------- */
-/*  Resolve current-post info (Makapix path only for phase 3)                */
+/*  Source-specific resolvers (parse current_post into pin_task_params_t)    */
 /* ------------------------------------------------------------------------- */
 
-static esp_err_t build_makapix_params_from_current(pin_task_params_t *p)
+/* Find the path component immediately after `marker` (e.g., "/museum/").
+ * Copies up to the next '/' into out. Returns true on success. */
+static bool extract_path_component_after(const char *path, const char *marker,
+                                         char *out, size_t out_len)
+{
+    const char *p = strstr(path, marker);
+    if (!p) return false;
+    p += strlen(marker);
+    const char *slash = strchr(p, '/');
+    if (!slash) return false;
+    size_t n = (size_t)(slash - p);
+    if (n == 0 || n >= out_len) return false;
+    memcpy(out, p, n);
+    out[n] = '\0';
+    return true;
+}
+
+static esp_err_t resolve_makapix_from_current(pin_task_params_t *p)
 {
     char filepath[256];
     p3a_current_post_get_filepath(filepath, sizeof(filepath));
-    if (filepath[0] == '\0') {
-        ESP_LOGW(TAG, "Current post has no filepath");
-        return ESP_ERR_INVALID_STATE;
-    }
+    if (filepath[0] == '\0') return ESP_ERR_INVALID_STATE;
 
     int ext = extension_index_from_path(filepath);
-    if (ext < 0) {
-        ESP_LOGW(TAG, "Unrecognized extension in %s", filepath);
-        return ESP_ERR_INVALID_ARG;
-    }
+    if (ext < 0) return ESP_ERR_INVALID_ARG;
     p->extension = (uint8_t)ext;
 
     char stem[40];
-    if (extract_basename_stem(filepath, stem, sizeof(stem)) < 0) {
-        ESP_LOGW(TAG, "Cannot extract basename from %s", filepath);
-        return ESP_ERR_INVALID_ARG;
-    }
-    /* Expect a 36-char UUID for Makapix. */
+    if (extract_basename_stem(filepath, stem, sizeof(stem)) < 0) return ESP_ERR_INVALID_ARG;
     if (strlen(stem) != 36) {
-        ESP_LOGW(TAG, "Basename '%s' is not a 36-char UUID", stem);
+        ESP_LOGW(TAG, "Makapix basename '%s' is not a 36-char UUID", stem);
         return ESP_ERR_INVALID_ARG;
     }
     strlcpy(p->uuid, stem, sizeof(p->uuid));
     strlcpy(p->src_artwork_path, filepath, sizeof(p->src_artwork_path));
     p->original_post_id = p3a_current_post_get_id();
     p->original_created_at = 0;
+    if (p3a_state_get_active_artwork_title) {
+        const char *t = p3a_state_get_active_artwork_title();
+        if (t) strlcpy(p->title, t, sizeof(p->title));
+    }
+    return ESP_OK;
+}
 
-    /* Best-effort title; creator left empty for v1. */
+static esp_err_t resolve_giphy_from_current(pin_task_params_t *p)
+{
+    char filepath[256];
+    p3a_current_post_get_filepath(filepath, sizeof(filepath));
+    if (filepath[0] == '\0') return ESP_ERR_INVALID_STATE;
+
+    int ext = extension_index_from_path(filepath);
+    if (ext < 0) return ESP_ERR_INVALID_ARG;
+    p->extension = (uint8_t)ext;
+
+    /* Prefer the giphy_id explicitly tracked on current_post; fall back to
+       the filepath basename. */
+    p3a_current_post_get_giphy_id(p->giphy_id, sizeof(p->giphy_id));
+    if (p->giphy_id[0] == '\0') {
+        if (extract_basename_stem(filepath, p->giphy_id, sizeof(p->giphy_id)) < 0) {
+            return ESP_ERR_INVALID_ARG;
+        }
+    }
+    strlcpy(p->src_artwork_path, filepath, sizeof(p->src_artwork_path));
+    p->original_post_id = p3a_current_post_get_id();
+    p->original_created_at = 0;
+    if (p3a_state_get_active_artwork_title) {
+        const char *t = p3a_state_get_active_artwork_title();
+        if (t) strlcpy(p->title, t, sizeof(p->title));
+    }
+    return ESP_OK;
+}
+
+static esp_err_t resolve_institution_from_current(pin_task_params_t *p)
+{
+    char filepath[256];
+    p3a_current_post_get_filepath(filepath, sizeof(filepath));
+    if (filepath[0] == '\0') return ESP_ERR_INVALID_STATE;
+
+    int ext = extension_index_from_path(filepath);
+    if (ext < 0) return ESP_ERR_INVALID_ARG;
+    p->extension = (uint8_t)ext;
+
+    /* filepath: /sdcard/p3a/museum/{museum_str}/{sha}/{sha}/{sha}/{safe_iiif_key}.{ext} */
+    char museum_str[16];
+    if (!extract_path_component_after(filepath, "/museum/", museum_str, sizeof(museum_str))) {
+        ESP_LOGW(TAG, "Museum component not found in %s", filepath);
+        return ESP_ERR_INVALID_ARG;
+    }
+    int museum_enum = museum_id_string_to_enum(museum_str);
+    if (museum_enum < 0) {
+        ESP_LOGW(TAG, "Unknown museum string '%s'", museum_str);
+        return ESP_ERR_INVALID_ARG;
+    }
+    p->museum_id = (uint16_t)museum_enum;
+
+    char stem[48];
+    if (extract_basename_stem(filepath, stem, sizeof(stem)) < 0) return ESP_ERR_INVALID_ARG;
+    strlcpy(p->iiif_key, stem, sizeof(p->iiif_key));
+
+    strlcpy(p->src_artwork_path, filepath, sizeof(p->src_artwork_path));
+    p->original_post_id = p3a_current_post_get_id();
+    p->original_created_at = 0;
     if (p3a_state_get_active_artwork_title) {
         const char *t = p3a_state_get_active_artwork_title();
         if (t) strlcpy(p->title, t, sizeof(p->title));
@@ -194,6 +344,17 @@ static esp_err_t build_makapix_params_from_current(pin_task_params_t *p)
 /*  Public entry points                                                      */
 /* ------------------------------------------------------------------------- */
 
+static esp_err_t resolve_from_current(int source, pin_task_params_t *p)
+{
+    p->source = source;
+    switch (source) {
+        case PIN_DISP_SOURCE_MAKAPIX:     return resolve_makapix_from_current(p);
+        case PIN_DISP_SOURCE_GIPHY:       return resolve_giphy_from_current(p);
+        case PIN_DISP_SOURCE_INSTITUTION: return resolve_institution_from_current(p);
+        default:                          return ESP_ERR_NOT_SUPPORTED;
+    }
+}
+
 esp_err_t p3a_pin_dispatch_from_current(const char *slug)
 {
     int source = p3a_current_post_get_source();
@@ -202,15 +363,9 @@ esp_err_t p3a_pin_dispatch_from_current(const char *slug)
         if (pin_overlay_show_error) pin_overlay_show_error();
         return ESP_ERR_INVALID_STATE;
     }
-    if (source != PIN_DISP_SOURCE_MAKAPIX) {
-        /* Phase 3 supports Makapix only. Silent no-op for SD card (matches
-           the pin-not-allowed policy). For Giphy/museum, surface error icon. */
-        if (source == PIN_DISP_SOURCE_SDCARD) {
-            return ESP_OK;
-        }
-        ESP_LOGI(TAG, "Pin not yet supported for source=%d (phase 4)", source);
-        if (pin_overlay_show_error) pin_overlay_show_error();
-        return ESP_ERR_NOT_SUPPORTED;
+    if (source == PIN_DISP_SOURCE_SDCARD) {
+        /* SD-card artworks cannot be pinned per spec; silent no-op. */
+        return ESP_OK;
     }
 
     pin_task_params_t *p = calloc(1, sizeof(*p));
@@ -218,7 +373,7 @@ esp_err_t p3a_pin_dispatch_from_current(const char *slug)
         if (pin_overlay_show_error) pin_overlay_show_error();
         return ESP_ERR_NO_MEM;
     }
-    esp_err_t err = build_makapix_params_from_current(p);
+    esp_err_t err = resolve_from_current(source, p);
     if (err != ESP_OK) {
         free(p);
         if (pin_overlay_show_error) pin_overlay_show_error();
@@ -227,7 +382,6 @@ esp_err_t p3a_pin_dispatch_from_current(const char *slug)
     if (slug && slug[0]) strlcpy(p->slug, slug, sizeof(p->slug));
     p->is_unpin = false;
 
-    /* Optimistic overlay before spawning. */
     if (pin_overlay_show_submit) pin_overlay_show_submit();
     return spawn_pin_task(p);
 }
@@ -237,22 +391,14 @@ esp_err_t p3a_pin_dispatch_unpin_from_current(const char *slug)
     int source = p3a_current_post_get_source();
     if (source == PIN_DISP_SOURCE_NONE) return ESP_ERR_INVALID_STATE;
     if (source == PIN_DISP_SOURCE_SDCARD) return ESP_OK;  /* silent no-op */
-    if (source != PIN_DISP_SOURCE_MAKAPIX) {
-        ESP_LOGI(TAG, "Unpin not yet supported for source=%d (phase 4)", source);
-        return ESP_ERR_NOT_SUPPORTED;
-    }
 
     pin_task_params_t *p = calloc(1, sizeof(*p));
     if (!p) return ESP_ERR_NO_MEM;
-    char filepath[256];
-    p3a_current_post_get_filepath(filepath, sizeof(filepath));
-    if (filepath[0] == '\0') { free(p); return ESP_ERR_INVALID_STATE; }
-    char stem[40];
-    if (extract_basename_stem(filepath, stem, sizeof(stem)) < 0 || strlen(stem) != 36) {
+    esp_err_t err = resolve_from_current(source, p);
+    if (err != ESP_OK) {
         free(p);
-        return ESP_ERR_INVALID_ARG;
+        return err;
     }
-    strlcpy(p->uuid, stem, sizeof(p->uuid));
     if (slug && slug[0]) strlcpy(p->slug, slug, sizeof(p->slug));
     p->is_unpin = true;
 

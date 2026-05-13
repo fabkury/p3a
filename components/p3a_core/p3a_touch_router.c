@@ -70,8 +70,10 @@ extern void reaction_overlay_show_error(void) __attribute__((weak));
 
 // POST_SOURCE_{MAKAPIX,GIPHY} (from play_scheduler_types.h). Kept as macros here
 // so p3a_core does not take a dependency on play_scheduler.
-#define REACTION_POST_SOURCE_MAKAPIX 1
-#define REACTION_POST_SOURCE_GIPHY   2
+#define REACTION_POST_SOURCE_MAKAPIX     1
+#define REACTION_POST_SOURCE_GIPHY       2
+#define REACTION_POST_SOURCE_SDCARD      3
+#define REACTION_POST_SOURCE_INSTITUTION 4
 
 // USB touch forwarding (from app_usb.c via weak symbols)
 typedef struct {
@@ -151,6 +153,15 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
                     return ESP_OK;
                 }
                 p3a_reaction_dispatch_giphy_click(giphy_id);
+                /* Pin runs alongside the click registration. */
+                p3a_pin_dispatch_from_current(NULL);
+                return ESP_OK;
+            }
+
+            if (source == REACTION_POST_SOURCE_INSTITUTION) {
+                /* Museum artworks have no reaction/click counterpart; swipe-up
+                   just pins. The pin dispatcher handles its own overlays. */
+                p3a_pin_dispatch_from_current(NULL);
                 return ESP_OK;
             }
 
@@ -173,7 +184,16 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
         }
 
         case P3A_TOUCH_EVENT_SWIPE_DOWN: {
-            if (p3a_current_post_get_source() != REACTION_POST_SOURCE_MAKAPIX) {
+            int source = p3a_current_post_get_source();
+
+            if (source == REACTION_POST_SOURCE_GIPHY ||
+                source == REACTION_POST_SOURCE_INSTITUTION) {
+                /* No reaction-revoke for these sources — swipe-down is unpin-only. */
+                p3a_pin_dispatch_unpin_from_current(NULL);
+                return ESP_OK;
+            }
+
+            if (source != REACTION_POST_SOURCE_MAKAPIX) {
                 ESP_LOGI(TAG, "Swipe down on non-Makapix post - showing error");
                 if (reaction_overlay_show_error) reaction_overlay_show_error();
                 return ESP_OK;

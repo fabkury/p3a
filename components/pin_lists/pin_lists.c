@@ -815,7 +815,11 @@ esp_err_t pin_list_unpin(const char *slug, pinned_source_t src, const char *sour
     };
     if (entry.source == PINNED_SOURCE_INSTITUTION) {
         shim.museum.museum_id = entry.museum_id;
-        strlcpy(shim.museum.iiif_key, entry.source_id, sizeof(shim.museum.iiif_key));
+        /* entry.source_id is the composite "<museum_id>:<iiif_key>".
+           Strip the prefix to recover just the iiif_key for path building. */
+        const char *colon = strchr(entry.source_id, ':');
+        const char *key = colon ? colon + 1 : entry.source_id;
+        strlcpy(shim.museum.iiif_key, key, sizeof(shim.museum.iiif_key));
     } else if (entry.source == PINNED_SOURCE_GIPHY) {
         strlcpy(shim.giphy.giphy_id, entry.source_id, sizeof(shim.giphy.giphy_id));
     } else if (entry.source == PINNED_SOURCE_MAKAPIX) {
@@ -954,4 +958,102 @@ esp_err_t pin_lists_unpin_makapix(const char *slug, const char *uuid_36chars)
 {
     if (!uuid_36chars) return ESP_ERR_INVALID_ARG;
     return pin_list_unpin(slug, PINNED_SOURCE_MAKAPIX, uuid_36chars);
+}
+
+esp_err_t pin_lists_pin_giphy(const char *slug,
+                              int32_t original_post_id,
+                              const char *giphy_id,
+                              uint8_t extension,
+                              const char *title,
+                              const char *creator,
+                              uint32_t original_created_at,
+                              const char *src_artwork_path)
+{
+    if (!giphy_id || !giphy_id[0] || !src_artwork_path) return ESP_ERR_INVALID_ARG;
+
+    pinned_order_entry_t order = {0};
+    order.source = PINNED_SOURCE_GIPHY;
+    order.extension = extension;
+    order.pinned_at = now_unix_seconds();
+    strlcpy(order.giphy.giphy_id, giphy_id, sizeof(order.giphy.giphy_id));
+
+    pinned_entry_file_t file = {0};
+    file.magic = PINNED_ENTRY_MAGIC;
+    file.version = PINNED_FORMAT_VERSION;
+    file.source = PINNED_SOURCE_GIPHY;
+    file.extension = extension;
+    file.pinned_at = order.pinned_at;
+    file.original_post_id = original_post_id;
+    file.original_created_at = original_created_at;
+    strlcpy(file.source_id, giphy_id, sizeof(file.source_id));
+    if (title)   strlcpy(file.title, title,   sizeof(file.title));
+    if (creator) strlcpy(file.creator, creator, sizeof(file.creator));
+
+    return pin_list_pin(slug, &order, &file, src_artwork_path);
+}
+
+esp_err_t pin_lists_unpin_giphy(const char *slug, const char *giphy_id)
+{
+    if (!giphy_id || !giphy_id[0]) return ESP_ERR_INVALID_ARG;
+    return pin_list_unpin(slug, PINNED_SOURCE_GIPHY, giphy_id);
+}
+
+/* Composite institution source_id used in entry filenames and dedup:
+ *   "<museum_id>:<safe_iiif_key>"
+ * The colon is fine here because the source_id is hashed into an opaque
+ * filename component (pl_source_id_hash) — it never lands on the filesystem
+ * verbatim, so FAT's reserved-character set doesn't apply. */
+static void build_institution_source_id(uint16_t museum_id,
+                                        const char *iiif_key_safe,
+                                        char *out, size_t out_len)
+{
+    snprintf(out, out_len, "%u:%s", (unsigned)museum_id, iiif_key_safe);
+}
+
+esp_err_t pin_lists_pin_institution(const char *slug,
+                                    int32_t original_post_id,
+                                    uint16_t museum_id,
+                                    const char *iiif_key_safe,
+                                    uint8_t extension,
+                                    const char *title,
+                                    const char *creator,
+                                    uint32_t original_created_at,
+                                    const char *src_artwork_path)
+{
+    if (!iiif_key_safe || !iiif_key_safe[0] || !src_artwork_path) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    pinned_order_entry_t order = {0};
+    order.source = PINNED_SOURCE_INSTITUTION;
+    order.extension = extension;
+    order.pinned_at = now_unix_seconds();
+    order.museum.museum_id = museum_id;
+    strlcpy(order.museum.iiif_key, iiif_key_safe, sizeof(order.museum.iiif_key));
+
+    pinned_entry_file_t file = {0};
+    file.magic = PINNED_ENTRY_MAGIC;
+    file.version = PINNED_FORMAT_VERSION;
+    file.source = PINNED_SOURCE_INSTITUTION;
+    file.extension = extension;
+    file.museum_id = museum_id;
+    file.pinned_at = order.pinned_at;
+    file.original_post_id = original_post_id;
+    file.original_created_at = original_created_at;
+    build_institution_source_id(museum_id, iiif_key_safe,
+                                file.source_id, sizeof(file.source_id));
+    if (title)   strlcpy(file.title, title,   sizeof(file.title));
+    if (creator) strlcpy(file.creator, creator, sizeof(file.creator));
+
+    return pin_list_pin(slug, &order, &file, src_artwork_path);
+}
+
+esp_err_t pin_lists_unpin_institution(const char *slug,
+                                      uint16_t museum_id,
+                                      const char *iiif_key_safe)
+{
+    if (!iiif_key_safe || !iiif_key_safe[0]) return ESP_ERR_INVALID_ARG;
+    char source_id[PINNED_SOURCE_ID_MAX];
+    build_institution_source_id(museum_id, iiif_key_safe, source_id, sizeof(source_id));
+    return pin_list_unpin(slug, PINNED_SOURCE_INSTITUTION, source_id);
 }

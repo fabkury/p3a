@@ -229,6 +229,73 @@ esp_err_t pin_lists_pin_makapix(const char *slug,
  */
 esp_err_t pin_lists_unpin_makapix(const char *slug, const char *uuid_36chars);
 
+/**
+ * @brief Pin a Giphy artwork into a list.
+ *
+ * @param slug                Target list (NULL/empty = active).
+ * @param original_post_id    Synthesized post_id (DJB2 of giphy_id). 0 to let
+ *                            pin_lists synthesize internally.
+ * @param giphy_id            Giphy string identifier (NUL-terminated).
+ * @param extension           0=webp, 1=gif, 2=png, 3=jpg.
+ * @param title               Display title (empty allowed).
+ * @param creator             Giphy username (empty allowed).
+ * @param original_created_at Unix seconds of original upload/import (0 if unknown).
+ * @param src_artwork_path    Absolute path on SD card to copy from.
+ */
+esp_err_t pin_lists_pin_giphy(const char *slug,
+                              int32_t original_post_id,
+                              const char *giphy_id,
+                              uint8_t extension,
+                              const char *title,
+                              const char *creator,
+                              uint32_t original_created_at,
+                              const char *src_artwork_path);
+
+/**
+ * @brief Unpin a Giphy artwork from a list using its giphy_id.
+ */
+esp_err_t pin_lists_unpin_giphy(const char *slug, const char *giphy_id);
+
+/**
+ * @brief Pin an art-institution artwork into a list.
+ *
+ * The iiif_key argument must be the FAT-safe form (colons replaced by
+ * underscores), which is also the form used to name the artwork file on
+ * disk. This guarantees that pinned playback can locate the local file
+ * without further key transformation.
+ *
+ * @param slug                Target list (NULL/empty = active).
+ * @param original_post_id    Synthesized post_id (DJB2 of "{museum}:{iiif_key}").
+ *                            Pass 0 to let pin_lists synthesize internally.
+ * @param museum_id           museum_id_t enum value (e.g., 0 = artic).
+ * @param iiif_key_safe       Safe-form iiif_key (colons → underscores).
+ * @param extension           0=webp, 1=gif, 2=png, 3=jpg.
+ * @param title               Display title (empty allowed).
+ * @param creator             Artist name (empty allowed).
+ * @param original_created_at Unix seconds of artwork creation (0 if unknown).
+ * @param src_artwork_path    Absolute path on SD card to copy from.
+ */
+esp_err_t pin_lists_pin_institution(const char *slug,
+                                    int32_t original_post_id,
+                                    uint16_t museum_id,
+                                    const char *iiif_key_safe,
+                                    uint8_t extension,
+                                    const char *title,
+                                    const char *creator,
+                                    uint32_t original_created_at,
+                                    const char *src_artwork_path);
+
+/**
+ * @brief Unpin an art-institution artwork. The key form must match what was
+ *        used during pinning (safe form, colons replaced).
+ *
+ * Internally the dedup key combines museum_id and the safe iiif_key form into
+ * a composite source_id string used for the entry filename.
+ */
+esp_err_t pin_lists_unpin_institution(const char *slug,
+                                      uint16_t museum_id,
+                                      const char *iiif_key_safe);
+
 #ifdef __cplusplus
 }
 #endif

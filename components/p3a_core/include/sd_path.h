@@ -127,6 +127,22 @@ esp_err_t sd_path_get_giphy(char *out_path, size_t out_len);
 esp_err_t sd_path_get_museum(char *out_path, size_t out_len);
 
 /**
+ * @brief Get the pinned-artworks root directory path
+ *
+ * Layout under this root:
+ *   /sdcard/p3a/pinned/state.bin
+ *   /sdcard/p3a/pinned/lists/{slug}/manifest.json
+ *   /sdcard/p3a/pinned/lists/{slug}/order.bin
+ *   /sdcard/p3a/pinned/lists/{slug}/entries/{source}_{hash}.bin
+ *   /sdcard/p3a/pinned/lists/{slug}/{source}/...artwork files
+ *
+ * @param out_path Output buffer for the path
+ * @param out_len Size of output buffer
+ * @return ESP_OK on success
+ */
+esp_err_t sd_path_get_pinned(char *out_path, size_t out_len);
+
+/**
  * @brief Set the SD card root folder (persisted to NVS, requires reboot)
  * 
  * Accepts either:
@@ -143,12 +159,25 @@ esp_err_t sd_path_set_root(const char *root_path);
 
 /**
  * @brief Create all required subdirectories under the p3a root
- * 
- * Creates: animations, vault, channel, playlists, temporary
- * 
+ *
+ * Creates: animations, vault, channel, playlists, temporary, giphy, museum, pinned
+ *
  * @return ESP_OK on success, or error if directory creation fails
  */
 esp_err_t sd_path_ensure_directories(void);
+
+/**
+ * @brief Create all intermediate directories on the way to `filepath`
+ *
+ * Walks the directory components of `filepath` and `mkdir`s each missing
+ * one. Stops at the final slash (which delimits the filename); the file
+ * itself is not created. `EEXIST` is treated as success — a parallel
+ * creator already did the work.
+ *
+ * @param filepath A full path including the filename (the filename is not created)
+ * @return ESP_OK on success, ESP_FAIL on mkdir failure
+ */
+esp_err_t sd_path_ensure_parent_dirs(const char *filepath);
 
 #ifdef __cplusplus
 }

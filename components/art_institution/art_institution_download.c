@@ -16,6 +16,7 @@
 #include "art_institution.h"
 #include "art_institution_internal.h"
 #include "p3a_limits.h"
+#include "sd_path.h"
 #include "sdio_bus.h"
 #include "makapix_channel_events.h"  // makapix_channel_is_sd_available
 #include "esp_http_client.h"
@@ -37,32 +38,6 @@ static const char *TAG = "ai_dl";
 #define DOWNLOAD_MAX_ATTEMPTS    3
 
 static const uint32_t s_backoff_ms[DOWNLOAD_MAX_ATTEMPTS] = { 0, 1000, 3000 };
-
-/**
- * @brief Walk the directory components of `filepath` and mkdir each missing one
- *
- * Stops at the final slash (which delimits the filename). EEXIST is treated
- * as success — a parallel creator already did the work.
- */
-static esp_err_t ensure_parent_dirs(const char *filepath)
-{
-    char tmp[256];
-    strlcpy(tmp, filepath, sizeof(tmp));
-    char *slash = tmp + 1;  // skip leading "/"
-    while ((slash = strchr(slash, '/')) != NULL) {
-        *slash = '\0';
-        struct stat st;
-        if (stat(tmp, &st) != 0) {
-            if (mkdir(tmp, 0755) != 0 && errno != EEXIST) {
-                ESP_LOGE(TAG, "mkdir failed: %s (%s)", tmp, strerror(errno));
-                return ESP_FAIL;
-            }
-        }
-        *slash = '/';
-        slash++;
-    }
-    return ESP_OK;
-}
 
 esp_err_t art_institution_download_to_path(const char *museum_id,
                                            const char *url,
@@ -89,7 +64,7 @@ esp_err_t art_institution_download_to_path(const char *museum_id,
         if (wait_count >= 120) return ESP_ERR_TIMEOUT;
     }
 
-    esp_err_t err = ensure_parent_dirs(out_path);
+    esp_err_t err = sd_path_ensure_parent_dirs(out_path);
     if (err != ESP_OK) return err;
 
     char temp_path[264];

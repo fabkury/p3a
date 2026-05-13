@@ -121,6 +121,11 @@ esp_err_t sd_path_get_museum(char *out_path, size_t out_len)
     return sd_path_get_subdir("museum", out_path, out_len);
 }
 
+esp_err_t sd_path_get_pinned(char *out_path, size_t out_len)
+{
+    return sd_path_get_subdir("pinned", out_path, out_len);
+}
+
 esp_err_t sd_path_set_root(const char *root_path)
 {
     if (!root_path || root_path[0] == '\0') {
@@ -203,7 +208,7 @@ esp_err_t sd_path_ensure_directories(void)
     }
 
     // Create subdirectories
-    const char *subdirs[] = {"animations", "vault", "channel", "playlists", "temporary", "giphy", "museum"};
+    const char *subdirs[] = {"animations", "vault", "channel", "playlists", "temporary", "giphy", "museum", "pinned"};
     for (size_t i = 0; i < sizeof(subdirs) / sizeof(subdirs[0]); i++) {
         snprintf(path, sizeof(path), "%s/%s", root, subdirs[i]);
         err = ensure_directory(path);
@@ -214,6 +219,29 @@ esp_err_t sd_path_ensure_directories(void)
     }
 
     ESP_LOGI(TAG, "SD directories ensured under %s", root);
+    return ESP_OK;
+}
+
+esp_err_t sd_path_ensure_parent_dirs(const char *filepath)
+{
+    if (!filepath || filepath[0] == '\0') {
+        return ESP_ERR_INVALID_ARG;
+    }
+    char tmp[256];
+    strlcpy(tmp, filepath, sizeof(tmp));
+    char *slash = tmp + 1;  // skip leading "/"
+    while ((slash = strchr(slash, '/')) != NULL) {
+        *slash = '\0';
+        struct stat st;
+        if (stat(tmp, &st) != 0) {
+            if (mkdir(tmp, 0755) != 0 && errno != EEXIST) {
+                ESP_LOGE(TAG, "mkdir failed: %s (%s)", tmp, strerror(errno));
+                return ESP_FAIL;
+            }
+        }
+        *slash = '/';
+        slash++;
+    }
     return ESP_OK;
 }
 

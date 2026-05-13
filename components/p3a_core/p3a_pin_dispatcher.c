@@ -217,7 +217,13 @@ static void pin_task(void *arg)
 
 static esp_err_t spawn_pin_task(pin_task_params_t *p)
 {
-    BaseType_t ret = xTaskCreate(pin_task, "pin_io", 4096, p, 5, NULL);
+    /* 8 KB: matches giphy_click_task — the deepest call chain
+     * (pin_list_pin -> pl_manifest_save -> cJSON_PrintUnformatted -> fwrite ->
+     *  vsnprintf) plus pin_list_pin's own 512 B pinned_entry_file_t copy and
+     * several 256-byte path buffers across nested frames easily blows past
+     * 4 KB; observed overflow ~116 B below the lower bound on first
+     * makapix pin via /action/pin. */
+    BaseType_t ret = xTaskCreate(pin_task, "pin_io", 8192, p, 5, NULL);
     if (ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create pin_io task");
         free(p);

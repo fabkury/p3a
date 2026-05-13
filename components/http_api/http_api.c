@@ -512,6 +512,10 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     if (strcmp(uri, "/api/museum/rate-limits") == 0) {
         return h_get_museum_rate_limits(req);
     }
+    if (strncmp(uri, "/api/pin-lists", 14) == 0 &&
+        (uri[14] == '\0' || uri[14] == '/' || uri[14] == '?')) {
+        return h_pinned_route_get(req);
+    }
 
     // UI/pages module
     esp_err_t pr = http_api_pages_route_get(req);
@@ -591,6 +595,10 @@ static esp_err_t h_post_router(httpd_req_t *req) {
     if (strcmp(uri, "/api/museum/rate-limits/report-429") == 0) {
         return h_post_museum_report_429(req);
     }
+    if (strncmp(uri, "/api/pin-lists", 14) == 0 &&
+        (uri[14] == '\0' || uri[14] == '/' || uri[14] == '?')) {
+        return h_pinned_route_post(req);
+    }
 
     // UI/pages module
     esp_err_t pr = http_api_pages_route_post(req);
@@ -644,6 +652,10 @@ static esp_err_t h_delete_router(httpd_req_t *req) {
 
     if (strncmp(uri, "/playsets/", 10) == 0) {
         return h_delete_playset(req);
+    }
+    if (strncmp(uri, "/api/pin-lists", 14) == 0 &&
+        (uri[14] == '\0' || uri[14] == '/' || uri[14] == '?')) {
+        return h_pinned_route_delete(req);
     }
 
     httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");

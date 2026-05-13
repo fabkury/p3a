@@ -65,6 +65,14 @@ const art_institution_museum_t ART_INSTITUTION_MUSEUMS[] = {
         .build_iiif_url  = art_institution_smk_build_iiif_url,
         .resolve_entry   = NULL,  // SMK returns image_iiif_id inline; no walk.
     },
+    {
+        .id              = "loc",
+        .display         = "Library of Congress",
+        .museum_enum     = ART_INSTITUTION_MUSEUM_LOC,
+        .refresh_channel = art_institution_loc_refresh_channel,
+        .build_iiif_url  = art_institution_loc_build_iiif_url,
+        .resolve_entry   = NULL,  // LoC returns the IIIF id inline; no walk.
+    },
 };
 
 const size_t ART_INSTITUTION_MUSEUM_COUNT =

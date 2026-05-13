@@ -16,6 +16,7 @@ import { RijksmuseumAdapter } from './rijksmuseum.js';
 import { VamAdapter } from './vam.js';
 import { WellcomeAdapter } from './wellcome.js';
 import { SmkAdapter } from './smk.js';
+import { LocAdapter } from './loc.js';
 
 const ADAPTERS = [
     new ArticAdapter(),
@@ -23,6 +24,7 @@ const ADAPTERS = [
     new VamAdapter(),
     new WellcomeAdapter(),
     new SmkAdapter(),
+    new LocAdapter(),
 ];
 
 export function listAdapters() {

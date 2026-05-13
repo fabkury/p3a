@@ -214,7 +214,7 @@ esp_err_t jpeg_decoder_init(animation_decoder_t **decoder, const uint8_t *data, 
     dec->impl.jpeg.jpeg_decoder = jpeg_data;
     *decoder = dec;
 
-    ESP_LOGI(TAG, "JPEG decoder initialized: %ux%u (route=%s)",
+    ESP_LOGD(TAG, "JPEG decoder initialized: %ux%u (route=%s)",
              (unsigned)jpeg_data->canvas_width,
              (unsigned)jpeg_data->canvas_height,
              used_sw ? "SW" : "HW");

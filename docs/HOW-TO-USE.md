@@ -331,7 +331,7 @@ A small number of Wellcome terms with very long labels are hidden from the brows
 2. Open or create a playset and click **Add Channel**
 3. Set **Channel Type** to **Museum**
 4. A browse modal opens. Pick the museum, then the facet/axis (skipped for Rijks, which is axis-less), then the term you want
-5. The modal previews up to 8 thumbnails from that term (Rijks shows title/artist/date textually — its thumbnail URLs would require an extra HTTP walk per artwork that isn't worth doing in the browser)
+5. The modal previews one artwork at a time at 400 px, with **Previous** / **Next** navigation and a title/artist/date caption. The **Add** button commits the channel — not the visible artwork. Rijks previews resolve lazily (one 3-hop Linked Art walk per artwork) so the first thumbnail takes a moment
 6. Click **Add channel** to push the channel into the playset, then save the playset normally
 
 The channel saves under a name like `AIC · Arts of Greece, Rome, and Byzantium` or `V&A · Photographs`. The wire encoding is `{museum_id}:{axis}` for the channel name and the facet term id for the identifier — see [finalized-design.md §4.1](art-institutions/finalized-design.md) for the exact format.

@@ -720,7 +720,7 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
         }
     }
 
-    ESP_LOGI(TAG, "TOTALS: active_channels=%zu, total_Ci=%zu, total_LAi=%zu",
+    ESP_LOGD(TAG, "TOTALS: active_channels=%zu, total_Ci=%zu, total_LAi=%zu",
              active_count, total_ci, total_lai);
 
     if (active_count == 0) {

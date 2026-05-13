@@ -71,7 +71,7 @@ void play_scheduler_deinit(void);
  * @param playset Playset parameters
  * @return ESP_OK on success
  */
-esp_err_t play_scheduler_execute_command(const ps_playset_t *playset);
+esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset);
 
 /**
  * @brief Create a built-in single-channel playset
@@ -181,7 +181,7 @@ esp_err_t play_scheduler_play_local_file(const char *filepath);
  * @param count Number of channels (1-64)
  * @return ESP_OK on success
  *
- * @deprecated Use play_scheduler_execute_command() instead
+ * @deprecated Use play_scheduler_execute_playset() instead
  */
 esp_err_t play_scheduler_set_channels(
     const ps_channel_config_t *channels,

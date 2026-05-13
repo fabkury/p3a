@@ -154,7 +154,7 @@ esp_err_t makapix_api_get_comments(int32_t post_id, const char *cursor, uint8_t 
  *
  * Sends a get_playset request via MQTT and parses the response into a
  * playset. The returned playset can be executed with
- * play_scheduler_execute_command().
+ * play_scheduler_execute_playset().
  *
  * @param playset_name Name of the playset (e.g., "followed_artists")
  * @param out_playset Output playset

@@ -404,7 +404,7 @@ esp_err_t play_scheduler_get_channel_spec_name(const char *channel_id,
     ps_state_t *s_state = ps_get_state();
     if (!s_state->initialized) return ESP_ERR_INVALID_STATE;
 
-    // No mutex: spec_name is set once at execute_command time and remains
+    // No mutex: spec_name is set once at execute_playset time and remains
     // stable for the channel's lifetime. Reads are atomic at the char-buffer
     // level under x86/RISC-V's natural alignment for char arrays.
     for (size_t i = 0; i < s_state->channel_count; i++) {

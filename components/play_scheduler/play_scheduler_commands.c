@@ -7,7 +7,7 @@
  *
  * This file implements playset execution including:
  * - Channel cache loading (SD card and Makapix formats)
- * - execute_command() for multi-channel playset setup
+ * - execute_playset() for multi-channel playset setup
  * - Convenience functions for named/user/hashtag channels
  *
  * See play_scheduler_types.h for the playset type definition.
@@ -389,7 +389,7 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
 // Command Execution
 // ============================================================================
 
-esp_err_t play_scheduler_execute_command(const ps_playset_t *playset)
+esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset)
 {
     ps_state_t *s_state = ps_get_state();
 
@@ -681,7 +681,7 @@ esp_err_t play_scheduler_play_named_channel(const char *name)
     playset->channels[0].weight = 1;
     ps_ensure_display_name(&playset->channels[0]);
 
-    esp_err_t result = play_scheduler_execute_command(playset);
+    esp_err_t result = play_scheduler_execute_playset(playset);
     free(playset);
     return result;
 }
@@ -710,7 +710,7 @@ esp_err_t play_scheduler_play_user_channel(const char *user_sqid)
     playset->channels[0].weight = 1;
     ps_ensure_display_name(&playset->channels[0]);
 
-    esp_err_t result = play_scheduler_execute_command(playset);
+    esp_err_t result = play_scheduler_execute_playset(playset);
     free(playset);
     return result;
 }
@@ -739,7 +739,7 @@ esp_err_t play_scheduler_play_reactions_channel(const char *user_sqid)
     playset->channels[0].weight = 1;
     ps_ensure_display_name(&playset->channels[0]);
 
-    esp_err_t result = play_scheduler_execute_command(playset);
+    esp_err_t result = play_scheduler_execute_playset(playset);
     free(playset);
     return result;
 }
@@ -768,7 +768,7 @@ esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag)
     playset->channels[0].weight = 1;
     ps_ensure_display_name(&playset->channels[0]);
 
-    esp_err_t result = play_scheduler_execute_command(playset);
+    esp_err_t result = play_scheduler_execute_playset(playset);
     free(playset);
     return result;
 }
@@ -884,7 +884,7 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id,
     ESP_LOGI(TAG, "play_artwork: post_id=%ld, storage_key=%s, title='%s'",
              (long)post_id, storage_key, (title && title[0]) ? title : "");
 
-    // Set view intent BEFORE execute_command (for view tracking)
+    // Set view intent BEFORE execute_playset (for view tracking)
     extern void makapix_set_view_intent_intentional(bool intentional);
     makapix_set_view_intent_intentional(true);
 
@@ -918,7 +918,7 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id,
     // silently retried with a different artwork.
     s_state->next_swap_fail_mode = SWAP_FAIL_LOUD;
 
-    esp_err_t result = play_scheduler_execute_command(playset);
+    esp_err_t result = play_scheduler_execute_playset(playset);
     if (result == ESP_OK) {
         // Treat the single-artwork session as a first-class active playset so
         // the WebUI shows it correctly, the preview URL builder fires, and
@@ -972,7 +972,7 @@ esp_err_t play_scheduler_play_local_file(const char *filepath)
     // silently retried with a different artwork.
     s_state->next_swap_fail_mode = SWAP_FAIL_LOUD;
 
-    esp_err_t result = play_scheduler_execute_command(playset);
+    esp_err_t result = play_scheduler_execute_playset(playset);
     if (result == ESP_OK) {
         p3a_state_set_active_local_file(filepath);
     }

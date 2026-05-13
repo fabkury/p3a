@@ -119,7 +119,7 @@ bool download_manager_get_active_channel(char *out_channel_id, size_t max_len);
 /**
  * @brief Set the channel list for downloads (decoupled from Play Scheduler)
  *
- * Called by Play Scheduler after execute_command() to configure which
+ * Called by Play Scheduler after execute_playset() to configure which
  * channels the download manager should work on. Downloads use round-robin
  * across channels to find missing files.
  *

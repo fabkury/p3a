@@ -27,7 +27,7 @@ All 24 custom components live under `components/`. This document describes each 
   - **Pick modes**: Recency-based, Random
   - **NAE**: New Artwork Events — react to freshly downloaded content
   - **LAi**: Locally Available index — persistence of playback position per channel
-- **Key functions**: `play_scheduler_init()`, `play_scheduler_execute_command()`, `play_scheduler_next()`, `play_scheduler_prev()`, `play_scheduler_peek_next()`, `play_scheduler_play_named_channel()`, `play_scheduler_play_artwork()`
+- **Key functions**: `play_scheduler_init()`, `play_scheduler_execute_playset()`, `play_scheduler_next()`, `play_scheduler_prev()`, `play_scheduler_peek_next()`, `play_scheduler_play_named_channel()`, `play_scheduler_play_artwork()`
 - **Kconfig**: `components/play_scheduler/Kconfig`
 
 ## 3. event_bus — Asynchronous Event Pub/Sub

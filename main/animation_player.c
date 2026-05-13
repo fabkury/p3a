@@ -401,13 +401,13 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
                 ps_err = ps_create_channel_playset(active_playset, playset);
                 if (ps_err == ESP_OK) {
                     ESP_LOGI(TAG, "Restoring built-in playset: %s", active_playset);
-                    ps_err = play_scheduler_execute_command(playset);
+                    ps_err = play_scheduler_execute_playset(playset);
                 } else {
                     // Not a built-in - try loading from cache (for server playsets like followed_artists)
                     ps_err = playset_store_load(active_playset, playset);
                     if (ps_err == ESP_OK) {
                         ESP_LOGI(TAG, "Restoring cached playset: %s", active_playset);
-                        ps_err = play_scheduler_execute_command(playset);
+                        ps_err = play_scheduler_execute_playset(playset);
                     } else {
                         ESP_LOGW(TAG, "Failed to load playset '%s': %s, falling back to default",
                                  active_playset, esp_err_to_name(ps_err));
@@ -421,7 +421,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
             ESP_LOGI(TAG, "Falling back to default playset: channel_promoted");
             ps_err = ps_create_channel_playset("channel_promoted", playset);
             if (ps_err == ESP_OK) {
-                ps_err = play_scheduler_execute_command(playset);
+                ps_err = play_scheduler_execute_playset(playset);
                 // Update NVS to reflect the fallback
                 p3a_state_set_active_playset("channel_promoted");
             }

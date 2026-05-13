@@ -643,7 +643,7 @@ size_t play_scheduler_get_active_channel_ids(const char **out_ids, size_t max_co
     }
 
     for (size_t i = 0; i < count; i++) {
-        // Return pointer to internal storage (stable until next execute_command)
+        // Return pointer to internal storage (stable until next execute_playset)
         out_ids[i] = s_state.channels[i].channel_id;
     }
 

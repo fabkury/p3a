@@ -727,7 +727,7 @@ Players can request named playsets from the server using the `get_playset` reque
 **Expected Player Behavior**:
 1. Send request with playset name
 2. Wait for response (with timeout)
-3. On success: cache playset to SD card, execute with `play_scheduler_execute_command()`
+3. On success: cache playset to SD card, execute with `play_scheduler_execute_playset()`
 4. On failure: fall back to cached version if available
 
 ---

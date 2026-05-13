@@ -466,7 +466,7 @@ const char *p3a_state_get_active_playset(void);
  * Sets active_playset = P3A_PLAYSET_NAME_ARTWORK, persists the artwork
  * payload (post_id, storage_key, art_url, title) to NVS, and clears the
  * local-file payload. The runtime call to play_scheduler_play_artwork()
- * should invoke this after a successful execute_command() so the WebUI and
+ * should invoke this after a successful execute_playset() so the WebUI and
  * boot restore see consistent state.
  *
  * @param title Optional post title for WebUI display. NULL or empty erases

@@ -181,7 +181,7 @@ cJSON *build_current_artwork_json(void)
  * 1. Check if it's a built-in playset (channel_recent, channel_promoted, channel_sdcard)
  * 2. If MQTT connected: fetch from server, save to SD, execute
  * 3. If not connected: load from SD cache if exists
- * 4. Execute via play_scheduler_execute_command()
+ * 4. Execute via play_scheduler_execute_playset()
  * 5. Persist playset name to NVS for boot restore
  */
 esp_err_t h_post_playset(httpd_req_t *req)
@@ -253,7 +253,7 @@ esp_err_t h_post_playset(httpd_req_t *req)
     }
 
     // Execute the playset
-    err = play_scheduler_execute_command(playset);
+    err = play_scheduler_execute_playset(playset);
     if (err != ESP_OK) {
         free(playset);
         char error_msg[128];
@@ -285,7 +285,7 @@ esp_err_t h_post_playset(httpd_req_t *req)
     cJSON_AddBoolToObject(root, "builtin", is_builtin);
     cJSON_AddStringToObject(root, "pick_mode", pick_mode_str(playset->pick_mode));
 
-    // Compute artwork sums from live scheduler state (caches loaded by execute_command)
+    // Compute artwork sums from live scheduler state (caches loaded by execute_playset)
     ps_stats_t ps_stats;
     if (play_scheduler_get_stats(&ps_stats) == ESP_OK) {
         cJSON_AddNumberToObject(root, "total_cached", (double)ps_stats.total_available);
@@ -518,7 +518,7 @@ esp_err_t h_get_playset_by_name(httpd_req_t *req)
 
     bool activated = false;
     if (activate) {
-        esp_err_t exec_err = play_scheduler_execute_command(playset);
+        esp_err_t exec_err = play_scheduler_execute_playset(playset);
         if (exec_err == ESP_OK) {
             p3a_state_set_active_playset(name);
             activated = true;
@@ -668,7 +668,7 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
     // Activate if requested
     bool activated = false;
     if (activate) {
-        esp_err_t exec_err = play_scheduler_execute_command(playset);
+        esp_err_t exec_err = play_scheduler_execute_playset(playset);
         if (exec_err == ESP_OK) {
             p3a_state_set_active_playset(name);
             activated = true;

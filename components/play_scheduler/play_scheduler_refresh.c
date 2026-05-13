@@ -846,7 +846,7 @@ static void refresh_task(void *arg)
 
                 // Show loading message while Giphy API is being called.
                 // This is especially important during boot when the initial
-                // "Loading channel..." from play_scheduler_execute_command() was
+                // "Loading channel..." from play_scheduler_execute_playset() was
                 // skipped because WiFi wasn't ready yet.
                 extern bool animation_player_is_animation_ready(void);
                 char giphy_display_name[64];

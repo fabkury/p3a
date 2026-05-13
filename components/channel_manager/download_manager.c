@@ -312,7 +312,7 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
         }
 
         // Pin the cache lifecycle for the duration of this channel's scan.
-        // Without this, play_scheduler_execute_command can free the cache
+        // Without this, play_scheduler_execute_playset can free the cache
         // between registry_find and any subsequent cache->... dereference,
         // turning the rest of this loop into a use-after-free.
         channel_cache_lifecycle_lock();

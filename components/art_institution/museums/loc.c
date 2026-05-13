@@ -47,7 +47,7 @@ static const char *TAG = "ai_loc";
 #define LOC_RESPONSE_BUF_SIZE     (256 * 1024)
 #define LOC_FETCH_MAX_ATTEMPTS    3
 #define LOC_MAX_PAGES             500  // defensive cap; see loc-channel-design.md §3
-#define LOC_IIIF_URL_PREFIX       "https://tile.loc.gov/image-services/iiif/"
+#define LOC_IIIF_URL_PREFIX       LOC_IIIF_BASE "/"
 
 static const uint32_t s_fetch_backoff_ms[LOC_FETCH_MAX_ATTEMPTS] = { 0, 1000, 3000 };
 
@@ -56,6 +56,8 @@ extern void download_manager_rescan(void);
 static const char *loc_user_agent(void)
 {
     static char s_ua[64];
+    // Lazy init is safe: refresh runs serialized per museum (see §7.2
+    // of finalized-design.md), so no concurrent writers.
     static bool s_inited = false;
     if (!s_inited) {
         snprintf(s_ua, sizeof(s_ua), "p3a/%s (pub@kury.dev)", FW_VERSION_STRING);
@@ -72,7 +74,8 @@ static const char *loc_user_agent(void)
  * fits in (out_len - 1). Writes the segment + NUL into @p out on
  * success.
  *
- * The 48-char `iiif_key` cap is enforced by `out_len < 48` — see
+ * The 48-char `iiif_key` cap is enforced by `id_len >= out_len`
+ * (rejects ids of 48 or more chars) — see
  * docs/deferred/loc-iiif-key-48-char.md for context.
  */
 static bool extract_loc_iiif_id(const char *image_url, char *out, size_t out_len)
@@ -397,12 +400,11 @@ esp_err_t art_institution_loc_refresh_channel(const char *channel_id,
 
     while (total_fetched < cache_size && page <= LOC_MAX_PAGES) {
         size_t page_count = 0;
-        int total_records = 0;
         bool has_more = false;
         esp_err_t err = loc_fetch_page(term_id, page,
                                        response_buf, LOC_RESPONSE_BUF_SIZE,
                                        page_entries, LOC_PAGE_LIMIT,
-                                       &page_count, &total_records, &has_more);
+                                       &page_count, NULL, &has_more);
         if (err != ESP_OK) {
             last_err = err;
             refresh_completed = false;

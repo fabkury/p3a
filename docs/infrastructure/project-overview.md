@@ -26,7 +26,7 @@
 - USB Mass Storage for SD card access
 - Captive portal for Wi-Fi provisioning
 - **Show URL** — download and play artwork from arbitrary HTTP/HTTPS URLs
-- **Playset editor** — web-based editor for creating and managing scheduler commands
+- **Playset editor** — web-based editor for creating and managing playsets
 
 ## Codebase Statistics
 

@@ -15,9 +15,9 @@
  * - New Artwork Events (NAE) for responsive handling of new content
  * - Deterministic and reproducible via reversible PRNGs
  *
- * Terminology: A "playset" is the preferred term for a scheduler command
- * (ps_scheduler_command_t). It describes what to play: which channels (with
- * per-channel weights) and how to pick artwork within channels.
+ * The primary input is a playset (ps_scheduler_command_t): a declarative
+ * configuration of which channels to include (with per-channel weights) and
+ * how to pick artwork within channels.
  *
  * @see docs/play-scheduler/SPECIFICATION.md for full details
  */
@@ -56,19 +56,19 @@ esp_err_t play_scheduler_init(void);
 void play_scheduler_deinit(void);
 
 // ============================================================================
-// Scheduler Commands (Playsets)
+// Playsets
 // ============================================================================
 
 /**
- * @brief Execute a scheduler command (playset)
+ * @brief Execute a playset
  *
- * This is the primary API for changing what the scheduler plays. A "playset"
- * is the preferred term for a scheduler command - it describes a declarative
- * configuration of channels (with per-channel weights) and pick mode.
+ * This is the primary API for changing what the scheduler plays. A playset is
+ * a declarative configuration of channels (with per-channel weights) and pick
+ * mode.
  *
  * Resets channel state, preserves history, begins new play queue.
  *
- * @param command Playset (scheduler command) parameters
+ * @param command Playset parameters
  * @return ESP_OK on success
  */
 esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command);
@@ -76,7 +76,7 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command);
 /**
  * @brief Create a built-in single-channel playset
  *
- * Generates a scheduler command for built-in playset names:
+ * Generates a playset for built-in playset names:
  * - "channel_recent": Single channel with "all" (user-facing: "All Makapix" /
  *                     "All Artworks") -- see naming note below
  * - "channel_promoted": Single channel with "promoted"
@@ -101,7 +101,7 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command);
  *     - webui/index.html (pill bar id + label mapping)
  *
  * @param playset_name Name of the built-in playset
- * @param out_cmd Output scheduler command (caller must allocate)
+ * @param out_cmd Output playset (caller must allocate)
  * @return ESP_OK if playset was created, ESP_ERR_NOT_FOUND if not a built-in playset
  */
 esp_err_t ps_create_channel_playset(const char *playset_name, ps_scheduler_command_t *out_cmd);
@@ -239,7 +239,7 @@ esp_err_t play_scheduler_refresh_sdcard_cache(void);
 /**
  * @brief Get list of active channel IDs
  *
- * Returns the channel IDs for all channels in the current scheduler command.
+ * Returns the channel IDs for all channels in the current playset.
  * Used by LRU eviction to protect active channel files.
  *
  * @param out_ids Array of channel ID pointers (points to internal storage)

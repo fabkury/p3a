@@ -51,7 +51,7 @@ Build artifacts go to `build/`. Release binaries are copied to `release/v{VERSIO
 | Component | Purpose |
 |-----------|---------|
 | `p3a_core` | Unified state machine and lifecycle management |
-| `play_scheduler` | Playback engine that executes playsets (scheduler commands) to select artwork |
+| `play_scheduler` | Playback engine that executes playsets to select artwork |
 | `channel_manager` | Playlist/channel handling, vault storage (SHA256-sharded `/sdcard/p3a/vault/`) |
 | `giphy` | Giphy API integration: trending GIFs, on-demand download, SD card caching (`/sdcard/p3a/giphy/`) |
 | `art_institution` | Museum (AIC, Rijksmuseum) channels via IIIF: per-museum dispatch (refresh, IIIF URL build, Linked-Art resolution for Rijks), shared rate-limit cooldown, vault at `/sdcard/p3a/museum/{museum_id}/`. See `docs/art-institutions/finalized-design.md`. |
@@ -92,7 +92,7 @@ Dual OTA slots (8MB each), NVS, LittleFS (4MB), and a 2MB partition for ESP32-C6
 
 ## Terminology
 
-- **Playset**: A scheduler command (`ps_scheduler_command_t`) that tells the Play Scheduler what to play. It specifies which channels to include, how to balance exposure across them, and how to pick artwork within each channel. "Playset" and "scheduler command" are interchangeable.
+- **Playset** (`ps_scheduler_command_t`): A declarative configuration that tells the Play Scheduler what to play — which channels to include, how to balance exposure across them, and how to pick artwork within each channel.
 
 ## Documentation
 

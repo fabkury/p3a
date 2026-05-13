@@ -152,7 +152,7 @@ typedef struct {
 /**
  * @brief Channel specification for playsets
  *
- * Specifies a channel to include in a playset (scheduler command).
+ * Specifies a channel to include in a playset.
  */
 typedef struct {
     ps_channel_type_t type;       // NAMED, USER, HASHTAG, SDCARD, ARTWORK, GIPHY
@@ -178,7 +178,7 @@ typedef struct {
 } ps_channel_spec_t;
 
 /**
- * @brief Scheduler command (also known as "playset")
+ * @brief Playset
  *
  * A playset is a declarative configuration that tells the Play Scheduler what
  * to play. It contains all parameters needed to produce a play queue:
@@ -189,9 +189,6 @@ typedef struct {
  * Executing a playset resets channel state (cursors, SWRR credits) but
  * preserves playback history for back-navigation.
  *
- * The terms "scheduler command" and "playset" are interchangeable throughout
- * the codebase.
- *
  * NOTE ON DWELL TIME: Playsets intentionally do NOT include dwell time settings.
  * Currently p3a only supports a single globally-configured dwell time (set via
  * config_store). Per-playset, per-channel, and per-artwork dwell times are
@@ -201,7 +198,7 @@ typedef struct {
 #define PS_PLAYSET_NAME_MAX 32
 
 typedef struct {
-    char name[PS_PLAYSET_NAME_MAX + 1]; // Playset name (empty for transient/anonymous commands)
+    char name[PS_PLAYSET_NAME_MAX + 1]; // Playset name (empty for transient/anonymous playsets)
     ps_channel_spec_t channels[PS_MAX_CHANNELS];
     size_t channel_count;
     ps_pick_mode_t pick_mode;

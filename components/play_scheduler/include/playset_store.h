@@ -5,7 +5,7 @@
  * @file playset_store.h
  * @brief Playset storage API for persisting named playsets to SD card
  *
- * Provides binary file storage for playsets (scheduler commands) with CRC32
+ * Provides binary file storage for playsets with CRC32
  * validation. Playsets are stored in /sdcard/p3a/channel/ps_{hash}.playset
  * where {hash} is a DJB2 hash of the playset name. The name is stored inside
  * the file header, decoupling human-readable names from filesystem constraints.
@@ -71,7 +71,7 @@ _Static_assert(sizeof(playset_channel_entry_t) == 144, "Playset channel entry mu
  * Uses atomic write pattern: write to .tmp, fsync, unlink old, rename.
  *
  * @param name Playset name (e.g., "followed_artists")
- * @param cmd Scheduler command to save
+ * @param cmd Playset to save
  * @return ESP_OK on success, ESP_ERR_INVALID_ARG if invalid params,
  *         ESP_FAIL on file system error
  */
@@ -84,7 +84,7 @@ esp_err_t playset_store_save(const char *name, const ps_scheduler_command_t *cmd
  * file and returns ESP_ERR_INVALID_VERSION.
  *
  * @param name Playset name (e.g., "followed_artists")
- * @param out_cmd Output scheduler command
+ * @param out_cmd Output playset
  * @return ESP_OK on success, ESP_ERR_NOT_FOUND if file doesn't exist,
  *         ESP_ERR_INVALID_VERSION if version mismatch,
  *         ESP_ERR_INVALID_CRC if checksum mismatch,

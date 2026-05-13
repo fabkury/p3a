@@ -78,7 +78,7 @@ p3a/
 │   ├── play_scheduler/                  # Deterministic multi-channel playback engine
 │   │   ├── play_scheduler.c             # Core scheduler logic
 │   │   ├── play_scheduler_swrr.c        # Smooth Weighted Round Robin
-│   │   ├── play_scheduler_commands.c    # Command execution
+│   │   ├── play_scheduler_commands.c    # Playset execution
 │   │   ├── play_scheduler_pick.c        # Artwork picking
 │   │   ├── play_scheduler_navigation.c  # Next/prev navigation
 │   │   ├── play_scheduler_timer.c       # Dwell time timer

@@ -43,7 +43,7 @@ const char *playset_channel_type_str(ps_channel_type_t type);
  * as a legacy "exposure_mode" from older clients) are silently ignored.
  *
  * @param json  cJSON object to parse (not modified)
- * @param out   Output scheduler command (zeroed then populated)
+ * @param out   Output playset (zeroed then populated)
  * @return ESP_OK on success, ESP_ERR_INVALID_ARG on missing/invalid channels
  */
 esp_err_t playset_json_parse(const cJSON *json, ps_scheduler_command_t *out);
@@ -55,7 +55,7 @@ esp_err_t playset_json_parse(const cJSON *json, ps_scheduler_command_t *out);
  * Caller owns the returned object and must call
  * cJSON_Delete() when done.
  *
- * @param cmd  Scheduler command to serialize
+ * @param cmd  Playset to serialize
  * @return cJSON object on success, NULL on OOM
  */
 cJSON *playset_json_serialize(const ps_scheduler_command_t *cmd);

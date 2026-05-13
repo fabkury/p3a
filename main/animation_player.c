@@ -360,7 +360,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     // Start playback via play_scheduler using saved playset.
     // This will:
     // 1. Create/load the playset (built-in or from cache)
-    // 2. Execute the scheduler command
+    // 2. Execute the playset
     // 3. Call play_scheduler_next() which triggers animation_player_request_swap()
     esp_err_t ps_err = ESP_FAIL;
 

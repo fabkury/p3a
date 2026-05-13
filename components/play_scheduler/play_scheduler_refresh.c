@@ -846,7 +846,7 @@ static void refresh_task(void *arg)
 
                 // Show loading message while Giphy API is being called.
                 // This is especially important during boot when the initial
-                // "Loading channel..." from ps_execute_scheduler_command() was
+                // "Loading channel..." from play_scheduler_execute_command() was
                 // skipped because WiFi wasn't ready yet.
                 extern bool animation_player_is_animation_ready(void);
                 char giphy_display_name[64];
@@ -1263,7 +1263,7 @@ void ps_refresh_signal_work(void)
 
 void ps_refresh_reset_timer(void)
 {
-    // Reset the periodic refresh timer - called when a new scheduler command is executed
+    // Reset the periodic refresh timer - called when a new playset is executed
     // This ensures immediate refresh happens and the 1-hour timer starts fresh
     s_last_full_refresh_complete = 0;
     s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;

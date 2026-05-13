@@ -5,13 +5,12 @@
  * @file play_scheduler_commands.c
  * @brief Play Scheduler - Playset execution and cache loading
  *
- * This file implements playset (scheduler command) execution including:
+ * This file implements playset execution including:
  * - Channel cache loading (SD card and Makapix formats)
  * - execute_command() for multi-channel playset setup
  * - Convenience functions for named/user/hashtag channels
  *
- * A "playset" is the preferred term for a scheduler command - see
- * play_scheduler_types.h for the full definition.
+ * See play_scheduler_types.h for the playset type definition.
  */
 
 #include "play_scheduler.h"
@@ -415,7 +414,7 @@ esp_err_t play_scheduler_execute_command(const ps_scheduler_command_t *command)
 
     xSemaphoreTake(s_state->mutex, portMAX_DELAY);
 
-    ESP_LOGI(TAG, "Executing scheduler command: %zu channel(s), pick=%d",
+    ESP_LOGI(TAG, "Executing playset: %zu channel(s), pick=%d",
              command->channel_count, command->pick_mode);
 
     // Free old channel entries before reconfiguring. Hold the cache

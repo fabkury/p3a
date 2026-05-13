@@ -298,7 +298,7 @@ void ps_refresh_signal_work(void);
 /**
  * @brief Reset periodic refresh timer
  *
- * Called when a new scheduler command is executed to trigger
+ * Called when a new playset is executed to trigger
  * immediate refresh and reset the 1-hour periodic timer.
  */
 void ps_refresh_reset_timer(void);

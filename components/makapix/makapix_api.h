@@ -153,11 +153,11 @@ esp_err_t makapix_api_get_comments(int32_t post_id, const char *cursor, uint8_t 
  * @brief Fetch a named playset from the server
  *
  * Sends a get_playset request via MQTT and parses the response into a
- * scheduler command. The returned command can be executed with
+ * playset. The returned playset can be executed with
  * play_scheduler_execute_command().
  *
  * @param playset_name Name of the playset (e.g., "followed_artists")
- * @param out_command Output scheduler command
+ * @param out_command Output playset
  * @return ESP_OK on success, ESP_ERR_INVALID_STATE if MQTT not connected,
  *         ESP_ERR_TIMEOUT on timeout, ESP_FAIL on server error
  */

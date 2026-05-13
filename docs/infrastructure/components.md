@@ -18,7 +18,7 @@ All 24 custom components live under `components/`. This document describes each 
 
 ## 2. play_scheduler — Deterministic Multi-Channel Playback Engine
 
-- **Purpose**: Executes playsets (scheduler commands) to select artwork across multiple channels using Smooth Weighted Round Robin (SWRR)
+- **Purpose**: Executes playsets to select artwork across multiple channels using Smooth Weighted Round Robin (SWRR)
 - **Key files**: `play_scheduler.c`, `play_scheduler_swrr.c`, `play_scheduler_commands.c`, `play_scheduler_pick.c`, `play_scheduler_navigation.c`, `play_scheduler_timer.c`, `play_scheduler_nae.c`, `play_scheduler_lai.c`, `play_scheduler_refresh.c`, `play_scheduler_buffers.c`, `play_scheduler_cache.c`, `playset_store.c`, `playset_json.c`
 - **Public API**: `play_scheduler.h`, `play_scheduler_types.h`, `playset_store.h`, `playset_json.h`
 - **Key concepts**:

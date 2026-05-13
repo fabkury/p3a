@@ -18,9 +18,7 @@
 #include "art_institution.h"
 #include "art_institution_internal.h"
 #include "art_institution_types.h"
-#include "esp_err.h"
 #include "esp_log.h"
-#include <stddef.h>
 
 static const char *TAG = "ai_loc";
 

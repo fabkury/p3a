@@ -94,7 +94,7 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset);
  *   of the wire format for POST /playset/{name}; renaming it would require an
  *   NVS migration / alias. The mapping channel_recent <-> "all" is hard-coded
  *   in:
- *     - components/play_scheduler/play_scheduler_commands.c (ps_create_channel_playset)
+ *     - components/play_scheduler/play_scheduler_playsets.c (ps_create_channel_playset)
  *     - components/http_api/http_api.c (legacy POST /channel)
  *     - components/http_api/http_api_rest_actions.c (GET /channel)
  *     - main/animation_player.c (boot-restore display name)

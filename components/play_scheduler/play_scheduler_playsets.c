@@ -2,7 +2,7 @@
 // Copyright 2025-2026 p3a Contributors
 
 /**
- * @file play_scheduler_commands.c
+ * @file play_scheduler_playsets.c
  * @brief Play Scheduler - Playset execution and cache loading
  *
  * This file implements playset execution including:

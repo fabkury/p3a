@@ -13,7 +13,7 @@
  * - Stats and debugging
  *
  * Other functionality is split into separate files:
- * - play_scheduler_commands.c: Command execution
+ * - play_scheduler_playsets.c: Playset execution
  * - play_scheduler_navigation.c: Navigation and swap requests
  * - play_scheduler_lai.c: LAi operations and download integration
  *

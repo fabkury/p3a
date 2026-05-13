@@ -7,7 +7,7 @@ idf_component_register(
          "play_scheduler_timer.c"
          "play_scheduler_cache.c"
          "play_scheduler_refresh.c"
-         "play_scheduler_commands.c"
+         "play_scheduler_playsets.c"
          "play_scheduler_lai.c"
          "play_scheduler_navigation.c"
          "playset_store.c"

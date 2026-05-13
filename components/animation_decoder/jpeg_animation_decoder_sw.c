@@ -178,7 +178,7 @@ esp_err_t jpeg_decode_sw_to_rgb888(const uint8_t *data, size_t size,
     *out_rgb = rgb_buffer;
     *out_width = out_w;
     *out_height = out_h;
-    ESP_LOGI(TAG, "SW JPEG decoded: native=%ux%u scale=%u/8 out=%ux%u (%zu bytes)",
+    ESP_LOGD(TAG, "SW JPEG decoded: native=%ux%u scale=%u/8 out=%ux%u (%zu bytes)",
              (unsigned)native_w, (unsigned)native_h,
              (unsigned)scale_num,
              (unsigned)out_w, (unsigned)out_h,

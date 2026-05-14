@@ -72,6 +72,19 @@ esp_err_t storage_eviction_get_storage_info(uint64_t *out_total_bytes, uint64_t 
  */
 esp_err_t channel_eviction_check_and_run(void);
 
+// DEBUG-TOOLS-BEGIN
+/**
+ * @brief Debug-only: run storage eviction with a caller-supplied free-space
+ *        target, ignoring the SNTP-sync guard.
+ *
+ * Lets the web UI exercise the eviction logic on demand even when the SD card
+ * is well above the configured target. Temporary; delete along with the
+ * matching block in storage_eviction.c when the Debug Tools UI section is
+ * removed.
+ */
+esp_err_t storage_eviction_run_with_target_debug(uint64_t target_bytes);
+// DEBUG-TOOLS-END
+
 #ifdef __cplusplus
 }
 #endif

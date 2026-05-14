@@ -625,6 +625,136 @@ body {
     <h4>&#9203; Giphy Rate Limited</h4>
     <p>The Giphy API key hit its limit of 100 requests per hour. Device is now waiting before refreshing Giphy channels.</p>
 </div>
+<!-- DEBUG-TOOLS-BEGIN -->
+<style>
+.debug-tools {
+    width: min(420px, 100%);
+    margin-top: var(--sp-4);
+    padding: var(--sp-3) var(--sp-4);
+    background: rgba(255,255,255,0.08);
+    border: 1px dashed rgba(255,255,255,0.35);
+    border-radius: var(--r-md);
+    color: white;
+    font-size: 0.85rem;
+}
+.debug-tools h3 {
+    margin: 0 0 var(--sp-2);
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.85;
+}
+.debug-tools-row {
+    display: flex;
+    gap: var(--sp-2);
+    align-items: center;
+    margin-bottom: var(--sp-2);
+    flex-wrap: wrap;
+}
+.debug-tools-row label {
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    opacity: 0.85;
+}
+.debug-tools-row input[type=number] {
+    flex: 1 1 80px;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: var(--r-md);
+    background: rgba(0,0,0,0.25);
+    color: white;
+    font-size: 0.85rem;
+}
+.debug-btn {
+    flex: 1 1 auto;
+    background: rgba(255,255,255,0.12);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.30);
+    border-radius: var(--r-md);
+    padding: 8px 10px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.debug-btn:hover:not(:disabled) { background: rgba(255,255,255,0.20); }
+.debug-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.debug-tools-status {
+    margin-top: var(--sp-2);
+    font-size: 0.78rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    opacity: 0.9;
+    word-break: break-word;
+    min-height: 1.1em;
+}
+</style>
+<div class="debug-tools" id="debug-tools">
+    <h3>Debug Tools</h3>
+    <div class="debug-tools-row">
+        <label for="debug-target-mib">Free-space target (MiB):</label>
+        <input type="number" id="debug-target-mib" min="1" step="1" value="1024">
+    </div>
+    <div class="debug-tools-row">
+        <button type="button" class="debug-btn" id="debug-storage-evict-btn">Run storage eviction</button>
+        <button type="button" class="debug-btn" id="debug-channel-evict-btn">Run channel eviction</button>
+    </div>
+    <div class="debug-tools-status" id="debug-tools-status"></div>
+</div>
+<script>
+(function () {
+    var storageBtn = document.getElementById('debug-storage-evict-btn');
+    var channelBtn = document.getElementById('debug-channel-evict-btn');
+    var targetInput = document.getElementById('debug-target-mib');
+    var statusEl = document.getElementById('debug-tools-status');
+
+    function setStatus(msg) { statusEl.textContent = msg || ''; }
+    function setBusy(busy) {
+        storageBtn.disabled = busy;
+        channelBtn.disabled = busy;
+    }
+
+    function postJson(url, body, label) {
+        setBusy(true);
+        setStatus(label + ': running...');
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState !== 4) return;
+            setBusy(false);
+            var parsed = null;
+            try { parsed = JSON.parse(xhr.responseText); } catch (e) {}
+            if (xhr.status >= 200 && xhr.status < 300 && parsed && parsed.ok) {
+                var d = parsed.data || {};
+                if (d.free_before_mib !== undefined) {
+                    setStatus(label + ': OK (err=' + d.err + ', target=' + d.target_mib + ' MiB, free ' +
+                              d.free_before_mib + ' -> ' + d.free_after_mib + ' MiB)');
+                } else {
+                    setStatus(label + ': OK (err=' + d.err + ')');
+                }
+            } else {
+                var errMsg = (parsed && parsed.error) ? parsed.error : ('HTTP ' + xhr.status);
+                setStatus(label + ': FAILED (' + errMsg + ')');
+            }
+        };
+        xhr.send(body);
+    }
+
+    storageBtn.addEventListener('click', function () {
+        var mib = parseInt(targetInput.value, 10);
+        if (!(mib > 0)) { setStatus('Storage eviction: target must be a positive integer'); return; }
+        if (!confirm('Run storage eviction with target ' + mib + ' MiB free?\nThis deletes cached artwork files.')) return;
+        postJson('/action/debug/storage_eviction', JSON.stringify({ target_mib: mib }), 'Storage eviction');
+    });
+
+    channelBtn.addEventListener('click', function () {
+        if (!confirm('Run channel-metadata eviction?\nThis deletes .cache/.json files for stale channels (age >= CONFIG_CHANNEL_EVICTION_AGE_DAYS, default 60d). Active-playset channels are protected.')) return;
+        postJson('/action/debug/channel_eviction', '{}', 'Channel eviction');
+    });
+})();
+</script>
+<!-- DEBUG-TOOLS-END -->
 <nav class="bottom-nav">
 <a href="/" class="bottom-nav-item active"><span class="bottom-nav-icon">&#8962;</span><span class="bottom-nav-label">Home</span></a>
 <a href="/playset-editor" class="bottom-nav-item"><span class="bottom-nav-icon">&#9776;</span><span class="bottom-nav-label">Playsets</span></a>

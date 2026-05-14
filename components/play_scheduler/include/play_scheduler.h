@@ -223,6 +223,17 @@ esp_err_t play_scheduler_play_channel(const char *channel_id);
 void play_scheduler_set_channel_select_mode(ps_channel_select_mode_t mode);
 
 /**
+ * @brief Apply channel selection mode without persisting
+ *
+ * Runtime-only update of the in-memory mode. Use when the caller has already
+ * persisted the value through another path (e.g. a batched config save) and
+ * only needs the scheduler to pick up the change.
+ *
+ * @param mode PS_CHANNEL_SELECT_SWRR or PS_CHANNEL_SELECT_STOCHASTIC
+ */
+void play_scheduler_apply_channel_select_mode(ps_channel_select_mode_t mode);
+
+/**
  * @brief Get channel selection mode
  *
  * @return Current channel selection mode
@@ -239,6 +250,16 @@ ps_channel_select_mode_t play_scheduler_get_channel_select_mode(void);
  * @param mode PS_PICK_RECENCY or PS_PICK_RANDOM
  */
 void play_scheduler_set_pick_mode(ps_pick_mode_t mode);
+
+/**
+ * @brief Apply pick mode without persisting
+ *
+ * Runtime-only update of the in-memory mode. Use when the caller has already
+ * persisted the value through another path (e.g. a batched config save).
+ *
+ * @param mode PS_PICK_RECENCY or PS_PICK_RANDOM
+ */
+void play_scheduler_apply_pick_mode(ps_pick_mode_t mode);
 
 /**
  * @brief Get pick mode

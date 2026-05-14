@@ -184,7 +184,7 @@ esp_err_t h_put_config(httpd_req_t *req) {
     if (csm && cJSON_IsNumber(csm)) {
         int mode = (int)cJSON_GetNumberValue(csm);
         if (mode >= 0 && mode <= 1) {
-            play_scheduler_set_channel_select_mode((ps_channel_select_mode_t)mode);
+            play_scheduler_apply_channel_select_mode((ps_channel_select_mode_t)mode);
         }
     }
 
@@ -192,7 +192,7 @@ esp_err_t h_put_config(httpd_req_t *req) {
     if (pm && cJSON_IsString(pm)) {
         const char *s = cJSON_GetStringValue(pm);
         ps_pick_mode_t mode = (s && strcmp(s, "random") == 0) ? PS_PICK_RANDOM : PS_PICK_RECENCY;
-        play_scheduler_set_pick_mode(mode);
+        play_scheduler_apply_pick_mode(mode);
         config_store_invalidate_pick_mode();
     }
 

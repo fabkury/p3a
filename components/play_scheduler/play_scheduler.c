@@ -543,11 +543,9 @@ esp_err_t play_scheduler_play_channel(const char *channel_id)
     return play_scheduler_next(NULL);
 }
 
-void play_scheduler_set_channel_select_mode(ps_channel_select_mode_t mode)
+void play_scheduler_apply_channel_select_mode(ps_channel_select_mode_t mode)
 {
     if (!s_state.initialized) return;
-
-    config_store_set_channel_select_mode((uint8_t)mode);
 
     xSemaphoreTake(s_state.mutex, portMAX_DELAY);
     s_state.channel_select_mode = mode;
@@ -556,9 +554,28 @@ void play_scheduler_set_channel_select_mode(ps_channel_select_mode_t mode)
     xSemaphoreGive(s_state.mutex);
 }
 
+void play_scheduler_set_channel_select_mode(ps_channel_select_mode_t mode)
+{
+    if (!s_state.initialized) return;
+
+    config_store_set_channel_select_mode((uint8_t)mode);
+    play_scheduler_apply_channel_select_mode(mode);
+}
+
 ps_channel_select_mode_t play_scheduler_get_channel_select_mode(void)
 {
     return s_state.channel_select_mode;
+}
+
+void play_scheduler_apply_pick_mode(ps_pick_mode_t mode)
+{
+    if (!s_state.initialized) return;
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    s_state.pick_mode = mode;
+    ESP_LOGI(TAG, "Pick mode set to %s",
+             mode == PS_PICK_RANDOM ? "Random" : "Recency");
+    xSemaphoreGive(s_state.mutex);
 }
 
 void play_scheduler_set_pick_mode(ps_pick_mode_t mode)
@@ -566,12 +583,7 @@ void play_scheduler_set_pick_mode(ps_pick_mode_t mode)
     if (!s_state.initialized) return;
 
     config_store_set_pick_mode((uint8_t)mode);
-
-    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
-    s_state.pick_mode = mode;
-    ESP_LOGI(TAG, "Pick mode set to %s",
-             mode == PS_PICK_RANDOM ? "Random" : "Recency");
-    xSemaphoreGive(s_state.mutex);
+    play_scheduler_apply_pick_mode(mode);
 }
 
 ps_pick_mode_t play_scheduler_get_pick_mode(void)

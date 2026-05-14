@@ -93,6 +93,21 @@ static void pinned_storage_key(const pinned_order_entry_t *e, char *out, size_t 
     }
 }
 
+/* For institution pins, override channel_spec_name with "{museum}:pin" so the
+ * web UI can recover the museum id via art_institution_parse_spec() and rebuild
+ * the IIIF URL. The pinned channel's own spec_name is just "pinned", which
+ * doesn't carry the museum. Native institution channels already use the
+ * "{museum}:{axis}" convention; the placeholder axis is unused outside refresh. */
+static void pinned_stamp_institution_spec(ps_artwork_t *artwork,
+                                          const pinned_order_entry_t *entry)
+{
+    if ((pinned_source_t)entry->source != PINNED_SOURCE_INSTITUTION) return;
+    uint16_t mid = entry->museum.museum_id;
+    if (mid >= ART_INSTITUTION_MUSEUM_COUNT) return;
+    snprintf(artwork->channel_spec_name, sizeof(artwork->channel_spec_name),
+             "%s:pin", ART_INSTITUTION_MUSEUMS[mid].id);
+}
+
 // Stamp the picked channel's provenance onto the artwork. The view tracker
 // reads these fields off the artwork (via the swap pipeline) instead of
 // inferring the channel from a global state mirror, so multi-channel
@@ -496,6 +511,7 @@ static bool pick_recency_pinned(ps_state_t *state, size_t channel_index, ps_artw
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         ps_artwork_stamp_channel(out_artwork, channel_index, ch);
         out_artwork->post_source = post_source_from_pinned_source(entry->source);
+        pinned_stamp_institution_spec(out_artwork, entry);
         return true;
     }
     ESP_LOGW(TAG, "RecencyPick Pinned[%zu]: EXHAUSTED (entries=%zu skipped_missing=%d skipped_repeat=%d)",
@@ -742,6 +758,7 @@ static bool pick_random_pinned(ps_state_t *state, size_t channel_index, ps_artwo
         out_artwork->type = get_asset_type_from_extension(entry->extension);
         ps_artwork_stamp_channel(out_artwork, channel_index, ch);
         out_artwork->post_source = post_source_from_pinned_source(entry->source);
+        pinned_stamp_institution_spec(out_artwork, entry);
         return true;
     }
     /* Random sampling didn't land on a present file; fall back to recency

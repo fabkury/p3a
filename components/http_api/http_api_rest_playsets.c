@@ -135,6 +135,52 @@ cJSON *build_current_artwork_json(void)
             break;
         }
 
+        case PS_CHANNEL_TYPE_PINNED: {
+            // Pinned items keep their original post_source; storage_key holds
+            // the source's native identifier (Makapix UUID, Giphy id, IIIF
+            // key), so we rebuild the same origin URL each native source uses.
+            // For institution pins the museum id is stashed in
+            // channel_spec_name as "{museum}:pin" by play_scheduler_pick.
+            // Caveat: LoC iiif_keys lose their colons to FAT-safe underscores
+            // at pin time, so URL reconstruction is broken for LoC pins; the
+            // LCD plays from the local cache regardless.
+            if (artwork.storage_key[0] == '\0') break;
+            switch (artwork.post_source) {
+                case POST_SOURCE_GIPHY:
+                    snprintf(url, sizeof(url),
+                             "https://i.giphy.com/media/%s/giphy.webp",
+                             artwork.storage_key);
+                    break;
+                case POST_SOURCE_MAKAPIX: {
+                    uint8_t sha[32];
+                    if (storage_key_sha256(artwork.storage_key, sha) == ESP_OK) {
+                        snprintf(url, sizeof(url),
+                                 "https://%s/api/vault/%02x/%02x/%02x/%s%s",
+                                 CONFIG_MAKAPIX_CLUB_HOST,
+                                 (unsigned)sha[0], (unsigned)sha[1], (unsigned)sha[2],
+                                 artwork.storage_key, asset_type_ext(artwork.type));
+                    }
+                    break;
+                }
+                case POST_SOURCE_INSTITUTION: {
+                    char museum_id[16] = {0};
+                    char axis_unused[32] = {0};
+                    if (art_institution_parse_spec(artwork.channel_spec_name,
+                                                   museum_id, sizeof(museum_id),
+                                                   axis_unused, sizeof(axis_unused)) == ESP_OK) {
+                        institution_channel_entry_t e = {0};
+                        e.extension = (uint8_t)artwork.type;
+                        strlcpy(e.iiif_key, artwork.storage_key, sizeof(e.iiif_key));
+                        art_institution_build_iiif_url(museum_id, &e, 720, url, sizeof(url));
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+            break;
+        }
+
         case PS_CHANNEL_TYPE_SDCARD:
         default:
             break;

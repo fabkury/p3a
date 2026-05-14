@@ -63,7 +63,6 @@ static esp_err_t ensure_init(void)
     }
 
     s_initialized = true;
-    ESP_LOGI(TAG, "PPA upscaler initialized (SRM + Fill clients)");
     return ESP_OK;
 }
 
@@ -269,14 +268,6 @@ esp_err_t display_ppa_upscale_rgb(
         ESP_LOGW(TAG, "PPA SRM failed: %s (src=%dx%d scale=%.3f rot=%d)",
                  esp_err_to_name(err), src_w, src_h, quantized_scale, (int)rotation);
         return err;
-    }
-
-    static bool s_first_srm_ok = true;
-    if (s_first_srm_ok) {
-        ESP_LOGI(TAG, "PPA SRM ok (src=%dx%d -> %dx%d @ offset %d,%d scale=%.3f rot=%d)",
-                 src_w, src_h, actual_w, actual_h,
-                 offset_x, offset_y, quantized_scale, (int)rotation);
-        s_first_srm_ok = false;
     }
 
     return ESP_OK;

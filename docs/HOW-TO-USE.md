@@ -30,7 +30,7 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 
 - Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board
 - USB-C data cable (not a charging-only cable)
-- microSD card
+- microSD card (8 GB minimum; see [SD card sizing](#sd-card-sizing) below)
 - a small screwdriver
 
 ### First-time setup
@@ -38,6 +38,14 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 1. **Insert the microSD card** into the slot on the board. This requires unscrewing the back plate.
 2. **Flash the firmware**. See [flash-p3a.md](flash-p3a.md) for instructions.
 3. **Configure Wi-Fi** by following the [Wi-Fi Setup](#wi-fi-setup) instructions.
+
+### SD card sizing
+
+p3a downloads and caches artwork on the SD card, and runs an automatic eviction policy that keeps a guaranteed amount of free space at all times. Under the default settings:
+
+- Eviction kicks in when free space drops below **1 GiB** (the *trigger* watermark).
+- It deletes the least-recently-modified cached artwork until free space rises to at least **5 GiB** (the *stop* watermark = trigger + 4 GiB headroom). The 4 GiB overshoot prevents thrashing — without it, a few downloads would push free space back across the trigger line almost immediately.
+- Files newer than 4 hours are never deleted.
 
 ---
 

@@ -37,6 +37,7 @@
 - **Interface**: SDMMC (4-bit mode)
 - **Mount point**: `/sdcard` (hardware level, BSP configured)
 - **Functions**: `p3a_board_sdcard_mount()`, `p3a_board_sdcard_unmount()`, `p3a_board_sdcard_mount_point()`
+- **Minimum size**: 8 GB recommended. The automatic eviction policy in `storage_eviction` keeps at least ~5 GiB free under the default configuration (`STORAGE_EVICTION_TARGET_MIB` 1024 + `STORAGE_EVICTION_HEADROOM_MIB` 4096 = 5120 MiB stop watermark); cards smaller than that can never satisfy the stop watermark and would cause continuous eviction churn.
 - **Bus coordination**: The SDIO bus is shared between WiFi (Slot 1) and SD card (Slot 0). The `sdio_bus` component provides mutex-based coordination to prevent "SDIO slave unresponsive" crashes during concurrent access (e.g., OTA downloads).
 
 ### USB

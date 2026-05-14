@@ -191,7 +191,8 @@ All 24 custom components live under `components/`. This document describes each 
   - `storage_eviction_get_storage_info()` — query total and free bytes
   - `channel_eviction_check_and_run()` — evict stale channel metadata files
 - **Policy**: Two-watermark hysteresis. Triggers when free space drops below `STORAGE_EVICTION_TARGET_MIB`, then evicts until free space reaches `STORAGE_EVICTION_TARGET_MIB + STORAGE_EVICTION_HEADROOM_MIB`. With defaults (1024 + 4096 = 5120 MiB stop watermark), p3a keeps **at least ~5 GiB free** at all times. Cards smaller than this can't satisfy the stop watermark and would trigger eviction churn — **8 GB minimum recommended for SD card sizing**.
-- **Kconfig**: `STORAGE_EVICTION_TARGET_MIB` (trigger watermark, default 1024 MiB), `STORAGE_EVICTION_HEADROOM_MIB` (overshoot above trigger, default 4096 MiB), `STORAGE_EVICTION_INITIAL_AGE_DAYS` (default 30), `STORAGE_EVICTION_MIN_AGE_HOURS` (default 4), `CHANNEL_EVICTION_AGE_DAYS` (default 60)
+- **Small-card guard**: If the SD card's total capacity is below `STORAGE_EVICTION_MIN_CARD_SIZE_MIB` (default 7000 MiB, sized below the formatted capacity of an advertised 8 GB card), eviction skips silently. The device fills the card and stops accepting new downloads rather than thrashing the FS. Set the Kconfig to 0 to disable the guard.
+- **Kconfig**: `STORAGE_EVICTION_TARGET_MIB` (trigger watermark, default 1024 MiB), `STORAGE_EVICTION_HEADROOM_MIB` (overshoot above trigger, default 4096 MiB), `STORAGE_EVICTION_MIN_CARD_SIZE_MIB` (small-card guard, default 7000 MiB), `STORAGE_EVICTION_INITIAL_AGE_DAYS` (default 30), `STORAGE_EVICTION_MIN_AGE_HOURS` (default 4), `CHANNEL_EVICTION_AGE_DAYS` (default 60)
 
 ## 18. loader_service — Animation File Loader
 

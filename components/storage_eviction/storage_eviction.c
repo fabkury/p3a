@@ -35,12 +35,13 @@
 
 static const char *TAG = "storage_evict";
 
-#define TARGET_BYTES    ((uint64_t)CONFIG_STORAGE_EVICTION_TARGET_MIB * 1024ULL * 1024ULL)
-#define HEADROOM_BYTES  ((uint64_t)CONFIG_STORAGE_EVICTION_HEADROOM_MIB * 1024ULL * 1024ULL)
-#define STOP_BYTES      (TARGET_BYTES + HEADROOM_BYTES)
-#define INITIAL_AGE_S   ((time_t)CONFIG_STORAGE_EVICTION_INITIAL_AGE_DAYS * 86400)
-#define MIN_AGE_S       ((time_t)CONFIG_STORAGE_EVICTION_MIN_AGE_HOURS * 3600)
-#define CHANNEL_AGE_S   ((time_t)CONFIG_CHANNEL_EVICTION_AGE_DAYS * 86400)
+#define TARGET_BYTES        ((uint64_t)CONFIG_STORAGE_EVICTION_TARGET_MIB * 1024ULL * 1024ULL)
+#define HEADROOM_BYTES      ((uint64_t)CONFIG_STORAGE_EVICTION_HEADROOM_MIB * 1024ULL * 1024ULL)
+#define STOP_BYTES          (TARGET_BYTES + HEADROOM_BYTES)
+#define MIN_CARD_SIZE_BYTES ((uint64_t)CONFIG_STORAGE_EVICTION_MIN_CARD_SIZE_MIB * 1024ULL * 1024ULL)
+#define INITIAL_AGE_S       ((time_t)CONFIG_STORAGE_EVICTION_INITIAL_AGE_DAYS * 86400)
+#define MIN_AGE_S           ((time_t)CONFIG_STORAGE_EVICTION_MIN_AGE_HOURS * 3600)
+#define CHANNEL_AGE_S       ((time_t)CONFIG_CHANNEL_EVICTION_AGE_DAYS * 86400)
 
 /** Counters passed through the eviction scan */
 typedef struct {
@@ -252,6 +253,26 @@ esp_err_t storage_eviction_check_and_run(void)
     if (!sntp_sync_is_synchronized()) {
         ESP_LOGD(TAG, "SNTP not synced, skipping eviction");
         return ESP_ERR_INVALID_STATE;
+    }
+
+    /* Guard: skip on cards too small to ever satisfy the stop watermark.
+       Running eviction on a card this small would just churn the FS; we'd
+       rather fill the card and stop downloading than thrash. Warn once so
+       the condition is visible in the logs without spamming on every
+       failed-download retry. */
+    if (MIN_CARD_SIZE_BYTES > 0) {
+        uint64_t total_bytes = 0;
+        if (storage_eviction_get_storage_info(&total_bytes, NULL) == ESP_OK &&
+            total_bytes < MIN_CARD_SIZE_BYTES) {
+            static bool warned = false;
+            if (!warned) {
+                ESP_LOGW(TAG, "SD card total size %llu MiB < minimum %d MiB; eviction disabled",
+                         (unsigned long long)(total_bytes / (1024 * 1024)),
+                         CONFIG_STORAGE_EVICTION_MIN_CARD_SIZE_MIB);
+                warned = true;
+            }
+            return ESP_OK;
+        }
     }
 
     uint64_t free_bytes = 0;

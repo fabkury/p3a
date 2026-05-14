@@ -130,6 +130,16 @@ void proc_notif_fail(void)
     ESP_LOGD(TAG, "Processing notification set to failed");
 }
 
+void proc_notif_fail_if_processing(void)
+{
+    if (g_proc_notif_state == PROC_NOTIF_STATE_PROCESSING) {
+        g_proc_notif_fail_time_us = esp_timer_get_time();
+        g_proc_notif_state = PROC_NOTIF_STATE_FAILED;
+        g_proc_notif_start_time_us = 0;
+        ESP_LOGD(TAG, "Processing notification set to failed (was processing)");
+    }
+}
+
 void processing_notification_update_and_draw(uint8_t *buffer)
 {
     if (!buffer) return;

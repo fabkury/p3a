@@ -616,7 +616,16 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset)
         s_state->playback_triggered = true;
         return next_err;
     } else {
-        ESP_LOGI(TAG, "No cached entries yet - waiting for refresh/download");
+        // Distinguish "empty pinned list" (terminal — nothing will load) from
+        // "remote channel not yet fetched" (transient — loading message).
+        bool pinned_empty = (s_state->channel_count == 1 &&
+                             s_state->channels[0].type == PS_CHANNEL_TYPE_PINNED);
+
+        if (pinned_empty) {
+            ESP_LOGI(TAG, "Pinned channel is empty - showing empty-state message");
+        } else {
+            ESP_LOGI(TAG, "No cached entries yet - waiting for refresh/download");
+        }
 
         // Invalidate the old animation's front buffer so it doesn't show through
         // while we wait for the new channel to load. The channel message UI will
@@ -624,11 +633,15 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset)
         extern void animation_player_invalidate(void);
         animation_player_invalidate();
 
-        // Show loading state to user while waiting for refresh/download
-        // But only if we have WiFi connectivity (no point showing loading in AP mode)
-        if (p3a_state_has_wifi()) {
-            extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
-                                                       int progress_percent, const char *detail);
+        extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
+                                                   int progress_percent, const char *detail);
+        if (pinned_empty) {
+            p3a_render_set_channel_message(first_channel_display_name, 4 /* P3A_CHANNEL_MSG_EMPTY */, -1,
+                                            "No artworks pinned to this list.\n"
+                                            "Add pins to see them here.");
+        } else if (p3a_state_has_wifi()) {
+            // Show loading state to user while waiting for refresh/download
+            // But only if we have WiFi connectivity (no point showing loading in AP mode)
             p3a_render_set_channel_message(first_channel_display_name, 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
                                             "Loading channel...");
         }

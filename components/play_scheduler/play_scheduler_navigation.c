@@ -31,6 +31,11 @@ static const char *TAG = "ps_navigation";
 extern esp_err_t animation_player_request_swap(const swap_request_t *request) __attribute__((weak));
 extern void animation_player_display_message(const char *title, const char *body) __attribute__((weak));
 
+// Forward declaration for processing-notification helper (defined in
+// main/display_processing_notification.c). Weak so we tolerate builds where
+// the renderer is absent.
+extern void proc_notif_fail_if_processing(void) __attribute__((weak));
+
 // Maximum retries when picking files that turn out to be missing from disk
 #define PS_MAX_MISSING_FILE_RETRIES 10
 
@@ -220,6 +225,14 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
     if (!found) {
         ESP_LOGW(TAG, "No artwork available (cold start or all channels exhausted)");
         result = ESP_ERR_NOT_FOUND;
+
+        // If a user-initiated swap was in flight (blue triangle showing),
+        // turn it red immediately instead of letting it sit for the full
+        // 5 s timeout. _if_processing() variant is a no-op when no swap
+        // was started (auto-swap from dwell timer, cold start).
+        if (proc_notif_fail_if_processing) {
+            proc_notif_fail_if_processing();
+        }
 
         // Check if we should display an error message
         // Don't show messages if:

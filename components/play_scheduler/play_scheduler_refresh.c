@@ -106,6 +106,15 @@ static bool refresh_channel_is_eligible(ps_channel_state_t *ch, bool mqtt_ready)
         return false;
     }
 
+    // Pinned channels are fully loaded from local NVS at playset-load time and
+    // have no remote source. Drop refresh_pending so they don't sit forever in
+    // the queue (especially relevant when MQTT is down, which would otherwise
+    // gate them at the Makapix branch below).
+    if (ch->type == PS_CHANNEL_TYPE_PINNED) {
+        ch->refresh_pending = false;
+        return false;
+    }
+
     // Pre-empt the per-dispatcher freshness gate. Without this, every channel
     // queued at playset load (or by the periodic re-cycle) sits at
     // refreshing=true until the picker rotates through and the dispatcher's
@@ -793,6 +802,12 @@ static void refresh_task(void *arg)
         if (type == PS_CHANNEL_TYPE_SDCARD) {
             did_refresh = true;
             err = refresh_sdcard_channel(ch);
+        } else if (type == PS_CHANNEL_TYPE_PINNED) {
+            // Pinned lists are local-only; nothing to refresh. Eligibility
+            // normally filters these out; this arm is belt-and-braces so a
+            // bypass can't fall through to the Makapix path and log
+            // "Unknown Makapix channel type: 8".
+            err = ESP_OK;
         } else if (type == PS_CHANNEL_TYPE_ARTWORK) {
             did_refresh = true;
             err = refresh_artwork_channel(ch);

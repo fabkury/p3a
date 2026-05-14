@@ -178,6 +178,15 @@ void proc_notif_success(void);
 void proc_notif_fail(void);
 
 /**
+ * @brief Signal failure only if a notification is currently in progress
+ *
+ * No-op when state is IDLE. Use this from paths that may run without
+ * a user-initiated swap (auto-swap, cold start, playset initial play)
+ * to avoid producing a stray red triangle.
+ */
+void proc_notif_fail_if_processing(void);
+
+/**
  * @brief Update and draw processing notification overlay
  * 
  * Called each frame from display_render_task. Handles state machine

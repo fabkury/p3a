@@ -414,6 +414,6 @@ esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t ext
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Downloaded %s (%zu bytes)", giphy_id, total_written);
+    ESP_LOGD(TAG, "Downloaded %s (%zu bytes)", giphy_id, total_written);
     return ESP_OK;
 }

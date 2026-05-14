@@ -240,13 +240,20 @@ void channel_cache_free(channel_cache_t *cache);
 /**
  * @brief Add an entry to LAi
  *
- * Called when a download completes. Thread-safe (takes mutex).
+ * Called when a download completes. Thread-safe (takes mutex). LAi is kept
+ * sorted descending by Ci.created_at, so the new entry is insertion-sorted
+ * (O(LAi)) into its date-ranked slot. Entries below the insertion point
+ * shift down by 1.
  *
  * @param cache Cache to modify
  * @param post_id Post ID of the now-available artwork
+ * @param out_position If non-NULL, set to the insertion index on success
+ *                    (or -1 on failure). Callers tracking an external cursor
+ *                    over LAi (e.g. the play scheduler) increment it when
+ *                    out_position <= cursor.
  * @return true if added, false if already present
  */
-bool lai_add_entry(channel_cache_t *cache, int32_t post_id);
+bool lai_add_entry(channel_cache_t *cache, int32_t post_id, int *out_position);
 
 /**
  * @brief Remove an entry from LAi

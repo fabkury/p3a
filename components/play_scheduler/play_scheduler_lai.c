@@ -100,10 +100,19 @@ static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
         xSemaphoreGive(ch->cache->mutex);
 
         // lai_add_entry takes its own mutex, so we release ours first
-        bool added = lai_add_entry(ch->cache, post_id);
+        int inserted_at = -1;
+        bool added = lai_add_entry(ch->cache, post_id, &inserted_at);
         if (added) {
             ch->active = true;
             channel_cache_schedule_save(ch->cache);
+
+            // LAi insertion shifts entries at positions >= inserted_at down by
+            // one. Advance the recency cursor so it still references the same
+            // logical entry (or stays "next-up" if the insert landed at it).
+            // Caller holds s_state->mutex, so direct cursor write is safe.
+            if (inserted_at >= 0 && (uint32_t)inserted_at <= ch->cursor) {
+                ch->cursor++;
+            }
         }
         return added;
     }

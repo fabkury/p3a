@@ -242,10 +242,13 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
                             if (node) {
                                 HASH_DEL(cache->lai_hash, node);
                                 free(node);
-                                // Also remove from array
+                                // Shift-preserving remove keeps LAi sorted by created_at DESC.
                                 for (size_t k = 0; k < cache->available_count; k++) {
                                     if (cache->available_post_ids[k] == post->post_id) {
-                                        cache->available_post_ids[k] = cache->available_post_ids[--cache->available_count];
+                                        memmove(&cache->available_post_ids[k],
+                                                &cache->available_post_ids[k + 1],
+                                                (cache->available_count - k - 1) * sizeof(int32_t));
+                                        cache->available_count--;
                                         break;
                                     }
                                 }
@@ -289,10 +292,13 @@ esp_err_t channel_cache_merge_posts(channel_cache_t *cache,
                 HASH_DEL(cache->lai_hash, node);
                 free(node);
 
-                // Remove from LAi array
+                // Remove from LAi array (shift-preserving: keeps sort by created_at DESC).
                 for (size_t k = 0; k < cache->available_count; k++) {
                     if (cache->available_post_ids[k] == post_id) {
-                        cache->available_post_ids[k] = cache->available_post_ids[--cache->available_count];
+                        memmove(&cache->available_post_ids[k],
+                                &cache->available_post_ids[k + 1],
+                                (cache->available_count - k - 1) * sizeof(int32_t));
+                        cache->available_count--;
                         break;
                     }
                 }

@@ -281,6 +281,12 @@ static esp_err_t load_new_format(FILE *f, channel_cache_t *cache)
     // Build LAi hash table
     lai_rebuild_hash(cache);
 
+    // Sort loaded LAi by Ci.created_at DESC. Caches written before the
+    // sorted-LAi invariant existed are stored in download-completion order;
+    // this one-time fixup brings them in line with what lai_add_entry now
+    // maintains. Cache isn't published to the registry yet, so no mutex.
+    lai_sort_by_created_at_desc(cache);
+
     free(file_data);
     return ESP_OK;
 }
@@ -419,10 +425,13 @@ static void cache_trim_to_cap(channel_cache_t *cache,
             HASH_DEL(cache->lai_hash, node);
             free(node);
             if (cache->available_post_ids) {
+                // Shift-preserving remove keeps LAi sorted by created_at DESC.
                 for (size_t k = 0; k < cache->available_count; k++) {
                     if (cache->available_post_ids[k] == post_id) {
-                        cache->available_post_ids[k] =
-                            cache->available_post_ids[--cache->available_count];
+                        memmove(&cache->available_post_ids[k],
+                                &cache->available_post_ids[k + 1],
+                                (cache->available_count - k - 1) * sizeof(int32_t));
+                        cache->available_count--;
                         break;
                     }
                 }

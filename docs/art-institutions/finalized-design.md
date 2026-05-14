@@ -427,7 +427,7 @@ entries.
 2. Looks up the museum dispatch entry, calls
    `build_iiif_url(entry, 720, ...)`.
 3. Streams the JPEG via `esp_http_client` → vault path.
-4. On success, calls `lai_add_entry(cache, entry->post_id)`.
+4. On success, calls `lai_add_entry(cache, entry->post_id, NULL)`.
 5. Loops to step 1 until `Ci ⊆ LAi`.
 
 **Rijks resolution.** Step 2 may need to perform the 3-hop Linked Art

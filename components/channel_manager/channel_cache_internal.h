@@ -28,6 +28,18 @@ void lai_hash_free(channel_cache_t *cache);
 void lai_rebuild_hash(channel_cache_t *cache);
 
 /**
+ * @brief Sort LAi (available_post_ids) descending by Ci.created_at.
+ *
+ * One-time fixup for caches loaded from disk before the sorted-LAi invariant
+ * existed. lai_add_entry maintains the invariant for new inserts; callers
+ * after a fresh load must call this once so the picker walks newest-first.
+ *
+ * Caller must hold cache->mutex (or call before publishing the cache).
+ * Requires Ci's post_id_hash to be built (call ci_rebuild_hash_tables first).
+ */
+void lai_sort_by_created_at_desc(channel_cache_t *cache);
+
+/**
  * @brief Build vault file path for a Makapix-style entry (kind=artwork).
  *
  * Uses the storage_key_uuid + SHA256 sharding scheme:

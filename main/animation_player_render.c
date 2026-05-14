@@ -19,8 +19,11 @@
 #include "display_ppa_upscaler.h"
 #endif
 
-// Processing notification (from display_renderer_priv.h via weak symbol)
+// Processing notification (from display_renderer_priv.h via weak symbol).
+// Terminal swap-pipeline sites in this file must signal one of these so the
+// indicator doesn't get stuck blue until the watchdog fires.
 extern void proc_notif_success(void) __attribute__((weak));
+extern void proc_notif_fail_if_processing(void) __attribute__((weak));
 
 // Frame rendering state
 static bool s_use_prefetched = false;
@@ -314,7 +317,7 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
         
         if (!buffer_valid) {
             ESP_LOGE(TAG, "Prefetch aborted: back buffer invalid (decoder=%p, frame=%p, pending=%d)",
-                     (void*)s_back_buffer.decoder, 
+                     (void*)s_back_buffer.decoder,
                      (void*)s_back_buffer.native_frame_b1,
                      (int)s_back_buffer.prefetch_pending);
             if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
@@ -328,6 +331,8 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
             if (s_prefetch_done_sem) {
                 xSemaphoreGive(s_prefetch_done_sem);
             }
+            // Terminal failure for a user-initiated swap (no-op for auto-swap).
+            if (proc_notif_fail_if_processing) proc_notif_fail_if_processing();
             goto skip_prefetch;
         }
         
@@ -375,6 +380,9 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
 
             // No auto-retry or navigation on prefetch failure
             ESP_LOGW(TAG, "Prefetch failed: %s", esp_err_to_name(prefetch_err));
+
+            // Terminal failure for a user-initiated swap (no-op for auto-swap).
+            if (proc_notif_fail_if_processing) proc_notif_fail_if_processing();
         }
     }
 

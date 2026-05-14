@@ -34,6 +34,13 @@ bool sdio_bus_is_locked(void);
 const char *sdio_bus_get_holder(void);
 bool ota_manager_is_checking(void);
 
+// Processing notification (from display_renderer_priv.h via weak symbol).
+// All terminal swap-pipeline sites must signal proc_notif_fail_if_processing
+// on failure or proc_notif_success on success so the indicator doesn't get
+// stuck blue until the watchdog fires.
+extern void proc_notif_success(void) __attribute__((weak));
+extern void proc_notif_fail_if_processing(void) __attribute__((weak));
+
 // ============================================================================
 // Corrupt file deletion safeguard
 // ============================================================================
@@ -171,6 +178,8 @@ static void discard_failed_silent_swap(esp_err_t error, int32_t post_id, const c
                  esp_err_to_name(error), basename_of(filepath), s_auto_retry_count);
         show_load_error_message(error, filepath);
         animation_loader_reset_auto_retry_state();
+        // Terminal failure for a user-initiated swap (no-op for auto-swap).
+        if (proc_notif_fail_if_processing) proc_notif_fail_if_processing();
     }
 }
 
@@ -186,6 +195,8 @@ static void discard_failed_loud_swap(esp_err_t error, const char *filepath)
              esp_err_to_name(error), basename_of(filepath));
     animation_loader_reset_auto_retry_state();
     show_load_error_message(error, filepath);
+    // Terminal failure for a user-initiated swap (no-op for auto-swap).
+    if (proc_notif_fail_if_processing) proc_notif_fail_if_processing();
 }
 
 static void discard_failed_swap_request(esp_err_t error, swap_fail_mode_t fail_mode,
@@ -217,6 +228,11 @@ static void discard_ignored_swap_request(void)
 
         xSemaphoreGive(s_buffer_mutex);
     }
+    // Same-file dedup is a no-op completion, not an error. Treat it as
+    // success so the proc-notif triangle clears immediately for a
+    // user-initiated swap (no-op for auto-swap, since success only acts
+    // on non-IDLE state).
+    if (proc_notif_success) proc_notif_success();
 }
 
 // Evict a post_id from LAi across all active channels.
@@ -499,6 +515,8 @@ void animation_loader_task(void *arg)
                 ESP_LOGE(TAG, "Silent swap: too many blocklist skips, giving up and displaying error");
                 show_load_error_message(ESP_ERR_NOT_FOUND, filepath);
                 animation_loader_reset_auto_retry_state();
+                // Terminal failure for a user-initiated swap (no-op for auto-swap).
+                if (proc_notif_fail_if_processing) proc_notif_fail_if_processing();
             } else {
                 event_bus_emit_simple(P3A_EVENT_SWAP_NEXT);
             }

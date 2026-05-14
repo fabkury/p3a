@@ -15,7 +15,13 @@
 static const char *TAG = "proc_notif";
 
 // Timing constants
-#define PROC_NOTIF_TIMEOUT_MS       5000    // Timeout for swap (triggers failure)
+//
+// PROC_NOTIF_WATCHDOG_MS is a safety net, not a primary failure trigger.
+// Terminal swap-failure sites in the animation_player and play_scheduler
+// signal proc_notif_fail_if_processing() explicitly. If a future code path
+// adds a failure without that signal, the watchdog turns the triangle red
+// after this interval and logs a warning so the gap is observable.
+#define PROC_NOTIF_WATCHDOG_MS      30000   // Sanity cap on BLUE state
 #define PROC_NOTIF_FAIL_DISPLAY_MS  3000    // How long to show red triangle
 
 // Cached config values (re-read periodically)
@@ -101,9 +107,14 @@ static void draw_checkerboard_triangle(uint8_t *buffer, uint8_t r, uint8_t g, ui
 
 void proc_notif_start(void)
 {
-    // Only start if not already in PROCESSING or FAILED state
-    if (g_proc_notif_state == PROC_NOTIF_STATE_IDLE) {
+    // Start (or restart) on every user-initiated swap. IDLE→PROCESSING is the
+    // common case; FAILED→PROCESSING lets a rapid retap clear the red flash
+    // and reflect that a new swap is now underway. From PROCESSING we no-op
+    // so a stacked second tap during an in-flight swap doesn't reset the
+    // clock — the in-flight swap will signal terminal state on its own.
+    if (g_proc_notif_state != PROC_NOTIF_STATE_PROCESSING) {
         g_proc_notif_start_time_us = esp_timer_get_time();
+        g_proc_notif_fail_time_us = 0;
         g_proc_notif_state = PROC_NOTIF_STATE_PROCESSING;
         ESP_LOGD(TAG, "Processing notification started");
     }
@@ -176,11 +187,15 @@ void processing_notification_update_and_draw(uint8_t *buffer)
             return;
             
         case PROC_NOTIF_STATE_PROCESSING:
-            // Check for timeout (5 seconds)
-            if ((now_us - g_proc_notif_start_time_us) > ((int64_t)PROC_NOTIF_TIMEOUT_MS * 1000LL)) {
+            // Watchdog: terminal swap sites are expected to signal explicitly
+            // via proc_notif_success / proc_notif_fail_if_processing. This
+            // branch should never fire under correct operation; if it does,
+            // some failure path is missing its terminal signal.
+            if ((now_us - g_proc_notif_start_time_us) > ((int64_t)PROC_NOTIF_WATCHDOG_MS * 1000LL)) {
                 g_proc_notif_state = PROC_NOTIF_STATE_FAILED;
                 g_proc_notif_fail_time_us = now_us;
-                ESP_LOGW(TAG, "Processing notification timed out - swap failed");
+                ESP_LOGW(TAG, "Processing notification watchdog fired after %d ms — swap pipeline did not signal terminal state",
+                         PROC_NOTIF_WATCHDOG_MS);
                 // Fall through to draw red triangle
             } else {
                 // Draw blue triangle (processing)

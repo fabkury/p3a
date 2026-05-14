@@ -94,7 +94,10 @@ esp_err_t config_store_get_serialized(char **out_json, size_t *out_len) {
         // Default empty object
         const char *empty = "{}";
         *out_len = strlen(empty);
-        *out_json = malloc(*out_len + 1);
+        *out_json = heap_caps_malloc(*out_len + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!*out_json) {
+            *out_json = heap_caps_malloc(*out_len + 1, MALLOC_CAP_8BIT);
+        }
         if (!*out_json) {
             nvs_close(h);
             return ESP_ERR_NO_MEM;

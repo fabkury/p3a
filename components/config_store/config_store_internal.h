@@ -11,6 +11,7 @@
 #include "config_store.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "cJSON.h"
 #include "sdkconfig.h"

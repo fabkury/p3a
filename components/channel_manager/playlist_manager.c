@@ -641,7 +641,7 @@ static esp_err_t load_playlist_json(const char *filepath, playlist_metadata_t **
     }
     
     // Read file
-    char *json_string = (char *)malloc(fsize + 1);
+    char *json_string = (char *)psram_malloc(fsize + 1);
     if (!json_string) {
         fclose(f);
         return ESP_ERR_NO_MEM;

@@ -126,8 +126,9 @@ static esp_err_t serve_success_page_with_ssid(httpd_req_t *req, const char *ssid
         return ESP_FAIL;
     }
 
-    // Allocate buffer for file content
-    char *html = malloc(size + 1);
+    // Allocate buffer for file content (prefer PSRAM)
+    char *html = heap_caps_malloc(size + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!html) html = heap_caps_malloc(size + 1, MALLOC_CAP_8BIT);
     if (!html) {
         fclose(f);
         httpd_resp_set_status(req, "500 Internal Server Error");
@@ -151,9 +152,10 @@ static esp_err_t serve_success_page_with_ssid(httpd_req_t *req, const char *ssid
         size_t before_len = placeholder_pos - html;
         size_t after_len = bytes_read - before_len - placeholder_len;
 
-        // Allocate new buffer for modified HTML
+        // Allocate new buffer for modified HTML (prefer PSRAM)
         size_t new_size = before_len + ssid_len + after_len + 1;
-        char *new_html = malloc(new_size);
+        char *new_html = heap_caps_malloc(new_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!new_html) new_html = heap_caps_malloc(new_size, MALLOC_CAP_8BIT);
         if (new_html) {
             memcpy(new_html, html, before_len);
             memcpy(new_html + before_len, ssid_escaped, ssid_len);
@@ -179,7 +181,8 @@ static esp_err_t serve_success_page_with_ssid(httpd_req_t *req, const char *ssid
             size_t before_len = pos - html;
             size_t after_len = bytes_read - before_len - hn_placeholder_len;
             size_t new_size = before_len + hn_len + after_len + 1;
-            char *new_html = malloc(new_size);
+            char *new_html = heap_caps_malloc(new_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            if (!new_html) new_html = heap_caps_malloc(new_size, MALLOC_CAP_8BIT);
             if (!new_html) break;
             memcpy(new_html, html, before_len);
             memcpy(new_html + before_len, hn, hn_len);
@@ -546,6 +549,14 @@ static httpd_uri_t canonical = {
     .user_ctx  = NULL
 };
 
+// PSRAM-backed stack for the captive-portal DNS server task. Allocated once
+// on first start and reused if the captive portal is re-entered; the task
+// handle guards against double-creation.
+#define DNS_SERVER_TASK_STACK_SIZE 4096
+static StackType_t *s_dns_server_stack = NULL;
+static StaticTask_t s_dns_server_task_buffer;
+static TaskHandle_t s_dns_server_task_handle = NULL;
+
 /* DNS Server for Captive Portal - responds with AP IP to all queries */
 static void dns_server_task(void *pvParameters)
 {
@@ -645,8 +656,25 @@ static void start_captive_portal(void)
         ESP_LOGE(TAG, "Failed to start HTTP server");
     }
 
-    // Start DNS server task
-    xTaskCreate(dns_server_task, "dns_server", 4096, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, NULL);
+    // Start DNS server task (single-instance; skip if already running).
+    // Prefer a PSRAM-resident stack to reduce internal-RAM pressure.
+    if (s_dns_server_task_handle == NULL) {
+        if (!s_dns_server_stack) {
+            s_dns_server_stack = heap_caps_malloc(DNS_SERVER_TASK_STACK_SIZE * sizeof(StackType_t),
+                                                   MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        }
+        if (s_dns_server_stack) {
+            s_dns_server_task_handle = xTaskCreateStatic(dns_server_task, "dns_server",
+                                                          DNS_SERVER_TASK_STACK_SIZE, NULL,
+                                                          CONFIG_P3A_NETWORK_TASK_PRIORITY,
+                                                          s_dns_server_stack, &s_dns_server_task_buffer);
+        }
+        if (s_dns_server_task_handle == NULL) {
+            ESP_LOGW(TAG, "PSRAM stack unavailable for dns_server, falling back to internal RAM");
+            xTaskCreate(dns_server_task, "dns_server", DNS_SERVER_TASK_STACK_SIZE, NULL,
+                        CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_dns_server_task_handle);
+        }
+    }
 }
 
 /* Start mDNS in AP mode so p3a.local works during WiFi setup.

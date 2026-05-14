@@ -13,6 +13,7 @@
 #include "esp_log.h"
 #include "esp_lcd_touch.h"
 #include "esp_system.h"
+#include "esp_heap_caps.h"
 #include "p3a_board.h"
 #include "app_lcd.h"
 #include "app_usb.h"
@@ -41,6 +42,12 @@ static const char *TAG = "app_touch";
 
 
 static esp_lcd_touch_handle_t tp = NULL;
+
+// PSRAM-backed stack for the long-lived app_touch_task. Allocated once at
+// init and never freed; the task runs for the lifetime of the device.
+#define APP_TOUCH_TASK_STACK_SIZE 8192
+static StackType_t *s_app_touch_stack = NULL;
+static StaticTask_t s_app_touch_task_buffer;
 
 /**
  * @brief Gesture state machine states
@@ -641,11 +648,25 @@ esp_err_t app_touch_init(void)
     // NOTE: Touch task stack must be large enough for gesture routing + logging.
     // Some tap paths can indirectly trigger deeper call chains (e.g. channel rebuild),
     // and 4KB has proven insufficient (stack overflow faults).
-    created = xTaskCreate(app_touch_task, "app_touch_task", 8192, NULL,
-                          CONFIG_P3A_TOUCH_TASK_PRIORITY, NULL);
-    if (created != pdPASS) {
-        ESP_LOGE(TAG, "touch task creation failed");
-        return ESP_FAIL;
+    // Prefer a PSRAM-resident stack to reduce DMA-capable internal-RAM pressure.
+    TaskHandle_t task = NULL;
+    if (!s_app_touch_stack) {
+        s_app_touch_stack = heap_caps_malloc(APP_TOUCH_TASK_STACK_SIZE * sizeof(StackType_t),
+                                              MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    }
+    if (s_app_touch_stack) {
+        task = xTaskCreateStatic(app_touch_task, "app_touch_task",
+                                 APP_TOUCH_TASK_STACK_SIZE, NULL,
+                                 CONFIG_P3A_TOUCH_TASK_PRIORITY,
+                                 s_app_touch_stack, &s_app_touch_task_buffer);
+    }
+    if (!task) {
+        ESP_LOGW(TAG, "PSRAM stack unavailable, falling back to internal RAM");
+        if (xTaskCreate(app_touch_task, "app_touch_task", APP_TOUCH_TASK_STACK_SIZE, NULL,
+                        CONFIG_P3A_TOUCH_TASK_PRIORITY, NULL) != pdPASS) {
+            ESP_LOGE(TAG, "touch task creation failed");
+            return ESP_FAIL;
+        }
     }
 
     return ESP_OK;

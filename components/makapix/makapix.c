@@ -39,6 +39,12 @@ static StackType_t *s_ch_switch_stack = NULL;
 static StaticTask_t s_ch_switch_task_buffer;
 TaskHandle_t s_channel_switch_task_handle = NULL;  // Handle for channel switch task
 
+// PSRAM-backed stack for provisioning task. Single-instance: callers
+// guarantee the prior polling task has exited before invoking
+// makapix_start_provisioning() again (see the wait loop in that function).
+static StackType_t *s_prov_stack = NULL;
+static StaticTask_t s_prov_task_buffer;
+
 TimerHandle_t s_status_timer = NULL;
 
 channel_handle_t s_current_channel = NULL;  // Current active Makapix channel
@@ -219,12 +225,29 @@ esp_err_t makapix_start_provisioning(void)
     makapix_set_state(MAKAPIX_STATE_PROVISIONING);
     s_provisioning_cancelled = false;  // Reset cancellation flag
 
-    // Start provisioning task
-    BaseType_t ret = xTaskCreate(makapix_provisioning_task, "makapix_prov", 8192, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, NULL);
-    if (ret != pdPASS) {
-        ESP_LOGE(MAKAPIX_TAG, "Failed to create provisioning task");
-        makapix_set_state(MAKAPIX_STATE_IDLE);
-        return ESP_ERR_NO_MEM;
+    // Start provisioning task. Prefer a PSRAM-resident stack to reduce
+    // internal-RAM pressure; fall back to dynamic on PSRAM failure.
+    const size_t prov_stack_size = 8192;
+    if (!s_prov_stack) {
+        s_prov_stack = heap_caps_malloc(prov_stack_size * sizeof(StackType_t),
+                                         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    }
+
+    TaskHandle_t prov_task = NULL;
+    if (s_prov_stack) {
+        prov_task = xTaskCreateStatic(makapix_provisioning_task, "makapix_prov",
+                                       prov_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
+                                       s_prov_stack, &s_prov_task_buffer);
+    }
+
+    if (!prov_task) {
+        ESP_LOGW(MAKAPIX_TAG, "PSRAM stack unavailable for provisioning task, falling back to internal RAM");
+        if (xTaskCreate(makapix_provisioning_task, "makapix_prov", prov_stack_size, NULL,
+                        CONFIG_P3A_NETWORK_TASK_PRIORITY, NULL) != pdPASS) {
+            ESP_LOGE(MAKAPIX_TAG, "Failed to create provisioning task");
+            makapix_set_state(MAKAPIX_STATE_IDLE);
+            return ESP_ERR_NO_MEM;
+        }
     }
 
     return ESP_OK;

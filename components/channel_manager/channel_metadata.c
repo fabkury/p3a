@@ -10,6 +10,7 @@
  */
 
 #include "channel_metadata.h"
+#include "psram_alloc.h"
 #include "cJSON.h"
 #include "esp_log.h"
 #include <stdio.h>
@@ -147,7 +148,7 @@ esp_err_t channel_metadata_load(const char *channel_id,
         return ESP_ERR_INVALID_SIZE;
     }
 
-    char *json_buf = malloc(size + 1);
+    char *json_buf = psram_malloc(size + 1);
     if (!json_buf) {
         fclose(f);
         return ESP_ERR_NO_MEM;

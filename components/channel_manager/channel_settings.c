@@ -8,6 +8,7 @@
 
 #include "channel_settings.h"
 #include "sd_path.h"
+#include "psram_alloc.h"
 #include "cJSON.h"
 #include "esp_log.h"
 #include <stdio.h>
@@ -35,7 +36,7 @@ static esp_err_t load_json_file(const char *path, cJSON **out_json)
         return ESP_ERR_INVALID_SIZE;
     }
 
-    char *buf = (char *)malloc((size_t)sz + 1);
+    char *buf = (char *)psram_malloc((size_t)sz + 1);
     if (!buf) {
         fclose(f);
         return ESP_ERR_NO_MEM;

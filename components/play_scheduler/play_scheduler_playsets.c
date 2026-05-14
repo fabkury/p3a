@@ -24,6 +24,7 @@
 #include "makapix.h"
 #include "giphy.h"
 #include "pin_lists.h"
+#include "psram_alloc.h"
 #include "esp_log.h"
 #include "mbedtls/sha256.h"
 #include <stdio.h>
@@ -177,7 +178,7 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
         ch->entries = NULL;
     }
 
-    ch->entries = malloc(ch->entry_count * entry_size);
+    ch->entries = psram_malloc(ch->entry_count * entry_size);
     if (!ch->entries) {
         ESP_LOGE(TAG, "Channel '%s': failed to allocate %zu entries", ch->display_name, ch->entry_count);
         ch->cache_loaded = false;

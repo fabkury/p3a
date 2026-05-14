@@ -9,6 +9,7 @@
 #include "pin_lists_internal.h"
 #include "sd_path.h"
 #include "cJSON.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include <errno.h>
 #include <stdio.h>
@@ -30,7 +31,8 @@ static esp_err_t read_manifest_file(const char *path, pl_manifest_t *out)
         fclose(f);
         return ESP_ERR_INVALID_SIZE;
     }
-    char *buf = malloc(sz + 1);
+    char *buf = heap_caps_malloc(sz + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!buf) buf = heap_caps_malloc(sz + 1, MALLOC_CAP_8BIT);
     if (!buf) { fclose(f); return ESP_ERR_NO_MEM; }
     size_t got = fread(buf, 1, sz, f);
     fclose(f);

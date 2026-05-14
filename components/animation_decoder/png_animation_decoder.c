@@ -190,7 +190,11 @@ esp_err_t png_decoder_init(animation_decoder_t **decoder, const uint8_t *data, s
     }
 
     // Allocate row pointers
-    png_bytep *row_pointers = (png_bytep *)malloc(height * sizeof(png_bytep));
+    png_bytep *row_pointers = (png_bytep *)heap_caps_malloc(height * sizeof(png_bytep),
+                                                             MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!row_pointers) {
+        row_pointers = (png_bytep *)heap_caps_malloc(height * sizeof(png_bytep), MALLOC_CAP_8BIT);
+    }
     if (!row_pointers) {
         ESP_LOGE(TAG, "Failed to allocate row pointers");
         free(png_data->rgba_buffer);

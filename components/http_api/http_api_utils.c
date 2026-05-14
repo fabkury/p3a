@@ -9,6 +9,7 @@
  */
 
 #include "http_api_internal.h"
+#include "psram_alloc.h"
 #include <strings.h>
 
 static int hex_digit(char c)
@@ -84,7 +85,7 @@ char* recv_body_json(httpd_req_t *req, size_t *out_len, int *out_err_status) {
         return NULL;
     }
 
-    char *buf = malloc(total + 1);
+    char *buf = psram_malloc(total + 1);
     if (!buf) {
         *out_err_status = 500;
         return NULL;

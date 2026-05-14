@@ -17,6 +17,7 @@
 #include "animation_player.h"
 #include "play_scheduler.h"
 #include "app_lcd.h"
+#include "psram_alloc.h"
 
 // ---------- Config Handlers ----------
 
@@ -315,7 +316,7 @@ esp_err_t h_post_rotation(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    char *buf = malloc(req->content_len + 1);
+    char *buf = psram_malloc(req->content_len + 1);
     if (!buf) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;

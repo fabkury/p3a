@@ -162,7 +162,7 @@ static esp_err_t read_file_to_buf(const char *path, char **out_buf, size_t *out_
         return ESP_ERR_INVALID_SIZE;
     }
 
-    char *buf = (char *)malloc((size_t)sz + 1);
+    char *buf = (char *)psram_malloc((size_t)sz + 1);
     if (!buf) {
         fclose(f);
         return ESP_ERR_NO_MEM;

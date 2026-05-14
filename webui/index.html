@@ -277,6 +277,11 @@ body {
 .shuffle-btn:hover { background: rgba(255,255,255,0.28); }
 .shuffle-btn.active { background: white; color: #667eea; }
 .shuffle-btn.active:hover { background: rgba(255,255,255,0.92); }
+.shuffle-btn .shuffle-state {
+    display: inline-block;
+    min-width: 1.7em;
+    text-align: left;
+}
 .now-playing-channels {
     border-top: 1px solid rgba(255,255,255,0.2);
     padding: 6px 10px var(--sp-2);
@@ -563,7 +568,7 @@ body {
     <div class="now-playing-header" onclick="toggleNowPlaying()">
         <button type="button" class="shuffle-btn" id="shuffle-btn"
                 onclick="event.stopPropagation(); toggleShuffle();"
-                aria-pressed="false" aria-label="Shuffle">Shuffle</button>
+                aria-pressed="false">Shuffle is <span class="shuffle-state" id="shuffle-state">off</span></button>
         <div class="now-playing-header-text">
             <div class="now-playing-name" id="now-playing-name"></div>
             <div class="now-playing-stats" id="now-playing-stats"></div>
@@ -1897,6 +1902,8 @@ function updateNowPlaying(name, info, displayOverride) {
             var on = (info.pick_mode === 'random');
             btn.classList.toggle('active', on);
             btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            var stateEl = document.getElementById('shuffle-state');
+            if (stateEl) stateEl.textContent = on ? 'on' : 'off';
         }
     }
     card.style.display = '';
@@ -1907,9 +1914,11 @@ var shufflePendingHydrate = false;
 function toggleShuffle() {
     var btn = document.getElementById('shuffle-btn');
     if (!btn) return;
+    var stateEl = document.getElementById('shuffle-state');
     var nextOn = !btn.classList.contains('active');
     btn.classList.toggle('active', nextOn);
     btn.setAttribute('aria-pressed', nextOn ? 'true' : 'false');
+    if (stateEl) stateEl.textContent = nextOn ? 'on' : 'off';
     shufflePendingHydrate = true;
     var xhr = new XMLHttpRequest();
     xhr.open('PUT', '/config?merge=true', true);
@@ -1921,6 +1930,7 @@ function toggleShuffle() {
             // Roll back the visual state on failure
             btn.classList.toggle('active', !nextOn);
             btn.setAttribute('aria-pressed', (!nextOn) ? 'true' : 'false');
+            if (stateEl) stateEl.textContent = (!nextOn) ? 'on' : 'off';
             showToast('Failed to update Shuffle', true);
         }
     };

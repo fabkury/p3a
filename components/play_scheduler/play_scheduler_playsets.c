@@ -400,7 +400,11 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
         ch->entries = entries;
         ch->entry_count = count;
         ch->available_post_ids = NULL;
-        ch->available_count = 0;
+        // Pinned channels have no LAi cycle — every entry is always playable,
+        // so available_count mirrors entry_count. play_scheduler_get_total_available()
+        // reads this field when ch->cache is NULL; leaving it at 0 would make the
+        // auto-swap timer think there's nothing to swap to.
+        ch->available_count = count;
         ch->cache = NULL;
         ch->cache_loaded = true;
         ch->active = (count > 0);

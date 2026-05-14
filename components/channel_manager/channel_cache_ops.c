@@ -276,8 +276,9 @@ bool lai_add_entry(channel_cache_t *cache, int32_t post_id, int *out_position)
     return true;
 }
 
-bool lai_remove_entry(channel_cache_t *cache, int32_t post_id)
+bool lai_remove_entry(channel_cache_t *cache, int32_t post_id, int *out_position)
 {
+    if (out_position) *out_position = -1;
     if (!cache) {
         return false;
     }
@@ -296,8 +297,12 @@ bool lai_remove_entry(channel_cache_t *cache, int32_t post_id)
     HASH_DEL(cache->lai_hash, node);
     free(node);
 
-    // Shift-preserving remove keeps LAi in sorted order so the recency picker's
-    // walk position stays meaningful across mutations.
+    // Shift-preserving remove keeps LAi sorted by Ci.created_at DESC. Entries
+    // at positions > removed_pos shift left by one, so an external recency
+    // cursor at cursor > removed_pos must decrement to keep referencing the
+    // same logical entry. cursor == removed_pos stays put: the slot now holds
+    // what was the next-up entry, which is exactly what cursor should point
+    // at next.
     if (cache->available_post_ids) {
         for (size_t i = 0; i < cache->available_count; i++) {
             if (cache->available_post_ids[i] == post_id) {
@@ -305,6 +310,7 @@ bool lai_remove_entry(channel_cache_t *cache, int32_t post_id)
                         &cache->available_post_ids[i + 1],
                         (cache->available_count - i - 1) * sizeof(int32_t));
                 cache->available_count--;
+                if (out_position) *out_position = (int)i;
                 break;
             }
         }

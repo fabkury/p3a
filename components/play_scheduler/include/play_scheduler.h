@@ -294,6 +294,27 @@ size_t play_scheduler_get_active_channel_ids(const char **out_ids, size_t max_co
 void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id);
 
 /**
+ * @brief Compensate the recency cursor after a caller-side lai_remove_entry
+ *
+ * lai_remove_entry shifts LAi entries at positions > removed_pos left by one.
+ * The channel's recency cursor must decrement when cursor > removed_pos to
+ * keep referencing the same logical entry; cursor == removed_pos stays put
+ * (the slot now holds the next-up entry). Takes s_state->mutex internally —
+ * not safe to call while already holding it.
+ *
+ * Use this from refresh-side callers (orphan eviction during giphy / museum /
+ * makapix refresh, etc.) that don't run inside the scheduler critical
+ * section. Scheduler-internal callers already holding the state mutex
+ * (pick, navigation, animation loader eviction) should adjust cursor inline
+ * with `if (cursor > removed_pos) cursor--;`.
+ *
+ * @param cache The cache whose LAi was just modified
+ * @param removed_pos The position returned via out_position from lai_remove_entry
+ */
+void play_scheduler_compensate_cursor_after_lai_remove(channel_cache_t *cache,
+                                                       int removed_pos);
+
+/**
  * @brief Get total available artwork count across all channels
  *
  * Returns the sum of LAi sizes for all active channels.

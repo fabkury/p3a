@@ -258,14 +258,20 @@ bool lai_add_entry(channel_cache_t *cache, int32_t post_id, int *out_position);
 /**
  * @brief Remove an entry from LAi
  *
- * Called when a file is deleted or fails to load. Uses swap-and-pop for O(1).
- * Thread-safe (takes mutex).
+ * Called when a file is deleted or fails to load. Shift-preserves order so
+ * the array stays sorted by Ci.created_at DESC. Thread-safe (takes mutex).
  *
  * @param cache Cache to modify
  * @param post_id Post ID of the artwork to remove
+ * @param out_position If non-NULL, set to the removed index on success
+ *                    (or -1 on failure). Callers tracking an external cursor
+ *                    over LAi (e.g. the play scheduler) decrement it when
+ *                    cursor > out_position. See
+ *                    play_scheduler_compensate_cursor_after_lai_remove() for
+ *                    callers without direct access to channel state.
  * @return true if removed, false if not present
  */
-bool lai_remove_entry(channel_cache_t *cache, int32_t post_id);
+bool lai_remove_entry(channel_cache_t *cache, int32_t post_id, int *out_position);
 
 /**
  * @brief Check if an entry is in LAi

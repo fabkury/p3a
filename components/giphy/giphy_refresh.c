@@ -221,7 +221,10 @@ static void giphy_evict_orphans(channel_cache_t *cache, si_node_t *si_hash)
 
     // Remove evicted entries from LAi (outside mutex — lai_remove_entry locks internally)
     for (size_t i = 0; i < evicted; i++) {
-        lai_remove_entry(cache, evicted_ids[i]);
+        int removed_pos = -1;
+        if (lai_remove_entry(cache, evicted_ids[i], &removed_pos)) {
+            play_scheduler_compensate_cursor_after_lai_remove(cache, removed_pos);
+        }
     }
     free(evicted_ids);
 

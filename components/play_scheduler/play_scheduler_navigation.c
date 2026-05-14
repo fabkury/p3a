@@ -57,12 +57,18 @@ static void ps_handle_missing_file(ps_state_t *state, const ps_artwork_t *artwor
         return;
     }
 
-    // Remove from LAi (lai_remove_entry is thread-safe, takes its own mutex)
-    bool removed = lai_remove_entry(ch->cache, artwork->post_id);
+    // Remove from LAi (lai_remove_entry is thread-safe, takes its own mutex).
+    // Caller (prepare_and_request_swap) runs under s_state->mutex, so we can
+    // compensate the cursor inline.
+    int removed_pos = -1;
+    bool removed = lai_remove_entry(ch->cache, artwork->post_id, &removed_pos);
 
     if (removed) {
         ESP_LOGW(TAG, "Evicted missing file from LAi: post_id=%ld, file=%s",
                  (long)artwork->post_id, artwork->filepath);
+        if (removed_pos >= 0 && ch->cursor > (uint32_t)removed_pos) {
+            ch->cursor--;
+        }
         channel_cache_schedule_save(ch->cache);
     }
 

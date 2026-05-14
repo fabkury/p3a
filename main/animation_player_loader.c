@@ -234,14 +234,19 @@ static void animation_loader_evict_from_lai(int32_t post_id)
 
     xSemaphoreTake(state->mutex, portMAX_DELAY);
     for (size_t i = 0; i < state->channel_count; i++) {
-        channel_cache_t *cache = state->channels[i].cache;
+        ps_channel_state_t *ch = &state->channels[i];
+        channel_cache_t *cache = ch->cache;
         if (!cache) {
             continue;
         }
         // lai_remove_entry takes its own mutex
-        if (lai_remove_entry(cache, post_id)) {
+        int removed_pos = -1;
+        if (lai_remove_entry(cache, post_id, &removed_pos)) {
             ESP_LOGW(TAG, "Evicted corrupt entry from LAi: post_id=%ld, channel=%zu",
                      (long)post_id, i);
+            if (removed_pos >= 0 && ch->cursor > (uint32_t)removed_pos) {
+                ch->cursor--;
+            }
             channel_cache_schedule_save(cache);
         }
     }

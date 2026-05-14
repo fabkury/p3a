@@ -22,6 +22,7 @@
 #include "art_institution.h"
 #include "art_institution_internal.h"
 #include "channel_cache.h"
+#include "play_scheduler.h"
 #include "psram_alloc.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -169,7 +170,10 @@ void art_institution_evict_orphans(struct channel_cache_s *cache,
     xSemaphoreGive(cache->mutex);
 
     for (size_t i = 0; i < evicted; i++) {
-        lai_remove_entry(cache, evicted_ids[i]);
+        int removed_pos = -1;
+        if (lai_remove_entry(cache, evicted_ids[i], &removed_pos)) {
+            play_scheduler_compensate_cursor_after_lai_remove(cache, removed_pos);
+        }
     }
     free(evicted_ids);
 

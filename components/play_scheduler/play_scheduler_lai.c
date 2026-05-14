@@ -214,6 +214,27 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
     xSemaphoreGive(s_state->mutex);
 }
 
+void play_scheduler_compensate_cursor_after_lai_remove(channel_cache_t *cache,
+                                                       int removed_pos)
+{
+    if (!cache || removed_pos < 0) return;
+
+    ps_state_t *s_state = ps_get_state();
+    if (!s_state->initialized) return;
+
+    xSemaphoreTake(s_state->mutex, portMAX_DELAY);
+    for (size_t i = 0; i < s_state->channel_count; i++) {
+        ps_channel_state_t *ch = &s_state->channels[i];
+        if (ch->cache == cache) {
+            if (ch->cursor > (uint32_t)removed_pos) {
+                ch->cursor--;
+            }
+            break;  // each cache is owned by at most one channel state
+        }
+    }
+    xSemaphoreGive(s_state->mutex);
+}
+
 // ============================================================================
 // Stats & Availability
 // ============================================================================

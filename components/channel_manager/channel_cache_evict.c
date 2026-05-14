@@ -14,6 +14,7 @@
 #include "channel_cache_evict.h"
 #include "channel_cache.h"
 #include "channel_cache_internal.h"  // build_vault_path_from_entry, ci_post_id_node_t
+#include "play_scheduler.h"
 #include "psram_alloc.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -96,7 +97,10 @@ void channel_cache_evict_orphans_makapix(channel_cache_t *cache,
 
     // LAi cleanup outside the cache mutex — lai_remove_entry locks internally.
     for (size_t i = 0; i < evicted; i++) {
-        lai_remove_entry(cache, evicted_ids[i]);
+        int removed_pos = -1;
+        if (lai_remove_entry(cache, evicted_ids[i], &removed_pos)) {
+            play_scheduler_compensate_cursor_after_lai_remove(cache, removed_pos);
+        }
     }
     free(evicted_ids);
 

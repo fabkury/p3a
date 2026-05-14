@@ -361,8 +361,12 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
         if (ci_index == UINT32_MAX) {
             ESP_LOGI(TAG, "  RecencyPick: LAi[%lu] post_id=%ld NOT FOUND in Ci (hash miss), evicting stale entry",
                      (unsigned long)lai_index, (long)post_id);
-            lai_remove_entry(ch->cache, post_id);
+            lai_remove_entry(ch->cache, post_id, NULL);
             available_count = ch->cache->available_count;
+            // Compensate: we just incremented past lai_index, which is the
+            // slot that got removed. cursor (= lai_index + 1) > removed_pos
+            // (= lai_index), so step back one to point at the next entry
+            // (which shifted left into the freed slot).
             ch->cursor--;
             if (available_count == 0) break;
             skipped_count++;
@@ -634,8 +638,14 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
         uint32_t ci_index = ci_find_by_post_id(ch->cache, post_id);
         if (ci_index == UINT32_MAX) {
             ESP_LOGI(TAG, "  RandomPick: LAi[%zu] post_id=%ld NOT FOUND in Ci, evicting stale entry", lai_index, (long)post_id);
-            lai_remove_entry(ch->cache, post_id);
+            int removed_pos = -1;
+            lai_remove_entry(ch->cache, post_id, &removed_pos);
             available_count = ch->cache->available_count;
+            // RecencyPick uses the same cursor on the same channel; keep it
+            // consistent even though this branch is the random picker.
+            if (removed_pos >= 0 && ch->cursor > (uint32_t)removed_pos) {
+                ch->cursor--;
+            }
             if (available_count == 0) break;
             continue;
         }

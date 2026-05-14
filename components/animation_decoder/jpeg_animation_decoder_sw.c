@@ -93,7 +93,9 @@ esp_err_t jpeg_decode_sw_to_rgb888(const uint8_t *data, size_t size,
 
     struct jpeg_decompress_struct cinfo;
     struct sw_jpeg_error_mgr jerr;
-    uint8_t *rgb_buffer = NULL;
+    // volatile: rgb_buffer is assigned after setjmp(); without volatile the
+    // value seen by the longjmp cleanup path is indeterminate per C11 7.13.2.1.
+    uint8_t * volatile rgb_buffer = NULL;
 
     cinfo.err = jpeg_std_error(&jerr.pub);
     jerr.pub.error_exit = sw_jpeg_error_exit;

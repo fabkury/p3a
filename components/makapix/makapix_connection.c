@@ -44,9 +44,7 @@ static void reconnect_watchdog_callback(TimerHandle_t xTimer)
     if ((s_makapix_state == MAKAPIX_STATE_DISCONNECTED) &&
         (s_reconnect_task_handle == NULL)) {
         ESP_LOGW(MAKAPIX_TAG, "Reconnect watchdog: state is DISCONNECTED but no reconnect task running, re-spawning");
-        if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", 16384, NULL,
-                        CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_reconnect_task_handle) != pdPASS) {
-            s_reconnect_task_handle = NULL;
+        if (makapix_ensure_reconnect_task(false) != ESP_OK) {
             ESP_LOGE(MAKAPIX_TAG, "Reconnect watchdog: failed to create reconnect task");
         }
     }
@@ -189,12 +187,8 @@ void makapix_mqtt_connection_callback(bool connected)
         // Start reconnection if we were connected
         if (s_makapix_state == MAKAPIX_STATE_CONNECTED || s_makapix_state == MAKAPIX_STATE_CONNECTING) {
             makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
-            
-            if (s_reconnect_task_handle == NULL) {
-                if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", 16384, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_reconnect_task_handle) != pdPASS) {
-                    s_reconnect_task_handle = NULL;
-                }
-            }
+
+            (void)makapix_ensure_reconnect_task(false);
         }
     }
 }

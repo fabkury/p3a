@@ -136,6 +136,27 @@ void makapix_mqtt_connection_callback(bool connected);
 void makapix_mqtt_reconnect_task(void *pvParameters);
 
 /**
+ * @brief Spawn the MQTT reconnect task if one isn't already running.
+ *
+ * Single entry point for the four contexts that need to ensure a reconnect
+ * task exists (post-cancel-provisioning, initial-connect failure, watchdog
+ * tick, disconnect callback). Lazily allocates a persistent PSRAM-backed
+ * stack on first call and reuses it across spawns, so every reconnect
+ * cycle benefits from the PSRAM stack — not just the boot path. Internally
+ * serialized by s_reconnect_spawn_mutex.
+ *
+ * @param start_immediate If true, the task's initial backoff is 100 ms
+ *                        instead of RECONNECT_DELAY_INITIAL_MS (15 s).
+ *                        Used by the post-cancel-provisioning path.
+ * @return ESP_OK if a reconnect task is running on return (either
+ *         pre-existing or freshly spawned). ESP_ERR_NO_MEM if both
+ *         PSRAM-static and dynamic-internal creation failed.
+ *         ESP_ERR_INVALID_STATE if makapix_init has not run yet.
+ *         ESP_ERR_TIMEOUT if the spawn mutex couldn't be acquired in 1 s.
+ */
+esp_err_t makapix_ensure_reconnect_task(bool start_immediate);
+
+/**
  * @brief Status timer callback
  */
 void makapix_status_timer_callback(TimerHandle_t xTimer);

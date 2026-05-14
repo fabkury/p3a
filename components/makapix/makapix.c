@@ -34,6 +34,12 @@ TaskHandle_t s_status_publish_task_handle = NULL;  // Handle for status publish 
 static StackType_t *s_mqtt_reconn_stack = NULL;
 static StaticTask_t s_mqtt_reconn_task_buffer;
 
+// Serializes the reconnect-task spawn helper so that concurrent triggers
+// (disconnect callback, watchdog tick, post-cancel-provisioning,
+// initial-connect failure) can't race on s_reconnect_task_handle /
+// s_mqtt_reconn_stack / s_mqtt_reconn_task_buffer. Created in makapix_init.
+static SemaphoreHandle_t s_reconnect_spawn_mutex = NULL;
+
 // PSRAM-backed stack for channel switch task
 static StackType_t *s_ch_switch_stack = NULL;
 static StaticTask_t s_ch_switch_task_buffer;
@@ -136,6 +142,17 @@ esp_err_t makapix_init(void)
         }
     }
 
+    // Mutex serializing makapix_ensure_reconnect_task across its four
+    // call sites (post-cancel-provisioning, initial-connect failure,
+    // watchdog tick, disconnect callback).
+    if (s_reconnect_spawn_mutex == NULL) {
+        s_reconnect_spawn_mutex = xSemaphoreCreateMutex();
+        if (s_reconnect_spawn_mutex == NULL) {
+            ESP_LOGE(MAKAPIX_TAG, "Failed to create reconnect spawn mutex");
+            return ESP_ERR_NO_MEM;
+        }
+    }
+
     if (s_channel_switch_task_handle == NULL) {
         const size_t ch_switch_stack_size = 8192;
         if (!s_ch_switch_stack) {
@@ -162,6 +179,59 @@ esp_err_t makapix_init(void)
     }
 
     return ESP_OK;
+}
+
+// --------------------------------------------------------------------------
+// Reconnect task spawn helper (shared by all four trigger sites)
+// --------------------------------------------------------------------------
+
+esp_err_t makapix_ensure_reconnect_task(bool start_immediate)
+{
+    if (s_reconnect_spawn_mutex == NULL) {
+        // makapix_init has not run yet; safer to do nothing than to race
+        // on the static buffers.
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (xSemaphoreTake(s_reconnect_spawn_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        ESP_LOGW(MAKAPIX_TAG, "Reconnect spawn mutex take timed out");
+        return ESP_ERR_TIMEOUT;
+    }
+
+    esp_err_t ret = ESP_OK;
+
+    if (s_reconnect_task_handle == NULL) {
+        const size_t mqtt_reconn_stack_size = 16384;
+        if (!s_mqtt_reconn_stack) {
+            s_mqtt_reconn_stack = heap_caps_malloc(mqtt_reconn_stack_size * sizeof(StackType_t),
+                                                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        }
+
+        // (void *)1 vs NULL is the protocol makapix_mqtt_reconnect_task
+        // uses to choose its initial backoff: non-NULL = 100 ms,
+        // NULL = RECONNECT_DELAY_INITIAL_MS (15 s).
+        void *arg = start_immediate ? (void *)1 : NULL;
+
+        if (s_mqtt_reconn_stack) {
+            s_reconnect_task_handle = xTaskCreateStatic(makapix_mqtt_reconnect_task, "mqtt_reconn",
+                                                         mqtt_reconn_stack_size, arg,
+                                                         CONFIG_P3A_NETWORK_TASK_PRIORITY,
+                                                         s_mqtt_reconn_stack, &s_mqtt_reconn_task_buffer);
+        }
+
+        if (s_reconnect_task_handle == NULL) {
+            ESP_LOGW(MAKAPIX_TAG, "PSRAM stack unavailable for reconnect task, falling back to internal RAM");
+            if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", mqtt_reconn_stack_size, arg,
+                            CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_reconnect_task_handle) != pdPASS) {
+                s_reconnect_task_handle = NULL;
+                ESP_LOGE(MAKAPIX_TAG, "Failed to create reconnect task");
+                ret = ESP_ERR_NO_MEM;
+            }
+        }
+    }
+
+    xSemaphoreGive(s_reconnect_spawn_mutex);
+    return ret;
 }
 
 // --------------------------------------------------------------------------
@@ -272,12 +342,8 @@ void makapix_cancel_provisioning(void)
                 ESP_LOGI(MAKAPIX_TAG, "Device has valid credentials, reconnecting MQTT immediately");
                 makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
 
-                if (s_reconnect_task_handle == NULL) {
-                    if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", 16384, (void *)1,
-                                    CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_reconnect_task_handle) != pdPASS) {
-                        s_reconnect_task_handle = NULL;
-                        ESP_LOGE(MAKAPIX_TAG, "Failed to create reconnect task after provisioning cancel");
-                    }
+                if (makapix_ensure_reconnect_task(true) != ESP_OK) {
+                    ESP_LOGE(MAKAPIX_TAG, "Failed to ensure reconnect task after provisioning cancel");
                 }
             }
         } else {
@@ -501,28 +567,7 @@ esp_err_t makapix_connect_if_registered(void)
     if (err != ESP_OK) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to connect: %s", esp_err_to_name(err));
         makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
-        if (s_reconnect_task_handle == NULL) {
-            const size_t mqtt_reconn_stack_size = 16384;
-            if (!s_mqtt_reconn_stack) {
-                s_mqtt_reconn_stack = heap_caps_malloc(mqtt_reconn_stack_size * sizeof(StackType_t),
-                                                        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-            }
-
-            bool task_created = false;
-            if (s_mqtt_reconn_stack) {
-                s_reconnect_task_handle = xTaskCreateStatic(makapix_mqtt_reconnect_task, "mqtt_reconn",
-                                                             mqtt_reconn_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
-                                                             s_mqtt_reconn_stack, &s_mqtt_reconn_task_buffer);
-                task_created = (s_reconnect_task_handle != NULL);
-            }
-
-            if (!task_created) {
-                if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn",
-                                mqtt_reconn_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_reconnect_task_handle) != pdPASS) {
-                    s_reconnect_task_handle = NULL;
-                }
-            }
-        }
+        (void)makapix_ensure_reconnect_task(false);
         // Start watchdog even on initial failure — it will re-spawn reconnect task if needed
         makapix_reconnect_watchdog_start();
         return err;

@@ -145,6 +145,17 @@ esp_err_t art_institution_download_to_path(const char *museum_id,
             esp_http_client_cleanup(client);
             continue;  // retry
         }
+        if (content_length == 0) {
+            // HTTP 200 with explicit Content-Length: 0 means the origin is
+            // serving an empty body for this resource — treat as permanent
+            // not-found so download_manager creates a .404 marker and we
+            // stop re-attempting this URL on every channel rotation.
+            ESP_LOGW(TAG, "IIIF empty body (200 with Content-Length: 0): %s", url);
+            esp_http_client_close(client);
+            esp_http_client_cleanup(client);
+            fatal_err = ESP_ERR_NOT_FOUND;
+            break;
+        }
         if (content_length > P3A_MAX_ARTWORK_SIZE) {
             ESP_LOGW(TAG, "IIIF artwork too large: %lld bytes (%s)",
                      content_length, url);

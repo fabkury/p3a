@@ -602,14 +602,6 @@ static esp_err_t h_post_router(httpd_req_t *req) {
     if (strcmp(uri, "/action/unpin") == 0) {
         return h_post_action_unpin(req);
     }
-    // DEBUG-TOOLS-BEGIN
-    if (strcmp(uri, "/action/debug/storage_eviction") == 0) {
-        return h_post_debug_storage_eviction(req);
-    }
-    if (strcmp(uri, "/action/debug/channel_eviction") == 0) {
-        return h_post_debug_channel_eviction(req);
-    }
-    // DEBUG-TOOLS-END
     // Playset endpoint: /playset/{name} (activate-only, existing)
     if (strncmp(uri, "/playset/", 9) == 0) {
         return h_post_playset(req);

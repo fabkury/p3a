@@ -180,11 +180,6 @@ esp_err_t h_pinned_route_delete(httpd_req_t *req);
 esp_err_t h_post_debug(httpd_req_t *req);
 #endif
 
-// DEBUG-TOOLS-BEGIN
-esp_err_t h_post_debug_storage_eviction(httpd_req_t *req);
-esp_err_t h_post_debug_channel_eviction(httpd_req_t *req);
-// DEBUG-TOOLS-END
-
 // ---------- Page Handlers (http_api_page_*.c) ----------
 
 /**

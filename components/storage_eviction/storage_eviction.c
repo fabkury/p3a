@@ -35,10 +35,12 @@
 
 static const char *TAG = "storage_evict";
 
-#define TARGET_BYTES   ((uint64_t)CONFIG_STORAGE_EVICTION_TARGET_MIB * 1024ULL * 1024ULL)
-#define INITIAL_AGE_S  ((time_t)CONFIG_STORAGE_EVICTION_INITIAL_AGE_DAYS * 86400)
-#define MIN_AGE_S      ((time_t)CONFIG_STORAGE_EVICTION_MIN_AGE_HOURS * 3600)
-#define CHANNEL_AGE_S  ((time_t)CONFIG_CHANNEL_EVICTION_AGE_DAYS * 86400)
+#define TARGET_BYTES    ((uint64_t)CONFIG_STORAGE_EVICTION_TARGET_MIB * 1024ULL * 1024ULL)
+#define HEADROOM_BYTES  ((uint64_t)CONFIG_STORAGE_EVICTION_HEADROOM_MIB * 1024ULL * 1024ULL)
+#define STOP_BYTES      (TARGET_BYTES + HEADROOM_BYTES)
+#define INITIAL_AGE_S   ((time_t)CONFIG_STORAGE_EVICTION_INITIAL_AGE_DAYS * 86400)
+#define MIN_AGE_S       ((time_t)CONFIG_STORAGE_EVICTION_MIN_AGE_HOURS * 3600)
+#define CHANNEL_AGE_S   ((time_t)CONFIG_CHANNEL_EVICTION_AGE_DAYS * 86400)
 
 /** Counters passed through the eviction scan */
 typedef struct {
@@ -259,12 +261,13 @@ esp_err_t storage_eviction_check_and_run(void)
     }
 
     if (free_bytes >= TARGET_BYTES) {
-        return ESP_OK;  /* nothing to do */
+        return ESP_OK;  /* trigger watermark not crossed */
     }
 
-    ESP_LOGW(TAG, "Low disk space: %llu MiB free (target %d MiB), starting eviction",
+    ESP_LOGW(TAG, "Low disk space: %llu MiB free (trigger %d MiB), evicting until >= %llu MiB free",
              (unsigned long long)(free_bytes / (1024 * 1024)),
-             CONFIG_STORAGE_EVICTION_TARGET_MIB);
+             CONFIG_STORAGE_EVICTION_TARGET_MIB,
+             (unsigned long long)(STOP_BYTES / (1024 * 1024)));
 
     evict_stats_t stats = { 0, 0 };
     time_t now = time(NULL);
@@ -282,8 +285,8 @@ esp_err_t storage_eviction_check_and_run(void)
         err = storage_eviction_get_free_space(&free_bytes);
         if (err != ESP_OK) break;
 
-        if (free_bytes >= TARGET_BYTES) {
-            ESP_LOGI(TAG, "Free space target reached (%llu MiB)",
+        if (free_bytes >= STOP_BYTES) {
+            ESP_LOGI(TAG, "Free space stop target reached (%llu MiB)",
                      (unsigned long long)(free_bytes / (1024 * 1024)));
             break;
         }
@@ -298,56 +301,6 @@ esp_err_t storage_eviction_check_and_run(void)
 
     return ESP_OK;
 }
-
-// DEBUG-TOOLS-BEGIN
-esp_err_t storage_eviction_run_with_target_debug(uint64_t target_bytes)
-{
-    uint64_t free_bytes = 0;
-    esp_err_t err = storage_eviction_get_free_space(&free_bytes);
-    if (err != ESP_OK) {
-        return ESP_FAIL;
-    }
-
-    ESP_LOGW(TAG, "[DEBUG] Forced eviction: %llu MiB free, target %llu MiB",
-             (unsigned long long)(free_bytes / (1024 * 1024)),
-             (unsigned long long)(target_bytes / (1024 * 1024)));
-
-    if (free_bytes >= target_bytes) {
-        ESP_LOGI(TAG, "[DEBUG] Already at/above target, nothing to evict");
-        return ESP_OK;
-    }
-
-    evict_stats_t stats = { 0, 0 };
-    time_t now = time(NULL);
-    time_t age_threshold = INITIAL_AGE_S;
-
-    while (age_threshold >= MIN_AGE_S) {
-        time_t cutoff = now - age_threshold;
-
-        ESP_LOGI(TAG, "[DEBUG] Eviction pass: age threshold %ld s (%ld h)",
-                 (long)age_threshold, (long)(age_threshold / 3600));
-
-        evict_old_files(cutoff, &stats);
-
-        err = storage_eviction_get_free_space(&free_bytes);
-        if (err != ESP_OK) break;
-
-        if (free_bytes >= target_bytes) {
-            ESP_LOGI(TAG, "[DEBUG] Free space target reached (%llu MiB)",
-                     (unsigned long long)(free_bytes / (1024 * 1024)));
-            break;
-        }
-
-        age_threshold /= 2;
-    }
-
-    ESP_LOGW(TAG, "[DEBUG] Eviction done: %lu files deleted, %llu MiB freed",
-             (unsigned long)stats.files_deleted,
-             (unsigned long long)(stats.bytes_freed / (1024 * 1024)));
-
-    return ESP_OK;
-}
-// DEBUG-TOOLS-END
 
 /* --------------------------------------------------------------------- */
 /*  Channel eviction                                                      */

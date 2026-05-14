@@ -19,8 +19,10 @@ extern "C" {
  * @brief Check available space and run eviction if needed
  *
  * Checks SNTP synchronization, then queries free space on /sdcard.
- * If free space is below the configured target, runs multi-pass
- * age-based eviction over the vault and giphy cache directories.
+ * Uses a two-watermark policy to avoid thrashing across a single
+ * threshold: eviction is triggered when free space drops below
+ * STORAGE_EVICTION_TARGET_MIB and continues until free space rises
+ * to STORAGE_EVICTION_TARGET_MIB + STORAGE_EVICTION_HEADROOM_MIB.
  *
  * Each pass halves the age threshold, starting from
  * STORAGE_EVICTION_INITIAL_AGE_DAYS and stopping at
@@ -71,19 +73,6 @@ esp_err_t storage_eviction_get_storage_info(uint64_t *out_total_bytes, uint64_t 
  * @return ESP_FAIL on filesystem error
  */
 esp_err_t channel_eviction_check_and_run(void);
-
-// DEBUG-TOOLS-BEGIN
-/**
- * @brief Debug-only: run storage eviction with a caller-supplied free-space
- *        target, ignoring the SNTP-sync guard.
- *
- * Lets the web UI exercise the eviction logic on demand even when the SD card
- * is well above the configured target. Temporary; delete along with the
- * matching block in storage_eviction.c when the Debug Tools UI section is
- * removed.
- */
-esp_err_t storage_eviction_run_with_target_debug(uint64_t target_bytes);
-// DEBUG-TOOLS-END
 
 #ifdef __cplusplus
 }

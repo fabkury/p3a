@@ -1,12 +1,24 @@
 menu "Storage Eviction"
 
     config STORAGE_EVICTION_TARGET_MIB
-        int "Free space target in MiB"
+        int "Free space trigger threshold in MiB"
         default 1024
         help
-            Target amount of free space on the SD card in MiB.
-            When free space falls below this threshold, old cached
-            artwork files are evicted based on last-access time.
+            Low watermark for the SD card free space. When free space
+            falls below this threshold, an eviction pass starts and
+            keeps deleting until free space reaches the high watermark
+            (target + headroom). See STORAGE_EVICTION_HEADROOM_MIB.
+
+    config STORAGE_EVICTION_HEADROOM_MIB
+        int "Free space headroom in MiB above target"
+        default 4096
+        help
+            Hysteresis between the trigger threshold and the stop
+            condition. Once eviction starts (free < target), it keeps
+            running until free >= target + headroom. A larger headroom
+            means fewer eviction passes but each pass deletes more
+            files; a value of 0 reverts to single-watermark behavior
+            and risks thrashing across the target line.
 
     config STORAGE_EVICTION_INITIAL_AGE_DAYS
         int "Initial age threshold in days"

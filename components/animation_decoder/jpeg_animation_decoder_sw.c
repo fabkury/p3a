@@ -25,6 +25,8 @@
 #include "jpeg_decoder_internal.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -157,6 +159,10 @@ esp_err_t jpeg_decode_sw_to_rgb888(const uint8_t *data, size_t size,
         return ESP_ERR_NO_MEM;
     }
 
+    // Yield every 32 scanlines: a full SW JPEG decode can hold a core for
+    // seconds, and when this task lands on CPU 1 alongside the display
+    // pipeline IDLE1 starves and the task watchdog fires.
+    // See docs/cpu1-saturation-wdt-tabled.md.
     JSAMPROW row_pointer[1];
     while (cinfo.output_scanline < cinfo.output_height) {
         row_pointer[0] = rgb_buffer + (size_t)cinfo.output_scanline * row_bytes;
@@ -169,6 +175,9 @@ esp_err_t jpeg_decode_sw_to_rgb888(const uint8_t *data, size_t size,
             free(rgb_buffer);
             jpeg_destroy_decompress(&cinfo);
             return ESP_FAIL;
+        }
+        if ((cinfo.output_scanline % 32u) == 0u) {
+            vTaskDelay(1);
         }
     }
 

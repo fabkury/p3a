@@ -1,6 +1,8 @@
 # CPU 1 Saturation Triggering IDLE1 Task Watchdog
 
-Status: **Diagnosed, fix tabled.** Captured from a live session on 2026-05-12. The watchdog does not panic (`CONFIG_ESP_TASK_WDT_PANIC` unset), so the device keeps running — these are warnings, but they're a signal that CPU 1 is being held for >15 s by non-yielding decode work. Pick this up when ready to address.
+Status: **(1) implemented 2026-05-14; (2)+ deferred.** SW JPEG scanline yield landed in `components/animation_decoder/jpeg_animation_decoder_sw.c`. The pinning recommendation (2) was *not* applied — see "Status update — 2026-05-14" below. The watchdog does not panic (`CONFIG_ESP_TASK_WDT_PANIC` unset), so any residual WDTs remain warnings rather than resets.
+
+A second trace on 2026-05-14 reproduced the same `ycc_rgb_convert_internal` stack on CPU 1 during V&A backfill, confirming the original diagnosis was still live. (1) directly addresses that call stack; observe post-deploy whether any WDT or display stutter remains before reconsidering (2).
 
 ## Symptom
 
@@ -104,3 +106,27 @@ Start with **(1) + (2)**. Five-line changes each, directly target the observed c
 
 - [refresh-lai-race.md](refresh-lai-race.md) — another concurrency edge in the play scheduler path.
 - [art-institutions/finalized-design.md](art-institutions/finalized-design.md) — museum URL build and rate-limit design.
+
+## Status update — 2026-05-14
+
+### (1) Yield in SW JPEG scanline loop — IMPLEMENTED
+
+`vTaskDelay(1)` every 32 scanlines, inside the `while (cinfo.output_scanline < cinfo.output_height)` loop in `jpeg_animation_decoder_sw.c`. With `CONFIG_FREERTOS_HZ=1000`, each yield is 1 ms; a 720-row image yields ~22 times, adding ~22 ms to a decode that already runs ~1.5 s on the worst case. Negligible cost, and IDLE1 now gets scheduled regularly enough to feed the WDT and run FreeRTOS housekeeping.
+
+### (2) Pin `anim_loader` to CPU 0 — DEFERRED, observation-gated
+
+Trade-offs that argued against pinning right now:
+
+- `download_mgr` is already pinned to CPU 0 (`components/channel_manager/download_manager.c:836`). Museum SW decodes happen back-to-back with downloads, so pinning concentrates download (Wi-Fi/TLS crypto, high-priority kernel tasks) and decode on the same core. May slow decodes during active backfill.
+- For static-image playback (very common with long swap intervals), CPU 1 sits mostly idle waiting for VSYNC. An unpinned `anim_loader` opportunistically uses those cycles; a pinned one cannot.
+- With (1) in place, IDLE1 starvation is no longer the failure mode. The remaining motivation for pinning shrinks to "isolate the display pipeline on its own core" — a design call, not a bug fix.
+
+**Revisit (2)** if post-deploy traces show:
+- Any task watchdog firing (especially still `IDLE1` or `display_render`), or
+- Visible display stutter that correlates with SW JPEG decode windows.
+
+If both are absent, leaving `anim_loader` unpinned preserves FreeRTOS load balancing and the rationale above.
+
+### Others (3)–(7)
+
+Still as originally written. WebP-side yield (3) is the next likely candidate if any WDT remains and points at `display_render` in libwebp.

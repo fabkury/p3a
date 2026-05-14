@@ -579,7 +579,7 @@ esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Received %d bytes from Giphy API", total_read);
+    ESP_LOGD(TAG, "Received %d bytes from Giphy API", total_read);
 
     if (total_read > 0 && total_read < 150) {
         ESP_LOGW(TAG, "Small response (%d bytes), full body: %s", total_read, ctx->response_buf);

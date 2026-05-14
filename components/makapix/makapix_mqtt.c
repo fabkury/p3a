@@ -314,7 +314,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 }
                 // Response topic: do NOT parse here. Hand the owned string to makapix_api (single parse there).
                 else if (strncmp(s_reassembly_topic, s_response_prefix, strlen(s_response_prefix)) == 0) {
-                    ESP_LOGI(TAG, "Received API response on topic: %s (%zu bytes)", s_reassembly_topic, s_reassembly_len);
+                    ESP_LOGD(TAG, "Received API response on topic: %s (%zu bytes)", s_reassembly_topic, s_reassembly_len);
                     if (s_response_callback) {
                         // Transfer ownership of a right-sized buffer to the callback.
                         char *owned = (char *)heap_caps_malloc(s_reassembly_len + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);

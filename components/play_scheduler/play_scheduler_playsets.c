@@ -19,6 +19,7 @@
 #include "channel_metadata.h"
 #include "view_tracker.h"
 #include "p3a_state.h"
+#include "p3a_current_post.h"
 #include "sd_path.h"
 #include "content_cache.h"
 #include "makapix.h"
@@ -626,6 +627,17 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset)
         } else {
             ESP_LOGI(TAG, "No cached entries yet - waiting for refresh/download");
         }
+
+        // Clear "currently playing" state so the web UI's /playsets/active
+        // poll stops returning the previous channel's last artwork.
+        // play_scheduler_current() reads from history, so we drop both the
+        // history buffer and the on-screen post identity. For non-empty
+        // channels this is unnecessary — play_scheduler_next() repopulates
+        // history before returning — but those don't take this branch.
+        xSemaphoreTake(s_state->mutex, portMAX_DELAY);
+        ps_history_clear(s_state);
+        xSemaphoreGive(s_state->mutex);
+        p3a_current_post_clear();
 
         // Invalidate the old animation's front buffer so it doesn't show through
         // while we wait for the new channel to load. The channel message UI will

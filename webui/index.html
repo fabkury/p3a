@@ -1449,6 +1449,17 @@ function playsetDisplayName(name) {
     if (name === 'giphy_trending') return 'Giphy';
     if (name === '__artwork__') return 'Makapix Artwork';
     if (name === '__local__') return 'Local File';
+    // Pinned-list playsets: "channel_pinned_<slug>" (specific list) or
+    // "channel_pinned" (whatever list is currently active). Resolve to the
+    // user-visible list name from the already-loaded pinLists global.
+    if (name === 'channel_pinned' || (name && name.indexOf('channel_pinned_') === 0)) {
+        var slug = (name === 'channel_pinned') ? null : name.substring('channel_pinned_'.length);
+        for (var i = 0; i < pinLists.length; i++) {
+            if (slug ? pinLists[i].slug === slug : pinLists[i].is_active) {
+                return pinLists[i].name;
+            }
+        }
+    }
     return name;
 }
 

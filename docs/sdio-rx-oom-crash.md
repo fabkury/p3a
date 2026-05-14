@@ -1,13 +1,17 @@
 # SDIO RX buffer OOM crash (esp_hosted streaming mode)
 
-**Status:** Open. Decision tabled — not yet implemented.
+**Status:** Open. Heap-snapshot diagnostic now in firmware and producing
+data; fragmentation+exhaustion hypothesis confirmed. Decision strongly
+indicated but not yet implemented.
 **First observed:** 2026-05-04.
-**Last observed:** 2026-05-05 (fourth occurrence; see "Occurrence 4" — a
-near-miss, no crash, but same root cause family).
-**Severity:** Hard crash + reboot. **Now confirmed recurring** — three hard
-crashes and one near-miss in two days, all triggered by Giphy refresh paging
-under load. Occurrences 2, 3, and 4 are on the same firmware
-(ELF `969b00418`), so the bug is reproducible-under-load on a fixed build.
+**Last observed:** 2026-05-14 (fifth occurrence; first hard crash on a
+*different* firmware build and IDF version, and the first to carry the
+new heap-snapshot diagnostic — see "Occurrence 5").
+**Severity:** Hard crash + reboot. **Confirmed recurring across builds and
+IDF versions** — four hard crashes and one near-miss spanning 2026-05-04 →
+2026-05-14, on at least two firmware builds (ELF `969b00418` for
+Occurrences 2–4, ELF `fc8daa29f` for Occurrence 5) and across ESP-IDF v5.5.1
+and v5.5.2.
 
 ---
 
@@ -25,14 +29,17 @@ change to switch the SDIO RX mode from streaming to `MAX_SIZE`
 ## Crash details
 
 ```
-assert failed: sdio_rx_get_buffer sdio_drv.c:830 (*buf)
+assert failed: sdio_rx_get_buffer sdio_drv.c:830 (*buf)    # Occurrences 1–4 (IDF v5.5.1, esp_hosted older)
+assert failed: sdio_rx_get_buffer sdio_drv.c:896 (*buf)    # Occurrence 5  (IDF v5.5.2, esp_hosted newer)
 Core 1 register dump:
 MEPC    : 0x4ff0a7ce  (panic_abort)
 MCAUSE  : 0x00000002  (illegal instruction — the unimp from panic_abort)
 ```
 
 Failing line in
-`managed_components/espressif__esp_hosted/host/drivers/transport/sdio/sdio_drv.c:830`:
+`managed_components/espressif__esp_hosted/host/drivers/transport/sdio/sdio_drv.c`
+(line :830 on IDF v5.5.1, :896 on IDF v5.5.2 — same code, esp_hosted shifted
+between versions):
 
 ```c
 *buf = (uint8_t *)g_h.funcs->_h_malloc_align(len, HOSTED_MEM_ALIGNMENT_64);
@@ -165,23 +172,86 @@ returning failure means TCB + stack couldn't be allocated. This is the
 the heap pressure happened to be observed by `xTaskCreate` first instead of
 `sdio_rx_get_buffer`.
 
-### Pattern across all four occurrences
+### Occurrence 5 — 2026-05-14 (uptime ~6 min, with heap snapshot)
 
-All four events share the same trigger:
+ELF SHA256: `fc8daa29f…`. ESP-IDF **v5.5.2** (compile time Mar 18 2026).
+Assert text now `assert failed: sdio_rx_get_buffer sdio_drv.c:896 (*buf)`
+(line shift from :830 reflects esp_hosted moving between IDF versions; same
+code path, same MEPC `0x4ff0a7ce` → `panic_abort`).
+
+**New in this occurrence:** the heap-snapshot diagnostic requested in the
+"Diagnostics worth adding before deciding" section (below) has been
+implemented and printed its first failure:
+
+```
+*** HEAP ALLOC FAILED (one-shot snapshot) ***
+  func=heap_caps_aligned_alloc  size=9216  caps=0x0000080c  task=sdio_read
+  INT+DMA+8BIT (SDIO RX): free=29863 largest=8192 total=277999
+  INTERNAL:               free=67903 largest=31744
+  DMA:                    free=29883 largest=8192
+  SPIRAM:                 free=23409216 largest=23068672
+  DEFAULT:                free=23457644 largest=23068672
+*********************************************
+```
+
+Caps `0x0000080c` decodes as `MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA |
+MALLOC_CAP_8BIT` — DMA-capable internal SRAM, 8-bit accessible. This is
+the pool every SDIO RX buffer is forced to live in (Wi-Fi-via-C6 traffic
+must DMA out of internal RAM; PSRAM is not DMA-reachable for this path).
+
+What the numbers say:
+- **The pool is at 89 % utilization** (248 KB of 272 KB allocated). Peak
+  network demand is grazing the ceiling.
+- **And it's fragmented**: 29.9 KB free in aggregate, but the largest
+  contiguous block is **8 KB**. The aligned 9 KB request can't be satisfied
+  even though the pool isn't fully exhausted.
+- SPIRAM has 23 MB free, but is useless here — SDIO RX needs DMA-capable
+  internal RAM.
+
+So the root cause is **both fragmentation and near-exhaustion** of the
+DMA-capable internal pool. The doc previously listed candidate causes and
+couldn't pick between fragmentation and absolute exhaustion; the snapshot
+shows both contribute.
+
+Timeline of the ~14 s before panic (timestamps in ms since boot):
+
+| t (ms)  | Event |
+|---------|-------|
+| 345570  | Giphy "work" paging: page 1 already received (96 KB), 50 entries merged |
+| 345900–359254 | Giphy "work" pages 2–10 fetched back-to-back at `offset=50…450` (~97 KB each over TLS) |
+| 346077–359944 | **14 Makapix MQTT response batches** (~8.6 KB each, 32-byte cursor steps from 416 → 864 on channel `Fab` with 1027 entries) interleaved with the Giphy paging |
+| 351452 | `giphy_dl` finishes `FjJlFKHKoFvS2gLeyY` (395 KB), starts `N0wPrpPdvASA0` |
+| 352519 | `giphy_dl` finishes `N0wPrpPdvASA0` (16 KB), starts `9D1time2rTBAvJHyEx` |
+| 353608 | `giphy_dl` finishes `9D1time2rTBAvJHyEx` (10 KB), starts `5kIh9jg6olLrZJtAf6` |
+| 353609 | `channel_cache: LAi array grew to capacity 756` — incidental pressure on the aligned-internal allocator |
+| 356040 | `giphy_dl` finishes `5kIh9jg6olLrZJtAf6` (108 KB), starts `U4sfHXAALLYBQzPcWk` |
+| 358089 | `giphy_dl` finishes `U4sfHXAALLYBQzPcWk` (75 KB), starts `UBAf8QIWQZ7p6IOZEm` |
+| 359944 | Last Makapix MQTT response logged |
+| —      | **CRASH** during the next inbound burst from the C6 |
+
+Core 1 was inside `GIFMakePels` decoding a frame at the moment Core 0
+panicked (per the boot log's `Core1 Saved PC: 0x4808e884`) — playback was
+healthy. The system died on the *network* side.
+
+### Pattern across all five occurrences
+
+All five events share the same trigger:
 
 1. A `ps_refresh` cycle is paging through a Giphy endpoint (multiple ~96 KB
    JSON responses over TLS, in quick succession).
 2. The crash/symptom hits in the middle of the API paging, not on the first
    page.
 
-What differs is the **victim** of the resource pressure:
+What differs is the **victim** of the resource pressure (and, in
+Occurrence 5, the **co-stressors** stacked on top of refresh paging):
 
-| # | Concurrent downloads? | Symptom |
-|---|----------------------|---------|
-| 1 | yes (3 GIFs)         | SDIO RX assert (hard crash) |
-| 2 | yes (multiple GIFs)  | SDIO RX assert (hard crash) |
-| 3 | yes (1 GIF)          | SDIO RX assert (hard crash) |
-| 4 | **no** (`dl_mgr` idle) | MQTT task-create failure + HTTP truncation + TLS EAGAIN; recovered |
+| # | Concurrent downloads? | Other concurrent load | Symptom |
+|---|----------------------|-----------------------|---------|
+| 1 | yes (3 GIFs)         | —                     | SDIO RX assert (hard crash) |
+| 2 | yes (multiple GIFs)  | —                     | SDIO RX assert (hard crash) |
+| 3 | yes (1 GIF)          | —                     | SDIO RX assert (hard crash) |
+| 4 | **no** (`dl_mgr` idle) | —                     | MQTT task-create failure + HTTP truncation + TLS EAGAIN; recovered |
+| 5 | yes (5 GIFs in succession) | **heavy Makapix MQTT** (14 batches × 8.6 KB in the window) | SDIO RX assert (hard crash) |
 
 #### What Occurrence 3 newly tells us
 
@@ -221,24 +291,64 @@ What differs is the **victim** of the resource pressure:
   a recoverable log line instead of a panic. Useful for instrumentation and
   for evaluating fixes.
 
+#### What Occurrence 5 newly tells us
+
+- **Fragmentation+exhaustion confirmed, no longer hypothesized.** The
+  heap-snapshot diagnostic (asked for in "Diagnostics worth adding"
+  below, now in firmware) prints the smoking gun at the moment of
+  failure: `INT+DMA+8BIT: free=29863 largest=8192 total=277999` — the
+  pool is at 89 % utilization *and* the largest contiguous block is
+  smaller than the 9 KB the SDIO driver is asking for. Both
+  fragmentation (item #1 in "Root cause" below) and concurrent peak
+  demand (item #2) are contributing, not one or the other.
+- **Makapix MQTT batches are a new co-stressor.** Occurrences 1–3 had
+  Giphy refresh ± Giphy GIF downloads; Occurrence 5 adds 14 Makapix
+  MQTT response batches (~8.6 KB each, every ~700 ms) running
+  concurrently with Giphy paging + Giphy downloads. The trigger set is
+  broader than this doc previously listed — any combination of TLS
+  sessions + sustained SDIO RX traffic can hit the wall, not just the
+  Giphy-specific pattern.
+- **Bug is not tied to one firmware build.** Occurrences 2–4 were on
+  ELF `969b00418` (IDF v5.5.1). Occurrence 5 is on ELF `fc8daa29f` (IDF
+  v5.5.2, esp_hosted line shift from :830 to :896). Same fingerprint,
+  different binary — rules out "this is a build artifact" and shows
+  upstream hasn't fixed it in v5.5.2 either.
+- **Short uptime reinforces burst-driven.** ~6 minutes from boot to
+  panic in Occurrence 5 (vs ~2 h in Occurrence 3 on the older
+  firmware). As soon as Wi-Fi and SD were up and the playscheduler ran
+  a full refresh cycle, every condition needed to crash was met. Time
+  is not a factor; *load* is.
+- **PSRAM is sitting idle while the relevant pool dies.** SPIRAM had
+  23 MB free at the moment of crash. None of it is reachable for the
+  failing alloc (SDIO RX needs DMA-capable internal RAM), but it does
+  highlight that the bottleneck pool is small and special-purpose —
+  shifting *other* internal-RAM consumers to PSRAM is a separate but
+  related angle worth pursuing.
+
 ---
 
 ## Root cause
 
 `_h_malloc_align(len, 64)` returned NULL. The DMA-capable / 64-byte-aligned
-heap couldn't satisfy the request. Most likely causes, in rough order of
-probability:
+internal-SRAM heap couldn't satisfy the request. Occurrence 5's heap
+snapshot pins down which contributors are active simultaneously:
 
-1. **Heap fragmentation.** Three TLS contexts (~16–32 KB each) had just been
-   allocated and torn down for the GIF downloads, and another one was
-   mid-handshake for the Giphy Work API call. Aligned allocation requires a
-   contiguous block.
-2. **Concurrent peak demand.** Animation decode buffers + frame buffers + JSON
-   parse buffer (96 KB API response) + multiple TLS sessions + SDIO RX path
-   all want internal SRAM at the same time.
-3. **Streaming-mode realloc churn.** Each time an unusually large RX chunk
-   arrives, the driver frees the old buffer and allocates a new bigger one.
-   This itself fragments the aligned heap over time.
+1. **Heap fragmentation** (confirmed). At crash time the pool had 29.9 KB
+   free but a largest contiguous block of only 8 KB, and SDIO needed 9 KB
+   aligned. Three TLS contexts (~16–32 KB each) had just been allocated
+   and torn down for GIF downloads, another was mid-handshake for the
+   Giphy API call, and Makapix MQTT was cycling its own buffers — all
+   churning the same aligned pool.
+2. **Concurrent peak demand** (confirmed). The pool was at 89 %
+   utilization (248 KB of 272 KB) at the moment of failure. Animation
+   decode buffers + LCD frame buffers + JSON parse buffer (96 KB API
+   response) + multiple TLS sessions + Wi-Fi/SDIO RX path are all
+   competing for the same ~272 KB region simultaneously.
+3. **Streaming-mode realloc churn** (still suspected, hard to prove
+   directly). Each time an unusually large RX chunk arrives, the driver
+   frees the old buffer and allocates a new bigger one. This itself
+   fragments the aligned heap over time and is the structural reason
+   (#1) is so easy to trigger.
 
 The streaming RX path is fundamentally fragile: it grows the buffer at
 unpredictable times under unpredictable memory pressure, and a single failure
@@ -313,42 +423,56 @@ make it less likely to fire. So they're cleanup, not a fix.
 
 ---
 
-## Diagnostics worth adding before deciding
+## Diagnostics added (Occurrence 5)
 
-Before committing to the config change, it would help to confirm the OOM
-hypothesis with data:
+The one-shot heap-failure snapshot requested here has been added to the
+firmware. It hooks `heap_caps_*alloc*` failures and dumps capability-split
+watermarks (`INT+DMA+8BIT`, `INTERNAL`, `DMA`, `SPIRAM`, `DEFAULT`) plus
+the requesting task name and caps mask. It fired for the first time in
+Occurrence 5 and produced the snapshot shown there.
 
-- Periodic logging of free-heap watermarks split by capability (internal
-  SRAM / DMA-capable / PSRAM). Today we don't log this regularly, so we don't
-  know how close we routinely run to the wall.
-- Heap-trace or `heap_caps_print_heap_info()` snapshot during a refresh
-  cycle to see fragmentation in the aligned/internal heap.
+Still worth adding (not yet implemented):
 
-If watermarks show plenty of headroom, the issue is fragmentation rather
-than absolute exhaustion — both fixes (config switch, concurrency tightening)
-still help, but it changes how aggressive the concurrency cleanup needs
-to be.
+- **Periodic** capability-split watermark logging during normal operation,
+  so we can see how close we routinely run to the wall *before* a failure
+  rather than only at the moment one happens. Would help us evaluate any
+  candidate fix's impact on steady-state headroom.
+- `heap_caps_print_heap_info(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL |
+  MALLOC_CAP_8BIT)` dump at the start and end of every refresh cycle, to
+  watch the fragmentation curve over time.
 
 ---
 
 ## Decision required
 
-When picking this back up, decide between:
+Options (consolidated across occurrences):
 
-- [ ] **A.** Switch SDIO RX mode to `MAX_SIZE`. Lowest-effort fix, eliminates
-      the assert path. Accept some Wi-Fi throughput loss.
-- [ ] **B.** Keep streaming mode, tighten concurrency only. Reduces
-      probability but the panic path still exists.
+- [ ] **A.** Switch SDIO RX mode to `MAX_SIZE`. Lowest-effort fix,
+      structurally eliminates the assert path (pre-allocated mempool at
+      init; oversize packets drop gracefully instead of panicking). Accept
+      some Wi-Fi RX throughput loss.
+- [ ] **B.** Keep streaming mode, tighten concurrency only (cap parallel
+      downloads, gate refresh-vs-download, stagger periodic refreshes,
+      stream-parse JSON). Reduces *probability* but the panic path still
+      exists.
 - [ ] **C.** Both A and B.
-- [ ] **D.** Add diagnostics first, decide based on data.
+- [ ] **D.** ~~Add diagnostics first, decide based on data.~~ ✅ done in
+      Occurrence 5.
+- [ ] **E.** Reduce internal-RAM footprint by moving non-DMA consumers
+      (task stacks, JSON parse buffers, channel_cache arrays, etc.) to
+      PSRAM. Doesn't fix the assert path but raises the ceiling on the
+      bottleneck pool so peak demand has more headroom. Complementary to A
+      and B; tracked separately.
 
 No fix has been applied. `sdkconfig` and source are unchanged.
 
-After the second occurrence, option **D (diagnostics first)** is weaker: we
-already have two data points showing the same fingerprint. Leaning toward
-**A** (config switch) or **C** (A + concurrency tightening), unless someone
-wants to instrument first to confirm fragmentation vs. absolute exhaustion
-before touching Kconfig.
+**Current lean: C (A + B)**, with E pursued in parallel as a separate
+workstream. The Occurrence 5 heap snapshot resolves the
+"fragmentation vs. exhaustion" question by showing both contribute, so
+D is closed. Option A alone removes the panic class; option B alone is
+not sufficient (Occurrence 4 showed refresh paging by itself can
+exhaust the pool even with `dl_mgr` idle). Combining them gives
+defense-in-depth without much more effort than A alone.
 
 ---
 
@@ -379,10 +503,14 @@ deciding.
 
 ## References
 
-- Failing assert: `managed_components/espressif__esp_hosted/host/drivers/transport/sdio/sdio_drv.c:830`
-- Streaming-mode RX path: `sdio_drv.c:810–835`
-- Non-streaming-mode RX path (uses mempool): `sdio_drv.c:766–782`
-- Buffer mempool: `sdio_drv.c:210–232`
+Line numbers below are from IDF v5.5.1 (Occurrences 1–4). On IDF v5.5.2
+(Occurrence 5) the failing assert is at `sdio_drv.c:896` and surrounding
+ranges have shifted by ~60 lines; same code paths, different offsets.
+
+- Failing assert: `managed_components/espressif__esp_hosted/host/drivers/transport/sdio/sdio_drv.c:830` (v5.5.1) / `:896` (v5.5.2)
+- Streaming-mode RX path: `sdio_drv.c:810–835` (v5.5.1)
+- Non-streaming-mode RX path (uses mempool): `sdio_drv.c:766–782` (v5.5.1)
+- Buffer mempool: `sdio_drv.c:210–232` (v5.5.1)
 - Kconfig choice: `managed_components/espressif__esp_hosted/Kconfig:549–575`
 - Project SDIO bus coordinator (unrelated to this crash, but adjacent code):
   `components/sdio_bus/sdio_bus.c`

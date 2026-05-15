@@ -229,6 +229,11 @@ body {
 }
 .pin-browse-card {
     flex: 0 0 140px;
+    /* Without min-width:0 the card would grow to fit the meta line's
+       min-content width (a 36-char UUID with white-space:nowrap), which
+       defeats both the fixed 140px basis and the meta's own
+       overflow/ellipsis truncation. */
+    min-width: 0;
     border: 1px solid #e5e7eb;
     border-radius: var(--r-md);
     padding: var(--sp-2);

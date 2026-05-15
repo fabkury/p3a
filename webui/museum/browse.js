@@ -21,7 +21,8 @@ const CSS = `
     align-items: center; justify-content: center; padding: 16px; z-index: 9999; }
 .mb-overlay.hidden { display: none; }
 .mb-modal { background: #1f2233; color: #f3f4f6; border-radius: 12px; width: 100%;
-    max-width: 560px; max-height: 90vh; display: flex; flex-direction: column;
+    max-width: 560px; max-height: 90vh; max-height: 90dvh;
+    display: flex; flex-direction: column; overflow: hidden;
     box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
 .mb-header { padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.08);
     display: flex; align-items: center; gap: 8px; }

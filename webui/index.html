@@ -93,14 +93,14 @@ body {
     z-index: 1000;
     align-items: center;
     justify-content: center;
-    padding: var(--sp-4);
+    padding: var(--sp-3);
 }
 .pin-modal-overlay.active { display: flex; }
 .pin-modal {
     background: white;
     color: #1f2937;
     border-radius: var(--r-lg);
-    padding: var(--sp-5);
+    padding: var(--sp-4) var(--sp-3);
     width: 100%;
     max-width: 520px;
     max-height: 90vh;
@@ -112,31 +112,77 @@ body {
     font-size: 1.1rem;
     color: #1f2937;
 }
+
+/* Mobile-first row: vertical stack — header (name + meta + badge) on top,
+   action buttons in a 2-column grid beneath. Collapses to a single
+   horizontal row on screens ≥560px (see media query below). */
 .pin-modal-row {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: var(--sp-2);
-    padding: var(--sp-2) 0;
+    padding: var(--sp-3) 0;
     border-bottom: 1px solid #e5e7eb;
 }
 .pin-modal-row:last-child { border-bottom: none; }
-.pin-modal-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.pin-modal-row-meta { font-size: 0.78rem; color: #6b7280; margin-left: var(--sp-2); }
-.pin-modal-row button {
-    padding: 6px 10px;
-    font-size: 0.78rem;
+.pin-modal-row-header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-width: 0;
+}
+.pin-modal-row-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+.pin-modal-row-meta { font-size: 0.78rem; color: #6b7280; flex-shrink: 0; }
+.pin-modal-active-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #fff;
+    background: var(--c-success);
+    padding: 2px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+.pin-modal-row-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--sp-2);
+}
+.pin-modal-row-actions button {
+    padding: 9px 10px;
+    font-size: 0.82rem;
     border-radius: var(--r-sm);
     border: 1px solid #d1d5db;
     background: white;
     color: #1f2937;
     cursor: pointer;
+    min-height: 38px;
 }
-.pin-modal-row button.danger { color: #b91c1c; border-color: #fecaca; }
-.pin-modal-row button:disabled { opacity: 0.5; cursor: default; }
-.pin-modal-active-badge {
-    font-size: 0.7rem;
-    color: #6b7280;
-    margin-right: var(--sp-2);
+.pin-modal-row-actions button.danger { color: #b91c1c; border-color: #fecaca; }
+.pin-modal-row-actions button:disabled { opacity: 0.5; cursor: default; }
+
+@media (min-width: 560px) {
+    .pin-modal { padding: var(--sp-5); }
+    .pin-modal-row {
+        flex-direction: row;
+        align-items: center;
+        gap: var(--sp-3);
+        padding: var(--sp-2) 0;
+    }
+    .pin-modal-row-header { flex: 1; }
+    .pin-modal-row-actions {
+        grid-template-columns: repeat(4, auto);
+        flex-shrink: 0;
+    }
+    .pin-modal-row-actions button { min-height: 0; padding: 6px 10px; font-size: 0.78rem; }
 }
 .pin-modal-create {
     display: flex;
@@ -164,13 +210,25 @@ body {
     cursor: pointer;
     color: #1f2937;
 }
-.pin-browse-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--sp-3);
+/* Horizontal one-row strip. Cards have a fixed flex-basis so the strip
+   can be swiped sideways; auto-loads more when scrolled near the right
+   edge (see openPinBrowseModal). */
+.pin-browse-strip {
+    display: flex;
+    gap: var(--sp-2);
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
     margin-top: var(--sp-3);
+    padding-bottom: var(--sp-1);
+    min-height: 200px;
+}
+.pin-browse-strip::-webkit-scrollbar { height: 6px; }
+.pin-browse-strip::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.18); border-radius: 3px;
 }
 .pin-browse-card {
+    flex: 0 0 140px;
     border: 1px solid #e5e7eb;
     border-radius: var(--r-md);
     padding: var(--sp-2);
@@ -185,6 +243,12 @@ body {
     object-fit: cover;
     background: #f3f4f6;
     border-radius: var(--r-sm);
+    image-rendering: auto;  /* default: smoothed (Giphy etc.) */
+}
+.pin-browse-card img.pixelated {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
 }
 .pin-browse-card .meta {
     font-size: 0.72rem;
@@ -208,23 +272,38 @@ body {
     cursor: pointer;
 }
 .pin-browse-card .actions button.danger { color: #b91c1c; border-color: #fecaca; }
-.pin-browse-pager {
+
+/* Loading sentinel that appears at the right edge during fetches. */
+.pin-browse-loading {
+    flex: 0 0 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9ca3af;
+    font-size: 0.78rem;
+    min-height: 140px;
+}
+
+.pin-browse-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: var(--sp-4);
+    margin-top: var(--sp-3);
     font-size: 0.85rem;
     color: #6b7280;
+    gap: var(--sp-3);
 }
-.pin-browse-pager button {
-    padding: 6px 12px;
+.pin-browse-footer button {
+    padding: 7px 14px;
     border: 1px solid #d1d5db;
     background: white;
     color: #1f2937;
     border-radius: var(--r-sm);
     cursor: pointer;
+    font-size: 0.82rem;
+    flex-shrink: 0;
 }
-.pin-browse-pager button:disabled { opacity: 0.4; cursor: default; }
+.pin-browse-footer button:disabled { opacity: 0.4; cursor: default; }
 .now-playing {
     width: min(420px, 100%);
     background: var(--c-primary);
@@ -1052,33 +1131,41 @@ function openPinManageModal() {
             var row = document.createElement('div');
             row.className = 'pin-modal-row';
 
+            var header = document.createElement('div');
+            header.className = 'pin-modal-row-header';
+
             var name = document.createElement('span');
             name.className = 'pin-modal-row-name';
             name.textContent = pl.name;
-            row.appendChild(name);
+            header.appendChild(name);
 
             var meta = document.createElement('span');
             meta.className = 'pin-modal-row-meta';
             meta.textContent = '(' + pl.count + ')';
-            row.appendChild(meta);
+            header.appendChild(meta);
 
             if (pl.is_active) {
                 var badge = document.createElement('span');
                 badge.className = 'pin-modal-active-badge';
                 badge.textContent = 'active';
-                row.appendChild(badge);
+                header.appendChild(badge);
             }
+
+            row.appendChild(header);
+
+            var actions = document.createElement('div');
+            actions.className = 'pin-modal-row-actions';
 
             var renameBtn = document.createElement('button');
             renameBtn.textContent = 'Rename';
             renameBtn.addEventListener('click', function() { promptRename(pl); });
-            row.appendChild(renameBtn);
+            actions.appendChild(renameBtn);
 
             var activeBtn = document.createElement('button');
             activeBtn.textContent = 'Set active';
             activeBtn.disabled = !!pl.is_active;
             activeBtn.addEventListener('click', function() { setActive(pl.slug); });
-            row.appendChild(activeBtn);
+            actions.appendChild(activeBtn);
 
             var browseBtn = document.createElement('button');
             browseBtn.textContent = 'Browse';
@@ -1086,14 +1173,16 @@ function openPinManageModal() {
                 closePinModal();
                 openPinBrowseModal(pl.slug, pl.name);
             });
-            row.appendChild(browseBtn);
+            actions.appendChild(browseBtn);
 
             var delBtn = document.createElement('button');
             delBtn.className = 'danger';
             delBtn.textContent = 'Delete';
             delBtn.disabled = !!pl.is_active;
             delBtn.addEventListener('click', function() { confirmDelete(pl); });
-            row.appendChild(delBtn);
+            actions.appendChild(delBtn);
+
+            row.appendChild(actions);
 
             rows.appendChild(row);
         });
@@ -1188,22 +1277,20 @@ function openPinBrowseModal(slug, listName) {
     h.textContent = listName + ' — pinned';
     body.appendChild(h);
 
-    var grid = document.createElement('div');
-    grid.className = 'pin-browse-grid';
-    body.appendChild(grid);
+    var strip = document.createElement('div');
+    strip.className = 'pin-browse-strip';
+    body.appendChild(strip);
 
-    var pager = document.createElement('div');
-    pager.className = 'pin-browse-pager';
-    var prev = document.createElement('button');
-    prev.textContent = 'Prev';
+    var footer = document.createElement('div');
+    footer.className = 'pin-browse-footer';
     var label = document.createElement('span');
     label.textContent = '';
-    var next = document.createElement('button');
-    next.textContent = 'Next';
-    pager.appendChild(prev);
-    pager.appendChild(label);
-    pager.appendChild(next);
-    body.appendChild(pager);
+    var jumpBtn = document.createElement('button');
+    jumpBtn.textContent = 'Jump to…';
+    jumpBtn.disabled = true;
+    footer.appendChild(label);
+    footer.appendChild(jumpBtn);
+    body.appendChild(footer);
 
     var actions = document.createElement('div');
     actions.className = 'pin-modal-actions';
@@ -1216,8 +1303,19 @@ function openPinBrowseModal(slug, listName) {
 
     ov.classList.add('active');
 
+    /* Browse state.
+         offset       — server offset of the first card currently in the strip
+         loaded       — number of cards rendered after that offset
+         total        — total list size (from last server response)
+         loading/done — fetch flags
+         generation   — bumped by Jump-to to invalidate any in-flight fetch
+                        (its result will be discarded rather than appended). */
     var offset = 0;
+    var loaded = 0;
     var total = 0;
+    var loading = false;
+    var done = false;
+    var generation = 0;
 
     /* Thumbnail strategy: prefer the source-CDN URL the server reconstructs
        (Makapix vault / Giphy CDN / IIIF). The /local fallback only fires on
@@ -1242,64 +1340,143 @@ function openPinBrowseModal(slug, listName) {
         return '';
     }
 
-    function loadPage() {
-        grid.innerHTML = '';
-        label.textContent = 'Loading…';
-        var url = '/api/pin-lists/' + encodeURIComponent(slug) +
-                  '/items?offset=' + offset + '&limit=' + PIN_BROWSE_PAGE_SIZE;
-        fetch(url).then(function(r) { return r.json(); }).then(function(d) {
-            total = d.total || 0;
-            label.textContent = total === 0 ? 'No pins yet' :
-                'Showing ' + (offset + 1) + '-' + Math.min(offset + (d.items || []).length, total) +
-                ' of ' + total;
-            prev.disabled = (offset <= 0);
-            next.disabled = (offset + PIN_BROWSE_PAGE_SIZE >= total);
-            (d.items || []).forEach(function(item) {
-                var card = document.createElement('div');
-                card.className = 'pin-browse-card';
-                var img = document.createElement('img');
-                img.alt = '';
-                img.loading = 'lazy';
-                /* One-shot fallback: if the CDN thumbnail fails, try /local.
-                   Clearing onerror prevents a flap if /local also fails. */
-                img.onerror = function() {
-                    img.onerror = null;
-                    var fb = localThumbUrl(item);
-                    if (img.src !== fb) img.src = fb;
-                };
-                img.src = thumbUrl(item);
-                card.appendChild(img);
+    /* Mirrors the main artwork display rule (animation_player_render.c:66
+       and updateArtwork in this file): only Giphy gets smooth interpolation;
+       everything else (Makapix, museum, …) renders nearest-neighbor. */
+    function isPixelated(item) { return item.source !== 'giphy'; }
 
-                var meta = document.createElement('div');
-                meta.className = 'meta';
-                meta.textContent = item.source + ' — ' + itemSourceId(item);
-                card.appendChild(meta);
+    function renderCard(item) {
+        var card = document.createElement('div');
+        card.className = 'pin-browse-card';
 
-                var actionsRow = document.createElement('div');
-                actionsRow.className = 'actions';
-                var unpin = document.createElement('button');
-                unpin.textContent = 'Unpin';
-                unpin.className = 'danger';
-                unpin.addEventListener('click', function() {
-                    unpinItem(slug, item, function() { loadPage(); });
-                });
-                actionsRow.appendChild(unpin);
-                card.appendChild(actionsRow);
-                grid.appendChild(card);
+        var img = document.createElement('img');
+        img.alt = '';
+        img.loading = 'lazy';
+        if (isPixelated(item)) img.classList.add('pixelated');
+        /* One-shot fallback: if the CDN thumbnail fails, try /local.
+           Clearing onerror prevents a flap if /local also fails. */
+        img.onerror = function() {
+            img.onerror = null;
+            var fb = localThumbUrl(item);
+            if (img.src !== fb) img.src = fb;
+        };
+        img.src = thumbUrl(item);
+        card.appendChild(img);
+
+        var meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.textContent = item.source + ' — ' + itemSourceId(item);
+        card.appendChild(meta);
+
+        var actionsRow = document.createElement('div');
+        actionsRow.className = 'actions';
+        var unpin = document.createElement('button');
+        unpin.textContent = 'Unpin';
+        unpin.className = 'danger';
+        unpin.addEventListener('click', function() {
+            unpinItem(slug, item, function() {
+                /* Surgical removal preserves scroll position; re-fetching from
+                   `offset` after a deep scroll would yank the user back to the
+                   top of the loaded window. */
+                card.remove();
+                loaded = Math.max(0, loaded - 1);
+                total = Math.max(0, total - 1);
+                updateLabel();
             });
+        });
+        actionsRow.appendChild(unpin);
+        card.appendChild(actionsRow);
+
+        return card;
+    }
+
+    function updateLabel() {
+        if (total === 0) {
+            label.textContent = 'No pins yet';
+            jumpBtn.disabled = true;
+        } else {
+            label.textContent = 'Showing ' + (offset + 1) + '–' +
+                                (offset + loaded) + ' of ' + total;
+            jumpBtn.disabled = false;
+        }
+    }
+
+    function loadMore(scrollToIndex) {
+        if (loading || done) return;
+        loading = true;
+        var gen = generation;
+        var fetchOffset = offset + loaded;
+        var sentinel = document.createElement('div');
+        sentinel.className = 'pin-browse-loading';
+        sentinel.textContent = 'Loading…';
+        strip.appendChild(sentinel);
+        var url = '/api/pin-lists/' + encodeURIComponent(slug) +
+                  '/items?offset=' + fetchOffset + '&limit=' + PIN_BROWSE_PAGE_SIZE;
+        fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+            sentinel.remove();
+            if (gen !== generation) { loading = false; return; }
+            total = d.total || 0;
+            var items = d.items || [];
+            items.forEach(function(item) { strip.appendChild(renderCard(item)); });
+            loaded += items.length;
+            done = (offset + loaded >= total) || items.length === 0;
+            loading = false;
+            updateLabel();
+            if (typeof scrollToIndex === 'number') {
+                var card = strip.children[scrollToIndex];
+                if (card && card.scrollIntoView) {
+                    card.scrollIntoView({ inline: 'start', block: 'nearest' });
+                }
+            }
+            ensureFilled();
         }).catch(function() {
-            label.textContent = 'Failed to load';
+            sentinel.textContent = 'Failed to load';
+            loading = false;
         });
     }
 
-    prev.addEventListener('click', function() {
-        if (offset >= PIN_BROWSE_PAGE_SIZE) { offset -= PIN_BROWSE_PAGE_SIZE; loadPage(); }
-    });
-    next.addEventListener('click', function() {
-        if (offset + PIN_BROWSE_PAGE_SIZE < total) { offset += PIN_BROWSE_PAGE_SIZE; loadPage(); }
-    });
+    /* If the strip isn't yet horizontally scrollable (small list or wide
+       viewport), keep loading until it is — otherwise the scroll-driven
+       loader has no trigger. */
+    function ensureFilled() {
+        if (!done && !loading && strip.scrollWidth <= strip.clientWidth + 50) {
+            loadMore();
+        }
+    }
 
-    loadPage();
+    /* Auto-load when scrolled near the right edge. */
+    strip.addEventListener('scroll', function() {
+        if (loading || done) return;
+        var threshold = 200;
+        if (strip.scrollLeft + strip.clientWidth + threshold >= strip.scrollWidth) {
+            loadMore();
+        }
+    }, { passive: true });
+
+    function jumpTo() {
+        if (total <= 0) return;
+        var raw = prompt('Jump to item # (1–' + total + '):',
+                         String(offset + Math.min(loaded, 1)));
+        if (raw === null) return;
+        var n = parseInt(raw, 10);
+        if (isNaN(n)) return;
+        if (n < 1) n = 1;
+        if (n > total) n = total;
+        var newOffset = Math.floor((n - 1) / PIN_BROWSE_PAGE_SIZE) * PIN_BROWSE_PAGE_SIZE;
+        var indexInPage = (n - 1) - newOffset;
+        /* Bump generation so any in-flight fetch is discarded, then reset. */
+        generation += 1;
+        loading = false;
+        done = false;
+        offset = newOffset;
+        loaded = 0;
+        strip.innerHTML = '';
+        strip.scrollLeft = 0;
+        loadMore(indexInPage);
+    }
+    jumpBtn.addEventListener('click', jumpTo);
+
+    loadMore();
 }
 
 function unpinItem(slug, item, cb) {

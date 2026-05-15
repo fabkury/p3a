@@ -416,7 +416,11 @@ esp_err_t channel_eviction_check_and_run(void)
         /* Protect the sdcard channel — compute its hash-based channel_id */
         {
             char sdcard_id[17];
-            ps_compute_channel_id(PS_CHANNEL_TYPE_SDCARD, "sdcard", "", sdcard_id, sizeof(sdcard_id));
+            // Protect the canonical (offset=0) SDCARD channel cache. Non-zero-offset
+            // SDCARD caches are derivable from the same local source and may be evicted
+            // normally if they age out (the active-channel check below still protects
+            // any sdcard slice that's currently in the active playset).
+            ps_compute_channel_id(PS_CHANNEL_TYPE_SDCARD, "sdcard", "", 0, sdcard_id, sizeof(sdcard_id));
             if (strcmp(stem, sdcard_id) == 0) {
                 ESP_LOGD(TAG, "  '%s': protected (sdcard)", stem);
                 channels_protected++;

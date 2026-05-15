@@ -168,6 +168,10 @@ typedef struct {
                                   //   GIPHY (search): search query (verbatim, spaces allowed)
     char display_name[65];        // Optional: friendly display name (e.g., user handle, hashtag)
     uint32_t weight;              // Channel weight; if all channels are 0, the scheduler distributes equally
+    uint32_t offset;              // Starting offset into the channel's source listing (per-playset slice).
+                                  // Honored for INSTITUTION, GIPHY, SDCARD, PINNED. Modulo against the
+                                  // source's total record count at refresh-time wraps oversized values
+                                  // back to the start. Always 0 for unsupported channel types.
 
     // Artwork-specific fields (only when type == PS_CHANNEL_TYPE_ARTWORK)
     struct {
@@ -258,6 +262,9 @@ typedef struct {
     int32_t credit;
     uint32_t weight;          // Normalized weight (out of 65536)
     uint32_t spec_weight;     // Original weight from playset spec (for weight recalculation)
+    uint32_t offset;          // Per-playset starting offset (mirrored from ps_channel_spec_t.offset).
+                              // Refresh paths consult this to slice their fetch window. Already part of
+                              // channel_id, so two playsets with different offsets get separate caches.
 
     // Pick state
     uint32_t cursor;          // For RecencyPick

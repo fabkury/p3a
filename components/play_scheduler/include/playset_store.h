@@ -53,6 +53,12 @@ _Static_assert(sizeof(playset_header_t) == 64, "Playset header must be 64 bytes"
 
 /**
  * @brief Playset channel entry (144 bytes)
+ *
+ * Note: `offset` consumes 4 of what were originally 8 reserved bytes in v11.
+ * v11 files have those bytes zero-filled, so they load as offset=0 (the
+ * correct default for the legacy "no offset" behavior). No format version
+ * bump is needed; CRC stays sound because pre-offset save paths still emit
+ * zero in those positions.
  */
 typedef struct __attribute__((packed)) {
     uint8_t  type;             // ps_channel_type_t
@@ -60,7 +66,9 @@ typedef struct __attribute__((packed)) {
     char     identifier[33];   // For USER/HASHTAG
     char     display_name[65]; // Human-readable
     uint32_t weight;           // Channel weight; if all channels are 0, the scheduler distributes equally
-    uint8_t  reserved[8];
+    uint32_t offset;           // Per-playset starting offset into the channel's source listing.
+                               // Reads as 0 for v11 files (legacy zero-filled reserved bytes).
+    uint8_t  reserved[4];
 } playset_channel_entry_t;
 
 _Static_assert(sizeof(playset_channel_entry_t) == 144, "Playset channel entry must be 144 bytes");

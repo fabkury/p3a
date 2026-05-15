@@ -300,9 +300,13 @@ static esp_err_t smk_fetch_page(const char *collection_name,
 
 esp_err_t art_institution_smk_refresh_channel(const char *channel_id,
                                               const char *axis,
-                                              const char *term_id)
+                                              const char *term_id,
+                                              uint32_t channel_offset)
 {
     (void)axis;  // SMK has one axis (collection); axis is informational here.
+    // SMK adapter has not been updated to honor channel_offset yet; accept
+    // the parameter so the dispatch table signature matches but ignore it.
+    (void)channel_offset;
     if (!channel_id || !term_id || term_id[0] == '\0') return ESP_ERR_INVALID_ARG;
 
     if (art_institution_is_rate_limited("smk")) {

@@ -128,6 +128,7 @@ esp_err_t playset_store_save(const char *name, const ps_playset_t *playset)
         strncpy(dst->identifier, src->identifier, sizeof(dst->identifier) - 1);
         strncpy(dst->display_name, src->display_name, sizeof(dst->display_name) - 1);
         dst->weight = src->weight;
+        dst->offset = src->offset;
     }
 
     header.checksum = calculate_checksum(&header, entries, playset->channel_count);
@@ -270,6 +271,7 @@ esp_err_t playset_store_load(const char *name, ps_playset_t *out_playset)
         strncpy(dst->identifier, src->identifier, sizeof(dst->identifier) - 1);
         strncpy(dst->display_name, src->display_name, sizeof(dst->display_name) - 1);
         dst->weight = src->weight;
+        dst->offset = src->offset;
     }
 
     free(entries);

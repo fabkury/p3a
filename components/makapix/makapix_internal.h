@@ -51,7 +51,8 @@ esp_err_t play_scheduler_play_user_channel(const char *user_sqid);
 esp_err_t play_scheduler_play_reactions_channel(const char *user_sqid);
 esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag);
 void ps_compute_channel_id(ps_channel_type_t type, const char *name,
-                           const char *identifier, char *out_id, size_t max_len);
+                           const char *identifier, uint32_t offset,
+                           char *out_id, size_t max_len);
 void ps_get_display_name(const char *channel_id, char *out_name, size_t max_len);
 
 // Shared TAG for logging

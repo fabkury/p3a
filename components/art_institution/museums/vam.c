@@ -282,7 +282,8 @@ static esp_err_t vam_fetch_page(const char *filter_param,
 
 esp_err_t art_institution_vam_refresh_channel(const char *channel_id,
                                               const char *axis,
-                                              const char *term_id)
+                                              const char *term_id,
+                                              uint32_t channel_offset)
 {
     if (!channel_id || !axis || !term_id) return ESP_ERR_INVALID_ARG;
 
@@ -328,7 +329,18 @@ esp_err_t art_institution_vam_refresh_channel(const char *channel_id,
     ai_si_node_t *si_hash = NULL;
     size_t si_count = 0;
     size_t total_fetched = 0;
-    int page = 1;
+    // V&A supports random-access pagination up to page × page_size ≤ 10 000
+    // (see docs/art-institutions/offset-tests/REPORT.md §2.4). Translate the
+    // user's record-offset into a starting page. The 10 000-record budget
+    // wraps oversized offsets back to the start so the channel never goes
+    // empty just because the user's offset is past the cap; we cap the
+    // effective offset at 9900 so the smallest page can still fit a full
+    // 100-entry response.
+    const uint32_t VAM_OFFSET_CAP = 9900;
+    uint32_t effective_offset = (channel_offset > VAM_OFFSET_CAP)
+        ? (channel_offset % (VAM_OFFSET_CAP + 1))
+        : channel_offset;
+    int page = (int)(effective_offset / VAM_PAGE_LIMIT) + 1;
     esp_err_t last_err = ESP_OK;
     bool refresh_completed = true;
 

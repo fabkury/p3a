@@ -34,24 +34,24 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier,
             return ESP_ERR_INVALID_ARG;
         }
         ch_type = PS_CHANNEL_TYPE_USER;
-        ps_compute_channel_id(ch_type, "user", identifier, channel_id, sizeof(channel_id));
+        ps_compute_channel_id(ch_type, "user", identifier, 0, channel_id, sizeof(channel_id));
     } else if (strcmp(channel, "reactions") == 0) {
         if (!identifier || strlen(identifier) == 0) {
             ESP_LOGE(MAKAPIX_TAG, "identifier required for reactions channel");
             return ESP_ERR_INVALID_ARG;
         }
         ch_type = PS_CHANNEL_TYPE_REACTIONS;
-        ps_compute_channel_id(ch_type, "reactions", identifier, channel_id, sizeof(channel_id));
+        ps_compute_channel_id(ch_type, "reactions", identifier, 0, channel_id, sizeof(channel_id));
     } else if (strcmp(channel, "hashtag") == 0) {
         if (!identifier || strlen(identifier) == 0) {
             ESP_LOGE(MAKAPIX_TAG, "identifier required for hashtag channel");
             return ESP_ERR_INVALID_ARG;
         }
         ch_type = PS_CHANNEL_TYPE_HASHTAG;
-        ps_compute_channel_id(ch_type, "hashtag", identifier, channel_id, sizeof(channel_id));
+        ps_compute_channel_id(ch_type, "hashtag", identifier, 0, channel_id, sizeof(channel_id));
     } else {
         ch_type = PS_CHANNEL_TYPE_NAMED;
-        ps_compute_channel_id(ch_type, channel, "", channel_id, sizeof(channel_id));
+        ps_compute_channel_id(ch_type, channel, "", 0, channel_id, sizeof(channel_id));
     }
 
     // Check if we're already on this channel
@@ -494,13 +494,13 @@ esp_err_t makapix_request_channel_switch(const char *channel, const char *identi
     // Build channel_id for comparison using hash
     char new_channel_id[128] = {0};
     if (strcmp(channel, "by_user") == 0 && identifier) {
-        ps_compute_channel_id(PS_CHANNEL_TYPE_USER, "user", identifier, new_channel_id, sizeof(new_channel_id));
+        ps_compute_channel_id(PS_CHANNEL_TYPE_USER, "user", identifier, 0, new_channel_id, sizeof(new_channel_id));
     } else if (strcmp(channel, "reactions") == 0 && identifier) {
-        ps_compute_channel_id(PS_CHANNEL_TYPE_REACTIONS, "reactions", identifier, new_channel_id, sizeof(new_channel_id));
+        ps_compute_channel_id(PS_CHANNEL_TYPE_REACTIONS, "reactions", identifier, 0, new_channel_id, sizeof(new_channel_id));
     } else if (strcmp(channel, "hashtag") == 0 && identifier) {
-        ps_compute_channel_id(PS_CHANNEL_TYPE_HASHTAG, "hashtag", identifier, new_channel_id, sizeof(new_channel_id));
+        ps_compute_channel_id(PS_CHANNEL_TYPE_HASHTAG, "hashtag", identifier, 0, new_channel_id, sizeof(new_channel_id));
     } else {
-        ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, channel, "", new_channel_id, sizeof(new_channel_id));
+        ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, channel, "", 0, new_channel_id, sizeof(new_channel_id));
     }
 
     // Check if this is the same channel already loading

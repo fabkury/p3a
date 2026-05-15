@@ -236,13 +236,14 @@ static void giphy_evict_orphans(channel_cache_t *cache, si_node_t *si_hash)
 // Response buffer size for Giphy API (allocated in PSRAM).
 #define GIPHY_RESPONSE_BUF_SIZE (384 * 1024)
 
-esp_err_t giphy_refresh_channel(const char *channel_id, const char *query)
+esp_err_t giphy_refresh_channel(const char *channel_id, const char *query, uint32_t channel_offset)
 {
-    return giphy_refresh_channel_with_progress(channel_id, query, NULL, NULL);
+    return giphy_refresh_channel_with_progress(channel_id, query, channel_offset, NULL, NULL);
 }
 
 esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
                                                const char *query,
+                                               uint32_t channel_offset,
                                                giphy_refresh_progress_cb_t progress_cb,
                                                void *progress_ctx)
 {
@@ -351,7 +352,13 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
         }
     }
     size_t total_fetched = 0;
-    int offset = 0;
+    // Apply per-playset channel offset: modulo against the 499-entry public
+    // cap (the conservative ceiling Giphy treats as "end of trending"; see
+    // giphy_api.c out_has_more heuristic). Offsets at or beyond that are
+    // wrapped back to a fresh slice.
+    const int GIPHY_OFFSET_CAP = 499;
+    int start_offset = (int)(channel_offset % (uint32_t)GIPHY_OFFSET_CAP);
+    int offset = start_offset;
     esp_err_t last_err = ESP_OK;
     bool refresh_completed = true;
 
@@ -360,7 +367,7 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
     si_node_t *si_hash = NULL;
     size_t si_count = 0;
 
-    while ((size_t)offset < cache_size) {
+    while ((size_t)(offset - start_offset) < cache_size) {
         if (s_refresh_cancel) {
             ESP_LOGI(TAG, "Refresh cancelled before page fetch (offset=%d)", offset);
             refresh_completed = false;

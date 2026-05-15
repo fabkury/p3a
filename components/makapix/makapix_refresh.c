@@ -267,21 +267,23 @@ esp_err_t makapix_refresh_channel_index(const char *channel_type, const char *id
     char channel_id[128] = {0};
     char channel_name[64] = {0};
 
+    // Makapix channels do not carry per-playset offsets; the canonical channel
+    // is offset=0.
     if (strcmp(channel_type, "all") == 0) {
-        ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "all", "", channel_id, sizeof(channel_id));
+        ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "all", "", 0, channel_id, sizeof(channel_id));
         strlcpy(channel_name, "All", sizeof(channel_name));
     } else if (strcmp(channel_type, "promoted") == 0) {
-        ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "promoted", "", channel_id, sizeof(channel_id));
+        ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "promoted", "", 0, channel_id, sizeof(channel_id));
         strlcpy(channel_name, "Promoted", sizeof(channel_name));
     } else if (strcmp(channel_type, "by_user") == 0 && identifier) {
-        ps_compute_channel_id(PS_CHANNEL_TYPE_USER, "user", identifier, channel_id, sizeof(channel_id));
+        ps_compute_channel_id(PS_CHANNEL_TYPE_USER, "user", identifier, 0, channel_id, sizeof(channel_id));
         snprintf(channel_name, sizeof(channel_name), "User %s", identifier);
     } else if (strcmp(channel_type, "reactions") == 0 && identifier) {
-        ps_compute_channel_id(PS_CHANNEL_TYPE_REACTIONS, "reactions", identifier,
+        ps_compute_channel_id(PS_CHANNEL_TYPE_REACTIONS, "reactions", identifier, 0,
                               channel_id, sizeof(channel_id));
         snprintf(channel_name, sizeof(channel_name), "Reactions: %s", identifier);
     } else if (strcmp(channel_type, "hashtag") == 0 && identifier) {
-        ps_compute_channel_id(PS_CHANNEL_TYPE_HASHTAG, "hashtag", identifier, channel_id, sizeof(channel_id));
+        ps_compute_channel_id(PS_CHANNEL_TYPE_HASHTAG, "hashtag", identifier, 0, channel_id, sizeof(channel_id));
         snprintf(channel_name, sizeof(channel_name), "#%s", identifier);
     } else {
         ESP_LOGW(MAKAPIX_TAG, "Unknown channel type: %s", channel_type);

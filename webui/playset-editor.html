@@ -1251,6 +1251,26 @@
                 '</div>' +
                 '</div>';
 
+            // Offset (per-playset starting slice). Enabled for channel types where the
+            // source supports random-access listing; disabled for Makapix-family and
+            // artwork channels where offset has no defined semantics.
+            var offsetSupported = (channel.type === 'institution' ||
+                                   channel.type === 'giphy' ||
+                                   channel.type === 'sdcard' ||
+                                   channel.type === 'pinned');
+            var offsetLabel = offsetSupported
+                ? 'Offset (starting index into the channel’s artworks; wraps when larger than the source)'
+                : 'Offset (not supported for this channel type)';
+            html += '<div class="field-row" style="margin-top: 8px;">' +
+                '<div class="form-group" style="margin: 0;">' +
+                '<label class="form-label" style="font-size: 12px;">' + offsetLabel + '</label>' +
+                '<input type="number" class="form-input" min="0" max="4294967295" ' +
+                'value="' + (channel.offset || 0) + '" ' +
+                (offsetSupported ? '' : 'disabled title="Not supported for this channel type" ') +
+                'onchange="updateChannelField(' + index + ', \'offset\', parseInt(this.value) || 0)">' +
+                '</div>' +
+                '</div>';
+
             html += '</div></div>';
             return html;
         }
@@ -1816,7 +1836,8 @@
                 name: '',
                 identifier: '',
                 display_name: displayName,
-                weight: 100
+                weight: 100,
+                offset: 0
             };
 
             switch (type) {

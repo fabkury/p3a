@@ -162,10 +162,13 @@ esp_err_t h_get_api_init(httpd_req_t *req) {
 
     // channel_stats: per-channel cached/total counts (O(1) from LAi)
     // Compute channel_id hashes to look up stats
+    // Stats lookup uses the canonical offset=0 channel_id. Per-playset
+    // channels with non-zero offsets are addressable via channel-specific
+    // endpoints, not this aggregate.
     char all_id[17], promoted_id[17], giphy_id[17];
-    ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "all", "", all_id, sizeof(all_id));
-    ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "promoted", "", promoted_id, sizeof(promoted_id));
-    ps_compute_channel_id(PS_CHANNEL_TYPE_GIPHY, "trending", "", giphy_id, sizeof(giphy_id));
+    ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "all", "", 0, all_id, sizeof(all_id));
+    ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "promoted", "", 0, promoted_id, sizeof(promoted_id));
+    ps_compute_channel_id(PS_CHANNEL_TYPE_GIPHY, "trending", "", 0, giphy_id, sizeof(giphy_id));
     size_t all_total = 0, all_cached = 0;
     size_t promoted_total = 0, promoted_cached = 0;
     size_t giphy_trending_total = 0, giphy_trending_cached = 0;
@@ -565,9 +568,9 @@ esp_err_t h_get_channels_stats(httpd_req_t *req) {
     // Get stats from Play Scheduler (O(1) lookup from LAi)
     // Compute channel_id hashes to look up stats
     char all_id[17], promoted_id[17], giphy_id[17];
-    ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "all", "", all_id, sizeof(all_id));
-    ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "promoted", "", promoted_id, sizeof(promoted_id));
-    ps_compute_channel_id(PS_CHANNEL_TYPE_GIPHY, "trending", "", giphy_id, sizeof(giphy_id));
+    ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "all", "", 0, all_id, sizeof(all_id));
+    ps_compute_channel_id(PS_CHANNEL_TYPE_NAMED, "promoted", "", 0, promoted_id, sizeof(promoted_id));
+    ps_compute_channel_id(PS_CHANNEL_TYPE_GIPHY, "trending", "", 0, giphy_id, sizeof(giphy_id));
     size_t all_total = 0, all_cached = 0;
     size_t promoted_total = 0, promoted_cached = 0;
     size_t giphy_trending_total = 0, giphy_trending_cached = 0;

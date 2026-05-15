@@ -55,10 +55,18 @@ typedef struct {
      * runs at the end. Returns ESP_OK on full success,
      * ESP_ERR_INVALID_RESPONSE on HTTP 429 (caller surfaces cooldown UI),
      * other codes for network / parse failures.
+     *
+     * `channel_offset` is the per-playset starting offset into the museum's
+     * listing. Museums that support random-access pagination apply it
+     * directly; museums that only support cursor walks discard the first
+     * channel_offset entries during the walk. Modulo-wrap against the
+     * facet's total record count happens inside the adapter once it
+     * knows the count.
      */
     esp_err_t (*refresh_channel)(const char *channel_id,
                                  const char *axis,
-                                 const char *term_id);
+                                 const char *term_id,
+                                 uint32_t channel_offset);
 
     /**
      * Build the IIIF JPEG URL for one entry at the requested longest-side
@@ -139,15 +147,17 @@ esp_err_t art_institution_parse_spec(const char *spec_name,
  * each page under channel_cache_lifecycle_lock() — same pattern Giphy
  * uses, so a concurrent playset switch can't free the cache mid-refresh).
  *
- * @param channel_id Channel id (used to re-resolve cache between pages)
- * @param spec_name  Channel spec name ("artic:departments")
- * @param identifier Term id ("PC-4")
+ * @param channel_id     Channel id (used to re-resolve cache between pages)
+ * @param spec_name      Channel spec name ("artic:departments")
+ * @param identifier     Term id ("PC-4")
+ * @param channel_offset Per-playset starting offset into the listing
  * @return ESP_OK on success, ESP_ERR_INVALID_RESPONSE on HTTP 429,
  *         ESP_ERR_NOT_FOUND for unknown museum, other codes on error.
  */
 esp_err_t art_institution_refresh_by_spec(const char *channel_id,
                                           const char *spec_name,
-                                          const char *identifier);
+                                          const char *identifier,
+                                          uint32_t channel_offset);
 
 /**
  * @brief Build the SD-card vault path for one entry

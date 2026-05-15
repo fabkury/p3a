@@ -190,12 +190,29 @@ cJSON *build_current_artwork_json(void)
     cJSON_AddStringToObject(obj, "channel_type",
                             playset_channel_type_str(artwork.channel_type));
 
-    // Reaction-related fields driven by p3a_current_post (which is the actual
-    // on-screen post, not the next one to be picked). Only include the
-    // identifier and reaction_submitted flag when the source supports
-    // reactions, so the web UI can use field presence as the "this artwork
-    // accepts reactions" signal.
+    // Fields driven by p3a_current_post (the actual on-screen post, not the
+    // next one to be picked). We emit:
+    //   - `source`     : string label for the underlying post source. The
+    //                    web UI uses this to gate the reaction button
+    //                    independently of channel_type (which collapses to
+    //                    "pinned" for pinned items and would otherwise hide
+    //                    the original makapix/giphy/institution origin).
+    //   - `post_id`    : present for Makapix AND Institution sources. The
+    //                    /action/pin endpoint accepts post_id for both.
+    //   - `giphy_id`   : present for Giphy.
+    //   - `reaction_submitted` : present only for Makapix (the only source
+    //                    that supports the 👍 reaction-submit semantic).
     int source = p3a_current_post_get_source();
+    const char *source_label = "none";
+    switch (source) {
+        case POST_SOURCE_MAKAPIX:     source_label = "makapix";     break;
+        case POST_SOURCE_GIPHY:       source_label = "giphy";       break;
+        case POST_SOURCE_SDCARD:      source_label = "sdcard";      break;
+        case POST_SOURCE_INSTITUTION: source_label = "institution"; break;
+        default:                      source_label = "none";        break;
+    }
+    cJSON_AddStringToObject(obj, "source", source_label);
+
     if (source == POST_SOURCE_MAKAPIX) {
         int32_t post_id = p3a_current_post_get_id();
         if (post_id > 0) {
@@ -208,6 +225,14 @@ cJSON *build_current_artwork_json(void)
         p3a_current_post_get_giphy_id(giphy_id, sizeof(giphy_id));
         if (giphy_id[0]) {
             cJSON_AddStringToObject(obj, "giphy_id", giphy_id);
+        }
+    } else if (source == POST_SOURCE_INSTITUTION) {
+        int32_t post_id = p3a_current_post_get_id();
+        if (post_id > 0) {
+            // post_id only — museums have no reaction-submit counterpart on
+            // device, so `reaction_submitted` is omitted. The web UI keys on
+            // `source` to gate the reaction button.
+            cJSON_AddNumberToObject(obj, "post_id", (double)post_id);
         }
     }
 

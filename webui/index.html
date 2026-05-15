@@ -798,20 +798,22 @@ function updateArtwork(currentArtwork) {
 function updatePinButton(currentArtwork) {
     var btn = document.getElementById('pin-btn');
     if (!btn) return;
-    /* Pinning is supported for Makapix, Giphy, and museum sources. SD-card
-       posts and an empty stage hide the button. */
+    /* The server only emits a pinnable identifier (post_id or giphy_id) for
+       sources that /action/pin actually accepts (Makapix, Giphy, museums),
+       so simple identifier-presence is sufficient — no need to whitelist
+       channel types on the client. SD-card posts and an empty stage emit
+       neither identifier and naturally fall through to "hidden". */
     if (!currentArtwork) {
         btn.style.visibility = 'hidden';
         delete btn.dataset.payload;
         return;
     }
-    var ct = currentArtwork.channel_type;
-    var hasMakapixId = typeof currentArtwork.post_id === 'number' && currentArtwork.post_id > 0;
     var hasGiphyId = typeof currentArtwork.giphy_id === 'string' && currentArtwork.giphy_id.length > 0;
+    var hasPostId = typeof currentArtwork.post_id === 'number' && currentArtwork.post_id > 0;
     if (hasGiphyId) {
         btn.dataset.payload = JSON.stringify({ giphy_id: currentArtwork.giphy_id });
         btn.style.visibility = '';
-    } else if (hasMakapixId && (ct === 'institution' || ct === 'pinned' || ct === undefined || ct === 'named' || ct === 'user' || ct === 'reactions' || ct === 'hashtag' || ct === 'makapix')) {
+    } else if (hasPostId) {
         btn.dataset.payload = JSON.stringify({ post_id: currentArtwork.post_id });
         btn.style.visibility = '';
     } else {
@@ -834,13 +836,20 @@ function updateReactionButton(currentArtwork) {
         btn.classList.remove('active');
         return;
     }
-    if (typeof currentArtwork.giphy_id === 'string' && currentArtwork.giphy_id) {
+    /* Reactions are gated on `source`, not just identifier presence: a museum
+       artwork carries a post_id (so it can be pinned) but does NOT support
+       the 👍 reaction. Pinned artworks inherit their original source, so a
+       pinned-makapix post still reacts while a pinned-museum post does not. */
+    var src = currentArtwork.source;
+    if (src === 'giphy' &&
+        typeof currentArtwork.giphy_id === 'string' && currentArtwork.giphy_id) {
         btn.dataset.source = 'giphy';
         btn.dataset.id = currentArtwork.giphy_id;
         btn.textContent = '👆';   // 👆
         btn.classList.remove('active');
         btn.style.visibility = '';
-    } else if (typeof currentArtwork.post_id === 'number' && currentArtwork.post_id > 0) {
+    } else if (src === 'makapix' &&
+               typeof currentArtwork.post_id === 'number' && currentArtwork.post_id > 0) {
         btn.dataset.source = 'makapix';
         btn.dataset.id = String(currentArtwork.post_id);
         btn.textContent = '👍';   // 👍

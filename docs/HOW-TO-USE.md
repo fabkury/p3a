@@ -428,7 +428,7 @@ p3a can act as a dedicated PICO-8 game display:
 The device automatically exits PICO-8 mode after 30 seconds of inactivity (no frames received) and returns to normal artwork playback.
 
 <p align="center">
-  <img src="../images/pico-8-gameplay.webp" alt="PICO-8 gameplay video">
+  <img src="../images/pico-8/pico-8-gameplay.webp" alt="PICO-8 gameplay video">
 </p>
 
 ---

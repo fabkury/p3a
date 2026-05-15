@@ -358,7 +358,14 @@ p3a/
 │
 ├── flasher/                             # Optional Windows flasher build (P3A_BUILD_FLASHER)
 ├── certs/                               # Provisioning certificate authority material
-├── images/                              # Project images, screenshots, gifs
+├── images/                              # Project art assets
+│   ├── photos/                          # Device photos & demo captures (README, marketing)
+│   ├── brand/                           # Logos & brand identity (PNG deliverables + source/ XCFs and raw sketches)
+│   ├── screenshots/                     # Web UI screenshots
+│   ├── pico-8/                          # PICO-8 logos, gameplay clips, web-interface shots
+│   ├── ui-icons/                        # Source artwork for icons baked into firmware/webui
+│   ├── hardware/                        # Board reference imagery
+│   └── webui-manifest/                  # PWA / add-to-home-screen icons (source folder; LittleFS uses webui/static/)
 ├── scripts/                             # Build / development helper scripts
 ├── build/                               # Build output directory
 ├── release/                             # Per-version release binaries

@@ -1,4 +1,4 @@
-<img src="images/p3a-alpha-x2-128p.png" alt="p3a" align="left" width="128" height="128" />
+<img src="images/brand/p3a-alpha-x2-128p.png" alt="p3a" align="left" width="128" height="128" />
 
 # p3a — Pixel Art Player
 
@@ -7,11 +7,11 @@
 <br clear="left"/>
 
 <p align="center">
-  <img src="images/p3a-1.jpg" alt="p3a displaying pixel art" height="280">
+  <img src="images/photos/p3a-1.jpg" alt="p3a displaying pixel art" height="280">
   &nbsp;
-  <img src="images/p3a-7.jpg" alt="p3a angled view" height="280">
+  <img src="images/photos/p3a-7.jpg" alt="p3a angled view" height="280">
   &nbsp;
-  <img src="images/p3a-4-giphy.jpg" alt="p3a playing a Giphy GIF" height="280">
+  <img src="images/photos/p3a-4-giphy.jpg" alt="p3a playing a Giphy GIF" height="280">
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@ p3a turns a [$40 development board](https://www.waveshare.com/product/arduino/bo
 It's open source, self-contained, and designed to be as simple to use as a picture frame — while still exposing a full REST API for those who want to automate and tinker. Both the hardware and the firmware are built for 24/7 operation, so you can leave it running on a shelf or wall indefinitely.
 
 <p align="center">
-  <img src="images/p3a_10fps.gif" alt="p3a playing animated artworks" height="300">
+  <img src="images/photos/p3a_10fps.gif" alt="p3a playing animated artworks" height="300">
 </p>
 
 ---
@@ -73,11 +73,11 @@ For a step-by-step walkthrough written for first-time buyers, see the [Quick Sta
 Mix them all in a single "playset" for an ever-changing display.
 
 <p align="center">
-  <img src="images/p3a-5.jpg" alt="p3a in hand" height="260">
+  <img src="images/photos/p3a-5.jpg" alt="p3a in hand" height="260">
   &nbsp;
-  <img src="images/p3a-3-giphy.jpg" alt="p3a playing a Giphy GIF" height="260">
+  <img src="images/photos/p3a-3-giphy.jpg" alt="p3a playing a Giphy GIF" height="260">
   &nbsp;
-  <img src="images/p3a-6.jpg" alt="p3a close-up" height="260">
+  <img src="images/photos/p3a-6.jpg" alt="p3a close-up" height="260">
 </p>
 
 ### Smooth, Gapless Playback
@@ -105,7 +105,7 @@ All controls are also available via the web UI and REST API.
 Open `http://p3a.local/` from any browser on the same Wi-Fi network for a full dashboard — playback controls, configuration, firmware updates, Giphy settings, and more.
 
 <p align="center">
-  <img src="images/p3a-web-ui.png" alt="p3a web UI" width="350">
+  <img src="images/screenshots/p3a-web-ui.png" alt="p3a web UI" width="350">
   <br>
   <em>p3a web UI: control everything from the browser</em>
 </p>
@@ -137,7 +137,7 @@ After the first USB flash, everything is over-the-air:
 Stream [PICO-8](https://www.lexaloffle.com/pico-8.php) games to the display over Wi-Fi. A WebAssembly emulator runs in your browser and sends frames to the device via WebSocket, which upscales them to 720x720. The 720x720 screen is a perfect square canvas for PICO-8's 128x128 output. The device returns to artwork playback when you exit PICO-8 mode.
 
 <p align="center">
-  <img src="images/pico-8-gameplay-2.gif" alt="PICO-8 gameplay on p3a">
+  <img src="images/pico-8/pico-8-gameplay-2.gif" alt="PICO-8 gameplay on p3a">
 </p>
 
 ### USB Storage
@@ -162,7 +162,7 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 | **Framework** | ESP-IDF v5.5 |
 
 <p align="center">
-  <img src="images/ESP32-P4-WIFI6-Touch-LCD-4B-details-size.jpg" alt="Board dimensions and layout" width="100%">
+  <img src="images/hardware/ESP32-P4-WIFI6-Touch-LCD-4B-details-size.jpg" alt="Board dimensions and layout" width="100%">
 </p>
 
 ---
@@ -170,7 +170,7 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 ## Makapix Club
 
 <p align="center">
-  <img src="images/p3a-2.jpg" alt="p3a displaying Makapix artwork" height="300">
+  <img src="images/photos/p3a-2.jpg" alt="p3a displaying Makapix artwork" height="300">
 </p>
 
 [Makapix Club](https://makapix.club/) is a pixel art social network where artists share animated creations. Register your p3a to unlock:

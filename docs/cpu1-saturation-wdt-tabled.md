@@ -1,8 +1,8 @@
 # CPU 1 Saturation Triggering IDLE1 Task Watchdog
 
-Status: **(1) implemented 2026-05-14; (2)+ deferred.** SW JPEG scanline yield landed in `components/animation_decoder/jpeg_animation_decoder_sw.c`. The pinning recommendation (2) was *not* applied — see "Status update — 2026-05-14" below. The watchdog does not panic (`CONFIG_ESP_TASK_WDT_PANIC` unset), so any residual WDTs remain warnings rather than resets.
+Status: **(1) superseded 2026-05-15 by libjpeg progress monitor; (2)+ still deferred.** The scanline-loop yield landed on 2026-05-14 and was removed on 2026-05-15 in favor of a `jpeg_progress_mgr` callback that fires from inside libjpeg's Huffman/IDCT loops — see "Status update — 2026-05-15" below. The pinning recommendation (2) was *not* applied. The watchdog does not panic (`CONFIG_ESP_TASK_WDT_PANIC` unset), so any residual WDTs remain warnings rather than resets.
 
-A second trace on 2026-05-14 reproduced the same `ycc_rgb_convert_internal` stack on CPU 1 during V&A backfill, confirming the original diagnosis was still live. (1) directly addresses that call stack; observe post-deploy whether any WDT or display stutter remains before reconsidering (2).
+History: a second trace on 2026-05-14 reproduced the original `ycc_rgb_convert_internal` stack during V&A backfill and motivated (1). A third trace on 2026-05-15 caught a *progressive* JPEG stuck in `decode_mcu_AC_refine` — a case (1) couldn't cover — which motivated the progress-monitor replacement.
 
 ## Symptom
 
@@ -130,3 +130,42 @@ If both are absent, leaving `anim_loader` unpinned preserves FreeRTOS load balan
 ### Others (3)–(7)
 
 Still as originally written. WebP-side yield (3) is the next likely candidate if any WDT remains and points at `display_render` in libwebp.
+
+## Status update — 2026-05-15
+
+### New variant: progressive JPEG inside `decode_mcu_AC_refine`
+
+A WDT fired again on CPU 1 with `anim_loader` running:
+
+```
+E (1734526) task_wdt: Task watchdog got triggered. - IDLE1 (CPU 1)
+E (1734526) task_wdt: CPU 1: anim_loader
+MEPC : 0x480ccc12 — decode_mcu_AC_refine at jdphuff.c:577
+RA   : 0x480ccd1a — decode_mcu_AC_refine at jdphuff.c:549
+
+W (1746661) anim_player:    Swap request ignored: swap already in progress
+W (1746662) ps_navigation:  Swap request failed: ESP_ERR_INVALID_STATE
+```
+
+`jdphuff.c` is libjpeg-turbo's progressive Huffman decoder. `decode_mcu_AC_refine` only runs for progressive AC refinement scans — baseline JPEGs use a different code path (`jdhuff.c`). The image was almost certainly the AIC pick made just before the WDT (`AIC · Drawing and Watercolor`, post 1261736080).
+
+### Why the 2026-05-14 fix didn't cover it
+
+The scanline-loop yield lived in the application's `while (cinfo.output_scanline < cinfo.output_height) { ... vTaskDelay(1) ... }`. For progressive JPEGs in single-pass mode (`cinfo.buffered_image == FALSE`, the default), libjpeg-turbo must consume **all scans** of the bitstream before any scanline can be output. The first call to `jpeg_read_scanlines` therefore blocks inside `decompress_data` → `decode_mcu_AC_refine` for the whole multi-scan decode, never returning to the loop where the yield lived. `output_scanline` stayed at 0 the entire time, and the yield never fired.
+
+### (1') libjpeg progress monitor — IMPLEMENTED, supersedes (1)
+
+Install `cinfo.progress = &mgr.pub` where `mgr.pub.progress_monitor` is a callback that yields on a wallclock cadence. libjpeg-turbo invokes the callback **once per MCU row** from inside `decompress_onepass` (baseline), `decompress_data` (progressive), and `consume_data` — i.e. from the same Huffman/IDCT call sites the WDT keeps catching. This covers progressive and baseline uniformly without depending on `output_scanline` advancing.
+
+Implementation choices for low overhead:
+
+- **Wallclock gate (`xTaskGetTickCount`), not call-count.** Yield frequency is constant in wallclock regardless of whether libjpeg fires the callback 100× or 1000× per image (progressive scan count varies wildly). Cost: one volatile read + subtract + compare per call.
+- **200 ms interval.** Comfortably under the 15 s WDT and fast enough that `display_render` doesn't visibly stall waiting for CPU 1. Adds ~7 yields over a 1.5 s decode → ~0.5% overhead.
+- **State in a wrapper struct (`p3a_progress_mgr_t`) with `struct jpeg_progress_mgr pub` first.** Standard libjpeg pattern, no globals, multi-instance safe.
+- **Scanline-loop `vTaskDelay` removed.** The progress callback fires more often than every 32 scanlines for baseline *and* covers progressive, so the in-loop yield was strictly redundant.
+
+Lives in `components/animation_decoder/jpeg_animation_decoder_sw.c`. Commit `07d91985`.
+
+### (2) Pin `anim_loader` to CPU 0 — still deferred
+
+The 2026-05-14 doc gated revisit on "any task watchdog firing." The 2026-05-15 WDT met that bar, but the root cause was a libjpeg coverage gap rather than core contention — (1') addresses it directly. Re-evaluate (2) only if a *new* WDT trace shows CPU 1 saturation that the progress monitor can't reach (e.g. libwebp, see (3)).

@@ -42,10 +42,40 @@
 // this constant (or thread it through from display state).
 #define DISPLAY_DIM_PX 720u
 
+// Wallclock interval between forced yields during decompression. libjpeg-turbo
+// invokes the progress monitor once per MCU row (per scan, for progressives),
+// so a tick-based gate decouples yield frequency from image characteristics:
+// a 10-scan progressive JPEG and a baseline of the same size yield the same
+// number of times in wallclock. 200 ms is comfortably under WDT (15 s) and
+// fast enough that display_render won't visibly stall waiting for CPU 1.
+#define P3A_JPEG_YIELD_INTERVAL_MS 200u
+
 struct sw_jpeg_error_mgr {
     struct jpeg_error_mgr pub;
     jmp_buf setjmp_buffer;
 };
+
+// Wrap jpeg_progress_mgr to carry the last-yield tick. `pub` must be first so
+// `(p3a_progress_mgr_t *)cinfo->progress` is well-defined.
+typedef struct {
+    struct jpeg_progress_mgr pub;
+    TickType_t last_yield_tick;
+} p3a_progress_mgr_t;
+
+// Fires once per MCU row from inside decompress_onepass / decompress_data /
+// consume_data — i.e. from the same Huffman/IDCT call sites where the WDT
+// caught us with the scanline-loop-only yield. The non-yielding path is a
+// pointer cast + tick read + subtract + compare (~20 cycles); over the ~1000
+// invocations of a worst-case progressive decode that adds ~50 us of CPU time.
+static void p3a_jpeg_progress_cb(j_common_ptr cinfo)
+{
+    p3a_progress_mgr_t *p = (p3a_progress_mgr_t *)cinfo->progress;
+    const TickType_t now = xTaskGetTickCount();
+    if ((TickType_t)(now - p->last_yield_tick) >= pdMS_TO_TICKS(P3A_JPEG_YIELD_INTERVAL_MS)) {
+        p->last_yield_tick = now;
+        vTaskDelay(1);
+    }
+}
 
 static void sw_jpeg_error_exit(j_common_ptr cinfo)
 {
@@ -93,6 +123,10 @@ esp_err_t jpeg_decode_sw_to_rgb888(const uint8_t *data, size_t size,
 
     struct jpeg_decompress_struct cinfo;
     struct sw_jpeg_error_mgr jerr;
+    p3a_progress_mgr_t progress = {
+        .pub.progress_monitor = p3a_jpeg_progress_cb,
+        .last_yield_tick = xTaskGetTickCount(),
+    };
     // volatile: rgb_buffer is assigned after setjmp(); without volatile the
     // value seen by the longjmp cleanup path is indeterminate per C11 7.13.2.1.
     uint8_t * volatile rgb_buffer = NULL;
@@ -114,6 +148,9 @@ esp_err_t jpeg_decode_sw_to_rgb888(const uint8_t *data, size_t size,
 
     jpeg_create_decompress(&cinfo);
     jpeg_mem_src(&cinfo, data, size);
+    // Install before jpeg_read_header so even header parsing on pathological
+    // files benefits from the yield. Covers every libjpeg-internal hot loop.
+    cinfo.progress = &progress.pub;
 
     const int header_status = jpeg_read_header(&cinfo, TRUE);
     if (header_status != JPEG_HEADER_OK) {
@@ -161,10 +198,10 @@ esp_err_t jpeg_decode_sw_to_rgb888(const uint8_t *data, size_t size,
         return ESP_ERR_NO_MEM;
     }
 
-    // Yield every 32 scanlines: a full SW JPEG decode can hold a core for
-    // seconds, and when this task lands on CPU 1 alongside the display
-    // pipeline IDLE1 starves and the task watchdog fires.
-    // See docs/cpu1-saturation-wdt-tabled.md.
+    // Yielding is handled by the progress monitor installed above, which
+    // fires from inside libjpeg's Huffman / IDCT loops and so also covers
+    // progressive JPEGs (where jpeg_read_scanlines blocks for the entire
+    // multi-scan decode and output_scanline never advances).
     JSAMPROW row_pointer[1];
     while (cinfo.output_scanline < cinfo.output_height) {
         row_pointer[0] = rgb_buffer + (size_t)cinfo.output_scanline * row_bytes;
@@ -177,9 +214,6 @@ esp_err_t jpeg_decode_sw_to_rgb888(const uint8_t *data, size_t size,
             free(rgb_buffer);
             jpeg_destroy_decompress(&cinfo);
             return ESP_FAIL;
-        }
-        if ((cinfo.output_scanline % 32u) == 0u) {
-            vTaskDelay(1);
         }
     }
 

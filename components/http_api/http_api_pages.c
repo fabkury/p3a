@@ -20,6 +20,7 @@
 #include "app_wifi.h"
 #include "p3a_board.h"
 #include "surrogate_ui.h"
+#include "config_store.h"
 #include "freertos/task.h"
 #include <sys/stat.h>
 
@@ -215,6 +216,48 @@ static esp_err_t h_get_favicon(httpd_req_t *req) {
     return serve_file(req, "/webui/favicon.ico");
 }
 
+// ---------- Web App Manifest Handler ----------
+
+/**
+ * GET /manifest.webmanifest
+ * Emits the PWA manifest with the device's configured hostname as the app
+ * label, so installed icons distinguish between p3a-bedroom, p3a-office, etc.
+ */
+static esp_err_t h_get_manifest(httpd_req_t *req) {
+    char hostname[24];
+    if (config_store_get_hostname(hostname, sizeof(hostname)) != ESP_OK || hostname[0] == '\0') {
+        strlcpy(hostname, "p3a", sizeof(hostname));
+    }
+
+    char body[640];
+    int n = snprintf(body, sizeof(body),
+        "{"
+        "\"name\":\"%s\","
+        "\"short_name\":\"%s\","
+        "\"start_url\":\"/\","
+        "\"scope\":\"/\","
+        "\"display\":\"standalone\","
+        "\"background_color\":\"#667eea\","
+        "\"theme_color\":\"#667eea\","
+        "\"icons\":["
+        "{\"src\":\"/static/icon-192.png\",\"sizes\":\"192x192\",\"type\":\"image/png\"},"
+        "{\"src\":\"/static/icon-512.png\",\"sizes\":\"512x512\",\"type\":\"image/png\"},"
+        "{\"src\":\"/static/icon-512-maskable.png\",\"sizes\":\"512x512\",\"type\":\"image/png\",\"purpose\":\"maskable\"}"
+        "]"
+        "}",
+        hostname, hostname);
+
+    if (n < 0 || n >= (int)sizeof(body)) {
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "Manifest build failed", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    httpd_resp_set_type(req, "application/manifest+json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    return httpd_resp_send(req, body, n);
+}
+
 // ---------- Static File Handler ----------
 
 /**
@@ -250,6 +293,9 @@ esp_err_t http_api_pages_route_get(httpd_req_t *req) {
 
     if (strcmp(uri, "/favicon.ico") == 0) {
         return h_get_favicon(req);
+    }
+    if (strcmp(uri, "/manifest.webmanifest") == 0) {
+        return h_get_manifest(req);
     }
     if (strcmp(uri, "/") == 0) {
         return h_get_root(req);

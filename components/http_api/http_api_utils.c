@@ -135,7 +135,8 @@ const char* get_mime_type(const char* path) {
     if (strcasecmp(ext, "jpg") == 0 || strcasecmp(ext, "jpeg") == 0) return "image/jpeg";
     if (strcasecmp(ext, "gif") == 0) return "image/gif";
     if (strcasecmp(ext, "ico") == 0) return "image/x-icon";
-    
+    if (strcasecmp(ext, "webmanifest") == 0) return "application/manifest+json";
+
     return "application/octet-stream";
 }
 

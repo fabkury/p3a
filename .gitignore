@@ -13,6 +13,7 @@ nul
 flasher/.venv/
 .claude/
 release/
+!images/webui-manifest/release/
 scripts/aic_test/output/
 scripts/apod_test/output/
 scripts/apod_test/.env

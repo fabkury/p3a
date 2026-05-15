@@ -185,7 +185,8 @@ void art_institution_evict_orphans(struct channel_cache_s *cache,
 
 esp_err_t art_institution_refresh_by_spec(const char *channel_id,
                                           const char *spec_name,
-                                          const char *identifier)
+                                          const char *identifier,
+                                          uint32_t channel_offset)
 {
     if (!channel_id || !spec_name || !identifier) return ESP_ERR_INVALID_ARG;
 
@@ -205,5 +206,5 @@ esp_err_t art_institution_refresh_by_spec(const char *channel_id,
         return ESP_ERR_NOT_FOUND;
     }
 
-    return m->refresh_channel(channel_id, axis, identifier);
+    return m->refresh_channel(channel_id, axis, identifier, channel_offset);
 }

@@ -50,21 +50,25 @@ static const char *TAG = "ps_commands";
 // ============================================================================
 
 /**
- * @brief Compute channel_id as first 16 hex chars of SHA256("{type}:{name}:{identifier}")
+ * @brief Compute channel_id as first 16 hex chars of SHA256("{type}:{name}:{identifier}:{offset}")
  *
  * Produces an opaque, filesystem-safe identifier. The resulting 16-char hex
- * string fits comfortably in existing char channel_id[64] buffers.
+ * string fits comfortably in existing char channel_id[64] buffers. The offset
+ * is part of the canonical input so different per-playset slices of the same
+ * source get distinct channel_ids (and therefore distinct caches).
  */
 void ps_compute_channel_id(ps_channel_type_t type, const char *name,
-                           const char *identifier, char *out_id, size_t max_len)
+                           const char *identifier, uint32_t offset,
+                           char *out_id, size_t max_len)
 {
     if (!out_id || max_len == 0) return;
     if (!name) name = "";
     if (!identifier) identifier = "";
 
-    // Build canonical string "{type_int}:{name}:{identifier}"
+    // Build canonical string "{type_int}:{name}:{identifier}:{offset}"
     char canonical[256];
-    int len = snprintf(canonical, sizeof(canonical), "%d:%s:%s", (int)type, name, identifier);
+    int len = snprintf(canonical, sizeof(canonical), "%d:%s:%s:%lu",
+                       (int)type, name, identifier, (unsigned long)offset);
     if (len < 0) len = 0;
     if ((size_t)len >= sizeof(canonical)) len = sizeof(canonical) - 1;
 
@@ -172,16 +176,38 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
         return ESP_ERR_INVALID_SIZE;
     }
 
-    ch->entry_count = st.st_size / entry_size;
+    size_t total_entries = st.st_size / entry_size;
+
+    // Apply per-playset offset: skip the first `effective_offset` entries from
+    // sdcard.bin (insertion order = ascending post_id). Modulo against the
+    // total wraps oversized values back to the start.
+    size_t effective_offset = 0;
+    if (total_entries > 0 && ch->offset > 0) {
+        effective_offset = (size_t)(ch->offset % total_entries);
+    }
+    size_t kept_entries = total_entries - effective_offset;
+    ch->entry_count = kept_entries;
 
     if (ch->entries) {
         free(ch->entries);
         ch->entries = NULL;
     }
 
-    ch->entries = psram_malloc(ch->entry_count * entry_size);
+    if (kept_entries == 0) {
+        // Offset landed exactly on the end; channel is effectively empty
+        // until the user changes the offset or more files are added.
+        ch->cache_loaded = true;
+        ch->available_count = 0;
+        ch->active = false;
+        ch->entry_format = PS_ENTRY_FORMAT_SDCARD;
+        ESP_LOGI(TAG, "Channel '%s': SD card cache empty after offset=%lu (total=%zu)",
+                 ch->display_name, (unsigned long)ch->offset, total_entries);
+        return ESP_OK;
+    }
+
+    ch->entries = psram_malloc(kept_entries * entry_size);
     if (!ch->entries) {
-        ESP_LOGE(TAG, "Channel '%s': failed to allocate %zu entries", ch->display_name, ch->entry_count);
+        ESP_LOGE(TAG, "Channel '%s': failed to allocate %zu entries", ch->display_name, kept_entries);
         ch->cache_loaded = false;
         ch->entry_count = 0;
         ch->available_count = 0;
@@ -205,11 +231,27 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
         return ESP_FAIL;
     }
 
-    size_t read_count = fread(ch->entries, entry_size, ch->entry_count, f);
+    if (effective_offset > 0) {
+        if (fseek(f, (long)(effective_offset * entry_size), SEEK_SET) != 0) {
+            ESP_LOGE(TAG, "Channel '%s': failed to seek past offset %zu", ch->display_name, effective_offset);
+            fclose(f);
+            free(ch->entries);
+            ch->entries = NULL;
+            ch->cache_loaded = false;
+            ch->entry_count = 0;
+            ch->available_count = 0;
+            ch->active = false;
+            ch->weight = 0;
+            ch->entry_format = PS_ENTRY_FORMAT_NONE;
+            return ESP_FAIL;
+        }
+    }
+
+    size_t read_count = fread(ch->entries, entry_size, kept_entries, f);
     fclose(f);
 
-    if (read_count != ch->entry_count) {
-        ESP_LOGE(TAG, "Channel '%s': read %zu/%zu entries", ch->display_name, read_count, ch->entry_count);
+    if (read_count != kept_entries) {
+        ESP_LOGE(TAG, "Channel '%s': read %zu/%zu entries", ch->display_name, read_count, kept_entries);
         free(ch->entries);
         ch->entries = NULL;
         ch->cache_loaded = false;
@@ -397,6 +439,21 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
                      ch->identifier, esp_err_to_name(err));
             return err;
         }
+
+        // Apply per-playset offset: skip the first `effective_offset` entries
+        // in insertion order (newest-first as documented in pin_lists.h).
+        // Modulo against the total wraps oversized values back to the start.
+        size_t effective_offset = 0;
+        if (count > 0 && ch->offset > 0) {
+            effective_offset = (size_t)(ch->offset % count);
+        }
+        if (effective_offset > 0) {
+            size_t kept = count - effective_offset;
+            memmove(entries, entries + effective_offset,
+                    kept * sizeof(pinned_order_entry_t));
+            count = kept;
+        }
+
         ch->entries = entries;
         ch->entry_count = count;
         ch->available_post_ids = NULL;
@@ -409,7 +466,8 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
         ch->cache_loaded = true;
         ch->active = (count > 0);
         ch->entry_format = PS_ENTRY_FORMAT_PINNED;
-        ESP_LOGI(TAG, "Pinned channel '%s': loaded %zu entries", ch->identifier, count);
+        ESP_LOGI(TAG, "Pinned channel '%s': loaded %zu entries (offset=%lu)",
+                 ch->identifier, count, (unsigned long)ch->offset);
         return ESP_OK;
     }
 
@@ -496,12 +554,13 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset)
         const ps_channel_spec_t *spec = &playset->channels[i];
         ps_channel_state_t *ch = &s_state->channels[i];
 
-        // Build channel_id as hash of spec and preserve original fields
-        ps_compute_channel_id(spec->type, spec->name, spec->identifier,
+        // Build channel_id as hash of spec (offset included) and preserve original fields
+        ps_compute_channel_id(spec->type, spec->name, spec->identifier, spec->offset,
                               ch->channel_id, sizeof(ch->channel_id));
         strlcpy(ch->identifier, spec->identifier, sizeof(ch->identifier));
         ch->type = spec->type;
         strlcpy(ch->spec_name, spec->name, sizeof(ch->spec_name));
+        ch->offset = spec->offset;
         if (spec->display_name[0] != '\0') {
             strlcpy(ch->display_name, spec->display_name, sizeof(ch->display_name));
         } else {

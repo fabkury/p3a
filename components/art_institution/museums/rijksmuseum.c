@@ -289,7 +289,8 @@ static esp_err_t build_first_cursor(const char *term_id, char *out, size_t len)
 
 esp_err_t art_institution_rijks_refresh_channel(const char *channel_id,
                                                 const char *axis,
-                                                const char *term_id)
+                                                const char *term_id,
+                                                uint32_t channel_offset)
 {
     (void)axis;  // Rijks is axis-less; spec_name is "rijks:set", axis="set"
     if (!channel_id || !term_id || term_id[0] == '\0') return ESP_ERR_INVALID_ARG;
@@ -344,6 +345,20 @@ esp_err_t art_institution_rijks_refresh_channel(const char *channel_id,
     int page_num = 1;
     esp_err_t last_err = ESP_OK;
     bool refresh_completed = true;
+    // Rijks supports only forward cursor walks (REPORT.md §3). To honor a
+    // per-playset offset we walk the first `entries_to_skip` items off the
+    // cursor without merging them. The walk cost is paid every refresh; an
+    // offset of N costs ⌈N / page_size⌉ extra HTTP requests. If the walk
+    // hits the end of the set before consuming the offset, the channel
+    // ends up empty (an offset wider than the set is degenerate; the user
+    // can dial it back).
+    //
+    // Modulo-wrap: the very first page response carries `partOf.totalItems`
+    // for the whole collection. We use it to wrap an oversized offset back
+    // into the set's range so the channel doesn't end up empty just because
+    // the user picked a number larger than the set.
+    size_t entries_to_skip = (size_t)channel_offset;
+    bool first_page = true;
 
     while (total_fetched < cache_size && cursor_url[0] != '\0') {
         ESP_LOGI(TAG, "Fetching page %d (set=%s)", page_num, term_id);
@@ -367,6 +382,23 @@ esp_err_t art_institution_rijks_refresh_channel(const char *channel_id,
 
         const cJSON *ordered = cJSON_GetObjectItem(root, "orderedItems");
         const cJSON *next    = cJSON_GetObjectItem(root, "next");
+
+        // Modulo-wrap on the first page using partOf.totalItems if present.
+        if (first_page) {
+            first_page = false;
+            const cJSON *part_of = cJSON_GetObjectItem(root, "partOf");
+            int total_items = 0;
+            if (cJSON_IsObject(part_of)) {
+                const cJSON *ti = cJSON_GetObjectItem(part_of, "totalItems");
+                if (cJSON_IsNumber(ti)) total_items = (int)cJSON_GetNumberValue(ti);
+            }
+            if (total_items > 0 && entries_to_skip >= (size_t)total_items) {
+                size_t wrapped = entries_to_skip % (size_t)total_items;
+                ESP_LOGI(TAG, "Rijks set '%s' has %d items; wrapping offset %zu -> %zu",
+                         term_id, total_items, entries_to_skip, wrapped);
+                entries_to_skip = wrapped;
+            }
+        }
 
         size_t page_count = 0;
         uint32_t now = (uint32_t)time(NULL);
@@ -414,6 +446,25 @@ esp_err_t art_institution_rijks_refresh_channel(const char *channel_id,
         if (page_count == 0 && next_url[0] == '\0') {
             ESP_LOGI(TAG, "Rijks: no entries on page %d, done", page_num);
             break;
+        }
+
+        // Apply the per-playset offset by discarding entries off the head of
+        // the walk until we have skipped `entries_to_skip` of them.
+        if (entries_to_skip > 0 && page_count > 0) {
+            if (entries_to_skip >= page_count) {
+                ESP_LOGI(TAG, "Rijks page %d: skipped %zu entries (offset progress %zu/%lu)",
+                         page_num, page_count,
+                         (size_t)channel_offset - entries_to_skip + page_count,
+                         (unsigned long)channel_offset);
+                entries_to_skip -= page_count;
+                page_count = 0;
+            } else {
+                size_t keep = page_count - entries_to_skip;
+                memmove(page_entries, page_entries + entries_to_skip,
+                        keep * sizeof(institution_channel_entry_t));
+                page_count = keep;
+                entries_to_skip = 0;
+            }
         }
 
         if (page_count > 0) {

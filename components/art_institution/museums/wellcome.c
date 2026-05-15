@@ -334,9 +334,14 @@ static esp_err_t wellcome_fetch_page(const char *filter_param,
 
 esp_err_t art_institution_wellcome_refresh_channel(const char *channel_id,
                                                    const char *axis,
-                                                   const char *term_id)
+                                                   const char *term_id,
+                                                   uint32_t channel_offset)
 {
     if (!channel_id || !axis || !term_id) return ESP_ERR_INVALID_ARG;
+    // Wellcome adapter has not been updated to honor channel_offset yet;
+    // accept the parameter so the dispatch table signature matches but
+    // ignore it for now.
+    (void)channel_offset;
 
     const char *filter_param = wellcome_filter_param_for_axis(axis);
     if (!filter_param) {

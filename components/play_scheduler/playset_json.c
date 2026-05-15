@@ -9,6 +9,7 @@
 #include "playset_json.h"
 #include "play_scheduler_internal.h"
 #include "esp_log.h"
+#include <stdint.h>
 #include <string.h>
 
 static const char *TAG = "playset_json";
@@ -144,6 +145,18 @@ esp_err_t playset_json_parse(const cJSON *json, ps_playset_t *out)
             spec->weight = (uint32_t)cJSON_GetNumberValue(weight);
         }
 
+        // Parse offset (per-playset starting slice into the channel's source).
+        // Honored for INSTITUTION / GIPHY / SDCARD / PINNED; ignored at refresh
+        // for other types. Modulo against the source's total count happens at
+        // refresh-time, not here.
+        const cJSON *offset = cJSON_GetObjectItemCaseSensitive(ch, "offset");
+        if (cJSON_IsNumber(offset)) {
+            double v = cJSON_GetNumberValue(offset);
+            if (v < 0) v = 0;
+            if (v > (double)UINT32_MAX) v = (double)UINT32_MAX;
+            spec->offset = (uint32_t)v;
+        }
+
         ps_ensure_display_name(spec);
     }
 
@@ -184,6 +197,9 @@ cJSON *playset_json_serialize(const ps_playset_t *playset)
         }
         if (spec->weight > 0) {
             cJSON_AddNumberToObject(ch, "weight", (double)spec->weight);
+        }
+        if (spec->offset > 0) {
+            cJSON_AddNumberToObject(ch, "offset", (double)spec->offset);
         }
 
         cJSON_AddItemToArray(channels, ch);

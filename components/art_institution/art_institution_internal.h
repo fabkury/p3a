@@ -130,7 +130,8 @@ uint32_t ai_parse_retry_after(const char *value);
 
 esp_err_t art_institution_artic_refresh_channel(const char *channel_id,
                                                 const char *axis,
-                                                const char *term_id);
+                                                const char *term_id,
+                                                uint32_t channel_offset);
 
 esp_err_t art_institution_artic_build_iiif_url(const institution_channel_entry_t *entry,
                                                int longest_side,
@@ -142,7 +143,8 @@ esp_err_t art_institution_artic_build_iiif_url(const institution_channel_entry_t
 
 esp_err_t art_institution_rijks_refresh_channel(const char *channel_id,
                                                 const char *axis,
-                                                const char *term_id);
+                                                const char *term_id,
+                                                uint32_t channel_offset);
 
 esp_err_t art_institution_rijks_build_iiif_url(const institution_channel_entry_t *entry,
                                                int longest_side,
@@ -156,7 +158,8 @@ esp_err_t art_institution_rijks_resolve_entry(institution_channel_entry_t *entry
 
 esp_err_t art_institution_vam_refresh_channel(const char *channel_id,
                                               const char *axis,
-                                              const char *term_id);
+                                              const char *term_id,
+                                              uint32_t channel_offset);
 
 esp_err_t art_institution_vam_build_iiif_url(const institution_channel_entry_t *entry,
                                              int longest_side,
@@ -168,7 +171,8 @@ esp_err_t art_institution_vam_build_iiif_url(const institution_channel_entry_t *
 
 esp_err_t art_institution_wellcome_refresh_channel(const char *channel_id,
                                                    const char *axis,
-                                                   const char *term_id);
+                                                   const char *term_id,
+                                                   uint32_t channel_offset);
 
 esp_err_t art_institution_wellcome_build_iiif_url(const institution_channel_entry_t *entry,
                                                   int longest_side,
@@ -180,7 +184,8 @@ esp_err_t art_institution_wellcome_build_iiif_url(const institution_channel_entr
 
 esp_err_t art_institution_smk_refresh_channel(const char *channel_id,
                                               const char *axis,
-                                              const char *term_id);
+                                              const char *term_id,
+                                              uint32_t channel_offset);
 
 esp_err_t art_institution_smk_build_iiif_url(const institution_channel_entry_t *entry,
                                              int longest_side,

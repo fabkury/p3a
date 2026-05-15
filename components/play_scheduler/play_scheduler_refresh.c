@@ -786,6 +786,7 @@ static void refresh_task(void *arg)
         strlcpy(spec_name, ch->spec_name, sizeof(spec_name));
         char display_name[65];
         strlcpy(display_name, ch->display_name, sizeof(display_name));
+        uint32_t channel_offset = ch->offset;
         bool cache_has_entries = (ch->cache != NULL && ch->cache->entry_count > 0);
 
         xSemaphoreGive(state->mutex);
@@ -871,11 +872,11 @@ static void refresh_task(void *arg)
                     p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_LOADING, -1,
                                                    "Loading channel...");
                     const char *query = identifier[0] != '\0' ? identifier : NULL;
-                    err = giphy_refresh_channel_with_progress(channel_id, query,
+                    err = giphy_refresh_channel_with_progress(channel_id, query, channel_offset,
                               giphy_refresh_ui_cb, giphy_display_name);
                 } else {
                     const char *query = identifier[0] != '\0' ? identifier : NULL;
-                    err = giphy_refresh_channel(channel_id, query);
+                    err = giphy_refresh_channel(channel_id, query, channel_offset);
                 }
                 if (err == ESP_OK) {
                     time_t stale_at = time(NULL) + (time_t)interval;
@@ -960,7 +961,7 @@ static void refresh_task(void *arg)
                         ESP_LOGI(TAG, "Institution channel '%s' cache is empty, forcing refresh despite interval", display_name);
                     }
                     did_refresh = true;
-                    err = art_institution_refresh_by_spec(channel_id, spec_name, identifier);
+                    err = art_institution_refresh_by_spec(channel_id, spec_name, identifier, channel_offset);
                     if (err == ESP_OK) {
                         time_t stale_at = time(NULL) + (time_t)interval;
                         if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;

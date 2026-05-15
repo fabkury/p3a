@@ -484,18 +484,24 @@ void play_scheduler_touch_back(void);
 // ============================================================================
 
 /**
- * @brief Compute channel_id = first 16 hex chars of SHA256("{type}:{name}:{identifier}")
+ * @brief Compute channel_id = first 16 hex chars of SHA256("{type}:{name}:{identifier}:{offset}")
  *
  * Produces an opaque, filesystem-safe identifier from channel spec fields.
+ * The offset is part of the canonical input so that the same source viewed
+ * at different starting slices in different playsets occupies independent
+ * cache directories and scheduler state. Pass 0 for callers that need the
+ * "canonical" channel_id of a source (e.g. status lookups for offset=0).
  *
  * @param type Channel type enum
  * @param name Channel name (e.g. "all", "trending")
  * @param identifier Channel identifier (e.g. user sqid, hashtag)
+ * @param offset Per-playset starting offset (0 for canonical/unsupported types)
  * @param out_id Output buffer for channel_id (17 chars used, but existing 64-char buffers are fine)
  * @param max_len Size of output buffer
  */
 void ps_compute_channel_id(ps_channel_type_t type, const char *name,
-                           const char *identifier, char *out_id, size_t max_len);
+                           const char *identifier, uint32_t offset,
+                           char *out_id, size_t max_len);
 
 /**
  * @brief Build display name from channel spec fields

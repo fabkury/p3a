@@ -86,7 +86,6 @@ static int museum_id_string_to_enum(const char *s)
     if (strcmp(s, "vam")      == 0) return 2;
     if (strcmp(s, "wellcome") == 0) return 3;
     if (strcmp(s, "smk")      == 0) return 4;
-    if (strcmp(s, "loc")      == 0) return 5;
     return -1;
 }
 

@@ -65,14 +65,6 @@ const art_institution_museum_t ART_INSTITUTION_MUSEUMS[] = {
         .build_iiif_url  = art_institution_smk_build_iiif_url,
         .resolve_entry   = NULL,  // SMK returns image_iiif_id inline; no walk.
     },
-    {
-        .id              = "loc",
-        .display         = "Library of Congress",
-        .museum_enum     = ART_INSTITUTION_MUSEUM_LOC,
-        .refresh_channel = art_institution_loc_refresh_channel,
-        .build_iiif_url  = art_institution_loc_build_iiif_url,
-        .resolve_entry   = NULL,  // LoC returns the IIIF id inline; no walk.
-    },
 };
 
 const size_t ART_INSTITUTION_MUSEUM_COUNT =
@@ -184,22 +176,10 @@ esp_err_t art_institution_build_vault_path(const char *museum_id,
         default: ext = ".jpg";  break;
     }
 
-    // LoC IIIF keys contain ':' (e.g. service:pnp:highsm:35300:35397),
-    // which FatFs rejects in filenames (see ff.c create_name(): the
-    // rejection set is "*:<>|\"\?\x7F"). Sanitize for the filename use
-    // only — the cache entry's iiif_key keeps the original colon form
-    // so URL building stays canonical. Other museums' keys don't
-    // contain reserved characters, so this is a no-op for them.
-    char safe_name[sizeof(entry->iiif_key)];
-    strlcpy(safe_name, entry->iiif_key, sizeof(safe_name));
-    for (char *p = safe_name; *p; p++) {
-        if (*p == ':') *p = '_';
-    }
-
     int n = snprintf(out_path, out_len, "%s/%s/%02x/%02x/%02x/%s%s",
                      base, museum_id,
                      (unsigned)sha[0], (unsigned)sha[1], (unsigned)sha[2],
-                     safe_name, ext);
+                     entry->iiif_key, ext);
     if (n < 0 || (size_t)n >= out_len) return ESP_ERR_INVALID_SIZE;
     return ESP_OK;
 }

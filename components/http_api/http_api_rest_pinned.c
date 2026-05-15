@@ -193,7 +193,7 @@ static cJSON *json_from_list_info(const pin_list_info_t *info)
  * since v0.1 are listed below in the same order. */
 static const char *museum_id_to_str(uint16_t id)
 {
-    static const char *names[] = { "artic", "rijks", "vam", "wellcome", "smk", "loc" };
+    static const char *names[] = { "artic", "rijks", "vam", "wellcome", "smk" };
     if (id < (sizeof(names) / sizeof(names[0]))) return names[id];
     return NULL;
 }
@@ -205,10 +205,7 @@ static const char *museum_id_to_str(uint16_t id)
  *   (SHA256 prefix derived from the UUID string).
  * - Giphy:   https://i.giphy.com/media/{giphy_id}/giphy.webp
  *   (Giphy CDN always serves WebP for trending/search results).
- * - Museum:  art_institution_build_iiif_url(museum_str, entry-shim).
- *   Note: LoC iiif_keys contain colons that we replace with underscores
- *   when vaulting to FAT, so URL reconstruction will fail for LoC pins —
- *   /local falls in. Other museums round-trip cleanly. */
+ * - Museum:  art_institution_build_iiif_url(museum_str, entry-shim). */
 static void build_source_url(const pinned_order_entry_t *e, char *out, size_t out_len)
 {
     if (!e || !out || out_len == 0) return;
@@ -262,9 +259,9 @@ static cJSON *json_from_order_entry(const pinned_order_entry_t *e)
     cJSON_AddNumberToObject(o, "pinned_at", e->pinned_at);
     cJSON_AddStringToObject(o, "source", source_to_string((pinned_source_t)e->source));
     cJSON_AddStringToObject(o, "extension", extension_to_string(e->extension));
-    /* Reconstructed source-CDN URL (empty when reconstruction isn't possible,
-       e.g. LoC iiif_keys whose colons we sanitized for FAT). The web UI uses
-       this as its primary thumbnail src and falls back to /local on error. */
+    /* Reconstructed source-CDN URL (empty when reconstruction isn't possible).
+       The web UI uses this as its primary thumbnail src and falls back to
+       /local on error. */
     char source_url[300];
     build_source_url(e, source_url, sizeof(source_url));
     cJSON_AddStringToObject(o, "source_url", source_url);
@@ -762,7 +759,7 @@ static esp_err_t h_post_pin_raw(httpd_req_t *req, const char *slug)
             strlcpy(order.museum.iiif_key, iiif, sizeof(order.museum.iiif_key));
             if (original_post_id <= 0) {
                 static const char *museum_names[] = {
-                    "artic", "rijks", "vam", "wellcome", "smk", "loc"
+                    "artic", "rijks", "vam", "wellcome", "smk"
                 };
                 if (file.museum_id < (sizeof(museum_names) / sizeof(museum_names[0]))) {
                     original_post_id = art_institution_compute_post_id(

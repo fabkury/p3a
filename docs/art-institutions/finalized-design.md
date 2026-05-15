@@ -557,40 +557,6 @@ about breadth-of-collection.
 - **Rate limit:** none published; treated like Rijks (default 60 s
   cooldown on a 429 with no `Retry-After` header).
 
-### 9.4 Library of Congress
-
-- **id:** `loc`
-- **display:** `Library of Congress`
-- **API base:** `https://www.loc.gov`
-- **IIIF base:** `https://tile.loc.gov/image-services/iiif`
-- **Required header:** `User-Agent: p3a/{version} (pub@kury.dev)` —
-  LoC does not require it; sent for polite identification given no
-  published rate limit.
-- **Axes (filterable, in browse order):** `format` (single axis).
-- **Terms (hardcoded):** `photo, print, drawing`,
-  `manuscript/mixed material`, `3d object`. The wire identifier is the
-  lowercase facet title with spaces preserved — LoC's `fa=` filter
-  silently drops slug-form values.
-- **Pagination cap:** 500 pages × 100 results = 50,000 results.
-  Defensive only; the natural end-of-results limit always bites first.
-- **Rate limit:** none published; default 60 s cooldown on 429 without
-  `Retry-After`.
-- **Listing endpoint:**
-  `GET /search/?fo=json&c=100&sp=N&fa=original-format:<value>`
-- **IIIF URL:** `https://tile.loc.gov/image-services/iiif/{iiif_key}/full/!720,720/0/default.jpg`
-- **`iiif_key` value:** the path segment between
-  `https://tile.loc.gov/image-services/iiif/` and the next `/` in any
-  `image_url[]` or `resources[].image` URL on the result. Entries
-  whose key is empty or ≥ 48 chars are skipped at refresh — see
-  [`docs/deferred/loc-iiif-key-48-char.md`](../deferred/loc-iiif-key-48-char.md).
-- **`extension`:** always 3 (jpg).
-- **`resolve_entry`:** NULL — IIIF id is inline; no walk.
-- **Quirks worth knowing:** most listing results have no IIIF URL
-  (~92 % for photo/print/drawing) and are silently dropped. This is
-  expected; refresh paginates until cache fills or end-of-results.
-  See `docs/art-institutions/loc-channel-design.md` and
-  `docs/art-institutions/loc-investigation/REPORT.md`.
-
 ## 10. Image rendition strategy
 
 The device requests `…/full/!720,720/0/default.jpg`. Universally
@@ -729,7 +695,7 @@ doors.
 
 - **Keyword search** across museums. Encoding fits the same channel
   spec (`name="artic:search"`, `identifier="<query>"`).
-- **More museums:** SMK, V&A, Wellcome, Gallica, LoC, Harvard.
+- **More museums:** Gallica, Harvard.
 - **Aggregator sources:** Europeana, DPLA.
 - **Per-channel overrides** for refresh interval / cache size.
 - **Manifest synthesis** for image-only IIIF (Princeton).

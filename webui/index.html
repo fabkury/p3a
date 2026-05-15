@@ -939,19 +939,11 @@ function sendReaction(body, onError, onDone) {
 function buildPillBar() {
     var bar = document.getElementById('pill-bar');
     bar.innerHTML = '';
-    builtInPresets.forEach(function(p) {
-        var btn = document.createElement('button');
-        btn.className = 'pill-item';
-        btn.textContent = p.label;
-        btn.setAttribute('data-playset', p.id);
-        if (p.needsRegistration && !isRegistered) btn.disabled = true;
-        if (p.id === activePlaysetName) btn.classList.add('active');
-        btn.addEventListener('click', function() { playPlayset(p.id, btn); });
-        bar.appendChild(btn);
-    });
+    /* Order: user playsets → pin lists → built-in channels → utility.
+       Each kind carries its own kind-* class for the colour key. */
     userPlaysets.forEach(function(ps) {
         var btn = document.createElement('button');
-        btn.className = 'pill-item';
+        btn.className = 'pill-item kind-user';
         btn.textContent = ps.name;
         btn.setAttribute('data-playset', ps.name);
         if (ps.name === activePlaysetName) btn.classList.add('active');
@@ -963,7 +955,7 @@ function buildPillBar() {
        "Manage" pill opens the list-management modal. */
     pinLists.forEach(function(pl) {
         var btn = document.createElement('button');
-        btn.className = 'pill-item';
+        btn.className = 'pill-item kind-pin';
         btn.textContent = (pl.is_active ? '★ ' : '') + pl.name + ' (' + pl.count + ')';
         var playsetId = 'channel_pinned_' + pl.slug;
         var playsetIdGeneric = (pl.is_active ? 'channel_pinned' : null);
@@ -998,9 +990,19 @@ function buildPillBar() {
         });
         bar.appendChild(btn);
     });
+    builtInPresets.forEach(function(p) {
+        var btn = document.createElement('button');
+        btn.className = 'pill-item kind-builtin';
+        btn.textContent = p.label;
+        btn.setAttribute('data-playset', p.id);
+        if (p.needsRegistration && !isRegistered) btn.disabled = true;
+        if (p.id === activePlaysetName) btn.classList.add('active');
+        btn.addEventListener('click', function() { playPlayset(p.id, btn); });
+        bar.appendChild(btn);
+    });
     if (pinLists.length > 0 || isRegistered) {
         var manage = document.createElement('button');
-        manage.className = 'pill-item';
+        manage.className = 'pill-item kind-utility';
         manage.textContent = 'Manage pins';
         manage.setAttribute('data-pin-manage', '1');
         manage.addEventListener('click', function() { openPinManageModal(); });

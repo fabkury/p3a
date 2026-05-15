@@ -597,6 +597,69 @@ body.has-bottom-nav {
     opacity: 0.4;
     cursor: not-allowed;
 }
+
+/* Color keys: each pill kind gets its own tint so the four categories
+   (user playsets, pin lists, built-in channels, utility) read as
+   distinct families at a glance. */
+.pill-item.kind-user {
+    background: rgba(244,196,74,0.18);
+    border-color: rgba(244,196,74,0.55);
+}
+.pill-item.kind-pin {
+    background: rgba(236,72,153,0.18);
+    border-color: rgba(236,72,153,0.55);
+}
+.pill-item.kind-builtin {
+    background: rgba(56,189,248,0.18);
+    border-color: rgba(56,189,248,0.55);
+}
+.pill-item.kind-utility {
+    background: rgba(255,255,255,0.06);
+    border-style: dashed;
+    border-color: rgba(255,255,255,0.40);
+    color: rgba(255,255,255,0.85);
+}
+
+/* Active state per kind: stronger fill + colored ring so the kind colour
+   stays legible while clearly marking selection. */
+.pill-item.kind-user.active {
+    background: #f4c44a;
+    color: #4a3500;
+    border-color: #f4c44a;
+    box-shadow: 0 0 0 2px rgba(244,196,74,0.55), var(--c-card-shadow);
+}
+.pill-item.kind-pin.active {
+    background: #ec4899;
+    color: #fff;
+    border-color: #ec4899;
+    box-shadow: 0 0 0 2px rgba(236,72,153,0.55), var(--c-card-shadow);
+}
+.pill-item.kind-builtin.active {
+    background: #38bdf8;
+    color: #07314f;
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 2px rgba(56,189,248,0.55), var(--c-card-shadow);
+}
+.pill-item.kind-utility.active {
+    background: rgba(255,255,255,0.85);
+    color: var(--c-text);
+    border-color: rgba(255,255,255,0.85);
+    border-style: solid;
+    box-shadow: var(--c-card-shadow);
+}
+
+/* Pending overlays kind-active (higher specificity needed to win). */
+.pill-item.kind-user.pending,
+.pill-item.kind-pin.pending,
+.pill-item.kind-builtin.pending,
+.pill-item.kind-utility.pending {
+    background: rgba(255,255,255,0.55);
+    color: var(--c-primary);
+    border-color: rgba(255,255,255,0.4);
+    border-style: solid;
+    box-shadow: none;
+}
+
 @media (min-width: 481px) {
     .pill-bar { flex-wrap: wrap; overflow-x: visible; }
     .tab-bar { flex-wrap: wrap; overflow-x: visible; }

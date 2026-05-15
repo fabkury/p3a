@@ -662,9 +662,12 @@ var userPlaysets = [];
 var pinLists = [];       // [{slug, name, count, is_active}, ...]
 var activePinSlug = '';
 
-// Built-in presets
+// Built-in presets. Entries marked hiddenUnlessActive stay out of the
+// pill bar unless that playset is currently active (set via MQTT or a
+// prior session) — they remain in this list so dedupe and the
+// registration-aware disabled state still see them.
 var builtInPresets = [
-    { id: 'channel_recent', label: 'All Makapix', needsRegistration: true },
+    { id: 'channel_recent', label: 'All Makapix', needsRegistration: true, hiddenUnlessActive: true },
     { id: 'channel_promoted', label: 'Promoted', needsRegistration: false },
     { id: 'followed_artists', label: 'Followed', needsRegistration: true },
     { id: 'channel_sdcard', label: 'SD Card', needsRegistration: false },
@@ -991,6 +994,7 @@ function buildPillBar() {
         bar.appendChild(btn);
     });
     builtInPresets.forEach(function(p) {
+        if (p.hiddenUnlessActive && p.id !== activePlaysetName) return;
         var btn = document.createElement('button');
         btn.className = 'pill-item kind-builtin';
         btn.textContent = p.label;

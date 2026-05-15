@@ -1325,8 +1325,7 @@ function openPinBrowseModal(slug, listName) {
     /* Thumbnail strategy: prefer the source-CDN URL the server reconstructs
        (Makapix vault / Giphy CDN / IIIF). The /local fallback only fires on
        <img onerror>, so the device's Wi-Fi only serves bytes for items where
-       URL reconstruction failed (e.g. LoC pins with colon-mangled keys) or
-       for offline browsing. */
+       URL reconstruction failed or for offline browsing. */
     function thumbUrl(item) {
         return item.source_url || localThumbUrl(item);
     }

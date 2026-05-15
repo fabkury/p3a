@@ -141,9 +141,6 @@ cJSON *build_current_artwork_json(void)
             // key), so we rebuild the same origin URL each native source uses.
             // For institution pins the museum id is stashed in
             // channel_spec_name as "{museum}:pin" by play_scheduler_pick.
-            // Caveat: LoC iiif_keys lose their colons to FAT-safe underscores
-            // at pin time, so URL reconstruction is broken for LoC pins; the
-            // LCD plays from the local cache regardless.
             if (artwork.storage_key[0] == '\0') break;
             switch (artwork.post_source) {
                 case POST_SOURCE_GIPHY:

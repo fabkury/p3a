@@ -22,6 +22,7 @@ set(srcs
     "submit_click_img.c"
     "display_pin_overlay.c"
     "pin_icon_img.c"
+    "unpin_icon_img.c"
     "ffsystem_aligned.c"
 )
 

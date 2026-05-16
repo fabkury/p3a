@@ -278,13 +278,15 @@ void reaction_overlay_update_and_draw(uint8_t *buffer);
 typedef enum {
     PIN_OVERLAY_IDLE,         ///< Not showing
     PIN_OVERLAY_SUBMIT,       ///< Showing pin icon (artwork pinned)
-    PIN_OVERLAY_ERROR         ///< Showing error icon (pin failed)
+    PIN_OVERLAY_UNPIN,        ///< Showing unpin icon (artwork unpinned)
+    PIN_OVERLAY_ERROR         ///< Showing error icon (pin/unpin failed)
 } pin_overlay_state_t;
 
 extern volatile pin_overlay_state_t g_pin_overlay_state;
 extern volatile int64_t             g_pin_overlay_start_us;
 
 void pin_overlay_show_submit(void);
+void pin_overlay_show_unpin(void);
 void pin_overlay_show_error(void);
 void pin_overlay_update_and_draw(uint8_t *buffer);
 

@@ -36,6 +36,7 @@ static const char *TAG = "p3a_pin_dispatcher";
 
 // LCD overlay (defined in main/display_pin_overlay.c)
 extern void pin_overlay_show_submit(void) __attribute__((weak));
+extern void pin_overlay_show_unpin(void)  __attribute__((weak));
 extern void pin_overlay_show_error(void)  __attribute__((weak));
 
 // Pin-lists API (defined in pin_lists component) — declared as weak externs
@@ -394,21 +395,28 @@ esp_err_t p3a_pin_dispatch_from_current(const char *slug)
 esp_err_t p3a_pin_dispatch_unpin_from_current(const char *slug)
 {
     int source = p3a_current_post_get_source();
-    if (source == PIN_DISP_SOURCE_NONE) return ESP_ERR_INVALID_STATE;
+    if (source == PIN_DISP_SOURCE_NONE) {
+        ESP_LOGW(TAG, "Unpin requested with no current post");
+        if (pin_overlay_show_error) pin_overlay_show_error();
+        return ESP_ERR_INVALID_STATE;
+    }
     if (source == PIN_DISP_SOURCE_SDCARD) return ESP_OK;  /* silent no-op */
 
     pin_task_params_t *p = calloc(1, sizeof(*p));
-    if (!p) return ESP_ERR_NO_MEM;
+    if (!p) {
+        if (pin_overlay_show_error) pin_overlay_show_error();
+        return ESP_ERR_NO_MEM;
+    }
     esp_err_t err = resolve_from_current(source, p);
     if (err != ESP_OK) {
         free(p);
+        if (pin_overlay_show_error) pin_overlay_show_error();
         return err;
     }
     if (slug && slug[0]) strlcpy(p->slug, slug, sizeof(p->slug));
     p->is_unpin = true;
 
-    /* No optimistic overlay for unpin in v1 — gesture-driven unpin is
-       commonly paired with reaction-revoke which already shows feedback. */
+    if (pin_overlay_show_unpin) pin_overlay_show_unpin();
     return spawn_pin_task(p);
 }
 

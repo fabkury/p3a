@@ -3,7 +3,7 @@
 
 /**
  * @file display_pin_overlay.c
- * @brief Pin overlay: shows pin/error icon in the user's TOP-LEFT corner
+ * @brief Pin overlay: shows pin/unpin/error icon in the user's TOP-LEFT corner
  *
  * Mirror of display_reaction_overlay.c but positioned on the opposite corner
  * and driven by its own independent state machine. The two overlays can show
@@ -11,12 +11,13 @@
  * reaction overlay (top-right) and the pin overlay (top-left).
  *
  * Triggered by the pin dispatcher (p3a_pin_dispatcher.c). On success the
- * pin icon shows for 4 s; on failure the icon is replaced (with a fresh
- * timer) by the error icon. The error variant reuses reaction_error_img.
+ * pin or unpin icon shows for 4 s; on failure the icon is replaced (with a
+ * fresh timer) by the error icon. The error variant reuses reaction_error_img.
  */
 
 #include "display_renderer_priv.h"
 #include "pin_icon_img.h"
+#include "unpin_icon_img.h"
 #include "reaction_error_img.h"
 
 #define PIN_OVERLAY_DURATION_MS    4000
@@ -34,6 +35,15 @@ void pin_overlay_show_submit(void)
         return;  // Dedup: already showing pin success
     }
     g_pin_overlay_state = PIN_OVERLAY_SUBMIT;
+    g_pin_overlay_start_us = esp_timer_get_time();
+}
+
+void pin_overlay_show_unpin(void)
+{
+    if (g_pin_overlay_state == PIN_OVERLAY_UNPIN) {
+        return;  // Dedup: already showing unpin success
+    }
+    g_pin_overlay_state = PIN_OVERLAY_UNPIN;
     g_pin_overlay_start_us = esp_timer_get_time();
 }
 
@@ -63,6 +73,11 @@ void pin_overlay_update_and_draw(uint8_t *buffer)
             blit_fn = pin_icon_img_blit_pixelwise_bgr888;
             img_w = pin_icon_img_w;
             img_h = pin_icon_img_h;
+            break;
+        case PIN_OVERLAY_UNPIN:
+            blit_fn = unpin_icon_img_blit_pixelwise_bgr888;
+            img_w = unpin_icon_img_w;
+            img_h = unpin_icon_img_h;
             break;
         case PIN_OVERLAY_ERROR:
             blit_fn = reaction_error_img_blit_pixelwise_bgr888;

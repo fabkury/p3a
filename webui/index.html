@@ -919,6 +919,7 @@ function reactionOverlayHide() {
 var PIN_OVERLAY_DURATION_MS = 4000;
 var PIN_OVERLAY_ASSETS = {
     submit: { src: '/static/reactions/pin.png',            w: 52, h: 59 },
+    unpin:  { src: '/static/reactions/unpin.png',          w: 64, h: 64 },
     error:  { src: '/static/reactions/reaction-error.png', w: 48, h: 48 }
 };
 var pinOverlayState = 'idle';
@@ -1500,8 +1501,13 @@ function unpinItem(slug, item, cb) {
     else return;
     var url = '/api/pin-lists/' + encodeURIComponent(slug) + '/items/' +
               encodeURIComponent(item.source) + '/' + encodeURIComponent(sid);
+    pinOverlayShow('unpin');
     sendJSON('DELETE', url, null, function(ok, res) {
-        if (!ok) { showToast(res && res.error ? res.error : 'Unpin failed', true); return; }
+        if (!ok) {
+            pinOverlayShowError();
+            showToast(res && res.error ? res.error : 'Unpin failed', true);
+            return;
+        }
         if (cb) cb();
     });
 }

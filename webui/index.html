@@ -795,6 +795,47 @@ function updateArtwork(currentArtwork) {
     updatePinButton(currentArtwork);
 }
 
+/* Pin button is a stateful toggle whose state is tracked entirely in the
+   web UI. The device does not push pin/unpin events back, so the button's
+   "pinned" state reflects only this client's clicks on the displayed
+   artwork — not the actual on-device state. Pin-list channels seed the
+   button to active (all artworks there are by definition pinned). Other
+   channels seed inactive. State resets on artwork swap. */
+var pinBtnActive = false;
+var pinBtnArtworkKey = null;
+var pinPending = false;
+
+function pinArtworkKey(currentArtwork) {
+    if (!currentArtwork) return null;
+    if (typeof currentArtwork.giphy_id === 'string' && currentArtwork.giphy_id) {
+        return 'giphy:' + currentArtwork.giphy_id;
+    }
+    if (typeof currentArtwork.post_id === 'number' && currentArtwork.post_id > 0) {
+        return 'post:' + currentArtwork.post_id;
+    }
+    return null;
+}
+
+/* The slug of the pin list whose channel is currently playing, parsed
+   from activePlaysetName ("channel_pinned_<slug>"). Null when the active
+   channel is not a pin-list channel. Pin/unpin clicks on pin-list
+   channels must target THIS slug, not the user's "active" pin list — the
+   two can differ. */
+function currentPinListSlug() {
+    if (activePlaysetName && activePlaysetName.indexOf('channel_pinned_') === 0) {
+        return activePlaysetName.substring('channel_pinned_'.length);
+    }
+    return null;
+}
+
+function pinBtnReset(btn) {
+    btn.style.visibility = 'hidden';
+    delete btn.dataset.payload;
+    btn.classList.remove('active');
+    pinBtnArtworkKey = null;
+    pinBtnActive = false;
+}
+
 function updatePinButton(currentArtwork) {
     var btn = document.getElementById('pin-btn');
     if (!btn) return;
@@ -803,22 +844,32 @@ function updatePinButton(currentArtwork) {
        so simple identifier-presence is sufficient — no need to whitelist
        channel types on the client. SD-card posts and an empty stage emit
        neither identifier and naturally fall through to "hidden". */
-    if (!currentArtwork) {
-        btn.style.visibility = 'hidden';
-        delete btn.dataset.payload;
-        return;
-    }
+    if (!currentArtwork) { pinBtnReset(btn); return; }
+
     var hasGiphyId = typeof currentArtwork.giphy_id === 'string' && currentArtwork.giphy_id.length > 0;
     var hasPostId = typeof currentArtwork.post_id === 'number' && currentArtwork.post_id > 0;
+    var payload = null;
     if (hasGiphyId) {
-        btn.dataset.payload = JSON.stringify({ giphy_id: currentArtwork.giphy_id });
-        btn.style.visibility = '';
+        payload = { giphy_id: currentArtwork.giphy_id };
     } else if (hasPostId) {
-        btn.dataset.payload = JSON.stringify({ post_id: currentArtwork.post_id });
-        btn.style.visibility = '';
-    } else {
-        btn.style.visibility = 'hidden';
-        delete btn.dataset.payload;
+        payload = { post_id: currentArtwork.post_id };
+    }
+    if (!payload) { pinBtnReset(btn); return; }
+
+    var slug = currentPinListSlug();
+    if (slug) payload.list = slug;
+    btn.dataset.payload = JSON.stringify(payload);
+    btn.style.visibility = '';
+
+    /* Skip the swap-detection reset while an XHR is in flight so the
+       optimistic toggle isn't clobbered by a poll tick that arrives
+       before the response. */
+    if (pinPending) return;
+    var key = pinArtworkKey(currentArtwork);
+    if (key !== pinBtnArtworkKey) {
+        pinBtnArtworkKey = key;
+        pinBtnActive = (currentArtwork.channel_type === 'pinned');
+        btn.classList.toggle('active', pinBtnActive);
     }
 }
 
@@ -951,15 +1002,23 @@ function pinOverlayHide() {
 function onPinClick() {
     var btn = document.getElementById('pin-btn');
     if (!btn || !btn.dataset.payload) return;
+    if (pinPending) return;
     var body;
     try { body = JSON.parse(btn.dataset.payload); } catch (e) { return; }
+
+    var wasActive = pinBtnActive;
+    var doUnpin = wasActive;
+    pinBtnActive = !wasActive;
+    btn.classList.toggle('active', pinBtnActive);
     playReactionPulse(btn);
-    pinOverlayShow('submit');
+    pinOverlayShow(doUnpin ? 'unpin' : 'submit');
+    pinPending = true;
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/action/pin', true);
+    xhr.open('POST', doUnpin ? '/action/unpin' : '/action/pin', true);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onreadystatechange = function() {
         if (xhr.readyState !== 4) return;
+        pinPending = false;
         var ok = false;
         var msg = '';
         try {
@@ -968,8 +1027,10 @@ function onPinClick() {
             if (!ok) msg = result.error || ('HTTP ' + xhr.status);
         } catch (e) { msg = 'Parse error: ' + e.message; }
         if (!ok) {
+            pinBtnActive = wasActive;
+            btn.classList.toggle('active', pinBtnActive);
             pinOverlayShowError();
-            showToast(msg || 'Pin failed', true);
+            showToast(msg || (doUnpin ? 'Unpin failed' : 'Pin failed'), true);
         }
     };
     xhr.send(JSON.stringify(body));
@@ -1501,13 +1562,8 @@ function unpinItem(slug, item, cb) {
     else return;
     var url = '/api/pin-lists/' + encodeURIComponent(slug) + '/items/' +
               encodeURIComponent(item.source) + '/' + encodeURIComponent(sid);
-    pinOverlayShow('unpin');
     sendJSON('DELETE', url, null, function(ok, res) {
-        if (!ok) {
-            pinOverlayShowError();
-            showToast(res && res.error ? res.error : 'Unpin failed', true);
-            return;
-        }
+        if (!ok) { showToast(res && res.error ? res.error : 'Unpin failed', true); return; }
         if (cb) cb();
     });
 }

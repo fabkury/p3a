@@ -84,16 +84,7 @@ Free, and gives you the entire Makapix Club library plus the ability to send any
 
 That's it. Now any artwork you tap *Send to p3a* on shows up instantly on the screen.
 
-### B. Show your own GIFs and images
-
-Got a favorite GIF? Drop it onto the dashboard:
-
-1. Open `http://p3a.local/` in any browser on the same Wi-Fi.
-2. Drag a `.webp`, `.gif`, `.png`, or `.jpeg` file onto the page.
-
-The file is saved to the SD card and joins the rotation. You can also copy lots of files at once over USB — see the [User Guide](HOW-TO-USE.md#preparing-artwork) for that.
-
-### C. Add trending GIFs from Giphy
+### B. Add trending GIFs from Giphy
 
 Pulls fresh trending GIFs every few hours. This one takes a few extra minutes because Giphy needs a free developer API key:
 
@@ -103,7 +94,7 @@ Pulls fresh trending GIFs every few hours. This one takes a few extra minutes be
 
 Trending GIFs start appearing in the rotation within a few minutes.
 
-### D. Add a museum channel
+### C. Add a museum channel
 
 Browse the open collections of major museums — no account, no API key. Five institutions ship today: the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, and the Statens Museum for Kunst (SMK).
 
@@ -113,6 +104,15 @@ Browse the open collections of major museums — no account, no API key. Five in
 4. Preview a few artworks with **Previous** / **Next**, then click **Add** to commit the channel and save the playset.
 
 The device queries the museum's listing API and starts downloading artwork at IIIF resolution. The first images appear within seconds; the rest fill in over the next minutes. See the [User Guide](HOW-TO-USE.md#museum-channels-iiif) for the full list of facets, refresh-interval settings, and storage behavior.
+
+### D. Show your own GIFs and images
+
+Got a favorite GIF? Drop it onto the dashboard:
+
+1. Open `http://p3a.local/` in any browser on the same Wi-Fi.
+2. Drag a `.webp`, `.gif`, `.png`, or `.jpeg` file onto the page.
+
+The file is saved to the SD card and joins the rotation. You can also copy lots of files at once over USB — see the [User Guide](HOW-TO-USE.md#preparing-artwork) for that.
 
 ---
 

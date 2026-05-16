@@ -67,8 +67,8 @@ For a step-by-step walkthrough written for first-time buyers, see the [Quick Sta
 |--------|-------------|
 | **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" and "All Artworks", or hashtags like "#nintendo". Control your device remotely from anywhere. |
 | **[Giphy](https://giphy.com/)** | Automatically fetches and cycles through trending GIFs. Configurable content rating (G through R) and refresh interval. |
-| **Local files** | Copy your own WebP, GIF, PNG, or JPEG files via USB or Wi-Fi. No cloud account needed, no internet required. |
 | **Museums** | Browse public collections from the Art Institute of Chicago, Rijksmuseum, Victoria and Albert Museum, Wellcome Collection, and the Statens Museum for Kunst (SMK) over IIIF. Pick a department, category, or curated set; the device refreshes the listing on its own schedule. No API key, no account. |
+| **Local files** | Copy your own WebP, GIF, PNG, or JPEG files via USB or Wi-Fi. No cloud account needed, no internet required. |
 
 Mix them all in a single "playset" for an ever-changing display.
 

@@ -804,6 +804,11 @@ function updateArtwork(currentArtwork) {
 var pinBtnActive = false;
 var pinBtnArtworkKey = null;
 var pinPending = false;
+/* Set true after a successful unpin on a pin-list channel: the firmware
+   deletes the artwork on unpin, so a subsequent re-pin click for the same
+   artwork would have nothing to pin. Blocks /action/pin client-side until
+   the artwork swaps. */
+var pinArtworkRemoved = false;
 
 function pinArtworkKey(currentArtwork) {
     if (!currentArtwork) return null;
@@ -834,6 +839,7 @@ function pinBtnReset(btn) {
     btn.classList.remove('active');
     pinBtnArtworkKey = null;
     pinBtnActive = false;
+    pinArtworkRemoved = false;
 }
 
 function updatePinButton(currentArtwork) {
@@ -869,6 +875,7 @@ function updatePinButton(currentArtwork) {
     if (key !== pinBtnArtworkKey) {
         pinBtnArtworkKey = key;
         pinBtnActive = (currentArtwork.channel_type === 'pinned');
+        pinArtworkRemoved = false;
         btn.classList.toggle('active', pinBtnActive);
     }
 }
@@ -1008,6 +1015,16 @@ function onPinClick() {
 
     var wasActive = pinBtnActive;
     var doUnpin = wasActive;
+
+    /* Block the illegal re-pin: after an unpin from a pin-list channel,
+       the firmware deleted the artwork, so /action/pin would have nothing
+       to operate on. Surface a toast instead of firing a doomed request.
+       Lock clears when the displayed artwork swaps. */
+    if (!doUnpin && pinArtworkRemoved) {
+        showToast("Can't re-pin — unpinned artwork was deleted from device", true);
+        return;
+    }
+
     pinBtnActive = !wasActive;
     btn.classList.toggle('active', pinBtnActive);
     playReactionPulse(btn);
@@ -1031,6 +1048,8 @@ function onPinClick() {
             btn.classList.toggle('active', pinBtnActive);
             pinOverlayShowError();
             showToast(msg || (doUnpin ? 'Unpin failed' : 'Pin failed'), true);
+        } else if (doUnpin && body.list) {
+            pinArtworkRemoved = true;
         }
     };
     xhr.send(JSON.stringify(body));

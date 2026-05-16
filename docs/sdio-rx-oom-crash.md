@@ -2,7 +2,8 @@
 
 **Status:** Open. Heap-snapshot diagnostic now in firmware and producing
 data; fragmentation+exhaustion hypothesis confirmed. Decision strongly
-indicated but not yet implemented.
+indicated but not yet implemented. Upstream sibling assert site fixed
+2026-04-29 (not our site); see "Upstream developments" below.
 **First observed:** 2026-05-04.
 **Last observed:** 2026-05-14 (fifth occurrence; first hard crash on a
 *different* firmware build and IDF version, and the first to carry the
@@ -497,7 +498,52 @@ patch the assert. Our comment makes the explicit case for replacing
 `assert(*buf)` with a graceful drop. No commitment from upstream yet.
 
 When picking this back up, check the issue thread for new replies before
-deciding.
+deciding. The sibling-fix precedent (below) is the strongest new argument
+for our position.
+
+### Upstream developments since 2026-05-05 (checked 2026-05-16)
+
+- **Sibling assert site fixed — but not the one that crashes us.**
+  Espressif's Vikram Dattu merged `fix/sdio_rx_mempool_graceful_drop` on
+  2026-04-29 — commits
+  [`a914274d`](https://github.com/espressif/esp-hosted-mcu/commit/a914274d)
+  ("gracefully drop packets on RX mempool exhaustion", 2026-04-03) and
+  [`971cf0d8`](https://github.com/espressif/esp-hosted-mcu/commit/971cf0d8)
+  ("throttle RX mempool drop log to burst start/recovery", 2026-04-23).
+  The commit message describes exactly the symptom and remedy we proposed:
+  *"Replace assert(pkt_rxbuff) with graceful packet skip when
+  sdio_buffer_alloc returns NULL during sustained streaming. Previously
+  crashed with 'assert failed: sdio_push_data_to_queue sdio_drv.c:928
+  (pkt_rxbuff)' after 3-11 minutes of 1080p streaming."*
+
+  **However:** this patch is in `sdio_push_data_to_queue`, **not** the
+  `sdio_rx_get_buffer` site that crashes our build (line :830 on v5.5.1 /
+  :896 on v5.5.2). Inspecting current `main` of
+  `host/drivers/transport/sdio/sdio_drv.c`, the streaming-mode
+  `sdio_rx_get_buffer` still has an unmodified `assert(*buf);` on the
+  `_h_malloc_align` return. **Half the streaming-mode assert class was
+  resolved; the half that affects us was not.** Useful precedent for our
+  comment on #144 — the upstream-acceptable fix shape (assert → ESP_LOGW +
+  `continue`) is now established in adjacent code.
+
+- **No Espressif response to our 2026-05-05 comment on #144** as of
+  2026-05-16 (11 days). Last activity on the issue is still our comment.
+
+- **Independent corroboration of the budget-side issue.**
+  [esp-hosted-mcu#191 "2.12.6 takes more memory than 2.12.3, cant start"
+  (EHM-213)](https://github.com/espressif/esp-hosted-mcu/issues/191),
+  filed 2026-05-03 (open) by an unrelated reporter, pinpoints the
+  architectural change between 2.12.3 → 2.12.6: the new
+  `sdio_mempool_create(tx_q_size, rx_q_size)` preallocates 31 × 1536 ≈
+  47.6 KB of DMA-internal SRAM at init. Espressif collaborator
+  `mantriyogesh` confirmed on 2026-05-04 that this is intentional
+  (*"reverting to it is not a viable path forward… may need to reduce
+  the number of mempool buckets or consider offloading some of them to
+  PSRAM"*), no committed timeline. Same architectural pressure family as
+  our streaming-mode assert: the DMA-internal pool is small, special-
+  purpose, and increasingly contended on the P4 + C6 topology. This also
+  validates the existing `~2.9.3` pin in `main/idf_component.yml` and is
+  referenced from `docs/ESP-IDF-v6.0/migration-report.md` §2.6.
 
 ---
 

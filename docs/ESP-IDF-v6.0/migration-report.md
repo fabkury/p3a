@@ -1,6 +1,7 @@
 # ESP-IDF v6.0 Migration Report for p3a
 
 **Generated:** 2026-05-16
+**Revised:** 2026-05-16 — §2.6 corrected after upstream `esp_hosted` status check
 **Source IDF version:** v5.5.1 (this workstation) / v5.5.2 (sibling workstation)
 **Target IDF version:** v6.0.1 (current stable, released 2026-04-10)
 
@@ -8,7 +9,7 @@
 
 ESP-IDF v6.0 shipped on **2026-03-16**; **v6.0.1 (2026-04-10)** is the current bugfix release. p3a's source code is in unexpectedly good shape for the migration — every explicitly-removed symbol Espressif lists (deprecated Wi-Fi macros, removed OTA / NETIF / FreeRTOS / TLS APIs, old LCD config fields, dropped headers) was grep'd against the codebase and **found zero direct hits**. All the fragile peripheral plumbing lives behind the Waveshare BSP and Espressif's managed components.
 
-The real risk surface is therefore **not in p3a's own code** — it's in **four external dependencies**: (1) the Waveshare BSP and ST7703 panel driver, (2) `esp_hosted` (currently pinned at 2.9.7 due to a known SDIO regression), (3) the mbedTLS v4 / PSA Crypto transition affecting every TLS endpoint p3a talks to, and (4) the toolchain bump to GCC 15 with warnings-as-errors on by default. Add to that the ESP32-P4 silicon-revision default change in v6.0.
+The real risk surface is therefore **not in p3a's own code** — it's in **three external dependencies**: (1) the Waveshare BSP and ST7703 panel driver, (2) the mbedTLS v4 / PSA Crypto transition affecting every TLS endpoint p3a talks to, and (3) the toolchain bump to GCC 15 with warnings-as-errors on by default. Add to that the ESP32-P4 silicon-revision default change in v6.0. (`esp_hosted` is **not** on this list — its 2.9.x pin is compatible with v6.0 and stays in place across the migration; see §2.6.)
 
 Recommendation: **stay on v5.5.x for now**, install v6.0.1 in parallel for experimentation, and revisit a serious migration after v6.0.2 (2026-06-04) and once Waveshare ships a v6.0-compatible BSP. Details below.
 
@@ -89,17 +90,21 @@ This is the most invasive non-vendor change.
 - **+37 KB flash growth in `esp_http_client`** because of PSA migration. p3a's partitions are 8 MB OTA slots, so this is comfortably absorbed.
 - No direct mbedTLS primitive calls in p3a code (no `esp_aes_*`, no `esp_ecdsa_*` hits) — only the implicit TLS-via-`esp_http_client`/`mqtt` path matters.
 
-### 2.6 ESP-Hosted / esp_wifi_remote — REQUIRED bump, possibly risky
+### 2.6 ESP-Hosted / esp_wifi_remote — NO `esp_hosted` bump required for v6.0
 
 Currently in `dependencies.lock`:
 ```
-esp_hosted: 2.9.7  (pinned per comment: "SDIO RX mempool regression in 2.10+")
+esp_hosted: 2.9.7  (held by manifest constraint "~2.9.3" in main/idf_component.yml)
 esp_wifi_remote: 1.2.2
 ```
-For v6.0:
-- `esp_wifi_remote` needs to be on ≥ **1.1.0** (which added v6.0 Kconfig support). Current is **1.5.2**. Bumping is straightforward; `1.2.2 → 1.5.2` semver-minor changes have not changed the public API meaningfully.
-- `esp_hosted` 2.9.7 — needs verification. The dep-lock comment is the operative constraint. **Before migrating, check the upstream `esp_hosted` issue tracker** for whether the SDIO RX mempool regression (which forced the 2.9.x pin) has been resolved on a release that's v6.0-compatible. If not, you're blocked. If yes, the C6 co-processor link should keep working — but smoke-test Wi-Fi connection, packet throughput, and reconnect.
-- No direct `esp_wifi_*` macro hits for any of v6.0's renamed Wi-Fi symbols in p3a code — the `wifi_manager` is conservative.
+
+Both 2.9.x and the current **2.12.7** declare `idf: ">=5.3"` with no upper bound, so the 2.9.7 pin is **compatible with v6.0 as-is** — no `esp_hosted` bump is required to migrate. The 2.12.7 changelog explicitly notes a v6.x PicolibC build fix, confirming v6.x is an actively-supported target on the latest line.
+
+For `esp_wifi_remote`: **1.5.2** (current) ships dedicated `Kconfig.idf_v6.0.in` and `Kconfig.idf_v6.1.in`. Bump from 1.2.2 → 1.5.2 is straightforward; the public API is unchanged across these semver-minor steps.
+
+**Why we're staying pinned at `esp_hosted` 2.9.x** rather than upgrading along with the migration: 2.12.6+ intentionally preallocates ~47.6 KB of DMA-capable internal SRAM at init (31 mempool buckets × 1536 bytes) instead of the prior lazy-allocation scheme. On the ESP32-P4's ~70 KB DMA-internal pool, this exceeds p3a's current sdkconfig budget and produces `HS_MP "no mem"` at boot followed by an SDIO host self-reset. The change is **acknowledged as intentional and won't be reverted** (Espressif on [esp-hosted-mcu#191](https://github.com/espressif/esp-hosted-mcu/issues/191), 2026-05-04: *"reverting to it is not a viable path forward… may need to reduce the number of mempool buckets or consider offloading some of them to PSRAM"*). No Kconfig knob to bound the pool exists yet; mitigation is on Espressif's TODO but unscheduled. The clean path is therefore to **keep `esp_hosted` at 2.9.x across the v6.0 migration**, and treat any future bump as a separate workstream paired with both a sdkconfig DMA-internal-SRAM increase and the switch to SDIO packet mode tracked in [docs/sdio-rx-oom-crash.md](../sdio-rx-oom-crash.md).
+
+No direct `esp_wifi_*` macro hits for any of v6.0's renamed Wi-Fi symbols in p3a code — the `wifi_manager` is conservative.
 
 ### 2.7 LCD / MIPI-DSI — LIKELY transparent, depends on vendor BSP
 
@@ -155,15 +160,15 @@ Likewise: `components/art_institution/museums/rijksmuseum.c` has a comment about
 
 ### Refactoring effort estimate
 
-Assuming the Waveshare BSP ships a v6.0-compatible release and `esp_hosted` resolves cleanly:
+Assuming the Waveshare BSP ships a v6.0-compatible release:
 
 | Tier | Items | Estimated effort |
 |------|-------|------------------|
-| Mechanical | `psa_crypto_init` add, `mqtt` dep add, `esp_hosted`/`esp_wifi_remote` bumps, silicon-rev sdkconfig, OTA-rename pass | **~2–4 hours** |
+| Mechanical | `psa_crypto_init` add, `mqtt` dep add, `esp_wifi_remote` bump, silicon-rev sdkconfig, OTA-rename pass | **~2–4 hours** |
 | Audit | TLS endpoint check, JPEG workaround re-evaluation, warnings-as-errors pass on all 26 components | **~1–3 days** |
 | Risk | Vendor BSP update or local fork, full functional re-test (Wi-Fi, MQTT, OTA, MIPI display, touch, USB MSC, GIF/JPEG/PNG decode paths, museum/Giphy/Makapix integrations) | **~3–7 days** |
 
-Realistic total: **1–2 weeks of focused work**, assuming no blocking issues from Waveshare or `esp_hosted`.
+Realistic total: **1–2 weeks of focused work**, assuming no blocking issues from Waveshare.
 
 ---
 
@@ -187,7 +192,7 @@ Realistic total: **1–2 weeks of focused work**, assuming no blocking issues fr
 
 ### Risks
 - **Hard blocker risk: Waveshare BSP** — if there's no v6.0-compatible BSP release when migration starts, the choice is wait or maintain a local fork. The latter is non-trivial because the BSP encapsulates the MIPI-DSI panel init and that's where most v6.0 LCD API breakage lands.
-- **Hard blocker risk: esp_hosted** — the `2.9.7` pin is forced by an SDIO regression in 2.10+. If newer `esp_hosted` versions compatible with v6.0 still have that regression, the C6 Wi-Fi co-processor link won't work and Wi-Fi is dead. Verify upstream issue status before committing.
+- **Manageable: esp_hosted is not a v6.0 blocker.** 2.9.7 builds against v6.0 fine (manifest is `idf: ">=5.3"`, no upper bound), so the migration doesn't force a bump. The reason to **not** bump (intentional ~47.6 KB DMA-internal SRAM preallocation in 2.12.6+, see [esp-hosted-mcu#191](https://github.com/espressif/esp-hosted-mcu/issues/191)) is independent of v6.0 and tracked separately.
 - **TLS endpoint regressions** — removed CAs and dropped cipher suites silently break connections. Affects all four external services (Makapix, Giphy, museums, GitHub).
 - **PSA Crypto memory footprint** — v6.0 increases PSA's RAM use; p3a is already heavy on PSRAM (`CONFIG_SPIRAM_FLASH_LOAD_TO_PSRAM=y`, `CONFIG_SPIRAM_RODATA=y`). Probably absorbable, worth measuring.
 - **Picolibc edge cases** — global stdio could cause issues for any code that assumed Newlib's per-task semantics. p3a probably doesn't, but it's a category of subtle bug.
@@ -202,7 +207,7 @@ Realistic total: **1–2 weeks of focused work**, assuming no blocking issues fr
 **Hold on v5.5.x for production. Install v6.0.1 in parallel on this workstation now for exploration.** Concretely:
 
 1. Install ESP-IDF v6.0.1 via EIM into `C:\Espressif\` so three versions sit side-by-side.
-2. Branch `migration/idf-6.0` from `main`. On that branch, do the mechanical changes from §2.1, §2.4, §2.5, §2.6 and try `idf.py build` with `CONFIG_COMPILER_DISABLE_DEFAULT_ERRORS=y` to see how far it gets. This is a 1-day investment that gives a concrete picture of the actual blockers.
+2. Branch `migration/idf-6.0` from `main`. On that branch, do the mechanical changes from §2.1, §2.4, §2.5 (§2.6 is unchanged — no `esp_hosted` bump) and try `idf.py build` with `CONFIG_COMPILER_DISABLE_DEFAULT_ERRORS=y` to see how far it gets. This is a 1-day investment that gives a concrete picture of the actual blockers.
 3. Wait for either v6.0.2 (2026-06-04) or a confirmed v6.0-compatible Waveshare BSP release — whichever is later — before committing to the migration.
 4. The other workstation on v5.5.2 is irrelevant; both v5.5.1 and v5.5.2 build the same source, so cross-machine consistency isn't a migration driver.
 
@@ -214,7 +219,7 @@ Realistic total: **1–2 weeks of focused work**, assuming no blocking issues fr
 2. **What ESP32-P4 silicon revision is on the board?** (Check `idf.py monitor` boot banner, look for `chip revision: vX.Y`.) This decides which `CONFIG_ESP32P4_REV_*` is needed.
 3. **Is there a feature in v6.0 specifically worth chasing**, or is this purely a "should we keep current" question? The recommendation flips to "migrate sooner" if there's a concrete v6.0 capability wanted (e.g., binary-size reduction for room to grow, or specific new managed components).
 4. **Do a §2 mechanical-changes pass on a branch now** to see actual build output, rather than reasoning abstractly? ~30–60 minutes of edits, then hand back for build.
-5. **Check the `esp_hosted` upstream issue tracker** for the status of the SDIO RX mempool regression? That's the single highest blocker risk; resolvable in one web fetch.
+5. ~~**Check the `esp_hosted` upstream issue tracker** for the status of the SDIO RX mempool regression?~~ ✅ Resolved 2026-05-16 — see §2.6. Not a v6.0 blocker; the 2.9.7 pin stays in place across the migration.
 
 ---
 

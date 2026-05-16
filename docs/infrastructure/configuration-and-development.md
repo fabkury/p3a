@@ -35,6 +35,15 @@ Configuration is organized into a project-level Kconfig (`main/Kconfig.projbuild
 | `GIPHY_RENDITION_DEFAULT` | `fixed_height` | giphy | Default Giphy rendition |
 | `GIPHY_FORMAT_DEFAULT` | `gif` | giphy | Default Giphy format |
 
+### Museum (NVS, runtime — not Kconfig)
+
+The two museum-channel knobs are stored in NVS and edited from the **Museum** tab of the settings page (`http://p3a.local/settings#museum`). They are not compile-time Kconfig options.
+
+| NVS key | Default | Allowed values | Description |
+|---------|---------|----------------|-------------|
+| `ai_refresh_sec` | `86400` (1 day) | `28800`, `86400`, `172800`, `345600` (8 h / 1 d / 2 d / 4 d) | How often the device re-queries each saved museum channel's listing API |
+| `ai_cache_size` | `1024` | `32`, `64`, `128`, `256`, `512`, `1024`, `2048`, `4096` | Maximum cache entries per museum channel (FIFO-trimmed by insertion order; subject to the absolute `CHANNEL_CACHE_HARD_CAP` of 4096) |
+
 ---
 
 ## Storage Layout
@@ -45,12 +54,18 @@ All p3a data is stored under a configurable root folder (`/sdcard/p3a` by defaul
 
 ```
 /sdcard/p3a/
-├── animations/    # Local animation files (WebP, GIF, PNG, JPEG)
-├── vault/         # Cached artwork from Makapix (3-level SHA256-sharded: aa/bb/cc/<storage_key>.<ext>)
-├── giphy/         # Cached Giphy GIFs (3-level SHA256-sharded)
-├── channel/       # Per-channel JSON metadata files
-├── playlists/     # Playlist cache files
-└── temporary/     # Staging area for uploads and downloads
+├── animations/                 # Local animation files (WebP, GIF, PNG, JPEG)
+├── vault/                      # Cached artwork from Makapix (3-level SHA256-sharded: aa/bb/cc/<storage_key>.<ext>)
+├── giphy/                      # Cached Giphy GIFs (3-level SHA256-sharded)
+├── museum/                     # Cached museum (IIIF) artwork, partitioned per museum
+│   ├── artic/                  #   Art Institute of Chicago (3-level SHA256-sharded: aa/bb/cc/<iiif_key>.<ext>)
+│   ├── rijks/                  #   Rijksmuseum
+│   ├── vam/                    #   Victoria and Albert Museum
+│   ├── wellcome/               #   Wellcome Collection
+│   └── smk/                    #   Statens Museum for Kunst
+├── channel/                    # Per-channel JSON metadata files
+├── playlists/                  # Playlist cache files
+└── temporary/                  # Staging area for uploads and downloads
 ```
 
 - **Root folder**: Configurable via web UI (e.g., `/p3a`, `/data`). The `/sdcard` prefix is prepended automatically at runtime. Changes require reboot.

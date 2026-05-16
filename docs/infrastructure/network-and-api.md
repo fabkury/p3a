@@ -37,6 +37,7 @@ The HTTP server is implemented across multiple source files in `components/http_
 | `http_api_rest_actions.c` | `/action/*` endpoints |
 | `http_api_rest_settings.c` | `/settings/*` and `/config` endpoints |
 | `http_api_rest_playsets.c` | `/playsets/*` endpoints |
+| `http_api_rest_museum.c` | `/api/museum/*` rate-limit endpoints |
 | `http_api_ota.c` | `/ota/*` endpoints |
 | `http_api_upload.c` | `/upload` endpoint |
 | `http_api_pages.c` | HTML page serving |
@@ -107,6 +108,15 @@ The HTTP server is implemented across multiple source files in `components/http_
 | DELETE | `/playsets/{name}` | Delete a saved playset |
 | POST | `/playset/{name}` | Load and execute a named playset |
 
+### Museum (IIIF) Channels
+
+The full design for museum channels lives in [`docs/art-institutions/finalized-design.md`](../art-institutions/finalized-design.md). The HTTP surface for them is small — channels themselves flow through `/playsets/{name}` like any other channel; the two endpoints below exist only to keep the per-museum rate-limit cooldown synchronized between the device and the browser.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/museum/rate-limits` | Per-museum cooldown table. Returns `{ "artic": { "remaining_sec": N }, "rijks": { ... }, ... }`. The browse modal polls this before triggering its term-count probes. |
+| POST | `/api/museum/rate-limits/report-429` | Browser reports a 429 it received directly from a museum API so the device's cooldown stays accurate. Body: `{ "museum": "artic", "retry_after_sec": 38 }`. `retry_after_sec` is optional; omitted/zero engages the museum-specific default (60 s today). Unknown museum ids are silently accepted. |
+
 ### File Upload
 
 | Method | Endpoint | Description |
@@ -170,4 +180,4 @@ Static HTML pages served from the LittleFS partition:
 - **Protocol**: MQTT over TLS 1.2 with mTLS authentication (TLS 1.3 is disabled in `sdkconfig`)
 - **Broker**: Makapix Club cloud
 - **Features**: Remote commands (`swap_next`, `swap_back`, `play_channel`, `show_artwork`, `show_url`, `swap_to`, `execute_playset`, `set_background_color`), artwork receiving, view tracking, status publishing via MQTT LWT
-- See [Components — makapix](components.md#10-makapix--makapix-club-integration) for details.
+- See [Components — makapix](components.md#11-makapix--makapix-club-integration) for details.

@@ -319,7 +319,7 @@ The Giphy tab at `http://p3a.local/settings#giphy` lets you customize:
 
 ## Museum Channels (IIIF)
 
-p3a can play artwork from major museums that publish their collections through the [IIIF Image API](https://iiif.io/api/image/3.0/). Channels are organized by the museum's own facets (collections, departments, sets, ...) and refreshed on a schedule. Six museums ship today:
+p3a can play artwork from major museums that publish their collections through the [IIIF Image API](https://iiif.io/api/image/3.0/). Channels are organized by the museum's own facets (collections, departments, sets, ...) and refreshed on a schedule. Five museums ship today:
 
 | Museum | Facets you can pick |
 |---|---|
@@ -328,7 +328,6 @@ p3a can play artwork from major museums that publish their collections through t
 | **Victoria and Albert Museum** | Collections, Categories, Venues |
 | **Wellcome Collection** | Work types, Genres, Subjects, Contributors |
 | **Statens Museum for Kunst (SMK)** | Collections |
-| **Library of Congress** | Formats (Photo/Print/Drawing, Manuscript/Mixed Material, 3D Object) |
 
 No API key, no account, no device registration — the museums expose these collections publicly.
 

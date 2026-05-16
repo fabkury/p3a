@@ -26,14 +26,16 @@
 │play       │ │content_cache     │ │wifi_manager    │
 │_scheduler │ │loader_service    │ │ota_manager     │
 │           │ │storage_eviction  │ │makapix         │
-│playback   │ └──────────────────┘ └────────────────┘
-│  _queue   │
+│playback   │ │giphy             │ │art_institution │
+│  _queue   │ └──────────────────┘ └────────────────┘
 └────┬──────┘
      │
-┌────▼──────────────────────────────────────────┐
-│              channel_manager                   │
-│  sdcard_channel · makapix_channel · vault      │
-└────┬──────────────────────────────────────────┘
+┌────▼──────────────────────────────────────────────┐
+│                channel_manager                     │
+│  sdcard_channel · makapix_channel · vault          │
+│  (institution channels persist via playset_store + │
+│   per-museum cache at /sdcard/p3a/museum/...)      │
+└────┬──────────────────────────────────────────────┘
      │
 ┌────▼──────────────────────────────────────────┐
 │            animation_player                    │

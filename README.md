@@ -2,7 +2,7 @@
 
 # p3a — Pixel Art Player
 
-**A 4-inch smart art frame powered by ESP32-P4.** Plays animated pixel art from [Makapix Club](https://makapix.club/), trending GIFs from [Giphy](https://giphy.com/), and your own files on a 24-bit 720x720 IPS touchscreen you control from anywhere.
+**A 4-inch smart art frame powered by ESP32-P4.** Plays animated pixel art from [Makapix Club](https://makapix.club/), trending GIFs from [Giphy](https://giphy.com/), masterpieces from major museums via [IIIF](https://iiif.io/), and your own files on a 24-bit 720x720 IPS touchscreen you control from anywhere.
 
 <br clear="left"/>
 
@@ -68,7 +68,7 @@ For a step-by-step walkthrough written for first-time buyers, see the [Quick Sta
 | **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" and "All Artworks", or hashtags like "#nintendo". Control your device remotely from anywhere. |
 | **[Giphy](https://giphy.com/)** | Automatically fetches and cycles through trending GIFs. Configurable content rating (G through R) and refresh interval. |
 | **Local files** | Copy your own WebP, GIF, PNG, or JPEG files via USB or Wi-Fi. No cloud account needed, no internet required. |
-| **Museums** *(upcoming)* | Browse and play artworks from museum collections via IIIF, starting with the Art Institute of Chicago and the Rijksmuseum. Pick a department or category and the device refreshes the listing periodically. |
+| **Museums** | Browse public collections from the Art Institute of Chicago, Rijksmuseum, Victoria and Albert Museum, Wellcome Collection, and the Statens Museum for Kunst (SMK) over IIIF. Pick a department, category, or curated set; the device refreshes the listing on its own schedule. No API key, no account. |
 
 Mix them all in a single "playset" for an ever-changing display.
 
@@ -196,7 +196,7 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 | **Playback** | `play_scheduler`, `playback_queue`, `channel_manager` |
 | **Decoders** | `animation_decoder` (WebP/PNG/JPEG), `animated_gif_decoder` (GIF), `libwebp_decoder` |
 | **Connectivity** | `wifi_manager` (provisioning, captive portal, mDNS), `http_api` (REST + WebSocket), `makapix` (MQTT/TLS) |
-| **Content** | `giphy` (API + SD caching), `content_cache`, `loader_service`, `storage_eviction` |
+| **Content** | `giphy` (API + SD caching), `art_institution` (museum IIIF channels), `content_cache`, `loader_service`, `storage_eviction` |
 | **System** | `ota_manager`, `slave_ota` (C6 firmware), `p3a_board_ep44b` (HAL), `sdio_bus` |
 | **Extras** | `pico8` (game streaming), `show_url` (URL artwork download), `ugfx` (on-screen text/font rendering) |
 
@@ -210,7 +210,7 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 | Slave FW | — | 2 MB | ESP32-C6 co-processor firmware |
 | **SD Card** | `/sdcard` | — | All artwork storage |
 
-SD card layout: `/sdcard/p3a/animations/` (local files), `/sdcard/p3a/vault/` (Makapix cache, SHA256-sharded), `/sdcard/p3a/giphy/` (Giphy cache).
+SD card layout: `/sdcard/p3a/animations/` (local files), `/sdcard/p3a/vault/` (Makapix cache, SHA256-sharded), `/sdcard/p3a/giphy/` (Giphy cache), `/sdcard/p3a/museum/{museum_id}/` (museum IIIF cache, SHA256-sharded per museum).
 
 ---
 

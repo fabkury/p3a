@@ -103,6 +103,17 @@ Pulls fresh trending GIFs every few hours. This one takes a few extra minutes be
 
 Trending GIFs start appearing in the rotation within a few minutes.
 
+### D. Add a museum channel
+
+Browse the open collections of major museums — no account, no API key. Five institutions ship today: the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, and the Statens Museum for Kunst (SMK).
+
+1. Open `http://p3a.local/playset-editor` in any browser on the same Wi-Fi.
+2. Open or create a playset and click **Add Channel**.
+3. Set **Channel Type** to **Museum**, then pick a museum, a facet (e.g. *Departments* for the Art Institute of Chicago), and a term (e.g. *Modern and Contemporary Art*).
+4. Preview a few artworks with **Previous** / **Next**, then click **Add** to commit the channel and save the playset.
+
+The device queries the museum's listing API and starts downloading artwork at IIIF resolution. The first images appear within seconds; the rest fill in over the next minutes. See the [User Guide](HOW-TO-USE.md#museum-channels-iiif) for the full list of facets, refresh-interval settings, and storage behavior.
+
 ---
 
 ## Where to next

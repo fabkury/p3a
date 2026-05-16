@@ -44,7 +44,7 @@ path. Pair it with option A or C from `docs/sdio-rx-oom-crash.md`.
 
 | Category | Files | Status |
 |---|---|---|
-| Giphy / museum / GitHub API JSON responses (96–384 KB each) | `giphy_refresh.c:327`, `artic.c:356`, `loc.c:378`, `rijksmuseum.c:314,591`, `vam.c:312`, `smk.c:325`, `wellcome.c:364`, `github_ota.c:223,410` | PSRAM-first w/ internal fallback |
+| Giphy / museum / GitHub API JSON responses (96–384 KB each) | `giphy_refresh.c:327`, `artic.c:356`, `rijksmuseum.c:314,591`, `vam.c:312`, `smk.c:325`, `wellcome.c:364`, `github_ota.c:223,410` | PSRAM-first w/ internal fallback |
 | MQTT reassembly buffer (128 KB) | `makapix_mqtt.c:180` | PSRAM-first |
 | Download chunk buffers (32 KB each) | `giphy_download.c:234`, `makapix_artwork.c:233`, `art_institution_download.c:75`, `show_url.c:434`, `pin_lists_copy.c:48` | PSRAM-first |
 | Animation/PICO-8/decoder frame buffers (~1.5–5 MB) | `animation_player_loader.c:908,928`, `png_animation_decoder.c:166,179`, `jpeg_animation_decoder_sw.c:148`, `pico8_render.c:111` | PSRAM-first |

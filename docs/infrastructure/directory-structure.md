@@ -50,7 +50,7 @@ p3a/
 │       ├── ugfx_ui.h
 │       └── version.h
 │
-├── components/                          # Custom components (24 total)
+├── components/                          # Custom components (25 total)
 │   ├── p3a_core/                        # Unified state machine and lifecycle
 │   │   ├── p3a_state.c                  # Global state machine
 │   │   ├── p3a_state_channel.c          # Channel-related state transitions
@@ -190,6 +190,25 @@ p3a/
 │   │   ├── CMakeLists.txt
 │   │   └── Kconfig
 │   │
+│   ├── art_institution/                 # Museum (IIIF) channel source
+│   │   ├── art_institution.c            # Public API, dispatch table, lifecycle
+│   │   ├── art_institution_refresh.c    # Per-channel refresh dispatcher
+│   │   ├── art_institution_download.c   # IIIF JPEG download (HTTPS, atomic writes)
+│   │   ├── art_institution_resolve.c    # Lazy resolver loop (e.g. Rijks Linked-Art walk)
+│   │   ├── art_institution_rate_limit.c # Per-museum cooldown table
+│   │   ├── art_institution_internal.h
+│   │   ├── museums/
+│   │   │   ├── common.c                 # Shared HTTP / parse helpers
+│   │   │   ├── artic.c                  # Art Institute of Chicago adapter
+│   │   │   ├── rijksmuseum.c            # Rijksmuseum adapter (3-hop Linked-Art walk)
+│   │   │   ├── vam.c                    # Victoria and Albert Museum adapter
+│   │   │   ├── wellcome.c               # Wellcome Collection adapter
+│   │   │   └── smk.c                    # Statens Museum for Kunst adapter
+│   │   ├── include/
+│   │   │   ├── art_institution.h
+│   │   │   └── art_institution_types.h  # institution_channel_entry_t, museum_id_t
+│   │   └── CMakeLists.txt
+│   │
 │   ├── makapix/                         # Makapix Club integration
 │   │   ├── makapix.c                    # Module init and lifecycle
 │   │   ├── makapix_mqtt.c               # MQTT client (mTLS over TLS 1.2)
@@ -228,6 +247,7 @@ p3a/
 │   │   ├── http_api_rest_actions.c      # /action/* endpoints
 │   │   ├── http_api_rest_settings.c     # /settings/* and /config endpoints
 │   │   ├── http_api_rest_playsets.c     # /playsets/* CRUD
+│   │   ├── http_api_rest_museum.c       # /api/museum/* rate-limit endpoints
 │   │   ├── http_api_ota.c               # /ota/* endpoints
 │   │   ├── http_api_upload.c            # /upload (multipart, 16 MiB cap)
 │   │   ├── http_api_pages.c             # HTML page serving
@@ -329,6 +349,15 @@ p3a/
 │   ├── metadata.json                    # Generated at configure time (web UI version + API)
 │   ├── config/
 │   │   └── network.html                 # Network configuration page
+│   ├── museum/                          # Museum browse adapters (ES modules, loaded by playset editor)
+│   │   ├── index.js                     # Adapter registry + dispatch helpers
+│   │   ├── browse.js                    # Modal flow (museum → axis → term → preview → add)
+│   │   ├── artic.js                     # Art Institute of Chicago browse adapter
+│   │   ├── rijksmuseum.js               # Rijksmuseum browse adapter
+│   │   ├── rijks-sets.json              # Baked OAI-PMH set list (CORS workaround; see finalized-design §9.2)
+│   │   ├── vam.js                       # Victoria and Albert Museum browse adapter
+│   │   ├── wellcome.js                  # Wellcome Collection browse adapter
+│   │   └── smk.js                       # Statens Museum for Kunst browse adapter
 │   ├── setup/                           # Captive portal pages
 │   │   ├── index.html                   # Wi-Fi setup form (POSTs to /save)
 │   │   ├── success.html

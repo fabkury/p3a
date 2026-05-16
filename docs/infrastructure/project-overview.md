@@ -18,6 +18,7 @@
 - Touch gestures for navigation, Makapix reactions, info screen, and screen rotation
 - Web-based control panel at `http://p3a.local/`
 - **Giphy integration** — play trending GIFs from [Giphy](https://giphy.com/) with configurable content rating, rendition, and automatic refresh
+- **Museum (IIIF) channels** — play public collections from the Art Institute of Chicago, Rijksmuseum, Victoria and Albert Museum, Wellcome Collection, and the Statens Museum for Kunst over [IIIF](https://iiif.io/); no API key required
 - **Makapix Club integration** — send artworks directly from [makapix.club](https://makapix.club/)
 - **Over-the-Air updates** — install firmware and web UI updates wirelessly via web UI
 - **ESP32-C6 auto-flash** — co-processor firmware is updated automatically when needed
@@ -30,6 +31,6 @@
 
 ## Codebase Statistics
 
-- **Custom components**: 24 ESP-IDF components under `components/`
+- **Custom components**: 25 ESP-IDF components under `components/`
 - **Main application files**: ~24 C source files + 21 headers
 - **Build artifacts**: ~7 MB (firmware ~2 MB + LittleFS web UI ~4 MB + ESP32-C6 firmware ~1 MB); reserves ~22 MB total flash including the second OTA slot

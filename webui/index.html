@@ -1822,8 +1822,8 @@ function resizeAndConvertToPng(file, maxW, maxH) {
 fileInput.addEventListener('change', function(e) {
     var file = e.target.files[0];
     if (file) {
-        var maxSize = isJpegFile(file) ? 25 * 1024 * 1024 : 16 * 1024 * 1024;
-        var maxSizeMB = isJpegFile(file) ? '25MB' : '16MiB';
+        var maxSize = isJpegFile(file) ? 256 * 1024 * 1024 : 16 * 1024 * 1024;
+        var maxSizeMB = isJpegFile(file) ? '256MiB' : '16MiB';
         if (file.size > maxSize) {
             fileInfo.innerHTML = '<strong style="color:#f44336">File too large!</strong> Maximum size is ' + maxSizeMB + '.';
             fileInfo.classList.add('has-file');
@@ -1851,8 +1851,8 @@ uploadForm.addEventListener('submit', function(e) {
         showToast('Please select a file', true);
         return;
     }
-    var maxSize = isJpegFile(file) ? 25 * 1024 * 1024 : 16 * 1024 * 1024;
-    var maxSizeMB = isJpegFile(file) ? '25MB' : '16MiB';
+    var maxSize = isJpegFile(file) ? 256 * 1024 * 1024 : 16 * 1024 * 1024;
+    var maxSizeMB = isJpegFile(file) ? '256MiB' : '16MiB';
     if (file.size > maxSize) {
         showToast('File too large! Maximum size is ' + maxSizeMB + '.', true);
         return;

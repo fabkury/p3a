@@ -53,6 +53,20 @@ const AXIS_DISPLAY_LABELS = {
     'artwork-types':   'Artwork types',
 };
 
+// Bool+range partitioning constants. AIC's public search endpoint hard-caps
+// `from + size ≤ 1000` (see docs/art-institutions/offset-tests/REPORT.md
+// §1.3-§1.6). For offsets beyond that we walk POST DSL buckets carved over
+// the artwork-ID space, mirroring components/art_institution/museums/artic.c
+// (aic_discover_buckets / aic_refresh_partitioned).
+const PARTITION_MAX_ID  = 1_000_000;
+const PARTITION_CAP     = 1000;
+const PARTITION_MIN_RNG = 100;
+const PROBE_DELAY_MS    = 150;
+const POST_HEADERS = Object.assign({}, HEADERS, {
+    'Content-Type': 'application/json',
+    'Accept':       'application/json',
+});
+
 async function getJson(url) {
     const r = await fetch(url, { headers: HEADERS });
     if (r.status === 429) {
@@ -87,6 +101,62 @@ function buildSearchParams(filterField, filterValue, page, limit) {
     return p;
 }
 
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function postJson(url, body) {
+    const r = await fetch(url, {
+        method: 'POST', headers: POST_HEADERS, body: JSON.stringify(body),
+    });
+    if (r.status === 429) {
+        try {
+            const retryAfter = parseInt(r.headers.get('Retry-After') || '0', 10);
+            fetch('/api/museum/rate-limits/report-429', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    museum: 'artic',
+                    retry_after_sec: isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60,
+                }),
+            }).catch(() => {});
+        } catch (_) { /* ignore */ }
+        const err = new Error(`AIC 429 POST ${url}`);
+        err.status = 429;
+        throw err;
+    }
+    if (!r.ok) throw new Error(`AIC ${r.status} POST ${url}`);
+    return r.json();
+}
+
+// POST DSL body for AIC's /artworks/search. `size === 0` is a count-only
+// probe used by bucket discovery; otherwise we ask for the artwork fields
+// the preview pane renders.
+function buildBoolRangeBody(filterField, termId, lo, hi, from, size) {
+    const wantFields = size > 0
+        ? ['id', 'title', 'image_id', 'artist_title', 'date_display']
+        : ['id'];
+    return {
+        query: { bool: {
+            must:   [{ term:  { [filterField]: Number(termId) } }],
+            filter: [{ range: { id: { gte: lo, lt: hi } } }],
+        }},
+        sort: [{ id: 'asc' }],
+        from, size,
+        fields: wantFields,
+    };
+}
+
+function parseItems(data) {
+    return (data || [])
+        .filter(it => it.image_id)
+        .map(it => ({
+            id: String(it.id),
+            imageId: String(it.image_id),
+            title: it.title || '(untitled)',
+            artist: it.artist_title || '',
+            date: it.date_display || '',
+        }));
+}
+
 // Simple bounded concurrency runner — keeps the term-count probe under
 // AIC's per-IP cap.
 async function mapWithConcurrency(items, limit, mapper) {
@@ -118,6 +188,9 @@ export class ArticAdapter {
     constructor() {
         // termsByAxis: axisName -> [{ id, label, count }] cached per session.
         this._termsByAxis = Object.create(null);
+        // buckets: axisName -> termId -> [{ lo, hi, count }, ...] cached per
+        // session. Populated lazily on first deep (offset > 1000) jump.
+        this._buckets = Object.create(null);
     }
 
     async listCollections({ axis = 'departments' } = {}) {
@@ -152,22 +225,75 @@ export class ArticAdapter {
         return out;
     }
 
-    async listArtworks(termId, { offset = 0, rows = 8, axis = 'departments' } = {}) {
+    async listArtworks(termId, { offset = 0, rows = 8, axis = 'departments', onProgress = null } = {}) {
         const ax = AXIS_BY_NAME[axis];
         if (!ax) throw new Error(`AIC: unknown axis ${axis}`);
-        const page = Math.floor(offset / rows) + 1;
-        const sp = buildSearchParams(ax.filterField, termId, page, rows);
-        const d = await getJson(`${SEARCH}?${sp}`);
-        const items = (d.data || [])
-            .filter(it => it.image_id)
-            .map(it => ({
-                id: String(it.id),
-                imageId: String(it.image_id),
-                title: it.title || '(untitled)',
-                artist: it.artist_title || '',
-                date: it.date_display || '',
-            }));
-        return { items, total: Number(d && d.pagination && d.pagination.total) || 0 };
+
+        // Within the public-tier cap → existing GET path. Cheap, no probe.
+        if (offset + rows <= PARTITION_CAP) {
+            const page = Math.floor(offset / rows) + 1;
+            const sp = buildSearchParams(ax.filterField, termId, page, rows);
+            const d = await getJson(`${SEARCH}?${sp}`);
+            return {
+                items: parseItems(d && d.data),
+                total: Number(d && d.pagination && d.pagination.total) || 0,
+            };
+        }
+        // Beyond the cap → POST DSL bool+range partitioning.
+        return this._fetchAtOffsetDeep(ax.filterField, termId, axis, offset, rows, onProgress);
+    }
+
+    // Recursively split [lo, hi) until every sub-range has count ≤ 1000.
+    // Empty ranges are omitted. Calls onProgress with a short status string
+    // as buckets accumulate so the modal can update its hint line.
+    async _discoverBuckets(filterField, termId, lo, hi, out, onProgress) {
+        if (lo >= hi) return;
+        const body = buildBoolRangeBody(filterField, termId, lo, hi, 0, 0);
+        const d = await postJson(SEARCH, body);
+        const total = (d && d.pagination && Number(d.pagination.total)) || 0;
+        if (total === 0) return;
+        if (total <= PARTITION_CAP || (hi - lo) <= PARTITION_MIN_RNG) {
+            out.push({ lo, hi, count: total });
+            if (onProgress) {
+                const sum = out.reduce((s, b) => s + b.count, 0);
+                onProgress(`Probing artwork-ID layout… ${out.length} buckets, ${sum} works mapped.`);
+            }
+            return;
+        }
+        // Politeness vs the 60 req/min cap.
+        await sleep(PROBE_DELAY_MS);
+        const mid = lo + Math.floor((hi - lo) / 2);
+        await this._discoverBuckets(filterField, termId, lo, mid, out, onProgress);
+        await this._discoverBuckets(filterField, termId, mid, hi, out, onProgress);
+    }
+
+    // Walk buckets to find the page containing `offset`, fetch one window.
+    async _fetchAtOffsetDeep(filterField, termId, axis, offset, rows, onProgress) {
+        let buckets = (this._buckets[axis] && this._buckets[axis][termId]) || null;
+        if (!buckets) {
+            if (onProgress) onProgress('Probing artwork-ID layout… (first deep jump in this term)');
+            const acc = [];
+            await this._discoverBuckets(filterField, termId, 0, PARTITION_MAX_ID, acc, onProgress);
+            buckets = acc;
+            if (!this._buckets[axis]) this._buckets[axis] = Object.create(null);
+            this._buckets[axis][termId] = buckets;
+        }
+        const totalRecords = buckets.reduce((s, b) => s + b.count, 0);
+        if (totalRecords === 0) return { items: [], total: 0 };
+
+        let walked = 0;
+        for (const b of buckets) {
+            if (walked + b.count <= offset) { walked += b.count; continue; }
+            const withinBucket = offset - walked;
+            // Per-query cap: from + size ≤ 1000.
+            const sizeReq = Math.min(rows, b.count - withinBucket, PARTITION_CAP - withinBucket);
+            if (sizeReq <= 0) return { items: [], total: totalRecords };
+            if (onProgress) onProgress(`Fetching artwork ${offset + 1} of ${totalRecords}…`);
+            const body = buildBoolRangeBody(filterField, termId, b.lo, b.hi, withinBucket, sizeReq);
+            const d = await postJson(SEARCH, body);
+            return { items: parseItems(d && d.data), total: totalRecords };
+        }
+        return { items: [], total: totalRecords };
     }
 
     // 64×64 thumbnail (matches design §1's spec). IIIF v2 size syntax

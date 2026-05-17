@@ -60,7 +60,20 @@ const CSS = `
 .mb-nav button { padding: 6px 14px; border-radius: 8px; border: 0; cursor: pointer;
     background: rgba(255,255,255,0.08); color: #f3f4f6; font-weight: 500; }
 .mb-nav button[disabled] { opacity: 0.4; cursor: not-allowed; }
-.mb-nav .mb-counter { color: #94a3b8; font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+.mb-nav .mb-counter { display: inline-flex; align-items: center; gap: 4px;
+    color: #94a3b8; font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+.mb-counter-input { width: 5em; padding: 4px 6px; border-radius: 6px; border: 0;
+    background: rgba(255,255,255,0.08); color: #f3f4f6;
+    font-variant-numeric: tabular-nums; font-size: 0.85rem; text-align: right;
+    -moz-appearance: textfield; }
+.mb-counter-input::-webkit-outer-spin-button,
+.mb-counter-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.mb-counter-input:focus { outline: 2px solid rgba(99,102,241,0.55); outline-offset: 1px; }
+.mb-counter-input[disabled] { opacity: 0.5; cursor: not-allowed; }
+.mb-counter-total { color: #94a3b8; }
+.mb-hint { color: #94a3b8; font-size: 0.75rem; margin-top: 6px; line-height: 1.3; }
+.mb-hint.warn { color: #fcd34d; }
+.mb-hint.progress { color: #cbd5e1; }
 .mb-add-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
     padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); margin-top: 8px; }
 .mb-add-row .mb-add-label { font-size: 0.85rem; color: #cbd5e1; }
@@ -129,6 +142,18 @@ function composeDisplayName(adapter, termLabel) {
     const budget = 64 - prefix.length;
     if (budget <= 1) return truncateForDisplayName(prefix + termLabel, 64);
     return prefix + truncateForDisplayName(termLabel, budget);
+}
+
+// Default text under the nav row. AIC gets a stronger warning because deep
+// jumps trigger bucket discovery and burn requests against the 60/min cap.
+function defaultHint(adapter) {
+    if (adapter && adapter.id === 'artic') {
+        return 'Jump uses AIC\'s search API (60 req/min). ' +
+               'First jump beyond position 1000 in a term takes a moment while ' +
+               'we probe the artwork-ID layout; subsequent jumps are instant.';
+    }
+    return 'Jumping fetches from the museum API — large jumps may take a moment ' +
+           'and consume that museum\'s per-IP rate limit.';
 }
 
 export function openMuseumBrowse({ onAdd, onCancel } = {}) {
@@ -319,8 +344,12 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
         // the end of the stream. See spec §4.3.
         if (gotItemsCount === 0) return true;
         if (typeof prev.total === 'number' && prev.nextOffset >= prev.total) return true;
-        // AIC public-tier cap: `from + size <= 1000` (see finalized-design.md §9.1).
-        if (state.adapter && state.adapter.id === 'artic' && prev.nextOffset >= 1000) {
+        // AIC public-tier cap: `from + size <= 1000`. Only enforce when we
+        // haven't deep-jumped — the adapter's POST DSL path walks past the
+        // cap, so a baseOffset > 0 means the next fetch is routed through
+        // that path and is governed by `total` alone.
+        if (state.adapter && state.adapter.id === 'artic'
+            && prev.baseOffset === 0 && prev.nextOffset >= 1000) {
             return true;
         }
         return false;
@@ -333,6 +362,7 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
             items: [],
             total: null,
             nextOffset: 0,
+            baseOffset: 0,     // offset of items[0] within the term sequence
             cursorEnd: false,
             loading: true,
             error: null,
@@ -404,10 +434,34 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
         shell.metaSub   = el('div', { class: 'mb-meta-sub' });
         shell.prevBtn   = el('button', { text: '← Previous' });
         shell.nextBtn   = el('button', { text: 'Next →' });
-        shell.counter   = el('span', { class: 'mb-counter' });
+        shell.counterInput = el('input', {
+            type: 'number', min: '1', class: 'mb-counter-input',
+            inputmode: 'numeric', 'aria-label': 'Jump to position', value: '1',
+        });
+        shell.counterTotal = el('span', { class: 'mb-counter-total', text: '' });
+        shell.counter = el('span', { class: 'mb-counter' },
+            [shell.counterInput, shell.counterTotal]);
+        shell.hint = el('div', { class: 'mb-hint', text: defaultHint(state.adapter) });
 
         shell.prevBtn.addEventListener('click', () => onPrev(shell));
         shell.nextBtn.addEventListener('click', () => onNext(shell));
+
+        const commit = () => {
+            const v = parseInt(shell.counterInput.value, 10);
+            if (Number.isFinite(v)) onJump(shell, v);
+        };
+        shell.counterInput.addEventListener('change', commit);
+        shell.counterInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                commit();
+                shell.counterInput.blur();
+            } else if (e.key === 'Escape') {
+                const prev = state.preview;
+                shell.counterInput.value = String(prev.baseOffset + prev.index + 1);
+                shell.counterInput.blur();
+            }
+        });
 
         const slot = el('div', { class: 'mb-preview-slot' },
             [shell.img, shell.spinner, shell.failTile]);
@@ -415,7 +469,7 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
             [shell.metaTitle, shell.metaSub]);
         const nav  = el('div', { class: 'mb-nav' },
             [shell.prevBtn, shell.counter, shell.nextBtn]);
-        shell.root = el('div', { class: 'mb-preview' }, [slot, meta, nav]);
+        shell.root = el('div', { class: 'mb-preview' }, [slot, meta, nav, shell.hint]);
         return shell;
     }
 
@@ -437,11 +491,21 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
         const atEnd   = (prev.index + 1 >= prev.items.length) && prev.cursorEnd;
         shell.prevBtn.disabled = atStart || prev.loading;
         shell.nextBtn.disabled = atEnd   || prev.loading;
-        // Counter: "N / total" if total known, else just "N".
-        const human = prev.index + 1;
-        shell.counter.textContent = (typeof prev.total === 'number')
-            ? `${human} / ${prev.total}`
-            : String(human);
+
+        // Update the input value only when the user isn't editing — don't
+        // fight their typing. The "/ total" label updates regardless.
+        const absHuman = prev.baseOffset + prev.index + 1;
+        if (document.activeElement !== shell.counterInput) {
+            shell.counterInput.value = String(absHuman);
+        }
+        shell.counterInput.disabled = prev.loading;
+        if (typeof prev.total === 'number') {
+            shell.counterInput.max = String(prev.total);
+            shell.counterTotal.textContent = ` / ${prev.total}`;
+        } else {
+            shell.counterInput.removeAttribute('max');
+            shell.counterTotal.textContent = '';
+        }
     }
 
     async function renderPreviewSlot(shell) {
@@ -567,6 +631,94 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
 
         prev.index += 1;
         renderPreviewSlot(shell);
+    }
+
+    async function onJump(shell, targetOneBased) {
+        const prev = state.preview;
+        if (prev.loading) return;
+        let target = (targetOneBased | 0) - 1;
+        if (!Number.isFinite(target) || target < 0) {
+            updateNavState(shell);
+            return;
+        }
+        if (typeof prev.total === 'number') {
+            target = Math.min(target, prev.total - 1);
+        }
+
+        // Already in the loaded window — no fetch needed.
+        if (target >= prev.baseOffset && target < prev.baseOffset + prev.items.length) {
+            prev.index = target - prev.baseOffset;
+            shell.hint.classList.remove('warn');
+            shell.hint.classList.remove('progress');
+            shell.hint.textContent = defaultHint(state.adapter);
+            await renderPreviewSlot(shell);
+            return;
+        }
+
+        // Align to PAGE_SIZE boundary. AIC's GET path quantises via
+        // page = floor(offset/rows)+1; the deep POST path accepts any
+        // `from`, but aligning keeps a context window around the target
+        // for Prev/Next afterward and matches V&A's page-based shape too.
+        const fetchOffset = Math.floor(target / PAGE_SIZE) * PAGE_SIZE;
+
+        prev.loading = true;
+        const token = (prev.renderToken = (prev.renderToken + 1) | 0);
+        updateNavState(shell);
+        shell.spinner.classList.remove('hidden');
+        shell.img.classList.add('loading');
+        shell.hint.classList.remove('warn');
+        shell.hint.classList.add('progress');
+
+        let result;
+        try {
+            const arg = {
+                offset: fetchOffset, rows: PAGE_SIZE,
+                onProgress: (msg) => {
+                    if (token !== prev.renderToken) return;
+                    shell.hint.textContent = msg;
+                },
+            };
+            if (state.axis) arg.axis = state.axis.name;
+            result = await state.adapter.listArtworks(state.term.id, arg);
+        } catch (err) {
+            if (token !== prev.renderToken) return;
+            shell.spinner.classList.add('hidden');
+            shell.img.classList.remove('loading');
+            prev.loading = false;
+            shell.hint.classList.remove('progress');
+            if (err && err.status === 429) {
+                const remain = await fetchCooldown(state.adapter.id);
+                renderCooldown(remain || 60);
+                return;
+            }
+            shell.hint.textContent = 'Jump failed — try a smaller position or wait a moment.';
+            shell.hint.classList.add('warn');
+            updateNavState(shell);
+            return;
+        }
+        if (token !== prev.renderToken) return;
+
+        const newItems = (result && Array.isArray(result.items)) ? result.items : [];
+        shell.hint.classList.remove('progress');
+        if (newItems.length === 0) {
+            shell.spinner.classList.add('hidden');
+            shell.img.classList.remove('loading');
+            prev.loading = false;
+            shell.hint.textContent = 'No artwork at that position.';
+            shell.hint.classList.add('warn');
+            updateNavState(shell);
+            return;
+        }
+        prev.items      = newItems;
+        prev.baseOffset = fetchOffset;
+        prev.index      = Math.min(target - fetchOffset, newItems.length - 1);
+        prev.nextOffset = fetchOffset + PAGE_SIZE;
+        if (prev.total == null && typeof result.total === 'number') {
+            prev.total = result.total;
+        }
+        prev.cursorEnd = computeCursorEnd(prev, newItems.length);
+        shell.hint.textContent = defaultHint(state.adapter);
+        await renderPreviewSlot(shell);
     }
 
     function confirmAdd() {

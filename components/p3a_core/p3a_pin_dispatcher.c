@@ -75,6 +75,10 @@ extern esp_err_t pin_lists_unpin_institution(const char *slug,
                                              uint16_t museum_id,
                                              const char *iiif_key_safe) __attribute__((weak));
 
+// Auto-swap dwell timer (defined in play_scheduler component). Weak to avoid
+// a circular REQUIRES — play_scheduler already depends on p3a_core.
+extern void play_scheduler_reset_timer(void) __attribute__((weak));
+
 // Map a museum vault-path identifier ("artic", "rijks", …) to its enum
 // ordinal. The art_institution_types.h enum is documented as append-only with
 // stable ordinals, so hardcoding here is safe and avoids dragging in the
@@ -373,6 +377,9 @@ esp_err_t p3a_pin_dispatch_from_current(const char *slug)
         /* SD-card artworks cannot be pinned per spec; silent no-op. */
         return ESP_OK;
     }
+
+    /* User engagement with the current artwork extends dwell. */
+    if (play_scheduler_reset_timer) play_scheduler_reset_timer();
 
     pin_task_params_t *p = calloc(1, sizeof(*p));
     if (!p) {

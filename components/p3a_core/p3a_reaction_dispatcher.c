@@ -32,6 +32,10 @@ extern esp_err_t giphy_register_click(const char *api_key, const char *random_id
 extern esp_err_t config_store_get_giphy_api_key(char *out_key, size_t max_len) __attribute__((weak));
 extern esp_err_t config_store_get_giphy_random_id(char *out, size_t max_len) __attribute__((weak));
 
+// Auto-swap dwell timer (defined in play_scheduler). Weak to avoid a circular
+// REQUIRES — play_scheduler already depends on p3a_core.
+extern void play_scheduler_reset_timer(void) __attribute__((weak));
+
 // Thumbs-up emoji (UTF-8: U+1F44D).
 static const char THUMBS_UP_EMOJI[] = "\xF0\x9F\x91\x8D";
 
@@ -119,6 +123,9 @@ static esp_err_t dispatch_makapix(int32_t post_id, bool is_submit)
 
 esp_err_t p3a_reaction_dispatch_makapix_submit(int32_t post_id)
 {
+    /* User engagement with the current artwork extends dwell. Revoke
+       intentionally does not — it's the user undoing a prior reaction. */
+    if (post_id > 0 && play_scheduler_reset_timer) play_scheduler_reset_timer();
     return dispatch_makapix(post_id, true);
 }
 
@@ -159,6 +166,9 @@ static void giphy_click_task(void *arg)
 esp_err_t p3a_reaction_dispatch_giphy_click(const char *giphy_id)
 {
     if (!giphy_id || !giphy_id[0]) return ESP_ERR_INVALID_ARG;
+
+    /* User engagement with the current artwork extends dwell. */
+    if (play_scheduler_reset_timer) play_scheduler_reset_timer();
 
     char api_key[128] = "";
     char random_id[40] = "";

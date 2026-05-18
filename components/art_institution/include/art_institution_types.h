@@ -36,6 +36,7 @@ typedef enum {
     ART_INSTITUTION_MUSEUM_VAM      = 2,
     ART_INSTITUTION_MUSEUM_WELLCOME = 3,
     ART_INSTITUTION_MUSEUM_SMK      = 4,
+    ART_INSTITUTION_MUSEUM_HAM      = 5,
     ART_INSTITUTION_NUM_MUSEUMS  // sentinel; keep last. Distinct from the
                                  // extern const ART_INSTITUTION_MUSEUM_COUNT
                                  // (dispatch-table size) — the two must stay

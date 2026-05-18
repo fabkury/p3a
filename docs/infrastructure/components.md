@@ -19,8 +19,9 @@ All 25 custom components live under `components/`. This document describes each 
 ## 2. play_scheduler — Deterministic Multi-Channel Playback Engine
 
 - **Purpose**: Executes playsets to select artwork across multiple channels using Smooth Weighted Round Robin (SWRR)
-- **Key files**: `play_scheduler.c`, `play_scheduler_swrr.c`, `play_scheduler_playsets.c`, `play_scheduler_pick.c`, `play_scheduler_navigation.c`, `play_scheduler_timer.c`, `play_scheduler_nae.c`, `play_scheduler_lai.c`, `play_scheduler_refresh.c`, `play_scheduler_buffers.c`, `play_scheduler_cache.c`, `playset_store.c`, `playset_json.c`
-- **Public API**: `play_scheduler.h`, `play_scheduler_types.h`, `playset_store.h`, `playset_json.h`
+- **Key files**: `play_scheduler.c`, `play_scheduler_swrr.c`, `play_scheduler_playsets.c`, `play_scheduler_pick.c`, `play_scheduler_navigation.c`, `play_scheduler_timer.c`, `play_scheduler_nae.c`, `play_scheduler_lai.c`, `play_scheduler_refresh.c`, `play_scheduler_buffers.c`, `play_scheduler_cache.c`, `playset_store.c`, `playset_json.c`, `active_playset_store.c`
+- **Public API**: `play_scheduler.h`, `play_scheduler_types.h`, `playset_store.h`, `playset_json.h`, `active_playset_store.h`
+- **Boot restore**: Every `play_scheduler_execute_playset()` writes `/sdcard/p3a/active_playset.bin` (full `ps_playset_t` blob, magic+version+CRC, atomic rename). On boot, `animation_player_restore_boot_playset()` loads that snapshot and re-executes it; on any failure falls back to channel_promoted.
 - **Key concepts**:
   - **Playset** (`ps_playset_t`): Specifies which channels to include (with per-channel weights) and pick mode
   - **Channel weights**: Each channel has a `weight`. SWRR distributes plays proportionally; if every weight is 0, plays are distributed equally.
@@ -113,15 +114,15 @@ All 25 custom components live under `components/`. This document describes each 
 
 ## 10. art_institution — Museum (IIIF) Channels
 
-- **Purpose**: First-class channel source for artwork hosted by major museums that expose their collections through the [IIIF Image API](https://iiif.io/api/image/3.0/). Five museums ship today: the Art Institute of Chicago (`artic`), the Rijksmuseum (`rijks`), the Victoria and Albert Museum (`vam`), the Wellcome Collection (`wellcome`), and the Statens Museum for Kunst (`smk`).
-- **Key files**: `art_institution.c` (dispatch + lifecycle), `art_institution_refresh.c` (per-channel listing walk), `art_institution_download.c` (IIIF JPEG fetch), `art_institution_resolve.c` (Rijks Linked-Art walk), `art_institution_rate_limit.c` (per-museum cooldown), `museums/{artic,rijksmuseum,vam,wellcome,smk}.c` (per-museum adapters), `museums/common.c` (shared HTTP helpers)
+- **Purpose**: First-class channel source for artwork hosted by major museums that expose their collections through the [IIIF Image API](https://iiif.io/api/image/3.0/). Six museums ship today: the Art Institute of Chicago (`artic`), the Rijksmuseum (`rijks`), the Victoria and Albert Museum (`vam`), the Wellcome Collection (`wellcome`), the Statens Museum for Kunst (`smk`), and Harvard Art Museums (`ham`, BYOK API key).
+- **Key files**: `art_institution.c` (dispatch + lifecycle), `art_institution_refresh.c` (per-channel listing walk), `art_institution_download.c` (IIIF JPEG fetch with NRS→IDS redirect shim), `art_institution_resolve.c` (Rijks Linked-Art walk), `art_institution_rate_limit.c` (per-museum cooldown), `museums/{artic,rijksmuseum,vam,wellcome,smk,ham}.c` (per-museum adapters), `museums/common.c` (shared HTTP helpers)
 - **Public API**: `art_institution.h`, `art_institution_types.h`
 - **Architecture**:
   - **Browser side** owns browse (museum → axis → term selection); each museum has a matching JS adapter under `webui/museum/`. The browser talks directly to museum APIs over CORS.
   - **Device side** owns refresh, IIIF download, and playback. Each museum exposes the same C dispatch shape: `refresh_channel`, `build_iiif_url`, and optional `resolve_entry` (for museums like Rijks that require a multi-hop Linked-Art walk to discover the image id).
 - **Storage**: Cached images live at `/sdcard/p3a/museum/{museum_id}/{sha[0]}/{sha[1]}/{sha[2]}/{iiif_key}.{ext}`. The vault is shared across all channels of the same museum, so an artwork that belongs to several facets is only stored once.
 - **Rate limiting**: A per-museum cooldown table is shared between the device's refresh dispatcher, the download manager, and the browser's browse modal. Browser-issued 429s are reported back to the device via `POST /api/museum/rate-limits/report-429` so the per-IP budget stays consistent. The browse modal reads `GET /api/museum/rate-limits` before triggering term-count probes.
-- **Settings**: Two global NVS keys, `ai_refresh_sec` (default 86 400 s — 1 day) and `ai_cache_size` (default 1024 entries per channel), surface in the **Museum** tab of the settings page.
+- **Settings**: Two global NVS keys, `ai_refresh_sec` (default 86 400 s — 1 day) and `ai_cache_size` (default 1024 entries per channel), surface in the **Museum** tab of the settings page. Per-museum BYOK keys live in the same tab: `ham_api_key` (Harvard Art Museums — no key shipped, refresh is a no-op until the user enters one).
 - **Storage eviction**: Museum vault files are reclaimed by the existing `storage_eviction` component alongside the Makapix vault and Giphy cache (see component 17).
 - **Playset binary format**: Institution channels use `PS_CHANNEL_TYPE_INSTITUTION = 7` with `name = "{museum_id}:{axis}"` and `identifier = "{term_id}"`. Cache entries use `institution_channel_entry_t` (64 bytes; same slot as the makapix/giphy entries) with the discriminator `PS_ENTRY_FORMAT_INSTITUTION`.
 - **Full design**: See [`docs/art-institutions/finalized-design.md`](../art-institutions/finalized-design.md).

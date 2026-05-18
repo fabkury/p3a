@@ -362,7 +362,7 @@
 <div class="tab-content" id="tab-museum">
     <div class="section">
         <h3>Museums</h3>
-        <p class="file-name" style="margin-bottom:10px;">Channels that play artwork from the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, and the Statens Museum for Kunst (SMK) via IIIF. Build a museum channel from <a href="/playset-editor">Playsets</a> &gt; Add Channel &gt; Museum.</p>
+        <p class="file-name" style="margin-bottom:10px;">Channels that play artwork from the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst (SMK), and Harvard Art Museums via IIIF. Build a museum channel from <a href="/playset-editor">Playsets</a> &gt; Add Channel &gt; Museum.</p>
         <div class="setting-row">
             <label class="setting-label" for="ai-refresh-sec">Refresh Interval</label>
             <select class="setting-select" id="ai-refresh-sec">
@@ -397,6 +397,14 @@
             applies a 60-second defensive cooldown if any of them returns a 429. The browse
             previewer and refresh dispatcher both honor the shared cooldown when a 429 is observed.
         </div>
+    </div>
+    <div class="section">
+        <h3>Harvard Art Museums (API key)</h3>
+        <div class="setting-row">
+            <label class="setting-label" for="ham-api-key">API Key</label>
+            <input class="setting-input" id="ham-api-key" type="text" placeholder="Harvard Art Museums API Key">
+        </div>
+        <div class="setting-hint">Enter your Harvard Art Museums API key. HAM channels will not refresh without a valid key, and the HAM entry is hidden from the museum browser until one is saved. You can request a free key at <a href="https://harvardartmuseums.org/collections/api" target="_blank" rel="noopener">harvardartmuseums.org/collections/api</a>. The key counts against a per-key quota of 2 500 requests per day; one HAM channel refresh costs ~11 calls at the default 1 024-entry cache size.</div>
     </div>
     <div class="section">
         <button class="btn save-all" id="museum-save-btn" onclick="saveMuseumAll()">Save Museum Settings</button>
@@ -876,14 +884,17 @@ function loadMuseumSettings(cfg) {
     if (!refreshSel.value) refreshSel.value = '86400';
     cacheSel.value = cacheVal;
     if (!cacheSel.value) cacheSel.value = '1024';
+    document.getElementById('ham-api-key').value = cfg.ham_api_key || '';
 }
 
 function saveMuseumAll() {
     var btn = document.getElementById('museum-save-btn');
     btn.disabled = true;
+    var hamKey = document.getElementById('ham-api-key').value.trim();
     var partial = {
         ai_refresh_sec: parseInt(document.getElementById('ai-refresh-sec').value, 10),
-        ai_cache_size:  parseInt(document.getElementById('ai-cache-size').value, 10)
+        ai_cache_size:  parseInt(document.getElementById('ai-cache-size').value, 10),
+        ham_api_key:    hamKey
     };
     mergeConfig(partial, function() {
         btn.disabled = false;

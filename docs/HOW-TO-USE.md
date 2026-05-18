@@ -319,7 +319,7 @@ The Giphy tab at `http://p3a.local/settings#giphy` lets you customize:
 
 ## Museum Channels (IIIF)
 
-p3a can play artwork from major museums that publish their collections through the [IIIF Image API](https://iiif.io/api/image/3.0/). Channels are organized by the museum's own facets (collections, departments, sets, ...) and refreshed on a schedule. Five museums ship today:
+p3a can play artwork from major museums that publish their collections through the [IIIF Image API](https://iiif.io/api/image/3.0/). Channels are organized by the museum's own facets (collections, departments, sets, ...) and refreshed on a schedule. Six museums ship today:
 
 | Museum | Facets you can pick |
 |---|---|
@@ -328,8 +328,9 @@ p3a can play artwork from major museums that publish their collections through t
 | **Victoria and Albert Museum** | Collections, Categories, Venues |
 | **Wellcome Collection** | Work types, Genres, Subjects, Contributors |
 | **Statens Museum for Kunst (SMK)** | Collections |
+| **Harvard Art Museums** | Classifications, Centuries, Cultures, Periods, Places, Media, Techniques, Work types, Groups, Galleries |
 
-No API key, no account, no device registration — the museums expose these collections publicly.
+Five of the six museums need no account or API key. **Harvard Art Museums requires a free API key**: request one at [harvardartmuseums.org/collections/api](https://harvardartmuseums.org/collections/api) (you get the key by email within a day) and paste it into **Settings → Museums → Harvard Art Museums (API key)**. Until a key is saved, the HAM entry in the browse modal will prompt you to add one and any HAM channel you've already created will sit dormant (it reactivates the moment a valid key is saved — no need to re-create the channel).
 
 A small number of Wellcome terms with very long labels are hidden from the browse modal — see [`docs/deferred/wellcome-long-labels.md`](deferred/wellcome-long-labels.md) for the rationale.
 

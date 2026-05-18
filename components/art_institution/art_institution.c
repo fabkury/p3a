@@ -65,6 +65,17 @@ const art_institution_museum_t ART_INSTITUTION_MUSEUMS[] = {
         .build_iiif_url  = art_institution_smk_build_iiif_url,
         .resolve_entry   = NULL,  // SMK returns image_iiif_id inline; no walk.
     },
+    {
+        .id              = "ham",
+        .display         = "Harvard Art Museums",
+        .museum_enum     = ART_INSTITUTION_MUSEUM_HAM,
+        .refresh_channel = art_institution_ham_refresh_channel,
+        .build_iiif_url  = art_institution_ham_build_iiif_url,
+        .resolve_entry   = NULL,  // HAM's images[0].baseimageurl is inline; the
+                                  // NRS→IDS 303 redirect is handled by the
+                                  // download path's redirect shim, not a
+                                  // resolve_entry walk.
+    },
 };
 
 const size_t ART_INSTITUTION_MUSEUM_COUNT =

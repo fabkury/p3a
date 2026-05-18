@@ -162,3 +162,23 @@ void config_store_invalidate_ai_cache_size(void)
 {
     s_ai_cache_size_loaded = false;
 }
+
+// ============================================================================
+// ham_api_key — Harvard Art Museums API key (BYOK; empty by default)
+// ============================================================================
+//
+// HAM ships no key. The user enters their personal key in settings.html;
+// when empty, the HAM refresh path is a no-op and the browse modal hides
+// the HAM entry.
+
+esp_err_t config_store_set_ham_api_key(const char *key)
+{
+    if (!key) return ESP_ERR_INVALID_ARG;
+    return cfg_set_string("ham_api_key", key);
+}
+
+esp_err_t config_store_get_ham_api_key(char *out_key, size_t max_len)
+{
+    if (!out_key || max_len == 0) return ESP_ERR_INVALID_ARG;
+    return cfg_get_string("ham_api_key", "", out_key, max_len);
+}

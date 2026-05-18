@@ -191,6 +191,19 @@ esp_err_t art_institution_smk_build_iiif_url(const institution_channel_entry_t *
                                              int longest_side,
                                              char *out, size_t len);
 
+// ============================================================================
+// Harvard Art Museums adapter entry points (defined in museums/ham.c)
+// ============================================================================
+
+esp_err_t art_institution_ham_refresh_channel(const char *channel_id,
+                                              const char *axis,
+                                              const char *term_id,
+                                              uint32_t channel_offset);
+
+esp_err_t art_institution_ham_build_iiif_url(const institution_channel_entry_t *entry,
+                                             int longest_side,
+                                             char *out, size_t len);
+
 #ifdef __cplusplus
 }
 #endif

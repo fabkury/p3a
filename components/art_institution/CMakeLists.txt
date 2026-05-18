@@ -11,6 +11,7 @@ idf_component_register(
         "museums/vam.c"
         "museums/wellcome.c"
         "museums/smk.c"
+        "museums/ham.c"
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS
         "."

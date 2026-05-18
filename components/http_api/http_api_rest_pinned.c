@@ -193,7 +193,7 @@ static cJSON *json_from_list_info(const pin_list_info_t *info)
  * since v0.1 are listed below in the same order. */
 static const char *museum_id_to_str(uint16_t id)
 {
-    static const char *names[] = { "artic", "rijks", "vam", "wellcome", "smk" };
+    static const char *names[] = { "artic", "rijks", "vam", "wellcome", "smk", "ham" };
     if (id < (sizeof(names) / sizeof(names[0]))) return names[id];
     return NULL;
 }
@@ -600,15 +600,14 @@ static esp_err_t h_post_set_active(httpd_req_t *req, const char *slug)
 
 /* POST /api/pin-lists/{slug}/play
  * Switches playback to the given pinned list as a first-class channel.
- * Persists the active-playset name as "channel_pinned_{slug}" so the
- * pill bar can highlight the active list across polls. */
+ * play_scheduler_play_pinned_channel() eventually calls execute_playset(),
+ * which persists the active-playset snapshot — no separate save step needed.
+ * The WebUI derives the pill ID from the snapshot's channel structure (the
+ * PS_CHANNEL_TYPE_PINNED channel carries `identifier = slug`). */
 static esp_err_t h_post_play(httpd_req_t *req, const char *slug)
 {
     esp_err_t err = play_scheduler_play_pinned_channel(slug);
     if (err != ESP_OK) { send_pin_err(req, err, "play"); return ESP_OK; }
-    char playset_name[40];
-    snprintf(playset_name, sizeof(playset_name), "channel_pinned_%s", slug);
-    p3a_state_set_active_playset(playset_name);
     send_json(req, 200, "{\"ok\":true}");
     return ESP_OK;
 }
@@ -759,7 +758,7 @@ static esp_err_t h_post_pin_raw(httpd_req_t *req, const char *slug)
             strlcpy(order.museum.iiif_key, iiif, sizeof(order.museum.iiif_key));
             if (original_post_id <= 0) {
                 static const char *museum_names[] = {
-                    "artic", "rijks", "vam", "wellcome", "smk"
+                    "artic", "rijks", "vam", "wellcome", "smk", "ham"
                 };
                 if (file.museum_id < (sizeof(museum_names) / sizeof(museum_names[0]))) {
                     original_post_id = art_institution_compute_post_id(

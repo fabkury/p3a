@@ -557,6 +557,67 @@ about breadth-of-collection.
 - **Rate limit:** none published; treated like Rijks (default 60 s
   cooldown on a 429 with no `Retry-After` header).
 
+### 9.4 Harvard Art Museums
+
+- **id:** `ham`
+- **display:** `Harvard Art Museums`
+- **API base:** `https://api.harvardartmuseums.org`
+- **IIIF base:** `https://nrs.harvard.edu/` (the NRS host 303-redirects
+  IIIF requests to `https://ids.lib.harvard.edu/mps/...`; the download
+  path's redirect shim follows it).
+- **Required header:** none beyond `Accept: application/json`.
+- **Required query:** `apikey=<uuid>` on every API call. The key is
+  **user-supplied** (BYOK) — stored in NVS under `ham_api_key`, entered
+  via the "Museums" tab in `webui/settings.html`. No key is shipped with
+  the firmware. When the saved key is empty, HAM channel refresh is a
+  no-op (`ESP_LOGI` + return `ESP_OK`, no `last_refresh` write) and the
+  browse modal surfaces "enter your key in Settings" instead of axes.
+  Channels saved while the key is configured remain persistent across
+  reboots; clearing the key only dormants the refresh path.
+- **Axes (filterable, in browse order):**
+  `classification`, `century`, `culture`, `period`, `place`, `medium`,
+  `technique`, `worktype`, `group`, `gallery`. The browser-side adapter
+  ships a display-label map and a skip-list (`color`, `person`); term
+  enumeration within each axis is driven entirely by what the HAM API
+  returns at runtime — endpoint name == filter-param name uniformly, so
+  no per-axis filter mapping is needed. See `docs/art-institutions/
+  ham-investigation/REPORT.md` for the design rationale.
+- **Filter param map:** identity (`classification` → `classification`,
+  etc.).
+- **Term-id field map:** the term-resource records use axis-specific id
+  field names (`classificationid`, `galleryid`, `periodid`, ...), but a
+  generic `id` field is always present too. The adapter reads `id` for
+  uniformity.
+- **Term ordering:** axes whose vocabulary surfaces a populated
+  `objectcount` (classification, century, culture, period, place,
+  medium, technique, gallery) are sorted by count descending. For
+  `worktype` and `group` the vocabulary has `objectcount=0` on every
+  term; the adapter sorts those alphabetically.
+- **Label-length filter:** terms whose `name` exceeds 32 chars are
+  dropped at enumeration time (the 33-byte playset identifier slot).
+  Affects `period` (~22 % of top-100), `gallery` (~27 %), `technique`
+  (~2 %); the other axes are unaffected.
+- **Image-permission gate:** every `/object` listing call MUST include
+  `q=imagepermissionlevel:0`. Without it, ~half of `hasimage=1` records
+  come back with `primaryimageurl: null` (permission-restricted) and the
+  refresh stores entries with no buildable URL.
+- **Listing endpoint:**
+  `GET /object?apikey={KEY}&size=100&page=N&hasimage=1&q=imagepermissionlevel:0`
+  `&{axis}={term_id}&sort=id&sortorder=asc&fields=id,primaryimageurl`
+- **IIIF URL:**
+  `https://nrs.harvard.edu/{iiif_key}/full/!720,720/0/default.jpg`.
+  Resolves to `ids.lib.harvard.edu` via a single 303 hop; the
+  `art_institution_download` redirect shim handles the chain.
+- **`iiif_key` value:** the URN portion of `images[0].baseimageurl`
+  (== `primaryimageurl`) — the substring after `https://nrs.harvard.edu/`
+  (typically `urn-3:HUAM:NNNN_dynmc`, 17-26 chars).
+- **`extension`:** always 3 (jpg).
+- **Resolve hook:** none. The URN→IDS redirect is part of the download
+  path, not a `resolve_entry` walk.
+- **Rate limit:** **2 500 req/day per API key**, per-user with BYOK. No
+  `Retry-After` headers observed; engage default 60 s cooldown on a 429
+  (matches AIC/Rijks).
+
 ## 10. Image rendition strategy
 
 The device requests `…/full/!720,720/0/default.jpg`. Universally
@@ -695,7 +756,7 @@ doors.
 
 - **Keyword search** across museums. Encoding fits the same channel
   spec (`name="artic:search"`, `identifier="<query>"`).
-- **More museums:** Gallica, Harvard.
+- **More museums:** Gallica. (Harvard Art Museums shipped — see §9.4.)
 - **Aggregator sources:** Europeana, DPLA.
 - **Per-channel overrides** for refresh interval / cache size.
 - **Manifest synthesis** for image-only IIIF (Princeton).

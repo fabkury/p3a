@@ -313,7 +313,11 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
                 renderCooldown(remain || 60);
                 return;
             }
-            body.appendChild(el('div', { class: 'mb-status error', text: 'Failed to load terms.' }));
+            // Adapters can attach a user-facing message to the thrown error
+            // (e.g. HAM's "enter your key" prompt when ham_api_key is unset).
+            // Falls back to a generic message otherwise.
+            const msg = (err && err.userMessage) || 'Failed to load terms.';
+            body.appendChild(el('div', { class: 'mb-status error', text: msg }));
             return;
         }
 
@@ -390,7 +394,8 @@ export function openMuseumBrowse({ onAdd, onCancel } = {}) {
                 renderCooldown(remain || 60);
                 return;
             }
-            body.appendChild(el('div', { class: 'mb-status error', text: 'Failed to load preview.' }));
+            const msg = (err && err.userMessage) || 'Failed to load preview.';
+            body.appendChild(el('div', { class: 'mb-status error', text: msg }));
             // Still surface the Add button below so the user can commit
             // the channel even if the preview load failed (the device
             // will refresh independently).

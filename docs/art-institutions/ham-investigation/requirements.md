@@ -17,9 +17,9 @@ Tier legend: **R** = required (can't add HAM without it); **P** = preferred
 
 | Decision | Choice |
 |---|---|
-| API-key placement | **Browser + device (shared)** — key embedded in firmware Kconfig and also served to the browser; matches the existing browser-direct pattern. Stage 2 probes both call paths. |
-| Axis selection strategy | **Inventory + recommend** — Stage 2 enumerates HAM's full facet surface and recommends the 1–4 most user-meaningful axes to ship. |
-| HAM API key used during Stage 2 | `c09e5b21-5ea4-4762-b611-e41d3a2ba07d` |
+| API-key placement | **BYOK (bring-your-own-key)** — *revised post-Stage 2.* Initially set as "browser + device (shared)" with the assumption of a shipped key; revised to BYOK after Stage 2 confirmed HAM's 2 500 req/day-per-key cap would be shared across the installed base. Key is stored in NVS under `ham_api_key`, entered via a new "Museums" section in `webui/settings.html`, and served to the browser at browse time. Mirrors the Giphy model. |
+| Axis selection strategy | **Inventory + recommend** — *revised post-Stage 2.* Originally framed as "ship the 1–4 most user-meaningful axes"; revised to hybrid discovery — compile-time display-label map + skip-list, runtime axis health check. See REPORT.md §"Axis strategy". |
+| HAM API key used during Stage 2 | `c09e5b21-5ea4-4762-b611-e41d3a2ba07d` (single-user investigation key; not shipped). |
 
 ## Phase A — Browse (browser-side, in the playset editor)
 

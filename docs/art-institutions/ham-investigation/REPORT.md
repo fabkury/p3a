@@ -262,7 +262,13 @@ Pre-filled so M1 mostly becomes a copy-paste. Goes into §9 of
 - **API base:** `https://api.harvardartmuseums.org`
 - **NRS image base:** `https://nrs.harvard.edu/`
 - **Required header:** none beyond Accept: application/json.
-- **Required query:** `apikey=<uuid>` on every API call.
+- **Required query:** `apikey=<uuid>` on every API call. The key is
+  **user-supplied** (BYOK) — stored in NVS under `ham_api_key`,
+  entered by the user via a new "Museums" section in
+  `webui/settings.html`. No key is shipped with the firmware. When
+  the saved key is empty, HAM browse is gated in the modal and HAM
+  channel refresh is a no-op (channels stay persistent and reactivate
+  when the user enters a key).
 - **Axes (filterable, in browse order):**
   `classification`, `century`, `culture`, `period`, `place`, `medium`,
   `technique`, `worktype`, `group`, `gallery`. The browse adapter ships
@@ -301,35 +307,53 @@ Pre-filled so M1 mostly becomes a copy-paste. Goes into §9 of
 - **`extension`:** always 3 (jpg).
 - **Resolve hook:** none. URN → IDS is one 303 hop handled in the
   downloader's redirect shim (shared with Rijks).
-- **Rate limit:** **2 500 req/day per API key**, shared across the
-  entire installed base. No `Retry-After` headers; engage default 60 s
-  cooldown on a 429 (matches AIC/Rijks).
+- **Rate limit:** **2 500 req/day per API key**. Per-user with BYOK,
+  so the budget belongs entirely to one user/device. No `Retry-After`
+  headers; engage default 60 s cooldown on a 429 (matches AIC/Rijks).
 ```
 
 ## Go / no-go for Stage 3
 
 **Status: GO.**
 
-Every R item passes. Two follow-up items needed before Stage 3 starts:
+Every R item passes. The key-management strategy is locked
+(see [Decision](#decision--byok-bring-your-own-key)); future-verification
+items below are not blockers.
 
-### Open question — key budget management
+### Decision — BYOK (bring-your-own-key)
 
-The 2 500 req/day-per-key cap is shared by all p3a installations
-using the same embedded key. M1 must include at least one of:
+No API key is shipped with the firmware. Each user registers for a
+free HAM API key and enters it in `settings.html` under a new "Museums"
+section. Mirrors the Giphy key-management model.
 
-1. **Shipped-key + per-device throttle.** Choose a refresh interval
-   that keeps the expected total request rate under ~2 000/day even
-   with 100 active devices. With 11 reqs per channel refresh and one
-   museum channel per device, refreshing once every 4 days gives ~3
-   reqs/device/day — well under the cap with growth headroom.
-2. **User-supplied key in settings.** Add a `ham_api_key` NVS setting
-   in the Museums section of `settings.html`; if blank, fall back to
-   the shipped key. Power users can get their own free key and avoid
-   the shared-key squeeze. Same pattern Giphy uses.
-3. **(2) and (1) combined.** Recommended. Documents the shared-key
-   tradeoff in the settings hint and provides a real escape valve.
+**Implications for M1:**
 
-Decision needed before the M1 design pass.
+- New NVS setting `ham_api_key` (string, max ~40 chars to fit a UUID
+  with padding). Cleared by default.
+- New section in `webui/settings.html` with the input field plus a
+  short hint linking to HAM's key-request page.
+- New REST endpoint `GET /api/museum/ham/key` (LAN-only by virtue of
+  the device's HTTP server scope) so the browser-side adapter can
+  read the saved key.
+  - **Or** the playset editor includes the key in the page-render
+    fetch alongside the existing settings load. Implementation
+    detail; either works.
+- **Browse modal empty-state**: when the saved key is empty, the HAM
+  entry in the museum picker is either hidden or shows a hint:
+  "Enter your HAM API key in Settings to browse Harvard Art Museums."
+- **Refresh skip when empty**: `art_institution_ham_refresh_channel()`
+  returns `ESP_ERR_INVALID_STATE` (or similar) with an `ESP_LOGI`
+  line if the key is empty; dispatcher treats it like a transient
+  no-op (no orphan eviction, no `last_refresh` update). When the user
+  later enters a key, the next dispatcher tick picks up the channel.
+- **Channel persistence semantics**: a HAM channel saved in a playset
+  remains valid across reboots / firmware updates even when the key
+  is cleared — only its refresh path is dormant. Re-entering the key
+  reactivates it without re-saving the playset.
+- **2 500 req/day quota** is no longer a shared-budget concern, but
+  the firmware still respects 429s from any single user blowing
+  their own quota: existing rate-limit cooldown infrastructure
+  applies unchanged.
 
 ### Future verification
 

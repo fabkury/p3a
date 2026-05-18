@@ -179,6 +179,31 @@ esp_err_t sd_path_ensure_directories(void);
  */
 esp_err_t sd_path_ensure_parent_dirs(const char *filepath);
 
+/**
+ * @brief Copy a string into out, replacing FAT-reserved chars with '_'
+ *
+ * FAT/exFAT (the filesystem on the SD card) forbids these characters in
+ * filenames: `:/\?*"<>|`. Most p3a identifiers (Makapix UUIDs, Giphy
+ * IDs, IIIF image keys for AIC/Rijks/V&A/Wellcome/SMK, SD card filenames)
+ * already use only FAT-safe characters, but HAM's URN-shaped iiif_key
+ * (`urn-3:HUAM:{id}_dynmc`) carries two colons that need substitution
+ * before the identifier can land on disk as a filename component.
+ *
+ * The substitution is length-preserving (one-byte → one-byte) and
+ * idempotent, so it is safe to apply unconditionally. SHA-shard
+ * computations should be performed against the un-sanitized identifier
+ * so the shard tree stays stable regardless of what the sanitizer does
+ * to the leaf name.
+ *
+ * Silently truncates if `out_len` is smaller than the input; callers
+ * that need length-checking should size `out_len ≥ strlen(in) + 1`.
+ *
+ * @param in     Null-terminated input string
+ * @param out    Output buffer (may equal `in` for in-place rewrite)
+ * @param out_len Size of out buffer (incl. NUL terminator)
+ */
+void sd_path_sanitize_filename(const char *in, char *out, size_t out_len);
+
 #ifdef __cplusplus
 }
 #endif

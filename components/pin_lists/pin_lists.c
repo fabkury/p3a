@@ -640,11 +640,21 @@ esp_err_t pin_list_build_artwork_path(const char *slug, const pinned_order_entry
             n = snprintf(out, out_len, "%s/giphy/%.*s%s",
                          dir, PINNED_GIPHY_ID_MAX, e->giphy.giphy_id, ext_str[ext_idx]);
             break;
-        case PINNED_SOURCE_INSTITUTION:
-            n = snprintf(out, out_len, "%s/museum/%u/%.*s%s",
+        case PINNED_SOURCE_INSTITUTION: {
+            // iiif_key is stored in canonical form (matches the channel cache
+            // and round-trips through art_institution_build_iiif_url for URL
+            // reconstruction at playback time). HAM's URN carries colons,
+            // which FAT/exFAT forbids in filenames; sanitize for the leaf
+            // name only. Other museums' identifiers use only FAT-safe
+            // characters, so the substitution is a no-op for them. See
+            // sd_path_sanitize_filename's docstring.
+            char safe_key[PINNED_IIIF_KEY_MAX + 1];
+            sd_path_sanitize_filename(e->museum.iiif_key, safe_key, sizeof(safe_key));
+            n = snprintf(out, out_len, "%s/museum/%u/%s%s",
                          dir, (unsigned)e->museum.museum_id,
-                         PINNED_IIIF_KEY_MAX, e->museum.iiif_key, ext_str[ext_idx]);
+                         safe_key, ext_str[ext_idx]);
             break;
+        }
         default:
             return ESP_ERR_INVALID_ARG;
     }

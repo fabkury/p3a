@@ -245,3 +245,23 @@ esp_err_t sd_path_ensure_parent_dirs(const char *filepath)
     return ESP_OK;
 }
 
+void sd_path_sanitize_filename(const char *in, char *out, size_t out_len)
+{
+    if (!out || out_len == 0) return;
+    if (!in) { out[0] = '\0'; return; }
+    size_t o = 0;
+    for (size_t i = 0; in[i] && o + 1 < out_len; i++) {
+        unsigned char c = (unsigned char)in[i];
+        switch (c) {
+            case ':': case '/': case '\\': case '?': case '*':
+            case '"': case '<': case '>': case '|':
+                out[o++] = '_';
+                break;
+            default:
+                out[o++] = (char)c;
+                break;
+        }
+    }
+    out[o] = '\0';
+}
+

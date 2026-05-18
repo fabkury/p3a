@@ -154,35 +154,10 @@ int32_t art_institution_compute_post_id(const char *museum_id, const char *iiif_
 
 // ----- Vault path ---------------------------------------------------------
 
-/**
- * @brief Copy iiif_key into a FAT-safe filename buffer
- *
- * SD cards are mounted as FAT/exFAT, which forbids `:/\?*"<>|` in
- * filenames. The iiif_key field is otherwise stored verbatim
- * (post_id hashing, URL building, and orphan comparison all use the
- * un-sanitized form), so the substitution is filename-local.
- *
- * Affects HAM today (`urn-3:HUAM:NNNN_dynmc` contains two colons).
- * Other museums use alphanumeric / underscore / dot / hyphen
- * identifiers, so the loop is a no-op for them.
- */
-static void sanitize_filename(const char *in, char *out, size_t out_len)
-{
-    size_t o = 0;
-    for (size_t i = 0; in[i] && o + 1 < out_len; i++) {
-        unsigned char c = (unsigned char)in[i];
-        switch (c) {
-            case ':': case '/': case '\\': case '?': case '*':
-            case '"': case '<': case '>': case '|':
-                out[o++] = '_';
-                break;
-            default:
-                out[o++] = (char)c;
-                break;
-        }
-    }
-    out[o] = '\0';
-}
+// The FAT-safe filename sanitizer used to live here (local static
+// sanitize_filename). It was promoted to a shared sd_path helper so the
+// pin-storage path builder in pin_lists.c can apply the same substitution
+// without duplicating the logic. See sd_path_sanitize_filename().
 
 esp_err_t art_institution_build_vault_path(const char *museum_id,
                                            const institution_channel_entry_t *entry,
@@ -223,7 +198,7 @@ esp_err_t art_institution_build_vault_path(const char *museum_id,
     // institution_channel_entry_t.iiif_key is 48 bytes; sanitized form is
     // length-preserving (one-byte → one-byte substitution).
     char safe_name[sizeof(entry->iiif_key)];
-    sanitize_filename(entry->iiif_key, safe_name, sizeof(safe_name));
+    sd_path_sanitize_filename(entry->iiif_key, safe_name, sizeof(safe_name));
 
     int n = snprintf(out_path, out_len, "%s/%s/%02x/%02x/%02x/%s%s",
                      base, museum_id,

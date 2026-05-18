@@ -735,7 +735,7 @@ esp_err_t art_institution_rijks_resolve_entry(institution_channel_entry_t *entry
         entry->extension = 3;
         entry->resolve_fails = 0;
         result = ESP_OK;
-        ESP_LOGI(TAG, "Resolved Rijks HMO -> micrio id %s", micrio_id);
+        ESP_LOGD(TAG, "Resolved Rijks HMO -> micrio id %s", micrio_id);
     } else {
         ESP_LOGW(TAG, "No micrio access_point found in Linked Art chain for %.60s",
                  entry->iiif_key);

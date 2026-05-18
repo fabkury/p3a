@@ -1025,6 +1025,14 @@ function onPinClick() {
         return;
     }
 
+    /* On a pin-list channel, unpinning deletes the cached artwork file on
+       the device — and since the artwork is still on screen, the user is
+       likely to try re-pinning it (which would be blocked above with only
+       a toast). Confirm up front so the destructive step is deliberate. */
+    if (doUnpin && body.list) {
+        if (!confirm('Unpin this artwork? The artwork file will be deleted from the device and this cannot be undone — the same artwork cannot be re-pinned afterwards.')) return;
+    }
+
     pinBtnActive = !wasActive;
     btn.classList.toggle('active', pinBtnActive);
     playReactionPulse(btn);

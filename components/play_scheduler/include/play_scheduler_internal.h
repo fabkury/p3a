@@ -97,7 +97,21 @@ typedef struct {
     // Command gating
     SemaphoreHandle_t mutex;
     bool command_active;
-    bool playback_triggered;  // prevents multiple swap triggers per playset execution
+    // Tracks whether THE initial swap for the current playset has been
+    // emitted yet. The download manager used to maintain a parallel
+    // `s_playback_initiated` for this same purpose, racing with the LAi
+    // 0→1 trigger here; that flag was removed (S2). first_swap_emitted is
+    // now the single source of truth, set only inside the mutex-protected
+    // LAi zero-to-one path and inside execute-playset (when an immediately
+    // playable channel exists), and reset only at playset teardown.
+    //
+    // Invariant (S5): at the moment first_swap_emitted is set true, at
+    // least one channel must have a downloaded artwork (Σ available_count
+    // > 0). Eviction may legitimately drop the total back to zero later;
+    // the invariant only constrains the set-time, not lifetime steady
+    // state. ps_assert_first_swap_invariant() in play_scheduler_lai.c
+    // logs ESP_LOGE if a code path ever violates it.
+    bool first_swap_emitted;
     bool initialized;
 
     // One-shot fail-mode override consumed by prepare_and_request_swap(): set
@@ -116,6 +130,24 @@ typedef struct {
  * @brief Get pointer to global scheduler state
  */
 ps_state_t *ps_get_state(void);
+
+/**
+ * @brief Verify the first_swap_emitted invariant after a successful trigger
+ *
+ * Called at each of the four set-sites for `state->first_swap_emitted`
+ * (LAi zero-to-one, execute-playset, async-refresh-complete, sync-
+ * refresh-complete). Logs ESP_LOGE if total_available is zero when the
+ * flag transitions to true. Defense-in-depth (S5): the gating checks at
+ * each call site already enforce the invariant, this is a tripwire for
+ * future refactors.
+ *
+ * Caller MUST hold state->mutex.
+ *
+ * @param state  Scheduler state (must be non-NULL).
+ * @param origin Short string identifying the call site (e.g. "lai_zto",
+ *               "execute_playset"). Included in the error log.
+ */
+void ps_assert_first_swap_invariant(ps_state_t *state, const char *origin);
 
 // ============================================================================
 // Buffer Operations (play_scheduler_buffers.c)

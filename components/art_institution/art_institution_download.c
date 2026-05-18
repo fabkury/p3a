@@ -15,6 +15,7 @@
 
 #include "art_institution.h"
 #include "art_institution_internal.h"
+#include "download_manager.h"  // download_manager_is_canceled (S1 cooperative cancel)
 #include "p3a_limits.h"
 #include "sd_path.h"
 #include "sdio_bus.h"
@@ -245,6 +246,11 @@ esp_err_t art_institution_download_to_path(const char *museum_id,
 
                 if (!makapix_channel_is_sd_available()) {
                     ESP_LOGI(TAG, "Aborting download of %s: SD exported to USB", current_url);
+                    fatal_err = ESP_ERR_INVALID_STATE;
+                    break;
+                }
+                if (download_manager_is_canceled()) {
+                    ESP_LOGI(TAG, "Aborting download of %s: playset switched", current_url);
                     fatal_err = ESP_ERR_INVALID_STATE;
                     break;
                 }

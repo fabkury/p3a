@@ -16,6 +16,7 @@
 #include "sd_path.h"
 #include "sdio_bus.h"
 #include "makapix_channel_events.h"
+#include "download_manager.h"  // download_manager_is_canceled (S1 cooperative cancel)
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_log.h"
@@ -350,6 +351,11 @@ esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t ext
 
             if (!makapix_channel_is_sd_available()) {
                 ESP_LOGI(TAG, "Aborting download of %s: SD card exported to USB host", giphy_id);
+                fatal_err = ESP_ERR_INVALID_STATE;
+                break;
+            }
+            if (download_manager_is_canceled()) {
+                ESP_LOGI(TAG, "Aborting download of %s: playset switched", giphy_id);
                 fatal_err = ESP_ERR_INVALID_STATE;
                 break;
             }

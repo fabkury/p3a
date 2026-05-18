@@ -136,6 +136,41 @@ static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
 }
 
 // ============================================================================
+// Defense-in-depth invariant check (S5)
+// ============================================================================
+
+/**
+ * @brief Verify the first_swap_emitted invariant after a successful trigger
+ *
+ * Documented contract: at the moment first_swap_emitted is set true, at
+ * least one channel must have a downloaded artwork (Σ available_count > 0).
+ * This is normally guaranteed by the four call-site gates (LAi zero-to-one,
+ * execute-playset with has_lai_entries, async-refresh-complete with
+ * ch->active, sync-refresh-complete with ch->active). A regression in any
+ * of those would silently start the player against an empty LAi.
+ *
+ * Caller MUST hold s_state->mutex.
+ *
+ * Cost is a single integer sum over channel_count (≤ PS_MAX_CHANNELS),
+ * so safe to run on every set-site.
+ */
+void ps_assert_first_swap_invariant(ps_state_t *state, const char *origin)
+{
+    if (!state) return;
+    size_t total = 0;
+    for (size_t i = 0; i < state->channel_count; i++) {
+        ps_channel_state_t *c = &state->channels[i];
+        total += (c->cache ? c->cache->available_count : c->available_count);
+    }
+    if (total == 0) {
+        ESP_LOGE(TAG, "INVARIANT VIOLATED at %s: first_swap_emitted=true but "
+                      "total_available=0 (channel_count=%zu). This will leave "
+                      "the player with no artwork to swap to.",
+                 origin ? origin : "(unknown)", state->channel_count);
+    }
+}
+
+// ============================================================================
 // Download Completion Callback
 // ============================================================================
 
@@ -197,9 +232,10 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
                  prev_channel_available, new_channel_available, ci_count);
 
         // Check for zero-to-one transition
-        if (prev_total_available == 0 && new_channel_available > 0 && !s_state->playback_triggered) {
+        if (prev_total_available == 0 && new_channel_available > 0 && !s_state->first_swap_emitted) {
             ESP_LOGI(TAG, "Zero-to-one transition - triggering playback");
-            s_state->playback_triggered = true;
+            s_state->first_swap_emitted = true;
+            ps_assert_first_swap_invariant(s_state, "lai_zero_to_one");
             xSemaphoreGive(s_state->mutex);
 
             // Trigger playback via event bus to avoid race condition

@@ -619,7 +619,7 @@ static void refresh_task(void *arg)
                     // Track if we should trigger playback (once, after the loop)
                     // Only trigger if channel is active (has locally-available artworks),
                     // not just index entries. Matches the sync path check at line 788.
-                    if (ch->active && entry_count > 0 && !state->playback_triggered) {
+                    if (ch->active && entry_count > 0 && !state->first_swap_emitted) {
                         should_trigger = true;
                     }
                 }
@@ -648,7 +648,10 @@ static void refresh_task(void *arg)
                 // clear it after the buffer swap completes for seamless transition.
                 // (Same pattern as the sync path at lines 799-801.)
                 if (play_scheduler_next(NULL) == ESP_OK) {
-                    state->playback_triggered = true;
+                    xSemaphoreTake(state->mutex, portMAX_DELAY);
+                    state->first_swap_emitted = true;
+                    ps_assert_first_swap_invariant(state, "async_refresh_complete");
+                    xSemaphoreGive(state->mutex);
                 }
             }
         }
@@ -1108,7 +1111,7 @@ static void refresh_task(void *arg)
         }
 
         // Check if we should trigger playback after refresh
-        bool should_trigger_playback = (err == ESP_OK && sync_entry_count > 0 && ch->active && !state->playback_triggered);
+        bool should_trigger_playback = (err == ESP_OK && sync_entry_count > 0 && ch->active && !state->first_swap_emitted);
         bool is_artwork_channel = (type == PS_CHANNEL_TYPE_ARTWORK);
         // SD card channel that refreshed cleanly but found no artworks: the
         // initial "Loading channel..." message will sit forever otherwise,
@@ -1147,7 +1150,10 @@ static void refresh_task(void *arg)
 
             // Trigger playback
             if (play_scheduler_next(NULL) == ESP_OK) {
-                state->playback_triggered = true;
+                xSemaphoreTake(state->mutex, portMAX_DELAY);
+                state->first_swap_emitted = true;
+                ps_assert_first_swap_invariant(state, "sync_refresh_complete");
+                xSemaphoreGive(state->mutex);
             }
         }
 

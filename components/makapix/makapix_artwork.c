@@ -11,6 +11,7 @@
 #include "sd_path.h"
 #include "sdio_bus.h"
 #include "makapix_channel_events.h"
+#include "download_manager.h"  // download_manager_is_canceled (S1 cooperative cancel)
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_crt_bundle.h"
@@ -356,6 +357,14 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
 
         if (!makapix_channel_is_sd_available()) {
             ESP_LOGI(TAG, "Aborting download of %s: SD card exported to USB host", storage_key);
+            sd_aborted = true;
+            break;
+        }
+        if (download_manager_is_canceled()) {
+            ESP_LOGI(TAG, "Aborting download of %s: playset switched", storage_key);
+            // Reuses the sd_aborted teardown branch — both unlink the temp
+            // file and return ESP_ERR_INVALID_STATE, which the download task
+            // distinguishes via download_manager_is_canceled().
             sd_aborted = true;
             break;
         }

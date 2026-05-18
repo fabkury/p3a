@@ -98,8 +98,26 @@ static SemaphoreHandle_t s_mutex = NULL;
 // Current download state
 static char s_active_channel[64] = {0};
 static bool s_busy = false;
-static bool s_playback_initiated = false;  // Track if we've started playback
 static bool s_all_downloaded_logged = false;  // Suppress repeated "All files downloaded" logs
+
+// S2: the download manager used to maintain a parallel "playback_initiated"
+// flag that gated its own play_scheduler_next() trigger when the first file
+// landed. That created a race with the LAi 0→1 trigger in
+// play_scheduler_lai.c (both fired on the same event from different tasks,
+// with separate flags that didn't see each other — see the analysis in
+// docs/observability/multi-swap-race.md). The flag and both Path B triggers
+// were removed. Initial playback is now driven exclusively by
+// play_scheduler_on_download_complete → ps_lai_add zero-to-one check.
+
+// Cooperative cancellation flag (S1). Set by download_manager_set_channels
+// when the in-flight download's channel is no longer in the active set;
+// polled by each chunked downloader between read iterations; cleared at
+// the start of each new download attempt in the download task. Single-byte
+// writes are atomic on ESP32, so volatile is sufficient — no mutex needed
+// on the read path (the downloader is the only reader and the only place
+// that observes a stale "true" would just bail out one chunk later, which
+// is harmless).
+static volatile bool s_dl_cancel_requested = false;
 
 // PSRAM-backed static task stack for reduced internal RAM usage
 static StackType_t *s_download_stack = NULL;
@@ -499,11 +517,11 @@ static char s_task_display_name[64];  // For UI display name
 static void dl_progress_cb(size_t bytes_read, size_t content_length, void *ctx)
 {
     // The progress callback is registered when a download starts during fresh
-    // start (!s_playback_initiated && !animation_player_is_animation_ready()).
-    // However, playback may have been initiated by an external trigger (e.g.,
-    // LAi zero-to-one transition, or provisioning exit) while this download is
-    // still running. Re-check dynamically to avoid overriding the display.
-    if (s_playback_initiated || animation_player_is_animation_ready()) return;
+    // start (!animation_player_is_animation_ready()). Playback may begin
+    // mid-download (LAi zero-to-one transition triggers a swap), so we
+    // re-check dynamically here and suppress further progress updates once
+    // an animation is on screen.
+    if (animation_player_is_animation_ready()) return;
 
     const char *name = (const char *)ctx;
     int pct = (content_length > 0) ? (int)((bytes_read * 100) / content_length) : -1;
@@ -602,6 +620,13 @@ static void download_task(void *arg)
         // for non-institution channels.
         art_institution_resolve_pending();
 
+        // Clear any leftover cancel flag from a prior iteration. If
+        // download_manager_set_channels set it while the previous
+        // download was returning, the in-flight downloader has already
+        // bailed by the time we get here; the next download we're about
+        // to start belongs to the new channel set and must run.
+        s_dl_cancel_requested = false;
+
         // Get next file to download using own round-robin logic
         // Take a snapshot of channel state under mutex to avoid race conditions
         // Note: Using static buffers (s_dl_req, s_dl_snapshot) to reduce stack usage
@@ -653,27 +678,20 @@ static void download_task(void *arg)
 
         // Check if file already exists (e.g., from a previous session, or just
         // merged into Ci by a refresh while the file was already on disk).
-        // Treat this the same as a successful download - update LAi and signal availability.
+        // Treat this the same as a successful download — update LAi via the
+        // play scheduler (which fires the zero-to-one transition if this is
+        // the first available artwork) and continue to the next entry.
         if (file_exists(s_dl_req.filepath)) {
             ESP_LOGI(TAG, "File already exists, updating LAi: %s", s_dl_req.storage_key);
             s_all_downloaded_logged = false;
 
-            // Update LAi via play_scheduler (same as successful download)
+            // play_scheduler_on_download_complete -> ps_lai_add does the
+            // zero-to-one playback trigger; the download manager no longer
+            // calls play_scheduler_next() directly here (S2).
             play_scheduler_on_download_complete(s_dl_req.channel_id, s_dl_req.post_id);
 
             // Signal that a file is available (wakes tasks waiting for first playable file)
             makapix_channel_signal_file_available();
-
-            // Check if we should trigger initial playback (same logic as successful download)
-            if (!animation_player_is_animation_ready() && !s_playback_initiated) {
-                esp_err_t swap_err = play_scheduler_next(NULL);
-                if (swap_err == ESP_OK) {
-                    ESP_LOGI(TAG, "Existing file found - triggered playback via play_scheduler");
-                    s_playback_initiated = true;
-                    // Don't clear the channel message here - the animation player
-                    // will clear it after the buffer swap completes (seamless transition)
-                }
-            }
 
             vTaskDelay(pdMS_TO_TICKS(10));  // Brief delay, then check next file
             continue;
@@ -693,16 +711,11 @@ static void download_task(void *arg)
         s_all_downloaded_logged = false;
         set_busy(true, s_dl_req.channel_id);
 
-        // Self-correct: if playback was triggered externally (e.g., LAi
-        // zero-to-one transition via event bus), detect it now so we don't
-        // show download progress after exiting provisioning/OTA modes.
-        if (!s_playback_initiated && animation_player_is_animation_ready()) {
-            s_playback_initiated = true;
-        }
-
-        // Update UI message during fresh start (no animation playing yet)
-        // Show download progress immediately, even if refresh is still running
-        if (!s_playback_initiated && !animation_player_is_animation_ready()) {
+        // Update UI message while no animation is on screen yet. Once the
+        // animation player has decoded and swapped to a buffer, it clears
+        // this message itself, so the predicate naturally narrows after
+        // the first successful playback.
+        if (!animation_player_is_animation_ready()) {
             // Get display name from channel_id in the request (using static buffer)
             dl_get_display_name(s_dl_req.channel_id, s_task_display_name, sizeof(s_task_display_name));
             p3a_render_set_channel_message(s_task_display_name, 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, 0, "Downloading artwork...");
@@ -717,7 +730,7 @@ static void download_task(void *arg)
             uint8_t ext = 0;  // default webp
             size_t flen = strlen(s_dl_req.filepath);
             if (flen >= 4 && strcmp(s_dl_req.filepath + flen - 4, ".gif") == 0) ext = 1;
-            if (!s_playback_initiated && !animation_player_is_animation_ready()) {
+            if (!animation_player_is_animation_ready()) {
                 err = giphy_download_artwork_with_progress(s_dl_req.storage_key, ext,
                           s_task_out_path, sizeof(s_task_out_path),
                           dl_progress_cb, s_task_display_name);
@@ -753,25 +766,26 @@ static void download_task(void *arg)
             makapix_channel_signal_downloads_needed();
             makapix_channel_signal_file_available();  // Wake tasks waiting for first file
 
-            // Check if we should trigger initial playback (first file downloaded during boot)
-            if (!animation_player_is_animation_ready() && !s_playback_initiated) {
-                // No animation playing yet - try to start playback via play_scheduler
-                esp_err_t swap_err = play_scheduler_next(NULL);
-                if (swap_err == ESP_OK) {
-                    ESP_LOGI(TAG, "First download complete - triggered playback via play_scheduler");
-                    s_playback_initiated = true;  // Mark that we've initiated playback
-                    // Don't clear the channel message here - the animation player
-                    // will clear it after the buffer swap completes (seamless transition)
-                } else {
-                    ESP_LOGD(TAG, "play_scheduler_next after download returned: %s", esp_err_to_name(swap_err));
-                }
-            }
+            // S2: removed the redundant play_scheduler_next(NULL) call that
+            // used to live here. play_scheduler_on_download_complete above
+            // already drives the LAi zero-to-one transition (which emits
+            // P3A_EVENT_SWAP_NEXT through the event bus), so the download
+            // manager no longer needs its own playback-initiated flag.
         } else if (err == ESP_ERR_INVALID_STATE) {
-            // Transient: the downloader aborted mid-stream because SD got
-            // exported to USB MSC. No 404 marker, no eviction, no .tmp left
-            // behind (downloader cleaned up). Next loop iteration will block
-            // in wait_for_sd until the host releases the card and then retry.
-            ESP_LOGI(TAG, "Download deferred (SD exported to USB): %s", s_dl_req.storage_key);
+            // ESP_ERR_INVALID_STATE has two cooperative-abort causes that share
+            // the same handling: no 404 marker, no eviction, no .tmp left
+            // behind. The next loop iteration will pick up wherever the new
+            // state demands.
+            //   (a) SD card got exported to USB MSC mid-stream.
+            //   (b) Playset switched and our channel is no longer active
+            //       (cooperative cancel via s_dl_cancel_requested).
+            // We disambiguate by reading the cancel flag (read-only here; the
+            // top-of-loop clear happens on the NEXT iteration).
+            if (s_dl_cancel_requested) {
+                ESP_LOGI(TAG, "Download canceled (playset switch): %s", s_dl_req.storage_key);
+            } else {
+                ESP_LOGI(TAG, "Download deferred (SD exported to USB): %s", s_dl_req.storage_key);
+            }
             makapix_channel_signal_downloads_needed();
         } else {
             // Record failure with error classification for backoff
@@ -807,8 +821,6 @@ esp_err_t download_manager_init(void)
     if (!s_mutex) {
         return ESP_ERR_NO_MEM;
     }
-
-    s_playback_initiated = false;
 
     const size_t stack_size = 81920;
 
@@ -931,6 +943,8 @@ bool download_manager_get_active_channel(char *out_channel_id, size_t max_len)
 
 void download_manager_set_channels(const char **channel_ids, size_t count)
 {
+    bool cancel_in_flight = false;
+
     if (s_mutex && xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         if (count > DL_MAX_CHANNELS) {
             ESP_LOGW(TAG, "Channel count %zu exceeds DL_MAX_CHANNELS (%d), truncated",
@@ -948,13 +962,43 @@ void download_manager_set_channels(const char **channel_ids, size_t count)
             s_dl_channels[i].channel_complete = false;
         }
 
+        // S1: if a download is in flight for a channel that's no longer in
+        // the new set, request that it bail. Each downloader polls the
+        // cancel flag between chunks and returns ESP_ERR_INVALID_STATE.
+        // Without this, a multi-MB Giphy GIF download on the OLD playset
+        // would block the user's freshly-picked playset for up to one full
+        // transfer.
+        if (s_busy && s_active_channel[0] != '\0') {
+            bool still_active = false;
+            for (size_t i = 0; i < s_dl_channel_count; i++) {
+                if (strcmp(s_dl_channels[i].channel_id, s_active_channel) == 0) {
+                    still_active = true;
+                    break;
+                }
+            }
+            if (!still_active) {
+                cancel_in_flight = true;
+            }
+        }
+
         s_all_downloaded_logged = false;
-        ESP_LOGI(TAG, "Configured %zu channel(s) for download", s_dl_channel_count);
+        ESP_LOGI(TAG, "Configured %zu channel(s) for download%s",
+                 s_dl_channel_count,
+                 cancel_in_flight ? " (cancelling in-flight download of dropped channel)" : "");
         xSemaphoreGive(s_mutex);
+    }
+
+    if (cancel_in_flight) {
+        s_dl_cancel_requested = true;
     }
 
     // Signal that we should check for downloads
     makapix_channel_signal_downloads_needed();
+}
+
+bool download_manager_is_canceled(void)
+{
+    return s_dl_cancel_requested;
 }
 
 void download_manager_reset_cursors(void)
@@ -971,16 +1015,5 @@ void download_manager_reset_cursors(void)
         s_all_downloaded_logged = false;
         ESP_LOGI(TAG, "Reset download cursors");
         xSemaphoreGive(s_mutex);
-    }
-}
-
-void download_manager_reset_playback_initiated(void)
-{
-    if (s_mutex && xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        s_playback_initiated = false;
-        ESP_LOGD(TAG, "Reset playback_initiated flag");
-        xSemaphoreGive(s_mutex);
-    } else {
-        s_playback_initiated = false;
     }
 }

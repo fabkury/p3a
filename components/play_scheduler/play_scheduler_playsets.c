@@ -15,6 +15,7 @@
 
 #include "play_scheduler.h"
 #include "play_scheduler_internal.h"
+#include "playset_json.h"        // playset_channel_type_str (S4.1)
 #include "channel_cache.h"
 #include "channel_metadata.h"
 #include "view_tracker.h"
@@ -372,8 +373,14 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
 
     ps_touch_cache_file(ch->channel_id, ch->type);
 
-    ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries, %zu available (makapix format)",
-             ch->display_name, ch->cache->entry_count, ch->cache->available_count);
+    // ps_load_makapix_cache is also used by Giphy and institution channels
+    // (the shared 64-byte channel_cache slot fits all three). The log used
+    // to hard-code "(makapix format)" which was wrong for the other types.
+    // Use the channel's actual type string so the log isn't misleading.
+    // S4.1.
+    ESP_LOGI(TAG, "Channel '%s': loaded cache with %zu entries, %zu available (%s format)",
+             ch->display_name, ch->cache->entry_count, ch->cache->available_count,
+             playset_channel_type_str(ch->type));
 
     return ESP_OK;
 }
@@ -635,20 +642,29 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset)
     }
     content_cache_set_channels(channel_ids, playset->channel_count);
 
-    // Reset playback_initiated so cache can trigger playback for new channel
-    content_cache_reset_playback_initiated();
+    // S2: download manager no longer maintains its own playback-initiated
+    // flag — the single source of truth is ps_state.first_swap_emitted,
+    // which we reset below alongside the rest of the playset state.
 
-    // Check if any channel has entries we can play immediately
-    bool has_entries = false;
+    // Two-level readiness check. has_lai_entries means we can play
+    // something right now (LAi > 0 on at least one active channel).
+    // has_ci_entries means the channel index is populated (refresh has
+    // run) but downloads haven't materialized files yet. The two cases
+    // produce different "Loading channel…" copy on screen and different
+    // log lines so debugging is precise (S4.2).
+    bool has_lai_entries = false;
+    bool has_ci_entries  = false;
     char first_channel_display_name[64] = "Channel";
     for (size_t i = 0; i < s_state->channel_count; i++) {
         ps_channel_state_t *ch = &s_state->channels[i];
         size_t entry_count = (ch->cache ? ch->cache->entry_count : ch->entry_count);
+        if (entry_count > 0) has_ci_entries = true;
         if (ch->active && entry_count > 0) {
-            has_entries = true;
+            has_lai_entries = true;
             break;
         }
     }
+    bool has_entries = has_lai_entries;  // existing name preserved below
     // Get first channel's display name for UI
     if (s_state->channel_count > 0) {
         ps_channel_state_t *ch0 = &s_state->channels[0];
@@ -656,7 +672,12 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset)
                                       first_channel_display_name, sizeof(first_channel_display_name));
     }
 
-    s_state->playback_triggered = false;
+    // Reset the first-swap flag at the single teardown point — the new
+    // playset starts with no swap emitted yet, regardless of what the old
+    // playset had done. All other touch-points (LAi 0→1, refresh-complete,
+    // immediate execute below) only set the flag to true; only this point
+    // clears it. Audited as part of S3.
+    s_state->first_swap_emitted = false;
 
     xSemaphoreGive(s_state->mutex);
 
@@ -677,18 +698,32 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset)
     // Otherwise, let download manager trigger it when first file is available
     if (has_entries) {
         esp_err_t next_err = play_scheduler_next(NULL);
-        s_state->playback_triggered = true;
+        // Set the flag and run the invariant check under the mutex so the
+        // check sees a coherent total_available. The existing single-byte
+        // write outside the mutex was racy with concurrent reads (low
+        // observed harm but the new check would amplify any race), so we
+        // tighten that here too.
+        xSemaphoreTake(s_state->mutex, portMAX_DELAY);
+        s_state->first_swap_emitted = true;
+        ps_assert_first_swap_invariant(s_state, "execute_playset");
+        xSemaphoreGive(s_state->mutex);
         return next_err;
     } else {
-        // Distinguish "empty pinned list" (terminal — nothing will load) from
-        // "remote channel not yet fetched" (transient — loading message).
+        // Distinguish "empty pinned list" (terminal — nothing will load),
+        // "channel index populated but no files downloaded yet" (downloads
+        // pending), and "channel index also empty" (cold start, awaiting
+        // refresh). The on-screen UI message branches the same way below
+        // so the user sees a precise state instead of a generic spinner.
+        // S4.2.
         bool pinned_empty = (s_state->channel_count == 1 &&
                              s_state->channels[0].type == PS_CHANNEL_TYPE_PINNED);
 
         if (pinned_empty) {
             ESP_LOGI(TAG, "Pinned channel is empty - showing empty-state message");
+        } else if (has_ci_entries) {
+            ESP_LOGI(TAG, "Channel index populated but no files downloaded yet - waiting for downloads");
         } else {
-            ESP_LOGI(TAG, "No cached entries yet - waiting for refresh/download");
+            ESP_LOGI(TAG, "No cached entries yet - waiting for refresh");
         }
 
         // Clear "currently playing" state so the web UI's /playsets/active
@@ -715,10 +750,15 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset)
                                             "No artworks pinned to this list.\n"
                                             "Add pins to see them here.");
         } else if (p3a_state_has_wifi()) {
-            // Show loading state to user while waiting for refresh/download
-            // But only if we have WiFi connectivity (no point showing loading in AP mode)
+            // Show loading state to user while waiting for refresh/download.
+            // Only when WiFi is up — no point showing this in AP/setup mode.
+            // S4.2: the message body distinguishes "downloads pending" from
+            // "refresh pending" so the user understands what's actually slow.
+            const char *detail = has_ci_entries
+                ? "Downloading artworks..."
+                : "Loading channel...";
             p3a_render_set_channel_message(first_channel_display_name, 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
-                                            "Loading channel...");
+                                            detail);
         }
         return ESP_OK;
     }

@@ -136,12 +136,20 @@ void download_manager_set_channels(const char **channel_ids, size_t count);
 void download_manager_reset_cursors(void);
 
 /**
- * @brief Reset the playback_initiated flag
+ * @brief Check whether the in-flight download should bail out
  *
- * Called when changing channels to allow the download manager to trigger
- * initial playback when the first file becomes available for the new channel.
+ * Set by `download_manager_set_channels` when the active playset changes
+ * and the currently-busy channel is no longer in the new channel set.
+ * The actual abort happens cooperatively: each downloader polls this
+ * between chunks and returns `ESP_ERR_INVALID_STATE` when true (same
+ * sentinel the USB-MSC export path uses).
+ *
+ * Thread-safe to call from any task. Cleared by the download task at
+ * the start of each download iteration.
+ *
+ * @return true if the download task should abandon the current download.
  */
-void download_manager_reset_playback_initiated(void);
+bool download_manager_is_canceled(void);
 
 #ifdef __cplusplus
 }

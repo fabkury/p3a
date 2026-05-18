@@ -39,11 +39,6 @@ void content_cache_reset_cursors(void)
     download_manager_reset_cursors();
 }
 
-void content_cache_reset_playback_initiated(void)
-{
-    download_manager_reset_playback_initiated();
-}
-
 void content_cache_rescan(void)
 {
     download_manager_rescan();

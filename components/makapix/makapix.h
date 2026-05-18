@@ -158,8 +158,7 @@ esp_err_t makapix_switch_to_channel(const char *channel, const char *identifier,
  * @param storage_key Storage key UUID
  * @param art_url Artwork URL
  * @param title Optional post title for WebUI display (NULL or "" → no title).
- *              Caller must have already truncated to
- *              P3A_ACTIVE_ARTWORK_TITLE_MAX bytes.
+ *              Caller must have already truncated to PS_ARTWORK_TITLE_MAX bytes.
  * @return ESP_OK on success, error code otherwise
  */
 esp_err_t makapix_show_artwork(int32_t post_id,

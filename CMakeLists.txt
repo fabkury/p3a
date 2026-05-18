@@ -19,7 +19,7 @@ set(PROJECT_VER "0.10.1")
 # =============================================================================
 # Web UI version uses X.Y format (not X.Y.Z). Updates are independent of
 # firmware updates and are checked/installed automatically during OTA checks.
-set(WEBUI_VERSION "2.4")
+set(WEBUI_VERSION "2.5")
 # =============================================================================
 
 # =============================================================================
@@ -27,7 +27,7 @@ set(WEBUI_VERSION "2.4")
 # =============================================================================
 # Bump ONLY when making breaking changes to HTTP API endpoints.
 # New firmware MUST remain backwards-compatible with old Web UI at same api_version.
-set(P3A_API_VERSION 3)
+set(P3A_API_VERSION 4)
 # =============================================================================
 
 # =============================================================================

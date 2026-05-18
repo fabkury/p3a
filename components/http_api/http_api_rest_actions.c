@@ -116,27 +116,49 @@ esp_err_t h_post_channel(httpd_req_t *req) {
  * @deprecated Use GET /playsets/active instead. This endpoint will be removed in a future version.
  */
 esp_err_t h_get_channel(httpd_req_t *req) {
-    // Get the active playset name (primary source of truth)
-    const char *playset = p3a_state_get_active_playset();
-
-    // Map playset to channel_name for backwards compatibility
+    /* Deprecated. Derives the "playset" and "channel_name" strings from the
+       structured active playset for any 3rd-party consumers still polling
+       this endpoint. The fields are best-effort — only single-channel
+       built-ins get a stable string; everything else returns ""/"other". */
+    const char *playset = "";
     const char *channel_name = "other";
-    if (playset && playset[0] != '\0') {
-        if (strcmp(playset, "channel_recent") == 0) {
-            channel_name = "all";
-        } else if (strcmp(playset, "channel_promoted") == 0) {
-            channel_name = "promoted";
-        } else if (strcmp(playset, "channel_sdcard") == 0) {
-            channel_name = "sdcard";
-        } else if (strcmp(playset, "followed_artists") == 0) {
-            channel_name = "followed_artists";
-        } else if (strcmp(playset, "giphy_trending") == 0) {
-            channel_name = "giphy_trending";
+    ps_playset_t *active = calloc(1, sizeof(ps_playset_t));
+
+    if (active && play_scheduler_get_active_playset(active) == ESP_OK) {
+        /* Prefer the playset's stored name (user-saved / followed_artists). */
+        if (active->name[0] != '\0') {
+            playset = active->name;
+            if (strcmp(active->name, "followed_artists") == 0) channel_name = "followed_artists";
+        }
+        if (active->channel_count == 1) {
+            const ps_channel_spec_t *ch = &active->channels[0];
+            switch (ch->type) {
+                case PS_CHANNEL_TYPE_NAMED:
+                    if (strcmp(ch->name, "all") == 0) {
+                        if (!*playset) playset = "channel_recent";
+                        channel_name = "all";
+                    } else if (strcmp(ch->name, "promoted") == 0) {
+                        if (!*playset) playset = "channel_promoted";
+                        channel_name = "promoted";
+                    }
+                    break;
+                case PS_CHANNEL_TYPE_SDCARD:
+                    if (!*playset) playset = "channel_sdcard";
+                    channel_name = "sdcard";
+                    break;
+                case PS_CHANNEL_TYPE_GIPHY:
+                    if (!*playset) playset = "giphy_trending";
+                    channel_name = "giphy_trending";
+                    break;
+                default:
+                    break;
+            }
         }
     }
 
     cJSON *root = cJSON_CreateObject();
     if (!root) {
+        free(active);
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
@@ -145,16 +167,16 @@ esp_err_t h_get_channel(httpd_req_t *req) {
 
     cJSON *data = cJSON_CreateObject();
     if (!data) {
+        free(active);
         cJSON_Delete(root);
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
 
-    // Primary: playset name
-    cJSON_AddStringToObject(data, "playset", playset ? playset : "");
-    // Backwards compatibility: channel_name
+    cJSON_AddStringToObject(data, "playset", playset);
     cJSON_AddStringToObject(data, "channel_name", channel_name);
     cJSON_AddItemToObject(root, "data", data);
+    free(active);
 
     char *out = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);

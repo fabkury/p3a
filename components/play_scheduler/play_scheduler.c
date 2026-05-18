@@ -417,6 +417,12 @@ void play_scheduler_deinit(void)
         s_state.history = NULL;
     }
 
+    // Free the active-playset snapshot buffer
+    if (s_state.active_playset) {
+        free(s_state.active_playset);
+        s_state.active_playset = NULL;
+    }
+
     s_state.initialized = false;
 
     if (s_state.mutex) {
@@ -624,6 +630,36 @@ esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats)
     xSemaphoreGive(s_state.mutex);
 
     return ESP_OK;
+}
+
+esp_err_t play_scheduler_get_active_playset(ps_playset_t *out_playset)
+{
+    if (!out_playset) return ESP_ERR_INVALID_ARG;
+    if (!s_state.initialized) return ESP_ERR_INVALID_STATE;
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    if (!s_state.active_playset) {
+        xSemaphoreGive(s_state.mutex);
+        return ESP_ERR_NOT_FOUND;
+    }
+    *out_playset = *s_state.active_playset;
+    xSemaphoreGive(s_state.mutex);
+    return ESP_OK;
+}
+
+void play_scheduler_get_active_artwork_title(char *out_title, size_t len)
+{
+    if (!out_title || len == 0) return;
+    out_title[0] = '\0';
+    if (!s_state.initialized) return;
+
+    xSemaphoreTake(s_state.mutex, portMAX_DELAY);
+    const ps_playset_t *ap = s_state.active_playset;
+    if (ap && ap->channel_count == 1 &&
+        ap->channels[0].type == PS_CHANNEL_TYPE_ARTWORK) {
+        strlcpy(out_title, ap->channels[0].artwork.title, len);
+    }
+    xSemaphoreGive(s_state.mutex);
 }
 
 esp_err_t play_scheduler_get_channel_details(

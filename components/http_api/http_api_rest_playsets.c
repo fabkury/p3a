@@ -332,11 +332,11 @@ esp_err_t h_post_playset(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Persist playset name to NVS for boot restore
-    esp_err_t persist_err = p3a_state_set_active_playset(name);
-    if (persist_err != ESP_OK) {
-        ESP_LOGW("http_api", "Failed to persist playset name: %s", esp_err_to_name(persist_err));
-    }
+    // Boot-restore persistence is handled inside play_scheduler_execute_playset(),
+    // which writes /sdcard/p3a/active_playset.bin via the active_playset_store
+    // module. The playset's `name` field is preserved in the snapshot for
+    // multi-channel playsets (followed_artists, user-saved) so the WebUI pill
+    // bar can match by name; single-channel playsets identify by structure.
 
     // Build response
     cJSON *root = cJSON_CreateObject();
@@ -389,8 +389,6 @@ esp_err_t h_post_playset(httpd_req_t *req)
  */
 esp_err_t h_get_active_playset(httpd_req_t *req)
 {
-    const char *playset = p3a_state_get_active_playset();
-
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
@@ -400,17 +398,17 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     cJSON_AddBoolToObject(root, "ok", true);
 
     cJSON *data = cJSON_AddObjectToObject(root, "data");
-    cJSON_AddStringToObject(data, "name", playset ? playset : "");
 
-    // Surface the post title for show_artwork sessions so the WebUI can use
-    // it as the playset display name. Field is only emitted when the artwork
-    // sentinel is active and a title was actually carried in the MQTT
-    // payload — absence implies "fall back to the hardcoded default label".
-    if (playset && strcmp(playset, P3A_PLAYSET_NAME_ARTWORK) == 0) {
-        const char *aw_title = p3a_state_get_active_artwork_title();
-        if (aw_title && aw_title[0] != '\0') {
-            cJSON_AddStringToObject(data, "active_artwork_title", aw_title);
+    /* Emit the structured active playset (channels, types, artwork sub-struct
+       for ARTWORK channels). Absent when nothing has been executed yet. The
+       WebUI derives pill matching and now-playing labels from this object. */
+    {
+        ps_playset_t *active = calloc(1, sizeof(ps_playset_t));
+        if (active && play_scheduler_get_active_playset(active) == ESP_OK) {
+            cJSON *ap = playset_json_serialize(active);
+            if (ap) cJSON_AddItemToObject(data, "active_playset", ap);
         }
+        free(active);
     }
 
     cJSON_AddBoolToObject(data, "registered", makapix_store_has_player_key());
@@ -589,9 +587,9 @@ esp_err_t h_get_playset_by_name(httpd_req_t *req)
 
     bool activated = false;
     if (activate) {
+        /* execute_playset persists the snapshot internally; no extra step needed. */
         esp_err_t exec_err = play_scheduler_execute_playset(playset);
         if (exec_err == ESP_OK) {
-            p3a_state_set_active_playset(name);
             activated = true;
         }
     }
@@ -660,10 +658,10 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Protected playsets cannot be overwritten via REST API.
-    // The "__"-prefixed names are reserved sentinels for ephemeral
-    // single-source playback (see P3A_PLAYSET_NAME_ARTWORK / _LOCAL_FILE).
-    static const char *protected_playsets[] = { "followed_artists", "__artwork__", "__local__" };
+    // Protected playsets cannot be overwritten via REST API. Currently only
+    // "followed_artists" is server-managed; single-artwork and single-local-file
+    // playback no longer use reserved name sentinels.
+    static const char *protected_playsets[] = { "followed_artists" };
     for (size_t i = 0; i < sizeof(protected_playsets) / sizeof(protected_playsets[0]); i++) {
         if (strcmp(name, protected_playsets[i]) == 0) {
             send_json(req, 403, "{\"ok\":false,\"error\":\"Cannot overwrite protected playset\",\"code\":\"PROTECTED_PLAYSET\"}");
@@ -736,22 +734,24 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Activate if requested
+    // Activate if requested. execute_playset persists the snapshot.
     bool activated = false;
     if (activate) {
         esp_err_t exec_err = play_scheduler_execute_playset(playset);
         if (exec_err == ESP_OK) {
-            p3a_state_set_active_playset(name);
             activated = true;
         }
     }
 
     free(playset);
 
-    // Handle rename: delete old file if rename_from is set and different from target name
+    // Handle rename: delete the old library file if rename_from is set and
+    // different from the new name. The in-memory active-playset snapshot keeps
+    // the old name in its `name` field — if the renamed playset is currently
+    // playing, the pill-bar highlight will only update on the user's next
+    // channel switch, which is a fine cost for this corner case.
     bool renamed = false;
     if (rename_from[0] != '\0' && strcmp(rename_from, name) != 0) {
-        // Don't allow renaming from a protected playset
         bool rename_protected = false;
         for (size_t i = 0; i < sizeof(protected_playsets) / sizeof(protected_playsets[0]); i++) {
             if (strcmp(rename_from, protected_playsets[i]) == 0) {
@@ -761,11 +761,6 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
         }
         if (!rename_protected) {
             playset_store_delete(rename_from);
-            // Update active playset reference if it pointed to the old name
-            const char *active = p3a_state_get_active_playset();
-            if (active && strcmp(active, rename_from) == 0) {
-                p3a_state_set_active_playset(name);
-            }
             renamed = true;
         }
     }

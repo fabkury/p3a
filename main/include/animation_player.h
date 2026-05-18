@@ -49,6 +49,19 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
                                 size_t buffer_bytes,
                                 size_t row_stride_bytes);
 
+/**
+ * @brief Restore the active playset on boot.
+ *
+ * Loads /sdcard/p3a/active_playset.bin and executes it. On any failure
+ * (missing snapshot, corruption, execute error) falls back to a fresh
+ * channel_promoted playset. Must be called after pin_lists_init() so the
+ * PS_CHANNEL_TYPE_PINNED cache load can succeed when the saved snapshot
+ * references a pinned list.
+ *
+ * @return ESP_OK on success of either restore or fallback.
+ */
+esp_err_t animation_player_restore_boot_playset(void);
+
 esp_err_t animation_player_load_asset(const char *filepath);
 
 void animation_player_set_paused(bool paused);

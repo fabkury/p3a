@@ -29,6 +29,7 @@
 #include "makapix_store.h"
 #include "p3a_current_post.h"
 #include "play_scheduler.h"
+#include "playset_json.h"
 #include "playback_service.h"
 #include "version.h"
 #include "p3a_state.h"
@@ -189,18 +190,18 @@ esp_err_t h_get_api_init(httpd_req_t *req) {
     cJSON_AddNumberToObject(s_giphy, "cached", (double)giphy_trending_cached);
     cJSON_AddBoolToObject(stats, "registered", is_registered);
 
-    // active_playset: current channel/playset name
-    const char *playset = p3a_state_get_active_playset();
-    cJSON_AddStringToObject(data, "active_playset", playset ? playset : "");
-
-    // For show_artwork sessions, also expose the post title so the WebUI can
-    // use it as the now-playing display name on first paint (this endpoint
-    // is the page-load init payload). See /playsets/active for the same field.
-    if (playset && strcmp(playset, P3A_PLAYSET_NAME_ARTWORK) == 0) {
-        const char *aw_title = p3a_state_get_active_artwork_title();
-        if (aw_title && aw_title[0] != '\0') {
-            cJSON_AddStringToObject(data, "active_artwork_title", aw_title);
+    // active_playset: structured object describing what's currently playing.
+    // Carries the full ps_playset_t shape (channels with type/name/identifier/
+    // display_name/weight/offset and the artwork sub-struct for ARTWORK
+    // channels), so the WebUI can derive pill highlighting and now-playing
+    // metadata without auxiliary fields. Absent when nothing is playing.
+    {
+        ps_playset_t *active = calloc(1, sizeof(ps_playset_t));
+        if (active && play_scheduler_get_active_playset(active) == ESP_OK) {
+            cJSON *ap = playset_json_serialize(active);
+            if (ap) cJSON_AddItemToObject(data, "active_playset", ap);
         }
+        free(active);
     }
 
     // paused: current pause state

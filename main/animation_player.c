@@ -10,7 +10,8 @@
 #include "esp_heap_caps.h"
 #include "sd_path.h"
 #include "play_scheduler.h"
-#include "playset_store.h"
+#include "active_playset_store.h"
+#include "psram_alloc.h"
 #include "sdcard_channel_impl.h"
 #include "playlist_manager.h"
 #include "content_cache.h"
@@ -228,30 +229,11 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     free(found_animations_dir);
     found_animations_dir = NULL;
 
-    // Determine boot playset: restore from NVS or default to "channel_promoted"
-    const char *active_playset = p3a_state_get_active_playset();
-    const char *boot_channel = "promoted";  // Default display name mapping
-
-    // Map playset to boot_channel for display name purposes
-    if (active_playset && active_playset[0] != '\0') {
-        if (strcmp(active_playset, "channel_recent") == 0) {
-            boot_channel = "all";
-        } else if (strcmp(active_playset, "channel_promoted") == 0) {
-            boot_channel = "promoted";
-        } else if (strcmp(active_playset, "channel_sdcard") == 0) {
-            boot_channel = "sdcard";
-        } else if (strcmp(active_playset, "followed_artists") == 0) {
-            boot_channel = "followed";  // Display "Followed Artists"
-        } else if (strcmp(active_playset, "giphy_trending") == 0) {
-            boot_channel = "giphy";  // Display "Giphy Trending"
-        } else {
-            // Custom playset - use generic name
-            boot_channel = "channel";
-        }
-        ESP_LOGI(TAG, "Boot playset: %s (display: %s)", active_playset, boot_channel);
-    } else {
-        ESP_LOGI(TAG, "No active playset; boot channel default: %s", boot_channel);
-    }
+    // Boot-restore of the active playset is deferred to
+    // animation_player_restore_boot_playset(), called from p3a_main.c after
+    // pin_lists_init(). The boot logo (3250 ms total) covers the gap, so the
+    // user never sees a blank screen between display init and the first
+    // execute_playset() call.
 
     s_buffer_mutex = xSemaphoreCreateMutex();
     if (!s_buffer_mutex) {
@@ -298,41 +280,12 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
     (void)p3a_render_init();
     display_renderer_set_frame_callback(animation_player_render_dispatch_cb, NULL);
 
-    // Show initial loading message based on channel type
-    // Note: play_scheduler will be started after loader task, this is just the initial message
-    // Only show if we have WiFi connectivity (no point in AP mode)
-    if (p3a_state_has_wifi()) {
-        // Get display name from boot channel
-        char display_name[64];
-        if (strcmp(boot_channel, "sdcard") == 0) {
-            snprintf(display_name, sizeof(display_name), "microSD Card");
-        } else if (strcmp(boot_channel, "all") == 0) {
-            snprintf(display_name, sizeof(display_name), "All Artworks");
-        } else if (strcmp(boot_channel, "promoted") == 0) {
-            snprintf(display_name, sizeof(display_name), "Promoted");
-        } else if (strcmp(boot_channel, "followed") == 0) {
-            snprintf(display_name, sizeof(display_name), "Followed Artists");
-        } else if (strcmp(boot_channel, "giphy") == 0) {
-            snprintf(display_name, sizeof(display_name), "Giphy: Trending");
-        } else {
-            snprintf(display_name, sizeof(display_name), "%s", boot_channel);
-        }
+    // The generic "Starting..." channel message is already set by p3a_state_init.
+    // It will be replaced with the actual channel's display name when
+    // animation_player_restore_boot_playset() runs (a few hundred ms later),
+    // hidden behind the boot logo.
 
-        if (strcmp(boot_channel, "sdcard") == 0) {
-            // SD card boot: show hint for provisioning if no local files
-            p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_LOADING, -1,
-                                           "Loading animations from SD card...");
-        } else if (strcmp(boot_channel, "giphy") == 0) {
-            // Giphy boot: show loading (no MQTT needed)
-            p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_LOADING, -1,
-                                           "Loading channel...");
-        } else {
-            // Makapix boot: show connecting/loading
-            p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_LOADING, -1,
-                                           "Connecting to Makapix Club...");
-        }
-    }
-    
+
     // Mark front buffer as not ready - will be loaded by swap_to(0, 0) after loader starts
     s_front_buffer.ready = false;
     s_front_buffer.prefetch_pending = false;
@@ -357,90 +310,53 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
         return ESP_FAIL;
     }
 
-    // Start playback via play_scheduler using saved playset.
-    // This will:
-    // 1. Create/load the playset (built-in or from cache)
-    // 2. Execute the playset
-    // 3. Call play_scheduler_next() which triggers animation_player_request_swap()
-    esp_err_t ps_err = ESP_FAIL;
-
-    // Heap allocate playset struct (~9KB)
-    ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
-    if (playset) {
-        if (active_playset && active_playset[0] != '\0') {
-            // Sentinel: single Makapix artwork (ephemeral, payload in NVS)
-            if (strcmp(active_playset, P3A_PLAYSET_NAME_ARTWORK) == 0) {
-                int32_t post_id = 0;
-                char skey[96] = "";
-                char url[256] = "";
-                char title[P3A_ACTIVE_ARTWORK_TITLE_MAX + 1] = "";
-                if (p3a_state_get_active_artwork(&post_id, skey, sizeof(skey),
-                                                  url, sizeof(url),
-                                                  title, sizeof(title)) == ESP_OK &&
-                    skey[0] != '\0') {
-                    ESP_LOGI(TAG, "Restoring single artwork: post_id=%ld, title='%s'",
-                             (long)post_id, title);
-                    ps_err = play_scheduler_play_artwork(post_id, skey, url, title);
-                } else {
-                    ESP_LOGW(TAG, "Artwork sentinel set but payload missing — falling back");
-                }
-            }
-            // Sentinel: single SD-card / uploaded file
-            else if (strcmp(active_playset, P3A_PLAYSET_NAME_LOCAL_FILE) == 0) {
-                char filepath[256] = "";
-                if (p3a_state_get_active_local_file(filepath, sizeof(filepath)) == ESP_OK &&
-                    filepath[0] != '\0') {
-                    ESP_LOGI(TAG, "Restoring local file: %s", filepath);
-                    ps_err = play_scheduler_play_local_file(filepath);
-                } else {
-                    ESP_LOGW(TAG, "Local-file sentinel set but payload missing — falling back");
-                }
-            }
-            // Try built-in playset first
-            else {
-                ps_err = ps_create_channel_playset(active_playset, playset);
-                if (ps_err == ESP_OK) {
-                    ESP_LOGI(TAG, "Restoring built-in playset: %s", active_playset);
-                    ps_err = play_scheduler_execute_playset(playset);
-                } else {
-                    // Not a built-in - try loading from cache (for server playsets like followed_artists)
-                    ps_err = playset_store_load(active_playset, playset);
-                    if (ps_err == ESP_OK) {
-                        ESP_LOGI(TAG, "Restoring cached playset: %s", active_playset);
-                        ps_err = play_scheduler_execute_playset(playset);
-                    } else {
-                        ESP_LOGW(TAG, "Failed to load playset '%s': %s, falling back to default",
-                                 active_playset, esp_err_to_name(ps_err));
-                    }
-                }
-            }
-        }
-
-        // If playset restore failed, fall back to channel_promoted
-        if (ps_err != ESP_OK) {
-            ESP_LOGI(TAG, "Falling back to default playset: channel_promoted");
-            ps_err = ps_create_channel_playset("channel_promoted", playset);
-            if (ps_err == ESP_OK) {
-                ps_err = play_scheduler_execute_playset(playset);
-                // Update NVS to reflect the fallback
-                p3a_state_set_active_playset("channel_promoted");
-            }
-        }
-
-        free(playset);
-    } else {
-        ESP_LOGE(TAG, "Failed to allocate playset struct");
-        // Last resort fallback using legacy API
-        ps_err = play_scheduler_play_named_channel("promoted");
-    }
-
-    if (ps_err != ESP_OK) {
-        ESP_LOGW(TAG, "Playset restore failed: %s (may need downloads)",
-                 esp_err_to_name(ps_err));
-        // Non-fatal - loading message is shown, playback will start once files are available
-    }
-
     return ESP_OK;
+}
+
+esp_err_t animation_player_restore_boot_playset(void)
+{
+    /* Try the saved snapshot first. Any failure mode (missing file, version
+       mismatch, corrupted CRC, execute failure) falls through to the Makapix
+       Promoted default. The snapshot file is deleted by active_playset_load
+       on corruption / version mismatch, so we don't accumulate stale state. */
+
+    ps_playset_t *playset = psram_calloc(1, sizeof(ps_playset_t));
+    if (!playset) {
+        ESP_LOGE(TAG, "Boot restore: OOM allocating playset; using legacy fallback");
+        return play_scheduler_play_named_channel("promoted");
+    }
+
+    esp_err_t err = active_playset_load(playset);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Restoring active playset (name='%s', channels=%zu)",
+                 playset->name, playset->channel_count);
+        err = play_scheduler_execute_playset(playset);
+        if (err == ESP_OK) {
+            free(playset);
+            return ESP_OK;
+        }
+        ESP_LOGW(TAG, "Restore execute failed: %s — falling back to channel_promoted",
+                 esp_err_to_name(err));
+    } else if (err == ESP_ERR_NOT_FOUND) {
+        ESP_LOGI(TAG, "No active-playset snapshot; starting on channel_promoted");
+    } else {
+        ESP_LOGW(TAG, "active_playset_load failed: %s — falling back to channel_promoted",
+                 esp_err_to_name(err));
+    }
+
+    /* Fallback: Makapix Promoted. Build it inline rather than depending on
+       ps_create_channel_playset() so this path stays cheap and self-contained. */
+    memset(playset, 0, sizeof(*playset));
+    playset->channel_count = 1;
+    playset->channels[0].type = PS_CHANNEL_TYPE_NAMED;
+    strlcpy(playset->channels[0].name, "promoted", sizeof(playset->channels[0].name));
+    playset->channels[0].weight = 1;
+    err = play_scheduler_execute_playset(playset);
+    free(playset);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Default Promoted execute failed: %s", esp_err_to_name(err));
+    }
+    return err;
 }
 
 esp_err_t animation_player_load_asset(const char *filepath)

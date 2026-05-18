@@ -94,8 +94,12 @@ static int museum_id_string_to_enum(const char *s)
     return -1;
 }
 
-// Active artwork title (defined in components/p3a_core/p3a_state.c).
-extern const char *p3a_state_get_active_artwork_title(void) __attribute__((weak));
+/* Active single-artwork title (defined in components/play_scheduler/play_scheduler.c).
+   Weak symbol so this file doesn't drag in play_scheduler headers. Reads the
+   title field from the active playset's ARTWORK channel — empty if not a
+   single-artwork playset. */
+extern void play_scheduler_get_active_artwork_title(char *out_title, size_t len)
+    __attribute__((weak));
 
 /* ------------------------------------------------------------------------- */
 /*  Filename parsing                                                         */
@@ -278,9 +282,8 @@ static esp_err_t resolve_makapix_from_current(pin_task_params_t *p)
     strlcpy(p->src_artwork_path, filepath, sizeof(p->src_artwork_path));
     p->original_post_id = p3a_current_post_get_id();
     p->original_created_at = 0;
-    if (p3a_state_get_active_artwork_title) {
-        const char *t = p3a_state_get_active_artwork_title();
-        if (t) strlcpy(p->title, t, sizeof(p->title));
+    if (play_scheduler_get_active_artwork_title) {
+        play_scheduler_get_active_artwork_title(p->title, sizeof(p->title));
     }
     return ESP_OK;
 }
@@ -306,9 +309,8 @@ static esp_err_t resolve_giphy_from_current(pin_task_params_t *p)
     strlcpy(p->src_artwork_path, filepath, sizeof(p->src_artwork_path));
     p->original_post_id = p3a_current_post_get_id();
     p->original_created_at = 0;
-    if (p3a_state_get_active_artwork_title) {
-        const char *t = p3a_state_get_active_artwork_title();
-        if (t) strlcpy(p->title, t, sizeof(p->title));
+    if (play_scheduler_get_active_artwork_title) {
+        play_scheduler_get_active_artwork_title(p->title, sizeof(p->title));
     }
     return ESP_OK;
 }
@@ -343,9 +345,8 @@ static esp_err_t resolve_institution_from_current(pin_task_params_t *p)
     strlcpy(p->src_artwork_path, filepath, sizeof(p->src_artwork_path));
     p->original_post_id = p3a_current_post_get_id();
     p->original_created_at = 0;
-    if (p3a_state_get_active_artwork_title) {
-        const char *t = p3a_state_get_active_artwork_title();
-        if (t) strlcpy(p->title, t, sizeof(p->title));
+    if (play_scheduler_get_active_artwork_title) {
+        play_scheduler_get_active_artwork_title(p->title, sizeof(p->title));
     }
     return ESP_OK;
 }

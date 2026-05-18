@@ -241,57 +241,44 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
 
         const char *channel = cJSON_GetStringValue(channel_name);
         esp_err_t err = ESP_OK;
-        char playset_name[128] = {0};
 
+        /* Each play_scheduler_play_* helper builds a playset and runs it
+           through execute_playset, which saves the active-playset snapshot
+           internally. No additional persistence step needed here. */
         if (strcmp(channel, "all") == 0) {
             err = play_scheduler_play_named_channel("all");
-            strlcpy(playset_name, "channel_recent", sizeof(playset_name));
         } else if (strcmp(channel, "promoted") == 0) {
             err = play_scheduler_play_named_channel("promoted");
-            strlcpy(playset_name, "channel_promoted", sizeof(playset_name));
         } else if (strcmp(channel, "sdcard") == 0) {
             err = play_scheduler_play_named_channel("sdcard");
-            strlcpy(playset_name, "channel_sdcard", sizeof(playset_name));
         } else if (strcmp(channel, "by_user") == 0) {
             cJSON *user_sqid = cJSON_GetObjectItem(payload, "user_sqid");
             if (!user_sqid || !cJSON_IsString(user_sqid)) {
                 ESP_LOGE(HTTP_API_TAG, "play_channel by_user: missing user_sqid");
                 return;
             }
-            const char *sqid = cJSON_GetStringValue(user_sqid);
-            err = play_scheduler_play_user_channel(sqid);
-            snprintf(playset_name, sizeof(playset_name), "by_user_%s", sqid);
+            err = play_scheduler_play_user_channel(cJSON_GetStringValue(user_sqid));
         } else if (strcmp(channel, "reactions") == 0) {
             cJSON *user_sqid = cJSON_GetObjectItem(payload, "user_sqid");
             if (!user_sqid || !cJSON_IsString(user_sqid)) {
                 ESP_LOGE(HTTP_API_TAG, "play_channel reactions: missing user_sqid");
                 return;
             }
-            const char *sqid = cJSON_GetStringValue(user_sqid);
-            err = play_scheduler_play_reactions_channel(sqid);
-            snprintf(playset_name, sizeof(playset_name), "reactions_%s", sqid);
+            err = play_scheduler_play_reactions_channel(cJSON_GetStringValue(user_sqid));
         } else if (strcmp(channel, "hashtag") == 0) {
             cJSON *hashtag = cJSON_GetObjectItem(payload, "hashtag");
             if (!hashtag || !cJSON_IsString(hashtag)) {
                 ESP_LOGE(HTTP_API_TAG, "play_channel hashtag: missing hashtag");
                 return;
             }
-            const char *tag = cJSON_GetStringValue(hashtag);
-            err = play_scheduler_play_hashtag_channel(tag);
-            snprintf(playset_name, sizeof(playset_name), "hashtag_%s", tag);
+            err = play_scheduler_play_hashtag_channel(cJSON_GetStringValue(hashtag));
         } else if (strcmp(channel, "pinned") == 0) {
             /* Optional `slug` selects a specific list; omit it to play the
-               currently active list. Persisted playset name is keyed by slug
-               so different lists don't clobber each other. */
+               currently active list. */
             cJSON *slug_item = cJSON_GetObjectItem(payload, "slug");
             const char *slug = (slug_item && cJSON_IsString(slug_item))
                                ? cJSON_GetStringValue(slug_item) : NULL;
             err = play_scheduler_play_pinned_channel(slug);
-            if (slug && slug[0]) {
-                snprintf(playset_name, sizeof(playset_name), "channel_pinned_%s", slug);
-            } else {
-                strlcpy(playset_name, "channel_pinned", sizeof(playset_name));
-            }
         } else {
             ESP_LOGW(HTTP_API_TAG, "play_channel: unknown channel '%s'", channel);
             return;
@@ -302,15 +289,7 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
             return;
         }
 
-        // Persist playset selection (like web UI does)
-        if (playset_name[0] != '\0') {
-            esp_err_t persist_err = p3a_state_set_active_playset(playset_name);
-            if (persist_err != ESP_OK) {
-                ESP_LOGW(HTTP_API_TAG, "Failed to persist playset: %s", esp_err_to_name(persist_err));
-            }
-        }
-
-        ESP_LOGI(HTTP_API_TAG, "play_channel: switched to %s (playset=%s)", channel, playset_name);
+        ESP_LOGI(HTTP_API_TAG, "play_channel: switched to %s", channel);
     } else if (strcmp(command_type, "show_artwork") == 0) {
         cJSON *storage_key = cJSON_GetObjectItem(payload, "storage_key");
         cJSON *storage_shard = cJSON_GetObjectItem(payload, "storage_shard");
@@ -331,7 +310,7 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
             // sees a bounded, NUL-terminated string (≤128 bytes). Byte-level
             // truncation may clip a UTF-8 multibyte sequence; the WebUI
             // tolerates that as a replacement char.
-            char title_buf[P3A_ACTIVE_ARTWORK_TITLE_MAX + 1];
+            char title_buf[PS_ARTWORK_TITLE_MAX + 1];
             title_buf[0] = '\0';
             if (title && cJSON_IsString(title)) {
                 strlcpy(title_buf, cJSON_GetStringValue(title), sizeof(title_buf));
@@ -437,7 +416,9 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
             return;
         }
 
-        // Optional "name" field: save to store and persist
+        /* Optional "name" field: save to the user-library AND populate the
+           playset's name so the active-snapshot persisted by execute_playset
+           carries it for pill-bar matching across reboots. */
         cJSON *name_item = cJSON_GetObjectItem(payload, "name");
         if (name_item && cJSON_IsString(name_item)) {
             const char *name = cJSON_GetStringValue(name_item);
@@ -446,7 +427,6 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
             if (save_err != ESP_OK) {
                 ESP_LOGW(HTTP_API_TAG, "execute_playset: failed to save '%s': %s", name, esp_err_to_name(save_err));
             }
-            p3a_state_set_active_playset(name);
         }
 
         esp_err_t exec_err = play_scheduler_execute_playset(playset);

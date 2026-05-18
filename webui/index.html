@@ -1639,10 +1639,12 @@ fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
         isRegistered = data.channel_stats.registered === true;
     }
     if (data.active_playset) {
-        activePlaysetName = data.active_playset;
+        activePlaysetName = pillIdFromActivePlayset(data.active_playset);
     }
     if (data.active_playset && data.playset_info) {
-        updateNowPlaying(data.active_playset, data.playset_info, data.active_artwork_title);
+        updateNowPlaying(pillIdFromActivePlayset(data.active_playset),
+                         data.playset_info,
+                         artworkTitleFromActivePlayset(data.active_playset));
     }
     if (data.paused) {
         isPaused = true;
@@ -1724,14 +1726,51 @@ function sendCommand(action) {
     }
 }
 
+/* Derive the legacy pill-id string from the structured active_playset object
+   emitted by /api/state and /playsets/active. Pill IDs are the namespace used
+   by data-playset attributes on pill DOM nodes (e.g. "channel_promoted",
+   "channel_pinned_<slug>") and by playsetDisplayName. Returns '' for playsets
+   that don't correspond to a pill (single artwork, single local file). */
+function pillIdFromActivePlayset(ap) {
+    if (!ap || !ap.channels || ap.channels.length === 0) return '';
+    if (ap.channels.length > 1) {
+        // Multi-channel playset: identified by the playset's saved name
+        // (e.g. "followed_artists", user-saved playsets). Empty name → no pill.
+        return ap.name || '';
+    }
+    var ch = ap.channels[0];
+    switch (ch.type) {
+        case 'named':
+            if (ch.name === 'all') return 'channel_recent';
+            if (ch.name === 'promoted') return 'channel_promoted';
+            return '';
+        case 'sdcard':    return 'channel_sdcard';
+        case 'giphy':     return 'giphy_trending';
+        case 'pinned':    return ch.identifier ? ('channel_pinned_' + ch.identifier) : 'channel_pinned';
+        case 'user':      return ch.identifier ? ('by_user_' + ch.identifier) : '';
+        case 'hashtag':   return ch.identifier ? ('hashtag_' + ch.identifier) : '';
+        case 'reactions': return ch.identifier ? ('reactions_' + ch.identifier) : '';
+        default:          return '';   // artwork / institution / unknown → no pill
+    }
+}
+
+/* Title of the currently-playing single artwork, used as the displayOverride
+   for updateNowPlaying so the WebUI shows the post title instead of the
+   generic single-artwork label. Empty for non-artwork playsets or untitled
+   artworks. */
+function artworkTitleFromActivePlayset(ap) {
+    if (!ap || !ap.channels || ap.channels.length !== 1) return '';
+    var ch = ap.channels[0];
+    if (ch.type !== 'artwork' || !ch.artwork) return '';
+    return ch.artwork.title || '';
+}
+
 function playsetDisplayName(name) {
     if (name === 'channel_recent') return 'All Makapix';
     if (name === 'channel_promoted') return 'Promoted';
     if (name === 'channel_sdcard') return 'SD Card';
     if (name === 'followed_artists') return 'Followed';
     if (name === 'giphy_trending') return 'Giphy';
-    if (name === '__artwork__') return 'Makapix Artwork';
-    if (name === '__local__') return 'Local File';
     // Pinned-list playsets: "channel_pinned_<slug>" (specific list) or
     // "channel_pinned" (whatever list is currently active). Resolve to the
     // user-visible list name from the already-loaded pinLists global.
@@ -2277,9 +2316,12 @@ function pollActivePlayset(attempt) {
                         return c.type === 'giphy' && c.refreshing && isDueForRefresh(c);
                     }));
                 cdBanner.style.display = (giphyCooldownActive && giphyWaiting) ? 'block' : 'none';
-                if (resp.data.name && resp.data.playset_info) {
-                    updateNowPlaying(resp.data.name, resp.data.playset_info, resp.data.active_artwork_title);
-                    updatePillBarActive(resp.data.name);
+                if (resp.data.active_playset && resp.data.playset_info) {
+                    var pollPillId = pillIdFromActivePlayset(resp.data.active_playset);
+                    updateNowPlaying(pollPillId,
+                                     resp.data.playset_info,
+                                     artworkTitleFromActivePlayset(resp.data.active_playset));
+                    updatePillBarActive(pollPillId);
                 }
                 updateArtwork(resp.data.current_artwork);
             }

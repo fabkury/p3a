@@ -413,118 +413,15 @@ esp_err_t p3a_state_wait_for_wifi(TickType_t timeout_ms);
 esp_err_t p3a_state_fallback_to_sdcard(void);
 
 // ============================================================================
-// PERSISTENCE
-// ============================================================================
-
-/**
- * @brief Maximum length for playset names
- */
-#define P3A_PLAYSET_MAX_NAME_LEN 32
-
-/**
- * @brief Reserved sentinel playset names for ephemeral single-source
- *        playback (Makapix show_artwork or single local file). These are
- *        first-class active-playset values but do NOT appear in the WebUI
- *        pill bar, and the playset editor refuses to save under these names.
- */
-#define P3A_PLAYSET_NAME_ARTWORK    "__artwork__"
-#define P3A_PLAYSET_NAME_LOCAL_FILE "__local__"
-
-/**
- * @brief Maximum length (bytes, excl. NUL) of the post title attached to a
- *        single-artwork (show_artwork) session. Anything longer is truncated
- *        at the JSON-parsing boundary.
- */
-#define P3A_ACTIVE_ARTWORK_TITLE_MAX 128
-
-/**
- * @brief Set and persist the active playset name to NVS
- *
- * This is the primary persistence mechanism for playback state.
- * Built-in playset names: "channel_recent", "channel_promoted", "channel_sdcard"
- * Server playsets: "followed_artists", etc.
- *
- * Side effect: when called with a non-sentinel name, the ephemeral payload
- * keys (artwork post_id/storage_key/art_url, local filepath) are cleared so
- * a regular playset selection wipes any leftover single-source state.
- *
- * @param name Playset name (max P3A_PLAYSET_MAX_NAME_LEN chars)
- * @return ESP_OK on success
- */
-esp_err_t p3a_state_set_active_playset(const char *name);
-
-/**
- * @brief Get the currently active playset name
- *
- * @return Playset name or empty string if none set
- */
-const char *p3a_state_get_active_playset(void);
-
-/**
- * @brief Set the active playset to a single Makapix artwork.
- *
- * Sets active_playset = P3A_PLAYSET_NAME_ARTWORK, persists the artwork
- * payload (post_id, storage_key, art_url, title) to NVS, and clears the
- * local-file payload. The runtime call to play_scheduler_play_artwork()
- * should invoke this after a successful execute_playset() so the WebUI and
- * boot restore see consistent state.
- *
- * @param title Optional post title for WebUI display. NULL or empty erases
- *              any previously-stored title. Caller is expected to have
- *              already truncated to P3A_ACTIVE_ARTWORK_TITLE_MAX bytes; the
- *              setter does not re-truncate.
- */
-esp_err_t p3a_state_set_active_artwork(int32_t post_id,
-                                       const char *storage_key,
-                                       const char *art_url,
-                                       const char *title);
-
-/**
- * @brief Set the active playset to a single SD-card / uploaded file.
- *
- * Sets active_playset = P3A_PLAYSET_NAME_LOCAL_FILE, persists filepath, and
- * clears the artwork payload.
- */
-esp_err_t p3a_state_set_active_local_file(const char *filepath);
-
-/**
- * @brief Read the persisted single-artwork payload.
- *
- * Returns ESP_OK only if storage_key and art_url are present in NVS.
- * post_id may be 0 (e.g. for sources without a Makapix post).
- * Caller-allocated buffers.
- *
- * @param title     Out-buffer for the post title. May be NULL (caller doesn't
- *                  want it). When non-NULL and the NVS key is missing the
- *                  buffer is set to an empty string and ESP_OK is still
- *                  returned (older NVS images without the title key remain
- *                  valid).
- * @param title_len Size of the title buffer in bytes. Use
- *                  P3A_ACTIVE_ARTWORK_TITLE_MAX + 1 for a safe size.
- */
-esp_err_t p3a_state_get_active_artwork(int32_t *post_id,
-                                       char *storage_key, size_t skey_len,
-                                       char *art_url, size_t url_len,
-                                       char *title, size_t title_len);
-
-/**
- * @brief Get the in-memory cached active-artwork title.
- *
- * Returns a pointer to the cached title string (empty when no title is set
- * or the active playset is not the artwork sentinel). Updated by
- * p3a_state_set_active_artwork() and cleared on switches to other playsets.
- * Cheap — does not touch NVS.
- */
-const char *p3a_state_get_active_artwork_title(void);
-
-/**
- * @brief Read the persisted single-local-file payload.
- */
-esp_err_t p3a_state_get_active_local_file(char *filepath, size_t len);
-
-// ============================================================================
 // CALLBACKS (for integration with other components)
 // ============================================================================
+
+/* NOTE: Active-playset persistence used to live here as
+   p3a_state_set_active_playset(name) plus the __artwork__/__local__
+   sentinels and their NVS keys. That is now owned by play_scheduler — the
+   active playset is serialized as a structured snapshot to
+   /sdcard/p3a/active_playset.bin on every execute_playset(), and queried via
+   play_scheduler_get_active_playset(). */
 
 /**
  * @brief State change callback type

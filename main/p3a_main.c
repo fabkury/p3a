@@ -637,6 +637,14 @@ void app_main(void)
         ESP_LOGW(TAG, "pin_lists_init failed: %s", esp_err_to_name(pl_err));
     }
 
+    // Restore the previously-active playset. Deferred until after pin_lists_init
+    // so a PS_CHANNEL_TYPE_PINNED snapshot can load its order.bin successfully.
+    // Falls back to channel_promoted on any failure.
+    esp_err_t restore_err = animation_player_restore_boot_playset();
+    if (restore_err != ESP_OK) {
+        ESP_LOGW(TAG, "Boot playset restore returned: %s", esp_err_to_name(restore_err));
+    }
+
 #if P3A_HAS_BUTTONS
     // Initialize BOOT button for pause/resume toggle
     ESP_ERROR_CHECK(p3a_board_button_init());

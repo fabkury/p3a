@@ -161,8 +161,7 @@ esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag);
  * @param storage_key UUID storage key
  * @param art_url Download URL for the artwork
  * @param title Optional post title for WebUI display (NULL or "" → no title).
- *              Caller must have already truncated to
- *              P3A_ACTIVE_ARTWORK_TITLE_MAX bytes.
+ *              Caller must have already truncated to PS_ARTWORK_TITLE_MAX bytes.
  * @return ESP_OK on success
  */
 esp_err_t play_scheduler_play_artwork(int32_t post_id,
@@ -540,6 +539,35 @@ void ps_get_display_name(const char *channel_id, char *out_name, size_t max_len)
  * @return ESP_OK on success
  */
 esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats);
+
+/**
+ * @brief Get a snapshot copy of the currently active playset.
+ *
+ * Returns the most recent playset passed to play_scheduler_execute_playset().
+ * The full ps_channel_spec_t (including the artwork sub-struct with post_id,
+ * storage_key, art_url, filepath, and title) is preserved, so callers can
+ * reconstruct the user-visible state without consulting any separate API.
+ *
+ * @param out_playset Caller-allocated playset that receives the copy.
+ * @return ESP_OK on success;
+ *         ESP_ERR_INVALID_ARG if out_playset is NULL;
+ *         ESP_ERR_INVALID_STATE if the scheduler is not initialized;
+ *         ESP_ERR_NOT_FOUND if no playset has been executed yet this session.
+ */
+esp_err_t play_scheduler_get_active_playset(ps_playset_t *out_playset);
+
+/**
+ * @brief Copy the active single-artwork title into a caller buffer.
+ *
+ * Returns the title attached to the active playset when it's a single
+ * PS_CHANNEL_TYPE_ARTWORK channel — used by the pin dispatcher to attach a
+ * human-readable title to swipe-up pins. Writes an empty string if the active
+ * playset is not a single-artwork playset (or no playset has been executed).
+ *
+ * @param out_title Caller buffer; written with NUL-terminated title.
+ * @param len Length of out_title (must be > 0).
+ */
+void play_scheduler_get_active_artwork_title(char *out_title, size_t len);
 
 /**
  * @brief Get per-channel detail snapshots for all active channels

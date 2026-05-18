@@ -41,6 +41,13 @@ extern "C" {
 #define PS_MAX_CHANNELS 64
 #endif
 
+/**
+ * @brief Maximum length (bytes excluding the NUL terminator) of the artwork
+ *        title attached to a PS_CHANNEL_TYPE_ARTWORK channel. Callers passing
+ *        a title must pre-truncate; downstream code does not re-truncate.
+ */
+#define PS_ARTWORK_TITLE_MAX 128
+
 // ============================================================================
 // Enumerations
 // ============================================================================
@@ -180,6 +187,8 @@ typedef struct {
         char storage_key[64];     // UUID storage key (empty for local files)
         char art_url[256];        // Download URL (empty if cached or local)
         char filepath[256];       // Full path (computed or provided directly)
+        char title[PS_ARTWORK_TITLE_MAX + 1]; // Post title for WebUI display.
+                                              // Empty for local files or untitled artworks.
     } artwork;
 } ps_channel_spec_t;
 

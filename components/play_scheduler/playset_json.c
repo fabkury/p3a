@@ -202,6 +202,32 @@ cJSON *playset_json_serialize(const ps_playset_t *playset)
             cJSON_AddNumberToObject(ch, "offset", (double)spec->offset);
         }
 
+        /* For ARTWORK channels, surface the embedded artwork metadata so the
+           WebUI can render the now-playing title and (if the storage_key /
+           art_url ever need to be displayed for diagnostics) the full payload.
+           Only emit the sub-object when the channel is actually ARTWORK and
+           at least one field is populated. */
+        if (spec->type == PS_CHANNEL_TYPE_ARTWORK) {
+            cJSON *aw = cJSON_AddObjectToObject(ch, "artwork");
+            if (aw) {
+                if (spec->artwork.post_id != 0) {
+                    cJSON_AddNumberToObject(aw, "post_id", (double)spec->artwork.post_id);
+                }
+                if (spec->artwork.storage_key[0] != '\0') {
+                    cJSON_AddStringToObject(aw, "storage_key", spec->artwork.storage_key);
+                }
+                if (spec->artwork.art_url[0] != '\0') {
+                    cJSON_AddStringToObject(aw, "art_url", spec->artwork.art_url);
+                }
+                if (spec->artwork.filepath[0] != '\0') {
+                    cJSON_AddStringToObject(aw, "filepath", spec->artwork.filepath);
+                }
+                if (spec->artwork.title[0] != '\0') {
+                    cJSON_AddStringToObject(aw, "title", spec->artwork.title);
+                }
+            }
+        }
+
         cJSON_AddItemToArray(channels, ch);
     }
 

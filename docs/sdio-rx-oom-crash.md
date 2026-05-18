@@ -1,18 +1,20 @@
 # SDIO RX buffer OOM crash (esp_hosted streaming mode)
 
-**Status:** Open. Heap-snapshot diagnostic now in firmware and producing
-data; fragmentation+exhaustion hypothesis confirmed. Decision strongly
-indicated but not yet implemented. Upstream sibling assert site fixed
-2026-04-29 (not our site); see "Upstream developments" below.
+**Status:** Open. Heap-snapshot diagnostic in firmware and producing
+data; fragmentation+exhaustion hypothesis confirmed. Trigger pattern
+now confirmed to extend to **museum-channel HTTPS paging**
+(Occurrence 6), not just Giphy. Decision strongly indicated but not
+yet implemented. Upstream sibling assert site fixed 2026-04-29 (not
+our site); see "Upstream developments" below.
 **First observed:** 2026-05-04.
-**Last observed:** 2026-05-14 (fifth occurrence; first hard crash on a
-*different* firmware build and IDF version, and the first to carry the
-new heap-snapshot diagnostic — see "Occurrence 5").
+**Last observed:** 2026-05-18 (sixth occurrence; museum-channel HTTPS
+paging is part of the trigger set, and `REFRESH_MAX_CONCURRENT=2`
+identified as a concrete enabler — see "Occurrence 6").
 **Severity:** Hard crash + reboot. **Confirmed recurring across builds and
-IDF versions** — four hard crashes and one near-miss spanning 2026-05-04 →
-2026-05-14, on at least two firmware builds (ELF `969b00418` for
-Occurrences 2–4, ELF `fc8daa29f` for Occurrence 5) and across ESP-IDF v5.5.1
-and v5.5.2.
+IDF versions** — five hard crashes and one near-miss spanning 2026-05-04 →
+2026-05-18, on at least three firmware builds (ELF `969b00418` for
+Occurrences 2–4, ELF `fc8daa29f` for Occurrence 5, ELF `ee443f31c` for
+Occurrence 6) and across ESP-IDF v5.5.1 and v5.5.2.
 
 ---
 
@@ -31,7 +33,7 @@ change to switch the SDIO RX mode from streaming to `MAX_SIZE`
 
 ```
 assert failed: sdio_rx_get_buffer sdio_drv.c:830 (*buf)    # Occurrences 1–4 (IDF v5.5.1, esp_hosted older)
-assert failed: sdio_rx_get_buffer sdio_drv.c:896 (*buf)    # Occurrence 5  (IDF v5.5.2, esp_hosted newer)
+assert failed: sdio_rx_get_buffer sdio_drv.c:896 (*buf)    # Occurrences 5–6 (IDF v5.5.2, esp_hosted newer)
 Core 1 register dump:
 MEPC    : 0x4ff0a7ce  (panic_abort)
 MCAUSE  : 0x00000002  (illegal instruction — the unimp from panic_abort)
@@ -234,17 +236,70 @@ Core 1 was inside `GIFMakePels` decoding a frame at the moment Core 0
 panicked (per the boot log's `Core1 Saved PC: 0x4808e884`) — playback was
 healthy. The system died on the *network* side.
 
-### Pattern across all five occurrences
+### Occurrence 6 — 2026-05-18 (uptime ~305 s)
 
-All five events share the same trigger:
+ELF SHA256: `ee443f31c…` (firmware `0.10.1` per `CMakeLists.txt`).
+ESP-IDF v5.5.2. Assert text identical to Occurrence 5 (`assert failed:
+sdio_rx_get_buffer sdio_drv.c:896 (*buf)`, MEPC `0x4ff0a7ce`).
 
-1. A `ps_refresh` cycle is paging through a Giphy endpoint (multiple ~96 KB
-   JSON responses over TLS, in quick succession).
-2. The crash/symptom hits in the middle of the API paging, not on the first
+Heap snapshot at the moment of failure:
+
+```
+*** HEAP ALLOC FAILED (one-shot snapshot) ***
+  func=heap_caps_aligned_alloc  size=10240  caps=0x0000080c  task=sdio_read
+  INT+DMA+8BIT (SDIO RX): free=33731 largest=9728 total=276991
+  INTERNAL:               free=73311 largest=31744
+  DMA:                    free=37411 largest=9728
+  SPIRAM:                 free=23198680 largest=22544384
+  DEFAULT:                free=23255684 largest=22544384
+*********************************************
+```
+
+Same shape as Occurrence 5: pool at **88 % utilization** (243 KB of
+277 KB allocated) and fragmented — 33.7 KB free in aggregate but only
+9.7 KB largest contiguous. The aligned 10.2 KB request misses by ~500
+bytes.
+
+**New trigger composition.** Earlier occurrences had Giphy paging
+± GIF downloads ± Makapix MQTT batches. Occurrence 6 is dominated by
+**two paginated channel refreshes overlapping** (Makapix MQTT "Fab"
++ V&A HTTPS) followed by a third paginated refresh (Wellcome HTTPS)
+stacked with several concurrent downloads:
+
+| t (s) | Event |
+|-------|-------|
+| 212.4 | `ps_refresh`: Makapix **"Fab"** refresh starts (1027 entries) — paginated MQTT batches |
+| 212.5–244.0 | **32 Makapix MQTT batches** for "Fab" arrive at 32-byte cursor steps (preview 32 → 1024) |
+| 214.7 | `ps_refresh` dispatches second slot: **V&A · Paintings** HTTPS refresh starts (`REFRESH_MAX_CONCURRENT=2` allowed the overlap) |
+| 214.7–266.8 | V&A pages 1–11 fetched back-to-back over TLS (`id_category=THES48917`, ~96 KB JSON each); `esp_http_client_init`/`cleanup` per page |
+| 245.0 | Fab refresh complete (1027 entries, 212 available); MQTT batches stop |
+| 253.5 | `dl_mgr` starts download `I48PlTLyNTnnkdqr33` (Giphy) — TLS handshake while V&A paging continues |
+| 256.1 | `dl_mgr` starts Makapix CDN download `3c3e3a11-…webp` |
+| 261.2 | `dl_mgr` starts download `l41JWwvf5k0GL1SuY` |
+| 266.8 | V&A refresh complete (1100 fetched, 1024 kept, 76 orphans evicted) |
+| 269.2 | `ps_refresh` dispatches **Wellcome · Paintings** HTTPS refresh — same per-page TLS pattern |
+| 269.2–304.1 | Wellcome pages 1–10 fetched (`genres.label=Paintings`, ~96 KB JSON each) |
+| 274.0–305.1 | Five more `dl_mgr` downloads kicked off (Giphy + Makapix CDN), in parallel with Wellcome paging |
+| 305.1 | `dl_mgr` starts download `TIMBLT1r15CGqxNMLt` |
+| —     | **CRASH** during the next inbound SDIO RX burst from the C6 |
+
+`ps_pick`/`ps_lai` were active throughout (channel selection, LAi cursor
+advances), so the picker + animation player were under their normal
+steady-state load. The system died on the *network* side, as in every
+prior occurrence.
+
+### Pattern across all six occurrences
+
+All six events share the same trigger:
+
+1. A `ps_refresh` cycle is paging through one or more HTTPS APIs
+   (Giphy, V&A, Wellcome) and/or a Makapix MQTT channel — multiple
+   batches/pages of network response in quick succession.
+2. The crash/symptom hits in the middle of the paging, not on the first
    page.
 
 What differs is the **victim** of the resource pressure (and, in
-Occurrence 5, the **co-stressors** stacked on top of refresh paging):
+Occurrences 5–6, the **co-stressors** stacked on top of refresh paging):
 
 | # | Concurrent downloads? | Other concurrent load | Symptom |
 |---|----------------------|-----------------------|---------|
@@ -253,6 +308,7 @@ Occurrence 5, the **co-stressors** stacked on top of refresh paging):
 | 3 | yes (1 GIF)          | —                     | SDIO RX assert (hard crash) |
 | 4 | **no** (`dl_mgr` idle) | —                     | MQTT task-create failure + HTTP truncation + TLS EAGAIN; recovered |
 | 5 | yes (5 GIFs in succession) | **heavy Makapix MQTT** (14 batches × 8.6 KB in the window) | SDIO RX assert (hard crash) |
+| 6 | yes (8 in succession: Giphy + Makapix CDN) | **two concurrent paginated refreshes** (Makapix MQTT "Fab" 32 batches overlapping V&A HTTPS 11 pages, then Wellcome HTTPS 10 pages) | SDIO RX assert (hard crash) |
 
 #### What Occurrence 3 newly tells us
 
@@ -325,6 +381,38 @@ Occurrence 5, the **co-stressors** stacked on top of refresh paging):
   highlight that the bottleneck pool is small and special-purpose —
   shifting *other* internal-RAM consumers to PSRAM is a separate but
   related angle worth pursuing.
+
+#### What Occurrence 6 newly tells us
+
+- **Museum-channel HTTPS paging is now a confirmed trigger.**
+  Occurrences 1–5 were all Giphy-paging-driven (± Makapix MQTT in
+  Occ 5). Occurrence 6 reaches the same wall with **V&A + Wellcome
+  paging** as the dominant HTTPS workload — Giphy is reduced to a few
+  concurrent downloads, not the refresh itself. The trigger class is
+  "any sustained paginated HTTPS refresh," not Giphy-specific. All
+  museum adapters in `components/art_institution/museums/*.c` call
+  `esp_http_client_init`/`cleanup` **per page** — V&A alone did 11
+  init/cleanup cycles in this run, Wellcome 10 more; identical churn
+  profile to Giphy's paging.
+- **`REFRESH_MAX_CONCURRENT=2` is a concrete enabler with a visible
+  overlap.** The Makapix "Fab" refresh and the V&A refresh ran
+  simultaneously for ~33 seconds (t=212 → t=245). Two paginated
+  network refreshes were the active load at the start of the burst,
+  with Wellcome and the download manager stacking on later. The
+  constant is defined at
+  `components/play_scheduler/play_scheduler_refresh.c:49`; lowering
+  it to 1 would have eliminated the visible overlap in this run.
+  Gives Option B's "stagger periodic refreshes" sub-action a concrete
+  one-line handle.
+- **Third firmware build hitting this fingerprint.** ELF `ee443f31c`
+  (firmware v0.10.1) — distinct from `969b00418` (Occ 2–4) and
+  `fc8daa29f` (Occ 5). Another data point that this isn't tied to a
+  particular build; same architectural pressure, same victim.
+- **Heap snapshot is consistent with Occurrence 5.** Pool utilization
+  87.8 % (Occ 5: 89.3 %), largest 9728 (Occ 5: 8192), request 10240
+  (Occ 5: 9216). The streaming-mode RX path is asking for
+  variable-sized aligned buffers and the internal-DMA heap can't
+  satisfy them under load. Same wall, slightly different exact peak.
 
 ---
 
@@ -473,7 +561,11 @@ workstream. The Occurrence 5 heap snapshot resolves the
 D is closed. Option A alone removes the panic class; option B alone is
 not sufficient (Occurrence 4 showed refresh paging by itself can
 exhaust the pool even with `dl_mgr` idle). Combining them gives
-defense-in-depth without much more effort than A alone.
+defense-in-depth without much more effort than A alone. Occurrence 6
+reinforces this lean and gives Option B a concrete one-line handle:
+drop `REFRESH_MAX_CONCURRENT` from 2 to 1 at
+`components/play_scheduler/play_scheduler_refresh.c:49` to eliminate
+the overlapping-refresh trigger that was visible in that run.
 
 ---
 
@@ -550,7 +642,7 @@ for our position.
 ## References
 
 Line numbers below are from IDF v5.5.1 (Occurrences 1–4). On IDF v5.5.2
-(Occurrence 5) the failing assert is at `sdio_drv.c:896` and surrounding
+(Occurrences 5–6) the failing assert is at `sdio_drv.c:896` and surrounding
 ranges have shifted by ~60 lines; same code paths, different offsets.
 
 - Failing assert: `managed_components/espressif__esp_hosted/host/drivers/transport/sdio/sdio_drv.c:830` (v5.5.1) / `:896` (v5.5.2)

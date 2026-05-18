@@ -120,6 +120,12 @@ typedef struct {
     // every prepare_and_request_swap() call so subsequent auto-swaps default
     // back to SWAP_FAIL_SILENT.
     swap_fail_mode_t next_swap_fail_mode;
+
+    // Last-executed playset. Allocated in PSRAM on first execute_playset and
+    // reused for subsequent executions; struct-copied from the caller-provided
+    // playset under s_state->mutex. NULL until the first execute. Read via
+    // play_scheduler_get_active_playset() which returns a snapshot copy.
+    ps_playset_t *active_playset;
 } ps_state_t;
 
 // ============================================================================

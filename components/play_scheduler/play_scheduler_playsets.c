@@ -16,6 +16,7 @@
 #include "play_scheduler.h"
 #include "play_scheduler_internal.h"
 #include "playset_json.h"        // playset_channel_type_str (S4.1)
+#include "active_playset_store.h"
 #include "channel_cache.h"
 #include "channel_metadata.h"
 #include "view_tracker.h"
@@ -679,10 +680,30 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset)
     // clears it. Audited as part of S3.
     s_state->first_swap_emitted = false;
 
+    // Capture the committed playset into s_state so play_scheduler_get_active_playset()
+    // can return a coherent snapshot. Allocate the buffer on first use and reuse it
+    // thereafter — the struct is ~55 KB so we keep it in PSRAM and avoid per-call
+    // churn. Allocation failure is non-fatal: getters just keep returning NOT_FOUND.
+    if (!s_state->active_playset) {
+        s_state->active_playset = psram_calloc(1, sizeof(ps_playset_t));
+    }
+    if (s_state->active_playset) {
+        *s_state->active_playset = *playset;
+    }
+
     xSemaphoreGive(s_state->mutex);
 
     // Reset auto-swap timer so the full dwell interval starts from this new playset
     ps_timer_reset(s_state);
+
+    // Persist the active-playset snapshot. This is the single chokepoint that
+    // makes boot-restore work: every "play X" path eventually flows through
+    // here, so saving once at this point captures everything. Non-fatal on
+    // failure — the user just loses boot-restore for this session.
+    esp_err_t save_err = active_playset_save(playset);
+    if (save_err != ESP_OK) {
+        ESP_LOGW(TAG, "active_playset_save failed: %s", esp_err_to_name(save_err));
+    }
 
     // Dismiss info-screen overlay if active, so playback is visible immediately.
     // Safe to call at boot (app_lcd_is_ui_mode returns false when no UI is shown).
@@ -1086,6 +1107,9 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id,
     playset->channels[0].artwork.post_source = (post_id != 0) ? POST_SOURCE_MAKAPIX : POST_SOURCE_NONE;
     strlcpy(playset->channels[0].artwork.storage_key, storage_key, sizeof(playset->channels[0].artwork.storage_key));
     strlcpy(playset->channels[0].artwork.art_url, art_url, sizeof(playset->channels[0].artwork.art_url));
+    if (title) {
+        strlcpy(playset->channels[0].artwork.title, title, sizeof(playset->channels[0].artwork.title));
+    }
 
     // Compute vault filepath from storage_key
     ps_build_artwork_filepath(storage_key, art_url,
@@ -1097,13 +1121,11 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id,
     // silently retried with a different artwork.
     s_state->next_swap_fail_mode = SWAP_FAIL_LOUD;
 
+    /* execute_playset persists the playset (including the artwork sub-struct
+       carrying post_id, storage_key, art_url, filepath, and title) via the
+       active_playset_store, so the WebUI's now-playing fields and boot restore
+       are both fed from that single snapshot — no extra persistence here. */
     esp_err_t result = play_scheduler_execute_playset(playset);
-    if (result == ESP_OK) {
-        // Treat the single-artwork session as a first-class active playset so
-        // the WebUI shows it correctly, the preview URL builder fires, and
-        // boot restore can replay it.
-        p3a_state_set_active_artwork(post_id, storage_key, art_url, title);
-    }
     free(playset);
     return result;
 }
@@ -1150,10 +1172,8 @@ esp_err_t play_scheduler_play_local_file(const char *filepath)
     // silently retried with a different artwork.
     s_state->next_swap_fail_mode = SWAP_FAIL_LOUD;
 
+    /* execute_playset persists the snapshot; no extra step needed. */
     esp_err_t result = play_scheduler_execute_playset(playset);
-    if (result == ESP_OK) {
-        p3a_state_set_active_local_file(filepath);
-    }
     free(playset);
     return result;
 }

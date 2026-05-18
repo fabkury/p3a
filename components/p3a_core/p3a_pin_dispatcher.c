@@ -91,6 +91,7 @@ static int museum_id_string_to_enum(const char *s)
     if (strcmp(s, "vam")      == 0) return 2;
     if (strcmp(s, "wellcome") == 0) return 3;
     if (strcmp(s, "smk")      == 0) return 4;
+    if (strcmp(s, "ham")      == 0) return 5;
     return -1;
 }
 
@@ -340,6 +341,21 @@ static esp_err_t resolve_institution_from_current(pin_task_params_t *p)
 
     char stem[48];
     if (extract_basename_stem(filepath, stem, sizeof(stem)) < 0) return ESP_ERR_INVALID_ARG;
+
+    /* HAM's canonical iiif_key contains colons (`urn-3:HUAM:{id}_dynmc`),
+       but FAT filenames cannot carry them — art_institution_build_vault_path
+       sanitizes the two colons to underscores before composing the on-disk
+       name. Reverse that here so the pin entry stores the canonical form,
+       matching the channel cache and round-tripping cleanly through
+       art_institution_build_iiif_url at playback time. The strncmp guard
+       makes this a no-op for any future HAM URN that doesn't start with the
+       documented prefix, and for the other museums (whose identifiers use
+       only FAT-safe characters today). */
+    if (strcmp(museum_str, "ham") == 0 && strncmp(stem, "urn-3_HUAM_", 11) == 0) {
+        stem[5]  = ':';
+        stem[10] = ':';
+    }
+
     strlcpy(p->iiif_key, stem, sizeof(p->iiif_key));
 
     strlcpy(p->src_artwork_path, filepath, sizeof(p->src_artwork_path));

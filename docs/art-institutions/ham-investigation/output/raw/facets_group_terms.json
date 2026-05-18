@@ -1,0 +1,43 @@
+{
+  "options": {
+    "redaction": {
+      "type": "replace",
+      "additionalKeys": []
+    }
+  },
+  "name": "ResponseError",
+  "meta": {
+    "body": {
+      "error": {
+        "root_cause": [
+          {
+            "type": "query_shard_exception",
+            "reason": "No mapping found for [objectcount] in order to sort on",
+            "index_uuid": "lopFF_EzSK6XY8-1e5WU-w",
+            "index": "groups_20260518-040352"
+          }
+        ],
+        "type": "search_phase_execution_exception",
+        "reason": "all shards failed",
+        "phase": "query",
+        "grouped": true,
+        "failed_shards": [
+          {
+            "shard": 0,
+            "index": "groups_20260518-040352",
+            "node": "0ORAFfYsQPSAZ5L7CEFABw",
+            "reason": {
+              "type": "query_shard_exception",
+              "reason": "No mapping found for [objectcount] in order to sort on",
+              "index_uuid": "lopFF_EzSK6XY8-1e5WU-w",
+              "index": "groups_20260518-040352"
+            }
+          }
+        ]
+      },
+      "status": 400
+    },
+    "statusCode": 400,
+    "warnings": null
+  }
+}

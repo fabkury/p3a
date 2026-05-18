@@ -1,0 +1,18 @@
+{
+  "info": {
+    "totalrecordsperquery": 1,
+    "totalrecords": 77076,
+    "pages": 77076,
+    "page": 50,
+    "next": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=1&page=51&classification=17&hasimage=1&fields=id%2Cobjectnumber&sort=id&sortorder=asc",
+    "prev": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=1&page=49&classification=17&hasimage=1&fields=id%2Cobjectnumber&sort=id&sortorder=asc",
+    "responsetime": "20 ms"
+  },
+  "records": [
+    {
+      "id": 4769,
+      "objectnumber": "BRLF.1002.126",
+      "imagepermissionlevel": 1
+    }
+  ]
+}

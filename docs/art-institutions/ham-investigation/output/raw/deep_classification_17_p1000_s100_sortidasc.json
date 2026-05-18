@@ -1,0 +1,11 @@
+{
+  "info": {
+    "totalrecordsperquery": 100,
+    "totalrecords": 77076,
+    "pages": 771,
+    "page": 1000,
+    "prev": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=100&page=999&classification=17&hasimage=1&fields=id%2Cobjectnumber&sort=id&sortorder=asc",
+    "responsetime": "105 ms"
+  },
+  "records": []
+}

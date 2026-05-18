@@ -1,0 +1,459 @@
+{
+  "info": {
+    "totalrecordsperquery": 100,
+    "totalrecords": 64,
+    "pages": 1,
+    "page": 1,
+    "responsetime": "16 ms"
+  },
+  "records": [
+    {
+      "id": 17,
+      "classificationid": 17,
+      "name": "Photographs",
+      "objectcount": 86437,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 23,
+      "classificationid": 23,
+      "name": "Prints",
+      "objectcount": 72257,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 21,
+      "classificationid": 21,
+      "name": "Drawings",
+      "objectcount": 34062,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 50,
+      "classificationid": 50,
+      "name": "Coins",
+      "objectcount": 20270,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 64,
+      "classificationid": 64,
+      "name": "Archival Material",
+      "objectcount": 15760,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 26,
+      "classificationid": 26,
+      "name": "Paintings",
+      "objectcount": 6906,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 30,
+      "classificationid": 30,
+      "name": "Sculpture",
+      "objectcount": 6647,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 57,
+      "classificationid": 57,
+      "name": "Vessels",
+      "objectcount": 6229,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 189,
+      "classificationid": 189,
+      "name": "Seals",
+      "objectcount": 5899,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 94,
+      "classificationid": 94,
+      "name": "Fragments",
+      "objectcount": 5214,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 959,
+      "classificationid": 959,
+      "name": "Straus Materials",
+      "objectcount": 5130,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 185,
+      "classificationid": 185,
+      "name": "Manuscripts",
+      "objectcount": 5005,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 62,
+      "classificationid": 62,
+      "name": "Textile Arts",
+      "objectcount": 3450,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 2,
+      "classificationid": 2,
+      "name": "Accessories (non-art)",
+      "objectcount": 2806,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 97,
+      "classificationid": 97,
+      "name": "Artists' Tools",
+      "objectcount": 1542,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 32,
+      "classificationid": 32,
+      "name": "Tools and Equipment",
+      "objectcount": 1420,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 43,
+      "classificationid": 43,
+      "name": "Multiples",
+      "objectcount": 1289,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 133,
+      "classificationid": 133,
+      "name": "Architectural Elements",
+      "objectcount": 1176,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 146,
+      "classificationid": 146,
+      "name": "Ritual Implements",
+      "objectcount": 974,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 19,
+      "classificationid": 19,
+      "name": "Jewelry",
+      "objectcount": 949,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 105,
+      "classificationid": 105,
+      "name": "Medals and Medallions",
+      "objectcount": 845,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 45,
+      "classificationid": 45,
+      "name": "Lighting Devices",
+      "objectcount": 664,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 139,
+      "classificationid": 139,
+      "name": "Timepieces",
+      "objectcount": 646,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 47,
+      "classificationid": 47,
+      "name": "Books",
+      "objectcount": 623,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 75,
+      "classificationid": 75,
+      "name": "Calligraphy",
+      "objectcount": 617,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 76,
+      "classificationid": 76,
+      "name": "Furniture",
+      "objectcount": 566,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 384,
+      "classificationid": 384,
+      "name": "Albums",
+      "objectcount": 538,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 1012,
+      "classificationid": 1012,
+      "name": "Artists' Materials",
+      "objectcount": 536,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 173,
+      "classificationid": 173,
+      "name": "Rubbings",
+      "objectcount": 470,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 71,
+      "classificationid": 71,
+      "name": "Audiovisual Works",
+      "objectcount": 436,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 60,
+      "classificationid": 60,
+      "name": "Plaques",
+      "objectcount": 404,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 155,
+      "classificationid": 155,
+      "name": "Weapons and Ammunition",
+      "objectcount": 363,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 0,
+      "classificationid": 0,
+      "name": "(not assigned)",
+      "objectcount": 356,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 1075,
+      "classificationid": 1075,
+      "name": "Material Specimens",
+      "objectcount": 344,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 85,
+      "classificationid": 85,
+      "name": "Boxes",
+      "objectcount": 336,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 1078,
+      "classificationid": 1078,
+      "name": "Gems",
+      "objectcount": 248,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 149,
+      "classificationid": 149,
+      "name": "Mosaics",
+      "objectcount": 191,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 251,
+      "classificationid": 251,
+      "name": "Recreational Artifacts",
+      "objectcount": 181,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 302,
+      "classificationid": 302,
+      "name": "Mirrors",
+      "objectcount": 171,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 80,
+      "classificationid": 80,
+      "name": "Paintings with Calligraphy",
+      "objectcount": 155,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 180,
+      "classificationid": 180,
+      "name": "Amulets",
+      "objectcount": 134,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 82,
+      "classificationid": 82,
+      "name": "Unidentified",
+      "objectcount": 88,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 492,
+      "classificationid": 492,
+      "name": "Tokens",
+      "objectcount": 80,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 364,
+      "classificationid": 364,
+      "name": "Measuring Devices",
+      "objectcount": 77,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 330,
+      "classificationid": 330,
+      "name": "Riding Equipment",
+      "objectcount": 71,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 344,
+      "classificationid": 344,
+      "name": "Inscriptions",
+      "objectcount": 69,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 224,
+      "classificationid": 224,
+      "name": "Performance Artifacts",
+      "objectcount": 66,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 1088,
+      "classificationid": 1088,
+      "name": "Stained Glass",
+      "objectcount": 64,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 242,
+      "classificationid": 242,
+      "name": "Armor",
+      "objectcount": 63,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 304,
+      "classificationid": 304,
+      "name": "Brick Stamps",
+      "objectcount": 62,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 114,
+      "classificationid": 114,
+      "name": "Furnishings",
+      "objectcount": 57,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 381,
+      "classificationid": 381,
+      "name": "Tablets",
+      "objectcount": 49,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 162,
+      "classificationid": 162,
+      "name": "Portfolios",
+      "objectcount": 48,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 1086,
+      "classificationid": 1086,
+      "name": "Cameos",
+      "objectcount": 46,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 359,
+      "classificationid": 359,
+      "name": "Musical Instruments",
+      "objectcount": 33,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 171,
+      "classificationid": 171,
+      "name": "Graphic Design",
+      "objectcount": 16,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 1188,
+      "classificationid": 1188,
+      "name": "Frames",
+      "objectcount": 13,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 1137,
+      "classificationid": 1137,
+      "name": "Models",
+      "objectcount": 11,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 1203,
+      "classificationid": 1203,
+      "name": "Containers",
+      "objectcount": 6,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 1185,
+      "classificationid": 1185,
+      "name": "Documents",
+      "objectcount": 3,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 197,
+      "classificationid": 197,
+      "name": "Paintings with Text",
+      "objectcount": 1,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 204,
+      "classificationid": 204,
+      "name": "Text",
+      "objectcount": 1,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 1139,
+      "classificationid": 1139,
+      "name": "Casts",
+      "objectcount": 1,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    },
+    {
+      "id": 1197,
+      "classificationid": 1197,
+      "name": "Costume",
+      "objectcount": 1,
+      "lastupdate": "2026-05-18T04:04:07-04:00"
+    }
+  ]
+}

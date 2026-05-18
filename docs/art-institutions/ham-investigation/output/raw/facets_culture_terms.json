@@ -1,0 +1,612 @@
+{
+  "info": {
+    "totalrecordsperquery": 100,
+    "totalrecords": 255,
+    "pages": 3,
+    "page": 1,
+    "next": "https://api.harvardartmuseums.org/culture?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=100&page=2&sort=objectcount&sortorder=desc",
+    "responsetime": "18 ms"
+  },
+  "records": [
+    {
+      "id": 37526778,
+      "name": "American",
+      "objectcount": 91844,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527453,
+      "name": "German",
+      "objectcount": 38785,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527426,
+      "name": "French",
+      "objectcount": 26051,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527759,
+      "name": "Italian",
+      "objectcount": 12518,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527039,
+      "name": "British",
+      "objectcount": 11055,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527795,
+      "name": "Japanese",
+      "objectcount": 10258,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527066,
+      "name": "Byzantine",
+      "objectcount": 9844,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527534,
+      "name": "Greek",
+      "objectcount": 9203,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527174,
+      "name": "Chinese",
+      "objectcount": 6827,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528416,
+      "name": "Roman",
+      "objectcount": 5604,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527300,
+      "name": "Dutch",
+      "objectcount": 5114,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528308,
+      "name": "Persian",
+      "objectcount": 3127,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528434,
+      "name": "Roman Provincial",
+      "objectcount": 2331,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527363,
+      "name": "European",
+      "objectcount": 2091,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527399,
+      "name": "Flemish",
+      "objectcount": 1792,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527867,
+      "name": "Korean",
+      "objectcount": 1605,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527678,
+      "name": "Indian",
+      "objectcount": 1487,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527219,
+      "name": "Croatian",
+      "objectcount": 1381,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528659,
+      "name": "Spanish",
+      "objectcount": 1352,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527318,
+      "name": "Egyptian",
+      "objectcount": 1097,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528173,
+      "name": "Netherlandish",
+      "objectcount": 952,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528425,
+      "name": "Roman Imperial",
+      "objectcount": 779,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528722,
+      "name": "Swiss",
+      "objectcount": 697,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528272,
+      "name": "Ottoman",
+      "objectcount": 694,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528857,
+      "name": "Unidentified culture",
+      "objectcount": 678,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528443,
+      "name": "Roman Republican",
+      "objectcount": 542,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37526913,
+      "name": "Austrian",
+      "objectcount": 524,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528461,
+      "name": "Russian",
+      "objectcount": 423,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528029,
+      "name": "Mexican",
+      "objectcount": 357,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527741,
+      "name": "Islamic",
+      "objectcount": 350,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527201,
+      "name": "Coptic",
+      "objectcount": 340,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528092,
+      "name": "Mycenaean",
+      "objectcount": 328,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527354,
+      "name": "Etruscan",
+      "objectcount": 317,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527030,
+      "name": "Brazilian",
+      "objectcount": 314,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528758,
+      "name": "Thai",
+      "objectcount": 300,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527147,
+      "name": "Central Asian",
+      "objectcount": 233,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527084,
+      "name": "Canadian",
+      "objectcount": 227,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527336,
+      "name": "English",
+      "objectcount": 217,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37526823,
+      "name": "Arab",
+      "objectcount": 214,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527237,
+      "name": "Cuban",
+      "objectcount": 200,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528506,
+      "name": "Scottish",
+      "objectcount": 184,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527714,
+      "name": "Iranian",
+      "objectcount": 181,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528236,
+      "name": "Norwegian",
+      "objectcount": 173,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528317,
+      "name": "Peruvian",
+      "objectcount": 164,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528731,
+      "name": "Syrian",
+      "objectcount": 159,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37526796,
+      "name": "Anatolian",
+      "objectcount": 155,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37526985,
+      "name": "Belgian",
+      "objectcount": 155,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527768,
+      "name": "Italic",
+      "objectcount": 154,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528713,
+      "name": "Swedish",
+      "objectcount": 147,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527570,
+      "name": "Hellenistic",
+      "objectcount": 137,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527255,
+      "name": "Cypriot",
+      "objectcount": 135,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527813,
+      "name": "Jewish",
+      "objectcount": 133,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527264,
+      "name": "Czech",
+      "objectcount": 117,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528164,
+      "name": "Nepalese",
+      "objectcount": 112,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527669,
+      "name": "Iberian",
+      "objectcount": 110,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527732,
+      "name": "Irish",
+      "objectcount": 108,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527345,
+      "name": "Ethiopian",
+      "objectcount": 106,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528785,
+      "name": "Turkish",
+      "objectcount": 105,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528038,
+      "name": "Minoan",
+      "objectcount": 104,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528362,
+      "name": "Polish",
+      "objectcount": 90,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528767,
+      "name": "Tibetan",
+      "objectcount": 90,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527111,
+      "name": "Celtic",
+      "objectcount": 83,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527516,
+      "name": "Graeco-Roman",
+      "objectcount": 82,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528407,
+      "name": "Punic",
+      "objectcount": 82,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528497,
+      "name": "Sasanian",
+      "objectcount": 80,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528380,
+      "name": "Portuguese",
+      "objectcount": 74,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527750,
+      "name": "Israeli",
+      "objectcount": 74,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528776,
+      "name": "Turkic",
+      "objectcount": 73,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527075,
+      "name": "Cambodian",
+      "objectcount": 71,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528119,
+      "name": "Near Eastern",
+      "objectcount": 71,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527282,
+      "name": "Danish",
+      "objectcount": 64,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37526859,
+      "name": "Argentinian",
+      "objectcount": 60,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37526931,
+      "name": "Avar",
+      "objectcount": 59,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528083,
+      "name": "Mughal",
+      "objectcount": 56,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37526868,
+      "name": "Armenian",
+      "objectcount": 55,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37526904,
+      "name": "Australian Aboriginal",
+      "objectcount": 54,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528911,
+      "name": "Uzbek",
+      "objectcount": 49,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527246,
+      "name": "Cycladic",
+      "objectcount": 45,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528299,
+      "name": "Parthian",
+      "objectcount": 45,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527228,
+      "name": "Crusader",
+      "objectcount": 44,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527579,
+      "name": "Early Roman",
+      "objectcount": 44,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527660,
+      "name": "Hurrian",
+      "objectcount": 39,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527651,
+      "name": "Hungarian",
+      "objectcount": 38,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527183,
+      "name": "Colombian",
+      "objectcount": 34,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528740,
+      "name": "Syro-Hittite",
+      "objectcount": 33,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37525950,
+      "name": "Afghan",
+      "objectcount": 32,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528020,
+      "name": "Mesopotamian",
+      "objectcount": 32,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37526895,
+      "name": "Australian",
+      "objectcount": 31,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528074,
+      "name": "Moroccan",
+      "objectcount": 29,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527894,
+      "name": "Kurdish",
+      "objectcount": 28,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528524,
+      "name": "Seleucid",
+      "objectcount": 27,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528929,
+      "name": "Venezuelan",
+      "objectcount": 27,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527480,
+      "name": "Graeco-Bactrian",
+      "objectcount": 27,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528326,
+      "name": "Philippine",
+      "objectcount": 27,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527309,
+      "name": "East Asian",
+      "objectcount": 26,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528182,
+      "name": "New Zealand",
+      "objectcount": 26,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37525941,
+      "name": "Achaemenid",
+      "objectcount": 24,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37527705,
+      "name": "Indonesian",
+      "objectcount": 23,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528551,
+      "name": "Siculo-Punic",
+      "objectcount": 23,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    },
+    {
+      "id": 37528704,
+      "name": "Sumerian",
+      "objectcount": 22,
+      "lastupdate": "2026-05-18T04:04:12-04:00"
+    }
+  ]
+}

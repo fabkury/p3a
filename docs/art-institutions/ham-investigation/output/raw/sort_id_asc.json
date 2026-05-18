@@ -1,0 +1,33 @@
+{
+  "info": {
+    "totalrecordsperquery": 3,
+    "totalrecords": 5575,
+    "pages": 1859,
+    "page": 1,
+    "next": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=3&classification=26&hasimage=1&fields=id%2Cobjectnumber%2Ctitle%2Cdated&sort=id&sortorder=asc&page=2",
+    "responsetime": "19 ms"
+  },
+  "records": [
+    {
+      "id": 1429,
+      "objectnumber": "2006.13",
+      "dated": "2005",
+      "imagepermissionlevel": 0,
+      "title": "What a Glorious Land!"
+    },
+    {
+      "id": 4586,
+      "objectnumber": "2006.14.11",
+      "dated": "2005",
+      "imagepermissionlevel": 0,
+      "title": "Streams and Mountains, from the series \"Sacrifice\""
+    },
+    {
+      "id": 4615,
+      "objectnumber": "2006.14.20",
+      "dated": "2005",
+      "imagepermissionlevel": 0,
+      "title": "The Great Wall Snaking through the Mountains, from the series \"Sacrifice\""
+    }
+  ]
+}

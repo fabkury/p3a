@@ -1,0 +1,4301 @@
+{
+  "info": {
+    "totalrecordsperquery": 100,
+    "totalrecords": 42549,
+    "pages": 426,
+    "page": 1,
+    "next": "https://api.harvardartmuseums.org/person?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=100&page=2&sort=objectcount&sortorder=desc",
+    "responsetime": "44 ms"
+  },
+  "records": [
+    {
+      "id": 20002,
+      "personid": 20002,
+      "displayname": "Lyonel Feininger",
+      "datebegin": 1871,
+      "dateend": 1956,
+      "displaydate": "1871 - 1956",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "New York, NY",
+      "deathplace": "New York, NY",
+      "alphasort": "Feininger, Lyonel",
+      "url": "https://www.harvardartmuseums.org/collections/person/20002",
+      "objectcount": 24062,
+      "createdate": "2006-03-27T15:44:31-05:00",
+      "lastupdate": "2026-05-18T05:50:18-04:00",
+      "viaf_id": "49225327",
+      "wikipedia_id": "18391",
+      "ulan_id": "500115308",
+      "wikidata_id": "Q158255",
+      "lcnaf_id": "n50001305",
+      "names": [
+        {
+          "displayname": "Lyonel Feininger",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Author",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Author",
+          "context": "publication",
+          "frequency": 1
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 9
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 24817
+        },
+        {
+          "role": "Donor/Lender/Vendor",
+          "context": "object",
+          "frequency": 3
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 3
+        }
+      ]
+    },
+    {
+      "id": 34147,
+      "personid": 34147,
+      "displayname": "Unidentified Artist",
+      "datebegin": 0,
+      "dateend": 0,
+      "displaydate": null,
+      "culture": null,
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Unidentified Artist",
+      "url": "https://www.harvardartmuseums.org/collections/person/34147",
+      "objectcount": 21046,
+      "createdate": "2006-03-27T15:56:49-05:00",
+      "lastupdate": "2026-05-18T05:50:12-04:00",
+      "names": [
+        {
+          "displayname": "Unidentified Artists",
+          "type": "Alternate Name"
+        },
+        {
+          "displayname": "Unidentified Artist",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Designer",
+          "context": "object",
+          "frequency": 10
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 9
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 114
+        },
+        {
+          "role": "Alternative attribution",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Photographer",
+          "context": "object",
+          "frequency": 7
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 28
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 41183
+        },
+        {
+          "role": "Printer",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Architect",
+          "context": "object",
+          "frequency": 5
+        }
+      ]
+    },
+    {
+      "id": 28639,
+      "personid": 28639,
+      "displayname": "Ben Shahn",
+      "datebegin": 1898,
+      "dateend": 1969,
+      "displaydate": "1898 - 1969",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "Kovno (now Kaunas), Lithuania",
+      "deathplace": "New York, NY",
+      "alphasort": "Shahn, Ben",
+      "url": "https://www.harvardartmuseums.org/collections/person/28639",
+      "objectcount": 7776,
+      "createdate": "2006-03-27T15:51:56-05:00",
+      "lastupdate": "2026-05-18T05:49:55-04:00",
+      "viaf_id": "17268935",
+      "wikipedia_id": "441346",
+      "ulan_id": "500005524",
+      "wikidata_id": "Q695239",
+      "names": [
+        {
+          "displayname": "Ben Shahn",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Author",
+          "context": "publication",
+          "frequency": 3
+        },
+        {
+          "role": "Donor/Lender/Vendor",
+          "context": "object",
+          "frequency": 9
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 6
+        },
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Author",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 8257
+        }
+      ]
+    },
+    {
+      "id": 28069,
+      "personid": 28069,
+      "displayname": "Otto Piene",
+      "datebegin": 1928,
+      "dateend": 2014,
+      "displaydate": "1928 - 2014",
+      "culture": "German",
+      "gender": "male",
+      "birthplace": "Laasphe, Westphalia, Germany",
+      "deathplace": "Berlin, Germany",
+      "alphasort": "Piene, Otto",
+      "url": "https://www.harvardartmuseums.org/collections/person/28069",
+      "objectcount": 6302,
+      "createdate": "2006-03-27T15:51:29-05:00",
+      "lastupdate": "2026-05-18T05:49:59-04:00",
+      "viaf_id": "44445490",
+      "wikipedia_id": "6624377",
+      "ulan_id": "500032357",
+      "wikidata_id": "Q455115",
+      "lcnaf_id": "n50009828",
+      "names": [
+        {
+          "displayname": "Otto Piene",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 6325
+        },
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 1
+        }
+      ]
+    },
+    {
+      "id": 22612,
+      "personid": 22612,
+      "displayname": "Joseph Janney Steinmetz",
+      "datebegin": 1905,
+      "dateend": 1985,
+      "displaydate": "1905 - 1985",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "Germantown, PA",
+      "deathplace": "Sarasota, FL",
+      "alphasort": "Steinmetz, Joseph Janney",
+      "url": "https://www.harvardartmuseums.org/collections/person/22612",
+      "objectcount": 5428,
+      "createdate": "2006-03-27T15:46:53-05:00",
+      "lastupdate": "2026-05-18T05:49:46-04:00",
+      "viaf_id": "68119692",
+      "wikipedia_id": "42511897",
+      "ulan_id": "500060707",
+      "names": [
+        {
+          "displayname": "Joe Steinmetz",
+          "type": "Alternate Name"
+        },
+        {
+          "displayname": "Joseph Janney Steinmetz",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 5576
+        },
+        {
+          "role": "Photographer",
+          "context": "object",
+          "frequency": 10
+        }
+      ]
+    },
+    {
+      "id": 23680,
+      "personid": 23680,
+      "displayname": "Walter Gropius",
+      "datebegin": 1883,
+      "dateend": 1969,
+      "displaydate": "1883 - 1969",
+      "culture": "German",
+      "gender": "male",
+      "birthplace": "Berlin, Germany",
+      "deathplace": "Boston, Mass., USA",
+      "alphasort": "Gropius, Walter",
+      "url": "https://www.harvardartmuseums.org/collections/person/23680",
+      "objectcount": 5067,
+      "createdate": "2006-03-27T15:47:47-05:00",
+      "lastupdate": "2026-05-18T05:49:34-04:00",
+      "viaf_id": "24663766",
+      "wikipedia_id": "33807",
+      "ulan_id": "500028112",
+      "wikidata_id": "Q61071",
+      "lcnaf_id": "n80076591",
+      "names": [
+        {
+          "displayname": "Walter Gropius",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 27
+        },
+        {
+          "role": "Alternative attribution",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Architect",
+          "context": "object",
+          "frequency": 1251
+        },
+        {
+          "role": "Donor/Lender/Vendor",
+          "context": "object",
+          "frequency": 4057
+        },
+        {
+          "role": "Editor",
+          "context": "publication",
+          "frequency": 1
+        },
+        {
+          "role": "Designer",
+          "context": "object",
+          "frequency": 22
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 3785
+        },
+        {
+          "role": "Editor",
+          "context": "object",
+          "frequency": 5
+        },
+        {
+          "role": "Author",
+          "context": "object",
+          "frequency": 4
+        }
+      ]
+    },
+    {
+      "id": 34691,
+      "personid": 34691,
+      "displayname": "Honor\u00e9-Victorin Daumier",
+      "datebegin": 1808,
+      "dateend": 1879,
+      "displaydate": "1808-1879",
+      "culture": "French",
+      "gender": "male",
+      "birthplace": "Marseille, France",
+      "deathplace": "Valmondois, France",
+      "alphasort": "Daumier, Honor\u00e9-Victorin",
+      "url": "https://www.harvardartmuseums.org/collections/person/34691",
+      "objectcount": 4795,
+      "createdate": "2006-03-27T15:57:18-05:00",
+      "lastupdate": "2026-05-18T05:49:45-04:00",
+      "viaf_id": "96555949",
+      "wikipedia_id": "337688",
+      "ulan_id": "500117998",
+      "wikidata_id": "Q187506",
+      "names": [
+        {
+          "displayname": "Honor\u00e9-Victorin Daumier",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Author",
+          "context": "publication",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 4799
+        },
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 3
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 7
+        }
+      ]
+    },
+    {
+      "id": 24403,
+      "personid": 24403,
+      "displayname": "Gordon W. Gahan",
+      "datebegin": 1945,
+      "dateend": 1984,
+      "displaydate": "1945 - 1984",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "New York, New York",
+      "deathplace": "St. Thomas, US Virgin Islands",
+      "alphasort": "Gahan, Gordon W.",
+      "url": "https://www.harvardartmuseums.org/collections/person/24403",
+      "objectcount": 4165,
+      "createdate": "2006-03-27T15:48:24-05:00",
+      "lastupdate": "2026-05-18T05:49:39-04:00",
+      "viaf_id": "96448004",
+      "wikipedia_id": "17429017",
+      "ulan_id": "500103197",
+      "wikidata_id": "Q5585152",
+      "names": [
+        {
+          "displayname": "Gordon W. Gahan",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 4170
+        }
+      ]
+    },
+    {
+      "id": 29410,
+      "personid": 29410,
+      "displayname": "Christopher Wilmarth",
+      "datebegin": 1943,
+      "dateend": 1987,
+      "displaydate": "1943 - 1987",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "Sonoma, CA",
+      "deathplace": "New York, NY",
+      "alphasort": "Wilmarth, Christopher",
+      "url": "https://www.harvardartmuseums.org/collections/person/29410",
+      "objectcount": 2869,
+      "createdate": "2006-03-27T15:52:39-05:00",
+      "lastupdate": "2026-05-18T05:49:24-04:00",
+      "viaf_id": "7430864",
+      "wikipedia_id": "48280002",
+      "ulan_id": "500019367",
+      "wikidata_id": "Q21176533",
+      "names": [
+        {
+          "displayname": "Christopher Wilmarth",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 2981
+        }
+      ]
+    },
+    {
+      "id": 21849,
+      "personid": 21849,
+      "displayname": "Jack Gould",
+      "datebegin": 0,
+      "dateend": 0,
+      "displaydate": null,
+      "culture": "American",
+      "gender": "male",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Gould, Jack",
+      "url": "https://www.harvardartmuseums.org/collections/person/21849",
+      "objectcount": 2444,
+      "createdate": "2006-03-27T15:46:11-05:00",
+      "lastupdate": "2026-05-18T05:49:21-04:00",
+      "names": [
+        {
+          "displayname": "Jack Gould",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 2444
+        }
+      ]
+    },
+    {
+      "id": 22094,
+      "personid": 22094,
+      "displayname": "Harry Annas",
+      "datebegin": 1897,
+      "dateend": 1980,
+      "displaydate": "1897 - 1980",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Annas, Harry",
+      "url": "https://www.harvardartmuseums.org/collections/person/22094",
+      "objectcount": 2154,
+      "createdate": "2006-03-27T15:46:23-05:00",
+      "lastupdate": "2026-05-18T05:49:25-04:00",
+      "names": [
+        {
+          "displayname": "Harry Annas",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 2172
+        },
+        {
+          "role": "Photographer",
+          "context": "object",
+          "frequency": 1
+        }
+      ]
+    },
+    {
+      "id": 23041,
+      "personid": 23041,
+      "displayname": "Lucian and Mary Brown",
+      "datebegin": 1915,
+      "dateend": 0,
+      "displaydate": null,
+      "culture": "American",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Brown, Lucian and Mary",
+      "url": "https://www.harvardartmuseums.org/collections/person/23041",
+      "objectcount": 1788,
+      "createdate": "2006-03-27T15:47:15-05:00",
+      "lastupdate": "2026-05-18T05:49:20-04:00",
+      "names": [
+        {
+          "displayname": "Lucian and Mary Brown",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1818
+        }
+      ]
+    },
+    {
+      "id": 22265,
+      "personid": 22265,
+      "displayname": "Martin Schweig",
+      "datebegin": 1900,
+      "dateend": 1999,
+      "displaydate": "20th century",
+      "culture": "American",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Schweig, Martin",
+      "url": "https://www.harvardartmuseums.org/collections/person/22265",
+      "objectcount": 1741,
+      "createdate": "2006-03-27T15:46:32-05:00",
+      "lastupdate": "2026-05-18T05:50:16-04:00",
+      "names": [
+        {
+          "displayname": "Martin Schweig",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Recipient",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1779
+        }
+      ]
+    },
+    {
+      "id": 27626,
+      "personid": 27626,
+      "displayname": "Otti Berger",
+      "datebegin": 1898,
+      "dateend": 1944,
+      "displaydate": "1898 - 1944",
+      "culture": "Yugoslav",
+      "gender": "female",
+      "birthplace": "Zmajevac, Hungary (present day Croatia)",
+      "deathplace": "Auschwitz, Poland",
+      "alphasort": "Berger, Otti",
+      "url": "https://www.harvardartmuseums.org/collections/person/27626",
+      "objectcount": 1463,
+      "createdate": "2006-03-27T15:51:08-05:00",
+      "lastupdate": "2026-05-18T05:50:06-04:00",
+      "viaf_id": "77059494",
+      "wikipedia_id": "46971092",
+      "ulan_id": "500098073",
+      "wikidata_id": "Q2037742",
+      "names": [
+        {
+          "displayname": "Otti Berger",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Designer",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1462
+        },
+        {
+          "role": "Author",
+          "context": "publication",
+          "frequency": 1
+        },
+        {
+          "role": "Author",
+          "context": "object",
+          "frequency": 4
+        }
+      ]
+    },
+    {
+      "id": 29118,
+      "personid": 29118,
+      "displayname": "Joseph Mallord William Turner",
+      "datebegin": 1775,
+      "dateend": 1851,
+      "displaydate": "1775 - 1851",
+      "culture": "British",
+      "gender": "male",
+      "birthplace": "London, England",
+      "deathplace": "Chelsea, England",
+      "alphasort": "Turner, Joseph Mallord William",
+      "url": "https://www.harvardartmuseums.org/collections/person/29118",
+      "objectcount": 1419,
+      "createdate": "2006-03-27T15:52:24-05:00",
+      "lastupdate": "2026-05-18T05:49:43-04:00",
+      "viaf_id": "100900492",
+      "wikipedia_id": "72187",
+      "ulan_id": "500026846",
+      "names": [
+        {
+          "displayname": "J.M.W. Turner",
+          "type": "Alternate Name"
+        },
+        {
+          "displayname": "Joseph Mallord William Turner",
+          "type": "Primary Name"
+        },
+        {
+          "displayname": "J. M. W. Turner",
+          "type": "Alternate Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 317
+        },
+        {
+          "role": "Publisher",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 1141
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 2
+        }
+      ]
+    },
+    {
+      "id": 28370,
+      "personid": 28370,
+      "displayname": "Denman Waldo Ross",
+      "datebegin": 1853,
+      "dateend": 1935,
+      "displaydate": "1853 - 1935",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "Cincinnati, OH",
+      "deathplace": "London, England",
+      "alphasort": "Ross, Denman Waldo",
+      "url": "https://www.harvardartmuseums.org/collections/person/28370",
+      "objectcount": 1418,
+      "createdate": "2006-03-27T15:51:43-05:00",
+      "lastupdate": "2026-05-18T05:50:03-04:00",
+      "viaf_id": "24510333",
+      "wikipedia_id": "656417",
+      "ulan_id": "500099745",
+      "names": [
+        {
+          "displayname": "Denman Waldo Ross",
+          "type": "Primary Name"
+        },
+        {
+          "displayname": "Denman Ross",
+          "type": "Alternate Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Recipient",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 31
+        },
+        {
+          "role": "Donor/Lender/Vendor",
+          "context": "object",
+          "frequency": 1317
+        },
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1370
+        },
+        {
+          "role": "Author",
+          "context": "object",
+          "frequency": 12
+        }
+      ]
+    },
+    {
+      "id": 28495,
+      "personid": 28495,
+      "displayname": "John Singer Sargent",
+      "datebegin": 1856,
+      "dateend": 1925,
+      "displaydate": "1856 - 1925",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "Florence, Italy",
+      "deathplace": "London, England",
+      "alphasort": "Sargent, John Singer",
+      "url": "https://www.harvardartmuseums.org/collections/person/28495",
+      "objectcount": 1402,
+      "createdate": "2006-03-27T15:51:49-05:00",
+      "lastupdate": "2026-05-18T05:49:55-04:00",
+      "viaf_id": "12466780",
+      "wikipedia_id": "105373",
+      "ulan_id": "500023972",
+      "wikidata_id": "Q155626",
+      "lcnaf_id": "n50019335",
+      "names": [
+        {
+          "displayname": "John Singer Sargent",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Recipient",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 3
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 45
+        },
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Author",
+          "context": "object",
+          "frequency": 3
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 8
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1386
+        }
+      ]
+    },
+    {
+      "id": 30723,
+      "personid": 30723,
+      "displayname": "Jacques Callot",
+      "datebegin": 1592,
+      "dateend": 1635,
+      "displaydate": "1592 - 1635",
+      "culture": "French",
+      "gender": "male",
+      "birthplace": "Nancy",
+      "deathplace": "Nancy",
+      "alphasort": "Callot, Jacques",
+      "url": "https://www.harvardartmuseums.org/collections/person/30723",
+      "objectcount": 1370,
+      "createdate": "2006-03-27T15:53:52-05:00",
+      "lastupdate": "2026-05-18T05:50:02-04:00",
+      "viaf_id": "19687783",
+      "wikipedia_id": "16313",
+      "ulan_id": "500021688",
+      "names": [
+        {
+          "displayname": "Jacques Callot",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1303
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 82
+        }
+      ]
+    },
+    {
+      "id": 22614,
+      "personid": 22614,
+      "displayname": "Francis J. Sullivan",
+      "datebegin": 1916,
+      "dateend": 1996,
+      "displaydate": "1916 - 1996",
+      "culture": "American",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Sullivan, Francis J.",
+      "url": "https://www.harvardartmuseums.org/collections/person/22614",
+      "objectcount": 1285,
+      "createdate": "2006-03-27T15:46:53-05:00",
+      "lastupdate": "2026-05-18T05:50:04-04:00",
+      "names": [
+        {
+          "displayname": "Francis J. Sullivan",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Photographer",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1291
+        }
+      ]
+    },
+    {
+      "id": 22345,
+      "personid": 22345,
+      "displayname": "Durette Studio",
+      "datebegin": 1900,
+      "dateend": 1999,
+      "displaydate": "20th century",
+      "culture": "American",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Durette Studio",
+      "url": "https://www.harvardartmuseums.org/collections/person/22345",
+      "objectcount": 1273,
+      "createdate": "2006-03-27T15:46:38-05:00",
+      "lastupdate": "2026-05-18T05:50:13-04:00",
+      "names": [
+        {
+          "displayname": "Durette Studio",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1360
+        }
+      ]
+    },
+    {
+      "id": 28089,
+      "personid": 28089,
+      "displayname": "Giovanni Battista Piranesi",
+      "datebegin": 1720,
+      "dateend": 1778,
+      "displaydate": "1720 - 1778",
+      "culture": "Italian",
+      "gender": "male",
+      "birthplace": "Mogliano Veneto, Italy",
+      "deathplace": "Rome, Italy",
+      "alphasort": "Piranesi, Giovanni Battista",
+      "url": "https://www.harvardartmuseums.org/collections/person/28089",
+      "objectcount": 1228,
+      "createdate": "2006-03-27T15:51:30-05:00",
+      "lastupdate": "2026-05-18T05:50:02-04:00",
+      "viaf_id": "2546239",
+      "wikipedia_id": "161803",
+      "ulan_id": "500114965",
+      "names": [
+        {
+          "displayname": "Giovanni Battista Piranesi",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1234
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 13
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 1
+        }
+      ]
+    },
+    {
+      "id": 34836,
+      "personid": 34836,
+      "displayname": "Stuart Davis",
+      "datebegin": 1892,
+      "dateend": 1964,
+      "displaydate": "1892 - 1964",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "Philadelphia, PA",
+      "deathplace": "New York, NY",
+      "alphasort": "Davis, Stuart",
+      "url": "https://www.harvardartmuseums.org/collections/person/34836",
+      "objectcount": 1181,
+      "createdate": "2006-03-27T15:57:28-05:00",
+      "lastupdate": "2026-05-18T05:50:06-04:00",
+      "viaf_id": "49262338",
+      "wikipedia_id": "608522",
+      "ulan_id": "500115507",
+      "wikidata_id": "Q704588",
+      "lcnaf_id": "n85290099",
+      "names": [
+        {
+          "displayname": "Stuart Davis",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Donor/Lender/Vendor",
+          "context": "object",
+          "frequency": 1165
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1188
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 1
+        }
+      ]
+    },
+    {
+      "id": 27839,
+      "personid": 27839,
+      "displayname": "Joseph Beuys",
+      "datebegin": 1921,
+      "dateend": 1986,
+      "displaydate": "1921 - 1986",
+      "culture": "German",
+      "gender": "male",
+      "birthplace": "Krefeld, Germany",
+      "deathplace": "D\u00fcsseldorf, Germany",
+      "alphasort": "Beuys, Joseph",
+      "url": "https://www.harvardartmuseums.org/collections/person/27839",
+      "objectcount": 1156,
+      "createdate": "2006-03-27T15:51:18-05:00",
+      "lastupdate": "2026-05-18T05:49:36-04:00",
+      "viaf_id": "14782352",
+      "wikipedia_id": "181651",
+      "ulan_id": "500024607",
+      "wikidata_id": "Q153965",
+      "lcnaf_id": "n79102794",
+      "names": [
+        {
+          "displayname": "Joseph Beuys",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1163
+        }
+      ]
+    },
+    {
+      "id": 28220,
+      "personid": 28220,
+      "displayname": "Raphael",
+      "datebegin": 1483,
+      "dateend": 1520,
+      "displaydate": "1483 - 1520",
+      "culture": "Italian",
+      "gender": "male",
+      "birthplace": "Urbino, Italy",
+      "deathplace": "Rome, Italy",
+      "alphasort": "Raphael",
+      "url": "https://www.harvardartmuseums.org/collections/person/28220",
+      "objectcount": 1131,
+      "createdate": "2006-03-27T15:51:36-05:00",
+      "lastupdate": "2026-05-18T05:50:05-04:00",
+      "viaf_id": "64055977",
+      "wikipedia_id": "44525",
+      "ulan_id": "500023578",
+      "names": [
+        {
+          "displayname": "Raphaele Sanzio",
+          "type": "Full name"
+        },
+        {
+          "displayname": "Raphael",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 1115
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 30
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 35
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 3
+        }
+      ]
+    },
+    {
+      "id": 34059,
+      "personid": 34059,
+      "displayname": "Anonymous France 1599",
+      "datebegin": 1500,
+      "dateend": 1599,
+      "displaydate": "16th century",
+      "culture": "French",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Anonymous France 1599",
+      "url": "https://www.harvardartmuseums.org/collections/person/34059",
+      "objectcount": 1098,
+      "createdate": "2006-03-27T15:56:44-05:00",
+      "lastupdate": "2026-05-18T05:49:40-04:00",
+      "names": [
+        {
+          "displayname": "Anonymous France 1599",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1098
+        }
+      ]
+    },
+    {
+      "id": 27814,
+      "personid": 27814,
+      "displayname": "Barnett Newman",
+      "datebegin": 1905,
+      "dateend": 1970,
+      "displaydate": "1905 - 1970",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "New York NY",
+      "deathplace": "New York NY",
+      "alphasort": "Newman, Barnett",
+      "url": "https://www.harvardartmuseums.org/collections/person/27814",
+      "objectcount": 1056,
+      "createdate": "2006-03-27T15:51:17-05:00",
+      "lastupdate": "2026-05-18T05:50:14-04:00",
+      "viaf_id": "19686304",
+      "wikipedia_id": "238470",
+      "ulan_id": "500000960",
+      "wikidata_id": "Q374504",
+      "lcnaf_id": "n79109192",
+      "names": [
+        {
+          "displayname": "Barnett Newman",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1063
+        }
+      ]
+    },
+    {
+      "id": 27344,
+      "personid": 27344,
+      "displayname": "Stefano Della Bella",
+      "datebegin": 1610,
+      "dateend": 1664,
+      "displaydate": "1610 - 1664",
+      "culture": "Italian",
+      "gender": "male",
+      "birthplace": "Florence, Italy",
+      "deathplace": "Florence, Italy",
+      "alphasort": "Bella, Stefano Della",
+      "url": "https://www.harvardartmuseums.org/collections/person/27344",
+      "objectcount": 1031,
+      "createdate": "2006-03-27T15:50:55-05:00",
+      "lastupdate": "2026-05-18T05:49:21-04:00",
+      "viaf_id": "7502835",
+      "wikipedia_id": "1642096",
+      "ulan_id": "500018966",
+      "names": [
+        {
+          "displayname": "Stefano Della Bella",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 70
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 963
+        }
+      ]
+    },
+    {
+      "id": 18263,
+      "personid": 18263,
+      "displayname": "Lucien Clergue",
+      "datebegin": 1934,
+      "dateend": 2014,
+      "displaydate": "1934 - 2014",
+      "culture": "French",
+      "gender": "male",
+      "birthplace": "Arles, France",
+      "deathplace": "N\u00eemes, France",
+      "alphasort": "Clergue, Lucien",
+      "url": "https://www.harvardartmuseums.org/collections/person/18263",
+      "objectcount": 910,
+      "createdate": "2006-03-27T15:42:58-05:00",
+      "lastupdate": "2026-05-18T05:49:28-04:00",
+      "viaf_id": "7388520",
+      "wikipedia_id": "13904909",
+      "ulan_id": "500115463",
+      "wikidata_id": "Q1395740",
+      "lcnaf_id": "n50028636",
+      "names": [
+        {
+          "displayname": "Lucien Clergue",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 910
+        },
+        {
+          "role": "Author",
+          "context": "publication",
+          "frequency": 4
+        },
+        {
+          "role": "Donor/Lender/Vendor",
+          "context": "object",
+          "frequency": 16
+        }
+      ]
+    },
+    {
+      "id": 10610,
+      "personid": 10610,
+      "displayname": "Paul J. Sachs",
+      "datebegin": 1878,
+      "dateend": 1965,
+      "displaydate": "1878 - 1965",
+      "culture": null,
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Sachs, Paul J.",
+      "url": "https://www.harvardartmuseums.org/collections/person/10610",
+      "objectcount": 833,
+      "createdate": "2006-03-27T15:36:12-05:00",
+      "lastupdate": "2026-05-18T05:50:16-04:00",
+      "names": [
+        {
+          "displayname": "Paul J. Sachs",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Donor/Lender/Vendor",
+          "context": "object",
+          "frequency": 1781
+        },
+        {
+          "role": "Curator",
+          "context": "exhibition",
+          "frequency": 2
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 7
+        },
+        {
+          "role": "Recipient",
+          "context": "object",
+          "frequency": 458
+        },
+        {
+          "role": "Author",
+          "context": "object",
+          "frequency": 347
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Author",
+          "context": "publication",
+          "frequency": 8
+        },
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 19
+        }
+      ]
+    },
+    {
+      "id": 28991,
+      "personid": 28991,
+      "displayname": "Antonio Tempesta",
+      "datebegin": 1555,
+      "dateend": 1630,
+      "displaydate": "1555 - 1630",
+      "culture": "Italian",
+      "gender": "male",
+      "birthplace": "Florence, Italy",
+      "deathplace": "Rome, Italy",
+      "alphasort": "Tempesta, Antonio",
+      "url": "https://www.harvardartmuseums.org/collections/person/28991",
+      "objectcount": 779,
+      "createdate": "2006-03-27T15:52:16-05:00",
+      "lastupdate": "2026-05-18T05:49:46-04:00",
+      "viaf_id": "73935201",
+      "wikipedia_id": "8748395",
+      "ulan_id": "500027888",
+      "names": [
+        {
+          "displayname": "Antonio Tempesta",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 5
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 776
+        }
+      ]
+    },
+    {
+      "id": 28241,
+      "personid": 28241,
+      "displayname": "Rembrandt Harmensz. van Rijn",
+      "datebegin": 1606,
+      "dateend": 1669,
+      "displaydate": "1606 - 1669",
+      "culture": "Dutch",
+      "gender": "male",
+      "birthplace": "Leiden",
+      "deathplace": "Amsterdam",
+      "alphasort": "Rembrandt Harmensz. van Rijn",
+      "url": "https://www.harvardartmuseums.org/collections/person/28241",
+      "objectcount": 709,
+      "createdate": "2006-03-27T15:51:37-05:00",
+      "lastupdate": "2026-05-18T05:50:10-04:00",
+      "viaf_id": "64013650",
+      "wikipedia_id": "4254144",
+      "ulan_id": "500011051",
+      "wikidata_id": "Q5598",
+      "lcnaf_id": "n79142935",
+      "names": [
+        {
+          "displayname": "Rembrandt",
+          "type": "Alternate Name"
+        },
+        {
+          "displayname": "Rembrandt Harmensz. van Rijn",
+          "type": "Primary Name"
+        },
+        {
+          "displayname": "Rembrandt van Rijn",
+          "type": "Alternate Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 10
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 233
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 222
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 292
+        }
+      ]
+    },
+    {
+      "id": 25840,
+      "personid": 25840,
+      "displayname": "Utagawa Hiroshige \u6b4c\u5ddd\u5e83\u91cd",
+      "datebegin": 1797,
+      "dateend": 1858,
+      "displaydate": "1797 - 1858",
+      "culture": "Japanese",
+      "gender": "male",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Utagawa, Hiroshige",
+      "url": "https://www.harvardartmuseums.org/collections/person/25840",
+      "objectcount": 651,
+      "createdate": "2006-03-27T15:49:41-05:00",
+      "lastupdate": "2026-05-18T05:50:09-04:00",
+      "viaf_id": "19678928",
+      "wikipedia_id": "2492542",
+      "ulan_id": "500019641",
+      "names": [
+        {
+          "displayname": "Utagawa Hiroshige \u6b4c\u5ddd\u5e83\u91cd",
+          "type": "Primary Name"
+        },
+        {
+          "displayname": "And\u014d Hiroshige",
+          "type": "Alternate Name"
+        },
+        {
+          "displayname": "\u6b4c\u5ddd\u5e83\u91cd",
+          "type": "Original Language Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 3
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 674
+        }
+      ]
+    },
+    {
+      "id": 20610,
+      "personid": 20610,
+      "displayname": "Edward Waldo Forbes",
+      "datebegin": 1873,
+      "dateend": 1969,
+      "displaydate": "1873 - 1969",
+      "culture": "American",
+      "gender": "unknown",
+      "birthplace": "Naushon Island, MA",
+      "deathplace": "Belmont, MA",
+      "alphasort": "Forbes, Edward Waldo",
+      "url": "https://www.harvardartmuseums.org/collections/person/20610",
+      "objectcount": 618,
+      "createdate": "2006-03-27T15:45:02-05:00",
+      "lastupdate": "2026-05-18T05:49:52-04:00",
+      "names": [
+        {
+          "displayname": "Edward Forbes",
+          "type": "Alternate Name"
+        },
+        {
+          "displayname": "Edward Waldo Forbes",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 25
+        },
+        {
+          "role": "Manufacturer",
+          "context": "object",
+          "frequency": 4
+        },
+        {
+          "role": "Donor/Lender/Vendor",
+          "context": "object",
+          "frequency": 400
+        },
+        {
+          "role": "Recipient",
+          "context": "object",
+          "frequency": 270
+        },
+        {
+          "role": "Curator",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 16
+        },
+        {
+          "role": "Author",
+          "context": "object",
+          "frequency": 297
+        },
+        {
+          "role": "Editor",
+          "context": "publication",
+          "frequency": 2
+        },
+        {
+          "role": "Author",
+          "context": "publication",
+          "frequency": 12
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 6
+        }
+      ]
+    },
+    {
+      "id": 22611,
+      "personid": 22611,
+      "displayname": "Paul Gittings",
+      "datebegin": 1900,
+      "dateend": 1988,
+      "displaydate": "1900 - 1988",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Gittings, Paul",
+      "url": "https://www.harvardartmuseums.org/collections/person/22611",
+      "objectcount": 610,
+      "createdate": "2006-03-27T15:46:53-05:00",
+      "lastupdate": "2026-05-18T05:49:27-04:00",
+      "viaf_id": "61229634",
+      "wikipedia_id": "4424638",
+      "names": [
+        {
+          "displayname": "Paul Gittings",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 614
+        },
+        {
+          "role": "Photographer",
+          "context": "object",
+          "frequency": 1
+        }
+      ]
+    },
+    {
+      "id": 26321,
+      "personid": 26321,
+      "displayname": "Katsushika Hokusai \u845b\u98fe\u5317\u658e",
+      "datebegin": 1760,
+      "dateend": 1849,
+      "displaydate": "1760 - 1849",
+      "culture": "Japanese",
+      "gender": "male",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Katsushika, Hokusai",
+      "url": "https://www.harvardartmuseums.org/collections/person/26321",
+      "objectcount": 593,
+      "createdate": "2006-03-27T15:50:07-05:00",
+      "lastupdate": "2026-05-18T05:49:37-04:00",
+      "viaf_id": "69033717",
+      "wikipedia_id": "43357",
+      "ulan_id": "500060426",
+      "names": [
+        {
+          "displayname": "\u845b\u98fe\u5317\u658e",
+          "type": "Original Language Name"
+        },
+        {
+          "displayname": "Katsushika Hokusai \u845b\u98fe\u5317\u658e",
+          "type": "Primary Name"
+        },
+        {
+          "displayname": "Tamekazu",
+          "type": "Alternate Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 26
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 577
+        }
+      ]
+    },
+    {
+      "id": 23040,
+      "personid": 23040,
+      "displayname": "Robert Burian",
+      "datebegin": 1940,
+      "dateend": 1959,
+      "displaydate": "active 1940s-1950s",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Burian, Robert",
+      "url": "https://www.harvardartmuseums.org/collections/person/23040",
+      "objectcount": 587,
+      "createdate": "2006-03-27T15:47:15-05:00",
+      "lastupdate": "2026-05-18T05:50:11-04:00",
+      "names": [
+        {
+          "displayname": "Robert Burian",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Recipient",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 586
+        }
+      ]
+    },
+    {
+      "id": 22601,
+      "personid": 22601,
+      "displayname": "Orrion Barger",
+      "datebegin": 1913,
+      "dateend": 1984,
+      "displaydate": "active 1913 - 1984",
+      "culture": "American",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Barger, Orrion",
+      "url": "https://www.harvardartmuseums.org/collections/person/22601",
+      "objectcount": 582,
+      "createdate": "2006-03-27T15:46:53-05:00",
+      "lastupdate": "2026-05-18T05:49:46-04:00",
+      "names": [
+        {
+          "displayname": "Orrion Barger",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Photographer",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Alternative attribution",
+          "context": "object",
+          "frequency": 24
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 555
+        },
+        {
+          "role": "Author",
+          "context": "object",
+          "frequency": 1
+        }
+      ]
+    },
+    {
+      "id": 22602,
+      "personid": 22602,
+      "displayname": "John Deusing",
+      "datebegin": 1940,
+      "dateend": 1949,
+      "displaydate": "active 1940s",
+      "culture": "American",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Deusing, John",
+      "url": "https://www.harvardartmuseums.org/collections/person/22602",
+      "objectcount": 564,
+      "createdate": "2006-03-27T15:46:53-05:00",
+      "lastupdate": "2026-05-18T05:49:39-04:00",
+      "names": [
+        {
+          "displayname": "John Deusing",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 565
+        }
+      ]
+    },
+    {
+      "id": 21727,
+      "personid": 21727,
+      "displayname": "Paul Gavarni",
+      "datebegin": 1804,
+      "dateend": 1866,
+      "displaydate": "1804 - 1866",
+      "culture": "French",
+      "gender": "male",
+      "birthplace": "Paris",
+      "deathplace": "Paris",
+      "alphasort": "Gavarni, Paul",
+      "url": "https://www.harvardartmuseums.org/collections/person/21727",
+      "objectcount": 544,
+      "createdate": "2006-03-27T15:46:05-05:00",
+      "lastupdate": "2026-05-18T05:49:37-04:00",
+      "viaf_id": "100173039",
+      "wikipedia_id": "1791166",
+      "ulan_id": "500006992",
+      "wikidata_id": "Q1074290",
+      "lcnaf_id": "n81098848",
+      "names": [
+        {
+          "displayname": "Hippolyte-Guillaume-Sulpice Chevalier",
+          "type": "Alternate Name"
+        },
+        {
+          "displayname": "Paul Gavarni",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 539
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 9
+        }
+      ]
+    },
+    {
+      "id": 29630,
+      "personid": 29630,
+      "displayname": "Marcel Breuer",
+      "datebegin": 1902,
+      "dateend": 1981,
+      "displaydate": "1902 - 1981",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "Pecs, Hungary",
+      "deathplace": "New York, N.Y., USA",
+      "alphasort": "Breuer, Marcel Lajos",
+      "url": "https://www.harvardartmuseums.org/collections/person/29630",
+      "objectcount": 539,
+      "createdate": "2006-03-27T15:52:52-05:00",
+      "lastupdate": "2026-05-18T05:49:35-04:00",
+      "viaf_id": "9899554",
+      "wikipedia_id": "1174550",
+      "ulan_id": "500118800",
+      "wikidata_id": "Q57588",
+      "names": [
+        {
+          "displayname": "Marcel Breuer",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Architect",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Designer",
+          "context": "object",
+          "frequency": 35
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 509
+        }
+      ]
+    },
+    {
+      "id": 72754,
+      "personid": 72754,
+      "displayname": "Tommy Kha",
+      "datebegin": 0,
+      "dateend": 0,
+      "displaydate": null,
+      "culture": null,
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Kha,  Tommy",
+      "url": "https://www.harvardartmuseums.org/collections/person/72754",
+      "objectcount": 505,
+      "createdate": "2026-04-09T14:29:58-04:00",
+      "lastupdate": "2026-05-18T05:49:26-04:00",
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 505
+        }
+      ]
+    },
+    {
+      "id": 18947,
+      "personid": 18947,
+      "displayname": "Albrecht D\u00fcrer",
+      "datebegin": 1471,
+      "dateend": 1528,
+      "displaydate": "1471 - 1528",
+      "culture": "German",
+      "gender": "male",
+      "birthplace": "Nuremberg",
+      "deathplace": "Nuremberg",
+      "alphasort": "D\u00fcrer, Albrecht",
+      "url": "https://www.harvardartmuseums.org/collections/person/18947",
+      "objectcount": 504,
+      "createdate": "2006-03-27T15:43:36-05:00",
+      "lastupdate": "2026-05-18T05:49:22-04:00",
+      "viaf_id": "54146999",
+      "wikipedia_id": "2402",
+      "ulan_id": "500115493",
+      "names": [
+        {
+          "displayname": "Albrecht D\u00fcrer",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 365
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 24
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 232
+        }
+      ]
+    },
+    {
+      "id": 32874,
+      "personid": 32874,
+      "displayname": "Claude Lorrain",
+      "datebegin": 1604,
+      "dateend": 1682,
+      "displaydate": "1604 - 1682",
+      "culture": "French",
+      "gender": "male",
+      "birthplace": "Chamagne",
+      "deathplace": "Rome",
+      "alphasort": "Lorrain, Claude",
+      "url": "https://www.harvardartmuseums.org/collections/person/32874",
+      "objectcount": 501,
+      "createdate": "2006-03-27T15:55:40-05:00",
+      "lastupdate": "2026-05-18T05:49:16-04:00",
+      "viaf_id": "54156251",
+      "wikipedia_id": "81669",
+      "ulan_id": "500115366",
+      "names": [
+        {
+          "displayname": "Claude Lorrain",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 452
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 52
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 3
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 4
+        }
+      ]
+    },
+    {
+      "id": 28402,
+      "personid": 28402,
+      "displayname": "Peter Paul Rubens",
+      "datebegin": 1577,
+      "dateend": 1640,
+      "displaydate": "1577 - 1640",
+      "culture": "Flemish",
+      "gender": "male",
+      "birthplace": "Siegen, Westphalia",
+      "deathplace": "Antwerp, Belgium",
+      "alphasort": "Rubens, Peter Paul",
+      "url": "https://www.harvardartmuseums.org/collections/person/28402",
+      "objectcount": 495,
+      "createdate": "2006-03-27T15:51:45-05:00",
+      "lastupdate": "2026-05-18T05:49:23-04:00",
+      "viaf_id": "56647196",
+      "wikipedia_id": "21463370",
+      "ulan_id": "500002921",
+      "names": [
+        {
+          "displayname": "Peter Paul Rubens",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 70
+        },
+        {
+          "role": "Painter",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 22
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 415
+        }
+      ]
+    },
+    {
+      "id": 27026,
+      "personid": 27026,
+      "displayname": "Johann Wilhelm Baur",
+      "datebegin": 1607,
+      "dateend": 1641,
+      "displaydate": "1607 - 1641",
+      "culture": "German",
+      "gender": "male",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Baur, Johann Wilhelm",
+      "url": "https://www.harvardartmuseums.org/collections/person/27026",
+      "objectcount": 494,
+      "createdate": "2006-03-27T15:50:40-05:00",
+      "lastupdate": "2026-05-18T05:49:20-04:00",
+      "viaf_id": "66737403",
+      "wikipedia_id": "19080878",
+      "ulan_id": "500020628",
+      "names": [
+        {
+          "displayname": "Johann Wilhelm Baur",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 253
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 241
+        }
+      ]
+    },
+    {
+      "id": 22518,
+      "personid": 22518,
+      "displayname": "Curtis Studio",
+      "datebegin": 1891,
+      "dateend": 1935,
+      "displaydate": "active 1891 - 1935",
+      "culture": "American",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Curtis Studio",
+      "url": "https://www.harvardartmuseums.org/collections/person/22518",
+      "objectcount": 485,
+      "createdate": "2006-03-27T15:46:48-05:00",
+      "lastupdate": "2026-05-18T05:49:20-04:00",
+      "names": [
+        {
+          "displayname": "Curtis Studio",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 510
+        }
+      ]
+    },
+    {
+      "id": 23184,
+      "personid": 23184,
+      "displayname": "Unknown Artist",
+      "datebegin": 0,
+      "dateend": 0,
+      "displaydate": null,
+      "culture": null,
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Unknown Artist",
+      "url": "https://www.harvardartmuseums.org/collections/person/23184",
+      "objectcount": 485,
+      "createdate": "2006-03-27T15:47:22-05:00",
+      "lastupdate": "2026-05-18T05:49:30-04:00",
+      "names": [
+        {
+          "displayname": "Unknown Artist",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 8
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 572
+        }
+      ]
+    },
+    {
+      "id": 22617,
+      "personid": 22617,
+      "displayname": "Jack Rodden Studio",
+      "datebegin": 1914,
+      "dateend": 2016,
+      "displaydate": "1914 - 2016",
+      "culture": "American",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Jack Rodden Studio",
+      "url": "https://www.harvardartmuseums.org/collections/person/22617",
+      "objectcount": 469,
+      "createdate": "2006-03-27T15:46:53-05:00",
+      "lastupdate": "2026-05-18T05:50:04-04:00",
+      "names": [
+        {
+          "displayname": "Jack Rodden Studio",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 475
+        },
+        {
+          "role": "Photographer",
+          "context": "object",
+          "frequency": 1
+        }
+      ]
+    },
+    {
+      "id": 23169,
+      "personid": 23169,
+      "displayname": "Francisco Jos\u00e9 de Goya y Lucientes",
+      "datebegin": 1746,
+      "dateend": 1828,
+      "displaydate": "1746 - 1828",
+      "culture": "Spanish",
+      "gender": "male",
+      "birthplace": "Fuendetodos",
+      "deathplace": "Bordeaux",
+      "alphasort": "Goya y Lucientes, Francisco Jos\u00e9 de",
+      "url": "https://www.harvardartmuseums.org/collections/person/23169",
+      "objectcount": 450,
+      "createdate": "2006-03-27T15:47:22-05:00",
+      "lastupdate": "2026-05-18T05:50:13-04:00",
+      "viaf_id": "54343141",
+      "wikipedia_id": "10868",
+      "ulan_id": "500118936",
+      "names": [
+        {
+          "displayname": "Francisco Jos\u00e9 de Goya y Lucientes",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 3
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 9
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 438
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 18
+        }
+      ]
+    },
+    {
+      "id": 18932,
+      "personid": 18932,
+      "displayname": "Lucia Moholy",
+      "datebegin": 1894,
+      "dateend": 1989,
+      "displaydate": "1894 - 1989",
+      "culture": "British",
+      "gender": "female",
+      "birthplace": "Prague, Czech Republic",
+      "deathplace": "Zurich, Switzerland",
+      "alphasort": "Moholy, Lucia",
+      "url": "https://www.harvardartmuseums.org/collections/person/18932",
+      "objectcount": 443,
+      "createdate": "2006-03-27T15:43:35-05:00",
+      "lastupdate": "2026-05-18T05:49:14-04:00",
+      "viaf_id": "95733967",
+      "wikipedia_id": "4709492",
+      "ulan_id": "500008672",
+      "wikidata_id": "Q214381",
+      "names": [
+        {
+          "displayname": "Lucia Moholy",
+          "type": "Primary Name"
+        },
+        {
+          "displayname": "Lucia Moholy-Nagy",
+          "type": "Alternate Name"
+        },
+        {
+          "displayname": "Lucia Schulz",
+          "type": "Alternate Name"
+        },
+        {
+          "displayname": "Lucia Moholy",
+          "type": "Alternate Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 445
+        },
+        {
+          "role": "Photographer",
+          "context": "object",
+          "frequency": 2
+        }
+      ]
+    },
+    {
+      "id": 34071,
+      "personid": 34071,
+      "displayname": "Anonymous",
+      "datebegin": 1789,
+      "dateend": 1799,
+      "displaydate": "French, active 1789-1799",
+      "culture": "French",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Anonymous",
+      "url": "https://www.harvardartmuseums.org/collections/person/34071",
+      "objectcount": 439,
+      "createdate": "2006-03-27T15:56:45-05:00",
+      "lastupdate": "2026-05-18T05:49:30-04:00",
+      "names": [
+        {
+          "displayname": "Anonymous",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 439
+        }
+      ]
+    },
+    {
+      "id": 22251,
+      "personid": 22251,
+      "displayname": "Sanford Robinson Gifford",
+      "datebegin": 1823,
+      "dateend": 1880,
+      "displaydate": "1823 - 1880",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "Greenfield, NY",
+      "deathplace": "New York, NY",
+      "alphasort": "Gifford, Sanford Robinson",
+      "url": "https://www.harvardartmuseums.org/collections/person/22251",
+      "objectcount": 430,
+      "createdate": "2006-03-27T15:46:31-05:00",
+      "lastupdate": "2026-05-18T05:49:54-04:00",
+      "viaf_id": "30335270",
+      "wikipedia_id": "2287972",
+      "ulan_id": "500019147",
+      "wikidata_id": "Q615161",
+      "names": [
+        {
+          "displayname": "Sanford Robinson Gifford",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 3
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 430
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 3
+        }
+      ]
+    },
+    {
+      "id": 27276,
+      "personid": 27276,
+      "displayname": "Morris Louis",
+      "datebegin": 1912,
+      "dateend": 1962,
+      "displaydate": "1912 - 1962",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "Baltimore, MD",
+      "deathplace": "Washington, DC",
+      "alphasort": "Louis, Morris",
+      "url": "https://www.harvardartmuseums.org/collections/person/27276",
+      "objectcount": 422,
+      "createdate": "2006-03-27T15:50:52-05:00",
+      "lastupdate": "2026-05-18T05:49:27-04:00",
+      "viaf_id": "54945311",
+      "wikipedia_id": "755571",
+      "ulan_id": "500012330",
+      "wikidata_id": "Q685186",
+      "lcnaf_id": "n79090064",
+      "names": [
+        {
+          "displayname": "Morris Louis",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 421
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 4
+        }
+      ]
+    },
+    {
+      "id": 19008,
+      "personid": 19008,
+      "displayname": "Anthony van Dyck",
+      "datebegin": 1599,
+      "dateend": 1641,
+      "displaydate": "1599 - 1641",
+      "culture": "Flemish",
+      "gender": "male",
+      "birthplace": "Antwerp, Belgium",
+      "deathplace": "London",
+      "alphasort": "Dyck, Anthony van Sir",
+      "url": "https://www.harvardartmuseums.org/collections/person/19008",
+      "objectcount": 403,
+      "createdate": "2006-03-27T15:43:39-05:00",
+      "lastupdate": "2026-05-18T05:49:52-04:00",
+      "viaf_id": "17231738",
+      "wikipedia_id": "294462",
+      "ulan_id": "500115190",
+      "names": [
+        {
+          "displayname": "Anthony van Dyck",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 54
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 4
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 82
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 290
+        }
+      ]
+    },
+    {
+      "id": 33967,
+      "personid": 33967,
+      "displayname": "George Maciunas",
+      "datebegin": 1931,
+      "dateend": 1978,
+      "displaydate": "1931 - 1978",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "Kaunas, Lithuania",
+      "deathplace": "Boston, MA",
+      "alphasort": "Maciunas, George",
+      "url": "https://www.harvardartmuseums.org/collections/person/33967",
+      "objectcount": 398,
+      "createdate": "2006-03-27T15:56:39-05:00",
+      "lastupdate": "2026-05-18T05:50:13-04:00",
+      "viaf_id": "36975044",
+      "wikipedia_id": "932126",
+      "ulan_id": "500075547",
+      "wikidata_id": "Q455931",
+      "names": [
+        {
+          "displayname": "George Maciunas",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Manufacturer",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Editor",
+          "context": "object",
+          "frequency": 5
+        },
+        {
+          "role": "Designer",
+          "context": "object",
+          "frequency": 118
+        },
+        {
+          "role": "Distributor",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 6
+        },
+        {
+          "role": "Publisher",
+          "context": "object",
+          "frequency": 18
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 267
+        }
+      ]
+    },
+    {
+      "id": 52642,
+      "personid": 52642,
+      "displayname": "Unidentified Maker",
+      "datebegin": 0,
+      "dateend": 0,
+      "displaydate": null,
+      "culture": null,
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Unidentified Maker",
+      "url": "https://www.harvardartmuseums.org/collections/person/52642",
+      "objectcount": 389,
+      "createdate": "2007-08-02T15:50:36-04:00",
+      "lastupdate": "2026-05-18T05:49:22-04:00",
+      "names": [
+        {
+          "displayname": "Unidentified Maker",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 425
+        },
+        {
+          "role": "Manufacturer",
+          "context": "object",
+          "frequency": 42
+        }
+      ]
+    },
+    {
+      "id": 26361,
+      "personid": 26361,
+      "displayname": "Hans Holbein the Younger",
+      "datebegin": 1497,
+      "dateend": 1543,
+      "displaydate": "1497/98 - 1543",
+      "culture": "German",
+      "gender": "male",
+      "birthplace": "Augsburg, Germany",
+      "deathplace": "London, England",
+      "alphasort": "Holbein, Hans the Younger",
+      "url": "https://www.harvardartmuseums.org/collections/person/26361",
+      "objectcount": 381,
+      "createdate": "2006-03-27T15:50:08-05:00",
+      "lastupdate": "2026-05-18T05:50:11-04:00",
+      "viaf_id": "4945401",
+      "wikipedia_id": "48321",
+      "ulan_id": "500005259",
+      "names": [
+        {
+          "displayname": "Hans Holbein the Younger",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 241
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 126
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 27
+        }
+      ]
+    },
+    {
+      "id": 29266,
+      "personid": 29266,
+      "displayname": "Maerten de Vos",
+      "datebegin": 1532,
+      "dateend": 1603,
+      "displaydate": "1532 - 1603",
+      "culture": "Netherlandish",
+      "gender": "male",
+      "birthplace": "Antwerp, Belgium",
+      "deathplace": "Antwerp, Belgium",
+      "alphasort": "Vos, Maerten de",
+      "url": "https://www.harvardartmuseums.org/collections/person/29266",
+      "objectcount": 376,
+      "createdate": "2006-03-27T15:52:32-05:00",
+      "lastupdate": "2026-05-18T05:49:33-04:00",
+      "viaf_id": "88877213",
+      "wikipedia_id": "11271126",
+      "ulan_id": "500029816",
+      "names": [
+        {
+          "displayname": "Maerten de Vos",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 365
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 10
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 7
+        }
+      ]
+    },
+    {
+      "id": 29041,
+      "personid": 29041,
+      "displayname": "Titian (Tiziano Vecellio)",
+      "datebegin": 1483,
+      "dateend": 1576,
+      "displaydate": "c. 1488 - 1576",
+      "culture": "Italian",
+      "gender": "male",
+      "birthplace": "Pieve di Cadore, Italy",
+      "deathplace": "Venice, Italy",
+      "alphasort": "Titian (Tiziano Vecellio)",
+      "url": "https://www.harvardartmuseums.org/collections/person/29041",
+      "objectcount": 373,
+      "createdate": "2006-03-27T15:52:19-05:00",
+      "lastupdate": "2026-05-18T05:49:57-04:00",
+      "viaf_id": "109266837",
+      "wikipedia_id": "154239",
+      "ulan_id": "500031075",
+      "names": [
+        {
+          "displayname": "Titian (Tiziano Vecellio)",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 91
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 277
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 10
+        }
+      ]
+    },
+    {
+      "id": 34078,
+      "personid": 34078,
+      "displayname": "Anonymous Germany",
+      "datebegin": 0,
+      "dateend": 0,
+      "displaydate": null,
+      "culture": "German",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Anonymous Germany",
+      "url": "https://www.harvardartmuseums.org/collections/person/34078",
+      "objectcount": 373,
+      "createdate": "2006-03-27T15:56:45-05:00",
+      "lastupdate": "2026-05-18T05:49:46-04:00",
+      "names": [
+        {
+          "displayname": "Anonymous Germany",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 376
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 3
+        }
+      ]
+    },
+    {
+      "id": 22609,
+      "personid": 22609,
+      "displayname": "Hamblin Studio",
+      "datebegin": 1930,
+      "dateend": 1939,
+      "displaydate": "active 1930s",
+      "culture": "American",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Hamblin Studio",
+      "url": "https://www.harvardartmuseums.org/collections/person/22609",
+      "objectcount": 372,
+      "createdate": "2006-03-27T15:46:53-05:00",
+      "lastupdate": "2026-05-18T05:50:16-04:00",
+      "names": [
+        {
+          "displayname": "Hamblin Studio",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 372
+        }
+      ]
+    },
+    {
+      "id": 31901,
+      "personid": 31901,
+      "displayname": "Richard Earlom",
+      "datebegin": 1743,
+      "dateend": 1822,
+      "displaydate": "1743 - 1822",
+      "culture": "British",
+      "gender": "male",
+      "birthplace": "London, England",
+      "deathplace": "London, England",
+      "alphasort": "Earlom, Richard",
+      "url": "https://www.harvardartmuseums.org/collections/person/31901",
+      "objectcount": 365,
+      "createdate": "2006-03-27T15:54:47-05:00",
+      "lastupdate": "2026-05-18T05:49:59-04:00",
+      "viaf_id": "5199206",
+      "wikipedia_id": "2321400",
+      "ulan_id": "500018023",
+      "names": [
+        {
+          "displayname": "Richard Earlom",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 362
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 3
+        }
+      ]
+    },
+    {
+      "id": 31045,
+      "personid": 31045,
+      "displayname": "Gerard de Jode",
+      "datebegin": 1509,
+      "dateend": 1591,
+      "displaydate": "1509 - 1591",
+      "culture": "Flemish",
+      "gender": "male",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Jode, Gerard de",
+      "url": "https://www.harvardartmuseums.org/collections/person/31045",
+      "objectcount": 362,
+      "createdate": "2006-03-27T15:54:07-05:00",
+      "lastupdate": "2026-05-18T05:49:13-04:00",
+      "viaf_id": "59387338",
+      "wikipedia_id": "1769340",
+      "ulan_id": "500019209",
+      "names": [
+        {
+          "displayname": "Gerard de Jode",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Publisher",
+          "context": "object",
+          "frequency": 342
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 22
+        }
+      ]
+    },
+    {
+      "id": 22495,
+      "personid": 22495,
+      "displayname": "Mary Lowber Tiers",
+      "datebegin": 1915,
+      "dateend": 1985,
+      "displaydate": "1916 - 1985",
+      "culture": "American",
+      "gender": "unknown",
+      "birthplace": "Pennsylvania",
+      "deathplace": "Florida",
+      "alphasort": "Tiers, Mary Lowber",
+      "url": "https://www.harvardartmuseums.org/collections/person/22495",
+      "objectcount": 360,
+      "createdate": "2006-03-27T15:46:47-05:00",
+      "lastupdate": "2026-05-18T05:49:25-04:00",
+      "names": [
+        {
+          "displayname": "Mary Lowber Tiers",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 360
+        }
+      ]
+    },
+    {
+      "id": 28055,
+      "personid": 28055,
+      "displayname": "Peter Phillips",
+      "datebegin": 1939,
+      "dateend": 2025,
+      "displaydate": "1939 - 2025",
+      "culture": "British",
+      "gender": "unknown",
+      "birthplace": "Birmingham, United Kingdom",
+      "deathplace": "Noosa, Australia",
+      "alphasort": "Phillips, Peter",
+      "url": "https://www.harvardartmuseums.org/collections/person/28055",
+      "objectcount": 349,
+      "createdate": "2006-03-27T15:51:28-05:00",
+      "lastupdate": "2026-05-18T05:50:12-04:00",
+      "names": [
+        {
+          "displayname": "Peter Phillips",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 349
+        }
+      ]
+    },
+    {
+      "id": 32282,
+      "personid": 32282,
+      "displayname": "Gerald Laing",
+      "datebegin": 1936,
+      "dateend": 2011,
+      "displaydate": "1936 - 2011",
+      "culture": "British",
+      "gender": "male",
+      "birthplace": "Newcastle upon Tyne, England",
+      "deathplace": null,
+      "alphasort": "Laing, Gerald",
+      "url": "https://www.harvardartmuseums.org/collections/person/32282",
+      "objectcount": 349,
+      "createdate": "2006-03-27T15:55:04-05:00",
+      "lastupdate": "2026-05-18T05:50:18-04:00",
+      "viaf_id": "1497334",
+      "wikipedia_id": "24153897",
+      "ulan_id": "500011629",
+      "wikidata_id": "Q5549319",
+      "names": [
+        {
+          "displayname": "Gerald Laing",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 350
+        }
+      ]
+    },
+    {
+      "id": 55809,
+      "personid": 55809,
+      "displayname": "Edition Staeck, Heidelberg",
+      "datebegin": 0,
+      "dateend": 0,
+      "displaydate": null,
+      "culture": null,
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Edition Staeck, Heidelberg",
+      "url": "https://www.harvardartmuseums.org/collections/person/55809",
+      "objectcount": 341,
+      "createdate": "2010-07-16T17:49:53-04:00",
+      "lastupdate": "2026-05-18T05:49:37-04:00",
+      "names": [
+        {
+          "displayname": "Edition Staeck, Heidelberg",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Publisher",
+          "context": "object",
+          "frequency": 347
+        }
+      ]
+    },
+    {
+      "id": 29335,
+      "personid": 29335,
+      "displayname": "Jean-Antoine Watteau",
+      "datebegin": 1684,
+      "dateend": 1721,
+      "displaydate": "1684 - 1721",
+      "culture": "French",
+      "gender": "male",
+      "birthplace": "Valenciennes",
+      "deathplace": "Nogent-sur-Marne",
+      "alphasort": "Watteau, Jean-Antoine",
+      "url": "https://www.harvardartmuseums.org/collections/person/29335",
+      "objectcount": 339,
+      "createdate": "2006-03-27T15:52:36-05:00",
+      "lastupdate": "2026-05-18T05:49:28-04:00",
+      "viaf_id": "46882028",
+      "wikipedia_id": "242867",
+      "ulan_id": "500032644",
+      "names": [
+        {
+          "displayname": "Jean-Antoine Watteau",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 7
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 32
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 5
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 301
+        }
+      ]
+    },
+    {
+      "id": 72026,
+      "personid": 72026,
+      "displayname": "Albert Bloch",
+      "datebegin": 1882,
+      "dateend": 1961,
+      "displaydate": "1882 - 1961",
+      "culture": null,
+      "gender": "unknown",
+      "birthplace": "St. Louis, MO",
+      "deathplace": "Lawrence, KS",
+      "alphasort": "Bloch,  Albert",
+      "url": "https://www.harvardartmuseums.org/collections/person/72026",
+      "objectcount": 336,
+      "createdate": "2025-04-17T16:40:15-04:00",
+      "lastupdate": "2026-05-18T05:49:33-04:00",
+      "viaf_id": "30346583",
+      "ulan_id": "500023299",
+      "names": [
+        {
+          "displayname": "Albert Bloch",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 350
+        }
+      ]
+    },
+    {
+      "id": 22610,
+      "personid": 22610,
+      "displayname": "O. B. Porter Studio",
+      "datebegin": 1930,
+      "dateend": 1949,
+      "displaydate": "active 1930s-1940s",
+      "culture": "American",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "O. B. Porter Studio",
+      "url": "https://www.harvardartmuseums.org/collections/person/22610",
+      "objectcount": 332,
+      "createdate": "2006-03-27T15:46:53-05:00",
+      "lastupdate": "2026-05-18T05:49:41-04:00",
+      "names": [
+        {
+          "displayname": "O. B. Porter Studio",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 333
+        }
+      ]
+    },
+    {
+      "id": 28927,
+      "personid": 28927,
+      "displayname": "Josef Albers",
+      "datebegin": 1888,
+      "dateend": 1976,
+      "displaydate": "1888 - 1976",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "Bottrop, Germany",
+      "deathplace": "New Haven, Conn.",
+      "alphasort": "Albers, Josef",
+      "url": "https://www.harvardartmuseums.org/collections/person/28927",
+      "objectcount": 330,
+      "createdate": "2006-03-27T15:52:11-05:00",
+      "lastupdate": "2026-05-18T05:49:43-04:00",
+      "viaf_id": "12347231",
+      "wikipedia_id": "335390",
+      "ulan_id": "500033049",
+      "wikidata_id": "Q170071",
+      "lcnaf_id": "n80057250",
+      "names": [
+        {
+          "displayname": "Josef Albers",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Editor",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Donor/Lender/Vendor",
+          "context": "object",
+          "frequency": 241
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 341
+        },
+        {
+          "role": "Author",
+          "context": "publication",
+          "frequency": 2
+        },
+        {
+          "role": "Designer",
+          "context": "object",
+          "frequency": 7
+        }
+      ]
+    },
+    {
+      "id": 34064,
+      "personid": 34064,
+      "displayname": "Anonymous France (Paris) 1528",
+      "datebegin": 1500,
+      "dateend": 1599,
+      "displaydate": "16th century",
+      "culture": "French",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Anonymous France (Paris) 1528",
+      "url": "https://www.harvardartmuseums.org/collections/person/34064",
+      "objectcount": 320,
+      "createdate": "2006-03-27T15:56:44-05:00",
+      "lastupdate": "2026-05-18T05:50:04-04:00",
+      "names": [
+        {
+          "displayname": "Anonymous France (Paris) 1528",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 320
+        }
+      ]
+    },
+    {
+      "id": 22842,
+      "personid": 22842,
+      "displayname": "Theodore I",
+      "datebegin": 1205,
+      "dateend": 1221,
+      "displaydate": "r. 1205 - 1221",
+      "culture": "Byzantine",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Theodore I",
+      "url": "https://www.harvardartmuseums.org/collections/person/22842",
+      "objectcount": 315,
+      "createdate": "2006-03-27T15:47:05-05:00",
+      "lastupdate": "2026-05-18T05:49:21-04:00",
+      "viaf_id": "121846978",
+      "wikipedia_id": "74219",
+      "names": [
+        {
+          "displayname": "Theodore I",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Coin Constituent",
+          "context": "object",
+          "frequency": 314
+        }
+      ]
+    },
+    {
+      "id": 25330,
+      "personid": 25330,
+      "displayname": "Paul Rowell",
+      "datebegin": 1898,
+      "dateend": 1935,
+      "displaydate": "active 1898-1935",
+      "culture": "American",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Rowell, Paul",
+      "url": "https://www.harvardartmuseums.org/collections/person/25330",
+      "objectcount": 311,
+      "createdate": "2006-03-27T15:49:14-05:00",
+      "lastupdate": "2026-05-18T05:50:12-04:00",
+      "names": [
+        {
+          "displayname": "Paul Rowell",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 311
+        }
+      ]
+    },
+    {
+      "id": 30680,
+      "personid": 30680,
+      "displayname": "Alexander Calder",
+      "datebegin": 1898,
+      "dateend": 1976,
+      "displaydate": "1898 - 1976",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "Philadelphia, PA",
+      "deathplace": "New York, NY",
+      "alphasort": "Calder, Alexander",
+      "url": "https://www.harvardartmuseums.org/collections/person/30680",
+      "objectcount": 309,
+      "createdate": "2006-03-27T15:53:50-05:00",
+      "lastupdate": "2026-05-18T05:49:18-04:00",
+      "viaf_id": "96096",
+      "wikipedia_id": "152997",
+      "ulan_id": "500007824",
+      "names": [
+        {
+          "displayname": "Alexander Calder",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Donor/Lender/Vendor",
+          "context": "object",
+          "frequency": 6
+        },
+        {
+          "role": "Author",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 312
+        },
+        {
+          "role": "Recipient",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 2
+        }
+      ]
+    },
+    {
+      "id": 59301,
+      "personid": 59301,
+      "displayname": "Henri F\u00e9lix Emmanuel Philippoteaux",
+      "datebegin": 1815,
+      "dateend": 1884,
+      "displaydate": "Paris 1815-1884 Paris",
+      "culture": "French",
+      "gender": "male",
+      "birthplace": "Paris",
+      "deathplace": "Paris",
+      "alphasort": "Philippoteaux, Henri F\u00e9lix Emmanuel",
+      "url": "https://www.harvardartmuseums.org/collections/person/59301",
+      "objectcount": 303,
+      "createdate": "2013-04-25T09:59:23-04:00",
+      "lastupdate": "2026-05-18T05:50:01-04:00",
+      "ulan_id": "500012297",
+      "wikidata_id": "Q324622",
+      "names": [
+        {
+          "displayname": "Henri F\u00e9lix Emmanuel Philippoteaux",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 304
+        }
+      ]
+    },
+    {
+      "id": 34062,
+      "personid": 34062,
+      "displayname": "Anonymous France (Lyons) 1599",
+      "datebegin": 1500,
+      "dateend": 1599,
+      "displaydate": "16th century",
+      "culture": "French",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Anonymous France (Lyons) 1599",
+      "url": "https://www.harvardartmuseums.org/collections/person/34062",
+      "objectcount": 297,
+      "createdate": "2006-03-27T15:56:44-05:00",
+      "lastupdate": "2026-05-18T05:49:51-04:00",
+      "names": [
+        {
+          "displayname": "Anonymous France (Lyons) 1599",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 297
+        }
+      ]
+    },
+    {
+      "id": 22091,
+      "personid": 22091,
+      "displayname": "Bachrach Studios",
+      "datebegin": 1868,
+      "dateend": 1868,
+      "displaydate": "founded 1868",
+      "culture": null,
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Bachrach Studios",
+      "url": "https://www.harvardartmuseums.org/collections/person/22091",
+      "objectcount": 291,
+      "createdate": "2006-03-27T15:46:23-05:00",
+      "lastupdate": "2026-05-18T05:49:45-04:00",
+      "wikipedia_id": "4510208",
+      "names": [
+        {
+          "displayname": "Bachrach Studios",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 291
+        }
+      ]
+    },
+    {
+      "id": 53603,
+      "personid": 53603,
+      "displayname": "Peter James Studio",
+      "datebegin": 0,
+      "dateend": 0,
+      "displaydate": null,
+      "culture": "American",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Peter James Studio",
+      "url": "https://www.harvardartmuseums.org/collections/person/53603",
+      "objectcount": 284,
+      "createdate": "2008-05-05T16:44:14-04:00",
+      "lastupdate": "2026-05-18T05:49:24-04:00",
+      "names": [
+        {
+          "displayname": "Peter James Studio",
+          "type": "Alternate Name"
+        },
+        {
+          "displayname": "Peter James Studio",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 284
+        }
+      ]
+    },
+    {
+      "id": 22794,
+      "personid": 22794,
+      "displayname": "Hendrick Goltzius",
+      "datebegin": 1558,
+      "dateend": 1617,
+      "displaydate": "1558 - 1617",
+      "culture": "Dutch",
+      "gender": "male",
+      "birthplace": "M\u00fchlbracht",
+      "deathplace": "Haarlem, Netherlands",
+      "alphasort": "Goltzius, Hendrick",
+      "url": "https://www.harvardartmuseums.org/collections/person/22794",
+      "objectcount": 282,
+      "createdate": "2006-03-27T15:47:02-05:00",
+      "lastupdate": "2026-05-18T05:49:20-04:00",
+      "viaf_id": "19737376",
+      "wikipedia_id": "840184",
+      "ulan_id": "500023327",
+      "names": [
+        {
+          "displayname": "Hendrick Goltzius",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Publisher",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 157
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 149
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 2
+        }
+      ]
+    },
+    {
+      "id": 30947,
+      "personid": 30947,
+      "displayname": "Washington Allston",
+      "datebegin": 1779,
+      "dateend": 1843,
+      "displaydate": "1779 - 1843",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "Georgetown, SC",
+      "deathplace": "Cambridge, MA",
+      "alphasort": "Allston, Washington",
+      "url": "https://www.harvardartmuseums.org/collections/person/30947",
+      "objectcount": 281,
+      "createdate": "2006-03-27T15:54:02-05:00",
+      "lastupdate": "2026-05-18T05:49:30-04:00",
+      "viaf_id": "57408203",
+      "wikipedia_id": "356981",
+      "ulan_id": "500016005",
+      "names": [
+        {
+          "displayname": "Washington Allston",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Author",
+          "context": "publication",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 274
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 5
+        }
+      ]
+    },
+    {
+      "id": 66057,
+      "personid": 66057,
+      "displayname": "Clarissa Tossin",
+      "datebegin": 1973,
+      "dateend": 9999,
+      "displaydate": "born 1973",
+      "culture": "Brazilian",
+      "gender": "unknown",
+      "birthplace": "Porto Alegre, Brazil",
+      "deathplace": null,
+      "alphasort": "Tossin, Clarissa",
+      "url": "https://www.harvardartmuseums.org/collections/person/66057",
+      "objectcount": 279,
+      "createdate": "2018-10-18T15:13:08-04:00",
+      "lastupdate": "2026-05-18T05:50:06-04:00",
+      "names": [
+        {
+          "displayname": "Clarissa Tossin",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 279
+        },
+        {
+          "role": "Donor/Lender/Vendor",
+          "context": "object",
+          "frequency": 279
+        }
+      ]
+    },
+    {
+      "id": 18734,
+      "personid": 18734,
+      "displayname": "Jean Dubuffet",
+      "datebegin": 1901,
+      "dateend": 1985,
+      "displaydate": "1901 - 1985",
+      "culture": "French",
+      "gender": "male",
+      "birthplace": "LeHavre, France",
+      "deathplace": "Paris, France",
+      "alphasort": "Dubuffet, Jean",
+      "url": "https://www.harvardartmuseums.org/collections/person/18734",
+      "objectcount": 277,
+      "createdate": "2006-03-27T15:43:25-05:00",
+      "lastupdate": "2026-05-18T05:49:31-04:00",
+      "viaf_id": "64004844",
+      "wikipedia_id": "285438",
+      "ulan_id": "500019113",
+      "wikidata_id": "Q170076",
+      "lcnaf_id": "n79134984",
+      "names": [
+        {
+          "displayname": "Jean Dubuffet",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 279
+        },
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Author",
+          "context": "object",
+          "frequency": 2
+        }
+      ]
+    },
+    {
+      "id": 28064,
+      "personid": 28064,
+      "displayname": "Pablo Ruiz Picasso",
+      "datebegin": 1881,
+      "dateend": 1973,
+      "displaydate": "1881 - 1973",
+      "culture": "Spanish",
+      "gender": "male",
+      "birthplace": "Malaga, Spain",
+      "deathplace": "Mougins, France",
+      "alphasort": "Picasso, Pablo Ruiz",
+      "url": "https://www.harvardartmuseums.org/collections/person/28064",
+      "objectcount": 276,
+      "createdate": "2006-03-27T15:51:29-05:00",
+      "lastupdate": "2026-05-18T05:49:29-04:00",
+      "viaf_id": "15873",
+      "wikipedia_id": "24176",
+      "ulan_id": "500009666",
+      "wikidata_id": "Q5593",
+      "lcnaf_id": "n78086005",
+      "names": [
+        {
+          "displayname": "Pablo Ruiz Picasso",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 10
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 303
+        }
+      ]
+    },
+    {
+      "id": 19549,
+      "personid": 19549,
+      "displayname": "Augustus",
+      "datebegin": -27,
+      "dateend": 14,
+      "displaydate": "r. 27 BCE - 14 CE",
+      "culture": "Roman",
+      "gender": "male",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Augustus",
+      "url": "https://www.harvardartmuseums.org/collections/person/19549",
+      "objectcount": 275,
+      "createdate": "2006-03-27T15:44:06-05:00",
+      "lastupdate": "2026-05-18T05:49:40-04:00",
+      "viaf_id": "18013086",
+      "wikipedia_id": "1273",
+      "ulan_id": "500058949",
+      "names": [
+        {
+          "displayname": "C. Julius Caesar Octavianus",
+          "type": "Alternate Name"
+        },
+        {
+          "displayname": "Augustus",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Coin Constituent",
+          "context": "object",
+          "frequency": 276
+        }
+      ]
+    },
+    {
+      "id": 20175,
+      "personid": 20175,
+      "displayname": "Justinian I",
+      "datebegin": 527,
+      "dateend": 565,
+      "displaydate": "r. c. 527 - 565 CE",
+      "culture": "Byzantine",
+      "gender": "male",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Justinian I",
+      "url": "https://www.harvardartmuseums.org/collections/person/20175",
+      "objectcount": 275,
+      "createdate": "2006-03-27T15:44:39-05:00",
+      "lastupdate": "2026-05-18T05:49:51-04:00",
+      "viaf_id": "88881722",
+      "wikipedia_id": "16209",
+      "ulan_id": "500011337",
+      "names": [
+        {
+          "displayname": "Justinian I",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Coin Constituent",
+          "context": "object",
+          "frequency": 275
+        }
+      ]
+    },
+    {
+      "id": 24847,
+      "personid": 24847,
+      "displayname": "Goupil et Cie",
+      "datebegin": 1850,
+      "dateend": 1899,
+      "displaydate": "active c. 1850s-1890s",
+      "culture": "French",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Goupil et Cie",
+      "url": "https://www.harvardartmuseums.org/collections/person/24847",
+      "objectcount": 274,
+      "createdate": "2006-03-27T15:48:51-05:00",
+      "lastupdate": "2026-05-18T05:49:37-04:00",
+      "wikipedia_id": "5881404",
+      "names": [
+        {
+          "displayname": "Goupil et Cie",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Printer",
+          "context": "object",
+          "frequency": 265
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 22
+        },
+        {
+          "role": "Publisher",
+          "context": "publication",
+          "frequency": 1
+        }
+      ]
+    },
+    {
+      "id": 42872,
+      "personid": 42872,
+      "displayname": "Ludovic Baschet",
+      "datebegin": 1876,
+      "dateend": 1913,
+      "displaydate": "active 1876-1913",
+      "culture": "French",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Baschet, Ludovic",
+      "url": "https://www.harvardartmuseums.org/collections/person/42872",
+      "objectcount": 274,
+      "createdate": "2006-03-28T12:48:30-05:00",
+      "lastupdate": "2026-05-18T05:49:17-04:00",
+      "names": [
+        {
+          "displayname": "Ludovic Baschet",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Publisher",
+          "context": "publication",
+          "frequency": 2
+        },
+        {
+          "role": "Publisher",
+          "context": "object",
+          "frequency": 272
+        }
+      ]
+    },
+    {
+      "id": 34089,
+      "personid": 34089,
+      "displayname": "Anonymous Italy (Venice) 1599",
+      "datebegin": 1500,
+      "dateend": 1599,
+      "displaydate": "16th century",
+      "culture": "Italian",
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Anonymous Italy (Venice) 1599",
+      "url": "https://www.harvardartmuseums.org/collections/person/34089",
+      "objectcount": 272,
+      "createdate": "2006-03-27T15:56:46-05:00",
+      "lastupdate": "2026-05-18T05:49:37-04:00",
+      "names": [
+        {
+          "displayname": "Anonymous Italy (Venice) 1599",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 272
+        }
+      ]
+    },
+    {
+      "id": 28734,
+      "personid": 28734,
+      "displayname": "Aaron Siskind",
+      "datebegin": 1903,
+      "dateend": 1991,
+      "displaydate": "1903 - 1991",
+      "culture": "American",
+      "gender": "male",
+      "birthplace": "New York, N.Y., USA",
+      "deathplace": "Providence, R.I., USA",
+      "alphasort": "Siskind, Aaron",
+      "url": "https://www.harvardartmuseums.org/collections/person/28734",
+      "objectcount": 266,
+      "createdate": "2006-03-27T15:52:00-05:00",
+      "lastupdate": "2026-05-18T05:49:21-04:00",
+      "viaf_id": "41909803",
+      "wikipedia_id": "1957896",
+      "ulan_id": "500024299",
+      "wikidata_id": "Q302714",
+      "lcnaf_id": "n81095966",
+      "names": [
+        {
+          "displayname": "Aaron Siskind",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Donor/Lender/Vendor",
+          "context": "object",
+          "frequency": 6
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 268
+        },
+        {
+          "role": "Author",
+          "context": "publication",
+          "frequency": 1
+        }
+      ]
+    },
+    {
+      "id": 19103,
+      "personid": 19103,
+      "displayname": "Christian Boltanski",
+      "datebegin": 1944,
+      "dateend": 2021,
+      "displaydate": "1944 - 2021",
+      "culture": "French",
+      "gender": "male",
+      "birthplace": "Paris, France",
+      "deathplace": "Paris, France",
+      "alphasort": "Boltanski, Christian",
+      "url": "https://www.harvardartmuseums.org/collections/person/19103",
+      "objectcount": 265,
+      "createdate": "2006-03-27T15:43:43-05:00",
+      "lastupdate": "2026-05-18T05:49:41-04:00",
+      "viaf_id": "78769830",
+      "wikipedia_id": "884274",
+      "ulan_id": "500083011",
+      "names": [
+        {
+          "displayname": "Christian Boltanski",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 265
+        }
+      ]
+    },
+    {
+      "id": 30784,
+      "personid": 30784,
+      "displayname": "Annibale Carracci",
+      "datebegin": 1560,
+      "dateend": 1609,
+      "displaydate": "1560 - 1609",
+      "culture": "Italian",
+      "gender": "male",
+      "birthplace": "Bologna, Italy",
+      "deathplace": "Rome, Italy",
+      "alphasort": "Carracci, Annibale",
+      "url": "https://www.harvardartmuseums.org/collections/person/30784",
+      "objectcount": 260,
+      "createdate": "2006-03-27T15:53:55-05:00",
+      "lastupdate": "2026-05-18T05:50:11-04:00",
+      "viaf_id": "12405951",
+      "wikipedia_id": "175801",
+      "ulan_id": "500115350",
+      "names": [
+        {
+          "displayname": "Annibale Carracci",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 225
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 42
+        }
+      ]
+    },
+    {
+      "id": 19709,
+      "personid": 19709,
+      "displayname": "Septimius Severus",
+      "datebegin": 193,
+      "dateend": 211,
+      "displaydate": "r. 193 - 211 CE",
+      "culture": "Roman",
+      "gender": "male",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Septimius Severus",
+      "url": "https://www.harvardartmuseums.org/collections/person/19709",
+      "objectcount": 259,
+      "createdate": "2006-03-27T15:44:15-05:00",
+      "lastupdate": "2026-05-18T05:49:35-04:00",
+      "viaf_id": "36952961",
+      "wikipedia_id": "28413",
+      "ulan_id": "500115702",
+      "names": [
+        {
+          "displayname": "Septimius Severus",
+          "type": "Primary Name"
+        },
+        {
+          "displayname": "Lucius Septimius Severus",
+          "type": "Alternate Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Coin Constituent",
+          "context": "object",
+          "frequency": 259
+        }
+      ]
+    },
+    {
+      "id": 32200,
+      "personid": 32200,
+      "displayname": "Edward Goodall",
+      "datebegin": 1795,
+      "dateend": 1870,
+      "displaydate": "1795 - 1870",
+      "culture": "British",
+      "gender": "male",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Goodall, Edward",
+      "url": "https://www.harvardartmuseums.org/collections/person/32200",
+      "objectcount": 252,
+      "createdate": "2006-03-27T15:54:59-05:00",
+      "lastupdate": "2026-05-18T05:49:15-04:00",
+      "viaf_id": "2743833",
+      "wikipedia_id": "38878741",
+      "ulan_id": "500121565",
+      "names": [
+        {
+          "displayname": "Edward Goodall",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 252
+        }
+      ]
+    },
+    {
+      "id": 31547,
+      "personid": 31547,
+      "displayname": "Am\u00e9d\u00e9e de No\u00e9, called Cham",
+      "datebegin": 1818,
+      "dateend": 1879,
+      "displaydate": "1818-1879",
+      "culture": "French",
+      "gender": "male",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Cham, Am\u00e9d\u00e9e de No\u00e9, called",
+      "url": "https://www.harvardartmuseums.org/collections/person/31547",
+      "objectcount": 251,
+      "createdate": "2006-03-27T15:54:30-05:00",
+      "lastupdate": "2026-05-18T05:49:45-04:00",
+      "viaf_id": "76313223",
+      "wikipedia_id": "4084673",
+      "ulan_id": "500017700",
+      "names": [
+        {
+          "displayname": "Am\u00e9d\u00e9e de No\u00e9, called Cham",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 251
+        }
+      ]
+    },
+    {
+      "id": 19544,
+      "personid": 19544,
+      "displayname": "Hadrian",
+      "datebegin": 117,
+      "dateend": 138,
+      "displaydate": "r. 117-138 CE",
+      "culture": "Roman",
+      "gender": "male",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Hadrian",
+      "url": "https://www.harvardartmuseums.org/collections/person/19544",
+      "objectcount": 246,
+      "createdate": "2006-03-27T15:44:06-05:00",
+      "lastupdate": "2026-05-18T05:49:41-04:00",
+      "viaf_id": "82440741",
+      "wikipedia_id": "13621",
+      "ulan_id": "500022200",
+      "names": [
+        {
+          "displayname": "Publius Aelius Hadrianus",
+          "type": "Alternate Name"
+        },
+        {
+          "displayname": "Hadrian",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Coin Constituent",
+          "context": "object",
+          "frequency": 246
+        }
+      ]
+    },
+    {
+      "id": 5935,
+      "personid": 5935,
+      "displayname": "John Coolidge",
+      "datebegin": 1913,
+      "dateend": 1995,
+      "displaydate": "1913 - 1995",
+      "culture": null,
+      "gender": "unknown",
+      "birthplace": null,
+      "deathplace": null,
+      "alphasort": "Coolidge, John Phillips",
+      "url": "https://www.harvardartmuseums.org/collections/person/5935",
+      "objectcount": 244,
+      "createdate": "2006-03-27T15:31:59-05:00",
+      "lastupdate": "2026-05-18T05:49:38-04:00",
+      "roles": [
+        {
+          "role": "Author",
+          "context": "object",
+          "frequency": 120
+        },
+        {
+          "role": "Recipient",
+          "context": "object",
+          "frequency": 97
+        },
+        {
+          "role": "Donor/Lender/Vendor",
+          "context": "object",
+          "frequency": 25
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Director",
+          "context": "object",
+          "frequency": 94
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Editor",
+          "context": "publication",
+          "frequency": 6
+        },
+        {
+          "role": "Author",
+          "context": "publication",
+          "frequency": 9
+        },
+        {
+          "role": "Sitter",
+          "context": "object",
+          "frequency": 24
+        }
+      ]
+    },
+    {
+      "id": 28246,
+      "personid": 28246,
+      "displayname": "Guido Reni",
+      "datebegin": 1575,
+      "dateend": 1642,
+      "displaydate": "1575 - 1642",
+      "culture": "Italian",
+      "gender": "male",
+      "birthplace": "Bologna",
+      "deathplace": "Bologna",
+      "alphasort": "Reni, Guido",
+      "url": "https://www.harvardartmuseums.org/collections/person/28246",
+      "objectcount": 244,
+      "createdate": "2006-03-27T15:51:37-05:00",
+      "lastupdate": "2026-05-18T05:50:16-04:00",
+      "viaf_id": "49288294",
+      "wikipedia_id": "605079",
+      "ulan_id": "500030334",
+      "names": [
+        {
+          "displayname": "Guido Reni",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 3
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 38
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 214
+        }
+      ]
+    },
+    {
+      "id": 28360,
+      "personid": 28360,
+      "displayname": "Salvator Rosa",
+      "datebegin": 1615,
+      "dateend": 1673,
+      "displaydate": "1615 - 1673",
+      "culture": "Italian",
+      "gender": "male",
+      "birthplace": "Arenella, Naples",
+      "deathplace": "Rome",
+      "alphasort": "Rosa, Salvator",
+      "url": "https://www.harvardartmuseums.org/collections/person/28360",
+      "objectcount": 242,
+      "createdate": "2006-03-27T15:51:42-05:00",
+      "lastupdate": "2026-05-18T05:49:37-04:00",
+      "viaf_id": "46830369",
+      "wikipedia_id": "746889",
+      "ulan_id": "500011328",
+      "names": [
+        {
+          "displayname": "Salvator Rosa",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 199
+        },
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 3
+        },
+        {
+          "role": "Related name",
+          "context": "object",
+          "frequency": 1
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 50
+        }
+      ]
+    },
+    {
+      "id": 30944,
+      "personid": 30944,
+      "displayname": "Wenceslaus Hollar",
+      "datebegin": 1607,
+      "dateend": 1677,
+      "displaydate": "1607 - 1677",
+      "culture": "Bohemian",
+      "gender": "male",
+      "birthplace": "Prague",
+      "deathplace": "London",
+      "alphasort": "Hollar, Wenceslaus",
+      "url": "https://www.harvardartmuseums.org/collections/person/30944",
+      "objectcount": 242,
+      "createdate": "2006-03-27T15:54:02-05:00",
+      "lastupdate": "2026-05-18T05:49:43-04:00",
+      "viaf_id": "54449428",
+      "wikipedia_id": "1571706",
+      "ulan_id": "500028368",
+      "names": [
+        {
+          "displayname": "Wenzel Hollar",
+          "type": "Alternate Name"
+        },
+        {
+          "displayname": "Wenceslaus Hollar",
+          "type": "Primary Name"
+        }
+      ],
+      "roles": [
+        {
+          "role": "Previous attribution",
+          "context": "object",
+          "frequency": 2
+        },
+        {
+          "role": "Artist",
+          "context": "object",
+          "frequency": 237
+        },
+        {
+          "role": "Artist after",
+          "context": "object",
+          "frequency": 5
+        }
+      ]
+    }
+  ]
+}

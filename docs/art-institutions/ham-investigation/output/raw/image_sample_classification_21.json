@@ -1,0 +1,877 @@
+{
+  "info": {
+    "totalrecordsperquery": 25,
+    "totalrecords": 29919,
+    "pages": 1197,
+    "page": 1,
+    "next": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=25&page=2&classification=21&hasimage=1&sort=id&sortorder=asc&fields=id%2Cobjectnumber%2Cprimaryimageurl%2Cimages%2Ctitle",
+    "responsetime": "24 ms"
+  },
+  "records": [
+    {
+      "id": 1423,
+      "objectnumber": "2005.79",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2005-05-31",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 36477,
+          "format": "image/jpeg",
+          "description": "Rendered in light graphite on pale gray paper, a young woman Is shown from the waist up. She is seated facing the viewer and is looking down and to the left with a calm expression, with her hands crossed in front of her. Her wavy hair is just visible tucked into her headdress, and she wear a dress with a high collar, puffy sleeves and gathered cuffs. Subtle shading carefully delineates the features of her face, while her hands are left incompletely rendered and the background is left blank.",
+          "technique": null,
+          "renditionnumber": "78315",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:78315_dynmc",
+          "alttext": "Sketch of the head and torso of a woman in Renaissance dress",
+          "width": 802,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:78315_dynmc",
+      "title": "Portrait of a Woman, after a Drawing in the Uffizi then attributed to Leonardo da Vinci",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1423",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 1434,
+      "objectnumber": "2005.251",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2024-12-12",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 567808,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.3 (Macintosh);",
+          "renditionnumber": "802142",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:802142",
+          "alttext": null,
+          "width": 6336,
+          "publiccaption": null,
+          "height": 7531
+        },
+        {
+          "date": "2006-01-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 117202,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV029678",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV029678_dynmc",
+          "alttext": null,
+          "width": 856,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:802142",
+      "title": "San Arcangelo",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1434",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 1436,
+      "objectnumber": "2006.5",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-06-02",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 182663,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV056029",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV056029_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 711
+        },
+        {
+          "date": "2010-09-23",
+          "copyright": null,
+          "imageid": 393102,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "LEG007860",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:huam:LEG007860_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": "detail",
+          "height": 768
+        },
+        {
+          "date": "2010-09-23",
+          "copyright": null,
+          "imageid": 393103,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "LEG007861",
+          "displayorder": 3,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:huam:LEG007861_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": "label",
+          "height": 630
+        },
+        {
+          "date": "2010-09-23",
+          "copyright": null,
+          "imageid": 393104,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "LEG007862",
+          "displayorder": 4,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:huam:LEG007862_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 740
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV056029_dynmc",
+      "title": "Geranium Chamadryoides",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1436",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4629,
+      "objectnumber": "2005.129",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2008-08-12",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 320942,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV201636",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV201636_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 659
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV201636_dynmc",
+      "title": "Beach Scene",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4629",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4630,
+      "objectnumber": "2005.127",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2012-08-06",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 413081,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "DDC237471",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC237471_dynmc",
+          "alttext": null,
+          "width": 750,
+          "publiccaption": null,
+          "height": 1024
+        },
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 174291,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV045494",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV045494_dynmc",
+          "alttext": null,
+          "width": 757,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC237471_dynmc",
+      "title": "Portrait of a Soldier",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4630",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4632,
+      "objectnumber": "2005.22",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2005-06-13",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 74809,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV008283",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV008283_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 781
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV008283_dynmc",
+      "title": "My Personal Atlas",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4632",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4647,
+      "objectnumber": "2003.163",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2004-09-20",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 86502,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "76276",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:huam:76276_dynmc",
+          "alttext": null,
+          "width": 2943,
+          "publiccaption": null,
+          "height": 4096
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:huam:76276_dynmc",
+      "title": "Study for the Mansfield Monument",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4647",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4654,
+      "objectnumber": "2005.260",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 175283,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV044587",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV044587_dynmc",
+          "alttext": null,
+          "width": 919,
+          "publiccaption": null,
+          "height": 1024
+        },
+        {
+          "date": "2006-11-03",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 204230,
+          "format": "image/jpeg",
+          "description": "Small, square sheet of beige paper with images on each side. On one side are two parallel lines running the length of the page. Between the two lines is a wide graphite zig-zag scribble. On the other side, a version of Whistler\u2019s \u201cbutterfly\u201d signature occupies the whole page. An S-shaped blue watercolor line makes up the butterfly\u2019s body. Its wings are two crescent shapes, one painted light gray and the other unpainted, with fan-shaped peach areas at the outer edges.",
+          "technique": null,
+          "renditionnumber": "INV115610",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV115610_dynmc",
+          "alttext": "Page with scribble on one side and abstract butterfly drawing on other",
+          "width": 919,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV044587_dynmc",
+      "title": "Butterfly for a Valance at Dowdeswell's Gallery",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4654",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4677,
+      "objectnumber": "2002.189.2",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "\"Six million farms and over in this country last census.\"",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4677",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4726,
+      "objectnumber": "2005.252",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2015-08-03",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 455119,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:Sinar Photography AG;Model:Sinar CMV/ Sinarback eVolution 86H;Orientation:1;Software:Adobe Photoshop CS6 (Macintosh);",
+          "renditionnumber": "758650",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:758650",
+          "alttext": null,
+          "width": 2550,
+          "publiccaption": null,
+          "height": 1861
+        },
+        {
+          "date": "2015-08-03",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 455117,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:Sinar Photography AG;Model:Sinar CMV/ Sinarback eVolution 86H;Orientation:1;Software:Adobe Photoshop CS6 (Macintosh);",
+          "renditionnumber": "758648",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:758648",
+          "alttext": null,
+          "width": 2550,
+          "publiccaption": null,
+          "height": 1918
+        },
+        {
+          "date": "2015-08-03",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 455118,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:Sinar Photography AG;Model:Sinar CMV/ Sinarback eVolution 86H;Orientation:1;Software:Adobe Photoshop CS6 (Macintosh);",
+          "renditionnumber": "758649",
+          "displayorder": 3,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:758649",
+          "alttext": null,
+          "width": 2550,
+          "publiccaption": null,
+          "height": 1906
+        },
+        {
+          "date": "2011-02-28",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 402284,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "DDC111727",
+          "displayorder": 4,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC111727_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 747
+        },
+        {
+          "date": "2013-02-14",
+          "copyright": null,
+          "imageid": 425948,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "STR011837",
+          "displayorder": 5,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:huam:STR011837_dynmc",
+          "alttext": null,
+          "width": 797,
+          "publiccaption": "beta-radiograph of watermark",
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:758650",
+      "title": "A View of Cronesteyn Castle, near Leiden",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4726",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4869,
+      "objectnumber": "2005.102",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2014-01-27",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 431797,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "DDC252988",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC252988_dynmc",
+          "alttext": null,
+          "width": 834,
+          "publiccaption": null,
+          "height": 1024
+        },
+        {
+          "date": "2006-10-03",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 198211,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV110374",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV110374_dynmc",
+          "alttext": null,
+          "width": 849,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC252988_dynmc",
+      "title": "Study for \"Box Smashed Flat (Vicksburg)\"",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4869",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4926,
+      "objectnumber": "2003.131",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "Death on a Horse",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4926",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4931,
+      "objectnumber": "2006.33",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2011-02-28",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 402286,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "DDC111729",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC111729_dynmc",
+          "alttext": null,
+          "width": 846,
+          "publiccaption": null,
+          "height": 1024
+        },
+        {
+          "date": "2006-10-02",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 198148,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV110311",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV110311_dynmc",
+          "alttext": null,
+          "width": 878,
+          "publiccaption": null,
+          "height": 1024
+        },
+        {
+          "date": "2013-02-14",
+          "copyright": null,
+          "imageid": 425854,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "STR011743",
+          "displayorder": 3,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:huam:STR011743_dynmc",
+          "alttext": null,
+          "width": 515,
+          "publiccaption": "beta-radiograph of watermark",
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC111729_dynmc",
+      "title": "A Cooper",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4931",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 5084,
+      "objectnumber": "2005.259",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2007-11-09",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 276288,
+          "format": "image/jpeg",
+          "description": "A man sits in profile facing left. He wears a round-top, wide-brimmed hat and loose collared shirt, which are shaded with graphite. He squints, and his mouth appears slightly open. He has a mustache and small beard. He appears to be sitting in a boat, as he is holding a ship\u2019s wheel. Behind him is a tall post with a wide sail attached to it, filled in with a wash of brown watercolor. In the distant backdown to the right, we can make out faint outlines of buildings.",
+          "technique": null,
+          "renditionnumber": "DDC104703",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC104703_dynmc",
+          "alttext": "Graphite drawing of man in hat with brown wash",
+          "width": 655,
+          "publiccaption": "recto",
+          "height": 1024
+        },
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 175284,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV044588",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV044588_dynmc",
+          "alttext": null,
+          "width": 651,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC104703_dynmc",
+      "title": "An Ajaccio Fisherman",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/5084",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 5136,
+      "objectnumber": "2009.90.20",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-01-09",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 86973,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV029579",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV029579_dynmc",
+          "alttext": null,
+          "width": 828,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV029579_dynmc",
+      "title": "La belle Lili",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/5136",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 5138,
+      "objectnumber": "2005.240.1-4",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "S. P. Drawing",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/5138",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 5139,
+      "objectnumber": "2005.248",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-01-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 86998,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV029681",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV029681_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": "recto",
+          "height": 779
+        },
+        {
+          "date": "2006-01-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 156618,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV029680",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV029680_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": "verso",
+          "height": 779
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV029681_dynmc",
+      "title": "Figure Studies (recto and verso)",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/5139",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 5140,
+      "objectnumber": "2005.250",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-01-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 86999,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV029683",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV029683_dynmc",
+          "alttext": null,
+          "width": 686,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV029683_dynmc",
+      "title": "Study of a Soldier",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/5140",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 5190,
+      "objectnumber": "2005.2.B.1-9",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "Illustrated Instructions for First Workset, Number 26:  Head Body Limbs",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/5190",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 5206,
+      "objectnumber": "2002.189.13",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "\"Pushing combine.Twelve hours a day.\"",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/5206",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 5207,
+      "objectnumber": "2002.189.12",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "\"We've Got Everything to Lose if You Win\"",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/5207",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 5208,
+      "objectnumber": "2002.189.7",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "\"And Russians shucks I cant  add em all up. I can\u2019t even [Spring?] is against you Russian scene ?\"",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/5208",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 5209,
+      "objectnumber": "2002.189.5",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "\"And Gus Taubs boy over in the tank plan.\"",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/5209",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 5223,
+      "objectnumber": "2002.189.10",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "\"You see farmers don't talk much. Delano [pot?].The wind etc....\"",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/5223",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 5224,
+      "objectnumber": "2002.189.6",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "\"Food for all kinds of folks I'll never see who are fighting for our side. British children and British seamen. Chinese soldier most likely.\"",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/5224",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,412 @@
+{
+  "info": {
+    "totalrecordsperquery": 25,
+    "totalrecords": 77076,
+    "pages": 3084,
+    "page": 1,
+    "next": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=25&page=2&classification=17&hasimage=1&sort=id&sortorder=asc&fields=id%2Cobjectnumber%2Cprimaryimageurl%2Cimages%2Ctitle",
+    "responsetime": "24 ms"
+  },
+  "records": [
+    {
+      "id": 1412,
+      "objectnumber": "BRLF.1002.214",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Buildings, Germany (Siemensstadt?)]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1412",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 1413,
+      "objectnumber": "BRLF.1002.215",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Buildings, Stockholm, 1936]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1413",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 1414,
+      "objectnumber": "BRLF.1003.6",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Street scene, Berlin]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1414",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 1415,
+      "objectnumber": "BRLF.1003.8",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Street scene in Berlin]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1415",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 1416,
+      "objectnumber": "BRLF.1003.9",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Shellhaus, Berlin]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1416",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 1417,
+      "objectnumber": "BRLF.1003.16",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Street scene, Berlin]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1417",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 1418,
+      "objectnumber": "BRLF.1003.24",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Clothes blowing in the wind, Berlin]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1418",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 1419,
+      "objectnumber": "BRLF.1003.32",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Building reflected in water, Deep, Baltic Coast]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1419",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4560,
+      "objectnumber": "BRLF.1003.27",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Train and steam near Hildebrand Chocolate Company, Berlin]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4560",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4561,
+      "objectnumber": "BRLF.1002.163",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Village in Brittany]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4561",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4562,
+      "objectnumber": "BRLF.1002.166",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Street scene in Quimper, Brittany]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4562",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4563,
+      "objectnumber": "BRLF.1002.170",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Harbor scene, Brittany]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4563",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4564,
+      "objectnumber": "BRLF.1002.172",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Harbor scene, Brittany]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4564",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4565,
+      "objectnumber": "BRLF.1002.178",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Men standing at harbor railing, Brittany]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4565",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4566,
+      "objectnumber": "BRLF.1002.181",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Harbor scene with fisherman, Stockholm, 1936]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4566",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4567,
+      "objectnumber": "BRLF.1002.186",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Harbor scene with boatmen, Saint-Malo, Brittany]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4567",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4568,
+      "objectnumber": "BRLF.1002.190",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Street scene, Saint-Malo, Brittany]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4568",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4569,
+      "objectnumber": "BRLF.1002.191",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Boats in the harbor at Saint-Malo, Brittany]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4569",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4570,
+      "objectnumber": "BRLF.1002.195",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Harbor scene in Saint-Malo, Brittany]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4570",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4571,
+      "objectnumber": "BRLF.1002.197",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Buildings in Paris]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4571",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4572,
+      "objectnumber": "BRLF.1002.202",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[View of barge on the Seine, with Notre-Dame Cathedral, Paris]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4572",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4573,
+      "objectnumber": "BRLF.1002.204",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Kaiser Wilhelm Memorial Church, Berlin]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4573",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4574,
+      "objectnumber": "BRLF.1002.209",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Transporting a boat on the road, Germany]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4574",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4575,
+      "objectnumber": "BRLF.1002.211",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Street scene, Berlin]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4575",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4576,
+      "objectnumber": "BRLF.1003.1",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "[Pedestrians walking, viewed from above, Berlin, 1933]",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4576",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    }
+  ]
+}

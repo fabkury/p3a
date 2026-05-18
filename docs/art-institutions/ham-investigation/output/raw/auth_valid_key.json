@@ -1,0 +1,165 @@
+{
+  "info": {
+    "totalrecordsperquery": 1,
+    "totalrecords": 248609,
+    "pages": 248609,
+    "page": 1,
+    "next": "https://api.harvardartmuseums.org/object?size=1&apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&page=2",
+    "responsetime": "22 ms"
+  },
+  "records": [
+    {
+      "id": 51222,
+      "objectid": 51222,
+      "objectnumber": "2004.67",
+      "accessionyear": 2004,
+      "dated": "c. 1530",
+      "datebegin": 1525,
+      "dateend": 1535,
+      "classification": "Documents",
+      "classificationid": 1185,
+      "medium": "Brown ink over charcoal on cream antique laid paper",
+      "technique": null,
+      "techniqueid": null,
+      "period": null,
+      "periodid": null,
+      "century": "16th century",
+      "culture": "Italian",
+      "style": null,
+      "signed": null,
+      "state": null,
+      "edition": null,
+      "standardreferencenumber": null,
+      "dimensions": "24.3 x 20.6 cm (9 9/16 x 8 1/8 in.)",
+      "copyright": null,
+      "creditline": "Harvard Art Museums/Fogg Museum, Bequest of John and Alice Steiner",
+      "department": "Department of Drawings",
+      "division": "European and American Art",
+      "contact": "am_europeanamerican@harvard.edu",
+      "description": null,
+      "provenance": "[Galerie de Bayser, Paris] sold; to [Yvonne Tan Bunzl, London], sold; to John and Alice Steiner, Larchmont, New York, 1976, bequest; to Harvard University Art Museums, 2004\r\n",
+      "commentary": null,
+      "labeltext": null,
+      "imagecount": 2,
+      "mediacount": 0,
+      "colorcount": 5,
+      "markscount": 0,
+      "peoplecount": 1,
+      "titlescount": 1,
+      "publicationcount": 20,
+      "exhibitioncount": 9,
+      "contextualtextcount": 0,
+      "groupcount": 1,
+      "relatedcount": 0,
+      "totalpageviews": 613,
+      "totaluniquepageviews": 497,
+      "dateoffirstpageview": "2009-07-02",
+      "dateoflastpageview": "2026-05-15",
+      "verificationlevel": 4,
+      "verificationleveldescription": "Best. Object is extensively researched, well described and information is vetted",
+      "imagepermissionlevel": 0,
+      "lendingpermissionlevel": 0,
+      "accesslevel": 1,
+      "accessionmethod": "Bequest",
+      "rank": 125367,
+      "url": "https://www.harvardartmuseums.org/collections/object/51222",
+      "createdate": "2004-05-27T00:00:00-04:00",
+      "lastupdate": "2026-05-18T04:34:07-04:00",
+      "colors": [
+        {
+          "color": "#c8af7d",
+          "spectrum": "#e9715f",
+          "hue": "Brown",
+          "percent": 0.2578125,
+          "css3": "#d2b48c"
+        },
+        {
+          "color": "#e1c896",
+          "spectrum": "#ed765a",
+          "hue": "Yellow",
+          "percent": 0.24177083333333332,
+          "css3": "#deb887"
+        },
+        {
+          "color": "#967d4b",
+          "spectrum": "#7fc241",
+          "hue": "Brown",
+          "percent": 0.23505208333333333,
+          "css3": "#a0522d"
+        },
+        {
+          "color": "#af9664",
+          "spectrum": "#e9715f",
+          "hue": "Yellow",
+          "percent": 0.21604166666666666,
+          "css3": "#bdb76b"
+        },
+        {
+          "color": "#fafae1",
+          "spectrum": "#ed765a",
+          "hue": "Green",
+          "percent": 0.04932291666666667,
+          "css3": "#ffffe0"
+        }
+      ],
+      "images": [
+        {
+          "date": "2004-06-29",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 35586,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "75720",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:75720_dynmc",
+          "alttext": null,
+          "width": 2181,
+          "publiccaption": "recto",
+          "height": 2550
+        },
+        {
+          "date": "2013-02-14",
+          "copyright": null,
+          "imageid": 425752,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "STR011641",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:huam:STR011641_dynmc",
+          "alttext": null,
+          "width": 841,
+          "publiccaption": "beta-radiograph of watermark",
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:75720_dynmc",
+      "people": [
+        {
+          "role": "Artist",
+          "birthplace": "Pieve di Cadore, Italy",
+          "gender": "male",
+          "displaydate": "c. 1488 - 1576",
+          "prefix": null,
+          "culture": "Italian",
+          "displayname": "Titian (Tiziano Vecellio)",
+          "alphasort": "Titian (Tiziano Vecellio)",
+          "name": "Titian (Tiziano Vecellio)",
+          "personid": 29041,
+          "deathplace": "Venice, Italy",
+          "displayorder": 1
+        }
+      ],
+      "title": "Trees Near a Pool of Water",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/51222",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    }
+  ]
+}

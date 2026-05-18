@@ -1,0 +1,47 @@
+{
+  "options": {
+    "redaction": {
+      "type": "replace",
+      "additionalKeys": []
+    }
+  },
+  "name": "ResponseError",
+  "meta": {
+    "body": {
+      "error": {
+        "root_cause": [
+          {
+            "type": "illegal_argument_exception",
+            "reason": "Fielddata is disabled on [dated] in [objects_20260518-040352]. Text fields are not optimised for operations that require per-document field data like aggregations and sorting, so these operations are disabled by default. Please use a keyword field instead. Alternatively, set fielddata=true on [dated] in order to load field data by uninverting the inverted index. Note that this can use significant memory."
+          }
+        ],
+        "type": "search_phase_execution_exception",
+        "reason": "all shards failed",
+        "phase": "query",
+        "grouped": true,
+        "failed_shards": [
+          {
+            "shard": 0,
+            "index": "objects_20260518-040352",
+            "node": "3gq9V-igQ_yE0J6MalMozA",
+            "reason": {
+              "type": "illegal_argument_exception",
+              "reason": "Fielddata is disabled on [dated] in [objects_20260518-040352]. Text fields are not optimised for operations that require per-document field data like aggregations and sorting, so these operations are disabled by default. Please use a keyword field instead. Alternatively, set fielddata=true on [dated] in order to load field data by uninverting the inverted index. Note that this can use significant memory."
+            }
+          }
+        ],
+        "caused_by": {
+          "type": "illegal_argument_exception",
+          "reason": "Fielddata is disabled on [dated] in [objects_20260518-040352]. Text fields are not optimised for operations that require per-document field data like aggregations and sorting, so these operations are disabled by default. Please use a keyword field instead. Alternatively, set fielddata=true on [dated] in order to load field data by uninverting the inverted index. Note that this can use significant memory.",
+          "caused_by": {
+            "type": "illegal_argument_exception",
+            "reason": "Fielddata is disabled on [dated] in [objects_20260518-040352]. Text fields are not optimised for operations that require per-document field data like aggregations and sorting, so these operations are disabled by default. Please use a keyword field instead. Alternatively, set fielddata=true on [dated] in order to load field data by uninverting the inverted index. Note that this can use significant memory."
+          }
+        }
+      },
+      "status": 400
+    },
+    "statusCode": 400,
+    "warnings": null
+  }
+}

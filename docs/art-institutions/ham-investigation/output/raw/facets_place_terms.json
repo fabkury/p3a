@@ -1,0 +1,1457 @@
+{
+  "info": {
+    "totalrecordsperquery": 100,
+    "totalrecords": 2549,
+    "pages": 26,
+    "page": 1,
+    "next": "https://api.harvardartmuseums.org/place?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=100&page=2&sort=objectcount&sortorder=desc",
+    "responsetime": "24 ms"
+  },
+  "records": [
+    {
+      "id": 2028213,
+      "placeid": 2028213,
+      "name": "United States",
+      "pathforward": "North America\\",
+      "parentplaceid": 2028212,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 28703,
+      "tgn_id": 7012149,
+      "geo": {
+        "lat": 38,
+        "lon": -98
+      },
+      "lastupdate": "2026-05-18T05:52:30-04:00"
+    },
+    {
+      "id": 2028304,
+      "placeid": 2028304,
+      "name": "Japan",
+      "pathforward": "East Asia\\",
+      "parentplaceid": 2028303,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 9738,
+      "tgn_id": 1000120,
+      "geo": {
+        "lat": 36,
+        "lon": 138
+      },
+      "lastupdate": "2026-05-18T05:52:25-04:00"
+    },
+    {
+      "id": 2028317,
+      "placeid": 2028317,
+      "name": "China",
+      "pathforward": "East Asia\\",
+      "parentplaceid": 2028303,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 5497,
+      "tgn_id": 1000111,
+      "geo": {
+        "lat": 35,
+        "lon": 105
+      },
+      "lastupdate": "2026-05-18T05:52:25-04:00"
+    },
+    {
+      "id": 2028383,
+      "placeid": 2028383,
+      "name": "Germany",
+      "pathforward": "Europe\\",
+      "parentplaceid": 2028188,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 4804,
+      "tgn_id": 7000084,
+      "geo": {
+        "lat": 51.5,
+        "lon": 10.5
+      },
+      "lastupdate": "2026-05-18T05:52:28-04:00"
+    },
+    {
+      "id": 2035822,
+      "placeid": 2035822,
+      "name": "Vietnam",
+      "pathforward": "Southeast Asia\\",
+      "parentplaceid": 2028391,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 3001,
+      "tgn_id": 1000145,
+      "geo": {
+        "lat": 16,
+        "lon": 106
+      },
+      "lastupdate": "2026-05-18T05:52:36-04:00"
+    },
+    {
+      "id": 2028344,
+      "placeid": 2028344,
+      "name": "Netherlands",
+      "pathforward": "Europe\\",
+      "parentplaceid": 2028188,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 2702,
+      "tgn_id": 7016845,
+      "geo": {
+        "lat": 52.5,
+        "lon": 5.75
+      },
+      "lastupdate": "2026-05-18T05:52:28-04:00"
+    },
+    {
+      "id": 2028640,
+      "placeid": 2028640,
+      "name": "Constantinople (Thrace)",
+      "pathforward": "Ancient & Byzantine World\\Europe\\",
+      "parentplaceid": 2028226,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 2283,
+      "lastupdate": "2026-05-18T05:52:19-04:00"
+    },
+    {
+      "id": 2029730,
+      "placeid": 2029730,
+      "name": "Rome (Latium)",
+      "pathforward": "Ancient & Byzantine World\\Europe\\",
+      "parentplaceid": 2028226,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 1963,
+      "lastupdate": "2026-05-18T05:52:21-04:00"
+    },
+    {
+      "id": 2028351,
+      "placeid": 2028351,
+      "name": "Iran",
+      "pathforward": "Middle East\\",
+      "parentplaceid": 2028350,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 1892,
+      "tgn_id": 7000231,
+      "geo": {
+        "lat": 32,
+        "lon": 53
+      },
+      "lastupdate": "2026-05-18T05:52:29-04:00"
+    },
+    {
+      "id": 2028276,
+      "placeid": 2028276,
+      "name": "New York City",
+      "pathforward": "North America\\United States\\New York State\\",
+      "parentplaceid": 2028275,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 1650,
+      "tgn_id": 7007567,
+      "geo": {
+        "lat": 40.7,
+        "lon": -74
+      },
+      "lastupdate": "2026-05-18T05:52:31-04:00"
+    },
+    {
+      "id": 2028313,
+      "placeid": 2028313,
+      "name": "Korea",
+      "pathforward": "East Asia\\",
+      "parentplaceid": 2028303,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 1546,
+      "tgn_id": 7000299,
+      "geo": {
+        "lat": 37,
+        "lon": 127.5
+      },
+      "lastupdate": "2026-05-18T05:52:25-04:00"
+    },
+    {
+      "id": 2028265,
+      "placeid": 2028265,
+      "name": "Boston",
+      "pathforward": "North America\\United States\\Massachusetts\\",
+      "parentplaceid": 2028264,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 1448,
+      "tgn_id": 7013445,
+      "geo": {
+        "lat": 42.35,
+        "lon": -71.5
+      },
+      "lastupdate": "2026-05-18T05:52:30-04:00"
+    },
+    {
+      "id": 2028210,
+      "placeid": 2028210,
+      "name": "Venice",
+      "pathforward": "Europe\\Italy\\Veneto\\",
+      "parentplaceid": 2028209,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 1295,
+      "tgn_id": 7018159,
+      "geo": {
+        "lat": 45.433,
+        "lon": 12.333
+      },
+      "lastupdate": "2026-05-18T05:52:26-04:00"
+    },
+    {
+      "id": 2028444,
+      "placeid": 2028444,
+      "name": "New York City",
+      "pathforward": "North America\\United States\\New York\\",
+      "parentplaceid": 2028439,
+      "haschildren": 1,
+      "level": 4,
+      "objectcount": 1229,
+      "tgn_id": 7007567,
+      "geo": {
+        "lat": 40.7,
+        "lon": -74
+      },
+      "lastupdate": "2026-05-18T05:52:31-04:00"
+    },
+    {
+      "id": 2028673,
+      "placeid": 2028673,
+      "name": "Paris",
+      "pathforward": "Europe\\France\\",
+      "parentplaceid": 2028277,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 1022,
+      "tgn_id": 7008038,
+      "geo": {
+        "lat": 48.866,
+        "lon": 2.333
+      },
+      "lastupdate": "2026-05-18T05:52:27-04:00"
+    },
+    {
+      "id": 2028188,
+      "placeid": 2028188,
+      "name": "Europe",
+      "pathforward": "",
+      "parentplaceid": null,
+      "haschildren": 1,
+      "level": 1,
+      "objectcount": 1015,
+      "lastupdate": "2026-05-18T05:52:26-04:00"
+    },
+    {
+      "id": 2028270,
+      "placeid": 2028270,
+      "name": "London",
+      "pathforward": "Europe\\United Kingdom\\England\\",
+      "parentplaceid": 2028269,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 929,
+      "tgn_id": 7011781,
+      "geo": {
+        "lat": 51.5,
+        "lon": -0.166
+      },
+      "lastupdate": "2026-05-18T05:52:26-04:00"
+    },
+    {
+      "id": 2028268,
+      "placeid": 2028268,
+      "name": "United Kingdom",
+      "pathforward": "Europe\\",
+      "parentplaceid": 2028188,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 922,
+      "tgn_id": 7008591,
+      "geo": {
+        "lat": 54,
+        "lon": -4.5
+      },
+      "lastupdate": "2026-05-18T05:52:26-04:00"
+    },
+    {
+      "id": 2028450,
+      "placeid": 2028450,
+      "name": "California",
+      "pathforward": "North America\\United States\\",
+      "parentplaceid": 2028213,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 892,
+      "tgn_id": 7007157,
+      "geo": {
+        "lat": 37,
+        "lon": -119
+      },
+      "lastupdate": "2026-05-18T05:52:32-04:00"
+    },
+    {
+      "id": 2028277,
+      "placeid": 2028277,
+      "name": "France",
+      "pathforward": "Europe\\",
+      "parentplaceid": 2028188,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 876,
+      "tgn_id": 1000070,
+      "geo": {
+        "lat": 46,
+        "lon": 2
+      },
+      "lastupdate": "2026-05-18T05:52:27-04:00"
+    },
+    {
+      "id": 2040208,
+      "placeid": 2040208,
+      "name": "Deep an der Rega",
+      "pathforward": "Europe\\Germany\\",
+      "parentplaceid": 2028383,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 851,
+      "lastupdate": "2026-05-18T05:52:29-04:00"
+    },
+    {
+      "id": 2028226,
+      "placeid": 2028226,
+      "name": "Europe",
+      "pathforward": "Ancient & Byzantine World\\",
+      "parentplaceid": 2028220,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 832,
+      "lastupdate": "2026-05-18T05:52:16-04:00"
+    },
+    {
+      "id": 2028264,
+      "placeid": 2028264,
+      "name": "Massachusetts",
+      "pathforward": "North America\\United States\\",
+      "parentplaceid": 2028213,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 797,
+      "tgn_id": 7007517,
+      "geo": {
+        "lat": 42.25,
+        "lon": -71.833
+      },
+      "lastupdate": "2026-05-18T05:52:30-04:00"
+    },
+    {
+      "id": 2028431,
+      "placeid": 2028431,
+      "name": "Ohio",
+      "pathforward": "North America\\United States\\",
+      "parentplaceid": 2028213,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 791,
+      "tgn_id": 7007706,
+      "geo": {
+        "lat": 40,
+        "lon": -80.833
+      },
+      "lastupdate": "2026-05-18T05:52:31-04:00"
+    },
+    {
+      "id": 2028236,
+      "placeid": 2028236,
+      "name": "Egypt (Ancient)",
+      "pathforward": "Ancient & Byzantine World\\Africa\\",
+      "parentplaceid": 2028235,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 634,
+      "lastupdate": "2026-05-18T05:52:24-04:00"
+    },
+    {
+      "id": 2035592,
+      "placeid": 2035592,
+      "name": "Syracuse (Sicily)",
+      "pathforward": "Ancient & Byzantine World\\Europe\\",
+      "parentplaceid": 2028226,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 627,
+      "lastupdate": "2026-05-18T05:52:19-04:00"
+    },
+    {
+      "id": 2028363,
+      "placeid": 2028363,
+      "name": "Athens (Attica)",
+      "pathforward": "Ancient & Byzantine World\\Europe\\",
+      "parentplaceid": 2028226,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 569,
+      "lastupdate": "2026-05-18T05:52:21-04:00"
+    },
+    {
+      "id": 2029827,
+      "placeid": 2029827,
+      "name": "Chicago",
+      "pathforward": "North America\\United States\\Illinois\\",
+      "parentplaceid": 2029826,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 565,
+      "tgn_id": 7013596,
+      "geo": {
+        "lat": 41.85,
+        "lon": -87.65
+      },
+      "lastupdate": "2026-05-18T05:52:33-04:00"
+    },
+    {
+      "id": 2028599,
+      "placeid": 2028599,
+      "name": "Antioch (Syria)",
+      "pathforward": "Ancient & Byzantine World\\Asia\\",
+      "parentplaceid": 2028233,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 535,
+      "lastupdate": "2026-05-18T05:52:23-04:00"
+    },
+    {
+      "id": 2028369,
+      "placeid": 2028369,
+      "name": "India",
+      "pathforward": "South Asia\\",
+      "parentplaceid": 2028358,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 533,
+      "tgn_id": 7000198,
+      "geo": {
+        "lat": 20,
+        "lon": 77
+      },
+      "lastupdate": "2026-05-18T05:52:35-04:00"
+    },
+    {
+      "id": 2035443,
+      "placeid": 2035443,
+      "name": "Fustat",
+      "pathforward": "Africa\\Egypt\\",
+      "parentplaceid": 2029778,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 506,
+      "tgn_id": 7001215,
+      "geo": {
+        "lat": 30.5,
+        "lon": 31.25
+      },
+      "lastupdate": "2026-05-18T05:52:16-04:00"
+    },
+    {
+      "id": 2035205,
+      "placeid": 2035205,
+      "name": "Brittany",
+      "pathforward": "Europe\\France\\",
+      "parentplaceid": 2028277,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 488,
+      "tgn_id": 7012216,
+      "geo": {
+        "lat": 48,
+        "lon": -3.16
+      },
+      "lastupdate": "2026-05-18T05:52:27-04:00"
+    },
+    {
+      "id": 2028237,
+      "placeid": 2028237,
+      "name": "Alexandria (Egypt)",
+      "pathforward": "Ancient & Byzantine World\\Africa\\",
+      "parentplaceid": 2028235,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 479,
+      "lastupdate": "2026-05-18T05:52:25-04:00"
+    },
+    {
+      "id": 2028439,
+      "placeid": 2028439,
+      "name": "New York",
+      "pathforward": "North America\\United States\\",
+      "parentplaceid": 2028213,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 473,
+      "tgn_id": 7007568,
+      "geo": {
+        "lat": 43,
+        "lon": -75
+      },
+      "lastupdate": "2026-05-18T05:52:31-04:00"
+    },
+    {
+      "id": 2028648,
+      "placeid": 2028648,
+      "name": "Cambridge",
+      "pathforward": "North America\\United States\\Massachusetts\\",
+      "parentplaceid": 2028264,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 472,
+      "tgn_id": 2050214,
+      "geo": {
+        "lat": 42.333,
+        "lon": -71.2
+      },
+      "lastupdate": "2026-05-18T05:52:30-04:00"
+    },
+    {
+      "id": 2028191,
+      "placeid": 2028191,
+      "name": "Florence",
+      "pathforward": "Europe\\Italy\\Tuscany\\",
+      "parentplaceid": 2028190,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 424,
+      "tgn_id": 7000457,
+      "geo": {
+        "lat": 43.783,
+        "lon": 11.25
+      },
+      "lastupdate": "2026-05-18T05:52:26-04:00"
+    },
+    {
+      "id": 2037593,
+      "placeid": 2037593,
+      "name": "Portugal",
+      "pathforward": "Europe\\",
+      "parentplaceid": 2028188,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 419,
+      "tgn_id": 1000090,
+      "geo": {
+        "lat": 39.5,
+        "lon": -8
+      },
+      "lastupdate": "2026-05-18T05:52:29-04:00"
+    },
+    {
+      "id": 2028384,
+      "placeid": 2028384,
+      "name": "T\u00fcrkiye (Turkey)",
+      "pathforward": "Middle East\\",
+      "parentplaceid": 2028350,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 399,
+      "tgn_id": 1000144,
+      "geo": {
+        "lat": 39,
+        "lon": 35
+      },
+      "lastupdate": "2026-05-18T05:52:29-04:00"
+    },
+    {
+      "id": 2028246,
+      "placeid": 2028246,
+      "name": "Attica",
+      "pathforward": "Ancient & Byzantine World\\Europe\\",
+      "parentplaceid": 2028226,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 389,
+      "tgn_id": 7002681,
+      "geo": {
+        "lat": 38.83,
+        "lon": 23.5
+      },
+      "lastupdate": "2026-05-18T05:52:17-04:00"
+    },
+    {
+      "id": 2028350,
+      "placeid": 2028350,
+      "name": "Middle East",
+      "pathforward": "",
+      "parentplaceid": null,
+      "haschildren": 1,
+      "level": 1,
+      "objectcount": 388,
+      "lastupdate": "2026-05-18T05:52:29-04:00"
+    },
+    {
+      "id": 2029778,
+      "placeid": 2029778,
+      "name": "Egypt",
+      "pathforward": "Africa\\",
+      "parentplaceid": 2029200,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 378,
+      "tgn_id": 7016833,
+      "geo": {
+        "lat": 27,
+        "lon": 30
+      },
+      "lastupdate": "2026-05-18T05:52:16-04:00"
+    },
+    {
+      "id": 2035309,
+      "placeid": 2035309,
+      "name": "Dessau",
+      "pathforward": "Europe\\Germany\\",
+      "parentplaceid": 2028383,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 370,
+      "tgn_id": 7012804,
+      "geo": {
+        "lat": 51.85,
+        "lon": 12.25
+      },
+      "lastupdate": "2026-05-18T05:52:29-04:00"
+    },
+    {
+      "id": 2035280,
+      "placeid": 2035280,
+      "name": "Stockholm",
+      "pathforward": "Europe\\Sweden\\",
+      "parentplaceid": 2028657,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 364,
+      "tgn_id": 7009861,
+      "geo": {
+        "lat": 59.333,
+        "lon": 18.83
+      },
+      "lastupdate": "2026-05-18T05:52:29-04:00"
+    },
+    {
+      "id": 2028220,
+      "placeid": 2028220,
+      "name": "Ancient & Byzantine World",
+      "pathforward": "",
+      "parentplaceid": null,
+      "haschildren": 1,
+      "level": 1,
+      "objectcount": 363,
+      "lastupdate": "2026-05-18T05:52:16-04:00"
+    },
+    {
+      "id": 2028306,
+      "placeid": 2028306,
+      "name": "Ky\u014dto",
+      "pathforward": "East Asia\\Japan\\Kyoto Metropolitan Area\\",
+      "parentplaceid": 2028305,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 336,
+      "tgn_id": 7004603,
+      "geo": {
+        "lat": 35,
+        "lon": 135.75
+      },
+      "lastupdate": "2026-05-18T05:52:25-04:00"
+    },
+    {
+      "id": 2028668,
+      "placeid": 2028668,
+      "name": "Berlin",
+      "pathforward": "Europe\\Germany\\",
+      "parentplaceid": 2028383,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 321,
+      "tgn_id": 7003712,
+      "geo": {
+        "lat": 52.533,
+        "lon": 13.416
+      },
+      "lastupdate": "2026-05-18T05:52:28-04:00"
+    },
+    {
+      "id": 2035183,
+      "placeid": 2035183,
+      "name": "Dijon",
+      "pathforward": "Europe\\France\\",
+      "parentplaceid": 2028277,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 311,
+      "tgn_id": 7008224,
+      "geo": {
+        "lat": 47.333,
+        "lon": 5.33
+      },
+      "lastupdate": "2026-05-18T05:52:27-04:00"
+    },
+    {
+      "id": 2028556,
+      "placeid": 2028556,
+      "name": "Java",
+      "pathforward": "Southeast Asia\\Indonesia\\",
+      "parentplaceid": 2028555,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 308,
+      "lastupdate": "2026-05-18T05:52:36-04:00"
+    },
+    {
+      "id": 2033729,
+      "placeid": 2033729,
+      "name": "Lyons",
+      "pathforward": "Europe\\France\\",
+      "parentplaceid": 2028277,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 305,
+      "tgn_id": 7008772,
+      "geo": {
+        "lat": 45.766,
+        "lon": 4.833
+      },
+      "lastupdate": "2026-05-18T05:52:27-04:00"
+    },
+    {
+      "id": 2036749,
+      "placeid": 2036749,
+      "name": "Qazvin?",
+      "pathforward": "Middle East\\Iran\\",
+      "parentplaceid": 2028351,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 296,
+      "lastupdate": "2026-05-18T05:52:29-04:00"
+    },
+    {
+      "id": 2028269,
+      "placeid": 2028269,
+      "name": "England",
+      "pathforward": "Europe\\United Kingdom\\",
+      "parentplaceid": 2028268,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 292,
+      "tgn_id": 7002445,
+      "geo": {
+        "lat": 53,
+        "lon": -2
+      },
+      "lastupdate": "2026-05-18T05:52:26-04:00"
+    },
+    {
+      "id": 2028392,
+      "placeid": 2028392,
+      "name": "Thailand",
+      "pathforward": "Southeast Asia\\",
+      "parentplaceid": 2028391,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 292,
+      "tgn_id": 1000142,
+      "geo": {
+        "lat": 15,
+        "lon": 100
+      },
+      "lastupdate": "2026-05-18T05:52:36-04:00"
+    },
+    {
+      "id": 2028501,
+      "placeid": 2028501,
+      "name": "Angkor",
+      "pathforward": "Southeast Asia\\Cambodia\\",
+      "parentplaceid": 2028500,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 281,
+      "tgn_id": 7004075,
+      "geo": {
+        "lat": 13.433,
+        "lon": 103.833
+      },
+      "lastupdate": "2026-05-18T05:52:36-04:00"
+    },
+    {
+      "id": 2035337,
+      "placeid": 2035337,
+      "name": "Deccan",
+      "pathforward": "South Asia\\India\\",
+      "parentplaceid": 2028369,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 281,
+      "tgn_id": 7001693,
+      "geo": {
+        "lat": 17,
+        "lon": 78
+      },
+      "lastupdate": "2026-05-18T05:52:35-04:00"
+    },
+    {
+      "id": 2028571,
+      "placeid": 2028571,
+      "name": "Connecticut",
+      "pathforward": "North America\\United States\\",
+      "parentplaceid": 2028213,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 275,
+      "tgn_id": 7007159,
+      "geo": {
+        "lat": 41.833,
+        "lon": -72.833
+      },
+      "lastupdate": "2026-05-18T05:52:33-04:00"
+    },
+    {
+      "id": 2035612,
+      "placeid": 2035612,
+      "name": "Corinth (Corinthia)",
+      "pathforward": "Ancient & Byzantine World\\Europe\\",
+      "parentplaceid": 2028226,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 262,
+      "lastupdate": "2026-05-18T05:52:18-04:00"
+    },
+    {
+      "id": 2035756,
+      "placeid": 2035756,
+      "name": "Kyzikos (Mysia)",
+      "pathforward": "Ancient & Byzantine World\\Asia\\",
+      "parentplaceid": 2028233,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 260,
+      "lastupdate": "2026-05-18T05:52:23-04:00"
+    },
+    {
+      "id": 2036889,
+      "placeid": 2036889,
+      "name": "Minnesota",
+      "pathforward": "North America\\United States\\",
+      "parentplaceid": 2028213,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 260,
+      "tgn_id": 7007521,
+      "geo": {
+        "lat": 46,
+        "lon": -94
+      },
+      "lastupdate": "2026-05-18T05:52:34-04:00"
+    },
+    {
+      "id": 2035576,
+      "placeid": 2035576,
+      "name": "Tarentum-Taras (Calabria)",
+      "pathforward": "Ancient & Byzantine World\\Europe\\",
+      "parentplaceid": 2028226,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 257,
+      "lastupdate": "2026-05-18T05:52:19-04:00"
+    },
+    {
+      "id": 2028560,
+      "placeid": 2028560,
+      "name": "Bali",
+      "pathforward": "Southeast Asia\\Indonesia\\",
+      "parentplaceid": 2028555,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 256,
+      "tgn_id": 1074624,
+      "geo": {
+        "lat": 25.833,
+        "lon": 74.83
+      },
+      "lastupdate": "2026-05-18T05:52:36-04:00"
+    },
+    {
+      "id": 2035809,
+      "placeid": 2035809,
+      "name": "Jingdezhen",
+      "pathforward": "East Asia\\China\\Jiangxi province\\",
+      "parentplaceid": 2035808,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 251,
+      "tgn_id": 1069298,
+      "geo": {
+        "lat": 29.283,
+        "lon": 117.2
+      },
+      "lastupdate": "2026-05-18T05:52:26-04:00"
+    },
+    {
+      "id": 2028610,
+      "placeid": 2028610,
+      "name": "Macedonia",
+      "pathforward": "Ancient & Byzantine World\\Europe\\",
+      "parentplaceid": 2028226,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 238,
+      "tgn_id": 7006667,
+      "geo": {
+        "lat": 41.833,
+        "lon": 22
+      },
+      "lastupdate": "2026-05-18T05:52:17-04:00"
+    },
+    {
+      "id": 2038380,
+      "placeid": 2038380,
+      "name": "Woodbine",
+      "pathforward": "North America\\United States\\New Jersey\\",
+      "parentplaceid": 2028570,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 234,
+      "tgn_id": 2066540,
+      "geo": {
+        "lat": 39.233,
+        "lon": -74.8
+      },
+      "lastupdate": "2026-05-18T05:52:33-04:00"
+    },
+    {
+      "id": 2028656,
+      "placeid": 2028656,
+      "name": "Philadelphia",
+      "pathforward": "North America\\United States\\Pennsylvania\\",
+      "parentplaceid": 2028513,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 228,
+      "tgn_id": 7014406,
+      "geo": {
+        "lat": 39.95,
+        "lon": -75.15
+      },
+      "lastupdate": "2026-05-18T05:52:32-04:00"
+    },
+    {
+      "id": 2035493,
+      "placeid": 2035493,
+      "name": "Khara Khoto",
+      "pathforward": "East Asia\\China\\Inner Mongolia (Nei Menggu)\\",
+      "parentplaceid": 2035492,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 226,
+      "tgn_id": 7001846,
+      "geo": {
+        "lat": 41.783,
+        "lon": 101.5
+      },
+      "lastupdate": "2026-05-18T05:52:26-04:00"
+    },
+    {
+      "id": 2028821,
+      "placeid": 2028821,
+      "name": "New Hampshire",
+      "pathforward": "North America\\United States\\",
+      "parentplaceid": 2028213,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 226,
+      "tgn_id": 7007564,
+      "geo": {
+        "lat": 44,
+        "lon": -71.666
+      },
+      "lastupdate": "2026-05-18T05:52:33-04:00"
+    },
+    {
+      "id": 2036133,
+      "placeid": 2036133,
+      "name": "Eleusis (Attica)",
+      "pathforward": "Ancient & Byzantine World\\Europe\\",
+      "parentplaceid": 2028226,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 225,
+      "lastupdate": "2026-05-18T05:52:21-04:00"
+    },
+    {
+      "id": 2035969,
+      "placeid": 2035969,
+      "name": "Nikomedeia (Bithynia)",
+      "pathforward": "Ancient & Byzantine World\\Asia\\",
+      "parentplaceid": 2028233,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 211,
+      "lastupdate": "2026-05-18T05:52:22-04:00"
+    },
+    {
+      "id": 2028620,
+      "placeid": 2028620,
+      "name": "Cyprus",
+      "pathforward": "Ancient & Byzantine World\\Asia\\",
+      "parentplaceid": 2028233,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 199,
+      "tgn_id": 1006894,
+      "geo": {
+        "lat": 35,
+        "lon": 33
+      },
+      "lastupdate": "2026-05-18T05:52:21-04:00"
+    },
+    {
+      "id": 2036953,
+      "placeid": 2036953,
+      "name": "Halle",
+      "pathforward": "Europe\\Germany\\",
+      "parentplaceid": 2028383,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 193,
+      "tgn_id": 1039443,
+      "geo": {
+        "lat": 51.983,
+        "lon": 9.55
+      },
+      "lastupdate": "2026-05-18T05:52:28-04:00"
+    },
+    {
+      "id": 2035672,
+      "placeid": 2035672,
+      "name": "Uncertain Mint",
+      "pathforward": "Ancient & Byzantine World\\",
+      "parentplaceid": 2028220,
+      "haschildren": 0,
+      "level": 2,
+      "objectcount": 190,
+      "lastupdate": "2026-05-18T05:52:25-04:00"
+    },
+    {
+      "id": 2029979,
+      "placeid": 2029979,
+      "name": "St. Louis",
+      "pathforward": "North America\\United States\\Missouri\\",
+      "parentplaceid": 2029978,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 186,
+      "tgn_id": 7014444,
+      "geo": {
+        "lat": 38.616,
+        "lon": -90.183
+      },
+      "lastupdate": "2026-05-18T05:52:34-04:00"
+    },
+    {
+      "id": 2033815,
+      "placeid": 2033815,
+      "name": "Augsburg",
+      "pathforward": "Europe\\Germany\\",
+      "parentplaceid": 2028383,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 183,
+      "tgn_id": 7004324,
+      "geo": {
+        "lat": 48.35,
+        "lon": 10.9
+      },
+      "lastupdate": "2026-05-18T05:52:28-04:00"
+    },
+    {
+      "id": 2033784,
+      "placeid": 2033784,
+      "name": "Ferrara",
+      "pathforward": "Europe\\Italy\\Emilia\\",
+      "parentplaceid": 2029191,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 182,
+      "tgn_id": 7004264,
+      "geo": {
+        "lat": 44.833,
+        "lon": 11.633
+      },
+      "lastupdate": "2026-05-18T05:52:26-04:00"
+    },
+    {
+      "id": 2035562,
+      "placeid": 2035562,
+      "name": "Magnesia ad Meandron (Ionia)",
+      "pathforward": "Ancient & Byzantine World\\Asia\\",
+      "parentplaceid": 2028233,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 178,
+      "lastupdate": "2026-05-18T05:52:22-04:00"
+    },
+    {
+      "id": 2035702,
+      "placeid": 2035702,
+      "name": "Thessalonike (Macedonia)",
+      "pathforward": "Ancient & Byzantine World\\Europe\\",
+      "parentplaceid": 2028226,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 174,
+      "lastupdate": "2026-05-18T05:52:21-04:00"
+    },
+    {
+      "id": 2029045,
+      "placeid": 2029045,
+      "name": "Kota",
+      "pathforward": "South Asia\\India\\Rajasthan\\",
+      "parentplaceid": 2028377,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 172,
+      "tgn_id": 1140161,
+      "geo": {
+        "lat": 25.183,
+        "lon": 75.966
+      },
+      "lastupdate": "2026-05-18T05:52:35-04:00"
+    },
+    {
+      "id": 2029083,
+      "placeid": 2029083,
+      "name": "T\u014dky\u014d",
+      "pathforward": "East Asia\\Japan\\Tokyo Metropolitan Area\\",
+      "parentplaceid": 2029082,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 169,
+      "tgn_id": 1001032,
+      "geo": {
+        "lat": 35.75,
+        "lon": 139.5
+      },
+      "lastupdate": "2026-05-18T05:52:25-04:00"
+    },
+    {
+      "id": 2035134,
+      "placeid": 2035134,
+      "name": "Sudan",
+      "pathforward": "Africa\\",
+      "parentplaceid": 2029200,
+      "haschildren": 0,
+      "level": 2,
+      "objectcount": 164,
+      "tgn_id": 1000201,
+      "geo": {
+        "lat": 15,
+        "lon": 30
+      },
+      "lastupdate": "2026-05-18T05:52:16-04:00"
+    },
+    {
+      "id": 2036025,
+      "placeid": 2036025,
+      "name": "Nikaia (Bithynia)",
+      "pathforward": "Ancient & Byzantine World\\Asia\\",
+      "parentplaceid": 2028233,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 164,
+      "lastupdate": "2026-05-18T05:52:22-04:00"
+    },
+    {
+      "id": 2028578,
+      "placeid": 2028578,
+      "name": "Jersey Homesteads",
+      "pathforward": "North America\\United States\\New Jersey\\",
+      "parentplaceid": 2028570,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 164,
+      "tgn_id": 2066071,
+      "geo": {
+        "lat": 40.216,
+        "lon": -74.466
+      },
+      "lastupdate": "2026-05-18T05:52:33-04:00"
+    },
+    {
+      "id": 2035369,
+      "placeid": 2035369,
+      "name": "Shiraz",
+      "pathforward": "Middle East\\Iran\\",
+      "parentplaceid": 2028351,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 158,
+      "tgn_id": 7002148,
+      "geo": {
+        "lat": 29.633,
+        "lon": 52.566
+      },
+      "lastupdate": "2026-05-18T05:52:29-04:00"
+    },
+    {
+      "id": 2035595,
+      "placeid": 2035595,
+      "name": "Amphipolis (Macedonia)",
+      "pathforward": "Ancient & Byzantine World\\Europe\\Macedonia\\",
+      "parentplaceid": 2028610,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 158,
+      "lastupdate": "2026-05-18T05:52:17-04:00"
+    },
+    {
+      "id": 2028585,
+      "placeid": 2028585,
+      "name": "North Carolina",
+      "pathforward": "North America\\United States\\",
+      "parentplaceid": 2028213,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 154,
+      "tgn_id": 7007709,
+      "geo": {
+        "lat": 35.5,
+        "lon": -80
+      },
+      "lastupdate": "2026-05-18T05:52:33-04:00"
+    },
+    {
+      "id": 2028274,
+      "placeid": 2028274,
+      "name": "Rome",
+      "pathforward": "Europe\\Italy\\Lazio\\",
+      "parentplaceid": 2028273,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 151,
+      "tgn_id": 7000874,
+      "geo": {
+        "lat": 41.883,
+        "lon": 12.5
+      },
+      "lastupdate": "2026-05-18T05:52:26-04:00"
+    },
+    {
+      "id": 2036676,
+      "placeid": 2036676,
+      "name": "Carthage (North Africa)",
+      "pathforward": "Ancient & Byzantine World\\Africa\\",
+      "parentplaceid": 2028235,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 150,
+      "lastupdate": "2026-05-18T05:52:25-04:00"
+    },
+    {
+      "id": 2036879,
+      "placeid": 2036879,
+      "name": "Hampton",
+      "pathforward": "North America\\United States\\Virginia\\",
+      "parentplaceid": 2029847,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 150,
+      "tgn_id": 7013687,
+      "geo": {
+        "lat": 37.16,
+        "lon": -76.333
+      },
+      "lastupdate": "2026-05-18T05:52:34-04:00"
+    },
+    {
+      "id": 2028189,
+      "placeid": 2028189,
+      "name": "Italy",
+      "pathforward": "Europe\\",
+      "parentplaceid": 2028188,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 145,
+      "tgn_id": 1000080,
+      "geo": {
+        "lat": 42.833,
+        "lon": 12.833
+      },
+      "lastupdate": "2026-05-18T05:52:26-04:00"
+    },
+    {
+      "id": 2028558,
+      "placeid": 2028558,
+      "name": "Hong Kong",
+      "pathforward": "East Asia\\China\\",
+      "parentplaceid": 2028317,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 144,
+      "tgn_id": 7004541,
+      "geo": {
+        "lat": 22.283,
+        "lon": 114.15
+      },
+      "lastupdate": "2026-05-18T05:52:26-04:00"
+    },
+    {
+      "id": 2028243,
+      "placeid": 2028243,
+      "name": "Thessaly",
+      "pathforward": "Ancient & Byzantine World\\Europe\\",
+      "parentplaceid": 2028226,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 144,
+      "tgn_id": 7001399,
+      "geo": {
+        "lat": 39.5,
+        "lon": 22.25
+      },
+      "lastupdate": "2026-05-18T05:52:17-04:00"
+    },
+    {
+      "id": 2028225,
+      "placeid": 2028225,
+      "name": "Luristan (Iran)",
+      "pathforward": "Ancient & Byzantine World\\Asia\\",
+      "parentplaceid": 2028233,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 143,
+      "lastupdate": "2026-05-18T05:52:22-04:00"
+    },
+    {
+      "id": 2035823,
+      "placeid": 2035823,
+      "name": "Henan province",
+      "pathforward": "East Asia\\China\\",
+      "parentplaceid": 2028317,
+      "haschildren": 1,
+      "level": 3,
+      "objectcount": 142,
+      "lastupdate": "2026-05-18T05:52:26-04:00"
+    },
+    {
+      "id": 2028510,
+      "placeid": 2028510,
+      "name": "Hilliards",
+      "pathforward": "North America\\United States\\Ohio\\",
+      "parentplaceid": 2028431,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 138,
+      "tgn_id": 2079979,
+      "geo": {
+        "lat": 40.33,
+        "lon": -83.15
+      },
+      "lastupdate": "2026-05-18T05:52:31-04:00"
+    },
+    {
+      "id": 2028338,
+      "placeid": 2028338,
+      "name": "Afghanistan",
+      "pathforward": "Central Asia\\",
+      "parentplaceid": 2028337,
+      "haschildren": 1,
+      "level": 2,
+      "objectcount": 138,
+      "tgn_id": 7016612,
+      "geo": {
+        "lat": 33,
+        "lon": 65
+      },
+      "lastupdate": "2026-05-18T05:52:25-04:00"
+    },
+    {
+      "id": 2029881,
+      "placeid": 2029881,
+      "name": "Pittsburgh",
+      "pathforward": "North America\\United States\\Pennsylvania\\",
+      "parentplaceid": 2028513,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 138,
+      "tgn_id": 7013927,
+      "geo": {
+        "lat": 40.433,
+        "lon": -79.983
+      },
+      "lastupdate": "2026-05-18T05:52:32-04:00"
+    },
+    {
+      "id": 2028618,
+      "placeid": 2028618,
+      "name": "Sardis (Lydia)",
+      "pathforward": "Ancient & Byzantine World\\Asia\\",
+      "parentplaceid": 2028233,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 134,
+      "lastupdate": "2026-05-18T05:52:24-04:00"
+    },
+    {
+      "id": 2028330,
+      "placeid": 2028330,
+      "name": "Etruria",
+      "pathforward": "Ancient & Byzantine World\\Europe\\",
+      "parentplaceid": 2028226,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 133,
+      "lastupdate": "2026-05-18T05:52:17-04:00"
+    },
+    {
+      "id": 2036016,
+      "placeid": 2036016,
+      "name": "Amisos (Pontus)",
+      "pathforward": "Ancient & Byzantine World\\Asia\\",
+      "parentplaceid": 2028233,
+      "haschildren": 0,
+      "level": 3,
+      "objectcount": 132,
+      "lastupdate": "2026-05-18T05:52:24-04:00"
+    },
+    {
+      "id": 2040363,
+      "placeid": 2040363,
+      "name": "Etruria",
+      "pathforward": "Europe\\United Kingdom\\England\\",
+      "parentplaceid": 2028269,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 132,
+      "lastupdate": "2026-05-18T05:52:27-04:00"
+    },
+    {
+      "id": 2028554,
+      "placeid": 2028554,
+      "name": "Washington",
+      "pathforward": "North America\\United States\\District of Columbia\\",
+      "parentplaceid": 2028553,
+      "haschildren": 0,
+      "level": 4,
+      "objectcount": 128,
+      "tgn_id": 7013962,
+      "geo": {
+        "lat": 38.883,
+        "lon": -77.33
+      },
+      "lastupdate": "2026-05-18T05:52:33-04:00"
+    }
+  ]
+}

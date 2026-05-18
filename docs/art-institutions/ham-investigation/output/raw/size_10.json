@@ -1,0 +1,52 @@
+{
+  "info": {
+    "totalrecordsperquery": 10,
+    "totalrecords": 5575,
+    "pages": 558,
+    "page": 1,
+    "next": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=10&classification=26&hasimage=1&fields=id&page=2",
+    "responsetime": "17 ms"
+  },
+  "records": [
+    {
+      "id": 1429,
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 4586,
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 4615,
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 4640,
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 4728,
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 4927,
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 4988,
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 5109,
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 5144,
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 5145,
+      "imagepermissionlevel": 0
+    }
+  ]
+}

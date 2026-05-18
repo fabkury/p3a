@@ -1,0 +1,513 @@
+{
+  "info": {
+    "totalrecordsperquery": 100,
+    "totalrecords": 77076,
+    "pages": 771,
+    "page": 200,
+    "next": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=100&page=201&classification=17&hasimage=1&fields=id%2Cobjectnumber&sort=id&sortorder=asc",
+    "prev": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=100&page=199&classification=17&hasimage=1&fields=id%2Cobjectnumber&sort=id&sortorder=asc",
+    "responsetime": "50 ms"
+  },
+  "records": [
+    {
+      "id": 51842,
+      "objectnumber": "BRGA.20.236",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51846,
+      "objectnumber": "BRGA.20.205",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51847,
+      "objectnumber": "BRGA.20.215",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51849,
+      "objectnumber": "BRGA.20.220",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51850,
+      "objectnumber": "BRGA.20.224",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51851,
+      "objectnumber": "BRGA.20.234",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51852,
+      "objectnumber": "BRGA.20.237",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51866,
+      "objectnumber": "BRGA.20.207",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51867,
+      "objectnumber": "BRGA.20.208",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51868,
+      "objectnumber": "BRGA.20.209",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51869,
+      "objectnumber": "BRGA.20.210",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51870,
+      "objectnumber": "BRGA.20.211",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51871,
+      "objectnumber": "BRGA.20.218",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51872,
+      "objectnumber": "BRGA.20.219",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51873,
+      "objectnumber": "BRGA.20.223",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51874,
+      "objectnumber": "BRGA.20.226",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51875,
+      "objectnumber": "BRGA.20.227",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51876,
+      "objectnumber": "BRGA.20.231",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51899,
+      "objectnumber": "BRGA.82.197",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51900,
+      "objectnumber": "BRGA.82.194",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51904,
+      "objectnumber": "BRGA.20.241",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51905,
+      "objectnumber": "BRGA.20.246",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51906,
+      "objectnumber": "BRGA.45.27",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51908,
+      "objectnumber": "BRGA.45.22",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51915,
+      "objectnumber": "BRGA.20.197",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51916,
+      "objectnumber": "BRGA.20.212",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51917,
+      "objectnumber": "BRGA.20.213",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51918,
+      "objectnumber": "BRGA.20.228",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51919,
+      "objectnumber": "BRGA.20.229",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51920,
+      "objectnumber": "BRGA.20.232",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51921,
+      "objectnumber": "BRGA.20.233",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51938,
+      "objectnumber": "BRGA.20.240",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51939,
+      "objectnumber": "BRGA.20.243",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51940,
+      "objectnumber": "BRGA.20.249",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51941,
+      "objectnumber": "BRGA.20.251",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51942,
+      "objectnumber": "BRGA.20.252",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51943,
+      "objectnumber": "BRGA.20.255",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51944,
+      "objectnumber": "BRGA.20.259",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51945,
+      "objectnumber": "BRGA.20.263",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51955,
+      "objectnumber": "BRGA.82.199",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51956,
+      "objectnumber": "BRGA.82.193",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51957,
+      "objectnumber": "BRGA.20.247",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51958,
+      "objectnumber": "BRGA.20.260",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51959,
+      "objectnumber": "BRGA.20.261",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51960,
+      "objectnumber": "BRGA.20.264",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51961,
+      "objectnumber": "BRGA.20.265",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51962,
+      "objectnumber": "BRGA.20.267",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51963,
+      "objectnumber": "BRGA.20.274",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51964,
+      "objectnumber": "BRGA.20.275",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51966,
+      "objectnumber": "P2004.70",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51967,
+      "objectnumber": "P2004.76",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51968,
+      "objectnumber": "P2004.77",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51969,
+      "objectnumber": "P2004.78",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51970,
+      "objectnumber": "P2004.81",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51972,
+      "objectnumber": "1978.484.90.1",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51973,
+      "objectnumber": "1978.484.91.1",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51974,
+      "objectnumber": "1978.484.91.3",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51978,
+      "objectnumber": "P2004.85.A",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51979,
+      "objectnumber": "P2004.86",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51980,
+      "objectnumber": "P2004.87",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 51991,
+      "objectnumber": "BRGA.20.248",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51992,
+      "objectnumber": "BRGA.20.250",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51993,
+      "objectnumber": "BRGA.20.253",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51994,
+      "objectnumber": "BRGA.20.266",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51995,
+      "objectnumber": "BRGA.20.269",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51996,
+      "objectnumber": "BRGA.20.270",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 51997,
+      "objectnumber": "BRGA.20.273",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52019,
+      "objectnumber": "BRGA.82.196",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52023,
+      "objectnumber": "BRGA.20.239",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 52024,
+      "objectnumber": "BRGA.20.242",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52025,
+      "objectnumber": "BRGA.20.244",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52026,
+      "objectnumber": "BRGA.20.245",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52027,
+      "objectnumber": "BRGA.20.254",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 52028,
+      "objectnumber": "BRGA.20.256",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52029,
+      "objectnumber": "BRGA.20.257",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52030,
+      "objectnumber": "BRGA.20.258",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52033,
+      "objectnumber": "P2004.49",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52034,
+      "objectnumber": "P2004.71",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 52035,
+      "objectnumber": "P2004.73",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 52036,
+      "objectnumber": "P2004.75",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 52037,
+      "objectnumber": "P2004.80",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 52038,
+      "objectnumber": "P2004.84",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 52040,
+      "objectnumber": "1978.484.90.2",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 52043,
+      "objectnumber": "BRGA.20.262",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52044,
+      "objectnumber": "BRGA.20.276",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52045,
+      "objectnumber": "BRGA.20.277",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52046,
+      "objectnumber": "BRGA.20.279",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52053,
+      "objectnumber": "BRGA.20.281",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52054,
+      "objectnumber": "BRGA.20.282",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52055,
+      "objectnumber": "BRGA.20.283",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52056,
+      "objectnumber": "BRGA.20.285",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52058,
+      "objectnumber": "BRGA.45.64",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 52060,
+      "objectnumber": "BRGA.45.58",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 52061,
+      "objectnumber": "BRGA.45.57",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 52065,
+      "objectnumber": "BRGA.20.286",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 52068,
+      "objectnumber": "BRGA.45.67",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 52070,
+      "objectnumber": "BRGA.20.312",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52072,
+      "objectnumber": "BRGA.20.321",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 52089,
+      "objectnumber": "BRGA.45.63",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 52090,
+      "objectnumber": "BRGA.45.56",
+      "imagepermissionlevel": 0
+    }
+  ]
+}

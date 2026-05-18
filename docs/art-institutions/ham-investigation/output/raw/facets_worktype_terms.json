@@ -1,0 +1,712 @@
+{
+  "info": {
+    "totalrecordsperquery": 100,
+    "totalrecords": 414,
+    "pages": 5,
+    "page": 1,
+    "next": "https://api.harvardartmuseums.org/worktype?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=100&page=2&sort=objectcount&sortorder=desc",
+    "responsetime": "23 ms"
+  },
+  "records": [
+    {
+      "id": "5",
+      "worktypeid": "5",
+      "name": "adze",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:40-04:00"
+    },
+    {
+      "id": "7",
+      "worktypeid": "7",
+      "name": "album cover",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "11",
+      "worktypeid": "11",
+      "name": "altered readymade",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "12",
+      "worktypeid": "12",
+      "name": "ammunition",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "14",
+      "worktypeid": "14",
+      "name": "anatomical model",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "22",
+      "worktypeid": "22",
+      "name": "arrows",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "23",
+      "worktypeid": "23",
+      "name": "artist's book",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "24",
+      "worktypeid": "24",
+      "name": "artist's equipment",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "27",
+      "worktypeid": "27",
+      "name": "assemblages",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "28",
+      "worktypeid": "28",
+      "name": "astrolabe",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "30",
+      "worktypeid": "30",
+      "name": "audio cassette",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "31",
+      "worktypeid": "31",
+      "name": "audio recording",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "32",
+      "worktypeid": "32",
+      "name": "audiotape",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "33",
+      "worktypeid": "33",
+      "name": "audiovisual equipment",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "34",
+      "worktypeid": "34",
+      "name": "audiovisual work",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "36",
+      "worktypeid": "36",
+      "name": "banner",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "37",
+      "worktypeid": "37",
+      "name": "baren",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "38",
+      "worktypeid": "38",
+      "name": "barometer",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "39",
+      "worktypeid": "39",
+      "name": "bed",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "41",
+      "worktypeid": "41",
+      "name": "bench",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "43",
+      "worktypeid": "43",
+      "name": "bodkin",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "44",
+      "worktypeid": "44",
+      "name": "bone",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "49",
+      "worktypeid": "49",
+      "name": "bottle ticket",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "50",
+      "worktypeid": "50",
+      "name": "bow",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "51",
+      "worktypeid": "51",
+      "name": "bow puller",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "53",
+      "worktypeid": "53",
+      "name": "box cover",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "55",
+      "worktypeid": "55",
+      "name": "bracket",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "56",
+      "worktypeid": "56",
+      "name": "brick stamp",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "57",
+      "worktypeid": "57",
+      "name": "brochure",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "59",
+      "worktypeid": "59",
+      "name": "brush handle",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "60",
+      "worktypeid": "60",
+      "name": "brush holder",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "62",
+      "worktypeid": "62",
+      "name": "bullet",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "63",
+      "worktypeid": "63",
+      "name": "bulloterion",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "64",
+      "worktypeid": "64",
+      "name": "burnisher",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "68",
+      "worktypeid": "68",
+      "name": "cabinet photograph",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "69",
+      "worktypeid": "69",
+      "name": "cake server",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "72",
+      "worktypeid": "72",
+      "name": "cameo",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "74",
+      "worktypeid": "74",
+      "name": "candle snuffer",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "75",
+      "worktypeid": "75",
+      "name": "canteen case",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "76",
+      "worktypeid": "76",
+      "name": "card catalog",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "77",
+      "worktypeid": "77",
+      "name": "carte-de-visite",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "78",
+      "worktypeid": "78",
+      "name": "cassolette",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "79",
+      "worktypeid": "79",
+      "name": "cast",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "80",
+      "worktypeid": "80",
+      "name": "catalog",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "81",
+      "worktypeid": "81",
+      "name": "cation exchange",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "82",
+      "worktypeid": "82",
+      "name": "cellulose derivative",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "83",
+      "worktypeid": "83",
+      "name": "celt",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "87",
+      "worktypeid": "87",
+      "name": "chaise longue",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "88",
+      "worktypeid": "88",
+      "name": "chape",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "91",
+      "worktypeid": "91",
+      "name": "chest",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "93",
+      "worktypeid": "93",
+      "name": "chou oinochoe",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "94",
+      "worktypeid": "94",
+      "name": "cigarette card",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "95",
+      "worktypeid": "95",
+      "name": "clay",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "96",
+      "worktypeid": "96",
+      "name": "clayworking tool",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "99",
+      "worktypeid": "99",
+      "name": "clock part",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "103",
+      "worktypeid": "103",
+      "name": "contact print",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "106",
+      "worktypeid": "106",
+      "name": "container",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "107",
+      "worktypeid": "107",
+      "name": "Cont\u00e9 crayon",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "109",
+      "worktypeid": "109",
+      "name": "corkscrew",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "111",
+      "worktypeid": "111",
+      "name": "costume",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "113",
+      "worktypeid": "113",
+      "name": "crayon",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "114",
+      "worktypeid": "114",
+      "name": "cupboard",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "115",
+      "worktypeid": "115",
+      "name": "cymbal",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "120",
+      "worktypeid": "120",
+      "name": "diary",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "121",
+      "worktypeid": "121",
+      "name": "digital video disk",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "126",
+      "worktypeid": "126",
+      "name": "doll",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "130",
+      "worktypeid": "130",
+      "name": "drier",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "132",
+      "worktypeid": "132",
+      "name": "enlarged proof sheet",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "135",
+      "worktypeid": "135",
+      "name": "fan",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "136",
+      "worktypeid": "136",
+      "name": "fetish",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "140",
+      "worktypeid": "140",
+      "name": "film",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "141",
+      "worktypeid": "141",
+      "name": "film reel",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "144",
+      "worktypeid": "144",
+      "name": "fireset",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "147",
+      "worktypeid": "147",
+      "name": "footwear",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "154",
+      "worktypeid": "154",
+      "name": "fungicide",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "155",
+      "worktypeid": "155",
+      "name": "funnel",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "157",
+      "worktypeid": "157",
+      "name": "fusuma",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "160",
+      "worktypeid": "160",
+      "name": "gem",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "161",
+      "worktypeid": "161",
+      "name": "glitter",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "162",
+      "worktypeid": "162",
+      "name": "glove stretcher",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "164",
+      "worktypeid": "164",
+      "name": "graphic design",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "165",
+      "worktypeid": "165",
+      "name": "graphite pencil",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "167",
+      "worktypeid": "167",
+      "name": "gravel",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "168",
+      "worktypeid": "168",
+      "name": "graver",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "169",
+      "worktypeid": "169",
+      "name": "greeting card",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "170",
+      "worktypeid": "170",
+      "name": "guard",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "171",
+      "worktypeid": "171",
+      "name": "handgun",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "175",
+      "worktypeid": "175",
+      "name": "hardware",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "176",
+      "worktypeid": "176",
+      "name": "harness",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "182",
+      "worktypeid": "182",
+      "name": "human remains",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "183",
+      "worktypeid": "183",
+      "name": "icon",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "184",
+      "worktypeid": "184",
+      "name": "imperial card",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "185",
+      "worktypeid": "185",
+      "name": "Imperial photograph",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "187",
+      "worktypeid": "187",
+      "name": "impression",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "189",
+      "worktypeid": "189",
+      "name": "ink block",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "190",
+      "worktypeid": "190",
+      "name": "ink stick",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "194",
+      "worktypeid": "194",
+      "name": "inscription",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "195",
+      "worktypeid": "195",
+      "name": "installations",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "196",
+      "worktypeid": "196",
+      "name": "installation-slide projection",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    },
+    {
+      "id": "207",
+      "worktypeid": "207",
+      "name": "liner",
+      "objectcount": 0,
+      "lastupdate": "2026-05-18T05:54:41-04:00"
+    }
+  ]
+}

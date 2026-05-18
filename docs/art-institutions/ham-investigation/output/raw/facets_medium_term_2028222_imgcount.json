@@ -1,0 +1,16 @@
+{
+  "info": {
+    "totalrecordsperquery": 1,
+    "totalrecords": 23376,
+    "pages": 23376,
+    "page": 1,
+    "next": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=1&medium=2028222&hasimage=1&fields=id&page=2",
+    "responsetime": "20 ms"
+  },
+  "records": [
+    {
+      "id": 209837,
+      "imagepermissionlevel": 0
+    }
+  ]
+}

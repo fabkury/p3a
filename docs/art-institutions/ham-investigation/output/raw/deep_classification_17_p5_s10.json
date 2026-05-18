@@ -1,0 +1,63 @@
+{
+  "info": {
+    "totalrecordsperquery": 10,
+    "totalrecords": 77076,
+    "pages": 7708,
+    "page": 5,
+    "next": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=10&page=6&classification=17&hasimage=1&fields=id%2Cobjectnumber",
+    "prev": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=10&page=4&classification=17&hasimage=1&fields=id%2Cobjectnumber",
+    "responsetime": "19 ms"
+  },
+  "records": [
+    {
+      "id": 4669,
+      "objectnumber": "BRLF.1003.12",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 4670,
+      "objectnumber": "BRLF.1003.13",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 4671,
+      "objectnumber": "BRLF.1003.14",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 4672,
+      "objectnumber": "BRLF.1003.18",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 4673,
+      "objectnumber": "BRLF.1003.21",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 4674,
+      "objectnumber": "BRLF.1003.29",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 4675,
+      "objectnumber": "BRLF.1003.33",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 4767,
+      "objectnumber": "BRLF.1002.123",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 4768,
+      "objectnumber": "BRLF.1002.125",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 4769,
+      "objectnumber": "BRLF.1002.126",
+      "imagepermissionlevel": 1
+    }
+  ]
+}

@@ -1,0 +1,138 @@
+{
+  "info": {
+    "totalrecordsperquery": 25,
+    "totalrecords": 77076,
+    "pages": 3084,
+    "page": 50,
+    "next": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=25&page=51&classification=17&hasimage=1&fields=id%2Cobjectnumber&sort=id&sortorder=asc",
+    "prev": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=25&page=49&classification=17&hasimage=1&fields=id%2Cobjectnumber&sort=id&sortorder=asc",
+    "responsetime": "28 ms"
+  },
+  "records": [
+    {
+      "id": 8390,
+      "objectnumber": "BRLF.1012.136",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8391,
+      "objectnumber": "BRLF.1012.143",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8392,
+      "objectnumber": "BRLF.1012.145",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8393,
+      "objectnumber": "BRLF.1012.146",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8394,
+      "objectnumber": "BRLF.1012.148",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8395,
+      "objectnumber": "BRLF.1012.245",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8396,
+      "objectnumber": "BRLF.1012.246",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8397,
+      "objectnumber": "BRLF.1012.254",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8398,
+      "objectnumber": "BRLF.1012.259",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8399,
+      "objectnumber": "BRLF.1012.263",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8400,
+      "objectnumber": "BRLF.1012.265",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8401,
+      "objectnumber": "BRLF.1012.266",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8402,
+      "objectnumber": "BRLF.1012.37",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8403,
+      "objectnumber": "BRLF.1012.38",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8404,
+      "objectnumber": "BRLF.1012.39",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8405,
+      "objectnumber": "BRLF.1011.62",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8406,
+      "objectnumber": "BRLF.1011.63",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8407,
+      "objectnumber": "BRLF.1012.217",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8408,
+      "objectnumber": "BRLF.1012.219",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8409,
+      "objectnumber": "BRLF.1012.223",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8410,
+      "objectnumber": "BRLF.1012.227",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8411,
+      "objectnumber": "BRLF.1012.230",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8412,
+      "objectnumber": "BRLF.1012.231",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8413,
+      "objectnumber": "BRLF.1012.243",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 8414,
+      "objectnumber": "BRLF.1012.244",
+      "imagepermissionlevel": 1
+    }
+  ]
+}

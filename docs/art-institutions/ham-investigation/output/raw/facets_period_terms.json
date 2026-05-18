@@ -1,0 +1,712 @@
+{
+  "info": {
+    "totalrecordsperquery": 100,
+    "totalrecords": 324,
+    "pages": 4,
+    "page": 1,
+    "next": "https://api.harvardartmuseums.org/period?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=100&page=2&sort=objectcount&sortorder=desc",
+    "responsetime": "19 ms"
+  },
+  "records": [
+    {
+      "id": 248,
+      "periodid": 248,
+      "name": "Edo period, 1615-1868",
+      "objectcount": 5947,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 786,
+      "periodid": 786,
+      "name": "Roman Imperial period",
+      "objectcount": 3233,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 374,
+      "periodid": 374,
+      "name": "Byzantine period",
+      "objectcount": 3032,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1793,
+      "periodid": 1793,
+      "name": "Byzantine period, Early",
+      "objectcount": 1851,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 398,
+      "periodid": 398,
+      "name": "Qing dynasty, 1644-1911",
+      "objectcount": 1825,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 6322,
+      "periodid": 6322,
+      "name": "Byzantine period, Middle",
+      "objectcount": 1440,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 632,
+      "periodid": 632,
+      "name": "Roman Imperial period, Middle",
+      "objectcount": 1435,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 2363,
+      "periodid": 2363,
+      "name": "Safavid period",
+      "objectcount": 1349,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 138,
+      "periodid": 138,
+      "name": "Roman Imperial period, Early",
+      "objectcount": 1244,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 793,
+      "periodid": 793,
+      "name": "Roman Imperial period, Late",
+      "objectcount": 1182,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 624,
+      "periodid": 624,
+      "name": "Hellenistic period",
+      "objectcount": 1066,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 250,
+      "periodid": 250,
+      "name": "Meiji era, 1868-1912",
+      "objectcount": 817,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 618,
+      "periodid": 618,
+      "name": "Classical period, Late",
+      "objectcount": 796,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 928,
+      "periodid": 928,
+      "name": "Archaic period",
+      "objectcount": 792,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 2376,
+      "periodid": 2376,
+      "name": "Ottoman period",
+      "objectcount": 760,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 484,
+      "periodid": 484,
+      "name": "Classical period, Late, to Early Hellenistic",
+      "objectcount": 750,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 103,
+      "periodid": 103,
+      "name": "Sh\u014dwa era, 1926-1989",
+      "objectcount": 736,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1419,
+      "periodid": 1419,
+      "name": "Classical period",
+      "objectcount": 628,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 627,
+      "periodid": 627,
+      "name": "Roman Republican period",
+      "objectcount": 617,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 5135,
+      "periodid": 5135,
+      "name": "Modern",
+      "objectcount": 606,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 906,
+      "periodid": 906,
+      "name": "Classical period, Early",
+      "objectcount": 564,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 352,
+      "periodid": 352,
+      "name": "Hellenistic period, Early",
+      "objectcount": 552,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 3951,
+      "periodid": 3951,
+      "name": "Qajar period",
+      "objectcount": 546,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1251,
+      "periodid": 1251,
+      "name": "Byzantine period, Late",
+      "objectcount": 493,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 532,
+      "periodid": 532,
+      "name": "Kory\u014f dynasty, 918-1392",
+      "objectcount": 460,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1075,
+      "periodid": 1075,
+      "name": "Ming dynasty, 1368-1644",
+      "objectcount": 405,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 99,
+      "periodid": 99,
+      "name": "Aq Qoyunlu period",
+      "objectcount": 397,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 416,
+      "periodid": 416,
+      "name": "Classical period, High",
+      "objectcount": 381,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 372,
+      "periodid": 372,
+      "name": "Tang dynasty, 618-907",
+      "objectcount": 372,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 504,
+      "periodid": 504,
+      "name": "Chos\u014fn dynasty, 1392-1910",
+      "objectcount": 367,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 401,
+      "periodid": 401,
+      "name": "Iron Age",
+      "objectcount": 354,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 772,
+      "periodid": 772,
+      "name": "Hellenistic period, Middle",
+      "objectcount": 333,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 968,
+      "periodid": 968,
+      "name": "Muromachi period, 1392-1568",
+      "objectcount": 291,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 602,
+      "periodid": 602,
+      "name": "Roman period",
+      "objectcount": 276,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 2892,
+      "periodid": 2892,
+      "name": "Roman Imperial period, Late, to Early Byzantine",
+      "objectcount": 262,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 345,
+      "periodid": 345,
+      "name": "Hellenistic period, Late",
+      "objectcount": 252,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 6281,
+      "periodid": 6281,
+      "name": "Seleucid period",
+      "objectcount": 249,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 249,
+      "periodid": 249,
+      "name": "Zhou dynasty, Warring States period, 475-221 BCE",
+      "objectcount": 239,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1522,
+      "periodid": 1522,
+      "name": "Mughal period",
+      "objectcount": 187,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 277,
+      "periodid": 277,
+      "name": "Kamakura period, 1185-1333",
+      "objectcount": 186,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1339,
+      "periodid": 1339,
+      "name": "Neolithic period, Liangzhu culture, c. 3300-2200 BCE",
+      "objectcount": 182,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 7422,
+      "periodid": 7422,
+      "name": "Ming (1368-1644) to Qing (1644-1911) dynasty",
+      "objectcount": 176,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 6271,
+      "periodid": 6271,
+      "name": "Helladic period, Late",
+      "objectcount": 170,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 7397,
+      "periodid": 7397,
+      "name": "Zhou dynasty, Western Zhou period, c. 1050-771 BCE",
+      "objectcount": 169,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 7395,
+      "periodid": 7395,
+      "name": "Shang dynasty,  c. 1600-c. 1050 BCE",
+      "objectcount": 156,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 2702,
+      "periodid": 2702,
+      "name": "Shaybanid period",
+      "objectcount": 153,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1623,
+      "periodid": 1623,
+      "name": "Ptolemaic period",
+      "objectcount": 150,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1050,
+      "periodid": 1050,
+      "name": "Taish\u014d era, 1912-1926",
+      "objectcount": 148,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 528,
+      "periodid": 528,
+      "name": "Neolithic period",
+      "objectcount": 143,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 827,
+      "periodid": 827,
+      "name": "Momoyama period, 1568-1615",
+      "objectcount": 131,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 2169,
+      "periodid": 2169,
+      "name": "Mamluk period",
+      "objectcount": 130,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 6107,
+      "periodid": 6107,
+      "name": "Hellenistic period, Late, to Early Roman Imperial",
+      "objectcount": 121,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 2095,
+      "periodid": 2095,
+      "name": "Han dynasty, Western Han period, 206 BCE-9 CE",
+      "objectcount": 120,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1442,
+      "periodid": 1442,
+      "name": "Song dynasty, 960-1279",
+      "objectcount": 112,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 2497,
+      "periodid": 2497,
+      "name": "Abbasid period",
+      "objectcount": 109,
+      "lastupdate": "2026-05-18T05:52:06-04:00"
+    },
+    {
+      "id": 2195,
+      "periodid": 2195,
+      "name": "Han dynasty, Eastern Han period, 25-220 CE",
+      "objectcount": 104,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 5245,
+      "periodid": 5245,
+      "name": "Orientalizing period",
+      "objectcount": 103,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 870,
+      "periodid": 870,
+      "name": "Parthian period",
+      "objectcount": 101,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 564,
+      "periodid": 564,
+      "name": "George III (1760-1820)",
+      "objectcount": 97,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 838,
+      "periodid": 838,
+      "name": "Song dynasty, Northern Song period, 960-1127",
+      "objectcount": 95,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1525,
+      "periodid": 1525,
+      "name": "Archaic period, Late, to Early Classical",
+      "objectcount": 92,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1689,
+      "periodid": 1689,
+      "name": "Han dynasty, 206 BCE-220 CE",
+      "objectcount": 92,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1170,
+      "periodid": 1170,
+      "name": "Bronze Age, Early",
+      "objectcount": 87,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 2653,
+      "periodid": 2653,
+      "name": "Roman Republican period, Late, to Early Imperial",
+      "objectcount": 87,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1527,
+      "periodid": 1527,
+      "name": "Jin dynasty, 1115-1234",
+      "objectcount": 85,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 394,
+      "periodid": 394,
+      "name": "Song dynasty, Southern Song period, 1127-1279",
+      "objectcount": 81,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 6836,
+      "periodid": 6836,
+      "name": "Seljuk-Atabeg period",
+      "objectcount": 81,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 4357,
+      "periodid": 4357,
+      "name": "Geometric period",
+      "objectcount": 79,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 7386,
+      "periodid": 7386,
+      "name": "Middle Ages, Early",
+      "objectcount": 76,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 3828,
+      "periodid": 3828,
+      "name": "Shang dynasty (c. 1600-c. 1050 BCE) to Western Zhou period (c. 1050-771 BCE)",
+      "objectcount": 75,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1643,
+      "periodid": 1643,
+      "name": "George II (1727-1760)",
+      "objectcount": 72,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1284,
+      "periodid": 1284,
+      "name": "Bronze Age",
+      "objectcount": 66,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 2291,
+      "periodid": 2291,
+      "name": "George I (1714-1727)",
+      "objectcount": 65,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 3735,
+      "periodid": 3735,
+      "name": "Timurid period",
+      "objectcount": 64,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 7419,
+      "periodid": 7419,
+      "name": "Southern Song period (1127-1279) to Yuan dynasty (1279-1368)",
+      "objectcount": 60,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 397,
+      "periodid": 397,
+      "name": "Umayyad period",
+      "objectcount": 60,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1659,
+      "periodid": 1659,
+      "name": "Yuan dynasty, 1279-1368",
+      "objectcount": 58,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 2796,
+      "periodid": 2796,
+      "name": "Classical period, Late, to Hellenistic",
+      "objectcount": 58,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 919,
+      "periodid": 919,
+      "name": "Bronze Age, Middle",
+      "objectcount": 57,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 3247,
+      "periodid": 3247,
+      "name": "Achaemenid period",
+      "objectcount": 56,
+      "lastupdate": "2026-05-18T05:52:06-04:00"
+    },
+    {
+      "id": 956,
+      "periodid": 956,
+      "name": "Three Kingdoms period, Silla, 57 BCE-668 CE",
+      "objectcount": 51,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 6158,
+      "periodid": 6158,
+      "name": "Late Period to Ptolemaic",
+      "objectcount": 51,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 7405,
+      "periodid": 7405,
+      "name": "Northern Wei, 386-534",
+      "objectcount": 49,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 614,
+      "periodid": 614,
+      "name": "Zhou dynasty, Spring and Autumn period, 770-476 BCE",
+      "objectcount": 47,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1916,
+      "periodid": 1916,
+      "name": "Heisei era, 1989-2019",
+      "objectcount": 46,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 7373,
+      "periodid": 7373,
+      "name": "Archaic period to Classical",
+      "objectcount": 45,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1128,
+      "periodid": 1128,
+      "name": "Hellenistic period to Early Roman Imperial",
+      "objectcount": 44,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1702,
+      "periodid": 1702,
+      "name": "Unified Silla dynasty, 668-935",
+      "objectcount": 43,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1394,
+      "periodid": 1394,
+      "name": "Sasanian period",
+      "objectcount": 41,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 2583,
+      "periodid": 2583,
+      "name": "Ilkhanid period",
+      "objectcount": 41,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1724,
+      "periodid": 1724,
+      "name": "Heian period, Late, 898-1185",
+      "objectcount": 40,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1748,
+      "periodid": 1748,
+      "name": "Bronze Age, Late",
+      "objectcount": 40,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 7399,
+      "periodid": 7399,
+      "name": "Chos\u014fn dynasty to Modern period",
+      "objectcount": 39,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 7398,
+      "periodid": 7398,
+      "name": "Zhou dynasty, Eastern Zhou period, 770-256 BCE",
+      "objectcount": 39,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 461,
+      "periodid": 461,
+      "name": "Fatimid period",
+      "objectcount": 38,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 1624,
+      "periodid": 1624,
+      "name": "Minoan period, Late",
+      "objectcount": 38,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 2254,
+      "periodid": 2254,
+      "name": "Neo-Assyrian period",
+      "objectcount": 38,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 3479,
+      "periodid": 3479,
+      "name": "Mitannian period",
+      "objectcount": 38,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 7401,
+      "periodid": 7401,
+      "name": "Warring States period (475-221 BCE) to Western Han period (206 BCE-9 CE)",
+      "objectcount": 38,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    },
+    {
+      "id": 2136,
+      "periodid": 2136,
+      "name": "Artuqids of Mardin period",
+      "objectcount": 37,
+      "lastupdate": "2026-05-18T05:52:07-04:00"
+    }
+  ]
+}

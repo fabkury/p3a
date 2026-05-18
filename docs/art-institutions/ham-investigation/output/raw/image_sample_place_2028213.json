@@ -1,0 +1,1741 @@
+{
+  "info": {
+    "totalrecordsperquery": 25,
+    "totalrecords": 44216,
+    "pages": 1769,
+    "page": 1,
+    "next": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=25&page=2&place=2028213&hasimage=1&sort=id&sortorder=asc&fields=id%2Cobjectnumber%2Cprimaryimageurl%2Cimages%2Ctitle",
+    "responsetime": "28 ms"
+  },
+  "records": [
+    {
+      "id": 1429,
+      "objectnumber": "2006.13",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": null,
+          "copyright": null,
+          "imageid": 207486,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "79762",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:79762_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": "Painting, section 1",
+          "height": 298
+        },
+        {
+          "date": null,
+          "copyright": null,
+          "imageid": 207485,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "79761",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:79761_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": "Title",
+          "height": 325
+        },
+        {
+          "date": null,
+          "copyright": null,
+          "imageid": 207487,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "79763",
+          "displayorder": 3,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:79763_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": "Painting, section 2",
+          "height": 299
+        },
+        {
+          "date": null,
+          "copyright": null,
+          "imageid": 207488,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "79764",
+          "displayorder": 4,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:79764_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": "Painting, section 3",
+          "height": 300
+        },
+        {
+          "date": null,
+          "copyright": null,
+          "imageid": 207489,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "79765",
+          "displayorder": 5,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:79765_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": "Painting, section 4",
+          "height": 300
+        },
+        {
+          "date": null,
+          "copyright": null,
+          "imageid": 207490,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "79766",
+          "displayorder": 6,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:79766_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": "Painting, section 5",
+          "height": 299
+        },
+        {
+          "date": null,
+          "copyright": null,
+          "imageid": 207491,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "79767",
+          "displayorder": 7,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:79767_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": "Colophon by Liu Guosong (b. 1932)",
+          "height": 388
+        },
+        {
+          "date": null,
+          "copyright": null,
+          "imageid": 207492,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "79768",
+          "displayorder": 8,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:79768_dynmc",
+          "alttext": null,
+          "width": 955,
+          "publiccaption": "Detail of colophon writer's seal",
+          "height": 1024
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562026,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797605",
+          "displayorder": 9,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797605",
+          "alttext": null,
+          "width": 8281,
+          "publiccaption": null,
+          "height": 5605
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562027,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797606",
+          "displayorder": 10,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797606",
+          "alttext": null,
+          "width": 7995,
+          "publiccaption": null,
+          "height": 3753
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562028,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797607",
+          "displayorder": 11,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797607",
+          "alttext": null,
+          "width": 9352,
+          "publiccaption": null,
+          "height": 3779
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562029,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797608",
+          "displayorder": 12,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797608",
+          "alttext": null,
+          "width": 9352,
+          "publiccaption": null,
+          "height": 3803
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562030,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797609",
+          "displayorder": 13,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797609",
+          "alttext": null,
+          "width": 9352,
+          "publiccaption": null,
+          "height": 3803
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562031,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797610",
+          "displayorder": 14,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797610",
+          "alttext": null,
+          "width": 9352,
+          "publiccaption": null,
+          "height": 3791
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562032,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797611",
+          "displayorder": 15,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797611",
+          "alttext": null,
+          "width": 9352,
+          "publiccaption": null,
+          "height": 3803
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562033,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797612",
+          "displayorder": 16,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797612",
+          "alttext": null,
+          "width": 9352,
+          "publiccaption": null,
+          "height": 3767
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562034,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797613",
+          "displayorder": 17,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797613",
+          "alttext": null,
+          "width": 9352,
+          "publiccaption": null,
+          "height": 3779
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562035,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797614",
+          "displayorder": 18,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797614",
+          "alttext": null,
+          "width": 9352,
+          "publiccaption": null,
+          "height": 3791
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562036,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797615",
+          "displayorder": 19,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797615",
+          "alttext": null,
+          "width": 9352,
+          "publiccaption": null,
+          "height": 3779
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562037,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797616",
+          "displayorder": 20,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797616",
+          "alttext": null,
+          "width": 9352,
+          "publiccaption": null,
+          "height": 3815
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562038,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797617",
+          "displayorder": 21,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797617",
+          "alttext": null,
+          "width": 9352,
+          "publiccaption": null,
+          "height": 3779
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562039,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797618",
+          "displayorder": 22,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797618",
+          "alttext": null,
+          "width": 8230,
+          "publiccaption": null,
+          "height": 3851
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562040,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797619",
+          "displayorder": 23,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797619",
+          "alttext": null,
+          "width": 21375,
+          "publiccaption": null,
+          "height": 3822
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562041,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797620",
+          "displayorder": 24,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797620",
+          "alttext": null,
+          "width": 21219,
+          "publiccaption": null,
+          "height": 3770
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562042,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797621",
+          "displayorder": 25,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797621",
+          "alttext": null,
+          "width": 20885,
+          "publiccaption": null,
+          "height": 3791
+        },
+        {
+          "date": "2024-08-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 562043,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.9 (Macintosh);",
+          "renditionnumber": "797622",
+          "displayorder": 26,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:797622",
+          "alttext": null,
+          "width": 15536,
+          "publiccaption": null,
+          "height": 3741
+        },
+        {
+          "date": "2006-05-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 186013,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "DDC000117",
+          "displayorder": 27,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC000117_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": "Overall Image of Painting with Title",
+          "height": 59
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:79762_dynmc",
+      "title": "What a Glorious Land!",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1429",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4585,
+      "objectnumber": "P2004.7",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2004-11-03",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 35761,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "76449",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:76449_dynmc",
+          "alttext": null,
+          "width": 620,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:76449_dynmc",
+      "title": "Rebecca, an Emancipated Slave, from New Orleans",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4585",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4586,
+      "objectnumber": "2006.14.11",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-24",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 186068,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "DDC000086",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC000086_dynmc",
+          "alttext": null,
+          "width": 629,
+          "publiccaption": null,
+          "height": 1024
+        },
+        {
+          "date": "2006-05-30",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 186090,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "DDC000108",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC000108_dynmc",
+          "alttext": null,
+          "width": 532,
+          "publiccaption": "detail of seal",
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC000086_dynmc",
+      "title": "Streams and Mountains, from the series \"Sacrifice\"",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4586",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4592,
+      "objectnumber": "3.2002.128",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-03-23",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 125087,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP15493",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP15493_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 660
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP15493_dynmc",
+      "title": "Races, Immigration: United States. New York. New York City. Immigrant Station: Regulation of Immigration at the Port of Entry. United States Immigrant Station, New York City",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4592",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4593,
+      "objectnumber": "2006.21.2",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "Untitled Documentary Shot",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4593",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4615,
+      "objectnumber": "2006.14.20",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-24",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 186067,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "DDC000085",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC000085_dynmc",
+          "alttext": null,
+          "width": 629,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC000085_dynmc",
+      "title": "The Great Wall Snaking through the Mountains, from the series \"Sacrifice\"",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4615",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4640,
+      "objectnumber": "2006.14.14",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-24",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 186069,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "DDC000087",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC000087_dynmc",
+          "alttext": null,
+          "width": 629,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC000087_dynmc",
+      "title": "Fantastic Mountains in Western China, from the series \"Sacrifice\"",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4640",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4849,
+      "objectnumber": "3.2002.32.1",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246584,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21220",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21220_dynmc",
+          "alttext": null,
+          "width": 448,
+          "publiccaption": "2",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246585,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21221",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21221_dynmc",
+          "alttext": null,
+          "width": 448,
+          "publiccaption": "3",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246586,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21222",
+          "displayorder": 3,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21222_dynmc",
+          "alttext": null,
+          "width": 450,
+          "publiccaption": "4",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246587,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21223",
+          "displayorder": 4,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21223_dynmc",
+          "alttext": null,
+          "width": 449,
+          "publiccaption": "5",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246588,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21224",
+          "displayorder": 5,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21224_dynmc",
+          "alttext": null,
+          "width": 450,
+          "publiccaption": "6",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246589,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21225",
+          "displayorder": 6,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21225_dynmc",
+          "alttext": null,
+          "width": 449,
+          "publiccaption": "7",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246590,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21226",
+          "displayorder": 7,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21226_dynmc",
+          "alttext": null,
+          "width": 881,
+          "publiccaption": "8",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246591,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21227",
+          "displayorder": 8,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21227_dynmc",
+          "alttext": null,
+          "width": 452,
+          "publiccaption": "9",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246592,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21228",
+          "displayorder": 9,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21228_dynmc",
+          "alttext": null,
+          "width": 451,
+          "publiccaption": "10",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246593,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21229",
+          "displayorder": 10,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21229_dynmc",
+          "alttext": null,
+          "width": 450,
+          "publiccaption": "11",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246594,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21230",
+          "displayorder": 11,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21230_dynmc",
+          "alttext": null,
+          "width": 449,
+          "publiccaption": "12",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246595,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21231",
+          "displayorder": 12,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21231_dynmc",
+          "alttext": null,
+          "width": 450,
+          "publiccaption": "13",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246596,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21232",
+          "displayorder": 13,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21232_dynmc",
+          "alttext": null,
+          "width": 449,
+          "publiccaption": "14",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246597,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21233",
+          "displayorder": 14,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21233_dynmc",
+          "alttext": null,
+          "width": 445,
+          "publiccaption": "15",
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21220_dynmc",
+      "title": "Charity, Organizations: United States. Massachusetts. Boston. Publicity for Social Work: Booklets: How Thousands of Men Make Their Leisure Hours Count!: Some Opportunites Open to You at the Boston Young Men's Christian Association",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4849",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4850,
+      "objectnumber": "3.2002.32.6",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246644,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21280",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21280_dynmc",
+          "alttext": null,
+          "width": 557,
+          "publiccaption": "1",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246645,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21281",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21281_dynmc",
+          "alttext": null,
+          "width": 574,
+          "publiccaption": "2",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246646,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21282",
+          "displayorder": 3,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21282_dynmc",
+          "alttext": null,
+          "width": 569,
+          "publiccaption": "3",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246647,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21283",
+          "displayorder": 4,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21283_dynmc",
+          "alttext": null,
+          "width": 575,
+          "publiccaption": "4",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246648,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21284",
+          "displayorder": 5,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21284_dynmc",
+          "alttext": null,
+          "width": 574,
+          "publiccaption": "5",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246649,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21285",
+          "displayorder": 6,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21285_dynmc",
+          "alttext": null,
+          "width": 565,
+          "publiccaption": "6",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246650,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21286",
+          "displayorder": 7,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21286_dynmc",
+          "alttext": null,
+          "width": 564,
+          "publiccaption": "7",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246651,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21287",
+          "displayorder": 8,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21287_dynmc",
+          "alttext": null,
+          "width": 564,
+          "publiccaption": "8",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246652,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21288",
+          "displayorder": 9,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21288_dynmc",
+          "alttext": null,
+          "width": 563,
+          "publiccaption": "9",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246653,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21289",
+          "displayorder": 10,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21289_dynmc",
+          "alttext": null,
+          "width": 564,
+          "publiccaption": "10",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246654,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21290",
+          "displayorder": 11,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21290_dynmc",
+          "alttext": null,
+          "width": 563,
+          "publiccaption": "11",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246655,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21291",
+          "displayorder": 12,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21291_dynmc",
+          "alttext": null,
+          "width": 563,
+          "publiccaption": "12",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246656,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21292",
+          "displayorder": 13,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21292_dynmc",
+          "alttext": null,
+          "width": 562,
+          "publiccaption": "13",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246657,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21293",
+          "displayorder": 14,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21293_dynmc",
+          "alttext": null,
+          "width": 566,
+          "publiccaption": "14",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246658,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21294",
+          "displayorder": 15,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21294_dynmc",
+          "alttext": null,
+          "width": 565,
+          "publiccaption": "15",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246659,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21295",
+          "displayorder": 16,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21295_dynmc",
+          "alttext": null,
+          "width": 565,
+          "publiccaption": "16",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246660,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21296",
+          "displayorder": 17,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21296_dynmc",
+          "alttext": null,
+          "width": 564,
+          "publiccaption": "17",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246661,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21297",
+          "displayorder": 18,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21297_dynmc",
+          "alttext": null,
+          "width": 565,
+          "publiccaption": "18",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246662,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21298",
+          "displayorder": 19,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21298_dynmc",
+          "alttext": null,
+          "width": 565,
+          "publiccaption": "19",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246663,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21299",
+          "displayorder": 20,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21299_dynmc",
+          "alttext": null,
+          "width": 565,
+          "publiccaption": "20",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246664,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21300",
+          "displayorder": 21,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21300_dynmc",
+          "alttext": null,
+          "width": 574,
+          "publiccaption": "21",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246665,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21301",
+          "displayorder": 22,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21301_dynmc",
+          "alttext": null,
+          "width": 570,
+          "publiccaption": "22",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246666,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21302",
+          "displayorder": 23,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21302_dynmc",
+          "alttext": null,
+          "width": 570,
+          "publiccaption": "23",
+          "height": 1024
+        },
+        {
+          "date": "2007-06-11",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 246667,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP21303",
+          "displayorder": 24,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21303_dynmc",
+          "alttext": null,
+          "width": 563,
+          "publiccaption": "24",
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP21280_dynmc",
+      "title": "Charity, Organizations: United States. Massachusetts. Boston. Publicity for Social Work: Booklets: Volunteer Varieties: Various Vocations for Volunteers in Social Work: The Volunteer Service Bureau: Auspices of the Boston Metropolitan Chapter American Red Cross.",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4850",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4857,
+      "objectnumber": "1967.79.973",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 168017,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV050959",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV050959_dynmc",
+          "alttext": null,
+          "width": 796,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV050959_dynmc",
+      "title": "Art Theory Diagrams",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4857",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4879,
+      "objectnumber": "1967.79.1080",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 167805,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV051158",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051158_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 646
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051158_dynmc",
+      "title": "Color Diagram for \u201cComposition Concrete\u201d",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4879",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4880,
+      "objectnumber": "1967.79.1081",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 167806,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV051159",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051159_dynmc",
+          "alttext": null,
+          "width": 640,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051159_dynmc",
+      "title": "Study for \u201cPochade\u201d",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4880",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4881,
+      "objectnumber": "1967.79.1082",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 167766,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV051162",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051162_dynmc",
+          "alttext": null,
+          "width": 640,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051162_dynmc",
+      "title": "Study for \u201cPochade\u201d",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4881",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4882,
+      "objectnumber": "1967.79.1085",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 167773,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV051168",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051168_dynmc",
+          "alttext": null,
+          "width": 689,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051168_dynmc",
+      "title": "Study for \u201cStudy for \u2018Pochade\u2019 #3\u201d",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4882",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4883,
+      "objectnumber": "1967.79.1086",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 167775,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV051170",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051170_dynmc",
+          "alttext": null,
+          "width": 677,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051170_dynmc",
+      "title": "Study for \u201cStudy for \u2018Pochade\u2019 #2\u201d",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4883",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4884,
+      "objectnumber": "1967.79.1091",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 167780,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV051175",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051175_dynmc",
+          "alttext": null,
+          "width": 640,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051175_dynmc",
+      "title": "Study for \"Pochade\"",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4884",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4885,
+      "objectnumber": "1967.79.1092",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 167781,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV051176",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051176_dynmc",
+          "alttext": null,
+          "width": 638,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051176_dynmc",
+      "title": "Study for \u201cPochade\u201d",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4885",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4893,
+      "objectnumber": "1967.79.1087",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 167776,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV051171",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051171_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 682
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051171_dynmc",
+      "title": "Study for \u201dStandard Still Life\u201d",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4893",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4894,
+      "objectnumber": "1967.79.1088",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 167777,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV051172",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051172_dynmc",
+          "alttext": null,
+          "width": 685,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051172_dynmc",
+      "title": "Study for \u201cStudy for \u2018Pochade\u2019 #2\u201d",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4894",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4897,
+      "objectnumber": "3.2002.2519.1",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-03-23",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 164583,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "OCP15796",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP15796_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 805
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:OCP15796_dynmc",
+      "title": "Recreation, Parks and Playgrounds: United States. New York. New York City. Crotona Park, Vacation Playground: New York City Public Schools. Examples of the Adaptation of Education to Special City Needs: Vacation Playgrounds - Crotona Park.",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4897",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4902,
+      "objectnumber": "1967.79.974",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 167981,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV050963",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV050963_dynmc",
+          "alttext": null,
+          "width": 795,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV050963_dynmc",
+      "title": "Art Theory Text with Diagrams",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4902",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4903,
+      "objectnumber": "1967.79.963",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 168043,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV050945",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV050945_dynmc",
+          "alttext": null,
+          "width": 798,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV050945_dynmc",
+      "title": "Study for \u201c\u2019Art Digest\u2019 Cover\u201d",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4903",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4904,
+      "objectnumber": "1967.79.964",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 168044,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV050946",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV050946_dynmc",
+          "alttext": null,
+          "width": 789,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV050946_dynmc",
+      "title": "Art Theory Text with Sketch",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4904",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4912,
+      "objectnumber": "1967.79.1083",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 167770,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV051165",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051165_dynmc",
+          "alttext": null,
+          "width": 640,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051165_dynmc",
+      "title": "Study for \"Pochade\"",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4912",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4913,
+      "objectnumber": "1967.79.1084",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2006-05-10",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 167771,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV051166",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051166_dynmc",
+          "alttext": null,
+          "width": 638,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV051166_dynmc",
+      "title": "Art Theory Text with Sketch",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4913",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    }
+  ]
+}

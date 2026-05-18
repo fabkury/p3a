@@ -1,0 +1,340 @@
+{
+  "info": {
+    "totalrecordsperquery": 100,
+    "totalrecords": 47,
+    "pages": 1,
+    "page": 1,
+    "responsetime": "17 ms"
+  },
+  "records": [
+    {
+      "id": 37525815,
+      "name": "20th century",
+      "objectcount": 131584,
+      "temporalorder": 46,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525806,
+      "name": "19th century",
+      "objectcount": 54028,
+      "temporalorder": 45,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525797,
+      "name": "18th century",
+      "objectcount": 19561,
+      "temporalorder": 44,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525788,
+      "name": "17th century",
+      "objectcount": 16420,
+      "temporalorder": 43,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525779,
+      "name": "16th century",
+      "objectcount": 12094,
+      "temporalorder": 42,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525824,
+      "name": "21st century",
+      "objectcount": 4535,
+      "temporalorder": 47,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525590,
+      "name": "4th century BCE",
+      "objectcount": 3459,
+      "temporalorder": 23,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525653,
+      "name": "3rd century CE",
+      "objectcount": 3392,
+      "temporalorder": 29,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525770,
+      "name": "15th century",
+      "objectcount": 3300,
+      "temporalorder": 41,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525608,
+      "name": "3rd century BCE",
+      "objectcount": 2992,
+      "temporalorder": 24,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525644,
+      "name": "2nd century CE",
+      "objectcount": 2945,
+      "temporalorder": 28,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525635,
+      "name": "1st century CE",
+      "objectcount": 2694,
+      "temporalorder": 27,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525581,
+      "name": "5th century BCE",
+      "objectcount": 2544,
+      "temporalorder": 22,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525617,
+      "name": "2nd century BCE",
+      "objectcount": 2372,
+      "temporalorder": 25,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525626,
+      "name": "1st century BCE",
+      "objectcount": 2240,
+      "temporalorder": 26,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525752,
+      "name": "13th century",
+      "objectcount": 1683,
+      "temporalorder": 39,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525743,
+      "name": "12th century",
+      "objectcount": 1574,
+      "temporalorder": 38,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525662,
+      "name": "4th century CE",
+      "objectcount": 1547,
+      "temporalorder": 30,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525680,
+      "name": "6th century",
+      "objectcount": 1369,
+      "temporalorder": 32,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525707,
+      "name": "8th century",
+      "objectcount": 1293,
+      "temporalorder": 34,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525572,
+      "name": "6th century BCE",
+      "objectcount": 1198,
+      "temporalorder": 21,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525761,
+      "name": "14th century",
+      "objectcount": 1151,
+      "temporalorder": 40,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525698,
+      "name": "7th century",
+      "objectcount": 1115,
+      "temporalorder": 33,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525671,
+      "name": "5th century CE",
+      "objectcount": 1099,
+      "temporalorder": 31,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525734,
+      "name": "11th century",
+      "objectcount": 1030,
+      "temporalorder": 37,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525725,
+      "name": "10th century",
+      "objectcount": 855,
+      "temporalorder": 36,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525527,
+      "name": "11th century BCE",
+      "objectcount": 722,
+      "temporalorder": 16,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525554,
+      "name": "8th century BCE",
+      "objectcount": 688,
+      "temporalorder": 19,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525536,
+      "name": "10th century BCE",
+      "objectcount": 654,
+      "temporalorder": 17,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525509,
+      "name": "12th century BCE",
+      "objectcount": 601,
+      "temporalorder": 15,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525410,
+      "name": "3rd millennium BCE",
+      "objectcount": 594,
+      "temporalorder": 6,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525482,
+      "name": "14th century BCE",
+      "objectcount": 583,
+      "temporalorder": 13,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525491,
+      "name": "13th century BCE",
+      "objectcount": 568,
+      "temporalorder": 14,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525563,
+      "name": "7th century BCE",
+      "objectcount": 532,
+      "temporalorder": 20,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525473,
+      "name": "15th century BCE",
+      "objectcount": 515,
+      "temporalorder": 12,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525464,
+      "name": "16th century BCE",
+      "objectcount": 501,
+      "temporalorder": 11,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525545,
+      "name": "9th century BCE",
+      "objectcount": 473,
+      "temporalorder": 18,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525716,
+      "name": "9th century",
+      "objectcount": 442,
+      "temporalorder": 35,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525446,
+      "name": "17th century BCE",
+      "objectcount": 398,
+      "temporalorder": 10,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525437,
+      "name": "18th century BCE",
+      "objectcount": 388,
+      "temporalorder": 9,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525428,
+      "name": "19th century BCE",
+      "objectcount": 376,
+      "temporalorder": 8,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525392,
+      "name": "4th millennium BCE",
+      "objectcount": 169,
+      "temporalorder": 5,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525365,
+      "name": "Unidentified century",
+      "objectcount": 81,
+      "temporalorder": 2,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525383,
+      "name": "5th millennium BCE",
+      "objectcount": 76,
+      "temporalorder": 4,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525419,
+      "name": "20th century BCE",
+      "objectcount": 70,
+      "temporalorder": 7,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525374,
+      "name": "6th millennium BCE",
+      "objectcount": 30,
+      "temporalorder": 3,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    },
+    {
+      "id": 37525356,
+      "name": "(not assigned)",
+      "objectcount": 1,
+      "temporalorder": 1,
+      "lastupdate": "2026-05-18T04:03:57-04:00"
+    }
+  ]
+}

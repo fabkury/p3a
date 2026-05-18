@@ -1,0 +1,513 @@
+{
+  "info": {
+    "totalrecordsperquery": 100,
+    "totalrecords": 77076,
+    "pages": 771,
+    "page": 500,
+    "next": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=100&page=501&classification=17&hasimage=1&fields=id%2Cobjectnumber&sort=id&sortorder=asc",
+    "prev": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=100&page=499&classification=17&hasimage=1&fields=id%2Cobjectnumber&sort=id&sortorder=asc",
+    "responsetime": "78 ms"
+  },
+  "records": [
+    {
+      "id": 158940,
+      "objectnumber": "3.2002.342",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158941,
+      "objectnumber": "2.2002.543",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158942,
+      "objectnumber": "2.2002.544",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158943,
+      "objectnumber": "2.2002.549",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 158944,
+      "objectnumber": "2.2002.551",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 158945,
+      "objectnumber": "2.2002.554",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158946,
+      "objectnumber": "2.2002.556",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158947,
+      "objectnumber": "4.2002.605",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 158948,
+      "objectnumber": "4.2002.614",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 158949,
+      "objectnumber": "4.2002.615",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 158950,
+      "objectnumber": "2.2002.536",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158951,
+      "objectnumber": "2.2002.537",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158952,
+      "objectnumber": "3.2002.419",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158953,
+      "objectnumber": "3.2002.426",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158954,
+      "objectnumber": "3.2002.427",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158955,
+      "objectnumber": "3.2002.431",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158957,
+      "objectnumber": "3.2002.457",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158958,
+      "objectnumber": "3.2002.460",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158959,
+      "objectnumber": "3.2002.469",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158960,
+      "objectnumber": "3.2002.478",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158961,
+      "objectnumber": "3.2002.332",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158962,
+      "objectnumber": "2.2002.545",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158963,
+      "objectnumber": "3.2002.479",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158964,
+      "objectnumber": "2.2002.538",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158965,
+      "objectnumber": "2.2002.539",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158966,
+      "objectnumber": "2.2002.540",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158967,
+      "objectnumber": "2.2002.542",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158968,
+      "objectnumber": "2.2002.672",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158969,
+      "objectnumber": "4.2002.638",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 158970,
+      "objectnumber": "2.2002.704",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158971,
+      "objectnumber": "2.2002.705",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158972,
+      "objectnumber": "2.2002.370",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158973,
+      "objectnumber": "2.2002.371",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158974,
+      "objectnumber": "2.2002.392",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158975,
+      "objectnumber": "2.2002.393",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158976,
+      "objectnumber": "2.2002.707",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158977,
+      "objectnumber": "2.2002.710",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 158978,
+      "objectnumber": "2.2002.712",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158979,
+      "objectnumber": "2.2002.713",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158980,
+      "objectnumber": "2.2002.717",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158981,
+      "objectnumber": "2.2002.719",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158982,
+      "objectnumber": "4.2002.640",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 158983,
+      "objectnumber": "4.2002.644",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 158984,
+      "objectnumber": "4.2002.646",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 158985,
+      "objectnumber": "4.2002.648",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 158986,
+      "objectnumber": "4.2002.650",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 158987,
+      "objectnumber": "4.2002.654",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 158988,
+      "objectnumber": "2.2002.396",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158989,
+      "objectnumber": "2.2002.397",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158990,
+      "objectnumber": "2.2002.398",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158991,
+      "objectnumber": "3.2002.480",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158992,
+      "objectnumber": "3.2002.481",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158993,
+      "objectnumber": "3.2002.491",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 158994,
+      "objectnumber": "3.2002.498",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159005,
+      "objectnumber": "2.2002.399",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159006,
+      "objectnumber": "2.2002.404",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159007,
+      "objectnumber": "2.2002.405",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159008,
+      "objectnumber": "2.2002.408",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159009,
+      "objectnumber": "2.2002.409",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159010,
+      "objectnumber": "4.2002.525",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159011,
+      "objectnumber": "4.2002.526",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159012,
+      "objectnumber": "4.2002.528",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159013,
+      "objectnumber": "4.2002.529",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159014,
+      "objectnumber": "4.2002.532",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159015,
+      "objectnumber": "4.2002.534",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159016,
+      "objectnumber": "4.2002.538",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159017,
+      "objectnumber": "2.2002.577",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159018,
+      "objectnumber": "2.2002.753",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159019,
+      "objectnumber": "2.2002.760",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159020,
+      "objectnumber": "2.2002.921",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159021,
+      "objectnumber": "2.2002.924",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159022,
+      "objectnumber": "2.2002.925",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159023,
+      "objectnumber": "2.2002.931",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159024,
+      "objectnumber": "3.2002.501",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159025,
+      "objectnumber": "3.2002.503",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159026,
+      "objectnumber": "3.2002.507",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159027,
+      "objectnumber": "3.2002.511",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159029,
+      "objectnumber": "3.2002.493",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159030,
+      "objectnumber": "3.2002.497",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159037,
+      "objectnumber": "2.2002.749",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159038,
+      "objectnumber": "2.2002.751",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159039,
+      "objectnumber": "2.2002.922",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159040,
+      "objectnumber": "2.2002.923",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159041,
+      "objectnumber": "3.2002.508",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159042,
+      "objectnumber": "3.2002.458",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159043,
+      "objectnumber": "3.2002.461",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159044,
+      "objectnumber": "3.2002.467",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159045,
+      "objectnumber": "3.2002.473",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159046,
+      "objectnumber": "3.2002.484",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159047,
+      "objectnumber": "3.2002.486",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159048,
+      "objectnumber": "3.2002.488",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159049,
+      "objectnumber": "3.2002.489",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159050,
+      "objectnumber": "3.2002.495",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159057,
+      "objectnumber": "3.2002.499",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159058,
+      "objectnumber": "2.2002.748",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159059,
+      "objectnumber": "2.2002.750",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159060,
+      "objectnumber": "2.2002.754",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159061,
+      "objectnumber": "2.2002.938",
+      "imagepermissionlevel": 1
+    },
+    {
+      "id": 159062,
+      "objectnumber": "3.2002.506",
+      "imagepermissionlevel": 0
+    },
+    {
+      "id": 159063,
+      "objectnumber": "3.2002.509",
+      "imagepermissionlevel": 0
+    }
+  ]
+}

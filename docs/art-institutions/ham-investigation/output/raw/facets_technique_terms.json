@@ -1,0 +1,712 @@
+{
+  "info": {
+    "totalrecordsperquery": 100,
+    "totalrecords": 321,
+    "pages": 4,
+    "page": 1,
+    "next": "https://api.harvardartmuseums.org/technique?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=100&page=2&sort=objectcount&sortorder=desc",
+    "responsetime": "30 ms"
+  },
+  "records": [
+    {
+      "id": 123,
+      "techniqueid": 123,
+      "name": "Gelatin silver print",
+      "objectcount": 25831,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 7320,
+      "techniqueid": 7320,
+      "name": "Struck",
+      "objectcount": 23075,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 107,
+      "techniqueid": 107,
+      "name": "Negative, gelatin silver (film)",
+      "objectcount": 17735,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 116,
+      "techniqueid": 116,
+      "name": "Etching",
+      "objectcount": 16087,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 777,
+      "techniqueid": 777,
+      "name": "Negative, gelatin silver (35mm film)",
+      "objectcount": 15897,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 98,
+      "techniqueid": 98,
+      "name": "Engraving",
+      "objectcount": 14095,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 136,
+      "techniqueid": 136,
+      "name": "Lithograph",
+      "objectcount": 11720,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 194,
+      "techniqueid": 194,
+      "name": "Woodcut",
+      "objectcount": 6983,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 220,
+      "techniqueid": 220,
+      "name": "Slide, 35 mm, black and white",
+      "objectcount": 3394,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 127,
+      "techniqueid": 127,
+      "name": "Slide, 35 mm, color",
+      "objectcount": 3387,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 269,
+      "techniqueid": 269,
+      "name": "Photomechanical print",
+      "objectcount": 3251,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 110,
+      "techniqueid": 110,
+      "name": "Albumen silver print",
+      "objectcount": 3132,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 170,
+      "techniqueid": 170,
+      "name": "Negative, gelatin dry plate (glass)",
+      "objectcount": 2131,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 233,
+      "techniqueid": 233,
+      "name": "Cast",
+      "objectcount": 1585,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 306,
+      "techniqueid": 306,
+      "name": "Screen print",
+      "objectcount": 1545,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 682,
+      "techniqueid": 682,
+      "name": "Negative, glass plate",
+      "objectcount": 1531,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 525,
+      "techniqueid": 525,
+      "name": "Wood engraving",
+      "objectcount": 1340,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 466,
+      "techniqueid": 466,
+      "name": "Photolithograph",
+      "objectcount": 1254,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 278,
+      "techniqueid": 278,
+      "name": "Etching and aquatint",
+      "objectcount": 1219,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1016,
+      "techniqueid": 1016,
+      "name": "Woven",
+      "objectcount": 1129,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1311,
+      "techniqueid": 1311,
+      "name": "Cast, lost-wax process",
+      "objectcount": 967,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 767,
+      "techniqueid": 767,
+      "name": "Etching and engraving",
+      "objectcount": 958,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 6961,
+      "techniqueid": 6961,
+      "name": "Offset print",
+      "objectcount": 911,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 834,
+      "techniqueid": 834,
+      "name": "Chromogenic print",
+      "objectcount": 910,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 538,
+      "techniqueid": 538,
+      "name": "Photogravure",
+      "objectcount": 885,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 290,
+      "techniqueid": 290,
+      "name": "Photocopy",
+      "objectcount": 767,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 639,
+      "techniqueid": 639,
+      "name": "Carved",
+      "objectcount": 743,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 97,
+      "techniqueid": 97,
+      "name": "Ink jet digital print",
+      "objectcount": 643,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 479,
+      "techniqueid": 479,
+      "name": "Drypoint",
+      "objectcount": 622,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 312,
+      "techniqueid": 312,
+      "name": "Etching and mezzotint",
+      "objectcount": 577,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 260,
+      "techniqueid": 260,
+      "name": "Mezzotint",
+      "objectcount": 566,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1035,
+      "techniqueid": 1035,
+      "name": "Typewriting",
+      "objectcount": 538,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 4806,
+      "techniqueid": 4806,
+      "name": "Pigment print",
+      "objectcount": 525,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 635,
+      "techniqueid": 635,
+      "name": "Wheel-made",
+      "objectcount": 485,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 3820,
+      "techniqueid": 3820,
+      "name": "Blueprint",
+      "objectcount": 482,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 313,
+      "techniqueid": 313,
+      "name": "Platinum print",
+      "objectcount": 468,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 157,
+      "techniqueid": 157,
+      "name": "Relief",
+      "objectcount": 454,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 328,
+      "techniqueid": 328,
+      "name": "Celadon",
+      "objectcount": 454,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 783,
+      "techniqueid": 783,
+      "name": "Aquatint",
+      "objectcount": 414,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1205,
+      "techniqueid": 1205,
+      "name": "Etching and drypoint",
+      "objectcount": 373,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 424,
+      "techniqueid": 424,
+      "name": "Linocut",
+      "objectcount": 347,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 647,
+      "techniqueid": 647,
+      "name": "Salted paper print",
+      "objectcount": 336,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1033,
+      "techniqueid": 1033,
+      "name": "Mold-made",
+      "objectcount": 320,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 7476,
+      "techniqueid": 7476,
+      "name": "Woodblock print",
+      "objectcount": 316,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 259,
+      "techniqueid": 259,
+      "name": "Woodburytype",
+      "objectcount": 309,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 703,
+      "techniqueid": 703,
+      "name": "Relief print",
+      "objectcount": 300,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 848,
+      "techniqueid": 848,
+      "name": "Chiaroscuro woodcut",
+      "objectcount": 297,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 871,
+      "techniqueid": 871,
+      "name": "Intaglio",
+      "objectcount": 285,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 666,
+      "techniqueid": 666,
+      "name": "Positive photostat print",
+      "objectcount": 256,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 724,
+      "techniqueid": 724,
+      "name": "Collodion process",
+      "objectcount": 250,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 430,
+      "techniqueid": 430,
+      "name": "Collage",
+      "objectcount": 238,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 2125,
+      "techniqueid": 2125,
+      "name": "Painted",
+      "objectcount": 238,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 7317,
+      "techniqueid": 7317,
+      "name": "Red-figure",
+      "objectcount": 227,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 370,
+      "techniqueid": 370,
+      "name": "Collotype",
+      "objectcount": 226,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 358,
+      "techniqueid": 358,
+      "name": "Mixed technique",
+      "objectcount": 216,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1244,
+      "techniqueid": 1244,
+      "name": "Stipple engraving",
+      "objectcount": 192,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 7032,
+      "techniqueid": 7032,
+      "name": "Electrotype",
+      "objectcount": 188,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1940,
+      "techniqueid": 1940,
+      "name": "Baxter process",
+      "objectcount": 185,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 6233,
+      "techniqueid": 6233,
+      "name": "Halftone print",
+      "objectcount": 184,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 585,
+      "techniqueid": 585,
+      "name": "Softground etching",
+      "objectcount": 177,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 7334,
+      "techniqueid": 7334,
+      "name": "Free-blown glass",
+      "objectcount": 177,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 2519,
+      "techniqueid": 2519,
+      "name": "Hammered",
+      "objectcount": 158,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1233,
+      "techniqueid": 1233,
+      "name": "Intaglio print",
+      "objectcount": 151,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 122,
+      "techniqueid": 122,
+      "name": "Chromolithograph",
+      "objectcount": 145,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 226,
+      "techniqueid": 226,
+      "name": "Tintype",
+      "objectcount": 141,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 7318,
+      "techniqueid": 7318,
+      "name": "Black-figure",
+      "objectcount": 137,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1484,
+      "techniqueid": 1484,
+      "name": "Stamped",
+      "objectcount": 127,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 771,
+      "techniqueid": 771,
+      "name": "Embroidery",
+      "objectcount": 126,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 325,
+      "techniqueid": 325,
+      "name": "Molded",
+      "objectcount": 126,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 7430,
+      "techniqueid": 7430,
+      "name": "Cast and hammered",
+      "objectcount": 126,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 7477,
+      "techniqueid": 7477,
+      "name": "Engraving and etching",
+      "objectcount": 122,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 2647,
+      "techniqueid": 2647,
+      "name": "20 x 24 Polaroid print",
+      "objectcount": 122,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 881,
+      "techniqueid": 881,
+      "name": "Monotype",
+      "objectcount": 117,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1456,
+      "techniqueid": 1456,
+      "name": "Fresco painting",
+      "objectcount": 111,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 367,
+      "techniqueid": 367,
+      "name": "Cibachrome (TM)",
+      "objectcount": 108,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 7011,
+      "techniqueid": 7011,
+      "name": "Gelatin dry plate (glass)",
+      "objectcount": 106,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 2824,
+      "techniqueid": 2824,
+      "name": "Letterpress",
+      "objectcount": 104,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 342,
+      "techniqueid": 342,
+      "name": "Jun",
+      "objectcount": 100,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1430,
+      "techniqueid": 1430,
+      "name": "Daguerreotype",
+      "objectcount": 95,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 4185,
+      "techniqueid": 4185,
+      "name": "Positive 4 x 5 transparency",
+      "objectcount": 90,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 847,
+      "techniqueid": 847,
+      "name": "Jasperware",
+      "objectcount": 90,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1322,
+      "techniqueid": 1322,
+      "name": "Negative photostat print",
+      "objectcount": 88,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 718,
+      "techniqueid": 718,
+      "name": "Softground etching and aquatint",
+      "objectcount": 78,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 738,
+      "techniqueid": 738,
+      "name": "Brocade",
+      "objectcount": 78,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 211,
+      "techniqueid": 211,
+      "name": "Blue-and-white ware",
+      "objectcount": 77,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1187,
+      "techniqueid": 1187,
+      "name": "Handmade",
+      "objectcount": 75,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1201,
+      "techniqueid": 1201,
+      "name": "Underglazed",
+      "objectcount": 73,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 2414,
+      "techniqueid": 2414,
+      "name": "Negative, color",
+      "objectcount": 71,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 227,
+      "techniqueid": 227,
+      "name": "Electroplated",
+      "objectcount": 68,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1758,
+      "techniqueid": 1758,
+      "name": "Clich\u00e9-verre",
+      "objectcount": 66,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 803,
+      "techniqueid": 803,
+      "name": "Underglazed, painted",
+      "objectcount": 65,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 2180,
+      "techniqueid": 2180,
+      "name": "Photoetching",
+      "objectcount": 63,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1536,
+      "techniqueid": 1536,
+      "name": "Woven, tapestry weave",
+      "objectcount": 61,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1615,
+      "techniqueid": 1615,
+      "name": "Dye transfer print",
+      "objectcount": 61,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1393,
+      "techniqueid": 1393,
+      "name": "Etching, drypoint and aquatint",
+      "objectcount": 60,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 2341,
+      "techniqueid": 2341,
+      "name": "Lusterware",
+      "objectcount": 59,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 2302,
+      "techniqueid": 2302,
+      "name": "Inlaid",
+      "objectcount": 58,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1772,
+      "techniqueid": 1772,
+      "name": "Collotype and stencil",
+      "objectcount": 57,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 1637,
+      "techniqueid": 1637,
+      "name": "Rubbing",
+      "objectcount": 57,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    },
+    {
+      "id": 182,
+      "techniqueid": 182,
+      "name": "Diazotype",
+      "objectcount": 57,
+      "lastupdate": "2026-05-18T05:54:28-04:00"
+    }
+  ]
+}

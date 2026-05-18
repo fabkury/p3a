@@ -1,0 +1,742 @@
+{
+  "info": {
+    "totalrecordsperquery": 25,
+    "totalrecords": 59162,
+    "pages": 2367,
+    "page": 1,
+    "next": "https://api.harvardartmuseums.org/object?apikey=c09e5b21-5ea4-4762-b611-e41d3a2ba07d&size=25&page=2&classification=23&hasimage=1&sort=id&sortorder=asc&fields=id%2Cobjectnumber%2Cprimaryimageurl%2Cimages%2Ctitle",
+    "responsetime": "31 ms"
+  },
+  "records": [
+    {
+      "id": 1424,
+      "objectnumber": "M26620",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2008-05-13",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 306418,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV190170",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190170_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 788
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190170_dynmc",
+      "title": "The Parable of the Unjust Husbandmen",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1424",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 1425,
+      "objectnumber": "M26622",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2008-05-13",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 306408,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV190160",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190160_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 793
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190160_dynmc",
+      "title": "The Virgin and Joseph at the Inn",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1425",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 1427,
+      "objectnumber": "2005.180.6",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "The Guards of the Rose Garden",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1427",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 1431,
+      "objectnumber": "M26448.4",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "Statement on the other side of this card",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1431",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 1433,
+      "objectnumber": "2004.177",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "Poem 70-11",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/1433",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4602,
+      "objectnumber": "M26448.2",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "Nut Bone",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4602",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4606,
+      "objectnumber": "M26616",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2008-05-13",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 306410,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV190162",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190162_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 780
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190162_dynmc",
+      "title": "The Parable of the Rich Fool",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4606",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4607,
+      "objectnumber": "M26618",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2008-05-13",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 306415,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV190167",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190167_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 789
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190167_dynmc",
+      "title": "The Plucking of Ears of Corn on Sabbath Day",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4607",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4608,
+      "objectnumber": "M26619",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2008-05-13",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 306417,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV190169",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190169_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 788
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190169_dynmc",
+      "title": "The Parable of the Barren Fig Tree",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4608",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4609,
+      "objectnumber": "2005.180.1",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "Walliser Bergriesen. Wide Horn and Company.",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4609",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4610,
+      "objectnumber": "2005.180.2",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "Wildpeak, the Bad and the cute little white Ball",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4610",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4619,
+      "objectnumber": "2004.132.2",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "Dufour and his Beautiful Donna Rosa",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4619",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4620,
+      "objectnumber": "M26621",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2008-05-13",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 306420,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV190172",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190172_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 785
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190172_dynmc",
+      "title": "The Parable of the Kingdom of Heaven",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4620",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4621,
+      "objectnumber": "M26610",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2008-05-13",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 306402,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV190154",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190154_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 769
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190154_dynmc",
+      "title": "Titlepage",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4621",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4622,
+      "objectnumber": "M26615",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2008-05-13",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 306400,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV190152",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190152_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 787
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190152_dynmc",
+      "title": "Christ and the Woman of Samaria",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4622",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4623,
+      "objectnumber": "M26617",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2008-05-13",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 306414,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV190166",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190166_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 784
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190166_dynmc",
+      "title": "The Good Shepherd",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4623",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4624,
+      "objectnumber": "M26624.1-205",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2009-04-01",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 338751,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV208103",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV208103_dynmc",
+          "alttext": null,
+          "width": 744,
+          "publiccaption": null,
+          "height": 1024
+        },
+        {
+          "date": "2006-09-27",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 197114,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "DDC100621",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:DDC100621_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 701
+        },
+        {
+          "date": "2009-04-01",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 338748,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV208100",
+          "displayorder": 3,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV208100_dynmc",
+          "alttext": null,
+          "width": 756,
+          "publiccaption": null,
+          "height": 1024
+        },
+        {
+          "date": "2009-04-01",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 338749,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV208101",
+          "displayorder": 4,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV208101_dynmc",
+          "alttext": null,
+          "width": 736,
+          "publiccaption": null,
+          "height": 1024
+        },
+        {
+          "date": "2009-04-01",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 338750,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV208102",
+          "displayorder": 5,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV208102_dynmc",
+          "alttext": null,
+          "width": 738,
+          "publiccaption": null,
+          "height": 1024
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV208103_dynmc",
+      "title": "Selection of 16th century prints",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4624",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4625,
+      "objectnumber": "2005.180.3",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "The Ortler dreams of lost Times",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4625",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4626,
+      "objectnumber": "2005.180.4",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "The King of the east Alps (The King Peak)",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4626",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4627,
+      "objectnumber": "2005.180.8",
+      "imagepermissionlevel": 1,
+      "images": [],
+      "primaryimageurl": null,
+      "title": "Near St. Martino. Cima the Castrozza and Val di Rota.",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4627",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4633,
+      "objectnumber": "M26611",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2008-05-13",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 306411,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV190163",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190163_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 781
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190163_dynmc",
+      "title": "The Angel Telling Joseph to Flee and the Flight into Egypt",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4633",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4634,
+      "objectnumber": "M26612",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2008-05-13",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 306413,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV190165",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190165_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 784
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190165_dynmc",
+      "title": "Jesus Calling the Apostles Among the Fishermen",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4634",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4635,
+      "objectnumber": "M26613",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2008-05-13",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 306383,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV190135",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190135_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 791
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190135_dynmc",
+      "title": "The Parable of the Sower",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4635",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4636,
+      "objectnumber": "M26614",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2008-05-13",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 306385,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV190137",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190137_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 779
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV190137_dynmc",
+      "title": "The Parable of the Two Sons and the Unjust Husbandmen",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4636",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    },
+    {
+      "id": 4637,
+      "objectnumber": "2021.362",
+      "imagepermissionlevel": 0,
+      "images": [
+        {
+          "date": "2024-05-16",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 556329,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 25.3 (Macintosh);",
+          "renditionnumber": "794441",
+          "displayorder": 1,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:794441",
+          "alttext": null,
+          "width": 9482,
+          "publiccaption": null,
+          "height": 7239
+        },
+        {
+          "date": "2022-05-25",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 526523,
+          "format": "image/jpeg",
+          "description": "Glorifying the Battle of Nieuwpoort, this political print show the Dutch lion \u2013 emblem of the Seven United Provinces \u2013 on a triumphal chariot surrounded by emblems referencing the provinces\u2019 unity including seven arrows hold by clasped hands and an orange tree with the Dutch leader Maurice of Nassau\u2019s coat-of-arms. Led by Prudence and Victory, and under the watchful eye of Vigilance, the chariot is pulled by Spanish prisoners-of-war, including Mendoza the Spanish commander. The procession is closed by happy countrymen playing musical instruments, while Fame blows its horn in the heavens followed by putti.",
+          "technique": "Make:SONY;Model:ILCE-7RM4;Orientation:1;Software:Adobe Photoshop 23.0 (Macintosh);",
+          "renditionnumber": "779627",
+          "displayorder": 2,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:779627",
+          "alttext": "A political allegory showing the Dutch lion on a triumphal chariot led by allegorical figures and Spanish prisoners of war. ",
+          "width": 2550,
+          "publiccaption": "before treatment",
+          "height": 1936
+        },
+        {
+          "date": "2007-10-19",
+          "copyright": "President and Fellows of Harvard College",
+          "imageid": 270977,
+          "format": "image/jpeg",
+          "description": null,
+          "technique": null,
+          "renditionnumber": "INV162379",
+          "displayorder": 3,
+          "baseimageurl": "https://nrs.harvard.edu/urn-3:HUAM:INV162379_dynmc",
+          "alttext": null,
+          "width": 1024,
+          "publiccaption": null,
+          "height": 788
+        }
+      ],
+      "primaryimageurl": "https://nrs.harvard.edu/urn-3:HUAM:794441",
+      "title": "Allegory of the Triumph of the Netherlands over Spain",
+      "seeAlso": [
+        {
+          "id": "https://iiif.harvardartmuseums.org/manifests/object/4637",
+          "type": "IIIF Manifest",
+          "format": "application/json",
+          "profile": "http://iiif.io/api/presentation/2/context.json"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+URL: https://nrs.harvard.edu/urn-3:HUAM:INV190162_dynmc/full/!720,720/0/default.jpg
+Status: 303
+Date: Mon, 18 May 2026 14:31:30 GMT
+Content-Length: 0
+Connection: keep-alive
+access-control-allow-origin: *
+content-security-policy: default-src 'self';script-src 'self' 'unsafe-inline' https://code.jquery.com https://cdn.jsdelivr.net https://library.harvard.edu;style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://library.harvard.edu;font-src 'self' https://fonts.gstatic.com https://library.harvard.edu;img-src 'self' data: https://library.harvard.edu;connect-src 'self';frame-src 'none';object-src 'none';upgrade-insecure-requests;base-uri 'self';form-action 'self';frame-ancestors 'self';script-src-attr 'none'
+cross-origin-opener-policy: same-origin
+origin-agent-cluster: ?1
+referrer-policy: origin-when-cross-origin
+strict-transport-security: max-age=31536000; includeSubDomains
+x-content-type-options: nosniff
+x-dns-prefetch-control: off
+x-download-options: noopen
+x-frame-options: SAMEORIGIN
+x-permitted-cross-domain-policies: none
+x-xss-protection: 0
+location: https://ids.lib.harvard.edu/mps/20493745/full/!720,720/0/default.jpg
+vary: Accept
+x-envoy-upstream-service-time: 5
+server: istio-envoy

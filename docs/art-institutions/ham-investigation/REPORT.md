@@ -266,7 +266,9 @@ Pre-filled so M1 mostly becomes a copy-paste. Goes into §9 of
   **user-supplied** (BYOK) — stored in NVS under `ham_api_key`,
   entered by the user via a new "Museums" section in
   `webui/settings.html`. No key is shipped with the firmware. When
-  the saved key is empty, HAM browse is gated in the modal and HAM
+  the saved key is empty, the HAM entry stays visible in the museum
+  browser but clicking through to an axis surfaces an inline "Enter
+  your API key in Settings → Museums" message instead of axes; HAM
   channel refresh is a no-op (channels stay persistent and reactivate
   when the user enters a key).
 - **Axes (filterable, in browse order):**
@@ -339,8 +341,13 @@ section. Mirrors the Giphy key-management model.
     fetch alongside the existing settings load. Implementation
     detail; either works.
 - **Browse modal empty-state**: when the saved key is empty, the HAM
-  entry in the museum picker is either hidden or shows a hint:
-  "Enter your HAM API key in Settings to browse Harvard Art Museums."
+  entry remains in the museum picker. The empty-state surfaces lazily:
+  the first `listCollections({axis})` call throws an error with a
+  `userMessage` field; `webui/museum/browse.js`'s catch block reads
+  the field and renders "Enter your Harvard Art Museums API key in
+  Settings → Museums to browse this museum." in place of the term
+  list. Same plumbing handles a 401 from a revoked key with a slightly
+  different message.
 - **Refresh skip when empty**: `art_institution_ham_refresh_channel()`
   returns `ESP_ERR_INVALID_STATE` (or similar) with an `ESP_LOGI`
   line if the key is empty; dispatcher treats it like a transient

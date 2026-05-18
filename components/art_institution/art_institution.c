@@ -154,6 +154,36 @@ int32_t art_institution_compute_post_id(const char *museum_id, const char *iiif_
 
 // ----- Vault path ---------------------------------------------------------
 
+/**
+ * @brief Copy iiif_key into a FAT-safe filename buffer
+ *
+ * SD cards are mounted as FAT/exFAT, which forbids `:/\?*"<>|` in
+ * filenames. The iiif_key field is otherwise stored verbatim
+ * (post_id hashing, URL building, and orphan comparison all use the
+ * un-sanitized form), so the substitution is filename-local.
+ *
+ * Affects HAM today (`urn-3:HUAM:NNNN_dynmc` contains two colons).
+ * Other museums use alphanumeric / underscore / dot / hyphen
+ * identifiers, so the loop is a no-op for them.
+ */
+static void sanitize_filename(const char *in, char *out, size_t out_len)
+{
+    size_t o = 0;
+    for (size_t i = 0; in[i] && o + 1 < out_len; i++) {
+        unsigned char c = (unsigned char)in[i];
+        switch (c) {
+            case ':': case '/': case '\\': case '?': case '*':
+            case '"': case '<': case '>': case '|':
+                out[o++] = '_';
+                break;
+            default:
+                out[o++] = (char)c;
+                break;
+        }
+    }
+    out[o] = '\0';
+}
+
 esp_err_t art_institution_build_vault_path(const char *museum_id,
                                            const institution_channel_entry_t *entry,
                                            char *out_path, size_t out_len)
@@ -168,6 +198,9 @@ esp_err_t art_institution_build_vault_path(const char *museum_id,
         strlcpy(base, "/sdcard/p3a/museum", sizeof(base));
     }
 
+    // SHA256 is computed over the un-sanitized iiif_key so the shard
+    // directories stay stable regardless of which characters the
+    // sanitizer touches.
     uint8_t sha[32];
     if (mbedtls_sha256((const unsigned char *)entry->iiif_key,
                        strlen(entry->iiif_key), sha, 0) != 0) {
@@ -187,10 +220,15 @@ esp_err_t art_institution_build_vault_path(const char *museum_id,
         default: ext = ".jpg";  break;
     }
 
+    // institution_channel_entry_t.iiif_key is 48 bytes; sanitized form is
+    // length-preserving (one-byte → one-byte substitution).
+    char safe_name[sizeof(entry->iiif_key)];
+    sanitize_filename(entry->iiif_key, safe_name, sizeof(safe_name));
+
     int n = snprintf(out_path, out_len, "%s/%s/%02x/%02x/%02x/%s%s",
                      base, museum_id,
                      (unsigned)sha[0], (unsigned)sha[1], (unsigned)sha[2],
-                     entry->iiif_key, ext);
+                     safe_name, ext);
     if (n < 0 || (size_t)n >= out_len) return ESP_ERR_INVALID_SIZE;
     return ESP_OK;
 }

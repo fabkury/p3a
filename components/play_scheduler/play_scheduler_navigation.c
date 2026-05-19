@@ -234,11 +234,19 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
             proc_notif_fail_if_processing();
         }
 
+        // LOUD = the upcoming swap was already flagged as user-initiated
+        // (execute_playset set this when the user explicitly switched to
+        // this playset). On LOUD the existing "skip if animation_playing"
+        // suppression is wrong — the user's screen would stay on the
+        // previous playset's artwork forever. PICO-8 suppression stays
+        // unconditional: never replace a game with an error overlay.
+        bool loud = (s_state->next_swap_fail_mode == SWAP_FAIL_LOUD);
+
         // Check if we should display an error message
         // Don't show messages if:
         // - Not in animation playback state (provisioning, OTA, PICO-8 streaming)
         // - PICO-8 mode is active
-        // - Animation is already playing
+        // - Animation is already playing (and the pick wasn't user-initiated)
         p3a_state_t current_state = p3a_state_get();
         if (current_state != P3A_STATE_ANIMATION_PLAYBACK) {
             // Not in animation playback mode - skip message display
@@ -250,9 +258,10 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
         bool pico8_active = playback_controller_is_pico8_active && playback_controller_is_pico8_active();
         bool animation_playing = animation_player_is_animation_ready && animation_player_is_animation_ready();
 
-        if (pico8_active || animation_playing) {
+        if (pico8_active || (animation_playing && !loud)) {
             // Don't show error message - something else is displaying content
-            ESP_LOGD(TAG, "Skipping error message: pico8=%d, animation=%d", pico8_active, animation_playing);
+            ESP_LOGD(TAG, "Skipping error message: pico8=%d, animation=%d, loud=%d",
+                     pico8_active, animation_playing, loud);
         } else {
             // Display appropriate message based on state
             // Priority: refresh in progress > downloading > no files
@@ -275,6 +284,15 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
                                               display_name, sizeof(display_name));
             }
 
+            // Title for the terminal "no playable files" message. Prefer the
+            // active playset's name; fall back to the first channel's display
+            // name for transient single-channel playsets (play_named_channel
+            // and friends leave playset.name empty).
+            const char *title = display_name;
+            if (s_state->active_playset && s_state->active_playset->name[0] != '\0') {
+                title = s_state->active_playset->name;
+            }
+
             // Only show loading/downloading messages if we have WiFi connectivity
             if (p3a_state_has_wifi()) {
                 if (any_refreshing) {
@@ -289,18 +307,25 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
                     } else {
                         // No refresh, no download - truly no files available
                         if (animation_player_display_message) {
-                            animation_player_display_message("No Artworks", "No artworks to play");
+                            animation_player_display_message(title,
+                                "No playable files. Please\nswitch to another playset.");
                         }
                     }
                 }
             } else {
                 // No WiFi - can't load channels from Makapix
                 if (animation_player_display_message) {
-                    animation_player_display_message("No Artworks", "No artworks to play");
+                    animation_player_display_message(title,
+                        "No playable files. Please\nswitch to another playset.");
                 }
             }
         }
         }  // Close the "if (current_state == P3A_STATE_ANIMATION_PLAYBACK)" else block
+
+        // Consume the one-shot LOUD flag so a subsequent autoswap defaults
+        // back to SILENT. Mirrors prepare_and_request_swap's consume on the
+        // success path.
+        s_state->next_swap_fail_mode = SWAP_FAIL_SILENT;
     } else if (result != ESP_OK) {
         ESP_LOGW(TAG, "Swap request failed: %s", esp_err_to_name(result));
     }

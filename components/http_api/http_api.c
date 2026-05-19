@@ -429,7 +429,7 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
             }
         }
 
-        esp_err_t exec_err = play_scheduler_execute_playset(playset);
+        esp_err_t exec_err = play_scheduler_execute_playset(playset, true);
         free(playset);
 
         if (exec_err != ESP_OK) {

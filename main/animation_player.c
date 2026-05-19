@@ -330,7 +330,7 @@ esp_err_t animation_player_restore_boot_playset(void)
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Restoring active playset (name='%s', channels=%zu)",
                  playset->name, playset->channel_count);
-        err = play_scheduler_execute_playset(playset);
+        err = play_scheduler_execute_playset(playset, false);
         if (err == ESP_OK) {
             free(playset);
             return ESP_OK;
@@ -351,7 +351,7 @@ esp_err_t animation_player_restore_boot_playset(void)
     playset->channels[0].type = PS_CHANNEL_TYPE_NAMED;
     strlcpy(playset->channels[0].name, "promoted", sizeof(playset->channels[0].name));
     playset->channels[0].weight = 1;
-    err = play_scheduler_execute_playset(playset);
+    err = play_scheduler_execute_playset(playset, false);
     free(playset);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Default Promoted execute failed: %s", esp_err_to_name(err));

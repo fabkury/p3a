@@ -69,9 +69,15 @@ void play_scheduler_deinit(void);
  * Resets channel state, preserves history, begins new play queue.
  *
  * @param playset Playset parameters
+ * @param user_initiated true for explicit user actions (HTTP/touch playset
+ *        switch, play_artwork, etc.) — the upcoming pick is marked
+ *        SWAP_FAIL_LOUD so a "no playable files" giveup surfaces on screen
+ *        instead of leaving the previous artwork in place. Pass false for
+ *        boot-restore and other automatic call paths where the screen is
+ *        empty anyway and silent retry is the correct default.
  * @return ESP_OK on success
  */
-esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset);
+esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_initiated);
 
 /**
  * @brief Create a built-in single-channel playset

@@ -487,7 +487,7 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
 // Command Execution
 // ============================================================================
 
-esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset)
+esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_initiated)
 {
     ps_state_t *s_state = ps_get_state();
 
@@ -496,6 +496,15 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset)
     }
     if (!playset || playset->channel_count == 0 || playset->channel_count > PS_MAX_CHANNELS) {
         return ESP_ERR_INVALID_ARG;
+    }
+
+    // User-initiated switches need the upcoming pick to fail LOUD: if no
+    // artwork is available, the navigation giveup branch surfaces an error
+    // instead of leaving the previous playset's artwork on screen. Boot
+    // restore and other automatic paths leave the default SILENT so a
+    // transient empty state doesn't flash an error during startup.
+    if (user_initiated) {
+        s_state->next_swap_fail_mode = SWAP_FAIL_LOUD;
     }
 
     // Cancel all active Makapix refresh tasks before setting up new channels
@@ -854,7 +863,7 @@ esp_err_t play_scheduler_play_named_channel(const char *name)
     playset->channels[0].weight = 1;
     ps_ensure_display_name(&playset->channels[0]);
 
-    esp_err_t result = play_scheduler_execute_playset(playset);
+    esp_err_t result = play_scheduler_execute_playset(playset, true);
     free(playset);
     return result;
 }
@@ -885,7 +894,7 @@ esp_err_t play_scheduler_play_pinned_channel(const char *slug)
     playset->channels[0].weight = 1;
     ps_ensure_display_name(&playset->channels[0]);
 
-    esp_err_t result = play_scheduler_execute_playset(playset);
+    esp_err_t result = play_scheduler_execute_playset(playset, true);
     free(playset);
     return result;
 }
@@ -913,7 +922,7 @@ esp_err_t play_scheduler_play_user_channel(const char *user_sqid)
     playset->channels[0].weight = 1;
     ps_ensure_display_name(&playset->channels[0]);
 
-    esp_err_t result = play_scheduler_execute_playset(playset);
+    esp_err_t result = play_scheduler_execute_playset(playset, true);
     free(playset);
     return result;
 }
@@ -941,7 +950,7 @@ esp_err_t play_scheduler_play_reactions_channel(const char *user_sqid)
     playset->channels[0].weight = 1;
     ps_ensure_display_name(&playset->channels[0]);
 
-    esp_err_t result = play_scheduler_execute_playset(playset);
+    esp_err_t result = play_scheduler_execute_playset(playset, true);
     free(playset);
     return result;
 }
@@ -969,7 +978,7 @@ esp_err_t play_scheduler_play_hashtag_channel(const char *hashtag)
     playset->channels[0].weight = 1;
     ps_ensure_display_name(&playset->channels[0]);
 
-    esp_err_t result = play_scheduler_execute_playset(playset);
+    esp_err_t result = play_scheduler_execute_playset(playset, true);
     free(playset);
     return result;
 }
@@ -1080,8 +1089,6 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id,
         return ESP_ERR_INVALID_ARG;
     }
 
-    ps_state_t *s_state = ps_get_state();
-
     ESP_LOGI(TAG, "play_artwork: post_id=%ld, storage_key=%s, title='%s'",
              (long)post_id, storage_key, (title && title[0]) ? title : "");
 
@@ -1116,16 +1123,11 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id,
                                playset->channels[0].artwork.filepath,
                                sizeof(playset->channels[0].artwork.filepath));
 
-    // Mark the upcoming swap loud-fail: the user picked a specific artwork,
-    // so a load failure should surface an on-screen error instead of being
-    // silently retried with a different artwork.
-    s_state->next_swap_fail_mode = SWAP_FAIL_LOUD;
-
     /* execute_playset persists the playset (including the artwork sub-struct
        carrying post_id, storage_key, art_url, filepath, and title) via the
        active_playset_store, so the WebUI's now-playing fields and boot restore
        are both fed from that single snapshot — no extra persistence here. */
-    esp_err_t result = play_scheduler_execute_playset(playset);
+    esp_err_t result = play_scheduler_execute_playset(playset, true);
     free(playset);
     return result;
 }
@@ -1143,8 +1145,6 @@ esp_err_t play_scheduler_play_local_file(const char *filepath)
         ESP_LOGW(TAG, "play_local_file: file not found: %s", filepath);
         return ESP_ERR_NOT_FOUND;
     }
-
-    ps_state_t *s_state = ps_get_state();
 
     ESP_LOGI(TAG, "play_local_file: %s", filepath);
 
@@ -1167,13 +1167,8 @@ esp_err_t play_scheduler_play_local_file(const char *filepath)
     playset->channels[0].artwork.art_url[0] = '\0';
     strlcpy(playset->channels[0].artwork.filepath, filepath, sizeof(playset->channels[0].artwork.filepath));
 
-    // Mark the upcoming swap loud-fail: the user picked a specific local file,
-    // so a load failure should surface an on-screen error instead of being
-    // silently retried with a different artwork.
-    s_state->next_swap_fail_mode = SWAP_FAIL_LOUD;
-
     /* execute_playset persists the snapshot; no extra step needed. */
-    esp_err_t result = play_scheduler_execute_playset(playset);
+    esp_err_t result = play_scheduler_execute_playset(playset, true);
     free(playset);
     return result;
 }

@@ -321,7 +321,7 @@ esp_err_t h_post_playset(httpd_req_t *req)
     }
 
     // Execute the playset
-    err = play_scheduler_execute_playset(playset);
+    err = play_scheduler_execute_playset(playset, true);
     if (err != ESP_OK) {
         free(playset);
         char error_msg[128];
@@ -588,7 +588,7 @@ esp_err_t h_get_playset_by_name(httpd_req_t *req)
     bool activated = false;
     if (activate) {
         /* execute_playset persists the snapshot internally; no extra step needed. */
-        esp_err_t exec_err = play_scheduler_execute_playset(playset);
+        esp_err_t exec_err = play_scheduler_execute_playset(playset, true);
         if (exec_err == ESP_OK) {
             activated = true;
         }
@@ -737,7 +737,7 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
     // Activate if requested. execute_playset persists the snapshot.
     bool activated = false;
     if (activate) {
-        esp_err_t exec_err = play_scheduler_execute_playset(playset);
+        esp_err_t exec_err = play_scheduler_execute_playset(playset, true);
         if (exec_err == ESP_OK) {
             activated = true;
         }

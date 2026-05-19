@@ -301,8 +301,10 @@ static makapix_channel_entry_t s_batch_entries[DL_BATCH_SIZE];
  * @param snapshot Snapshot of channel state (will be modified with cursor updates)
  * @return ESP_OK if found, ESP_ERR_NOT_FOUND if all files downloaded
  */
-static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapshot_t *snapshot)
+static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapshot_t *snapshot,
+                                      size_t *out_unresolved_count)
 {
+    if (out_unresolved_count) *out_unresolved_count = 0;
     if (!snapshot || snapshot->channel_count == 0 || !out_request) {
         ESP_LOGD(TAG, "dl_get_next_download invalid args (snapshot=%p, count=%zu)",
                  snapshot, snapshot ? snapshot->channel_count : 0);
@@ -420,9 +422,16 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                 // Institution channel: entry is institution_channel_entry_t.
                 const institution_channel_entry_t *ie = (const institution_channel_entry_t *)entry;
                 // M2 sentinel extensions never have a downloadable file — skip.
+                // 0xFF (unresolved) entries are work-in-progress: the resolver
+                // will eventually mutate them to a downloadable form, so we
+                // count them so the "all done" log doesn't lie. 0xFE
+                // (tombstone) entries are terminal failures and don't count.
                 if (ie->extension == 0xFF || ie->extension == 0xFE) {
                     ESP_LOGD(TAG, "SKIP post_id=%d: institution sentinel ext=0x%02X",
                              ie->post_id, ie->extension);
+                    if (ie->extension == 0xFF && out_unresolved_count) {
+                        (*out_unresolved_count)++;
+                    }
                     continue;
                 }
                 art_institution_build_vault_path_from_spec(ai_spec_name, ie,
@@ -636,8 +645,9 @@ static void download_task(void *arg)
         memset(&s_dl_snapshot, 0, sizeof(s_dl_snapshot));
         bool snapshot_ok = dl_take_snapshot(&s_dl_snapshot);
         ESP_LOGD(TAG, "snapshot_ok=%d, channel_count=%zu", snapshot_ok, s_dl_channel_count);
+        size_t unresolved_count = 0;
         if (snapshot_ok) {
-            get_err = dl_get_next_download(&s_dl_req, &s_dl_snapshot);
+            get_err = dl_get_next_download(&s_dl_req, &s_dl_snapshot, &unresolved_count);
             ESP_LOGD(TAG, "dl_get_next_download returned %s (post_id=%ld)",
                      esp_err_to_name(get_err), (long)s_dl_req.post_id);
             if (get_err == ESP_OK) {
@@ -653,7 +663,12 @@ static void download_task(void *arg)
             if (s_dl_channel_count == 0) {
                 ESP_LOGD(TAG, "No channels configured, waiting for signal...");
             } else if (!s_all_downloaded_logged) {
-                ESP_LOGI(TAG, "All files downloaded (ch_count=%zu), waiting for signal...", s_dl_channel_count);
+                if (unresolved_count > 0) {
+                    ESP_LOGI(TAG, "All resolvable entries downloaded (unresolved=%zu, ch_count=%zu), waiting for signal...",
+                             unresolved_count, s_dl_channel_count);
+                } else {
+                    ESP_LOGI(TAG, "All files downloaded (ch_count=%zu), waiting for signal...", s_dl_channel_count);
+                }
                 s_all_downloaded_logged = true;
             }
             makapix_channel_clear_downloads_needed();

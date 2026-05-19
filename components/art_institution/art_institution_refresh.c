@@ -69,7 +69,25 @@ esp_err_t art_institution_merge_entries(struct channel_cache_s *cache,
         for (size_t j = 0; j < all_count; j++) {
             // post_id is at offset 0 for all three entry layouts.
             if (all[j].post_id == ne->post_id) {
-                memcpy(&all[j], ne, sizeof(makapix_channel_entry_t));
+                // Preserve resolver output across refreshes. Rijks emits
+                // unresolved (extension=0xFF, iiif_key=HMO URL) entries
+                // that a separate Linked-Art walk later mutates in place
+                // to (extension<=3, iiif_key=micrio short id). The next
+                // refresh re-emits the unresolved sentinel from the API;
+                // overwriting wholesale would destroy the resolver's
+                // output and orphan the on-disk files (whose paths derive
+                // from iiif_key). Tombstones (0xFE) are still replaced so
+                // the next refresh hands them a fresh resolve_fails=0
+                // budget, per the header contract.
+                institution_channel_entry_t *existing =
+                    (institution_channel_entry_t *)&all[j];
+                bool new_is_unresolved = (ne->extension == 0xFF);
+                bool existing_is_resolved = (existing->extension <= 3);
+                if (new_is_unresolved && existing_is_resolved) {
+                    existing->created_at = ne->created_at;
+                } else {
+                    memcpy(&all[j], ne, sizeof(makapix_channel_entry_t));
+                }
                 found = true;
                 break;
             }

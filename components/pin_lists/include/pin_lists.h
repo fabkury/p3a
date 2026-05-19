@@ -89,14 +89,43 @@ esp_err_t pin_lists_create(const char *name, char out_slug[PIN_LIST_SLUG_LEN]);
 esp_err_t pin_lists_rename(const char *slug, const char *new_name);
 
 /**
- * @brief Delete a list (recursively removes lists/{slug}/)
+ * @brief Delete a list (asynchronously)
+ *
+ * Atomically renames lists/{slug}/ to a hidden tombstone (`.deleting-...`) and
+ * returns. The on-disk rmtree of the tombstone happens in a background worker
+ * task, so this call is fast even for lists with thousands of pinned artworks.
+ * The list disappears from all enumeration APIs the instant this returns ESP_OK.
  *
  * Refuses to delete the active list. If this would remove the last list,
- * a fresh "My Pins" is auto-created and marked active.
+ * a fresh "My Pins" is auto-created and marked active before returning.
  *
- * @return ESP_OK, ESP_ERR_NOT_FOUND, or ESP_ERR_INVALID_STATE (active list)
+ * If the device loses power mid-rmtree, the tombstone is reclaimed by the
+ * garbage collector after the next successful playset-wide refresh — see
+ * pin_lists_gc_kick().
+ *
+ * @return ESP_OK, ESP_ERR_NOT_FOUND, or ESP_ERR_INVALID_STATE (active list).
+ *         ESP_FAIL on filesystem error during the rename — the list is left
+ *         intact in that case.
  */
 esp_err_t pin_lists_delete(const char *slug);
+
+/**
+ * @brief Hint the pin-lists garbage collector to scan for tombstones
+ *
+ * Tombstone directories are produced by pin_lists_delete() and reclaimed
+ * asynchronously by a background worker. This call wakes the worker; it
+ * scans /sdcard/p3a/pinned/lists/ for any `.deleting-*` entries and rmtree's
+ * them, one at a time, without holding the pin_lists mutex.
+ *
+ * Safe to call from any task context. Cheap. Idempotent — multiple calls
+ * coalesce into a single worker pass.
+ *
+ * Intended to be called from a "device is settled and online" hook, e.g.
+ * after a playset-wide refresh completes successfully, so that the boot path
+ * itself does not pay the cost of resuming a large rmtree from a previous
+ * power loss.
+ */
+void pin_lists_gc_kick(void);
 
 /**
  * @brief Enumerate all lists

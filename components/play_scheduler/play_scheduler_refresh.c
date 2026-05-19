@@ -24,6 +24,7 @@
 #include "channel_metadata.h"  // For channel_metadata_load()
 #include "sntp_sync.h"         // For sntp_sync_is_synchronized()
 #include "sd_path.h"
+#include "pin_lists.h"         // For pin_lists_gc_kick()
 #include "p3a_state.h"   // For P3A_CHANNEL_MSG_* constants
 #include "p3a_render.h"  // For p3a_render_set_channel_message()
 #include "esp_log.h"
@@ -754,6 +755,10 @@ static void refresh_task(void *arg)
                     }
                     ESP_LOGI(TAG, "All channels refreshed. Next periodic refresh in %lu seconds.",
                              (unsigned long)s_next_refresh_delay);
+                    /* Settled-and-online moment: nudge the pin_lists GC so any
+                       tombstones left over from a power loss during a previous
+                       delete get reclaimed. No-op if there's nothing to do. */
+                    pin_lists_gc_kick();
                 } else if (now - s_last_full_refresh_complete >= (time_t)s_next_refresh_delay) {
                     ESP_LOGI(TAG, "Starting periodic refresh cycle (%lu seconds elapsed)",
                              (unsigned long)s_next_refresh_delay);

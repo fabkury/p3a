@@ -9,11 +9,14 @@
 #include "pin_lists.h"
 #include "pin_lists_internal.h"
 #include "sd_path.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_random.h"
 #include "esp_rom_crc.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
@@ -35,6 +38,21 @@ static char              s_active_slug[PIN_LIST_SLUG_LEN] = {0};
 
 #define LOCK()    do { if (s_mutex) xSemaphoreTake(s_mutex, portMAX_DELAY); } while (0)
 #define UNLOCK()  do { if (s_mutex) xSemaphoreGive(s_mutex); } while (0)
+
+/* Background GC: rmtree's `.deleting-*` tombstones outside the pin_lists mutex.
+   Woken by pin_lists_delete (immediate cleanup) and pin_lists_gc_kick (typically
+   called from the playset-wide refresh completion path to reclaim tombstones
+   that survived a power loss). */
+static SemaphoreHandle_t s_gc_sem = NULL;
+static TaskHandle_t      s_gc_task = NULL;
+static StackType_t      *s_gc_stack = NULL;
+static StaticTask_t      s_gc_task_buffer;
+static bool              s_gc_stack_in_psram = false;
+
+#define PL_GC_STACK_SIZE      (12 * 1024)
+#define PL_GC_TASK_PRIORITY   3
+#define PL_GC_TASK_NAME       "pin_lists_gc"
+#define PL_TOMBSTONE_PREFIX   ".deleting-"
 
 /* ------------------------------------------------------------------------- */
 /*  Path builders                                                            */
@@ -207,6 +225,72 @@ esp_err_t pl_rmtree(const char *path)
 }
 
 /* ------------------------------------------------------------------------- */
+/*  Tombstone helpers (background GC)                                        */
+/* ------------------------------------------------------------------------- */
+
+/* Build a tombstone path `{lists_root}/.deleting-{slug}-{8hex}` with bounds
+   checking. The 8-hex suffix is from esp_random() so back-to-back deletes of
+   the same slug (after re-creation) cannot collide on disk. */
+static esp_err_t pl_paths_tombstone(const char *slug, char *out, size_t out_len)
+{
+    char lists_root[180];
+    esp_err_t err = pl_paths_lists_root(lists_root, sizeof(lists_root));
+    if (err != ESP_OK) return err;
+    uint32_t rnd = esp_random();
+    int n = snprintf(out, out_len, "%s/" PL_TOMBSTONE_PREFIX "%s-%08lx",
+                     lists_root, slug, (unsigned long)rnd);
+    return (n > 0 && (size_t)n < out_len) ? ESP_OK : ESP_ERR_INVALID_SIZE;
+}
+
+/* Find the first tombstone in lists_root. Returns true and fills `out` with
+   the absolute path; returns false if none exist. Each call reopens the dir
+   so no handle survives concurrent renames. */
+static bool next_tombstone(const char *lists_root, char *out, size_t out_len)
+{
+    DIR *d = opendir(lists_root);
+    if (!d) return false;
+    bool found = false;
+    struct dirent *de;
+    while ((de = readdir(d)) != NULL) {
+        if (strncmp(de->d_name, PL_TOMBSTONE_PREFIX,
+                    sizeof(PL_TOMBSTONE_PREFIX) - 1) != 0) continue;
+        int n = snprintf(out, out_len, "%s/%s", lists_root, de->d_name);
+        if (n > 0 && (size_t)n < out_len) found = true;
+        break;
+    }
+    closedir(d);
+    return found;
+}
+
+/* Background worker: drains all tombstones each time it wakes. Holds NO
+   pin_lists mutex while rmtree'ing — tombstones are unreachable to public
+   APIs because their names fail pl_slug_is_valid(). */
+static void pl_gc_task(void *arg)
+{
+    (void)arg;
+    char lists_root[180];
+    char tomb[256];
+    for (;;) {
+        xSemaphoreTake(s_gc_sem, portMAX_DELAY);
+        if (pl_paths_lists_root(lists_root, sizeof(lists_root)) != ESP_OK) continue;
+        while (next_tombstone(lists_root, tomb, sizeof(tomb))) {
+            ESP_LOGI(TAG, "gc start: %s", tomb);
+            int64_t t0 = esp_timer_get_time();
+            esp_err_t err = pl_rmtree(tomb);
+            int64_t elapsed_ms = (esp_timer_get_time() - t0) / 1000;
+            ESP_LOGI(TAG, "gc done : %s (%lld ms, %s)",
+                     tomb, (long long)elapsed_ms,
+                     err == ESP_OK ? "ok" : esp_err_to_name(err));
+        }
+    }
+}
+
+void pin_lists_gc_kick(void)
+{
+    if (s_gc_sem) xSemaphoreGive(s_gc_sem);
+}
+
+/* ------------------------------------------------------------------------- */
 /*  Forward declarations for orchestration                                   */
 /* ------------------------------------------------------------------------- */
 
@@ -305,6 +389,40 @@ esp_err_t pin_lists_init(void)
     int total = count_lists_locked();
     ESP_LOGI(TAG, "init ok, lists=%d active=%s", total, s_active_slug);
     UNLOCK();
+
+    /* Spawn the background GC worker. Failure is non-fatal: deletes still
+       rename to a tombstone, but on-disk cleanup won't run until the next
+       boot (where init is retried). Not kicked here — the boot path stays
+       fast; the playset-wide refresh completion path calls gc_kick to
+       reclaim any tombstones left over from a previous power loss. */
+    s_gc_sem = xSemaphoreCreateBinary();
+    if (!s_gc_sem) {
+        ESP_LOGE(TAG, "gc sem create failed; tombstone cleanup disabled");
+        return ESP_OK;
+    }
+    s_gc_stack = heap_caps_malloc(PL_GC_STACK_SIZE * sizeof(StackType_t),
+                                  MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (s_gc_stack) {
+        s_gc_stack_in_psram = true;
+        s_gc_task = xTaskCreateStaticPinnedToCore(
+            pl_gc_task, PL_GC_TASK_NAME, PL_GC_STACK_SIZE, NULL,
+            PL_GC_TASK_PRIORITY, s_gc_stack, &s_gc_task_buffer, 0);
+        if (s_gc_task) {
+            ESP_LOGI(TAG, "gc task using PSRAM stack (Core 0)");
+            return ESP_OK;
+        }
+        heap_caps_free(s_gc_stack);
+        s_gc_stack = NULL;
+        s_gc_stack_in_psram = false;
+    }
+    ESP_LOGW(TAG, "gc PSRAM stack unavailable, using internal RAM");
+    if (xTaskCreatePinnedToCore(pl_gc_task, PL_GC_TASK_NAME, PL_GC_STACK_SIZE,
+                                NULL, PL_GC_TASK_PRIORITY, &s_gc_task, 0) != pdPASS) {
+        ESP_LOGE(TAG, "gc task create failed; tombstone cleanup disabled");
+        vSemaphoreDelete(s_gc_sem);
+        s_gc_sem = NULL;
+        s_gc_task = NULL;
+    }
     return ESP_OK;
 }
 
@@ -509,18 +627,35 @@ esp_err_t pin_lists_delete(const char *slug)
         UNLOCK();
         return ESP_ERR_NOT_FOUND;
     }
-    err = pl_rmtree(dir);
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "deleted list %s", slug);
-        /* If we somehow ended up with zero lists, recreate the default. */
-        if (count_lists_locked() == 0) {
-            char fresh[PIN_LIST_SLUG_LEN];
-            bootstrap_default_list_locked(fresh);
-            strlcpy(s_active_slug, fresh, sizeof(s_active_slug));
-        }
+
+    /* Atomically rename the live dir to a hidden tombstone so it disappears
+       from every enumeration (pl_slug_is_valid rejects the `.deleting-*`
+       prefix). The recursive unlink happens later in the GC worker, outside
+       the pin_lists mutex. */
+    char tomb[256];
+    err = pl_paths_tombstone(slug, tomb, sizeof(tomb));
+    if (err != ESP_OK) { UNLOCK(); return err; }
+    if (rename(dir, tomb) != 0) {
+        ESP_LOGE(TAG, "rename %s -> %s failed: %s", dir, tomb, strerror(errno));
+        UNLOCK();
+        return ESP_FAIL;
+    }
+    ESP_LOGI(TAG, "deleted list %s (tombstone %s)", slug, tomb);
+
+    /* If we somehow ended up with zero lists, recreate the default. The
+       active-list guard above makes this unreachable in practice, but keep
+       parity with prior behavior. */
+    if (count_lists_locked() == 0) {
+        char fresh[PIN_LIST_SLUG_LEN];
+        bootstrap_default_list_locked(fresh);
+        strlcpy(s_active_slug, fresh, sizeof(s_active_slug));
     }
     UNLOCK();
-    return err;
+
+    /* Wake the GC. Safe if the worker failed to start at init — the rename
+       has already removed the list from view; the bytes just linger. */
+    if (s_gc_sem) xSemaphoreGive(s_gc_sem);
+    return ESP_OK;
 }
 
 esp_err_t pin_lists_enumerate(pin_list_info_t *out, size_t cap, size_t *out_n)

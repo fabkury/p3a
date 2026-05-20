@@ -73,6 +73,22 @@ For a step-by-step walkthrough written for first-time buyers, see the [Quick Sta
 Mix them all in a single "playset" for an ever-changing display.
 
 <p align="center">
+  <img src="images/photos/p3a-museum-channel-1.jpg" alt="p3a displaying a museum artwork" height="260">
+  &nbsp;
+  <img src="images/photos/p3a-museum-channel-2.jpg" alt="p3a displaying a museum artwork" height="260">
+  &nbsp;
+  <img src="images/photos/p3a-museum-channel-3.jpg" alt="p3a displaying a museum artwork" height="260">
+</p>
+
+<p align="center">
+  <img src="images/photos/p3a-museum-channel-4.jpg" alt="p3a displaying a museum artwork" height="260">
+  &nbsp;
+  <img src="images/photos/p3a-museum-channel-5.jpg" alt="p3a displaying a museum artwork" height="260">
+</p>
+
+<p align="center"><em>Museum channels: works from the Art Institute of Chicago, Rijksmuseum, V&amp;A, Wellcome Collection, SMK, and Harvard Art Museums — streamed over IIIF.</em></p>
+
+<p align="center">
   <img src="images/photos/p3a-5.jpg" alt="p3a in hand" height="260">
   &nbsp;
   <img src="images/photos/p3a-3-giphy.jpg" alt="p3a playing a Giphy GIF" height="260">

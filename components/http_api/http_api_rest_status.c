@@ -25,6 +25,7 @@
 #include "esp_netif.h"
 #include "app_wifi.h"
 #include "config_store.h"
+#include "art_institution.h"
 #include "makapix.h"
 #include "makapix_store.h"
 #include "p3a_current_post.h"
@@ -206,6 +207,27 @@ esp_err_t h_get_api_init(httpd_req_t *req) {
 
     // paused: current pause state
     cJSON_AddBoolToObject(data, "paused", playback_service_is_paused());
+
+    // ai_refresh_sec: per-museum channel refresh interval. The index page
+    // uses this to compute isDueForRefresh() for institution channels
+    // without an extra /config round trip on every page load.
+    cJSON_AddNumberToObject(data, "ai_refresh_sec",
+                            (double)config_store_get_ai_refresh_sec());
+
+    // museum_rate_limits: same shape /playsets/active emits. Seeded here so
+    // the institution-channel "rate limited" badge can light up immediately
+    // on page load instead of waiting for the first 4s playset poll.
+    cJSON *mrl = cJSON_AddObjectToObject(data, "museum_rate_limits");
+    if (mrl) {
+        for (size_t i = 0; i < ART_INSTITUTION_MUSEUM_COUNT; i++) {
+            cJSON *o = cJSON_CreateObject();
+            if (!o) continue;
+            cJSON_AddNumberToObject(o, "remaining_sec",
+                (double)art_institution_rate_limit_remaining(
+                    ART_INSTITUTION_MUSEUMS[i].id));
+            cJSON_AddItemToObject(mrl, ART_INSTITUTION_MUSEUMS[i].id, o);
+        }
+    }
 
     // playset_info: active playset details
     ps_stats_t ps_stats;

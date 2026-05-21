@@ -44,8 +44,69 @@ static void ota_progress_callback(int percent, const char *status_text) {
 // ---------- OTA REST Handlers ----------
 
 /**
+ * Populate the given cJSON object with the current web-UI OTA fields.
+ * Returns true when web UI OTA is operational, false when it is disabled
+ * (in which case only a "message" key is added) or errored (object left
+ * untouched). Shared between the legacy /ota/webui/status handler and the
+ * combined /ota/status handler.
+ */
+static bool fill_webui_ota_fields(cJSON *out) {
+    webui_ota_status_t status;
+    esp_err_t err = webui_ota_get_status(&status);
+
+    if (err == ESP_ERR_NOT_SUPPORTED) {
+        cJSON_AddStringToObject(out, "message", "Web UI OTA is disabled");
+        return false;
+    }
+    if (err != ESP_OK) {
+        return false;
+    }
+
+    cJSON_AddStringToObject(out, "current_version",
+                            strlen(status.current_version) > 0 ? status.current_version : "unknown");
+
+    if (status.update_available && strlen(status.available_version) > 0) {
+        cJSON_AddStringToObject(out, "available_version", status.available_version);
+    } else {
+        cJSON_AddNullToObject(out, "available_version");
+    }
+
+    if (strlen(status.latest_remote_version) > 0) {
+        cJSON_AddStringToObject(out, "latest_remote_version", status.latest_remote_version);
+    } else {
+        cJSON_AddNullToObject(out, "latest_remote_version");
+    }
+
+    cJSON_AddBoolToObject(out, "update_available", status.update_available);
+    cJSON_AddBoolToObject(out, "partition_valid", status.partition_valid);
+    cJSON_AddBoolToObject(out, "needs_recovery", status.needs_recovery);
+    cJSON_AddBoolToObject(out, "auto_update_disabled", status.auto_update_disabled);
+    cJSON_AddNumberToObject(out, "failure_count", status.failure_count);
+
+    cJSON_AddStringToObject(out, "state", webui_ota_state_to_string(status.state));
+    cJSON_AddNumberToObject(out, "progress", status.progress);
+
+    if (strlen(status.status_message) > 0) {
+        cJSON_AddStringToObject(out, "status_message", status.status_message);
+    } else {
+        cJSON_AddNullToObject(out, "status_message");
+    }
+
+    if (status.state == WEBUI_OTA_STATE_ERROR && strlen(status.error_message) > 0) {
+        cJSON_AddStringToObject(out, "error_message", status.error_message);
+    } else {
+        cJSON_AddNullToObject(out, "error_message");
+    }
+
+    return true;
+}
+
+/**
  * GET /ota/status
- * Returns current OTA status including version info and update availability
+ * Returns current OTA status including version info and update availability.
+ * Also embeds a `webui` sub-object with the web-UI OTA status so the client
+ * can fetch both halves in a single request. The standalone
+ * /ota/webui/status route is retained as a legacy alias.
  */
 static esp_err_t h_get_ota_status(httpd_req_t *req) {
     ota_status_t status;
@@ -114,7 +175,20 @@ static esp_err_t h_get_ota_status(httpd_req_t *req) {
     // Dev mode info
     cJSON_AddBoolToObject(data, "dev_mode", status.dev_mode);
     cJSON_AddBoolToObject(data, "is_prerelease", status.is_prerelease);
-    
+
+    // Embed the web-UI OTA fields under a `webui` sub-key so a single
+    // /ota/status request gives the client both halves. When web UI OTA is
+    // disabled or errored, we omit the key entirely so the client can
+    // detect that with a simple `if (data.webui)` check.
+    cJSON *webui_obj = cJSON_CreateObject();
+    if (webui_obj) {
+        if (fill_webui_ota_fields(webui_obj)) {
+            cJSON_AddItemToObject(data, "webui", webui_obj);
+        } else {
+            cJSON_Delete(webui_obj);
+        }
+    }
+
     cJSON_AddItemToObject(root, "data", data);
     
     char *json_str = cJSON_PrintUnformatted(root);
@@ -235,12 +309,11 @@ static esp_err_t h_post_ota_rollback(httpd_req_t *req) {
 
 /**
  * GET /ota/webui/status
- * Returns current web UI OTA status
+ * Returns current web UI OTA status. Kept as a legacy alias so older web UI
+ * builds against newer firmware keep working; current builds read the
+ * `webui` sub-object embedded in /ota/status instead.
  */
 static esp_err_t h_get_webui_ota_status(httpd_req_t *req) {
-    webui_ota_status_t status;
-    esp_err_t err = webui_ota_get_status(&status);
-
     cJSON *root = cJSON_CreateObject();
     cJSON *data = cJSON_CreateObject();
     if (!root || !data) {
@@ -250,49 +323,8 @@ static esp_err_t h_get_webui_ota_status(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    cJSON_AddBoolToObject(root, "ok", err == ESP_OK);
-
-    if (err == ESP_OK) {
-        cJSON_AddStringToObject(data, "current_version",
-                                strlen(status.current_version) > 0 ? status.current_version : "unknown");
-
-        if (status.update_available && strlen(status.available_version) > 0) {
-            cJSON_AddStringToObject(data, "available_version", status.available_version);
-        } else {
-            cJSON_AddNullToObject(data, "available_version");
-        }
-
-        if (strlen(status.latest_remote_version) > 0) {
-            cJSON_AddStringToObject(data, "latest_remote_version", status.latest_remote_version);
-        } else {
-            cJSON_AddNullToObject(data, "latest_remote_version");
-        }
-
-        cJSON_AddBoolToObject(data, "update_available", status.update_available);
-        cJSON_AddBoolToObject(data, "partition_valid", status.partition_valid);
-        cJSON_AddBoolToObject(data, "needs_recovery", status.needs_recovery);
-        cJSON_AddBoolToObject(data, "auto_update_disabled", status.auto_update_disabled);
-        cJSON_AddNumberToObject(data, "failure_count", status.failure_count);
-
-        // Add state and progress fields
-        cJSON_AddStringToObject(data, "state", webui_ota_state_to_string(status.state));
-        cJSON_AddNumberToObject(data, "progress", status.progress);
-
-        if (strlen(status.status_message) > 0) {
-            cJSON_AddStringToObject(data, "status_message", status.status_message);
-        } else {
-            cJSON_AddNullToObject(data, "status_message");
-        }
-
-        if (status.state == WEBUI_OTA_STATE_ERROR && strlen(status.error_message) > 0) {
-            cJSON_AddStringToObject(data, "error_message", status.error_message);
-        } else {
-            cJSON_AddNullToObject(data, "error_message");
-        }
-    } else if (err == ESP_ERR_NOT_SUPPORTED) {
-        cJSON_AddStringToObject(data, "message", "Web UI OTA is disabled");
-    }
-
+    bool ok = fill_webui_ota_fields(data);
+    cJSON_AddBoolToObject(root, "ok", ok);
     cJSON_AddItemToObject(root, "data", data);
 
     char *json_str = cJSON_PrintUnformatted(root);

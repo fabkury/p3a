@@ -226,7 +226,6 @@ button {
 </nav>
 </div>
 <script>
-var pollInterval = null;
 var lastState = null;
 var fwLastCheck = null;
 var lastCheckedLocal = null;
@@ -318,7 +317,6 @@ function updateUI(data) {
         if (data.state === 'update_available') {
             showStatus('Update available!', 'success');
         }
-        if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
     }
     if (data.error_message) showStatus(data.error_message, 'error');
     lastState = data.state;
@@ -326,27 +324,77 @@ function updateUI(data) {
     fwUpdateReady = (data.state === 'update_available');
     updateBothUpdatesBanner();
 }
+// One combined fetch — the firmware status carries the webui status as a
+// `webui` sub-object now, so a single round trip drives both halves of the
+// UI. The standalone /ota/webui/status route still exists for older builds
+// but newer firmware fills the sub-object on /ota/status, so we ignore the
+// legacy route here.
 function fetchStatus() {
     fetch('/ota/status').then(function(r) { return r.json(); }).then(function(d) {
-        if (d.ok) updateUI(d.data);
-    }).catch(function(e) { console.error('Status fetch error:', e); });
-    fetch('/ota/webui/status').then(function(r) { return r.json(); }).then(function(d) {
-        if (d.ok && d.data) {
-            updateWebuiUI(d.data);
-            // Start fast polling if update is active
-            if (isWebuiActiveState(d.data.state) && !webuiPollInterval) {
-                startWebuiPolling();
-            }
+        if (!d || !d.ok || !d.data) return;
+        updateUI(d.data);
+        lastFwState = d.data.state || null;
+        if (d.data.webui) {
+            updateWebuiUI(d.data.webui);
+            lastWebuiState = d.data.webui.state || null;
+        } else {
+            lastWebuiState = null;
         }
-    }).catch(function(e) { console.error('WebUI status fetch error:', e); });
+        applyPollInterval();
+    }).catch(function(e) { console.error('Status fetch error:', e); });
 }
-var webuiPollInterval = null;
-var webuiPollStartTime = null;
+
+// Adaptive single-timer polling. We collapse the prior cascade of three
+// overlapping setInterval timers (5s baseline + 1s firmware burst + 500ms
+// webui burst) into one timer whose period is recomputed from the combined
+// FW + Web UI state after every response:
+//   * Web UI in an active phase   -> 500ms  (finest-grained progress)
+//   * Firmware active OR within   -> 1000ms (manual check window)
+//     the post-click fast window
+//   * Otherwise                   -> 5000ms (idle/settled)
+// Polling pauses entirely while the tab is hidden; one immediate fetch
+// fires when the tab becomes visible again.
+var lastFwState = null;
 var lastWebuiState = null;
+var pollTimerId = null;
+var currentPollInterval = 0;
+var fastWindowUntil = 0;
 
 function isWebuiActiveState(state) {
     return state === 'downloading' || state === 'unmounting' || state === 'erasing' ||
            state === 'writing' || state === 'verifying' || state === 'remounting';
+}
+
+function isFwActiveState(state) {
+    return state === 'checking' || state === 'downloading' || state === 'verifying';
+}
+
+function computeDesiredInterval() {
+    if (isWebuiActiveState(lastWebuiState)) return 500;
+    if (isFwActiveState(lastFwState) || Date.now() < fastWindowUntil) return 1000;
+    return 5000;
+}
+
+function applyPollInterval() {
+    var want = computeDesiredInterval();
+    if (want === currentPollInterval && pollTimerId) return;
+    if (pollTimerId) { clearInterval(pollTimerId); pollTimerId = null; }
+    currentPollInterval = want;
+    pollTimerId = setInterval(tickPoll, want);
+}
+
+function tickPoll() {
+    if (document.visibilityState !== 'visible') return;
+    fetchStatus();
+}
+
+// Open a "fast window" after a user-initiated action (Check / Install).
+// During this window we poll at the active-state cadence even if the
+// device hasn't reported an active state yet — gives the UI snappy
+// feedback while the state machine spins up server-side.
+function openFastWindow() {
+    fastWindowUntil = Date.now() + 120000;
+    applyPollInterval();
 }
 
 function updateWebuiUI(data) {
@@ -382,10 +430,6 @@ function updateWebuiUI(data) {
         statusEl.textContent = data.status_message || data.state;
         statusEl.style.color = '#1565c0';
         statusEl.className = 'version-value';
-
-        if (!webuiPollInterval) {
-            startWebuiPolling();
-        }
     } else if (data.state === 'complete') {
         progressEl.style.display = 'block';
         progressFill.style.width = '100%';
@@ -398,7 +442,6 @@ function updateWebuiUI(data) {
         statusEl.textContent = data.error_message || 'Update failed';
         statusEl.style.color = '#c62828';
         statusEl.className = 'version-value';
-        if (webuiPollInterval) { stopWebuiPolling(); }
     } else if (data.state === 'update_available') {
         progressEl.style.display = 'none';
         statusEl.textContent = 'Update available';
@@ -417,43 +460,16 @@ function updateWebuiUI(data) {
             statusEl.style.color = fwLastCheck ? '#4CAF50' : '';
         }
         statusEl.className = 'version-value';
-
-        if (lastWebuiState && isWebuiActiveState(lastWebuiState) && webuiPollInterval) {
-            stopWebuiPolling();
-        }
     }
 
-    lastWebuiState = data.state;
     webuiUpdateReady = (data.state === 'update_available');
     updateBothUpdatesBanner();
-}
-
-function startWebuiPolling() {
-    if (webuiPollInterval) return;
-    webuiPollStartTime = Date.now();
-    webuiPollInterval = setInterval(function() {
-        fetch('/ota/webui/status').then(function(r) { return r.json(); }).then(function(d) {
-            if (d.ok && d.data) updateWebuiUI(d.data);
-        }).catch(function(e) { console.error('WebUI status fetch error:', e); });
-
-        // Auto-stop after 10 minutes
-        if (Date.now() - webuiPollStartTime > 600000) {
-            stopWebuiPolling();
-        }
-    }, 500);
-}
-
-function stopWebuiPolling() {
-    if (webuiPollInterval) {
-        clearInterval(webuiPollInterval);
-        webuiPollInterval = null;
-    }
 }
 function checkUpdate() {
     showStatus('Checking for updates...', 'info');
     fetch('/ota/check', { method: 'POST' }).then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok) {
-            startPolling();
+            openFastWindow();
         } else {
             showStatus(d.error || 'Check failed', 'error');
         }
@@ -465,7 +481,7 @@ function installUpdate() {
     fetch('/ota/install', { method: 'POST' }).then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok) {
             showStatus('Update in progress. Device will reboot...', 'info');
-            startPolling();
+            openFastWindow();
         } else {
             showStatus(d.error || 'Install failed', 'error');
         }
@@ -484,7 +500,7 @@ function installWebuiUpdate() {
     document.getElementById('webui-install-btn').disabled = true;
     fetch('/ota/webui/install', { method: 'POST' }).then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok) {
-            startWebuiPolling();
+            openFastWindow();
         } else {
             showStatus(d.error || 'Install failed', 'error');
             document.getElementById('webui-install-btn').disabled = false;
@@ -494,14 +510,12 @@ function installWebuiUpdate() {
         document.getElementById('webui-install-btn').disabled = false;
     });
 }
-function startPolling() {
-    if (pollInterval) clearInterval(pollInterval);
-    pollInterval = setInterval(fetchStatus, 1000);
-    setTimeout(function() { if (pollInterval) { clearInterval(pollInterval); pollInterval = null; } }, 120000);
-}
 fetchStatus();
-setInterval(fetchStatus, 5000);
+applyPollInterval();
 setInterval(renderLastChecked, 30000);
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') fetchStatus();
+});
 
 </script>
 </body>

@@ -819,8 +819,10 @@ var giphyRefreshIntervalSec = 0;
 var makapixRefreshIntervalSec = 0;
 // Institution-channel refresh interval (default 1 day; pulled from /config).
 var aiRefreshSec = 86400;
-// Museum-id -> remaining cooldown seconds, refreshed by pollMuseumRateLimits.
-// Empty map until first /api/museum/rate-limits response lands.
+// Museum-id -> remaining cooldown seconds. Refreshed from
+// data.museum_rate_limits on every /playsets/active response (which is the
+// 4s poll). The standalone /api/museum/rate-limits endpoint still exists
+// for the browse modal but isn't polled from this page.
 var museumCooldowns = {};
 // "Allow refresh override (one-time bypass)" — when true the dispatcher
 // refreshes every channel regardless of last_refresh, so isDueForRefresh
@@ -1949,6 +1951,19 @@ fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
         pinLists = data.pin_lists.lists || [];
         activePinSlug = data.pin_lists.active || '';
     }
+    if (typeof data.ai_refresh_sec === 'number' && data.ai_refresh_sec > 0) {
+        aiRefreshSec = data.ai_refresh_sec;
+    }
+    if (data.museum_rate_limits && typeof data.museum_rate_limits === 'object') {
+        var seed = {};
+        var mrl = data.museum_rate_limits;
+        for (var k in mrl) {
+            if (Object.prototype.hasOwnProperty.call(mrl, k) && mrl[k]) {
+                seed[k] = mrl[k].remaining_sec | 0;
+            }
+        }
+        museumCooldowns = seed;
+    }
     updateArtwork(data.current_artwork);
     // Fetch user playsets then build pill bar
     fetch('/playsets').then(function(r) { return r.json(); }).then(function(pr) {
@@ -2565,10 +2580,18 @@ function toggleShuffle() {
     xhr.send(JSON.stringify({ pick_mode: nextOn ? 'random' : 'recency' }));
 }
 
+// Last ETag seen on /playsets/active. We send it as If-None-Match so the
+// device can short-circuit to 304 when the playset/channel/artwork state
+// hasn't changed. The giphy cooldown countdown is intentionally NOT in the
+// digest (we only use it as a boolean here), so 304 streaks persist through
+// the entire cooldown window.
+var playsetActiveEtag = null;
+
 function pollActivePlayset(attempt) {
     attempt = attempt || 0;
     var xhr = new XMLHttpRequest();
     xhr.open('GET', '/playsets/active', true);
+    if (playsetActiveEtag) xhr.setRequestHeader('If-None-Match', playsetActiveEtag);
     xhr.timeout = 5000;
     function retry() {
         if (attempt < 2) {
@@ -2579,7 +2602,12 @@ function pollActivePlayset(attempt) {
     xhr.ontimeout = retry;
     xhr.onreadystatechange = function() {
         if (xhr.readyState !== 4) return;
+        // 304: state unchanged since last fetch — nothing to do. The local
+        // copy of cdSec/registered/playset_info is already correct.
+        if (xhr.status === 304) return;
         if (xhr.status !== 200) { retry(); return; }
+        var newEtag = xhr.getResponseHeader('ETag');
+        if (newEtag) playsetActiveEtag = newEtag;
         try {
             var resp = JSON.parse(xhr.responseText);
             if (resp.ok && resp.data) {
@@ -2618,6 +2646,16 @@ function pollActivePlayset(attempt) {
                                      artworkTitleFromActivePlayset(resp.data.active_playset));
                     updatePillBarActive(pollPillId);
                 }
+                if (resp.data.museum_rate_limits && typeof resp.data.museum_rate_limits === 'object') {
+                    var next = {};
+                    var mrl = resp.data.museum_rate_limits;
+                    for (var k in mrl) {
+                        if (Object.prototype.hasOwnProperty.call(mrl, k) && mrl[k]) {
+                            next[k] = mrl[k].remaining_sec | 0;
+                        }
+                    }
+                    museumCooldowns = next;
+                }
                 updateArtwork(resp.data.current_artwork);
             }
         } catch (e) { console.log('Playset poll parse error:', e); retry(); }
@@ -2626,48 +2664,34 @@ function pollActivePlayset(attempt) {
 }
 
 checkForUpdates();
-var pollIntervalId = setInterval(pollActivePlayset, 4000);
 
-// Poll the per-museum cooldown table so the "API rate limited" badge on
-// institution-channel rows can light up promptly after a 429. 8s cadence
-// matches the channel-list freshness pulse rate; museum cooldowns are
-// short-lived (default 60s) so we want to react within a polling window.
-function pollMuseumRateLimits() {
-    fetch('/api/museum/rate-limits', { cache: 'no-store' }).then(function(r) {
-        if (!r.ok) return null;
-        return r.json();
-    }).then(function(j) {
-        if (!j || typeof j !== 'object') return;
-        var next = {};
-        for (var k in j) {
-            if (Object.prototype.hasOwnProperty.call(j, k) && j[k]) {
-                next[k] = j[k].remaining_sec | 0;
-            }
-        }
-        museumCooldowns = next;
-    }).catch(function() { /* network blip; keep previous map */ });
+// Background ticks skip when the tab is hidden — there's no point hammering
+// the device just to update a card the user can't see. User-initiated
+// follow-up polls (schedulePollSoon, after a reaction/swap) bypass the guard
+// because the user is definitionally looking at the tab when they click.
+//
+// Per-museum rate-limit state rides along on the same /playsets/active
+// response (under data.museum_rate_limits), so the dedicated museum poll
+// is gone — the same 4s cadence already covers cooldown badge updates,
+// and the boolean is in the ETag so 304s flow when nothing's changed.
+function activePlaysetTick() {
+    if (document.visibilityState !== 'visible') return;
+    pollActivePlayset();
 }
-pollMuseumRateLimits();
-setInterval(pollMuseumRateLimits, 8000);
+var pollIntervalId = setInterval(activePlaysetTick, 4000);
 
-// Pull ai_refresh_sec once at boot so isDueForRefresh can reason about
-// institution channels. We don't re-poll because the user changes this
-// only via Settings, and the next page load (or playset switch) refreshes
-// the value naturally.
-fetch('/config', { cache: 'no-store' }).then(function(r) {
-    if (!r.ok) return null;
-    return r.json();
-}).then(function(cfg) {
-    if (cfg && typeof cfg.ai_refresh_sec === 'number' && cfg.ai_refresh_sec > 0) {
-        aiRefreshSec = cfg.ai_refresh_sec;
-    }
-}).catch(function() {});
+// Refresh immediately when the user returns to the tab so they don't have
+// to wait up to a full interval to see fresh state.
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState !== 'visible') return;
+    pollActivePlayset();
+});
 
 function schedulePollSoon() {
     clearInterval(pollIntervalId);
     setTimeout(function() {
         pollActivePlayset();
-        pollIntervalId = setInterval(pollActivePlayset, 4000);
+        pollIntervalId = setInterval(activePlaysetTick, 4000);
     }, 750);
 }
 function schedulePollAfterSwap() { schedulePollSoon(); }

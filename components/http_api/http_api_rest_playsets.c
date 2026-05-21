@@ -49,6 +49,26 @@ static const char *pick_mode_str(ps_pick_mode_t m) {
     }
 }
 
+// ---------- FNV-1a (used for the /playsets/active weak ETag) ----------
+//
+// Just needs to flip when any tracked field changes. No cryptographic
+// strength required.
+static inline uint32_t fnv_u8(uint32_t h, uint8_t b) {
+    return (h ^ b) * 0x01000193u;
+}
+static uint32_t fnv_u32(uint32_t h, uint32_t v) {
+    h = fnv_u8(h, (uint8_t)(v & 0xff));
+    h = fnv_u8(h, (uint8_t)((v >> 8) & 0xff));
+    h = fnv_u8(h, (uint8_t)((v >> 16) & 0xff));
+    h = fnv_u8(h, (uint8_t)((v >> 24) & 0xff));
+    return h;
+}
+static uint32_t fnv_str(uint32_t h, const char *s) {
+    if (!s) return fnv_u8(h, 0xff);
+    while (*s) h = fnv_u8(h, (uint8_t)*s++);
+    return fnv_u8(h, 0);
+}
+
 // ---------- Current Artwork Helper ----------
 
 static const char *asset_type_ext(asset_type_t t) {
@@ -410,61 +430,165 @@ esp_err_t h_post_playset(httpd_req_t *req)
  */
 esp_err_t h_get_active_playset(httpd_req_t *req)
 {
+    // Gather every value that ends up in the response (and in the ETag
+    // digest) once, up front. The web UI polls this endpoint every 4s —
+    // most polls find nothing changed, so the 304 short-circuit needs the
+    // input values without paying for cJSON allocation first.
+    ps_playset_t *active = calloc(1, sizeof(ps_playset_t));
+    bool has_active = (active && play_scheduler_get_active_playset(active) == ESP_OK);
+
+    bool registered = makapix_store_has_player_key();
+    bool cooldown_active = giphy_is_rate_limited();
+    uint32_t giphy_cd_sec = cooldown_active ? giphy_cooldown_remaining_sec() : 0;
+    uint32_t giphy_refresh_int = config_store_get_giphy_refresh_interval();
+    uint32_t refresh_int = config_store_get_refresh_interval_sec();
+    bool refresh_allow_override = config_store_get_refresh_allow_override();
+
+    ps_stats_t ps_stats;
+    bool has_stats = (play_scheduler_get_stats(&ps_stats) == ESP_OK);
+
+    ps_channel_detail_t *ch_details = calloc(PS_MAX_CHANNELS, sizeof(ps_channel_detail_t));
+    size_t ch_count = 0;
+    if (ch_details && has_stats) {
+        if (play_scheduler_get_channel_details(ch_details, PS_MAX_CHANNELS, &ch_count) != ESP_OK) {
+            ch_count = 0;
+        }
+    }
+
+    ps_artwork_t cur_aw;
+    bool has_cur_aw = (play_scheduler_current(&cur_aw) == ESP_OK);
+    int cur_post_source = p3a_current_post_get_source();
+    int32_t cur_post_id = p3a_current_post_get_id();
+    bool cur_reaction_submitted = p3a_current_post_get_reaction_submitted();
+    char cur_giphy_id[24] = {0};
+    p3a_current_post_get_giphy_id(cur_giphy_id, sizeof(cur_giphy_id));
+
+    // Per-museum rate-limit cooldowns. Folded into this endpoint so the
+    // web UI doesn't need a separate /api/museum/rate-limits poll — the web
+    // UI uses each value only as a boolean (badge show/hide), and the same
+    // ETag mechanism that covers the giphy cooldown extends to these
+    // (boolean hashed, not seconds). The standalone endpoint is kept for
+    // webui/museum/browse.js which does a one-shot lookup after a 429.
+    uint32_t museum_remaining[ART_INSTITUTION_MUSEUM_COUNT];
+    for (size_t i = 0; i < ART_INSTITUTION_MUSEUM_COUNT; i++) {
+        museum_remaining[i] = art_institution_rate_limit_remaining(
+            ART_INSTITUTION_MUSEUMS[i].id);
+    }
+
+    // ----- Weak ETag over stable fields -----
+    //
+    // The per-second `giphy_cd_sec` countdown is intentionally NOT hashed.
+    // We feed the derived `cooldown_active` boolean instead. The web UI
+    // uses the cooldown value only as a boolean (banner show/hide), so a
+    // 304 streak can last the entire cooldown window — flipping only when
+    // the cooldown engages or expires. Hashing the seconds would defeat
+    // the whole optimisation: it changes on every single poll.
+    uint32_t h = 0x811c9dc5u;
+    h = fnv_u8(h, registered ? 1 : 0);
+    h = fnv_u8(h, cooldown_active ? 1 : 0);
+    h = fnv_u32(h, giphy_refresh_int);
+    h = fnv_u32(h, refresh_int);
+    h = fnv_u8(h, refresh_allow_override ? 1 : 0);
+    if (has_active) {
+        h = fnv_str(h, active->name);
+    }
+    if (has_stats) {
+        h = fnv_u32(h, (uint32_t)ps_stats.channel_count);
+        h = fnv_u32(h, (uint32_t)ps_stats.total_available);
+        h = fnv_u32(h, (uint32_t)ps_stats.total_entries);
+        h = fnv_u32(h, (uint32_t)ps_stats.pick_mode);
+    }
+    for (size_t i = 0; i < ch_count; i++) {
+        h = fnv_u32(h, (uint32_t)ch_details[i].type);
+        h = fnv_str(h, ch_details[i].display_name);
+        h = fnv_str(h, ch_details[i].spec_name);
+        h = fnv_str(h, ch_details[i].identifier);
+        h = fnv_u32(h, (uint32_t)ch_details[i].available_count);
+        h = fnv_u32(h, (uint32_t)ch_details[i].entry_count);
+        h = fnv_u8(h, ch_details[i].refreshing ? 1 : 0);
+        h = fnv_u32(h, (uint32_t)ch_details[i].last_refresh);
+    }
+    if (has_cur_aw) {
+        h = fnv_u32(h, (uint32_t)cur_aw.channel_type);
+        h = fnv_str(h, cur_aw.storage_key);
+        h = fnv_str(h, cur_aw.channel_spec_name);
+        h = fnv_u32(h, (uint32_t)cur_aw.type);
+        h = fnv_u32(h, (uint32_t)cur_aw.post_source);
+    }
+    h = fnv_u32(h, (uint32_t)cur_post_source);
+    h = fnv_u32(h, (uint32_t)cur_post_id);
+    h = fnv_u8(h, cur_reaction_submitted ? 1 : 0);
+    h = fnv_str(h, cur_giphy_id);
+    for (size_t i = 0; i < ART_INSTITUTION_MUSEUM_COUNT; i++) {
+        // Hash the museum id (defensive against future reorderings) and the
+        // boolean derived from remaining_sec — NOT the seconds, same reason
+        // as the giphy cooldown above.
+        h = fnv_str(h, ART_INSTITUTION_MUSEUMS[i].id);
+        h = fnv_u8(h, museum_remaining[i] > 0 ? 1 : 0);
+    }
+
+    char etag[20];
+    snprintf(etag, sizeof(etag), "W/\"%08x\"", (unsigned)h);
+
+    // 304 short-circuit. If the client's If-None-Match matches our current
+    // digest, the playset/channel/artwork/cooldown-active state is unchanged
+    // since the client's last fetch — return an empty body and let them
+    // keep the cached payload.
+    char inm[32];
+    if (httpd_req_get_hdr_value_str(req, "If-None-Match", inm, sizeof(inm)) == ESP_OK &&
+        strcmp(inm, etag) == 0) {
+        httpd_resp_set_status(req, "304 Not Modified");
+        httpd_resp_set_hdr(req, "ETag", etag);
+        httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+        httpd_resp_send(req, NULL, 0);
+        free(active);
+        free(ch_details);
+        return ESP_OK;
+    }
+
+    // ----- Build the full JSON body -----
     cJSON *root = cJSON_CreateObject();
     if (!root) {
+        free(active);
+        free(ch_details);
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
 
     cJSON_AddBoolToObject(root, "ok", true);
-
     cJSON *data = cJSON_AddObjectToObject(root, "data");
 
     /* Emit the structured active playset (channels, types, artwork sub-struct
        for ARTWORK channels). Absent when nothing has been executed yet. The
        WebUI derives pill matching and now-playing labels from this object. */
-    {
-        ps_playset_t *active = calloc(1, sizeof(ps_playset_t));
-        if (active && play_scheduler_get_active_playset(active) == ESP_OK) {
-            cJSON *ap = playset_json_serialize(active);
-            if (ap) cJSON_AddItemToObject(data, "active_playset", ap);
-        }
-        free(active);
+    if (has_active) {
+        cJSON *ap = playset_json_serialize(active);
+        if (ap) cJSON_AddItemToObject(data, "active_playset", ap);
     }
 
-    cJSON_AddBoolToObject(data, "registered", makapix_store_has_player_key());
-
-    uint32_t giphy_cd = giphy_is_rate_limited() ? giphy_cooldown_remaining_sec() : 0;
-    cJSON_AddNumberToObject(data, "giphy_cooldown_remaining_sec", (double)giphy_cd);
+    cJSON_AddBoolToObject(data, "registered", registered);
+    cJSON_AddNumberToObject(data, "giphy_cooldown_remaining_sec", (double)giphy_cd_sec);
 
     // Refresh intervals so the frontend can derive due-for-refresh from
     // ch.last_refresh without a backend round trip. Cached statics — cheap.
-    cJSON_AddNumberToObject(data, "giphy_refresh_interval_sec",
-                            (double)config_store_get_giphy_refresh_interval());
-    cJSON_AddNumberToObject(data, "refresh_interval_sec",
-                            (double)config_store_get_refresh_interval_sec());
+    cJSON_AddNumberToObject(data, "giphy_refresh_interval_sec", (double)giphy_refresh_int);
+    cJSON_AddNumberToObject(data, "refresh_interval_sec", (double)refresh_int);
 
     // Refresh override (one-time bypass): when true the dispatcher refreshes
     // every channel regardless of its last_refresh, so the frontend's
     // freshness-gated pulse animation must also bypass its due-check or the
     // user sees real refreshes happening with no visual feedback. The flag
     // auto-resets on the play scheduler side after the sweep completes.
-    cJSON_AddBoolToObject(data, "refresh_allow_override",
-                          config_store_get_refresh_allow_override());
+    cJSON_AddBoolToObject(data, "refresh_allow_override", refresh_allow_override);
 
-    ps_stats_t ps_stats;
-    if (play_scheduler_get_stats(&ps_stats) == ESP_OK) {
+    if (has_stats) {
         cJSON *pi = cJSON_AddObjectToObject(data, "playset_info");
         cJSON_AddNumberToObject(pi, "channel_count", (double)ps_stats.channel_count);
         cJSON_AddNumberToObject(pi, "total_cached", (double)ps_stats.total_available);
         cJSON_AddNumberToObject(pi, "total_entries", (double)ps_stats.total_entries);
         cJSON_AddStringToObject(pi, "pick_mode", pick_mode_str(ps_stats.pick_mode));
 
-        ps_channel_detail_t *ch_details = calloc(PS_MAX_CHANNELS, sizeof(ps_channel_detail_t));
-        size_t ch_count = 0;
-        if (ch_details &&
-            play_scheduler_get_channel_details(ch_details, PS_MAX_CHANNELS, &ch_count) == ESP_OK &&
-            ch_count > 0) {
+        if (ch_count > 0) {
             cJSON *ch_arr = cJSON_AddArrayToObject(pi, "channels");
             for (size_t i = 0; i < ch_count; i++) {
                 cJSON *ch_obj = cJSON_CreateObject();
@@ -479,7 +603,6 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
                 cJSON_AddItemToArray(ch_arr, ch_obj);
             }
         }
-        free(ch_details);
     }
 
     cJSON *ca = build_current_artwork_json();
@@ -487,13 +610,30 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
         cJSON_AddItemToObject(data, "current_artwork", ca);
     }
 
+    // Same shape as /api/museum/rate-limits so the consumer code in
+    // index.html can read either source without branching.
+    cJSON *mrl = cJSON_AddObjectToObject(data, "museum_rate_limits");
+    if (mrl) {
+        for (size_t i = 0; i < ART_INSTITUTION_MUSEUM_COUNT; i++) {
+            cJSON *o = cJSON_CreateObject();
+            if (!o) continue;
+            cJSON_AddNumberToObject(o, "remaining_sec", (double)museum_remaining[i]);
+            cJSON_AddItemToObject(mrl, ART_INSTITUTION_MUSEUMS[i].id, o);
+        }
+    }
+
     char *out = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
+    free(active);
+    free(ch_details);
+
     if (!out) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
 
+    httpd_resp_set_hdr(req, "ETag", etag);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
     send_json(req, 200, out);
     free(out);
     return ESP_OK;

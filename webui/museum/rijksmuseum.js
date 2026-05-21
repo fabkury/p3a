@@ -241,17 +241,20 @@ export class RijksmuseumAdapter {
     // Fetch title + artist + date given the device's iiif_key. Post-resolve,
     // the device encodes the iiif_key as "{micrio}|{hmo_int}" so the lookup
     // can hit the HMO directly. Legacy entries from before the
-    // HMO-preservation change land without the "|" separator — those throw,
-    // surfacing the "Title unavailable" path until the next refresh
-    // re-resolves and re-stamps the iiif_key.
+    // HMO-preservation change land without the "|" separator — for those we
+    // return all-null (em-dashes in the UI) and log a hint so the user
+    // understands why the info isn't loading. The entry will work after the
+    // next refresh re-resolves it under the new format.
     async fetchMetadataByIiifKey(iiifKey) {
         if (!iiifKey) return { title: null, artist: null, date: null };
         const sep = iiifKey.indexOf('|');
         if (sep < 0) {
-            throw new Error('rijks iiif_key lacks HMO suffix (legacy entry)');
+            console.info('rijks: iiif_key has no HMO suffix (legacy entry); ' +
+                         'artwork info will populate after the next channel refresh');
+            return { title: null, artist: null, date: null };
         }
         const hmo = iiifKey.slice(sep + 1);
-        if (!hmo) throw new Error('rijks iiif_key has empty HMO suffix');
+        if (!hmo) return { title: null, artist: null, date: null };
         const hmoUrl = `${ID_PREFIX}${encodeURIComponent(hmo)}`;
         const d = await fetchJsonLd(hmoUrl);
         // getTitle returns '(untitled)' when no Name node exists; getArtist

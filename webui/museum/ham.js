@@ -249,22 +249,26 @@ export class HamAdapter {
 
     // Fetch title + artist + date given the device's iiif_key (the URN
     // portion of primaryimageurl, e.g. "urn-3:HUAM:79762_dynmc"). The URN
-    // is unique within HAM; q=primaryimageurl:*<urn>* returns the matching
-    // record. Requires a configured API key — propagates makeNoKeyError()
-    // when absent so the panel shows "—" without exposing a stack trace.
+    // embeds the numeric objectid between "HUAM:" and "_dynmc"; we extract
+    // it and hit /object/{id} directly. The earlier search-by-primaryimageurl
+    // approach didn't work because the URN's internal colons collide with
+    // HAM's Elastic-style field:value query syntax.
+    //
+    // Requires a configured API key — propagates makeNoKeyError() when
+    // absent so the panel shows "—" without exposing a stack trace.
     async fetchMetadataByIiifKey(iiifKey) {
         if (!iiifKey) return { title: null, artist: null, date: null };
+        // Capture the numeric objectid from urn-3:HUAM:{id}{anything}.
+        const m = /^urn-3:HUAM:(\d+)/.exec(iiifKey);
+        if (!m) return { title: null, artist: null, date: null };
+        const objectId = m[1];
+
         const apiKey = await this._getKey();
-        const params = new URLSearchParams({
-            size: '1',
-            hasimage: '1',
-            q: `primaryimageurl:*${iiifKey}*`,
-            fields: 'id,title,people,dated',
-        });
-        const data = await getJsonWithKey(`${API_ROOT}/object?${params}`, apiKey);
-        const recs = (data && Array.isArray(data.records)) ? data.records : [];
-        if (recs.length === 0) return { title: null, artist: null, date: null };
-        const r = recs[0];
+        // /object/{id} returns the record at the top level — no records
+        // wrapper. `fields=` keeps the response small.
+        const url = `${API_ROOT}/object/${encodeURIComponent(objectId)}?fields=title,people,dated`;
+        const r = await getJsonWithKey(url, apiKey);
+        if (!r || typeof r !== 'object') return { title: null, artist: null, date: null };
         const artist = getPeopleDisplay(r);  // '' when missing
         return {
             title:  r.title ? String(r.title) : null,

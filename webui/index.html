@@ -1114,8 +1114,11 @@ function onInfoClick() {
     fetchMetadataForArtwork(artwork).then(function(meta) {
         if (infoArtworkKey !== key) return;  // swap raced ahead — drop result
         setInfoPanelValues(meta);
-    }, function() {
+    }, function(err) {
         if (infoArtworkKey !== key) return;
+        // Surface the underlying error so a future "nothing happens" can be
+        // diagnosed from the browser console without re-instrumenting.
+        console.warn('artwork info fetch failed:', err);
         setInfoPanelValues(null);  // all three rows -> em-dash
     });
 }

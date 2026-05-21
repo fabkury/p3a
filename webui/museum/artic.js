@@ -310,19 +310,25 @@ export class ArticAdapter {
         return this.thumbnailUrl(item.imageId, size);
     }
 
-    // Fetch the artwork's title given only the IIIF image_id (the iiif_key
-    // the device stores). AIC's listing endpoint returns title inline, so
-    // a single search-by-image_id call is enough. The image_id is a UUID
-    // and globally unique within AIC.
-    async fetchTitleByIiifKey(iiifKey) {
-        if (!iiifKey) return null;
+    // Fetch title + artist + date given only the IIIF image_id (the
+    // iiif_key the device stores). AIC's listing endpoint returns all
+    // three inline, so a single search-by-image_id call is enough. The
+    // image_id is a UUID and globally unique within AIC.
+    async fetchMetadataByIiifKey(iiifKey) {
+        if (!iiifKey) return { title: null, artist: null, date: null };
         const sp = new URLSearchParams({
             limit: '1',
-            fields: 'id,title',
+            fields: 'id,title,artist_title,date_display',
         });
         sp.set('query[term][image_id]', String(iiifKey));
         const d = await getJson(`${SEARCH}?${sp}`);
         const items = (d && Array.isArray(d.data)) ? d.data : [];
-        return items.length > 0 ? (items[0].title || null) : null;
+        if (items.length === 0) return { title: null, artist: null, date: null };
+        const it = items[0];
+        return {
+            title:  it.title         ? String(it.title)         : null,
+            artist: it.artist_title  ? String(it.artist_title)  : null,
+            date:   it.date_display  ? String(it.date_display)  : null,
+        };
     }
 }

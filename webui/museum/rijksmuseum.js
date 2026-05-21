@@ -238,14 +238,14 @@ export class RijksmuseumAdapter {
         return `${MICRIO_PREFIX}${encodeURIComponent(micrioId)}/full/!${size},${size}/0/default.jpg`;
     }
 
-    // Fetch the artwork's title given the device's iiif_key. Post-resolve,
-    // the device encodes the iiif_key as "{micrio}|{hmo_int}" so the title
-    // lookup can hit the HMO directly. Legacy entries from before the
-    // HMO-preservation change land without the "|" separator — those
-    // throw, surfacing the "Title unavailable" path until the next refresh
+    // Fetch title + artist + date given the device's iiif_key. Post-resolve,
+    // the device encodes the iiif_key as "{micrio}|{hmo_int}" so the lookup
+    // can hit the HMO directly. Legacy entries from before the
+    // HMO-preservation change land without the "|" separator — those throw,
+    // surfacing the "Title unavailable" path until the next refresh
     // re-resolves and re-stamps the iiif_key.
-    async fetchTitleByIiifKey(iiifKey) {
-        if (!iiifKey) return null;
+    async fetchMetadataByIiifKey(iiifKey) {
+        if (!iiifKey) return { title: null, artist: null, date: null };
         const sep = iiifKey.indexOf('|');
         if (sep < 0) {
             throw new Error('rijks iiif_key lacks HMO suffix (legacy entry)');
@@ -254,6 +254,16 @@ export class RijksmuseumAdapter {
         if (!hmo) throw new Error('rijks iiif_key has empty HMO suffix');
         const hmoUrl = `${ID_PREFIX}${encodeURIComponent(hmo)}`;
         const d = await fetchJsonLd(hmoUrl);
-        return getTitle(d);
+        // getTitle returns '(untitled)' when no Name node exists; getArtist
+        // and getDate return '' when their fields are missing. Normalize
+        // both to null so the UI renders '—' consistently.
+        const t = getTitle(d);
+        const a = getArtist(d);
+        const dt = getDate(d);
+        return {
+            title:  (t && t !== '(untitled)') ? t : null,
+            artist: a || null,
+            date:   dt || null,
+        };
     }
 }

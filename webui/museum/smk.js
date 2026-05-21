@@ -190,19 +190,29 @@ export class SmkAdapter {
         return this.thumbnailUrl(item.imageId, size);
     }
 
-    // Fetch the artwork's title given the device's iiif_key (the JP2
+    // Fetch title + artist + date given the device's iiif_key (the JP2
     // filename, e.g. "bc386p50w_kksgb22235.tif.jp2"). The filename is
     // unique within SMK; a free-text `keys` search returns the matching
     // record as the only hit.
-    async fetchTitleByIiifKey(iiifKey) {
-        if (!iiifKey) return null;
+    async fetchMetadataByIiifKey(iiifKey) {
+        if (!iiifKey) return { title: null, artist: null, date: null };
         const params = new URLSearchParams({
             keys: String(iiifKey),
             rows: '1',
         });
         const d = await getJson(`${SEARCH}?${params}`);
         const recs = (d && Array.isArray(d.items)) ? d.items : [];
-        if (recs.length === 0) return null;
-        return getTitle(recs[0]);
+        if (recs.length === 0) return { title: null, artist: null, date: null };
+        const it = recs[0];
+        // getTitle returns '(untitled)' when the titles array is empty;
+        // getArtist / getDate return '' when missing. Normalize both to null.
+        const t = getTitle(it);
+        const a = getArtist(it);
+        const dt = getDate(it);
+        return {
+            title:  (t && t !== '(untitled)') ? t : null,
+            artist: a  || null,
+            date:   dt || null,
+        };
     }
 }

@@ -247,24 +247,29 @@ export class HamAdapter {
         return this.thumbnailUrl(item.imageId, size);
     }
 
-    // Fetch the artwork's title given the device's iiif_key (the URN
+    // Fetch title + artist + date given the device's iiif_key (the URN
     // portion of primaryimageurl, e.g. "urn-3:HUAM:79762_dynmc"). The URN
     // is unique within HAM; q=primaryimageurl:*<urn>* returns the matching
     // record. Requires a configured API key — propagates makeNoKeyError()
-    // when absent so the panel shows "Title unavailable" without exposing
-    // a stack trace.
-    async fetchTitleByIiifKey(iiifKey) {
-        if (!iiifKey) return null;
+    // when absent so the panel shows "—" without exposing a stack trace.
+    async fetchMetadataByIiifKey(iiifKey) {
+        if (!iiifKey) return { title: null, artist: null, date: null };
         const apiKey = await this._getKey();
         const params = new URLSearchParams({
             size: '1',
             hasimage: '1',
             q: `primaryimageurl:*${iiifKey}*`,
-            fields: 'id,title',
+            fields: 'id,title,people,dated',
         });
         const data = await getJsonWithKey(`${API_ROOT}/object?${params}`, apiKey);
         const recs = (data && Array.isArray(data.records)) ? data.records : [];
-        if (recs.length === 0) return null;
-        return recs[0].title || null;
+        if (recs.length === 0) return { title: null, artist: null, date: null };
+        const r = recs[0];
+        const artist = getPeopleDisplay(r);  // '' when missing
+        return {
+            title:  r.title ? String(r.title) : null,
+            artist: artist  || null,
+            date:   r.dated ? String(r.dated) : null,
+        };
     }
 }

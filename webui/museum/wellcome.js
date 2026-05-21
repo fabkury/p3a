@@ -204,15 +204,15 @@ export class WellcomeAdapter {
         return this.thumbnailUrl(item.imageId, size);
     }
 
-    // Fetch the artwork's title given the device's iiif_key (the IIIF
+    // Fetch title + artist + date given the device's iiif_key (the IIIF
     // vid extracted from the work's items[].locations[] entry — usually
     // shaped like a bnumber, e.g. "b18035723"). The vid isn't the work's
     // catalogue id, so /works/{id} doesn't work directly; we query the
     // catalogue and rely on the vid being unique enough to identify the
     // record. We also request items so getTitle/getArtist/getDate can
     // read the same shape used by listArtworks.
-    async fetchTitleByIiifKey(iiifKey) {
-        if (!iiifKey) return null;
+    async fetchMetadataByIiifKey(iiifKey) {
+        if (!iiifKey) return { title: null, artist: null, date: null };
         const params = new URLSearchParams({
             query: String(iiifKey),
             pageSize: '1',
@@ -221,7 +221,18 @@ export class WellcomeAdapter {
         });
         const d = await getJson(`${WORKS}?${params}`);
         const results = (d && Array.isArray(d.results)) ? d.results : [];
-        if (results.length === 0) return null;
-        return getTitle(results[0]);
+        if (results.length === 0) return { title: null, artist: null, date: null };
+        const w = results[0];
+        // getTitle here keeps the paragraph-trimming behavior (titles can be
+        // long); the '(untitled)' fallback is normalized to null. getArtist
+        // and getDate return '' when missing.
+        const t = getTitle(w);
+        const a = getArtist(w);
+        const dt = getDate(w);
+        return {
+            title:  (t && t !== '(untitled)') ? t : null,
+            artist: a  || null,
+            date:   dt || null,
+        };
     }
 }

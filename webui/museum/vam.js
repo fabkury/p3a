@@ -166,21 +166,32 @@ export class VamAdapter {
         return this.thumbnailUrl(item.imageId, size);
     }
 
-    // Fetch the artwork's title given the device's iiif_key (the V&A's
+    // Fetch title + artist + date given the device's iiif_key (the V&A's
     // _primaryImageId, e.g. "2007AT9374"). The image id is a globally
     // unique alphanumeric token so a free-text q= query returns the
     // matching record as the only hit. If a future V&A release surfaces
     // a dedicated lookup-by-imageId parameter, switch to that.
-    async fetchTitleByIiifKey(iiifKey) {
-        if (!iiifKey) return null;
+    async fetchMetadataByIiifKey(iiifKey) {
+        if (!iiifKey) return { title: null, artist: null, date: null };
         const params = new URLSearchParams({
             q: String(iiifKey),
             page_size: '1',
         });
         const d = await getJson(`${SEARCH}?${params}`);
         const recs = (d && Array.isArray(d.records)) ? d.records : [];
-        if (recs.length === 0) return null;
-        return getTitle(recs[0]);
+        if (recs.length === 0) return { title: null, artist: null, date: null };
+        const it = recs[0];
+        // Read _primaryTitle directly (not getTitle) so a missing title shows
+        // as '—' in the panel rather than '(untitled)' or the objectType
+        // surrogate. getArtist / getDate return '' when missing — normalize
+        // those to null.
+        const a = getArtist(it);
+        const dt = getDate(it);
+        return {
+            title:  it._primaryTitle ? String(it._primaryTitle) : null,
+            artist: a  || null,
+            date:   dt || null,
+        };
     }
 }
 

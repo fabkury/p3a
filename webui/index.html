@@ -1181,10 +1181,10 @@ function fetchGiphyMetadata(gifId) {
 }
 
 function fetchMakapixMetadata(storageKey) {
-    // /player/post/{storage_key} (not /api/post/...) — the player route ships
-    // permissive CORS headers so browser-direct fetches work. Response shape
-    // is the same Post schema (title, owner.handle, created_at, ...).
-    var url = 'https://makapix.club/player/post/' + encodeURIComponent(storageKey);
+    // /api/player/post/{storage_key} ships Access-Control-Allow-Origin: * so
+    // browser-direct fetches work; the sibling /api/post/{storage_key} route
+    // is same-origin only and blocks the web UI. Same Post schema.
+    var url = 'https://makapix.club/api/player/post/' + encodeURIComponent(storageKey);
     return fetch(url, { headers: { 'Accept': 'application/json' } }).then(function(r) {
         if (!r.ok) throw new Error('makapix ' + r.status);
         return r.json();

@@ -42,12 +42,12 @@ the `current_artwork` JSON (`build_current_artwork_json()` in
 | Wellcome   | `GET https://api.wellcomecollection.org/catalogue/v2/works?query={vid}&pageSize=1&items.locations.locationType=iiif-image&include=items` | `results[0].title`          | `results[0].contributors[0].agent.label`               | `results[0].production[0].dates[0].label`       | none                              | yes     |
 | SMK        | `GET https://api.smk.dk/api/v1/art/search?keys={filename}&rows=1`                                                              | `items[0].titles[0].title`  | `items[0].production[].creator`/`creator_forename`/`creator_surname` | `items[0].production[0].creation_date_text`     | none                              | yes     |
 | HAM        | `GET https://api.harvardartmuseums.org/object?apikey={key}&q=primaryimageurl:*{urn}*&size=1&fields=id,title,people,dated`     | `records[0].title`          | `records[0].people[0].displayname`                     | `records[0].dated`                              | `apikey` query (from `/config`)   | yes     |
-| Makapix    | `GET https://makapix.club/player/post/{storage_key}` (Accept: `application/json`)                                              | `title`                     | `owner.handle` (formatted as `@handle`)                | `created_at` → YYYY-MM-DD                       | none                              | yes (player route) |
+| Makapix    | `GET https://makapix.club/api/player/post/{storage_key}` (Accept: `application/json`)                                              | `title`                     | `owner.handle` (formatted as `@handle`)                | `created_at` → YYYY-MM-DD                       | none                              | yes (player route) |
 
 "CORS yes" entries are empirically confirmed because the existing
 `webui/museum/*.js` browse adapters already fetch from those hosts. Makapix CORS
 required switching from the `/api/post/{storage_key}` route (same-origin only)
-to `/player/post/{storage_key}`, which the Makapix team ships with permissive
+to `/api/player/post/{storage_key}`, which the Makapix team ships with permissive
 CORS headers specifically for player/embed use cases. Response schema is
 identical between the two routes.
 
@@ -203,12 +203,13 @@ same way `webui/museum/ham.js:59` retrieves it today (`loadConfigKey()`).
 
 ### Makapix
 
-The Makapix Club team provided several endpoint variants:
+The Makapix Club team provides several endpoint variants under `/api/*`:
 
 - `GET https://makapix.club/api/p/{public_sqid}` — primary route (same-origin CORS only)
 - `GET https://makapix.club/api/post/{storage_key}` — same-origin CORS only
-- `GET https://makapix.club/player/post/{storage_key}` — **permissive CORS**, intended for
-  player / embed use cases. Same Post schema as the other two.
+- `GET https://makapix.club/api/player/p/{public_sqid}` — **permissive CORS** (`Access-Control-Allow-Origin: *`)
+- `GET https://makapix.club/api/player/post/{storage_key}` — **permissive CORS**, intended for
+  player / embed use cases. Same Post schema as the other variants.
 
 The firmware does not have the post's `public_sqid` (verified via grep — the only
 SQID concept in `components/makapix/` refers to the **user**, not the post). We do
@@ -216,7 +217,7 @@ have `storage_key`, and the player route is the only one with cross-origin CORS,
 so that's the chosen path:
 
 ```
-GET https://makapix.club/player/post/{storage_key}
+GET https://makapix.club/api/player/post/{storage_key}
 Header: Accept: application/json
 ```
 
@@ -234,9 +235,11 @@ user click").
 
 **CORS:** the `/api/post/{storage_key}` and `/api/p/{public_sqid}` routes are
 same-origin only, which blocked the original implementation. The Makapix team
-exposed `/player/post/{storage_key}` specifically with permissive CORS for
-embed / player use cases, and that's the route this feature uses. Response
-schema is unchanged.
+exposed `/api/player/post/{storage_key}` (mirrors the existing
+verify-user / verify-hashtag endpoints under `/api/*`) specifically with
+permissive CORS for embed / player use cases, and that's the route this
+feature uses. Response schema is unchanged. Confirmed live: response carries
+`Access-Control-Allow-Origin: *`.
 
 ## Error handling
 

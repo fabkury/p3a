@@ -221,7 +221,7 @@ cJSON *build_current_artwork_json(void)
                                   p3a_current_post_get_reaction_submitted());
         }
         // storage_key drives the browser's info-fetch against
-        // https://makapix.club/player/post/{storage_key}. Already populated for
+        // https://makapix.club/api/player/post/{storage_key}. Already populated for
         // Makapix and pinned-Makapix artwork (used at the top of this function
         // to build the vault URL).
         if (artwork.storage_key[0] != '\0') {

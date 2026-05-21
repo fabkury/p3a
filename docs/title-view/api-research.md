@@ -42,13 +42,14 @@ the `current_artwork` JSON (`build_current_artwork_json()` in
 | Wellcome   | `GET https://api.wellcomecollection.org/catalogue/v2/works?query={vid}&pageSize=1&items.locations.locationType=iiif-image&include=items` | `results[0].title`          | `results[0].contributors[0].agent.label`               | `results[0].production[0].dates[0].label`       | none                              | yes     |
 | SMK        | `GET https://api.smk.dk/api/v1/art/search?keys={filename}&rows=1`                                                              | `items[0].titles[0].title`  | `items[0].production[].creator`/`creator_forename`/`creator_surname` | `items[0].production[0].creation_date_text`     | none                              | yes     |
 | HAM        | `GET https://api.harvardartmuseums.org/object?apikey={key}&q=primaryimageurl:*{urn}*&size=1&fields=id,title,people,dated`     | `records[0].title`          | `records[0].people[0].displayname`                     | `records[0].dated`                              | `apikey` query (from `/config`)   | yes     |
-| Makapix    | `GET https://makapix.club/api/post/{storage_key}` (Accept: `application/json`)                                                 | `title`                     | `owner.handle` (formatted as `@handle`)                | `created_at` → YYYY-MM-DD                       | none                              | **TBD** |
+| Makapix    | `GET https://makapix.club/player/post/{storage_key}` (Accept: `application/json`)                                              | `title`                     | `owner.handle` (formatted as `@handle`)                | `created_at` → YYYY-MM-DD                       | none                              | yes (player route) |
 
 "CORS yes" entries are empirically confirmed because the existing
-`webui/museum/*.js` browse adapters already fetch from those hosts. Makapix CORS is
-**unverified at plan time** — the browser does not currently call `makapix.club`
-endpoints; if a smoke test from the browser console returns a CORS error, drop
-Makapix from the feature.
+`webui/museum/*.js` browse adapters already fetch from those hosts. Makapix CORS
+required switching from the `/api/post/{storage_key}` route (same-origin only)
+to `/player/post/{storage_key}`, which the Makapix team ships with permissive
+CORS headers specifically for player/embed use cases. Response schema is
+identical between the two routes.
 
 ## Date formatting
 
@@ -202,17 +203,20 @@ same way `webui/museum/ham.js:59` retrieves it today (`loadConfigKey()`).
 
 ### Makapix
 
-The Makapix Club team provided two endpoint variants:
+The Makapix Club team provided several endpoint variants:
 
-- `GET https://makapix.club/api/p/{public_sqid}` — primary route
-- `GET https://makapix.club/api/post/{storage_key}` — legacy route (same Post schema)
+- `GET https://makapix.club/api/p/{public_sqid}` — primary route (same-origin CORS only)
+- `GET https://makapix.club/api/post/{storage_key}` — same-origin CORS only
+- `GET https://makapix.club/player/post/{storage_key}` — **permissive CORS**, intended for
+  player / embed use cases. Same Post schema as the other two.
 
 The firmware does not have the post's `public_sqid` (verified via grep — the only
 SQID concept in `components/makapix/` refers to the **user**, not the post). We do
-have `storage_key`, so the legacy route is the chosen path:
+have `storage_key`, and the player route is the only one with cross-origin CORS,
+so that's the chosen path:
 
 ```
-GET https://makapix.club/api/post/{storage_key}
+GET https://makapix.club/player/post/{storage_key}
 Header: Accept: application/json
 ```
 
@@ -228,11 +232,11 @@ Per Makapix team notes, each successful call records a view event against the po
 We do not optimize around this (no caching, no rate limiting beyond "one fetch per
 user click").
 
-**CORS:** still unverified at implementation time (server-side `WebFetch` confirmed
-the response *shape* but a server-side fetch bypasses CORS). The first
-implementation step for Makapix is a one-line browser-console smoke test against
-a real `storage_key`. If the request is blocked, Makapix is dropped from the
-feature: its info button is hidden, same as SD-card. No firmware proxy.
+**CORS:** the `/api/post/{storage_key}` and `/api/p/{public_sqid}` routes are
+same-origin only, which blocked the original implementation. The Makapix team
+exposed `/player/post/{storage_key}` specifically with permissive CORS for
+embed / player use cases, and that's the route this feature uses. Response
+schema is unchanged.
 
 ## Error handling
 
@@ -252,4 +256,3 @@ feature: its info button is hidden, same as SD-card. No firmware proxy.
    `identifiers.value={vid}`.
 3. SMK: does `keys={filename}` find the record? If not, switch to
    `filters=[image_iiif_id:CONTAINS:{filename}]`.
-4. Makapix: does `makapix.club` allow cross-origin browser requests? If not, drop.

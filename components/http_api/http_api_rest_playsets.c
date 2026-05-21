@@ -220,8 +220,8 @@ cJSON *build_current_artwork_json(void)
             cJSON_AddBoolToObject(obj, "reaction_submitted",
                                   p3a_current_post_get_reaction_submitted());
         }
-        // storage_key drives the browser's title-fetch against
-        // https://makapix.club/api/post/{storage_key}. Already populated for
+        // storage_key drives the browser's info-fetch against
+        // https://makapix.club/player/post/{storage_key}. Already populated for
         // Makapix and pinned-Makapix artwork (used at the top of this function
         // to build the vault URL).
         if (artwork.storage_key[0] != '\0') {

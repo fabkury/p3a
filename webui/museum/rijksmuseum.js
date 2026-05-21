@@ -237,4 +237,23 @@ export class RijksmuseumAdapter {
         if (!micrioId) return null;
         return `${MICRIO_PREFIX}${encodeURIComponent(micrioId)}/full/!${size},${size}/0/default.jpg`;
     }
+
+    // Fetch the artwork's title given the device's iiif_key. Post-resolve,
+    // the device encodes the iiif_key as "{micrio}|{hmo_int}" so the title
+    // lookup can hit the HMO directly. Legacy entries from before the
+    // HMO-preservation change land without the "|" separator — those
+    // throw, surfacing the "Title unavailable" path until the next refresh
+    // re-resolves and re-stamps the iiif_key.
+    async fetchTitleByIiifKey(iiifKey) {
+        if (!iiifKey) return null;
+        const sep = iiifKey.indexOf('|');
+        if (sep < 0) {
+            throw new Error('rijks iiif_key lacks HMO suffix (legacy entry)');
+        }
+        const hmo = iiifKey.slice(sep + 1);
+        if (!hmo) throw new Error('rijks iiif_key has empty HMO suffix');
+        const hmoUrl = `${ID_PREFIX}${encodeURIComponent(hmo)}`;
+        const d = await fetchJsonLd(hmoUrl);
+        return getTitle(d);
+    }
 }

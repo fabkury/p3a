@@ -220,6 +220,13 @@ cJSON *build_current_artwork_json(void)
             cJSON_AddBoolToObject(obj, "reaction_submitted",
                                   p3a_current_post_get_reaction_submitted());
         }
+        // storage_key drives the browser's title-fetch against
+        // https://makapix.club/api/post/{storage_key}. Already populated for
+        // Makapix and pinned-Makapix artwork (used at the top of this function
+        // to build the vault URL).
+        if (artwork.storage_key[0] != '\0') {
+            cJSON_AddStringToObject(obj, "storage_key", artwork.storage_key);
+        }
     } else if (source == POST_SOURCE_GIPHY) {
         char giphy_id[24];
         p3a_current_post_get_giphy_id(giphy_id, sizeof(giphy_id));
@@ -233,6 +240,20 @@ cJSON *build_current_artwork_json(void)
             // device, so `reaction_submitted` is omitted. The web UI keys on
             // `source` to gate the reaction button.
             cJSON_AddNumberToObject(obj, "post_id", (double)post_id);
+        }
+        // museum_id + iiif_key let the browser route the title-fetch to the
+        // right per-museum adapter in webui/museum/*.js. channel_spec_name
+        // is "{museum}:{axis}" for INSTITUTION channels and "{museum}:pin"
+        // for pinned-institution artwork; in both cases the museum prefix is
+        // what we want.
+        char museum_id[16] = {0};
+        char axis_unused[32] = {0};
+        if (artwork.storage_key[0] != '\0' &&
+            art_institution_parse_spec(artwork.channel_spec_name,
+                                       museum_id, sizeof(museum_id),
+                                       axis_unused, sizeof(axis_unused)) == ESP_OK) {
+            cJSON_AddStringToObject(obj, "museum_id", museum_id);
+            cJSON_AddStringToObject(obj, "iiif_key",  artwork.storage_key);
         }
     }
 

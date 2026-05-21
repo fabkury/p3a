@@ -165,6 +165,23 @@ export class VamAdapter {
         if (!item || !item.imageId) return null;
         return this.thumbnailUrl(item.imageId, size);
     }
+
+    // Fetch the artwork's title given the device's iiif_key (the V&A's
+    // _primaryImageId, e.g. "2007AT9374"). The image id is a globally
+    // unique alphanumeric token so a free-text q= query returns the
+    // matching record as the only hit. If a future V&A release surfaces
+    // a dedicated lookup-by-imageId parameter, switch to that.
+    async fetchTitleByIiifKey(iiifKey) {
+        if (!iiifKey) return null;
+        const params = new URLSearchParams({
+            q: String(iiifKey),
+            page_size: '1',
+        });
+        const d = await getJson(`${SEARCH}?${params}`);
+        const recs = (d && Array.isArray(d.records)) ? d.records : [];
+        if (recs.length === 0) return null;
+        return getTitle(recs[0]);
+    }
 }
 
 // Bounded concurrency runner — same shape as artic.js's helper.

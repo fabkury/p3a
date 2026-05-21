@@ -262,8 +262,18 @@ esp_err_t art_institution_rijks_build_iiif_url(const institution_channel_entry_t
     if (entry->extension == 0xFF || entry->extension == 0xFE) return ESP_ERR_INVALID_STATE;
     if (longest_side <= 0) longest_side = 720;
 
+    // Post-resolve, iiif_key holds either "{micrio}" (legacy) or
+    // "{micrio}|{hmo_int}" (title-view feature). Only the micrio half is part
+    // of the IIIF URL; the optional hmo half is for the browser's title-view
+    // lookup.
+    char micrio[sizeof(entry->iiif_key)];
+    strlcpy(micrio, entry->iiif_key, sizeof(micrio));
+    char *sep = strchr(micrio, '|');
+    if (sep) *sep = '\0';
+    if (micrio[0] == '\0') return ESP_ERR_INVALID_ARG;
+
     int n = snprintf(out, len, RIJKS_MICRIO_PREFIX "%s/full/!%d,%d/0/default.jpg",
-                     entry->iiif_key, longest_side, longest_side);
+                     micrio, longest_side, longest_side);
     if (n < 0 || (size_t)n >= len) return ESP_ERR_INVALID_SIZE;
     return ESP_OK;
 }
@@ -727,15 +737,36 @@ esp_err_t art_institution_rijks_resolve_entry(institution_channel_entry_t *entry
     cJSON_Delete(hmo);
 
     if (found) {
-        // Mutate the entry: replace HMO URL with micrio short id, extension
-        // becomes jpg (matches Rijks's micrio default and the byte encoding
-        // shared with makapix/giphy). resolve_fails goes back to 0.
+        // Capture the HMO id (the integer suffix after RIJKS_ID_PREFIX in the
+        // unresolved URL) before we overwrite iiif_key. The title-view
+        // feature needs it to fetch the Linked-Art HMO document and read the
+        // artwork's title; once the entry is resolved to a micrio short id
+        // there is no public reverse mapping back to the HMO.
+        char hmo_suffix[24] = {0};
+        const char *hmo_src = entry->iiif_key;
+        size_t prefix_len = strlen(RIJKS_ID_PREFIX);
+        if (strncmp(hmo_src, RIJKS_ID_PREFIX, prefix_len) == 0) {
+            strlcpy(hmo_suffix, hmo_src + prefix_len, sizeof(hmo_suffix));
+        }
+
+        // Mutate the entry: replace HMO URL with "{micrio}|{hmo}" (or just
+        // {micrio} if hmo extraction failed — keeps legacy IIIF URL building
+        // working), extension becomes jpg (matches Rijks's micrio default and
+        // the byte encoding shared with makapix/giphy). resolve_fails goes
+        // back to 0. build_iiif_url() splits on '|' and uses only the micrio
+        // half; webui/museum/rijksmuseum.js uses the hmo half for title-view.
         memset(entry->iiif_key, 0, sizeof(entry->iiif_key));
-        strlcpy(entry->iiif_key, micrio_id, sizeof(entry->iiif_key));
+        if (hmo_suffix[0] != '\0') {
+            snprintf(entry->iiif_key, sizeof(entry->iiif_key), "%s|%s",
+                     micrio_id, hmo_suffix);
+        } else {
+            strlcpy(entry->iiif_key, micrio_id, sizeof(entry->iiif_key));
+        }
         entry->extension = 3;
         entry->resolve_fails = 0;
         result = ESP_OK;
-        ESP_LOGD(TAG, "Resolved Rijks HMO -> micrio id %s", micrio_id);
+        ESP_LOGD(TAG, "Resolved Rijks HMO %s -> micrio id %s",
+                 hmo_suffix[0] ? hmo_suffix : "(unknown)", micrio_id);
     } else {
         ESP_LOGW(TAG, "No micrio access_point found in Linked Art chain for %.60s",
                  entry->iiif_key);

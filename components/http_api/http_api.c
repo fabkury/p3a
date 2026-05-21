@@ -549,6 +549,9 @@ static esp_err_t h_post_router(httpd_req_t *req) {
     if (strcmp(uri, "/action/resume") == 0) {
         return h_post_resume(req);
     }
+    if (strcmp(uri, "/action/reset_dwell_timer") == 0) {
+        return h_post_reset_dwell_timer(req);
+    }
     if (strcmp(uri, "/rotation") == 0) {
         return h_post_rotation(req);
     }

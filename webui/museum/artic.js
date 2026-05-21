@@ -309,4 +309,20 @@ export class ArticAdapter {
         if (!item || !item.imageId) return null;
         return this.thumbnailUrl(item.imageId, size);
     }
+
+    // Fetch the artwork's title given only the IIIF image_id (the iiif_key
+    // the device stores). AIC's listing endpoint returns title inline, so
+    // a single search-by-image_id call is enough. The image_id is a UUID
+    // and globally unique within AIC.
+    async fetchTitleByIiifKey(iiifKey) {
+        if (!iiifKey) return null;
+        const sp = new URLSearchParams({
+            limit: '1',
+            fields: 'id,title',
+        });
+        sp.set('query[term][image_id]', String(iiifKey));
+        const d = await getJson(`${SEARCH}?${sp}`);
+        const items = (d && Array.isArray(d.data)) ? d.data : [];
+        return items.length > 0 ? (items[0].title || null) : null;
+    }
 }

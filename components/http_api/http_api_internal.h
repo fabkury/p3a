@@ -144,6 +144,7 @@ esp_err_t h_post_swap_next(httpd_req_t *req);
 esp_err_t h_post_swap_back(httpd_req_t *req);
 esp_err_t h_post_pause(httpd_req_t *req);
 esp_err_t h_post_resume(httpd_req_t *req);
+esp_err_t h_post_reset_dwell_timer(httpd_req_t *req);
 esp_err_t h_get_rotation(httpd_req_t *req);
 esp_err_t h_post_rotation(httpd_req_t *req);
 esp_err_t h_post_playset(httpd_req_t *req);

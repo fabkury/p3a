@@ -289,6 +289,23 @@ esp_err_t h_post_resume(httpd_req_t *req) {
     return ESP_OK;
 }
 
+/**
+ * POST /action/reset_dwell_timer
+ *
+ * Restart the auto-swap dwell timer from zero. The web UI calls this when
+ * the user opens the title-view panel so the artwork doesn't swap out from
+ * under them while they're reading the title.
+ */
+esp_err_t h_post_reset_dwell_timer(httpd_req_t *req) {
+    if (req->content_len > 0 && !ensure_json_content(req)) {
+        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+    play_scheduler_reset_timer();
+    send_json(req, 200, "{\"ok\":true}");
+    return ESP_OK;
+}
+
 // ---------- Show URL Handler ----------
 
 /**

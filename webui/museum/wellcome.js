@@ -203,4 +203,25 @@ export class WellcomeAdapter {
         if (!item || !item.imageId) return null;
         return this.thumbnailUrl(item.imageId, size);
     }
+
+    // Fetch the artwork's title given the device's iiif_key (the IIIF
+    // vid extracted from the work's items[].locations[] entry — usually
+    // shaped like a bnumber, e.g. "b18035723"). The vid isn't the work's
+    // catalogue id, so /works/{id} doesn't work directly; we query the
+    // catalogue and rely on the vid being unique enough to identify the
+    // record. We also request items so getTitle/getArtist/getDate can
+    // read the same shape used by listArtworks.
+    async fetchTitleByIiifKey(iiifKey) {
+        if (!iiifKey) return null;
+        const params = new URLSearchParams({
+            query: String(iiifKey),
+            pageSize: '1',
+            'items.locations.locationType': 'iiif-image',
+            include: 'items',
+        });
+        const d = await getJson(`${WORKS}?${params}`);
+        const results = (d && Array.isArray(d.results)) ? d.results : [];
+        if (results.length === 0) return null;
+        return getTitle(results[0]);
+    }
 }

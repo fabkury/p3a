@@ -546,30 +546,16 @@ body {
     min-width: 0;
 }
 .artwork-info-row {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    min-width: 0;
+    /* Block layout so label + value read as inline prose; long values wrap
+       to the next line under the label without needing a separate column. */
+    line-height: 1.4;
+    word-break: break-word;
+    font-size: 0.95rem;
+    color: var(--c-text);
 }
 .artwork-info-label {
-    flex: 0 0 48px;
-    font-size: 0.7rem;
     font-weight: 600;
-    color: rgba(255,255,255,0.55);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-.artwork-info-value {
-    flex: 1;
-    font-size: 0.9rem;
-    line-height: 1.35;
-    color: var(--c-text);
-    word-break: break-word;
-    min-width: 0;
-}
-.artwork-info-row.title .artwork-info-value {
-    font-size: 1rem;
-    font-weight: 500;
+    margin-right: 4px;
 }
 .artwork-info-spinner {
     width: 10px;
@@ -745,16 +731,13 @@ body {
     <div class="artwork-info-spinner" id="artwork-info-spinner" aria-hidden="true"></div>
     <div class="artwork-info-rows">
         <div class="artwork-info-row title">
-            <span class="artwork-info-label">Title</span>
-            <span class="artwork-info-value" id="artwork-info-title"></span>
+            <span class="artwork-info-label">Title:</span><span class="artwork-info-value" id="artwork-info-title"></span>
         </div>
         <div class="artwork-info-row artist">
-            <span class="artwork-info-label">Artist</span>
-            <span class="artwork-info-value" id="artwork-info-artist"></span>
+            <span class="artwork-info-label">Author:</span><span class="artwork-info-value" id="artwork-info-artist"></span>
         </div>
         <div class="artwork-info-row date">
-            <span class="artwork-info-label">Date</span>
-            <span class="artwork-info-value" id="artwork-info-date"></span>
+            <span class="artwork-info-label">Date:</span><span class="artwork-info-value" id="artwork-info-date"></span>
         </div>
     </div>
 </div>

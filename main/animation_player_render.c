@@ -56,14 +56,15 @@ static inline esp_err_t decode_next_native(animation_buffer_t *buf, uint8_t *dst
 /**
  * @brief Select PPA or CPU upscaling based on channel type.
  *
- * Giphy channels use PPA bilinear upscaling; all other channels use
- * the CPU nearest-neighbor pipeline.
+ * Giphy and museum (institution) channels use PPA bilinear upscaling;
+ * all other channels use the CPU nearest-neighbor pipeline.
  */
 static void upscale_frame_to_display(const animation_buffer_t *buf,
                                      const uint8_t *src, uint8_t *dst)
 {
 #if CONFIG_P3A_PPA_UPSCALE_ENABLE
-    if (buf->channel_type == PS_CHANNEL_TYPE_GIPHY) {
+    if (buf->channel_type == PS_CHANNEL_TYPE_GIPHY ||
+        buf->channel_type == PS_CHANNEL_TYPE_INSTITUTION) {
         esp_err_t err = display_ppa_upscale_rgb(
             src, buf->upscale_src_w, buf->upscale_src_h,
             dst, buf->upscale_dst_w, buf->upscale_dst_h,
@@ -187,7 +188,7 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
     int64_t t_upscale_start = debug_timer_now_us();
 #endif
 
-    // Upscale to display (PPA for Giphy, CPU for everything else)
+    // Upscale to display (PPA for Giphy and museums, CPU for everything else)
     upscale_frame_to_display(buf, decode_buffer, dest_buffer);
 
 #if CONFIG_P3A_PERF_DEBUG

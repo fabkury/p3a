@@ -176,7 +176,7 @@ All 25 custom components live under `components/`. This document describes each 
 - **Features**:
   - Detects outdated or missing co-processor firmware
   - Automatically flashes ESP-Hosted firmware during boot
-  - Progress display on LCD during flashing
+  - Progress logged to the serial console only; the LCD keeps showing whatever the animation player was rendering, then blanks at the post-update `esp_restart()`
 
 ## 16. pico8 — PICO-8 Streaming
 

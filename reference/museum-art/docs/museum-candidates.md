@@ -51,11 +51,11 @@ Tiers:
 | Smithsonian Open Access | v2 | partial | key | offset (`start`/`rows`) | full-text + Solr-style | art subset of 5.1M | 2 |
 | Yale Center for British Art | v2 | v3 | none | LUX paging / OAI-PMH | LUX faceted | ~70K | 2 |
 | Princeton University Art Museum | v3 | none (image only) | none | offset (`from`/`size` ≤ 500) | full-text | ~115K | 2 |
-| National Gallery of Art (DC) | v2 | v2 | none | bulk CSV harvest | none (UI only) | ~80K | 2 |
+| National Gallery of Art (DC) | v2 | v2 (anon 403) | none | bulk CSV harvest | none (UI only) | ~80K | 2 |
 | Internet Archive | v3 | v3 | none | rows + cursor | full-text (Lucene) | 5M+ image items | 2 |
 | Europeana | v2 | v2 | key | offset (`start`/`rows`) | full-text + facets | image-filtered subset of 50M+ | 2 |
 | Digital Bodleian (Oxford) | v2/v3 (negotiated) | v2/v3 | none | walk-the-collection | site only (no JSON search API) | ~800K | 2 |
-| Fitzwilliam Museum (Cambridge) | v2 (unverified) | yes (unverified) | none | offset (page) | full-text + facets | ~200K | 2 |
+| Fitzwilliam Museum (Cambridge) | v2 | yes (unverified) | key (60/min) | offset (page) | full-text + facets | ~200K | 2 |
 | e-codices (Switzerland) | v2 | v2 | none | walk-the-collection | none (programmatic) | ~700K page images (manuscripts) | 2 |
 
 A wider watch list (Vatican Library, Belvedere, Nationalmuseum Stockholm, Royal Collection Trust, Yale University Art Gallery, Finna.fi, DPLA, Cultural Japan, Stanford SDR) appears below the per-source sections.
@@ -173,8 +173,8 @@ These sources support most UBI features natively but require client-side emulati
 ### Smithsonian Open Access (incl. Freer/Sackler, NMAAHC, Cooper Hewitt, NPG, SAAM)
 
 - **API docs**: <https://edan.si.edu/openaccess/docs/>
-- **IIIF Image (v2)**: `https://ids.si.edu/ids/iiif/{id}/{region}/{size}/{rotation}/{quality}.jpg`
-- **IIIF Presentation (partial)**: per-object manifests exist for IIIF-enabled items but are not consistently surfaced in search-API responses; the UBI must probe per item
+- **IIIF Image (v2 L2)**: `https://ids.si.edu/ids/iiif/{idsId}/{region}/{size}/{rotation}/{quality}.jpg`. The `{idsId}` is the `idsId` field of any `content.descriptiveNonRepeating.online_media.media[]` entry from a search response — the search payload itself only carries the proprietary delivery-service URL, but the IIIF endpoint resolves for the same id (verified 2026-05-22 with `SAAM-1968.155.176_1`: info.json returns 2354×3000, v2 Level 2)
+- **IIIF Presentation (partial)**: per-object manifests exist for IIIF-enabled items but are not consistently surfaced in search-API responses; the UBI must probe per item, or skip Presentation entirely and rely on the derived Image API URL above
 - **List & paginate**: `https://api.si.edu/openaccess/api/v1.0/search?start=N&rows=M` — verified; range-friendly
 - **Search**: full-text + Solr-style `fqs` filter queries
 - **Auth**: free API key from api.data.gov; `DEMO_KEY` works for low-volume testing
@@ -203,11 +203,11 @@ These sources support most UBI features natively but require client-side emulati
 ### National Gallery of Art (Washington DC)
 
 - **Open data repo**: <https://github.com/NationalGalleryOfArt/opendata>
-- **IIIF Image (v2)**: served via the manifest's image services (NGA-developed `iipsrv`)
-- **IIIF Presentation (v2)**: `https://www.nga.gov/api/v1/iiif/presentation/manifest.json?cultObj:id={id}` — pattern referenced widely (Wikidata, IIIF guides) but the endpoint returned 403 to anonymous fetches in this research session; revisit with proper headers
+- **IIIF Image (v2 L2)**: directly accessible at `https://media.nga.gov/iiif/public/objects/{d1}/{d2}/{d3}/{d4}/{d5}/{id}-primary-0-nativeres.ptif/{region}/{size}/{rotation}/{quality}.{format}`, where `{d1..d5}` are the five digits of the zero-padded object id. Verified 2026-05-22 with object 46126: info.json reports **32266×29579, v2 Level 2** — the highest source resolution of any museum surveyed.
+- **IIIF Presentation (v2)**: `https://www.nga.gov/api/v1/iiif/presentation/manifest.json?cultObj:id={id}` — pattern referenced widely (Wikidata, IIIF guides) but **still returns 403 to anonymous fetches** (re-verified 2026-05-22). Practical path: synthesize manifests client-side from per-object metadata in the CSV + the Image API URLs above.
 - **List & paginate**: there is no public live JSON search/list API. The de-facto enumeration path is the bulk CSV download from the opendata GitHub repo (~130K artworks, daily refresh). The UBI must ingest the CSV and build a local index.
 - **Search**: not a public JSON search API — search lives only in the website UI
-- **Why tier 2**: per-object IIIF works, ~80K open-access CC0 images, but listing and search must both be emulated locally over the CSV dump. Treat as a "bulk-harvest then index" backend rather than a live API.
+- **Why tier 2**: per-object IIIF works (and at outstanding resolution), ~80K open-access CC0 images, but listing and search must both be emulated locally over the CSV dump. Treat as a "bulk-harvest then index" backend rather than a live API.
 
 ### Internet Archive
 
@@ -242,12 +242,14 @@ These sources support most UBI features natively but require client-side emulati
 ### Fitzwilliam Museum (Cambridge)
 
 - **API docs**: <https://data.fitzmuseum.cam.ac.uk/api>
-- **IIIF Image**: yes (version unverified; likely v2)
+- **IIIF Image**: yes (deep-zoom advertised by the API; version likely v2)
 - **IIIF Presentation**: yes — manifest URLs surfaced through the data API (e.g., `https://data.fitzmuseum.cam.ac.uk/id/image/iiif/media-{id}`)
 - **List & paginate**: JSON-API style (offset + page-size)
 - **Search**: full-text + faceted
 - **Collections**: Linked Art–based, with departments and object types
-- **Why tier 2**: ~200K records, Linked Art alignment makes it a code-shareable peer of Rijksmuseum. Direct manifest probe was not completed in this research session — *needs verification* before integration.
+- **Auth**: API key required (session cookie or bearer token); 60 req/min standard, 300 req/min for whitelisted IPs (verified 2026-05-22)
+- **Rights**: **metadata CC0, but images are CC-BY-NC-ND 4.0** (verified 2026-05-22); 20th-century and in-copyright works are excluded from the API entirely. The ND clause is incompatible with downstream re-encoding/derivative pipelines (a thumbnailer-and-cache deployment, for example).
+- **Why tier 2**: ~200K records, Linked Art alignment makes it a code-shareable peer of Rijksmuseum. Direct manifest URL probe still not completed in this research session — *manifest pattern needs verification* before integration. The image-license caveat above is the more serious concern: any caller that caches, re-encodes, or composites Fitzwilliam images is likely outside the licence.
 
 ### e-codices (Switzerland)
 
@@ -398,3 +400,12 @@ The following endpoints were confirmed live during research on 2026-05-07 (manif
 Endpoints that *failed* anonymous fetch in this session but are documented as live (returned 403, likely client-fingerprint policies — re-verify with proper headers): NGA-DC manifest, LoC item JSON, DPLA registration endpoint, Royal Collection Trust image host, Cultural Japan OpenAPI.
 
 Negative verifications (confirmed *no* IIIF): Met Museum (sample object 436535 returns CDN URLs, no IIIF service); Cleveland Museum of Art (sample artwork response has no IIIF service field).
+
+### Follow-up verifications (2026-05-22)
+
+Spot-checks that update Tier 2 entries:
+
+- **NGA-DC Image API** — `media.nga.gov/iiif/public/objects/0/4/6/1/2/6/46126-primary-0-nativeres.ptif/info.json` returned a valid v2 Level 2 info.json (32266×29579, JPEG, native/color/gray, 256-tile pyramid). The image-level IIIF is fully live and exceptionally high resolution; only the per-object Presentation manifest is broken anonymously. NGA Presentation manifest endpoint **re-verified still 403** on the same date.
+- **Smithsonian IIIF Image** — `ids.si.edu/ids/iiif/SAAM-1968.155.176_1/info.json` returned a valid v2 Level 2 info.json (2354×3000, JPG). Confirms that the IIIF endpoint resolves directly from the `idsId` carried in search responses, even though the search API itself only exposes the proprietary delivery-service URL. Sample search call `unit_code:SAAM` with `DEMO_KEY` returned items with `content.freetext.objectRights[0].content = "CC0"`.
+- **Getty Activity Stream** — re-confirmed live: 4,537,822 items across 45,428 pages (~100 items per page). Same shape as 2026-05-07.
+- **Fitzwilliam Museum** — `data.fitzmuseum.cam.ac.uk/api` confirms IIIF deep-zoom support, 60 req/min anonymous rate limit, **CC-BY-NC-ND on images and CC0 on metadata**; 20th-century / in-copyright works excluded. Manifest URL pattern still not directly probed.

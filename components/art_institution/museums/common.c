@@ -15,7 +15,27 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
+
+const char *ai_user_agent(void)
+{
+    // Built once at first use, then reused. Mirrors the format AIC's
+    // aic_user_agent() requests on the `AIC-User-Agent` header; sent on
+    // the standard `User-Agent` header by both the per-museum search
+    // helpers and the shared image-download path. Smithsonian's F5
+    // BIG-IP ASM WAF rejects requests with empty/default UA (returns
+    // HTTP 200 with a "Request Rejected" HTML body, not a 4xx) — both
+    // api.si.edu and ids.si.edu need it. Other museum CDNs accept any
+    // reasonable UA, so this is universally safe to send.
+    static char s_ua[64];
+    static bool s_inited = false;
+    if (!s_inited) {
+        snprintf(s_ua, sizeof(s_ua), "p3a/%s (pub@kury.dev)", FW_VERSION_STRING);
+        s_inited = true;
+    }
+    return s_ua;
+}
 
 void ai_url_encode(const char *in, char *out, size_t out_len)
 {

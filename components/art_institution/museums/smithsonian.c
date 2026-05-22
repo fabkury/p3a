@@ -79,24 +79,10 @@ static const uint32_t s_fetch_backoff_ms[SI_FETCH_MAX_ATTEMPTS] = { 0, 1000, 300
 
 extern void download_manager_rescan(void);
 
-// ----- User-Agent ----------------------------------------------------------
-//
-// Smithsonian fronts api.si.edu with an F5 BIG-IP ASM WAF that rejects
-// requests with an empty or default User-Agent (response is HTTP 200 with
-// a "Request Rejected" HTML body, not a 4xx — so the only signal is the
-// non-JSON parse failure). A plain, identifying User-Agent passes. Pattern
-// mirrors aic_user_agent() in museums/artic.c.
-
-static const char *si_user_agent(void)
-{
-    static char s_ua[64];
-    static bool s_inited = false;
-    if (!s_inited) {
-        snprintf(s_ua, sizeof(s_ua), "p3a/%s (pub@kury.dev)", FW_VERSION_STRING);
-        s_inited = true;
-    }
-    return s_ua;
-}
+// Both api.si.edu (search) and ids.si.edu (image) sit behind the same
+// F5 BIG-IP ASM WAF and reject requests with empty/default User-Agent
+// (HTTP 200 with "Request Rejected" HTML body). The shared ai_user_agent()
+// in museums/common.c carries the required header on both paths.
 
 // ----- IIIF URL ------------------------------------------------------------
 
@@ -230,7 +216,7 @@ static esp_err_t si_fetch_page(const char *unit_code,
 
         esp_http_client_handle_t client = esp_http_client_init(&cfg);
         if (!client) continue;
-        esp_http_client_set_header(client, "User-Agent", si_user_agent());
+        esp_http_client_set_header(client, "User-Agent", ai_user_agent());
         esp_http_client_set_header(client, "Accept", "application/json");
 
         esp_err_t err = esp_http_client_open(client, 0);

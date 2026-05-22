@@ -160,6 +160,11 @@ esp_err_t art_institution_download_to_path(const char *museum_id,
 
             esp_http_client_handle_t client = esp_http_client_init(&cfg);
             if (!client) continue;
+            // Send a UA on every museum image fetch. Required by the
+            // Smithsonian F5 WAF (ids.si.edu rejects empty UA with a 200
+            // + "Request Rejected" HTML body that decodes to invalid
+            // JPEG); harmless to every other museum CDN.
+            esp_http_client_set_header(client, "User-Agent", ai_user_agent());
 
             esp_err_t open_err = esp_http_client_open(client, 0);
             if (open_err != ESP_OK) {

@@ -124,6 +124,16 @@ int ai_drain_body(esp_http_client_handle_t client, char *buf, size_t buf_size);
  */
 uint32_t ai_parse_retry_after(const char *value);
 
+/**
+ * @brief Return the shared `User-Agent` string for museum HTTP requests
+ *
+ * Format: "p3a/{FW_VERSION_STRING} (pub@kury.dev)". Built lazily at first
+ * call, then reused. Sent on the standard `User-Agent` header by both the
+ * per-museum search adapters and the shared image-download path. Required
+ * by Smithsonian's F5 WAF; harmless to every other museum CDN.
+ */
+const char *ai_user_agent(void);
+
 // ============================================================================
 // AIC adapter entry points (defined in museums/artic.c)
 // ============================================================================

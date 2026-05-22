@@ -67,7 +67,7 @@ For a step-by-step walkthrough written for first-time buyers, see the [Quick Sta
 |--------|-------------|
 | **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" and "All Artworks", or hashtags like "#nintendo". Control your device remotely from anywhere. |
 | **[Giphy](https://giphy.com/)** | Automatically fetches and cycles through trending GIFs and GIF searches. Configurable content rating (G through R) and refresh interval. |
-| **Museums** | Browse public collections from the Art Institute of Chicago, Rijksmuseum, Victoria and Albert Museum, Wellcome Collection, the Statens Museum for Kunst (SMK), and Harvard Art Museums over IIIF. Pick a department, category, or curated set; the device refreshes the listing on schedule. |
+| **Museums** | Browse public collections from the Art Institute of Chicago, Rijksmuseum, Victoria and Albert Museum, Wellcome Collection, the Statens Museum for Kunst (SMK), Harvard Art Museums, and the Smithsonian over IIIF. Pick a department, category, or curated set; the device refreshes the listing on schedule. |
 | **Local files** | Copy your own WebP, GIF, PNG, or JPEG files via USB or Wi-Fi. No cloud account needed, no internet required. |
 
 Mix them all in a single "playset" for an ever-changing display.
@@ -86,7 +86,7 @@ Mix them all in a single "playset" for an ever-changing display.
   <img src="images/photos/p3a-museum-channel-5.jpg" alt="p3a displaying a museum artwork" height="260">
 </p>
 
-<p align="center"><em>Museum channels: works from the Art Institute of Chicago, Rijksmuseum, V&amp;A, Wellcome Collection, SMK, and Harvard Art Museums — streamed over IIIF.</em></p>
+<p align="center"><em>Museum channels: works from the Art Institute of Chicago, Rijksmuseum, V&amp;A, Wellcome Collection, SMK, Harvard Art Museums, and the Smithsonian — streamed over IIIF.</em></p>
 
 <p align="center">
   <img src="images/photos/p3a-5.jpg" alt="p3a in hand" height="260">

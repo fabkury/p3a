@@ -28,7 +28,7 @@ static const char *s_connectivity_short_messages[] = {
 static const char *s_connectivity_detail_messages[] = {
     [P3A_CONNECTIVITY_NO_WIFI] = "Connect to Wi-Fi network",
     [P3A_CONNECTIVITY_NO_INTERNET] = "Wi-Fi connected but no internet access",
-    [P3A_CONNECTIVITY_NO_REGISTRATION] = "Long-press to register with Makapix Club",
+    [P3A_CONNECTIVITY_NO_REGISTRATION] = "Open the Settings page to register with Makapix Club",
     [P3A_CONNECTIVITY_NO_MQTT] = "Connecting to Makapix Cloud",
     [P3A_CONNECTIVITY_ONLINE] = "Connected to Makapix Club",
 };

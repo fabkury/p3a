@@ -13,7 +13,7 @@
  * - Swipe up: submit emoji reaction (Makapix posts only)
  * - Swipe down: revoke emoji reaction (Makapix posts only)
  * - Two-finger rotation: screen rotation
- * - Long press (3s): enter provisioning or toggle AP info
+ * - Long press (3s): show info screen (or captive-AP info when in softAP); dismisses overlay if already in UI mode
  * 
  * PROVISIONING:
  * - Long press (3s): cancel provisioning and return to playback

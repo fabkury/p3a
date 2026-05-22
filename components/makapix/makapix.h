@@ -46,8 +46,8 @@ makapix_state_t makapix_get_state(void);
 /**
  * @brief Start provisioning process
  * 
- * Called when user triggers the 3-second long press gesture.
- * Initiates HTTP request to provisioning endpoint.
+ * Called when the user clicks the Register button on the Makapix tab
+ * of the Settings web UI. Initiates HTTP request to provisioning endpoint.
  * 
  * @return ESP_OK on success, error code otherwise
  */

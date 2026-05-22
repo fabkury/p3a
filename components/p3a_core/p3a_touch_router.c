@@ -41,7 +41,8 @@ extern esp_err_t app_set_screen_rotation(int rotation) __attribute__((weak));
 extern int app_get_screen_rotation(void) __attribute__((weak));
 
 // Provisioning handlers (from makapix.c via weak symbols)
-extern esp_err_t makapix_start_provisioning(void) __attribute__((weak));
+// Note: provisioning is started from the Settings web UI, not from any
+// touch gesture; only the cancel path is reachable from the router.
 extern void makapix_cancel_provisioning(void) __attribute__((weak));
 
 // PICO-8 handlers (from playback_controller.c via weak symbols)

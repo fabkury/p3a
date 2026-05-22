@@ -1,12 +1,15 @@
 # p3a Museum-Channels Outreach Plan
 
-*Companion to `outreach-plan.md`. Compiled 2026-05-11.*
+*Companion to `outreach-plan.md`. Compiled 2026-05-11; refreshed
+2026-05-16 to reflect five shipped institutions (AIC, Rijksmuseum, V&A,
+Wellcome Collection, SMK) and the agreed launch cadence.*
 
-This plan adds venues unlocked by p3a's new art-institution channels
-(AIC, Rijksmuseum, V&A). Read alongside `outreach-plan.md` — that doc
-targets the pixel-art / maker / ESP32 crowd; this one targets cultural-
-heritage tech, IIIF specialists, library-tech, museum digital teams,
-and art-curious editorial audiences. Combined, they form one campaign.
+This plan adds venues unlocked by p3a's art-institution channels
+(AIC, Rijksmuseum, V&A, Wellcome Collection, Statens Museum for Kunst).
+Read alongside `outreach-plan.md` — that doc targets the pixel-art /
+maker / ESP32 crowd; this one targets cultural-heritage tech, IIIF
+specialists, library-tech, museum digital teams, and art-curious
+editorial audiences. Combined, they form one campaign.
 
 **Framing.** p3a's headline identity stays "pixel-art player." Museum
 channels are the *hook* for reaching new audiences — not a rebrand.
@@ -23,9 +26,12 @@ existing plan doesn't touch:
 - **Cultural-heritage tech** — IIIF Consortium, Code4Lib, library-tech
   lists. They actively celebrate creative IIIF reuse; a microcontroller
   IIIF client is novel in that crowd.
-- **Museum digital teams** — AIC, Rijksmuseum, V&A. The institutions
-  whose APIs p3a consumes. Their digital teams reward reuse with
-  feature posts to audiences of 100k–2M+ followers.
+- **Museum digital teams** — AIC, Rijksmuseum, V&A, Wellcome
+  Collection, and SMK. The institutions whose APIs p3a consumes. Their
+  digital teams reward reuse with feature posts to audiences of 100k–2M+
+  followers. Wellcome's Wikimedia-partnership track record makes them
+  especially likely to amplify; SMK's "SMK Open" program is the
+  Scandinavian equivalent.
 - **Art-tech editorial** — Hyperallergic, Open Culture, We Make Money
   Not Art, MCN. Cover digital-art-meets-DIY-hardware regularly.
 - **Open-content / OpenGLAM advocates** — small but high-density.
@@ -55,19 +61,25 @@ if reachable, mention in the IIIF Slack.
 
 ### 2. Museum digital teams — direct email, staggered weekly
 
-Don't fire all three the same week. Each email: 30-second video,
-GitHub link, no ask.
+Don't fire all five the same week. Each email: 30-second video,
+GitHub link, no ask. See `museum-digital-team-email.md` for all five
+fully-drafted variants.
 
-- **AIC first** — most-receptive of the three (they curate a public
+- **AIC first** — most-receptive of the five (they curate a public
   [API showcase](https://www.artic.edu/open-access)). Contact: their
   open-access / digital-experience team.
 - **Rijksstudio next** — Rijksstudio is famously enthusiastic about
   creative reuse of the collection.
-- **V&A third** — newest to p3a (V&A just landed in v0.10.0), lower
-  priority but worth doing.
+- **V&A third** — established institution with an active Collections
+  API team.
+- **Wellcome fourth** — Wellcome Collection's licensing and Wikimedia
+  partnership make them an easy yes on creative reuse.
+- **SMK fifth** — SMK Open is the Scandinavian peer of AIC's open-
+  access program; smaller social footprint but high credibility in
+  OpenGLAM circles.
 - **Pitch angle:** "An open-hardware art frame plays your collection.
   Here's a video. No ask — just thought you'd want to see it."
-- **Why:** combined social reach of these three is in the millions.
+- **Why:** combined social reach across the five is in the millions.
   A single feature post outperforms most other Tier 1 wins by an order
   of magnitude.
 
@@ -205,12 +217,22 @@ Most Tier 1/2 venues in this track need things that don't exist yet:
 
 | Week | Action |
 |------|--------|
-| 0 | Prep assets: museum-mode video, README Museums section, press kit V2. **Subscribe to `code4lib-l` now** so the 2–3 week lurk window is already burning down by the time the Week 2 post goes out. |
-| 1 | IIIF Consortium news submission + `discuss.iiif.io` post. AIC digital team email. Bluesky/Mastodon launch wave. |
-| 2 | Rijksstudio team email. Code4Lib mailing list post. PR to `awesome-iiif`. |
-| 3 | V&A digital team email. r/museums (mod-approved). Hyperallergic tip. |
-| 4 | r/arthistory. Open Culture tip. We Make Money Not Art tip. |
-| 5+ | MCN, Museums and the Web, Smithsonian Open Access showcase. Tagging museums on Bluesky/Mastodon becomes ongoing pattern. |
+| 0 | Prep assets: museum-mode video (see `museum-mode-video-brief.md`), confirm README Museums section, press kit V2. **Subscribe to `code4lib-l` now** so the 2–3 week lurk window is already burning down by the time the Week 3 post goes out. Add GitHub topics (`iiif`, `openglam`, `museum-api`, `cultural-heritage`). Open the "PR welcome?" conversation with `mejackreed/awesome-iiif`. |
+| 1 | Produce the video (Fiverr turnaround ~5 business days). Plug `{{video_url}}` into all five drafts. |
+| 2 | IIIF Consortium news submission + `discuss.iiif.io` post (forum first, email 2–3 days later). Bluesky/Mastodon launch wave. |
+| 3 | AIC digital team email. Code4Lib mailing list post (after the lurk window). PR to `awesome-iiif` if maintainer signaled yes. |
+| 4 | Rijksstudio team email. r/museums (mod-approved). |
+| 5 | V&A digital team email. r/arthistory. |
+| 6 | Wellcome Collection digital team email. We Make Money Not Art tip. |
+| 7 | SMK / SMK Open team email. Hyperallergic tip. |
+| 8+ | Open Culture tip (≥1 week after Hyperallergic). MCN newsletter submission. Museums and the Web. Smithsonian Open Access showcase. Tagging museums on Bluesky/Mastodon becomes ongoing pattern. |
+
+The cadence is intentionally slower than the original 5-week plan:
+five museums staggered weekly + IIIF community first + editorial press
+last is ~8 weeks end-to-end. Resist the urge to collapse it — each
+staggered email is a separate audience, and "this got picked up by the
+IIIF community" is a real piece of social proof to lean on in the
+later editorial pitches.
 
 ---
 
@@ -231,20 +253,23 @@ in principle. But two practical adjustments:
 
 ## Follow-up artifacts to draft
 
-Each takes ~5 minutes and is independently useful. Worth drafting
-before the launch sequence starts:
-
-- [ ] IIIF Consortium news submission (subject + body)
-- [ ] Museum digital-team cold email template (parameterized for AIC /
-      Rijks / V&A)
-- [ ] Code4Lib mailing list post draft
-- [ ] Hyperallergic tip email
-- [ ] Open Culture tip email
-- [ ] We Make Money Not Art tip email
-- [ ] MCN newsletter submission
-- [ ] Reusable Bluesky/Mastodon social-post copy with the IIIF /
-      openglam hashtag cloud
-- [ ] README "Museums" section copy
+- [x] IIIF Consortium news submission — `iiif-news-submission.md`
+- [x] discuss.iiif.io thread — `iiif-discuss-thread.md`
+- [x] Museum digital-team cold email template, all five museums —
+      `museum-digital-team-email.md`
+- [x] Hyperallergic tip email — `hyperallergic-tip-email.md`
+- [x] Open Culture tip email — `open-culture-tip-email.md`
+- [x] Museum-mode video brief (Fiverr) — `museum-mode-video-brief.md`
+- [x] Code4Lib mailing list post — `code4lib-post.md`
+- [x] We Make Money Not Art tip — `wmmna-tip-email.md`
+- [x] MCN newsletter submission — `mcn-newsletter-submission.md`
+- [x] Reusable Bluesky / Mastodon launch posts — `social-launch-posts.md`
+- [ ] README "Museums" section — already present in `README.md` line 70;
+      consider an "as seen on" line once IIIF community / press picks
+      up.
+- [ ] Press kit V2 — 3–5 high-res photos of the device displaying
+      paintings and photographs. Use frames from the museum-mode video
+      shoot as the source.
 
 ---
 

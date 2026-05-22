@@ -22,11 +22,11 @@ museum-mode demo video is produced.
 — verify against the site before sending. Dan Colman is the founder/
 editor.
 
-**Subject:** An open-source $48 device that streams free art from the Art Institute, Rijksmuseum, and V&A
+**Subject:** An open-source $48 device that streams free art from five major museums
 
 > Hi Open Culture team,
 >
-> A tip in the open-content / open-source-meets-cultural-heritage vein you cover regularly: **p3a** is an open-source desktop art frame — a $48 4-inch touchscreen built on a Waveshare ESP32-P4 dev board — that pulls real artwork live from the Art Institute of Chicago, the Rijksmuseum, and the Victoria and Albert Museum. A Vermeer at 9:00, a Picasso at 9:30, a V&A photograph at 10:00. The firmware is Apache 2.0; the artwork comes via each museum's own public APIs; nothing in the chain is proprietary.
+> A tip in the open-content / open-source-meets-cultural-heritage vein you cover regularly: **p3a** is an open-source desktop art frame — a $48 4-inch touchscreen built on a Waveshare ESP32-P4 dev board — that pulls real artwork live from five museums: the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, and the Statens Museum for Kunst (SMK). A Vermeer at 9:00, a Picasso at 9:30, a V&A photograph at 10:00, a Wellcome anatomical engraving at 10:30, a Hammershøi from SMK at 11:00. The firmware is Apache 2.0; the artwork comes via each museum's own public APIs; nothing in the chain is proprietary.
 >
 > The angle that fits your beat: it's open hardware running open-source firmware against open cultural APIs — the full trifecta on a $48 device a reader could buy and have running by the weekend. Museums have spent the last decade publishing collections under open licenses; this is what it looks like when an indie maker plays them all back at once, with no cloud account in the loop.
 >

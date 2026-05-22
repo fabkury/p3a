@@ -24,7 +24,7 @@ if no reply in 2 weeks.
 >
 > I'm writing to suggest a community-implementation news item for iiif.io/news. **p3a** is an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — and at v0.10.0 it is, as far as I'm aware, the first firmware-level IIIF Image API consumer: implemented in C against ESP-IDF, decoding JPEGs on-device, with per-museum 429 handling and (for the Rijksmuseum) an on-device Linked Art walk.
 >
-> It currently plays artwork from the Art Institute of Chicago, the Rijksmuseum, and the Victoria and Albert Museum. Apache 2.0.
+> It currently plays artwork from five institutions: the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, and the Statens Museum for Kunst (SMK). Apache 2.0.
 >
 > Repository: https://github.com/fabkury/p3a
 >
@@ -40,7 +40,7 @@ if no reply in 2 weeks.
 
 > **An Embedded IIIF Client on a $48 ESP32-P4 Microcontroller**
 >
-> p3a, an open-hardware desktop art frame built on the Waveshare ESP32-P4 development board, is an embedded IIIF client that displays artwork pulled directly from the Art Institute of Chicago, the Rijksmuseum, and the Victoria and Albert Museum on a 720×720 4-inch screen. The firmware speaks IIIF Image API v2 natively, performs Linked Art resolution on-device for Rijksmuseum objects, and handles per-museum rate limits — all in 32 MB of PSRAM. The project is open-source (Apache 2.0) and may be the first IIIF client to run at the firmware level.
+> p3a, an open-hardware desktop art frame built on the Waveshare ESP32-P4 development board, is an embedded IIIF client that displays artwork pulled directly from the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, and the Statens Museum for Kunst (SMK) on a 720×720 4-inch screen. The firmware speaks IIIF Image API v2 natively, performs Linked Art resolution on-device for Rijksmuseum objects, and handles per-museum rate limits — all in 32 MB of PSRAM. The project is open-source (Apache 2.0) and may be the first IIIF client to run at the firmware level.
 >
 > [Read more →](https://github.com/fabkury/p3a)
 
@@ -48,6 +48,10 @@ if no reply in 2 weeks.
 
 ## Supporting facts (for staff to quote if they expand)
 
+- **Museums covered (v0.10.0):** Art Institute of Chicago, Rijksmuseum,
+  Victoria and Albert Museum, Wellcome Collection, Statens Museum for
+  Kunst (SMK) — five institutions across the US, Netherlands, UK
+  (general + medical-humanities), and Denmark.
 - **Hardware:** Waveshare ESP32-P4-WIFI6-Touch-LCD-4B, 720×720 IPS,
   32 MB PSRAM, 32 MB flash, ~$48 retail.
 - **Image rendition:** firmware requests

@@ -3,9 +3,10 @@
 *Companion to `museum-outreach-plan.md`. Drafted 2026-05-11.*
 
 Tier 1 cold-email template for the digital / open-access teams at the
-three museums whose APIs p3a consumes. Send personally from the author's
+five museums whose APIs p3a consumes. Send personally from the author's
 address, staggered weekly per the plan's launch sequence: AIC (Week 1),
-Rijksmuseum (Week 2), V&A (Week 3).
+Rijksmuseum (Week 2), V&A (Week 3), Wellcome Collection (Week 4),
+SMK (Week 5).
 
 The pitch frame: **30-second video, GitHub link, no ask.**
 
@@ -45,7 +46,7 @@ museum-mode demo video is produced.
 >
 > I built **p3a**, an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — that pulls artwork from the Art Institute of Chicago via your Open Access program and rotates through it like a tiny gallery on the desk. It's a firmware-level IIIF consumer: hits your IIIF Image API directly with proper rate-limit handling, decodes JPEGs on-device, no cloud middleman.
 >
-> The AIC Open Access program is part of why p3a exists — the showcase you curate is a model the rest of the field follows. AIC is a first-class source in the device alongside the Rijksmuseum and the V&A.
+> The AIC Open Access program is part of why p3a exists — the showcase you curate is a model the rest of the field follows. AIC is a first-class source in the device alongside the Rijksmuseum, the V&A, the Wellcome Collection, and the Statens Museum for Kunst (SMK).
 >
 > 30-second video: {{video_url}}
 > Source / firmware: https://github.com/fabkury/p3a
@@ -91,7 +92,53 @@ museum-mode demo video is produced.
 >
 > I built **p3a**, an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — that pulls artwork from the V&A via your Collections API and rotates through it like a tiny gallery on the desk. It's a firmware-level IIIF consumer: hits your IIIF endpoints directly, decodes JPEGs on-device, no cloud middleman.
 >
-> V&A is the newest source p3a supports — your Collections API made the integration straightforward, and the device now treats the V&A as a peer of AIC and the Rijksmuseum.
+> V&A sits alongside AIC, the Rijksmuseum, the Wellcome Collection, and SMK as a first-class source on the device — your Collections API made the integration straightforward.
+>
+> 30-second video: {{video_url}}
+> Source / firmware: https://github.com/fabkury/p3a
+>
+> No ask — just thought your team might want to see it.
+>
+> Best,
+> Fabrício Kury
+> pub@kury.dev
+
+---
+
+## Variant 4 — Wellcome Collection (Week 4)
+
+**To:** Digital team via [wellcomecollection.org/developers](https://wellcomecollection.org/developers) contact
+
+**Subject:** A $48 open-hardware device playing Wellcome Collection imagery over IIIF
+
+> Hi Wellcome digital team,
+>
+> I built **p3a**, an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — that pulls images from the Wellcome Collection via your Catalogue / IIIF APIs and rotates through them like a tiny gallery on the desk. It's a firmware-level IIIF consumer: hits your IIIF endpoints directly, decodes JPEGs on-device, no cloud middleman.
+>
+> Wellcome's openly-licensed catalogue is what made it possible to drop the collection into the device alongside AIC, the Rijksmuseum, the V&A, and SMK — Wellcome's stance on reuse is something I cite when I explain to people why p3a doesn't need permissions or accounts.
+>
+> 30-second video: {{video_url}}
+> Source / firmware: https://github.com/fabkury/p3a
+>
+> No ask — just thought your team might want to see it.
+>
+> Best,
+> Fabrício Kury
+> pub@kury.dev
+
+---
+
+## Variant 5 — Statens Museum for Kunst / SMK (Week 5)
+
+**To:** SMK Open / API team via [open.smk.dk](https://open.smk.dk/) contact
+
+**Subject:** A $48 open-hardware device playing the SMK collection over IIIF
+
+> Hi SMK Open team,
+>
+> I built **p3a**, an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — that pulls artwork from the SMK collection via your public API and rotates through it like a tiny gallery on the desk. It's a firmware-level IIIF consumer: hits your IIIF endpoints directly, decodes JPEGs on-device, no cloud middleman.
+>
+> SMK Open's permissive licensing and clean API are what made adding the collection straightforward — the device now treats SMK as a peer of AIC, the Rijksmuseum, the V&A, and the Wellcome Collection.
 >
 > 30-second video: {{video_url}}
 > Source / firmware: https://github.com/fabkury/p3a
@@ -131,8 +178,9 @@ museum-mode demo video is produced.
 
 - [ ] Museum-mode video uploaded; URL plugged into all three variants.
 - [ ] Confirmed contact address on each museum's API/open-access page.
-- [ ] Variants sent in order: AIC → Rijks → V&A, one per week,
-      different days of the week to avoid coordinated-campaign optics
-      on shared inboxes if any of these forward to the same syndicate.
+- [ ] Variants sent in order: AIC → Rijks → V&A → Wellcome → SMK,
+      one per week, different days of the week to avoid coordinated-
+      campaign optics on shared inboxes if any of these forward to the
+      same syndicate.
 - [ ] Logged send dates so any follow-up reply lands in the right
       thread.

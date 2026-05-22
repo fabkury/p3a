@@ -37,14 +37,14 @@ announcements; cross-posting an announcement there reads as off-topic.
 >
 > *[photo of the device displaying a painting]*
 >
-> **p3a** is an open-hardware desktop art frame — a Waveshare ESP32-P4 development board (~$48), 720×720 4-inch IPS, 32 MB PSRAM, 32 MB flash — and as of v0.10.0 it speaks the IIIF Image API natively from the firmware. It cycles through artwork from the Art Institute of Chicago, the Rijksmuseum, and the Victoria and Albert Museum, alongside pixel art from a community network and trending GIFs. Apache 2.0: https://github.com/fabkury/p3a
+> **p3a** is an open-hardware desktop art frame — a Waveshare ESP32-P4 development board (~$48), 720×720 4-inch IPS, 32 MB PSRAM, 32 MB flash — and as of v0.10.0 it speaks the IIIF Image API natively from the firmware. It cycles through artwork from five institutions — the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, and the Statens Museum for Kunst (SMK) — alongside pixel art from a community network and trending GIFs. Apache 2.0: https://github.com/fabkury/p3a
 >
 > A few protocol-level highlights, since this audience cares:
 >
-> - **Image API v2** end-to-end — every image is requested as `…/full/!720,720/0/default.jpg`. No `info.json` negotiation yet (deferred — see questions below).
+> - **Image API v2** end-to-end across all five sources — every image is requested as `…/full/!720,720/0/default.jpg`. No `info.json` negotiation yet (deferred — see questions below).
 > - **Per-museum 429 handling.** A small per-museum cooldown table honors `Retry-After` and falls back to per-museum defaults. The browse UI runs in a LAN-side browser, and it reports its own 429s back to the device over a small REST endpoint so the per-IP rate-limit budget stays coherent across both clients. This matters for AIC's 60-req/min per-IP cap.
 > - **Linked Art walk on-device** for the Rijksmuseum: HMO → VisualItem → DigitalObject → access_point, lazy-resolved at download time, with sentinel encoding for unresolved entries and a tombstone after 3 consecutive failures.
-> - **Per-museum vault dedup** — a painting that appears in four AIC facets is stored once on the SD card.
+> - **Per-museum vault dedup** — a painting that appears in four AIC facets is stored once on the SD card. Vault paths are namespaced per museum, so Wellcome + SMK adapters drop in without touching the shared layer.
 > - **JPEG-only rendition**, decoded by the ESP32-P4's hardware JPEG codec at 720×720.
 >
 > A few things I'd genuinely value input on:

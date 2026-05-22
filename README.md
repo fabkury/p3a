@@ -28,9 +28,9 @@
 
 ## What Is p3a?
 
-p3a turns a [$40 development board](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) into a dedicated pixel art display. Think of it as a tiny gallery on your desk — it cycles through artworks automatically, picks up trending GIFs throughout the day, and lets users send artworks directly to it from [Makapix Club](https://makapix.club/), a pixel art social network.
+p3a turns a [$40 development board](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) into a dedicated pixel art display. Think of it as a tiny gallery on your desk: it cycles through artworks automatically, picks up trending GIFs throughout the day, and lets you send artworks directly to it from [Makapix Club](https://makapix.club/), a pixel art social network. It also fetches countless artworks from museum IIIF endpoints.
 
-It's open source, self-contained, and designed to be as simple to use as a picture frame — while still exposing a full REST API for those who want to automate and tinker. Both the hardware and the firmware are built for 24/7 operation, so you can leave it running on a shelf or wall indefinitely.
+It's open source, self-contained, and designed to be as simple to use as a picture frame, while still exposing a full REST API for those who want to automate and tinker. Both the hardware and the firmware are built for 24/7 operation, so you can leave it running on a desktop, shelf or wall indefinitely.
 
 <p align="center">
   <img src="images/photos/p3a_10fps.gif" alt="p3a playing animated artworks" height="300">
@@ -67,7 +67,7 @@ For a step-by-step walkthrough written for first-time buyers, see the [Quick Sta
 |--------|-------------|
 | **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" and "All Artworks", or hashtags like "#nintendo". Control your device remotely from anywhere. |
 | **[Giphy](https://giphy.com/)** | Automatically fetches and cycles through trending GIFs. Configurable content rating (G through R) and refresh interval. |
-| **Museums** | Browse public collections from the Art Institute of Chicago, Rijksmuseum, Victoria and Albert Museum, Wellcome Collection, the Statens Museum for Kunst (SMK), and Harvard Art Museums over IIIF. Pick a department, category, or curated set; the device refreshes the listing on its own schedule. The first five museums need no account or key; Harvard requires a free API key (request one at harvardartmuseums.org/collections/api). |
+| **Museums** | Browse public collections from the Art Institute of Chicago, Rijksmuseum, Victoria and Albert Museum, Wellcome Collection, the Statens Museum for Kunst (SMK), and Harvard Art Museums over IIIF. Pick a department, category, or curated set; the device refreshes the listing on schedule. |
 | **Local files** | Copy your own WebP, GIF, PNG, or JPEG files via USB or Wi-Fi. No cloud account needed, no internet required. |
 
 Mix them all in a single "playset" for an ever-changing display.
@@ -99,8 +99,8 @@ Mix them all in a single "playset" for an ever-changing display.
 ### Smooth, Gapless Playback
 
 - **Animated WebP and GIF; static PNG and JPEG** — with alpha/transparency where the format supports it
-- **Smart upscaling** — pixel art uses nearest-neighbor scaling to keep edges crisp; Giphy content uses hardware-accelerated bilinear interpolation for smooth results
-- **Triple-buffered rendering** with VSYNC — no tearing, no freezing, even with problematic files
+- **Smart upscaling** — pixel art and local files use nearest-neighbor scaling to keep edges crisp; Giphy and museum content use hardware-accelerated bilinear interpolation for smooth results
+- **Triple-buffered rendering** with VSYNC — no tearing, no freezing
 - **Aspect ratio preservation** — non-square art is centered on the display with a configurable background color
 - **Auto-advance** — cycles to a new artwork every 30 seconds (configurable)
 
@@ -142,7 +142,7 @@ curl -X POST http://p3a.local/rotation \
 
 After the first USB flash, everything is over-the-air:
 - **One-click install** from the web UI, with progress shown on both screen and browser
-- **Automatic update checks** every 12 hours — updates are never installed without your approval
+- **Automatic update checks** every 12 hours (not installed without your approval)
 - **Manual rollback** to the previous version at any time
 - **SHA256 verification** of every download
 - **ESP32-C6 co-processor** firmware updates automatically when needed

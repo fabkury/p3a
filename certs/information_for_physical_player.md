@@ -453,7 +453,7 @@ def report_status(status):
 
 ### Manual Testing Flow
 
-1. Perform provision gesture (very long 10-second press on the screen), call provision endpoint, get registration code, display registration code on the player's screen
+1. Perform provision gesture (3-second long press on the screen), call provision endpoint, get registration code, display registration code on the player's screen
 2. Log into Makapix Club website
 3. Go to "My Players" page
 4. Click "Register Player"

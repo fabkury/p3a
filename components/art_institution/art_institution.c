@@ -76,6 +76,16 @@ const art_institution_museum_t ART_INSTITUTION_MUSEUMS[] = {
                                   // download path's redirect shim, not a
                                   // resolve_entry walk.
     },
+    {
+        .id              = "si",
+        .display         = "Smithsonian",
+        .museum_enum     = ART_INSTITUTION_MUSEUM_SI,
+        .refresh_channel = art_institution_si_refresh_channel,
+        .build_iiif_url  = art_institution_si_build_iiif_url,
+        .resolve_entry   = NULL,  // Smithsonian returns idsId inline in the
+                                  // search response; the IIIF URL is built
+                                  // from it directly, no walk needed.
+    },
 };
 
 const size_t ART_INSTITUTION_MUSEUM_COUNT =

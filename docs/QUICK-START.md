@@ -96,7 +96,7 @@ Trending GIFs start appearing in the rotation within a few minutes.
 
 ### C. Add a museum channel
 
-Browse the open collections of major museums. Six institutions ship today: the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst (SMK), and Harvard Art Museums. The first five need no account or key; Harvard requires a free API key — request one at [harvardartmuseums.org/collections/api](https://harvardartmuseums.org/collections/api) and paste it into **Settings → Museums**.
+Browse the open collections of major museums. Seven institutions ship today: the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst (SMK), Harvard Art Museums, and the Smithsonian. The first five need no account or key. Harvard requires a free API key — request one at [harvardartmuseums.org/collections/api](https://harvardartmuseums.org/collections/api). Smithsonian requires a free api.data.gov key — register at [api.data.gov/signup/](https://api.data.gov/signup/) (instant). Paste either key into **Settings → Museums**.
 
 1. Open `http://p3a.local/playset-editor` in any browser on the same Wi-Fi.
 2. Open or create a playset and click **Add Channel**.

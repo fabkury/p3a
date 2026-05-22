@@ -392,10 +392,12 @@
             <strong>Rate limits:</strong> The Art Institute of Chicago publishes a hard limit of
             60 requests per minute per IP. A single AIC channel refresh issues up to ~11 paginated
             requests at the default 1024-entry cache size (or ~41 at the 4096 maximum), so several
-            AIC channels refreshing simultaneously can trigger throttling. The other
-            four museums (Rijksmuseum, V&amp;A, Wellcome Collection, SMK) don't publish a limit; p3a
-            applies a 60-second defensive cooldown if any of them returns a 429. The browse
-            previewer and refresh dispatcher both honor the shared cooldown when a 429 is observed.
+            AIC channels refreshing simultaneously can trigger throttling. Harvard Art Museums
+            caps at 2 500 requests per day per API key, and Smithsonian (api.data.gov) at
+            1 000 requests per hour per key. The four other museums (Rijksmuseum, V&amp;A,
+            Wellcome Collection, SMK) don't publish a limit; p3a applies a 60-second defensive
+            cooldown if any museum returns a 429. The browse previewer and refresh dispatcher
+            both honor the shared cooldown when a 429 is observed.
         </div>
     </div>
     <div class="section">
@@ -405,6 +407,14 @@
             <input class="setting-input" id="ham-api-key" type="text" placeholder="Harvard Art Museums API Key">
         </div>
         <div class="setting-hint">Enter your Harvard Art Museums API key. HAM channels will not refresh without a valid key, and the museum browser shows a prompt to enter one when you click into HAM until a key is saved. You can request a free key at <a href="https://harvardartmuseums.org/collections/api" target="_blank" rel="noopener">harvardartmuseums.org/collections/api</a>. The key counts against a per-key quota of 2 500 requests per day; one HAM channel refresh costs ~11 calls at the default 1 024-entry cache size.</div>
+    </div>
+    <div class="section">
+        <h3>Smithsonian (API key)</h3>
+        <div class="setting-row">
+            <label class="setting-label" for="si-api-key">API Key</label>
+            <input class="setting-input" id="si-api-key" type="text" placeholder="api.data.gov API Key">
+        </div>
+        <div class="setting-hint">Enter your api.data.gov API key. Smithsonian channels will not refresh without a valid key, and the museum browser shows a prompt to enter one when you click into Smithsonian until a key is saved. Get a free key at <a href="https://api.data.gov/signup/" target="_blank" rel="noopener">api.data.gov/signup/</a> — the same key works for any api.data.gov service. The default registered-key quota is 1 000 requests per hour; one Smithsonian channel refresh costs ~11 calls at the default 1 024-entry cache size. (Do not use <code>DEMO_KEY</code> — it is capped at ~30 requests per hour per IP and will throttle mid-refresh.)</div>
     </div>
     <div class="section">
         <button class="btn save-all" id="museum-save-btn" onclick="saveMuseumAll()">Save Museum Settings</button>
@@ -885,16 +895,19 @@ function loadMuseumSettings(cfg) {
     cacheSel.value = cacheVal;
     if (!cacheSel.value) cacheSel.value = '1024';
     document.getElementById('ham-api-key').value = cfg.ham_api_key || '';
+    document.getElementById('si-api-key').value = cfg.si_api_key || '';
 }
 
 function saveMuseumAll() {
     var btn = document.getElementById('museum-save-btn');
     btn.disabled = true;
     var hamKey = document.getElementById('ham-api-key').value.trim();
+    var siKey  = document.getElementById('si-api-key').value.trim();
     var partial = {
         ai_refresh_sec: parseInt(document.getElementById('ai-refresh-sec').value, 10),
         ai_cache_size:  parseInt(document.getElementById('ai-cache-size').value, 10),
-        ham_api_key:    hamKey
+        ham_api_key:    hamKey,
+        si_api_key:     siKey
     };
     mergeConfig(partial, function() {
         btn.disabled = false;

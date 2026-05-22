@@ -618,6 +618,71 @@ about breadth-of-collection.
   `Retry-After` headers observed; engage default 60 s cooldown on a 429
   (matches AIC/Rijks).
 
+### 9.5 Smithsonian Open Access
+
+- **id:** `si`
+- **display:** `Smithsonian`
+- **API base:** `https://api.si.edu/openaccess/api/v1.0`
+- **IIIF base:** `https://ids.si.edu/ids/iiif/` (no redirect — the IDS host
+  serves IIIF directly).
+- **Required headers:** `Accept: application/json` **and** `User-Agent:
+  p3a/{version} (pub@kury.dev)`. The UA is mandatory: api.si.edu sits
+  behind an F5 BIG-IP ASM WAF that returns HTTP 200 with a "Request
+  Rejected" HTML body (not a 4xx) when the UA is empty or default. The
+  adapter's `si_user_agent()` mirrors AIC's `aic_user_agent()`.
+- **Required query:** `api_key=<key>` on every search call. The key is
+  **user-supplied** (BYOK from api.data.gov — one key covers any
+  api.data.gov service: Smithsonian, NASA, NOAA, etc.) — stored in NVS
+  under `si_api_key`, entered via the "Museums" tab in
+  `webui/settings.html`. No key is shipped. `DEMO_KEY` is intentionally
+  rate-capped at ~30 req/hour/IP and will throttle the first refresh
+  mid-flight, so users must register their own (free, instant signup at
+  api.data.gov/signup/). When the saved key is empty, refresh is a no-op
+  (`ESP_LOGI` + return `ESP_OK`, no `last_refresh` write) and the browse
+  modal surfaces "enter your key in Settings" instead of the unit list.
+  Behavior on key clear mirrors HAM.
+- **Axes:** one — `unit` (Smithsonian's administrative units). The v1
+  wired set in `webui/museum/smithsonian.js` is six art-bearing units:
+  CHNDM (Cooper Hewitt), SAAM (American Art), NPG (Portrait Gallery),
+  NMAAHC (African American History), HMSG (Hirshhorn), NMAfA (African
+  Art). Excluded units (NMAI's broken IIIF, FSG's empty dataset), the
+  field-shape audit, and v2 axis ideas (cross-unit classification,
+  topic, keyword) live in
+  `reference/museum-art/source/smithsonian/DEFERRED.md`.
+- **Filter param map:** the axis is folded into the Solr query string,
+  not a separate URL param: `q=unit_code:{term_id} AND online_visual_material:true`.
+  Phase A's probe D confirmed `usage:CC0` is **not** a Solr-indexed field
+  (returns 0 hits as an AND clause), so per-item rights filtering is left
+  to a future v2.
+- **Term-id:** Smithsonian unit codes (`SAAM`, `CHNDM`, …). The curated
+  list lives in the browser adapter; the firmware accepts any
+  `unit_code` and trusts the curation.
+- **Listing endpoint:**
+  `GET /search?api_key={KEY}&q=<encoded-q>&start=N&rows=50`
+- **Pagination:** native offset (`start` + `rows`). Phase A's probe E
+  (`reference/museum-art/source/smithsonian/output/report.md` §E)
+  confirmed deep `start=10000` returns valid results — no AIC-style 10K
+  cap. Modulo-wrap on `channel_offset` mirrors HAM.
+- **Page size:** 50 (smaller than HAM's 100). Smithsonian records nest a
+  deeply-faceted `freetext` + `indexedStructured` +
+  `descriptiveNonRepeating` set; per-record averages ~5 KB but verbose
+  units (NMAAHC provenance, CHNDM design metadata) can push individual
+  records over 10 KB. 50/page comfortably fits the 1 MB response buffer.
+- **IIIF URL:**
+  `https://ids.si.edu/ids/iiif/{iiif_key}/full/!720,720/0/default.jpg`.
+  No redirect.
+- **`iiif_key` value:** the IDS id extracted from
+  `content.descriptiveNonRepeating.online_media.media[*].idsId`. The
+  `media` field is either an object (single media file) or a list of
+  objects — the adapter handles both shapes. IDs are typically 18-30
+  chars (e.g. `SAAM-1935.13.211_1`, `CHSDM-6C6C1A2D27BB2-000001`).
+- **`extension`:** always 3 (jpg).
+- **Resolve hook:** none. The idsId is returned inline in the search
+  response.
+- **Rate limit:** **1 000 req/hour per API key** (api.data.gov default
+  for registered keys). 429 carries `Retry-After` in seconds; engaged
+  via the standard `art_institution_set_rate_limited("si", ...)` flow.
+
 ## 10. Image rendition strategy
 
 The device requests `…/full/!720,720/0/default.jpg`. Universally
@@ -631,7 +696,7 @@ museum IIIF servers reliably serve JPEG, less reliably WebP.
 | Wi-Fi offline | Refresh skipped (existing dispatcher behavior). Browse modal shows a "Connect to Wi-Fi to browse museums" hint. |
 | Museum API returns 5xx | Refresh logs the error, leaves cache unchanged, retries on the next cycle. |
 | Museum API returns 429 | Per-museum cooldown engages (§11.1). Browse UI surfaces "rate-limited, try again in N seconds". |
-| TLS handshake failure | Logged. The `esp_crt_bundle` should cover all Tier-1 museum CDNs (`artic.edu`, `iiif.micr.io`, `data.rijksmuseum.nl`, `vam.ac.uk`). Verification is a gating step before the first C-side commit for each museum (§12.3). |
+| TLS handshake failure | Logged. The `esp_crt_bundle` should cover all Tier-1 museum CDNs (`artic.edu`, `iiif.micr.io`, `data.rijksmuseum.nl`, `vam.ac.uk`, `api.harvardartmuseums.org`, `nrs.harvard.edu`, `api.si.edu`, `ids.si.edu`). Verification is a gating step before the first C-side commit for each museum (§12.3). |
 | Empty cache after refresh | Channel marked inactive (existing pattern). UI shows "no artworks". |
 | Image download 404 | Entry left out of LAi; another entry is picked at playback time. |
 | Channel spec parses but museum is unknown (newer playset on older firmware) | Channel skipped at execute time, logged WARN. |

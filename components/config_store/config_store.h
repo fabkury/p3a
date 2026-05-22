@@ -576,6 +576,29 @@ esp_err_t config_store_set_ham_api_key(const char *key);
  */
 esp_err_t config_store_get_ham_api_key(char *out_key, size_t max_len);
 
+/**
+ * @brief Set Smithsonian Open Access API key (BYOK; empty by default)
+ *
+ * The user enters this key in settings.html under the Museums tab. The key
+ * is issued by api.data.gov (a single key covers all api.data.gov services
+ * — Smithsonian, NASA, NOAA, etc.). When empty, the Smithsonian refresh
+ * path is a no-op and the browse modal hides the Smithsonian museum entry.
+ * No key is shipped with the firmware.
+ *
+ * @param key API key string (empty string clears it)
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_si_api_key(const char *key);
+
+/**
+ * @brief Get Smithsonian Open Access API key
+ *
+ * @param out_key Buffer to receive the key
+ * @param max_len Buffer size (api.data.gov keys are 40 chars; pass >= 64)
+ * @return ESP_OK on success; out_key is empty string if no key is saved.
+ */
+esp_err_t config_store_get_si_api_key(char *out_key, size_t max_len);
+
 // ============================================================================
 // Device Name (persisted)
 // ============================================================================

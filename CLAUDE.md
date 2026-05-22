@@ -54,7 +54,7 @@ Build artifacts go to `build/`. Release binaries are copied to `release/v{VERSIO
 | `play_scheduler` | Playback engine that executes playsets to select artwork |
 | `channel_manager` | Playlist/channel handling, vault storage (SHA256-sharded `/sdcard/p3a/vault/`) |
 | `giphy` | Giphy API integration: trending GIFs, on-demand download, SD card caching (`/sdcard/p3a/giphy/`) |
-| `art_institution` | Museum channels via IIIF. Six museums today (`artic`, `rijks`, `vam`, `wellcome`, `smk`, `ham`); per-museum dispatch (refresh, IIIF URL build, optional resolver e.g. Rijks Linked-Art walk), shared rate-limit cooldown synchronized with the browser via `/api/museum/rate-limits*`, vault at `/sdcard/p3a/museum/{museum_id}/`. NVS settings: `ai_refresh_sec`, `ai_cache_size`, plus per-museum BYOK keys where required (`ham_api_key`). See `docs/art-institutions/finalized-design.md`. |
+| `art_institution` | Museum channels via IIIF. Seven museums today (`artic`, `rijks`, `vam`, `wellcome`, `smk`, `ham`, `si`); per-museum dispatch (refresh, IIIF URL build, optional resolver e.g. Rijks Linked-Art walk), shared rate-limit cooldown synchronized with the browser via `/api/museum/rate-limits*`, vault at `/sdcard/p3a/museum/{museum_id}/`. NVS settings: `ai_refresh_sec`, `ai_cache_size`, plus per-museum BYOK keys where required (`ham_api_key`, `si_api_key`). See `docs/art-institutions/finalized-design.md`. |
 | `animation_decoder` | WebP/PNG/JPEG decoders with transparency support |
 | `animated_gif_decoder` | GIF decoder (C++ wrapper) |
 | `wifi_manager` | Wi-Fi provisioning, captive portal, mDNS (`p3a.local`) |

@@ -2,7 +2,7 @@ idf_component_register(
     SRCS "slave_ota.c"
     INCLUDE_DIRS "include"
     REQUIRES esp_partition app_update freertos
-    PRIV_REQUIRES log esp_hosted esp_system
+    PRIV_REQUIRES log esp_hosted esp_system p3a_core
 )
 
 # The esp_hosted component provides the OTA APIs

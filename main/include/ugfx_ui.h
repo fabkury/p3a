@@ -117,10 +117,37 @@ void ugfx_ui_update_ota_progress(int percent, const char *status_text);
 
 /**
  * @brief Hide OTA progress screen
- * 
+ *
  * Deactivates the OTA progress UI and returns to normal animation mode.
  */
 void ugfx_ui_hide_ota_progress(void);
+
+/**
+ * @brief Show ESP32-C6 (slave) co-processor OTA progress screen
+ *
+ * Distinct from the host (ESP32-P4) OTA UI: yellow title "CO-PROCESSOR
+ * UPDATE", "One-time update — device will reboot" subtitle, gentle
+ * "Please wait" footer (no alarmist warning, since power loss is recoverable
+ * thanks to the C6's dual-OTA partitions).
+ *
+ * @param version_from Current C6 firmware version (can be NULL)
+ * @param version_to Target C6 firmware version (can be NULL)
+ * @return ESP_OK on success
+ */
+esp_err_t ugfx_ui_show_slave_ota_progress(const char *version_from, const char *version_to);
+
+/**
+ * @brief Update slave OTA progress display
+ *
+ * @param percent Progress percentage (0-100)
+ * @param status_text Status text (e.g., "Updating co-processor…", "Rebooting in 3…")
+ */
+void ugfx_ui_update_slave_ota_progress(int percent, const char *status_text);
+
+/**
+ * @brief Hide slave OTA progress screen
+ */
+void ugfx_ui_hide_slave_ota_progress(void);
 
 /**
  * @brief Show channel loading message

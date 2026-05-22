@@ -53,6 +53,7 @@
 #include "playset_json.h"
 #include "playset_store.h"
 #include "event_bus.h"
+#include "slave_ota.h"
 #include "esp_heap_caps.h"
 #if CONFIG_P3A_PICO8_ENABLE
 #include "pico8_stream.h"
@@ -146,6 +147,15 @@ static bool enqueue_cmd(command_type_t t) {
         return false;
     }
 
+    // Drop everything except REBOOT while the slave OTA owns the screen.
+    // REBOOT is allowed through because it's consistent with the OTA's own
+    // esp_restart at the end (and a user-requested reboot wouldn't change
+    // the screen — it just hastens what's about to happen anyway).
+    if (slave_ota_is_in_progress() && t != CMD_REBOOT) {
+        ESP_LOGI(HTTP_API_TAG, "Command type %d dropped: slave OTA in progress", (int)t);
+        return false;
+    }
+
     command_t c = { .type = t, .id = ++s_cmd_id };
     return xQueueSend(s_cmdq, &c, pdMS_TO_TICKS(10)) == pdTRUE;
 }
@@ -180,6 +190,15 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
     // Optional Player Commands: pause/brightness/rotation/mirror. The OPC
     // module owns ack publishing for any command it claims, so we return early.
     if (makapix_opc_handle_command(command_type, payload, command_id)) {
+        return;
+    }
+
+    // Drop screen-affecting commands while the slave OTA is running. OPC
+    // commands above this gate are intentionally allowed (brightness etc.
+    // don't change pixel content; the OTA screen stays correct).
+    if (slave_ota_is_in_progress()) {
+        ESP_LOGI(HTTP_API_TAG, "MQTT command '%s' ignored: slave OTA in progress",
+                 command_type ? command_type : "(null)");
         return;
     }
 

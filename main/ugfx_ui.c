@@ -39,7 +39,8 @@ typedef enum {
     UI_MODE_STATUS,            // Provisioning status
     UI_MODE_REGISTRATION,      // Registration code display
     UI_MODE_CAPTIVE_AP_INFO,   // Captive portal setup info
-    UI_MODE_OTA_PROGRESS,      // OTA update progress
+    UI_MODE_OTA_PROGRESS,      // OTA update progress (host / ESP32-P4)
+    UI_MODE_SLAVE_OTA_PROGRESS, // OTA update progress (slave / ESP32-C6)
     UI_MODE_CHANNEL_MESSAGE,   // Channel loading/download status
     UI_MODE_CONNECTIVITY_ERROR, // Connectivity error (no internet, etc.)
     UI_MODE_INFO_SCREEN,        // System info overlay
@@ -305,6 +306,76 @@ static void ugfx_ui_draw_ota_progress(void)
     // Warning at bottom
     gdispFillStringBox(0, screen_h - 60, screen_w, 25, "DO NOT POWER OFF",
                      gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0xFF6666), GFX_BLACK, gJustifyCenter);
+}
+
+/**
+ * @brief Draw the slave (ESP32-C6) OTA progress screen
+ *
+ * Distinct from the host OTA screen: yellow title, "one-time update"
+ * subtitle, gentle "Please wait" footer. Reuses the s_ota_* state since
+ * only one OTA can be in progress at a time.
+ *
+ * Box heights follow the codebase's documented descender-safe pattern:
+ * the captive-portal and info screens both use 36 for 16pt and 20pt text
+ * that may contain descenders ("Long-press to dismiss", uptime, etc. —
+ * see comment at line 534: "row height – enough for descenders"). A
+ * mere 30 turned out to clip the descender of "p" in "One-time update".
+ */
+static void ugfx_ui_draw_slave_ota_progress(void)
+{
+    gdispClear(GFX_BLACK);
+
+    gCoord screen_w = gdispGetWidth();
+    gCoord screen_h = gdispGetHeight();
+
+    // Title (24pt)
+    gdispFillStringBox(0, 50, screen_w, 44, "CO-PROCESSOR UPDATE",
+                     gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0xFFCC00), GFX_BLACK, gJustifyCenter);
+
+    // Subtitle (16pt) — "update" has a descender on the "p"
+    gdispFillStringBox(0, 104, screen_w, 36, "One-time update - device will reboot",
+                     gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+
+    // Version info (20pt)
+    char version_text[96];
+    if (strlen(s_ota_version_from) > 0 && strlen(s_ota_version_to) > 0) {
+        snprintf(version_text, sizeof(version_text), "v%s  ->  v%s", s_ota_version_from, s_ota_version_to);
+    } else {
+        snprintf(version_text, sizeof(version_text), "Updating co-processor...");
+    }
+    gdispFillStringBox(0, 148, screen_w, 36, version_text,
+                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+
+    // Progress bar geometry mirrors the host OTA screen for visual rhythm
+    gCoord bar_x = 40;
+    gCoord bar_y = screen_h / 2 - 20;
+    gCoord bar_w = screen_w - 80;
+    gCoord bar_h = 40;
+
+    gdispDrawBox(bar_x - 2, bar_y - 2, bar_w + 4, bar_h + 4, HTML2COLOR(0x444444));
+    gdispFillArea(bar_x, bar_y, bar_w, bar_h, HTML2COLOR(0x222222));
+
+    gCoord fill_w = (bar_w * s_ota_progress) / 100;
+    if (fill_w > 0) {
+        // Yellow gradient to match the title
+        gdispFillArea(bar_x, bar_y, fill_w, bar_h / 2, HTML2COLOR(0xFFCC00));
+        gdispFillArea(bar_x, bar_y + bar_h / 2, fill_w, bar_h / 2, HTML2COLOR(0xCC9900));
+    }
+
+    // Progress percentage (32pt)
+    char progress_text[16];
+    snprintf(progress_text, sizeof(progress_text), "%d%%", s_ota_progress);
+    gdispFillStringBox(0, bar_y + bar_h + 20, screen_w, 50, progress_text,
+                     gdispOpenFont("* DejaVu Sans 32"), GFX_WHITE, GFX_BLACK, gJustifyCenter);
+
+    // Status text (20pt) (e.g., "Updating co-processor…", "Rebooting in 3…")
+    gdispFillStringBox(0, bar_y + bar_h + 90, screen_w, 36, s_ota_status_text,
+                     gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xFFFF00), GFX_BLACK, gJustifyCenter);
+
+    // Gentle footer (16pt) — bumped to 36 for consistency with other
+    // 16pt text in the codebase, even though "Please wait" has no descenders
+    gdispFillStringBox(0, screen_h - 70, screen_w, 36, "Please wait",
+                     gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
 }
 
 /**
@@ -1093,8 +1164,63 @@ void ugfx_ui_hide_ota_progress(void)
         s_ota_status_text[0] = '\0';
         s_ota_version_from[0] = '\0';
         s_ota_version_to[0] = '\0';
-        
+
         ESP_LOGD(TAG, "OTA progress UI deactivated");
+    }
+}
+
+esp_err_t ugfx_ui_show_slave_ota_progress(const char *version_from, const char *version_to)
+{
+    if (version_from) {
+        strncpy(s_ota_version_from, version_from, sizeof(s_ota_version_from) - 1);
+        s_ota_version_from[sizeof(s_ota_version_from) - 1] = '\0';
+    } else {
+        s_ota_version_from[0] = '\0';
+    }
+
+    if (version_to) {
+        strncpy(s_ota_version_to, version_to, sizeof(s_ota_version_to) - 1);
+        s_ota_version_to[sizeof(s_ota_version_to) - 1] = '\0';
+    } else {
+        s_ota_version_to[0] = '\0';
+    }
+
+    s_ota_progress = 0;
+    strncpy(s_ota_status_text, "Preparing...", sizeof(s_ota_status_text) - 1);
+    s_ui_mode = UI_MODE_SLAVE_OTA_PROGRESS;
+    s_ui_active = true;
+
+    ESP_LOGD(TAG, "Slave OTA UI activated: %s -> %s",
+             version_from ? version_from : "?",
+             version_to ? version_to : "?");
+    return ESP_OK;
+}
+
+void ugfx_ui_update_slave_ota_progress(int percent, const char *status_text)
+{
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+    s_ota_progress = percent;
+
+    if (status_text) {
+        strncpy(s_ota_status_text, status_text, sizeof(s_ota_status_text) - 1);
+        s_ota_status_text[sizeof(s_ota_status_text) - 1] = '\0';
+    }
+
+    ESP_LOGD(TAG, "Slave OTA: %d%% - %s", s_ota_progress, s_ota_status_text);
+}
+
+void ugfx_ui_hide_slave_ota_progress(void)
+{
+    if (s_ui_mode == UI_MODE_SLAVE_OTA_PROGRESS) {
+        s_ui_active = false;
+        s_ui_mode = UI_MODE_NONE;
+        s_ota_progress = 0;
+        s_ota_status_text[0] = '\0';
+        s_ota_version_from[0] = '\0';
+        s_ota_version_to[0] = '\0';
+
+        ESP_LOGD(TAG, "Slave OTA UI deactivated");
     }
 }
 
@@ -1215,6 +1341,10 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
         case UI_MODE_OTA_PROGRESS:
             ugfx_ui_draw_ota_progress();
             return 50;  // Faster refresh for smooth progress updates
+
+        case UI_MODE_SLAVE_OTA_PROGRESS:
+            ugfx_ui_draw_slave_ota_progress();
+            return 50;  // Match host OTA refresh cadence
             
         case UI_MODE_REGISTRATION:
             if (s_current_code[0] != '\0') {

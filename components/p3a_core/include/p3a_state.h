@@ -120,6 +120,7 @@ typedef enum {
     P3A_OTA_VERIFYING,              ///< Verifying checksum
     P3A_OTA_FLASHING,               ///< Writing to flash
     P3A_OTA_PENDING_REBOOT,         ///< Waiting for reboot
+    P3A_OTA_SLAVE_FLASHING,         ///< ESP32-C6 co-processor OTA in progress (boot-time)
 } p3a_ota_substate_t;
 
 /**

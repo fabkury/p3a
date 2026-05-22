@@ -117,6 +117,25 @@ void p3a_render_set_provisioning_code(const char *code, const char *expires_at);
 void p3a_render_set_ota_progress(int percent, const char *status,
                                   const char *version_from, const char *version_to);
 
+/**
+ * @brief Show the ESP32-C6 (slave) OTA progress screen
+ *
+ * Forwards to ugfx_ui_show_slave_ota_progress via a weak symbol. Used by
+ * slave_ota to take exclusive ownership of the LCD during boot-time
+ * co-processor firmware updates.
+ */
+void p3a_render_show_slave_ota(const char *version_from, const char *version_to);
+
+/**
+ * @brief Update slave OTA progress text + percentage
+ */
+void p3a_render_update_slave_ota(int percent, const char *status);
+
+/**
+ * @brief Hide the slave OTA progress screen
+ */
+void p3a_render_hide_slave_ota(void);
+
 #ifdef __cplusplus
 }
 #endif

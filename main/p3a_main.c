@@ -679,7 +679,12 @@ void app_main(void)
     }
 
     // Check and update ESP32-C6 co-processor firmware if needed
-    // This uses the ESP-Hosted OTA feature to update the WiFi chip
+    // This uses the ESP-Hosted OTA feature to update the WiFi chip.
+    // Hand slave_ota the predicate it should use to detect USB-MSC activity
+    // (USB and the C6 share the SDIO bus — running OTA during MSC export risks
+    // contention). The function tolerates slave_ota being called before
+    // registration, so app_usb_is_stream_active is safe to register here.
+    slave_ota_set_usb_busy_check(app_usb_is_stream_active);
     esp_err_t slave_ota_err = slave_ota_check_and_update();
     if (slave_ota_err != ESP_OK && slave_ota_err != ESP_ERR_NOT_FOUND) {
         ESP_LOGW(TAG, "Slave OTA check failed: %s (continuing anyway)", esp_err_to_name(slave_ota_err));

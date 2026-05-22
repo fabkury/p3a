@@ -1,0 +1,25 @@
+menu "Slave OTA"
+
+config P3A_SLAVE_OTA_MOCK
+    bool "Mock slave OTA (test screen ownership without real OTA)"
+    default n
+    help
+      When enabled, slave_ota_check_and_update runs through all the UX
+      paths (UI ownership, input lockout, success countdown, reboot)
+      but does NOT call esp_hosted_slave_ota_*. Used to verify the
+      screen-owning code without burning real OTA cycles. Disable
+      before shipping.
+
+config P3A_SLAVE_OTA_MOCK_DURATION_MS
+    int "Total mock duration (ms)"
+    depends on P3A_SLAVE_OTA_MOCK
+    default 10000
+    range 2000 60000
+    help
+      How long the mock OTA takes to climb from 0% to 100%, in
+      milliseconds. Defaults to 10 seconds, similar to a real ~1 MB
+      transfer over SDIO. Bump this when manually testing the input
+      lockout to give yourself a wider window to press buttons or
+      issue commands.
+
+endmenu

@@ -51,6 +51,9 @@ extern int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride) __attribute_
 extern esp_err_t ugfx_ui_init(void) __attribute__((weak));
 extern esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *message, int progress_percent) __attribute__((weak));
 extern void ugfx_ui_hide_channel_message(void) __attribute__((weak));
+extern esp_err_t ugfx_ui_show_slave_ota_progress(const char *version_from, const char *version_to) __attribute__((weak));
+extern void ugfx_ui_update_slave_ota_progress(int percent, const char *status_text) __attribute__((weak));
+extern void ugfx_ui_hide_slave_ota_progress(void) __attribute__((weak));
 
 // Animation rendering (weak symbol)
 extern int animation_player_render_frame_internal(uint8_t *buffer, size_t stride) __attribute__((weak));
@@ -354,9 +357,9 @@ void p3a_render_set_ota_progress(int percent, const char *status,
                                   const char *version_from, const char *version_to)
 {
     if (!s_render.initialized) return;
-    
+
     s_render.ota_progress = percent;
-    
+
     if (status) {
         snprintf(s_render.ota_status, sizeof(s_render.ota_status), "%s", status);
     }
@@ -366,7 +369,28 @@ void p3a_render_set_ota_progress(int percent, const char *status,
     if (version_to) {
         snprintf(s_render.ota_version_to, sizeof(s_render.ota_version_to), "%s", version_to);
     }
-    
+
     ESP_LOGD(TAG, "OTA progress: %d%% - %s", percent, status ? status : "");
+}
+
+void p3a_render_show_slave_ota(const char *version_from, const char *version_to)
+{
+    if (ugfx_ui_show_slave_ota_progress) {
+        ugfx_ui_show_slave_ota_progress(version_from, version_to);
+    }
+}
+
+void p3a_render_update_slave_ota(int percent, const char *status)
+{
+    if (ugfx_ui_update_slave_ota_progress) {
+        ugfx_ui_update_slave_ota_progress(percent, status);
+    }
+}
+
+void p3a_render_hide_slave_ota(void)
+{
+    if (ugfx_ui_hide_slave_ota_progress) {
+        ugfx_ui_hide_slave_ota_progress();
+    }
 }
 

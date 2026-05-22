@@ -25,6 +25,7 @@
 #include "p3a_current_post.h"
 #include "p3a_reaction_dispatcher.h"
 #include "p3a_pin_dispatcher.h"
+#include "slave_ota.h"
 #include <sys/stat.h>
 #include <string.h>
 
@@ -41,6 +42,11 @@ extern void proc_notif_start(void) __attribute__((weak));
 esp_err_t h_post_channel(httpd_req_t *req) {
     if (!ensure_json_content(req)) {
         send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+
+    if (slave_ota_is_in_progress()) {
+        send_json(req, 503, "{\"ok\":false,\"error\":\"OTA_IN_PROGRESS\",\"code\":\"OTA_IN_PROGRESS\"}");
         return ESP_OK;
     }
 
@@ -380,6 +386,11 @@ esp_err_t h_post_show_url(httpd_req_t *req) {
 esp_err_t h_post_swap_to(httpd_req_t *req) {
     if (!ensure_json_content(req)) {
         send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        return ESP_OK;
+    }
+
+    if (slave_ota_is_in_progress()) {
+        send_json(req, 503, "{\"ok\":false,\"error\":\"OTA_IN_PROGRESS\",\"code\":\"OTA_IN_PROGRESS\"}");
         return ESP_OK;
     }
 

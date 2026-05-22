@@ -10,6 +10,7 @@
 #include "freertos/timers.h"
 #include "event_bus.h"
 #include "esp_log.h"
+#include "slave_ota.h"
 
 static const char *TAG = "board_button";
 
@@ -29,6 +30,10 @@ static void debounce_timer_cb(TimerHandle_t timer)
 
     // Confirm button is still held (active-low: 0 = pressed)
     if (gpio_get_level(BOOT_BUTTON_GPIO) == 0) {
+        if (slave_ota_is_in_progress()) {
+            ESP_LOGI(TAG, "BOOT button ignored: slave OTA in progress");
+            return;
+        }
         ESP_LOGI(TAG, "BOOT button pressed - toggling pause");
         event_bus_emit_simple(P3A_EVENT_TOGGLE_PAUSE);
     }

@@ -470,10 +470,10 @@
             <label class="toggle-label" for="mkx-refresh">Refresh Interval</label>
             <select id="mkx-refresh" onchange="saveMakapixRefresh(this.value)"
                 style="padding:8px 10px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem;background:#fff;color:#333;">
-                <option value="3600">1 hour (default)</option>
                 <option value="7200">2 hours</option>
-                <option value="14400">4 hours</option>
+                <option value="14400">4 hours (default)</option>
                 <option value="28800">8 hours</option>
+                <option value="86400">24 hours</option>
             </select>
         </div>
         <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
@@ -935,7 +935,7 @@ function saveCacheSize() {
 
 function saveMakapixRefresh(val) {
     var sec = parseInt(val, 10);
-    var prev = document.getElementById('mkx-refresh').dataset.prev || '3600';
+    var prev = document.getElementById('mkx-refresh').dataset.prev || '14400';
     mergeConfig({refresh_interval_sec: sec}, function() {
         document.getElementById('mkx-refresh').dataset.prev = String(sec);
         showToast('Makapix refresh interval: ' + (sec / 3600) + 'h', false);
@@ -1252,9 +1252,9 @@ xhr.onreadystatechange = function() {
         document.getElementById('sd-root').value = cfg.sdcard_root || '/p3a';
         // Makapix refresh interval
         var mkxRefreshSel = document.getElementById('mkx-refresh');
-        var mkxRefreshVal = String(cfg.refresh_interval_sec || 3600);
+        var mkxRefreshVal = String(cfg.refresh_interval_sec || 14400);
         mkxRefreshSel.value = mkxRefreshVal;
-        if (!mkxRefreshSel.value) mkxRefreshSel.value = '3600';
+        if (!mkxRefreshSel.value) mkxRefreshSel.value = '14400';
         mkxRefreshSel.dataset.prev = mkxRefreshSel.value;
         // Refresh override (now included in /config response)
         document.getElementById('refresh-override').checked = !!cfg.refresh_allow_override;

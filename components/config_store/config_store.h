@@ -113,7 +113,7 @@ esp_err_t config_store_set_refresh_interval_sec(uint32_t interval_sec);
 /**
  * @brief Get background refresh interval for Makapix channels
  * 
- * @return Refresh interval in seconds (defaults to 3600 = 1 hour)
+ * @return Refresh interval in seconds (defaults to 14400 = 4 hours)
  */
 uint32_t config_store_get_refresh_interval_sec(void);
 

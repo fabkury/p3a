@@ -585,7 +585,7 @@ bool config_store_get_max_speed_playback(void)
 // Refresh Interval (persisted)
 // ============================================================================
 
-static uint32_t s_refresh_interval_sec = 3600;
+static uint32_t s_refresh_interval_sec = 14400;
 static bool s_refresh_interval_sec_loaded = false;
 
 esp_err_t config_store_set_refresh_interval_sec(uint32_t interval_sec)
@@ -632,7 +632,7 @@ uint32_t config_store_get_refresh_interval_sec(void)
     esp_err_t err = config_store_load(&cfg);
     if (err != ESP_OK) {
         s_refresh_interval_sec_loaded = true;
-        return s_refresh_interval_sec;  // Default: 1 hour
+        return s_refresh_interval_sec;  // Default: 4 hours
     }
 
     cJSON *item = cJSON_GetObjectItem(cfg, "refresh_interval_sec");

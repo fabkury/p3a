@@ -303,7 +303,7 @@ The Giphy tab at `http://p3a.local/settings#giphy` lets you customize:
 | Setting | Options | Description |
 |---------|---------|-------------|
 | **Content Rating** | G, PG, PG-13, R | Filters content by age-appropriateness |
-| **Refresh Interval** | 1, 2, or 4 hours | How often p3a fetches fresh trending content from Giphy |
+| **Refresh Interval** | 1, 2, 4, or 8 hours | How often p3a fetches fresh trending content from Giphy |
 | **Cache Size** | 32–500 items | Maximum number of GIFs kept per Giphy channel |
 
 > Rendition (resolution) and format (WebP/GIF) are build-time defaults set via Kconfig (`CONFIG_GIPHY_RENDITION_DEFAULT`, `CONFIG_GIPHY_FORMAT_DEFAULT`); they are not adjustable from the web UI.

@@ -451,7 +451,7 @@ Two new `config_store` keys, both global:
 
 | Key | Type | Default | Allowed values |
 |---|---|---|---|
-| `ai_refresh_sec` | uint32 | 86400 (1 day) | 28800 (8h), 86400 (1d), 172800 (2d), 345600 (4d) |
+| `ai_refresh_sec` | uint32 | 172800 (2 days) | 86400 (1d), 172800 (2d), 345600 (4d), 691200 (8d) |
 | `ai_cache_size` | uint32 | 1024 | 32, 64, 128, 256, 512, 1024, 2048, 4096 |
 
 NVS keys are short (`ai_*` prefix) to fit the NVS 15-char key limit.

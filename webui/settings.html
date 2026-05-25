@@ -367,10 +367,10 @@
         <div class="setting-row">
             <label class="setting-label" for="ai-refresh-sec">Refresh Interval</label>
             <select class="setting-select" id="ai-refresh-sec">
-                <option value="28800">8 hours</option>
-                <option value="86400" selected>1 day (default)</option>
-                <option value="172800">2 days</option>
+                <option value="86400">1 day</option>
+                <option value="172800" selected>2 days (default)</option>
                 <option value="345600">4 days</option>
+                <option value="691200">8 days</option>
             </select>
         </div>
         <div class="setting-row">
@@ -889,10 +889,10 @@ function resetRandomId() {
 function loadMuseumSettings(cfg) {
     var refreshSel = document.getElementById('ai-refresh-sec');
     var cacheSel   = document.getElementById('ai-cache-size');
-    var refreshVal = String(cfg.ai_refresh_sec || 86400);
+    var refreshVal = String(cfg.ai_refresh_sec || 172800);
     var cacheVal   = String(cfg.ai_cache_size  || 1024);
     refreshSel.value = refreshVal;
-    if (!refreshSel.value) refreshSel.value = '86400';
+    if (!refreshSel.value) refreshSel.value = '172800';
     cacheSel.value = cacheVal;
     if (!cacheSel.value) cacheSel.value = '1024';
     document.getElementById('ham-api-key').value = cfg.ham_api_key || '';

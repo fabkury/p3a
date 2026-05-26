@@ -27,6 +27,7 @@
 #include "sdcard_channel_impl.h"
 #include "makapix_channel_impl.h"
 #include "art_institution.h"
+#include "pin_lists.h"
 #include "config_store.h"
 #include "p3a_state.h"
 #include "sd_path.h"
@@ -100,6 +101,24 @@ void ps_get_display_name_from_spec(ps_channel_type_t type, const char *spec_name
                 strlcpy(out_name, "Giphy: Trending", max_len);
             }
             break;
+        case PS_CHANNEL_TYPE_PINNED: {
+            // identifier holds the pin-list slug; the user-visible label
+            // lives in the list metadata. Falls back to the slug itself if
+            // the lookup fails (list deleted out from under us, or called
+            // before pin_lists_init) so the panel still shows *something*
+            // identifiable instead of the generic "Channel".
+            pin_list_info_t info;
+            if (identifier[0] != '\0' &&
+                pin_lists_get_info(identifier, &info) == ESP_OK &&
+                info.name[0] != '\0') {
+                strlcpy(out_name, info.name, max_len);
+            } else if (identifier[0] != '\0') {
+                snprintf(out_name, max_len, "Pinned: %.48s", identifier);
+            } else {
+                strlcpy(out_name, "Pinned", max_len);
+            }
+            break;
+        }
         case PS_CHANNEL_TYPE_INSTITUTION: {
             // spec_name is "{museum_id}:{axis}"; identifier is the term_id.
             // The browser-side editor normally supplies a rich display_name;

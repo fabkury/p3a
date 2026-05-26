@@ -272,10 +272,12 @@ static void animation_loader_evict_from_lai(int32_t post_id)
 }
 
 // Exposed for prefetch-time corruption handling.
-// Handles both vault (/vault/) and giphy (/giphy/) cached files.
+// Handles vault (/vault/), giphy (/giphy/), and museum (/museum/) cached files.
 bool animation_loader_try_delete_corrupt_cached_file(const char *filepath, esp_err_t error, int32_t post_id)
 {
-    if (!filepath || (strstr(filepath, "/vault/") == NULL && strstr(filepath, "/giphy/") == NULL)) {
+    if (!filepath || (strstr(filepath, "/vault/") == NULL
+                      && strstr(filepath, "/giphy/") == NULL
+                      && strstr(filepath, "/museum/") == NULL)) {
         return false;
     }
 
@@ -541,7 +543,9 @@ void animation_loader_task(void *arg)
         esp_err_t err = file_missing ? ESP_ERR_NOT_FOUND : load_animation_into_buffer(filepath, type, channel_type,
                                                                                       &s_back_buffer);
         if (err != ESP_OK) {
-            bool is_cached_file = filepath && (strstr(filepath, "/vault/") != NULL || strstr(filepath, "/giphy/") != NULL);
+            bool is_cached_file = filepath && (strstr(filepath, "/vault/") != NULL
+                                               || strstr(filepath, "/giphy/") != NULL
+                                               || strstr(filepath, "/museum/") != NULL);
 
             if (is_cached_file && file_missing) {
                 // File doesn't exist - advance to next and let background refresh re-download it

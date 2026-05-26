@@ -2051,11 +2051,14 @@ function sendCommand(action) {
    that don't correspond to a pill (single artwork, single local file). */
 function pillIdFromActivePlayset(ap) {
     if (!ap || !ap.channels || ap.channels.length === 0) return '';
-    if (ap.channels.length > 1) {
-        // Multi-channel playset: identified by the playset's saved name
-        // (e.g. "followed_artists", user-saved playsets). Empty name → no pill.
-        return ap.name || '';
-    }
+    // Saved playsets (user-created or backend-loaded) carry a non-empty `name`
+    // that is also the user-pill's `data-playset` attribute, so this is the
+    // authoritative pill ID regardless of channel count or channel type.
+    // Transient single-channel built-ins (play_named_channel, channel_promoted
+    // etc.) leave playset.name empty — for those we fall through to the
+    // type-based derivation that maps channel kind to built-in pill IDs.
+    if (ap.name) return ap.name;
+    if (ap.channels.length > 1) return '';
     var ch = ap.channels[0];
     switch (ch.type) {
         case 'named':

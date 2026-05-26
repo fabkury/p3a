@@ -155,6 +155,38 @@ void ps_get_display_name(const char *channel_id, char *out_name, size_t max_len)
     snprintf(out_name, max_len, "%.63s", channel_id);
 }
 
+void play_scheduler_get_channel_display_name(const ps_artwork_t *artwork,
+                                              char *out_name, size_t max_len)
+{
+    if (!artwork || !out_name || max_len == 0) return;
+    out_name[0] = '\0';
+
+    // Prefer the matching active channel's stored display_name. We match on the
+    // provenance triple (type + spec_name + identifier) rather than recomputing
+    // a channel_id, because the id also folds in a pagination offset the artwork
+    // doesn't carry. This recovers the editor-composed label for institution
+    // channels, whose human term label lives only in display_name (the artwork
+    // carries the machine term id, not the label).
+    for (size_t i = 0; i < s_state.channel_count; i++) {
+        const ps_channel_state_t *ch = &s_state.channels[i];
+        if (ch->type == artwork->channel_type &&
+            strcmp(ch->spec_name, artwork->channel_spec_name) == 0 &&
+            strcmp(ch->identifier, artwork->channel_identifier) == 0 &&
+            ch->display_name[0] != '\0') {
+            strlcpy(out_name, ch->display_name, max_len);
+            return;
+        }
+    }
+
+    // Channel isn't in the active playset (e.g. a history item from a playset
+    // that has since been replaced) — derive a best-effort label from the
+    // artwork's own stamped provenance.
+    ps_get_display_name_from_spec(artwork->channel_type,
+                                  artwork->channel_spec_name,
+                                  artwork->channel_identifier,
+                                  out_name, max_len);
+}
+
 esp_err_t ps_storage_key_sha256(const char *storage_key, uint8_t out_sha256[32])
 {
     if (!storage_key || !out_sha256) {

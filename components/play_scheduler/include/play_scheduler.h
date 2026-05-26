@@ -534,6 +534,25 @@ void ps_get_display_name_from_spec(ps_channel_type_t type, const char *spec_name
  */
 void ps_get_display_name(const char *channel_id, char *out_name, size_t max_len);
 
+/**
+ * @brief Resolve the display name of the channel a given artwork came from
+ *
+ * Prefers the stored display name of the matching channel in the active
+ * scheduler state, matched by the artwork's stamped provenance (channel type +
+ * spec name + identifier). This recovers the rich label the playset editor
+ * composed — notably institution channels, whose human-readable section label
+ * (e.g. "AIC · Impressionism") cannot be rebuilt from the artwork's spec name
+ * and machine term id alone. Falls back to ps_get_display_name_from_spec() when
+ * the channel is not in the active playset (e.g. a history item left over from
+ * a previously loaded playset).
+ *
+ * @param artwork Artwork carrying stamped channel provenance
+ * @param out_name Output buffer for display name
+ * @param max_len Size of output buffer
+ */
+void play_scheduler_get_channel_display_name(const ps_artwork_t *artwork,
+                                              char *out_name, size_t max_len);
+
 // ============================================================================
 // Status & Debugging
 // ============================================================================

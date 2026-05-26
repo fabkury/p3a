@@ -739,6 +739,9 @@ body {
         <div class="artwork-info-row date">
             <span class="artwork-info-label">Date:</span><span class="artwork-info-value" id="artwork-info-date"></span>
         </div>
+        <div class="artwork-info-row channel">
+            <span class="artwork-info-label">Channel:</span><span class="artwork-info-value" id="artwork-info-channel"></span>
+        </div>
     </div>
 </div>
 <div class="now-playing collapsed" id="now-playing" style="display:none;">
@@ -1041,7 +1044,8 @@ function playReactionPulse(btn) {
 // source's API (Giphy + HAM use keys read from /config; the museum dispatch
 // goes through webui/museum/{museum_id}.js), and reset the dwell timer so
 // the artwork doesn't swap while the user is reading. Missing fields render
-// as '—'.
+// as '—'. The channel row is the exception: it ships with current_artwork
+// (channel_name, device-side) so it's shown immediately without a fetch.
 // =========================================================================
 
 var latestArtwork = null;        // last currentArtwork seen by updateArtwork
@@ -1076,7 +1080,7 @@ function dismissInfoPanel() {
     if (panel) panel.hidden = true;
     var spinner = document.getElementById('artwork-info-spinner');
     if (spinner) spinner.classList.remove('loading');
-    var ids = ['artwork-info-title', 'artwork-info-artist', 'artwork-info-date'];
+    var ids = ['artwork-info-title', 'artwork-info-artist', 'artwork-info-date', 'artwork-info-channel'];
     for (var i = 0; i < ids.length; i++) {
         var el = document.getElementById(ids[i]);
         if (el) el.textContent = '';
@@ -1088,11 +1092,15 @@ function setInfoPanelLoading() {
     var panel = document.getElementById('artwork-info-area');
     if (panel) panel.hidden = false;
     document.getElementById('artwork-info-spinner').classList.add('loading');
-    // Show em-dashes in all three rows during the load — the spinner
+    // Show em-dashes in the three fetched rows during the load — the spinner
     // communicates "fetching" without holding the rows empty.
     document.getElementById('artwork-info-title').textContent  = EM_DASH;
     document.getElementById('artwork-info-artist').textContent = EM_DASH;
     document.getElementById('artwork-info-date').textContent   = EM_DASH;
+    // Channel ships with current_artwork (device-side), so it's known without a
+    // fetch — fill it immediately rather than spinner-gating it.
+    document.getElementById('artwork-info-channel').textContent =
+        (latestArtwork && latestArtwork.channel_name) ? String(latestArtwork.channel_name) : EM_DASH;
 }
 
 function setInfoPanelValues(meta) {

@@ -210,6 +210,15 @@ cJSON *build_current_artwork_json(void)
     cJSON_AddStringToObject(obj, "channel_type",
                             playset_channel_type_str(artwork.channel_type));
 
+    // Human-readable channel label for the artwork-info panel. Resolves the
+    // active channel's stored display_name (matching what the now-playing card
+    // shows, including editor-composed institution labels), falling back to a
+    // name derived from the artwork's stamped provenance when the channel is no
+    // longer in the active playset.
+    char channel_name[65];
+    play_scheduler_get_channel_display_name(&artwork, channel_name, sizeof(channel_name));
+    cJSON_AddStringToObject(obj, "channel_name", channel_name);
+
     // Fields driven by p3a_current_post (the actual on-screen post, not the
     // next one to be picked). We emit:
     //   - `source`     : string label for the underlying post source. The

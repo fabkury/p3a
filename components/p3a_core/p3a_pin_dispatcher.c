@@ -79,21 +79,12 @@ extern esp_err_t pin_lists_unpin_institution(const char *slug,
 // a circular REQUIRES — play_scheduler already depends on p3a_core.
 extern void play_scheduler_reset_timer(void) __attribute__((weak));
 
-// Map a museum vault-path identifier ("artic", "rijks", …) to its enum
-// ordinal. The art_institution_types.h enum is documented as append-only with
-// stable ordinals, so hardcoding here is safe and avoids dragging in the
-// art_institution header from p3a_core.
-static int museum_id_string_to_enum(const char *s)
-{
-    if (!s) return -1;
-    if (strcmp(s, "artic")    == 0) return 0;
-    if (strcmp(s, "rijks")    == 0) return 1;
-    if (strcmp(s, "vam")      == 0) return 2;
-    if (strcmp(s, "wellcome") == 0) return 3;
-    if (strcmp(s, "smk")      == 0) return 4;
-    if (strcmp(s, "ham")      == 0) return 5;
-    return -1;
-}
+// Map a museum vault-path identifier ("artic", "rijks", ...) to its enum
+// ordinal. Declared as weak extern so this file doesn't need to REQUIRE
+// art_institution — which would create a cycle, since art_institution
+// already REQUIREs p3a_core. The canonical mapping (and a build-time guard
+// that catches missing entries) lives in components/art_institution/.
+extern int art_institution_enum_from_id(const char *museum_id) __attribute__((weak));
 
 /* Active single-artwork title (defined in components/play_scheduler/play_scheduler.c).
    Weak symbol so this file doesn't drag in play_scheduler headers. Reads the
@@ -332,7 +323,11 @@ static esp_err_t resolve_institution_from_current(pin_task_params_t *p)
         ESP_LOGW(TAG, "Museum component not found in %s", filepath);
         return ESP_ERR_INVALID_ARG;
     }
-    int museum_enum = museum_id_string_to_enum(museum_str);
+    if (!art_institution_enum_from_id) {
+        ESP_LOGE(TAG, "art_institution_enum_from_id unavailable (link error)");
+        return ESP_ERR_INVALID_STATE;
+    }
+    int museum_enum = art_institution_enum_from_id(museum_str);
     if (museum_enum < 0) {
         ESP_LOGW(TAG, "Unknown museum string '%s'", museum_str);
         return ESP_ERR_INVALID_ARG;

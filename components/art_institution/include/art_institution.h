@@ -122,6 +122,25 @@ esp_err_t art_institution_init(void);
 const art_institution_museum_t *art_institution_find(const char *museum_id);
 
 /**
+ * @brief Map a wire id ("artic", "si", ...) to its museum_id_t ordinal
+ *
+ * Thin wrappers around art_institution_find() that exist so callers can
+ * avoid pulling in the full dispatch-entry struct. Used by p3a_core (which
+ * cannot REQUIRE art_institution without creating a cycle) via weak extern
+ * declarations.
+ *
+ * @return enum ordinal on hit, -1 on miss / NULL input.
+ */
+int art_institution_enum_from_id(const char *museum_id);
+
+/**
+ * @brief Map a museum_id_t ordinal back to its wire id
+ *
+ * @return Pointer into the static dispatch table on hit, NULL on out-of-range.
+ */
+const char *art_institution_id_from_enum(uint16_t museum_enum);
+
+/**
  * @brief Parse a channel-spec `name` of the form "{museum_id}:{axis}"
  *
  * The two output buffers receive null-terminated strings. The colon is

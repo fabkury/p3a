@@ -91,6 +91,14 @@ const art_institution_museum_t ART_INSTITUTION_MUSEUMS[] = {
 const size_t ART_INSTITUTION_MUSEUM_COUNT =
     sizeof(ART_INSTITUTION_MUSEUMS) / sizeof(ART_INSTITUTION_MUSEUMS[0]);
 
+// Build-time guard: the dispatch table above must list one entry per museum
+// in the enum. If you add a value to museum_id_t, append the corresponding
+// row to ART_INSTITUTION_MUSEUMS — this static_assert will fail otherwise.
+_Static_assert(
+    sizeof(ART_INSTITUTION_MUSEUMS) / sizeof(ART_INSTITUTION_MUSEUMS[0])
+        == (size_t)ART_INSTITUTION_NUM_MUSEUMS,
+    "ART_INSTITUTION_MUSEUMS must have one entry per museum_id_t value");
+
 // ----- Lifecycle ----------------------------------------------------------
 
 esp_err_t art_institution_init(void)
@@ -109,6 +117,22 @@ const art_institution_museum_t *art_institution_find(const char *museum_id)
     for (size_t i = 0; i < ART_INSTITUTION_MUSEUM_COUNT; i++) {
         if (strcmp(ART_INSTITUTION_MUSEUMS[i].id, museum_id) == 0) {
             return &ART_INSTITUTION_MUSEUMS[i];
+        }
+    }
+    return NULL;
+}
+
+int art_institution_enum_from_id(const char *museum_id)
+{
+    const art_institution_museum_t *m = art_institution_find(museum_id);
+    return m ? (int)m->museum_enum : -1;
+}
+
+const char *art_institution_id_from_enum(uint16_t museum_enum)
+{
+    for (size_t i = 0; i < ART_INSTITUTION_MUSEUM_COUNT; i++) {
+        if ((uint16_t)ART_INSTITUTION_MUSEUMS[i].museum_enum == museum_enum) {
+            return ART_INSTITUTION_MUSEUMS[i].id;
         }
     }
     return NULL;

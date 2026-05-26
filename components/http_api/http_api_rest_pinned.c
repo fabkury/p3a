@@ -188,14 +188,12 @@ static cJSON *json_from_list_info(const pin_list_info_t *info)
     return o;
 }
 
-/* Map a museum enum ordinal to its public string id. The art_institution
- * enum is documented as append-only with stable ordinals; museums shipped
- * since v0.1 are listed below in the same order. */
+/* Map a museum enum ordinal to its public string id. Thin shim over
+ * art_institution_id_from_enum() — kept as a wrapper so the existing call
+ * sites stay readable, and so a NULL miss has one obvious place to land. */
 static const char *museum_id_to_str(uint16_t id)
 {
-    static const char *names[] = { "artic", "rijks", "vam", "wellcome", "smk", "ham" };
-    if (id < (sizeof(names) / sizeof(names[0]))) return names[id];
-    return NULL;
+    return art_institution_id_from_enum(id);
 }
 
 /* Build the source-CDN URL for a pinned entry into `out`. Empty string on
@@ -757,12 +755,9 @@ static esp_err_t h_post_pin_raw(httpd_req_t *req, const char *slug)
                                : cJSON_GetStringValue(j_src_id);
             strlcpy(order.museum.iiif_key, iiif, sizeof(order.museum.iiif_key));
             if (original_post_id <= 0) {
-                static const char *museum_names[] = {
-                    "artic", "rijks", "vam", "wellcome", "smk", "ham"
-                };
-                if (file.museum_id < (sizeof(museum_names) / sizeof(museum_names[0]))) {
-                    original_post_id = art_institution_compute_post_id(
-                        museum_names[file.museum_id], iiif);
+                const char *museum_str = art_institution_id_from_enum(file.museum_id);
+                if (museum_str) {
+                    original_post_id = art_institution_compute_post_id(museum_str, iiif);
                 }
             }
             break;

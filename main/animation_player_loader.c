@@ -57,7 +57,7 @@ extern void proc_notif_fail_if_processing(void) __attribute__((weak));
 
 // Track last time a corrupt file was deleted (milliseconds since boot)
 static uint64_t s_last_corrupt_deletion_ms = 0;
-static const uint64_t CORRUPT_DELETION_COOLDOWN_MS = 300000ULL;  // 5 minutes
+static const uint64_t CORRUPT_DELETION_COOLDOWN_MS = 120000ULL;  // 2 minutes
 
 // ============================================================================
 // Silent auto-swap retry burst

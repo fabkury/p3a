@@ -189,17 +189,30 @@ Fields: `items[0].titles[0].title`, `items[0].production[].creator*` (via
 
 The stored `iiif_key` is the URN suffix (e.g. `urn-3:HUAM:79762_dynmc`), with the
 NRS host prefix stripped — see `extractUrn()` in `webui/museum/ham.js:114`. The
-URN is embedded in `primaryimageurl`, which is searchable:
+token between `HUAM:` and the optional `_dynmc` suffix is HAM's **`renditionnumber`**,
+NOT the object id (object 1429's rendition is 79762), and it can be non-numeric
+(e.g. `INV056029`). Recover the object by searching the image sub-field:
 
 ```
 GET https://api.harvardartmuseums.org/object
-    ?apikey={key}&q=primaryimageurl:*{urn}*&size=1
-    &fields=id,title,people,dated
+    ?apikey={key}&q=images.renditionnumber:{rendition}&size=1
+    &fields=title,people,dated
 ```
 
 Fields: `records[0].title`, `getPeopleDisplay(record)` (uses `people[0].displayname`),
 `records[0].dated`. The `apikey` is read from `cfg.ham_api_key` via `/config`, the
 same way `webui/museum/ham.js:59` retrieves it today (`loadConfigKey()`).
+
+Two gotchas this approach sidesteps:
+- **Don't use `/object/{rendition}`.** The rendition number is not the object id,
+  and HAM answers an unknown object id with HTTP **200** and a body of
+  `{"error":"Not found"}` (no 4xx), so the caller can't detect the failure by
+  status — it silently parses all-null metadata. `getJsonWithKey()` now rejects on
+  a top-level `error` to surface this regardless.
+- **Don't query `q=primaryimageurl:...`.** The URN's internal colons collide with
+  HAM's `field:value` query syntax. `images.renditionnumber:{rendition}` (and
+  `images.imageid:{id}` as a fallback) match the indexed sub-field cleanly —
+  verified live for numeric and `INV`-prefixed renditions.
 
 ### Makapix
 

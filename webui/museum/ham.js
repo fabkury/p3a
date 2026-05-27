@@ -99,7 +99,17 @@ async function getJsonWithKey(url, apiKey) {
         throw err;
     }
     if (!r.ok) throw new Error(`HAM ${r.status} ${url}`);
-    return r.json();
+    const j = await r.json();
+    // HAM answers a not-found object id or a malformed query with HTTP 200 and
+    // a body of {"error": "..."} — it does NOT use a 4xx status. Treat a
+    // top-level `error` as a hard failure so callers reject (and the info panel
+    // logs + shows "—") instead of silently parsing all-null metadata out of an
+    // error envelope. Listing/search responses carry {info, records} and never
+    // a top-level `error`, so this only fires on genuine failures.
+    if (j && typeof j === 'object' && j.error) {
+        throw new Error(`HAM API error: ${j.error} (${url})`);
+    }
+    return j;
 }
 
 function getPeopleDisplay(rec) {
@@ -248,32 +258,43 @@ export class HamAdapter {
     }
 
     // Fetch title + artist + date given the device's iiif_key (the URN
-    // portion of primaryimageurl, e.g. "urn-3:HUAM:79762_dynmc"). The URN
-    // embeds the numeric objectid between "HUAM:" and "_dynmc"; we extract
-    // it and hit /object/{id} directly. The earlier search-by-primaryimageurl
-    // approach didn't work because the URN's internal colons collide with
-    // HAM's Elastic-style field:value query syntax.
+    // portion of primaryimageurl, e.g. "urn-3:HUAM:79762_dynmc",
+    // "urn-3:HUAM:INV056029_dynmc", or occasionally "urn-3:HUAM:802142" with
+    // no suffix). The token between "HUAM:" and the optional "_dynmc" is HAM's
+    // `renditionnumber` — NOT the object id (object 1429's rendition is 79762),
+    // and it can be non-numeric. So we recover the object by searching the
+    // image sub-field instead of hitting /object/{id}: a rendition number used
+    // as an object id 200s with {"error":"Not found"}, which getJsonWithKey now
+    // rejects. `q=images.renditionnumber:{rendition}` returns the one matching
+    // object (verified against the live API for both numeric and INV-prefixed
+    // renditions). `images.imageid` would work equally well as a fallback.
     //
     // Requires a configured API key — propagates makeNoKeyError() when
     // absent so the panel shows "—" without exposing a stack trace.
     async fetchMetadataByIiifKey(iiifKey) {
         if (!iiifKey) return { title: null, artist: null, date: null };
-        // Capture the numeric objectid from urn-3:HUAM:{id}{anything}.
-        const m = /^urn-3:HUAM:(\d+)/.exec(iiifKey);
+        // Capture the rendition token: everything between "urn-3:HUAM:" and the
+        // optional "_dynmc" suffix. Non-greedy so "_dynmc" is stripped when
+        // present and the whole tail is kept when it's absent.
+        const m = /^urn-3:HUAM:(.+?)(?:_dynmc)?$/.exec(iiifKey);
         if (!m) return { title: null, artist: null, date: null };
-        const objectId = m[1];
+        const rendition = m[1];
 
         const apiKey = await this._getKey();
-        // /object/{id} returns the record at the top level — no records
-        // wrapper. `fields=` keeps the response small.
-        const url = `${API_ROOT}/object/${encodeURIComponent(objectId)}?fields=title,people,dated`;
-        const r = await getJsonWithKey(url, apiKey);
-        if (!r || typeof r !== 'object') return { title: null, artist: null, date: null };
-        const artist = getPeopleDisplay(r);  // '' when missing
+        const sp = new URLSearchParams({
+            q: `images.renditionnumber:${rendition}`,
+            size: '1',
+            fields: 'title,people,dated',
+        });
+        const data = await getJsonWithKey(`${API_ROOT}/object?${sp}`, apiKey);
+        const records = Array.isArray(data && data.records) ? data.records : [];
+        if (records.length === 0) return { title: null, artist: null, date: null };
+        const rec = records[0];
+        const artist = getPeopleDisplay(rec);  // '' when missing
         return {
-            title:  r.title ? String(r.title) : null,
-            artist: artist  || null,
-            date:   r.dated ? String(r.dated) : null,
+            title:  rec.title ? String(rec.title) : null,
+            artist: artist    || null,
+            date:   rec.dated ? String(rec.dated) : null,
         };
     }
 }

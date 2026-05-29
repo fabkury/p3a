@@ -48,7 +48,7 @@ extern void proc_notif_fail_if_processing(void) __attribute__((weak));
 // SAFEGUARD MEASURE: This mechanism prevents accidental cascade deletion of
 // good files due to transient errors. It tracks the last time a cached file
 // (vault or giphy) was deleted due to corruption and only allows one deletion
-// every 5 minutes.
+// every 60 seconds.
 //
 // After successful deletion, the entry is also evicted from LAi so the
 // scheduler doesn't re-pick the missing file before the next channel refresh.
@@ -57,7 +57,7 @@ extern void proc_notif_fail_if_processing(void) __attribute__((weak));
 
 // Track last time a corrupt file was deleted (milliseconds since boot)
 static uint64_t s_last_corrupt_deletion_ms = 0;
-static const uint64_t CORRUPT_DELETION_COOLDOWN_MS = 120000ULL;  // 2 minutes
+static const uint64_t CORRUPT_DELETION_COOLDOWN_MS = 60000ULL;  // 60 seconds
 
 // ============================================================================
 // Silent auto-swap retry burst

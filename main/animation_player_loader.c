@@ -555,12 +555,8 @@ void animation_loader_task(void *arg)
                 // Phase 3: No navigation on load failure
                 ESP_LOGW(TAG, "Missing file: %s", filepath ? filepath : "(null)");
             } else if (is_cached_file) {
-                // File exists but failed to decode - it's corrupt. If we actually
-                // delete it, refund the SWRR credit the scheduler debited for this
-                // pick so the channel isn't penalized for a show the user never saw.
-                if (animation_loader_try_delete_corrupt_cached_file(filepath, err, post_id)) {
-                    play_scheduler_refund_swrr_credit(channel_type, channel_spec_name, channel_identifier);
-                }
+                // File exists but failed to decode - it's corrupt
+                (void)animation_loader_try_delete_corrupt_cached_file(filepath, err, post_id);
             } else {
                 // Phase 3: No navigation on load failure
                 ESP_LOGW(TAG, "Decode failed: %s", filepath ? filepath : "(null)");

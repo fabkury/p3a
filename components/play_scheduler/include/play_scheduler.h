@@ -320,29 +320,6 @@ size_t play_scheduler_get_active_channel_ids(const char **out_ids, size_t max_co
 void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id);
 
 /**
- * @brief Refund one SWRR selection's worth of credit (WSUM) to a channel
- *
- * Call when a pick was debited at selection time but the artwork never reached
- * the screen because its cached file was found corrupt and deleted, so channel
- * selection stays fair to what the user actually saw. Mirrors the missing-file
- * rollback in play_scheduler_navigation.c.
- *
- * The channel is matched by the (type, spec_name, identifier) triple — the same
- * identity used by play_scheduler_get_channel_display_name — NOT by channel_id
- * (which folds in a pagination offset the swap request doesn't carry). No-op if
- * no channel matches (e.g. the channel was rebuilt by a refresh since the pick).
- *
- * Thread-safe: takes s_state->mutex internally. Do NOT call while holding it.
- *
- * @param type       Channel type of the picked channel
- * @param spec_name  Channel sub-type name (NULL treated as "")
- * @param identifier Channel identifier (NULL treated as "")
- */
-void play_scheduler_refund_swrr_credit(ps_channel_type_t type,
-                                       const char *spec_name,
-                                       const char *identifier);
-
-/**
  * @brief Compensate the recency cursor after a caller-side lai_remove_entry
  *
  * lai_remove_entry shifts LAi entries at positions > removed_pos left by one.

@@ -14,7 +14,6 @@
 #include "esp_log.h"
 #include <limits.h>
 #include <math.h>
-#include <string.h>
 
 static const char *TAG = "ps_chsel";
 
@@ -289,36 +288,4 @@ void ps_swrr_reset_credits(ps_state_t *state)
     for (size_t i = 0; i < state->channel_count; i++) {
         state->channels[i].credit = 0;
     }
-}
-
-// ============================================================================
-// Credit refund (cross-task)
-// ============================================================================
-
-void play_scheduler_refund_swrr_credit(ps_channel_type_t type,
-                                       const char *spec_name,
-                                       const char *identifier)
-{
-    ps_state_t *state = ps_get_state();
-    if (!state || !state->mutex || !state->initialized) {
-        return;
-    }
-    if (!spec_name)  spec_name = "";
-    if (!identifier) identifier = "";
-
-    xSemaphoreTake(state->mutex, portMAX_DELAY);
-    for (size_t i = 0; i < state->channel_count; i++) {
-        ps_channel_state_t *ch = &state->channels[i];
-        if (ch->type == type &&
-            strcmp(ch->spec_name, spec_name) == 0 &&
-            strcmp(ch->identifier, identifier) == 0) {
-            int32_t before = ch->credit;
-            ch->credit += WSUM;
-            ESP_LOGI(TAG,
-                "Refunded SWRR credit to channel[%zu] '%s' after corrupt file (credit %ld -> %ld)",
-                i, ch->display_name, (long)before, (long)ch->credit);
-            break;
-        }
-    }
-    xSemaphoreGive(state->mutex);
 }

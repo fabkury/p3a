@@ -340,6 +340,11 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
         esp_err_t prefetch_err = prefetch_first_frame(&s_back_buffer);
         char failed_path[256] = {0};
         int32_t failed_post_id = 0;
+        // Channel identity of the failed buffer, captured under the mutex so we
+        // can refund SWRR credit to the picked channel if the file is deleted.
+        ps_channel_type_t failed_view_type = PS_CHANNEL_TYPE_NAMED;
+        char failed_view_spec[33] = {0};
+        char failed_view_identifier[33] = {0};
 
         if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
             s_back_buffer.prefetch_pending = false;
@@ -352,6 +357,9 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
                 strlcpy(failed_path, s_back_buffer.filepath, sizeof(failed_path));
             }
             failed_post_id = s_back_buffer.post_id;
+            failed_view_type = s_back_buffer.view_channel_type;
+            strlcpy(failed_view_spec, s_back_buffer.view_channel_spec_name, sizeof(failed_view_spec));
+            strlcpy(failed_view_identifier, s_back_buffer.view_channel_identifier, sizeof(failed_view_identifier));
 
             // If prefetch failed, clear swap request so we don't get stuck.
             if (prefetch_err != ESP_OK) {
@@ -368,9 +376,14 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
         if (prefetch_err != ESP_OK) {
             ESP_LOGW(TAG, "Prefetch failed: %s", esp_err_to_name(prefetch_err));
 
-            // Attempt to delete corrupt cached files (safeguarded).
+            // Attempt to delete corrupt cached files (safeguarded). If the file
+            // is actually deleted, refund the SWRR credit the scheduler debited
+            // for this pick so the channel isn't penalized for a show the user
+            // never saw.
             if (failed_path[0] != '\0') {
-                (void)animation_loader_try_delete_corrupt_cached_file(failed_path, prefetch_err, failed_post_id);
+                if (animation_loader_try_delete_corrupt_cached_file(failed_path, prefetch_err, failed_post_id)) {
+                    play_scheduler_refund_swrr_credit(failed_view_type, failed_view_spec, failed_view_identifier);
+                }
             }
 
             // Clean up back buffer contents so future attempts are clean.

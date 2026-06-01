@@ -19,6 +19,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_mipi_dsi.h"
 #include <stdlib.h>
@@ -62,7 +63,8 @@ extern size_t g_display_row_stride;
 // Synchronization
 extern SemaphoreHandle_t g_display_vsync_sem;
 extern SemaphoreHandle_t g_display_mutex;
-extern TaskHandle_t g_display_render_task;
+extern TaskHandle_t g_display_producer_task;
+extern TaskHandle_t g_display_consumer_task;
 
 // Render mode
 extern volatile display_render_mode_t g_display_mode_request;
@@ -104,8 +106,9 @@ extern volatile bool g_upscale_worker_bottom_done;
 // Multi-buffering state tracking (supports 3+ buffers)
 typedef enum {
     BUFFER_STATE_FREE,       // Safe to write
-    BUFFER_STATE_RENDERING,  // Being rendered to
-    BUFFER_STATE_PENDING,    // Submitted, waiting for DMA
+    BUFFER_STATE_RENDERING,  // Being rendered to (producer)
+    BUFFER_STATE_READY,      // Producer done; entry sits in g_ready_queue
+    BUFFER_STATE_PENDING,    // Submitted, waiting for DMA (consumer)
     BUFFER_STATE_DISPLAYING  // Currently scanned by DMA
 } buffer_state_t;
 
@@ -121,9 +124,20 @@ extern volatile int8_t g_displaying_idx;
 extern volatile int8_t g_last_submitted_idx;
 extern SemaphoreHandle_t g_buffer_free_sem;
 
+// Ready-frame hand-off (producer -> consumer). The producer enqueues a finished
+// buffer with its intended on-screen duration and the content generation it was
+// rendered for; the consumer dequeues, drops stale-generation frames (see
+// display_renderer_note_content_discontinuity), and presents the rest.
+typedef struct {
+    int8_t   buffer_idx;    // index into g_display_buffers; state == BUFFER_STATE_READY
+    uint32_t duration_ms;   // this frame's intended on-screen dwell (from the decoder)
+    uint32_t generation;    // content epoch when finalized
+} ready_frame_t;
+
+extern QueueHandle_t g_ready_queue;
+
 // Timing
 extern int64_t g_last_frame_present_us;
-extern uint32_t g_target_frame_delay_ms;
 extern volatile int64_t g_last_vsync_us;
 
 // Screen rotation
@@ -131,10 +145,11 @@ extern display_rotation_t g_screen_rotation;
 extern volatile bool g_rotation_in_progress;
 
 // Internal functions
-bool display_panel_refresh_done_cb(esp_lcd_panel_handle_t panel, 
-                                   esp_lcd_dpi_panel_event_data_t *edata, 
+bool display_panel_refresh_done_cb(esp_lcd_panel_handle_t panel,
+                                   esp_lcd_dpi_panel_event_data_t *edata,
                                    void *user_ctx);
-void display_render_task(void *arg);
+void display_producer_task(void *arg);
+void display_consumer_task(void *arg);
 void display_upscale_worker_top_task(void *arg);
 void display_upscale_worker_bottom_task(void *arg);
 esp_err_t display_renderer_ensure_upscale_workers(void);
@@ -189,7 +204,7 @@ void proc_notif_fail_if_processing(void);
 /**
  * @brief Update and draw processing notification overlay
  * 
- * Called each frame from display_render_task. Handles state machine
+ * Called each frame from the producer task. Handles state machine
  * transitions and draws the triangle if active.
  * 
  * @param buffer Frame buffer to draw into
@@ -258,7 +273,7 @@ void reaction_overlay_show_click(void);
 /**
  * @brief Update and draw reaction overlay
  *
- * Called each frame from display_render_task. Handles timing
+ * Called each frame from the producer task. Handles timing
  * and draws the overlay image if active.
  *
  * @param buffer Frame buffer to draw into

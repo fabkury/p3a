@@ -21,7 +21,8 @@ size_t g_display_row_stride = 0;
 // Synchronization
 SemaphoreHandle_t g_display_vsync_sem = NULL;
 SemaphoreHandle_t g_display_mutex = NULL;
-TaskHandle_t g_display_render_task = NULL;
+TaskHandle_t g_display_producer_task = NULL;
+TaskHandle_t g_display_consumer_task = NULL;
 
 // Render mode
 volatile display_render_mode_t g_display_mode_request = DISPLAY_RENDER_MODE_ANIMATION;
@@ -70,9 +71,16 @@ volatile int8_t g_displaying_idx = -1;
 volatile int8_t g_last_submitted_idx = -1;
 SemaphoreHandle_t g_buffer_free_sem = NULL;
 
+// Producer -> consumer ready-frame hand-off queue (see ready_frame_t).
+QueueHandle_t g_ready_queue = NULL;
+
+// Content generation: bumped on any discontinuity (mode switch, pause/brightness
+// transition, artwork swap) so the consumer can drop frames the producer rendered
+// for a now-superseded epoch. See display_renderer_note_content_discontinuity().
+static volatile uint32_t g_render_generation = 0;
+
 // Timing
 int64_t g_last_frame_present_us = 0;
-uint32_t g_target_frame_delay_ms = 0;
 // Wall-clock timestamp of the most recent on_refresh_done event, captured in ISR
 // context. Used by the render task to phase-lock submits to vsync edges and to
 // distinguish "fresh" vsync signals from cached ones in the binary semaphore.
@@ -83,7 +91,7 @@ volatile int64_t g_last_vsync_us = 0;
 // so one refresh = 1e6 / 60 ≈ 16667 us. If the panel config changes, update this.
 #define VSYNC_PERIOD_US 16667
 
-// Virtual-playhead accumulator (see Frame timing block in display_render_task).
+// Virtual-playhead accumulator (see Frame timing block in display_consumer_task).
 // File-scope so it persists across iterations.
 static int64_t s_target_present_us = 0;
 
@@ -147,6 +155,14 @@ esp_err_t display_renderer_init(esp_lcd_panel_handle_t panel,
     g_buffer_free_sem = xSemaphoreCreateCounting(buffer_count, buffer_count);
     if (!g_buffer_free_sem) {
         ESP_LOGE(DISPLAY_TAG, "Failed to create buffer-free semaphore");
+        return ESP_ERR_NO_MEM;
+    }
+
+    // Ready-frame hand-off queue (producer -> consumer). Depth covers the at most
+    // one banked frame plus headroom; the real in-flight cap is g_buffer_free_sem.
+    g_ready_queue = xQueueCreate(2, sizeof(ready_frame_t));
+    if (!g_ready_queue) {
+        ESP_LOGE(DISPLAY_TAG, "Failed to create ready-frame queue");
         return ESP_ERR_NO_MEM;
     }
 
@@ -219,9 +235,21 @@ static esp_err_t create_upscale_workers(void)
 
 void display_renderer_deinit(void)
 {
-    if (g_display_render_task) {
-        vTaskDelete(g_display_render_task);
-        g_display_render_task = NULL;
+    // Delete the producer first (stops new frames being enqueued), then the
+    // consumer (stops dequeue/submit), then the queue once both readers are gone.
+    if (g_display_producer_task) {
+        vTaskDelete(g_display_producer_task);
+        g_display_producer_task = NULL;
+    }
+
+    if (g_display_consumer_task) {
+        vTaskDelete(g_display_consumer_task);
+        g_display_consumer_task = NULL;
+    }
+
+    if (g_ready_queue) {
+        vQueueDelete(g_ready_queue);
+        g_ready_queue = NULL;
     }
 
     if (g_upscale_worker_top) {
@@ -269,16 +297,36 @@ void display_renderer_deinit(void)
 
 esp_err_t display_renderer_start(void)
 {
-    if (g_display_render_task == NULL) {
-        // Pin to core 1 for cache locality with bottom upscale worker
-        if (xTaskCreatePinnedToCore(display_render_task,
-                                    "display_render",
+    // Consumer first: it blocks harmlessly on the empty ready-queue until the
+    // producer enqueues. Both pinned to core 1 — the consumer must hit vsync
+    // deadlines (priority +1 so it preempts the heavy producer), and the producer
+    // co-locates with the bottom upscale worker it blocks on.
+    if (g_display_consumer_task == NULL) {
+        if (xTaskCreatePinnedToCore(display_consumer_task,
+                                    "display_consumer",
+                                    4096,
+                                    NULL,
+                                    CONFIG_P3A_RENDER_TASK_PRIORITY + 1,
+                                    &g_display_consumer_task,
+                                    1) != pdPASS) {
+            ESP_LOGE(DISPLAY_TAG, "Failed to start display consumer task");
+            return ESP_FAIL;
+        }
+    }
+
+    if (g_display_producer_task == NULL) {
+        if (xTaskCreatePinnedToCore(display_producer_task,
+                                    "display_producer",
                                     4096,
                                     NULL,
                                     CONFIG_P3A_RENDER_TASK_PRIORITY,
-                                    &g_display_render_task,
+                                    &g_display_producer_task,
                                     1) != pdPASS) {
-            ESP_LOGE(DISPLAY_TAG, "Failed to start display render task");
+            ESP_LOGE(DISPLAY_TAG, "Failed to start display producer task");
+            if (g_display_consumer_task) {
+                vTaskDelete(g_display_consumer_task);
+                g_display_consumer_task = NULL;
+            }
             return ESP_FAIL;
         }
     }
@@ -299,6 +347,14 @@ void display_renderer_set_frame_callback(display_frame_callback_t callback, void
         g_display_frame_callback = callback;
         g_display_frame_callback_ctx = user_ctx;
     }
+}
+
+void display_renderer_note_content_discontinuity(void)
+{
+    // Bump the content generation. The producer stamps subsequent frames with the
+    // new value; the consumer drops any queued frame from an older generation
+    // instead of presenting it (flush-on-change).
+    __atomic_add_fetch(&g_render_generation, 1, __ATOMIC_SEQ_CST);
 }
 
 // ============================================================================
@@ -327,10 +383,14 @@ esp_err_t display_renderer_enter_ui_mode(void)
     ESP_LOGI(DISPLAY_TAG, "Entering UI mode");
     g_display_mode_request = DISPLAY_RENDER_MODE_UI;
     
-    if (g_display_vsync_sem) {
-        xSemaphoreGive(g_display_vsync_sem);
+    // Nudge the producer in case it is blocked acquiring a free buffer, so it
+    // promptly loops, re-reads g_display_mode_request, and flips
+    // g_display_mode_active (which wait_for_render_mode polls). The mode flip
+    // itself bumps the content generation, flushing stale animation frames.
+    if (g_buffer_free_sem) {
+        xSemaphoreGive(g_buffer_free_sem);
         vTaskDelay(pdMS_TO_TICKS(10));
-        xSemaphoreGive(g_display_vsync_sem);
+        xSemaphoreGive(g_buffer_free_sem);
     }
     
     wait_for_render_mode(DISPLAY_RENDER_MODE_UI);
@@ -342,11 +402,12 @@ void display_renderer_exit_ui_mode(void)
 {
     ESP_LOGI(DISPLAY_TAG, "Exiting UI mode");
     g_display_mode_request = DISPLAY_RENDER_MODE_ANIMATION;
-    
-    if (g_display_vsync_sem) {
-        xSemaphoreGive(g_display_vsync_sem);
+
+    // Nudge the producer (see enter_ui_mode) so it re-reads the mode promptly.
+    if (g_buffer_free_sem) {
+        xSemaphoreGive(g_buffer_free_sem);
     }
-    
+
     wait_for_render_mode(DISPLAY_RENDER_MODE_ANIMATION);
     ESP_LOGI(DISPLAY_TAG, "Animation mode active");
 }
@@ -516,57 +577,71 @@ static int8_t acquire_free_buffer(uint32_t timeout_ms)
 }
 
 // ============================================================================
-// Main render task
+// Producer task: acquire a buffer, render (decode + upscale + overlays), enqueue
 // ============================================================================
 
-void display_render_task(void *arg)
+void display_producer_task(void *arg)
 {
     (void)arg;
 
+    // Tracks the previous "black output" state (paused or brightness-zero). A
+    // transition bumps the content generation so the consumer drops queued
+    // frames from the superseded epoch (e.g. pause should freeze immediately).
+    bool prev_black = false;
+
     while (true) {
         display_render_mode_t mode = g_display_mode_request;
+        if (mode != g_display_mode_active) {
+            // Mode switch: invalidate frames queued for the old mode.
+            display_renderer_note_content_discontinuity();
+        }
         g_display_mode_active = mode;
 
         const bool ui_mode = (mode == DISPLAY_RENDER_MODE_UI);
 
         // ================================================================
-        // 1. Acquire buffer
+        // 1. Acquire a free buffer to render into
         // ================================================================
-        int8_t back_buffer_idx;
-        uint8_t *back_buffer;
-
-        back_buffer_idx = acquire_free_buffer(portMAX_DELAY);
+        int8_t back_buffer_idx = acquire_free_buffer(portMAX_DELAY);
         if (back_buffer_idx < 0) {
             // Should not happen with portMAX_DELAY, but handle gracefully
             vTaskDelay(pdMS_TO_TICKS(1));
             continue;
         }
-        back_buffer = g_display_buffers[back_buffer_idx];
+        uint8_t *back_buffer = g_display_buffers[back_buffer_idx];
 
         if (!back_buffer) {
-            if (back_buffer_idx >= 0) {
-                g_buffer_info[back_buffer_idx].state = BUFFER_STATE_FREE;
+            g_buffer_info[back_buffer_idx].state = BUFFER_STATE_FREE;
+            if (g_buffer_free_sem) {
+                xSemaphoreGive(g_buffer_free_sem);
             }
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
 
         // ================================================================
-        // 2. Render frame via callback
+        // 2. Render the frame (mode branch)
         // ================================================================
         int frame_delay_ms = 100;
-        uint32_t prev_frame_delay_ms = g_target_frame_delay_ms;
 
         bool brightness_zero = (app_lcd_get_brightness() == 0);
         bool anim_paused = app_lcd_is_animation_paused();
+        bool black = anim_paused || brightness_zero;
+        if (black != prev_black) {
+            // Entering or leaving black output: drop queued frames so the
+            // change lands on the next vsync.
+            display_renderer_note_content_discontinuity();
+            prev_black = black;
+        }
+
         if (brightness_zero && !anim_paused) {
             // User manually set brightness to 0 (not paused): skip callback
             memset(back_buffer, 0, g_display_buffer_bytes);
+            frame_delay_ms = 100;
         } else if (anim_paused) {
             // Paused: always output black regardless of render mode
             memset(back_buffer, 0, g_display_buffer_bytes);
             frame_delay_ms = 100;
-            g_target_frame_delay_ms = 100;
         } else {
             if (ui_mode) {
                 frame_delay_ms = ugfx_ui_render_to_buffer(back_buffer, g_display_row_stride);
@@ -574,19 +649,16 @@ void display_render_task(void *arg)
                     memset(back_buffer, 0, g_display_buffer_bytes);
                     frame_delay_ms = 100;
                 }
-                g_target_frame_delay_ms = (uint32_t)frame_delay_ms;
             } else {
                 display_frame_callback_t callback = g_display_frame_callback;
                 void *ctx = g_display_frame_callback_ctx;
-    
+
                 if (callback) {
-                    prev_frame_delay_ms = g_target_frame_delay_ms;
                     frame_delay_ms = callback(back_buffer, ctx);
                     if (frame_delay_ms < 0) {
-                        // Callback returned error - release back buffer and skip this frame.
-                        // The display continues showing the previously-submitted frame.
-                        // SAFETY: Release back buffer. The display continues showing
-                        // the previously-submitted frame via DMA.
+                        // Callback error: release the buffer and skip this frame.
+                        // The consumer never sees it; DMA keeps showing the last
+                        // submitted frame.
                         g_buffer_info[back_buffer_idx].state = BUFFER_STATE_FREE;
                         if (g_buffer_free_sem) {
                             xSemaphoreGive(g_buffer_free_sem);
@@ -594,98 +666,127 @@ void display_render_task(void *arg)
                         vTaskDelay(pdMS_TO_TICKS(10));
                         continue;
                     }
-                    g_target_frame_delay_ms = (uint32_t)frame_delay_ms;
                 } else {
                     memset(back_buffer, 0, g_display_buffer_bytes);
                     frame_delay_ms = 100;
-                    g_target_frame_delay_ms = 100;
                 }
             }
-            
+
             // ================================================================
-            // 3. Apply overlays
+            // 3. Bake overlays into the frame (before it is queued)
             // ================================================================
             fps_update_and_draw(back_buffer);
-    
+
             if (!ui_mode) {
                 processing_notification_update_and_draw(back_buffer);
                 reaction_overlay_update_and_draw(back_buffer);
                 pin_overlay_update_and_draw(back_buffer);
             }
         }
-        
 
         // ================================================================
-        // 4. Frame timing — virtual playhead with fractional vsync alignment
+        // 4. Hand the finished frame to the consumer
+        // ================================================================
+        g_buffer_info[back_buffer_idx].state = BUFFER_STATE_READY;
+        ready_frame_t rf = {
+            .buffer_idx  = back_buffer_idx,
+            .duration_ms = (uint32_t)frame_delay_ms,
+            .generation  = __atomic_load_n(&g_render_generation, __ATOMIC_SEQ_CST),
+        };
+        xQueueSend(g_ready_queue, &rf, portMAX_DELAY);
+    }
+}
+
+// ============================================================================
+// Consumer task: dequeue, drop stale frames, pace to the playhead, submit
+// ============================================================================
+
+void display_consumer_task(void *arg)
+{
+    (void)arg;
+
+    // Generation of the frame most recently presented. A change marks a content
+    // discontinuity, so the next presented frame is baselined to "now".
+    uint32_t last_presented_gen = UINT32_MAX;
+
+    while (true) {
+        // ================================================================
+        // 1. Dequeue the next ready frame
+        // ================================================================
+        ready_frame_t rf;
+        if (xQueueReceive(g_ready_queue, &rf, portMAX_DELAY) != pdTRUE) {
+            continue;
+        }
+        const int8_t back_buffer_idx = rf.buffer_idx;
+        uint8_t *back_buffer = g_display_buffers[back_buffer_idx];
+
+        // Flush-on-change: drop frames the producer rendered for a superseded
+        // content generation. The buffer returns straight to the free pool;
+        // nothing is presented and the playhead is left untouched, so DMA keeps
+        // showing the last submitted frame until a current-generation frame
+        // arrives.
+        const uint32_t cur_gen = __atomic_load_n(&g_render_generation, __ATOMIC_SEQ_CST);
+        if (rf.generation != cur_gen) {
+            g_buffer_info[back_buffer_idx].state = BUFFER_STATE_FREE;
+            if (g_buffer_free_sem) {
+                xSemaphoreGive(g_buffer_free_sem);
+            }
+            continue;
+        }
+
+        // First frame of a new generation: present it immediately rather than on
+        // the stale playhead schedule (baseline handled in the timing block).
+        if (rf.generation != last_presented_gen) {
+            g_last_frame_present_us = 0;
+            last_presented_gen = rf.generation;
+        }
+
+        const bool max_speed = config_store_get_max_speed_playback();
+
+        // ================================================================
+        // 2. Frame timing — virtual playhead with fractional vsync alignment
         // ================================================================
         //
-        // Semantics: prev_frame_delay_ms is the on-screen duration of the
-        // frame that the upcoming submit will replace (i.e. the frame that
-        // the previous callback decoded and that g_last_frame_present_us was
-        // recorded for).  We advance a virtual playhead by exactly that
-        // duration, then phase-lock the actual submit to the vsync nearest
-        // the playhead.  This gives correct AVERAGE frame rate even when
-        // source delays aren't multiples of the panel's vsync period (16.67 ms
-        // at 60 Hz), at the cost of some per-frame jitter on non-aligned
-        // content (e.g. 50 fps WebPs alternate 16.67 / 33.33 ms presentations
-        // to average 20 ms).
+        // The playhead advances by THIS frame's carried duration AFTER it is
+        // submitted (end of loop), so on entry s_target_present_us already holds
+        // this frame's intended present time. Duration accumulates exactly once
+        // per presented frame, so long-term drift is zero even when source
+        // delays aren't multiples of the panel's vsync period (16.67 ms at
+        // 60 Hz). The half-period vsync rounding below gives the fractional
+        // alignment that makes 50 fps content average 20 ms (alternating
+        // 16.67 / 33.33) rather than ceiling-quantizing to 33.33 every frame.
         //
-        // The legacy implementation slept for `target_delay - elapsed`, then
-        // waited for one fresh vsync.  That ceiling-quantized every frame to
-        // a multiple of the vsync period and lost up to a full vsync per
-        // frame on top.  See git history (commit immediately preceding this
-        // one) for the slowdown table.
-        //
-        if (!config_store_get_max_speed_playback()) {
+        if (!max_speed) {
             const int64_t now_us = esp_timer_get_time();
 
             if (g_last_frame_present_us == 0) {
-                // First frame after init / mode change / long pause: baseline
+                // First frame after init / discontinuity / long pause: baseline
                 // the playhead to "now" so we present immediately.
                 s_target_present_us = now_us;
             } else {
-                // Advance the virtual playhead by the previous frame's
-                // intended duration.  This is the only place we accumulate
-                // source-side timing, so long-term drift is zero.
-                s_target_present_us += (int64_t)prev_frame_delay_ms * 1000;
-
                 // Drift safeguard — POSITIVE direction only.
                 //
-                // Positive drift (now > target by more than the threshold)
-                // means wall clock ran ahead of the playhead: a stall (slow
-                // decode, SD-card burst, OS preemption) cost us so much time
-                // that the next frame's intended slot is already in the past.
-                // Without resync, the loop would submit several frames
-                // back-to-back to "catch up", which visibly fast-forwards the
-                // animation.  Resync forfeits the lost time and resumes from
-                // "now", which is the only sane recovery.
+                // Positive drift (now ran ahead of target by more than the
+                // threshold) means a stall (slow decode, SD-I/O burst, OS
+                // preemption) cost so much time that this frame's intended slot
+                // is already in the past. Resync forfeits the lost time and
+                // resumes from "now" rather than submitting a catch-up burst
+                // that would visibly fast-forward the animation.
                 //
                 // NEGATIVE drift (target > now) is the NORMAL state for any
-                // frame whose intended duration exceeds one render-loop
-                // iteration: the sleep block immediately below will sleep
-                // until the playhead catches up.  We MUST NOT resync in that
-                // case — doing so would zero the residual, skip the sleep,
-                // and spin the loop at vsync rate, which is exactly the bug
-                // that the first build of this code exhibited (every
-                // iteration: target += 304 ms, drift ≈ -288 ms, resync,
-                // sleep=0, repeat → 60 fps regardless of source rate).
+                // frame whose duration exceeds one loop iteration: the sleep
+                // below waits until the playhead catches up. We MUST NOT resync
+                // there — doing so would spin the loop at the vsync rate (the
+                // original 60-fps-pin bug).
                 int64_t drift_us = now_us - s_target_present_us;
                 if (drift_us > FRAME_TIMING_RESYNC_US) {
-                    // Logging silenced: this fires routinely on slow decode/
-                    // upscale paths (e.g. large frames, SD-I/O bursts) and
-                    // would flood the monitor.  Re-enable for diagnostics.
-                    // ESP_LOGW(DISPLAY_TAG, "Frame timing fell %lld us behind; resync playhead",
-                    //          (long long)drift_us);
                     s_target_present_us = now_us;
                 }
             }
 
-            // Sleep until just before the target presentation time, leaving
-            // a small slack (~1.5 ms) so the alignment loop below has a
-            // chance to phase-lock without busy-waiting.  The 3 ms threshold
-            // avoids submitting a 1-tick vTaskDelay (FreeRTOS tick = 1 ms
-            // per CONFIG_FREERTOS_HZ=1000) for trivial residuals where the
-            // alignment loop will block on the vsync sem anyway.
+            // Sleep until ~1.5 ms before target, leaving slack for the alignment
+            // loop. Trivial residuals (<3 ms) skip the sleep (FreeRTOS tick =
+            // 1 ms at CONFIG_FREERTOS_HZ=1000) and block on the vsync sem below.
             int64_t residual_us = s_target_present_us - esp_timer_get_time();
             if (residual_us > 3000) {
                 int64_t sleep_us = residual_us - 1500;
@@ -693,36 +794,22 @@ void display_render_task(void *arg)
             }
         }
 
-
         // ================================================================
-        // 5. Vsync alignment + submit
+        // 3. Vsync alignment + submit
         // ================================================================
-
-        if (config_store_get_max_speed_playback()) {
+        if (max_speed) {
             // Max-speed: consume one vsync per submit (no playhead, no sleep).
             xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
         } else {
-            // Phase-lock the submit to the vsync edge nearest the virtual
-            // playhead.  Loop semantics:
-            //   - Take a vsync signal (may be cached or fresh).
-            //   - Read g_last_vsync_us (ISR-stamped); the actual vsync edge
-            //     is at vsync_us, regardless of whether take() blocked.
-            //   - If vsync_us + half_period >= target, this vsync is the
-            //     closest edge to (or past) target → present here.
-            //   - Otherwise the vsync is more than half a period before
-            //     target → wait for the next one.
+            // Phase-lock the submit to the vsync edge nearest the playhead:
+            // take a vsync signal, read the ISR-stamped g_last_vsync_us, and if
+            // that edge is within half a period of (or past) the target, present
+            // here; otherwise wait for the next edge.
             //
-            // The half-period rounding gives the fractional alignment that
-            // makes 50 fps content average 20 ms (alternating 16.67 / 33.33)
-            // rather than ceiling to 33.33 every frame.
-            //
-            // Tearing safety: if take() returned a cached signal whose
-            // vsync_us is more than ~half a vsync ago, "now" is well into
-            // the next refresh and submitting would tear.  In that case we
-            // skip the cached signal and wait for the next fresh vsync,
-            // even if the cached one would otherwise satisfy the alignment
-            // check.  This costs at most one extra vsync (the accumulator
-            // compensates next frame).
+            // Tearing safety: if take() returned a cached signal whose edge is
+            // already more than ~half a vsync old, "now" is well into the next
+            // refresh and submitting would tear, so skip it and wait for a fresh
+            // vsync (the accumulator compensates next frame).
             const int64_t cached_age_threshold_us = VSYNC_PERIOD_US / 2;
             while (true) {
                 xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
@@ -749,5 +836,11 @@ void display_render_task(void *arg)
         esp_lcd_panel_draw_bitmap(g_display_panel, 0, 0, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, back_buffer);
 
         g_last_frame_present_us = esp_timer_get_time();
+
+        // Advance the playhead by THIS frame's intended duration so the next
+        // frame is due exactly that long after this one was presented.
+        if (!max_speed) {
+            s_target_present_us += (int64_t)rf.duration_ms * 1000;
+        }
     }
 }

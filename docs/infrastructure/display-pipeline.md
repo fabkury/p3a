@@ -34,8 +34,29 @@
 The panel runs at a fixed **60 Hz** refresh (`ST7703_720_720_PANEL_60HZ_DPI_CONFIG`), so one
 refresh ≈ 16.667 µs (`VSYNC_PERIOD_US` in `display_renderer.c`). Animation frame delays
 (e.g. a 50 fps WebP wants 20 ms/frame) are usually **not** integer multiples of that period,
-so the render task decouples *playback speed* from the *refresh grid* using a virtual playhead
-with fractional vsync alignment. All of this lives in `display_render_task()`.
+so playback is decoupled from the refresh grid using a virtual playhead with fractional vsync
+alignment.
+
+### Producer / consumer split
+
+Frame production and presentation run in **two tasks** (both pinned to core 1), connected by the
+small `g_ready_queue`:
+
+- **`display_producer_task`** acquires a `FREE` framebuffer, renders into it — the mode branch:
+  the animation frame callback, UI via `ugfx_ui_render_to_buffer`, or a black frame when
+  paused/brightness-zero — **bakes the overlays** (FPS, processing/reaction/pin), then enqueues a
+  `ready_frame_t { buffer_idx, duration_ms, generation }`. It blocks in `acquire_free_buffer()`
+  on `g_buffer_free_sem` once every buffer is downstream, so it is **back-pressured to the present
+  rate** and runs at most ~1 frame ahead with 3 buffers.
+- **`display_consumer_task`** dequeues a ready frame, drops it if its generation is stale (see
+  flush-on-change), paces it to the virtual playhead, phase-locks to the vsync grid, and submits
+  with `esp_lcd_panel_draw_bitmap`. It owns all timing state (`s_target_present_us`,
+  `g_last_frame_present_us`) and runs at priority +1 so it preempts the heavy producer to hit
+  vsync deadlines.
+
+Because the producer banks a finished frame ahead, a single frame whose decode+upscale overruns
+its interval can still be presented on time from the queue — the spike absorption that the
+previous single-loop "render → sleep → present" design could not provide.
 
 ### VSYNC delivery
 
@@ -45,33 +66,46 @@ VSYNC is interrupt-driven, not polled:
    callback and creates a **binary semaphore** (`g_display_vsync_sem`).
 2. On each refresh-done interrupt the callback:
    - **Stamps the edge**: `g_last_vsync_us = esp_timer_get_time()` — the exact moment the vsync
-     fired. The render task reads this to align submits and to tell a *fresh* signal from a
+     fired. The consumer reads this to align submits and to tell a *fresh* signal from a
      *cached* one sitting in the binary semaphore.
    - **Advances buffer ownership** (see triple buffering below): the `PENDING` buffer becomes
      `DISPLAYING`, the previously-displaying buffer is freed and its slot returned via
      `g_buffer_free_sem`.
-   - **Signals** the render task by giving the vsync semaphore.
+   - **Signals** the consumer by giving the vsync semaphore.
 
-### Virtual playhead
+### Virtual playhead (consumer)
 
-`s_target_present_us` is a file-scope accumulator representing *when the next frame should
-appear*. Each iteration:
+`s_target_present_us` is a file-scope accumulator representing *when the current frame should
+appear*. Each dequeued frame carries its own intended `duration_ms`, snapshotted by the producer
+at decode time — by present time the decoder has raced ahead, so the consumer can't query it.
+Per frame the consumer:
 
-- The playhead advances by **exactly the previous frame's intended duration**
-  (`s_target_present_us += prev_frame_delay_ms * 1000`). This is the only place source-side
-  timing accumulates, so **long-term drift is zero** — the average frame rate matches the
-  source even though individual frames don't land on vsync boundaries.
-- The task sleeps (`vTaskDelay`) until ~1.5 ms before the target, leaving slack for the
-  alignment loop. Trivial residuals (<3 ms) skip the sleep and just block on the vsync sem.
-- The **alignment loop** then takes a vsync signal, reads the ISR-stamped `g_last_vsync_us`,
-  and presents on the vsync edge *nearest* the playhead: if `vsync_us + half_period >= target`,
-  this edge is the closest one → submit here; otherwise wait for the next. The half-period
-  rounding is what gives fractional alignment — 50 fps content alternates 16.67 / 33.33 ms
-  presentations to **average** 20 ms, instead of ceiling-quantizing every frame to 33.33 ms.
+- Presents at `s_target_present_us`, then **after submit** advances the playhead by *this*
+  frame's carried duration (`s_target_present_us += duration_ms * 1000`). Duration accumulates
+  exactly once per presented frame, so **long-term drift is zero** — the average frame rate
+  matches the source even though individual frames don't land on vsync boundaries.
+- Sleeps (`vTaskDelay`) until ~1.5 ms before the target, leaving slack for the alignment loop.
+  Trivial residuals (<3 ms) skip the sleep and just block on the vsync sem.
+- The **alignment loop** takes a vsync signal, reads the ISR-stamped `g_last_vsync_us`, and
+  presents on the vsync edge *nearest* the playhead: if `vsync_us + half_period >= target`, this
+  edge is the closest one → submit here; otherwise wait for the next. The half-period rounding
+  gives fractional alignment — 50 fps content alternates 16.67 / 33.33 ms presentations to
+  **average** 20 ms, instead of ceiling-quantizing every frame to 33.33 ms.
 
-This replaced a legacy "sleep for `target - elapsed`, then wait for one fresh vsync" approach
-that ceiling-quantized every frame to a multiple of the vsync period and lost up to a full
-extra vsync per frame, visibly slowing animations.
+The accumulator advances by each frame's carried duration *after* it is submitted, so each queue
+entry owns its dwell time; this replaced the single-loop design's `prev_frame_delay_ms`
+bookkeeping (which advanced by the duration of the frame being replaced).
+
+### Flush-on-change (content generation)
+
+`g_render_generation` is bumped via `display_renderer_note_content_discontinuity()` whenever the
+on-screen content should change immediately: a **mode switch** or **pause/brightness transition**
+(detected by the producer) or an **artwork swap** (signalled from `animation_player_render.c`
+after the front/back flip). The producer stamps each queued frame with the generation current
+when it finished; the consumer **drops** any dequeued frame whose generation is stale (returning
+the buffer straight to `FREE`) and baselines the playhead on the first fresh-generation frame.
+This lands swaps and mode switches on the next vsync instead of after the ~1–2 queued frames
+drain, with no stale frame ever presented.
 
 ### Drift safeguards
 
@@ -79,7 +113,7 @@ extra vsync per frame, visibly slowing animations.
   250 ms *ahead* of the playhead (a slow decode, SD-I/O burst, or preemption stole that much
   time), re-baseline the playhead to "now" rather than submitting a burst of catch-up frames
   that would visibly fast-forward the animation. **Negative** drift (target ahead of now) is
-  the *normal* state for any frame longer than one loop iteration and is deliberately **not**
+  the *normal* state for any frame longer than one vsync period and is deliberately **not**
   resynced — doing so was the original bug that pinned everything to 60 fps.
 - **Stale cached-vsync guard** (`cached_too_late`): the binary semaphore may hold a signal that
   fired earlier. If the consumed signal's timestamp is more than half a period old, "now" is
@@ -88,25 +122,29 @@ extra vsync per frame, visibly slowing animations.
 
 ### Timing edge cases
 
-- **Max-speed playback** (`config_store_get_max_speed_playback()`): bypasses the playhead and
-  sleep entirely — consumes one vsync per submit, running at the full 60 Hz panel rate
-  regardless of source durations.
-- **First frame** after init / mode change / long pause (`g_last_frame_present_us == 0`):
+- **Max-speed playback** (`config_store_get_max_speed_playback()`): the consumer bypasses the
+  playhead and sleep entirely — consumes one vsync per submit, running at the full 60 Hz panel
+  rate regardless of source durations.
+- **First frame** after init / discontinuity / long pause (`g_last_frame_present_us == 0`):
   baselines the playhead to "now" so it presents immediately.
-- **Paused / brightness-zero**: outputs a black frame with a fixed 100 ms delay.
+- **Paused / brightness-zero**: the producer outputs a black frame with a fixed 100 ms delay and
+  bumps the generation on the transition.
 - **Static images**: decoded once and cached; the frame callback returns the cached delay each
   tick without re-decoding (re-compositing only when the background color changes on a
   transparent asset).
-- **Callback error (returns -1)**: the back buffer is released and DMA keeps showing the last
-  submitted frame — no flicker.
+- **Callback error (returns -1)**: the producer releases the buffer without enqueuing; DMA keeps
+  showing the last submitted frame — no flicker.
 
 ### Triple buffering
 
-Buffers move through `FREE → RENDERING → PENDING → DISPLAYING` and back to `FREE`
-(`buffer_state_t`). The render task acquires a `FREE` buffer (blocking on `g_buffer_free_sem`),
-renders into it, marks it `PENDING` at submit time, and the vsync ISR promotes `PENDING →
-DISPLAYING` while freeing the buffer DMA just released. This lets the task decode/upscale frame
-N+1 while DMA scans frame N and a third frame waits, so decode latency doesn't stall scan-out.
+Buffers move through `FREE → RENDERING → READY → PENDING → DISPLAYING` and back to `FREE`
+(`buffer_state_t`). The producer acquires a `FREE` buffer (blocking on `g_buffer_free_sem`),
+renders into it, marks it `READY` and enqueues it; the consumer marks it `PENDING` at submit
+time; and the vsync ISR promotes `PENDING → DISPLAYING` while freeing the buffer DMA just
+released. With 3 buffers the producer banks ~1 finished frame ahead of the one on screen, so
+decode/upscale latency on a single frame is hidden instead of stalling scan-out. `g_ready_queue`
+carries finished frames from producer to consumer; `g_buffer_free_sem` is the back-pressure
+channel (FREE buffers are produced only by the ISR).
 
 ## Rendering Features
 

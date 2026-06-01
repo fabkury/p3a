@@ -50,7 +50,7 @@ typedef int (*display_frame_callback_t)(uint8_t *dest_buffer, void *user_ctx);
  * 
  * @param panel LCD panel handle
  * @param buffers Array of frame buffer pointers
- * @param buffer_count Number of buffers (typically 2 for double buffering)
+ * @param buffer_count Number of frame buffers (3 for triple buffering)
  * @param buffer_bytes Size of each buffer in bytes
  * @param row_stride Row stride in bytes
  * @return ESP_OK on success
@@ -80,6 +80,23 @@ esp_err_t display_renderer_start(void);
  * @param user_ctx User context passed to callback
  */
 void display_renderer_set_frame_callback(display_frame_callback_t callback, void *user_ctx);
+
+/**
+ * @brief Mark a content discontinuity so already-queued frames are dropped.
+ *
+ * The render pipeline is split into a producer (decode + upscale + overlays)
+ * that runs ahead and a consumer that presents on the vsync grid. Frames the
+ * producer has already finished sit in a ready-queue. When the on-screen
+ * content should change immediately — an artwork swap, pause/resume, or a
+ * render-mode switch — call this to bump the content generation: the producer
+ * stamps subsequent frames with the new generation and the consumer drops any
+ * queued frame from an older generation instead of presenting it. This makes
+ * the change land on the next vsync rather than after the queue drains.
+ *
+ * Safe to call from any task. The display renderer itself calls this on
+ * mode/pause transitions; external callers use it for content swaps.
+ */
+void display_renderer_note_content_discontinuity(void);
 
 /**
  * @brief Enter UI rendering mode

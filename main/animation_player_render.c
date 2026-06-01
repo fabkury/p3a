@@ -486,6 +486,11 @@ skip_prefetch:
                                      s_front_buffer.view_channel_identifier);
         }
         s_use_prefetched = true;
+
+        // The artwork changed: invalidate any frames the producer already
+        // queued for the previous artwork so the new one lands on the next
+        // vsync instead of after the queue drains (flush-on-change).
+        display_renderer_note_content_discontinuity();
     }
 
     // Check for PICO-8 mode

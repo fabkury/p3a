@@ -25,6 +25,7 @@
 #include "art_institution.h"
 #include "art_institution_internal.h"
 #include "art_institution_types.h"
+#include "http_fetch.h"
 #include "channel_cache.h"
 #include "channel_metadata.h"
 #include "config_store.h"
@@ -49,9 +50,6 @@ static const char *TAG = "ai_vam";
 #define VAM_IIIF_BASE             "https://framemark.vam.ac.uk/collections"
 #define VAM_PAGE_LIMIT            100
 #define VAM_RESPONSE_BUF_SIZE     (256 * 1024)   // V&A search pages are richer than AIC's
-#define VAM_FETCH_MAX_ATTEMPTS    3
-
-static const uint32_t s_fetch_backoff_ms[VAM_FETCH_MAX_ATTEMPTS] = { 0, 1000, 3000 };
 
 extern void download_manager_rescan(void);
 
@@ -95,6 +93,15 @@ esp_err_t art_institution_vam_build_iiif_url(const institution_channel_entry_t *
 
 // ----- One-page fetch ------------------------------------------------------
 
+// 429 handler: record the cooldown so the picker and browser both back off.
+// Honors a numeric Retry-After when present (the helper parses it), else the
+// rate-limit table's default.
+static void vam_on_rate_limited(uint32_t retry_after_sec, void *ctx)
+{
+    (void)ctx;
+    art_institution_set_rate_limited("vam", retry_after_sec);
+}
+
 /**
  * @brief Fetch + parse one V&A search page
  *
@@ -132,89 +139,22 @@ static esp_err_t vam_fetch_page(const char *filter_param,
 
     ESP_LOGI(TAG, "Fetching page %d (filter=%s term=%.32s)", page, filter_param, term_id);
 
-    esp_http_client_config_t cfg = {
-        .url = url,
-        .timeout_ms = 15000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .buffer_size = 4096,
+    http_fetch_header_t headers[] = {
+        { "Accept", "application/json" },
     };
-
-    esp_err_t fatal_err = ESP_OK;
-    int total_read = 0;
-    bool success = false;
-
-    for (int attempt = 0; attempt < VAM_FETCH_MAX_ATTEMPTS && !success && fatal_err == ESP_OK; attempt++) {
-        if (attempt > 0) {
-            ESP_LOGW(TAG, "Retrying V&A page fetch in %lums (attempt %d/%d)",
-                     (unsigned long)s_fetch_backoff_ms[attempt],
-                     attempt + 1, VAM_FETCH_MAX_ATTEMPTS);
-            vTaskDelay(pdMS_TO_TICKS(s_fetch_backoff_ms[attempt]));
-            total_read = 0;
-        }
-
-        esp_http_client_handle_t client = esp_http_client_init(&cfg);
-        if (!client) continue;
-        esp_http_client_set_header(client, "Accept", "application/json");
-
-        esp_err_t err = esp_http_client_open(client, 0);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(err));
-            esp_http_client_cleanup(client);
-            continue;
-        }
-
-        esp_http_client_fetch_headers(client);
-        int64_t content_length = esp_http_client_get_content_length(client);
-        int status = esp_http_client_get_status_code(client);
-
-        if (status == 429) {
-            art_institution_set_rate_limited("vam", 0);
-            ESP_LOGW(TAG, "V&A returned 429");
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            fatal_err = ESP_ERR_INVALID_RESPONSE;
-            break;
-        }
-        if (status == 401 || status == 403) {
-            ESP_LOGW(TAG, "V&A returned %d on page %d", status, page);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            fatal_err = ESP_ERR_NOT_ALLOWED;
-            break;
-        }
-        if (status != 200) {
-            ESP_LOGW(TAG, "V&A status %d on page %d", status, page);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            continue;
-        }
-
-        total_read = ai_drain_body(client, response_buf, response_buf_size);
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-
-        if (total_read < 0) continue;
-        if (total_read == 0) continue;
-        if (total_read >= (int)response_buf_size - 1) {
-            ESP_LOGE(TAG, "V&A response truncated at %d bytes", total_read);
-            fatal_err = ESP_FAIL;
-            break;
-        }
-        if (content_length > 0 && total_read < (int)content_length) {
-            ESP_LOGW(TAG, "V&A truncated: got %d/%lld bytes",
-                     total_read, (long long)content_length);
-            continue;
-        }
-        success = true;
+    http_fetch_request_t fr = {
+        .url = url,
+        .headers = headers,
+        .header_count = 1,
+        .on_rate_limited = vam_on_rate_limited,
+    };
+    size_t got = 0;
+    esp_err_t err = http_fetch_to_buffer(&fr, response_buf, response_buf_size, &got, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "V&A page %d fetch failed: %s", page, esp_err_to_name(err));
+        return err;
     }
-
-    if (fatal_err != ESP_OK) return fatal_err;
-    if (!success) {
-        ESP_LOGE(TAG, "V&A page %d fetch failed after %d attempts",
-                 page, VAM_FETCH_MAX_ATTEMPTS);
-        return ESP_FAIL;
-    }
-    response_buf[total_read] = '\0';
+    int total_read = (int)got;
 
     cJSON *root = cJSON_Parse(response_buf);
     if (!root) {

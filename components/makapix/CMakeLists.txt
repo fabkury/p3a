@@ -22,6 +22,7 @@ idf_component_register(
     REQUIRES
         nvs_flash
         esp_http_client
+        http_fetch
         mqtt
         json
         fatfs

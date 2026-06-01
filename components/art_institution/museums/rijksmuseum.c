@@ -42,6 +42,8 @@
 #include <string.h>
 #include <time.h>
 
+#include "http_fetch.h"
+
 static const char *TAG = "ai_rijks";
 
 #define RIJKS_API_BASE            "https://data.rijksmuseum.nl"
@@ -49,42 +51,17 @@ static const char *TAG = "ai_rijks";
 #define RIJKS_MICRIO_PREFIX       "https://iiif.micr.io/"
 #define RIJKS_LIST_RESPONSE_SIZE  (192 * 1024)
 #define RIJKS_LD_RESPONSE_SIZE    (96 * 1024)   // single-HMO / VisualItem / DigitalObject
-#define RIJKS_FETCH_MAX_ATTEMPTS  3
 #define RIJKS_MAX_REDIRECTS       5
-
-static const uint32_t s_fetch_backoff_ms[RIJKS_FETCH_MAX_ATTEMPTS] = { 0, 1000, 3000 };
 
 // External: signal download manager to rescan when new entries land.
 extern void download_manager_rescan(void);
 
-// ----- HTTP event handler: capture Location header ------------------------
-
-/**
- * @brief Per-request scratch the event handler writes into
- *
- * esp_http_client_get_header("Location", ...) doesn't reliably return
- * the header even with disable_auto_redirect=true (observed on ESP-IDF
- * v5.5.2: get_header returns ESP_OK with *value=NULL on 3xx responses,
- * regardless of the flag). Snagging the value via the ON_HEADER
- * event callback bypasses whatever the higher-level path is doing —
- * the parser dispatches the event synchronously as it walks the
- * response, so we always see Location regardless of how the client
- * later handles the redirect status.
- */
-typedef struct {
-    char location[512];
-} rijks_fetch_ctx_t;
-
-static esp_err_t rijks_http_event_handler(esp_http_client_event_t *evt)
+// 429 handler: engage the per-museum cooldown (Retry-After honored if present).
+static void rijks_on_rate_limited(uint32_t retry_after_sec, void *ctx)
 {
-    if (evt->event_id != HTTP_EVENT_ON_HEADER) return ESP_OK;
-    rijks_fetch_ctx_t *ctx = (rijks_fetch_ctx_t *)evt->user_data;
-    if (!ctx) return ESP_OK;
-    if (evt->header_key && evt->header_value &&
-        strcasecmp(evt->header_key, "Location") == 0) {
-        strlcpy(ctx->location, evt->header_value, sizeof(ctx->location));
-    }
-    return ESP_OK;
+    (void)ctx;
+    ESP_LOGW(TAG, "Rijks rate-limited (Retry-After %us)", (unsigned)retry_after_sec);
+    art_institution_set_rate_limited("rijks", retry_after_sec);
 }
 
 // ----- HTTP fetch helper --------------------------------------------------
@@ -111,143 +88,25 @@ static esp_err_t rijks_fetch_jsonld(const char *url, char *buf, size_t buf_size,
     if (!url || !buf || buf_size == 0 || !out_total_read) return ESP_ERR_INVALID_ARG;
     *out_total_read = 0;
 
-    char current_url[512];
-    strlcpy(current_url, url, sizeof(current_url));
-
-    for (int redirect_hop = 0; redirect_hop <= RIJKS_MAX_REDIRECTS; redirect_hop++) {
-        rijks_fetch_ctx_t ctx = {0};
-        esp_http_client_config_t cfg = {
-            .url = current_url,
-            .timeout_ms = 15000,
-            .crt_bundle_attach = esp_crt_bundle_attach,
-            .buffer_size = 4096,
-            // disable_auto_redirect keeps fetch_headers() honest. Combined
-            // with the ON_HEADER event handler below, we capture the
-            // Location value reliably regardless of how ESP-IDF would
-            // otherwise process the 3xx response.
-            .disable_auto_redirect = true,
-            .event_handler = rijks_http_event_handler,
-            .user_data = &ctx,
-        };
-
-        esp_err_t fatal_err = ESP_OK;
-        int total_read = 0;
-        bool success = false;
-        char next_url[512] = "";  // populated if we hit a 3xx with a Location
-
-        for (int attempt = 0; attempt < RIJKS_FETCH_MAX_ATTEMPTS && !success && fatal_err == ESP_OK; attempt++) {
-            if (attempt > 0) {
-                ESP_LOGW(TAG, "Retrying %.80s in %lums (attempt %d/%d)",
-                         current_url, (unsigned long)s_fetch_backoff_ms[attempt],
-                         attempt + 1, RIJKS_FETCH_MAX_ATTEMPTS);
-                vTaskDelay(pdMS_TO_TICKS(s_fetch_backoff_ms[attempt]));
-                total_read = 0;
-            }
-
-            esp_http_client_handle_t client = esp_http_client_init(&cfg);
-            if (!client) continue;
-            esp_http_client_set_header(client, "Accept", "application/ld+json");
-
-            esp_err_t open_err = esp_http_client_open(client, 0);
-            if (open_err != ESP_OK) {
-                ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(open_err));
-                esp_http_client_cleanup(client);
-                continue;
-            }
-
-            esp_http_client_fetch_headers(client);
-            int64_t content_length = esp_http_client_get_content_length(client);
-            int status = esp_http_client_get_status_code(client);
-
-            if (status == 429) {
-                art_institution_set_rate_limited("rijks", 0);
-                ESP_LOGW(TAG, "Rijks returned 429");
-                esp_http_client_close(client);
-                esp_http_client_cleanup(client);
-                fatal_err = ESP_ERR_INVALID_RESPONSE;
-                break;
-            }
-            if (status == 401 || status == 403) {
-                ESP_LOGW(TAG, "Rijks returned %d for %.80s", status, current_url);
-                esp_http_client_close(client);
-                esp_http_client_cleanup(client);
-                fatal_err = ESP_ERR_NOT_ALLOWED;
-                break;
-            }
-            if (status == 404) {
-                esp_http_client_close(client);
-                esp_http_client_cleanup(client);
-                fatal_err = ESP_ERR_NOT_FOUND;
-                break;
-            }
-            // 301/302/303/307/308 — Location was captured by the event
-            // handler during header parsing. We don't use the response
-            // body, so the retry loop is short-circuited here.
-            if (status >= 300 && status < 400) {
-                if (ctx.location[0]) {
-                    strlcpy(next_url, ctx.location, sizeof(next_url));
-                } else {
-                    ESP_LOGW(TAG, "Rijks %d for %.80s but no Location header", status, current_url);
-                }
-                esp_http_client_close(client);
-                esp_http_client_cleanup(client);
-                success = true;
-                total_read = 0;
-                break;
-            }
-            if (status != 200) {
-                ESP_LOGW(TAG, "Rijks status %d for %.80s", status, current_url);
-                esp_http_client_close(client);
-                esp_http_client_cleanup(client);
-                continue;
-            }
-
-            bool read_err = false;
-            while (total_read < (int)buf_size - 1) {
-                int n = esp_http_client_read(client, buf + total_read,
-                                              buf_size - 1 - total_read);
-                if (n < 0) { read_err = true; break; }
-                if (n == 0) break;
-                total_read += n;
-            }
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-
-            if (read_err) continue;
-            if (total_read == 0) continue;
-            if (total_read >= (int)buf_size - 1) {
-                ESP_LOGE(TAG, "Rijks response truncated at %d bytes for %.80s", total_read, current_url);
-                fatal_err = ESP_FAIL;
-                break;
-            }
-            if (content_length > 0 && total_read < (int)content_length) {
-                ESP_LOGW(TAG, "Rijks truncated: got %d/%lld bytes", total_read, (long long)content_length);
-                continue;
-            }
-            success = true;
-        }
-
-        if (fatal_err != ESP_OK) return fatal_err;
-        if (!success) return ESP_FAIL;
-
-        // If the inner loop succeeded via a redirect, advance to the next
-        // hop and re-run the retry loop against the new URL.
-        if (next_url[0]) {
-            ESP_LOGD(TAG, "Rijks redirect %d: %.80s -> %.80s",
-                     redirect_hop + 1, current_url, next_url);
-            strlcpy(current_url, next_url, sizeof(current_url));
-            continue;
-        }
-
-        // Real 200 response — body is in buf.
-        buf[total_read] = '\0';
-        *out_total_read = total_read;
-        return ESP_OK;
-    }
-
-    ESP_LOGW(TAG, "Rijks too many redirects (>%d) starting at %.80s",
-             RIJKS_MAX_REDIRECTS, url);
-    return ESP_FAIL;
+    // Rijks HMO URLs (id.rijksmuseum.nl/{id}) 303-redirect to the JSON-LD on
+    // data.rijksmuseum.nl; the helper follows the chain manually (capturing
+    // Location) and skips the empty 3xx bodies.
+    http_fetch_header_t headers[] = {
+        { "Accept", "application/ld+json" },
+    };
+    http_fetch_request_t fr = {
+        .url = url,
+        .redirect_mode = HTTP_FETCH_REDIRECT_MANUAL,
+        .max_redirects = RIJKS_MAX_REDIRECTS,
+        .headers = headers,
+        .header_count = 1,
+        .on_rate_limited = rijks_on_rate_limited,
+    };
+    size_t got = 0;
+    esp_err_t err = http_fetch_to_buffer(&fr, buf, buf_size, &got, NULL);
+    if (err != ESP_OK) return err;
+    *out_total_read = (int)got;
+    return ESP_OK;
 }
 
 // ----- IIIF URL (resolved entry) ------------------------------------------

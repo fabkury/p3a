@@ -7,6 +7,7 @@
  */
 
 #include "makapix_artwork.h"
+#include "http_fetch.h"
 #include "p3a_limits.h"
 #include "sd_path.h"
 #include "sdio_bus.h"
@@ -122,13 +123,40 @@ static esp_err_t ensure_vault_dirs(const char *vault_base, const char *dir1, con
  * 
  * This uses only 1MB of RAM regardless of file size, while keeping operations serialized.
  */
+// Percent-throttled progress: the helper invokes us every chunk; we forward to
+// the caller's callback only when the integer percent changes (preserves the
+// pre-refactor behavior).
 typedef struct {
-    makapix_download_progress_cb progress_cb;
-    void *progress_ctx;
-    size_t content_length;
-    size_t total_received;
+    makapix_download_progress_cb cb;
+    void *ctx;
     int last_percent;
-} download_progress_ctx_t;
+} mk_progress_t;
+
+static void mk_progress_cb(size_t total, size_t content_length, void *ctx)
+{
+    mk_progress_t *p = (mk_progress_t *)ctx;
+    if (!p->cb || content_length == 0) return;
+    int percent = (int)((total * 100) / content_length);
+    if (percent != p->last_percent) {
+        p->last_percent = percent;
+        p->cb(total, content_length, p->ctx);
+    }
+}
+
+// Cooperative abort: SD card exported to USB, or playset switched mid-download.
+static bool mk_should_abort(void *ctx)
+{
+    (void)ctx;
+    if (!makapix_channel_is_sd_available()) {
+        ESP_LOGI(TAG, "Aborting download: SD card exported to USB host");
+        return true;
+    }
+    if (download_manager_is_canceled()) {
+        ESP_LOGI(TAG, "Aborting download: playset switched");
+        return true;
+    }
+    return false;
+}
 
 esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char *storage_key,
                                                  char *out_path, size_t path_len,
@@ -209,267 +237,31 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
         full_url[copy_len] = '\0';
     }
 
-    // Use temp file for atomic write (power-loss safe)
-    char temp_path[path_len + 8];
-    snprintf(temp_path, sizeof(temp_path), "%s.tmp", out_path);
-    
     ESP_LOGD(TAG, "Downloading artwork from %s to %s", full_url, out_path);
 
-    // =========================================================================
-    // SERIALIZED CHUNKED DOWNLOAD
-    // =========================================================================
-    // The ESP32-P4 shares the SDMMC controller between WiFi (SDIO Slot 1) and 
-    // SD card (Slot 0). Simultaneous operations cause "SDIO slave unresponsive" 
-    // crashes.
-    //
-    // Solution: Read/write in serialized chunks:
-    //   1. Read 1MB chunk from WiFi into RAM (only WiFi/SDIO active)
-    //   2. Write chunk to SD card (only SD/SDMMC active)
-    //   3. Repeat until complete
-    //
-    // This uses only 1MB RAM regardless of file size.
-    // =========================================================================
-    
-    // Allocate chunk buffer (prefer PSRAM, fall back to internal)
-    uint8_t *chunk_buffer = heap_caps_malloc(DOWNLOAD_CHUNK_SIZE, MALLOC_CAP_SPIRAM);
-    if (!chunk_buffer) {
-        chunk_buffer = malloc(DOWNLOAD_CHUNK_SIZE);
-        if (!chunk_buffer) {
-            ESP_LOGE(TAG, "Failed to allocate %d KB chunk buffer", DOWNLOAD_CHUNK_SIZE / 1024);
-            return ESP_ERR_NO_MEM;
-        }
-        ESP_LOGD(TAG, "Using internal RAM for chunk buffer");
-    }
-    
-    ESP_LOGD(TAG, "Starting chunked download (%d KB chunks)", DOWNLOAD_CHUNK_SIZE / 1024);
-
-    // Configure HTTP client for manual read control
-    esp_http_client_config_t config = {
+    // The ESP32-P4 shares the SDMMC controller between WiFi (SDIO) and SD card,
+    // so the helper reads a chunk from WiFi then writes it to SD, serialized,
+    // never running both at once. Exact Content-Length match is our integrity
+    // check (avoids hashing the whole file); a mismatch retries then fails.
+    mk_progress_t prog = { .cb = cb, .ctx = user_ctx, .last_percent = -1 };
+    http_fetch_request_t fr = {
         .url = full_url,
         .timeout_ms = 30000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .buffer_size = 4096,  // Internal receive buffer
+        .max_size = P3A_MAX_ARTWORK_SIZE,
+        .chunk_size = DOWNLOAD_CHUNK_SIZE,
+        .min_size = 12,
+        .require_exact_length = true,
+        .should_abort = mk_should_abort,
+        .progress = mk_progress_cb,
+        .user_ctx = &prog,
     };
-
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (!client) {
-        ESP_LOGE(TAG, "Failed to initialize HTTP client");
-        free(chunk_buffer);
-        return ESP_ERR_NO_MEM;
-    }
-
-    // Open connection and fetch headers
-    err = esp_http_client_open(client, 0);  // 0 = no write data (GET request)
+    err = http_fetch_to_file(&fr, out_path, NULL);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to open HTTP connection: %s", esp_err_to_name(err));
-        esp_http_client_cleanup(client);
-        free(chunk_buffer);
+        ESP_LOGW(TAG, "Artwork download failed for %s: %s", storage_key, esp_err_to_name(err));
         return err;
     }
 
-    int64_t content_length = esp_http_client_fetch_headers(client);
-    int status_code = esp_http_client_get_status_code(client);
-    
-    if (status_code != 200) {
-        ESP_LOGE(TAG, "HTTP request failed with status %d for URL: %s", status_code, full_url);
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-        free(chunk_buffer);
-        if (status_code == 404) {
-            // Permanent miss: do not retry
-            return ESP_ERR_NOT_FOUND;
-        }
-        return ESP_ERR_INVALID_RESPONSE;
-    }
-    
-    ESP_LOGD(TAG, "HTTP 200 OK, Content-Length: %lld bytes", content_length);
-
-    // Reject files larger than 16 MiB
-    if (content_length > P3A_MAX_ARTWORK_SIZE) {
-        ESP_LOGW(TAG, "File too large: %lld bytes (limit %d), skipping: %s",
-                 content_length, P3A_MAX_ARTWORK_SIZE, storage_key);
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-        free(chunk_buffer);
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    // Open temp file for writing
-    FILE *fp = fopen(temp_path, "wb");
-    if (!fp) {
-        ESP_LOGE(TAG, "Failed to open temp file: %s (errno=%d)", temp_path, errno);
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-        free(chunk_buffer);
-        return ESP_FAIL;
-    }
-
-    // Progress tracking
-    download_progress_ctx_t progress = {
-        .progress_cb = cb,
-        .progress_ctx = user_ctx,
-        .content_length = (content_length > 0) ? (size_t)content_length : 0,
-        .total_received = 0,
-        .last_percent = -1,
-    };
-
-    // =========================================================================
-    // MAIN DOWNLOAD LOOP: Read chunk → Write chunk (serialized)
-    // =========================================================================
-    bool download_error = false;
-    bool sd_aborted = false;
-
-    while (1) {
-        // ---------------------------------------------------------------------
-        // PHASE A: Read up to 1MB from WiFi into RAM (only WiFi/SDIO active)
-        // ---------------------------------------------------------------------
-        size_t chunk_received = 0;
-        
-        while (chunk_received < DOWNLOAD_CHUNK_SIZE) {
-            int read_len = esp_http_client_read(
-                client, 
-                (char *)(chunk_buffer + chunk_received), 
-                DOWNLOAD_CHUNK_SIZE - chunk_received
-            );
-            
-            if (read_len < 0) {
-                ESP_LOGE(TAG, "HTTP read error: %d", read_len);
-                download_error = true;
-                break;
-            }
-            
-            if (read_len == 0) {
-                // End of stream
-                break;
-            }
-            
-            chunk_received += read_len;
-        }
-        
-        if (download_error) {
-            break;
-        }
-        
-        // No more data?
-        if (chunk_received == 0) {
-            break;
-        }
-
-        if (!makapix_channel_is_sd_available()) {
-            ESP_LOGI(TAG, "Aborting download of %s: SD card exported to USB host", storage_key);
-            sd_aborted = true;
-            break;
-        }
-        if (download_manager_is_canceled()) {
-            ESP_LOGI(TAG, "Aborting download of %s: playset switched", storage_key);
-            // Reuses the sd_aborted teardown branch — both unlink the temp
-            // file and return ESP_ERR_INVALID_STATE, which the download task
-            // distinguishes via download_manager_is_canceled().
-            sd_aborted = true;
-            break;
-        }
-
-        // ---------------------------------------------------------------------
-        // PHASE B: Write chunk to SD card (only SD/SDMMC active)
-        // ---------------------------------------------------------------------
-        size_t written = fwrite(chunk_buffer, 1, chunk_received, fp);
-        if (written != chunk_received) {
-            ESP_LOGE(TAG, "SD write error: wrote %zu of %zu bytes", written, chunk_received);
-            download_error = true;
-            break;
-        }
-        
-        // Update progress
-        progress.total_received += chunk_received;
-
-        // Guard against chunked transfers with no Content-Length
-        if (progress.total_received > P3A_MAX_ARTWORK_SIZE) {
-            ESP_LOGW(TAG, "Download exceeded 16 MiB during transfer, aborting: %s", storage_key);
-            download_error = true;
-            break;
-        }
-
-        if (progress.progress_cb && progress.content_length > 0) {
-            int percent = (int)((progress.total_received * 100) / progress.content_length);
-            if (percent != progress.last_percent) {
-                progress.last_percent = percent;
-                progress.progress_cb(progress.total_received, progress.content_length, progress.progress_ctx);
-            }
-        }
-
-        ESP_LOGD(TAG, "Chunk: %zu bytes, Total: %zu / %zu bytes",
-                 chunk_received, progress.total_received, progress.content_length);
-    }
-
-    // Cleanup HTTP client
-    esp_http_client_close(client);
-    esp_http_client_cleanup(client);
-    free(chunk_buffer);
-    chunk_buffer = NULL;
-
-    if (sd_aborted) {
-        fclose(fp);
-        unlink(temp_path);
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    // Handle download errors
-    if (download_error) {
-        ESP_LOGE(TAG, "Download failed after %zu bytes", progress.total_received);
-        fclose(fp);
-        unlink(temp_path);
-        return ESP_FAIL;
-    }
-
-    // Validate downloaded size
-    if (progress.total_received == 0) {
-        ESP_LOGE(TAG, "Downloaded file is empty");
-        fclose(fp);
-        unlink(temp_path);
-        return ESP_ERR_INVALID_SIZE;
-    }
-    
-    if (progress.total_received < 12) {
-        ESP_LOGE(TAG, "Downloaded file too small (%zu bytes)", progress.total_received);
-        fclose(fp);
-        unlink(temp_path);
-        return ESP_ERR_INVALID_SIZE;
-    }
-    
-    // File size verification: compare actual bytes written vs expected Content-Length
-    // RATIONALE: This serves as our file integrity check, avoiding the CPU cost of
-    // hashing the entire file after download. We rely on the HTTP stack (TLS) for
-    // preventing corruption during transfer. This check catches truncated downloads
-    // and storage write failures.
-    // NOTE: Unhealthy/corrupted files that pass size check should be marked for
-    // deletion by a separate verification system (not yet implemented).
-    if (progress.content_length > 0 && progress.total_received != progress.content_length) {
-        ESP_LOGE(TAG, "File size mismatch: received %zu bytes, expected %zu bytes",
-                progress.total_received, progress.content_length);
-        fclose(fp);
-        unlink(temp_path);
-        return ESP_ERR_INVALID_SIZE;
-    } else if (progress.content_length > 0) {
-        ESP_LOGD(TAG, "File size verified: %zu bytes match Content-Length", progress.total_received);
-    }
-
-    // Ensure all data is flushed to SD card
-    fflush(fp);
-    fsync(fileno(fp));
-    fclose(fp);
-    
-    ESP_LOGD(TAG, "Download complete: %zu bytes written to temp file", progress.total_received);
-
-    // =========================================================================
-    // ATOMIC RENAME: temp file → final file (power-loss safe)
-    // =========================================================================
-    if (rename(temp_path, out_path) != 0) {
-        ESP_LOGE(TAG, "Failed to rename: %s -> %s (errno=%d)", temp_path, out_path, errno);
-        unlink(temp_path);
-        return ESP_FAIL;
-    }
-    
-    ESP_LOGD(TAG, "Artwork saved successfully (%zu bytes)", progress.total_received);
+    ESP_LOGD(TAG, "Artwork saved successfully -> %s", out_path);
     return ESP_OK;
 }
 

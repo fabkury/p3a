@@ -20,6 +20,7 @@
 #include "play_scheduler.h"
 #include "makapix.h"
 #include "download_manager.h"
+#include "http_fetch.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_heap_caps.h"
@@ -272,6 +273,30 @@ static void report_failure(bool blocking, const char *error_msg)
 // Download Task
 // ============================================================================
 
+// Percent-throttled progress for blocking mode -> on-screen download bar.
+typedef struct {
+    bool blocking;
+    int  last_percent;
+} su_progress_t;
+
+static void su_progress_cb(size_t total, size_t content_length, void *ctx)
+{
+    su_progress_t *p = (su_progress_t *)ctx;
+    if (!p->blocking || content_length == 0) return;
+    int percent = (int)((total * 100) / content_length);
+    if (percent != p->last_percent) {
+        p->last_percent = percent;
+        p3a_render_set_channel_message("Download", P3A_CHANNEL_MSG_DOWNLOADING, percent, NULL);
+    }
+}
+
+// Cooperative cancel: a new request or explicit cancel sets s_cancel.
+static bool su_should_abort(void *ctx)
+{
+    (void)ctx;
+    return s_cancel;
+}
+
 static void show_url_task(void *arg)
 {
     ESP_LOGI(TAG, "Show-URL task started");
@@ -374,229 +399,70 @@ static void show_url_task(void *arg)
         }
 
         // ------------------------------------------------------------------
-        // HTTP client setup
+        // Download to the temp file. The helper handles retry / truncation /
+        // size cap and the serialized chunk read-write; leave_temp keeps the
+        // file in place so we can sniff its bytes and pick a unique name below.
         // ------------------------------------------------------------------
-        esp_http_client_config_t config = {
+        su_progress_t prog = { .blocking = blocking, .last_percent = -1 };
+        http_fetch_request_t fr = {
             .url = url,
             .timeout_ms = 30000,
-            .crt_bundle_attach = esp_crt_bundle_attach,
-            .buffer_size = 4096,
-            .buffer_size_tx = 2560,
+            .max_size = SHOW_URL_MAX_FILE_SIZE,
+            .chunk_size = SHOW_URL_CHUNK_SIZE,
+            .min_size = 12,
+            .require_exact_length = true,
+            .leave_temp = true,
+            .should_abort = su_should_abort,
+            .progress = su_progress_cb,
+            .user_ctx = &prog,
         };
-
-        esp_http_client_handle_t client = esp_http_client_init(&config);
-        if (!client) {
-            report_failure(blocking, "HTTP client init failed");
-            play_scheduler_resume_auto_swap();
-            s_busy = false;
-            continue;
-        }
-
-        esp_err_t err = esp_http_client_open(client, 0);
+        http_fetch_result_t res = {0};
+        esp_err_t err = http_fetch_to_file(&fr, temp_path, &res);
         if (err != ESP_OK) {
-            ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(err));
-            esp_http_client_cleanup(client);
-            report_failure(blocking, "Connection failed");
-            play_scheduler_resume_auto_swap();
-            s_busy = false;
-            continue;
-        }
-
-        int64_t content_length = esp_http_client_fetch_headers(client);
-        int status_code = esp_http_client_get_status_code(client);
-
-        if (status_code != 200) {
-            ESP_LOGE(TAG, "HTTP %d for %s", status_code, url);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            char err_msg[64];
-            snprintf(err_msg, sizeof(err_msg), "HTTP error %d", status_code);
-            report_failure(blocking, err_msg);
-            play_scheduler_resume_auto_swap();
-            s_busy = false;
-            continue;
-        }
-
-        // Check Content-Length against size limit
-        if (content_length > SHOW_URL_MAX_FILE_SIZE) {
-            ESP_LOGE(TAG, "File too large: %lld bytes (limit %d)", content_length, SHOW_URL_MAX_FILE_SIZE);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            report_failure(blocking, "File exceeds 16 MiB limit");
-            play_scheduler_resume_auto_swap();
-            s_busy = false;
-            continue;
-        }
-
-        // ------------------------------------------------------------------
-        // Allocate chunk buffer
-        // ------------------------------------------------------------------
-        uint8_t *chunk_buffer = heap_caps_malloc(SHOW_URL_CHUNK_SIZE, MALLOC_CAP_SPIRAM);
-        if (!chunk_buffer) {
-            chunk_buffer = malloc(SHOW_URL_CHUNK_SIZE);
-            if (!chunk_buffer) {
-                ESP_LOGE(TAG, "Failed to allocate chunk buffer");
-                esp_http_client_close(client);
-                esp_http_client_cleanup(client);
-                report_failure(blocking, "Out of memory");
-                play_scheduler_resume_auto_swap();
-                s_busy = false;
-                continue;
-            }
-        }
-
-        // ------------------------------------------------------------------
-        // Open temp file
-        // ------------------------------------------------------------------
-        FILE *fp = fopen(temp_path, "w+b");
-        if (!fp) {
-            ESP_LOGE(TAG, "Failed to open temp file: %s", strerror(errno));
-            free(chunk_buffer);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            report_failure(blocking, "Failed to create temp file");
-            play_scheduler_resume_auto_swap();
-            s_busy = false;
-            continue;
-        }
-
-        // ------------------------------------------------------------------
-        // Download loop (serialized chunks: read from WiFi, write to SD)
-        // ------------------------------------------------------------------
-        size_t total_received = 0;
-        bool download_error = false;
-        bool cancelled = false;
-        bool size_exceeded = false;
-        int last_percent = -1;
-
-        while (1) {
-            // Check cancel flag
-            if (s_cancel) {
+            // The helper already removed the temp file on failure.
+            if (err == ESP_ERR_INVALID_STATE) {
+                // Cancelled mid-download — silent; just clear the progress bar.
                 ESP_LOGI(TAG, "Download cancelled");
-                cancelled = true;
-                break;
-            }
-
-            // Phase A: Read chunk from network
-            size_t chunk_received = 0;
-            while (chunk_received < SHOW_URL_CHUNK_SIZE) {
-                int read_len = esp_http_client_read(
-                    client,
-                    (char *)(chunk_buffer + chunk_received),
-                    SHOW_URL_CHUNK_SIZE - chunk_received
-                );
-
-                if (read_len < 0) {
-                    ESP_LOGE(TAG, "HTTP read error: %d", read_len);
-                    download_error = true;
-                    break;
-                }
-                if (read_len == 0) {
-                    break; // End of stream
-                }
-                chunk_received += read_len;
-            }
-
-            if (download_error) break;
-            if (chunk_received == 0) break; // Done
-
-            // Check cumulative size limit (for chunked TE with no Content-Length)
-            if (total_received + chunk_received > (size_t)SHOW_URL_MAX_FILE_SIZE) {
-                ESP_LOGE(TAG, "File exceeds 16 MiB limit during download");
-                size_exceeded = true;
-                break;
-            }
-
-            // Phase B: Write chunk to SD
-            size_t written = fwrite(chunk_buffer, 1, chunk_received, fp);
-            if (written != chunk_received) {
-                ESP_LOGE(TAG, "SD write error: wrote %zu of %zu", written, chunk_received);
-                download_error = true;
-                break;
-            }
-
-            total_received += chunk_received;
-
-            // Update progress (blocking mode)
-            if (blocking && content_length > 0) {
-                int percent = (int)((total_received * 100) / (size_t)content_length);
-                if (percent != last_percent) {
-                    last_percent = percent;
-                    p3a_render_set_channel_message("Download", P3A_CHANNEL_MSG_DOWNLOADING, percent, NULL);
-                }
-            }
-
-            // Yield to animation rendering between chunks
-            vTaskDelay(pdMS_TO_TICKS(10));
-        }
-
-        // ------------------------------------------------------------------
-        // Cleanup HTTP and buffer
-        // ------------------------------------------------------------------
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-        free(chunk_buffer);
-        chunk_buffer = NULL;
-
-        // ------------------------------------------------------------------
-        // Handle errors
-        // ------------------------------------------------------------------
-        if (cancelled || download_error || size_exceeded) {
-            fclose(fp);
-            unlink(temp_path);
-
-            if (cancelled) {
-                // Silently cancelled - clear progress if blocking
                 if (blocking) {
                     p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
                 }
-            } else if (size_exceeded) {
+            } else if (err == ESP_ERR_INVALID_SIZE &&
+                       res.content_length > (int64_t)SHOW_URL_MAX_FILE_SIZE) {
                 report_failure(blocking, "File exceeds 16 MiB limit");
+            } else if (err == ESP_ERR_INVALID_SIZE && res.bytes == 0) {
+                report_failure(blocking, "Downloaded file is empty");
+            } else if (err == ESP_ERR_INVALID_SIZE) {
+                report_failure(blocking, "Incomplete download");
             } else {
-                report_failure(blocking, "Download failed");
+                char err_msg[64];
+                snprintf(err_msg, sizeof(err_msg), "Download failed (%s)", esp_err_to_name(err));
+                report_failure(blocking, err_msg);
             }
-
             play_scheduler_resume_auto_swap();
             s_busy = false;
             continue;
         }
 
-        // Validate size
-        if (total_received == 0) {
-            fclose(fp);
-            unlink(temp_path);
-            report_failure(blocking, "Downloaded file is empty");
-            play_scheduler_resume_auto_swap();
-            s_busy = false;
-            continue;
-        }
-
-        // Size verification (if Content-Length was provided)
-        if (content_length > 0 && total_received != (size_t)content_length) {
-            ESP_LOGE(TAG, "Size mismatch: received %zu, expected %lld", total_received, content_length);
-            fclose(fp);
-            unlink(temp_path);
-            report_failure(blocking, "Incomplete download");
-            play_scheduler_resume_auto_swap();
-            s_busy = false;
-            continue;
-        }
+        size_t total_received = res.bytes;
 
         // ------------------------------------------------------------------
         // Format detection fallback (when extension was missing/unknown)
         // ------------------------------------------------------------------
         if (needs_format_detection) {
-            // Read first 12 bytes from the temp file to detect format
-            fflush(fp);
-            fseek(fp, 0, SEEK_SET);
+            // Re-open the temp file (the helper already closed it) and read the
+            // first 12 bytes to detect the format from magic bytes.
             uint8_t header[12];
-            size_t header_read = fread(header, 1, sizeof(header), fp);
+            size_t header_read = 0;
+            FILE *hf = fopen(temp_path, "rb");
+            if (hf) {
+                header_read = fread(header, 1, sizeof(header), hf);
+                fclose(hf);
+            }
 
             const char *format = detect_image_format(header, header_read);
             const char *detected_ext = format_to_extension(format);
 
             if (!detected_ext) {
-                fclose(fp);
                 unlink(temp_path);
                 report_failure(blocking, "Unsupported file type");
                 play_scheduler_resume_auto_swap();
@@ -624,7 +490,6 @@ static void show_url_task(void *arg)
         char final_name[SHOW_URL_MAX_FILENAME_LEN];
         if (!generate_unique_filename(animations_dir, filename, final_path, sizeof(final_path),
                                       final_name, sizeof(final_name))) {
-            fclose(fp);
             unlink(temp_path);
             report_failure(blocking, "Could not generate unique filename");
             play_scheduler_resume_auto_swap();
@@ -635,12 +500,8 @@ static void show_url_task(void *arg)
         ESP_LOGI(TAG, "Target filename: %s", final_name);
 
         // ------------------------------------------------------------------
-        // Flush and move to final path
+        // Move to final path (the helper already flushed + closed the temp)
         // ------------------------------------------------------------------
-        fflush(fp);
-        fsync(fileno(fp));
-        fclose(fp);
-
         if (rename(temp_path, final_path) != 0) {
             ESP_LOGE(TAG, "Failed to rename %s -> %s: %s", temp_path, final_path, strerror(errno));
             unlink(temp_path);

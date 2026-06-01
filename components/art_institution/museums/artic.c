@@ -37,17 +37,27 @@
 #include <string.h>
 #include <time.h>
 
+#include "http_fetch.h"
+
 static const char *TAG = "ai_artic";
 
 #define AIC_API_BASE              "https://api.artic.edu/api/v1"
 #define AIC_IIIF_BASE             "https://www.artic.edu/iiif/2"
 #define AIC_PAGE_LIMIT            100
 #define AIC_RESPONSE_BUF_SIZE     (192 * 1024)   // headroom over typical ~80 KB pages
-#define AIC_FETCH_MAX_ATTEMPTS    3
-static const uint32_t s_fetch_backoff_ms[AIC_FETCH_MAX_ATTEMPTS] = { 0, 1000, 3000 };
 
 // External: signal download manager that new entries are mergeable.
 extern void download_manager_rescan(void);
+
+// Shared 429 handler for both the GET search and POST-DSL paths. Honors a
+// numeric Retry-After when present (the helper parses it), else the table's
+// default. (aic_user_agent / Accept / Content-Type are passed per-request.)
+static void aic_on_rate_limited(uint32_t retry_after_sec, void *ctx)
+{
+    (void)ctx;
+    ESP_LOGW(TAG, "AIC rate-limited (Retry-After %us)", (unsigned)retry_after_sec);
+    art_institution_set_rate_limited("artic", retry_after_sec);
+}
 
 // ----- Axis -> filter-field map (mirrors reference adapter) ----------------
 
@@ -145,110 +155,23 @@ static esp_err_t aic_fetch_page(const char *filter_field,
 
     ESP_LOGI(TAG, "Fetching page %d (filter=%s term=%.32s)", page, filter_field, term_id);
 
-    esp_http_client_config_t cfg = {
-        .url = url,
-        .timeout_ms = 15000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .buffer_size = 4096,
+    http_fetch_header_t headers[] = {
+        { "AIC-User-Agent", aic_user_agent() },
+        { "Accept", "application/json" },
     };
-
-    esp_err_t fatal_err = ESP_OK;
-    int total_read = 0;
-    bool success = false;
-
-    for (int attempt = 0; attempt < AIC_FETCH_MAX_ATTEMPTS && !success && fatal_err == ESP_OK; attempt++) {
-        if (attempt > 0) {
-            ESP_LOGW(TAG, "Retrying AIC page fetch in %lums (attempt %d/%d)",
-                     (unsigned long)s_fetch_backoff_ms[attempt],
-                     attempt + 1, AIC_FETCH_MAX_ATTEMPTS);
-            vTaskDelay(pdMS_TO_TICKS(s_fetch_backoff_ms[attempt]));
-            total_read = 0;
-        }
-
-        esp_http_client_handle_t client = esp_http_client_init(&cfg);
-        if (!client) continue;
-        esp_http_client_set_header(client, "AIC-User-Agent", aic_user_agent());
-        esp_http_client_set_header(client, "Accept", "application/json");
-
-        esp_err_t err = esp_http_client_open(client, 0);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(err));
-            esp_http_client_cleanup(client);
-            continue;
-        }
-
-        esp_http_client_fetch_headers(client);
-        int64_t content_length = esp_http_client_get_content_length(client);
-        int status = esp_http_client_get_status_code(client);
-
-        if (status == 429) {
-            char *retry_after = NULL;
-            uint32_t cooldown = 0;
-            if (esp_http_client_get_header(client, "Retry-After", &retry_after) == ESP_OK) {
-                cooldown = ai_parse_retry_after(retry_after);
-            }
-            art_institution_set_rate_limited("artic", cooldown);  // 0 -> default 60s
-            ESP_LOGW(TAG, "AIC returned 429 (cooldown %us)",
-                     (unsigned)(cooldown ? cooldown : 60));
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            fatal_err = ESP_ERR_INVALID_RESPONSE;
-            break;
-        }
-
-        if (status == 401 || status == 403) {
-            // Logged at WARN: AIC has been observed returning 403 on deeper
-            // pages of certain large-result-set queries (e.g. Painting past
-            // page ~10), independent of the documented offset cap. The
-            // caller decides whether to fail the refresh: if pages 1..N-1
-            // succeeded, treat this as partial success rather than rendering
-            // a hard error.
-            ESP_LOGW(TAG, "AIC returned %d on page %d (filter=%s term=%.32s)",
-                     status, page, filter_field, term_id);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            fatal_err = ESP_ERR_NOT_ALLOWED;
-            break;
-        }
-
-        if (status != 200) {
-            ESP_LOGW(TAG, "AIC status %d on page %d", status, page);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            continue;  // retry
-        }
-
-        total_read = ai_drain_body(client, response_buf, response_buf_size);
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-
-        if (total_read < 0) continue;
-        if (total_read == 0) {
-            ESP_LOGW(TAG, "AIC empty body");
-            continue;
-        }
-        if (total_read >= (int)response_buf_size - 1) {
-            ESP_LOGE(TAG, "AIC response truncated at %d bytes", total_read);
-            fatal_err = ESP_FAIL;
-            break;
-        }
-        if (content_length > 0 && total_read < (int)content_length) {
-            ESP_LOGW(TAG, "AIC truncated: got %d/%lld bytes",
-                     total_read, (long long)content_length);
-            continue;  // retry
-        }
-
-        success = true;
+    http_fetch_request_t fr = {
+        .url = url,
+        .headers = headers,
+        .header_count = 2,
+        .on_rate_limited = aic_on_rate_limited,
+    };
+    size_t got = 0;
+    esp_err_t err = http_fetch_to_buffer(&fr, response_buf, response_buf_size, &got, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "AIC page %d fetch failed: %s", page, esp_err_to_name(err));
+        return err;
     }
-
-    if (fatal_err != ESP_OK) return fatal_err;
-    if (!success) {
-        ESP_LOGE(TAG, "AIC page %d fetch failed after %d attempts",
-                 page, AIC_FETCH_MAX_ATTEMPTS);
-        return ESP_FAIL;
-    }
-
-    response_buf[total_read] = '\0';
+    int total_read = (int)got;
 
     cJSON *root = cJSON_Parse(response_buf);
     if (!root) {
@@ -616,91 +539,22 @@ static esp_err_t aic_post_dsl(const char *filter_field,
         return ESP_FAIL;
     }
 
-    esp_http_client_config_t cfg = {
-        .url = AIC_API_BASE "/artworks/search",
-        .method = HTTP_METHOD_POST,
-        .timeout_ms = 15000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .buffer_size = 4096,
+    http_fetch_header_t headers[] = {
+        { "AIC-User-Agent", aic_user_agent() },
+        { "Accept", "application/json" },
+        { "Content-Type", "application/json" },
     };
-
-    esp_err_t fatal_err = ESP_OK;
-    int total_read = 0;
-    bool success = false;
-
-    for (int attempt = 0; attempt < AIC_FETCH_MAX_ATTEMPTS && !success && fatal_err == ESP_OK; attempt++) {
-        if (attempt > 0) {
-            vTaskDelay(pdMS_TO_TICKS(s_fetch_backoff_ms[attempt]));
-            total_read = 0;
-        }
-
-        esp_http_client_handle_t client = esp_http_client_init(&cfg);
-        if (!client) continue;
-        esp_http_client_set_header(client, "AIC-User-Agent", aic_user_agent());
-        esp_http_client_set_header(client, "Accept", "application/json");
-        esp_http_client_set_header(client, "Content-Type", "application/json");
-
-        // open(blen) declares the Content-Length; the body itself is sent
-        // via the explicit write() below. (set_post_field is only consulted
-        // by perform(); we run the request manually so we can drain the
-        // body into our PSRAM response_buf.)
-        esp_err_t err = esp_http_client_open(client, blen);
-        if (err != ESP_OK) {
-            esp_http_client_cleanup(client);
-            continue;
-        }
-        if (esp_http_client_write(client, body, blen) != blen) {
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            continue;
-        }
-
-        esp_http_client_fetch_headers(client);
-        int status = esp_http_client_get_status_code(client);
-
-        if (status == 429) {
-            char *retry_after = NULL;
-            uint32_t cooldown = 0;
-            if (esp_http_client_get_header(client, "Retry-After", &retry_after) == ESP_OK) {
-                cooldown = ai_parse_retry_after(retry_after);
-            }
-            art_institution_set_rate_limited("artic", cooldown);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            fatal_err = ESP_ERR_INVALID_RESPONSE;
-            break;
-        }
-        if (status == 401 || status == 403) {
-            ESP_LOGW(TAG, "AIC POST DSL returned %d (range=[%ld,%ld) from=%d size=%d)",
-                     status, (long)range_lo, (long)range_hi, from, size);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            fatal_err = ESP_ERR_NOT_ALLOWED;
-            break;
-        }
-        if (status != 200) {
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            continue;
-        }
-
-        total_read = ai_drain_body(client, response_buf, response_buf_size);
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-
-        if (total_read <= 0) continue;
-        if (total_read >= (int)response_buf_size - 1) {
-            ESP_LOGE(TAG, "AIC POST DSL response truncated at %d bytes", total_read);
-            fatal_err = ESP_FAIL;
-            break;
-        }
-        success = true;
-    }
-
-    if (fatal_err != ESP_OK) return fatal_err;
-    if (!success) return ESP_FAIL;
-
-    response_buf[total_read] = '\0';
+    http_fetch_request_t fr = {
+        .url = AIC_API_BASE "/artworks/search",
+        .method = HTTP_FETCH_POST,
+        .body = body,
+        .body_len = (size_t)blen,
+        .headers = headers,
+        .header_count = 3,
+        .on_rate_limited = aic_on_rate_limited,
+    };
+    esp_err_t err = http_fetch_to_buffer(&fr, response_buf, response_buf_size, NULL, NULL);
+    if (err != ESP_OK) return err;
 
     cJSON *root = cJSON_Parse(response_buf);
     if (!root) return ESP_FAIL;

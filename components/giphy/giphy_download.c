@@ -17,6 +17,7 @@
 #include "sdio_bus.h"
 #include "makapix_channel_events.h"
 #include "download_manager.h"  // download_manager_is_canceled (S1 cooperative cancel)
+#include "http_fetch.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_log.h"
@@ -34,11 +35,6 @@ static const char *TAG = "giphy_dl";
 
 // Chunk size for serialized download (matches makapix_artwork.c)
 #define DOWNLOAD_CHUNK_SIZE (32 * 1024)
-
-// Retry truncated downloads to ride out transient lwIP/TLS contention.
-// See docs/concurrent-tls-eagain-tabled.md for the failure mode.
-#define DOWNLOAD_MAX_ATTEMPTS 3
-static const uint32_t s_download_backoff_ms[DOWNLOAD_MAX_ATTEMPTS] = { 0, 1000, 3000 };
 
 // Extension strings
 static const char *s_ext_strings[] = { ".webp", ".gif", ".png", ".jpg" };
@@ -159,6 +155,23 @@ esp_err_t giphy_download_artwork(const char *giphy_id, uint8_t extension,
     return giphy_download_artwork_with_progress(giphy_id, extension, out_path, out_len, NULL, NULL);
 }
 
+// Cooperative abort: stop mid-download if the SD card got exported to USB or the
+// playset switched (download_manager cancel). Mirrors the per-chunk inline checks
+// the old read loop performed.
+static bool giphy_dl_should_abort(void *ctx)
+{
+    (void)ctx;
+    if (!makapix_channel_is_sd_available()) {
+        ESP_LOGI(TAG, "Aborting download: SD card exported to USB host");
+        return true;
+    }
+    if (download_manager_is_canceled()) {
+        ESP_LOGI(TAG, "Aborting download: playset switched");
+        return true;
+    }
+    return false;
+}
+
 esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t extension,
                                                char *out_path, size_t out_len,
                                                giphy_download_progress_cb_t progress_cb,
@@ -225,213 +238,23 @@ esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t ext
     err = giphy_build_download_url(giphy_id, url, sizeof(url));
     if (err != ESP_OK) return err;
 
-    // Build temp file path
-    char temp_path[264];
-    snprintf(temp_path, sizeof(temp_path), "%s.tmp", out_path);
-
     ESP_LOGD(TAG, "Downloading: %s -> %s", url, out_path);
 
-    // Allocate chunk buffer (prefer PSRAM)
-    uint8_t *chunk_buffer = heap_caps_malloc(DOWNLOAD_CHUNK_SIZE, MALLOC_CAP_SPIRAM);
-    if (!chunk_buffer) {
-        chunk_buffer = malloc(DOWNLOAD_CHUNK_SIZE);
-        if (!chunk_buffer) {
-            ESP_LOGE(TAG, "Failed to allocate chunk buffer");
-            return ESP_ERR_NO_MEM;
-        }
-    }
-
-    // Configure HTTP client
-    esp_http_client_config_t config = {
+    http_fetch_request_t fr = {
         .url = url,
-        .timeout_ms = 15000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .buffer_size = 4096,
+        .max_size = P3A_MAX_ARTWORK_SIZE,
+        .chunk_size = DOWNLOAD_CHUNK_SIZE,
+        .treat_empty_as_not_found = true,
+        .progress = progress_cb,
+        .should_abort = giphy_dl_should_abort,
+        .user_ctx = progress_ctx,
     };
-
-    // Open temp file once; rewind+truncate between retries.
-    FILE *f = fopen(temp_path, "wb");
-    if (!f) {
-        ESP_LOGE(TAG, "Failed to open temp file: %s", temp_path);
-        free(chunk_buffer);
-        return ESP_FAIL;
+    err = http_fetch_to_file(&fr, out_path, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Download failed for %s: %s", giphy_id, esp_err_to_name(err));
+        return err;
     }
 
-    bool success = false;
-    esp_err_t fatal_err = ESP_OK;
-    size_t total_written = 0;
-
-    for (int attempt = 0; attempt < DOWNLOAD_MAX_ATTEMPTS && !success && fatal_err == ESP_OK; attempt++) {
-        if (attempt > 0) {
-            ESP_LOGW(TAG, "Retrying %s in %lums (attempt %d/%d)",
-                     giphy_id, (unsigned long)s_download_backoff_ms[attempt],
-                     attempt + 1, DOWNLOAD_MAX_ATTEMPTS);
-            vTaskDelay(pdMS_TO_TICKS(s_download_backoff_ms[attempt]));
-            rewind(f);
-            if (ftruncate(fileno(f), 0) != 0) {
-                ESP_LOGE(TAG, "Failed to truncate temp file for retry");
-                fatal_err = ESP_FAIL;
-                break;
-            }
-            total_written = 0;
-        }
-
-        esp_http_client_handle_t client = esp_http_client_init(&config);
-        if (!client) {
-            continue;
-        }
-
-        err = esp_http_client_open(client, 0);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(err));
-            esp_http_client_cleanup(client);
-            continue;
-        }
-
-        esp_http_client_fetch_headers(client);
-        int64_t content_length = esp_http_client_get_content_length(client);
-        int status = esp_http_client_get_status_code(client);
-
-        if (status == 404) {
-            ESP_LOGW(TAG, "Giphy 404: %s", giphy_id);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            fatal_err = ESP_ERR_NOT_FOUND;
-            break;
-        }
-
-        if (status != 200) {
-            ESP_LOGE(TAG, "HTTP status %d for %s", status, giphy_id);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            continue;
-        }
-
-        if (content_length == 0) {
-            // HTTP 200 with explicit Content-Length: 0 means the origin is
-            // serving an empty body for this resource — treat as permanent
-            // not-found so download_manager creates a .404 marker and we
-            // stop re-attempting this URL on every channel rotation.
-            ESP_LOGW(TAG, "Giphy empty body (200 with Content-Length: 0): %s", giphy_id);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            fatal_err = ESP_ERR_NOT_FOUND;
-            break;
-        }
-
-        if (content_length > P3A_MAX_ARTWORK_SIZE) {
-            ESP_LOGW(TAG, "Giphy file too large: %lld bytes, skipping: %s",
-                     content_length, giphy_id);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            fatal_err = ESP_ERR_INVALID_SIZE;
-            break;
-        }
-
-        bool read_ok = true;
-        bool write_err = false;
-        bool too_large = false;
-
-        while (true) {
-            int chunk_received = 0;
-            while (chunk_received < DOWNLOAD_CHUNK_SIZE) {
-                int read_len = esp_http_client_read(client,
-                                                     (char *)chunk_buffer + chunk_received,
-                                                     DOWNLOAD_CHUNK_SIZE - chunk_received);
-                if (read_len < 0) {
-                    ESP_LOGW(TAG, "HTTP read error for %s", giphy_id);
-                    read_ok = false;
-                    break;
-                }
-                if (read_len == 0) break;  // End of data
-                chunk_received += read_len;
-            }
-
-            if (!read_ok || chunk_received == 0) break;
-
-            if (!makapix_channel_is_sd_available()) {
-                ESP_LOGI(TAG, "Aborting download of %s: SD card exported to USB host", giphy_id);
-                fatal_err = ESP_ERR_INVALID_STATE;
-                break;
-            }
-            if (download_manager_is_canceled()) {
-                ESP_LOGI(TAG, "Aborting download of %s: playset switched", giphy_id);
-                fatal_err = ESP_ERR_INVALID_STATE;
-                break;
-            }
-
-            size_t written = fwrite(chunk_buffer, 1, chunk_received, f);
-            if (written != (size_t)chunk_received) {
-                ESP_LOGE(TAG, "Write error: wrote %zu/%d bytes", written, chunk_received);
-                write_err = true;
-                break;
-            }
-
-            total_written += written;
-
-            if (total_written > P3A_MAX_ARTWORK_SIZE) {
-                too_large = true;
-                break;
-            }
-
-            if (progress_cb) {
-                progress_cb(total_written,
-                            (content_length > 0) ? (size_t)content_length : 0,
-                            progress_ctx);
-            }
-
-            if (chunk_received < DOWNLOAD_CHUNK_SIZE) break;  // Last chunk
-        }
-
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-
-        if (write_err) {
-            fatal_err = ESP_FAIL;
-            break;
-        }
-        if (too_large) {
-            ESP_LOGW(TAG, "Giphy download exceeded 16 MiB, aborting: %s", giphy_id);
-            fatal_err = ESP_ERR_INVALID_SIZE;
-            break;
-        }
-
-        bool truncated = !read_ok ||
-                         total_written == 0 ||
-                         (content_length > 0 && total_written < (size_t)content_length);
-        if (truncated) {
-            ESP_LOGW(TAG, "Truncated download for %s: got %zu/%lld bytes",
-                     giphy_id, total_written, (long long)content_length);
-            continue;  // retry
-        }
-
-        success = true;
-    }
-
-    fflush(f);
-    fsync(fileno(f));
-    fclose(f);
-    free(chunk_buffer);
-
-    if (fatal_err != ESP_OK) {
-        unlink(temp_path);
-        return fatal_err;
-    }
-
-    if (!success) {
-        unlink(temp_path);
-        ESP_LOGE(TAG, "Download failed for %s after %d attempts", giphy_id, DOWNLOAD_MAX_ATTEMPTS);
-        return ESP_FAIL;
-    }
-
-    // Atomic rename
-    unlink(out_path);  // Remove old file if exists
-    if (rename(temp_path, out_path) != 0) {
-        ESP_LOGE(TAG, "Rename failed: %s -> %s", temp_path, out_path);
-        unlink(temp_path);
-        return ESP_FAIL;
-    }
-
-    ESP_LOGD(TAG, "Downloaded %s (%zu bytes)", giphy_id, total_written);
+    ESP_LOGD(TAG, "Downloaded %s", giphy_id);
     return ESP_OK;
 }

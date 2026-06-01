@@ -44,15 +44,18 @@
 #include <string.h>
 #include <time.h>
 
+#include "http_fetch.h"
+
 static const char *TAG = "ai_smk";
 
 #define SMK_API_BASE           "https://api.smk.dk/api/v1"
 #define SMK_IIIF_PREFIX        "https://iip.smk.dk/iiif/jp2/"
-#define SMK_PAGE_LIMIT         100
+// 50 rather than 100: SMK records carry rich metadata, and a 100-record page
+// can exceed SMK_RESPONSE_BUF_SIZE for some collections (e.g. "Stroes
+// fortegnelse" fills 192 KB). 50 keeps a page well under the cap, mirroring
+// the Smithsonian adapter's rows=50 for the same reason.
+#define SMK_PAGE_LIMIT         50
 #define SMK_RESPONSE_BUF_SIZE  (192 * 1024)
-#define SMK_FETCH_MAX_ATTEMPTS 3
-
-static const uint32_t s_fetch_backoff_ms[SMK_FETCH_MAX_ATTEMPTS] = { 0, 1000, 3000 };
 
 extern void download_manager_rescan(void);
 
@@ -108,6 +111,13 @@ static bool extract_smk_filename(const char *image_iiif_id, char *out, size_t ou
 
 // ----- One-page fetch -----------------------------------------------------
 
+static void smk_on_rate_limited(uint32_t retry_after_sec, void *ctx)
+{
+    (void)ctx;
+    ESP_LOGW(TAG, "SMK rate-limited (Retry-After %us)", (unsigned)retry_after_sec);
+    art_institution_set_rate_limited("smk", retry_after_sec);
+}
+
 static esp_err_t smk_fetch_page(const char *collection_name,
                                 int offset,
                                 char *response_buf,
@@ -149,95 +159,22 @@ static esp_err_t smk_fetch_page(const char *collection_name,
 
     ESP_LOGI(TAG, "Fetching offset %d (collection=%.32s)", offset, collection_name);
 
-    esp_http_client_config_t cfg = {
-        .url = url,
-        .timeout_ms = 15000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .buffer_size = 4096,
+    http_fetch_header_t headers[] = {
+        { "Accept", "application/json" },
     };
-
-    esp_err_t fatal_err = ESP_OK;
-    int total_read = 0;
-    bool success = false;
-
-    for (int attempt = 0; attempt < SMK_FETCH_MAX_ATTEMPTS && !success && fatal_err == ESP_OK; attempt++) {
-        if (attempt > 0) {
-            ESP_LOGW(TAG, "Retrying SMK page fetch in %lums (attempt %d/%d)",
-                     (unsigned long)s_fetch_backoff_ms[attempt],
-                     attempt + 1, SMK_FETCH_MAX_ATTEMPTS);
-            vTaskDelay(pdMS_TO_TICKS(s_fetch_backoff_ms[attempt]));
-            total_read = 0;
-        }
-
-        esp_http_client_handle_t client = esp_http_client_init(&cfg);
-        if (!client) continue;
-        esp_http_client_set_header(client, "Accept", "application/json");
-
-        esp_err_t err = esp_http_client_open(client, 0);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(err));
-            esp_http_client_cleanup(client);
-            continue;
-        }
-
-        esp_http_client_fetch_headers(client);
-        int64_t content_length = esp_http_client_get_content_length(client);
-        int status = esp_http_client_get_status_code(client);
-
-        if (status == 429) {
-            char *retry_after = NULL;
-            uint32_t cooldown = 0;
-            if (esp_http_client_get_header(client, "Retry-After", &retry_after) == ESP_OK) {
-                cooldown = ai_parse_retry_after(retry_after);
-            }
-            art_institution_set_rate_limited("smk", cooldown);
-            ESP_LOGW(TAG, "SMK returned 429 (cooldown %us)",
-                     (unsigned)(cooldown ? cooldown : 60));
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            fatal_err = ESP_ERR_INVALID_RESPONSE;
-            break;
-        }
-        if (status == 401 || status == 403) {
-            ESP_LOGW(TAG, "SMK returned %d at offset %d", status, offset);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            fatal_err = ESP_ERR_NOT_ALLOWED;
-            break;
-        }
-        if (status != 200) {
-            ESP_LOGW(TAG, "SMK status %d at offset %d", status, offset);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            continue;
-        }
-
-        total_read = ai_drain_body(client, response_buf, response_buf_size);
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-
-        if (total_read < 0) continue;
-        if (total_read == 0) continue;
-        if (total_read >= (int)response_buf_size - 1) {
-            ESP_LOGE(TAG, "SMK response truncated at %d bytes", total_read);
-            fatal_err = ESP_FAIL;
-            break;
-        }
-        if (content_length > 0 && total_read < (int)content_length) {
-            ESP_LOGW(TAG, "SMK truncated: got %d/%lld bytes",
-                     total_read, (long long)content_length);
-            continue;
-        }
-        success = true;
+    http_fetch_request_t fr = {
+        .url = url,
+        .headers = headers,
+        .header_count = 1,
+        .on_rate_limited = smk_on_rate_limited,
+    };
+    size_t got = 0;
+    esp_err_t err = http_fetch_to_buffer(&fr, response_buf, response_buf_size, &got, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "SMK offset %d fetch failed: %s", offset, esp_err_to_name(err));
+        return err;
     }
-
-    if (fatal_err != ESP_OK) return fatal_err;
-    if (!success) {
-        ESP_LOGE(TAG, "SMK offset %d fetch failed after %d attempts",
-                 offset, SMK_FETCH_MAX_ATTEMPTS);
-        return ESP_FAIL;
-    }
-    response_buf[total_read] = '\0';
+    int total_read = (int)got;
 
     cJSON *root = cJSON_Parse(response_buf);
     if (!root) {

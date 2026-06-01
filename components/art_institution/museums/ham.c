@@ -54,16 +54,15 @@
 #include <string.h>
 #include <time.h>
 
+#include "http_fetch.h"
+
 static const char *TAG = "ai_ham";
 
 #define HAM_API_BASE              "https://api.harvardartmuseums.org"
 #define HAM_NRS_PREFIX            "https://nrs.harvard.edu/"
 #define HAM_PAGE_LIMIT            100
 #define HAM_RESPONSE_BUF_SIZE     (256 * 1024)
-#define HAM_FETCH_MAX_ATTEMPTS    3
 #define HAM_API_KEY_MAX           64
-
-static const uint32_t s_fetch_backoff_ms[HAM_FETCH_MAX_ATTEMPTS] = { 0, 1000, 3000 };
 
 extern void download_manager_rescan(void);
 
@@ -105,6 +104,13 @@ static const char *ham_extract_urn(const char *full_url)
 }
 
 // ----- One-page fetch ------------------------------------------------------
+
+static void ham_on_rate_limited(uint32_t retry_after_sec, void *ctx)
+{
+    (void)ctx;
+    ESP_LOGW(TAG, "HAM rate-limited (Retry-After %us)", (unsigned)retry_after_sec);
+    art_institution_set_rate_limited("ham", retry_after_sec);
+}
 
 /**
  * @brief Fetch + parse one HAM /object search page
@@ -157,105 +163,22 @@ static esp_err_t ham_fetch_page(const char *axis,
 
     ESP_LOGI(TAG, "Fetching page %d (axis=%s term=%.32s)", page, axis, term_id);
 
-    esp_http_client_config_t cfg = {
-        .url = url,
-        .timeout_ms = 15000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .buffer_size = 4096,
+    http_fetch_header_t headers[] = {
+        { "Accept", "application/json" },
     };
-
-    esp_err_t fatal_err = ESP_OK;
-    int total_read = 0;
-    bool success = false;
-
-    for (int attempt = 0; attempt < HAM_FETCH_MAX_ATTEMPTS && !success && fatal_err == ESP_OK; attempt++) {
-        if (attempt > 0) {
-            ESP_LOGW(TAG, "Retrying HAM page fetch in %lums (attempt %d/%d)",
-                     (unsigned long)s_fetch_backoff_ms[attempt],
-                     attempt + 1, HAM_FETCH_MAX_ATTEMPTS);
-            vTaskDelay(pdMS_TO_TICKS(s_fetch_backoff_ms[attempt]));
-            total_read = 0;
-        }
-
-        esp_http_client_handle_t client = esp_http_client_init(&cfg);
-        if (!client) continue;
-        esp_http_client_set_header(client, "Accept", "application/json");
-
-        esp_err_t err = esp_http_client_open(client, 0);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(err));
-            esp_http_client_cleanup(client);
-            continue;
-        }
-
-        esp_http_client_fetch_headers(client);
-        int64_t content_length = esp_http_client_get_content_length(client);
-        int status = esp_http_client_get_status_code(client);
-
-        if (status == 429) {
-            char *retry_after = NULL;
-            uint32_t cooldown = 0;
-            if (esp_http_client_get_header(client, "Retry-After", &retry_after) == ESP_OK) {
-                cooldown = ai_parse_retry_after(retry_after);
-            }
-            art_institution_set_rate_limited("ham", cooldown);
-            ESP_LOGW(TAG, "HAM returned 429 (cooldown %us)",
-                     (unsigned)(cooldown ? cooldown : 60));
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            fatal_err = ESP_ERR_INVALID_RESPONSE;
-            break;
-        }
-        if (status == 401) {
-            // BYOK key was rejected — likely expired or revoked. Surface
-            // as ESP_ERR_NOT_ALLOWED; the dispatcher's caller will log it
-            // and the user will need to re-enter the key.
-            ESP_LOGW(TAG, "HAM returned 401 on page %d — API key invalid?", page);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            fatal_err = ESP_ERR_NOT_ALLOWED;
-            break;
-        }
-        if (status == 403) {
-            ESP_LOGW(TAG, "HAM returned 403 on page %d", page);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            fatal_err = ESP_ERR_NOT_ALLOWED;
-            break;
-        }
-        if (status != 200) {
-            ESP_LOGW(TAG, "HAM status %d on page %d", status, page);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            continue;  // retry
-        }
-
-        total_read = ai_drain_body(client, response_buf, response_buf_size);
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-
-        if (total_read < 0) continue;
-        if (total_read == 0) continue;
-        if (total_read >= (int)response_buf_size - 1) {
-            ESP_LOGE(TAG, "HAM response truncated at %d bytes", total_read);
-            fatal_err = ESP_FAIL;
-            break;
-        }
-        if (content_length > 0 && total_read < (int)content_length) {
-            ESP_LOGW(TAG, "HAM truncated: got %d/%lld bytes",
-                     total_read, (long long)content_length);
-            continue;
-        }
-        success = true;
+    http_fetch_request_t fr = {
+        .url = url,
+        .headers = headers,
+        .header_count = 1,
+        .on_rate_limited = ham_on_rate_limited,
+    };
+    size_t got = 0;
+    esp_err_t err = http_fetch_to_buffer(&fr, response_buf, response_buf_size, &got, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "HAM page %d fetch failed: %s", page, esp_err_to_name(err));
+        return err;
     }
-
-    if (fatal_err != ESP_OK) return fatal_err;
-    if (!success) {
-        ESP_LOGE(TAG, "HAM page %d fetch failed after %d attempts",
-                 page, HAM_FETCH_MAX_ATTEMPTS);
-        return ESP_FAIL;
-    }
-    response_buf[total_read] = '\0';
+    int total_read = (int)got;
 
     cJSON *root = cJSON_Parse(response_buf);
     if (!root) {

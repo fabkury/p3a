@@ -107,24 +107,6 @@ void art_institution_evict_orphans(struct channel_cache_s *cache,
 void ai_url_encode(const char *in, char *out, size_t out_len);
 
 /**
- * @brief Drain an open esp_http_client response into a caller-provided buffer
- *
- * Reads until EOF or until one byte short of buf_size (to reserve room for a
- * caller-applied null terminator). Returns total bytes read, or -1 on any
- * read error. Caller is responsible for null-terminating the buffer.
- */
-int ai_drain_body(esp_http_client_handle_t client, char *buf, size_t buf_size);
-
-/**
- * @brief Parse a Retry-After header value (seconds form only)
- *
- * Returns the cooldown seconds requested by the server, capped at 3600.
- * Returns 0 for missing, malformed, or HTTP-date-formatted values (caller
- * should fall back to a museum-specific default cooldown in that case).
- */
-uint32_t ai_parse_retry_after(const char *value);
-
-/**
  * @brief Return the shared `User-Agent` string for museum HTTP requests
  *
  * Format: "p3a/{FW_VERSION_STRING} (pub@kury.dev)". Built lazily at first

@@ -136,6 +136,23 @@ static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
 }
 
 // ============================================================================
+// Availability accounting
+// ============================================================================
+
+size_t ps_channel_available_count(const ps_channel_state_t *c)
+{
+    if (!c) return 0;
+    // Artwork channels carry no cache and never populate available_count;
+    // their single item is playable exactly when ch->active is set (the same
+    // gate ps_pick_artwork uses). Count it as one available artwork so it
+    // isn't miscounted as empty by availability sums.
+    if (c->type == PS_CHANNEL_TYPE_ARTWORK) {
+        return c->active ? 1 : 0;
+    }
+    return c->cache ? c->cache->available_count : c->available_count;
+}
+
+// ============================================================================
 // Defense-in-depth invariant check (S5)
 // ============================================================================
 
@@ -143,11 +160,12 @@ static bool ps_lai_add(ps_channel_state_t *ch, uint32_t ci_index)
  * @brief Verify the first_swap_emitted invariant after a successful trigger
  *
  * Documented contract: at the moment first_swap_emitted is set true, at
- * least one channel must have a downloaded artwork (Σ available_count > 0).
- * This is normally guaranteed by the four call-site gates (LAi zero-to-one,
- * execute-playset with has_lai_entries, async-refresh-complete with
- * ch->active, sync-refresh-complete with ch->active). A regression in any
- * of those would silently start the player against an empty LAi.
+ * least one channel must have a playable artwork
+ * (Σ ps_channel_available_count() > 0). This is normally guaranteed by the
+ * four call-site gates (LAi zero-to-one, execute-playset with has_lai_entries,
+ * async-refresh-complete with ch->active, sync-refresh-complete with
+ * ch->active). A regression in any of those would silently start the player
+ * against an empty LAi.
  *
  * Caller MUST hold s_state->mutex.
  *
@@ -159,8 +177,7 @@ void ps_assert_first_swap_invariant(ps_state_t *state, const char *origin)
     if (!state) return;
     size_t total = 0;
     for (size_t i = 0; i < state->channel_count; i++) {
-        ps_channel_state_t *c = &state->channels[i];
-        total += (c->cache ? c->cache->available_count : c->available_count);
+        total += ps_channel_available_count(&state->channels[i]);
     }
     if (total == 0) {
         ESP_LOGE(TAG, "INVARIANT VIOLATED at %s: first_swap_emitted=true but "
@@ -218,14 +235,13 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
     // Track if this is a zero-to-one transition
     size_t prev_total_available = 0;
     for (size_t i = 0; i < s_state->channel_count; i++) {
-        ps_channel_state_t *c = &s_state->channels[i];
-        prev_total_available += (c->cache ? c->cache->available_count : c->available_count);
+        prev_total_available += ps_channel_available_count(&s_state->channels[i]);
     }
 
     // Add to LAi
-    size_t prev_channel_available = ch->cache ? ch->cache->available_count : ch->available_count;
+    size_t prev_channel_available = ps_channel_available_count(ch);
     if (ps_lai_add(ch, ci_index)) {
-        size_t new_channel_available = ch->cache ? ch->cache->available_count : ch->available_count;
+        size_t new_channel_available = ps_channel_available_count(ch);
         size_t ci_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
         ESP_LOGI(TAG, ">>> LAi ADD: ch='%s' post_id=%ld ci=%lu, LAi: %zu -> %zu (Ci=%zu)",
                  ch->display_name, (long)post_id, (unsigned long)ci_index,
@@ -287,8 +303,7 @@ size_t play_scheduler_get_total_available(void)
 
     size_t total = 0;
     for (size_t i = 0; i < s_state->channel_count; i++) {
-        ps_channel_state_t *ch = &s_state->channels[i];
-        total += (ch->cache ? ch->cache->available_count : ch->available_count);
+        total += ps_channel_available_count(&s_state->channels[i]);
     }
 
     xSemaphoreGive(s_state->mutex);
@@ -314,7 +329,7 @@ void play_scheduler_get_channel_stats(const char *channel_id, size_t *out_total,
         ps_channel_state_t *ch = &s_state->channels[i];
         if (strcmp(ch->channel_id, channel_id) == 0) {
             if (out_total) *out_total = (ch->cache ? ch->cache->entry_count : ch->entry_count);
-            if (out_cached) *out_cached = (ch->cache ? ch->cache->available_count : ch->available_count);
+            if (out_cached) *out_cached = ps_channel_available_count(ch);
             break;
         }
     }

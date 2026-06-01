@@ -155,6 +155,22 @@ ps_state_t *ps_get_state(void);
  */
 void ps_assert_first_swap_invariant(ps_state_t *state, const char *origin);
 
+/**
+ * @brief Number of currently-playable artworks in a channel.
+ *
+ * Abstracts over how each channel type tracks availability so callers can
+ * sum "what can we play right now" uniformly:
+ *   - Makapix/Giphy/institution: cache->available_count (the LAi).
+ *   - SD card: available_count (mirrors entry_count once scanned).
+ *   - Artwork ("show this one"): has no cache and never populates
+ *     available_count; its single item is playable iff ch->active (the same
+ *     gate ps_pick_artwork uses), so this returns 1 when active, else 0.
+ *
+ * Prefer this over the raw `c->cache ? c->cache->available_count :
+ * c->available_count` idiom so artwork channels aren't miscounted as empty.
+ */
+size_t ps_channel_available_count(const ps_channel_state_t *c);
+
 // ============================================================================
 // Buffer Operations (play_scheduler_buffers.c)
 // ============================================================================

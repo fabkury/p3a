@@ -672,7 +672,7 @@ esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats)
     size_t total_avail = 0, total_entries = 0;
     for (size_t i = 0; i < s_state.channel_count; i++) {
         ps_channel_state_t *ch = &s_state.channels[i];
-        total_avail   += (ch->cache ? ch->cache->available_count : ch->available_count);
+        total_avail   += ps_channel_available_count(ch);
         total_entries  += (ch->cache ? ch->cache->entry_count : ch->entry_count);
     }
     out_stats->total_available = total_avail;
@@ -736,7 +736,7 @@ esp_err_t play_scheduler_get_channel_details(
         d->type = ch->type;
 
         d->entry_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
-        d->available_count = ch->cache ? ch->cache->available_count : ch->available_count;
+        d->available_count = ps_channel_available_count(ch);
 
         d->refreshing = ch->refresh_pending || ch->refresh_in_progress || ch->refresh_async_pending;
         d->last_refresh = ch->last_refresh;

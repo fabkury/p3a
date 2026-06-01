@@ -50,12 +50,16 @@ static const char *TAG = "ai_smk";
 
 #define SMK_API_BASE           "https://api.smk.dk/api/v1"
 #define SMK_IIIF_PREFIX        "https://iip.smk.dk/iiif/jp2/"
-// 50 rather than 100: SMK records carry rich metadata, and a 100-record page
-// can exceed SMK_RESPONSE_BUF_SIZE for some collections (e.g. "Stroes
-// fortegnelse" fills 192 KB). 50 keeps a page well under the cap, mirroring
-// the Smithsonian adapter's rows=50 for the same reason.
+// SMK returns full records (~4 KB each: production, materials, notes, titles,
+// ...) and its `fields` query param won't trim them down to image_iiif_id the
+// way AIC/HAM shrink their responses (it returns empty items), so the page
+// can't be reduced request-side. A 50-record page measures ~205 KB for
+// metadata-rich collections (e.g. "Stroes fortegnelse"), so keep rows modest
+// (cf. Smithsonian rows=50) and size the buffer to hold it with headroom.
+// Note: image_iiif_id is present on most — not all — records; the parser
+// skips those without it (some carry only a UUID thumbnail).
 #define SMK_PAGE_LIMIT         50
-#define SMK_RESPONSE_BUF_SIZE  (192 * 1024)
+#define SMK_RESPONSE_BUF_SIZE  (512 * 1024)
 
 extern void download_manager_rescan(void);
 

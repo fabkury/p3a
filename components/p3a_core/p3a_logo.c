@@ -7,7 +7,6 @@
  */
 
 #include "p3a_logo.h"
-#include <string.h>
 
 /* Chroma key color (BGR): pixels matching this color are transparent */
 #define P3A_LOGO_CHROMA_KEY_B 0x80
@@ -485,65 +484,6 @@ static const uint8_t p3a_logo_pixels[] = {
     0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
     0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
 };
-
-/* Note: memcpy blit does not support chroma key transparency. */
-void p3a_logo_blit_memcpy_bgr888(
-    uint8_t *dst,
-    int dst_w,
-    int dst_h,
-    int dst_stride_bytes,
-    int x,
-    int y
-)
-{
-    const int src_w = p3a_logo_w;
-    const int src_h = p3a_logo_h;
-
-    /* Compute source and destination regions with clipping */
-    int src_x = 0;
-    int src_y = 0;
-    int copy_w = src_w;
-    int copy_h = src_h;
-
-    /* Clip left edge */
-    if (x < 0) {
-        src_x = -x;
-        copy_w += x;
-        x = 0;
-    }
-
-    /* Clip top edge */
-    if (y < 0) {
-        src_y = -y;
-        copy_h += y;
-        y = 0;
-    }
-
-    /* Clip right edge */
-    if (x + copy_w > dst_w) {
-        copy_w = dst_w - x;
-    }
-
-    /* Clip bottom edge */
-    if (y + copy_h > dst_h) {
-        copy_h = dst_h - y;
-    }
-
-    /* If fully clipped, nothing to draw */
-    if (copy_w <= 0 || copy_h <= 0) {
-        return;
-    }
-
-    /* Blit row by row using memcpy */
-    const int src_stride = src_w * 3;
-    const int copy_bytes = copy_w * 3;
-
-    for (int j = 0; j < copy_h; j++) {
-        const uint8_t *src_row = p3a_logo_pixels + (src_y + j) * src_stride + (src_x * 3);
-        uint8_t *dst_row = dst + (y + j) * dst_stride_bytes + (x * 3);
-        memcpy(dst_row, src_row, copy_bytes);
-    }
-}
 
 void p3a_logo_blit_pixelwise_bgr888(
     uint8_t *dst,

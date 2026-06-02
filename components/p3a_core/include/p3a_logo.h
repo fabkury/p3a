@@ -15,28 +15,6 @@ extern const int p3a_logo_w;
 extern const int p3a_logo_h;
 
 /**
- * Fast blit the p3a_logo image to a destination BGR888 buffer using memcpy.
- *
- * This is the fastest blit method - uses row-by-row memcpy.
- * No scaling, no alpha blending - direct pixel copy.
- *
- * @param dst              Pointer to destination buffer (BGR888 format)
- * @param dst_w            Width of destination buffer in pixels
- * @param dst_h            Height of destination buffer in pixels
- * @param dst_stride_bytes Stride of destination buffer in bytes (usually dst_w * 3)
- * @param x                X position to blit to (can be negative for clipping)
- * @param y                Y position to blit to (can be negative for clipping)
- */
-void p3a_logo_blit_memcpy_bgr888(
-    uint8_t *dst,
-    int dst_w,
-    int dst_h,
-    int dst_stride_bytes,
-    int x,
-    int y
-);
-
-/**
  * Blit the p3a_logo image with alpha blending, scaling, and rotation to a BGR888 buffer.
  *
  * Pixel-by-pixel blit with three optimized code paths:

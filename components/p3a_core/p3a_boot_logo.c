@@ -19,7 +19,6 @@ static struct {
     int64_t start_time_us;
     bool initialized;
     bool started;
-    bool skipped;
 } s_boot_logo = {0};
 
 /**
@@ -42,7 +41,6 @@ esp_err_t p3a_boot_logo_init(void)
 {
     s_boot_logo.initialized = true;
     s_boot_logo.started = false;
-    s_boot_logo.skipped = false;
 
     ESP_LOGI(TAG, "Boot logo initialized: delay %dms, fade-in %dms, hold %dms, total %dms",
              P3A_BOOT_LOGO_DELAY_MS, P3A_BOOT_LOGO_FADE_IN_MS, P3A_BOOT_LOGO_HOLD_MS, P3A_BOOT_LOGO_TOTAL_MS);
@@ -52,7 +50,7 @@ esp_err_t p3a_boot_logo_init(void)
 
 bool p3a_boot_logo_is_active(void)
 {
-    if (!s_boot_logo.initialized || s_boot_logo.skipped) {
+    if (!s_boot_logo.initialized) {
         return false;
     }
 
@@ -62,22 +60,6 @@ bool p3a_boot_logo_is_active(void)
 
     int64_t elapsed_us = esp_timer_get_time() - s_boot_logo.start_time_us;
     return elapsed_us < ((int64_t)P3A_BOOT_LOGO_TOTAL_MS * 1000);
-}
-
-uint32_t p3a_boot_logo_remaining_ms(void)
-{
-    if (!s_boot_logo.initialized || s_boot_logo.skipped) {
-        return 0;
-    }
-
-    if (!s_boot_logo.started) {
-        return P3A_BOOT_LOGO_TOTAL_MS;
-    }
-
-    int64_t elapsed_us = esp_timer_get_time() - s_boot_logo.start_time_us;
-    int64_t remaining_us = ((int64_t)P3A_BOOT_LOGO_TOTAL_MS * 1000) - elapsed_us;
-
-    return (remaining_us > 0) ? (uint32_t)(remaining_us / 1000) : 0;
 }
 
 int p3a_boot_logo_render(uint8_t *buffer, int width, int height, size_t stride)
@@ -159,13 +141,5 @@ int p3a_boot_logo_render(uint8_t *buffer, int width, int height, size_t stride)
     }
 
     return P3A_BOOT_LOGO_FRAME_MS;
-}
-
-void p3a_boot_logo_skip(void)
-{
-    if (s_boot_logo.initialized && !s_boot_logo.skipped) {
-        s_boot_logo.skipped = true;
-        ESP_LOGI(TAG, "Boot logo skipped by user");
-    }
 }
 

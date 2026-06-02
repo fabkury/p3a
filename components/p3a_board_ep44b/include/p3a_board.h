@@ -120,14 +120,18 @@ extern "C" {
 
 /**
  * @brief Initialize board display hardware
- * 
- * Initializes the display controller, allocates framebuffers, and sets up
- * brightness control if available. Must be called before any other
+ *
+ * Initializes the display controller, allocates framebuffers, prepaints them to
+ * the given background color, and enables the backlight last so the panel never
+ * lights up showing a black or garbage frame. Must be called before any other
  * p3a_board display functions.
- * 
+ *
+ * @param bg_r Background color red   component (0-255) used to prepaint buffers
+ * @param bg_g Background color green component (0-255)
+ * @param bg_b Background color blue  component (0-255)
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t p3a_board_display_init(void);
+esp_err_t p3a_board_display_init(uint8_t bg_r, uint8_t bg_g, uint8_t bg_b);
 
 /**
  * @brief Get LCD panel handle

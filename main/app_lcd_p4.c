@@ -19,6 +19,7 @@
 
 #include "p3a_board.h"
 #include "app_lcd.h"
+#include "config_store.h"
 #include "animation_player.h"
 #include "display_renderer.h"
 #include "play_scheduler.h"
@@ -40,17 +41,23 @@ esp_err_t app_lcd_init(void)
 {
     ESP_LOGI(TAG, "P3A: Initialize display");
 
-    // Step 1: Initialize board display hardware
-    esp_err_t err = p3a_board_display_init();
+    // Step 1: Initialize board display hardware. Pass the configured background
+    // color so the board prepaints the framebuffers to it before switching on
+    // the backlight — the panel lights up already showing the background, never
+    // a black/garbage frame, and the boot logo then fades in over it.
+    uint8_t bg_r, bg_g, bg_b;
+    config_store_get_background_color(&bg_r, &bg_g, &bg_b);
+    esp_err_t err = p3a_board_display_init(bg_r, bg_g, bg_b);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize board display: %s", esp_err_to_name(err));
         return err;
     }
 
-    // Step 1.5: Initialize boot logo timer immediately
-    // This starts the logo display timer so rendering begins as soon as the
-    // render task starts. All subsequent initialization (SD card, channels, etc.)
-    // proceeds in parallel while the logo is displayed.
+    // Step 1.5: Arm the boot logo. This only initializes logo state — the
+    // display timer starts on the first rendered frame (once the render tasks
+    // are running), not here. Initialization that runs after the render
+    // pipeline starts (channel load, Wi-Fi, OTA) proceeds in parallel while
+    // the logo is displayed.
     err = p3a_boot_logo_init();
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Boot logo init failed: %s (continuing without logo)", esp_err_to_name(err));

@@ -13,6 +13,7 @@
 #include "esp_lcd_mipi_dsi.h"
 #include "driver/gpio.h"
 #include "esp_rom_sys.h"
+#include <string.h>
 
 static const char *TAG = "p3a_board_display";
 
@@ -26,7 +27,39 @@ static size_t s_buffer_bytes = 0;
 static int s_brightness = 100;
 static bool s_initialized = false;
 
-esp_err_t p3a_board_display_init(void)
+// Fill every framebuffer with a solid color (BGR888) before the backlight is
+// enabled, so the panel never lights up showing a black or garbage frame.
+// Fills the first visible row pixelwise, then replicates it via memcpy for speed.
+static void prepaint_buffers(uint8_t r, uint8_t g, uint8_t b)
+{
+    // Implemented for the active 24-bit BGR888 framebuffer format; other
+    // formats fall through with no prepaint (legacy behavior).
+    if (P3A_DISPLAY_BPP != 24 || s_buffer_count == 0 || !s_buffers[0]) {
+        return;
+    }
+
+    uint8_t *b0 = s_buffers[0];
+
+    // First visible row (BGR byte order, matching the render pipeline).
+    for (int x = 0; x < P3A_DISPLAY_WIDTH; x++) {
+        b0[x * 3 + 0] = b;
+        b0[x * 3 + 1] = g;
+        b0[x * 3 + 2] = r;
+    }
+
+    // Replicate that row down buffer 0, then copy buffer 0 into the others.
+    const size_t visible_row_bytes = (size_t)P3A_DISPLAY_WIDTH * 3;
+    for (int y = 1; y < P3A_DISPLAY_HEIGHT; y++) {
+        memcpy(b0 + (size_t)y * s_row_stride, b0, visible_row_bytes);
+    }
+    for (int i = 1; i < s_buffer_count; i++) {
+        if (s_buffers[i]) {
+            memcpy(s_buffers[i], b0, s_buffer_bytes);
+        }
+    }
+}
+
+esp_err_t p3a_board_display_init(uint8_t bg_r, uint8_t bg_g, uint8_t bg_b)
 {
     if (s_initialized) {
         ESP_LOGW(TAG, "Display already initialized");
@@ -43,17 +76,6 @@ esp_err_t p3a_board_display_init(void)
         ESP_LOGE(TAG, "Failed to create display: %s", esp_err_to_name(err));
         return err;
     }
-
-    // Initialize brightness control
-#if P3A_HAS_BRIGHTNESS
-    err = bsp_display_brightness_init();
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Brightness init failed: %s (continuing without)", esp_err_to_name(err));
-    } else {
-        s_brightness = 100;
-        bsp_display_brightness_set(s_brightness);
-    }
-#endif
 
     // Get framebuffers from DPI panel (variadic API requires compile-time switch)
     switch (P3A_DISPLAY_BUFFERS) {
@@ -97,6 +119,23 @@ esp_err_t p3a_board_display_init(void)
             }
         }
     }
+
+    // Prepaint every framebuffer to the background color BEFORE enabling the
+    // backlight. This guarantees the first thing the user sees when the panel
+    // lights up is the configured background — never a black or garbage frame.
+    // The render pipeline (boot logo, then animations) takes over once started.
+    prepaint_buffers(bg_r, bg_g, bg_b);
+
+    // Enable the backlight last, now that the framebuffers show the background.
+#if P3A_HAS_BRIGHTNESS
+    err = bsp_display_brightness_init();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Brightness init failed: %s (continuing without)", esp_err_to_name(err));
+    } else {
+        s_brightness = 100;
+        bsp_display_brightness_set(s_brightness);
+    }
+#endif
 
     ESP_LOGI(TAG, "Display initialized: %d buffers, stride=%zu, size=%zu bytes",
              s_buffer_count, s_row_stride, s_buffer_bytes);

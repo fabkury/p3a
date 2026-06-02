@@ -586,8 +586,30 @@ This is a known issue, tracked at:
   https://github.com/espressif/esp-hosted-mcu/blob/main/docs/sdio.md#94-switching-to-packet-mode
 
 Espressif's stance so far is to recommend mitigation (packet mode) rather than
-patch the assert. Our comment makes the explicit case for replacing
-`assert(*buf)` with a graceful drop. No commitment from upstream yet.
+patch the assert. **This recommendation is concrete and crash-specific, not
+just a general pointer to the memory docs** (verified by re-reading the full
+#144 thread via `gh`, 2026-06-02):
+
+- On 2026-01-12, Espressif collaborator `SohKamYung-Espressif` first pointed at
+  the general §9 memory-reduction steps — *"One solution is to reduce the amount
+  of heap memory ESP-Hosted SDIO uses … at the cost of network performance"*
+  ([comment](https://github.com/espressif/esp-hosted-mcu/issues/144#issuecomment-3736702205)).
+- On 2026-01-13, **after analyzing the reporter's crash logs** (largest DMA block
+  4608 B vs a 12288 B `sdio_rx_get_buffer` request), the same collaborator gave a
+  pointed recommendation: *"Can you try switching ESP-Hosted SDIO to packet mode?
+  This results in the smallest DMA allocation requested by ESP-Hosted SDIO,"*
+  citing §9.4 above
+  ([comment](https://github.com/espressif/esp-hosted-mcu/issues/144#issuecomment-3742476534)).
+
+So packet mode / `RX_MAX_SIZE` is both **documented** (§9.4) and **explicitly
+recommended in-thread for this exact assert** — it is the path Espressif pointed
+at, not a workaround we invented. Caveats worth keeping in mind: it was framed as
+*"can you try"* with no in-thread confirmation it resolved the crash (the original
+reporter — a different product, with fingerprint/NFC/display — went quiet still
+hunting a 100 KB+ DMA-RAM consumer), and packet mode is rationalized around
+shrinking the DMA request, not as a correctness fix. Our comment makes the
+explicit case for *also* replacing `assert(*buf)` with a graceful drop; no
+Espressif reply to that proposal yet.
 
 When picking this back up, check the issue thread for new replies before
 deciding. The sibling-fix precedent (below) is the strongest new argument
@@ -636,6 +658,22 @@ for our position.
   purpose, and increasingly contended on the P4 + C6 topology. This also
   validates the existing `~2.9.3` pin in `main/idf_component.yml` and is
   referenced from `docs/ESP-IDF-v6.0/migration-report.md` §2.6.
+
+### Upstream re-check (2026-06-02)
+
+- **Re-read the full #144 thread via `gh` to settle whether the packet-mode
+  recommendation is crash-specific.** It is — see the two `SohKamYung-Espressif`
+  comments quoted under "Espressif's stance" above. This confirms the §9.4
+  citation is Espressif's actual recommendation for *this* assert, not just a
+  generic memory-docs link.
+- **#144 is still OPEN; no new Espressif replies.** Last activity remains our
+  2026-05-05 comment; the graceful-drop proposal for `sdio_rx_get_buffer` is
+  still unanswered. The thread otherwise ends in January 2026 with the original
+  reporter still chasing a DMA-RAM consumer (they disabled their display and
+  recovered ~80 KB of DMA RAM, confirming the pool is genuinely contended).
+- **No behavioral confirmation that packet mode fixes the crash exists anywhere
+  yet** — neither in-thread nor in our own builds. Our planned option-C
+  build/flash/soak (see "Decision required") is what would establish it.
 
 ---
 

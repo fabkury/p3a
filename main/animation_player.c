@@ -754,8 +754,20 @@ esp_err_t animation_player_enter_ui_mode(void)
 
 void animation_player_exit_ui_mode(void)
 {
+    // While the microSD card is exported over USB the on-screen "SD exposed"
+    // notice is modal: it must own the display until the host disconnects.
+    // Background events (Wi-Fi connect, OTA callbacks, channel refresh) reach
+    // here to resume playback, but resuming while the card is exported would
+    // both steal the screen and read the FAT filesystem out from under the USB
+    // host. The USB unmount/suspend path releases the export lock *before*
+    // calling exit, so legitimate teardown still proceeds.
+    if (animation_player_is_sd_export_locked()) {
+        ESP_LOGD(TAG, "Exit-UI-mode ignored: microSD card exported over USB");
+        return;
+    }
+
     ESP_LOGD(TAG, "Exiting UI mode");
-    
+
     // Trigger reload of current animation
     if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
         s_swap_requested = true;

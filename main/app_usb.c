@@ -360,12 +360,16 @@ void tud_umount_cb(void)
     s_last_unmount_us = esp_timer_get_time();
     ESP_LOGI(TAG, "USB host disconnected");
     s_usb_active = false;
-    ugfx_ui_hide_usb_msc();
-    app_lcd_exit_ui_mode();
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     pico8_stream_reset();
 #endif
+    // Release the SD-export lock (and refresh the local file view) BEFORE
+    // leaving UI mode. While the lock is held, exit-UI-mode is intentionally a
+    // no-op so the "SD exposed" notice stays modal, so the lock must drop first
+    // or the screen would remain stuck on the notice after the host detaches.
     animation_player_end_sd_export();
+    ugfx_ui_hide_usb_msc();
+    app_lcd_exit_ui_mode();
 }
 
 void tud_suspend_cb(bool remote_wakeup_en)
@@ -379,12 +383,13 @@ void tud_suspend_cb(bool remote_wakeup_en)
     // disconnect; conflating the two caused legitimate mounts to be debounced
     // when a transient suspend fires during the plug-in enumeration cycle.
     s_usb_active = false;
-    ugfx_ui_hide_usb_msc();
-    app_lcd_exit_ui_mode();
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     pico8_stream_reset();
 #endif
+    // Drop the SD-export lock before leaving UI mode — see tud_umount_cb().
     animation_player_end_sd_export();
+    ugfx_ui_hide_usb_msc();
+    app_lcd_exit_ui_mode();
 }
 
 void tud_resume_cb(void)

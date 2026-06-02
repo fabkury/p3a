@@ -58,6 +58,16 @@ static char s_status_message[128] = {0};
 static ui_mode_t s_ui_mode = UI_MODE_NONE;
 static gOrientation s_pending_orientation = gOrientation0;  // Orientation to apply when µGFX inits
 
+// True while the microSD card is exported over USB. This overlay is modal: it
+// owns the display and must not be replaced or implicitly cleared by any other
+// overlay. Background subsystems (Wi-Fi/Makapix events, channel refresh,
+// download progress) freely call ugfx_ui_show_*() during the export window and
+// would otherwise stomp on the single-slot s_ui_mode; this flag is checked
+// first at render time and keeps ugfx_ui_is_active() true so the notice
+// persists regardless. Only ugfx_ui_hide_usb_msc() (from the USB unmount path)
+// clears it.
+static bool s_usb_msc_active = false;
+
 // OTA progress state
 static int s_ota_progress = 0;
 static char s_ota_status_text[64] = {0};
@@ -904,6 +914,7 @@ void ugfx_ui_deinit(void)
     }
     
     s_ui_active = false;
+    s_usb_msc_active = false;
     s_expires_time = 0;
     memset(s_current_code, 0, sizeof(s_current_code));
     memset(s_status_message, 0, sizeof(s_status_message));
@@ -1021,6 +1032,7 @@ static void ugfx_ui_draw_usb_msc(void)
 
 esp_err_t ugfx_ui_show_usb_msc(void)
 {
+    s_usb_msc_active = true;
     s_ui_mode = UI_MODE_USB_MSC;
     s_ui_active = true;
 
@@ -1030,9 +1042,14 @@ esp_err_t ugfx_ui_show_usb_msc(void)
 
 void ugfx_ui_hide_usb_msc(void)
 {
-    if (s_ui_mode != UI_MODE_USB_MSC) {
+    if (!s_usb_msc_active) {
         return;
     }
+    s_usb_msc_active = false;
+    // Reset overlay state outright. Any overlay another subsystem tried to show
+    // during the export window was suppressed by the render gate, so there is
+    // nothing meaningful to restore — drop back to "no overlay" and let the
+    // caller leave UI mode to resume playback.
     s_ui_active = false;
     s_ui_mode = UI_MODE_NONE;
 
@@ -1299,7 +1316,9 @@ void ugfx_ui_hide_channel_message(void)
 
 gBool ugfx_ui_is_active(void)
 {
-    return s_ui_active ? gTrue : gFalse;
+    // s_usb_msc_active keeps the UI active even if a background overlay flipped
+    // s_ui_active off while the card is exported (see s_usb_msc_active).
+    return (s_ui_active || s_usb_msc_active) ? gTrue : gFalse;
 }
 
 int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
@@ -1312,6 +1331,14 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
     esp_err_t err = ugfx_ui_init_gfx(buffer, stride);
     if (err != ESP_OK) {
         return -1;
+    }
+
+    // The USB mass-storage notice is modal: while the card is exported it owns
+    // the screen regardless of whatever other overlay state has been set, so
+    // draw it first and ignore everything below (see s_usb_msc_active).
+    if (s_usb_msc_active) {
+        ugfx_ui_draw_usb_msc();
+        return 500;
     }
 
     // If UI not active, just clear to black

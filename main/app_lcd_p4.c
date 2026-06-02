@@ -186,6 +186,15 @@ esp_err_t app_lcd_enter_ui_mode(void)
 
 esp_err_t app_lcd_exit_ui_mode(void)
 {
+    // The "SD card exposed via USB" notice is modal — it stays up for as long
+    // as the card is exported. Refuse to leave UI mode while the export lock is
+    // held so background events can't dismiss it and resume playback. The USB
+    // unmount/suspend path drops the lock before calling here. See
+    // animation_player_exit_ui_mode() for the authoritative guard.
+    if (animation_player_is_sd_export_locked()) {
+        ESP_LOGD(TAG, "Exit-UI-mode ignored: microSD card exported over USB");
+        return ESP_OK;
+    }
     if (!animation_player_is_ui_mode()) {
         return ESP_OK;
     }

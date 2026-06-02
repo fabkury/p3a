@@ -47,6 +47,7 @@
 #include "show_url.h"            // show-url download command
 #include "freertos/task.h"
 #include "esp_timer.h"
+#include "cJSON.h"               // cJSON_InitHooks: route JSON parse heap to PSRAM
 
 static const char *TAG = "p3a";
 
@@ -86,6 +87,21 @@ esp_err_t animation_player_set_dwell_time(uint32_t dwell_time)
 }
 
 // Phase 7: auto_swap_task removed - timer task now in play_scheduler
+
+// Route all cJSON allocations (DOM nodes + duplicated strings) to PSRAM,
+// internal-RAM only as a last resort. cJSON builds a full parse tree of many
+// small nodes per API response (Giphy / museum / Makapix JSON is 96 KB-1 MB);
+// with CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=8192 those per-node mallocs would
+// otherwise land in the DMA-capable internal pool the esp_hosted SDIO RX path
+// needs, fragmenting/exhausting it during refresh paging. See
+// docs/sdio-rx-oom-crash.md (Option E). Same allocator-redirection pattern as
+// main/ffsystem_aligned.c (FATFS) and channel_manager/psram_alloc.h.
+static void *cjson_psram_malloc(size_t sz)
+{
+    void *p = heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!p) p = heap_caps_malloc(sz, MALLOC_CAP_8BIT);  // internal fallback
+    return p;
+}
 
 // esp_hosted SDIO RX requests this exact cap mask in sdio_rx_get_buffer()
 // (see managed_components/.../sdio_drv.c). When *that* allocation returns
@@ -498,6 +514,15 @@ static void debug_provisioning_task(void *arg)
 void app_main(void)
 {
     ESP_LOGI(TAG, "Starting p3a");
+
+    // Route cJSON's allocator to PSRAM (internal fallback) before ANY cJSON
+    // parse runs (config_store, boot-playset restore, refresh paging). Safe
+    // here: PSRAM heap is already up (CONFIG_SPIRAM_BOOT_INIT=y) and no cJSON
+    // runs before app_main(). Keeps the large transient JSON parse trees out of
+    // the DMA-capable internal pool that esp_hosted SDIO RX needs — see
+    // docs/sdio-rx-oom-crash.md (Option E). free() is heap-region-aware, so it
+    // releases PSRAM and internal blocks correctly.
+    cJSON_InitHooks(&(cJSON_Hooks){ .malloc_fn = cjson_psram_malloc, .free_fn = free });
 
     // Arm the heap allocation-failed hook as early as possible — well before
     // WiFi / esp_hosted / SDIO come up. Cost is one function-pointer slot;

@@ -3,9 +3,11 @@
 **Status:** Open. Heap-snapshot diagnostic in firmware and producing
 data; fragmentation+exhaustion hypothesis confirmed. Trigger pattern
 now confirmed to extend to **museum-channel HTTPS paging**
-(Occurrence 6), not just Giphy. Decision strongly indicated but not
-yet implemented. Upstream sibling assert site fixed 2026-04-29 (not
-our site); see "Upstream developments" below.
+(Occurrence 6), not just Giphy. The A/B decision is strongly indicated
+but not yet implemented; **Option E partially landed 2026-06-02** (cJSON
+parse heap routed to PSRAM — see "Option E" under "Decision required").
+Upstream sibling assert site fixed 2026-04-29 (not our site); see
+"Upstream developments" below.
 **First observed:** 2026-05-04.
 **Last observed:** 2026-05-18 (sixth occurrence; museum-channel HTTPS
 paging is part of the trigger set, and `REFRESH_MAX_CONCURRENT=2`
@@ -547,16 +549,32 @@ Options (consolidated across occurrences):
 - [ ] **C.** Both A and B.
 - [ ] **D.** ~~Add diagnostics first, decide based on data.~~ ✅ done in
       Occurrence 5.
-- [ ] **E.** Reduce internal-RAM footprint by moving non-DMA consumers
-      (task stacks, JSON parse buffers, channel_cache arrays, etc.) to
-      PSRAM. Doesn't fix the assert path but raises the ceiling on the
-      bottleneck pool so peak demand has more headroom. Complementary to A
-      and B; tracked separately.
+- [~] **E. Partially landed (2026-06-02).** Reduce internal-RAM footprint
+      by moving non-DMA consumers to PSRAM. An audit found the
+      originally-listed targets were **already** in PSRAM: worker task stacks
+      (`heap_caps_malloc(MALLOC_CAP_SPIRAM …)` + `xTaskCreateStatic`, internal
+      fallback), the 96 KB–1 MB JSON response buffers (giphy / museums /
+      makapix), the channel_cache LAi/Ci arrays (`psram_malloc()`), and FATFS
+      SD buffers (`main/ffsystem_aligned.c` `--wrap` shim). The one major
+      consumer still hitting the internal pool was **cJSON's parse tree** —
+      `cJSON_InitHooks()` was never called, so every DOM node landed in
+      DMA-capable internal RAM (under `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=8192`)
+      during refresh paging — matching the snapshots' fragmentation + peak-demand
+      signature. **Done:** `cJSON_InitHooks` now routes all cJSON allocation to
+      PSRAM (internal fallback) at the top of `app_main()` (`main/p3a_main.c`),
+      so JSON parse trees no longer pressure or fragment the `INT+DMA+8BIT`
+      pool. **Still available, not yet applied:** raise
+      `CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL` (currently 32 KB) and/or lower
+      `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL` (currently 8 KB). Doesn't fix the
+      assert path; raises the ceiling. Complementary to A and B.
 
-No fix has been applied. `sdkconfig` and source are unchanged.
+The **cJSON-to-PSRAM portion of Option E has been applied** in source
+(`main/p3a_main.c`, 2026-06-02). The assert-path fix (A) and concurrency
+work (B) are **not** yet applied, and `sdkconfig` is unchanged.
 
 **Current lean: C (A + B)**, with E pursued in parallel as a separate
-workstream. The Occurrence 5 heap snapshot resolves the
+workstream (its cJSON-to-PSRAM sub-item landed 2026-06-02; the
+sdkconfig-knob sub-items remain open). The Occurrence 5 heap snapshot resolves the
 "fragmentation vs. exhaustion" question by showing both contribute, so
 D is closed. Option A alone removes the panic class; option B alone is
 not sufficient (Occurrence 4 showed refresh paging by itself can

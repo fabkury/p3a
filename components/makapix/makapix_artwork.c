@@ -10,6 +10,7 @@
 #include "http_fetch.h"
 #include "p3a_limits.h"
 #include "sd_path.h"
+#include "makapix_channel_utils.h"  // makapix_build_vault_path
 #include "sdio_bus.h"
 #include "makapix_channel_events.h"
 #include "download_manager.h"  // download_manager_is_canceled (S1 cooperative cancel)
@@ -20,7 +21,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
-#include "mbedtls/sha256.h"
 #include <string.h>
 #include <strings.h>
 #include <stdio.h>
@@ -34,9 +34,6 @@ static const char *TAG = "makapix_artwork";
 // Chunk size for serialized download (read chunk from WiFi, then write to SD)
 // 64 KB provides good balance between throughput, memory usage and animation jitter.
 #define DOWNLOAD_CHUNK_SIZE (32 * 1024)
-
-// Extension strings for file naming
-static const char *s_ext_strings[] = { ".webp", ".gif", ".png", ".jpg" };
 
 /**
  * @brief Detect file extension from URL
@@ -53,59 +50,6 @@ static int detect_extension_from_url(const char *url)
     if (len >= 4 && strcasecmp(url + len - 4, ".png") == 0)  return 2;
     if (len >= 4 && strcasecmp(url + len - 4, ".jpg") == 0)  return 3; // JPEG (canonical extension)
     return 0; // Default to webp
-}
-
-/**
- * @brief SHA256(storage_key) helper (used for vault sharding and URL syntax)
- */
-static esp_err_t storage_key_sha256(const char *storage_key, uint8_t out_sha256[32])
-{
-    if (!storage_key || !out_sha256) return ESP_ERR_INVALID_ARG;
-    // mbedTLS: is224=0 => SHA-256
-    int ret = mbedtls_sha256((const unsigned char *)storage_key, strlen(storage_key), out_sha256, 0);
-    if (ret != 0) {
-        ESP_LOGE(TAG, "SHA256 failed (ret=%d)", ret);
-        return ESP_FAIL;
-    }
-    return ESP_OK;
-}
-
-/**
- * @brief Ensure vault directory structure exists
- */
-static esp_err_t ensure_vault_dirs(const char *vault_base, const char *dir1, const char *dir2, const char *dir3)
-{
-    char path[256];
-    struct stat st;
-    
-    // Create first level directory
-    snprintf(path, sizeof(path), "%s/%s", vault_base, dir1);
-    if (stat(path, &st) != 0) {
-        if (mkdir(path, 0755) != 0) {
-            ESP_LOGE(TAG, "Failed to create directory %s", path);
-            return ESP_FAIL;
-        }
-    }
-
-    // Create second level directory
-    snprintf(path, sizeof(path), "%s/%s/%s", vault_base, dir1, dir2);
-    if (stat(path, &st) != 0) {
-        if (mkdir(path, 0755) != 0) {
-            ESP_LOGE(TAG, "Failed to create directory %s", path);
-            return ESP_FAIL;
-        }
-    }
-
-    // Create third level directory
-    snprintf(path, sizeof(path), "%s/%s/%s/%s", vault_base, dir1, dir2, dir3);
-    if (stat(path, &st) != 0) {
-        if (mkdir(path, 0755) != 0) {
-            ESP_LOGE(TAG, "Failed to create directory %s", path);
-            return ESP_FAIL;
-        }
-    }
-
-    return ESP_OK;
 }
 
 /**
@@ -194,33 +138,16 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
         return ESP_FAIL;
     }
 
-    // Ensure vault base directory exists
-    struct stat st;
-    if (stat(vault_base, &st) != 0) {
-        if (mkdir(vault_base, 0755) != 0) {
-            ESP_LOGE(TAG, "Failed to create vault directory");
-            return ESP_FAIL;
-        }
-    }
-
-    // Derive folder structure from SHA256(storage_key): /vault/aa/bb/cc/<storage_key>.<ext>
-    uint8_t sha256[32];
-    esp_err_t err = storage_key_sha256(storage_key, sha256);
-    if (err != ESP_OK) return err;
-    char dir1[3], dir2[3], dir3[3];
-    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
-    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
-    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
-
-    // Ensure directories exist
-    err = ensure_vault_dirs(vault_base, dir1, dir2, dir3);
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    // Detect extension from URL and build file path WITH extension
+    // Build the sharded vault path (/vault/aa/bb/cc/<storage_key>.<ext>) and
+    // create its parent directories. detect_extension_from_url picks the ext.
     int ext_idx = detect_extension_from_url(art_url);
-    snprintf(out_path, path_len, "%s/%s/%s/%s/%s%s", vault_base, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
+    if (makapix_build_vault_path(vault_base, storage_key, (uint8_t)ext_idx,
+                                 out_path, path_len) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to build vault path for %s", storage_key);
+        return ESP_FAIL;
+    }
+    esp_err_t err = sd_path_ensure_parent_dirs(out_path);
+    if (err != ESP_OK) return err;
 
     // Build full URL - if art_url starts with '/', prepend https://hostname
     char full_url[512];

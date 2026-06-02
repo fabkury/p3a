@@ -143,57 +143,49 @@ static void evict_leaf(const char *leaf_path, time_t cutoff, evict_stats_t *stat
 }
 
 /**
- * @brief Walk a 3-level sharded base directory and evict old files
+ * @brief Recursively descend `levels` shard directories, then evict the leaf
  *
- * Directory structure: {base}/{xx}/{yy}/{zz}/{file}
+ * At levels == 0 we are at a leaf shard directory and scan it for old files;
+ * otherwise we open `dir` and recurse into each child with one fewer level.
+ * Driven by SD_SHARD_DEPTH so the walk depth always matches the layout the
+ * sd_path_build_sharded() builders produce — change the depth in one place and
+ * both the writers and this walker follow.
+ */
+static void evict_shard_tree(const char *dir, int levels, time_t cutoff, evict_stats_t *stats)
+{
+    if (levels <= 0) {
+        evict_leaf(dir, cutoff, stats);
+        /* Yield between leaf directories to avoid starving other tasks */
+        vTaskDelay(1);
+        return;
+    }
+
+    DIR *d = opendir(dir);
+    if (!d) return;
+
+    struct dirent *e;
+    char child[256];
+
+    while ((e = readdir(d)) != NULL) {
+        if (e->d_name[0] == '.') continue;
+
+        int n = snprintf(child, sizeof(child), "%s/%s", dir, e->d_name);
+        if (n < 0 || n >= (int)sizeof(child)) continue;
+
+        evict_shard_tree(child, levels - 1, cutoff, stats);
+    }
+
+    closedir(d);
+}
+
+/**
+ * @brief Walk a SHA256-sharded base directory and evict old files
+ *
+ * Directory structure: {base}/{xx}/{yy}/{zz}/{file} for SD_SHARD_DEPTH == 3.
  */
 static void evict_from_base_dir(const char *base_path, time_t cutoff, evict_stats_t *stats)
 {
-    DIR *d1 = opendir(base_path);
-    if (!d1) return;
-
-    struct dirent *e1;
-    char l1[160], l2[200], l3[240];
-
-    while ((e1 = readdir(d1)) != NULL) {
-        if (e1->d_name[0] == '.') continue;
-
-        int r1 = snprintf(l1, sizeof(l1), "%s/%s", base_path, e1->d_name);
-        if (r1 < 0 || r1 >= (int)sizeof(l1)) continue;
-
-        DIR *d2 = opendir(l1);
-        if (!d2) continue;
-
-        struct dirent *e2;
-        while ((e2 = readdir(d2)) != NULL) {
-            if (e2->d_name[0] == '.') continue;
-
-            int r2 = snprintf(l2, sizeof(l2), "%s/%s", l1, e2->d_name);
-            if (r2 < 0 || r2 >= (int)sizeof(l2)) continue;
-
-            DIR *d3 = opendir(l2);
-            if (!d3) continue;
-
-            struct dirent *e3;
-            while ((e3 = readdir(d3)) != NULL) {
-                if (e3->d_name[0] == '.') continue;
-
-                int r3 = snprintf(l3, sizeof(l3), "%s/%s", l2, e3->d_name);
-                if (r3 < 0 || r3 >= (int)sizeof(l3)) continue;
-
-                evict_leaf(l3, cutoff, stats);
-
-                /* Yield between leaf directories to avoid starving other tasks */
-                vTaskDelay(1);
-            }
-
-            closedir(d3);
-        }
-
-        closedir(d2);
-    }
-
-    closedir(d1);
+    evict_shard_tree(base_path, SD_SHARD_DEPTH, cutoff, stats);
 }
 
 /**
@@ -201,8 +193,8 @@ static void evict_from_base_dir(const char *base_path, time_t cutoff, evict_stat
  *
  * Museum vault layout has an extra museum_id segment at the top:
  *   /sdcard/p3a/museum/{museum_id}/{xx}/{yy}/{zz}/{file}
- * The existing evict_from_base_dir() walks 3 levels of SHA shards; we
- * just delegate to it once per museum_id directory found here.
+ * The existing evict_from_base_dir() walks SD_SHARD_DEPTH levels of SHA shards;
+ * we just delegate to it once per museum_id directory found here.
  */
 static void evict_museum_root(const char *base_path, time_t cutoff, evict_stats_t *stats)
 {

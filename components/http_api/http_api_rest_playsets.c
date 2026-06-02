@@ -106,13 +106,12 @@ cJSON *build_current_artwork_json(void)
         case PS_CHANNEL_TYPE_USER:
         case PS_CHANNEL_TYPE_REACTIONS:
         case PS_CHANNEL_TYPE_HASHTAG: {
-            uint8_t sha[32];
-            if (storage_key_sha256(artwork.storage_key, sha) == ESP_OK) {
+            char shard[3 * MAKAPIX_REMOTE_SHARD_DEPTH];
+            if (makapix_build_remote_shard(artwork.storage_key, shard, sizeof(shard)) == ESP_OK) {
                 snprintf(url, sizeof(url),
-                         "https://%s/api/vault/%02x/%02x/%02x/%s%s",
+                         "https://%s/api/vault/%s/%s%s",
                          CONFIG_MAKAPIX_CLUB_HOST,
-                         (unsigned)sha[0], (unsigned)sha[1], (unsigned)sha[2],
-                         artwork.storage_key, asset_type_ext(artwork.type));
+                         shard, artwork.storage_key, asset_type_ext(artwork.type));
             }
             break;
         }
@@ -122,13 +121,12 @@ cJSON *build_current_artwork_json(void)
             // file). For Makapix, build the same vault URL used by named
             // channels; for local files (storage_key empty) leave url empty.
             if (artwork.storage_key[0] != '\0') {
-                uint8_t sha[32];
-                if (storage_key_sha256(artwork.storage_key, sha) == ESP_OK) {
+                char shard[3 * MAKAPIX_REMOTE_SHARD_DEPTH];
+                if (makapix_build_remote_shard(artwork.storage_key, shard, sizeof(shard)) == ESP_OK) {
                     snprintf(url, sizeof(url),
-                             "https://%s/api/vault/%02x/%02x/%02x/%s%s",
+                             "https://%s/api/vault/%s/%s%s",
                              CONFIG_MAKAPIX_CLUB_HOST,
-                             (unsigned)sha[0], (unsigned)sha[1], (unsigned)sha[2],
-                             artwork.storage_key, asset_type_ext(artwork.type));
+                             shard, artwork.storage_key, asset_type_ext(artwork.type));
                 }
             }
             break;
@@ -169,13 +167,12 @@ cJSON *build_current_artwork_json(void)
                              artwork.storage_key);
                     break;
                 case POST_SOURCE_MAKAPIX: {
-                    uint8_t sha[32];
-                    if (storage_key_sha256(artwork.storage_key, sha) == ESP_OK) {
+                    char shard[3 * MAKAPIX_REMOTE_SHARD_DEPTH];
+                    if (makapix_build_remote_shard(artwork.storage_key, shard, sizeof(shard)) == ESP_OK) {
                         snprintf(url, sizeof(url),
-                                 "https://%s/api/vault/%02x/%02x/%02x/%s%s",
+                                 "https://%s/api/vault/%s/%s%s",
                                  CONFIG_MAKAPIX_CLUB_HOST,
-                                 (unsigned)sha[0], (unsigned)sha[1], (unsigned)sha[2],
-                                 artwork.storage_key, asset_type_ext(artwork.type));
+                                 shard, artwork.storage_key, asset_type_ext(artwork.type));
                     }
                     break;
                 }

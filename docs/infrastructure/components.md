@@ -60,10 +60,10 @@ All 25 custom components live under `components/`. This document describes each 
   - `sdcard_channel_impl.h` — SD card file scanning and playback
   - `makapix_channel_impl.h` — Makapix Club channel implementation
   - `download_manager.h` — download coordination
-  - `playlist_manager.h` — playlist management (also implements vault path/sharding helpers)
+  - `playlist_manager.h` — playlist management
   - `channel_cache.h` — channel cache
 - **Key files**: `sdcard_channel.c`, `sdcard_channel_impl.c`, `makapix_channel_impl.c`, `makapix_channel_events.c`, `makapix_channel_refresh.c`, `makapix_channel_utils.c`, `channel_cache.c`, `channel_cache_ops.c`, `channel_cache_merge.c`, `channel_metadata.c`, `channel_settings.c`, `download_manager.c`, `playlist_manager.c`
-- **Vault sharding**: 3-level shard derived from the first three SHA256 bytes of the storage key, e.g. `/sdcard/p3a/vault/aa/bb/cc/<storage_key>.<ext>`. Path-building lives in `playlist_manager.c` and `channel_cache_ops.c` (no separate `vault_storage` module).
+- **Vault sharding**: 3-level shard (`SD_SHARD_DEPTH`) derived from the first SHA256 bytes of the storage key, e.g. `/sdcard/p3a/vault/aa/bb/cc/<storage_key>.<ext>`. All vault/giphy/museum local path-building is centralized in `sd_path_build_sharded()` (`p3a_core/sd_path.c`), with the Makapix family wrapper `makapix_build_vault_path()` in `makapix_channel_utils.c`. The Makapix server's `/api/vault/` URL shard is a **separate** constant — `MAKAPIX_REMOTE_SHARD_DEPTH` (`makapix_build_remote_shard()`) — because it mirrors a server contract, not the local disk layout.
 - **Kconfig**: `CHANNEL_MANAGER_PAGE_SIZE` (default 32)
 
 ## 6. wifi_manager — Connectivity

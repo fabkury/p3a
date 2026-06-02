@@ -22,7 +22,6 @@
 #include "esp_crt_bundle.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
-#include "mbedtls/sha256.h"
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -36,8 +35,6 @@ static const char *TAG = "giphy_dl";
 // Chunk size for serialized download (matches makapix_artwork.c)
 #define DOWNLOAD_CHUNK_SIZE (32 * 1024)
 
-// Extension strings
-static const char *s_ext_strings[] = { ".webp", ".gif", ".png", ".jpg" };
 
 /**
  * @brief Rendition suffix lookup table
@@ -119,36 +116,6 @@ esp_err_t giphy_build_download_url(const char *giphy_id, char *out_url, size_t o
     return ESP_OK;
 }
 
-/**
- * @brief Ensure sharded directory structure exists under giphy base
- */
-static esp_err_t ensure_giphy_dirs(const char *giphy_base,
-                                    const char *d1, const char *d2, const char *d3)
-{
-    char path[256];
-    struct stat st;
-
-    snprintf(path, sizeof(path), "%s/%s", giphy_base, d1);
-    if (stat(path, &st) != 0 && mkdir(path, 0755) != 0) {
-        ESP_LOGE(TAG, "Failed to create dir: %s", path);
-        return ESP_FAIL;
-    }
-
-    snprintf(path, sizeof(path), "%s/%s/%s", giphy_base, d1, d2);
-    if (stat(path, &st) != 0 && mkdir(path, 0755) != 0) {
-        ESP_LOGE(TAG, "Failed to create dir: %s", path);
-        return ESP_FAIL;
-    }
-
-    snprintf(path, sizeof(path), "%s/%s/%s/%s", giphy_base, d1, d2, d3);
-    if (stat(path, &st) != 0 && mkdir(path, 0755) != 0) {
-        ESP_LOGE(TAG, "Failed to create dir: %s", path);
-        return ESP_FAIL;
-    }
-
-    return ESP_OK;
-}
-
 esp_err_t giphy_download_artwork(const char *giphy_id, uint8_t extension,
                                  char *out_path, size_t out_len)
 {
@@ -196,42 +163,14 @@ esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t ext
         }
     }
 
-    // Get giphy base path
-    char giphy_base[128];
-    if (sd_path_get_giphy(giphy_base, sizeof(giphy_base)) != ESP_OK) {
-        strlcpy(giphy_base, "/sdcard/p3a/giphy", sizeof(giphy_base));
-    }
-
-    // Ensure base directory exists
-    struct stat st;
-    if (stat(giphy_base, &st) != 0) {
-        if (mkdir(giphy_base, 0755) != 0) {
-            ESP_LOGE(TAG, "Failed to create giphy directory");
-            return ESP_FAIL;
-        }
-    }
-
-    // Compute SHA256 for sharding
-    uint8_t sha256[32];
-    int ret = mbedtls_sha256((const unsigned char *)giphy_id, strlen(giphy_id), sha256, 0);
-    if (ret != 0) {
-        ESP_LOGE(TAG, "SHA256 failed");
+    // Build the sharded target path (shared with the reader so writer/reader
+    // can't disagree) and create its parent directories.
+    if (giphy_build_filepath(giphy_id, extension, out_path, out_len) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to build giphy path for %s", giphy_id);
         return ESP_FAIL;
     }
-
-    char d1[3], d2[3], d3[3];
-    snprintf(d1, sizeof(d1), "%02x", (unsigned int)sha256[0]);
-    snprintf(d2, sizeof(d2), "%02x", (unsigned int)sha256[1]);
-    snprintf(d3, sizeof(d3), "%02x", (unsigned int)sha256[2]);
-
-    // Ensure directories exist
-    esp_err_t err = ensure_giphy_dirs(giphy_base, d1, d2, d3);
+    esp_err_t err = sd_path_ensure_parent_dirs(out_path);
     if (err != ESP_OK) return err;
-
-    // Build final filepath
-    int ext_idx = (extension <= 1) ? extension : 0;
-    snprintf(out_path, out_len, "%s/%s/%s/%s/%s%s",
-             giphy_base, d1, d2, d3, giphy_id, s_ext_strings[ext_idx]);
 
     // Build download URL
     char url[256];

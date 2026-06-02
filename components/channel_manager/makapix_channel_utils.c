@@ -7,7 +7,9 @@
  */
 
 #include "makapix_channel_internal.h"
+#include "makapix_channel_utils.h"
 #include "channel_cache.h"
+#include "sd_path.h"
 #include "esp_log.h"
 #include "mbedtls/sha256.h"
 #include <stdlib.h>
@@ -136,6 +138,32 @@ esp_err_t storage_key_sha256(const char *storage_key, uint8_t out_sha256[32])
     return ESP_OK;
 }
 
+esp_err_t makapix_build_vault_path(const char *vault_base, const char *storage_key,
+                                   uint8_t ext_index, char *out, size_t out_len)
+{
+    if (!vault_base || !storage_key) return ESP_ERR_INVALID_ARG;
+    const char *ext = s_ext_strings[(ext_index <= EXT_JPEG) ? ext_index : EXT_WEBP];
+    return sd_path_build_sharded(vault_base, storage_key, storage_key, ext, out, out_len);
+}
+
+esp_err_t makapix_build_remote_shard(const char *storage_key, char *out, size_t out_len)
+{
+    if (!storage_key || !out || out_len == 0) return ESP_ERR_INVALID_ARG;
+
+    uint8_t sha[32];
+    if (storage_key_sha256(storage_key, sha) != ESP_OK) return ESP_FAIL;
+
+    // "aa/bb/cc" — no leading/trailing slash; depth = MAKAPIX_REMOTE_SHARD_DEPTH.
+    size_t pos = 0;
+    for (int i = 0; i < MAKAPIX_REMOTE_SHARD_DEPTH; i++) {
+        int n = snprintf(out + pos, out_len - pos, (i == 0) ? "%02x" : "/%02x",
+                         (unsigned int)sha[i]);
+        if (n < 0 || (size_t)n >= out_len - pos) return ESP_ERR_INVALID_SIZE;
+        pos += (size_t)n;
+    }
+    return ESP_OK;
+}
+
 time_t parse_iso8601_utc(const char *s)
 {
     if (!s || !*s) return 0;
@@ -158,49 +186,27 @@ void build_index_path(const makapix_channel_t *ch, char *out, size_t out_len)
     snprintf(out, out_len, "%s/%s.bin", ch->channels_path, ch->channel_id);
 }
 
-void build_vault_path(const makapix_channel_t *ch, 
+void build_vault_path(const makapix_channel_t *ch,
                       const makapix_channel_entry_t *entry,
                       char *out, size_t out_len)
 {
     // Convert stored bytes back to UUID string
     char storage_key[40];
     bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
-    
-    uint8_t sha256[32];
-    if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
-        // Best-effort fallback (should never happen)
-        snprintf(out, out_len, "%s/%s%s", ch->vault_path, storage_key, s_ext_strings[EXT_WEBP]);
-        return;
+
+    if (makapix_build_vault_path(ch->vault_path, storage_key, entry->extension,
+                                 out, out_len) != ESP_OK && out && out_len > 0) {
+        out[0] = '\0';
     }
-    char dir1[3], dir2[3], dir3[3];
-    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
-    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
-    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
-    
-    // Include file extension for type detection
-    int ext_idx = (entry->extension <= EXT_JPEG) ? entry->extension : EXT_WEBP;
-    snprintf(out, out_len, "%s/%s/%s/%s/%s%s", 
-             ch->vault_path, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
 }
 
-void build_vault_path_from_storage_key(const makapix_channel_t *ch, const char *storage_key, 
+void build_vault_path_from_storage_key(const makapix_channel_t *ch, const char *storage_key,
                                         file_extension_t ext, char *out, size_t out_len)
 {
-    // Match makapix_artwork_download pattern: /vault/{aa}/{bb}/{cc}/{storage_key}.{ext}
-    uint8_t sha256[32];
-    if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
-        snprintf(out, out_len, "%s/%s%s", ch->vault_path, storage_key, s_ext_strings[EXT_WEBP]);
-        return;
+    if (makapix_build_vault_path(ch->vault_path, storage_key, (uint8_t)ext,
+                                 out, out_len) != ESP_OK && out && out_len > 0) {
+        out[0] = '\0';
     }
-    char dir1[3], dir2[3], dir3[3];
-    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
-    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
-    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
-    
-    // Include file extension for type detection
-    int ext_idx = (ext <= EXT_JPEG) ? ext : EXT_WEBP;
-    snprintf(out, out_len, "%s/%s/%s/%s/%s%s", 
-             ch->vault_path, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
 }
 
 file_extension_t detect_file_type(const char *url)

@@ -73,7 +73,7 @@ All p3a data is stored under a configurable root folder (`/sdcard/p3a` by defaul
 
 ### Vault Storage
 
-- **Layout**: `/sdcard/p3a/vault/aa/bb/cc/<storage_key>.<ext>` (3-level shard from the first three bytes of the SHA256 of the storage key; the filename is the storage key UUID)
+- **Layout**: `/sdcard/p3a/vault/aa/bb/cc/<storage_key>.<ext>` (`SD_SHARD_DEPTH`-level shard from the first bytes of the SHA256 of the storage key; the filename is the storage key UUID). Path construction is centralized in `sd_path_build_sharded()` (`p3a_core`).
 - **Sidecar**: `.404` markers indicate prior failed downloads (placed next to where the asset would have lived). Per-channel JSON metadata files live in `/sdcard/p3a/channel/{channel_id}.json`, not in the vault.
 - **Atomic writes**: `.tmp` + `fsync` + `rename`
 

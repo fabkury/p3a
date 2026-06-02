@@ -451,20 +451,10 @@ static void build_vault_path_from_entry_impl(const makapix_channel_entry_t *entr
     char storage_key[40];
     bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
 
-    uint8_t sha256[32];
-    if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
-        snprintf(out, out_len, "%s/%s%s", vault_path, storage_key, s_ext_strings[0]);
-        return;
+    if (makapix_build_vault_path(vault_path, storage_key, entry->extension,
+                                 out, out_len) != ESP_OK && out && out_len > 0) {
+        out[0] = '\0';
     }
-
-    char dir1[3], dir2[3], dir3[3];
-    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
-    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
-    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
-
-    int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
-    snprintf(out, out_len, "%s/%s/%s/%s/%s%s",
-             vault_path, dir1, dir2, dir3, storage_key, s_ext_strings[ext_idx]);
 }
 
 static esp_err_t makapix_impl_get_post(channel_handle_t channel, size_t post_index, channel_post_t *out_post)

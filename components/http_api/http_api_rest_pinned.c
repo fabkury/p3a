@@ -220,13 +220,12 @@ static void build_source_url(const pinned_order_entry_t *e, char *out, size_t ou
                      "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
                      u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7],
                      u[8], u[9], u[10], u[11], u[12], u[13], u[14], u[15]);
-            uint8_t sha[32];
-            if (storage_key_sha256(uuid, sha) != ESP_OK) return;
+            char shard[3 * MAKAPIX_REMOTE_SHARD_DEPTH];
+            if (makapix_build_remote_shard(uuid, shard, sizeof(shard)) != ESP_OK) return;
             snprintf(out, out_len,
-                     "https://%s/api/vault/%02x/%02x/%02x/%s%s",
+                     "https://%s/api/vault/%s/%s%s",
                      CONFIG_MAKAPIX_CLUB_HOST,
-                     (unsigned)sha[0], (unsigned)sha[1], (unsigned)sha[2],
-                     uuid, ext_str[ext_idx]);
+                     shard, uuid, ext_str[ext_idx]);
             break;
         }
         case PINNED_SOURCE_GIPHY: {

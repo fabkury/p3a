@@ -206,29 +206,6 @@ void play_scheduler_get_channel_display_name(const ps_artwork_t *artwork,
                                   out_name, max_len);
 }
 
-esp_err_t ps_storage_key_sha256(const char *storage_key, uint8_t out_sha256[32])
-{
-    if (!storage_key || !out_sha256) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    // SHA256(storage_key) used for vault sharding
-    mbedtls_sha256_context ctx;
-    mbedtls_sha256_init(&ctx);
-    int rc = mbedtls_sha256_starts(&ctx, 0);
-    if (rc != 0) {
-        mbedtls_sha256_free(&ctx);
-        return ESP_FAIL;
-    }
-    rc = mbedtls_sha256_update(&ctx, (const unsigned char *)storage_key, strlen(storage_key));
-    if (rc != 0) {
-        mbedtls_sha256_free(&ctx);
-        return ESP_FAIL;
-    }
-    rc = mbedtls_sha256_finish(&ctx, out_sha256);
-    mbedtls_sha256_free(&ctx);
-    return (rc == 0) ? ESP_OK : ESP_FAIL;
-}
-
 // ============================================================================
 // Channel Loading (Legacy)
 // ============================================================================

@@ -7,8 +7,8 @@
  */
 
 #include "makapix_internal.h"
+#include "makapix_channel_utils.h"  // makapix_build_vault_path
 #include "psram_alloc.h"
-#include "mbedtls/sha256.h"
 #include "esp_heap_caps.h"
 
 // ---------------------------------------------------------------------------
@@ -21,20 +21,6 @@ typedef struct {
     bool has_item;
     char art_url[256];
 } single_artwork_channel_t;
-
-static esp_err_t storage_key_sha256_local(const char *storage_key, uint8_t out_sha256[32])
-{
-    if (!storage_key || !out_sha256) return ESP_ERR_INVALID_ARG;
-    int ret = mbedtls_sha256((const unsigned char *)storage_key, strlen(storage_key), out_sha256, 0);
-    if (ret != 0) {
-        ESP_LOGE(MAKAPIX_TAG, "SHA256 failed (ret=%d)", ret);
-        return ESP_FAIL;
-    }
-    return ESP_OK;
-}
-
-// Extension strings for file naming
-static const char *s_ext_strings_local[] = { ".webp", ".gif", ".png", ".jpg" };
 
 static int detect_file_type_ext(const char *url)
 {
@@ -56,18 +42,10 @@ static void build_vault_path_from_storage_key_simple(const char *storage_key, co
         return;
     }
 
-    uint8_t sha256[32];
-    if (storage_key_sha256_local(storage_key, sha256) != ESP_OK) {
-        snprintf(out, out_len, "%s/%s%s", vault_base, storage_key, ".webp");
-        return;
-    }
-    char dir1[3], dir2[3], dir3[3];
-    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
-    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
-    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
-    // Include file extension for type detection
     int ext_idx = detect_file_type_ext(art_url);
-    snprintf(out, out_len, "%s/%s/%s/%s/%s%s", vault_base, dir1, dir2, dir3, storage_key, s_ext_strings_local[ext_idx]);
+    if (makapix_build_vault_path(vault_base, storage_key, (uint8_t)ext_idx, out, out_len) != ESP_OK) {
+        out[0] = '\0';
+    }
 }
 
 static esp_err_t single_ch_load(channel_handle_t channel)

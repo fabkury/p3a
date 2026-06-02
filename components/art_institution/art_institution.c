@@ -16,7 +16,6 @@
 #include "art_institution_internal.h"
 #include "sd_path.h"
 #include "esp_log.h"
-#include "mbedtls/sha256.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -202,20 +201,13 @@ esp_err_t art_institution_build_vault_path(const char *museum_id,
     }
     if (entry->iiif_key[0] == '\0') return ESP_ERR_INVALID_ARG;
 
-    char base[128];
-    if (sd_path_get_museum(base, sizeof(base)) != ESP_OK) {
-        strlcpy(base, "/sdcard/p3a/museum", sizeof(base));
+    char museum_root[128];
+    if (sd_path_get_museum(museum_root, sizeof(museum_root)) != ESP_OK) {
+        strlcpy(museum_root, "/sdcard/p3a/museum", sizeof(museum_root));
     }
-
-    // SHA256 is computed over the un-sanitized iiif_key so the shard
-    // directories stay stable regardless of which characters the
-    // sanitizer touches.
-    uint8_t sha[32];
-    if (mbedtls_sha256((const unsigned char *)entry->iiif_key,
-                       strlen(entry->iiif_key), sha, 0) != 0) {
-        ESP_LOGE(TAG, "SHA256 failed for iiif_key='%s'", entry->iiif_key);
-        return ESP_FAIL;
-    }
+    // The shard base carries the per-museum segment: {museum_root}/{museum_id}.
+    char base[160];
+    snprintf(base, sizeof(base), "%s/%s", museum_root, museum_id);
 
     // Same byte encoding as makapix_channel_entry_t.extension; AIC artwork
     // uses 3 (jpg). 0xFE/0xFF sentinels never reach here in M1 — the download
@@ -230,16 +222,15 @@ esp_err_t art_institution_build_vault_path(const char *museum_id,
     }
 
     // institution_channel_entry_t.iiif_key is 48 bytes; sanitized form is
-    // length-preserving (one-byte → one-byte substitution).
+    // length-preserving (one-byte → one-byte substitution). The shard is hashed
+    // from the UN-sanitized iiif_key so the directories stay stable regardless
+    // of which characters the sanitizer touches, while the leaf uses the safe
+    // form.
     char safe_name[sizeof(entry->iiif_key)];
     sd_path_sanitize_filename(entry->iiif_key, safe_name, sizeof(safe_name));
 
-    int n = snprintf(out_path, out_len, "%s/%s/%02x/%02x/%02x/%s%s",
-                     base, museum_id,
-                     (unsigned)sha[0], (unsigned)sha[1], (unsigned)sha[2],
-                     safe_name, ext);
-    if (n < 0 || (size_t)n >= out_len) return ESP_ERR_INVALID_SIZE;
-    return ESP_OK;
+    return sd_path_build_sharded(base, entry->iiif_key, safe_name, ext,
+                                 out_path, out_len);
 }
 
 esp_err_t art_institution_build_vault_path_from_spec(const char *spec_name,

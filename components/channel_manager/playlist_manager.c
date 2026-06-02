@@ -9,10 +9,10 @@
 #include "playlist_manager.h"
 #include "makapix_api.h"
 #include "sd_path.h"
+#include "makapix_channel_utils.h"  // makapix_build_vault_path
 #include "psram_alloc.h"
 #include "esp_log.h"
 #include "cJSON.h"
-#include "mbedtls/sha256.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -62,17 +62,6 @@ static asset_type_t asset_type_from_url(const char *url)
     return ASSET_TYPE_WEBP;
 }
 
-static esp_err_t storage_key_sha256(const char *storage_key, uint8_t out_sha256[32])
-{
-    if (!storage_key || !out_sha256) return ESP_ERR_INVALID_ARG;
-    int ret = mbedtls_sha256((const unsigned char *)storage_key, strlen(storage_key), out_sha256, 0);
-    if (ret != 0) {
-        ESP_LOGE(TAG, "SHA256 failed (ret=%d)", ret);
-        return ESP_FAIL;
-    }
-    return ESP_OK;
-}
-
 // Build vault path based on storage_key UUID (matches makapix_artwork_download sharding).
 static void build_vault_path_from_storage_key_uuid(const char *storage_key, const char *art_url, char *out, size_t out_len)
 {
@@ -84,29 +73,20 @@ static void build_vault_path_from_storage_key_uuid(const char *storage_key, cons
         return;
     }
     
-    uint8_t sha256[32];
-    if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
-        // Best-effort fallback (no sharding)
-        snprintf(out, out_len, "%s/%s.webp", vault_base, storage_key);
-        return;
-    }
-    char dir1[3], dir2[3], dir3[3];
-    snprintf(dir1, sizeof(dir1), "%02x", (unsigned int)sha256[0]);
-    snprintf(dir2, sizeof(dir2), "%02x", (unsigned int)sha256[1]);
-    snprintf(dir3, sizeof(dir3), "%02x", (unsigned int)sha256[2]);
-
-    const char *ext = ".webp";
+    // webp(0)/gif(1)/png(2)/jpg(3) — index into the shared s_ext_strings table.
+    uint8_t ext_idx = 0;
     if (art_url) {
         const char *dot = strrchr(art_url, '.');
         if (dot) {
-            if (strcasecmp(dot, ".webp") == 0) ext = ".webp";
-            else if (strcasecmp(dot, ".gif") == 0) ext = ".gif";
-            else if (strcasecmp(dot, ".png") == 0) ext = ".png";
-            else if (strcasecmp(dot, ".jpg") == 0 || strcasecmp(dot, ".jpeg") == 0) ext = ".jpg";
+            if (strcasecmp(dot, ".gif") == 0) ext_idx = 1;
+            else if (strcasecmp(dot, ".png") == 0) ext_idx = 2;
+            else if (strcasecmp(dot, ".jpg") == 0 || strcasecmp(dot, ".jpeg") == 0) ext_idx = 3;
         }
     }
 
-    snprintf(out, out_len, "%s/%s/%s/%s/%s%s", vault_base, dir1, dir2, dir3, storage_key, ext);
+    if (makapix_build_vault_path(vault_base, storage_key, ext_idx, out, out_len) != ESP_OK) {
+        out[0] = '\0';
+    }
 }
 
 esp_err_t playlist_manager_init(void)

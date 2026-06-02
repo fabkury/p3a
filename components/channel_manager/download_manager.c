@@ -162,7 +162,6 @@ static bool has_404_marker(const char *filepath)
 // Safe because only one download task exists (single-threaded access)
 static char s_build_vault_base[128];
 static char s_build_storage_key[40];
-static uint8_t s_build_sha256[32];
 
 /**
  * @brief Build vault filepath for an entry
@@ -185,23 +184,10 @@ static void dl_build_vault_filepath(const makapix_channel_entry_t *entry,
     // Convert UUID bytes to string
     bytes_to_uuid(entry->storage_key_uuid, s_build_storage_key, sizeof(s_build_storage_key));
 
-    // Compute SHA256 for sharding
-    if (storage_key_sha256(s_build_storage_key, s_build_sha256) != ESP_OK) {
-        // Fallback without sharding
-        int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
-        snprintf(out, out_len, "%s/%s%s", s_build_vault_base, s_build_storage_key, s_ext_strings[ext_idx]);
-        return;
+    if (makapix_build_vault_path(s_build_vault_base, s_build_storage_key, entry->extension,
+                                 out, out_len) != ESP_OK && out && out_len > 0) {
+        out[0] = '\0';
     }
-
-    // Build sharded path
-    int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
-    snprintf(out, out_len, "%s/%02x/%02x/%02x/%s%s",
-             s_build_vault_base,
-             (unsigned int)s_build_sha256[0],
-             (unsigned int)s_build_sha256[1],
-             (unsigned int)s_build_sha256[2],
-             s_build_storage_key,
-             s_ext_strings[ext_idx]);
 }
 
 // ============================================================================
@@ -281,7 +267,6 @@ static void dl_commit_state(const dl_snapshot_t *snapshot, size_t new_round_robi
 // Safe because only one download task exists (single-threaded access)
 static char s_dl_filepath[256];
 static char s_dl_storage_key[40];
-static uint8_t s_dl_sha256[32];
 
 // Batch buffer for reducing mutex contention during download scan
 // Fetches multiple missing entries at once instead of per-entry mutex
@@ -465,15 +450,14 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                 art_institution_build_iiif_url(ai_museum_id, ie, 720,
                                                out_request->art_url, sizeof(out_request->art_url));
             } else {
-                // Build Makapix artwork URL (using static sha256 buffer)
-                memset(s_dl_sha256, 0, sizeof(s_dl_sha256));
-                if (storage_key_sha256(s_dl_storage_key, s_dl_sha256) == ESP_OK) {
+                // Build the Makapix artwork URL via the shared remote shard helper.
+                char shard[3 * MAKAPIX_REMOTE_SHARD_DEPTH];
+                if (makapix_build_remote_shard(s_dl_storage_key, shard, sizeof(shard)) == ESP_OK) {
                     int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
                     snprintf(out_request->art_url, sizeof(out_request->art_url),
-                             "https://%s/api/vault/%02x/%02x/%02x/%s%s",
+                             "https://%s/api/vault/%s/%s%s",
                              CONFIG_MAKAPIX_CLUB_HOST,
-                             (unsigned int)s_dl_sha256[0], (unsigned int)s_dl_sha256[1], (unsigned int)s_dl_sha256[2],
-                             s_dl_storage_key, s_ext_strings[ext_idx]);
+                             shard, s_dl_storage_key, s_ext_strings[ext_idx]);
                 }
             }
 

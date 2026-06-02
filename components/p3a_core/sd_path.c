@@ -9,10 +9,14 @@
 #include "sd_path.h"
 #include "config_store.h"
 #include "esp_log.h"
+#include "mbedtls/sha256.h"
 #include <string.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <errno.h>
+
+_Static_assert(SD_SHARD_DEPTH >= 1 && SD_SHARD_DEPTH <= 32,
+               "SD_SHARD_DEPTH must be between 1 and the 32-byte SHA256 width");
 
 static const char *TAG = "sd_path";
 
@@ -263,5 +267,40 @@ void sd_path_sanitize_filename(const char *in, char *out, size_t out_len)
         }
     }
     out[o] = '\0';
+}
+
+esp_err_t sd_path_build_sharded(const char *base, const char *hash_key,
+                                const char *leaf_name, const char *ext,
+                                char *out_path, size_t out_len)
+{
+    if (!base || !hash_key || !leaf_name || !out_path || out_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!ext) ext = "";
+
+    uint8_t sha[32];
+    if (mbedtls_sha256((const unsigned char *)hash_key, strlen(hash_key), sha, 0) != 0) {
+        ESP_LOGE(TAG, "SHA256 failed for key '%s'", hash_key);
+        return ESP_FAIL;
+    }
+
+    // Emit "{base}", then one "/{byte:02x}" per shard level, then "/{leaf}{ext}".
+    // The loop (not a literal "%02x/%02x/%02x") is what makes SD_SHARD_DEPTH the
+    // single knob that drives the layout.
+    size_t pos = 0;
+    int n = snprintf(out_path, out_len, "%s", base);
+    if (n < 0 || (size_t)n >= out_len) return ESP_ERR_INVALID_SIZE;
+    pos = (size_t)n;
+
+    for (int i = 0; i < SD_SHARD_DEPTH; i++) {
+        n = snprintf(out_path + pos, out_len - pos, "/%02x", (unsigned int)sha[i]);
+        if (n < 0 || (size_t)n >= out_len - pos) return ESP_ERR_INVALID_SIZE;
+        pos += (size_t)n;
+    }
+
+    n = snprintf(out_path + pos, out_len - pos, "/%s%s", leaf_name, ext);
+    if (n < 0 || (size_t)n >= out_len - pos) return ESP_ERR_INVALID_SIZE;
+
+    return ESP_OK;
 }
 

@@ -33,6 +33,25 @@ extern "C" {
 #define SD_PATH_ROOT_MAX_LEN 64
 
 /**
+ * @brief Number of SHA256 bytes used for SD-card directory sharding
+ *
+ * Sharded caches (vault, giphy, museum) store files under
+ *   {base}/{sha[0]}/.../{sha[SD_SHARD_DEPTH-1]}/{name}.{ext}
+ * where sha = SHA256(key). This is the single source of truth for the local
+ * shard depth; sd_path_build_sharded() and the eviction tree-walker
+ * (storage_eviction.c) both derive their behavior from it.
+ *
+ * WARNING: changing this value re-homes every already-cached file. The new
+ * firmware would compute different paths, fail to find existing files, and
+ * re-download everything; the old files would be orphaned (the eviction
+ * walker would no longer descend to them). Do NOT change this without a
+ * one-time on-disk migration that renames files from the old layout to the
+ * new one. The Makapix server URL shard is a SEPARATE constant
+ * (MAKAPIX_REMOTE_SHARD_DEPTH) and is not affected by this value.
+ */
+#define SD_SHARD_DEPTH 3
+
+/**
  * @brief Initialize the SD path module
  * 
  * Loads the configured root path from NVS. If not set, uses the default.
@@ -117,7 +136,7 @@ esp_err_t sd_path_get_giphy(char *out_path, size_t out_len);
  * @brief Get the museum directory path (for art-institution artwork cache)
  *
  * The institution vault is sharded per museum:
- *   /sdcard/p3a/museum/{museum_id}/{sha[0]}/{sha[1]}/{sha[2]}/{iiif_key}.{ext}
+ *   /sdcard/p3a/museum/{museum_id}/{sha[0]}/.../{sha[SD_SHARD_DEPTH-1]}/{iiif_key}.{ext}
  * This helper returns the common parent /sdcard/p3a/museum.
  *
  * @param out_path Output buffer for the path
@@ -203,6 +222,45 @@ esp_err_t sd_path_ensure_parent_dirs(const char *filepath);
  * @param out_len Size of out buffer (incl. NUL terminator)
  */
 void sd_path_sanitize_filename(const char *in, char *out, size_t out_len);
+
+/**
+ * @brief Build a SHA256-sharded SD-card path
+ *
+ * Produces:
+ *   {base}/{sha[0]:02x}/.../{sha[SD_SHARD_DEPTH-1]:02x}/{leaf_name}{ext}
+ * where sha = SHA256(hash_key). The number of shard levels is SD_SHARD_DEPTH.
+ *
+ * This is the single place the local shard layout is constructed; every
+ * vault/giphy/museum path builder routes through it so writers and readers
+ * can never disagree on the on-disk layout, and a future depth change is a
+ * one-line edit to SD_SHARD_DEPTH.
+ *
+ * `hash_key` and `leaf_name` are usually the same string. They differ only
+ * when the filesystem-safe filename is not the value that should seed the
+ * shard — e.g. the museum vault hashes the un-sanitized iiif_key but names
+ * the file with the sanitized form, so the shard tree stays stable
+ * regardless of what the sanitizer does to the leaf.
+ *
+ * `ext` is appended verbatim to `leaf_name`; pass it including the leading
+ * dot (e.g. ".webp") or "" for none.
+ *
+ * On SHA256 failure this writes nothing and returns ESP_FAIL (the failure is
+ * effectively unreachable for a non-empty key; there is no flat-path
+ * fallback — callers treat an error as "no path").
+ *
+ * @param base      Base directory (e.g. "/sdcard/p3a/vault" or
+ *                  "/sdcard/p3a/museum/{museum_id}")
+ * @param hash_key  String hashed to derive the shard directories
+ * @param leaf_name Filename stem (without extension)
+ * @param ext       Extension including the dot, or "" for none
+ * @param out_path  Output buffer for the full path
+ * @param out_len   Size of output buffer
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG on null args,
+ *         ESP_ERR_INVALID_SIZE if the buffer is too small, ESP_FAIL on hash error
+ */
+esp_err_t sd_path_build_sharded(const char *base, const char *hash_key,
+                                const char *leaf_name, const char *ext,
+                                char *out_path, size_t out_len);
 
 #ifdef __cplusplus
 }

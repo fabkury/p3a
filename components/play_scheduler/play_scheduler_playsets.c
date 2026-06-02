@@ -25,6 +25,7 @@
 #include "sd_path.h"
 #include "content_cache.h"
 #include "makapix.h"
+#include "makapix_channel_utils.h"  // makapix_build_vault_path
 #include "giphy.h"
 #include "pin_lists.h"
 #include "psram_alloc.h"
@@ -1051,33 +1052,21 @@ static void ps_build_artwork_filepath(const char *storage_key, const char *art_u
         strlcpy(vault_base, "/sdcard/p3a/vault", sizeof(vault_base));
     }
 
-    // Compute SHA256 for sharding
-    uint8_t sha256[32];
-    if (mbedtls_sha256((const unsigned char *)storage_key, strlen(storage_key), sha256, 0) != 0) {
-        // Fallback without sharding
-        snprintf(out_path, max_len, "%s/%s.webp", vault_base, storage_key);
-        return;
-    }
-
-    // Detect extension from URL
-    const char *ext = ".webp";
+    // Detect extension from URL: webp(0)/gif(1)/png(2)/jpg(3).
+    uint8_t ext_idx = 0;
     if (art_url) {
         size_t url_len = strlen(art_url);
         if (url_len >= 4) {
-            if (strcasecmp(art_url + url_len - 4, ".gif") == 0) ext = ".gif";
-            else if (strcasecmp(art_url + url_len - 4, ".png") == 0) ext = ".png";
-            else if (strcasecmp(art_url + url_len - 4, ".jpg") == 0) ext = ".jpg";
-            else if (url_len >= 5 && strcasecmp(art_url + url_len - 5, ".jpeg") == 0) ext = ".jpg";
-            else if (url_len >= 5 && strcasecmp(art_url + url_len - 5, ".webp") == 0) ext = ".webp";
+            if (strcasecmp(art_url + url_len - 4, ".gif") == 0) ext_idx = 1;
+            else if (strcasecmp(art_url + url_len - 4, ".png") == 0) ext_idx = 2;
+            else if (strcasecmp(art_url + url_len - 4, ".jpg") == 0) ext_idx = 3;
+            else if (url_len >= 5 && strcasecmp(art_url + url_len - 5, ".jpeg") == 0) ext_idx = 3;
         }
     }
 
-    snprintf(out_path, max_len, "%s/%02x/%02x/%02x/%s%s",
-             vault_base,
-             (unsigned int)sha256[0],
-             (unsigned int)sha256[1],
-             (unsigned int)sha256[2],
-             storage_key, ext);
+    if (makapix_build_vault_path(vault_base, storage_key, ext_idx, out_path, max_len) != ESP_OK) {
+        out_path[0] = '\0';
+    }
 }
 
 esp_err_t play_scheduler_play_artwork(int32_t post_id,

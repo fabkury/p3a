@@ -192,24 +192,10 @@ void ps_build_vault_filepath(const makapix_channel_entry_t *entry,
     char storage_key[40];
     bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
 
-    // Compute SHA256 for sharding
-    uint8_t sha256[32];
-    if (storage_key_sha256(storage_key, sha256) != ESP_OK) {
-        // Fallback without sharding
-        int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
-        snprintf(out, out_len, "%s/%s%s", vault_base, storage_key, s_ext_strings[ext_idx]);
-        return;
+    if (makapix_build_vault_path(vault_base, storage_key, entry->extension,
+                                 out, out_len) != ESP_OK && out && out_len > 0) {
+        out[0] = '\0';
     }
-
-    // Build sharded path
-    int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
-    snprintf(out, out_len, "%s/%02x/%02x/%02x/%s%s",
-             vault_base,
-             (unsigned int)sha256[0],
-             (unsigned int)sha256[1],
-             (unsigned int)sha256[2],
-             storage_key,
-             s_ext_strings[ext_idx]);
 }
 
 // ============================================================================

@@ -10,7 +10,6 @@
 #include "giphy_types.h"
 #include "sd_path.h"
 #include "esp_log.h"
-#include "mbedtls/sha256.h"
 #include <string.h>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -56,27 +55,9 @@ esp_err_t giphy_build_filepath(const char *giphy_id, uint8_t extension,
         strlcpy(giphy_base, "/sdcard/p3a/giphy", sizeof(giphy_base));
     }
 
-    // Compute SHA256 of giphy_id for sharding
-    uint8_t sha256[32];
-    int ret = mbedtls_sha256((const unsigned char *)giphy_id, strlen(giphy_id), sha256, 0);
-    if (ret != 0) {
-        ESP_LOGE(TAG, "SHA256 failed for giphy_id '%s'", giphy_id);
-        // Fallback: no sharding
-        int ext_idx = (extension <= 1) ? extension : 0;
-        snprintf(out_path, out_len, "%s/%s%s", giphy_base, giphy_id, s_giphy_ext_strings[ext_idx]);
-        return ESP_OK;
-    }
-
     int ext_idx = (extension <= 1) ? extension : 0;
-    snprintf(out_path, out_len, "%s/%02x/%02x/%02x/%s%s",
-             giphy_base,
-             (unsigned int)sha256[0],
-             (unsigned int)sha256[1],
-             (unsigned int)sha256[2],
-             giphy_id,
-             s_giphy_ext_strings[ext_idx]);
-
-    return ESP_OK;
+    return sd_path_build_sharded(giphy_base, giphy_id, giphy_id,
+                                 s_giphy_ext_strings[ext_idx], out_path, out_len);
 }
 
 void giphy_build_entry_filepath(const giphy_channel_entry_t *entry,

@@ -336,17 +336,31 @@ static esp_err_t root_get_handler(httpd_req_t *req)
 static esp_err_t save_post_handler(httpd_req_t *req)
 {
     #define MAX_DEVICE_NAME_LEN 17  // 16 + null
-    char content[280];
-    size_t recv_size = sizeof(content) - 1;
-
-    int ret = httpd_req_recv(req, content, recv_size);
-    if (ret <= 0) {
-        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-            httpd_resp_send_408(req);
-        }
+    // Large enough for a max-length percent-encoded form (32-octet SSID +
+    // 63-char passphrase + 16-char device name, all URL-encoded, plus field
+    // names) with headroom. Oversized bodies are rejected rather than silently
+    // truncated (truncation previously corrupted long passwords).
+    char content[512];
+    if (req->content_len >= sizeof(content)) {
+        ESP_LOGW(TAG, "Setup form body too large (%u bytes); rejecting",
+                 (unsigned)req->content_len);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Form too large");
         return ESP_FAIL;
     }
-    content[ret] = '\0';
+
+    // Drain the full body; a single httpd_req_recv can short-read a fragmented body.
+    size_t total = 0;
+    while (total < req->content_len) {
+        int ret = httpd_req_recv(req, content + total, req->content_len - total);
+        if (ret <= 0) {
+            if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+                httpd_resp_send_408(req);
+            }
+            return ESP_FAIL;
+        }
+        total += (size_t)ret;
+    }
+    content[total] = '\0';
 
     // Parse SSID, password, and device_name from form data
     char ssid[MAX_SSID_LEN] = {0};
@@ -592,6 +606,12 @@ static void dns_server_task(void *pvParameters)
                           (struct sockaddr *)&source_addr, &socklen);
 
         if (len < 12) continue;  // DNS header is 12 bytes minimum
+
+        // The answer appended below is exactly 16 bytes (name ptr 2 + type 2 +
+        // class 2 + TTL 4 + rdlength 2 + IPv4 4). Reserve room for it so a query
+        // of 113..128 bytes can't overflow the 128-byte tx_buffer — reachable by
+        // any client on the open setup AP via a long QNAME.
+        if (len > (int)sizeof(tx_buffer) - 16) continue;  // too large to answer; drop
 
         // Build DNS response - copy request and modify flags
         memcpy(tx_buffer, rx_buffer, len);

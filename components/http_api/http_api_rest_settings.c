@@ -316,23 +316,19 @@ esp_err_t h_post_rotation(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    char *buf = psram_malloc(req->content_len + 1);
+    int err_status;
+    size_t len;
+    char *buf = recv_body_json(req, &len, &err_status);
     if (!buf) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        if (err_status == 413) {
+            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
+        } else {
+            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
+        }
         return ESP_OK;
     }
 
-    int ret = httpd_req_recv(req, buf, req->content_len);
-    if (ret <= 0) {
-        free(buf);
-        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-            httpd_resp_send_408(req);
-        }
-        return ESP_FAIL;
-    }
-    buf[ret] = '\0';
-
-    cJSON *root = cJSON_Parse(buf);
+    cJSON *root = cJSON_ParseWithLength(buf, len);
     free(buf);
 
     if (!root) {

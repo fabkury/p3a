@@ -527,9 +527,16 @@ esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
         return ESP_OK;
     }
 
-    // Parse each GIF object
+    // Parse each GIF object. out_entries holds exactly GIPHY_PAGE_LIMIT slots
+    // (allocated by the caller in giphy_refresh.c; contract in giphy.h), so a
+    // server that ignores our limit=50 and returns more items must never write
+    // past the buffer.
+    if (array_size > GIPHY_PAGE_LIMIT) {
+        ESP_LOGW(TAG, "Giphy returned %d items (> limit %d); truncating",
+                 array_size, GIPHY_PAGE_LIMIT);
+    }
     size_t parsed = 0;
-    for (int i = 0; i < array_size; i++) {
+    for (int i = 0; i < array_size && parsed < GIPHY_PAGE_LIMIT; i++) {
         const cJSON *gif = cJSON_GetArrayItem(data, i);
         if (parse_gif_object(gif, &out_entries[parsed], ctx->rendition, ctx->format,
                              request_downsized, ctx->screen_width, ctx->screen_height)) {

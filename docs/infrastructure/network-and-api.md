@@ -62,7 +62,7 @@ The HTTP server is implemented across multiple source files in `components/http_
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/config` | Current configuration as JSON |
-| PUT | `/config` | Update configuration (supports `?merge=true` for partial updates) |
+| PUT | `/config` | Update configuration (supports `?merge=true` for partial updates). `sdcard_root` is validated via `sd_path_validate_root()`; malformed values are rejected with 400 `INVALID_SDCARD_ROOT`. Valid root changes still require a reboot. |
 
 ### Settings
 

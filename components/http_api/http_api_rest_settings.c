@@ -18,6 +18,7 @@
 #include "play_scheduler.h"
 #include "app_lcd.h"
 #include "psram_alloc.h"
+#include "sd_path.h"
 
 // ---------- Config Handlers ----------
 
@@ -94,6 +95,20 @@ esp_err_t h_put_config(httpd_req_t *req) {
     if (!o || !cJSON_IsObject(o)) {
         if (o) cJSON_Delete(o);
         send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
+        return ESP_OK;
+    }
+
+    // Validate sdcard_root before persisting. sd_path_init() would fall back
+    // to the default on an invalid stored value, so a bad write can't brick
+    // the device — but rejecting it here surfaces the mistake to the caller
+    // instead of silently reverting at the next reboot. (The root itself is
+    // latched at boot; a valid change still requires a reboot to apply.)
+    cJSON *sd_root_item = cJSON_GetObjectItem(o, "sdcard_root");
+    if (sd_root_item &&
+        (!cJSON_IsString(sd_root_item) ||
+         sd_path_validate_root(cJSON_GetStringValue(sd_root_item)) != ESP_OK)) {
+        cJSON_Delete(o);
+        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_SDCARD_ROOT\",\"code\":\"INVALID_SDCARD_ROOT\"}");
         return ESP_OK;
     }
 

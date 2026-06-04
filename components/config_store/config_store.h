@@ -229,18 +229,12 @@ void config_store_invalidate_refresh_interval_sec(void);
 // ============================================================================
 
 /**
- * @brief Set SD card root folder path
- *
- * All p3a data directories (animations, vault, channel, etc.) will be
- * created under this root folder. Changes require a reboot to take effect.
- *
- * @param root_path Root folder path - user-friendly format (e.g., "/p3a", "/data")
- * @return ESP_OK on success
- */
-esp_err_t config_store_set_sdcard_root(const char *root_path);
-
-/**
  * @brief Get SD card root folder path
+ *
+ * All p3a data directories (animations, vault, channel, etc.) live under
+ * this root folder. The value is written through the settings JSON
+ * ("sdcard_root" key, PUT /config — validated by sd_path_validate_root());
+ * changes require a reboot, and sd_path_init() is the only consumer.
  *
  * @param out_path Pointer to receive allocated string (caller must free)
  * @return ESP_OK on success, ESP_ERR_NOT_FOUND if not set

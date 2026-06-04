@@ -179,19 +179,29 @@ esp_err_t sd_path_get_museum(char *out_path, size_t out_len);
 esp_err_t sd_path_get_pinned(char *out_path, size_t out_len);
 
 /**
- * @brief Set the SD card root folder (persisted to NVS, requires reboot)
- * 
+ * @brief Validate a candidate SD root path value
+ *
  * Accepts either:
- * - User-friendly path: "/p3a", "/data", "/myproject" (recommended)
- * - Full path: "/sdcard/p3a", "/sdcard/data" (for compatibility)
- * 
- * The user-friendly format is stored in NVS, and /sdcard is prepended
- * internally at runtime.
- * 
- * @param root_path New root path (e.g., "/p3a" or "/sdcard/p3a")
- * @return ESP_OK on success, ESP_ERR_INVALID_ARG if validation fails
+ * - User-friendly path: "/p3a", "/data", "/myproject" (recommended;
+ *   "/sdcard" is prepended when resolved at boot)
+ * - Full path: "/sdcard/p3a", "/sdcard/data" (compatibility form, used as-is)
+ *
+ * Rules: must start with '/', must name at least one folder (not bare "/"),
+ * must not contain "..", and the resolved form (after any /sdcard prepend)
+ * must fit SD_PATH_ROOT_MAX_LEN.
+ *
+ * The value itself is written through the settings JSON ("sdcard_root" key,
+ * PUT /config): the HTTP handler rejects values failing this check, and
+ * sd_path_init() applies the same check at boot, falling back to
+ * SD_PATH_DEFAULT_ROOT for invalid stored values (older firmware, raw NVS
+ * edits). Root changes always require a reboot — the root is read from NVS
+ * exactly once, at init, and cached for the session.
+ *
+ * @param root_path Candidate root path (e.g., "/p3a" or "/sdcard/p3a")
+ * @return ESP_OK if valid; ESP_ERR_INVALID_ARG on a malformed path;
+ *         ESP_ERR_INVALID_SIZE if the resolved path is too long
  */
-esp_err_t sd_path_set_root(const char *root_path);
+esp_err_t sd_path_validate_root(const char *root_path);
 
 /**
  * @brief Create all required subdirectories under the p3a root

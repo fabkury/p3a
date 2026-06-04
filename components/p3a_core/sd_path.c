@@ -24,6 +24,40 @@ static const char *TAG = "sd_path";
 static char s_root_path[SD_PATH_ROOT_MAX_LEN] = SD_PATH_DEFAULT_ROOT;
 static bool s_initialized = false;
 
+esp_err_t sd_path_validate_root(const char *root_path)
+{
+    if (!root_path || root_path[0] == '\0') {
+        ESP_LOGW(TAG, "Root path validation failed: empty");
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (root_path[0] != '/') {
+        ESP_LOGW(TAG, "Root path validation failed: must start with '/': %s", root_path);
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (root_path[1] == '\0') {
+        ESP_LOGW(TAG, "Root path validation failed: cannot be just '/' - must specify at least one folder");
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (strstr(root_path, "..") != NULL) {
+        ESP_LOGW(TAG, "Root path validation failed: must not contain '..': %s", root_path);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Length check on the RESOLVED form: user-friendly paths get "/sdcard"
+    // (7 chars) prepended at init, compatibility-form paths are used as-is.
+    size_t resolved_len = strlen(root_path);
+    if (strncmp(root_path, "/sdcard/", 8) != 0) {
+        resolved_len += 7;
+    }
+    if (resolved_len >= SD_PATH_ROOT_MAX_LEN) {
+        ESP_LOGW(TAG, "Root path validation failed: too long (resolved %zu, max %d): %s",
+                 resolved_len, SD_PATH_ROOT_MAX_LEN - 1, root_path);
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    return ESP_OK;
+}
+
 esp_err_t sd_path_init(void)
 {
     if (s_initialized) {
@@ -33,28 +67,23 @@ esp_err_t sd_path_init(void)
     // Try to load from config store
     char *stored_path = NULL;
     esp_err_t err = config_store_get_sdcard_root(&stored_path);
-    
+
     if (err == ESP_OK && stored_path != NULL && stored_path[0] != '\0') {
-        // Check if path already has /sdcard prefix (for backward compatibility)
-        if (strncmp(stored_path, "/sdcard/", 8) == 0) {
-            // Already has /sdcard prefix, use as-is
+        if (sd_path_validate_root(stored_path) != ESP_OK) {
+            // Reject-at-write lives in the /config handler; this is the boot
+            // safety net for values written by older firmware or raw NVS edits.
+            ESP_LOGW(TAG, "Invalid root path in config: %s - using default %s",
+                     stored_path, SD_PATH_DEFAULT_ROOT);
+            strlcpy(s_root_path, SD_PATH_DEFAULT_ROOT, sizeof(s_root_path));
+        } else if (strncmp(stored_path, "/sdcard/", 8) == 0) {
+            // Already has /sdcard prefix (compatibility form), use as-is
             strlcpy(s_root_path, stored_path, sizeof(s_root_path));
             ESP_LOGI(TAG, "Using configured root: %s", s_root_path);
-        } else if (stored_path[0] == '/' && strlen(stored_path) > 1) {
-            // User-friendly path (e.g., /p3a), prepend /sdcard
-            // Check if the combined path will fit
-            size_t stored_len = strlen(stored_path);
-            size_t total_len = 7 + stored_len; // "/sdcard" (7) + user path
-            if (total_len >= sizeof(s_root_path)) {
-                ESP_LOGW(TAG, "Configured root path too long after prepending /sdcard: %s", stored_path);
-                strlcpy(s_root_path, SD_PATH_DEFAULT_ROOT, sizeof(s_root_path));
-            } else {
-                snprintf(s_root_path, sizeof(s_root_path), "/sdcard%s", stored_path);
-                ESP_LOGI(TAG, "Using configured root: %s (from user path: %s)", s_root_path, stored_path);
-            }
         } else {
-            ESP_LOGW(TAG, "Invalid root path in config (must start with / and not be empty): %s", stored_path);
-            strlcpy(s_root_path, SD_PATH_DEFAULT_ROOT, sizeof(s_root_path));
+            // User-friendly path (e.g., /p3a), prepend /sdcard.
+            // Cannot truncate: the validator capped the resolved length.
+            snprintf(s_root_path, sizeof(s_root_path), "/sdcard%s", stored_path);
+            ESP_LOGI(TAG, "Using configured root: %s (from user path: %s)", s_root_path, stored_path);
         }
         free(stored_path);
     } else {
@@ -128,55 +157,6 @@ esp_err_t sd_path_get_museum(char *out_path, size_t out_len)
 esp_err_t sd_path_get_pinned(char *out_path, size_t out_len)
 {
     return sd_path_get_subdir("pinned", out_path, out_len);
-}
-
-esp_err_t sd_path_set_root(const char *root_path)
-{
-    if (!root_path || root_path[0] == '\0') {
-        ESP_LOGE(TAG, "Root path cannot be empty");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    // Validate path starts with /
-    if (root_path[0] != '/') {
-        ESP_LOGE(TAG, "Root path must start with /");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    // Validate path is not just "/"
-    if (strlen(root_path) == 1) {
-        ESP_LOGE(TAG, "Root path cannot be just '/' - must specify at least one folder");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    // Check for directory traversal attempts
-    if (strstr(root_path, "..") != NULL) {
-        ESP_LOGE(TAG, "Root path cannot contain '..'");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    // If path already starts with /sdcard/, strip it for storage (user-friendly format)
-    const char *path_to_store = root_path;
-    if (strncmp(root_path, "/sdcard/", 8) == 0) {
-        path_to_store = root_path + 7; // Skip "/sdcard", keep the leading "/"
-        ESP_LOGI(TAG, "Stripping /sdcard prefix for storage: %s -> %s", root_path, path_to_store);
-    }
-
-    // Validate final length (after potential stripping)
-    if (strlen(path_to_store) >= SD_PATH_ROOT_MAX_LEN) {
-        ESP_LOGE(TAG, "Root path too long (max %d chars)", SD_PATH_ROOT_MAX_LEN - 1);
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    // Save to config store (user-friendly format: /p3a not /sdcard/p3a)
-    esp_err_t err = config_store_set_sdcard_root(path_to_store);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to save root path: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    ESP_LOGI(TAG, "Root path saved: %s (reboot required)", path_to_store);
-    return ESP_OK;
 }
 
 static esp_err_t ensure_directory(const char *path)

@@ -198,11 +198,11 @@ All 25 custom components live under `components/`. This document describes each 
 
 ## 18. storage_eviction — SD Card Space Management
 
-- **Purpose**: Age-based eviction of cached artwork and stale channel files from SD card
+- **Purpose**: Age-based eviction of cached artwork and stale channel files from SD card. The cache walk is layout-unaware: it recurses into whatever directories exist under the vault/giphy/museum bases (depth capped for stack safety, not layout), deletes by extension allowlist + age — artwork files plus `.404` negative-cache markers and orphaned `.tmp` staging files — and `rmdir`s emptied directories on the way out (this is also what gradually reclaims orphaned pre-1.0 SHA256 shard trees). File mtime is touched on every successful load by the animation player, so age ≈ time since last played.
 - **Key files**: `storage_eviction.c`
 - **Public API**: `storage_eviction.h`
 - **Key functions**:
-  - `storage_eviction_check_and_run()` — multi-pass age-based eviction of vault/giphy files
+  - `storage_eviction_check_and_run()` — multi-pass age-based eviction of the vault/giphy/museum cache trees
   - `storage_eviction_get_free_space()` — query free bytes on /sdcard
   - `storage_eviction_get_storage_info()` — query total and free bytes
   - `channel_eviction_check_and_run()` — evict stale channel metadata files

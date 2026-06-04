@@ -47,16 +47,17 @@ extern "C" {
  * This layout is the v1.0 ON-DISK FORMAT CONTRACT. The hash constants, the
  * 6-bit mask, the decimal directory names, and the depth are all frozen:
  * changing any of them re-homes every already-cached file (the firmware
- * would compute different paths, re-download everything, and orphan the
- * old files where the eviction walker no longer finds them). Pre-1.0
- * firmware used a 3-level SHA256-based layout; those trees are deliberately
- * orphaned in place and may be deleted manually. The Makapix server URL
+ * would compute different paths and re-download everything; the stranded
+ * files would drain away only through age-based eviction). Pre-1.0
+ * firmware used a 3-level SHA256-based layout; those trees were orphaned
+ * without migration and are reclaimed by eviction like any cache debris
+ * (or may be deleted manually for immediate space). The Makapix server URL
  * shard is a SEPARATE constant (MAKAPIX_REMOTE_SHARD_DEPTH, SHA256-based
  * server contract) and is not affected by this value.
  *
- * This is the single source of truth for the local shard depth;
- * sd_path_build_sharded() and the eviction tree-walker (storage_eviction.c)
- * both derive their behavior from it.
+ * sd_path_build_sharded() is the only consumer. The eviction walker
+ * (storage_eviction.c) is deliberately layout-UNAWARE — it judges files by
+ * extension and age wherever they sit and does not read this constant.
  */
 #define SD_SHARD_DEPTH 2
 

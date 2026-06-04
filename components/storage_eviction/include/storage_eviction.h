@@ -3,7 +3,8 @@
 
 /**
  * @file storage_eviction.h
- * @brief Storage eviction interface: age-based cleanup of cached artwork files
+ * @brief Storage eviction interface: age-based cleanup of cache debris
+ *        (artwork, .404 markers, orphaned .tmp files) and emptied directories
  */
 
 #pragma once
@@ -27,6 +28,11 @@ extern "C" {
  * Each pass halves the age threshold, starting from
  * STORAGE_EVICTION_INITIAL_AGE_DAYS and stopping at
  * STORAGE_EVICTION_MIN_AGE_HOURS.
+ *
+ * Each pass walks the vault, giphy, and museum cache trees without any
+ * knowledge of the shard layout, deleting allowlisted cache files
+ * (artwork, .404 markers, .tmp staging) older than the threshold
+ * wherever they sit, and rmdir'ing directories left empty.
  *
  * Safe to call from any context; fast-returns if space is sufficient.
  *
@@ -63,8 +69,8 @@ esp_err_t storage_eviction_get_storage_info(uint64_t *out_total_bytes, uint64_t 
  * .cache, .json, .settings.json, and .bin files. Channels in the active
  * playset and the SD card channel are always protected.
  *
- * Does not delete artwork files (vault/giphy) -- those are handled
- * separately by storage_eviction_check_and_run().
+ * Does not delete artwork files (vault/giphy/museum) -- those are
+ * handled separately by storage_eviction_check_and_run().
  *
  * Safe to call from any context; fast-returns if SNTP is not synced.
  *

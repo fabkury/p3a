@@ -234,17 +234,16 @@ Integration:
 
 1. Add `sd_path_get_museum(char *out, size_t len)` to `sd_path`
    (returns `/sdcard/p3a/museum`).
-2. Add a thin `evict_museum_root()` wrapper in `storage_eviction.c` that
-   opens `/sdcard/p3a/museum/`, iterates the per-museum subdirectories
-   (`artic/`, `rijks/`, ...), and delegates each to the existing
-   `evict_from_base_dir()`. Call it from `evict_old_files()` after the
-   vault and giphy passes.
+2. Call `evict_from_base_dir()` on `/sdcard/p3a/museum` from
+   `evict_old_files()` after the vault and giphy passes.
 
 The museum vault has an extra `{museum_id}` segment at the top compared
-to the vault and giphy layouts, so a single `evict_from_base_dir` call
-on `/sdcard/p3a/museum/` would not reach the hash-sharded leaves. The
-wrapper is small (≈10 lines) and reuses the hash-sharded walker per
-museum_id.
+to the vault and giphy layouts. The eviction walker is layout-unaware
+(it recurses into whatever directories exist and deletes by extension
+allowlist + age), so the extra segment needs no special handling — it
+is just one more directory level. (An earlier revision used a dedicated
+`evict_museum_root()` wrapper around a fixed-depth shard walker; the
+walker became layout-unaware for v1.0 and the wrapper was removed.)
 
 **Channel cache file cleanup** is already handled by
 `channel_eviction_check_and_run()`, which deletes stale channel `.cache`

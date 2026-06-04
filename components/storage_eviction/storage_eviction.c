@@ -5,12 +5,23 @@
  * @file storage_eviction.c
  * @brief Age-based eviction of cached artwork and channel files from SD card
  *
- * When the SD card runs low on space, this module scans the vault and
- * giphy cache directories and deletes files whose mtime is older than
- * a progressively-shrinking threshold.  The threshold starts at
- * CONFIG_STORAGE_EVICTION_INITIAL_AGE_DAYS and halves on each pass
+ * When the SD card runs low on space, this module walks the vault,
+ * giphy, and museum cache trees and deletes cache debris whose mtime is
+ * older than a progressively-shrinking threshold.  The threshold starts
+ * at CONFIG_STORAGE_EVICTION_INITIAL_AGE_DAYS and halves on each pass
  * until the free-space target is met or the floor
- * (CONFIG_STORAGE_EVICTION_MIN_AGE_HOURS) is reached.
+ * (CONFIG_STORAGE_EVICTION_MIN_AGE_HOURS) is reached.  mtime is a
+ * last-played signal, not a download stamp — the animation loader
+ * touches every file it successfully loads — so eviction approximates
+ * least-recently-played.
+ *
+ * The walk is deliberately layout-UNAWARE: it recurses into whatever
+ * directories exist (bounded only by EVICT_MAX_DEPTH for stack safety)
+ * and judges files purely by extension allowlist + age, never by their
+ * coordinates.  It therefore keeps working across shard-layout
+ * generations — it is what gradually reclaims pre-1.0 3-level SHA256
+ * trees — and cannot go blind after a future re-shard.  Emptied
+ * directories are rmdir'd on the way out, reclaiming their FAT clusters.
  *
  * Channel eviction deletes stale channel metadata files (.cache, .json,
  * .settings.json, .bin) from the channel directory when they haven't
@@ -43,9 +54,17 @@ static const char *TAG = "storage_evict";
 #define MIN_AGE_S           ((time_t)CONFIG_STORAGE_EVICTION_MIN_AGE_HOURS * 3600)
 #define CHANNEL_AGE_S       ((time_t)CONFIG_CHANNEL_EVICTION_AGE_DAYS * 86400)
 
+/* Recursion bound for the cache-tree walk — a stack-safety limit, not a
+   layout descriptor. v1.0 trees are 2 levels deep (3 for museum with its
+   {museum_id} segment) and pre-1.0 SHA256 trees one deeper; 8 covers any
+   layout generation with slack. Cheap because the walker shares a single
+   path buffer across recursion frames. */
+#define EVICT_MAX_DEPTH 8
+
 /** Counters passed through the eviction scan */
 typedef struct {
     uint32_t files_deleted;
+    uint32_t dirs_removed;
     uint64_t bytes_freed;
 } evict_stats_t;
 
@@ -53,14 +72,25 @@ typedef struct {
 /*  Helpers                                                               */
 /* --------------------------------------------------------------------- */
 
-static bool is_artwork_ext(const char *name)
+/**
+ * Cache-debris allowlist: everything the cache writers can leave on disk.
+ * Artwork files; ".404" negative-cache markers (eviction is their ONLY
+ * expiry — downloads never retry past a marker and nothing else deletes
+ * an orphaned one); ".tmp" staging files orphaned by a power cut
+ * mid-download (a live .tmp is at most minutes old, far inside the
+ * MIN_AGE_HOURS floor).  Anything else found in a cache tree is left
+ * alone deliberately.
+ */
+static bool is_evictable_ext(const char *name)
 {
     const char *dot = strrchr(name, '.');
     if (!dot) return false;
     return (strcasecmp(dot, ".webp") == 0 ||
             strcasecmp(dot, ".gif")  == 0 ||
             strcasecmp(dot, ".png")  == 0 ||
-            strcasecmp(dot, ".jpg")  == 0);
+            strcasecmp(dot, ".jpg")  == 0 ||
+            strcasecmp(dot, ".404")  == 0 ||
+            strcasecmp(dot, ".tmp")  == 0);
 }
 
 /**
@@ -101,122 +131,91 @@ esp_err_t storage_eviction_get_storage_info(uint64_t *out_total_bytes, uint64_t 
 }
 
 /* --------------------------------------------------------------------- */
-/*  Leaf-directory scanner (SD_SHARD_DEPTH-level hash sharding)           */
+/*  Layout-unaware cache-tree walker                                      */
 /* --------------------------------------------------------------------- */
 
 /**
- * @brief Scan a single leaf directory and delete old artwork files
+ * @brief Recursively walk a cache tree, deleting old debris and empty dirs
  *
- * @param leaf_path  Full path to the leaf directory (e.g. vault/12/63)
- * @param cutoff     Files with mtime < cutoff are eligible for deletion
- * @param stats      Running totals (updated in place)
+ * Descends into every subdirectory (up to `depth_left` levels — a stack
+ * bound, not a layout descriptor) and deletes any allowlisted file (see
+ * is_evictable_ext) older than `cutoff`, wherever it sits.  Knowing
+ * nothing about SD_SHARD_DEPTH is the point: the same walk reclaims
+ * v1.0 trees, orphaned pre-1.0 SHA256 trees, and whatever a future
+ * layout produces, with no re-sync needed when the builders change.
+ *
+ * After returning from a subdirectory the walker rmdir()s it: success
+ * reclaims the directory's FAT cluster (and is what dissolves emptied
+ * pre-1.0 shard skeletons); failure on a non-empty directory is a cheap
+ * no-op.  All cache-tree writers run in the download task — the sole
+ * caller of storage_eviction_check_and_run() — so the walk cannot pull
+ * a just-created directory out from under an in-flight download.  If a
+ * concurrent writer is ever added, that race becomes possible but
+ * self-heals: the download fails, retries, and re-creates its path.
+ *
+ * `path` is a single shared buffer holding the directory to scan;
+ * segments are appended and truncated in place, so recursion depth does
+ * not multiply path-buffer stack cost.
  */
-static void evict_leaf(const char *leaf_path, time_t cutoff, evict_stats_t *stats)
+static void evict_tree(char *path, size_t path_cap, int depth_left,
+                       time_t cutoff, evict_stats_t *stats)
 {
-    DIR *d = opendir(leaf_path);
+    DIR *d = opendir(path);
     if (!d) return;
 
+    size_t dir_len = strlen(path);
     struct dirent *de;
-    char filepath[280];
 
     while ((de = readdir(d)) != NULL) {
         if (de->d_name[0] == '.') continue;
-        if (!is_artwork_ext(de->d_name)) continue;
 
-        int ret = snprintf(filepath, sizeof(filepath), "%s/%s", leaf_path, de->d_name);
-        if (ret < 0 || ret >= (int)sizeof(filepath)) continue;
+        int n = snprintf(path + dir_len, path_cap - dir_len, "/%s", de->d_name);
+        if (n < 0 || (size_t)n >= path_cap - dir_len) {
+            path[dir_len] = '\0';
+            continue;
+        }
 
-        struct stat st;
-        if (stat(filepath, &st) != 0) continue;
-
-        if (st.st_mtime < cutoff) {
-            uint64_t size = (uint64_t)st.st_size;
-            if (unlink(filepath) == 0) {
-                stats->files_deleted++;
-                stats->bytes_freed += size;
-                remove_sidecar(filepath, ".404");
+        if (de->d_type == DT_DIR) {
+            if (depth_left > 0) {
+                evict_tree(path, path_cap, depth_left - 1, cutoff, stats);
+                if (rmdir(path) == 0) {
+                    stats->dirs_removed++;
+                }
+            }
+        } else if (is_evictable_ext(de->d_name)) {
+            struct stat st;
+            if (stat(path, &st) == 0 && st.st_mtime < cutoff) {
+                uint64_t size = (uint64_t)st.st_size;
+                if (unlink(path) == 0) {
+                    stats->files_deleted++;
+                    stats->bytes_freed += size;
+                    /* Drop the stale negative-cache marker along with its
+                       artwork; for .404/.tmp files this is a harmless no-op. */
+                    remove_sidecar(path, ".404");
+                }
             }
         }
+
+        path[dir_len] = '\0';
     }
 
     closedir(d);
+
+    /* Yield between directories to avoid starving other tasks */
+    vTaskDelay(1);
 }
 
 /**
- * @brief Recursively descend `levels` shard directories, then evict the leaf
+ * @brief Walk one cache base directory (vault, giphy, or museum) and evict
  *
- * At levels == 0 we are at a leaf shard directory and scan it for old files;
- * otherwise we open `dir` and recurse into each child with one fewer level.
- * Driven by SD_SHARD_DEPTH so the walk depth always matches the layout the
- * sd_path_build_sharded() builders produce — change the depth in one place and
- * both the writers and this walker follow.
- */
-static void evict_shard_tree(const char *dir, int levels, time_t cutoff, evict_stats_t *stats)
-{
-    if (levels <= 0) {
-        evict_leaf(dir, cutoff, stats);
-        /* Yield between leaf directories to avoid starving other tasks */
-        vTaskDelay(1);
-        return;
-    }
-
-    DIR *d = opendir(dir);
-    if (!d) return;
-
-    struct dirent *e;
-    char child[256];
-
-    while ((e = readdir(d)) != NULL) {
-        if (e->d_name[0] == '.') continue;
-
-        int n = snprintf(child, sizeof(child), "%s/%s", dir, e->d_name);
-        if (n < 0 || n >= (int)sizeof(child)) continue;
-
-        evict_shard_tree(child, levels - 1, cutoff, stats);
-    }
-
-    closedir(d);
-}
-
-/**
- * @brief Walk a hash-sharded base directory and evict old files
- *
- * Directory structure: {base}/{d0}/{d1}/{file} for SD_SHARD_DEPTH == 2.
- *
- * Pre-1.0 firmware sharded three levels deep (SHA256-based); those orphaned
- * trees coexist harmlessly — at the new leaf depth they contain only
- * subdirectories, which the artwork-extension filter skips, so their files
- * are never reached (nor reclaimed; users delete the old trees manually).
+ * The museum tree's extra {museum_id} segment needs no special handling —
+ * to a layout-unaware walk it is just one more directory level.
  */
 static void evict_from_base_dir(const char *base_path, time_t cutoff, evict_stats_t *stats)
 {
-    evict_shard_tree(base_path, SD_SHARD_DEPTH, cutoff, stats);
-}
-
-/**
- * @brief Walk a museum-rooted base directory and evict old files
- *
- * Museum vault layout has an extra museum_id segment at the top:
- *   /sdcard/p3a/museum/{museum_id}/{d0}/{d1}/{file}
- * The existing evict_from_base_dir() walks SD_SHARD_DEPTH levels of shard
- * dirs; we just delegate to it once per museum_id directory found here.
- */
-static void evict_museum_root(const char *base_path, time_t cutoff, evict_stats_t *stats)
-{
-    DIR *d = opendir(base_path);
-    if (!d) return;
-
-    struct dirent *e;
-    char sub[160];
-
-    while ((e = readdir(d)) != NULL) {
-        if (e->d_name[0] == '.') continue;
-        int r = snprintf(sub, sizeof(sub), "%s/%s", base_path, e->d_name);
-        if (r < 0 || r >= (int)sizeof(sub)) continue;
-        evict_from_base_dir(sub, cutoff, stats);
-    }
-
-    closedir(d);
+    char path[280];
+    if (strlcpy(path, base_path, sizeof(path)) >= sizeof(path)) return;
+    evict_tree(path, sizeof(path), EVICT_MAX_DEPTH, cutoff, stats);
 }
 
 /* --------------------------------------------------------------------- */
@@ -236,7 +235,7 @@ static void evict_old_files(time_t cutoff, evict_stats_t *stats)
     }
 
     if (sd_path_get_museum(path, sizeof(path)) == ESP_OK) {
-        evict_museum_root(path, cutoff, stats);
+        evict_from_base_dir(path, cutoff, stats);
     }
 }
 
@@ -287,7 +286,7 @@ esp_err_t storage_eviction_check_and_run(void)
              CONFIG_STORAGE_EVICTION_TARGET_MIB,
              (unsigned long long)(STOP_BYTES / (1024 * 1024)));
 
-    evict_stats_t stats = { 0, 0 };
+    evict_stats_t stats = { 0, 0, 0 };
     time_t now = time(NULL);
     time_t age_threshold = INITIAL_AGE_S;
 
@@ -313,8 +312,9 @@ esp_err_t storage_eviction_check_and_run(void)
         age_threshold /= 2;
     }
 
-    ESP_LOGI(TAG, "Eviction done: %lu files deleted, %llu MiB freed",
+    ESP_LOGI(TAG, "Eviction done: %lu files deleted, %lu empty dirs removed, %llu MiB freed",
              (unsigned long)stats.files_deleted,
+             (unsigned long)stats.dirs_removed,
              (unsigned long long)(stats.bytes_freed / (1024 * 1024)));
 
     return ESP_OK;

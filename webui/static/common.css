@@ -314,6 +314,8 @@ body {
 }
 .status-connected { background: #d1fae5; color: #065f46; }
 .status-disconnected { background: #fee2e2; color: #991b1b; }
+.status-warn { background: #fef3c7; color: #92400e; }
+.status-neutral { background: #e5e7eb; color: #374151; }
 
 /* ── Footer ── */
 

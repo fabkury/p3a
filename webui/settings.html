@@ -450,13 +450,10 @@
     <div class="section">
         <h3>Makapix Club</h3>
         <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
-            <div style="display:flex;justify-content:space-between;align-items:baseline;">
-                <span style="font-size:0.85rem;color:#333;" id="mkx-reg-status">Loading...</span>
-                <span class="file-name" id="mkx-mqtt-status" style="min-height:0;"></span>
-            </div>
+            <div><span class="status-badge status-neutral" id="mkx-health-badge">Loading...</span></div>
+            <div class="file-name" id="mkx-health-detail" style="display:none;min-height:0;"></div>
             <div id="mkx-player-key" style="display:none;font-family:monospace;font-size:0.78rem;color:#555;word-break:break-all;background:#f5f5f5;padding:6px 8px;border-radius:6px;"><span style="font-family:inherit;color:#888;">Player key: </span><span id="mkx-player-key-value"></span></div>
         </div>
-        <p class="file-name" id="provision-status" style="display:none;"></p>
         <button class="btn btn-full" id="provision-btn" style="display:none;" onclick="toggleProvisioning()">
             Enter Provisioning Mode
         </button>
@@ -534,14 +531,20 @@
 </nav>
 <script>
 // ── Tab system ──
+var currentTab = 'display';
 function initTabs() {
     var hash = location.hash.slice(1) || 'display';
     var tabs = document.querySelectorAll('.tab-item');
     var contents = document.querySelectorAll('.tab-content');
     function activate(name) {
+        var wasTab = currentTab;
+        currentTab = name;
         tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.tab === name); });
         contents.forEach(function(c) { c.classList.toggle('active', c.id === 'tab-' + name); });
         history.replaceState(null, '', '#' + name);
+        // Freshen the Makapix health badge the moment the tab is opened
+        // (the page otherwise only fetches /status once at load).
+        if (name === 'makapix' && wasTab !== 'makapix') loadStatus();
     }
     tabs.forEach(function(t) {
         t.addEventListener('click', function() { activate(t.dataset.tab); });
@@ -981,12 +984,61 @@ function saveSdRoot() {
 
 // ── Makapix tab ──
 var provisioningActive = false;
-function populateMakapixState(mkx) {
+// Health badge mapping mirrors the on-device info screen (ugfx_ui.c):
+// green = connected, amber = transient (provisioning/connecting/disconnected),
+// red = registration invalid, gray = not registered (neutral, not an error).
+function populateMakapixState(mkx, net) {
     var registered = !!mkx.registered;
     var mqttStatus = mkx.mqtt_status || 'disconnected';
-    document.getElementById('mkx-reg-status').textContent = registered ? 'Registered' : 'Not registered';
-    var mqttLabel = {connected: 'MQTT connected', connecting: 'MQTT connecting...', disconnected: 'MQTT disconnected', invalid: 'Registration invalid'};
-    document.getElementById('mkx-mqtt-status').textContent = registered ? (mqttLabel[mqttStatus] || mqttStatus) : '';
+    provisioningActive = (mkx.p3a_state === 'PROVISIONING');
+
+    var badgeClass, badgeText, detailText;
+    var showProvision = false;
+    var provisionLabel = 'Enter Provisioning Mode';
+
+    if (provisioningActive) {
+        badgeClass = 'status-warn';
+        badgeText = 'Provisioning…';
+        detailText = 'Enter the code shown on the device at makapix.club';
+        showProvision = true;
+        provisionLabel = 'Exit Provisioning Mode';
+    } else if (mqttStatus === 'invalid') {
+        badgeClass = 'status-disconnected';
+        badgeText = 'Registration invalid';
+        detailText = 'The server is rejecting this device’s credentials. Re-register to fix.';
+        showProvision = true;
+        provisionLabel = 'Re-register device';
+    } else if (!registered) {
+        badgeClass = 'status-neutral';
+        badgeText = 'Not registered';
+        detailText = (net && net.connected === false)
+            ? 'Connect to Wi-Fi to register'
+            : 'Link this device to your Makapix Club account';
+        showProvision = true;
+    } else if (mqttStatus === 'connecting') {
+        badgeClass = 'status-warn';
+        badgeText = 'Connecting…';
+        detailText = '';
+    } else if (mqttStatus === 'connected') {
+        badgeClass = 'status-connected';
+        badgeText = 'Connected';
+        detailText = '';
+    } else {
+        badgeClass = 'status-warn';
+        badgeText = 'MQTT disconnected';
+        // mkx.connectivity is optional (older firmware doesn't send it)
+        detailText = (mkx.connectivity === 'no_wifi') ? 'No Wi-Fi connection'
+            : (mkx.connectivity === 'no_internet') ? 'Wi-Fi connected but no internet access'
+            : 'Reconnecting automatically…';
+    }
+
+    var badge = document.getElementById('mkx-health-badge');
+    badge.className = 'status-badge ' + badgeClass;
+    badge.textContent = badgeText;
+    var detail = document.getElementById('mkx-health-detail');
+    detail.textContent = detailText;
+    detail.style.display = detailText ? 'block' : 'none';
+
     var keyEl = document.getElementById('mkx-player-key');
     if (registered && mkx.player_key) {
         document.getElementById('mkx-player-key-value').textContent = mkx.player_key;
@@ -994,27 +1046,27 @@ function populateMakapixState(mkx) {
     } else {
         keyEl.style.display = 'none';
     }
+
     var provBtn = document.getElementById('provision-btn');
-    var provStatus = document.getElementById('provision-status');
-    if (!registered) {
-        provBtn.style.display = 'block';
-        provStatus.style.display = 'block';
-        if (mkx.p3a_state === 'PROVISIONING') {
-            provisioningActive = true;
-            provBtn.textContent = 'Exit Provisioning Mode';
-            provStatus.textContent = 'Device is in provisioning mode';
-        } else {
-            provisioningActive = false;
-            provBtn.textContent = 'Enter Provisioning Mode';
-            provStatus.textContent = 'Link this device to your Makapix Club account';
-        }
-    } else {
-        provBtn.style.display = 'none';
-        provStatus.style.display = 'none';
-    }
-    document.getElementById('mkx-unregister-btn').style.display = registered ? 'block' : 'none';
-    document.getElementById('mkx-unregister-hint').style.display = registered ? 'block' : 'none';
+    provBtn.style.display = showProvision ? 'block' : 'none';
+    provBtn.textContent = provisionLabel;
+    var showUnregister = registered && !provisioningActive;
+    document.getElementById('mkx-unregister-btn').style.display = showUnregister ? 'block' : 'none';
+    document.getElementById('mkx-unregister-hint').style.display = showUnregister ? 'block' : 'none';
 }
+
+// Live health updates: poll /status every 5 s, but only while the Makapix
+// tab is the active tab and the page is visible — other tabs and
+// backgrounded pages cost nothing (same idiom as index.html's tick).
+function makapixTick() {
+    if (document.visibilityState !== 'visible') return;
+    if (currentTab !== 'makapix') return;
+    loadStatus();
+}
+setInterval(makapixTick, 5000);
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && currentTab === 'makapix') loadStatus();
+});
 
 function unregisterMakapix() {
     if (!confirm('Are you sure you want to remove Makapix Club registration? You can re-register later.')) return;
@@ -1055,11 +1107,8 @@ function toggleProvisioning() {
             var r = JSON.parse(xhr.responseText);
             if (r.ok) {
                 provisioningActive = enable;
-                btn.textContent = enable ? 'Exit Provisioning Mode' : 'Enter Provisioning Mode';
-                document.getElementById('provision-status').textContent = enable
-                    ? 'Device is in provisioning mode'
-                    : 'Link this device to your Makapix Club account';
                 showToast(enable ? 'Provisioning started' : 'Provisioning stopped', false);
+                loadStatus();  // refresh badge/buttons from authoritative state
             } else {
                 showToast(r.error || 'Failed', true);
             }
@@ -1172,7 +1221,7 @@ function loadStatus() {
 
         // Makapix tab
         var mkx = data.makapix || {};
-        populateMakapixState(mkx);
+        populateMakapixState(mkx, net);
 
         // Storage tab
         if (data.storage) {

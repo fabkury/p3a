@@ -461,6 +461,14 @@ esp_err_t h_get_status(httpd_req_t *req) {
             else if (ms == MAKAPIX_STATE_CONNECTING) mqtt = "connecting";
             else if (ms == MAKAPIX_STATE_REGISTRATION_INVALID) mqtt = "invalid";
             cJSON_AddStringToObject(mkx, "mqtt_status", mqtt);
+            // Connectivity ladder (no_wifi < no_internet < no_registration <
+            // no_mqtt < online) so the web UI can mirror the info screen's
+            // nuance (e.g. "no internet" vs "server unreachable").
+            static const char *conn_names[] = {"no_wifi", "no_internet", "no_registration", "no_mqtt", "online"};
+            p3a_connectivity_level_t lvl = p3a_state_get_connectivity();
+            if ((unsigned)lvl <= P3A_CONNECTIVITY_ONLINE) {
+                cJSON_AddStringToObject(mkx, "connectivity", conn_names[lvl]);
+            }
             cJSON_AddItemToObject(data, "makapix", mkx);
         }
     }

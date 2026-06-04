@@ -8,8 +8,8 @@
  * These helpers are implemented in `components/channel_manager/makapix_channel_utils.c`.
  *
  * Note: This header intentionally exposes ONLY stateless utility helpers (UUID
- * conversion, SHA256 sharding helper, etc.). It does not expose internal channel
- * structures.
+ * conversion, vault/remote path helpers, etc.). It does not expose internal
+ * channel structures.
  */
 
 #pragma once
@@ -45,7 +45,11 @@ bool uuid_to_bytes(const char *uuid_str, uint8_t *out_bytes);
 void bytes_to_uuid(const uint8_t *bytes, char *out, size_t out_len);
 
 /**
- * @brief Compute SHA256(storage_key) for Makapix vault sharding
+ * @brief Compute SHA256(storage_key) for the Makapix server's URL shard
+ *
+ * Used only by makapix_build_remote_shard() — the server's /api/vault/ URL
+ * layout is SHA256-based. The LOCAL SD-card vault uses the FNV-1a shard
+ * scheme in sd_path_build_sharded() and does not involve SHA256.
  *
  * @param storage_key Storage key string (UUID text)
  * @param out_sha256 Output 32 bytes
@@ -74,9 +78,10 @@ extern const char *s_ext_strings[];
  * @brief Build the local SD-card vault path for a Makapix artwork
  *
  * Thin wrapper over sd_path_build_sharded() that maps the extension index to a
- * string and uses the storage_key (UUID text) as both the shard seed and the
- * leaf filename:
- *   {vault_base}/{sha[0]}/.../{sha[SD_SHARD_DEPTH-1]}/{storage_key}{ext}
+ * string and uses the storage_key (UUID text) as the leaf filename (which is
+ * also the shard-hash input):
+ *   {vault_base}/{d0}/{d1}/{storage_key}{ext}
+ * where the d_i are the 6-bit decimal shard dirs (see SD_SHARD_DEPTH).
  *
  * @param vault_base Vault root (e.g. sd_path_get_vault() or ch->vault_path)
  * @param storage_key UUID text

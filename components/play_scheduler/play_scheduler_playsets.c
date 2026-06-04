@@ -1064,7 +1064,8 @@ esp_err_t play_scheduler_refresh_sdcard_cache(void)
 /**
  * @brief Build vault filepath from storage_key and art_url
  *
- * Computes the sharded vault path: {vault}/{sha[0]}/{sha[1]}/{sha[2]}/{storage_key}.{ext}
+ * Computes the sharded vault path: {vault}/{d0}/{d1}/{storage_key}.{ext}
+ * (see sd_path_build_sharded())
  */
 static void ps_build_artwork_filepath(const char *storage_key, const char *art_url,
                                        char *out_path, size_t max_len)

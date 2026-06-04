@@ -33,7 +33,6 @@
 #include "sd_path.h"
 #include "esp_log.h"
 #include "esp_random.h"
-#include "mbedtls/sha256.h"
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>

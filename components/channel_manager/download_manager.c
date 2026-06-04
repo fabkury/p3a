@@ -35,7 +35,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
-#include "mbedtls/sha256.h"
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
@@ -166,7 +165,8 @@ static char s_build_storage_key[40];
 /**
  * @brief Build vault filepath for an entry
  *
- * Uses SHA256 sharding: {vault}/{sha[0]}/{sha[1]}/{sha[2]}/{storage_key}.{ext}
+ * Uses hash sharding: {vault}/{d0}/{d1}/{storage_key}.{ext}
+ * (see sd_path_build_sharded())
  */
 static void dl_build_vault_filepath(const makapix_channel_entry_t *entry,
                                     char *out, size_t out_len)

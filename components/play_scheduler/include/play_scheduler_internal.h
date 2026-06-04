@@ -394,8 +394,8 @@ void ps_prng_seed(uint64_t *state, uint64_t seed);
 /**
  * @brief Build vault filepath for an entry
  *
- * Uses SHA256 sharding: {vault}/{sha[0]}/{sha[1]}/{sha[2]}/{storage_key}.{ext}
- * Implemented in play_scheduler_pick.c
+ * Uses hash sharding: {vault}/{d0}/{d1}/{storage_key}.{ext}
+ * (see sd_path_build_sharded()). Implemented in play_scheduler_pick.c
  */
 void ps_build_vault_filepath(const makapix_channel_entry_t *entry,
                               char *out, size_t out_len);

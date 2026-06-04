@@ -172,7 +172,8 @@ static void ps_build_sdcard_filepath(const sdcard_index_entry_t *entry,
 /**
  * @brief Build filepath for a Makapix entry
  *
- * Uses SHA256 sharding: {vault}/{sha[0]}/{sha[1]}/{sha[2]}/{storage_key}.{ext}
+ * Uses hash sharding: {vault}/{d0}/{d1}/{storage_key}.{ext}
+ * (see sd_path_build_sharded())
  */
 void ps_build_vault_filepath(const makapix_channel_entry_t *entry,
                               char *out, size_t out_len)

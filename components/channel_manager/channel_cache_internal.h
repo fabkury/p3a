@@ -42,9 +42,9 @@ void lai_sort_by_created_at_desc(channel_cache_t *cache);
 /**
  * @brief Build vault file path for a Makapix-style entry (kind=artwork).
  *
- * Uses the storage_key_uuid + SHA256 sharding scheme (SD_SHARD_DEPTH levels,
+ * Uses the storage_key_uuid + hash sharding scheme (SD_SHARD_DEPTH levels,
  * built via makapix_build_vault_path() -> sd_path_build_sharded()):
- *   {vault_path}/{sha[0]}/.../{sha[SD_SHARD_DEPTH-1]}/{storage_key}.{ext}
+ *   {vault_path}/{d0}/{d1}/{storage_key}.{ext}
  *
  * Caller is responsible for filtering on entry->kind == artwork; passing a
  * playlist entry will produce a path derived from a zeroed UUID.

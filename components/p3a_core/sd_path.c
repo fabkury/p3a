@@ -9,14 +9,14 @@
 #include "sd_path.h"
 #include "config_store.h"
 #include "esp_log.h"
-#include "mbedtls/sha256.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <sys/stat.h>
 #include <errno.h>
 
-_Static_assert(SD_SHARD_DEPTH >= 1 && SD_SHARD_DEPTH <= 32,
-               "SD_SHARD_DEPTH must be between 1 and the 32-byte SHA256 width");
+_Static_assert(SD_SHARD_DEPTH >= 1 && SD_SHARD_DEPTH <= 8,
+               "SD_SHARD_DEPTH must fit within the 8 bytes of the 64-bit shard hash");
 
 static const char *TAG = "sd_path";
 
@@ -249,56 +249,94 @@ esp_err_t sd_path_ensure_parent_dirs(const char *filepath)
     return ESP_OK;
 }
 
+/**
+ * Map one filename character to its FAT-safe form. Single source of truth
+ * for both sd_path_sanitize_filename() and the shard hash / leaf emission
+ * in sd_path_build_sharded() — the two must never disagree, because the
+ * shard directories are derived from the hash of the sanitized leaf name.
+ */
+static inline char sanitize_char(char c)
+{
+    switch (c) {
+        case ':': case '/': case '\\': case '?': case '*':
+        case '"': case '<': case '>': case '|':
+            return '_';
+        default:
+            return c;
+    }
+}
+
+/**
+ * 64-bit FNV-1a over the SANITIZED leaf name, finished with fmix64
+ * (MurmurHash3's avalanche mix) so every byte of the result is uniformly
+ * distributed even for short or similar keys.
+ *
+ * v1.0 ON-DISK FORMAT: these constants define where every cached file
+ * lives. Never change them — see the SD_SHARD_DEPTH contract in sd_path.h.
+ */
+static uint64_t shard_hash(const char *s)
+{
+    uint64_t h = 0xcbf29ce484222325ULL;             /* FNV offset basis */
+    for (const char *p = s; *p; p++) {
+        h ^= (uint8_t)sanitize_char(*p);
+        h *= 0x100000001b3ULL;                      /* FNV prime */
+    }
+    h ^= h >> 33;                                   /* fmix64 */
+    h *= 0xff51afd7ed558ccdULL;
+    h ^= h >> 33;
+    h *= 0xc4ceb9fe1a85ec53ULL;
+    h ^= h >> 33;
+    return h;
+}
+
 void sd_path_sanitize_filename(const char *in, char *out, size_t out_len)
 {
     if (!out || out_len == 0) return;
     if (!in) { out[0] = '\0'; return; }
     size_t o = 0;
     for (size_t i = 0; in[i] && o + 1 < out_len; i++) {
-        unsigned char c = (unsigned char)in[i];
-        switch (c) {
-            case ':': case '/': case '\\': case '?': case '*':
-            case '"': case '<': case '>': case '|':
-                out[o++] = '_';
-                break;
-            default:
-                out[o++] = (char)c;
-                break;
-        }
+        out[o++] = sanitize_char(in[i]);
     }
     out[o] = '\0';
 }
 
-esp_err_t sd_path_build_sharded(const char *base, const char *hash_key,
-                                const char *leaf_name, const char *ext,
+esp_err_t sd_path_build_sharded(const char *base, const char *leaf_name,
+                                const char *ext,
                                 char *out_path, size_t out_len)
 {
-    if (!base || !hash_key || !leaf_name || !out_path || out_len == 0) {
+    if (!base || !leaf_name || leaf_name[0] == '\0' || !out_path || out_len == 0) {
         return ESP_ERR_INVALID_ARG;
     }
     if (!ext) ext = "";
 
-    uint8_t sha[32];
-    if (mbedtls_sha256((const unsigned char *)hash_key, strlen(hash_key), sha, 0) != 0) {
-        ESP_LOGE(TAG, "SHA256 failed for key '%s'", hash_key);
-        return ESP_FAIL;
-    }
+    uint64_t hash = shard_hash(leaf_name);
 
-    // Emit "{base}", then one "/{byte:02x}" per shard level, then "/{leaf}{ext}".
-    // The loop (not a literal "%02x/%02x/%02x") is what makes SD_SHARD_DEPTH the
-    // single knob that drives the layout.
+    // Emit "{base}", then one "/{dir}" per shard level (decimal 0..63 from
+    // the low 6 bits of each successive hash byte), then the sanitized
+    // leaf and the extension. The loop (not a literal "%u/%u") is what
+    // makes SD_SHARD_DEPTH the single knob that drives the layout.
     size_t pos = 0;
     int n = snprintf(out_path, out_len, "%s", base);
     if (n < 0 || (size_t)n >= out_len) return ESP_ERR_INVALID_SIZE;
     pos = (size_t)n;
 
     for (int i = 0; i < SD_SHARD_DEPTH; i++) {
-        n = snprintf(out_path + pos, out_len - pos, "/%02x", (unsigned int)sha[i]);
+        unsigned int dir = (unsigned int)((hash >> (8 * i)) & SD_SHARD_MASK);
+        n = snprintf(out_path + pos, out_len - pos, "/%u", dir);
         if (n < 0 || (size_t)n >= out_len - pos) return ESP_ERR_INVALID_SIZE;
         pos += (size_t)n;
     }
 
-    n = snprintf(out_path + pos, out_len - pos, "/%s%s", leaf_name, ext);
+    // Leaf: sanitized char-by-char with the same mapping the hash consumed,
+    // so the shard location stays re-derivable from the on-disk name.
+    if (pos + 1 >= out_len) return ESP_ERR_INVALID_SIZE;
+    out_path[pos++] = '/';
+    for (const char *p = leaf_name; *p; p++) {
+        if (pos + 1 >= out_len) return ESP_ERR_INVALID_SIZE;
+        out_path[pos++] = sanitize_char(*p);
+    }
+
+    n = snprintf(out_path + pos, out_len - pos, "%s", ext);
     if (n < 0 || (size_t)n >= out_len - pos) return ESP_ERR_INVALID_SIZE;
 
     return ESP_OK;

@@ -56,7 +56,7 @@ esp_err_t giphy_build_filepath(const char *giphy_id, uint8_t extension,
     }
 
     int ext_idx = (extension <= 1) ? extension : 0;
-    return sd_path_build_sharded(giphy_base, giphy_id, giphy_id,
+    return sd_path_build_sharded(giphy_base, giphy_id,
                                  s_giphy_ext_strings[ext_idx], out_path, out_len);
 }
 

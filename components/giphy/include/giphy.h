@@ -126,9 +126,10 @@ esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
 /**
  * @brief Build filepath for a Giphy artwork on SD card
  *
- * Path format: /sdcard/p3a/giphy/{sha[0]}/.../{sha[SD_SHARD_DEPTH-1]}/{giphy_id}.{ext}
- * where sha = SHA256(giphy_id). Built via the shared sd_path_build_sharded()
- * helper, so the shard depth (SD_SHARD_DEPTH) lives in one place.
+ * Path format: /sdcard/p3a/giphy/{d0}/{d1}/{giphy_id}.{ext}
+ * where the d_i are the 6-bit decimal shard dirs derived from the giphy_id.
+ * Built via the shared sd_path_build_sharded() helper, so the shard scheme
+ * (SD_SHARD_DEPTH / SD_SHARD_MASK) lives in one place.
  *
  * @param giphy_id Giphy string ID
  * @param extension Extension index (0=webp, 1=gif)

@@ -55,10 +55,10 @@ All p3a data is stored under a configurable root folder (`/sdcard/p3a` by defaul
 ```
 /sdcard/p3a/
 ├── animations/                 # Local animation files (WebP, GIF, PNG, JPEG)
-├── vault/                      # Cached artwork from Makapix (3-level SHA256-sharded: aa/bb/cc/<storage_key>.<ext>)
-├── giphy/                      # Cached Giphy GIFs (3-level SHA256-sharded)
+├── vault/                      # Cached artwork from Makapix (hash-sharded: {0..63}/{0..63}/<storage_key>.<ext>)
+├── giphy/                      # Cached Giphy GIFs (hash-sharded)
 ├── museum/                     # Cached museum (IIIF) artwork, partitioned per museum
-│   ├── artic/                  #   Art Institute of Chicago (3-level SHA256-sharded: aa/bb/cc/<iiif_key>.<ext>)
+│   ├── artic/                  #   Art Institute of Chicago (hash-sharded: {0..63}/{0..63}/<iiif_key>.<ext>)
 │   ├── rijks/                  #   Rijksmuseum
 │   ├── vam/                    #   Victoria and Albert Museum
 │   ├── wellcome/               #   Wellcome Collection
@@ -73,7 +73,7 @@ All p3a data is stored under a configurable root folder (`/sdcard/p3a` by defaul
 
 ### Vault Storage
 
-- **Layout**: `/sdcard/p3a/vault/aa/bb/cc/<storage_key>.<ext>` (`SD_SHARD_DEPTH`-level shard from the first bytes of the SHA256 of the storage key; the filename is the storage key UUID). Path construction is centralized in `sd_path_build_sharded()` (`p3a_core`).
+- **Layout** (v1.0 on-disk contract): `/sdcard/p3a/vault/{d0}/{d1}/<storage_key>.<ext>` — `SD_SHARD_DEPTH` (2) shard levels named in decimal `0`–`63`, where `d_i` = bits `[8i, 8i+5]` (byte `i` masked to `SD_SHARD_MASK` = 6 bits) of the 64-bit FNV-1a hash (fmix64-finalized) of the FAT-sanitized leaf filename. The filename is the storage key UUID; because the hash input is the sanitized filename itself, a file's shard location is always re-derivable from its name. Path construction is centralized in `sd_path_build_sharded()` (`p3a_core`). Pre-1.0 firmware used a 3-level SHA256 shard (`aa/bb/cc/`); those trees are orphaned in place and can be deleted manually.
 - **Sidecar**: `.404` markers indicate prior failed downloads (placed next to where the asset would have lived). Per-channel JSON metadata files live in `/sdcard/p3a/channel/{channel_id}.json`, not in the vault.
 - **Atomic writes**: `.tmp` + `fsync` + `rename`
 

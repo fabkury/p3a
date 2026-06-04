@@ -120,7 +120,7 @@ p3a/
 │   │   ├── makapix_channel_utils.c      # Makapix channel utilities
 │   │   ├── makapix_channel_internal.h
 │   │   ├── channel_cache.c              # Channel cache
-│   │   ├── channel_cache_ops.c          # Vault path / per-asset cache ops (3-level SHA256 sharding)
+│   │   ├── channel_cache_ops.c          # Vault path / per-asset cache ops (2-level hash sharding)
 │   │   ├── channel_cache_merge.c        # Cache merge logic
 │   │   ├── channel_cache_internal.h
 │   │   ├── channel_metadata.c           # Per-channel metadata
@@ -181,7 +181,7 @@ p3a/
 │   │
 │   ├── giphy/                           # Giphy API integration
 │   │   ├── giphy_api.c                  # API calls
-│   │   ├── giphy_cache.c                # SD card cache (3-level SHA256-sharded)
+│   │   ├── giphy_cache.c                # SD card cache (2-level hash-sharded)
 │   │   ├── giphy_download.c             # Download with atomic writes
 │   │   ├── giphy_refresh.c              # Periodic refresh
 │   │   ├── include/

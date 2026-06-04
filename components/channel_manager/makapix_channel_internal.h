@@ -102,7 +102,7 @@ bool uuid_to_bytes(const char *uuid_str, uint8_t *out_bytes);
 void bytes_to_uuid(const uint8_t *bytes, char *out, size_t out_len);
 
 /**
- * @brief Compute SHA256(storage_key) for Makapix vault sharding
+ * @brief Compute SHA256(storage_key) for the Makapix server's URL shard
  */
 esp_err_t storage_key_sha256(const char *storage_key, uint8_t out_sha256[32]);
 

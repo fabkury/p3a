@@ -63,7 +63,7 @@ All 25 custom components live under `components/`. This document describes each 
   - `playlist_manager.h` — playlist management
   - `channel_cache.h` — channel cache
 - **Key files**: `sdcard_channel.c`, `sdcard_channel_impl.c`, `makapix_channel_impl.c`, `makapix_channel_events.c`, `makapix_channel_refresh.c`, `makapix_channel_utils.c`, `channel_cache.c`, `channel_cache_ops.c`, `channel_cache_merge.c`, `channel_metadata.c`, `channel_settings.c`, `download_manager.c`, `playlist_manager.c`
-- **Vault sharding**: 3-level shard (`SD_SHARD_DEPTH`) derived from the first SHA256 bytes of the storage key, e.g. `/sdcard/p3a/vault/aa/bb/cc/<storage_key>.<ext>`. All vault/giphy/museum local path-building is centralized in `sd_path_build_sharded()` (`p3a_core/sd_path.c`), with the Makapix family wrapper `makapix_build_vault_path()` in `makapix_channel_utils.c`. The Makapix server's `/api/vault/` URL shard is a **separate** constant — `MAKAPIX_REMOTE_SHARD_DEPTH` (`makapix_build_remote_shard()`) — because it mirrors a server contract, not the local disk layout.
+- **Vault sharding**: 2-level shard (`SD_SHARD_DEPTH`) of 6 bits each (decimal dirs `0`–`63`), derived from the first two bytes of the FNV-1a-64+fmix64 hash of the sanitized leaf filename, e.g. `/sdcard/p3a/vault/{d0}/{d1}/<storage_key>.<ext>`. All vault/giphy/museum local path-building is centralized in `sd_path_build_sharded()` (`p3a_core/sd_path.c`), with the Makapix family wrapper `makapix_build_vault_path()` in `makapix_channel_utils.c`. The Makapix server's `/api/vault/` URL shard is a **separate**, SHA256-based constant — `MAKAPIX_REMOTE_SHARD_DEPTH` (`makapix_build_remote_shard()`) — because it mirrors a server contract, not the local disk layout.
 - **Kconfig**: `CHANNEL_MANAGER_PAGE_SIZE` (default 32)
 
 ## 6. wifi_manager — Connectivity
@@ -105,7 +105,7 @@ All 25 custom components live under `components/`. This document describes each 
 - **Key files**: `giphy_api.c`, `giphy_cache.c`, `giphy_download.c`, `giphy_refresh.c`
 - **Features**:
   - Fetches trending GIFs via the Giphy API (paginated, up to cache size)
-  - SHA256-sharded file storage on SD card (`/sdcard/p3a/giphy/`)
+  - Hash-sharded file storage on SD card (`/sdcard/p3a/giphy/`)
   - Configurable rendition, format (WebP/GIF), content rating, refresh interval, and cache size
   - Periodic automatic refresh of trending content
   - On-demand download with atomic writes (temp file + rename)
@@ -120,7 +120,7 @@ All 25 custom components live under `components/`. This document describes each 
 - **Architecture**:
   - **Browser side** owns browse (museum → axis → term selection); each museum has a matching JS adapter under `webui/museum/`. The browser talks directly to museum APIs over CORS.
   - **Device side** owns refresh, IIIF download, and playback. Each museum exposes the same C dispatch shape: `refresh_channel`, `build_iiif_url`, and optional `resolve_entry` (for museums like Rijks that require a multi-hop Linked-Art walk to discover the image id).
-- **Storage**: Cached images live at `/sdcard/p3a/museum/{museum_id}/{sha[0]}/{sha[1]}/{sha[2]}/{iiif_key}.{ext}`. The vault is shared across all channels of the same museum, so an artwork that belongs to several facets is only stored once.
+- **Storage**: Cached images live at `/sdcard/p3a/museum/{museum_id}/{d0}/{d1}/{iiif_key}.{ext}` (6-bit decimal shard dirs — see `sd_path_build_sharded()`). The vault is shared across all channels of the same museum, so an artwork that belongs to several facets is only stored once.
 - **Rate limiting**: A per-museum cooldown table is shared between the device's refresh dispatcher, the download manager, and the browser's browse modal. Browser-issued 429s are reported back to the device via `POST /api/museum/rate-limits/report-429` so the per-IP budget stays consistent. The browse modal reads `GET /api/museum/rate-limits` before triggering term-count probes.
 - **Settings**: Two global NVS keys, `ai_refresh_sec` (default 86 400 s — 1 day) and `ai_cache_size` (default 1024 entries per channel), surface in the **Museum** tab of the settings page. Per-museum BYOK keys live in the same tab: `ham_api_key` (Harvard Art Museums) and `si_api_key` (Smithsonian, via api.data.gov). For both: no key is shipped, refresh is a no-op until the user enters one, and clearing the key dormants the refresh path without dropping the channel.
 - **Storage eviction**: Museum vault files are reclaimed by the existing `storage_eviction` component alongside the Makapix vault and Giphy cache (see component 17).

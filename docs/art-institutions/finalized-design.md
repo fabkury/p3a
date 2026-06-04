@@ -187,11 +187,14 @@ The 48-byte `iiif_key` covers every Tier-1 museum surveyed:
 Files land at:
 
 ```
-/sdcard/p3a/museum/{museum_id}/{sha[0]}/{sha[1]}/{sha[2]}/{iiif_key}.{ext}
+/sdcard/p3a/museum/{museum_id}/{d0}/{d1}/{iiif_key}.{ext}
 ```
 
-The shard prefix uses `SHA256(iiif_key)` for filesystem fan-out — same
-convention as Makapix's vault and Giphy's cache.
+The shard prefix uses the shared `sd_path_build_sharded()` hash scheme
+(FNV-1a-64 of the sanitized iiif_key, 6-bit decimal dirs) for filesystem
+fan-out — same convention as Makapix's vault and Giphy's cache. (This doc
+originally specified `SHA256(iiif_key)` with 3 hex levels; the shard scheme
+changed globally for v1.0.)
 
 The vault is **per-museum and shared across channels**. A given
 artwork — e.g. a Picasso painting that appears in `departments:Modern
@@ -239,8 +242,8 @@ Integration:
 
 The museum vault has an extra `{museum_id}` segment at the top compared
 to the vault and giphy layouts, so a single `evict_from_base_dir` call
-on `/sdcard/p3a/museum/` would not reach the SHA-sharded leaves. The
-wrapper is small (≈10 lines) and reuses the SHA-sharded walker per
+on `/sdcard/p3a/museum/` would not reach the hash-sharded leaves. The
+wrapper is small (≈10 lines) and reuses the hash-sharded walker per
 museum_id.
 
 **Channel cache file cleanup** is already handled by

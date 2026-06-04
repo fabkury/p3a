@@ -221,15 +221,12 @@ esp_err_t art_institution_build_vault_path(const char *museum_id,
         default: ext = ".jpg";  break;
     }
 
-    // institution_channel_entry_t.iiif_key is 48 bytes; sanitized form is
-    // length-preserving (one-byte → one-byte substitution). The shard is hashed
-    // from the UN-sanitized iiif_key so the directories stay stable regardless
-    // of which characters the sanitizer touches, while the leaf uses the safe
-    // form.
-    char safe_name[sizeof(entry->iiif_key)];
-    sd_path_sanitize_filename(entry->iiif_key, safe_name, sizeof(safe_name));
-
-    return sd_path_build_sharded(base, entry->iiif_key, safe_name, ext,
+    // iiif_key is stored in canonical (un-sanitized) form; the shared builder
+    // sanitizes it for FAT internally (HAM's URN-shaped keys carry colons that
+    // land on disk as '_') and derives the shard directories from that
+    // sanitized leaf, so the on-disk location is always re-derivable from the
+    // filename alone.
+    return sd_path_build_sharded(base, entry->iiif_key, ext,
                                  out_path, out_len);
 }
 

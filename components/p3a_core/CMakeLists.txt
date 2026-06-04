@@ -28,5 +28,4 @@ idf_component_register(
         event_bus
     PRIV_REQUIRES
         json
-        mbedtls
 )

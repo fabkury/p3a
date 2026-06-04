@@ -143,7 +143,7 @@ esp_err_t makapix_build_vault_path(const char *vault_base, const char *storage_k
 {
     if (!vault_base || !storage_key) return ESP_ERR_INVALID_ARG;
     const char *ext = s_ext_strings[(ext_index <= EXT_JPEG) ? ext_index : EXT_WEBP];
-    return sd_path_build_sharded(vault_base, storage_key, storage_key, ext, out, out_len);
+    return sd_path_build_sharded(vault_base, storage_key, ext, out, out_len);
 }
 
 esp_err_t makapix_build_remote_shard(const char *storage_key, char *out, size_t out_len)

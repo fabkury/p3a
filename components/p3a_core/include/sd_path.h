@@ -33,23 +33,39 @@ extern "C" {
 #define SD_PATH_ROOT_MAX_LEN 64
 
 /**
- * @brief Number of SHA256 bytes used for SD-card directory sharding
+ * @brief Number of shard directory levels used for SD-card cache fan-out
  *
  * Sharded caches (vault, giphy, museum) store files under
- *   {base}/{sha[0]}/.../{sha[SD_SHARD_DEPTH-1]}/{name}.{ext}
- * where sha = SHA256(key). This is the single source of truth for the local
- * shard depth; sd_path_build_sharded() and the eviction tree-walker
- * (storage_eviction.c) both derive their behavior from it.
+ *   {base}/{d0}/{d1}/{name}{ext}
+ * where d_i = (shard_hash >> (8*i)) & SD_SHARD_MASK, rendered in DECIMAL
+ * (directory names "0".."63"). shard_hash is a 64-bit FNV-1a over the
+ * SANITIZED leaf filename (see sd_path_sanitize_filename()), finished with
+ * the fmix64 avalanche mix — exact constants live in sd_path.c. Because the
+ * hash input is the sanitized leaf name as it lands on disk, a cached
+ * file's shard location is always re-derivable from its filename alone.
  *
- * WARNING: changing this value re-homes every already-cached file. The new
- * firmware would compute different paths, fail to find existing files, and
- * re-download everything; the old files would be orphaned (the eviction
- * walker would no longer descend to them). Do NOT change this without a
- * one-time on-disk migration that renames files from the old layout to the
- * new one. The Makapix server URL shard is a SEPARATE constant
- * (MAKAPIX_REMOTE_SHARD_DEPTH) and is not affected by this value.
+ * This layout is the v1.0 ON-DISK FORMAT CONTRACT. The hash constants, the
+ * 6-bit mask, the decimal directory names, and the depth are all frozen:
+ * changing any of them re-homes every already-cached file (the firmware
+ * would compute different paths, re-download everything, and orphan the
+ * old files where the eviction walker no longer finds them). Pre-1.0
+ * firmware used a 3-level SHA256-based layout; those trees are deliberately
+ * orphaned in place and may be deleted manually. The Makapix server URL
+ * shard is a SEPARATE constant (MAKAPIX_REMOTE_SHARD_DEPTH, SHA256-based
+ * server contract) and is not affected by this value.
+ *
+ * This is the single source of truth for the local shard depth;
+ * sd_path_build_sharded() and the eviction tree-walker (storage_eviction.c)
+ * both derive their behavior from it.
  */
-#define SD_SHARD_DEPTH 3
+#define SD_SHARD_DEPTH 2
+
+/**
+ * @brief Bit mask applied to each shard hash byte (6 bits -> 64 dirs/level)
+ *
+ * Part of the v1.0 on-disk contract — see SD_SHARD_DEPTH.
+ */
+#define SD_SHARD_MASK 0x3F
 
 /**
  * @brief Initialize the SD path module
@@ -136,7 +152,7 @@ esp_err_t sd_path_get_giphy(char *out_path, size_t out_len);
  * @brief Get the museum directory path (for art-institution artwork cache)
  *
  * The institution vault is sharded per museum:
- *   /sdcard/p3a/museum/{museum_id}/{sha[0]}/.../{sha[SD_SHARD_DEPTH-1]}/{iiif_key}.{ext}
+ *   /sdcard/p3a/museum/{museum_id}/{d0}/{d1}/{iiif_key}.{ext}
  * This helper returns the common parent /sdcard/p3a/museum.
  *
  * @param out_path Output buffer for the path
@@ -209,10 +225,11 @@ esp_err_t sd_path_ensure_parent_dirs(const char *filepath);
  * before the identifier can land on disk as a filename component.
  *
  * The substitution is length-preserving (one-byte → one-byte) and
- * idempotent, so it is safe to apply unconditionally. SHA-shard
- * computations should be performed against the un-sanitized identifier
- * so the shard tree stays stable regardless of what the sanitizer does
- * to the leaf name.
+ * idempotent, so it is safe to apply unconditionally.
+ * sd_path_build_sharded() applies the same per-character mapping
+ * internally to both the shard-hash input and the emitted leaf name, so
+ * callers that pre-sanitize and callers that pass raw identifiers
+ * produce the same on-disk path.
  *
  * Silently truncates if `out_len` is smaller than the input; callers
  * that need length-checking should size `out_len ≥ strlen(in) + 1`.
@@ -224,42 +241,37 @@ esp_err_t sd_path_ensure_parent_dirs(const char *filepath);
 void sd_path_sanitize_filename(const char *in, char *out, size_t out_len);
 
 /**
- * @brief Build a SHA256-sharded SD-card path
+ * @brief Build a hash-sharded SD-card path (v1.0 on-disk layout)
  *
  * Produces:
- *   {base}/{sha[0]:02x}/.../{sha[SD_SHARD_DEPTH-1]:02x}/{leaf_name}{ext}
- * where sha = SHA256(hash_key). The number of shard levels is SD_SHARD_DEPTH.
+ *   {base}/{d0}/{d1}/{sanitized leaf_name}{ext}    (SD_SHARD_DEPTH levels)
+ * where d_i = (shard_hash >> (8*i)) & SD_SHARD_MASK rendered in decimal
+ * ("0".."63"), and shard_hash is a 64-bit FNV-1a + fmix64 over the
+ * SANITIZED leaf name. The same sanitized form is emitted as the filename,
+ * so a cached file's shard location is always re-derivable from its
+ * on-disk name alone. The extension is NOT part of the hash input.
  *
  * This is the single place the local shard layout is constructed; every
  * vault/giphy/museum path builder routes through it so writers and readers
- * can never disagree on the on-disk layout, and a future depth change is a
- * one-line edit to SD_SHARD_DEPTH.
+ * can never disagree on the on-disk layout.
  *
- * `hash_key` and `leaf_name` are usually the same string. They differ only
- * when the filesystem-safe filename is not the value that should seed the
- * shard — e.g. the museum vault hashes the un-sanitized iiif_key but names
- * the file with the sanitized form, so the shard tree stays stable
- * regardless of what the sanitizer does to the leaf.
- *
- * `ext` is appended verbatim to `leaf_name`; pass it including the leading
- * dot (e.g. ".webp") or "" for none.
- *
- * On SHA256 failure this writes nothing and returns ESP_FAIL (the failure is
- * effectively unreachable for a non-empty key; there is no flat-path
- * fallback — callers treat an error as "no path").
+ * Callers may pass `leaf_name` raw (e.g. a museum iiif_key with colons) or
+ * pre-sanitized — sanitization is idempotent, so both produce the same
+ * path. `ext` is appended verbatim; pass it including the leading dot
+ * (e.g. ".webp") or "" for none.
  *
  * @param base      Base directory (e.g. "/sdcard/p3a/vault" or
  *                  "/sdcard/p3a/museum/{museum_id}")
- * @param hash_key  String hashed to derive the shard directories
- * @param leaf_name Filename stem (without extension)
+ * @param leaf_name Filename stem (without extension); sanitized internally
+ *                  and hashed to derive the shard directories
  * @param ext       Extension including the dot, or "" for none
  * @param out_path  Output buffer for the full path
  * @param out_len   Size of output buffer
- * @return ESP_OK on success, ESP_ERR_INVALID_ARG on null args,
- *         ESP_ERR_INVALID_SIZE if the buffer is too small, ESP_FAIL on hash error
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG on null args or empty
+ *         leaf_name, ESP_ERR_INVALID_SIZE if the buffer is too small
  */
-esp_err_t sd_path_build_sharded(const char *base, const char *hash_key,
-                                const char *leaf_name, const char *ext,
+esp_err_t sd_path_build_sharded(const char *base, const char *leaf_name,
+                                const char *ext,
                                 char *out_path, size_t out_len);
 
 #ifdef __cplusplus

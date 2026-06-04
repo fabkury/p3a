@@ -226,7 +226,7 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 | Slave FW | — | 2 MB | ESP32-C6 co-processor firmware |
 | **SD Card** | `/sdcard` | — | All artwork storage |
 
-SD card layout: `/sdcard/p3a/animations/` (local files), `/sdcard/p3a/vault/` (Makapix cache, SHA256-sharded), `/sdcard/p3a/giphy/` (Giphy cache), `/sdcard/p3a/museum/{museum_id}/` (museum IIIF cache, SHA256-sharded per museum).
+SD card layout: `/sdcard/p3a/animations/` (local files), `/sdcard/p3a/vault/` (Makapix cache, hash-sharded), `/sdcard/p3a/giphy/` (Giphy cache), `/sdcard/p3a/museum/{museum_id}/` (museum IIIF cache, hash-sharded per museum).
 
 ---
 

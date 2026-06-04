@@ -181,11 +181,12 @@ esp_err_t art_institution_refresh_by_spec(const char *channel_id,
 /**
  * @brief Build the SD-card vault path for one entry
  *
- * Layout: /sdcard/p3a/museum/{museum_id}/{sha[0]}/.../{sha[SD_SHARD_DEPTH-1]}/{iiif_key}.{ext}
+ * Layout: /sdcard/p3a/museum/{museum_id}/{d0}/{d1}/{iiif_key}.{ext}
  *
- * SHA256 is computed over the iiif_key string for filesystem fan-out, matching
- * the vault and giphy conventions; built via the shared sd_path_build_sharded()
- * helper (shard depth = SD_SHARD_DEPTH).
+ * The d_i are the 6-bit decimal shard dirs derived from the sanitized
+ * iiif_key, matching the vault and giphy conventions; built via the shared
+ * sd_path_build_sharded() helper (depth = SD_SHARD_DEPTH), which also
+ * FAT-sanitizes the leaf filename.
  *
  * @param museum_id  Stable wire id
  * @param entry      Cache entry; iiif_key and extension are read

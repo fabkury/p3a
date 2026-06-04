@@ -101,13 +101,13 @@ esp_err_t storage_eviction_get_storage_info(uint64_t *out_total_bytes, uint64_t 
 }
 
 /* --------------------------------------------------------------------- */
-/*  Leaf-directory scanner (3-level SHA256 sharding)                      */
+/*  Leaf-directory scanner (SD_SHARD_DEPTH-level hash sharding)           */
 /* --------------------------------------------------------------------- */
 
 /**
  * @brief Scan a single leaf directory and delete old artwork files
  *
- * @param leaf_path  Full path to the leaf directory (e.g. vault/aa/bb/cc)
+ * @param leaf_path  Full path to the leaf directory (e.g. vault/12/63)
  * @param cutoff     Files with mtime < cutoff are eligible for deletion
  * @param stats      Running totals (updated in place)
  */
@@ -179,9 +179,14 @@ static void evict_shard_tree(const char *dir, int levels, time_t cutoff, evict_s
 }
 
 /**
- * @brief Walk a SHA256-sharded base directory and evict old files
+ * @brief Walk a hash-sharded base directory and evict old files
  *
- * Directory structure: {base}/{xx}/{yy}/{zz}/{file} for SD_SHARD_DEPTH == 3.
+ * Directory structure: {base}/{d0}/{d1}/{file} for SD_SHARD_DEPTH == 2.
+ *
+ * Pre-1.0 firmware sharded three levels deep (SHA256-based); those orphaned
+ * trees coexist harmlessly — at the new leaf depth they contain only
+ * subdirectories, which the artwork-extension filter skips, so their files
+ * are never reached (nor reclaimed; users delete the old trees manually).
  */
 static void evict_from_base_dir(const char *base_path, time_t cutoff, evict_stats_t *stats)
 {
@@ -192,9 +197,9 @@ static void evict_from_base_dir(const char *base_path, time_t cutoff, evict_stat
  * @brief Walk a museum-rooted base directory and evict old files
  *
  * Museum vault layout has an extra museum_id segment at the top:
- *   /sdcard/p3a/museum/{museum_id}/{xx}/{yy}/{zz}/{file}
- * The existing evict_from_base_dir() walks SD_SHARD_DEPTH levels of SHA shards;
- * we just delegate to it once per museum_id directory found here.
+ *   /sdcard/p3a/museum/{museum_id}/{d0}/{d1}/{file}
+ * The existing evict_from_base_dir() walks SD_SHARD_DEPTH levels of shard
+ * dirs; we just delegate to it once per museum_id directory found here.
  */
 static void evict_museum_root(const char *base_path, time_t cutoff, evict_stats_t *stats)
 {

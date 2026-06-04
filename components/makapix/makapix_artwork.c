@@ -3,7 +3,7 @@
 
 /**
  * @file makapix_artwork.c
- * @brief Makapix artwork HTTP download to vault with SHA256-sharded storage
+ * @brief Makapix artwork HTTP download to vault with hash-sharded storage
  */
 
 #include "makapix_artwork.h"
@@ -138,7 +138,7 @@ esp_err_t makapix_artwork_download_with_progress(const char *art_url, const char
         return ESP_FAIL;
     }
 
-    // Build the sharded vault path (/vault/aa/bb/cc/<storage_key>.<ext>) and
+    // Build the sharded vault path (/vault/{d0}/{d1}/<storage_key>.<ext>) and
     // create its parent directories. detect_extension_from_url picks the ext.
     int ext_idx = detect_extension_from_url(art_url);
     if (makapix_build_vault_path(vault_base, storage_key, (uint8_t)ext_idx,

@@ -102,8 +102,12 @@ typedef struct {
     // `s_playback_initiated` for this same purpose, racing with the LAi
     // 0→1 trigger here; that flag was removed (S2). first_swap_emitted is
     // now the single source of truth, set only inside the mutex-protected
-    // LAi zero-to-one path and inside execute-playset (when an immediately
-    // playable channel exists), and reset only at playset teardown.
+    // LAi first-available path, the refresh-complete paths, and execute-
+    // playset (on a successful immediate pick). It is cleared at playset
+    // teardown, and rolled back by play_scheduler_next()'s failure path
+    // when an optimistically-set first swap failed before anything played
+    // (empty history) — so the first-swap gates re-arm instead of
+    // stranding a cold playset on a status screen.
     //
     // Invariant (S5): at the moment first_swap_emitted is set true, at
     // least one channel must have a downloaded artwork (Σ available_count
@@ -141,9 +145,9 @@ ps_state_t *ps_get_state(void);
  * @brief Verify the first_swap_emitted invariant after a successful trigger
  *
  * Called at each of the four set-sites for `state->first_swap_emitted`
- * (LAi zero-to-one, execute-playset, async-refresh-complete, sync-
- * refresh-complete). Logs ESP_LOGE if total_available is zero when the
- * flag transitions to true. Defense-in-depth (S5): the gating checks at
+ * (LAi first-available add, execute-playset, async-refresh-complete,
+ * sync-refresh-complete). Logs ESP_LOGE if total_available is zero when
+ * the flag transitions to true. Defense-in-depth (S5): the gating checks at
  * each call site already enforce the invariant, this is a tripwire for
  * future refactors.
  *

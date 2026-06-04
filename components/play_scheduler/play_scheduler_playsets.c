@@ -676,18 +676,33 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_
         }
     }
     bool has_entries = has_lai_entries;  // existing name preserved below
-    // Get first channel's display name for UI
+    // Name the channel the background refresh task will service first (same
+    // ordering rule as find_next_pending_refresh: oldest last_refresh, ties
+    // broken by insertion order) so the cold-start status screen narrates the
+    // channel that actually refreshes first instead of blindly channels[0].
+    // Eligibility gates (Wi-Fi, rate limits) are ignored here — this is a
+    // best-effort label and the per-refresh UI pushes correct it within ~2 s.
     if (s_state->channel_count > 0) {
-        ps_channel_state_t *ch0 = &s_state->channels[0];
-        ps_get_display_name_from_spec(ch0->type, ch0->spec_name, ch0->identifier,
-                                      first_channel_display_name, sizeof(first_channel_display_name));
+        size_t first_refresh_idx = 0;
+        for (size_t i = 1; i < s_state->channel_count; i++) {
+            if (s_state->channels[i].last_refresh <
+                s_state->channels[first_refresh_idx].last_refresh) {
+                first_refresh_idx = i;
+            }
+        }
+        strlcpy(first_channel_display_name,
+                s_state->channels[first_refresh_idx].display_name,
+                sizeof(first_channel_display_name));
     }
 
-    // Reset the first-swap flag at the single teardown point — the new
+    // Reset the first-swap flag at the playset teardown point — the new
     // playset starts with no swap emitted yet, regardless of what the old
-    // playset had done. All other touch-points (LAi 0→1, refresh-complete,
-    // immediate execute below) only set the flag to true; only this point
-    // clears it. Audited as part of S3.
+    // playset had done. Set-points (LAi first-available add, refresh-
+    // complete, immediate execute below) only set the flag to true. Besides
+    // this teardown reset, the only other clear is the failure rollback in
+    // play_scheduler_next(): an optimistic set whose pick then failed with
+    // nothing played yet is undone so the first-swap gates re-arm. Audited
+    // as part of S3; rollback added with the cold-start fixes.
     s_state->first_swap_emitted = false;
 
     // Capture the committed playset into s_state so play_scheduler_get_active_playset()
@@ -729,15 +744,19 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_
     // Otherwise, let download manager trigger it when first file is available
     if (has_entries) {
         esp_err_t next_err = play_scheduler_next(NULL);
-        // Set the flag and run the invariant check under the mutex so the
-        // check sees a coherent total_available. The existing single-byte
-        // write outside the mutex was racy with concurrent reads (low
-        // observed harm but the new check would amplify any race), so we
-        // tighten that here too.
-        xSemaphoreTake(s_state->mutex, portMAX_DELAY);
-        s_state->first_swap_emitted = true;
-        ps_assert_first_swap_invariant(s_state, "execute_playset");
-        xSemaphoreGive(s_state->mutex);
+        // Set the flag only when the immediate pick actually succeeded. If
+        // it failed (e.g. every cached LAi file vanished from disk), leaving
+        // the flag false keeps the first-swap gates (LAi add, refresh-
+        // complete) armed so playback recovers as soon as content
+        // materializes. Set under the mutex so the invariant check sees a
+        // coherent total_available (the old single-byte write outside the
+        // mutex was racy with concurrent reads).
+        if (next_err == ESP_OK) {
+            xSemaphoreTake(s_state->mutex, portMAX_DELAY);
+            s_state->first_swap_emitted = true;
+            ps_assert_first_swap_invariant(s_state, "execute_playset");
+            xSemaphoreGive(s_state->mutex);
+        }
         return next_err;
     } else {
         // Distinguish "empty pinned list" (terminal — nothing will load),

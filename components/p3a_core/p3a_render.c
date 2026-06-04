@@ -11,6 +11,7 @@
 #include "p3a_boot_logo.h"
 #include "p3a_board.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
@@ -27,6 +28,9 @@ static struct {
     p3a_channel_msg_type_t channel_msg_type;
     int channel_progress_percent;
     char channel_detail[128];
+    // Message arbitration (see p3a_render_set_channel_message)
+    int64_t channel_msg_changed_us;   // last accepted identity change
+    int64_t channel_msg_updated_us;   // last accepted write (incl. progress)
     
     // Provisioning state
     char prov_status[128];
@@ -82,6 +86,28 @@ static const char *channel_msg_type_to_string(p3a_channel_msg_type_t type)
         case P3A_CHANNEL_MSG_LOADING: return "Loading channel";
         case P3A_CHANNEL_MSG_ERROR: return "Failed to load channel";
         default: return "Unknown";
+    }
+}
+
+// Arbitration tuning for the channel-message slot. A *different* message may
+// replace the current one only after the current one has been visible for
+// MIN_DISPLAY (equal rank), immediately (higher rank), or once the current
+// one has stopped receiving updates for STALE (lower rank — a dead progress
+// bar must not wedge the screen).
+#define CHANNEL_MSG_MIN_DISPLAY_US  (700LL * 1000)
+#define CHANNEL_MSG_STALE_US        (2000LL * 1000)
+
+static int channel_msg_priority(p3a_channel_msg_type_t type)
+{
+    switch (type) {
+        case P3A_CHANNEL_MSG_ERROR:
+        case P3A_CHANNEL_MSG_DOWNLOAD_FAILED:
+        case P3A_CHANNEL_MSG_EMPTY:
+            return 2;   // problem/terminal states must not be lost
+        case P3A_CHANNEL_MSG_DOWNLOADING:
+            return 1;   // live download progress beats generic loading
+        default:
+            return 0;   // LOADING / FETCHING
     }
 }
 
@@ -277,7 +303,53 @@ void p3a_render_set_channel_message(const char *channel_name,
                  p3a_state_get_name(state));
         return;
     }
-    
+
+    // Arbitration: this slot used to be last-writer-wins, and during a cold
+    // playset switch four uncoordinated writers (executor, refresh starts,
+    // download starts/progress, failed picks) made the screen flicker
+    // erratically. Rules:
+    //   - clears (MSG_NONE) always pass — blocking one would leave a stale
+    //     overlay covering a freshly swapped-in artwork;
+    //   - updates to the SAME message (same type + channel) always pass, so
+    //     progress bars stay live;
+    //   - a DIFFERENT message passes if it outranks the current one, or
+    //     after the current one has been shown CHANNEL_MSG_MIN_DISPLAY_US
+    //     (equal rank), or once the current one has gone stale (lower rank).
+    // A NULL channel_name inherits the currently displayed name (existing
+    // semantics of the snprintf guard below), so it compares as same-name.
+    {
+        const char *eff_name = channel_name ? channel_name : s_render.channel_name;
+        bool same_identity =
+            ((p3a_channel_msg_type_t)msg_type == s_render.channel_msg_type) &&
+            (strcmp(eff_name, s_render.channel_name) == 0);
+        int64_t now_us = esp_timer_get_time();
+
+        if (msg_type != P3A_CHANNEL_MSG_NONE) {
+            if (!same_identity && s_render.channel_msg_type != P3A_CHANNEL_MSG_NONE) {
+                int new_prio = channel_msg_priority((p3a_channel_msg_type_t)msg_type);
+                int cur_prio = channel_msg_priority(s_render.channel_msg_type);
+                bool accept;
+                if (new_prio > cur_prio) {
+                    accept = true;
+                } else if (new_prio == cur_prio) {
+                    accept = (now_us - s_render.channel_msg_changed_us) >= CHANNEL_MSG_MIN_DISPLAY_US;
+                } else {
+                    accept = (now_us - s_render.channel_msg_updated_us) >= CHANNEL_MSG_STALE_US;
+                }
+                if (!accept) {
+                    ESP_LOGD(TAG, "Channel message dropped (arbitration): %s - %s",
+                             eff_name,
+                             channel_msg_type_to_string((p3a_channel_msg_type_t)msg_type));
+                    return;
+                }
+            }
+            if (!same_identity) {
+                s_render.channel_msg_changed_us = now_us;
+            }
+            s_render.channel_msg_updated_us = now_us;
+        }
+    }
+
     if (channel_name) {
         snprintf(s_render.channel_name, sizeof(s_render.channel_name), "%s", channel_name);
     }

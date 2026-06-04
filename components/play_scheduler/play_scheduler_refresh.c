@@ -874,7 +874,11 @@ static void refresh_task(void *arg)
                 // skipped because WiFi wasn't ready yet.
                 extern bool animation_player_is_animation_ready(void);
                 char giphy_display_name[64];
-                ps_get_display_name_from_spec(type, spec_name, identifier, giphy_display_name, sizeof(giphy_display_name));
+                // Use the channel's resolved display name (honors a custom
+                // playset display_name) so this push shares identity with the
+                // executor/navigation messages — the render-side arbitration
+                // then dedups same-channel updates instead of flickering.
+                strlcpy(giphy_display_name, display_name, sizeof(giphy_display_name));
                 did_refresh = true;
                 if (!animation_player_is_animation_ready()) {
                     p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_LOADING, -1,

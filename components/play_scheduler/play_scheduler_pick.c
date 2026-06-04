@@ -905,26 +905,44 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
     }
 
     // Try each active channel via configured selection mode
-    for (size_t attempt = 0; attempt < active_count; attempt++) {
+    size_t attempts_left = active_count;
+    bool weights_healed = false;
+    while (attempts_left > 0) {
         int ch_idx = (state->channel_select_mode == PS_CHANNEL_SELECT_STOCHASTIC)
             ? ps_stochastic_select_channel(state)
             : ps_swrr_select_channel(state);
         if (ch_idx < 0) {
-            ESP_LOGW(TAG, "SWRR returned -1 on attempt %zu", attempt);
+            // Live availability says something is playable (active_count > 0
+            // above) yet the selector found no channel with weight > 0: the
+            // weight table is stale relative to availability. Recalculate
+            // once and retry — self-healing guard against any gap in the
+            // weight-recalc lifecycle (this exact mismatch used to strand
+            // cold playset switches on a status screen).
+            if (!weights_healed) {
+                weights_healed = true;
+                ESP_LOGW(TAG, "Selector found no weighted channel despite %zu active; recalculating weights",
+                         active_count);
+                ps_swrr_calculate_weights(state);
+                continue;  // does not consume an attempt
+            }
+            ESP_LOGW(TAG, "Selector returned -1 after weight recalc; giving up");
             break;
         }
 
         // ESP_LOGI(TAG, "SWRR selected channel[%d] '%s' (attempt %zu/%zu)",
-        //          ch_idx, state->channels[ch_idx].channel_id, attempt + 1, active_count);
+        //          ch_idx, state->channels[ch_idx].channel_id,
+        //          active_count - attempts_left + 1, active_count);
 
         if (ps_pick_artwork(state, (size_t)ch_idx, out_artwork)) {
             return true;
         }
         ESP_LOGW(TAG, "Channel[%d] exhausted, trying next", ch_idx);
         // Channel exhausted - SWRR will pick different one next iteration
+        attempts_left--;
     }
 
-    ESP_LOGW(TAG, "PICK FAILED: No available artwork in any channel after %zu attempts", active_count);
+    ESP_LOGW(TAG, "PICK FAILED: No available artwork in any channel after %zu attempts",
+             active_count - attempts_left);
     return false;
 }
 
@@ -933,6 +951,12 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
  *
  * Saves only the fields that ps_pick_next_available() might modify.
  * This is ~1KB instead of copying the entire ps_state_t (~21KB).
+ *
+ * Channel weights are deliberately NOT snapshotted: the self-healing
+ * recalc inside ps_pick_next_available() may rewrite them during a peek,
+ * but ps_swrr_calculate_weights() is a pure function of current
+ * availability, so leaving the corrected values behind is idempotent
+ * (and strictly more correct than restoring stale ones).
  */
 static void ps_save_pick_state(const ps_state_t *state, ps_pick_snapshot_t *snapshot)
 {

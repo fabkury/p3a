@@ -226,6 +226,20 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
         ESP_LOGW(TAG, "No artwork available (cold start or all channels exhausted)");
         result = ESP_ERR_NOT_FOUND;
 
+        // Re-arm the first-swap triggers when the first pick of a playset
+        // fails. The LAi first-available path sets first_swap_emitted
+        // optimistically before emitting SWAP_NEXT (it cannot know the pick
+        // outcome); without this rollback a single failed pick disarms every
+        // remaining first-swap gate (refresh-complete, future LAi adds) and
+        // strands the playset on a status screen until the dwell timer
+        // happens to rescue it. "Nothing has played yet" == empty history:
+        // execute_playset clears history on the no-entries path, and every
+        // successful swap pushes an entry.
+        if (s_state->first_swap_emitted && s_state->history_count == 0) {
+            ESP_LOGW(TAG, "First swap failed before anything played - re-arming first-swap triggers");
+            s_state->first_swap_emitted = false;
+        }
+
         // If a user-initiated swap was in flight (blue triangle showing),
         // turn it red immediately instead of letting it sit for the full
         // 5 s timeout. _if_processing() variant is a no-op when no swap
@@ -265,24 +279,44 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
         } else {
             // Display appropriate message based on state
             // Priority: refresh in progress > downloading > no files
+            //
+            // Name the channel the user is actually waiting on — the one
+            // currently refreshing, else the one currently downloading —
+            // instead of hard-coding channels[0] (which made every cold-start
+            // status screen claim the first channel regardless of activity).
             bool any_refreshing = false;
+            char display_name[64] = "Channel";
+            bool name_set = false;
             for (size_t i = 0; i < s_state->channel_count; i++) {
                 if (s_state->channels[i].refresh_async_pending || s_state->channels[i].refresh_in_progress) {
                     any_refreshing = true;
+                    strlcpy(display_name, s_state->channels[i].display_name, sizeof(display_name));
+                    name_set = true;
                     break;
                 }
+            }
+            if (!name_set) {
+                // Lock-order note: scheduler mutex → download-manager mutex is
+                // the established order (execute_playset holds the scheduler
+                // mutex while configuring the download manager); the converse
+                // never occurs, so this nested call cannot deadlock.
+                char dl_channel_id[64];
+                if (download_manager_get_active_channel(dl_channel_id, sizeof(dl_channel_id))) {
+                    for (size_t i = 0; i < s_state->channel_count; i++) {
+                        if (strcmp(s_state->channels[i].channel_id, dl_channel_id) == 0) {
+                            strlcpy(display_name, s_state->channels[i].display_name, sizeof(display_name));
+                            name_set = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!name_set && s_state->channel_count > 0) {
+                strlcpy(display_name, s_state->channels[0].display_name, sizeof(display_name));
             }
 
             extern void p3a_render_set_channel_message(const char *channel_name, int msg_type,
                                                        int progress_percent, const char *detail);
-
-            // Get display name for first channel
-            char display_name[64] = "Channel";
-            if (s_state->channel_count > 0) {
-                ps_channel_state_t *ch0 = &s_state->channels[0];
-                ps_get_display_name_from_spec(ch0->type, ch0->spec_name, ch0->identifier,
-                                              display_name, sizeof(display_name));
-            }
 
             // Title for the terminal "no playable files" message. Prefer the
             // active playset's name; fall back to the first channel's display

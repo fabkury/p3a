@@ -1010,7 +1010,16 @@ void download_manager_reset_cursors(void)
             s_dl_channels[i].has_wrapped = false;
             s_dl_channels[i].channel_complete = false;
         }
-        s_dl_round_robin_idx = 0;
+        // Deliberately do NOT reset s_dl_round_robin_idx here. This function
+        // runs on every refresh completion; snapping the round-robin back to
+        // channel 0 each time made channel[0] monopolize downloads for the
+        // whole refresh storm of a large playset (e.g. 64 sequential Giphy
+        // refreshes ≈ one reset every ~7 s) while high-index channels
+        // starved. Per-channel cursors must rescan from 0 (a merge can
+        // insert entries anywhere), but fairness across channels survives a
+        // rescan — matching download_manager_rescan(), which also preserves
+        // the index. set_channels() still resets it: a new channel list is a
+        // genuinely new cycle.
         s_all_downloaded_logged = false;
         ESP_LOGI(TAG, "Reset download cursors");
         xSemaphoreGive(s_mutex);

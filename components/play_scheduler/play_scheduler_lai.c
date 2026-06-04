@@ -162,10 +162,10 @@ size_t ps_channel_available_count(const ps_channel_state_t *c)
  * Documented contract: at the moment first_swap_emitted is set true, at
  * least one channel must have a playable artwork
  * (Σ ps_channel_available_count() > 0). This is normally guaranteed by the
- * four call-site gates (LAi zero-to-one, execute-playset with has_lai_entries,
- * async-refresh-complete with ch->active, sync-refresh-complete with
- * ch->active). A regression in any of those would silently start the player
- * against an empty LAi.
+ * four call-site gates (LAi first-available add, execute-playset on a
+ * successful immediate pick, async-refresh-complete with ch->active,
+ * sync-refresh-complete with ch->active). A regression in any of those
+ * would silently start the player against an empty LAi.
  *
  * Caller MUST hold s_state->mutex.
  *
@@ -232,12 +232,6 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
         return;
     }
 
-    // Track if this is a zero-to-one transition
-    size_t prev_total_available = 0;
-    for (size_t i = 0; i < s_state->channel_count; i++) {
-        prev_total_available += ps_channel_available_count(&s_state->channels[i]);
-    }
-
     // Add to LAi
     size_t prev_channel_available = ps_channel_available_count(ch);
     if (ps_lai_add(ch, ci_index)) {
@@ -247,11 +241,30 @@ void play_scheduler_on_download_complete(const char *channel_id, int32_t post_id
                  ch->display_name, (long)post_id, (unsigned long)ci_index,
                  prev_channel_available, new_channel_available, ci_count);
 
-        // Check for zero-to-one transition
-        if (prev_total_available == 0 && new_channel_available > 0 && !s_state->first_swap_emitted) {
-            ESP_LOGI(TAG, "Zero-to-one transition - triggering playback");
+        // This channel just gained its first available artwork. The SWRR
+        // weight table only changes when a channel's availability presence
+        // flips (weights don't scale with count), and the only other recalc
+        // sites are playset-execute and refresh-complete. Without this, a
+        // channel filled purely by downloads keeps weight==0 — invisible to
+        // the channel selectors — until its next dispatched refresh, which
+        // on a cold playset switch broke the first-swap pick below and froze
+        // the pickable pool for up to a full refresh interval.
+        if (prev_channel_available == 0 && new_channel_available > 0) {
+            ps_swrr_calculate_weights(s_state);
+        }
+
+        // First-swap trigger: while no swap has been emitted for this
+        // playset, any LAi add that leaves artwork available should start
+        // playback. The gate used to require the *total* available count to
+        // transition 0→1; combined with the optimistic flag set below, a
+        // single failed pick would then disarm playback until the dwell
+        // timer happened to rescue it. The relaxed condition re-fires on the
+        // next landed file after a rollback (see play_scheduler_next()'s
+        // failure path, which clears the flag when nothing has played yet).
+        if (!s_state->first_swap_emitted && new_channel_available > 0) {
+            ESP_LOGI(TAG, "First artwork available - triggering playback");
             s_state->first_swap_emitted = true;
-            ps_assert_first_swap_invariant(s_state, "lai_zero_to_one");
+            ps_assert_first_swap_invariant(s_state, "lai_first_available");
             xSemaphoreGive(s_state->mutex);
 
             // Trigger playback via event bus to avoid race condition

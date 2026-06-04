@@ -254,22 +254,38 @@ static int find_next_pending_refresh(ps_state_t *state)
 
 // External: check if download manager is actively downloading
 extern bool download_manager_is_busy(void);
+// External: check if an animation is on screen. Progress callbacks below
+// re-check this dynamically: playback can begin mid-refresh (LAi
+// first-available trigger), and a progress push landing after the
+// swap-complete clear would re-cover the playing artwork until the NEXT
+// swap — there is no other path that clears the message slot.
+extern bool animation_player_is_animation_ready(void);
 
 /**
  * @brief Progress callback for Giphy channel refresh
  *
  * Updates the UI with page-fetch progress during fresh start.
- * Yields to download progress when the download manager is busy.
+ * Goes silent once an animation is on screen (same dynamic re-check as
+ * dl_progress_cb in download_manager.c — playback may start mid-refresh),
+ * and yields to download progress when the download manager is busy.
  */
 static void giphy_refresh_ui_cb(int offset, int cache_size, void *ctx)
 {
+    // Playback may have started mid-refresh — never cover a live animation
+    // with index-fetch progress.
+    if (animation_player_is_animation_ready()) return;
+
     // Don't override download progress
     if (download_manager_is_busy()) return;
 
     const char *name = (const char *)ctx;
-    int pct = (cache_size > 0) ? (offset * 100) / cache_size : -1;
+    // The fetch loop reports whole pages and can overshoot the cache cap
+    // (e.g. 150 fetched against a 128-entry cap) — clamp so the user never
+    // sees "150/128" / >100%.
+    int shown = (cache_size > 0 && offset > cache_size) ? cache_size : offset;
+    int pct = (cache_size > 0) ? (shown * 100) / cache_size : -1;
     char detail[64];
-    snprintf(detail, sizeof(detail), "Fetching trending (%d/%d)", offset, cache_size);
+    snprintf(detail, sizeof(detail), "Fetching artwork list (%d/%d)", shown, cache_size);
     p3a_render_set_channel_message(name, P3A_CHANNEL_MSG_LOADING, pct, detail);
 }
 
@@ -281,6 +297,11 @@ static void giphy_refresh_ui_cb(int offset, int cache_size, void *ctx)
 static void artwork_download_progress_cb(size_t bytes_read, size_t content_length, void *user_ctx)
 {
     (void)user_ctx;  // Unused
+
+    // Playback may have started while this download was in flight (periodic
+    // refresh of a mixed playset) — don't cover a live animation with
+    // progress for a background fetch.
+    if (animation_player_is_animation_ready()) return;
 
     int percent = 0;
     if (content_length > 0) {
@@ -321,7 +342,9 @@ static esp_err_t refresh_artwork_channel(ps_channel_state_t *ch)
 
     // Download the artwork
     ch->artwork_state.download_in_progress = true;
-    p3a_render_set_channel_message("Artwork", P3A_CHANNEL_MSG_DOWNLOADING, 0, NULL);
+    if (!animation_player_is_animation_ready()) {
+        p3a_render_set_channel_message("Artwork", P3A_CHANNEL_MSG_DOWNLOADING, 0, NULL);
+    }
 
     ESP_LOGI(TAG, "Downloading artwork: %s", ch->artwork_state.art_url);
 
@@ -753,8 +776,24 @@ static void refresh_task(void *arg)
                     } else {
                         s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
                     }
-                    ESP_LOGI(TAG, "All channels refreshed. Next periodic refresh in %lu seconds.",
-                             (unsigned long)s_next_refresh_delay);
+                    // Distinguish "everything actually refreshed" from "no
+                    // eligible work right now": channels stay pending while
+                    // gated on Wi-Fi / MQTT / rate-limit cooldowns (typical
+                    // at boot before connectivity), and the old unconditional
+                    // copy claimed completion at t=2.6s on a cold boot with
+                    // nothing refreshed. Logged once per idle detection (the
+                    // stamp above keeps this branch from re-entering).
+                    size_t still_pending = 0;
+                    for (size_t i = 0; i < state->channel_count; i++) {
+                        if (state->channels[i].refresh_pending) still_pending++;
+                    }
+                    if (still_pending > 0) {
+                        ESP_LOGI(TAG, "No eligible channels to refresh (%zu pending on connectivity/cooldown). Next periodic check in %lu seconds.",
+                                 still_pending, (unsigned long)s_next_refresh_delay);
+                    } else {
+                        ESP_LOGI(TAG, "All channels refreshed. Next periodic refresh in %lu seconds.",
+                                 (unsigned long)s_next_refresh_delay);
+                    }
                     /* Settled-and-online moment: nudge the pin_lists GC so any
                        tombstones left over from a power loss during a previous
                        delete get reclaimed. No-op if there's nothing to do. */
@@ -869,10 +908,9 @@ static void refresh_task(void *arg)
                 }
 
                 // Show loading message while Giphy API is being called.
-                // This is especially important during boot when the initial
-                // "Loading channel..." from play_scheduler_execute_playset() was
-                // skipped because WiFi wasn't ready yet.
-                extern bool animation_player_is_animation_ready(void);
+                // During boot restore this replaces the "Waiting for
+                // network..." placeholder pushed by execute_playset before
+                // Wi-Fi was up.
                 char giphy_display_name[64];
                 // Use the channel's resolved display name (honors a custom
                 // playset display_name) so this push shares identity with the
@@ -1151,7 +1189,6 @@ static void refresh_task(void *arg)
             // For other channels during normal operation: clear immediately.
             // During fresh start: keep the message until the buffer swap clears it.
             if (!is_artwork_channel) {
-                extern bool animation_player_is_animation_ready(void);
                 if (animation_player_is_animation_ready()) {
                     p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
                 }

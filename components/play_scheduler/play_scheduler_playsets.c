@@ -801,7 +801,6 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_
                                             "Add pins to see them here.");
         } else if (p3a_state_has_wifi()) {
             // Show loading state to user while waiting for refresh/download.
-            // Only when WiFi is up — no point showing this in AP/setup mode.
             // S4.2: the message body distinguishes "downloads pending" from
             // "refresh pending" so the user understands what's actually slow.
             const char *detail = has_ci_entries
@@ -809,6 +808,15 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_
                 : "Loading channel...";
             p3a_render_set_channel_message(first_channel_display_name, 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
                                             detail);
+        } else {
+            // No Wi-Fi yet (typical at boot restore): without a message the
+            // screen sits black between boot-logo expiry and the refresh
+            // task's first push. The refresh-start push replaces this once
+            // Wi-Fi lands. In AP/setup mode the render layer rejects channel
+            // messages (state != ANIMATION_PLAYBACK), so this is a no-op
+            // there.
+            p3a_render_set_channel_message(first_channel_display_name, 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
+                                            "Waiting for network...");
         }
         return ESP_OK;
     }

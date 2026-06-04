@@ -52,7 +52,7 @@ esp_err_t animation_player_init(esp_lcd_panel_handle_t display_handle,
 /**
  * @brief Restore the active playset on boot.
  *
- * Loads /sdcard/p3a/active_playset.bin and executes it. On any failure
+ * Loads {sd-root}/active_playset.bin and executes it. On any failure
  * (missing snapshot, corruption, execute error) falls back to a fresh
  * channel_promoted playset. Must be called after pin_lists_init() so the
  * PS_CHANNEL_TYPE_PINNED cache load can succeed when the saved snapshot

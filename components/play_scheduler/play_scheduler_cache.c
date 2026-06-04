@@ -5,8 +5,8 @@
  * @file play_scheduler_cache.c
  * @brief SD card index building for Play Scheduler
  *
- * Scans /sdcard/p3a/animations/ and builds a binary index file at
- * /sdcard/p3a/channel/sdcard.bin using the sdcard_index_entry_t format
+ * Scans {sd-root}/animations/ and builds a binary index file at
+ * {sd-root}/channel/sdcard.bin using the sdcard_index_entry_t format
  * (160 bytes per entry with 144-byte filename field).
  */
 

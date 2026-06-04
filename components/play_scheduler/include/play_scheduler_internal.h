@@ -316,7 +316,7 @@ void ps_timer_reset(ps_state_t *state);
 /**
  * @brief Build SD card index file
  *
- * Scans /sdcard/p3a/animations/ and writes /sdcard/p3a/channel/sdcard.bin
+ * Scans {sd-root}/animations/ and writes {sd-root}/channel/sdcard.bin
  *
  * @return ESP_OK on success
  */

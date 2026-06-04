@@ -492,16 +492,19 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
     // write a garbage timestamp that poisons future cooldown checks.
     if (refresh_completed && sntp_sync_is_synchronized()) {
         char channels_path[128];
-        if (sd_path_get_channel(channels_path, sizeof(channels_path)) != ESP_OK) {
-            strlcpy(channels_path, "/sdcard/p3a/channel", sizeof(channels_path));
-        }
-        channel_metadata_t meta = {
-            .last_refresh = time(NULL),
-            .cursor = "",
-        };
-        esp_err_t meta_err = channel_metadata_save(channel_id, channels_path, &meta);
-        if (meta_err != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to save channel metadata: %s", esp_err_to_name(meta_err));
+        esp_err_t path_err = sd_path_get_channel(channels_path, sizeof(channels_path));
+        if (path_err != ESP_OK) {
+            ESP_LOGE(TAG, "Cannot resolve channel directory (%s) - skipping metadata save",
+                     esp_err_to_name(path_err));
+        } else {
+            channel_metadata_t meta = {
+                .last_refresh = time(NULL),
+                .cursor = "",
+            };
+            esp_err_t meta_err = channel_metadata_save(channel_id, channels_path, &meta);
+            if (meta_err != ESP_OK) {
+                ESP_LOGW(TAG, "Failed to save channel metadata: %s", esp_err_to_name(meta_err));
+            }
         }
     } else if (refresh_completed) {
         ESP_LOGI(TAG, "Clock not synchronized, deferring metadata save for '%s'",

@@ -3,7 +3,7 @@
 
 /**
  * @file pin_lists_state.c
- * @brief Atomic load/save of /sdcard/p3a/pinned/state.bin (active list slug)
+ * @brief Atomic load/save of {sd-root}/pinned/state.bin (active list slug)
  */
 
 #include "pin_lists_internal.h"

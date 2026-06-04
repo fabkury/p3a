@@ -653,7 +653,7 @@ void app_main(void)
 
     // Initialize the pinned-artworks vault. Deferred to here (rather than
     // content_service_init) because pin_lists creates files under
-    // /sdcard/p3a/pinned/, which requires the SD card to be mounted and
+    // {sd-root}/pinned/, which requires the SD card to be mounted and
     // sd_path_ensure_directories() to have run. Both happen inside
     // app_lcd_init -> animation_player_init. Non-fatal on failure —
     // pinning will be unavailable but the rest of the app continues.

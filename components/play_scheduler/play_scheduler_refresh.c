@@ -875,11 +875,13 @@ static void refresh_task(void *arg)
             // If the cache is empty (e.g. deleted), always refresh so the
             // user has something to see, even if the interval hasn't elapsed.
             char ch_path[128];
-            if (sd_path_get_channel(ch_path, sizeof(ch_path)) != ESP_OK) {
-                strlcpy(ch_path, "/sdcard/p3a/channel", sizeof(ch_path));
+            channel_metadata_t giphy_meta = {0};
+            if (sd_path_get_channel(ch_path, sizeof(ch_path)) == ESP_OK) {
+                channel_metadata_load(channel_id, ch_path, &giphy_meta);
+            } else {
+                ESP_LOGE(TAG, "Cannot resolve channel directory; treating '%s' as never refreshed",
+                         display_name);
             }
-            channel_metadata_t giphy_meta;
-            channel_metadata_load(channel_id, ch_path, &giphy_meta);
 
             time_t now = time(NULL);
             uint32_t interval = config_store_get_giphy_refresh_interval();
@@ -981,11 +983,13 @@ static void refresh_task(void *arg)
             } else {
                 // Freshness gate (canonical: on-disk sidecar, see giphy block above)
                 char ai_ch_path[128];
-                if (sd_path_get_channel(ai_ch_path, sizeof(ai_ch_path)) != ESP_OK) {
-                    strlcpy(ai_ch_path, "/sdcard/p3a/channel", sizeof(ai_ch_path));
+                channel_metadata_t ai_meta = {0};
+                if (sd_path_get_channel(ai_ch_path, sizeof(ai_ch_path)) == ESP_OK) {
+                    channel_metadata_load(channel_id, ai_ch_path, &ai_meta);
+                } else {
+                    ESP_LOGE(TAG, "Cannot resolve channel directory; treating '%s' as never refreshed",
+                             display_name);
                 }
-                channel_metadata_t ai_meta;
-                channel_metadata_load(channel_id, ai_ch_path, &ai_meta);
 
                 time_t now = time(NULL);
                 uint32_t interval = config_store_get_ai_refresh_sec();
@@ -1042,11 +1046,13 @@ static void refresh_task(void *arg)
             } else {
                 // Gate 2: Check if channel was refreshed recently enough.
                 char mkx_ch_path[128];
-                if (sd_path_get_channel(mkx_ch_path, sizeof(mkx_ch_path)) != ESP_OK) {
-                    strlcpy(mkx_ch_path, "/sdcard/p3a/channel", sizeof(mkx_ch_path));
+                channel_metadata_t mkx_meta = {0};
+                if (sd_path_get_channel(mkx_ch_path, sizeof(mkx_ch_path)) == ESP_OK) {
+                    channel_metadata_load(channel_id, mkx_ch_path, &mkx_meta);
+                } else {
+                    ESP_LOGE(TAG, "Cannot resolve channel directory; treating '%s' as never refreshed",
+                             display_name);
                 }
-                channel_metadata_t mkx_meta;
-                channel_metadata_load(channel_id, mkx_ch_path, &mkx_meta);
 
                 time_t now = time(NULL);
                 uint32_t interval = config_store_get_refresh_interval_sec();
@@ -1169,11 +1175,13 @@ static void refresh_task(void *arg)
 
         if (sdcard_empty) {
             char anim_path[128];
-            if (sd_path_get_animations(anim_path, sizeof(anim_path)) != ESP_OK) {
-                strlcpy(anim_path, "/sdcard/p3a/animations", sizeof(anim_path));
-            }
             char detail[160];
-            snprintf(detail, sizeof(detail), "No artworks found in\n%s", anim_path);
+            if (sd_path_get_animations(anim_path, sizeof(anim_path)) == ESP_OK) {
+                snprintf(detail, sizeof(detail), "No artworks found in\n%s", anim_path);
+            } else {
+                // Don't name a directory we can't resolve — it would be a lie.
+                snprintf(detail, sizeof(detail), "No artworks found");
+            }
             p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_ERROR, -1, detail);
         }
 
@@ -1342,9 +1350,14 @@ void ps_refresh_reset_timer(void)
 // Helper to build cache path (exposed for use by refresh_task)
 void ps_build_cache_path_internal(const char *channel_id, char *out_path, size_t max_len)
 {
+    if (!out_path || max_len == 0) return;
+
     char channel_dir[256];
-    if (sd_path_get_channel(channel_dir, sizeof(channel_dir)) != ESP_OK) {
-        strlcpy(channel_dir, "/sdcard/p3a/channel", sizeof(channel_dir));
+    esp_err_t err = sd_path_get_channel(channel_dir, sizeof(channel_dir));
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot resolve channel directory: %s", esp_err_to_name(err));
+        out_path[0] = '\0';
+        return;
     }
 
     // channel_id is a hex hash — always filesystem-safe, no sanitization needed

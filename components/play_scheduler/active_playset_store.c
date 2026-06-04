@@ -13,6 +13,7 @@
  */
 
 #include "active_playset_store.h"
+#include "sd_path.h"
 #include "esp_log.h"
 #include "esp_rom_crc.h"
 #include <stdio.h>
@@ -23,10 +24,28 @@
 
 static const char *TAG = "act_ps_store";
 
-#define ACTIVE_PLAYSET_PATH      "/sdcard/p3a/active_playset.bin"
-#define ACTIVE_PLAYSET_TMP_PATH  "/sdcard/p3a/active_playset.bin.tmp"
+#define ACTIVE_PLAYSET_FILENAME      "active_playset.bin"
+#define ACTIVE_PLAYSET_TMP_FILENAME  "active_playset.bin.tmp"
 #define ACTIVE_PLAYSET_MAGIC     0x50415033u   /* 'P3AP' little-endian */
 #define ACTIVE_PLAYSET_VERSION   1u
+
+/* Room for the configured root plus "/active_playset.bin.tmp" */
+#define ACTIVE_PLAYSET_PATH_MAX  (SD_PATH_ROOT_MAX_LEN + 32)
+
+/**
+ * Resolve {root}/{filename} against the configured SD root at runtime.
+ * The snapshot deliberately lives under the user-configurable root so a
+ * root switch behaves as a cold start (no cross-root playset bleed-through).
+ */
+static esp_err_t build_snapshot_path(const char *filename, char *out, size_t out_len)
+{
+    int n = snprintf(out, out_len, "%s/%s", sd_path_get_root(), filename);
+    if (n < 0 || (size_t)n >= out_len) {
+        ESP_LOGE(TAG, "Snapshot path truncated for %s", filename);
+        return ESP_ERR_INVALID_SIZE;
+    }
+    return ESP_OK;
+}
 
 /*
  * Header. Channels are appended as channel_count copies of ps_channel_spec_t
@@ -69,6 +88,16 @@ esp_err_t active_playset_save(const ps_playset_t *playset)
         return ESP_ERR_INVALID_ARG;
     }
 
+    char path[ACTIVE_PLAYSET_PATH_MAX];
+    char tmp_path[ACTIVE_PLAYSET_PATH_MAX];
+    esp_err_t path_err = build_snapshot_path(ACTIVE_PLAYSET_FILENAME, path, sizeof(path));
+    if (path_err == ESP_OK) {
+        path_err = build_snapshot_path(ACTIVE_PLAYSET_TMP_FILENAME, tmp_path, sizeof(tmp_path));
+    }
+    if (path_err != ESP_OK) {
+        return path_err;
+    }
+
     active_playset_header_t header = {0};
     header.magic = ACTIVE_PLAYSET_MAGIC;
     header.version = ACTIVE_PLAYSET_VERSION;
@@ -77,9 +106,9 @@ esp_err_t active_playset_save(const ps_playset_t *playset)
     strlcpy(header.name, playset->name, sizeof(header.name));
     header.checksum = compute_checksum(&header, playset->channels, playset->channel_count);
 
-    FILE *f = fopen(ACTIVE_PLAYSET_TMP_PATH, "wb");
+    FILE *f = fopen(tmp_path, "wb");
     if (!f) {
-        ESP_LOGE(TAG, "open %s: %s", ACTIVE_PLAYSET_TMP_PATH, strerror(errno));
+        ESP_LOGE(TAG, "open %s: %s", tmp_path, strerror(errno));
         return ESP_FAIL;
     }
 
@@ -101,18 +130,18 @@ esp_err_t active_playset_save(const ps_playset_t *playset)
     fclose(f);
 
     if (!write_ok) {
-        unlink(ACTIVE_PLAYSET_TMP_PATH);
+        unlink(tmp_path);
         return ESP_FAIL;
     }
 
     /* Atomic replace: unlink target then rename. On POSIX, rename(2) is
        atomic over the same filesystem; the unlink is belt-and-braces for
        filesystems where rename refuses to overwrite. */
-    unlink(ACTIVE_PLAYSET_PATH);
-    if (rename(ACTIVE_PLAYSET_TMP_PATH, ACTIVE_PLAYSET_PATH) != 0) {
+    unlink(path);
+    if (rename(tmp_path, path) != 0) {
         ESP_LOGE(TAG, "rename %s -> %s: %s",
-                 ACTIVE_PLAYSET_TMP_PATH, ACTIVE_PLAYSET_PATH, strerror(errno));
-        unlink(ACTIVE_PLAYSET_TMP_PATH);
+                 tmp_path, path, strerror(errno));
+        unlink(tmp_path);
         return ESP_FAIL;
     }
 
@@ -125,10 +154,16 @@ esp_err_t active_playset_load(ps_playset_t *out_playset)
 {
     if (!out_playset) return ESP_ERR_INVALID_ARG;
 
-    FILE *f = fopen(ACTIVE_PLAYSET_PATH, "rb");
+    char path[ACTIVE_PLAYSET_PATH_MAX];
+    esp_err_t path_err = build_snapshot_path(ACTIVE_PLAYSET_FILENAME, path, sizeof(path));
+    if (path_err != ESP_OK) {
+        return path_err;
+    }
+
+    FILE *f = fopen(path, "rb");
     if (!f) {
         if (errno == ENOENT) return ESP_ERR_NOT_FOUND;
-        ESP_LOGE(TAG, "open %s: %s", ACTIVE_PLAYSET_PATH, strerror(errno));
+        ESP_LOGE(TAG, "open %s: %s", path, strerror(errno));
         return ESP_FAIL;
     }
 
@@ -136,7 +171,7 @@ esp_err_t active_playset_load(ps_playset_t *out_playset)
     if (fread(&header, sizeof(header), 1, f) != 1) {
         ESP_LOGW(TAG, "Truncated header — discarding");
         fclose(f);
-        unlink(ACTIVE_PLAYSET_PATH);
+        unlink(path);
         return ESP_ERR_INVALID_CRC;
     }
 
@@ -144,7 +179,7 @@ esp_err_t active_playset_load(ps_playset_t *out_playset)
         ESP_LOGW(TAG, "Bad magic 0x%08lx — discarding",
                  (unsigned long)header.magic);
         fclose(f);
-        unlink(ACTIVE_PLAYSET_PATH);
+        unlink(path);
         return ESP_ERR_INVALID_CRC;
     }
 
@@ -152,7 +187,7 @@ esp_err_t active_playset_load(ps_playset_t *out_playset)
         ESP_LOGW(TAG, "Version mismatch (%u, expected %u) — discarding",
                  header.version, ACTIVE_PLAYSET_VERSION);
         fclose(f);
-        unlink(ACTIVE_PLAYSET_PATH);
+        unlink(path);
         return ESP_ERR_INVALID_VERSION;
     }
 
@@ -162,14 +197,14 @@ esp_err_t active_playset_load(ps_playset_t *out_playset)
         ESP_LOGW(TAG, "Spec size mismatch (file=%lu, expected=%zu) — discarding",
                  (unsigned long)header.spec_size, sizeof(ps_channel_spec_t));
         fclose(f);
-        unlink(ACTIVE_PLAYSET_PATH);
+        unlink(path);
         return ESP_ERR_INVALID_VERSION;
     }
 
     if (header.channel_count == 0 || header.channel_count > PS_MAX_CHANNELS) {
         ESP_LOGW(TAG, "Bad channel_count %u — discarding", header.channel_count);
         fclose(f);
-        unlink(ACTIVE_PLAYSET_PATH);
+        unlink(path);
         return ESP_ERR_INVALID_CRC;
     }
 
@@ -182,7 +217,7 @@ esp_err_t active_playset_load(ps_playset_t *out_playset)
               header.channel_count, f) != header.channel_count) {
         ESP_LOGW(TAG, "Truncated channels — discarding");
         fclose(f);
-        unlink(ACTIVE_PLAYSET_PATH);
+        unlink(path);
         return ESP_ERR_INVALID_CRC;
     }
     fclose(f);
@@ -193,7 +228,7 @@ esp_err_t active_playset_load(ps_playset_t *out_playset)
     if (actual != expected) {
         ESP_LOGW(TAG, "CRC mismatch (file=0x%08lx, computed=0x%08lx) — discarding",
                  (unsigned long)expected, (unsigned long)actual);
-        unlink(ACTIVE_PLAYSET_PATH);
+        unlink(path);
         return ESP_ERR_INVALID_CRC;
     }
 
@@ -204,8 +239,14 @@ esp_err_t active_playset_load(ps_playset_t *out_playset)
 
 esp_err_t active_playset_clear(void)
 {
-    if (unlink(ACTIVE_PLAYSET_PATH) != 0 && errno != ENOENT) {
-        ESP_LOGE(TAG, "unlink %s: %s", ACTIVE_PLAYSET_PATH, strerror(errno));
+    char path[ACTIVE_PLAYSET_PATH_MAX];
+    esp_err_t path_err = build_snapshot_path(ACTIVE_PLAYSET_FILENAME, path, sizeof(path));
+    if (path_err != ESP_OK) {
+        return path_err;
+    }
+
+    if (unlink(path) != 0 && errno != ENOENT) {
+        ESP_LOGE(TAG, "unlink %s: %s", path, strerror(errno));
         return ESP_FAIL;
     }
     return ESP_OK;

@@ -466,8 +466,9 @@ skip_prefetch:
             // /status REST endpoint can see what's on screen. The view tracker also
             // needs this info to decide whether/when to emit view events.
             // Derive giphy_id from the filepath when the source is GIPHY.
-            // The Giphy cache layout is /sdcard/p3a/giphy/xx/yy/zz/<id>.<ext>,
-            // so the basename minus its final extension is the Giphy ID.
+            // The Giphy cache layout is {giphy-root}/{d0}/{d1}/<id>.<ext>
+            // (see sd_path_build_sharded()), so the basename minus its final
+            // extension is the Giphy ID.
             char giphy_id_buf[24] = "";
             if (s_front_buffer.post_source == POST_SOURCE_GIPHY && s_front_buffer.filepath) {
                 const char *base = strrchr(s_front_buffer.filepath, '/');

@@ -21,7 +21,7 @@ All 25 custom components live under `components/`. This document describes each 
 - **Purpose**: Executes playsets to select artwork across multiple channels using Smooth Weighted Round Robin (SWRR)
 - **Key files**: `play_scheduler.c`, `play_scheduler_swrr.c`, `play_scheduler_playsets.c`, `play_scheduler_pick.c`, `play_scheduler_navigation.c`, `play_scheduler_timer.c`, `play_scheduler_nae.c`, `play_scheduler_lai.c`, `play_scheduler_refresh.c`, `play_scheduler_buffers.c`, `play_scheduler_cache.c`, `playset_store.c`, `playset_json.c`, `active_playset_store.c`
 - **Public API**: `play_scheduler.h`, `play_scheduler_types.h`, `playset_store.h`, `playset_json.h`, `active_playset_store.h`
-- **Boot restore**: Every `play_scheduler_execute_playset()` writes `/sdcard/p3a/active_playset.bin` (full `ps_playset_t` blob, magic+version+CRC, atomic rename). On boot, `animation_player_restore_boot_playset()` loads that snapshot and re-executes it; on any failure falls back to channel_promoted.
+- **Boot restore**: Every `play_scheduler_execute_playset()` writes `{sd-root}/active_playset.bin` (root resolved at runtime via `sd_path_get_root()`, default `/sdcard/p3a`; full `ps_playset_t` blob, magic+version+CRC, atomic rename). On boot, `animation_player_restore_boot_playset()` loads that snapshot and re-executes it; on any failure falls back to channel_promoted. Because the snapshot lives under the configurable root, switching the root cold-starts the playset too.
 - **Key concepts**:
   - **Playset** (`ps_playset_t`): Specifies which channels to include (with per-channel weights) and pick mode
   - **Channel weights**: Each channel has a `weight`. SWRR distributes plays proportionally; if every weight is 0, plays are distributed equally.

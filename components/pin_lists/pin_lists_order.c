@@ -58,7 +58,7 @@ static esp_err_t read_header(FILE *f, pinned_order_header_t *hdr)
        level but the post_ids point to the wrong entities — so reject them
        outright instead of silently misbehaving. Newer versions also rejected. */
     if (hdr->version != PINNED_FORMAT_VERSION) {
-        ESP_LOGW(TAG, "order.bin: version %lu != expected %u; wipe /sdcard/p3a/pinned/ to upgrade",
+        ESP_LOGW(TAG, "order.bin: version %lu != expected %u; wipe the pinned/ directory under the SD root to upgrade",
                  (unsigned long)hdr->version, PINNED_FORMAT_VERSION);
         return ESP_ERR_NOT_SUPPORTED;
     }

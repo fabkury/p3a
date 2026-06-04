@@ -202,8 +202,10 @@ esp_err_t art_institution_build_vault_path(const char *museum_id,
     if (entry->iiif_key[0] == '\0') return ESP_ERR_INVALID_ARG;
 
     char museum_root[128];
-    if (sd_path_get_museum(museum_root, sizeof(museum_root)) != ESP_OK) {
-        strlcpy(museum_root, "/sdcard/p3a/museum", sizeof(museum_root));
+    esp_err_t path_err = sd_path_get_museum(museum_root, sizeof(museum_root));
+    if (path_err != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot resolve museum directory: %s", esp_err_to_name(path_err));
+        return path_err;
     }
     // The shard base carries the per-museum segment: {museum_root}/{museum_id}.
     char base[160];

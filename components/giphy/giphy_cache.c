@@ -51,8 +51,10 @@ esp_err_t giphy_build_filepath(const char *giphy_id, uint8_t extension,
 
     // Get giphy base path
     char giphy_base[128];
-    if (sd_path_get_giphy(giphy_base, sizeof(giphy_base)) != ESP_OK) {
-        strlcpy(giphy_base, "/sdcard/p3a/giphy", sizeof(giphy_base));
+    esp_err_t path_err = sd_path_get_giphy(giphy_base, sizeof(giphy_base));
+    if (path_err != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot resolve giphy directory: %s", esp_err_to_name(path_err));
+        return path_err;
     }
 
     int ext_idx = (extension <= 1) ? extension : 0;
@@ -68,7 +70,9 @@ void giphy_build_entry_filepath(const giphy_channel_entry_t *entry,
         return;
     }
 
-    giphy_build_filepath(entry->giphy_id, entry->extension, out_path, out_len);
+    if (giphy_build_filepath(entry->giphy_id, entry->extension, out_path, out_len) != ESP_OK) {
+        out_path[0] = '\0';
+    }
 }
 
 // ============================================================================

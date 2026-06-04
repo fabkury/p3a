@@ -109,9 +109,14 @@ void ps_ensure_display_name(ps_channel_spec_t *spec)
 
 void ps_build_cache_path(const char *channel_id, char *out_path, size_t max_len)
 {
+    if (!out_path || max_len == 0) return;
+
     char channel_dir[256];
-    if (sd_path_get_channel(channel_dir, sizeof(channel_dir)) != ESP_OK) {
-        strlcpy(channel_dir, "/sdcard/p3a/channel", sizeof(channel_dir));
+    esp_err_t err = sd_path_get_channel(channel_dir, sizeof(channel_dir));
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot resolve channel directory: %s", esp_err_to_name(err));
+        out_path[0] = '\0';
+        return;
     }
 
     // channel_id is a hex hash — always filesystem-safe, no sanitization needed
@@ -129,8 +134,17 @@ static esp_err_t ps_load_sdcard_cache(ps_channel_state_t *ch)
 {
     char cache_path[512];
     char channel_dir[256];
-    if (sd_path_get_channel(channel_dir, sizeof(channel_dir)) != ESP_OK) {
-        strlcpy(channel_dir, "/sdcard/p3a/channel", sizeof(channel_dir));
+    esp_err_t path_err = sd_path_get_channel(channel_dir, sizeof(channel_dir));
+    if (path_err != ESP_OK) {
+        ESP_LOGE(TAG, "Channel '%s': cannot resolve channel directory: %s",
+                 ch->display_name, esp_err_to_name(path_err));
+        ch->cache_loaded = false;
+        ch->entry_count = 0;
+        ch->available_count = 0;
+        ch->active = false;
+        ch->weight = 0;
+        ch->entry_format = PS_ENTRY_FORMAT_NONE;
+        return path_err;
     }
     snprintf(cache_path, sizeof(cache_path), "%s/sdcard.bin", channel_dir);
 
@@ -296,15 +310,15 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
     // Get paths
     char channels_path[128];
     char vault_path[128];
-    if (sd_path_get_channel(channels_path, sizeof(channels_path)) != ESP_OK) {
-        strlcpy(channels_path, "/sdcard/p3a/channel", sizeof(channels_path));
-    }
-    if (sd_path_get_vault(vault_path, sizeof(vault_path)) != ESP_OK) {
-        strlcpy(vault_path, "/sdcard/p3a/vault", sizeof(vault_path));
+    esp_err_t path_err = sd_path_get_channel(channels_path, sizeof(channels_path));
+    if (path_err == ESP_OK) {
+        path_err = sd_path_get_vault(vault_path, sizeof(vault_path));
     }
 
     // Free existing cache if any (handles channel switch). Hold the cache
     // lifecycle lock so concurrent readers can't be mid-use on the cache.
+    // Done even when path resolution failed so a stale cache never lingers
+    // registered under the old channel binding.
     if (ch->cache) {
         channel_cache_lifecycle_lock();
         channel_cache_unregister(ch->cache);
@@ -314,6 +328,18 @@ static esp_err_t ps_load_makapix_cache(ps_channel_state_t *ch)
         ch->entries = NULL;
         ch->available_post_ids = NULL;
         channel_cache_lifecycle_unlock();
+    }
+
+    if (path_err != ESP_OK) {
+        ESP_LOGE(TAG, "Channel '%s': cannot resolve SD paths: %s",
+                 ch->display_name, esp_err_to_name(path_err));
+        ch->cache_loaded = false;
+        ch->entry_count = 0;
+        ch->available_count = 0;
+        ch->active = false;
+        ch->weight = 0;
+        ch->entry_format = PS_ENTRY_FORMAT_NONE;
+        return path_err;
     }
 
     // Allocate new cache structure
@@ -561,10 +587,13 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_
     // history instead of picking fresh from the newly loaded channels.
     s_state->history_position = -1;
 
-    // Resolve channel sidecar directory once for last_refresh hydration below
+    // Resolve channel sidecar directory once for last_refresh hydration below.
+    // On failure, skip hydration (channels rank as never-refreshed) rather
+    // than consulting a directory that isn't the configured root.
     char ch_meta_path[128];
-    if (sd_path_get_channel(ch_meta_path, sizeof(ch_meta_path)) != ESP_OK) {
-        strlcpy(ch_meta_path, "/sdcard/p3a/channel", sizeof(ch_meta_path));
+    bool ch_meta_path_ok = (sd_path_get_channel(ch_meta_path, sizeof(ch_meta_path)) == ESP_OK);
+    if (!ch_meta_path_ok) {
+        ESP_LOGE(TAG, "Cannot resolve channel directory; skipping last_refresh hydration");
     }
 
     // Initialize each channel
@@ -610,7 +639,8 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_
         // which makes them refresh first (cheap operations, no quota concern).
         ch->last_refresh = 0;
         channel_metadata_t meta_init;
-        if (channel_metadata_load(ch->channel_id, ch_meta_path, &meta_init) == ESP_OK) {
+        if (ch_meta_path_ok &&
+            channel_metadata_load(ch->channel_id, ch_meta_path, &meta_init) == ESP_OK) {
             ch->last_refresh = meta_init.last_refresh;
         }
 
@@ -1076,8 +1106,11 @@ static void ps_build_artwork_filepath(const char *storage_key, const char *art_u
     }
 
     char vault_base[128];
-    if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
-        strlcpy(vault_base, "/sdcard/p3a/vault", sizeof(vault_base));
+    esp_err_t path_err = sd_path_get_vault(vault_base, sizeof(vault_base));
+    if (path_err != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot resolve vault directory: %s", esp_err_to_name(path_err));
+        out_path[0] = '\0';
+        return;
     }
 
     // Detect extension from URL: webp(0)/gif(1)/png(2)/jpg(3).

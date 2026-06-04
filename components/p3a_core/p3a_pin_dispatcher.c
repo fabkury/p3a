@@ -317,7 +317,8 @@ static esp_err_t resolve_institution_from_current(pin_task_params_t *p)
     if (ext < 0) return ESP_ERR_INVALID_ARG;
     p->extension = (uint8_t)ext;
 
-    /* filepath: /sdcard/p3a/museum/{museum_str}/{sha}/{sha}/{sha}/{safe_iiif_key}.{ext} */
+    /* filepath: {museum-root}/{museum_str}/{d0}/{d1}/{safe_iiif_key}.{ext}
+       (v1.0 shard layout, see sd_path_build_sharded()) */
     char museum_str[16];
     if (!extract_path_component_after(filepath, "/museum/", museum_str, sizeof(museum_str))) {
         ESP_LOGW(TAG, "Museum component not found in %s", filepath);

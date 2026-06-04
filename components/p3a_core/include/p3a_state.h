@@ -421,7 +421,7 @@ esp_err_t p3a_state_fallback_to_sdcard(void);
    p3a_state_set_active_playset(name) plus the __artwork__/__local__
    sentinels and their NVS keys. That is now owned by play_scheduler — the
    active playset is serialized as a structured snapshot to
-   /sdcard/p3a/active_playset.bin on every execute_playset(), and queried via
+   {sd-root}/active_playset.bin on every execute_playset(), and queried via
    play_scheduler_get_active_playset(). */
 
 /**

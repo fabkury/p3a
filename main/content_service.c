@@ -32,7 +32,7 @@ esp_err_t content_service_init(void)
 
     // pin_lists_init is intentionally NOT called here — content_service_init
     // runs early in p3a_main, before the SD card is mounted, so any mkdir on
-    // /sdcard/p3a/pinned/ would fail with ENOENT. The pin-lists module is
+    // {sd-root}/pinned/ would fail with ENOENT. The pin-lists module is
     // initialized later from p3a_main, after app_lcd_init (which mounts the
     // SD card and runs sd_path_ensure_directories).
 

@@ -10,7 +10,9 @@
  * "what was last playing" — overwritten on every play_scheduler_execute_playset()
  * and consulted exactly once on boot to resume playback.
  *
- * On-disk format: /sdcard/p3a/active_playset.bin
+ * On-disk format: {sd-root}/active_playset.bin (root resolved at runtime via
+ * sd_path_get_root(), default /sdcard/p3a — so switching the configured root
+ * cold-starts the playset too)
  *   - 64-byte header (magic, version, CRC32, channel_count, playset name)
  *   - N × active_playset_channel_entry_t (one per channel; carries the full
  *     ps_channel_spec_t including the artwork sub-struct, unlike playset_store
@@ -34,7 +36,7 @@ extern "C" {
 #endif
 
 /**
- * @brief Save the active playset to /sdcard/p3a/active_playset.bin
+ * @brief Save the active playset to {sd-root}/active_playset.bin
  *
  * @param playset Non-NULL playset with channel_count in [1, PS_MAX_CHANNELS].
  * @return ESP_OK on success, ESP_ERR_INVALID_ARG, or ESP_FAIL on IO error.

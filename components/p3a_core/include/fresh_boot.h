@@ -33,14 +33,16 @@ esp_err_t fresh_boot_erase_nvs(void);
 
 /**
  * @brief Delete and recreate the p3a SD card root directory
- * 
+ *
  * This function:
- * 1. Recursively deletes /sdcard/p3a and all its contents
- * 2. Recreates the empty /sdcard/p3a directory
- * 
+ * 1. Recursively deletes the configured SD root (default /sdcard/p3a,
+ *    resolved via sd_path_get_root()) and all its contents
+ * 2. Recreates the empty root directory
+ *
  * This is intended for debugging fresh device behavior.
- * Should be called after SD card is mounted but before sd_path_init().
- * 
+ * Should be called after the SD card is mounted and NVS is initialized
+ * (sd_path lazy-initializes from NVS to resolve the configured root).
+ *
  * @return ESP_OK on success, error code otherwise
  */
 esp_err_t fresh_boot_erase_sdcard(void);

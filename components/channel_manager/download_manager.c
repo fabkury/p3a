@@ -177,8 +177,11 @@ static void dl_build_vault_filepath(const makapix_channel_entry_t *entry,
     }
 
     // Get vault base path
-    if (sd_path_get_vault(s_build_vault_base, sizeof(s_build_vault_base)) != ESP_OK) {
-        strlcpy(s_build_vault_base, "/sdcard/p3a/vault", sizeof(s_build_vault_base));
+    esp_err_t path_err = sd_path_get_vault(s_build_vault_base, sizeof(s_build_vault_base));
+    if (path_err != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot resolve vault directory: %s", esp_err_to_name(path_err));
+        out[0] = '\0';
+        return;
     }
 
     // Convert UUID bytes to string

@@ -253,12 +253,14 @@ esp_err_t makapix_promoted_https_refresh(const char *channel_id)
 
     // Resolve paths
     char channels_path[128];
-    if (sd_path_get_channel(channels_path, sizeof(channels_path)) != ESP_OK) {
-        strlcpy(channels_path, "/sdcard/p3a/channel", sizeof(channels_path));
-    }
     char vault_path[128];
-    if (sd_path_get_vault(vault_path, sizeof(vault_path)) != ESP_OK) {
-        strlcpy(vault_path, "/sdcard/p3a/vault", sizeof(vault_path));
+    esp_err_t path_err = sd_path_get_channel(channels_path, sizeof(channels_path));
+    if (path_err == ESP_OK) {
+        path_err = sd_path_get_vault(vault_path, sizeof(vault_path));
+    }
+    if (path_err != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot resolve SD paths: %s", esp_err_to_name(path_err));
+        return path_err;
     }
 
     uint32_t cache_size = config_store_get_channel_cache_size();

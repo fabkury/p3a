@@ -6,9 +6,10 @@
  * @brief Playset storage API for persisting named playsets to SD card
  *
  * Provides binary file storage for playsets with CRC32
- * validation. Playsets are stored in /sdcard/p3a/channel/ps_{hash}.playset
- * where {hash} is a DJB2 hash of the playset name. The name is stored inside
- * the file header, decoupling human-readable names from filesystem constraints.
+ * validation. Playsets are stored in {sd-root}/channel/ps_{hash}.playset
+ * (root resolved at runtime via sd_path, default /sdcard/p3a) where {hash}
+ * is a DJB2 hash of the playset name. The name is stored inside the file
+ * header, decoupling human-readable names from filesystem constraints.
  *
  * File format: 64-byte header + N * 144-byte channel entries
  */

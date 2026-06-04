@@ -380,7 +380,7 @@ esp_err_t h_post_playset(httpd_req_t *req)
     }
 
     // Boot-restore persistence is handled inside play_scheduler_execute_playset(),
-    // which writes /sdcard/p3a/active_playset.bin via the active_playset_store
+    // which writes {sd-root}/active_playset.bin via the active_playset_store
     // module. The playset's `name` field is preserved in the snapshot for
     // multi-channel playsets (followed_artists, user-saved) so the WebUI pill
     // bar can match by name; single-channel playsets identify by structure.

@@ -150,8 +150,11 @@ static void ps_build_sdcard_filepath(const sdcard_index_entry_t *entry,
 
     // Get animations directory path
     char animations_path[128];
-    if (sd_path_get_animations(animations_path, sizeof(animations_path)) != ESP_OK) {
-        strlcpy(animations_path, "/sdcard/p3a/animations", sizeof(animations_path));
+    esp_err_t path_err = sd_path_get_animations(animations_path, sizeof(animations_path));
+    if (path_err != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot resolve animations directory: %s", esp_err_to_name(path_err));
+        out[0] = '\0';
+        return;
     }
 
     if (entry->filename[0] == '\0') {
@@ -185,8 +188,11 @@ void ps_build_vault_filepath(const makapix_channel_entry_t *entry,
 
     // Makapix entry - build vault path
     char vault_base[128];
-    if (sd_path_get_vault(vault_base, sizeof(vault_base)) != ESP_OK) {
-        strlcpy(vault_base, "/sdcard/p3a/vault", sizeof(vault_base));
+    esp_err_t path_err = sd_path_get_vault(vault_base, sizeof(vault_base));
+    if (path_err != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot resolve vault directory: %s", esp_err_to_name(path_err));
+        out[0] = '\0';
+        return;
     }
 
     // Convert UUID bytes to string

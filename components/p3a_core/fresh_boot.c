@@ -185,9 +185,11 @@ esp_err_t fresh_boot_erase_sdcard(void)
 {
     ESP_LOGW(TAG, "Starting fresh boot SD card erase...");
 
-    // Use the default root path
-    const char *p3a_root = SD_PATH_DEFAULT_ROOT;
-    
+    // Use the configured root (lazy-inits sd_path from NVS; falls back to the
+    // default when unset). Erasing a hardcoded default here would miss the
+    // active tree on devices with a custom root.
+    const char *p3a_root = sd_path_get_root();
+
     // Check if directory exists
     struct stat st;
     if (stat(p3a_root, &st) != 0) {

@@ -121,7 +121,7 @@ typedef enum {
  * stores the full filename directly since local files are identified by
  * their names, not UUIDs.
  *
- * Used in: /sdcard/p3a/channel/sdcard.bin
+ * Used in: {sd-root}/channel/sdcard.bin (default root /sdcard/p3a)
  */
 typedef struct __attribute__((packed)) {
     int32_t post_id;              // Sequential positive ID (1, 2, ...)

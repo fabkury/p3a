@@ -23,8 +23,6 @@
 
 static const char *TAG = "playset_store";
 
-#define PLAYSET_DIR "/sdcard/p3a/channel"
-
 static uint32_t djb2_hash(const char *str)
 {
     uint32_t hash = 5381;
@@ -35,16 +33,42 @@ static uint32_t djb2_hash(const char *str)
     return hash;
 }
 
-static void build_path(const char *name, char *out_path, size_t path_len)
+/**
+ * Resolve the channel directory under the configured SD root at runtime.
+ * Playsets deliberately live under the user-configurable root so a root
+ * switch behaves as a cold start (no cross-root playset bleed-through).
+ */
+static esp_err_t get_playset_dir(char *out_dir, size_t dir_len)
 {
-    snprintf(out_path, path_len, PLAYSET_DIR "/ps_%08lx.playset",
-             (unsigned long)djb2_hash(name));
+    esp_err_t err = sd_path_get_channel(out_dir, dir_len);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to resolve channel directory: %s", esp_err_to_name(err));
+    }
+    return err;
 }
 
-static void build_tmp_path(const char *name, char *out_path, size_t path_len)
+static esp_err_t build_path(const char *name, char *out_path, size_t path_len)
 {
-    snprintf(out_path, path_len, PLAYSET_DIR "/ps_%08lx.playset.tmp",
-             (unsigned long)djb2_hash(name));
+    char dir[128];
+    esp_err_t err = get_playset_dir(dir, sizeof(dir));
+    if (err != ESP_OK) return err;
+
+    int written = snprintf(out_path, path_len, "%s/ps_%08lx.playset",
+                           dir, (unsigned long)djb2_hash(name));
+    if (written < 0 || (size_t)written >= path_len) return ESP_ERR_INVALID_SIZE;
+    return ESP_OK;
+}
+
+static esp_err_t build_tmp_path(const char *name, char *out_path, size_t path_len)
+{
+    char dir[128];
+    esp_err_t err = get_playset_dir(dir, sizeof(dir));
+    if (err != ESP_OK) return err;
+
+    int written = snprintf(out_path, path_len, "%s/ps_%08lx.playset.tmp",
+                           dir, (unsigned long)djb2_hash(name));
+    if (written < 0 || (size_t)written >= path_len) return ESP_ERR_INVALID_SIZE;
+    return ESP_OK;
 }
 
 static uint32_t calculate_checksum(const playset_header_t *header,
@@ -64,25 +88,6 @@ static uint32_t calculate_checksum(const playset_header_t *header,
     return crc;
 }
 
-static esp_err_t ensure_directory(void)
-{
-    struct stat st;
-    if (stat(PLAYSET_DIR, &st) == 0) {
-        return ESP_OK;
-    }
-
-    if (mkdir("/sdcard/p3a", 0755) != 0 && errno != EEXIST) {
-        // Ignore error, parent may exist
-    }
-
-    if (mkdir(PLAYSET_DIR, 0755) != 0 && errno != EEXIST) {
-        ESP_LOGE(TAG, "Failed to create directory %s: %s", PLAYSET_DIR, strerror(errno));
-        return ESP_FAIL;
-    }
-
-    return ESP_OK;
-}
-
 esp_err_t playset_store_save(const char *name, const ps_playset_t *playset)
 {
     if (!name || !playset || strlen(name) == 0 || strlen(name) > PLAYSET_MAX_NAME_LEN) {
@@ -94,15 +99,22 @@ esp_err_t playset_store_save(const char *name, const ps_playset_t *playset)
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t err = ensure_directory();
+    char path[128];
+    char tmp_path[128];
+    esp_err_t err = build_path(name, path, sizeof(path));
+    if (err == ESP_OK) {
+        err = build_tmp_path(name, tmp_path, sizeof(tmp_path));
+    }
     if (err != ESP_OK) {
         return err;
     }
 
-    char path[128];
-    char tmp_path[128];
-    build_path(name, path, sizeof(path));
-    build_tmp_path(name, tmp_path, sizeof(tmp_path));
+    // Boot creates {root}/channel (sd_path_ensure_directories), but recreate
+    // on demand in case the directory disappeared since boot.
+    err = sd_path_ensure_parent_dirs(path);
+    if (err != ESP_OK) {
+        return err;
+    }
 
     playset_header_t header = {0};
     header.magic = PLAYSET_MAGIC;
@@ -183,7 +195,10 @@ esp_err_t playset_store_load(const char *name, ps_playset_t *out_playset)
     }
 
     char path[128];
-    build_path(name, path, sizeof(path));
+    esp_err_t path_err = build_path(name, path, sizeof(path));
+    if (path_err != ESP_OK) {
+        return path_err;
+    }
 
     FILE *f = fopen(path, "rb");
     if (!f) {
@@ -287,7 +302,9 @@ bool playset_store_exists(const char *name)
     }
 
     char path[128];
-    build_path(name, path, sizeof(path));
+    if (build_path(name, path, sizeof(path)) != ESP_OK) {
+        return false;
+    }
 
     struct stat st;
     return stat(path, &st) == 0;
@@ -300,7 +317,10 @@ esp_err_t playset_store_delete(const char *name)
     }
 
     char path[128];
-    build_path(name, path, sizeof(path));
+    esp_err_t path_err = build_path(name, path, sizeof(path));
+    if (path_err != ESP_OK) {
+        return path_err;
+    }
 
     if (unlink(path) != 0 && errno != ENOENT) {
         ESP_LOGE(TAG, "Failed to delete %s: %s", path, strerror(errno));
@@ -316,7 +336,13 @@ esp_err_t playset_store_list(playset_list_entry_t *out, size_t max, size_t *out_
     if (!out || !out_count) return ESP_ERR_INVALID_ARG;
     *out_count = 0;
 
-    DIR *dir = opendir(PLAYSET_DIR);
+    char dir_path[128];
+    esp_err_t path_err = get_playset_dir(dir_path, sizeof(dir_path));
+    if (path_err != ESP_OK) {
+        return path_err;
+    }
+
+    DIR *dir = opendir(dir_path);
     if (!dir) {
         return ESP_OK;
     }
@@ -339,7 +365,7 @@ esp_err_t playset_store_list(playset_list_entry_t *out, size_t max, size_t *out_
 
         // Read header directly to get the playset name
         char fpath[256];
-        snprintf(fpath, sizeof(fpath), PLAYSET_DIR "/%s", ent->d_name);
+        snprintf(fpath, sizeof(fpath), "%s/%s", dir_path, ent->d_name);
 
         FILE *f = fopen(fpath, "rb");
         if (!f) continue;

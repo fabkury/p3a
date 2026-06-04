@@ -128,7 +128,7 @@ static esp_err_t mount_sd_and_discover(char **animations_dir_out)
 
 #if CONFIG_P3A_FORCE_FRESH_SDCARD
         // Debug: Erase SD card p3a directory to simulate fresh boot
-        ESP_LOGW(TAG, "CONFIG_P3A_FORCE_FRESH_SDCARD enabled - erasing /sdcard/p3a");
+        ESP_LOGW(TAG, "CONFIG_P3A_FORCE_FRESH_SDCARD enabled - erasing the configured SD root");
         fresh_boot_erase_sdcard();
 #endif
     }

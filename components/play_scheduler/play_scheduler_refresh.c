@@ -89,6 +89,69 @@ static char s_completed_ids[PS_MAX_CHANNELS][64];
 static size_t s_completed_count = 0;
 
 /**
+ * @brief Per-type freshness interval
+ *
+ * @return Interval in seconds, or 0 for types with no freshness interval
+ *         (SDCARD/ARTWORK/PINNED). SDCARD and ARTWORK refreshes are local
+ *         and cheap, so they are never "fresh" — the periodic cycle is the
+ *         SD card's only periodic rescan path and ARTWORK's retry path for
+ *         evicted/failed downloads.
+ */
+static uint32_t refresh_interval_for_type(ps_channel_type_t type)
+{
+    if (type == PS_CHANNEL_TYPE_GIPHY) {
+        return config_store_get_giphy_refresh_interval();
+    }
+    if (type == PS_CHANNEL_TYPE_INSTITUTION) {
+        return config_store_get_ai_refresh_sec();
+    }
+    if (type == PS_CHANNEL_TYPE_NAMED ||
+        type == PS_CHANNEL_TYPE_USER ||
+        type == PS_CHANNEL_TYPE_HASHTAG ||
+        type == PS_CHANNEL_TYPE_REACTIONS) {
+        return config_store_get_refresh_interval_sec();
+    }
+    return 0;
+}
+
+/**
+ * @brief Whether a channel is provably inside its freshness window
+ *
+ * True only when every precondition for a trustworthy verdict holds: SNTP
+ * has synchronized (pre-SNTP, time(NULL) is boot-relative garbage), the
+ * channel has a real prior refresh stamp, its cache has entries, its type
+ * carries a freshness interval, no force-refresh override is active, and
+ * the interval has not yet elapsed. Anything uncertain returns false —
+ * "not fresh" never blocks a refresh by itself; it only hands the channel
+ * to the connectivity/cooldown gates and per-type dispatchers, which stay
+ * the single source of truth for whether a refresh can actually run.
+ *
+ * Shared by the eligibility pre-emption gate (drop a queued fresh channel)
+ * and the blanket re-queue sites (don't queue a fresh channel at all) so
+ * the two predicates cannot drift: a channel skipped at re-queue is exactly
+ * one the eligibility gate would have dropped.
+ *
+ * Reads the in-memory last_refresh mirror (hydrated from the sidecar at
+ * playset load), not the on-disk sidecar — same source the pre-emption
+ * gate has always used; see the defense-in-depth note in
+ * refresh_channel_is_eligible for why dispatchers re-check the sidecar.
+ */
+static bool refresh_channel_is_fresh(const ps_channel_state_t *ch)
+{
+    if (!sntp_sync_is_synchronized()) return false;
+    if (ch->last_refresh <= 0) return false;
+    if (config_store_get_refresh_allow_override()) return false;
+
+    uint32_t interval = refresh_interval_for_type(ch->type);
+    if (interval == 0) return false;
+
+    if (ch->cache == NULL || ch->cache->entry_count == 0) return false;
+
+    time_t now = time(NULL);
+    return now > 0 && (now - ch->last_refresh) < (time_t)interval;
+}
+
+/**
  * @brief Decide whether a channel is eligible to refresh right now
  *
  * Applies all type-specific gates: Wi-Fi for Giphy (plus 429 cooldown), MQTT
@@ -117,11 +180,11 @@ static bool refresh_channel_is_eligible(ps_channel_state_t *ch, bool mqtt_ready)
     }
 
     // Pre-empt the per-dispatcher freshness gate. Without this, every channel
-    // queued at playset load (or by the periodic re-cycle) sits at
-    // refreshing=true until the picker rotates through and the dispatcher's
-    // gate skips it as "still fresh". While the Giphy 429 cooldown is active
-    // those channels can't even be picked, so they'd appear queued
-    // indefinitely despite having no real work to do.
+    // queued unconditionally (the playset executor queues all channels at
+    // load) sits at refreshing=true until the picker rotates through and the
+    // dispatcher's gate skips it as "still fresh". While the Giphy 429
+    // cooldown is active those channels can't even be picked, so they'd
+    // appear queued indefinitely despite having no real work to do.
     //
     // Mirrors the per-type gates in the dispatcher (Giphy: ~line 730,
     // Makapix: ~line 825). Those gates remain as defense-in-depth — they
@@ -130,32 +193,13 @@ static bool refresh_channel_is_eligible(ps_channel_state_t *ch, bool mqtt_ready)
     // refresh (in-memory bumped, disk save skipped on incomplete fetch).
     // SDCARD/ARTWORK have no dispatcher-side freshness gate, so we don't
     // apply one here either — their refreshes are local and cheap.
-    if (sntp_sync_is_synchronized() &&
-        ch->last_refresh > 0 &&
-        !config_store_get_refresh_allow_override()) {
-        uint32_t interval = 0;
-        if (ch->type == PS_CHANNEL_TYPE_GIPHY) {
-            interval = config_store_get_giphy_refresh_interval();
-        } else if (ch->type == PS_CHANNEL_TYPE_INSTITUTION) {
-            interval = config_store_get_ai_refresh_sec();
-        } else if (ch->type == PS_CHANNEL_TYPE_NAMED ||
-                   ch->type == PS_CHANNEL_TYPE_USER ||
-                   ch->type == PS_CHANNEL_TYPE_HASHTAG ||
-                   ch->type == PS_CHANNEL_TYPE_REACTIONS) {
-            interval = config_store_get_refresh_interval_sec();
-        }
-        bool cache_has_entries = (ch->cache != NULL && ch->cache->entry_count > 0);
-        if (interval > 0 && cache_has_entries) {
-            time_t now = time(NULL);
-            if (now > 0 && (now - ch->last_refresh) < (time_t)interval) {
-                ch->refresh_pending = false;
-                ESP_LOGI(TAG, "Channel '%s' still fresh (last refresh %lds ago, interval %lus), dropped from queue",
-                         ch->display_name,
-                         (long)(now - ch->last_refresh),
-                         (unsigned long)interval);
-                return false;
-            }
-        }
+    if (refresh_channel_is_fresh(ch)) {
+        ch->refresh_pending = false;
+        ESP_LOGI(TAG, "Channel '%s' still fresh (last refresh %lds ago, interval %lus), dropped from queue",
+                 ch->display_name,
+                 (long)(time(NULL) - ch->last_refresh),
+                 (unsigned long)refresh_interval_for_type(ch->type));
+        return false;
     }
 
     // Artwork channels don't need MQTT — they download directly
@@ -530,6 +574,15 @@ static void refresh_task(void *arg)
         // skipped the metadata save (save-side guard). Re-queuing lets the
         // cooldown logic re-evaluate with a valid clock and the preserved
         // on-disk last_refresh from the previous session.
+        //
+        // Selective: this runs after sync, so refresh_channel_is_fresh()
+        // gives a trustworthy verdict against the sidecar-hydrated
+        // last_refresh — channels provably inside their window are left
+        // alone instead of being queued just to be dropped by the
+        // eligibility gate. A channel that DID refresh pre-SNTP has no
+        // valid stamp (both the in-memory bump and the sidecar save are
+        // SNTP-gated), so it reads as not-fresh and is re-queued for the
+        // valid-clock re-evaluation this one-shot exists for.
         if (!s_sntp_synced_observed && sntp_sync_is_synchronized()) {
             s_sntp_synced_observed = true;
             // Reset periodic timer so the SNTP-triggered round recalculates
@@ -546,7 +599,8 @@ static void refresh_task(void *arg)
                      t == PS_CHANNEL_TYPE_HASHTAG ||
                      t == PS_CHANNEL_TYPE_INSTITUTION) &&
                     !state->channels[i].refresh_in_progress &&
-                    !state->channels[i].refresh_pending) {
+                    !state->channels[i].refresh_pending &&
+                    !refresh_channel_is_fresh(&state->channels[i])) {
                     state->channels[i].refresh_pending = true;
                 }
             }
@@ -556,6 +610,12 @@ static void refresh_task(void *arg)
         // One-shot: when PICO-8 mode ends, re-queue Makapix channels for refresh.
         // The refresh tasks exit after one cycle, so after PICO-8 paused them
         // the Play Scheduler must re-trigger them.
+        //
+        // Selective: a channel that completed its refresh before PICO-8 took
+        // over has a valid stamp and is provably fresh — skip it. A refresh
+        // that PICO-8 interrupted never bumped last_refresh, so the channel
+        // reads as not-fresh and is re-queued, which is the case this
+        // one-shot exists for.
         {
             bool pico8_active = (p3a_state_get() == P3A_STATE_PICO8_STREAMING);
             if (s_pico8_was_active && !pico8_active) {
@@ -570,7 +630,8 @@ static void refresh_task(void *arg)
                          t == PS_CHANNEL_TYPE_NAMED ||
                          t == PS_CHANNEL_TYPE_INSTITUTION) &&
                         !state->channels[i].refresh_in_progress &&
-                        !state->channels[i].refresh_pending) {
+                        !state->channels[i].refresh_pending &&
+                        !refresh_channel_is_fresh(&state->channels[i])) {
                         state->channels[i].refresh_pending = true;
                     }
                 }
@@ -736,24 +797,15 @@ static void refresh_task(void *arg)
                     // Sweep current channel state for the soonest stale_at.
                     // The accumulator only captures channels that traversed
                     // the dispatcher's per-type freshness check; channels
-                    // skipped earlier at refresh_channel_is_eligible's
-                    // pre-emption gate never contribute. Recomputing from
-                    // ch->last_refresh here makes the adaptive delay correct
-                    // regardless of which path each channel took.
+                    // skipped earlier (dropped by the eligibility pre-emption
+                    // gate, or never queued by a selective re-queue site)
+                    // never contribute. Recomputing from ch->last_refresh
+                    // here makes the adaptive delay correct regardless of
+                    // which path each channel took.
                     for (size_t i = 0; i < state->channel_count; i++) {
                         ps_channel_state_t *cch = &state->channels[i];
                         if (cch->last_refresh <= 0) continue;
-                        uint32_t cinterval = 0;
-                        if (cch->type == PS_CHANNEL_TYPE_GIPHY) {
-                            cinterval = config_store_get_giphy_refresh_interval();
-                        } else if (cch->type == PS_CHANNEL_TYPE_INSTITUTION) {
-                            cinterval = config_store_get_ai_refresh_sec();
-                        } else if (cch->type == PS_CHANNEL_TYPE_NAMED ||
-                                   cch->type == PS_CHANNEL_TYPE_USER ||
-                                   cch->type == PS_CHANNEL_TYPE_HASHTAG ||
-                                   cch->type == PS_CHANNEL_TYPE_REACTIONS) {
-                            cinterval = config_store_get_refresh_interval_sec();
-                        }
+                        uint32_t cinterval = refresh_interval_for_type(cch->type);
                         if (cinterval == 0) continue;
                         time_t cstale = cch->last_refresh + (time_t)cinterval;
                         if (earliest_stale_time == 0 || cstale < earliest_stale_time) {
@@ -788,10 +840,10 @@ static void refresh_task(void *arg)
                         if (state->channels[i].refresh_pending) still_pending++;
                     }
                     if (still_pending > 0) {
-                        ESP_LOGI(TAG, "No eligible channels to refresh (%zu pending on connectivity/cooldown). Next periodic check in %lu seconds.",
+                        ESP_LOGI(TAG, "No eligible channels to refresh (%zu pending on connectivity/cooldown). Next freshness check in %lu seconds.",
                                  still_pending, (unsigned long)s_next_refresh_delay);
                     } else {
-                        ESP_LOGI(TAG, "All channels refreshed. Next periodic refresh in %lu seconds.",
+                        ESP_LOGI(TAG, "All channels refreshed. Next freshness check in %lu seconds.",
                                  (unsigned long)s_next_refresh_delay);
                     }
                     /* Settled-and-online moment: nudge the pin_lists GC so any
@@ -799,16 +851,52 @@ static void refresh_task(void *arg)
                        delete get reclaimed. No-op if there's nothing to do. */
                     pin_lists_gc_kick();
                 } else if (now - s_last_full_refresh_complete >= (time_t)s_next_refresh_delay) {
-                    ESP_LOGI(TAG, "Starting periodic refresh cycle (%lu seconds elapsed)",
-                             (unsigned long)s_next_refresh_delay);
+                    // Selective re-queue: skip channels provably inside their
+                    // freshness window. They used to be queued unconditionally
+                    // and immediately dropped by the eligibility gate — pure
+                    // churn (two INFO lines per fresh channel per cycle and a
+                    // transient "refreshing" blip in the status API). The
+                    // predicate is shared with that gate, so a channel skipped
+                    // here is exactly one the gate would have dropped.
+                    //
+                    // Channels that can't refresh RIGHT NOW are deliberately
+                    // still queued when due — is_fresh knows nothing about
+                    // connectivity, and the gates stay the deciders:
+                    //  - unregistered Makapix (state IDLE/REG_INVALID): the
+                    //    eligibility gate keeps clearing them each cycle, as
+                    //    before, so they retry within an hour of registration;
+                    //  - Wi-Fi-down / cooldown-gated (Giphy or museum 429):
+                    //    those keep refresh_pending set across cycles anyway
+                    //    (the gate preserves it), so the re-stamp here is
+                    //    idempotent and they still retry within ~2s of the
+                    //    gate opening.
+                    // SDCARD/ARTWORK have no interval (never fresh): they
+                    // re-queue every cycle, preserving the hourly SD rescan
+                    // and evicted/failed-artwork retry. PINNED is local-only
+                    // with nothing to refresh — skipped explicitly rather
+                    // than queued for the gate to silently clear.
+                    size_t due = 0;
                     for (size_t i = 0; i < state->channel_count; i++) {
-                        state->channels[i].refresh_pending = true;
+                        ps_channel_state_t *cch = &state->channels[i];
+                        if (cch->type == PS_CHANNEL_TYPE_PINNED) continue;
+                        if (refresh_channel_is_fresh(cch)) continue;
+                        cch->refresh_pending = true;
+                        due++;
+                    }
+                    if (due > 0) {
+                        ESP_LOGI(TAG, "Periodic refresh cycle: %zu channel(s) due (%lu seconds elapsed)",
+                                 due, (unsigned long)s_next_refresh_delay);
+                    } else {
+                        ESP_LOGD(TAG, "Periodic freshness check: no channels due (%lu seconds elapsed)",
+                                 (unsigned long)s_next_refresh_delay);
                     }
                     s_last_full_refresh_complete = 0;
                     s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
                     earliest_stale_time = 0;
                     xSemaphoreGive(state->mutex);
-                    ps_refresh_signal_work();
+                    if (due > 0) {
+                        ps_refresh_signal_work();
+                    }
                     vTaskDelay(pdMS_TO_TICKS(100));
                     continue;
                 }

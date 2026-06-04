@@ -212,19 +212,32 @@ void makapix_credentials_poll_task(void *pvParameters)
                 mqtt_port = mqtt_port_to_save;
                 
                 // Use certificates directly from creds struct (no need to reload from SPIFFS)
-                err = makapix_mqtt_init(player_key, mqtt_host, mqtt_port, 
+                err = makapix_mqtt_init(player_key, mqtt_host, mqtt_port,
                                        creds.ca_pem, creds.cert_pem, creds.key_pem);
                 if (err == ESP_OK) {
                     err = makapix_mqtt_connect();
                     if (err != ESP_OK) {
+                        // Synchronous failure (e.g. no memory for the MQTT
+                        // task): the disconnect callback never fires, so spawn
+                        // the reconnect task ourselves or nothing will retry.
                         ESP_LOGE(MAKAPIX_TAG, "MQTT connect failed: %s", esp_err_to_name(err));
                         makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
+                        (void)makapix_ensure_reconnect_task(true);
                     }
                 } else {
                     ESP_LOGE(MAKAPIX_TAG, "MQTT init failed: %s", esp_err_to_name(err));
                     makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
+                    (void)makapix_ensure_reconnect_task(true);
                 }
-                
+
+                // A device that booted unregistered never armed the reconnect
+                // watchdog: makapix_connect_if_registered bailed at the
+                // no-player-key check before reaching its watchdog start.
+                // Arm it now so this freshly registered session has the same
+                // safety net as a registered boot (re-spawns the reconnect
+                // task if state is DISCONNECTED with no task running).
+                makapix_reconnect_watchdog_start();
+
                 break; // Exit polling task
             } else {
                 ESP_LOGE(MAKAPIX_TAG, "Failed to save certificates: %s", esp_err_to_name(err));

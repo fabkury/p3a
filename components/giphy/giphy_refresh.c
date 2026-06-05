@@ -183,12 +183,15 @@ static void giphy_evict_orphans(channel_cache_t *cache, si_node_t *si_hash)
             }
             kept++;
         } else {
-            // Evict — delete cached file
+            // Evict — delete cached file and any .404 marker so the marker
+            // can't orphan in the shard directory
             const giphy_channel_entry_t *ge =
                 (const giphy_channel_entry_t *)&cache->entries[i];
             char filepath[256];
             giphy_build_filepath(ge->giphy_id, ge->extension,
                                  filepath, sizeof(filepath));
+            unlink(filepath);
+            strlcat(filepath, ".404", sizeof(filepath));
             unlink(filepath);
             if (evicted_ids) {
                 evicted_ids[evicted] = ge->post_id;

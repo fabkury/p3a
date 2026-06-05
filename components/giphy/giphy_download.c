@@ -40,6 +40,13 @@ static const char *TAG = "giphy_dl";
  * @brief Rendition suffix lookup table
  *
  * Maps (rendition_name, format) to the URL path suffix.
+ *
+ * Caveat: only the fixed_height/fixed_width/original files are guaranteed to
+ * exist on the CDN. The downsized* rows are best-effort — Giphy materializes
+ * those derivatives for only some GIFs (for the rest the API's rendition url
+ * points at giphy.gif, and the guessed filename 404s). That is why the
+ * per-entry override path (giphy_build_download_url_for_entry) stores which
+ * file the API actually referenced instead of trusting this table.
  */
 typedef struct {
     const char *rendition;
@@ -59,27 +66,13 @@ static const rendition_map_t s_rendition_map[] = {
     { NULL, NULL, NULL }
 };
 
-esp_err_t giphy_build_download_url_for_entry(const giphy_channel_entry_t *entry,
-                                              char *out_url, size_t out_len)
-{
-    if (!entry || !out_url || out_len == 0) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    if (entry->reserved[0] == 1) {
-        // downsized_medium override — always GIF
-        snprintf(out_url, out_len, "https://i.giphy.com/media/%s/giphy-downsized-medium.gif",
-                 entry->giphy_id);
-        ESP_LOGD(TAG, "Download URL: downsized_medium for %s", entry->giphy_id);
-        return ESP_OK;
-    }
-
-    // Default: use configured rendition/format
-    ESP_LOGD(TAG, "Download URL: configured rendition for %s", entry->giphy_id);
-    return giphy_build_download_url(entry->giphy_id, out_url, out_len);
-}
-
-esp_err_t giphy_build_download_url(const char *giphy_id, char *out_url, size_t out_len)
+/**
+ * @brief Build download URL from giphy_id + configured rendition/format
+ *
+ * Entry-unaware: ignores the per-entry downsized_medium override, so it must
+ * only be used as the fallback inside giphy_build_download_url_for_entry().
+ */
+static esp_err_t giphy_build_download_url(const char *giphy_id, char *out_url, size_t out_len)
 {
     if (!giphy_id || !out_url || out_len == 0) {
         return ESP_ERR_INVALID_ARG;
@@ -116,10 +109,40 @@ esp_err_t giphy_build_download_url(const char *giphy_id, char *out_url, size_t o
     return ESP_OK;
 }
 
-esp_err_t giphy_download_artwork(const char *giphy_id, uint8_t extension,
+esp_err_t giphy_build_download_url_for_entry(const giphy_channel_entry_t *entry,
+                                              char *out_url, size_t out_len)
+{
+    if (!entry || !out_url || out_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (entry->reserved[0] == 1) {
+        // downsized_medium override — dedicated derivative file (always GIF)
+        snprintf(out_url, out_len, "https://i.giphy.com/media/%s/giphy-downsized-medium.gif",
+                 entry->giphy_id);
+        ESP_LOGD(TAG, "Download URL: downsized_medium for %s", entry->giphy_id);
+        return ESP_OK;
+    }
+
+    if (entry->reserved[0] == 2) {
+        // downsized_medium override — passthrough: the API's rendition url
+        // pointed at giphy.gif (no dedicated downsized-medium file exists on
+        // the CDN; requesting one would 404)
+        snprintf(out_url, out_len, "https://i.giphy.com/media/%s/giphy.gif",
+                 entry->giphy_id);
+        ESP_LOGD(TAG, "Download URL: downsized_medium via giphy.gif for %s", entry->giphy_id);
+        return ESP_OK;
+    }
+
+    // Default: use configured rendition/format
+    ESP_LOGD(TAG, "Download URL: configured rendition for %s", entry->giphy_id);
+    return giphy_build_download_url(entry->giphy_id, out_url, out_len);
+}
+
+esp_err_t giphy_download_artwork(const char *giphy_id, const char *url, uint8_t extension,
                                  char *out_path, size_t out_len)
 {
-    return giphy_download_artwork_with_progress(giphy_id, extension, out_path, out_len, NULL, NULL);
+    return giphy_download_artwork_with_progress(giphy_id, url, extension, out_path, out_len, NULL, NULL);
 }
 
 // Cooperative abort: stop mid-download if the SD card got exported to USB or the
@@ -139,12 +162,13 @@ static bool giphy_dl_should_abort(void *ctx)
     return false;
 }
 
-esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t extension,
+esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, const char *url,
+                                               uint8_t extension,
                                                char *out_path, size_t out_len,
                                                giphy_download_progress_cb_t progress_cb,
                                                void *progress_ctx)
 {
-    if (!giphy_id || !out_path || out_len == 0) {
+    if (!giphy_id || !url || !url[0] || !out_path || out_len == 0) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -170,11 +194,6 @@ esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t ext
         return ESP_FAIL;
     }
     esp_err_t err = sd_path_ensure_parent_dirs(out_path);
-    if (err != ESP_OK) return err;
-
-    // Build download URL
-    char url[256];
-    err = giphy_build_download_url(giphy_id, url, sizeof(url));
     if (err != ESP_OK) return err;
 
     ESP_LOGD(TAG, "Downloading: %s -> %s", url, out_path);

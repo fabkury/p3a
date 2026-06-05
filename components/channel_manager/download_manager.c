@@ -727,17 +727,20 @@ static void download_task(void *arg)
         ESP_LOGI(TAG, "Downloading: %s", s_dl_req.art_url);
         esp_err_t err;
         if (play_scheduler_is_giphy_channel(s_dl_req.channel_id)) {
-            // Giphy channel: use giphy_download_artwork
+            // Giphy channel: use giphy_download_artwork with the entry-aware
+            // URL built in dl_get_next_download (and logged above), so the
+            // per-entry downsized_medium override is honored.
             // Determine extension from the filepath
             uint8_t ext = 0;  // default webp
             size_t flen = strlen(s_dl_req.filepath);
             if (flen >= 4 && strcmp(s_dl_req.filepath + flen - 4, ".gif") == 0) ext = 1;
             if (!animation_player_is_animation_ready()) {
-                err = giphy_download_artwork_with_progress(s_dl_req.storage_key, ext,
+                err = giphy_download_artwork_with_progress(s_dl_req.storage_key, s_dl_req.art_url, ext,
                           s_task_out_path, sizeof(s_task_out_path),
                           dl_progress_cb, s_task_display_name);
             } else {
-                err = giphy_download_artwork(s_dl_req.storage_key, ext, s_task_out_path, sizeof(s_task_out_path));
+                err = giphy_download_artwork(s_dl_req.storage_key, s_dl_req.art_url, ext,
+                          s_task_out_path, sizeof(s_task_out_path));
             }
         } else if (play_scheduler_is_institution_channel(s_dl_req.channel_id)) {
             // Institution channel: museum_id derived from spec_name; the URL

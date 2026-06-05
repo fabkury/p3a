@@ -169,24 +169,16 @@ int32_t giphy_id_to_post_id(const char *giphy_id);
 // ============================================================================
 
 /**
- * @brief Build download URL for a Giphy artwork
- *
- * Reconstructs the URL from giphy_id + configured rendition/format.
- * Pattern: https://i.giphy.com/media/{giphy_id}/{rendition_suffix}
- *
- * @param giphy_id Giphy string ID
- * @param out_url Output buffer for the full URL
- * @param out_len Output buffer length
- * @return ESP_OK on success
- */
-esp_err_t giphy_build_download_url(const char *giphy_id, char *out_url, size_t out_len);
-
-/**
  * @brief Build download URL for a Giphy channel entry
  *
  * Checks entry->reserved[0] to select the rendition:
- * - 0: uses configured rendition/format (delegates to giphy_build_download_url)
- * - 1: uses downsized_medium (always GIF)
+ * - 0: uses configured rendition/format
+ * - 1: downsized_medium via its dedicated giphy-downsized-medium.gif
+ * - 2: downsized_medium passthrough via giphy.gif (the API's rendition url
+ *      pointed at the original; no dedicated downsized-medium file exists)
+ *
+ * This is the only public URL builder: every download must use an
+ * entry-aware URL so the per-entry downsized_medium override is honored.
  *
  * @param entry Giphy channel entry
  * @param out_url Output buffer for the full URL
@@ -203,13 +195,15 @@ esp_err_t giphy_build_download_url_for_entry(const giphy_channel_entry_t *entry,
  * Creates sharded directories as needed.
  *
  * @param giphy_id Giphy string ID
+ * @param url Download URL (build with giphy_build_download_url_for_entry()
+ *            so the per-entry rendition override is honored)
  * @param extension Extension index (0=webp, 1=gif)
  * @param out_path Output buffer for the final file path
  * @param out_len Output buffer length
  * @return ESP_OK on success, ESP_ERR_NOT_FOUND on 404,
  *         ESP_FAIL on other errors
  */
-esp_err_t giphy_download_artwork(const char *giphy_id, uint8_t extension,
+esp_err_t giphy_download_artwork(const char *giphy_id, const char *url, uint8_t extension,
                                  char *out_path, size_t out_len);
 
 /**
@@ -226,7 +220,8 @@ typedef void (*giphy_download_progress_cb_t)(size_t bytes_read, size_t content_l
  *
  * Same as giphy_download_artwork() but invokes progress_cb after each chunk.
  */
-esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, uint8_t extension,
+esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, const char *url,
+                                               uint8_t extension,
                                                char *out_path, size_t out_len,
                                                giphy_download_progress_cb_t progress_cb,
                                                void *progress_ctx);

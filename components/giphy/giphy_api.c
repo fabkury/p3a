@@ -58,6 +58,62 @@ uint32_t giphy_cooldown_remaining_sec(void)
 }
 
 /**
+ * @brief Read a Giphy rendition dimension (served as string or number)
+ *
+ * Giphy is inconsistent: most rendition dims arrive as strings ("480"),
+ * but some GIFs report them as bare JSON numbers. Accept both.
+ */
+static uint16_t json_dim_u16(const cJSON *v)
+{
+    if (cJSON_IsString(v) && v->valuestring[0]) {
+        int n = atoi(v->valuestring);
+        return (n > 0 && n <= UINT16_MAX) ? (uint16_t)n : 0;
+    }
+    if (cJSON_IsNumber(v) && v->valueint > 0 && v->valueint <= UINT16_MAX) {
+        return (uint16_t)v->valueint;
+    }
+    return 0;
+}
+
+/**
+ * @brief Rendition-override flag from a downsized_medium url
+ *
+ * Giphy materializes a dedicated giphy-downsized-medium.gif for only some
+ * GIFs; for the rest downsized_medium is a passthrough whose url points
+ * straight at giphy.gif (and the guessed -downsized-medium filename 404s
+ * on the CDN). The filename inside the API-provided url is therefore the
+ * only authority on which file to fetch from i.giphy.com.
+ *
+ * @return 1 = dedicated giphy-downsized-medium.gif exists,
+ *         2 = passthrough to giphy.gif,
+ *         0 = unrecognized filename (caller must not override)
+ */
+static uint8_t dm_flag_from_url(const cJSON *url)
+{
+    if (!cJSON_IsString(url) || !url->valuestring[0]) return 0;
+
+    // Filename = segment after the last '/' before the query string
+    const char *s = url->valuestring;
+    const char *end = strchr(s, '?');
+    if (!end) end = s + strlen(s);
+    const char *fname = s;
+    for (const char *p = s; p < end; p++) {
+        if (*p == '/') fname = p + 1;
+    }
+    size_t len = (size_t)(end - fname);
+
+    if (len == strlen("giphy-downsized-medium.gif") &&
+        strncmp(fname, "giphy-downsized-medium.gif", len) == 0) {
+        return 1;
+    }
+    if (len == strlen("giphy.gif") &&
+        strncmp(fname, "giphy.gif", len) == 0) {
+        return 2;
+    }
+    return 0;
+}
+
+/**
  * @brief Parse a single GIF object from the Giphy API response
  *
  * Extracts id, dimensions, timestamps, and fills a giphy_channel_entry_t.
@@ -104,21 +160,20 @@ static bool parse_gif_object(const cJSON *gif, giphy_channel_entry_t *out_entry,
         if (prefer_downsized) {
             const cJSON *dm = cJSON_GetObjectItem(images, "downsized_medium");
             if (cJSON_IsObject(dm)) {
-                const cJSON *w = cJSON_GetObjectItem(dm, "width");
-                const cJSON *h = cJSON_GetObjectItem(dm, "height");
-                if (cJSON_IsString(w) && w->valuestring[0] &&
-                    cJSON_IsString(h) && h->valuestring[0]) {
-                    uint16_t dm_w = (uint16_t)atoi(w->valuestring);
-                    uint16_t dm_h = (uint16_t)atoi(h->valuestring);
+                uint16_t dm_w = json_dim_u16(cJSON_GetObjectItem(dm, "width"));
+                uint16_t dm_h = json_dim_u16(cJSON_GetObjectItem(dm, "height"));
+                uint8_t dm_flag = dm_flag_from_url(cJSON_GetObjectItem(dm, "url"));
+                if (dm_w > 0 && dm_h > 0 && dm_flag != 0) {
                     // Only use downsized_medium if it fits within the screen
                     if (dm_w <= screen_width && dm_h <= screen_height) {
                         out_entry->width = dm_w;
                         out_entry->height = dm_h;
                         out_entry->extension = 1;  // downsized_medium is always gif
-                        out_entry->reserved[0] = 1;  // Flag: use downsized_medium URL
+                        out_entry->reserved[0] = dm_flag;  // Which CDN file serves it
                         used_downsized = true;
-                        ESP_LOGD(TAG, "Rendition selected: downsized_medium for %s (%ux%u)",
-                                 gif_id, dm_w, dm_h);
+                        ESP_LOGD(TAG, "Rendition selected: downsized_medium for %s (%ux%u, %s)",
+                                 gif_id, dm_w, dm_h,
+                                 dm_flag == 2 ? "giphy.gif passthrough" : "dedicated file");
                     } else {
                         ESP_LOGD(TAG, "Rendition rejected: downsized_medium for %s (%ux%u exceeds %ux%u)",
                                  gif_id, dm_w, dm_h, screen_width, screen_height);

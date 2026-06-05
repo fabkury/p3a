@@ -221,7 +221,7 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 | Partition | Mount | Size | Purpose |
 |-----------|-------|------|---------|
 | LittleFS | `/webui` | 4 MB | Web UI assets |
-| NVS | — | 24 KB | Wi-Fi credentials, settings, state |
+| NVS | — | 64 KB | Wi-Fi credentials, settings, state |
 | OTA 0 / OTA 1 | — | 8 MB each | Dual firmware slots |
 | Slave FW | — | 2 MB | ESP32-C6 co-processor firmware |
 | **SD Card** | `/sdcard` | — | All artwork storage |

@@ -1,15 +1,23 @@
 # Name,    Type, SubType,  Offset,   Size,    Flags
 # p3a OTA-enabled partition table
 # Note: Changing from factory to OTA requires full re-flash of existing devices
+# v1.x layout: NVS grown in place 24 KB -> 64 KB (absorbing the old phy_init/
+# otadata locations and the former 0x12000-0x20000 gap); phy_init and otadata
+# moved up. ota_0 and everything after it are unchanged from the 0.x layout.
+# Requires a one-time serial re-flash (partition table changes never apply via
+# OTA). NVS keeps offset 0x9000, so prior contents are preserved best-effort:
+# the old valid pages carry over and NVS init erases the stale phy/otadata
+# sectors it inherits as corrupt pages (worst case: full NVS erase -> fresh
+# setup, see nvs_flash_init fallback in p3a_main.c).
 
-# NVS partition for configuration storage
-nvs,       data, nvs,      0x9000,   0x6000,
+# NVS partition for configuration storage (64 KB = 16 pages, 15 usable)
+nvs,       data, nvs,      0x9000,   0x10000,
 
 # PHY initialization data
-phy_init,  data, phy,      0xf000,   0x1000,
+phy_init,  data, phy,      0x19000,  0x1000,
 
 # OTA data partition - stores boot slot selection and rollback state
-otadata,   data, ota,      0x10000,  0x2000,
+otadata,   data, ota,      0x1A000,  0x2000,
 
 # Dual OTA app partitions (8MB each = 16MB total for apps)
 # First OTA partition - primary boot slot

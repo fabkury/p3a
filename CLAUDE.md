@@ -72,7 +72,7 @@ Build artifacts go to `build/`. Release binaries are copied to `release/v{VERSIO
   - `/sdcard/p3a/vault/` - Cached Makapix artwork
   - `/sdcard/p3a/giphy/` - Cached Giphy artwork
   - `/sdcard/p3a/museum/{museum_id}/` - Cached art-institution artwork
-- **NVS** (24KB) - Wi-Fi credentials, settings, state
+- **NVS** (64KB) - Wi-Fi credentials, settings, state
 
 ### Flash Partitions (`partitions.csv`)
 Dual OTA slots (8MB each), NVS, LittleFS (4MB), and a 2MB partition for ESP32-C6 firmware.

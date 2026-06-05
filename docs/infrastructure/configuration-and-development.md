@@ -79,7 +79,7 @@ All p3a data is stored under a configurable root folder (`/sdcard/p3a` by defaul
 
 ### NVS (Non-Volatile Storage)
 
-- **Partition**: `nvs` (24 KB)
+- **Partition**: `nvs` (64 KB)
 - **Stores**: Wi-Fi credentials, device settings, playlist state, Makapix credentials, playset data
 
 ### LittleFS (Internal Flash)

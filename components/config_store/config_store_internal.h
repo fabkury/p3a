@@ -23,7 +23,12 @@
 #define NAMESPACE "appcfg"
 #define KEY_CUR   "cfg"
 #define KEY_NEW   "cfg_new"
-#define MAX_JSON  (32 * 1024)
+// Max serialized config size. Sized against the 64 KB NVS partition: saves
+// are double-buffered (KEY_NEW + KEY_CUR), so peak NVS demand is 2x this,
+// alongside the makapix cert blobs (up to 3x MAKAPIX_PEM_MAX_LEN, 2x during
+// re-registration) and Wi-Fi credentials. Today's config is ~1-2 KB; 8 KB is
+// generous headroom. Keep these budgets in sync if either side grows.
+#define MAX_JSON  (8 * 1024)
 
 // Internal helpers (defined in config_store.c)
 esp_err_t cfg_ensure_nvs(nvs_handle_t *h);

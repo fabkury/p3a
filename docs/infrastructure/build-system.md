@@ -110,9 +110,9 @@ From `partitions.csv`:
 
 | Name | Type | SubType | Offset | Size | Purpose |
 |------|------|---------|--------|------|---------|
-| `nvs` | data | nvs | 0x9000 | 24 KB | Configuration storage |
-| `phy_init` | data | phy | 0xF000 | 4 KB | PHY initialization data |
-| `otadata` | data | ota | 0x10000 | 8 KB | OTA boot slot selection and rollback state |
+| `nvs` | data | nvs | 0x9000 | 64 KB | Configuration storage |
+| `phy_init` | data | phy | 0x19000 | 4 KB | PHY initialization data |
+| `otadata` | data | ota | 0x1A000 | 8 KB | OTA boot slot selection and rollback state |
 | `ota_0` | app | ota_0 | 0x20000 | 8 MB | Primary OTA app slot |
 | `ota_1` | app | ota_1 | 0x820000 | 8 MB | Secondary OTA app slot |
 | `storage` | data | spiffs | 0x1020000 | 4 MB | LittleFS web UI assets |

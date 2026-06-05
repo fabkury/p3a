@@ -165,7 +165,7 @@ Hand these to the Makapix Club backend team:
 
 ## 6. Cons
 
-- **NVS pressure.** Doubling cert storage (active + prev + recovery token) bumps the makapix namespace from ~12 KB to ~25 KB worst case, against a 24 KB NVS partition. Mitigation: move cert blobs to LittleFS or a small dedicated raw partition and keep NVS for small metadata only. This is a partition-layout decision that needs to land up front.
+- **NVS pressure.** ~~Doubling cert storage (active + prev + recovery token) bumps the makapix namespace from ~12 KB to ~25 KB worst case, against a 24 KB NVS partition.~~ Resolved: the v1.x partition layout grows NVS to 64 KB (grown in place at 0x9000; `partitions.csv`), which absorbs the ~25 KB worst case with room to spare. No cert relocation to LittleFS needed.
 - **Server complexity creeps up.** Per-player rate limiting, mTLS→player mapping, recovery-token rotation, overlap window in the CA — each small, cumulatively non-trivial.
 - **Recovery token is a long-lived secret.** New attack surface. NVS dump = permanent identity theft for that device. Rotate-on-use + rate-limit + per-renewal alerting are the standard mitigations; binding to an eFuse-stored device factor is the next level if the threat model demands it.
 - **Verify-before-commit doubles TLS work per renewal.** Two handshakes (verification + production reconnect). Negligible in absolute terms but worth noting on fragile Wi-Fi links.

@@ -67,7 +67,7 @@ CONFIG = {
     'flash_addresses': {
         'bootloader.bin': 0x2000,
         'partition-table.bin': 0x8000,
-        'ota_data_initial.bin': 0x10000,
+        'ota_data_initial.bin': 0x1A000,
         'p3a.bin': 0x20000,
         'storage.bin': 0x1020000,
         'network_adapter.bin': 0x1420000,  # Must match slave_fw partition in partitions.csv

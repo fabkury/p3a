@@ -141,7 +141,7 @@ files = [
     ('build:p3a.bin', 'p3a.bin', '0x20000', False),
     ('build:bootloader/bootloader.bin', 'bootloader.bin', '0x2000', False),
     ('build:partition_table/partition-table.bin', 'partition-table.bin', '0x8000', False),
-    ('build:ota_data_initial.bin', 'ota_data_initial.bin', '0x10000', False),
+    ('build:ota_data_initial.bin', 'ota_data_initial.bin', '0x1A000', False),
     ('build:storage.bin', 'storage.bin', '0x1020000', False),
     ('project:components/slave_ota/firmware/network_adapter.bin', 'network_adapter.bin', '0x1420000', True),
 ]
@@ -334,7 +334,7 @@ The device will automatically reboot into p3a:
 | `p3a.bin` | Main application firmware | 0x20000 |
 | `bootloader.bin` | ESP-IDF bootloader | 0x2000 |
 | `partition-table.bin` | Partition table | 0x8000 |
-| `ota_data_initial.bin` | OTA data (boot selection) | 0x10000 |
+| `ota_data_initial.bin` | OTA data (boot selection) | 0x1A000 |
 | `storage.bin` | LittleFS web UI assets (4 MB) | 0x1020000 |
 | `network_adapter.bin` | ESP32-C6 co-processor firmware | 0x1420000 |
 

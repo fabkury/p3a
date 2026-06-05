@@ -13,6 +13,24 @@
 #include <stdint.h>
 
 /**
+ * @brief Maximum size of a single PEM item (cert or private key), incl. null terminator
+ *
+ * Single source of truth for the three layers that must agree: the
+ * provisioning response parser (makapix_credentials_result_t), the NVS
+ * read-back buffers in makapix.c, and the MQTT reconnect path
+ * (mqtt_certs_t). A PEM larger than this is rejected at acquisition, so
+ * NVS never holds an item the read paths cannot load.
+ *
+ * Measured server PEMs as of 2026-06-05: 1823/1514/1705 bytes (CA/cert/key),
+ * so 4096 gives ~2x headroom.
+ *
+ * NOTE: the credential-polling task stack (makapix_provision_flow.c) holds
+ * one makapix_credentials_result_t (3x this constant); revisit that stack
+ * size before raising this value.
+ */
+#define MAKAPIX_PEM_MAX_LEN 4096
+
+/**
  * @brief Initialize the Makapix store module
  * 
  * Must be called before any other makapix_store functions.

@@ -506,10 +506,10 @@ esp_err_t makapix_connect_if_registered(void)
     ESP_LOGD(MAKAPIX_TAG, "Connecting to %s:%d", mqtt_host, mqtt_port);
     makapix_set_state(MAKAPIX_STATE_CONNECTING);
 
-    // Load certificates from SPIFFS (allocate dynamically to avoid stack overflow)
-    char *ca_cert = malloc(4096);
-    char *client_cert = malloc(4096);
-    char *client_key = malloc(4096);
+    // Load certificates from NVS (allocate dynamically to avoid stack overflow)
+    char *ca_cert = malloc(MAKAPIX_PEM_MAX_LEN);
+    char *client_cert = malloc(MAKAPIX_PEM_MAX_LEN);
+    char *client_key = malloc(MAKAPIX_PEM_MAX_LEN);
 
     if (!ca_cert || !client_cert || !client_key) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to allocate certificate buffers");
@@ -520,7 +520,7 @@ esp_err_t makapix_connect_if_registered(void)
         return ESP_ERR_NO_MEM;
     }
 
-    err = makapix_store_get_ca_cert(ca_cert, 4096);
+    err = makapix_store_get_ca_cert(ca_cert, MAKAPIX_PEM_MAX_LEN);
     if (err != ESP_OK) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to load CA cert: %s", esp_err_to_name(err));
         free(ca_cert);
@@ -530,7 +530,7 @@ esp_err_t makapix_connect_if_registered(void)
         return err;
     }
 
-    err = makapix_store_get_client_cert(client_cert, 4096);
+    err = makapix_store_get_client_cert(client_cert, MAKAPIX_PEM_MAX_LEN);
     if (err != ESP_OK) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to load client cert: %s", esp_err_to_name(err));
         free(ca_cert);
@@ -540,7 +540,7 @@ esp_err_t makapix_connect_if_registered(void)
         return err;
     }
 
-    err = makapix_store_get_client_key(client_key, 4096);
+    err = makapix_store_get_client_key(client_key, MAKAPIX_PEM_MAX_LEN);
     if (err != ESP_OK) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to load client key: %s", esp_err_to_name(err));
         free(ca_cert);

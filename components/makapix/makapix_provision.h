@@ -9,6 +9,7 @@
 #pragma once
 
 #include "esp_err.h"
+#include "makapix_store.h"  // MAKAPIX_PEM_MAX_LEN
 
 /**
  * @brief Provisioning result structure
@@ -25,9 +26,9 @@ typedef struct {
  * @brief Credentials result structure
  */
 typedef struct {
-    char ca_pem[4096];      // CA certificate
-    char cert_pem[4096];    // Client certificate  
-    char key_pem[4096];     // Client private key
+    char ca_pem[MAKAPIX_PEM_MAX_LEN];      // CA certificate
+    char cert_pem[MAKAPIX_PEM_MAX_LEN];    // Client certificate
+    char key_pem[MAKAPIX_PEM_MAX_LEN];     // Client private key
     char mqtt_host[64];
     uint16_t mqtt_port;
 } makapix_credentials_result_t;

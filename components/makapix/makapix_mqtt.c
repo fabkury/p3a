@@ -7,6 +7,7 @@
  */
 
 #include "makapix_mqtt.h"
+#include "makapix_store.h"  // MAKAPIX_PEM_MAX_LEN
 #include "p3a_current_post.h"
 #include "play_scheduler_types.h"  // POST_SOURCE_MAKAPIX
 #include "mqtt_client.h"
@@ -45,9 +46,9 @@ static void (*s_response_callback)(const char *topic, char *data, int data_len) 
 
 // Static buffers for certificates - ESP-IDF MQTT client stores pointers, doesn't copy
 // These must remain valid for the lifetime of the MQTT client
-static char s_ca_cert[4096] = {0};
-static char s_client_cert[4096] = {0};
-static char s_client_key[4096] = {0};
+static char s_ca_cert[MAKAPIX_PEM_MAX_LEN] = {0};
+static char s_client_cert[MAKAPIX_PEM_MAX_LEN] = {0};
+static char s_client_key[MAKAPIX_PEM_MAX_LEN] = {0};
 
 // Message reassembly for fragmented MQTT messages
 // ESP-IDF MQTT client splits large messages across multiple MQTT_EVENT_DATA events

@@ -73,7 +73,7 @@ void makapix_provisioning_task(void *pvParameters)
             ESP_LOGD(MAKAPIX_TAG, "Starting credential polling task...");
 
             // Start credential polling task
-            // Stack size needs to be large enough for makapix_credentials_result_t (3x 4096 byte arrays = ~12KB)
+            // Stack size needs to be large enough for makapix_credentials_result_t (3x MAKAPIX_PEM_MAX_LEN arrays = ~12KB)
             const size_t cred_poll_stack_size = 16384;
             if (!s_cred_poll_stack) {
                 s_cred_poll_stack = heap_caps_malloc(cred_poll_stack_size * sizeof(StackType_t),

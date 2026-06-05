@@ -202,9 +202,9 @@ void makapix_mqtt_connection_callback(bool connected)
 
 // Cert buffers allocated on heap to avoid 12KB stack usage
 typedef struct {
-    char ca[4096];
-    char cert[4096];
-    char key[4096];
+    char ca[MAKAPIX_PEM_MAX_LEN];
+    char cert[MAKAPIX_PEM_MAX_LEN];
+    char key[MAKAPIX_PEM_MAX_LEN];
 } mqtt_certs_t;
 
 /**

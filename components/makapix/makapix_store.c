@@ -111,9 +111,10 @@ esp_err_t makapix_store_get_mqtt_port(uint16_t *out_port)
     return err;
 }
 
-esp_err_t makapix_store_save_credentials(const char *player_key, const char *host, uint16_t port)
+esp_err_t makapix_store_save_registration(const char *player_key, const char *host, uint16_t port,
+                                          const char *ca_pem, const char *cert_pem, const char *key_pem)
 {
-    if (!player_key || !host) {
+    if (!player_key || !host || !ca_pem || !cert_pem || !key_pem) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -124,7 +125,13 @@ esp_err_t makapix_store_save_credentials(const char *player_key, const char *hos
         return err;
     }
 
-    // Save player_key
+    size_t ca_len = strlen(ca_pem) + 1;  // Include null terminator
+    size_t cert_len = strlen(cert_pem) + 1;
+    size_t key_len = strlen(key_pem) + 1;
+
+    // Write the complete registration under one handle with a single commit,
+    // overwriting any prior registration in place. This minimizes the window
+    // where NVS could hold a partial registration (certs without player_key).
     err = nvs_set_str(nvs_handle, KEY_PLAYER_KEY, player_key);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to save player_key: %s", esp_err_to_name(err));
@@ -132,7 +139,6 @@ esp_err_t makapix_store_save_credentials(const char *player_key, const char *hos
         return err;
     }
 
-    // Save MQTT host
     err = nvs_set_str(nvs_handle, KEY_MQTT_HOST, host);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to save mqtt_host: %s", esp_err_to_name(err));
@@ -140,10 +146,30 @@ esp_err_t makapix_store_save_credentials(const char *player_key, const char *hos
         return err;
     }
 
-    // Save MQTT port
     err = nvs_set_blob(nvs_handle, KEY_MQTT_PORT, &port, sizeof(port));
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to save mqtt_port: %s", esp_err_to_name(err));
+        nvs_close(nvs_handle);
+        return err;
+    }
+
+    err = nvs_set_blob(nvs_handle, KEY_CA_CERT, ca_pem, ca_len);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save CA cert: %s", esp_err_to_name(err));
+        nvs_close(nvs_handle);
+        return err;
+    }
+
+    err = nvs_set_blob(nvs_handle, KEY_CLIENT_CERT, cert_pem, cert_len);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save client cert: %s", esp_err_to_name(err));
+        nvs_close(nvs_handle);
+        return err;
+    }
+
+    err = nvs_set_blob(nvs_handle, KEY_CLIENT_KEY, key_pem, key_len);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save client key: %s", esp_err_to_name(err));
         nvs_close(nvs_handle);
         return err;
     }
@@ -153,7 +179,8 @@ esp_err_t makapix_store_save_credentials(const char *player_key, const char *hos
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to commit NVS: %s", esp_err_to_name(err));
     } else {
-        ESP_LOGI(TAG, "Saved Makapix credentials: player_key=%s, host=%s, port=%d", player_key, host, port);
+        ESP_LOGI(TAG, "Saved Makapix registration: player_key=%s, host=%s, port=%d, certs=%zu/%zu/%zu bytes",
+                 player_key, host, port, ca_len, cert_len, key_len);
     }
 
     nvs_close(nvs_handle);
@@ -197,62 +224,6 @@ bool makapix_store_has_certificates(void)
 
     nvs_close(nvs_handle);
     return all_exist;
-}
-
-esp_err_t makapix_store_save_certificates(const char *ca_pem, const char *cert_pem, const char *key_pem)
-{
-    if (!ca_pem || !cert_pem || !key_pem) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    nvs_handle_t nvs_handle;
-    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to open NVS namespace: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    size_t ca_len = strlen(ca_pem) + 1;  // Include null terminator
-    size_t cert_len = strlen(cert_pem) + 1;
-    size_t key_len = strlen(key_pem) + 1;
-
-    // Save CA certificate
-    err = nvs_set_blob(nvs_handle, KEY_CA_CERT, ca_pem, ca_len);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to save CA cert: %s", esp_err_to_name(err));
-        nvs_close(nvs_handle);
-        return err;
-    }
-    ESP_LOGI(TAG, "Saved CA certificate to NVS (%zu bytes)", ca_len);
-
-    // Save client certificate
-    err = nvs_set_blob(nvs_handle, KEY_CLIENT_CERT, cert_pem, cert_len);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to save client cert: %s", esp_err_to_name(err));
-        nvs_close(nvs_handle);
-        return err;
-    }
-    ESP_LOGI(TAG, "Saved client certificate to NVS (%zu bytes)", cert_len);
-
-    // Save client private key
-    err = nvs_set_blob(nvs_handle, KEY_CLIENT_KEY, key_pem, key_len);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to save client key: %s", esp_err_to_name(err));
-        nvs_close(nvs_handle);
-        return err;
-    }
-    ESP_LOGI(TAG, "Saved client private key to NVS (%zu bytes)", key_len);
-
-    // Commit changes
-    err = nvs_commit(nvs_handle);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to commit NVS: %s", esp_err_to_name(err));
-    } else {
-        ESP_LOGI(TAG, "All certificates saved successfully to NVS");
-    }
-
-    nvs_close(nvs_handle);
-    return err;
 }
 
 esp_err_t makapix_store_get_ca_cert(char *buffer, size_t max_len)

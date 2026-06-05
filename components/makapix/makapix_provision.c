@@ -26,22 +26,28 @@ typedef struct {
     char *buffer;
     size_t buffer_size;
     size_t data_len;
+    size_t dropped;     // Bytes discarded because the buffer was full (truncation)
 } http_response_t;
 
 static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
     http_response_t *resp = (http_response_t *)evt->user_data;
-    
+
     switch (evt->event_id) {
     case HTTP_EVENT_ON_DATA:
         if (resp && resp->buffer && evt->data_len > 0) {
             // Check if we have room
             size_t remaining = resp->buffer_size - resp->data_len - 1; // -1 for null terminator
-            size_t copy_len = (evt->data_len < remaining) ? evt->data_len : remaining;
+            size_t copy_len = ((size_t)evt->data_len < remaining) ? (size_t)evt->data_len : remaining;
             if (copy_len > 0) {
                 memcpy(resp->buffer + resp->data_len, evt->data, copy_len);
                 resp->data_len += copy_len;
                 resp->buffer[resp->data_len] = '\0';
+            }
+            // Track overflow so callers can report truncation instead of
+            // misdiagnosing the resulting partial body as a parse failure
+            if ((size_t)evt->data_len > copy_len) {
+                resp->dropped += (size_t)evt->data_len - copy_len;
             }
         }
         break;
@@ -87,7 +93,8 @@ esp_err_t makapix_provision_request(makapix_provision_result_t *result)
     http_response_t response = {
         .buffer = malloc(MAX_RESPONSE_SIZE),
         .buffer_size = MAX_RESPONSE_SIZE,
-        .data_len = 0
+        .data_len = 0,
+        .dropped = 0
     };
     
     if (!response.buffer) {
@@ -141,7 +148,11 @@ esp_err_t makapix_provision_request(makapix_provision_result_t *result)
 
         ESP_LOGI(TAG, "HTTP Status = %d, response_len = %zu", status_code, response.data_len);
 
-        if (status_code == 201) {
+        if (response.dropped > 0) {
+            ESP_LOGE(TAG, "Provisioning response truncated: %zu bytes exceeded %d-byte buffer",
+                     response.dropped, MAX_RESPONSE_SIZE);
+            err = ESP_ERR_INVALID_SIZE;
+        } else if (status_code == 201) {
             // Parse response body captured by event handler
             if (response.data_len > 0) {
                 ESP_LOGD(TAG, "Response: %s", response.buffer);
@@ -226,11 +237,12 @@ esp_err_t makapix_poll_credentials(const char *player_key, makapix_credentials_r
 
     // Allocate response buffer (certificates can be large)
     // Use SPIRAM to leave internal RAM for mbedTLS SSL buffers
-    #define CREDENTIALS_MAX_RESPONSE_SIZE 16384  // 16KB should be enough for 3 PEM certificates
+    #define CREDENTIALS_MAX_RESPONSE_SIZE 32768  // 32KB: 3 JSON-escaped PEMs typically ~6-9KB, generous headroom for larger certs/chains
     http_response_t response = {
         .buffer = heap_caps_malloc(CREDENTIALS_MAX_RESPONSE_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT),
         .buffer_size = CREDENTIALS_MAX_RESPONSE_SIZE,
-        .data_len = 0
+        .data_len = 0,
+        .dropped = 0
     };
     
     if (!response.buffer) {
@@ -276,7 +288,11 @@ esp_err_t makapix_poll_credentials(const char *player_key, makapix_credentials_r
 
         ESP_LOGI(TAG, "Credentials poll HTTP Status = %d, response_len = %zu", status_code, response.data_len);
 
-        if (status_code == 200) {
+        if (response.dropped > 0) {
+            ESP_LOGE(TAG, "Credentials response truncated: %zu bytes exceeded %d-byte buffer — server response too large",
+                     response.dropped, CREDENTIALS_MAX_RESPONSE_SIZE);
+            err = ESP_ERR_INVALID_SIZE;
+        } else if (status_code == 200) {
             // Credentials are available - parse response
             if (response.data_len > 0) {
                 ESP_LOGD(TAG, "Credentials response received");

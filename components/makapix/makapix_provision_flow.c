@@ -159,90 +159,88 @@ void makapix_credentials_poll_task(void *pvParameters)
                 ESP_LOGD(MAKAPIX_TAG, "Pending broker info from provisioning: %s:%d", s_pending_mqtt_host, s_pending_mqtt_port);
             }
             
-            // Clear old registration data before saving new credentials (only if re-registering)
-            // This ensures old data is only cleared upon successful, complete registration
-            if (makapix_store_has_player_key() || makapix_store_has_certificates()) {
-                ESP_LOGD(MAKAPIX_TAG, "Clearing old registration data before saving new credentials");
-                makapix_store_clear();
+            // Determine which broker info to use:
+            // 1. Use credentials response if provided
+            // 2. Otherwise use preserved broker info from provisioning
+            // 3. Fall back to CONFIG values as last resort
+            const char *mqtt_host_to_save;
+            uint16_t mqtt_port_to_save;
+
+            if (strlen(creds.mqtt_host) > 0 && creds.mqtt_port > 0) {
+                mqtt_host_to_save = creds.mqtt_host;
+                mqtt_port_to_save = creds.mqtt_port;
+                ESP_LOGD(MAKAPIX_TAG, "Using broker info from credentials response: %s:%d", mqtt_host_to_save, mqtt_port_to_save);
+            } else if (has_pending_broker) {
+                mqtt_host_to_save = s_pending_mqtt_host;
+                mqtt_port_to_save = s_pending_mqtt_port;
+                ESP_LOGD(MAKAPIX_TAG, "Using pending broker info: %s:%d", mqtt_host_to_save, mqtt_port_to_save);
+            } else {
+                mqtt_host_to_save = CONFIG_MAKAPIX_CLUB_HOST;
+                mqtt_port_to_save = CONFIG_MAKAPIX_CLUB_MQTT_PORT;
+                ESP_LOGD(MAKAPIX_TAG, "Using CONFIG broker info: %s:%d", mqtt_host_to_save, mqtt_port_to_save);
             }
-            
-            // Save certificates to SPIFFS
-            err = makapix_store_save_certificates(creds.ca_pem, creds.cert_pem, creds.key_pem);
+
+            // Persist the complete registration (player_key, broker info, TLS
+            // certs) to NVS in a single transaction — registration is confirmed.
+            // Any old registration is overwritten in the same commit, so NVS
+            // never holds certificates without a matching player_key.
+            err = makapix_store_save_registration(player_key, mqtt_host_to_save, mqtt_port_to_save,
+                                                  creds.ca_pem, creds.cert_pem, creds.key_pem);
+            if (err != ESP_OK) {
+                // Keep the pending in-memory credentials and keep polling: the
+                // next iteration re-fetches the credentials and retries the
+                // save. Without this, a failed NVS write would surface only
+                // after reboot as a silently unregistered device.
+                ESP_LOGE(MAKAPIX_TAG, "Failed to persist registration: %s — will retry", esp_err_to_name(err));
+                continue;
+            }
+
+            // Clear pending state
+            memset(s_pending_player_key, 0, sizeof(s_pending_player_key));
+            memset(s_pending_mqtt_host, 0, sizeof(s_pending_mqtt_host));
+            s_pending_mqtt_port = 0;
+
+            ESP_LOGD(MAKAPIX_TAG, "Registration saved successfully, initiating MQTT connection");
+            makapix_mqtt_deinit();  // Tear down old MQTT client before connecting with new certs
+            makapix_set_state(MAKAPIX_STATE_CONNECTING);
+
+            // Update connectivity state - device is now registered
+            event_bus_emit_i32(P3A_EVENT_REGISTRATION_CHANGED, 1);
+
+            // Initiate MQTT connection using the determined broker info
+            char mqtt_host[64];
+            uint16_t mqtt_port;
+            snprintf(mqtt_host, sizeof(mqtt_host), "%s", mqtt_host_to_save);
+            mqtt_port = mqtt_port_to_save;
+
+            // Use certificates directly from creds struct (no need to reload from NVS)
+            err = makapix_mqtt_init(player_key, mqtt_host, mqtt_port,
+                                   creds.ca_pem, creds.cert_pem, creds.key_pem);
             if (err == ESP_OK) {
-                // Determine which broker info to use:
-                // 1. Use credentials response if provided
-                // 2. Otherwise use preserved broker info from provisioning
-                // 3. Fall back to CONFIG values as last resort
-                const char *mqtt_host_to_save;
-                uint16_t mqtt_port_to_save;
-                
-                if (strlen(creds.mqtt_host) > 0 && creds.mqtt_port > 0) {
-                    mqtt_host_to_save = creds.mqtt_host;
-                    mqtt_port_to_save = creds.mqtt_port;
-                    ESP_LOGD(MAKAPIX_TAG, "Using broker info from credentials response: %s:%d", mqtt_host_to_save, mqtt_port_to_save);
-                } else if (has_pending_broker) {
-                    mqtt_host_to_save = s_pending_mqtt_host;
-                    mqtt_port_to_save = s_pending_mqtt_port;
-                    ESP_LOGD(MAKAPIX_TAG, "Using pending broker info: %s:%d", mqtt_host_to_save, mqtt_port_to_save);
-                } else {
-                    mqtt_host_to_save = CONFIG_MAKAPIX_CLUB_HOST;
-                    mqtt_port_to_save = CONFIG_MAKAPIX_CLUB_MQTT_PORT;
-                    ESP_LOGD(MAKAPIX_TAG, "Using CONFIG broker info: %s:%d", mqtt_host_to_save, mqtt_port_to_save);
-                }
-                
-                // NOW persist credentials to NVS — registration is confirmed
-                makapix_store_save_credentials(player_key, mqtt_host_to_save, mqtt_port_to_save);
-
-                // Clear pending state
-                memset(s_pending_player_key, 0, sizeof(s_pending_player_key));
-                memset(s_pending_mqtt_host, 0, sizeof(s_pending_mqtt_host));
-                s_pending_mqtt_port = 0;
-
-                ESP_LOGD(MAKAPIX_TAG, "Certificates saved successfully, initiating MQTT connection");
-                makapix_mqtt_deinit();  // Tear down old MQTT client before connecting with new certs
-                makapix_set_state(MAKAPIX_STATE_CONNECTING);
-                
-                // Update connectivity state - device is now registered
-                event_bus_emit_i32(P3A_EVENT_REGISTRATION_CHANGED, 1);
-                
-                // Initiate MQTT connection using the determined broker info
-                char mqtt_host[64];
-                uint16_t mqtt_port;
-                snprintf(mqtt_host, sizeof(mqtt_host), "%s", mqtt_host_to_save);
-                mqtt_port = mqtt_port_to_save;
-                
-                // Use certificates directly from creds struct (no need to reload from SPIFFS)
-                err = makapix_mqtt_init(player_key, mqtt_host, mqtt_port,
-                                       creds.ca_pem, creds.cert_pem, creds.key_pem);
-                if (err == ESP_OK) {
-                    err = makapix_mqtt_connect();
-                    if (err != ESP_OK) {
-                        // Synchronous failure (e.g. no memory for the MQTT
-                        // task): the disconnect callback never fires, so spawn
-                        // the reconnect task ourselves or nothing will retry.
-                        ESP_LOGE(MAKAPIX_TAG, "MQTT connect failed: %s", esp_err_to_name(err));
-                        makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
-                        (void)makapix_ensure_reconnect_task(true);
-                    }
-                } else {
-                    ESP_LOGE(MAKAPIX_TAG, "MQTT init failed: %s", esp_err_to_name(err));
+                err = makapix_mqtt_connect();
+                if (err != ESP_OK) {
+                    // Synchronous failure (e.g. no memory for the MQTT
+                    // task): the disconnect callback never fires, so spawn
+                    // the reconnect task ourselves or nothing will retry.
+                    ESP_LOGE(MAKAPIX_TAG, "MQTT connect failed: %s", esp_err_to_name(err));
                     makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
                     (void)makapix_ensure_reconnect_task(true);
                 }
-
-                // A device that booted unregistered never armed the reconnect
-                // watchdog: makapix_connect_if_registered bailed at the
-                // no-player-key check before reaching its watchdog start.
-                // Arm it now so this freshly registered session has the same
-                // safety net as a registered boot (re-spawns the reconnect
-                // task if state is DISCONNECTED with no task running).
-                makapix_reconnect_watchdog_start();
-
-                break; // Exit polling task
             } else {
-                ESP_LOGE(MAKAPIX_TAG, "Failed to save certificates: %s", esp_err_to_name(err));
-                // Continue polling in case of transient error
+                ESP_LOGE(MAKAPIX_TAG, "MQTT init failed: %s", esp_err_to_name(err));
+                makapix_set_state(MAKAPIX_STATE_DISCONNECTED);
+                (void)makapix_ensure_reconnect_task(true);
             }
+
+            // A device that booted unregistered never armed the reconnect
+            // watchdog: makapix_connect_if_registered bailed at the
+            // no-player-key check before reaching its watchdog start.
+            // Arm it now so this freshly registered session has the same
+            // safety net as a registered boot (re-spawns the reconnect
+            // task if state is DISCONNECTED with no task running).
+            makapix_reconnect_watchdog_start();
+
+            break; // Exit polling task
         } else if (err == ESP_ERR_NOT_FOUND) {
             // Registration not complete yet - continue polling
             ESP_LOGD(MAKAPIX_TAG, "Credentials not ready yet (404), continuing to poll...");

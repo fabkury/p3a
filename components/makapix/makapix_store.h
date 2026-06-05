@@ -55,33 +55,31 @@ esp_err_t makapix_store_get_mqtt_host(char *out_host, size_t max_len);
 esp_err_t makapix_store_get_mqtt_port(uint16_t *out_port);
 
 /**
- * @brief Save Makapix credentials to NVS
- * 
+ * @brief Persist a complete Makapix registration to NVS in one transaction
+ *
+ * Writes player_key, MQTT broker info, and all three TLS certificates under a
+ * single NVS handle with a single commit. Existing values are overwritten in
+ * place, so a prior registration does not need to be cleared first. Writing
+ * everything in one transaction minimizes the window where NVS could hold a
+ * partial registration (e.g. certificates without a player_key).
+ *
  * @param player_key UUID string (36 chars + null terminator)
  * @param host MQTT broker hostname
  * @param port MQTT broker port
- * @return ESP_OK on success, error code otherwise
- */
-esp_err_t makapix_store_save_credentials(const char *player_key, const char *host, uint16_t port);
-
-/**
- * @brief Check if TLS certificates are stored in NVS
- * 
- * @return true if all certificates exist, false otherwise
- */
-bool makapix_store_has_certificates(void);
-
-/**
- * @brief Save TLS certificates to NVS
- * 
- * Saves CA certificate, client certificate, and client private key to NVS.
- * 
  * @param ca_pem CA certificate PEM string
  * @param cert_pem Client certificate PEM string
  * @param key_pem Client private key PEM string
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t makapix_store_save_certificates(const char *ca_pem, const char *cert_pem, const char *key_pem);
+esp_err_t makapix_store_save_registration(const char *player_key, const char *host, uint16_t port,
+                                          const char *ca_pem, const char *cert_pem, const char *key_pem);
+
+/**
+ * @brief Check if TLS certificates are stored in NVS
+ *
+ * @return true if all certificates exist, false otherwise
+ */
+bool makapix_store_has_certificates(void);
 
 /**
  * @brief Get CA certificate from NVS

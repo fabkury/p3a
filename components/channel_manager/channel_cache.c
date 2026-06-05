@@ -58,7 +58,8 @@ static struct {
     // pointer, and by writers (scheduler) around unregister+free, so the
     // struct can't be freed mid-iteration.
     SemaphoreHandle_t lifecycle_mutex;
-    TickType_t first_dirty_tick;  // Tick when first cache became dirty (0 = none)
+    bool first_dirty_valid;       // true while any cache is dirty (guards first_dirty_tick)
+    TickType_t first_dirty_tick;  // Tick when first cache became dirty since last flush
 } s_cache_state = {0};
 
 // ============================================================================
@@ -710,13 +711,18 @@ void channel_cache_schedule_save(channel_cache_t *cache)
 
     cache->dirty = true;
 
-    // Record tick of first dirty mark (since last flush)
-    if (s_cache_state.first_dirty_tick == 0) {
-        s_cache_state.first_dirty_tick = xTaskGetTickCount() | 1;  // Ensure non-zero
+    // Record tick of first dirty mark (since last flush). The old code kept
+    // "0 = none" in the tick itself via `| 1`, which on even ticks stored
+    // tick+1 and made the subtraction below underflow to ~4.29e9 — flushing
+    // immediately and defeating the debounce ~50% of the time.
+    TickType_t now = xTaskGetTickCount();
+    if (!s_cache_state.first_dirty_valid) {
+        s_cache_state.first_dirty_tick = now;
+        s_cache_state.first_dirty_valid = true;
     }
 
     // If max delay exceeded, flush immediately instead of resetting debounce
-    TickType_t elapsed = xTaskGetTickCount() - s_cache_state.first_dirty_tick;
+    TickType_t elapsed = now - s_cache_state.first_dirty_tick;
     if (elapsed >= pdMS_TO_TICKS(CHANNEL_CACHE_SAVE_MAX_DELAY_MS)) {
         event_bus_emit_simple(P3A_EVENT_CACHE_FLUSH);
         return;
@@ -763,7 +769,7 @@ void channel_cache_flush_all(const char *channels_path)
     }
 
     // Reset max-delay tracker after flush
-    s_cache_state.first_dirty_tick = 0;
+    s_cache_state.first_dirty_valid = false;
 
     xSemaphoreGive(s_cache_state.registry_mutex);
 }

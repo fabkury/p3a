@@ -390,6 +390,18 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
                                    ? read_into_buffer(sink, client, req)
                                    : read_into_file(sink, client, content_length, max_size, req);
 
+            // Chunked responses carry no Content-Length, so the byte-count
+            // truncation check below can't see a premature end-of-stream (the
+            // EAGAIN-under-load path surfaces as read==0, indistinguishable
+            // from EOF — see docs/concurrent-tls-eagain-tabled.md). The parser
+            // does know whether the terminating zero-length chunk arrived;
+            // capture that before close/cleanup destroy the parser state.
+            // Gated on is_chunked: for close-delimited responses (no
+            // Content-Length and not chunked) is_complete_data_received()
+            // reports false even on success, which would fail every transfer.
+            bool chunked_incomplete = esp_http_client_is_chunked_response(client) &&
+                                      !esp_http_client_is_complete_data_received(client);
+
             esp_http_client_close(client);
             esp_http_client_cleanup(client);
 
@@ -417,10 +429,16 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
             // BODY_OK or BODY_READ_ERR -> truncation check, then final validations.
             bool truncated = (br == BODY_READ_ERR) ||
                              sink->bytes == 0 ||
-                             (content_length > 0 && sink->bytes < (size_t)content_length);
+                             (content_length > 0 && sink->bytes < (size_t)content_length) ||
+                             chunked_incomplete;
             if (truncated) {
-                ESP_LOGW(TAG, "Truncated response: got %zu/%lld bytes",
-                         sink->bytes, (long long)content_length);
+                if (chunked_incomplete) {
+                    ESP_LOGW(TAG, "Truncated chunked response: got %zu bytes, terminal chunk never arrived: %s",
+                             sink->bytes, cur_url);
+                } else {
+                    ESP_LOGW(TAG, "Truncated response: got %zu/%lld bytes",
+                             sink->bytes, (long long)content_length);
+                }
                 continue;  // retry
             }
             if (req->min_size > 0 && sink->bytes < req->min_size) {

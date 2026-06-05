@@ -2,6 +2,8 @@
 
 Status: **Option 2 implemented** (2026-05-03). Truncated-read retry with backoff is now in `giphy_download.c` and `giphy_api.c::giphy_fetch_page`. Options 3 and 4 remain on the shelf — revisit if Option 2 retries turn out to be frequent in real usage.
 
+Update 2026-06-05: the retry/truncation core has since been centralized in the shared `components/http_fetch` helper, and the truncation check was extended to chunked transfer-encoding (no Content-Length) — see the dated bullet under Option 2's implementation notes.
+
 ## Symptom
 
 During a periodic Giphy channel refresh, the log shows:
@@ -76,6 +78,27 @@ In `giphy_fetch_page` (and analogous call sites), compare bytes received against
 - Truncation detected when: `esp_http_client_read` returns `< 0`, `total == 0`, or `total < Content-Length`.
 - Fatal (no retry): 404 in download path; 401/403/429 in API path; oversized (>16 MiB); local file write/truncate error; response buffer overflow.
 - Coverage gap: `view_tracker` pingbacks, `register_click`, `fetch_random_id`, and the makapix HTTPS paths still lack retry. They were skipped because (a) view_tracker is one-shot best-effort, (b) the others fire infrequently and weren't in the observed failure window. Extend by following the same pattern if needed.
+- **2026-06-05 update:** the retry/truncation core has since been centralized in
+  `components/http_fetch` (`do_fetch()`), which giphy, all seven museums,
+  `makapix_artwork`, and `show_url` now call — Option 2 coverage is much wider
+  than the original two call sites (the bullets above predate that refactor;
+  of the listed gaps, `view_tracker` events go over MQTT today, and the
+  remaining direct-`esp_http_client` paths are `register_click` /
+  `fetch_random_id` (click-driven, best-effort), OTA, provisioning, and
+  `makapix_promoted_https` — the last is flagged in `docs/v1.0-readiness-audit.md`).
+  Same date, the truncation check was extended to **chunked transfer-encoding**:
+  a 200 body whose terminating zero-length chunk never arrived is now treated
+  as a truncated read and retried (log: `"Truncated chunked response"`).
+  Previously the EAGAIN→`read==0` mapping described above was indistinguishable
+  from EOF when the server sent no Content-Length, so a partial chunked body
+  was accepted as success — in the file path it got renamed into the vault as a
+  corrupt artwork that only the decode-time corrupt-file deletion
+  (`animation_loader_try_delete_corrupt_cached_file`, 60 s cooldown, fires only
+  on loud decode failures) could catch later; truncated-but-decodable
+  animations were never caught at all. Close-delimited responses (no
+  Content-Length, not chunked) remain undetectable at this layer by design:
+  `esp_http_client_is_complete_data_received()` always reports false for them,
+  so the new check is gated on `esp_http_client_is_chunked_response()`.
 
 **Pros**
 - Localized (~20 lines in `giphy_fetch_page`).

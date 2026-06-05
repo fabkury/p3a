@@ -164,8 +164,12 @@ static bool parse_gif_object(const cJSON *gif, giphy_channel_entry_t *out_entry,
                 uint16_t dm_h = json_dim_u16(cJSON_GetObjectItem(dm, "height"));
                 uint8_t dm_flag = dm_flag_from_url(cJSON_GetObjectItem(dm, "url"));
                 if (dm_w > 0 && dm_h > 0 && dm_flag != 0) {
-                    // Only use downsized_medium if it fits within the screen
-                    if (dm_w <= screen_width && dm_h <= screen_height) {
+                    // Accept downsized_medium up to 1.5x the screen on each
+                    // axis; the renderer downscales modest oversizes and the
+                    // result still beats an upscaled fixed_height.
+                    uint32_t max_w = (uint32_t)screen_width * 3 / 2;
+                    uint32_t max_h = (uint32_t)screen_height * 3 / 2;
+                    if (dm_w <= max_w && dm_h <= max_h) {
                         out_entry->width = dm_w;
                         out_entry->height = dm_h;
                         out_entry->extension = 1;  // downsized_medium is always gif
@@ -175,8 +179,8 @@ static bool parse_gif_object(const cJSON *gif, giphy_channel_entry_t *out_entry,
                                  gif_id, dm_w, dm_h,
                                  dm_flag == 2 ? "giphy.gif passthrough" : "dedicated file");
                     } else {
-                        ESP_LOGD(TAG, "Rendition rejected: downsized_medium for %s (%ux%u exceeds %ux%u)",
-                                 gif_id, dm_w, dm_h, screen_width, screen_height);
+                        ESP_LOGI(TAG, "Rendition rejected: downsized_medium for %s (%ux%u exceeds %ux%u)",
+                                 gif_id, dm_w, dm_h, (unsigned)max_w, (unsigned)max_h);
                     }
                 }
             }

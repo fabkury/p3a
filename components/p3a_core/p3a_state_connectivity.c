@@ -192,6 +192,14 @@ void p3a_state_on_wifi_connected(void)
     }
     xSemaphoreGive(s_state.mutex);
 
+    // Wake the Play Scheduler refresh task: channels gated on Wi-Fi (Giphy,
+    // museums, promoted-HTTPS) keep refresh_pending while offline and can
+    // proceed now. MQTT-gated channels get the equivalent signal from
+    // makapix_mqtt.c on MQTT_EVENT_CONNECTED; same extern pattern used here
+    // (resolved at link time, no component dependency).
+    extern void ps_refresh_signal_work(void);
+    ps_refresh_signal_work();
+
     p3a_state_check_internet();
 }
 

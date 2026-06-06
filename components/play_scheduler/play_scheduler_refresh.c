@@ -29,9 +29,12 @@
 #include "p3a_render.h"  // For p3a_render_set_channel_message()
 #include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "esp_timer.h"   // For esp_timer_get_time() (failure backoff deadlines)
+#include "esp_random.h"  // For esp_random() (backoff jitter)
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
+#include <stdint.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -45,6 +48,17 @@ static const char *TAG = "ps_refresh";
 // Periodic refresh configuration
 #define REFRESH_INTERVAL_SECONDS 3600  // 1 hour
 #define REFRESH_MIN_DELAY_SECONDS 10   // Floor to prevent tight loops
+
+// Sentinel for channel_next_actionable_sec(): the channel contributes no timed
+// deadline — it is either gated on a connectivity event (Wi-Fi/MQTT signals
+// wake the task via ps_refresh_signal_work) or has no freshness interval.
+#define NEXT_CHECK_NO_DEADLINE UINT32_MAX
+
+// Per-channel failure retry backoff: 30 s doubling to a 15 min cap (shift
+// clamped at use site so a long streak can't overflow), ±20% jitter applied
+// when armed so channels that failed together don't retry in lockstep.
+#define RETRY_BACKOFF_BASE_SEC 30
+#define RETRY_BACKOFF_CAP_SEC  900
 
 // Concurrency control
 #define REFRESH_MAX_CONCURRENT 2
@@ -76,6 +90,13 @@ static volatile bool s_sntp_cache_touched = false;
 static bool s_pico8_was_active = false;
 static time_t s_last_full_refresh_complete = 0;
 static uint32_t s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
+
+// Arms the pin_lists GC kick fired at the next idle settle. Starts armed so
+// the first settle after boot reclaims tombstones from a power loss; re-armed
+// on playset switch and whenever a refresh actually completes. Without the
+// flag the idle branch would kick the GC (an SD directory scan) on every
+// re-entry while channels sit gated on a cooldown or missing connectivity.
+static bool s_gc_kick_armed = true;
 
 // PSRAM-backed stack for refresh task
 static StackType_t *s_refresh_stack = NULL;
@@ -152,6 +173,123 @@ static bool refresh_channel_is_fresh(const ps_channel_state_t *ch)
 }
 
 /**
+ * @brief Seconds until this channel could next need AND accept a refresh
+ *
+ * A channel is actionable when the latest of its constraints clears:
+ *  - freshness expiry (last_refresh + interval; 0 when overdue/never refreshed)
+ *  - rate-limit cooldown (Giphy key-wide, museum per-museum)
+ *  - per-channel failure backoff (retry_at_us)
+ *
+ * "Due" without "actionable" is what used to clamp the periodic delay to its
+ * 10 s floor: an overdue channel behind a 429 cooldown reported a stale time
+ * in the past, so the idle machinery re-armed every 10 seconds for the whole
+ * cooldown despite having provably nothing to do.
+ *
+ * Channels gated on connectivity (Wi-Fi for Giphy/museums, MQTT for Makapix)
+ * have no timed bound — they return NEXT_CHECK_NO_DEADLINE and rely on the
+ * connectivity signals (ps_refresh_signal_work on Wi-Fi/MQTT connect) plus
+ * the REFRESH_INTERVAL_SECONDS fallback. SDCARD/ARTWORK carry no freshness
+ * interval and ride along with whatever cycle fires next; only an active
+ * failure backoff gives them a deadline of their own.
+ *
+ * Cooldowns and backoff are esp_timer-based (monotonic); freshness is wall
+ * clock. All terms are combined as deltas from now, never as absolute times,
+ * so the two clock domains never mix.
+ *
+ * @param ch       Channel state (caller must hold mutex)
+ * @param now      Current wall-clock time
+ * @param wifi_up  Cached p3a_state_has_wifi()
+ * @param mqtt_up  Cached makapix_mqtt_is_connected()
+ * @param out_gate Set to a short human-readable name of the binding
+ *                 constraint (NULL when the channel has no deadline and no
+ *                 connectivity gate, e.g. PINNED)
+ * @return Seconds until next actionable, or NEXT_CHECK_NO_DEADLINE
+ */
+static uint32_t channel_next_actionable_sec(const ps_channel_state_t *ch, time_t now,
+                                            bool wifi_up, bool mqtt_up,
+                                            const char **out_gate)
+{
+    *out_gate = NULL;
+
+    // Pinned channels are local-only and never refresh.
+    if (ch->type == PS_CHANNEL_TYPE_PINNED) {
+        return NEXT_CHECK_NO_DEADLINE;
+    }
+
+    // Failure backoff applies to every refreshable type.
+    uint32_t backoff_in = 0;
+    if (ch->retry_at_us > 0) {
+        int64_t now_us = esp_timer_get_time();
+        if (now_us < ch->retry_at_us) {
+            backoff_in = (uint32_t)((ch->retry_at_us - now_us + 999999) / 1000000);
+        }
+    }
+
+    // Freshness expiry: 0 when overdue or never refreshed.
+    uint32_t stale_in = 0;
+    uint32_t interval = refresh_interval_for_type(ch->type);
+    if (interval > 0 && ch->last_refresh > 0 && now > 0) {
+        time_t stale_at = ch->last_refresh + (time_t)interval;
+        if (stale_at > now) stale_in = (uint32_t)(stale_at - now);
+    }
+
+    // SDCARD/ARTWORK: no freshness interval (see refresh_interval_for_type) —
+    // contributing stale_in == 0 here would pin every cycle at the 10 s floor.
+    if (interval == 0) {
+        if (backoff_in > 0) {
+            *out_gate = "failure backoff";
+            return backoff_in;
+        }
+        return NEXT_CHECK_NO_DEADLINE;
+    }
+
+    // Connectivity gates and rate-limit cooldowns, by type.
+    uint32_t gate_in = 0;
+    const char *gate_name = NULL;
+    if (ch->type == PS_CHANNEL_TYPE_GIPHY) {
+        if (!wifi_up) {
+            *out_gate = "Wi-Fi connectivity";
+            return NEXT_CHECK_NO_DEADLINE;
+        }
+        gate_in = giphy_cooldown_remaining_sec();
+        gate_name = "Giphy rate-limit cooldown";
+    } else if (ch->type == PS_CHANNEL_TYPE_INSTITUTION) {
+        if (!wifi_up) {
+            *out_gate = "Wi-Fi connectivity";
+            return NEXT_CHECK_NO_DEADLINE;
+        }
+        char museum_id[16] = {0};
+        char axis[32] = {0};
+        if (art_institution_parse_spec(ch->spec_name, museum_id, sizeof(museum_id),
+                                       axis, sizeof(axis)) == ESP_OK) {
+            gate_in = art_institution_rate_limit_remaining(museum_id);
+        }
+        gate_name = "museum rate-limit cooldown";
+    } else {
+        // Makapix types are MQTT-gated, except the promoted channel which
+        // falls back to HTTPS over plain Wi-Fi (mirrors the eligibility gate).
+        bool promoted_https = (ch->type == PS_CHANNEL_TYPE_NAMED &&
+                               strcmp(ch->spec_name, "promoted") == 0 && wifi_up);
+        if (!mqtt_up && !promoted_https) {
+            *out_gate = "Makapix connectivity";
+            return NEXT_CHECK_NO_DEADLINE;
+        }
+    }
+
+    uint32_t next_in = stale_in;
+    *out_gate = "channel freshness";
+    if (gate_in > next_in) {
+        next_in = gate_in;
+        *out_gate = gate_name;
+    }
+    if (backoff_in > next_in) {
+        next_in = backoff_in;
+        *out_gate = "failure backoff";
+    }
+    return next_in;
+}
+
+/**
  * @brief Decide whether a channel is eligible to refresh right now
  *
  * Applies all type-specific gates: Wi-Fi for Giphy (plus 429 cooldown), MQTT
@@ -199,6 +337,23 @@ static bool refresh_channel_is_eligible(ps_channel_state_t *ch, bool mqtt_ready)
                  ch->display_name,
                  (long)(time(NULL) - ch->last_refresh),
                  (unsigned long)refresh_interval_for_type(ch->type));
+        return false;
+    }
+
+    // Failure backoff: a channel that just failed waits out its per-channel
+    // exponential backoff before re-dispatch. Pending stays set (mirrors the
+    // rate-limit cooldown pattern below) so the retry fires within ~2 s of
+    // the backoff expiring via the periodic eligibility re-check. Checked
+    // before the ARTWORK early-accept so failed artwork downloads back off
+    // too instead of re-downloading every cycle.
+    //
+    // The user's force-refresh override bypasses the backoff — it's an
+    // explicit "I fixed it, try again" signal and a transient failure may
+    // well be fixed. The 429 cooldowns below deliberately do NOT honor the
+    // override: a rate-limited key will fail again no matter what.
+    if (ch->retry_at_us > 0 &&
+        !config_store_get_refresh_allow_override() &&
+        esp_timer_get_time() < ch->retry_at_us) {
         return false;
     }
 
@@ -535,7 +690,6 @@ static void refresh_task(void *arg)
 
     ESP_LOGI(TAG, "Refresh task started");
     s_task_running = true;
-    time_t earliest_stale_time = 0;  // Absolute time when soonest channel goes stale
 
     while (s_task_running) {
         // Wait for work or shutdown
@@ -651,6 +805,12 @@ static void refresh_task(void *arg)
                     // This channel's async refresh completed
                     ch->refresh_async_pending = false;
                     ch->refresh_in_progress = false;
+
+                    // A real refresh ran: clear the failure backoff and arm
+                    // the pin_lists GC kick for the next idle settle.
+                    ch->fail_streak = 0;
+                    ch->retry_at_us = 0;
+                    s_gc_kick_armed = true;
 
                     // Mirror the makapix-side save: only stamp a real time when
                     // SNTP is synced (matches makapix_channel_refresh.c:362).
@@ -794,62 +954,84 @@ static void refresh_task(void *arg)
                         config_store_get_refresh_allow_override()) {
                         config_store_set_refresh_allow_override(false);
                     }
-                    // Sweep current channel state for the soonest stale_at.
-                    // The accumulator only captures channels that traversed
-                    // the dispatcher's per-type freshness check; channels
-                    // skipped earlier (dropped by the eligibility pre-emption
-                    // gate, or never queued by a selective re-queue site)
-                    // never contribute. Recomputing from ch->last_refresh
-                    // here makes the adaptive delay correct regardless of
-                    // which path each channel took.
+                    // Gate-aware deadline sweep: each channel reports when it
+                    // could next need AND accept a refresh — freshness expiry,
+                    // rate-limit cooldown expiry, and failure backoff combined
+                    // (whichever clears last; see channel_next_actionable_sec).
+                    // Channels gated on connectivity report no deadline: the
+                    // Wi-Fi/MQTT connect signals wake the task directly, and
+                    // the REFRESH_INTERVAL_SECONDS fallback is belt-and-braces.
+                    //
+                    // Without the gate terms, overdue-but-gated channels (e.g.
+                    // a whole playset of Giphy channels behind a 429 cooldown)
+                    // reported a stale time in the past, clamping the delay to
+                    // the 10 s floor — the periodic machinery then spun
+                    // uselessly for the entire cooldown (~60 requeue/log
+                    // cycles per 10 min cooldown, plus a pin_lists GC kick
+                    // each time).
+                    //
+                    // The deadline only times the requeue/log cycle. Gated
+                    // channels keep refresh_pending and are picked up by the
+                    // eligibility re-check within ~2 s of their gate opening,
+                    // regardless of this delay.
+                    bool wifi_up = p3a_state_has_wifi();
+                    bool mqtt_up = makapix_mqtt_is_connected();
+                    uint32_t min_next_sec = NEXT_CHECK_NO_DEADLINE;
+                    const char *pending_gate = NULL;  // Binding gate of a still-pending channel
+                    size_t still_pending = 0;
                     for (size_t i = 0; i < state->channel_count; i++) {
                         ps_channel_state_t *cch = &state->channels[i];
-                        if (cch->last_refresh <= 0) continue;
-                        uint32_t cinterval = refresh_interval_for_type(cch->type);
-                        if (cinterval == 0) continue;
-                        time_t cstale = cch->last_refresh + (time_t)cinterval;
-                        if (earliest_stale_time == 0 || cstale < earliest_stale_time) {
-                            earliest_stale_time = cstale;
+                        const char *gate = NULL;
+                        uint32_t next_sec = channel_next_actionable_sec(cch, now, wifi_up,
+                                                                        mqtt_up, &gate);
+                        if (next_sec < min_next_sec) {
+                            min_next_sec = next_sec;
+                        }
+                        if (cch->refresh_pending) {
+                            still_pending++;
+                            if (gate) pending_gate = gate;
                         }
                     }
 
-                    // Compute adaptive delay from freshness tracking
-                    // Use absolute stale time so elapsed processing time is
-                    // automatically accounted for (no stale relative deltas).
-                    if (earliest_stale_time > 0 && now > 0) {
-                        int32_t remaining_sec = (int32_t)(earliest_stale_time - now);
-                        if (remaining_sec < (int32_t)REFRESH_MIN_DELAY_SECONDS) {
-                            s_next_refresh_delay = REFRESH_MIN_DELAY_SECONDS;
-                        } else if ((uint32_t)remaining_sec > REFRESH_INTERVAL_SECONDS) {
-                            s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
-                        } else {
-                            s_next_refresh_delay = (uint32_t)remaining_sec;
-                        }
-                    } else {
+                    if (min_next_sec == NEXT_CHECK_NO_DEADLINE) {
                         s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
+                    } else if (min_next_sec < REFRESH_MIN_DELAY_SECONDS) {
+                        s_next_refresh_delay = REFRESH_MIN_DELAY_SECONDS;
+                    } else if (min_next_sec > REFRESH_INTERVAL_SECONDS) {
+                        s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
+                    } else {
+                        s_next_refresh_delay = min_next_sec;
                     }
+
                     // Distinguish "everything actually refreshed" from "no
                     // eligible work right now": channels stay pending while
-                    // gated on Wi-Fi / MQTT / rate-limit cooldowns (typical
-                    // at boot before connectivity), and the old unconditional
-                    // copy claimed completion at t=2.6s on a cold boot with
-                    // nothing refreshed. Logged once per idle detection (the
-                    // stamp above keeps this branch from re-entering).
-                    size_t still_pending = 0;
-                    for (size_t i = 0; i < state->channel_count; i++) {
-                        if (state->channels[i].refresh_pending) still_pending++;
-                    }
+                    // gated on Wi-Fi / MQTT / rate-limit cooldowns / failure
+                    // backoff (typical at boot before connectivity), and the
+                    // old unconditional copy claimed completion at t=2.6s on a
+                    // cold boot with nothing refreshed. Logged once per idle
+                    // detection (the stamp above keeps this branch from
+                    // re-entering); the named gate is the binding constraint
+                    // of one of the pending channels, so the log tells the
+                    // truth about WHY the device is waiting and for how long.
                     if (still_pending > 0) {
-                        ESP_LOGI(TAG, "No eligible channels to refresh (%zu pending on connectivity/cooldown). Next freshness check in %lu seconds.",
-                                 still_pending, (unsigned long)s_next_refresh_delay);
+                        ESP_LOGI(TAG, "No eligible channels to refresh (%zu pending on %s). Next check in %lu seconds.",
+                                 still_pending,
+                                 pending_gate ? pending_gate : "connectivity",
+                                 (unsigned long)s_next_refresh_delay);
                     } else {
                         ESP_LOGI(TAG, "All channels refreshed. Next freshness check in %lu seconds.",
                                  (unsigned long)s_next_refresh_delay);
                     }
-                    /* Settled-and-online moment: nudge the pin_lists GC so any
-                       tombstones left over from a power loss during a previous
-                       delete get reclaimed. No-op if there's nothing to do. */
-                    pin_lists_gc_kick();
+                    /* Settled moment: nudge the pin_lists GC so any tombstones
+                       left over from a power loss during a previous delete get
+                       reclaimed. Armed at boot, on playset switch, and on
+                       completed refreshes — NOT kicked on every idle re-entry,
+                       which would rescan the SD card each cycle while channels
+                       sit gated on a cooldown or missing connectivity. */
+                    if (s_gc_kick_armed) {
+                        s_gc_kick_armed = false;
+                        pin_lists_gc_kick();
+                    }
                 } else if (now - s_last_full_refresh_complete >= (time_t)s_next_refresh_delay) {
                     // Selective re-queue: skip channels provably inside their
                     // freshness window. They used to be queued unconditionally
@@ -859,17 +1041,21 @@ static void refresh_task(void *arg)
                     // predicate is shared with that gate, so a channel skipped
                     // here is exactly one the gate would have dropped.
                     //
-                    // Channels that can't refresh RIGHT NOW are deliberately
-                    // still queued when due — is_fresh knows nothing about
-                    // connectivity, and the gates stay the deciders:
-                    //  - unregistered Makapix (state IDLE/REG_INVALID): the
-                    //    eligibility gate keeps clearing them each cycle, as
-                    //    before, so they retry within an hour of registration;
-                    //  - Wi-Fi-down / cooldown-gated (Giphy or museum 429):
-                    //    those keep refresh_pending set across cycles anyway
-                    //    (the gate preserves it), so the re-stamp here is
-                    //    idempotent and they still retry within ~2s of the
-                    //    gate opening.
+                    // Also skip channels already queued or in flight: the
+                    // re-stamp was an idempotent no-op, but counting them made
+                    // the cycle log claim "30 due" every cycle while every one
+                    // of them sat gated on a cooldown. `due` now counts actual
+                    // not-pending -> pending transitions, so the INFO line
+                    // only fires when this cycle adds real work. Gated
+                    // channels (Wi-Fi down, Giphy/museum 429, failure backoff)
+                    // keep refresh_pending across cycles and retry within ~2s
+                    // of the gate opening — the eligibility gates stay the
+                    // deciders; is_fresh knows nothing about connectivity.
+                    // Unregistered Makapix (state IDLE/REG_INVALID) channels
+                    // have pending cleared by the eligibility gate, so they
+                    // transition back here each cycle and retry within an
+                    // hour of registration, as before.
+                    //
                     // SDCARD/ARTWORK have no interval (never fresh): they
                     // re-queue every cycle, preserving the hourly SD rescan
                     // and evicted/failed-artwork retry. PINNED is local-only
@@ -879,6 +1065,7 @@ static void refresh_task(void *arg)
                     for (size_t i = 0; i < state->channel_count; i++) {
                         ps_channel_state_t *cch = &state->channels[i];
                         if (cch->type == PS_CHANNEL_TYPE_PINNED) continue;
+                        if (cch->refresh_pending || cch->refresh_in_progress) continue;
                         if (refresh_channel_is_fresh(cch)) continue;
                         cch->refresh_pending = true;
                         due++;
@@ -892,7 +1079,6 @@ static void refresh_task(void *arg)
                     }
                     s_last_full_refresh_complete = 0;
                     s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
-                    earliest_stale_time = 0;
                     xSemaphoreGive(state->mutex);
                     if (due > 0) {
                         ps_refresh_signal_work();
@@ -982,8 +1168,6 @@ static void refresh_task(void *arg)
                     ESP_LOGI(TAG, "Giphy channel '%s' deferred (SNTP not synchronized)", display_name); // Channels are re-checked on SNTP sync
                 } else {
                     uint32_t remaining = interval - (uint32_t)(now - giphy_meta.last_refresh);
-                    time_t stale_at = giphy_meta.last_refresh + (time_t)interval;
-                    if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
                     ESP_LOGI(TAG, "Giphy channel '%s' still fresh (last refresh %lds ago, interval %lus, stale in %lus), skipping",
                             display_name, (long)(now - giphy_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
                 }
@@ -1018,10 +1202,7 @@ static void refresh_task(void *arg)
                     const char *query = identifier[0] != '\0' ? identifier : NULL;
                     err = giphy_refresh_channel(channel_id, query, channel_offset);
                 }
-                if (err == ESP_OK) {
-                    time_t stale_at = time(NULL) + (time_t)interval;
-                    if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
-                } else if (err == ESP_ERR_NOT_ALLOWED) {
+                if (err == ESP_ERR_NOT_ALLOWED) {
                     // Check if this is a cancellation (from giphy_cancel_refresh)
                     // vs an invalid API key (HTTP 401/403 from giphy_fetch_page)
                     if (giphy_is_refresh_cancelled()) {
@@ -1032,7 +1213,7 @@ static void refresh_task(void *arg)
                         p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1,
                                                        "Invalid Giphy API key");
                     }
-                } else {
+                } else if (err != ESP_OK) {
                     char giphy_display_name[64];
                     ps_get_display_name_from_spec(type, spec_name, identifier, giphy_display_name, sizeof(giphy_display_name));
                     const char *detail = "Giphy refresh failed";
@@ -1090,8 +1271,6 @@ static void refresh_task(void *arg)
                         ESP_LOGI(TAG, "Institution channel '%s' deferred (SNTP not synchronized)", display_name);
                     } else {
                         uint32_t remaining = interval - (uint32_t)(now - ai_meta.last_refresh);
-                        time_t stale_at = ai_meta.last_refresh + (time_t)interval;
-                        if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
                         ESP_LOGI(TAG, "Institution channel '%s' still fresh (last refresh %lds ago, interval %lus, stale in %lus), skipping",
                                  display_name, (long)(now - ai_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
                     }
@@ -1104,10 +1283,7 @@ static void refresh_task(void *arg)
                     }
                     did_refresh = true;
                     err = art_institution_refresh_by_spec(channel_id, spec_name, identifier, channel_offset);
-                    if (err == ESP_OK) {
-                        time_t stale_at = time(NULL) + (time_t)interval;
-                        if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
-                    } else if (err == ESP_ERR_INVALID_RESPONSE) {
+                    if (err == ESP_ERR_INVALID_RESPONSE) {
                         // 429 — cooldown already engaged inside the adapter.
                         uint32_t remaining_sec = art_institution_rate_limit_remaining(museum_id);
                         char rate_limit_buf[160];
@@ -1118,7 +1294,7 @@ static void refresh_task(void *arg)
                                  museum_id[0] ? museum_id : "museum",
                                  (unsigned)remaining_sec);
                         p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_ERROR, -1, rate_limit_buf);
-                    } else {
+                    } else if (err != ESP_OK) {
                         p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_ERROR, -1, "Museum refresh failed");
                     }
                 }
@@ -1150,8 +1326,6 @@ static void refresh_task(void *arg)
                     mkx_meta.last_refresh > 0 &&
                     (now - mkx_meta.last_refresh) < (time_t)interval) {
                     uint32_t remaining = interval - (uint32_t)(now - mkx_meta.last_refresh);
-                    time_t stale_at = mkx_meta.last_refresh + (time_t)interval;
-                    if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
                     ESP_LOGI(TAG, "Makapix channel '%s' still fresh (last refresh %lds ago, interval %lus, stale in %lus), skipping",
                              display_name, (long)(now - mkx_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
                     err = ESP_OK;
@@ -1167,17 +1341,8 @@ static void refresh_task(void *arg)
                         ESP_LOGI(TAG, "Using HTTPS fallback for promoted channel");
                         did_refresh = true;
                         err = makapix_promoted_https_refresh(channel_id);
-                        // Synchronous — ESP_OK means done, stale_at applies
-                        if (err == ESP_OK) {
-                            time_t stale_at = time(NULL) + (time_t)interval;
-                            if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
-                        }
                     } else {
                         err = refresh_makapix_channel(ch);
-                        if (err == ESP_ERR_NOT_FINISHED) {
-                            time_t stale_at = time(NULL) + (time_t)interval;
-                            if (earliest_stale_time == 0 || stale_at < earliest_stale_time) earliest_stale_time = stale_at;
-                        }
                     }
                 }
             }
@@ -1210,6 +1375,10 @@ static void refresh_task(void *arg)
         } else if (err == ESP_OK) {
             ch->refresh_in_progress = false;
 
+            // Success (or clean no-op): clear the failure backoff.
+            ch->fail_streak = 0;
+            ch->retry_at_us = 0;
+
             // Bump in-memory last_refresh only when an actual refresh primitive
             // ran (did_refresh) and the wall clock is trustworthy. Mirrors the
             // SNTP-gated disk save in giphy_refresh.c and makapix_channel_refresh.c.
@@ -1218,6 +1387,12 @@ static void refresh_task(void *arg)
             // refreshed last week with a real clock, breaking oldest-first.
             if (did_refresh && sntp_sync_is_synchronized()) {
                 ch->last_refresh = time(NULL);
+            }
+
+            // A refresh actually ran: arm the pin_lists GC kick for the next
+            // idle settle.
+            if (did_refresh) {
+                s_gc_kick_armed = true;
             }
 
             // Update active flag based on available artwork count
@@ -1241,13 +1416,35 @@ static void refresh_task(void *arg)
             makapix_channel_signal_refresh_done();
         } else {
             ch->refresh_in_progress = false;
-            // Giphy / institution rate-limit: keep pending so the channel
-            // retries within ~2s of the cooldown clearing instead of waiting
-            // up to a full periodic cycle. ESP_ERR_INVALID_RESPONSE is only
-            // ever returned by network-paths for HTTP 429.
             if ((type == PS_CHANNEL_TYPE_GIPHY || type == PS_CHANNEL_TYPE_INSTITUTION) &&
                 err == ESP_ERR_INVALID_RESPONSE) {
+                // Giphy / institution rate-limit: the key/museum-wide cooldown
+                // already gates eligibility — no per-channel backoff on top.
+                // Keep pending so the channel retries within ~2s of the
+                // cooldown clearing instead of waiting up to a full periodic
+                // cycle. ESP_ERR_INVALID_RESPONSE is only ever returned by
+                // network paths for HTTP 429.
                 ch->refresh_pending = true;
+            } else {
+                // Other failures (DNS, 5xx, timeout, missing API key, dead
+                // artwork URL): per-channel exponential backoff with pending
+                // preserved — the eligibility gate holds the channel until
+                // retry_at_us, then the periodic re-check retries it within
+                // ~2 s. Previously pending was dropped and the periodic cycle
+                // re-queued the stale channel ~10 s later, hammering a
+                // failing endpoint indefinitely. Jitter (±20%) keeps channels
+                // that failed together (e.g. a Wi-Fi blip mid-cycle) from
+                // retrying in lockstep.
+                uint32_t shift = ch->fail_streak < 5 ? ch->fail_streak : 5;
+                uint32_t backoff_sec = RETRY_BACKOFF_BASE_SEC << shift;
+                if (backoff_sec > RETRY_BACKOFF_CAP_SEC) backoff_sec = RETRY_BACKOFF_CAP_SEC;
+                uint32_t backoff_ms = backoff_sec * (800 + (esp_random() % 401));
+                ch->retry_at_us = esp_timer_get_time() + (int64_t)backoff_ms * 1000;
+                if (ch->fail_streak < UINT8_MAX) ch->fail_streak++;
+                ch->refresh_pending = true;
+                ESP_LOGI(TAG, "Channel '%s' failure #%u, retry in ~%lus",
+                         display_name, (unsigned)ch->fail_streak,
+                         (unsigned long)(backoff_ms / 1000));
             }
         }
 
@@ -1432,6 +1629,7 @@ void ps_refresh_reset_timer(void)
     s_last_full_refresh_complete = 0;
     s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
     s_pico8_was_active = false;
+    s_gc_kick_armed = true;  // Kick pin_lists GC at the next idle settle
     ESP_LOGD(TAG, "Refresh timer reset");
 }
 

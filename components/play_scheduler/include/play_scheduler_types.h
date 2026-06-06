@@ -309,6 +309,11 @@ typedef struct {
     bool refresh_in_progress;   // Currently refreshing
     bool refresh_async_pending; // Waiting for Makapix async completion
     uint32_t refresh_start_tick;    // Tick when refresh_in_progress was set (for async timeout)
+    uint8_t fail_streak;        // Consecutive refresh failures (0 = healthy); drives the
+                                // exponential retry backoff in play_scheduler_refresh.c
+    int64_t retry_at_us;        // esp_timer deadline gating the next attempt after a
+                                // failure (0 = no backoff). Monotonic domain — immune
+                                // to SNTP step adjustments.
     time_t last_refresh;        // Unix timestamp of last successful refresh (0 = never).
                                 // Mirrors the channel_metadata sidecar; loaded at channel
                                 // init and updated by the refresh task on actual refresh

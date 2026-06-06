@@ -636,6 +636,10 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_
         ch->refresh_in_progress = false;
         ch->refresh_async_pending = false;
         ch->refresh_start_tick = 0;
+        // Channel slots are reused across playsets — don't inherit a previous
+        // channel's failure backoff.
+        ch->fail_streak = 0;
+        ch->retry_at_us = 0;
 
         // Hydrate last_refresh from on-disk sidecar so the picker can rank
         // channels by oldest-first across reboots and partial refresh cycles.

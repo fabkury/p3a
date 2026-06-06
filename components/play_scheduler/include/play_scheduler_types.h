@@ -279,6 +279,13 @@ typedef struct {
     uint32_t cursor;          // For RecencyPick
     uint64_t pick_rng_state;  // For RandomPick (64-bit state for proper PCG32)
 
+    // Pick-miss staleness tracking (RAM only, never persisted). Shift
+    // register of recent swap-time outcomes (bit 1 = file missing); when
+    // the recent miss rate trips the windowed threshold, an LAi
+    // verification sweep is requested. See ps_track_pick_outcome().
+    uint32_t miss_window;
+    uint8_t miss_window_fill;  // Valid bits in miss_window (saturates at 32)
+
     // Cache info
     // For SD card channels: entries/entry_count/available_* are used directly
     // For Makapix channels: access ch->cache->* instead (cache may reallocate during merges)

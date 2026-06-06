@@ -28,6 +28,7 @@
 #include "giphy.h"
 #include "art_institution.h"
 #include "channel_cache.h"
+#include "lai_verify.h"
 #include "sd_path.h"
 #include "sdio_bus.h"
 #include "p3a_state.h"
@@ -191,6 +192,45 @@ static void dl_build_vault_filepath(const makapix_channel_entry_t *entry,
                                  out, out_len) != ESP_OK && out && out_len > 0) {
         out[0] = '\0';
     }
+}
+
+esp_err_t download_manager_build_entry_filepath(const char *channel_id,
+                                                const makapix_channel_entry_t *entry,
+                                                char *out, size_t out_len)
+{
+    if (!channel_id || !entry || !out || out_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    out[0] = '\0';
+
+    bool is_giphy = play_scheduler_is_giphy_channel(channel_id);
+    bool is_institution = !is_giphy && play_scheduler_is_institution_channel(channel_id);
+
+    if (is_giphy) {
+        // Giphy channel: entry is giphy_channel_entry_t (same 64-byte slot)
+        const giphy_channel_entry_t *ge = (const giphy_channel_entry_t *)entry;
+        giphy_build_filepath(ge->giphy_id, ge->extension, out, out_len);
+    } else if (is_institution) {
+        // Institution channel: entry is institution_channel_entry_t.
+        const institution_channel_entry_t *ie = (const institution_channel_entry_t *)entry;
+        // Sentinel extensions (0xFF unresolved, 0xFE tombstone) never have
+        // a downloadable file (see docs/art-institutions/finalized-design.md).
+        if (ie->extension == 0xFF || ie->extension == 0xFE) {
+            return ESP_ERR_NOT_SUPPORTED;
+        }
+        // The {museum}/{shard}/... path needs the playset spec_name.
+        char spec_name[33] = {0};
+        if (play_scheduler_get_channel_spec_name(channel_id, spec_name,
+                                                 sizeof(spec_name)) != ESP_OK) {
+            return ESP_ERR_NOT_FOUND;
+        }
+        art_institution_build_vault_path_from_spec(spec_name, ie, out, out_len);
+    } else {
+        // Makapix channel: standard sharded vault filepath
+        dl_build_vault_filepath(entry, out, out_len);
+    }
+
+    return (out[0] != '\0') ? ESP_OK : ESP_FAIL;
 }
 
 // ============================================================================
@@ -399,21 +439,13 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                 art_institution_parse_spec(ai_spec_name,
                                            ai_museum_id, sizeof(ai_museum_id),
                                            ai_axis_unused, sizeof(ai_axis_unused));
-            }
 
-            if (is_giphy) {
-                // Giphy channel: entry is giphy_channel_entry_t (same size as makapix_channel_entry_t)
-                const giphy_channel_entry_t *ge = (const giphy_channel_entry_t *)entry;
-                giphy_build_filepath(ge->giphy_id, ge->extension, s_dl_filepath, sizeof(s_dl_filepath));
-                strlcpy(s_dl_storage_key, ge->giphy_id, sizeof(s_dl_storage_key));
-            } else if (is_institution) {
-                // Institution channel: entry is institution_channel_entry_t.
-                const institution_channel_entry_t *ie = (const institution_channel_entry_t *)entry;
                 // M2 sentinel extensions never have a downloadable file — skip.
                 // 0xFF (unresolved) entries are work-in-progress: the resolver
                 // will eventually mutate them to a downloadable form, so we
                 // count them so the "all done" log doesn't lie. 0xFE
                 // (tombstone) entries are terminal failures and don't count.
+                const institution_channel_entry_t *ie = (const institution_channel_entry_t *)entry;
                 if (ie->extension == 0xFF || ie->extension == 0xFE) {
                     ESP_LOGD(TAG, "SKIP post_id=%d: institution sentinel ext=0x%02X",
                              ie->post_id, ie->extension);
@@ -422,12 +454,23 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                     }
                     continue;
                 }
-                art_institution_build_vault_path_from_spec(ai_spec_name, ie,
-                                                          s_dl_filepath, sizeof(s_dl_filepath));
+            }
+
+            // Filepath via the shared helper (also used by the LAi
+            // verification sweep, so both resolve identical paths).
+            if (download_manager_build_entry_filepath(ch->channel_id, entry,
+                                                      s_dl_filepath, sizeof(s_dl_filepath)) != ESP_OK) {
+                continue;  // Un-pathable entry; skip to next batch slot.
+            }
+
+            // Storage key per channel type
+            if (is_giphy) {
+                const giphy_channel_entry_t *ge = (const giphy_channel_entry_t *)entry;
+                strlcpy(s_dl_storage_key, ge->giphy_id, sizeof(s_dl_storage_key));
+            } else if (is_institution) {
+                const institution_channel_entry_t *ie = (const institution_channel_entry_t *)entry;
                 strlcpy(s_dl_storage_key, ie->iiif_key, sizeof(s_dl_storage_key));
             } else {
-                // Makapix channel: standard vault filepath
-                dl_build_vault_filepath(entry, s_dl_filepath, sizeof(s_dl_filepath));
                 bytes_to_uuid(entry->storage_key_uuid, s_dl_storage_key, sizeof(s_dl_storage_key));
             }
 
@@ -608,6 +651,15 @@ static void download_task(void *arg)
             continue;  // Skip this cycle
         }
 
+        // Run one paced LAi verification batch when a sweep is pending or
+        // active (pick-miss triggered reconciliation, see lai_verify.h).
+        // Hosted here so verification shares this task's gates and never
+        // contends with a second background SD scanner.
+        lai_verify_result_t verify_state = LAI_VERIFY_IDLE;
+        if (lai_verify_has_work()) {
+            verify_state = lai_verify_run_batch();
+        }
+
         // Resolve one pending museum entry per iteration. For Rijks
         // channels every cache entry arrives with extension=0xFF; the
         // resolver runs the 3-hop Linked-Art walk and mutates the entry
@@ -645,6 +697,11 @@ static void download_task(void *arg)
         }
 
         if (get_err == ESP_ERR_NOT_FOUND) {
+            // Sweep actively progressing: skip the wait and come back for
+            // the next batch (pacing lives inside lai_verify_run_batch).
+            if (verify_state == LAI_VERIFY_RAN) {
+                continue;
+            }
             // All files downloaded OR no channels configured - wait for signal
             // Clear signal before waiting so we only wake on NEW signals
             if (s_dl_channel_count == 0) {
@@ -659,7 +716,12 @@ static void download_task(void *arg)
                 s_all_downloaded_logged = true;
             }
             makapix_channel_clear_downloads_needed();
-            makapix_channel_wait_for_downloads_needed(portMAX_DELAY);
+            // Bounded wait while verify work remains queued (a gated sweep
+            // gets no wake signal when its gates clear, so poll). Re-checking
+            // AFTER the clear also closes the race where a sweep request
+            // lands between the top-of-loop check and the clear.
+            makapix_channel_wait_for_downloads_needed(
+                lai_verify_has_work() ? 5000 : portMAX_DELAY);
             ESP_LOGD(TAG, "Woke from downloads_needed wait");
             continue;
         }
@@ -826,6 +888,9 @@ esp_err_t download_manager_init(void)
     if (!s_mutex) {
         return ESP_ERR_NO_MEM;
     }
+
+    // The LAi verification sweep runs inside the download task loop
+    lai_verify_init();
 
     const size_t stack_size = 81920;
 

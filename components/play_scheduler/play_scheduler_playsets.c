@@ -624,6 +624,10 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_
         ch->cursor = 0;
         ps_prng_seed(&ch->pick_rng_state, s_state->global_seed ^ (uint32_t)i ^ s_state->epoch_id);
 
+        // Reset pick-miss staleness tracking
+        ch->miss_window = 0;
+        ch->miss_window_fill = 0;
+
         // Clear legacy handle
         ch->handle = NULL;
 

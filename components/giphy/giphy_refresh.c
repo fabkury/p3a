@@ -16,6 +16,7 @@
 #include "p3a_board.h"
 #include "channel_cache.h"
 #include "channel_metadata.h"
+#include "download_manager.h"
 #include "sntp_sync.h"
 #include "makapix_channel_events.h"
 #include "sd_path.h"

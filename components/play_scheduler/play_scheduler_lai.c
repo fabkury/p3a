@@ -300,6 +300,41 @@ void play_scheduler_compensate_cursor_after_lai_remove(channel_cache_t *cache,
     xSemaphoreGive(s_state->mutex);
 }
 
+void play_scheduler_on_lai_swept(const char *channel_id, size_t checked, size_t evicted)
+{
+    ps_state_t *s_state = ps_get_state();
+
+    if (!s_state->initialized || !channel_id) {
+        return;
+    }
+
+    xSemaphoreTake(s_state->mutex, portMAX_DELAY);
+
+    int ch_idx = ps_find_channel_index(s_state, channel_id);
+    if (ch_idx < 0) {
+        // Playset switched mid-sweep — nothing to update
+        xSemaphoreGive(s_state->mutex);
+        return;
+    }
+
+    ps_channel_state_t *ch = &s_state->channels[ch_idx];
+
+    // Fresh start for the staleness detector: the LAi now reflects disk
+    ch->miss_window = 0;
+    ch->miss_window_fill = 0;
+
+    if (evicted > 0) {
+        // Availability may have dropped (possibly to zero) — keep the SWRR
+        // weight table in sync with presence so a hollowed-out channel
+        // stops being selected until re-downloads land.
+        ps_swrr_calculate_weights(s_state);
+        ESP_LOGI(TAG, "LAi sweep for '%s': checked=%zu evicted=%zu, LAi now %zu",
+                 ch->display_name, checked, evicted, ps_channel_available_count(ch));
+    }
+
+    xSemaphoreGive(s_state->mutex);
+}
+
 // ============================================================================
 // Stats & Availability
 // ============================================================================

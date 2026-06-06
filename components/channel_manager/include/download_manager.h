@@ -11,8 +11,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include "esp_err.h"
 #include "playlist_manager.h"
+#include "makapix_channel_impl.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -134,6 +136,31 @@ void download_manager_set_channels(const char **channel_ids, size_t count);
  * Called when channel cache is refreshed to rescan from the beginning.
  */
 void download_manager_reset_cursors(void);
+
+/**
+ * @brief Build the local vault filepath for a channel cache entry
+ *
+ * Dispatches on the channel's type: Giphy entries map to the giphy cache,
+ * institution entries to the per-museum tree (via the playset spec_name),
+ * everything else to the sharded Makapix vault. Shared by the download
+ * scan and the LAi verification sweep so both resolve identical paths.
+ *
+ * MUST only be called from the download manager task — the Makapix branch
+ * uses single-task static path-building buffers.
+ *
+ * @param channel_id Channel the entry belongs to
+ * @param entry      Cache entry (64-byte slot; format implied by channel)
+ * @param out        Output buffer for the filepath
+ * @param out_len    Output buffer size
+ * @return ESP_OK on success;
+ *         ESP_ERR_NOT_SUPPORTED for institution sentinel entries
+ *         (0xFF unresolved / 0xFE tombstone — no file by design);
+ *         ESP_ERR_NOT_FOUND if the channel's spec is no longer resolvable;
+ *         ESP_FAIL / ESP_ERR_INVALID_ARG on path-build failure
+ */
+esp_err_t download_manager_build_entry_filepath(const char *channel_id,
+                                                const makapix_channel_entry_t *entry,
+                                                char *out, size_t out_len);
 
 /**
  * @brief Check whether the in-flight download should bail out

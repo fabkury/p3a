@@ -21,6 +21,7 @@
 #include "content_cache.h"
 #include "channel_cache.h"
 #include "download_manager.h"
+#include "lai_verify.h"
 #include "esp_log.h"
 #include <string.h>
 
@@ -36,8 +37,99 @@ extern void animation_player_display_message(const char *title, const char *body
 // the renderer is absent.
 extern void proc_notif_fail_if_processing(void) __attribute__((weak));
 
-// Maximum retries when picking files that turn out to be missing from disk
+// Maximum retries when picking files that turn out to be missing from disk.
+// This loop only needs to ride out a handful of stale entries — mass
+// staleness is handled by the LAi verification sweep (lai_verify), which the
+// give-up path below requests for every miss-contributing channel.
 #define PS_MAX_MISSING_FILE_RETRIES 10
+
+// Pick-miss windowed staleness trigger: per channel, track the last N
+// swap-time outcomes in a shift register and request an LAi verification
+// sweep when >=50% of the last W are misses. W scales with the channel's
+// LAi size (more entries at stake -> more evidence demanded), clamped to
+// [PS_MISS_WINDOW_MIN, PS_MISS_WINDOW_MAX].
+#define PS_MISS_WINDOW_MIN     8
+#define PS_MISS_WINDOW_MAX     32
+#define PS_MISS_WINDOW_DIVISOR 8
+
+/**
+ * @brief Record a swap-time pick outcome and trip the staleness sweep
+ *
+ * Maintains the per-channel shift register of recent outcomes (bit 1 =
+ * file missing at swap time). On a miss, evaluates the scaled windowed
+ * threshold and requests an LAi verification sweep when tripped.
+ *
+ * Cache-backed channels only: SD card and pinned channels stat-mask at
+ * pick time and have no LAi to verify.
+ *
+ * Thread-safety: Caller must hold s_state->mutex
+ */
+static void ps_track_pick_outcome(ps_state_t *state, const ps_artwork_t *artwork, bool miss)
+{
+    if (!state || !artwork || artwork->channel_index >= state->channel_count) {
+        return;
+    }
+
+    ps_channel_state_t *ch = &state->channels[artwork->channel_index];
+    if (!ch->cache) {
+        return;
+    }
+
+    ch->miss_window = (ch->miss_window << 1) | (miss ? 1u : 0u);
+    if (ch->miss_window_fill < PS_MISS_WINDOW_MAX) {
+        ch->miss_window_fill++;
+    }
+
+    if (!miss) {
+        return;
+    }
+
+    uint32_t w = (uint32_t)(ch->cache->available_count / PS_MISS_WINDOW_DIVISOR);
+    if (w < PS_MISS_WINDOW_MIN) w = PS_MISS_WINDOW_MIN;
+    if (w > PS_MISS_WINDOW_MAX) w = PS_MISS_WINDOW_MAX;
+
+    if (ch->miss_window_fill < w) {
+        return;
+    }
+
+    uint32_t mask = (w < 32) ? ((1u << w) - 1u) : 0xFFFFFFFFu;
+    uint32_t misses = (uint32_t)__builtin_popcount(ch->miss_window & mask);
+    if (misses * 2 < w) {
+        return;
+    }
+
+    ESP_LOGW(TAG, "Pick-miss threshold tripped for '%s' (%lu/%lu missing in window) - requesting LAi sweep",
+             ch->display_name, (unsigned long)misses, (unsigned long)w);
+    ch->miss_window = 0;
+    ch->miss_window_fill = 0;
+    lai_verify_request(ch->channel_id);
+}
+
+/**
+ * @brief Request LAi sweeps for every channel that contributed a miss
+ *
+ * Called from the give-up paths: PS_MAX_MISSING_FILE_RETRIES missing files
+ * in a single navigation attempt is the strongest mass-staleness signal
+ * available, so don't wait for the per-channel windows to fill.
+ *
+ * Thread-safety: Caller must hold s_state->mutex
+ */
+static void ps_request_sweeps_for_missed(ps_state_t *state, uint64_t missed_channels)
+{
+    for (size_t i = 0; i < state->channel_count && i < 64; i++) {
+        if (!(missed_channels & (1ULL << i))) {
+            continue;
+        }
+        ps_channel_state_t *ch = &state->channels[i];
+        if (!ch->cache) {
+            continue;
+        }
+        ESP_LOGW(TAG, "Requesting LAi sweep for miss contributor '%s'", ch->display_name);
+        ch->miss_window = 0;
+        ch->miss_window_fill = 0;
+        lai_verify_request(ch->channel_id);
+    }
+}
 
 /**
  * @brief Handle case where a file in LAi is missing from disk
@@ -79,6 +171,9 @@ static void ps_handle_missing_file(ps_state_t *state, const ps_artwork_t *artwor
 
     // Rescan so the download manager re-discovers the evicted file
     download_manager_rescan();
+
+    // Feed the staleness detector (may request a verification sweep)
+    ps_track_pick_outcome(state, artwork, true);
 }
 
 // ============================================================================
@@ -91,7 +186,16 @@ static esp_err_t prepare_and_request_swap(ps_state_t *state, const ps_artwork_t 
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (!ps_file_exists(artwork->filepath)) {
+    ps_file_status_t fstatus = ps_file_check(artwork->filepath);
+    if (fstatus == PS_FILE_ERROR) {
+        // Filesystem-level failure (SD exported/unmounted, I/O error) — not
+        // evidence the file is gone. Abort the swap without evicting,
+        // counting, or rescanning; the retry loops bail on non-NOT_FOUND
+        // errors, so the current artwork keeps playing.
+        ESP_LOGW(TAG, "File check failed (FS error), aborting swap: %s", artwork->filepath);
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (fstatus == PS_FILE_MISSING) {
         // File is in LAi but missing from disk - evict and signal for re-download
         ps_handle_missing_file(state, artwork);
         return ESP_ERR_NOT_FOUND;
@@ -152,6 +256,7 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
     bool found = false;
     bool fresh_pick = false;
     int missing_retries = 0;
+    uint64_t missed_channels = 0;  // Bitmask of channels that hit a missing file
     int32_t saved_credits[PS_MAX_CHANNELS];
 
     // If walking forward through history, return from history
@@ -185,8 +290,10 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
         result = prepare_and_request_swap(s_state, &artwork);
 
         if (result == ESP_OK) {
-            // Success - commit history entry and last_played_id now that the
-            // file is confirmed to exist on disk
+            // Success - record the hit for the staleness window, then commit
+            // history entry and last_played_id now that the file is
+            // confirmed to exist on disk
+            ps_track_pick_outcome(s_state, &artwork, false);
             if (fresh_pick) {
                 ps_history_push(s_state, &artwork);
                 s_state->last_played_id = artwork.artwork_id;
@@ -204,6 +311,9 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
                 }
                 ESP_LOGI(TAG, "Rolled back SWRR credits after missing file");
             }
+            if (artwork.channel_index < 64) {
+                missed_channels |= 1ULL << artwork.channel_index;
+            }
             missing_retries++;
             found = false;  // Force fresh pick
             fresh_pick = false;
@@ -218,6 +328,7 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
 
     if (missing_retries >= PS_MAX_MISSING_FILE_RETRIES) {
         ESP_LOGE(TAG, "Too many missing files (%d), giving up", missing_retries);
+        ps_request_sweeps_for_missed(s_state, missed_channels);
         result = ESP_ERR_NOT_FOUND;
         found = false;
     }
@@ -386,6 +497,7 @@ esp_err_t play_scheduler_prev(ps_artwork_t *out_artwork)
     esp_err_t result = ESP_OK;
     ps_artwork_t artwork;
     int missing_retries = 0;
+    uint64_t missed_channels = 0;  // Bitmask of channels that hit a missing file
 
     // Retry loop: skip missing files in history
     while (missing_retries < PS_MAX_MISSING_FILE_RETRIES) {
@@ -403,11 +515,15 @@ esp_err_t play_scheduler_prev(ps_artwork_t *out_artwork)
         result = prepare_and_request_swap(s_state, &artwork);
 
         if (result == ESP_OK) {
+            ps_track_pick_outcome(s_state, &artwork, false);
             break;
         }
 
         if (result == ESP_ERR_NOT_FOUND) {
             // File missing - already evicted, skip to previous
+            if (artwork.channel_index < 64) {
+                missed_channels |= 1ULL << artwork.channel_index;
+            }
             missing_retries++;
             ESP_LOGW(TAG, "History file missing, skipping (%d/%d)",
                      missing_retries, PS_MAX_MISSING_FILE_RETRIES);
@@ -420,6 +536,7 @@ esp_err_t play_scheduler_prev(ps_artwork_t *out_artwork)
 
     if (missing_retries >= PS_MAX_MISSING_FILE_RETRIES) {
         ESP_LOGE(TAG, "Too many missing files in history (%d)", missing_retries);
+        ps_request_sweeps_for_missed(s_state, missed_channels);
         result = ESP_ERR_NOT_FOUND;
     }
 

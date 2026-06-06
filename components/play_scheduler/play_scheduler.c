@@ -31,8 +31,10 @@
 #include "config_store.h"
 #include "p3a_state.h"
 #include "sd_path.h"
+#include "makapix_channel_events.h"
 #include "esp_log.h"
 #include "esp_random.h"
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -59,6 +61,24 @@ bool ps_file_exists(const char *path)
     if (!path || path[0] == '\0') return false;
     struct stat st;
     return (stat(path, &st) == 0);
+}
+
+ps_file_status_t ps_file_check(const char *path)
+{
+    // An empty path means path *building* failed (sd_path resolution etc.) —
+    // infrastructure, not evidence about the file.
+    if (!path || path[0] == '\0') return PS_FILE_ERROR;
+
+    struct stat st;
+    if (stat(path, &st) == 0) return PS_FILE_EXISTS;
+
+    // ENOENT on a healthy mounted filesystem is the only trustworthy
+    // "file absent" signal. Anything else — EIO, or ENOENT because the VFS
+    // prefix itself is gone (SD exported over USB MSC / unmounted) — is
+    // infrastructure failure and must not evict LAi entries or feed the
+    // staleness detector.
+    if (errno == ENOENT && makapix_channel_is_sd_available()) return PS_FILE_MISSING;
+    return PS_FILE_ERROR;
 }
 
 void ps_get_display_name_from_spec(ps_channel_type_t type, const char *spec_name,

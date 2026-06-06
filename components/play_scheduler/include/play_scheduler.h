@@ -341,6 +341,23 @@ void play_scheduler_compensate_cursor_after_lai_remove(channel_cache_t *cache,
                                                        int removed_pos);
 
 /**
+ * @brief Notify scheduler that an LAi verification sweep completed
+ *
+ * Called by lai_verify (from the download task) after sweeping a channel's
+ * LAi against disk. Clears the channel's pick-miss staleness window and,
+ * when entries were evicted, recalculates SWRR weights so a channel whose
+ * availability collapsed (possibly to zero) stops being selected.
+ *
+ * Takes s_state->mutex internally — not safe to call while holding it.
+ * Unknown channel_id (playset switched mid-sweep) is a no-op.
+ *
+ * @param channel_id Channel that was swept
+ * @param checked    Entries whose files were confirmed present
+ * @param evicted    Entries removed from LAi (files missing)
+ */
+void play_scheduler_on_lai_swept(const char *channel_id, size_t checked, size_t evicted);
+
+/**
  * @brief Get total available artwork count across all channels
  *
  * Returns the sum of LAi sizes for all active channels.

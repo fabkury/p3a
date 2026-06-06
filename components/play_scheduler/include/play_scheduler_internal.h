@@ -406,6 +406,25 @@ void ps_build_vault_filepath(const makapix_channel_entry_t *entry,
 bool ps_file_exists(const char *path);
 
 /**
+ * @brief Tri-state file presence check result
+ *
+ * Discriminates "the file is genuinely absent" from "the filesystem itself
+ * failed", so SD hiccups / USB-MSC exports can't masquerade as missing
+ * artwork (which would wrongly evict LAi entries and feed the staleness
+ * detector).
+ */
+typedef enum {
+    PS_FILE_EXISTS = 0,   // stat() succeeded
+    PS_FILE_MISSING,      // ENOENT with the SD reported available: genuinely absent
+    PS_FILE_ERROR,        // FS-level failure (SD exported/unmounted, I/O error)
+} ps_file_status_t;
+
+/**
+ * @brief Tri-state file presence check (see ps_file_status_t)
+ */
+ps_file_status_t ps_file_check(const char *path);
+
+/**
  * @brief Build display name from channel spec fields
  */
 void ps_get_display_name_from_spec(ps_channel_type_t type, const char *spec_name,

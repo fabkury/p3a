@@ -10,7 +10,6 @@
 #define MAKAPIX_CHANNEL_IMPL_H
 
 #include "channel_interface.h"
-#include "download_manager.h"
 
 #ifdef __cplusplus
 extern "C" {

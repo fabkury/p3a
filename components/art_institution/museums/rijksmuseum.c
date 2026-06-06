@@ -26,6 +26,7 @@
 #include "art_institution_types.h"
 #include "channel_cache.h"
 #include "channel_metadata.h"
+#include "download_manager.h"
 #include "config_store.h"
 #include "psram_alloc.h"
 #include "sd_path.h"

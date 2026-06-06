@@ -15,6 +15,9 @@ esp_err_t play_scheduler_play_artwork(int32_t post_id,
                                       const char *art_url,
                                       const char *title);
 
+// Forward declaration to avoid pulling in download_manager.h (drags channel headers)
+bool download_manager_is_busy(void);
+
 // --------------------------------------------------------------------------
 // Public API - Channel switching
 // --------------------------------------------------------------------------

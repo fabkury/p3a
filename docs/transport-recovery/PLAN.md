@@ -361,3 +361,8 @@ rollback; consider adding a force-reflash NVS flag to `slave_ota` first.
   netif-down fallback if the task can't spawn), health monitor stands down
   via `transport_recovery_is_degraded()`. Degraded is now quiet and terminal
   until reboot.
+- **2026-06-06** — Fourth test round (after rebuild with the quiesce):
+  confirmed the error storm is gone — degraded mode is quiet, playback-only.
+  Remaining before closing Phase 0 validation: plain `?real=1` reboot
+  variant on a clean streak, normal-boot log check, streak-reset-on-GOT_IP
+  check, soak under 64-channel load, then delete the test hook.

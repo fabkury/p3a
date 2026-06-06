@@ -79,6 +79,73 @@ void play_scheduler_deinit(void);
  */
 esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_initiated);
 
+// ============================================================================
+// Asynchronous Playset Switching
+// ============================================================================
+//
+// execute_playset takes seconds for large playsets (per-channel SD cache
+// loads under the scheduler mutex). The request_* API hands the execution to
+// a dedicated worker task so callers (HTTP/MQTT handlers) return immediately;
+// progress and errors are observed via play_scheduler_get_switch_status(),
+// which the /playsets/active endpoint folds into its polled payload + ETag.
+//
+// Requests coalesce latest-wins: a request enqueued while another is queued
+// (not yet started) replaces it. All async requests run with
+// user_initiated=true — they originate from explicit user actions.
+
+/**
+ * @brief Snapshot of the async switch state
+ *
+ * switching covers the whole request lifetime: set at enqueue, cleared when
+ * the worker finishes the attempt (unless a newer request is already queued).
+ * switch_seq increments once per completed attempt — success or failure —
+ * so a poller can detect completion across its polling interval.
+ * last_error_code is "" on success, else one of: PLAYSET_NOT_FOUND,
+ * MQTT_TIMEOUT, NOT_CONNECTED, EXECUTE_ERROR, OOM, OTA_IN_PROGRESS.
+ */
+typedef struct {
+    bool     switching;
+    uint32_t switch_seq;
+    char     pending_name[PS_PLAYSET_NAME_MAX + 1];
+    char     last_error_code[24];
+} ps_switch_status_t;
+
+/**
+ * @brief Request an async switch to a fully-resolved playset
+ *
+ * On ESP_OK, ownership of @p playset (a heap buffer, ideally PSRAM via
+ * psram_calloc) transfers to the switch module — the caller must not access
+ * or free it afterwards. On error the caller retains ownership.
+ *
+ * @param playset Heap-allocated playset; freed by the worker after execution
+ * @param name    Display name for status reporting (e.g. the user-facing
+ *                playset key); falls back to playset->name when NULL/empty
+ * @return ESP_OK if enqueued; ESP_ERR_INVALID_ARG on bad playset;
+ *         ESP_ERR_INVALID_STATE if the worker is not running
+ */
+esp_err_t play_scheduler_request_switch_by_value(ps_playset_t *playset, const char *name);
+
+/**
+ * @brief Request an async switch to a named playset
+ *
+ * The worker resolves the name itself: SD library first, then a Makapix
+ * server fetch (which can take ~30 s of MQTT retries — the reason this
+ * variant exists). Resolution failures surface via get_switch_status().
+ *
+ * @return ESP_OK if enqueued; ESP_ERR_INVALID_ARG on empty name;
+ *         ESP_ERR_INVALID_STATE if the worker is not running
+ */
+esp_err_t play_scheduler_request_switch_by_name(const char *name);
+
+/**
+ * @brief Copy the current async switch status
+ *
+ * Never blocks on the scheduler state mutex — safe to call while a switch
+ * is executing (that's the point). Reports a zeroed "not switching" status
+ * if the worker was never started.
+ */
+void play_scheduler_get_switch_status(ps_switch_status_t *out);
+
 /**
  * @brief Create a built-in single-channel playset
  *

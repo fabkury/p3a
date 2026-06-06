@@ -413,6 +413,14 @@ esp_err_t play_scheduler_init(void)
         // Continue anyway - refresh will happen on-demand
     }
 
+    // Start async playset-switch worker task
+    esp_err_t switch_err = ps_switch_start();
+    if (switch_err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to start switch task: %s", esp_err_to_name(switch_err));
+        // Continue anyway - request_switch_* returns INVALID_STATE and the
+        // HTTP layer reports 503 instead of switching asynchronously
+    }
+
     ESP_LOGI(TAG, "Play Scheduler initialized");
 
     return ESP_OK;
@@ -425,6 +433,10 @@ void play_scheduler_deinit(void)
     }
 
     ESP_LOGI(TAG, "Deinitializing Play Scheduler");
+
+    // Stop the switch worker before the refresh task so no execute_playset
+    // is mid-flight when the rest of the scheduler tears down.
+    ps_switch_stop();
 
     // Stop background refresh task
     ps_refresh_stop();

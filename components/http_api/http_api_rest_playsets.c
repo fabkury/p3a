@@ -27,6 +27,8 @@
 #include "giphy.h"
 #include "art_institution.h"
 #include "config_store.h"
+#include "psram_alloc.h"
+#include "slave_ota.h"
 
 // ---------- Playset Name Validation ----------
 
@@ -290,14 +292,21 @@ cJSON *build_current_artwork_json(void)
 
 /**
  * POST /playset/{name}
- * Load and execute a named playset
+ * Resolve a named playset and request an asynchronous switch to it
  *
  * Flow:
  * 1. Check if it's a built-in playset (channel_recent, channel_promoted, channel_sdcard)
- * 2. If MQTT connected: fetch from server, save to SD, execute
- * 3. If not connected: load from SD cache if exists
- * 4. Execute via play_scheduler_execute_playset()
- * 5. Persist playset name to NVS for boot restore
+ * 2. Else try the local SD library (instant)
+ * 3. Else, if MQTT connected, hand the bare name to the switch worker which
+ *    fetches from the server (up to ~30 s of retries) off the httpd task
+ * 4. Enqueue via play_scheduler_request_switch_* and return immediately
+ *
+ * The response only confirms acceptance ({"switching":true}). Execution can
+ * take seconds for large playsets (per-channel SD cache loads), so completion
+ * and errors surface through GET /playsets/active (switching / switch_seq /
+ * last_switch_error), which the web UI already polls every 4 s. Boot-restore
+ * persistence still happens inside play_scheduler_execute_playset() on the
+ * worker task.
  */
 esp_err_t h_post_playset(httpd_req_t *req)
 {
@@ -322,7 +331,14 @@ esp_err_t h_post_playset(httpd_req_t *req)
         return ESP_OK;
     }
 
-    ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
+    // Screen-affecting switches are dropped during the slave OTA, matching
+    // the /action/swap_to gate and the MQTT command path.
+    if (slave_ota_is_in_progress()) {
+        send_json(req, 503, "{\"ok\":false,\"error\":\"OTA in progress\",\"code\":\"OTA_IN_PROGRESS\"}");
+        return ESP_OK;
+    }
+
+    ps_playset_t *playset = psram_calloc(1, sizeof(ps_playset_t));
     if (!playset) {
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
@@ -331,6 +347,7 @@ esp_err_t h_post_playset(httpd_req_t *req)
     esp_err_t err;
     bool from_cache = false;
     bool is_builtin = false;
+    bool by_name = false;
 
     // 1. Check built-in playsets (no I/O needed)
     err = ps_create_channel_playset(name, playset);
@@ -338,28 +355,16 @@ esp_err_t h_post_playset(httpd_req_t *req)
         is_builtin = true;
         ESP_LOGI("http_api", "Using built-in playset: %s", name);
     } else {
-        // 2. Try local cache first (instant, avoids 30s MQTT timeout for user-created playsets)
+        // 2. Try local cache first (a single small SD read)
         err = playset_store_load(name, playset);
         if (err == ESP_OK) {
             from_cache = true;
         } else if (makapix_mqtt_is_connected()) {
-            // 3. Not cached locally -- try fetching from server
-            err = makapix_api_get_playset(name, playset);
-            if (err == ESP_OK) {
-                strlcpy(playset->name, name, sizeof(playset->name));
-                esp_err_t save_err = playset_store_save(name, playset);
-                if (save_err != ESP_OK) {
-                    ESP_LOGW("http_api", "Failed to cache playset '%s': %s", name, esp_err_to_name(save_err));
-                }
-            } else {
-                free(playset);
-                if (err == ESP_ERR_TIMEOUT) {
-                    send_json(req, 504, "{\"ok\":false,\"error\":\"Request timed out\",\"code\":\"MQTT_TIMEOUT\"}");
-                } else {
-                    send_json(req, 404, "{\"ok\":false,\"error\":\"Playset not found\",\"code\":\"PLAYSET_NOT_FOUND\"}");
-                }
-                return ESP_OK;
-            }
+            // 3. Not cached locally -- the switch worker fetches it from the
+            // server so the MQTT wait doesn't block the httpd task. A
+            // nonexistent playset therefore reports PLAYSET_NOT_FOUND via
+            // the status poll instead of a synchronous 404.
+            by_name = true;
         } else {
             free(playset);
             send_json(req, 503, "{\"ok\":false,\"error\":\"Not connected and no cached playset\",\"code\":\"NOT_CONNECTED\"}");
@@ -367,60 +372,51 @@ esp_err_t h_post_playset(httpd_req_t *req)
         }
     }
 
-    // Execute the playset
-    err = play_scheduler_execute_playset(playset, true);
-    if (err != ESP_OK) {
+    // Hand off to the async switch worker. channel_count is captured before
+    // the enqueue: on success the worker owns `playset` and it must not be
+    // touched afterwards (unknown for by-name requests).
+    int channel_count = by_name ? -1 : (int)playset->channel_count;
+    esp_err_t enq;
+    if (by_name) {
         free(playset);
-        char error_msg[128];
-        snprintf(error_msg, sizeof(error_msg),
-                 "{\"ok\":false,\"error\":\"Failed to execute playset: %s\",\"code\":\"EXECUTE_ERROR\"}",
-                 esp_err_to_name(err));
-        send_json(req, 500, error_msg);
+        enq = play_scheduler_request_switch_by_name(name);
+    } else {
+        enq = play_scheduler_request_switch_by_value(playset, name);
+        if (enq != ESP_OK) {
+            free(playset);  // ownership retained on enqueue failure
+        }
+    }
+    if (enq != ESP_OK) {
+        send_json(req, 503, "{\"ok\":false,\"error\":\"Switch worker unavailable\",\"code\":\"SWITCH_UNAVAILABLE\"}");
         return ESP_OK;
     }
 
-    // Boot-restore persistence is handled inside play_scheduler_execute_playset(),
-    // which writes {sd-root}/active_playset.bin via the active_playset_store
-    // module. The playset's `name` field is preserved in the snapshot for
-    // multi-channel playsets (followed_artists, user-saved) so the WebUI pill
-    // bar can match by name; single-channel playsets identify by structure.
-
-    // Build response
+    // Build the acceptance response. The pre-switch total_cached /
+    // total_entries / pick_mode fields are gone — the web UI hydrates the
+    // now-playing card from the status poll once the switch lands.
     cJSON *root = cJSON_CreateObject();
     if (!root) {
-        free(playset);
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
 
     cJSON_AddBoolToObject(root, "ok", true);
+    cJSON_AddBoolToObject(root, "switching", true);
     cJSON_AddStringToObject(root, "playset", name);
-    cJSON_AddNumberToObject(root, "channel_count", (double)playset->channel_count);
+    if (channel_count >= 0) {
+        cJSON_AddNumberToObject(root, "channel_count", (double)channel_count);
+    }
     cJSON_AddBoolToObject(root, "from_cache", from_cache);
     cJSON_AddBoolToObject(root, "builtin", is_builtin);
-
-    // Compute artwork sums and global pick_mode from live scheduler state
-    // (caches loaded by execute_playset). pick_mode is now a device-wide
-    // setting (config_store) — the field is kept in the response so the
-    // WebUI's now-playing hydration logic keeps working without a separate
-    // fetch.
-    ps_stats_t ps_stats;
-    if (play_scheduler_get_stats(&ps_stats) == ESP_OK) {
-        cJSON_AddNumberToObject(root, "total_cached", (double)ps_stats.total_available);
-        cJSON_AddNumberToObject(root, "total_entries", (double)ps_stats.total_entries);
-        cJSON_AddStringToObject(root, "pick_mode", pick_mode_str(ps_stats.pick_mode));
-    }
 
     char *out = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
 
     if (!out) {
-        free(playset);
         send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
         return ESP_OK;
     }
 
-    free(playset);
     send_json(req, 200, out);
     free(out);
     return ESP_OK;
@@ -440,8 +436,21 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     // digest) once, up front. The web UI polls this endpoint every 4s —
     // most polls find nothing changed, so the 304 short-circuit needs the
     // input values without paying for cJSON allocation first.
+    //
+    // Async-switch short-circuit: while the switch worker is executing a
+    // playset it holds the scheduler state mutex for seconds (per-channel SD
+    // cache loads), and every play_scheduler_* getter below would block on
+    // it — freezing exactly the poll that should stay responsive during a
+    // switch. The switch status getter never touches that mutex; when it
+    // reports switching, skip the scheduler-derived gathers entirely (their
+    // payload sections are omitted and the web UI keeps showing its
+    // last-known state under a "switching" indicator).
+    ps_switch_status_t sw;
+    play_scheduler_get_switch_status(&sw);
+
     ps_playset_t *active = calloc(1, sizeof(ps_playset_t));
-    bool has_active = (active && play_scheduler_get_active_playset(active) == ESP_OK);
+    bool has_active = (!sw.switching && active &&
+                       play_scheduler_get_active_playset(active) == ESP_OK);
 
     bool registered = makapix_store_has_player_key();
     bool cooldown_active = giphy_is_rate_limited();
@@ -451,7 +460,7 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     bool refresh_allow_override = config_store_get_refresh_allow_override();
 
     ps_stats_t ps_stats;
-    bool has_stats = (play_scheduler_get_stats(&ps_stats) == ESP_OK);
+    bool has_stats = (!sw.switching && play_scheduler_get_stats(&ps_stats) == ESP_OK);
 
     ps_channel_detail_t *ch_details = calloc(PS_MAX_CHANNELS, sizeof(ps_channel_detail_t));
     size_t ch_count = 0;
@@ -461,13 +470,21 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
         }
     }
 
+    // The current-post gathers don't lock scheduler state, but they pair with
+    // current_artwork (omitted while switching) — gate them with the same
+    // flag so the ETag never depends on fields the payload doesn't carry.
     ps_artwork_t cur_aw;
-    bool has_cur_aw = (play_scheduler_current(&cur_aw) == ESP_OK);
-    int cur_post_source = p3a_current_post_get_source();
-    int32_t cur_post_id = p3a_current_post_get_id();
-    bool cur_reaction_submitted = p3a_current_post_get_reaction_submitted();
+    bool has_cur_aw = (!sw.switching && play_scheduler_current(&cur_aw) == ESP_OK);
+    int cur_post_source = 0;
+    int32_t cur_post_id = 0;
+    bool cur_reaction_submitted = false;
     char cur_giphy_id[24] = {0};
-    p3a_current_post_get_giphy_id(cur_giphy_id, sizeof(cur_giphy_id));
+    if (!sw.switching) {
+        cur_post_source = p3a_current_post_get_source();
+        cur_post_id = p3a_current_post_get_id();
+        cur_reaction_submitted = p3a_current_post_get_reaction_submitted();
+        p3a_current_post_get_giphy_id(cur_giphy_id, sizeof(cur_giphy_id));
+    }
 
     // Per-museum rate-limit cooldowns. Folded into this endpoint so the
     // web UI doesn't need a separate /api/museum/rate-limits poll — the web
@@ -495,6 +512,15 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     h = fnv_u32(h, giphy_refresh_int);
     h = fnv_u32(h, refresh_int);
     h = fnv_u8(h, refresh_allow_override ? 1 : 0);
+    // Async switch progress. switch_seq bumps once per completed attempt, so
+    // the 304 streak breaks exactly when a switch starts (switching flips
+    // true) and when it lands (seq advances, switching flips back). During
+    // the switch itself every field here is stable — polls 304 right through
+    // the worker's multi-second execute.
+    h = fnv_u8(h, sw.switching ? 1 : 0);
+    h = fnv_str(h, sw.pending_name);
+    h = fnv_u32(h, sw.switch_seq);
+    h = fnv_str(h, sw.last_error_code);
     if (has_active) {
         h = fnv_str(h, active->name);
     }
@@ -587,6 +613,17 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     // auto-resets on the play scheduler side after the sweep completes.
     cJSON_AddBoolToObject(data, "refresh_allow_override", refresh_allow_override);
 
+    // Async switch progress (always emitted). While `switching` is true the
+    // scheduler-derived sections (active_playset, playset_info,
+    // current_artwork) are omitted — the web UI keeps its last-known display
+    // under a pending indicator. `switch_seq` + `last_switch_error` let the
+    // poller detect a completed attempt and toast failures (error code is ""
+    // on success).
+    cJSON_AddBoolToObject(data, "switching", sw.switching);
+    cJSON_AddStringToObject(data, "pending_playset", sw.pending_name);
+    cJSON_AddNumberToObject(data, "switch_seq", (double)sw.switch_seq);
+    cJSON_AddStringToObject(data, "last_switch_error", sw.last_error_code);
+
     if (has_stats) {
         cJSON *pi = cJSON_AddObjectToObject(data, "playset_info");
         cJSON_AddNumberToObject(pi, "channel_count", (double)ps_stats.channel_count);
@@ -611,7 +648,10 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
         }
     }
 
-    cJSON *ca = build_current_artwork_json();
+    // Gated on the switch short-circuit: build_current_artwork_json() calls
+    // play_scheduler_current(), which blocks on the scheduler mutex the
+    // executing switch is holding.
+    cJSON *ca = sw.switching ? NULL : build_current_artwork_json();
     if (ca) {
         cJSON_AddItemToObject(data, "current_artwork", ca);
     }
@@ -753,11 +793,19 @@ esp_err_t h_get_playset_by_name(httpd_req_t *req)
     }
 
     bool activated = false;
-    if (activate) {
-        /* execute_playset persists the snapshot internally; no extra step needed. */
-        esp_err_t exec_err = play_scheduler_execute_playset(playset, true);
-        if (exec_err == ESP_OK) {
-            activated = true;
+    if (activate && !slave_ota_is_in_progress()) {
+        /* Async hand-off: `activated` now means "switch accepted". The worker
+           persists the snapshot via execute_playset; completion/errors surface
+           through GET /playsets/active. The serialized `playset` below stays
+           handler-owned — the worker owns the separate copy. */
+        ps_playset_t *copy = psram_calloc(1, sizeof(ps_playset_t));
+        if (copy) {
+            *copy = *playset;
+            if (play_scheduler_request_switch_by_value(copy, name) == ESP_OK) {
+                activated = true;
+            } else {
+                free(copy);
+            }
         }
     }
 
@@ -901,12 +949,19 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Activate if requested. execute_playset persists the snapshot.
+    // Activate if requested. Async hand-off: `activated` now means "switch
+    // accepted"; the worker persists the snapshot via execute_playset and
+    // completion/errors surface through GET /playsets/active.
     bool activated = false;
-    if (activate) {
-        esp_err_t exec_err = play_scheduler_execute_playset(playset, true);
-        if (exec_err == ESP_OK) {
-            activated = true;
+    if (activate && !slave_ota_is_in_progress()) {
+        ps_playset_t *copy = psram_calloc(1, sizeof(ps_playset_t));
+        if (copy) {
+            *copy = *playset;
+            if (play_scheduler_request_switch_by_value(copy, name) == ESP_OK) {
+                activated = true;
+            } else {
+                free(copy);
+            }
         }
     }
 

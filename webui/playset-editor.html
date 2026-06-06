@@ -924,7 +924,9 @@
                         var result = JSON.parse(xhr.responseText);
                         if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
                             clearPending();
-                            showToast('Playset saved and playing!', 'success');
+                            // activated:true now means the switch was accepted
+                            // and runs in the background on the device.
+                            showToast('Playset saved! Switching…', 'success');
                             state.activePlayset = name;
                             cancelEdit();
                             loadPlaysets();
@@ -993,7 +995,8 @@
                     try {
                         var result = JSON.parse(xhr.responseText);
                         if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
-                            showToast('Playing playset "' + name + '"', 'success');
+                            // Accepted: the device switches in the background.
+                            showToast('Switching to "' + name + '"…', 'success');
                             state.activePlayset = name;
                             renderPlaysetList();
                         } else {

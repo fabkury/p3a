@@ -55,6 +55,7 @@
 #include "event_bus.h"
 #include "slave_ota.h"
 #include "esp_heap_caps.h"
+#include "psram_alloc.h"
 #if CONFIG_P3A_PICO8_ENABLE
 #include "pico8_stream.h"
 #endif
@@ -448,14 +449,32 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
             }
         }
 
-        esp_err_t exec_err = play_scheduler_execute_playset(playset, true);
-        free(playset);
-
-        if (exec_err != ESP_OK) {
-            ESP_LOGE(HTTP_API_TAG, "execute_playset: execute failed: %s", esp_err_to_name(exec_err));
-        } else {
-            ESP_LOGI(HTTP_API_TAG, "execute_playset: activated");
+        /* Async hand-off so a large playset doesn't block the MQTT callback
+           task for seconds. On enqueue failure (worker not running, OOM on
+           the copy) fall back to the synchronous path — an MQTT command has
+           no client that could retry on a 503. */
+        ps_playset_t *copy = psram_calloc(1, sizeof(ps_playset_t));
+        bool queued = false;
+        if (copy) {
+            *copy = *playset;
+            if (play_scheduler_request_switch_by_value(copy, playset->name) == ESP_OK) {
+                queued = true;
+            } else {
+                free(copy);
+            }
         }
+
+        if (queued) {
+            ESP_LOGI(HTTP_API_TAG, "execute_playset: switch queued");
+        } else {
+            esp_err_t exec_err = play_scheduler_execute_playset(playset, true);
+            if (exec_err != ESP_OK) {
+                ESP_LOGE(HTTP_API_TAG, "execute_playset: execute failed: %s", esp_err_to_name(exec_err));
+            } else {
+                ESP_LOGI(HTTP_API_TAG, "execute_playset: activated");
+            }
+        }
+        free(playset);
     }
 }
 

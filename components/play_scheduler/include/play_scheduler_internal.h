@@ -366,6 +366,25 @@ void ps_refresh_reset_timer(void);
  */
 void ps_build_cache_path_internal(const char *channel_id, char *out_path, size_t max_len);
 
+// ============================================================================
+// Async Switch Operations (play_scheduler_switch.c)
+// ============================================================================
+
+/**
+ * @brief Start the async playset-switch worker task
+ *
+ * @return ESP_OK on success
+ */
+esp_err_t ps_switch_start(void);
+
+/**
+ * @brief Stop the async playset-switch worker task
+ *
+ * Waits for an in-flight execute to finish (up to 15 s) and frees any
+ * still-queued request.
+ */
+void ps_switch_stop(void);
+
 /**
  * @brief Load cache file for a channel
  *

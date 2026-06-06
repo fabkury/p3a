@@ -2118,22 +2118,22 @@ function playPlayset(name, btn) {
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
-            if (btn) btn.classList.remove('pending');
             try {
                 var result = JSON.parse(xhr.responseText);
                 if (xhr.status >= 200 && xhr.status < 300 && result.ok) {
-                    showToast('Switched to ' + playsetDisplayName(name), false);
-                    updatePillBarActive(name);
-                    updateNowPlaying(name, {
-                        channel_count: result.channel_count,
-                        total_cached: result.total_cached,
-                        total_entries: result.total_entries,
-                        pick_mode: result.pick_mode
-                    });
+                    // Switch accepted: the device executes it on a background
+                    // task (seconds for large playsets). Keep the pill pulsing
+                    // until the /playsets/active poll reports convergence —
+                    // it flips the pill active itself; failures surface as a
+                    // toast from the poll's switch_seq tracking.
+                    showToast('Switching to ' + playsetDisplayName(name) + '…', false);
+                    schedulePollSoon();
                 } else {
+                    if (btn) btn.classList.remove('pending');
                     showToast(result.error || 'Failed to load playset', true);
                 }
             } catch (e) {
+                if (btn) btn.classList.remove('pending');
                 showToast('Parse error: ' + e.message, true);
             }
         }
@@ -2598,6 +2598,13 @@ function toggleShuffle() {
 // the entire cooldown window.
 var playsetActiveEtag = null;
 
+// Last switch_seq seen on /playsets/active. The device bumps it once per
+// completed async switch attempt (success or failure), so comparing against
+// it detects completions that happened between polls. null until the first
+// 200 response; the `seq > lastSwitchSeq` guard also suppresses a spurious
+// failure toast when the device reboots mid-switch (seq resets to 0).
+var lastSwitchSeq = null;
+
 function pollActivePlayset(attempt) {
     attempt = attempt || 0;
     var xhr = new XMLHttpRequest();
@@ -2622,6 +2629,35 @@ function pollActivePlayset(attempt) {
         try {
             var resp = JSON.parse(xhr.responseText);
             if (resp.ok && resp.data) {
+                // Async switch tracking. While the device reports switching,
+                // it omits the scheduler-derived sections (active_playset,
+                // playset_info, current_artwork) — hold the UI on its
+                // last-known state and keep the target pill pulsing. Once
+                // switching clears, the pill flips via updatePillBarActive
+                // below; a completed attempt with a non-empty error code
+                // toasts the failure.
+                var switching = resp.data.switching === true;
+                var switchSeq = (resp.data.switch_seq | 0);
+                var switchErr = resp.data.last_switch_error || '';
+                if (lastSwitchSeq !== null && switchSeq > lastSwitchSeq && switchErr) {
+                    showToast('Switch failed: ' + switchErr, true);
+                }
+                lastSwitchSeq = switchSeq;
+                if (!switching) {
+                    document.querySelectorAll('.pill-item.pending').forEach(function(p) {
+                        p.classList.remove('pending');
+                    });
+                } else {
+                    // Device-driven pending: mark the switch target's pill.
+                    // Self-heals a poll response that raced the click (it
+                    // would otherwise wipe the just-set pulse) and keeps
+                    // other open tabs in sync with the switch.
+                    var pendingName = resp.data.pending_playset || '';
+                    document.querySelectorAll('.pill-item').forEach(function(p) {
+                        p.classList.toggle('pending',
+                            p.getAttribute('data-playset') === pendingName);
+                    });
+                }
                 isRegistered = resp.data.registered === true;
                 // Update pill bar disabled states
                 var pills = document.querySelectorAll('.pill-item');
@@ -2650,7 +2686,7 @@ function pollActivePlayset(attempt) {
                         return c.type === 'giphy' && c.refreshing && isDueForRefresh(c);
                     }));
                 cdBanner.style.display = (giphyCooldownActive && giphyWaiting) ? 'block' : 'none';
-                if (resp.data.active_playset && resp.data.playset_info) {
+                if (!switching && resp.data.active_playset && resp.data.playset_info) {
                     var pollPillId = pillIdFromActivePlayset(resp.data.active_playset);
                     updateNowPlaying(pollPillId,
                                      resp.data.playset_info,
@@ -2667,7 +2703,11 @@ function pollActivePlayset(attempt) {
                     }
                     museumCooldowns = next;
                 }
-                updateArtwork(resp.data.current_artwork);
+                // While switching, current_artwork is omitted — keep showing
+                // the last-known artwork instead of clearing the panel.
+                if (!switching) {
+                    updateArtwork(resp.data.current_artwork);
+                }
             }
         } catch (e) { console.log('Playset poll parse error:', e); retry(); }
     };

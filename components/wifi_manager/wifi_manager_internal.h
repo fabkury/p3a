@@ -64,5 +64,11 @@ void wifi_recovery_task(void *arg);
 void wifi_health_monitor_task(void *arg);
 void wifi_schedule_full_reinit(void);
 
+// Internal functions (transport_recovery.c)
+void transport_recovery_register_events_once(void);
+// True once the transport-failure policy has declared the C6 link dead and
+// committed to degraded playback-only mode (terminal until reboot).
+bool transport_recovery_is_degraded(void);
+
 // Internal functions (wifi_captive_portal.c)
 void wifi_init_softap(void);

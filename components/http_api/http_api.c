@@ -564,12 +564,82 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     return ESP_OK;
 }
 
+#if CONFIG_P3A_TRANSPORT_FAULT_INJECT
+// ============================================================================
+// TEMPORARY TEST HOOK (TRANSPORT_FAULT_INJECT) — DELETE AFTER PHASE 0 TESTING
+// ============================================================================
+// POST /action/inject_transport_failure[?streak=N][&real=1]
+//
+// Default (synthetic): posts ESP_HOSTED_EVENT_TRANSPORT_FAILURE to exercise
+// the Phase 0 orderly-reboot path (docs/transport-recovery/PLAN.md) without
+// touching the C6. With real=1: pulses the C6 reset GPIO so the *driver*
+// detects the dead slave itself (full production chain; needs SDIO traffic).
+// With ?streak=N the persisted transport-reboot streak is preset first, so
+// ?streak=3 exercises the degraded-mode branch in one shot.
+//
+// To remove every piece of this hook: grep -rn "TRANSPORT_FAULT_INJECT"
+// (this block + the router branch below, the inject function at the bottom
+// of wifi_manager/transport_recovery.c, the esp_driver_gpio line in
+// wifi_manager/CMakeLists.txt, the Kconfig option in main/Kconfig.projbuild,
+// and the line in sdkconfig).
+#include <stdlib.h>
+
+// Defined in wifi_manager/transport_recovery.c (weak: no component dep edge)
+extern esp_err_t transport_recovery_inject_failure_for_test(int streak_preset, bool real_gpio_reset) __attribute__((weak));
+
+static esp_err_t h_post_inject_transport_failure(httpd_req_t *req) {
+    if (!transport_recovery_inject_failure_for_test) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "inject hook not linked");
+        return ESP_OK;
+    }
+
+    int streak_preset = -1;
+    bool real_gpio_reset = false;
+    char query[32];
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
+        char val[8];
+        if (httpd_query_key_value(query, "streak", val, sizeof(val)) == ESP_OK) {
+            streak_preset = atoi(val);
+        }
+        if (httpd_query_key_value(query, "real", val, sizeof(val)) == ESP_OK) {
+            real_gpio_reset = (atoi(val) != 0);
+        }
+    }
+
+    esp_err_t err = transport_recovery_inject_failure_for_test(streak_preset, real_gpio_reset);
+    if (err != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "injection failed");
+        return ESP_OK;
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    if (real_gpio_reset) {
+        httpd_resp_sendstr(req,
+            "{\"ok\":true,\"note\":\"C6 reset-pulsed; expect driver CMD53 errors then "
+            "TRANSPORT_FAILURE within seconds under traffic\"}");
+    } else {
+        httpd_resp_sendstr(req,
+            "{\"ok\":true,\"note\":\"TRANSPORT_FAILURE posted; expect 5s countdown reboot, "
+            "or degraded-mode notice if streak >= 3\"}");
+    }
+    return ESP_OK;
+}
+#endif // CONFIG_P3A_TRANSPORT_FAULT_INJECT
+
 static esp_err_t h_post_router(httpd_req_t *req) {
     const char *uri = req ? req->uri : NULL;
     if (!uri) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Bad request");
         return ESP_OK;
     }
+
+#if CONFIG_P3A_TRANSPORT_FAULT_INJECT
+    // TEMPORARY TEST HOOK (TRANSPORT_FAULT_INJECT) — DELETE AFTER PHASE 0 TESTING.
+    // Prefix match so the optional ?streak=N query string still routes here.
+    if (strncmp(uri, "/action/inject_transport_failure", 32) == 0) {
+        return h_post_inject_transport_failure(req);
+    }
+#endif
 
     // Core action endpoints
     if (strcmp(uri, "/action/reboot") == 0) {

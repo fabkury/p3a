@@ -398,6 +398,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         s_no_ip_health_cycles = 0;
         s_wifi_health_interval_ms = WIFI_HEALTH_INTERVAL_NORMAL_MS;
         config_store_reset_wifi_reboot_streak();
+        config_store_reset_transport_reboot_streak();
         // Cancel any pending reconnect timer — we're connected
         if (s_reconnect_timer) {
             esp_timer_stop(s_reconnect_timer);
@@ -585,6 +586,12 @@ esp_err_t app_wifi_init(void)
 {
     // Initialize Wi-Fi remote module (ESP32-C6 via SDIO)
     wifi_remote_init();
+
+    // Register for ESP-Hosted transport events before any esp_wifi_remote_*
+    // call can bring the SDIO transport up, so a transport failure has no
+    // unhandled window (esp_hosted's own restart-on-failure is disabled in
+    // sdkconfig). Covers both the STA and captive-portal init paths.
+    transport_recovery_register_events_once();
 
     // Create non-blocking reconnection timer (used by disconnect handler)
     if (!s_reconnect_timer) {

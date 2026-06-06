@@ -2,9 +2,12 @@ idf_component_register(
     SRCS "app_wifi.c"
          "wifi_captive_portal.c"
          "wifi_recovery.c"
+         "transport_recovery.c"
          "sntp_sync.c"
     INCLUDE_DIRS "include"
     REQUIRES esp_wifi esp_wifi_remote esp_event esp_netif nvs_flash esp_http_server lwip espressif__mdns
-    PRIV_REQUIRES http_api makapix config_store p3a_core event_bus
+    PRIV_REQUIRES http_api makapix config_store p3a_core event_bus esp_hosted
+                  # TRANSPORT_FAULT_INJECT (temporary): gpio driver for the C6 reset-pulse test hook
+                  esp_driver_gpio
 )
 

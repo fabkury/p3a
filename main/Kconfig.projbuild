@@ -38,6 +38,18 @@ menu "Physical Player of Pixel Art (P3A)"
             help
                 When enabled, the /sdcard/p3a folder is deleted and recreated
                 empty on boot. Useful for testing fresh device behavior.
+
+        config P3A_TRANSPORT_FAULT_INJECT
+            bool "TEMPORARY: HTTP hook to inject a synthetic transport failure (debug)"
+            default n
+            help
+                TEMPORARY test hook for Phase 0 of
+                docs/transport-recovery/PLAN.md. Compiles in
+                POST /action/inject_transport_failure[?streak=N], which posts a
+                synthetic ESP_HOSTED_EVENT_TRANSPORT_FAILURE to exercise the
+                orderly-reboot path (and, with streak >= 3, the degraded mode).
+                DELETE after Phase 0 validation:
+                grep -rn "TRANSPORT_FAULT_INJECT" finds every piece.
     endmenu
 
     menu "Display"

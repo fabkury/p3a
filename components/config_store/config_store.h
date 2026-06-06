@@ -657,6 +657,15 @@ void     config_store_increment_touch_reboot_streak(void);
 void     config_store_reset_touch_reboot_streak(void);
 void     config_store_reset_touch_reboot_counters(void);
 
+// ESP-Hosted Transport-Failure Reboot Counters (persisted in NVS)
+// See docs/transport-recovery/PLAN.md
+uint16_t config_store_get_transport_reboot_total(void);
+void     config_store_increment_transport_reboot_total(void);
+uint16_t config_store_get_transport_reboot_streak(void);
+void     config_store_increment_transport_reboot_streak(void);
+void     config_store_reset_transport_reboot_streak(void);
+void     config_store_reset_transport_reboot_counters(void);
+
 #ifdef __cplusplus
 }
 #endif

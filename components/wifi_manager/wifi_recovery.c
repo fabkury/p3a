@@ -54,8 +54,12 @@ static const char *TAG = "wifi_recovery";
 // Health interval is now adaptive: see wifi_manager_internal.h defines.
 // s_wifi_health_interval_ms is defined in app_wifi.c and externed via the header.
 
-// UI function for showing countdown before hard reboot (weak: resolved at link time)
+// UI functions for showing countdown before hard reboot (weak: resolved at link time).
+// display_renderer_enter_ui_mode() is required for visibility: during playback
+// the animation renderer wins and ugfx messages never composite (same pattern
+// as the touch-recovery countdown in app_touch.c).
 extern esp_err_t ugfx_ui_show_channel_message(const char *channel_name, const char *message, int progress_percent) __attribute__((weak));
+extern esp_err_t display_renderer_enter_ui_mode(void) __attribute__((weak));
 
 void wifi_recovery_task(void *arg)
 {
@@ -209,9 +213,15 @@ void wifi_recovery_task(void *arg)
                 config_store_increment_wifi_reboot_total();
                 config_store_increment_wifi_reboot_streak();
 
+                // Switch the render pipeline to the UI source so the countdown
+                // is visible during playback (bounded: mode wait times out
+                // after 500 ms, so a wedged renderer can't block the reboot).
+                if (display_renderer_enter_ui_mode) {
+                    display_renderer_enter_ui_mode();
+                }
                 for (int i = 10; i > 0; i--) {
                     char msg[64];
-                    snprintf(msg, sizeof(msg), "WiFi chip not responding\nRestarting in %d...", i);
+                    snprintf(msg, sizeof(msg), "WiFi chip not responding.\nRestarting in %d...", i);
                     if (ugfx_ui_show_channel_message) {
                         ugfx_ui_show_channel_message("p3a", msg, -1);
                     }
@@ -277,6 +287,14 @@ void wifi_health_monitor_task(void *arg)
 
         // Skip monitoring while captive portal is active (AP mode)
         if (s_captive_portal_server != NULL) {
+            continue;
+        }
+
+        // Transport-failure policy declared the C6 link dead (degraded
+        // mode): WiFi-level recovery would only spray RPC timeouts at a dead
+        // SDIO link, and was already declined there. Stand down; only a
+        // reboot can recover.
+        if (transport_recovery_is_degraded()) {
             continue;
         }
 

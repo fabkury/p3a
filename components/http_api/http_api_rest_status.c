@@ -407,6 +407,11 @@ esp_err_t h_get_status(httpd_req_t *req) {
         cJSON_AddNumberToObject(data, "touch_recovery_reboots", (double)touch_reboots);
     }
 
+    uint16_t transport_reboots = config_store_get_transport_reboot_total();
+    if (transport_reboots > 0) {
+        cJSON_AddNumberToObject(data, "transport_recovery_reboots", (double)transport_reboots);
+    }
+
     // Device identity
     {
         char device_name[CONFIG_STORE_MAX_DEVICE_NAME_LEN + 1];

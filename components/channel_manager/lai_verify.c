@@ -10,8 +10,11 @@
  * - Requests (from the play scheduler's pick path) land in a per-channel
  *   slot table under a small leaf mutex; a volatile pending counter makes
  *   lai_verify_has_work() lock-free for the download task's hot loop.
- * - All verification I/O runs in the download manager task, one batch per
- *   loop iteration, preserving the single-background-SD-scanner pattern.
+ * - All verification I/O runs in the download manager task, one
+ *   time-budgeted slice of batches per loop iteration, preserving the
+ *   single-background-SD-scanner pattern. The slice (rather than a single
+ *   batch) keeps sweep throughput useful when the loop's iterations are
+ *   dominated by multi-second downloads.
  * - The sweep operates on an owned PSRAM snapshot of the channel's LAi
  *   post_id array taken at sweep start. Plain int32 copies are immune to
  *   concurrent cache merges, evictions, and frees; per-entry
@@ -51,10 +54,15 @@ static const char *TAG = "lai_verify";
 // External: SD paused check (weak, may be absent in some builds)
 extern bool animation_player_is_sd_paused(void) __attribute__((weak));
 
-// Stats per batch; one batch runs per download-task loop iteration.
+// Stats per batch.
 #define LAI_VERIFY_BATCH_STATS    16
 // Pacing delay after every batch that touched the SD card.
 #define LAI_VERIFY_BATCH_DELAY_MS 50
+// Time budget for one slice (one download-task loop iteration): batches run
+// back-to-back (pacing gaps included) until this elapses. Bounds the latency
+// added to each download cycle while letting a sweep make real progress
+// (~6 batches ≈ 96 stats per cycle at ~2 ms/stat).
+#define LAI_VERIFY_SLICE_MS       500
 // Per-channel cooldown after a completed sweep; requests inside the window
 // are dropped (the pick path's miss window must re-accumulate anyway).
 #define LAI_VERIFY_COOLDOWN_MS    120000
@@ -262,7 +270,14 @@ static void sweep_finish(bool completed)
     s_sweep.active = false;
 }
 
-lai_verify_result_t lai_verify_run_batch(void)
+/**
+ * @brief Run one paced verification batch (≤LAI_VERIFY_BATCH_STATS stats)
+ *
+ * Building block of lai_verify_run_slice(). Re-checks the gates, verifies
+ * snapshot entries against disk, evicts confirmed-missing ones, and sleeps
+ * LAI_VERIFY_BATCH_DELAY_MS when it performed I/O.
+ */
+static lai_verify_result_t lai_verify_run_batch(void)
 {
     if (!lai_verify_has_work()) {
         return LAI_VERIFY_IDLE;
@@ -458,4 +473,23 @@ lai_verify_result_t lai_verify_run_batch(void)
     }
 
     return LAI_VERIFY_RAN;
+}
+
+lai_verify_result_t lai_verify_run_slice(void)
+{
+    TickType_t slice_start = xTaskGetTickCount();
+
+    lai_verify_result_t last = lai_verify_run_batch();
+
+    // Keep running batches until the budget elapses, the work drains, or a
+    // gate closes. Returning the LAST batch's outcome gives the host loop
+    // the right wait policy: RAN -> come straight back for the next slice,
+    // GATED -> bounded poll, IDLE -> normal long wait.
+    while (last == LAI_VERIFY_RAN &&
+           lai_verify_has_work() &&
+           (xTaskGetTickCount() - slice_start) < pdMS_TO_TICKS(LAI_VERIFY_SLICE_MS)) {
+        last = lai_verify_run_batch();
+    }
+
+    return last;
 }

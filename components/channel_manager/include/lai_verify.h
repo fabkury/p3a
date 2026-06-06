@@ -15,8 +15,8 @@
  *
  * Sweeps are requested by the play scheduler's pick path (windowed
  * miss-rate threshold and retry-loop give-up) via lai_verify_request()
- * and executed exclusively inside the download manager task, one batch
- * per task-loop iteration.
+ * and executed exclusively inside the download manager task, one
+ * time-budgeted slice of paced batches per task-loop iteration.
  */
 
 #ifndef LAI_VERIFY_H
@@ -29,11 +29,11 @@ extern "C" {
 #endif
 
 /**
- * @brief Outcome of one lai_verify_run_batch() call
+ * @brief Outcome of one lai_verify_run_slice() call (last batch's result)
  */
 typedef enum {
     LAI_VERIFY_IDLE = 0,  // No sweep pending or active
-    LAI_VERIFY_RAN,       // Processed a batch (includes its pacing delay)
+    LAI_VERIFY_RAN,       // Processed batch(es) (includes their pacing delays)
     LAI_VERIFY_GATED,     // Work pending but blocked (SD exported, SDIO locked, PICO-8)
 } lai_verify_result_t;
 
@@ -63,19 +63,22 @@ void lai_verify_request(const char *channel_id);
 bool lai_verify_has_work(void);
 
 /**
- * @brief Run one paced verification batch
+ * @brief Run a time-budgeted slice of paced verification batches
  *
  * MUST only be called from the download manager task (shares its
- * single-task path-building buffers). Checks the SD/MSC/SDIO/PICO-8
- * gates, verifies up to LAI_VERIFY_BATCH_STATS LAi entries against disk,
- * evicts confirmed-missing ones, and sleeps LAI_VERIFY_BATCH_DELAY_MS
- * when it performed I/O. On sweep completion: schedules a cache save,
+ * single-task path-building buffers). Runs verification batches (16
+ * stats + 50 ms pacing gap each) back-to-back until the ~500 ms slice
+ * budget elapses, the work runs out, or a gate closes — so a deep
+ * re-download queue doesn't throttle the sweep to one batch per
+ * multi-second download. Each batch re-checks the SD/MSC/SDIO/PICO-8
+ * gates, verifies LAi entries against disk, and evicts
+ * confirmed-missing ones. On sweep completion: schedules a cache save,
  * notifies the play scheduler, and triggers a download rescan if any
  * entries were evicted.
  *
- * @return LAI_VERIFY_IDLE / LAI_VERIFY_RAN / LAI_VERIFY_GATED
+ * @return Last batch's outcome: LAI_VERIFY_IDLE / RAN / GATED
  */
-lai_verify_result_t lai_verify_run_batch(void);
+lai_verify_result_t lai_verify_run_slice(void);
 
 #ifdef __cplusplus
 }

@@ -651,13 +651,15 @@ static void download_task(void *arg)
             continue;  // Skip this cycle
         }
 
-        // Run one paced LAi verification batch when a sweep is pending or
-        // active (pick-miss triggered reconciliation, see lai_verify.h).
-        // Hosted here so verification shares this task's gates and never
-        // contends with a second background SD scanner.
+        // Run one time-budgeted slice of LAi verification batches when a
+        // sweep is pending or active (pick-miss triggered reconciliation,
+        // see lai_verify.h). Hosted here so verification shares this task's
+        // gates and never contends with a second background SD scanner; the
+        // ~500 ms slice keeps the sweep fast even when iterations are
+        // dominated by multi-second downloads, while downloads stay active.
         lai_verify_result_t verify_state = LAI_VERIFY_IDLE;
         if (lai_verify_has_work()) {
-            verify_state = lai_verify_run_batch();
+            verify_state = lai_verify_run_slice();
         }
 
         // Resolve one pending museum entry per iteration. For Rijks
@@ -698,7 +700,7 @@ static void download_task(void *arg)
 
         if (get_err == ESP_ERR_NOT_FOUND) {
             // Sweep actively progressing: skip the wait and come back for
-            // the next batch (pacing lives inside lai_verify_run_batch).
+            // the next slice (pacing lives inside lai_verify_run_slice).
             if (verify_state == LAI_VERIFY_RAN) {
                 continue;
             }

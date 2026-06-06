@@ -6,9 +6,56 @@ history.
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| 0 | Orderly reboot instead of esp_hosted's instant restart | **Done** (code complete 2026-06-06; on-device validation pending — see checklist) |
-| 1 | In-place transport recovery (no reboot), version-gated | Not started |
+| 0 | Orderly reboot instead of esp_hosted's instant restart | **Done** — shipped + validated on-device (2.7.0 bench unit); 3 quick checks + passive soak open (see checklist) |
+| 1 | In-place transport recovery (no reboot), version-gated | **Ready to start** — needs a slave-2.9.3 bench unit; see the Phase 1 guide |
 | 2 | Bundle slave fw 2.9.7 (contingent on Phase 1 bench findings) | Not started |
+
+---
+
+## Handoff — resuming from another workstation
+
+State as of 2026-06-06 (handoff written for resuming on the workstation with
+the **slave-2.9.3 bench unit**; all work so far was done and tested against
+the **2.7.0 bench unit**). Identify a unit's slave version from the boot log:
+`slave_ota: Current co-processor firmware: X.Y.Z`.
+
+**Commits so far** (all 2026-06-06, branch `main`):
+
+- `ace926cb` — chore: sdkconfig/dependencies.lock regenerated under ESP-IDF
+  **5.5.1** (this workstation built with 5.5.1). If the next workstation uses
+  5.5.2, sdkconfig will churn again on first build — commit that churn as its
+  own `chore:` commit per repo precedent (`272485a0`, `d9c5b393`, `ace926cb`)
+  and keep feature diffs clean.
+- `370db897` — feat: the entire Phase 0 implementation + the temporary test
+  hook + this plan. Read this commit to see every Phase 0 touch point.
+- `d040e58f` — docs: degraded-mode quiesce validation logged.
+
+**Decisions already made (do not relitigate without new evidence):**
+
+1. Containment + recovery on our side; upgrading esp-hosted does not fix the
+   underlying bug (open upstream, reproduced through 2.12.x).
+2. Version-gate enhancements, never the safety ladder (see Design rule).
+3. The test hook **stays until Phase 1 is validated** — `?real=1` is the
+   injection rig Phase 1 needs. It is Kconfig-gated (default n), so
+   release-from-defaults stays safe meanwhile.
+4. Heartbeat monitoring is Phase 2 material: it needs slave >= 2.9.4 and the
+   fleet maxes out at 2.9.3 until a slave bump ships.
+5. CP_INIT stays log-only in Phase 0; Phase 1 may act on it once trusted.
+6. No `transport_degraded` field in `/api/status`: when degraded, the device
+   has no connectivity at all, so nothing could ever read it. The NVS
+   counters (read after recovery/reboot) are the fleet telemetry.
+
+**Immediate next actions, in order:**
+
+1. Quick Phase 0 checks on any unit (~15 min, see checklist): normal-boot
+   log line; plain `?real=1` reboot variant + eyeball
+   `transport_recovery_reboots` in `/api/status`; streak-reset-on-GOT_IP.
+2. Start/continue the passive soak (64-channel Giphy playset running; wait
+   for the organic failure; confirm orderly path). Do not block on this.
+3. Phase 1 development + validation on the 2.9.3 unit (guide below).
+4. Regression-check the gate on a 2.7.0 unit (must take the Phase 0 path).
+5. Delete the test hook (five files; `grep -rn "TRANSPORT_FAULT_INJECT"`),
+   final commit, mark Phase 1 done here.
 
 ---
 
@@ -176,8 +223,8 @@ risk; gathers fleet evidence for Phase 1.
 - **Acting on unexpected CP_INIT** — false-positive reboot risk on a healthy
   device (exactly the regression the 2.7.0 constraint forbids). Log-only
   until Phase 1.
-- **Heartbeat** — needs slave >= 2.9.4 and adds a liveness-policy decision;
-  Phase 1 material.
+- **Heartbeat** — needs slave >= 2.9.4, and the fleet maxes out at 2.9.3
+  until a slave bump ships; Phase 2 material.
 - **ugfx diagnostics screen row** — the "Reboots" row in `main/ugfx_ui.c`
   formats wifi+touch combinatorially; adding a third counter there is a
   cosmetic refactor. `/api/status` + logs are the telemetry channels for now.
@@ -209,13 +256,15 @@ risk; gathers fleet evidence for Phase 1.
       injection must take the countdown-reboot path again.
 - [ ] Soak under the trigger load (64-channel Giphy playset) until a real
       failure occurs; confirm orderly path end-to-end.
-- [ ] **Delete the temporary test hook** (see below) once the above pass.
+- [ ] ~~Delete the temporary test hook once the above pass~~ — **deferred:**
+      the hook is Phase 1's test rig (decision 2026-06-06); deletion is the
+      last item of the Phase 1 checklist.
 
-### Temporary test hook (TRANSPORT_FAULT_INJECT) — delete after testing
+### Temporary test hook (TRANSPORT_FAULT_INJECT) — delete after Phase 1
 
 Gated by `CONFIG_P3A_TRANSPORT_FAULT_INJECT` (currently **=y** in sdkconfig
-for the validation build; default n, so a release built from defaults would
-exclude it — but delete it outright once testing is done).
+for the validation builds; default n, so a release built from defaults would
+exclude it — but delete it outright once Phase 1 validation is done).
 
 Usage:
 
@@ -255,32 +304,118 @@ expect up to a few seconds of delay when idle).
 
 ---
 
-## Phase 1 — in-place transport recovery (planned)
+## Phase 1 — in-place transport recovery (ready to start)
 
-**Goal:** on transport failure (and, once trusted, on unexpected CP_INIT),
-recover without rebooting the P4: playback never blinks; ~8–18 s network
-outage.
+**Goal:** on transport failure, recover without rebooting the P4: playback
+never blinks; ~8–18 s network outage (deinit + 1.5 s slave reset delay
+`CONFIG_ESP_HOSTED_SDIO_RESET_DELAY_MS` + card re-init + Wi-Fi/DHCP + MQTT).
 
-Sketch (details to be finalized when started):
+**Prerequisite:** a bench unit whose C6 reports >= 2.9.3, with the test hook
+still compiled in.
 
-- Gate: slave fw >= 2.9.x (cache version at boot — `slave_ota` already reads
-  it successfully on all fleet versions, including 2.7.0). Slave 2.7.0 -> use
-  Phase 0 path until/unless bench-validated on the stuck-2.7.0 bench unit.
-- Sequence (per `managed_components/espressif__esp_hosted/examples/host_hosted_events/`):
-  netif down -> `esp_wifi_remote_stop/deinit` (best-effort) ->
-  `esp_hosted_deinit()` -> `esp_hosted_init()` + `esp_hosted_connect_to_slave()`
-  (resets C6 via GPIO 54) -> existing `wifi_recovery_task` reinit flow ->
-  success criteria = GOT_IP + DNS health check.
-- Bounded attempts (2–3) -> escalate to Phase 0 orderly reboot. Phase 0
-  streak guard still terminates the ladder.
-- Reuse `wifi_recovery_task` (extend its notification protocol) rather than a
-  new task — keeps internal-RAM cost ~0.
-- Audit callers of `esp_wifi_remote_*` for unchecked-error panics during the
-  transport-down window.
-- Policy decisions to make: treat repeated unexpected CP_INIT as failure?
-  enable heartbeat (slave >= 2.9.4) and at what interval? per-cycle heap
-  watermark logging; cap on lifetime in-place recoveries before a scheduled
-  maintenance reboot.
+### Why this is expected to work on the pinned versions
+
+- Host lib 2.9.7 contains the 2.9.4 fix "fixed ESP-Hosted and SDIO issues
+  that prevent transport reinitialisation" and 2.9.7's deinit->init memory
+  leak fixes.
+- The vendor demonstrates this exact flow:
+  `managed_components/espressif__esp_hosted/examples/host_hosted_events/`
+  (README shows a full successful in-place recovery from this exact error —
+  deinit -> init -> GPIO-54 slave reset -> card re-init -> reconnect).
+  **Known quirk** from that README's log: reinit prints
+  `W H_API: Transport already initialized, skipping initialization` — the
+  deinit/init path has version-specific internal-state behavior; it works
+  anyway, but treat that warning as expected, and re-validate on any
+  esp_hosted upgrade.
+- Open question Phase 1 answers empirically: whether the **slave 2.9.3** side
+  blocks reliable reinit (the 2.9.4 changelog does not say which side those
+  fixes touched; the slave-side experience of an in-place recovery is
+  identical to a host reboot, so probably fine). If reinit proves unreliable
+  against 2.9.3 -> Phase 2.
+
+### API surface (all already in the pinned component)
+
+- `esp_hosted.h`: `esp_hosted_init()`, `esp_hosted_deinit()`,
+  `esp_hosted_connect_to_slave()`
+- `esp_hosted_misc.h`: `esp_hosted_get_coprocessor_fwversion()`
+- `esp_hosted_event.h`: events (already consumed by `transport_recovery.c`)
+
+### Critical gotcha: cache the slave version at boot
+
+At failure time the transport is dead — `esp_hosted_get_coprocessor_fwversion()`
+is an RPC and **cannot be called then**. Cache it while the transport is up:
+`slave_ota` already queries it during boot (`slave_ota.c`, the
+`current_ver` it logs); either expose a getter from there or query once from
+`transport_recovery.c` after the first CP_INIT. Gate on the cached value;
+treat "never learned" as "old slave" (Phase 0 path).
+
+### Implementation sketch (code anchors)
+
+1. `transport_recovery.c`, TRANSPORT_FAILURE case: insert the gate + recovery
+   dispatch *before* the existing streak/reboot logic; refactor the reboot
+   branch into a callable helper — it becomes the escalation target.
+2. Recovery runs in `wifi_recovery_task` (extend its notification into a
+   command protocol — today it is a plain binary notify from
+   `wifi_schedule_full_reinit()`). Keeps internal-RAM cost ~0. Respect/reuse
+   `s_reinit_in_progress` (the health monitor force-clears it after 120 s —
+   extend that guard to the transport-recovery command).
+3. Recovery sequence (mirror the vendor example, then reuse our existing
+   Wi-Fi machinery):
+   set "recovering" flag -> netif down (`esp_netif_action_disconnected`,
+   as in the degraded quiesce) -> `esp_wifi_remote_stop/deinit` best-effort
+   (RPC calls will error/time out over the dead link — tolerate) ->
+   `esp_hosted_deinit()` -> `esp_hosted_init()` ->
+   `esp_hosted_connect_to_slave()` (hard-resets C6 via GPIO 54) -> existing
+   `wifi_recovery_task` reinit flow (it already does
+   esp_wifi_remote_init/set_mode/set_config/start/connect with backoff and
+   credential reload) -> success = WIFI_CONNECTED_BIT within 15 s + the DNS
+   health check.
+4. CP_INIT **during** recovery is expected (we reset the slave) — gate the
+   "C6 rebooted underneath us" warning with the recovering flag (the vendor
+   example uses `resetting_esp_hosted_transport` for exactly this).
+5. Bounded attempts (2–3) -> escalate to the Phase 0 orderly-reboot helper.
+   The Phase 0 streak guard still terminates the whole ladder in degraded
+   mode.
+6. **Hang protection:** `esp_hosted_deinit()` can in principle block on a
+   semaphore held by a wedged transport task. Arm a one-shot `esp_timer`
+   escalation (e.g. 60 s) before starting recovery, cancel on success; if it
+   fires, run the Phase 0 orderly reboot. Without this, a hung recovery would
+   leave the device broken with no way out (today's instant-restart at least
+   guaranteed a reset).
+7. Per-cycle heap watermark logging (free internal heap + largest block)
+   to confirm the 2.9.7 leak fixes hold across repeated recoveries.
+8. Caller audit before enabling: grep app components for `ESP_ERROR_CHECK`
+   wrapping `esp_wifi_remote_*` / `esp_wifi_*` calls that could abort when
+   RPCs fail during the transport-down window; soften to logged errors.
+
+### Policy decisions to make during implementation
+
+- Does the streak guard gate recovery *attempts* or only *reboots*?
+  (Suggestion: only reboots — in-place attempts are cheap and invisible.)
+- Treat repeated unexpected CP_INIT (outside recovery) as a transport
+  failure? (Suggestion: yes after Phase 1 soaks, since recovery is now
+  cheap; keep log-only until then.)
+- Cap on lifetime in-place recoveries before scheduling a maintenance reboot
+  at an idle hour (P4 uptime becomes unbounded once reboots stop; slow leaks
+  elsewhere lose their accidental "cleanup").
+
+### Phase 1 validation checklist
+
+- [ ] On the 2.9.3 unit, Phase 0 quick checks first (baseline: hook + reboot
+      path behave exactly as on the 2.7.0 unit).
+- [ ] `?real=1` under load -> in-place recovery: driver errors ->
+      TRANSPORT_FAILURE -> recovery -> Wi-Fi + MQTT back, downloads resume,
+      **screen never blinks**, no reboot (uptime preserved).
+- [ ] Repeat >= 5 cycles; heap watermarks stable across cycles.
+- [ ] Recovery-failure path: induce failure during recovery (e.g. hold the
+      C6 in reset by re-pulsing mid-recovery) -> bounded attempts ->
+      orderly reboot escalation works.
+- [ ] Unexpected-CP_INIT logging still correct (no false "rebooted underneath
+      us" during recovery).
+- [ ] Regression on the 2.7.0 unit: `?real=1` -> gate routes to Phase 0
+      orderly reboot (no in-place attempt).
+- [ ] Soak both units under 64-channel load.
+- [ ] Delete the test hook (five files), final commit.
 
 ## Phase 2 — bundle slave fw 2.9.7 (contingent)
 
@@ -366,3 +501,11 @@ rollback; consider adding a force-reflash NVS flag to `slave_ota` first.
   Remaining before closing Phase 0 validation: plain `?real=1` reboot
   variant on a clean streak, normal-boot log check, streak-reset-on-GOT_IP
   check, soak under 64-channel load, then delete the test hook.
+- **2026-06-06** — Handoff revision: work moves to the workstation with the
+  slave-2.9.3 bench unit. Added the Handoff section (state, commits,
+  standing decisions, next actions), expanded Phase 1 from sketch to an
+  implementation guide (API surface, code anchors, the cache-slave-version-
+  at-boot gotcha, hang-protection escalation timer, policy decisions, its
+  own validation checklist), deferred test-hook deletion to end of Phase 1,
+  reclassified heartbeat as Phase 2 (fleet maxes at 2.9.3). All testing so
+  far was on the 2.7.0 bench unit, built under ESP-IDF v5.5.1.

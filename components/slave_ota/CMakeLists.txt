@@ -14,6 +14,10 @@ if(EXISTS ${SLAVE_FW_BIN})
     message(STATUS "Slave firmware found: ${SLAVE_FW_BIN}")
     # This will be flashed to the slave_fw partition
     esptool_py_flash_to_partition(flash "slave_fw" "${SLAVE_FW_BIN}")
+    # esptool v5 (IDF 5.5.2+) image-validates write_flash files and refuses
+    # network_adapter.bin (an ESP32-C6 image in the P4's slave_fw partition by
+    # design). --force skips the chip-id check for the flash target.
+    set_property(TARGET flash APPEND PROPERTY SUB_ARGS "--force")
 else()
     message(WARNING "Slave firmware not found at ${SLAVE_FW_BIN}")
     message(WARNING "Build the slave project first: cd ../slave && idf.py build")

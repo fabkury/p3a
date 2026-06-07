@@ -1,6 +1,6 @@
 # CPU 1 Saturation Triggering IDLE1 Task Watchdog
 
-Status: **(1) superseded 2026-05-15 by libjpeg progress monitor; (2)+ still deferred.** The scanline-loop yield landed on 2026-05-14 and was removed on 2026-05-15 in favor of a `jpeg_progress_mgr` callback that fires from inside libjpeg's Huffman/IDCT loops — see "Status update — 2026-05-15" below. The pinning recommendation (2) was *not* applied. The watchdog does not panic (`CONFIG_ESP_TASK_WDT_PANIC` unset), so any residual WDTs remain warnings rather than resets.
+Status: **(1) superseded 2026-05-15 by libjpeg progress monitor; (2)+ still deferred.** The scanline-loop yield landed on 2026-05-14 and was removed on 2026-05-15 in favor of a `jpeg_progress_mgr` callback that fires from inside libjpeg's Huffman/IDCT loops — see "Status update — 2026-05-15" below. The pinning recommendation (2) was *not* applied. The watchdog does not panic (`CONFIG_ESP_TASK_WDT_PANIC` unset), so any residual WDTs remain warnings rather than resets. 2026-06-07: the same slow decodes resurfaced as dwell-tick "swap already in progress" collisions — Tier 1 mitigation landed, see "Status update — 2026-06-07" below.
 
 History: a second trace on 2026-05-14 reproduced the original `ycc_rgb_convert_internal` stack during V&A backfill and motivated (1). A third trace on 2026-05-15 caught a *progressive* JPEG stuck in `decode_mcu_AC_refine` — a case (1) couldn't cover — which motivated the progress-monitor replacement.
 
@@ -169,3 +169,23 @@ Lives in `components/animation_decoder/jpeg_animation_decoder_sw.c`. Commit `07d
 ### (2) Pin `anim_loader` to CPU 0 — still deferred
 
 The 2026-05-14 doc gated revisit on "any task watchdog firing." The 2026-05-15 WDT met that bar, but the root cause was a libjpeg coverage gap rather than core contention — (1') addresses it directly. Re-evaluate (2) only if a *new* WDT trace shows CPU 1 saturation that the progress monitor can't reach (e.g. libwebp, see (3)).
+
+## Status update — 2026-06-07
+
+### Silent sibling: dwell-tick "swap already in progress" collisions — Tier 1 landed
+
+With (1') in place the WDT no longer fires, but the underlying 45–105 s SW JPEG decodes still hold the swap pipeline (`s_loader_busy` → `prefetch_pending`) across multiple 30 s dwell ticks. Each tick ran a full SWRR round + pick, then died in `animation_player_request_swap()`:
+
+```
+W anim_player:    Swap request ignored: swap already in progress
+W ps_navigation:  Swap request failed: ESP_ERR_INVALID_STATE
+```
+
+Field log 2026-06-07: a `HAM · Oil` pick held the pipeline ~104 s (3 rejected ticks) and an `AIC · Painting` pick ~53 s (1 rejected tick); the display stayed frozen on the prior artwork throughout (confirmed by view-tracker "still watching" heartbeats for the same post across the window). The rejected picks debited SWRR credit with no rollback (`play_scheduler_next` only rolled back on `ESP_ERR_NOT_FOUND`).
+
+Landed (Tier 1 — symptom + bookkeeping only, does not shorten the decode):
+
+- `play_scheduler_timer.c`: the dwell tick is skipped while `animation_player_is_loader_busy()` (weak-linked; same predicate the rejection uses) — no pick, no SWRR round, no warning pair. User-initiated swaps (touch/REST) still reach the player and keep the loud rejection.
+- `play_scheduler_navigation.c`: `play_scheduler_next()` now rolls back SWRR credits on any rejected fresh pick (non-OK results other than the already-handled `NOT_FOUND`), so a rejected attempt leaves the credit books as if the tick never happened.
+
+Still open (Tier 2, deferred): bound the decode itself — wallclock budget in the SW JPEG progress monitor (abort via the existing setjmp/longjmp path; distinct error code, **exempt from corrupt-file deletion**) paired with a too-slow skip-list so the same image doesn't re-stall on every re-pick. A one-line per-SW-decode duration/dims/progressive log should land first to size the threshold and to check whether some hosts (e.g. HAM's NRS redirect) ignore the IIIF `!720,720` size hint. Proposals (4)/(5) above remain the source-level fixes.

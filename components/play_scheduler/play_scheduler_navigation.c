@@ -322,7 +322,18 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
             continue;
         }
 
-        // Other error (ESP_ERR_INVALID_STATE, etc.) - don't retry
+        // Other error (ESP_ERR_INVALID_STATE, etc.) - don't retry.
+        // Roll back the SWRR round for a rejected fresh pick (swap already
+        // in progress, FS error, ...): nothing was displayed, so the credit
+        // books should read as if this tick never happened. Mirrors the
+        // missing-file rollback above.
+        if (fresh_pick) {
+            for (size_t i = 0; i < s_state->channel_count; i++) {
+                s_state->channels[i].credit = saved_credits[i];
+            }
+            ESP_LOGI(TAG, "Rolled back SWRR credits after rejected swap (%s)",
+                     esp_err_to_name(result));
+        }
         break;
     }
 

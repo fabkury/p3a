@@ -16,10 +16,16 @@ The build commands are listed below for your information, but you must NOT build
 # Set PYTHONUTF8 to avoid Unicode encoding errors on Windows
 $env:PYTHONUTF8="1"
 
-# Activate ESP-IDF (Windows PowerShell): avoid running this command multiple times because you don't want to leave open sessions behind. Instead, run the export command once, and reuse the environment on subsequent commands
-# Choose either one of:
-# C:\Users\Fab\esp\v5.5.1\esp-idf\export.ps1 # ESP-IDF v5.5.1
-# C:\Espressif\Initialize-Idf.ps1 -IdfId esp-idf-b29c58f93b4ca0f49cdfc4c3ef43b562 # ESP-IDF v5.5.2
+# Activate ESP-IDF v5.5.4 (Windows PowerShell): avoid running this command multiple times because you don't want to leave open sessions behind. Instead, run the activation once, and reuse the environment on subsequent commands
+. C:\Espressif\tools\Microsoft.v5.5.4.PowerShell_profile.ps1
+# REQUIRED after activating: EIM 0.13.1's profile script forgets to export ESP_IDF_VERSION.
+# Without it, esp_wifi_remote's Kconfig silently fails to load, sdkconfig regenerates with
+# esp_hosted on SPI/"invalid" slave target, and the build dies with "Unknown Slave Target".
+$env:ESP_IDF_VERSION="5.5"
+
+# Fallback installs (older, keep until v5.5.4 is proven on both workstations):
+# C:\Users\Fab\esp\v5.5.1\esp-idf\export.ps1 # ESP-IDF v5.5.1 (workstation 1)
+# C:\Espressif\Initialize-Idf.ps1 -IdfId esp-idf-b29c58f93b4ca0f49cdfc4c3ef43b562 # ESP-IDF v5.5.2 (workstation 2)
 
 # Set target (first time only)
 idf.py set-target esp32p4
@@ -28,7 +34,12 @@ idf.py set-target esp32p4
 idf.py build
 
 # Flash and monitor
-idf.py flash monitor
+# NOTE: plain `idf.py flash` currently FAILS under v5.5.4: esptool v5 refuses to write
+# network_adapter.bin (an ESP32-C6 image, flashed by design into the P4's slave_ota
+# partition) without --force. Until that's wired into the build, flash from build/ with:
+#   python -m esptool --chip esp32p4 -p COM11 -b 460800 --before default_reset --after hard_reset write_flash --force "@flash_args"
+# then monitor separately:
+idf.py monitor
 
 # Configure options
 idf.py menuconfig
@@ -36,6 +47,8 @@ idf.py menuconfig
 # Clean build
 idf.py fullclean
 ```
+
+**sdkconfig caution:** the board's ESP32-P4 is silicon rev v1.0. `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y` + `CONFIG_ESP32P4_REV_MIN_1=y` must survive any sdkconfig regeneration — from IDF 5.5.2 the default is rev-3.01-only, whose images the bootloader rejects on this board. If a regeneration diff touches `ESP32P4_REV_MIN_FULL`, stop and restore.
 
 Build artifacts go to `build/`. Release binaries are copied to `release/v{VERSION}/`.
 

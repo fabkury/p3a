@@ -33,13 +33,11 @@ idf.py set-target esp32p4
 # Build
 idf.py build
 
-# Flash and monitor
-# NOTE: plain `idf.py flash` currently FAILS under v5.5.4: esptool v5 refuses to write
-# network_adapter.bin (an ESP32-C6 image, flashed by design into the P4's slave_ota
-# partition) without --force. Until that's wired into the build, flash from build/ with:
-#   python -m esptool --chip esp32p4 -p COM11 -b 460800 --before default_reset --after hard_reset write_flash --force "@flash_args"
-# then monitor separately:
-idf.py monitor
+# Flash and monitor (board is usually on COM11)
+# (slave_ota's CMakeLists appends --force to flash_args: esptool v5 would otherwise
+# refuse network_adapter.bin, the ESP32-C6 image flashed into the P4's slave_fw
+# partition by design)
+idf.py flash monitor
 
 # Configure options
 idf.py menuconfig

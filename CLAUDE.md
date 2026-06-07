@@ -18,9 +18,11 @@ $env:PYTHONUTF8="1"
 
 # Activate ESP-IDF v5.5.4 (Windows PowerShell): avoid running this command multiple times because you don't want to leave open sessions behind. Instead, run the activation once, and reuse the environment on subsequent commands
 . C:\Espressif\tools\Microsoft.v5.5.4.PowerShell_profile.ps1
-# REQUIRED after activating: EIM 0.13.1's profile script forgets to export ESP_IDF_VERSION.
-# Without it, esp_wifi_remote's Kconfig silently fails to load, sdkconfig regenerates with
-# esp_hosted on SPI/"invalid" slave target, and the build dies with "Unknown Slave Target".
+# REQUIRED after activating: EIM 0.13.1's profile script sets ESP_IDF_VERSION to the full
+# version ("5.5.4"), but official IDF 5.5.x activation sets major.minor ("5.5"), which is
+# what esp_wifi_remote's Kconfig keys its version fragments on. Without this override the
+# fragment silently fails to load, sdkconfig regenerates with esp_hosted on SPI/"invalid"
+# slave target, and the build dies with "Unknown Slave Target".
 $env:ESP_IDF_VERSION="5.5"
 
 # Fallback installs (older, keep until v5.5.4 is proven on both workstations):

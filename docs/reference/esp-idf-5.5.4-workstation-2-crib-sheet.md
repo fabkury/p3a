@@ -33,14 +33,18 @@ $env:PYTHONUTF8="1"
 $env:ESP_IDF_VERSION="5.5"   # REQUIRED — see landmine #1
 ```
 
-### Landmine #1: EIM forgets `ESP_IDF_VERSION`
+### Landmine #1: EIM sets the wrong `ESP_IDF_VERSION` format
 
-EIM 0.13.1's profile script does not export `ESP_IDF_VERSION` (official
-`export.ps1` sets it to major.minor, i.e. `"5.5"`). Without it,
-`esp_wifi_remote`'s Kconfig (`orsource "./Kconfig.idf_v$ESP_IDF_VERSION.in"`)
-silently loads nothing, every `SLAVE_IDF_TARGET_*` symbol vanishes, sdkconfig
+EIM 0.13.1's profile script sets `ESP_IDF_VERSION` to the full version
+(`"5.5.4"`), but official IDF 5.5.x activation (`export.ps1`/`activate.py`)
+sets major.minor (`"5.5"`). `esp_wifi_remote`'s Kconfig
+(`orsource "./Kconfig.idf_v$ESP_IDF_VERSION.in"`) keys its fragment files on
+the official convention — `Kconfig.idf_v5.5.in` exists, `Kconfig.idf_v5.5.4.in`
+does not (in our pinned 1.2.2). With the wrong value the fragment silently
+loads nothing, every `SLAVE_IDF_TARGET_*` symbol vanishes, sdkconfig
 regenerates with esp_hosted on SPI/`"invalid"` slave target, and the build dies
 with a misleading `#error "Unknown Slave Target"` deep inside esp_hosted.
+The `$env:ESP_IDF_VERSION="5.5"` override AFTER sourcing the profile fixes it.
 
 **Recovery if it happens:** `git checkout -- sdkconfig dependencies.lock`,
 delete `build/`, set the env var, rebuild.

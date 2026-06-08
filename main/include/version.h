@@ -9,8 +9,17 @@
  * 
  * Version follows Semantic Versioning 2.0 (https://semver.org/)
  * MAJOR.MINOR.PATCH
- * 
- * Version is defined in CMakeLists.txt as PROJECT_VER and passed via compile definitions.
+ *
+ * Version is defined in CMakeLists.txt as PROJECT_VER and passed via compile
+ * definitions.
+ *
+ * FOOTGUN: those definitions are injected PRIVATE per component
+ * (target_compile_definitions ... PRIVATE ...) and therefore do NOT propagate
+ * across REQUIRES. Any component that includes this header AND reads
+ * FW_VERSION* must inject the defs in its own CMakeLists.txt (see
+ * main/CMakeLists.txt), or it will silently compile against the "0.0.0"
+ * fallback below. Components currently injecting: main, makapix,
+ * art_institution, http_api.
  */
 
 // Version components (defined by CMake from PROJECT_VER)

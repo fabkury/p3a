@@ -6,7 +6,7 @@ history.
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| 0 | Orderly reboot instead of esp_hosted's instant restart | **Done** — shipped + validated on-device (2.7.0 bench unit); 3 quick checks + passive soak open (see checklist) |
+| 0 | Orderly reboot instead of esp_hosted's instant restart | **Done** — shipped + validated on-device (2.7.0 bench unit); 2 quick checks (normal-boot log, streak-reset-on-GOT_IP) + passive soak open (see checklist) |
 | 1 | In-place transport recovery (no reboot), version-gated | **Ready to start** — needs a slave-2.9.3 bench unit; see the Phase 1 guide |
 | 2 | Bundle slave fw 2.9.7 (contingent on Phase 1 bench findings) | Not started |
 
@@ -41,15 +41,15 @@ the **2.7.0 bench unit**). Identify a unit's slave version from the boot log:
 4. Heartbeat monitoring is Phase 2 material: it needs slave >= 2.9.4 and the
    fleet maxes out at 2.9.3 until a slave bump ships.
 5. CP_INIT stays log-only in Phase 0; Phase 1 may act on it once trusted.
-6. No `transport_degraded` field in `/api/status`: when degraded, the device
+6. No `transport_degraded` field in `/status`: when degraded, the device
    has no connectivity at all, so nothing could ever read it. The NVS
    counters (read after recovery/reboot) are the fleet telemetry.
 
 **Immediate next actions, in order:**
 
 1. Quick Phase 0 checks on any unit (~15 min, see checklist): normal-boot
-   log line; plain `?real=1` reboot variant + eyeball
-   `transport_recovery_reboots` in `/api/status`; streak-reset-on-GOT_IP.
+   log line; streak-reset-on-GOT_IP. *(plain `?real=1` reboot variant +
+   `transport_recovery_reboots` in `/status` — done 2026-06-08.)*
 2. Start/continue the passive soak (64-channel Giphy playset running; wait
    for the organic failure; confirm orderly path). Do not block on this.
 3. Phase 1 development + validation on the 2.9.3 unit (guide below).
@@ -211,7 +211,7 @@ risk; gathers fleet evidence for Phase 1.
 | `components/wifi_manager/wifi_recovery.c` | drive-by fix: pre-existing hard-reboot countdown was invisible during playback for the same reason (no `display_renderer_enter_ui_mode()`); now uses the same UI-mode switch |
 | `components/wifi_manager/CMakeLists.txt` | add source + `esp_hosted` dep |
 | `components/config_store/config_store.h` / `config_store_giphy.c` | `transport_reboot_total` / `transport_reboot_streak` counters (NVS keys `tp_rst_tot` / `tp_rst_str`), mirroring the wifi/touch reboot counters |
-| `components/http_api/http_api_rest_status.c` | expose `transport_recovery_reboots` in `/api/status` (only when > 0) |
+| `components/http_api/http_api_rest_status.c` | expose `transport_recovery_reboots` in `/status` (only when > 0) |
 | `components/ota_manager/ota_manager_install.c` | reset transport counters on OTA validation (parity with wifi/touch) |
 
 ### Deliberately omitted (with rationale)
@@ -227,26 +227,29 @@ risk; gathers fleet evidence for Phase 1.
   until a slave bump ships; Phase 2 material.
 - **ugfx diagnostics screen row** — the "Reboots" row in `main/ugfx_ui.c`
   formats wifi+touch combinatorially; adding a third counter there is a
-  cosmetic refactor. `/api/status` + logs are the telemetry channels for now.
+  cosmetic refactor. `/status` + logs are the telemetry channels for now.
 
 ### Validation checklist
 
 - [x] Build passes (user builds; not part of this change).
 - [ ] Normal boot: "C6 co-processor up" logged once; no behavior change.
-- [ ] Fault injection — realistic (no physical probe needed; automated via
+- [x] Fault injection — realistic (no physical probe needed; automated via
       the hook): `curl -X POST "http://p3a.local/action/inject_transport_failure?real=1"`
       while downloads are active; the host driver hits real CMD53 failures ->
-      TRANSPORT_FAILURE -> countdown UI -> reboot -> reconnect; `/api/status`
+      TRANSPORT_FAILURE -> countdown UI -> reboot -> reconnect; `/status`
       shows `transport_recovery_reboots` incremented.
       *(2026-06-06: detection chain validated via `?real=1&streak=3` on the
       2.7.0 bench unit — pulse -> CMD53 errors -> TRANSPORT_FAILURE -> handler
-      in ~50 ms, degraded branch + notice OK. Remaining: the reboot variant,
-      plain `?real=1` with a clean streak, after the quiesce change builds.)*
+      in ~50 ms, degraded branch + notice OK. 2026-06-08: plain `?real=1`
+      reboot variant on a clean streak validated end-to-end on the 2.7.0 unit
+      — GPIO-54 pulse -> first CMD53 0x107 at +5 ms -> handler at +62 ms ->
+      "Entering UI mode" -> 5..1 countdown -> clean SW_CPU_RESET -> reconnect;
+      `/status` then reported `transport_recovery_reboots:1`.)*
 - [x] Fault injection — synthetic (no hardware poke), via the temporary hook
       (see below): `curl -X POST "http://p3a.local/action/inject_transport_failure"`
       -> countdown UI -> reboot -> `transport_recovery_reboots` increments.
       *(2026-06-06: reboot + on-screen countdown confirmed; counter value in
-      `/api/status` not yet explicitly checked.)*
+      `/status` not yet explicitly checked.)*
 - [x] Degraded mode (one shot):
       `curl -X POST "http://p3a.local/action/inject_transport_failure?streak=3"`
       -> no reboot, "Playback continues offline" notice, playback keeps
@@ -448,7 +451,7 @@ rollback; consider adding a force-reflash NVS flag to `slave_ota` first.
 - **2026-06-06** — Phase 0 **done** (code complete). All changes from the
   Phase 0 table landed: `transport_recovery.c` (event handler, 5 s countdown
   reboot task, streak guard at 3, CP_INIT log-only telemetry), sdkconfig flag
-  flipped, NVS counters + GOT_IP streak reset + `/api/status` field +
+  flipped, NVS counters + GOT_IP streak reset + `/status` field +
   OTA-validation reset wired. Verified `esp_hosted_event.h` is on the
   component's public include path and `ESP_HOSTED_EVENT` base is defined in
   the host lib (links). Not yet built/flashed — on-device validation
@@ -509,3 +512,15 @@ rollback; consider adding a force-reflash NVS flag to `slave_ota` first.
   own validation checklist), deferred test-hook deletion to end of Phase 1,
   reclassified heartbeat as Phase 2 (fleet maxes at 2.9.3). All testing so
   far was on the 2.7.0 bench unit, built under ESP-IDF v5.5.1.
+- **2026-06-08** — Closed the open **plain `?real=1` reboot variant** check on
+  the 2.7.0 bench unit (clean streak). Full chain confirmed from the monitor
+  log: GPIO-54 pulse (`streak_preset=-1`) -> first CMD53 `0x107` at +5 ms ->
+  `transport_rec: ESP-Hosted transport failure` handler at +62 ms -> `display_
+  renderer: Entering UI mode` -> "Transport-failure reboot in 5..1" countdown
+  -> clean `rst:0xc (SW_CPU_RESET)` (`esp_restart_noos`) -> reconnect. After
+  reboot `/status` reported `transport_recovery_reboots:1`, MQTT back to
+  `online`. **Doc fix:** the status endpoint is registered at `/status`
+  (`http_api.c:904`), not `/api/status` as written here — corrected throughout
+  this file (no code referenced the wrong path). Remaining Phase 0 quick
+  checks: normal-boot log line, streak-reset-on-GOT_IP (the formal post-
+  degraded sequence), and the passive soak.

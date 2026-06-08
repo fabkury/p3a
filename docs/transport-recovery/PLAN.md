@@ -6,8 +6,8 @@ history.
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| 0 | Orderly reboot instead of esp_hosted's instant restart | **Done** — shipped + validated on-device (2.7.0 bench unit); 2 quick checks (normal-boot log, streak-reset-on-GOT_IP) + passive soak open (see checklist) |
-| 1 | In-place transport recovery (no reboot), version-gated | **Ready to start** — needs a slave-2.9.3 bench unit; see the Phase 1 guide |
+| 0 | Orderly reboot instead of esp_hosted's instant restart | **Done** — shipped + validated on-device (2.7.0 + 2.9.3 bench units); 1 quick check (streak-reset-on-GOT_IP) + passive soak open (see checklist) |
+| 1 | In-place transport recovery (no reboot), version-gated | **Ready to start** — 2.9.3 bench unit now live (2026-06-08), Phase 0 baseline confirmed on it; see the Phase 1 guide |
 | 2 | Bundle slave fw 2.9.7 (contingent on Phase 1 bench findings) | Not started |
 
 ---
@@ -47,9 +47,10 @@ the **2.7.0 bench unit**). Identify a unit's slave version from the boot log:
 
 **Immediate next actions, in order:**
 
-1. Quick Phase 0 checks on any unit (~15 min, see checklist): normal-boot
-   log line; streak-reset-on-GOT_IP. *(plain `?real=1` reboot variant +
-   `transport_recovery_reboots` in `/status` — done 2026-06-08.)*
+1. Quick Phase 0 checks (~15 min, see checklist): streak-reset-on-GOT_IP
+   only. *(plain `?real=1` reboot variant + `transport_recovery_reboots` in
+   `/status`, and the normal-boot "C6 co-processor up" log — both done
+   2026-06-08 on the 2.9.3 unit.)*
 2. Start/continue the passive soak (64-channel Giphy playset running; wait
    for the organic failure; confirm orderly path). Do not block on this.
 3. Phase 1 development + validation on the 2.9.3 unit (guide below).
@@ -232,7 +233,10 @@ risk; gathers fleet evidence for Phase 1.
 ### Validation checklist
 
 - [x] Build passes (user builds; not part of this change).
-- [ ] Normal boot: "C6 co-processor up" logged once; no behavior change.
+- [x] Normal boot: "C6 co-processor up" logged once; no behavior change.
+      *(2026-06-08, 2.9.3 unit: `transport_rec: C6 co-processor up
+      (reset_reason=0)` logged exactly once, no "rebooted underneath us"
+      warning, clean boot to Online.)*
 - [x] Fault injection — realistic (no physical probe needed; automated via
       the hook): `curl -X POST "http://p3a.local/action/inject_transport_failure?real=1"`
       while downloads are active; the host driver hits real CMD53 failures ->
@@ -241,8 +245,8 @@ risk; gathers fleet evidence for Phase 1.
       *(2026-06-06: detection chain validated via `?real=1&streak=3` on the
       2.7.0 bench unit — pulse -> CMD53 errors -> TRANSPORT_FAILURE -> handler
       in ~50 ms, degraded branch + notice OK. 2026-06-08: plain `?real=1`
-      reboot variant on a clean streak validated end-to-end on the 2.7.0 unit
-      — GPIO-54 pulse -> first CMD53 0x107 at +5 ms -> handler at +62 ms ->
+      reboot variant on a clean streak validated end-to-end on the **2.9.3
+      bench unit** — GPIO-54 pulse -> first CMD53 0x107 at +5 ms -> handler at +62 ms ->
       "Entering UI mode" -> 5..1 countdown -> clean SW_CPU_RESET -> reconnect;
       `/status` then reported `transport_recovery_reboots:1`.)*
 - [x] Fault injection — synthetic (no hardware poke), via the temporary hook
@@ -512,15 +516,24 @@ rollback; consider adding a force-reflash NVS flag to `slave_ota` first.
   own validation checklist), deferred test-hook deletion to end of Phase 1,
   reclassified heartbeat as Phase 2 (fleet maxes at 2.9.3). All testing so
   far was on the 2.7.0 bench unit, built under ESP-IDF v5.5.1.
-- **2026-06-08** — Closed the open **plain `?real=1` reboot variant** check on
-  the 2.7.0 bench unit (clean streak). Full chain confirmed from the monitor
-  log: GPIO-54 pulse (`streak_preset=-1`) -> first CMD53 `0x107` at +5 ms ->
-  `transport_rec: ESP-Hosted transport failure` handler at +62 ms -> `display_
-  renderer: Entering UI mode` -> "Transport-failure reboot in 5..1" countdown
-  -> clean `rst:0xc (SW_CPU_RESET)` (`esp_restart_noos`) -> reconnect. After
-  reboot `/status` reported `transport_recovery_reboots:1`, MQTT back to
-  `online`. **Doc fix:** the status endpoint is registered at `/status`
-  (`http_api.c:904`), not `/api/status` as written here — corrected throughout
-  this file (no code referenced the wrong path). Remaining Phase 0 quick
-  checks: normal-boot log line, streak-reset-on-GOT_IP (the formal post-
-  degraded sequence), and the passive soak.
+- **2026-06-08** — **Now testing on the 2.9.3 bench unit** (boot log:
+  `slave_ota: Current co-processor firmware: 2.9.3`) — the workstation move
+  anticipated in the handoff has happened, so the Phase 1 prerequisite unit is
+  live. Closed two open Phase 0 quick checks on it:
+  1. **Plain `?real=1` reboot variant** (clean streak). Full chain confirmed
+     from the monitor log: GPIO-54 pulse (`streak_preset=-1`) -> first CMD53
+     `0x107` at +5 ms -> `transport_rec: ESP-Hosted transport failure` handler
+     at +62 ms -> `display_renderer: Entering UI mode` -> "Transport-failure
+     reboot in 5..1" countdown -> clean `rst:0xc (SW_CPU_RESET)`
+     (`esp_restart_noos`) -> reconnect. After reboot `/status` reported
+     `transport_recovery_reboots:1`, MQTT back to `online`.
+  2. **Normal-boot log**: `transport_rec: C6 co-processor up (reset_reason=0)`
+     logged exactly once, no "rebooted underneath us" warning, clean boot.
+  Together these also satisfy the Phase 1 checklist's baseline item (Phase 0
+  hook + reboot path behave on 2.9.3 exactly as on 2.7.0). **Doc fix:** the
+  status endpoint is registered at `/status` (`http_api.c:904`), not
+  `/api/status` as written here — corrected throughout this file (no code
+  referenced the wrong path). Remaining Phase 0 quick checks: just
+  streak-reset-on-GOT_IP (the formal post-degraded sequence) and the passive
+  soak. (Correction to the first draft of this entry, which mis-attributed the
+  reboot test to the 2.7.0 unit.)

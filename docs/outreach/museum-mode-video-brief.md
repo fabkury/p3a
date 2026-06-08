@@ -3,9 +3,12 @@
 *Companion to `museum-outreach-plan.md`. Drafted 2026-05-16.*
 
 The single most leveraged Tier 1 asset: a 30-second demo video that
-shows p3a playing real artwork from the five supported museums (AIC,
-Rijksmuseum, V&A, Wellcome Collection, SMK). Drops into every
-Tier 1 venue, the README's Museums section, and the social-launch wave.
+shows p3a playing real artwork from the seven supported museums (AIC,
+Rijksmuseum, V&A, Wellcome Collection, SMK, Harvard Art Museums, and
+the Smithsonian). Drops into every Tier 1 venue, the README's Museums
+section, and the social-launch wave. The 30-second cut features a
+representative rotation, not necessarily all seven on screen — but
+capture footage from all seven so the editor can choose.
 
 This document has two audiences:
 
@@ -31,8 +34,8 @@ anyway). Tripod mandatory — no handheld shake.
 - Keep the device powered from a wall outlet — no battery surprises
   mid-shoot.
 
-**Curate the playlist before shooting.** Make a 10–15 artwork rotation
-that hits all five museums:
+**Curate the playlist before shooting.** Make a 12–18 artwork rotation
+that spans the seven museums:
 
 | Museum | Suggested examples (substitute freely) |
 |---|---|
@@ -41,6 +44,8 @@ that hits all five museums:
 | V&A | A Julia Margaret Cameron photograph, a William Morris design |
 | Wellcome Collection | Vesalius anatomical plate, a botanical illustration |
 | SMK | A Hammershøi interior, a Krøyer Skagen beach scene |
+| Harvard Art Museums | A Sargent watercolor, a van Gogh self-portrait, a Winslow Homer |
+| Smithsonian | A National Portrait Gallery portrait, a SAAM landscape, a Cooper Hewitt design |
 
 Avoid: anything dark/low-key (reads as a black screen on camera), busy
 abstract pieces (don't sell the "real painting" promise as quickly).
@@ -75,7 +80,7 @@ abstract pieces (don't sell the "real painting" promise as quickly).
 
 > **Project:** 30-second demo video for an open-source desktop art
 > frame (p3a). Source: pre-shot 4K phone clips of the device displaying
-> paintings from five major museums.
+> paintings from several major museums.
 >
 > **Deliverables (please quote for all of these):**
 > - Master cut: 30 seconds, 16:9, 1080p H.264 MP4.
@@ -181,7 +186,7 @@ fastest, clearest reply, not the cheapest.
 1. Plug `{{video_url}}` placeholder in:
    - `iiif-news-submission.md`
    - `iiif-discuss-thread.md`
-   - `museum-digital-team-email.md` (all five variants)
+   - `museum-digital-team-email.md` (all seven variants)
    - `hyperallergic-tip-email.md`
    - `open-culture-tip-email.md`
 2. Embed in the README's Museums section (the vertical 9:16 cut also

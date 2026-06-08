@@ -2,10 +2,13 @@
 
 *Companion to `outreach-plan.md`. Compiled 2026-05-11; refreshed
 2026-05-16 to reflect five shipped institutions (AIC, Rijksmuseum, V&A,
-Wellcome Collection, SMK) and the agreed launch cadence.*
+Wellcome Collection, SMK) and the agreed launch cadence; refreshed
+2026-06-08 for two further shipped institutions — the Harvard Art
+Museums and the Smithsonian — bringing the total to seven.*
 
 This plan adds venues unlocked by p3a's art-institution channels
-(AIC, Rijksmuseum, V&A, Wellcome Collection, Statens Museum for Kunst).
+(AIC, Rijksmuseum, V&A, Wellcome Collection, Statens Museum for Kunst,
+Harvard Art Museums, and the Smithsonian).
 Read alongside `outreach-plan.md` — that doc targets the pixel-art /
 maker / ESP32 crowd; this one targets cultural-heritage tech, IIIF
 specialists, library-tech, museum digital teams, and art-curious
@@ -27,11 +30,12 @@ existing plan doesn't touch:
   lists. They actively celebrate creative IIIF reuse; a microcontroller
   IIIF client is novel in that crowd.
 - **Museum digital teams** — AIC, Rijksmuseum, V&A, Wellcome
-  Collection, and SMK. The institutions whose APIs p3a consumes. Their
-  digital teams reward reuse with feature posts to audiences of 100k–2M+
-  followers. Wellcome's Wikimedia-partnership track record makes them
-  especially likely to amplify; SMK's "SMK Open" program is the
-  Scandinavian equivalent.
+  Collection, SMK, the Harvard Art Museums, and the Smithsonian. The
+  institutions whose APIs p3a consumes. Their digital teams reward
+  reuse with feature posts to audiences of 100k–2M+ followers.
+  Wellcome's Wikimedia-partnership track record makes them especially
+  likely to amplify; SMK's "SMK Open" program is the Scandinavian
+  equivalent; the Smithsonian actively spotlights Open Access reuse.
 - **Art-tech editorial** — Hyperallergic, Open Culture, We Make Money
   Not Art, MCN. Cover digital-art-meets-DIY-hardware regularly.
 - **Open-content / OpenGLAM advocates** — small but high-density.
@@ -61,11 +65,11 @@ if reachable, mention in the IIIF Slack.
 
 ### 2. Museum digital teams — direct email, staggered weekly
 
-Don't fire all five the same week. Each email: 30-second video,
-GitHub link, no ask. See `museum-digital-team-email.md` for all five
+Don't fire all of them the same week. Each email: 30-second video,
+GitHub link, no ask. See `museum-digital-team-email.md` for all seven
 fully-drafted variants.
 
-- **AIC first** — most-receptive of the five (they curate a public
+- **AIC first** — most-receptive of the set (they curate a public
   [API showcase](https://www.artic.edu/open-access)). Contact: their
   open-access / digital-experience team.
 - **Rijksstudio next** — Rijksstudio is famously enthusiastic about
@@ -77,9 +81,18 @@ fully-drafted variants.
 - **SMK fifth** — SMK Open is the Scandinavian peer of AIC's open-
   access program; smaller social footprint but high credibility in
   OpenGLAM circles.
+- **Harvard Art Museums and the Smithsonian** shipped after this plan
+  was first drafted (seven sources total now). Their digital-team
+  email variants are written and ready in
+  `museum-digital-team-email.md` (Weeks 6–7). **Open decision:** send
+  both as digital-team cold emails, or route the Smithsonian through
+  its existing Tier-2 Open Access *showcase* slot (below) and send only
+  Harvard a direct email. Harvard's API team is reachable and
+  reuse-friendly; the Smithsonian's showcase path may outperform a cold
+  email given the size of the institution.
 - **Pitch angle:** "An open-hardware art frame plays your collection.
   Here's a video. No ask — just thought you'd want to see it."
-- **Why:** combined social reach across the five is in the millions.
+- **Why:** combined social reach across the seven is in the millions.
   A single feature post outperforms most other Tier 1 wins by an order
   of magnitude.
 
@@ -218,7 +231,7 @@ Most Tier 1/2 venues in this track need things that don't exist yet:
 | Week | Action |
 |------|--------|
 | 0 | Prep assets: museum-mode video (see `museum-mode-video-brief.md`), confirm README Museums section, press kit V2. **Subscribe to `code4lib-l` now** so the 2–3 week lurk window is already burning down by the time the Week 3 post goes out. Add GitHub topics (`iiif`, `openglam`, `museum-api`, `cultural-heritage`). Open the "PR welcome?" conversation with `mejackreed/awesome-iiif`. |
-| 1 | Produce the video (Fiverr turnaround ~5 business days). Plug `{{video_url}}` into all five drafts. |
+| 1 | Produce the video (Fiverr turnaround ~5 business days). Plug `{{video_url}}` into all seven drafts. |
 | 2 | IIIF Consortium news submission + `discuss.iiif.io` post (forum first, email 2–3 days later). Bluesky/Mastodon launch wave. |
 | 3 | AIC digital team email. Code4Lib mailing list post (after the lurk window). PR to `awesome-iiif` if maintainer signaled yes. |
 | 4 | Rijksstudio team email. r/museums (mod-approved). |
@@ -228,8 +241,10 @@ Most Tier 1/2 venues in this track need things that don't exist yet:
 | 8+ | Open Culture tip (≥1 week after Hyperallergic). MCN newsletter submission. Museums and the Web. Smithsonian Open Access showcase. Tagging museums on Bluesky/Mastodon becomes ongoing pattern. |
 
 The cadence is intentionally slower than the original 5-week plan:
-five museums staggered weekly + IIIF community first + editorial press
-last is ~8 weeks end-to-end. Resist the urge to collapse it — each
+the museum emails staggered weekly + IIIF community first + editorial
+press last is ~8 weeks end-to-end (longer if Harvard and the
+Smithsonian get their own email weeks). Resist the urge to collapse
+it — each
 staggered email is a separate audience, and "this got picked up by the
 IIIF community" is a real piece of social proof to lean on in the
 later editorial pitches.
@@ -255,7 +270,7 @@ in principle. But two practical adjustments:
 
 - [x] IIIF Consortium news submission — `iiif-news-submission.md`
 - [x] discuss.iiif.io thread — `iiif-discuss-thread.md`
-- [x] Museum digital-team cold email template, all five museums —
+- [x] Museum digital-team cold email template, all seven museums —
       `museum-digital-team-email.md`
 - [x] Hyperallergic tip email — `hyperallergic-tip-email.md`
 - [x] Open Culture tip email — `open-culture-tip-email.md`

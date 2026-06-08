@@ -25,11 +25,11 @@ museum-mode demo video is produced.
 contact page before sending. Régine usually replies from a personal
 address.
 
-**Subject:** Embedded IIIF on a $48 microcontroller — five museum collections playing on a handmade desktop frame
+**Subject:** Embedded IIIF on a $48 microcontroller — seven museum collections playing on a handmade desktop frame
 
 > Hi Régine,
 >
-> A tip in the maker-meets-cultural-institution vein you've been covering for a long time: **p3a** is an open-hardware desktop art frame — a $48 ESP32-P4 board, 4-inch 720×720 touchscreen — and at v0.10.0 the firmware speaks IIIF natively, pulling artwork from five museums: the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, and the Statens Museum for Kunst.
+> A tip in the maker-meets-cultural-institution vein you've been covering for a long time: **p3a** is an open-hardware desktop art frame — a $48 ESP32-P4 board, 4-inch 720×720 touchscreen — and at v0.10.0 the firmware speaks IIIF natively, pulling artwork from seven museums: the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst, the Harvard Art Museums, and the Smithsonian.
 >
 > The piece I think is worth a paragraph on WMMNA: museums have spent a decade publishing collections under open licenses and open IIIF APIs, mostly with the assumption that the consumers would be other institutions, scholars, or web designers. p3a is what it looks like when a solo maker decides that "open" should mean "open enough to embed in a $48 microcontroller running on a desk." It's not a startup product — there's nothing to buy, no service to sign up for, no cloud account in the loop. The firmware is Apache 2.0 and the hardware is off-the-shelf. The whole project is one person.
 >
@@ -50,7 +50,7 @@ address.
 
 - **Subject line** is the longest of any tip in this campaign, and
   deliberately so. WMMNA readers are scanning for substance; "embedded
-  IIIF on a $48 microcontroller — five museum collections" reads as a
+  IIIF on a $48 microcontroller — seven museum collections" reads as a
   niche-specific signal that the sender knows the beat.
 - **First paragraph names the maker-meets-cultural-institution angle
   explicitly.** Régine has rejected pitches that don't read the room.

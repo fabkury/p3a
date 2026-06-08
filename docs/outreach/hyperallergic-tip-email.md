@@ -21,11 +21,11 @@ museum-mode demo video is produced.
 **To:** `tips@hyperallergic.com` — verify against current Hyperallergic
 contact page before sending.
 
-**Subject:** A $48 open-hardware art frame that streams five major museum collections to your wall
+**Subject:** A $48 open-hardware art frame that streams seven major museum collections to your wall
 
 > Hi Hyperallergic team,
 >
-> A tip for the digital-art / maker-meets-museum beat: **p3a** is an open-source desktop art frame — a $48 4-inch touchscreen built on a Waveshare ESP32-P4 dev board — that rotates through real artwork from five museums: the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, and the Statens Museum for Kunst (SMK). A Vermeer at 9:00, a Picasso at 9:30, a V&A photograph at 10:00, a Wellcome anatomical engraving at 10:30, a Hammershøi from SMK at 11:00. No cloud account, no subscription, no museum-budget pricing — it pulls directly from each museum's own public APIs and runs entirely on the device.
+> A tip for the digital-art / maker-meets-museum beat: **p3a** is an open-source desktop art frame — a $48 4-inch touchscreen built on a Waveshare ESP32-P4 dev board — that rotates through real artwork from seven museums: the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst (SMK), the Harvard Art Museums, and the Smithsonian. A Vermeer at 9:00, a Picasso at 9:30, a V&A photograph at 10:00, a Wellcome anatomical engraving at 10:30, a Hammershøi from SMK at 11:00, a Sargent watercolor from Harvard at 11:30, a Smithsonian portrait at noon. No cloud account, no subscription, no museum-budget pricing — it pulls directly from each museum's own public APIs and runs entirely on the device.
 >
 > The angle that might travel: this is the first piece of consumer hardware I know of that treats the world's open museum collections as a first-class, default content source — the way a radio is a default for music. Museums have spent a decade opening their collections; this is what it looks like when an indie maker takes them at their word.
 >
@@ -44,9 +44,9 @@ contact page before sending.
 
 ## Notes on the choices
 
-- **Subject line names all three museums** instead of a generic "art
-  frame" pitch. Editors triage at speed; specifics earn the second
-  glance, marketing-flavor headlines don't.
+- **Subject line leads with a concrete count (seven collections)**
+  instead of a generic "art frame" pitch. Editors triage at speed;
+  specifics earn the second glance, marketing-flavor headlines don't.
 - **Concrete imagery in sentence 2** ("A Vermeer at 9:00, a Picasso at
   9:30…") gives the editor a scene to picture. Without a scene, a tip
   reads like a press release.

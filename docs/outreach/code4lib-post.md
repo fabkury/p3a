@@ -46,10 +46,11 @@ later, so concrete terms ("ESP32-P4," "IIIF Image API") pay off.
 > **p3a** is an open-hardware desktop art frame — a Waveshare
 > ESP32-P4 development board (~$48 retail) with a 4-inch 720×720
 > touchscreen — and as of v0.10.0 it speaks the IIIF Image API
-> natively from firmware. It currently pulls artwork from five
+> natively from firmware. It currently pulls artwork from seven
 > institutions: the Art Institute of Chicago, the Rijksmuseum, the
-> Victoria and Albert Museum, the Wellcome Collection, and the
-> Statens Museum for Kunst. Apache 2.0:
+> Victoria and Albert Museum, the Wellcome Collection, the
+> Statens Museum for Kunst, the Harvard Art Museums, and the
+> Smithsonian. Apache 2.0:
 > https://github.com/fabkury/p3a
 >
 > I'm writing because the implementation hit a few patterns that I
@@ -63,6 +64,10 @@ later, so concrete terms ("ESP32-P4," "IIIF Image API") pay off.
 > - Each museum is implemented as a per-museum adapter (refresh loop,
 >   IIIF URL builder, optional resolver). The adapters share a
 >   rate-limit cooldown table and a per-museum vault on the SD card.
+>   Resolution varies by source: the Rijksmuseum needs a Linked Art
+>   walk, the Harvard Art Museums sit behind an NRS→IDS redirect, the
+>   Smithsonian needs a User-Agent workaround past its WAF, and the
+>   rest return the IIIF id inline.
 > - All image requests are `…/full/!720,720/0/default.jpg`. No
 >   `info.json` round-trips. The ESP32-P4 has a hardware JPEG codec
 >   so JPEG-only is a deliberate constraint.
@@ -90,22 +95,23 @@ later, so concrete terms ("ESP32-P4," "IIIF Image API") pay off.
 >
 > 2. **`info.json` negotiation at this resolution.** At 720 px
 >    longest side, request-time `!720,720` has been Good Enough across
->    the five museums I'm consuming. Where does negotiation start
+>    the seven sources I'm consuming. Where does negotiation start
 >    paying off in your experience — only when stitching from larger
 >    masters, or are there server-side reasons I'm missing?
 >
-> 3. **Aggregator sources (Europeana, DPLA, Smithsonian).** They're
->    on my roadmap. The resolution / licensing / IIIF-availability
->    patterns seem to vary considerably more than the museums I'm
->    currently consuming. Has anyone built against these and run into
->    things I should know before I start?
+> 3. **Aggregator sources.** I've since added the Smithsonian — an
+>    aggregator across many units, whose WAF needed a User-Agent
+>    workaround before it'd serve IIIF. Europeana and DPLA are still
+>    on my roadmap, and their resolution / licensing / IIIF-availability
+>    patterns seem to vary considerably more. Has anyone built against
+>    these and run into things I should know before I start?
 >
 > 4. **Code4Lib Journal angle:** if the implementation seems worth
 >    writing up in more depth — "Writing an IIIF Client on a $48
 >    Microcontroller," roughly — would the Journal be interested? I
 >    don't want to submit cold if the topic's a poor fit.
 >
-> A 30-second video of the device cycling through the five
+> A 30-second video of the device cycling through the seven
 > collections is at {{video_url}}, source at the link above.
 >
 > Happy to dig into any of the design choices on-list or off.

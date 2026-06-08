@@ -34,12 +34,12 @@ not the video.
 Vermeer from the Rijksmuseum is the strongest opener — instantly
 readable at thumbnail size).
 
-**Body** (294 chars):
+**Body** (~298 chars — re-verify before posting; close to the Bluesky limit):
 
-> New: **p3a** v0.10.0 plays artwork from five museums — Art
-> Institute of Chicago, Rijksmuseum, V&A, Wellcome Collection, and
-> SMK — on a $48 ESP32-P4 desktop frame. Firmware speaks IIIF
-> natively. Open hardware, open source (Apache 2.0).
+> New: **p3a** v0.10.0 plays artwork from seven museums — Art
+> Institute of Chicago, Rijksmuseum, V&A, Wellcome, SMK, Harvard Art
+> Museums + the Smithsonian — on a $48 ESP32-P4 desktop frame.
+> Firmware speaks IIIF natively. Open source (Apache 2.0).
 >
 > https://github.com/fabkury/p3a
 >
@@ -119,7 +119,7 @@ a Hooke microscopy image on the device.
 > Wellcome Collection on p3a. Vesalius at 11:00, a botanical plate
 > at 11:30, a Hooke microscopy image at 12:00. Wellcome's
 > open-license stance and IIIF infrastructure made this one of the
-> smoothest integrations of the five.
+> smoothest integrations of the seven.
 >
 > https://github.com/fabkury/p3a
 >
@@ -145,17 +145,59 @@ Krøyer's *Summer Evening on Skagen Beach* on the device.
 
 ---
 
+## Post 6a — Harvard Art Museums (Week 4, Tuesday)
+
+**Image:** A John Singer Sargent watercolor or a van Gogh self-portrait
+on the device.
+
+**Body** (~272 chars):
+
+> Harvard Art Museums on p3a. Their API hands back a base image behind
+> an NRS→IDS redirect; the firmware resolves it on-device and streams
+> the IIIF image at 720×720. A Sargent watercolor this morning, on a
+> $48 open-hardware frame.
+>
+> https://github.com/fabkury/p3a
+>
+> #IIIF #openglam
+
+---
+
+## Post 6b — Smithsonian (Week 4, Friday)
+
+**Image:** A National Portrait Gallery portrait or a SAAM landscape on
+the device.
+
+**Body** (~280 chars):
+
+> The Smithsonian on p3a — Open Access spanning many units, now a
+> first-class source on the device. (It took a User-Agent tweak to get
+> past their WAF before it'd serve IIIF.) Open cultural APIs on a $48
+> ESP32-P4 desktop frame.
+>
+> https://github.com/fabkury/p3a
+>
+> #IIIF #openglam
+
+**Note:** Posts 6a/6b extend the museum-specific drip by a few days.
+If the cadence feels crowded, fold Harvard + Smithsonian into Week 5
+and let the trifecta/reflective posts (7/8) slide a week — the order
+matters more than the exact dates.
+
+---
+
 ## Post 7 — The trifecta / video drop (Week 4, Tuesday)
 
 **Image / video:** The 9:16 vertical cut of the museum-mode demo
 video. This is the post the video is *for* on social.
 
-**Body** (290 chars):
+**Body** (~298 chars — re-verify before posting):
 
 > Open hardware + open-source firmware + open cultural APIs.
-> p3a is the trifecta on a $48 desktop art frame, playing
-> the Art Institute, Rijksmuseum, V&A, Wellcome, and SMK
-> collections via their own IIIF endpoints. 30 seconds:
+> p3a is the trifecta on a $48 desktop art frame, playing seven
+> museum collections — the Art Institute, Rijksmuseum, V&A,
+> Wellcome, SMK, Harvard + the Smithsonian — via their own IIIF
+> endpoints. 30 seconds:
 >
 > {{video_url}}
 >
@@ -173,11 +215,12 @@ objects (the "in-context" frame from the video shoot).
 
 **Body** (286 chars):
 
-> Building p3a's IIIF client, what surprised me: the five museums
-> have wildly different APIs but their IIIF endpoints are nearly
-> interchangeable. Same `…/full/!720,720/0/default.jpg` request,
-> same result, on a $48 microcontroller. That's what an open
-> standard buys you.
+> Building p3a's IIIF client, what surprised me: the seven sources
+> have wildly different *discovery* APIs, but the IIIF *image*
+> request is nearly interchangeable — same
+> `…/full/!720,720/0/default.jpg`, same right-sized JPEG, on a $48
+> microcontroller. The pixels are standardized even where discovery
+> isn't.
 >
 > #IIIF #openglam
 

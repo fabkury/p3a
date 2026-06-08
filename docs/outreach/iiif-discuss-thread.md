@@ -37,11 +37,11 @@ announcements; cross-posting an announcement there reads as off-topic.
 >
 > *[photo of the device displaying a painting]*
 >
-> **p3a** is an open-hardware desktop art frame — a Waveshare ESP32-P4 development board (~$48), 720×720 4-inch IPS, 32 MB PSRAM, 32 MB flash — and as of v0.10.0 it speaks the IIIF Image API natively from the firmware. It cycles through artwork from five institutions — the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, and the Statens Museum for Kunst (SMK) — alongside pixel art from a community network and trending GIFs. Apache 2.0: https://github.com/fabkury/p3a
+> **p3a** is an open-hardware desktop art frame — a Waveshare ESP32-P4 development board (~$48), 720×720 4-inch IPS, 32 MB PSRAM, 32 MB flash — and as of v0.10.0 it speaks the IIIF Image API natively from the firmware. It cycles through artwork from seven institutions — the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst (SMK), the Harvard Art Museums, and the Smithsonian — alongside pixel art from a community network and trending GIFs. Apache 2.0: https://github.com/fabkury/p3a
 >
 > A few protocol-level highlights, since this audience cares:
 >
-> - **Image API v2** end-to-end across all five sources — every image is requested as `…/full/!720,720/0/default.jpg`. No `info.json` negotiation yet (deferred — see questions below).
+> - **Image API v2 for the pixels** — every image is ultimately requested as `…/full/!720,720/0/default.jpg` across all seven sources, and that confined-size request is what keeps decode tractable on the chip. No `info.json` negotiation yet (deferred — see questions below). Where the sources actually diverge is *discovery*: the Rijksmuseum needs a full Linked Art walk (below), the Harvard Art Museums sit behind an NRS→IDS redirect, the Smithsonian needs a User-Agent workaround past its WAF, and the rest return the IIIF id inline.
 > - **Per-museum 429 handling.** A small per-museum cooldown table honors `Retry-After` and falls back to per-museum defaults. The browse UI runs in a LAN-side browser, and it reports its own 429s back to the device over a small REST endpoint so the per-IP rate-limit budget stays coherent across both clients. This matters for AIC's 60-req/min per-IP cap.
 > - **Linked Art walk on-device** for the Rijksmuseum: HMO → VisualItem → DigitalObject → access_point, lazy-resolved at download time, with sentinel encoding for unresolved entries and a tombstone after 3 consecutive failures.
 > - **Per-museum vault dedup** — a painting that appears in four AIC facets is stored once on the SD card. Vault paths are namespaced per museum, so Wellcome + SMK adapters drop in without touching the shared layer.
@@ -50,8 +50,8 @@ announcements; cross-posting an announcement there reads as off-topic.
 > A few things I'd genuinely value input on:
 >
 > 1. **Does anyone know of prior firmware-level IIIF clients?** I haven't found one, but I'd rather hear about it than mis-claim a "first."
-> 2. **`info.json`-aware rendition negotiation** — when does it pay off in practice? At a 720 px longest side, request-time `!720,720` has been Good Enough across the three museums I'm consuming. Curious where the threshold sits for others.
-> 3. **Aggregator sources (Europeana, DPLA, Smithsonian).** They're on my roadmap, but the resolution patterns seem to vary a lot. Has anyone integrated these at the embedded level, or even thought about it?
+> 2. **`info.json`-aware rendition negotiation** — when does it pay off in practice? At a 720 px longest side, request-time `!720,720` has been Good Enough across the seven sources I'm consuming. Curious where the threshold sits for others.
+> 3. **Aggregator sources.** I've since integrated the Smithsonian — an aggregator across many units, whose WAF needed a User-Agent workaround before it'd serve IIIF. Europeana and DPLA are still on my roadmap, and their resolution patterns seem to vary a lot more. Has anyone integrated those at the embedded level, or even thought about it?
 >
 > A 30-second video is at *[VIDEO URL]* and the source is at the link above. Happy to dig into any of the implementation choices.
 >

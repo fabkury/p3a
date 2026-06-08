@@ -25,13 +25,14 @@ YouTube link — autoplay matters here.
 
 ### Title
 
-ESP32-P4 desktop art display now streams from 5 museums via IIIF (Rijksmuseum, Art Institute of Chicago, V&A, Wellcome, SMK)
+ESP32-P4 desktop art display now streams from 7 museums via IIIF (Rijksmuseum, Art Institute of Chicago, V&A, Wellcome, SMK, Harvard, Smithsonian)
 
 ### Body
 
 > Update from an earlier post: p3a now streams directly from the IIIF
-> Image APIs of five museums — Rijksmuseum, Art Institute of Chicago,
-> V&A, Wellcome Collection, and SMK.
+> Image APIs of seven museums — Rijksmuseum, Art Institute of Chicago,
+> V&A, Wellcome Collection, SMK, Harvard Art Museums, and the
+> Smithsonian.
 >
 > It's open-source firmware for the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B
 > (720×720 IPS, ESP32-C6 for Wi-Fi 6). Built as a desktop companion —
@@ -52,7 +53,7 @@ ESP32-P4 desktop art display now streams from 5 museums via IIIF (Rijksmuseum, A
 
 ### Title
 
-p3a (ESP32-P4 art display) now streams from museum IIIF APIs: Rijksmuseum, Art Institute of Chicago, V&A, Wellcome, SMK
+p3a (ESP32-P4 art display) now streams from museum IIIF APIs: Rijksmuseum, Art Institute of Chicago, V&A, Wellcome, SMK, Harvard, Smithsonian
 
 ### Body
 
@@ -63,13 +64,15 @@ p3a (ESP32-P4 art display) now streams from museum IIIF APIs: Rijksmuseum, Art I
 > show real artwork rather than LED-matrix pixel art.
 >
 > **What's new since last time:** the device now streams directly from
-> the IIIF Image APIs of five museums and cycles their collections:
+> the IIIF Image APIs of seven museums and cycles their collections:
 >
 > - Rijksmuseum
 > - Art Institute of Chicago
 > - Victoria & Albert Museum
 > - Wellcome Collection
 > - Statens Museum for Kunst (SMK)
+> - Harvard Art Museums
+> - Smithsonian Institution
 >
 > A few technical bits this sub may find interesting:
 >
@@ -78,8 +81,11 @@ p3a (ESP32-P4 art display) now streams from museum IIIF APIs: Rijksmuseum, Art I
 >   the 720×720 panel and pulls a JPEG directly — no proxy server in
 >   the middle.
 > - Each museum has its own dispatch path (refresh cadence, URL
->   builder, optional Linked-Art resolver for Rijksmuseum since it
->   doesn't expose IIIF images directly through the search API).
+>   builder, optional resolver). The resolvers differ by source: a
+>   Linked-Art walk for Rijksmuseum (it doesn't expose IIIF images
+>   directly through the search API), an NRS→IDS redirect for Harvard,
+>   and a User-Agent workaround past the Smithsonian's WAF; the rest
+>   return the IIIF id inline.
 > - Rate-limit cooldown is shared between the firmware and the
 >   on-device web UI via a small REST endpoint, so browsing the
 >   configuration page in your browser doesn't double-spend the

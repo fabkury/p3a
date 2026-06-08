@@ -3,10 +3,16 @@
 *Companion to `museum-outreach-plan.md`. Drafted 2026-05-11.*
 
 Tier 1 cold-email template for the digital / open-access teams at the
-five museums whose APIs p3a consumes. Send personally from the author's
+seven museums whose APIs p3a consumes. Send personally from the author's
 address, staggered weekly per the plan's launch sequence: AIC (Week 1),
 Rijksmuseum (Week 2), V&A (Week 3), Wellcome Collection (Week 4),
-SMK (Week 5).
+SMK (Week 5), Harvard Art Museums (Week 6), Smithsonian (Week 7).
+
+**Note:** Harvard and the Smithsonian shipped after this template was
+first drafted. Variants 6–7 below are written and ready, but whether to
+send them as digital-team cold emails — vs. routing the Smithsonian
+through its Tier-2 Open Access *showcase* slot — is the open cadence
+decision flagged in `museum-outreach-plan.md`.
 
 The pitch frame: **30-second video, GitHub link, no ask.**
 
@@ -46,7 +52,7 @@ museum-mode demo video is produced.
 >
 > I built **p3a**, an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — that pulls artwork from the Art Institute of Chicago via your Open Access program and rotates through it like a tiny gallery on the desk. It's a firmware-level IIIF consumer: hits your IIIF Image API directly with proper rate-limit handling, decodes JPEGs on-device, no cloud middleman.
 >
-> The AIC Open Access program is part of why p3a exists — the showcase you curate is a model the rest of the field follows. AIC is a first-class source in the device alongside the Rijksmuseum, the V&A, the Wellcome Collection, and the Statens Museum for Kunst (SMK).
+> The AIC Open Access program is part of why p3a exists — the showcase you curate is a model the rest of the field follows. AIC is a first-class source in the device alongside the Rijksmuseum, the V&A, the Wellcome Collection, the Statens Museum for Kunst (SMK), the Harvard Art Museums, and the Smithsonian.
 >
 > 30-second video: {{video_url}}
 > Source / firmware: https://github.com/fabkury/p3a
@@ -92,7 +98,7 @@ museum-mode demo video is produced.
 >
 > I built **p3a**, an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — that pulls artwork from the V&A via your Collections API and rotates through it like a tiny gallery on the desk. It's a firmware-level IIIF consumer: hits your IIIF endpoints directly, decodes JPEGs on-device, no cloud middleman.
 >
-> V&A sits alongside AIC, the Rijksmuseum, the Wellcome Collection, and SMK as a first-class source on the device — your Collections API made the integration straightforward.
+> V&A sits alongside AIC, the Rijksmuseum, the Wellcome Collection, SMK, the Harvard Art Museums, and the Smithsonian as a first-class source on the device — your Collections API made the integration straightforward.
 >
 > 30-second video: {{video_url}}
 > Source / firmware: https://github.com/fabkury/p3a
@@ -115,7 +121,7 @@ museum-mode demo video is produced.
 >
 > I built **p3a**, an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — that pulls images from the Wellcome Collection via your Catalogue / IIIF APIs and rotates through them like a tiny gallery on the desk. It's a firmware-level IIIF consumer: hits your IIIF endpoints directly, decodes JPEGs on-device, no cloud middleman.
 >
-> Wellcome's openly-licensed catalogue is what made it possible to drop the collection into the device alongside AIC, the Rijksmuseum, the V&A, and SMK — Wellcome's stance on reuse is something I cite when I explain to people why p3a doesn't need permissions or accounts.
+> Wellcome's openly-licensed catalogue is what made it possible to drop the collection into the device alongside AIC, the Rijksmuseum, the V&A, SMK, the Harvard Art Museums, and the Smithsonian — Wellcome's stance on reuse is something I cite when I explain to people why p3a doesn't need permissions or accounts.
 >
 > 30-second video: {{video_url}}
 > Source / firmware: https://github.com/fabkury/p3a
@@ -138,7 +144,53 @@ museum-mode demo video is produced.
 >
 > I built **p3a**, an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — that pulls artwork from the SMK collection via your public API and rotates through it like a tiny gallery on the desk. It's a firmware-level IIIF consumer: hits your IIIF endpoints directly, decodes JPEGs on-device, no cloud middleman.
 >
-> SMK Open's permissive licensing and clean API are what made adding the collection straightforward — the device now treats SMK as a peer of AIC, the Rijksmuseum, the V&A, and the Wellcome Collection.
+> SMK Open's permissive licensing and clean API are what made adding the collection straightforward — the device now treats SMK as a peer of AIC, the Rijksmuseum, the V&A, the Wellcome Collection, the Harvard Art Museums, and the Smithsonian.
+>
+> 30-second video: {{video_url}}
+> Source / firmware: https://github.com/fabkury/p3a
+>
+> No ask — just thought your team might want to see it.
+>
+> Best,
+> Fabrício Kury
+> pub@kury.dev
+
+---
+
+## Variant 6 — Harvard Art Museums (Week 6)
+
+**To:** Harvard Art Museums API team via [harvardartmuseums.org/collections/api](https://harvardartmuseums.org/collections/api) (free API, key required)
+
+**Subject:** A $48 open-hardware device that plays the Harvard Art Museums collection over IIIF
+
+> Hi Harvard Art Museums API team,
+>
+> I built **p3a**, an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — that pulls artwork from the Harvard Art Museums via your public API and rotates through it like a tiny gallery on the desk. It's a firmware-level IIIF consumer: it resolves your IDS image identifiers on-device (through the NRS→IDS redirect), decodes JPEGs on the chip, no cloud middleman.
+>
+> Harvard's API plus IDS imaging made the collection a natural fit — it now sits alongside the Art Institute of Chicago, the Rijksmuseum, the V&A, the Wellcome Collection, SMK, and the Smithsonian as a first-class source on the device.
+>
+> 30-second video: {{video_url}}
+> Source / firmware: https://github.com/fabkury/p3a
+>
+> No ask — just thought your team might want to see it.
+>
+> Best,
+> Fabrício Kury
+> pub@kury.dev
+
+---
+
+## Variant 7 — Smithsonian (Week 7)
+
+**To:** Smithsonian Open Access team via [si.edu/openaccess](https://www.si.edu/openaccess) (API key via api.data.gov)
+
+**Subject:** A $48 open-hardware device that plays the Smithsonian collection over IIIF
+
+> Hi Smithsonian Open Access team,
+>
+> I built **p3a**, an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — that pulls artwork from the Smithsonian via your Open Access API and rotates through it like a tiny gallery on the desk. It's a firmware-level IIIF consumer: it reads your Open Access metadata, fetches the IIIF image on-device, and decodes JPEGs on the chip — no cloud middleman.
+>
+> The breadth of Open Access across the Smithsonian's units is exactly what makes it compelling on a rotating frame — it now sits alongside the Art Institute of Chicago, the Rijksmuseum, the V&A, the Wellcome Collection, SMK, and the Harvard Art Museums as a first-class source.
 >
 > 30-second video: {{video_url}}
 > Source / firmware: https://github.com/fabkury/p3a
@@ -176,11 +228,12 @@ museum-mode demo video is produced.
 
 ## Send checklist
 
-- [ ] Museum-mode video uploaded; URL plugged into all three variants.
+- [ ] Museum-mode video uploaded; URL plugged into all seven variants.
 - [ ] Confirmed contact address on each museum's API/open-access page.
-- [ ] Variants sent in order: AIC → Rijks → V&A → Wellcome → SMK,
-      one per week, different days of the week to avoid coordinated-
-      campaign optics on shared inboxes if any of these forward to the
-      same syndicate.
+- [ ] Variants sent in order: AIC → Rijks → V&A → Wellcome → SMK →
+      Harvard → Smithsonian (the last two pending the cadence decision
+      in `museum-outreach-plan.md`), one per week, different days of the
+      week to avoid coordinated-campaign optics on shared inboxes if any
+      of these forward to the same syndicate.
 - [ ] Logged send dates so any follow-up reply lands in the right
       thread.

@@ -28,11 +28,11 @@ museum-mode demo video is produced.
 
 **To:** MCN editorial contact via the [MCN website contact form](https://mcn.edu/) — verify the current intake address before sending.
 
-**Subject:** For the MCN newsletter: an embedded IIIF client reusing five museum collections
+**Subject:** For the MCN newsletter: an embedded IIIF client reusing seven museum collections
 
 > Hi MCN editorial team,
 >
-> Submitting a community-implementation note for the newsletter. **p3a** is an open-hardware desktop art frame built on a $48 ESP32-P4 microcontroller; as of v0.10.0 its firmware embeds a IIIF Image API client and consumes the open-access APIs of five institutions — the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, and the Statens Museum for Kunst.
+> Submitting a community-implementation note for the newsletter. **p3a** is an open-hardware desktop art frame built on a $48 ESP32-P4 microcontroller; as of v0.10.0 its firmware embeds a IIIF Image API client and consumes the open-access APIs of seven institutions — the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst, the Harvard Art Museums, and the Smithsonian.
 >
 > I think it's a useful concrete data point for MCN readers because the device sits in an unusual category: not a museum-built product, not a startup's product, not a research prototype — a working consumer-grade object that exists because of the digital-access decisions museums have made over the last decade. The pitch for digital teams trying to justify continued open-access investment, more or less.
 >
@@ -49,9 +49,9 @@ museum-mode demo video is produced.
 
 ## Drop-in blurb (newsletter-ready, ~150 words)
 
-> **A microcontroller IIIF client puts five museum collections on a $48 desktop frame**
+> **A microcontroller IIIF client puts seven museum collections on a $48 desktop frame**
 >
-> p3a, an open-source art-frame firmware released this spring, is one of the first consumer-scale objects to consume museum IIIF APIs at the firmware level. Built on the Waveshare ESP32-P4 development board (a 4-inch 720×720 touchscreen, ~$48 retail), the device cycles through artwork pulled directly from the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, and the Statens Museum for Kunst — no cloud account, no subscription, no intermediary service.
+> p3a, an open-source art-frame firmware released this spring, is one of the first consumer-scale objects to consume museum IIIF APIs at the firmware level. Built on the Waveshare ESP32-P4 development board (a 4-inch 720×720 touchscreen, ~$48 retail), the device cycles through artwork pulled directly from the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst, the Harvard Art Museums, and the Smithsonian — no cloud account, no subscription, no intermediary service.
 >
 > The firmware speaks IIIF Image API v2 natively, performs on-device Linked Art resolution for Rijksmuseum objects, and respects per-museum rate limits. Released under Apache 2.0, it's the work of a single maker, Fabrício Kury. Source and documentation: https://github.com/fabkury/p3a
 
@@ -61,7 +61,7 @@ museum-mode demo video is produced.
 
 > Looked at from the museum-side, p3a is a useful data point in the
 > long-running argument about whether open-access programs justify
-> the engineering investment: it exists precisely because the five
+> the engineering investment: it exists precisely because the seven
 > participating institutions made their collections programmatically
 > reachable. None of them were consulted in advance. The device
 > consumes their public APIs, respects their published rate limits,

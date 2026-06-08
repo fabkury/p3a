@@ -30,7 +30,5 @@ idf_component_register(
     WHOLE_ARCHIVE
 )
 
-# Make FW_VERSION_STRING visible to museums/artic.c (used in AIC-User-Agent).
-target_compile_definitions(${COMPONENT_LIB} PRIVATE
-    FW_VERSION_STRING="${PROJECT_VER}"
-)
+# FW_VERSION_STRING (used in the AIC User-Agent in museums/artic.c) is injected
+# globally in the root CMakeLists.txt (add_compile_definitions before project()).

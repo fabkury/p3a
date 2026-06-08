@@ -20,15 +20,6 @@ idf_component_register(SRCS "http_api.c"
                     REQUIRES ${http_api_requires}
                     PRIV_REQUIRES main)
 
-# Version/API defs consumed by http_api_rest_status.c (/status endpoint).
-# These are injected PRIVATE per-component and do NOT propagate via REQUIRES,
-# so http_api must declare its own — otherwise version.h falls back to
-# FW_VERSION "0.0.0" and the api_version field falls back to 1 (real values:
-# PROJECT_VER and P3A_API_VERSION). Mirrors main/CMakeLists.txt.
-target_compile_definitions(${COMPONENT_LIB} PRIVATE
-    FW_VERSION_STRING="${PROJECT_VER}"
-    FW_VERSION_MAJOR=${FW_VERSION_MAJOR}
-    FW_VERSION_MINOR=${FW_VERSION_MINOR}
-    FW_VERSION_PATCH=${FW_VERSION_PATCH}
-    P3A_API_VERSION=${P3A_API_VERSION}
-)
+# Version/API compile definitions consumed by http_api_rest_status.c (/status)
+# are injected globally in the root CMakeLists.txt (add_compile_definitions
+# before project()).

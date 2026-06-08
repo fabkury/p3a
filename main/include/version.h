@@ -11,15 +11,12 @@
  * MAJOR.MINOR.PATCH
  *
  * Version is defined in CMakeLists.txt as PROJECT_VER and passed via compile
- * definitions.
- *
- * FOOTGUN: those definitions are injected PRIVATE per component
- * (target_compile_definitions ... PRIVATE ...) and therefore do NOT propagate
- * across REQUIRES. Any component that includes this header AND reads
- * FW_VERSION* must inject the defs in its own CMakeLists.txt (see
- * main/CMakeLists.txt), or it will silently compile against the "0.0.0"
- * fallback below. Components currently injecting: main, makapix,
- * art_institution, http_api.
+ * definitions. The root CMakeLists.txt injects FW_VERSION_* (and
+ * P3A_API_VERSION) GLOBALLY via add_compile_definitions() before project(), so
+ * every component sees the real values automatically — no per-component
+ * declaration is needed. The "0.0.0" fallback below only applies if this
+ * header is ever used outside that build (e.g. a standalone tool that does not
+ * inherit the global definitions).
  */
 
 // Version components (defined by CMake from PROJECT_VER)

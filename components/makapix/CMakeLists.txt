@@ -39,10 +39,5 @@ idf_component_register(
     WHOLE_ARCHIVE
 )
 
-# Add compiler definitions for version information
-target_compile_definitions(${COMPONENT_LIB} PRIVATE
-    FW_VERSION_STRING="${PROJECT_VER}"
-    FW_VERSION_MAJOR=${FW_VERSION_MAJOR}
-    FW_VERSION_MINOR=${FW_VERSION_MINOR}
-    FW_VERSION_PATCH=${FW_VERSION_PATCH}
-)
+# Version compile definitions (FW_VERSION*) are injected globally in the root
+# CMakeLists.txt (add_compile_definitions before project()).

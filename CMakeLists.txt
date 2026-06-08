@@ -56,6 +56,21 @@ set(RELEASE_SUBDIR "release/v${PROJECT_VER}")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 add_compile_options(-Wno-ignored-qualifiers)
 
+# Version/API identifiers consumed via main/include/version.h (FW_VERSION*) and
+# the /status api_version field (P3A_API_VERSION). Injected globally here —
+# BEFORE project() so every component inherits them (same propagation point as
+# the add_compile_options above). Previously these were declared PRIVATE in
+# each component's CMakeLists, which silently gave any component that forgot
+# them version.h's "0.0.0" / api_version=1 fallbacks (the http_api /status
+# bug). One source of truth; no per-component injection needed.
+add_compile_definitions(
+    FW_VERSION_STRING="${PROJECT_VER}"
+    FW_VERSION_MAJOR=${FW_VERSION_MAJOR}
+    FW_VERSION_MINOR=${FW_VERSION_MINOR}
+    FW_VERSION_PATCH=${FW_VERSION_PATCH}
+    P3A_API_VERSION=${P3A_API_VERSION}
+)
+
 # Workaround for IDF v5.5.x component-name aliasing: managed components are
 # registered under the prefixed alias idf::<namespace>__<name>, so the
 # espressif/libjpeg-turbo component is exposed as idf::espressif__libjpeg-turbo.

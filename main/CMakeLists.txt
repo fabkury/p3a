@@ -46,14 +46,9 @@ idf_component_register(
     PRIV_REQUIRES esp_mm
 )
 
-# Add compiler definitions
-target_compile_definitions(${COMPONENT_LIB} PRIVATE
-    FW_VERSION_STRING="${PROJECT_VER}"
-    FW_VERSION_MAJOR=${FW_VERSION_MAJOR}
-    FW_VERSION_MINOR=${FW_VERSION_MINOR}
-    FW_VERSION_PATCH=${FW_VERSION_PATCH}
-    P3A_API_VERSION=${P3A_API_VERSION}
-)
+# Version/API compile definitions are injected globally in the root
+# CMakeLists.txt (add_compile_definitions before project()), so no
+# per-component declaration is needed here.
 
 # Redirect FATFS's allocator (ff_memalloc/ff_memfree) to our cache-aligned
 # implementation in ffsystem_aligned.c. Without this the SDMMC driver bounces

@@ -25,10 +25,6 @@ $env:PYTHONUTF8="1"
 # slave target, and the build dies with "Unknown Slave Target".
 $env:ESP_IDF_VERSION="5.5"
 
-# Fallback installs (older, keep until v5.5.4 is proven on both workstations):
-# C:\Users\Fab\esp\v5.5.1\esp-idf\export.ps1 # ESP-IDF v5.5.1 (workstation 1)
-# C:\Espressif\Initialize-Idf.ps1 -IdfId esp-idf-b29c58f93b4ca0f49cdfc4c3ef43b562 # ESP-IDF v5.5.2 (workstation 2)
-
 # Set target (first time only)
 idf.py set-target esp32p4
 

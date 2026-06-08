@@ -108,7 +108,8 @@ cd p3a
 # Activate ESP-IDF environment
 . $HOME/esp/esp-idf/export.sh  # Linux/macOS
 # or
-C:\Users\<user>\esp\v5.5.1\esp-idf\export.ps1  # Windows PowerShell
+. C:\Espressif\tools\Microsoft.v5.5.4.PowerShell_profile.ps1  # Windows PowerShell
+$env:ESP_IDF_VERSION="5.5"  # required: EIM sets full version, IDF Kconfig needs major.minor
 
 # Set target
 idf.py set-target esp32p4

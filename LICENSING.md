@@ -23,7 +23,7 @@ The Apache 2.0 license is a permissive open source license that:
 
 ### 1. ESP-IDF Framework
 
-The project is built on the Espressif IoT Development Framework (ESP-IDF) v5.5.1.
+The project is built on the Espressif IoT Development Framework (ESP-IDF) v5.5.4.
 
 - **License**: Apache License 2.0
 - **Homepage**: https://github.com/espressif/esp-idf

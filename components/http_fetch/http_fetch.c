@@ -163,6 +163,7 @@ static bool sink_reset(fetch_sink_t *s)
 }
 
 static body_status_t read_into_buffer(fetch_sink_t *s, esp_http_client_handle_t client,
+                                       int64_t content_length,
                                        const http_fetch_request_t *req)
 {
     bool read_err = false;
@@ -173,6 +174,9 @@ static body_status_t read_into_buffer(fetch_sink_t *s, esp_http_client_handle_t 
         if (rl == 0) break;
         s->bytes += (size_t)rl;
         if (req->should_abort && req->should_abort(req->user_ctx)) return BODY_ABORTED;
+        if (req->progress) {
+            req->progress(s->bytes, content_length > 0 ? (size_t)content_length : 0, req->user_ctx);
+        }
     }
     if (s->bytes >= s->buf_size - 1) return BODY_BUFFER_FULL;
     return read_err ? BODY_READ_ERR : BODY_OK;
@@ -287,6 +291,7 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
                 .timeout_ms = timeout_ms,
                 .crt_bundle_attach = esp_crt_bundle_attach,
                 .buffer_size = rx_buf,
+                .buffer_size_tx = req->tx_buffer_size,  // 0 -> IDF default
             };
             if (req->method == HTTP_FETCH_POST) {
                 cfg.method = HTTP_METHOD_POST;
@@ -362,14 +367,16 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
                 esp_http_client_cleanup(client);
                 break;  // leave attempt loop; hop loop advances iff got_redirect
             }
-            if (last_status != 200) {
+            bool status_ok = (last_status == 200) ||
+                             (req->accept_2xx && last_status >= 200 && last_status < 300);
+            if (!status_ok) {
                 ESP_LOGW(TAG, "HTTP status %d for %s", last_status, cur_url);
                 esp_http_client_close(client);
                 esp_http_client_cleanup(client);
                 continue;  // retry
             }
 
-            // --- 200 OK ---
+            // --- 200 OK (or accepted 2xx) ---
             if (content_length == 0 && req->treat_empty_as_not_found) {
                 ESP_LOGW(TAG, "Empty body (200, Content-Length: 0): %s", cur_url);
                 esp_http_client_close(client);
@@ -387,7 +394,7 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
             }
 
             body_status_t br = (sink->kind == SINK_BUFFER)
-                                   ? read_into_buffer(sink, client, req)
+                                   ? read_into_buffer(sink, client, content_length, req)
                                    : read_into_file(sink, client, content_length, max_size, req);
 
             // Chunked responses carry no Content-Length, so the byte-count
@@ -428,7 +435,7 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
 
             // BODY_OK or BODY_READ_ERR -> truncation check, then final validations.
             bool truncated = (br == BODY_READ_ERR) ||
-                             sink->bytes == 0 ||
+                             (sink->bytes == 0 && !req->allow_empty_body) ||
                              (content_length > 0 && sink->bytes < (size_t)content_length) ||
                              chunked_incomplete;
             if (truncated) {

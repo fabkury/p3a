@@ -22,8 +22,7 @@
 #include "psram_alloc.h"            // For psram_malloc (Si hash nodes)
 #include "sd_path.h"                // For sd_path_get_channel, sd_path_get_vault
 #include "sntp_sync.h"              // For sntp_sync_is_synchronized
-#include "esp_http_client.h"
-#include "esp_crt_bundle.h"
+#include "http_fetch.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "cJSON.h"
@@ -56,6 +55,13 @@ void makapix_promoted_https_cancel(void)
 
 bool makapix_promoted_https_is_cancelled(void)
 {
+    return s_cancel;
+}
+
+// Cooperative cancellation hook for http_fetch (checked once per chunk).
+static bool promoted_should_abort(void *ctx)
+{
+    (void)ctx;
     return s_cancel;
 }
 
@@ -139,61 +145,26 @@ static esp_err_t fetch_promoted_page(char *response_buf, size_t buf_size,
              (cursor && cursor[0]) ? " cursor=" : "",
              (cursor && cursor[0]) ? cursor : "");
 
-    esp_http_client_config_t config = {
+    http_fetch_request_t fr = {
         .url = url,
         .timeout_ms = 15000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .buffer_size = 4096,
+        .should_abort = promoted_should_abort,
     };
-
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (!client) {
-        ESP_LOGE(TAG, "Failed to init HTTP client");
-        return ESP_ERR_NO_MEM;
-    }
-
-    esp_err_t err = esp_http_client_open(client, 0);
+    size_t total_read = 0;
+    http_fetch_result_t res = {0};
+    esp_err_t err = http_fetch_to_buffer(&fr, response_buf, buf_size, &total_read, &res);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "HTTP open failed: %s", esp_err_to_name(err));
-        esp_http_client_cleanup(client);
-        return err;
+        ESP_LOGE(TAG, "Promoted API fetch failed: %s (HTTP %d)",
+                 esp_err_to_name(err), res.http_status);
+        return (err == ESP_ERR_INVALID_STATE) ? err : ESP_FAIL;  // INVALID_STATE = cancelled
     }
 
-    esp_http_client_fetch_headers(client);
-    int status = esp_http_client_get_status_code(client);
-
-    if (status != 200) {
-        ESP_LOGE(TAG, "Promoted API returned status %d", status);
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-        return ESP_FAIL;
-    }
-
-    // Read response body
-    int total_read = 0;
-    int read_len;
-    while (total_read < (int)buf_size - 1) {
-        read_len = esp_http_client_read(client, response_buf + total_read,
-                                        buf_size - 1 - total_read);
-        if (read_len <= 0) break;
-        total_read += read_len;
-    }
-    response_buf[total_read] = '\0';
-
-    esp_http_client_close(client);
-    esp_http_client_cleanup(client);
-
-    if (total_read == 0) {
-        ESP_LOGE(TAG, "Empty response from promoted API");
-        return ESP_FAIL;
-    }
-
-    ESP_LOGI(TAG, "Received %d bytes from promoted API", total_read);
+    ESP_LOGI(TAG, "Received %zu bytes from promoted API", total_read);
 
     // Parse JSON
     cJSON *root = cJSON_Parse(response_buf);
     if (!root) {
-        ESP_LOGE(TAG, "Failed to parse promoted JSON (%d bytes)", total_read);
+        ESP_LOGE(TAG, "Failed to parse promoted JSON (%zu bytes)", total_read);
         return ESP_FAIL;
     }
 

@@ -9,8 +9,6 @@
 #include "giphy.h"
 #include "giphy_types.h"
 #include "http_fetch.h"
-#include "esp_http_client.h"
-#include "esp_crt_bundle.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "cJSON.h"
@@ -255,6 +253,15 @@ static void url_encode(const char *in, char *out, size_t out_len)
     out[o] = '\0';
 }
 
+// Giphy beta keys get a fixed local cooldown (see giphy_set_rate_limited); we
+// intentionally do not honor the server's Retry-After, so the arg is ignored.
+static void giphy_on_rate_limited(uint32_t retry_after_sec, void *ctx)
+{
+    (void)retry_after_sec;
+    (void)ctx;
+    giphy_set_rate_limited(0);
+}
+
 esp_err_t giphy_fetch_random_id(const char *api_key, char *out_random_id, size_t max_len)
 {
     if (!api_key || !out_random_id || max_len == 0) return ESP_ERR_INVALID_ARG;
@@ -263,45 +270,17 @@ esp_err_t giphy_fetch_random_id(const char *api_key, char *out_random_id, size_t
     char url[256];
     snprintf(url, sizeof(url), "https://api.giphy.com/v1/randomid?api_key=%s", api_key);
 
-    esp_http_client_config_t config = {
+    http_fetch_request_t fr = {
         .url = url,
         .timeout_ms = 10000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .buffer_size = 1024,
+        .on_rate_limited = giphy_on_rate_limited,
     };
-
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (!client) {
-        ESP_LOGE(TAG, "random_id: failed to init HTTP client");
-        return ESP_FAIL;
-    }
-
-    esp_err_t err = esp_http_client_open(client, 0);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "random_id: HTTP open failed: %s", esp_err_to_name(err));
-        esp_http_client_cleanup(client);
-        return ESP_FAIL;
-    }
-
-    esp_http_client_fetch_headers(client);
-    int status = esp_http_client_get_status_code(client);
-
     char buf[256];
-    int total_read = 0;
-    int read_len;
-    while (total_read < (int)sizeof(buf) - 1) {
-        read_len = esp_http_client_read(client, buf + total_read, sizeof(buf) - 1 - total_read);
-        if (read_len <= 0) break;
-        total_read += read_len;
-    }
-    buf[total_read] = '\0';
-
-    esp_http_client_close(client);
-    esp_http_client_cleanup(client);
-
-    if (status != 200) {
-        ESP_LOGE(TAG, "random_id: API returned status %d", status);
-        if (status == 429) giphy_set_rate_limited(0);
+    http_fetch_result_t res = {0};
+    esp_err_t err = http_fetch_to_buffer(&fr, buf, sizeof(buf), NULL, &res);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "random_id: fetch failed: %s (HTTP %d)",
+                 esp_err_to_name(err), res.http_status);
         return ESP_FAIL;
     }
 
@@ -326,24 +305,6 @@ esp_err_t giphy_fetch_random_id(const char *api_key, char *out_random_id, size_t
     return ESP_OK;
 }
 
-/**
- * @brief Drain an esp_http_client response body into out (null-terminated).
- *
- * Reads up to out_size-1 bytes; further bytes are silently dropped (caller is
- * responsible for sizing). Returns total bytes read.
- */
-static int drain_response(esp_http_client_handle_t client, char *out, size_t out_size)
-{
-    int total = 0;
-    while (total < (int)out_size - 1) {
-        int n = esp_http_client_read(client, out + total, out_size - 1 - total);
-        if (n <= 0) break;
-        total += n;
-    }
-    out[total] = '\0';
-    return total;
-}
-
 esp_err_t giphy_register_click(const char *api_key,
                                const char *random_id,
                                const char *giphy_id)
@@ -360,44 +321,20 @@ esp_err_t giphy_register_click(const char *api_key,
              "https://api.giphy.com/v1/gifs/%s?api_key=%s&fields=id,analytics&random_id=%s",
              giphy_id, api_key, random_id);
 
-    esp_http_client_config_t cfg = {
+    http_fetch_request_t fr = {
         .url = url,
         .timeout_ms = 10000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .buffer_size = 2048,
+        .on_rate_limited = giphy_on_rate_limited,
     };
-    esp_http_client_handle_t client = esp_http_client_init(&cfg);
-    if (!client) {
-        ESP_LOGE(TAG, "register_click: HTTP init failed");
-        return ESP_FAIL;
-    }
-
-    esp_err_t err = esp_http_client_open(client, 0);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "register_click: HTTP open failed: %s", esp_err_to_name(err));
-        esp_http_client_cleanup(client);
-        return ESP_FAIL;
-    }
-
-    esp_http_client_fetch_headers(client);
-    int status = esp_http_client_get_status_code(client);
-
     char body[2048];
-    int total = drain_response(client, body, sizeof(body));
-    esp_http_client_close(client);
-    esp_http_client_cleanup(client);
-
-    if (status != 200) {
-        ESP_LOGW(TAG, "register_click: lookup HTTP %d for %s", status, giphy_id);
-        if (status == 401 || status == 403) return ESP_ERR_NOT_ALLOWED;
-        if (status == 429) {
-            giphy_set_rate_limited(0);
-            return ESP_ERR_INVALID_RESPONSE;
-        }
-        return ESP_FAIL;
-    }
-    if (total == 0) {
-        ESP_LOGW(TAG, "register_click: empty lookup response");
+    http_fetch_result_t res = {0};
+    esp_err_t err = http_fetch_to_buffer(&fr, body, sizeof(body), NULL, &res);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "register_click: lookup failed: %s (HTTP %d) for %s",
+                 esp_err_to_name(err), res.http_status, giphy_id);
+        // Preserve the codes callers act on: 401/403 -> NOT_ALLOWED,
+        // 429 -> INVALID_RESPONSE (cooldown engaged via the callback).
+        if (err == ESP_ERR_NOT_ALLOWED || err == ESP_ERR_INVALID_RESPONSE) return err;
         return ESP_FAIL;
     }
 
@@ -433,48 +370,26 @@ esp_err_t giphy_register_click(const char *api_key,
     }
 
     // -- Step 2: fire the pingback -----------------------------------------
-    esp_http_client_config_t pcfg = {
+    // The pingback registers the click server-side: never auto-retry it (a
+    // retry after a half-completed exchange would double-count), and accept
+    // any 200 regardless of body (the response body is irrelevant).
+    http_fetch_request_t pfr = {
         .url = ping_url,
         .timeout_ms = 10000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .buffer_size = 1024,
+        .max_attempts = 1,
+        .allow_empty_body = true,
     };
-    esp_http_client_handle_t pclient = esp_http_client_init(&pcfg);
-    if (!pclient) {
-        ESP_LOGE(TAG, "register_click: pingback HTTP init failed");
-        return ESP_FAIL;
-    }
-
-    err = esp_http_client_open(pclient, 0);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "register_click: pingback HTTP open failed: %s", esp_err_to_name(err));
-        esp_http_client_cleanup(pclient);
-        return ESP_FAIL;
-    }
-
-    esp_http_client_fetch_headers(pclient);
-    int pstatus = esp_http_client_get_status_code(pclient);
     char pbody[64];
-    drain_response(pclient, pbody, sizeof(pbody));
-    esp_http_client_close(pclient);
-    esp_http_client_cleanup(pclient);
-
-    if (pstatus != 200) {
-        ESP_LOGW(TAG, "register_click: pingback HTTP %d for %s", pstatus, giphy_id);
+    http_fetch_result_t pres = {0};
+    err = http_fetch_to_buffer(&pfr, pbody, sizeof(pbody), NULL, &pres);
+    if (err != ESP_OK && !(pres.buffer_full && pres.http_status == 200)) {
+        ESP_LOGW(TAG, "register_click: pingback failed: %s (HTTP %d) for %s",
+                 esp_err_to_name(err), pres.http_status, giphy_id);
         return ESP_FAIL;
     }
 
     ESP_LOGI(TAG, "register_click: ok for %s", giphy_id);
     return ESP_OK;
-}
-
-// Giphy beta keys get a fixed local cooldown (see giphy_set_rate_limited); we
-// intentionally do not honor the server's Retry-After, so the arg is ignored.
-static void giphy_page_on_rate_limited(uint32_t retry_after_sec, void *ctx)
-{
-    (void)retry_after_sec;
-    (void)ctx;
-    giphy_set_rate_limited(0);
 }
 
 esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
@@ -541,7 +456,7 @@ esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
 
     http_fetch_request_t fr = {
         .url = url,
-        .on_rate_limited = giphy_page_on_rate_limited,
+        .on_rate_limited = giphy_on_rate_limited,
     };
     size_t got = 0;
     http_fetch_result_t res = {0};

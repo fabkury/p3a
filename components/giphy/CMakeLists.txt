@@ -6,7 +6,6 @@ idf_component_register(
         "giphy_download.c"
     INCLUDE_DIRS "include"
     REQUIRES
-        esp_http_client
         http_fetch
         json
         p3a_core

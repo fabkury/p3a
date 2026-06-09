@@ -7,8 +7,8 @@
  */
 
 #include "github_ota.h"
-#include "esp_http_client.h"
-#include "esp_crt_bundle.h"
+#include "http_fetch.h"
+#include "esp_http_client.h"   // ESP_ERR_HTTP_* error codes
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "cJSON.h"
@@ -27,36 +27,10 @@ static const char *TAG = "github_ota";
 // Maximum response size for SHA256 file (64 hex chars + some padding)
 #define MAX_SHA256_RESPONSE_SIZE 256
 
-/**
- * @brief HTTP event handler for buffering response
- */
-typedef struct {
-    char *buffer;
-    size_t buffer_size;
-    size_t received;
-} http_response_buffer_t;
-
-static esp_err_t http_event_handler(esp_http_client_event_t *evt)
-{
-    http_response_buffer_t *resp = (http_response_buffer_t *)evt->user_data;
-    
-    switch (evt->event_id) {
-        case HTTP_EVENT_ON_DATA:
-            if (resp && resp->buffer && evt->data_len > 0) {
-                size_t remaining = resp->buffer_size - resp->received - 1;
-                size_t to_copy = (evt->data_len < remaining) ? evt->data_len : remaining;
-                if (to_copy > 0) {
-                    memcpy(resp->buffer + resp->received, evt->data, to_copy);
-                    resp->received += to_copy;
-                    resp->buffer[resp->received] = '\0';
-                }
-            }
-            break;
-        default:
-            break;
-    }
-    return ESP_OK;
-}
+// GitHub REST API requires an Accept header (and a User-Agent, set per request)
+static const http_fetch_header_t GH_API_HEADERS[] = {
+    { .name = "Accept", .value = "application/vnd.github+json" },
+};
 
 uint32_t github_ota_parse_version(const char *version_str)
 {
@@ -234,74 +208,47 @@ esp_err_t github_ota_get_latest_release(github_release_info_t *info)
         return ESP_ERR_NO_MEM;
     }
     
-    http_response_buffer_t resp = {
-        .buffer = response_buffer,
-        .buffer_size = MAX_API_RESPONSE_SIZE,
-        .received = 0
-    };
-    
-    // Configure HTTP client
-    esp_http_client_config_t config = {
+    // ota_manager retries this call itself, so a single attempt here keeps
+    // the overall attempt count unchanged.
+    http_fetch_request_t fr = {
         .url = GITHUB_API_URL,
-        .method = HTTP_METHOD_GET,
         .timeout_ms = 30000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .event_handler = http_event_handler,
-        .user_data = &resp,
-        .buffer_size = CONFIG_OTA_HTTP_BUFFER_SIZE,
+        .rx_buffer_size = CONFIG_OTA_HTTP_BUFFER_SIZE,
+        .user_agent = GITHUB_USER_AGENT,
+        .headers = GH_API_HEADERS,
+        .header_count = 1,
+        .max_attempts = 1,
     };
-    
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (!client) {
-        free(response_buffer);
-        return ESP_ERR_NO_MEM;
-    }
-    
-    // Set required headers
-    esp_http_client_set_header(client, "Accept", "application/vnd.github+json");
-    esp_http_client_set_header(client, "User-Agent", GITHUB_USER_AGENT);
-    
+
     ESP_LOGI(TAG, "Fetching releases from GitHub: %s", GITHUB_API_URL);
-    
+
     // Yield to allow WiFi/SDIO driver to settle before starting transfer
     vTaskDelay(pdMS_TO_TICKS(100));
-    
-    esp_err_t err = esp_http_client_perform(client);
-    int status_code = esp_http_client_get_status_code(client);
-    
-    esp_http_client_cleanup(client);
-    
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "HTTP request failed: %s", esp_err_to_name(err));
-        free(response_buffer);
-        return ESP_ERR_HTTP_CONNECT;
-    }
-    
-    if (status_code == 404) {
+
+    size_t received = 0;
+    http_fetch_result_t res = {0};
+    esp_err_t err = http_fetch_to_buffer(&fr, response_buffer, MAX_API_RESPONSE_SIZE,
+                                         &received, &res);
+
+    if (err == ESP_ERR_NOT_FOUND) {
         ESP_LOGW(TAG, "No releases found (404)");
         free(response_buffer);
         return ESP_ERR_NOT_FOUND;
     }
-    
-    if (status_code == 403) {
+    if (err == ESP_ERR_NOT_ALLOWED) {
         ESP_LOGW(TAG, "Rate limited or forbidden (403)");
         free(response_buffer);
         return ESP_ERR_HTTP_CONNECT;
     }
-    
-    if (status_code != 200) {
-        ESP_LOGE(TAG, "HTTP request failed with status %d", status_code);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "HTTP request failed: %s (status %d)",
+                 esp_err_to_name(err), res.http_status);
         free(response_buffer);
-        return ESP_ERR_HTTP_FETCH_HEADER;
+        return ESP_ERR_HTTP_CONNECT;
     }
-    
-    ESP_LOGI(TAG, "Received %zu bytes from GitHub API (buffer max: %d)", resp.received, MAX_API_RESPONSE_SIZE);
-    
-    // Check if response was truncated
-    if (resp.received >= MAX_API_RESPONSE_SIZE - 1) {
-        ESP_LOGW(TAG, "Response may have been truncated!");
-    }
-    
+
+    ESP_LOGI(TAG, "Received %zu bytes from GitHub API (buffer max: %d)", received, MAX_API_RESPONSE_SIZE);
+
     // Parse JSON response - expect an array of releases
     cJSON *releases_array = cJSON_Parse(response_buffer);
     
@@ -418,44 +365,25 @@ esp_err_t github_ota_download_sha256(const char *sha256_url, char *sha256_hex, s
         return ESP_ERR_NO_MEM;
     }
     
-    http_response_buffer_t resp = {
-        .buffer = response_buffer,
-        .buffer_size = MAX_SHA256_RESPONSE_SIZE,
-        .received = 0
-    };
-    
-    // GitHub raw URLs redirect to CDN, so we must follow redirects
-    // The buffer_size must be large enough to hold redirect response headers
-    esp_http_client_config_t config = {
+    // GitHub asset URLs redirect to the CDN; follow them manually with a
+    // larger tx buffer (the signed CDN URLs are long).
+    http_fetch_request_t fr = {
         .url = sha256_url,
-        .method = HTTP_METHOD_GET,
         .timeout_ms = 30000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .event_handler = http_event_handler,
-        .user_data = &resp,
-        .max_redirection_count = 5,  // Follow up to 5 redirects (GitHub -> CDN)
-        .buffer_size = 4096,         // Large buffer for redirect header handling
-        .buffer_size_tx = 1024,
+        .tx_buffer_size = 1024,
+        .user_agent = GITHUB_USER_AGENT,
+        .redirect_mode = HTTP_FETCH_REDIRECT_MANUAL,
+        .max_redirects = 5,  // GitHub -> CDN
     };
-    
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (!client) {
-        free(response_buffer);
-        return ESP_ERR_NO_MEM;
-    }
-    
-    esp_http_client_set_header(client, "User-Agent", GITHUB_USER_AGENT);
-    
+
     ESP_LOGI(TAG, "Downloading SHA256 checksum from: %s", sha256_url);
-    
-    esp_err_t err = esp_http_client_perform(client);
-    int status_code = esp_http_client_get_status_code(client);
-    
-    esp_http_client_cleanup(client);
-    
-    if (err != ESP_OK || status_code != 200) {
-        ESP_LOGE(TAG, "Failed to download SHA256: err=%s, status=%d", 
-                 esp_err_to_name(err), status_code);
+
+    http_fetch_result_t res = {0};
+    esp_err_t err = http_fetch_to_buffer(&fr, response_buffer, MAX_SHA256_RESPONSE_SIZE,
+                                         NULL, &res);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to download SHA256: err=%s, status=%d",
+                 esp_err_to_name(err), res.http_status);
         free(response_buffer);
         return ESP_FAIL;
     }
@@ -593,41 +521,23 @@ static esp_err_t parse_manifest_from_release(cJSON *release, github_release_mani
         return ESP_ERR_NO_MEM;
     }
 
-    http_response_buffer_t resp = {
-        .buffer = manifest_buffer,
-        .buffer_size = 4096,
-        .received = 0
-    };
-
-    esp_http_client_config_t config = {
+    http_fetch_request_t fr = {
         .url = manifest_url,
-        .method = HTTP_METHOD_GET,
         .timeout_ms = 30000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .event_handler = http_event_handler,
-        .user_data = &resp,
-        .max_redirection_count = 5,
-        .buffer_size = 8192,
-        .buffer_size_tx = 1024,
+        .rx_buffer_size = 8192,
+        .tx_buffer_size = 1024,
+        .user_agent = GITHUB_USER_AGENT,
+        .redirect_mode = HTTP_FETCH_REDIRECT_MANUAL,
+        .max_redirects = 5,  // GitHub -> CDN
     };
-
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (!client) {
-        free(manifest_buffer);
-        return ESP_ERR_NO_MEM;
-    }
-
-    esp_http_client_set_header(client, "User-Agent", GITHUB_USER_AGENT);
 
     ESP_LOGI(TAG, "Downloading manifest.json from: %s", manifest_url);
 
-    esp_err_t err = esp_http_client_perform(client);
-    int status_code = esp_http_client_get_status_code(client);
-    esp_http_client_cleanup(client);
-
-    if (err != ESP_OK || status_code != 200) {
+    http_fetch_result_t res = {0};
+    esp_err_t err = http_fetch_to_buffer(&fr, manifest_buffer, 4096, NULL, &res);
+    if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to download manifest.json: err=%s, status=%d",
-                 esp_err_to_name(err), status_code);
+                 esp_err_to_name(err), res.http_status);
         free(manifest_buffer);
         return ESP_FAIL;
     }
@@ -709,43 +619,25 @@ esp_err_t github_ota_get_release_manifest(github_release_manifest_t *manifest)
         return ESP_ERR_NO_MEM;
     }
 
-    http_response_buffer_t resp = {
-        .buffer = response_buffer,
-        .buffer_size = MAX_API_RESPONSE_SIZE,
-        .received = 0
-    };
-
-    // Configure HTTP client
-    esp_http_client_config_t config = {
+    http_fetch_request_t fr = {
         .url = GITHUB_API_URL,
-        .method = HTTP_METHOD_GET,
         .timeout_ms = 30000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .event_handler = http_event_handler,
-        .user_data = &resp,
-        .buffer_size = CONFIG_OTA_HTTP_BUFFER_SIZE,
+        .rx_buffer_size = CONFIG_OTA_HTTP_BUFFER_SIZE,
+        .user_agent = GITHUB_USER_AGENT,
+        .headers = GH_API_HEADERS,
+        .header_count = 1,
     };
-
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (!client) {
-        free(response_buffer);
-        return ESP_ERR_NO_MEM;
-    }
-
-    esp_http_client_set_header(client, "Accept", "application/vnd.github+json");
-    esp_http_client_set_header(client, "User-Agent", GITHUB_USER_AGENT);
 
     ESP_LOGI(TAG, "Fetching releases from GitHub for manifest...");
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    esp_err_t err = esp_http_client_perform(client);
-    int status_code = esp_http_client_get_status_code(client);
-
-    esp_http_client_cleanup(client);
-
-    if (err != ESP_OK || status_code != 200) {
-        ESP_LOGE(TAG, "HTTP request failed: err=%s, status=%d", esp_err_to_name(err), status_code);
+    http_fetch_result_t res = {0};
+    esp_err_t err = http_fetch_to_buffer(&fr, response_buffer, MAX_API_RESPONSE_SIZE,
+                                         NULL, &res);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "HTTP request failed: err=%s, status=%d",
+                 esp_err_to_name(err), res.http_status);
         free(response_buffer);
         return ESP_ERR_HTTP_CONNECT;
     }

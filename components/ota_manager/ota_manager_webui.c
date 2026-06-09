@@ -7,10 +7,9 @@
  */
 
 #include "ota_manager_internal.h"
+#include "http_fetch.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
-#include "esp_http_client.h"
-#include "esp_crt_bundle.h"
 #include "esp_partition.h"
 #include "mbedtls/sha256.h"
 #include "nvs_flash.h"
@@ -294,49 +293,21 @@ esp_err_t webui_ota_get_status(webui_ota_status_t *status)
     return ESP_OK;
 }
 
-// Context for web UI download event handler
+// Progress relay for the web UI download (http_fetch buffer sink)
 typedef struct {
-    uint8_t *buffer;
-    size_t buffer_size;
-    size_t received;
     ota_progress_cb_t progress_cb;
-    int content_length;
-} webui_download_ctx_t;
+} webui_dl_progress_ctx_t;
 
-static esp_err_t webui_http_event_handler(esp_http_client_event_t *evt)
+static void webui_dl_progress(size_t total, size_t content_length, void *arg)
 {
-    webui_download_ctx_t *ctx = (webui_download_ctx_t *)evt->user_data;
-
-    switch (evt->event_id) {
-        case HTTP_EVENT_ON_HEADER:
-            // Capture content-length for progress reporting
-            if (strcasecmp(evt->header_key, "Content-Length") == 0) {
-                ctx->content_length = atoi(evt->header_value);
-            }
-            break;
-        case HTTP_EVENT_ON_DATA:
-            if (ctx && ctx->buffer && evt->data_len > 0) {
-                size_t remaining = ctx->buffer_size - ctx->received;
-                size_t to_copy = (evt->data_len < remaining) ? evt->data_len : remaining;
-                if (to_copy > 0) {
-                    memcpy(ctx->buffer + ctx->received, evt->data, to_copy);
-                    ctx->received += to_copy;
-
-                    // Report and persist progress
-                    if (ctx->content_length > 0) {
-                        int percent = (int)((ctx->received * 100) / ctx->content_length);
-                        webui_set_progress(percent, "Downloading web UI...");
-                        if (ctx->progress_cb) {
-                            ctx->progress_cb(percent, "Downloading web UI...");
-                        }
-                    }
-                }
-            }
-            break;
-        default:
-            break;
+    webui_dl_progress_ctx_t *ctx = (webui_dl_progress_ctx_t *)arg;
+    if (content_length > 0) {
+        int percent = (int)((total * 100) / content_length);
+        webui_set_progress(percent, "Downloading web UI...");
+        if (ctx && ctx->progress_cb) {
+            ctx->progress_cb(percent, "Downloading web UI...");
+        }
     }
-    return ESP_OK;
 }
 
 static esp_err_t webui_ota_download_and_verify(const char *url,
@@ -348,59 +319,41 @@ static esp_err_t webui_ota_download_and_verify(const char *url,
     ESP_LOGI(TAG, "Downloading web UI from: %s", url);
 
     // Allocate buffer for storage.bin (up to 4MB)
-    // Use PSRAM for the download buffer
+    // Use PSRAM for the download buffer. +1: http_fetch reserves one byte for
+    // its NUL terminator, and storage.bin can be exactly 4 MB.
     size_t max_size = 4 * 1024 * 1024;
-    uint8_t *buffer = heap_caps_malloc(max_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    uint8_t *buffer = heap_caps_malloc(max_size + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!buffer) {
         ESP_LOGE(TAG, "Failed to allocate download buffer");
         return ESP_ERR_NO_MEM;
     }
 
-    // Download context for event handler
-    webui_download_ctx_t ctx = {
-        .buffer = buffer,
-        .buffer_size = max_size,
-        .received = 0,
-        .progress_cb = progress_cb,
-        .content_length = 0,
-    };
+    webui_dl_progress_ctx_t prog_ctx = { .progress_cb = progress_cb };
 
-    // Use esp_http_client_perform() which properly handles GitHub redirects to CDN
-    esp_http_client_config_t config = {
+    // GitHub asset URLs redirect to the CDN; follow manually with a larger tx
+    // buffer (the signed CDN URLs are long).
+    http_fetch_request_t fr = {
         .url = url,
-        .crt_bundle_attach = esp_crt_bundle_attach,
         .timeout_ms = CONFIG_OTA_DOWNLOAD_TIMEOUT_SEC * 1000,
-        .buffer_size = CONFIG_OTA_HTTP_BUFFER_SIZE,
-        .buffer_size_tx = 1024,
-        .max_redirection_count = 5,  // GitHub redirects to CDN
-        .event_handler = webui_http_event_handler,
-        .user_data = &ctx,
+        .rx_buffer_size = CONFIG_OTA_HTTP_BUFFER_SIZE,
+        .tx_buffer_size = 1024,
+        .redirect_mode = HTTP_FETCH_REDIRECT_MANUAL,
+        .max_redirects = 5,  // GitHub redirects to CDN
+        .progress = webui_dl_progress,
+        .user_ctx = &prog_ctx,
     };
 
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (!client) {
-        free(buffer);
-        return ESP_ERR_NO_MEM;
-    }
-
-    esp_err_t err = esp_http_client_perform(client);
-    int status_code = esp_http_client_get_status_code(client);
-
-    esp_http_client_cleanup(client);
-
+    size_t total_read = 0;
+    http_fetch_result_t res = {0};
+    esp_err_t err = http_fetch_to_buffer(&fr, (char *)buffer, max_size + 1,
+                                         &total_read, &res);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "HTTP request failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Web UI download failed: %s (HTTP %d)",
+                 esp_err_to_name(err), res.http_status);
         free(buffer);
         return err;
     }
 
-    if (status_code != 200) {
-        ESP_LOGE(TAG, "HTTP error: %d", status_code);
-        free(buffer);
-        return ESP_ERR_HTTP_FETCH_HEADER;
-    }
-
-    size_t total_read = ctx.received;
     ESP_LOGI(TAG, "Downloaded %zu bytes", total_read);
 
     // Verify SHA256

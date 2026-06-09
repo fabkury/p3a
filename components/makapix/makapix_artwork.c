@@ -14,9 +14,7 @@
 #include "sdio_bus.h"
 #include "makapix_channel_events.h"
 #include "download_manager.h"  // download_manager_is_canceled (S1 cooperative cancel)
-#include "esp_http_client.h"
 #include "esp_log.h"
-#include "esp_crt_bundle.h"
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"

@@ -21,7 +21,6 @@ idf_component_register(
         "${CMAKE_CURRENT_SOURCE_DIR}/../../main/include"
     REQUIRES
         nvs_flash
-        esp_http_client
         http_fetch
         mqtt
         json

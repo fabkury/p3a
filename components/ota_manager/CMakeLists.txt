@@ -9,6 +9,7 @@ idf_component_register(
     REQUIRES
         esp_http_client
         esp_https_ota
+        http_fetch
         esp_partition
         esp_timer
         json

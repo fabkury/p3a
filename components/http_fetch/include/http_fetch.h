@@ -68,7 +68,8 @@ typedef struct {
 /** Return true to abort the transfer. Checked once per chunk. */
 typedef bool (*http_fetch_should_abort_cb)(void *ctx);
 
-/** Called after each written chunk (caller does its own throttling). */
+/** Called after each received/written chunk, for both the buffer and file
+ *  sinks (caller does its own throttling). content_length is 0 if unknown. */
 typedef void (*http_fetch_progress_cb)(size_t total, size_t content_length, void *ctx);
 
 /** Called once on HTTP 429 before returning ESP_ERR_INVALID_RESPONSE. */
@@ -91,7 +92,10 @@ typedef struct {
     size_t                    header_count;
     int                       timeout_ms;      ///< 0 -> 15000
     int                       rx_buffer_size;  ///< esp_http_client buffer_size; 0 -> 4096
+    int                       tx_buffer_size;  ///< esp_http_client buffer_size_tx; 0 -> IDF default
     const char               *user_agent;      ///< convenience; added as "User-Agent" if non-NULL
+    bool                      accept_2xx;      ///< any 2xx counts as success (default: 200 only);
+                                               ///< caller inspects result->http_status for the exact code
 
     // --- redirects ---
     http_fetch_redirect_mode_t redirect_mode;  ///< default AUTO
@@ -111,6 +115,8 @@ typedef struct {
     size_t                     min_size;             ///< reject success if bytes < min_size (0 -> none)
     bool                       require_exact_length; ///< reject success if bytes != Content-Length
     bool                       treat_empty_as_not_found; ///< 200 + Content-Length 0 -> ESP_ERR_NOT_FOUND
+    bool                       allow_empty_body;     ///< a 0-byte body is success (default: treated
+                                                     ///< as a truncated read and retried)
 
     // --- file sink only ---
     size_t                     chunk_size;      ///< 0 -> 32768

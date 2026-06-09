@@ -655,3 +655,10 @@ rollback; consider adding a force-reflash NVS flag to `slave_ota` first.
   of the approach. (Secondary backlog item surfaced by this test: the
   `event_bus` task's 4 KB stack overflows under an SD-error storm — worth
   hardening independently, since any severe SD fault could hit it.)
+- **2026-06-09** — Hardened the secondary finding: bumped the `event_bus`
+  dispatch-task stack 4 KB -> 8 KB (`components/event_bus/event_bus.c`). It is
+  PSRAM-backed, so this costs no internal RAM. Proportionate fix for a
+  low-probability, self-recovering (panic->reboot) failure; the deeper
+  robustness items in that task (handlers run synchronously under the dispatch
+  mutex; `emit` drops on a full 32-deep queue) are left for a future event_bus
+  refactor.

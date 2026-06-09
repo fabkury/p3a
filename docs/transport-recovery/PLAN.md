@@ -7,7 +7,7 @@ history.
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 0 | Orderly reboot instead of esp_hosted's instant restart | **Done** — shipped + validated on-device (2.7.0 + 2.9.3 bench units); all quick checks pass, only the passive soak remains open (non-blocking; see checklist) |
-| 1 | In-place transport recovery (no reboot), version-gated | **Ready to start** — 2.9.3 bench unit now live (2026-06-08), Phase 0 baseline confirmed on it; see the Phase 1 guide |
+| 1 | In-place transport recovery (no reboot), version-gated | **Attempted + reverted — not viable on this board (2026-06-09).** The esp_hosted reinit works on 2.9.3, but the C6 (SDMMC slot 1) and microSD (SDMMC slot 0) share the one ESP32-P4 SDMMC controller, so the C6 reset kills the SD card → playback can't continue → defeats the "never blinks" premise. Code reverted (not committed). **Phase 0 reboot is the production recovery path.** See log. |
 | 2 | Bundle slave fw 2.9.7 (contingent on Phase 1 bench findings) | Not started |
 
 ---
@@ -316,7 +316,21 @@ expect up to a few seconds of delay when idle).
 
 ---
 
-## Phase 1 — in-place transport recovery (ready to start)
+## Phase 1 — in-place transport recovery (ATTEMPTED — NOT VIABLE on this board)
+
+> **Closed 2026-06-09.** Implemented in full and bench-tested on the 2.9.3
+> unit. The esp_hosted reinit itself works (the slave recovers the transport),
+> but the C6 and the microSD share the single ESP32-P4 SDMMC controller (C6 on
+> slot 1, SD on slot 0), so the `esp_hosted_deinit/init` reset reinitializes
+> that shared host and kills the SD card mid-playback — which defeats the whole
+> "playback never blinks" premise and crashed the device (SD `0x107` timeouts ->
+> `event_bus` stack overflow). Decision: **stop Phase 1; keep the Phase 0
+> orderly reboot as the production recovery path.** The code was reverted
+> (plain revert, never committed). The guide below is retained as a record of
+> the approach (useful if a future board decouples the SD bus, or for an
+> upstream report). See the 2026-06-09 log entry for the full test trace.
+
+
 
 **Goal:** on transport failure, recover without rebooting the P4: playback
 never blinks; ~8–18 s network outage (deinit + 1.5 s slave reset delay
@@ -550,3 +564,94 @@ rollback; consider adding a force-reflash NVS flag to `slave_ota` first.
   (it would have re-entered degraded had the streak persisted at 3). Phase 0
   now has only the non-blocking passive soak left open; Phase 1 development on
   the 2.9.3 unit is the next body of work.
+- **2026-06-09** — **Phase 1 implemented (code complete; not yet built/flashed).**
+  Built in four stages:
+  - *Stage A (version cache):* `slave_ota` now caches the live C6 version it
+    queries at boot and exposes `slave_ota_get_running_version()` — a no-RPC
+    getter, safe to call at transport-failure time. The gate keys on the
+    *running* slave, not the bundled constant (a stuck-2.7.0 device runs 2.7.0
+    but bundles 2.9.3), closing the "critical gotcha" the guide flagged.
+  - *Stage B (refactors):* the Phase 0 reboot/degraded decision is factored
+    into `transport_recovery_phase0_fallback()` (the escalation target), and
+    `wifi_recovery_task` gained a command protocol (`REINIT_WIFI` vs
+    `RECOVER_TRANSPORT`) so one task serializes both flows under the existing
+    `s_reinit_in_progress` guard (internal-RAM cost ~0, no new task).
+  - *Stage C (recovery):* on an eligible `TRANSPORT_FAILURE` (running slave
+    >= 2.9.3 and under the per-boot cap), the handler arms a 60 s hang-guard
+    `esp_timer` and dispatches `RECOVER_TRANSPORT`. The task quiesces the netif,
+    detaches Wi-Fi, then `esp_hosted_deinit -> init -> connect_to_slave`
+    (GPIO-54 C6 reset) -> wait `TRANSPORT_UP` (10 s) -> the existing Wi-Fi
+    reinit loop on the fresh link. Success re-arms `s_failure_handled`, clears
+    `s_recovering`, logs internal-heap watermarks; failure/timeout escalates
+    through the Phase 0 streak guard (reboot or degraded). CP_INIT during
+    recovery is suppressed via `s_recovering` (no false "rebooted underneath
+    us"). The hang-guard vs task-completion race is resolved with
+    `esp_timer_stop`'s return value as the arbiter (whichever fires first owns
+    the outcome; no double reboot).
+  - *Stage D (caller audit):* no `ESP_ERROR_CHECK(esp_wifi_*/esp_hosted_*)`
+    site executes during the recovery window — the wrapped ones are all
+    one-time boot STA bring-up (`app_wifi.c`) or AP-mode captive-portal
+    provisioning (`wifi_captive_portal.c`), neither concurrent with an in-place
+    recovery on a provisioned STA device; the recovery task's own calls already
+    log-and-tolerate. No softening needed (softening the boot-time ones would
+    mask genuine boot failures).
+
+  Policy defaults taken (override on review): streak gates *reboots* only, not
+  in-place attempts; unexpected CP_INIT stays log-only; per-boot in-place cap =
+  `MAX_INPLACE_RECOVERIES_PER_BOOT` (5) before escalating to a reboot. Files
+  touched: `components/slave_ota/slave_ota.{c,h}`,
+  `components/wifi_manager/transport_recovery.c`,
+  `components/wifi_manager/wifi_recovery.c`,
+  `components/wifi_manager/wifi_manager_internal.h`,
+  `components/wifi_manager/CMakeLists.txt`. **Next:** build + flash the 2.9.3
+  unit, then run the Phase 1 checklist (`?real=1` under load -> in-place
+  recovery, screen never blinks, no reboot; repeat >= 5x; recovery-failure
+  escalation; 2.7.0 regression routes to Phase 0). Test hook stays compiled in
+  until that passes.
+  *Build (2026-06-09):* `idf.py app` links clean — `p3a.bin` 0x23c0f0 bytes,
+  72% app-partition free, firmware 1.0.0, no warnings in the touched files, and
+  the new cross-component symbol `slave_ota_get_running_version` resolves. The
+  full `idf.py build` is currently blocked only by a Windows Device Guard policy
+  on the **regenerated** `build/littlefs_py_venv/.../littlefs-python.exe` (the
+  webui LittleFS image step, unrelated to this change — `webui/` was untouched,
+  and the existing `storage.bin` is still valid). Flash for testing with
+  `idf.py app-flash monitor` (app partition only) to sidestep that step; a full
+  build later needs the regenerated venv exe allowlisted (or `build/` cleaned).
+- **2026-06-09** — **First Phase 1 on-device test (2.9.3 unit, `?real=1`): the
+  recovery mechanism works, but a hardware coupling makes it non-viable as-is.**
+  What worked (from the monitor log): GPIO-54 pulse -> CMD53 `0x107` ->
+  `Unrecoverable host sdio state` -> `ESP-Hosted transport failure` ->
+  `attempting in-place recovery #1` -> pre-reset `esp_wifi_remote_stop/deinit`
+  RPCs timed out over the dead link and were tolerated (≈5 s each via
+  `rpc_core` timeout) -> `Resetting ESP-Hosted transport link` -> `Reset slave
+  using GPIO[54]` -> card re-init -> **`ESP-Hosted transport is back up`**
+  (so the **2.9.3 slave tolerates the reinit** — the central open question is
+  answered *yes*) -> `C6 re-init during in-place recovery ... expected` (CP_INIT
+  suppression worked) -> Wi-Fi station restarted. **Then it crashed:**
+  `sdmmc_req: sdmmc_host_wait_for_event returned 0x107` (the **microSD**) twice,
+  then a **stack-protection fault (stack overflow) in the `event_bus` task**
+  (~4 KB stack; `event_bus.c` runs every subscriber handler synchronously under
+  a mutex on that stack).
+  **Root cause:** the C6 and the microSD share the single ESP32-P4 SDMMC
+  peripheral — microSD on **slot 0** (`bsp_sdcard_mount`, `SDMMC_HOST_SLOT_0`,
+  pins CLK43/CMD44/D39-42), C6 on **slot 1** (CLK18/CMD19/D14-17). The recovery
+  `esp_hosted_deinit -> init` reinitializes that shared host, which knocks out
+  the SD card on slot 0; SD I/O then times out and a handler overflows the
+  event_bus stack. **Implication:** Phase 1's "playback never blinks" premise
+  cannot hold here — playback reads frames from the SD that the C6 reset kills.
+  Surviving would require unmount-SD-before / remount-SD-after around the reset
+  (playback stalls during the window, plus in-flight vault/USB-MSC/download
+  coordination), reducing Phase 1 to "freeze ~10-20 s" — marginal over the
+  shipped Phase 0 reboot. This is a *host-side* coupling, so Phase 2 (newer
+  slave fw) would not fix it either. **Decision (2026-06-09): option A — stop
+  Phase 1; the Phase 0 orderly reboot remains the production recovery path.**
+  The other options considered and rejected: (B) SD-aware in-place recovery
+  (unmount/remount + quiesce all SD users) — playback still stalls ~10-20 s, so
+  marginal over the reboot for a lot of risk; (C) a C6-only reset that does not
+  tear down the shared SDMMC host — would need esp_hosted internals we have
+  pinned. **The Phase 1 code (Stages A–D) was reverted** — plain `git checkout`,
+  never committed; it only ever lived in the working tree, so the "implemented"
+  and "builds clean" entries above describe now-removed code, kept as a record
+  of the approach. (Secondary backlog item surfaced by this test: the
+  `event_bus` task's 4 KB stack overflows under an SD-error storm — worth
+  hardening independently, since any severe SD fault could hit it.)

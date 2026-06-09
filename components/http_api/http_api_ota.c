@@ -112,7 +112,7 @@ static esp_err_t h_get_ota_status(httpd_req_t *req) {
     ota_status_t status;
     esp_err_t err = ota_manager_get_status(&status);
     if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to get OTA status\",\"code\":\"OTA_STATUS_FAIL\"}");
+        send_json_error(req, 500, "OTA_STATUS_FAIL", "Failed to get OTA status");
         return ESP_OK;
     }
 
@@ -121,7 +121,7 @@ static esp_err_t h_get_ota_status(httpd_req_t *req) {
     if (!root || !data) {
         if (root) cJSON_Delete(root);
         if (data) cJSON_Delete(data);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -190,17 +190,8 @@ static esp_err_t h_get_ota_status(httpd_req_t *req) {
     }
 
     cJSON_AddItemToObject(root, "data", data);
-    
-    char *json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    
-    if (!json_str) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-    
-    send_json(req, 200, json_str);
-    free(json_str);
+
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -212,16 +203,13 @@ static esp_err_t h_post_ota_check(httpd_req_t *req) {
     esp_err_t err = ota_manager_check_for_update();
     
     if (err == ESP_ERR_INVALID_STATE) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"Check already in progress\",\"code\":\"CHECK_IN_PROGRESS\"}");
+        send_json_error(req, 409, "CHECK_IN_PROGRESS", "Check already in progress");
         return ESP_OK;
     }
     
     if (err != ESP_OK) {
-        char response[128];
-        snprintf(response, sizeof(response), 
-                 "{\"ok\":false,\"error\":\"Failed to start check: %s\",\"code\":\"CHECK_FAIL\"}", 
-                 esp_err_to_name(err));
-        send_json(req, 500, response);
+        send_json_errorf(req, 500, "CHECK_FAIL", "Failed to start check: %s",
+                         esp_err_to_name(err));
         return ESP_OK;
     }
     
@@ -237,18 +225,14 @@ static esp_err_t h_post_ota_install(httpd_req_t *req) {
     // Check if update is available
     ota_state_t state = ota_manager_get_state();
     if (state != OTA_STATE_UPDATE_AVAILABLE) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"No update available\",\"code\":\"NO_UPDATE\"}");
+        send_json_error(req, 409, "NO_UPDATE", "No update available");
         return ESP_OK;
     }
     
     // Check blockers
     const char *block_reason;
     if (ota_manager_is_blocked(&block_reason)) {
-        char response[256];
-        snprintf(response, sizeof(response), 
-                 "{\"ok\":false,\"error\":\"%s\",\"code\":\"OTA_BLOCKED\"}", 
-                 block_reason);
-        send_json(req, 423, response);
+        send_json_error(req, 423, "OTA_BLOCKED", block_reason);
         return ESP_OK;
     }
     
@@ -280,7 +264,7 @@ static esp_err_t h_post_ota_rollback(httpd_req_t *req) {
     ota_manager_get_status(&status);
     
     if (!status.can_rollback) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"No rollback available\",\"code\":\"NO_ROLLBACK\"}");
+        send_json_error(req, 409, "NO_ROLLBACK", "No rollback available");
         return ESP_OK;
     }
     
@@ -319,7 +303,7 @@ static esp_err_t h_get_webui_ota_status(httpd_req_t *req) {
     if (!root || !data) {
         if (root) cJSON_Delete(root);
         if (data) cJSON_Delete(data);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -327,16 +311,7 @@ static esp_err_t h_get_webui_ota_status(httpd_req_t *req) {
     cJSON_AddBoolToObject(root, "ok", ok);
     cJSON_AddItemToObject(root, "data", data);
 
-    char *json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    if (!json_str) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, json_str);
-    free(json_str);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -348,7 +323,7 @@ static esp_err_t h_post_webui_ota_install(httpd_req_t *req) {
     esp_err_t err = webui_ota_install_available_update(NULL);
 
     if (err == ESP_ERR_NOT_SUPPORTED) {
-        send_json(req, 501, "{\"ok\":false,\"error\":\"Web UI OTA is disabled\",\"code\":\"NOT_SUPPORTED\"}");
+        send_json_error(req, 501, "NOT_SUPPORTED", "Web UI OTA is disabled");
         return ESP_OK;
     }
 
@@ -356,19 +331,16 @@ static esp_err_t h_post_webui_ota_install(httpd_req_t *req) {
         webui_ota_status_t status;
         webui_ota_get_status(&status);
         if (!status.update_available) {
-            send_json(req, 409, "{\"ok\":false,\"error\":\"No web UI update available\",\"code\":\"NO_UPDATE\"}");
+            send_json_error(req, 409, "NO_UPDATE", "No web UI update available");
         } else {
-            send_json(req, 409, "{\"ok\":false,\"error\":\"Install already in progress\",\"code\":\"INSTALL_IN_PROGRESS\"}");
+            send_json_error(req, 409, "INSTALL_IN_PROGRESS", "Install already in progress");
         }
         return ESP_OK;
     }
 
     if (err != ESP_OK) {
-        char response[128];
-        snprintf(response, sizeof(response),
-                 "{\"ok\":false,\"error\":\"Failed to start install: %s\",\"code\":\"INSTALL_FAIL\"}",
-                 esp_err_to_name(err));
-        send_json(req, 500, response);
+        send_json_errorf(req, 500, "INSTALL_FAIL", "Failed to start install: %s",
+                         esp_err_to_name(err));
         return ESP_OK;
     }
 
@@ -384,21 +356,18 @@ static esp_err_t h_post_webui_ota_repair(httpd_req_t *req) {
     esp_err_t err = webui_ota_trigger_repair();
 
     if (err == ESP_ERR_NOT_SUPPORTED) {
-        send_json(req, 501, "{\"ok\":false,\"error\":\"Web UI OTA is disabled\",\"code\":\"NOT_SUPPORTED\"}");
+        send_json_error(req, 501, "NOT_SUPPORTED", "Web UI OTA is disabled");
         return ESP_OK;
     }
 
     if (err == ESP_ERR_INVALID_STATE) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"Repair already in progress\",\"code\":\"REPAIR_IN_PROGRESS\"}");
+        send_json_error(req, 409, "REPAIR_IN_PROGRESS", "Repair already in progress");
         return ESP_OK;
     }
 
     if (err != ESP_OK) {
-        char response[128];
-        snprintf(response, sizeof(response),
-                 "{\"ok\":false,\"error\":\"Failed to start repair: %s\",\"code\":\"REPAIR_FAIL\"}",
-                 esp_err_to_name(err));
-        send_json(req, 500, response);
+        send_json_errorf(req, 500, "REPAIR_FAIL", "Failed to start repair: %s",
+                         esp_err_to_name(err));
         return ESP_OK;
     }
 

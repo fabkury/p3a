@@ -10,6 +10,8 @@
 
 #include "http_api_internal.h"
 #include "psram_alloc.h"
+#include "play_scheduler.h"
+#include <stdarg.h>
 #include <strings.h>
 
 static int hex_digit(char c)
@@ -65,6 +67,95 @@ void send_json(httpd_req_t *req, int status, const char *json) {
     httpd_resp_set_status(req, http_status_str(status));
     httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, json, HTTPD_RESP_USE_STRLEN);
+}
+
+void send_json_error(httpd_req_t *req, int status, const char *code, const char *msg) {
+    if (!code) code = "ERROR";
+    if (!msg) msg = code;
+    // code/msg are plain-ASCII literals from call sites (no JSON escaping done);
+    // a fixed buffer keeps this path allocation-free so it works under OOM.
+    char buf[224];
+    int n = snprintf(buf, sizeof(buf),
+                     "{\"ok\":false,\"error\":\"%s\",\"code\":\"%s\"}", msg, code);
+    if (n < 0 || n >= (int)sizeof(buf)) {
+        send_json(req, status, "{\"ok\":false,\"error\":\"Internal error\",\"code\":\"INTERNAL\"}");
+        return;
+    }
+    send_json(req, status, buf);
+}
+
+void send_json_errorf(httpd_req_t *req, int status, const char *code, const char *fmt, ...) {
+    char msg[160];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(msg, sizeof(msg), fmt, args);
+    va_end(args);
+    send_json_error(req, status, code, msg);
+}
+
+void send_json_oom(httpd_req_t *req) {
+    send_json_error(req, 500, "OOM", "Out of memory");
+}
+
+void send_json_root(httpd_req_t *req, int status, cJSON *root) {
+    if (!root) {
+        send_json_oom(req);
+        return;
+    }
+    char *out = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!out) {
+        send_json_oom(req);
+        return;
+    }
+    send_json(req, status, out);
+    free(out);
+}
+
+cJSON *recv_json_object(httpd_req_t *req) {
+    int err_status = 0;
+    size_t len = 0;
+    char *body = recv_body_json(req, &len, &err_status);
+    if (!body) {
+        if (err_status == 413) {
+            send_json_error(req, 413, "PAYLOAD_TOO_LARGE", "Request body too large");
+        } else {
+            send_json_error(req, err_status ? err_status : 500, "READ_BODY",
+                            "Failed to read request body");
+        }
+        return NULL;
+    }
+    cJSON *root = cJSON_ParseWithLength(body, len);
+    free(body);
+    if (!root || !cJSON_IsObject(root)) {
+        if (root) cJSON_Delete(root);
+        send_json_error(req, 400, "INVALID_JSON", "Invalid JSON");
+        return NULL;
+    }
+    return root;
+}
+
+const char *json_get_string(const cJSON *obj, const char *key, const char *def) {
+    const cJSON *it = cJSON_GetObjectItem(obj, key);
+    return (cJSON_IsString(it) && it->valuestring) ? it->valuestring : def;
+}
+
+int json_get_int(const cJSON *obj, const char *key, int def) {
+    const cJSON *it = cJSON_GetObjectItem(obj, key);
+    return cJSON_IsNumber(it) ? it->valueint : def;
+}
+
+bool json_get_bool(const cJSON *obj, const char *key, bool def) {
+    const cJSON *it = cJSON_GetObjectItem(obj, key);
+    return cJSON_IsBool(it) ? cJSON_IsTrue(it) : def;
+}
+
+const char *pick_mode_str(int mode) {
+    switch ((ps_pick_mode_t)mode) {
+        case PS_PICK_RECENCY: return "recency";
+        case PS_PICK_RANDOM:  return "random";
+        default:              return "unknown";
+    }
 }
 
 bool ensure_json_content(httpd_req_t *req) {

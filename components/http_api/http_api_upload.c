@@ -35,20 +35,20 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     char ANIMATIONS_DIR[128];
     if (sd_path_get_temporary(TEMP_DIR, sizeof(TEMP_DIR)) != ESP_OK ||
         sd_path_get_animations(ANIMATIONS_DIR, sizeof(ANIMATIONS_DIR)) != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to get SD paths\",\"code\":\"PATH_ERROR\"}");
+        send_json_error(req, 500, "PATH_ERROR", "Failed to get SD paths");
         return ESP_OK;
     }
     
     // Check Content-Type
     char content_type[128] = {0};
     if (httpd_req_get_hdr_value_str(req, "Content-Type", content_type, sizeof(content_type)) != ESP_OK) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing Content-Type\",\"code\":\"MISSING_CONTENT_TYPE\"}");
+        send_json_error(req, 400, "MISSING_CONTENT_TYPE", "Missing Content-Type");
         return ESP_OK;
     }
     
     // Check if multipart/form-data
     if (strstr(content_type, "multipart/form-data") == NULL) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"Unsupported Content-Type\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Unsupported Content-Type");
         return ESP_OK;
     }
 
@@ -65,14 +65,14 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
             }
             remaining -= ret;
         }
-        send_json(req, 423, "{\"ok\":false,\"error\":\"SD card shared over USB\",\"code\":\"SD_LOCKED\"}");
+        send_json_error(req, 423, "SD_LOCKED", "SD card shared over USB");
         return ESP_OK;
     }
 
     // Extract boundary from Content-Type
     const char *boundary_str = strstr(content_type, "boundary=");
     if (!boundary_str) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing boundary\",\"code\":\"MISSING_BOUNDARY\"}");
+        send_json_error(req, 400, "MISSING_BOUNDARY", "Missing boundary");
         return ESP_OK;
     }
     boundary_str += 9; // Skip "boundary="
@@ -88,7 +88,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     // Check Content-Length
     size_t content_len = req->content_len;
     if (content_len == 0 || content_len > MAX_FILE_SIZE) {
-        send_json(req, 413, "{\"ok\":false,\"error\":\"File size exceeds 16MiB limit\",\"code\":\"FILE_TOO_LARGE\"}");
+        send_json_error(req, 413, "FILE_TOO_LARGE", "File size exceeds 16MiB limit");
         return ESP_OK;
     }
     
@@ -98,7 +98,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
         ESP_LOGI(HTTP_API_TAG, "Creating temporary directory: %s", TEMP_DIR);
         if (mkdir(TEMP_DIR, 0755) != 0) {
             ESP_LOGE(HTTP_API_TAG, "Failed to create temporary directory: %s", strerror(errno));
-            send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to create temporary directory\",\"code\":\"DIR_CREATE_FAIL\"}");
+            send_json_error(req, 500, "DIR_CREATE_FAIL", "Failed to create temporary directory");
             return ESP_OK;
         }
     }
@@ -108,7 +108,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
         ESP_LOGI(HTTP_API_TAG, "Creating animations directory: %s", ANIMATIONS_DIR);
         if (mkdir(ANIMATIONS_DIR, 0755) != 0) {
             ESP_LOGE(HTTP_API_TAG, "Failed to create animations directory: %s", strerror(errno));
-            send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to create animations directory\",\"code\":\"DIR_CREATE_FAIL\"}");
+            send_json_error(req, 500, "DIR_CREATE_FAIL", "Failed to create animations directory");
             return ESP_OK;
         }
     }
@@ -122,7 +122,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
         fp = fopen(temp_path, "wb");
         if (!fp) {
             ESP_LOGE(HTTP_API_TAG, "Failed to open temp file for writing: %s", strerror(errno));
-            send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to open file\",\"code\":\"FILE_OPEN_FAIL\"}");
+            send_json_error(req, 500, "FILE_OPEN_FAIL", "Failed to open file");
             return ESP_OK;
         }
     }
@@ -155,7 +155,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
             fclose(fp);
             unlink(temp_path);
         }
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Out of memory\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
     
@@ -373,19 +373,19 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     // Validate upload completed without errors
     if (write_error) {
         unlink(temp_path);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to write file to SD card\",\"code\":\"WRITE_ERROR\"}");
+        send_json_error(req, 500, "WRITE_ERROR", "Failed to write file to SD card");
         return ESP_OK;
     }
 
     if (!boundary_found) {
         unlink(temp_path);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Boundary not found or incomplete upload\",\"code\":\"MALFORMED_DATA\"}");
+        send_json_error(req, 400, "MALFORMED_DATA", "Boundary not found or incomplete upload");
         return ESP_OK;
     }
     
     if (!found_filename || strlen(filename) == 0) {
         unlink(temp_path);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"No filename in upload\",\"code\":\"NO_FILENAME\"}");
+        send_json_error(req, 400, "NO_FILENAME", "No filename in upload");
         return ESP_OK;
     }
 
@@ -400,7 +400,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     }
     if (strlen(filename) == 0 || strstr(filename, "..") != NULL) {
         unlink(temp_path);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid filename\",\"code\":\"INVALID_FILENAME\"}");
+        send_json_error(req, 400, "INVALID_FILENAME", "Invalid filename");
         return ESP_OK;
     }
     
@@ -408,7 +408,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     const char *ext = strrchr(filename, '.');
     if (!ext) {
         unlink(temp_path);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"File must have an extension\",\"code\":\"INVALID_EXTENSION\"}");
+        send_json_error(req, 400, "INVALID_EXTENSION", "File must have an extension");
         return ESP_OK;
     }
     ext++; // Skip the dot
@@ -422,7 +422,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     
     if (!valid_ext) {
         unlink(temp_path);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Unsupported file type. Use WebP, GIF, JPG, JPEG, or PNG\",\"code\":\"UNSUPPORTED_TYPE\"}");
+        send_json_error(req, 400, "UNSUPPORTED_TYPE", "Unsupported file type. Use WebP, GIF, JPG, JPEG, or PNG");
         return ESP_OK;
     }
     
@@ -452,7 +452,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     if (rename(temp_path, final_path) != 0) {
         ESP_LOGE(HTTP_API_TAG, "Failed to move file: %s", strerror(errno));
         unlink(temp_path);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to save file\",\"code\":\"FILE_SAVE_FAIL\"}");
+        send_json_error(req, 500, "FILE_SAVE_FAIL", "Failed to save file");
         return ESP_OK;
     }
     

@@ -41,35 +41,17 @@ extern void proc_notif_start(void) __attribute__((weak));
  */
 esp_err_t h_post_channel(httpd_req_t *req) {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
     if (slave_ota_is_in_progress()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"OTA_IN_PROGRESS\",\"code\":\"OTA_IN_PROGRESS\"}");
+        send_json_error(req, 503, "OTA_IN_PROGRESS", "Firmware update in progress");
         return ESP_OK;
     }
 
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        if (err_status == 413) {
-            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
-        } else {
-            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        }
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
 
     // Parse: exactly ONE of channel_name, hashtag, or user_sqid
     cJSON *channel_name = cJSON_GetObjectItem(root, "channel_name");
@@ -92,19 +74,19 @@ esp_err_t h_post_channel(httpd_req_t *req) {
         err = playback_service_play_user_channel(sqid);
     } else {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing channel_name, hashtag, or user_sqid\",\"code\":\"INVALID_REQUEST\"}");
+        send_json_error(req, 400, "INVALID_REQUEST", "Missing channel_name, hashtag, or user_sqid");
         return ESP_OK;
     }
 
     cJSON_Delete(root);
 
     if (err == ESP_ERR_INVALID_ARG) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid channel\",\"code\":\"INVALID_CHANNEL\"}");
+        send_json_error(req, 400, "INVALID_CHANNEL", "Invalid channel");
         return ESP_OK;
     }
 
     if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Channel switch failed\",\"code\":\"CHANNEL_SWITCH_FAILED\"}");
+        send_json_error(req, 500, "CHANNEL_SWITCH_FAILED", "Channel switch failed");
         return ESP_OK;
     }
 
@@ -165,7 +147,7 @@ esp_err_t h_get_channel(httpd_req_t *req) {
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         free(active);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -175,7 +157,7 @@ esp_err_t h_get_channel(httpd_req_t *req) {
     if (!data) {
         free(active);
         cJSON_Delete(root);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -184,16 +166,7 @@ esp_err_t h_get_channel(httpd_req_t *req) {
     cJSON_AddItemToObject(root, "data", data);
     free(active);
 
-    char *out = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    if (!out) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, out);
-    free(out);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -204,12 +177,12 @@ esp_err_t h_get_channel(httpd_req_t *req) {
  */
 esp_err_t h_post_reboot(httpd_req_t *req) {
     if (req->content_len > 0 && !ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
     if (!api_enqueue_reboot()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
+        send_json_error(req, 503, "QUEUE_FULL", "Queue full");
         return ESP_OK;
     }
 
@@ -222,11 +195,11 @@ esp_err_t h_post_reboot(httpd_req_t *req) {
  */
 esp_err_t h_post_swap_next(httpd_req_t *req) {
     if (req->content_len > 0 && !ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
     if (!api_enqueue_swap_next()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
+        send_json_error(req, 503, "QUEUE_FULL", "Queue full");
         return ESP_OK;
     }
     // Start processing notification after confirming swap was queued
@@ -243,11 +216,11 @@ esp_err_t h_post_swap_next(httpd_req_t *req) {
  */
 esp_err_t h_post_swap_back(httpd_req_t *req) {
     if (req->content_len > 0 && !ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
     if (!api_enqueue_swap_back()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
+        send_json_error(req, 503, "QUEUE_FULL", "Queue full");
         return ESP_OK;
     }
     // Start processing notification after confirming swap was queued
@@ -264,12 +237,12 @@ esp_err_t h_post_swap_back(httpd_req_t *req) {
  */
 esp_err_t h_post_pause(httpd_req_t *req) {
     if (req->content_len > 0 && !ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
     if (!api_enqueue_pause()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
+        send_json_error(req, 503, "QUEUE_FULL", "Queue full");
         return ESP_OK;
     }
 
@@ -282,12 +255,12 @@ esp_err_t h_post_pause(httpd_req_t *req) {
  */
 esp_err_t h_post_resume(httpd_req_t *req) {
     if (req->content_len > 0 && !ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
     if (!api_enqueue_resume()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"Queue full\",\"code\":\"QUEUE_FULL\"}");
+        send_json_error(req, 503, "QUEUE_FULL", "Queue full");
         return ESP_OK;
     }
 
@@ -304,7 +277,7 @@ esp_err_t h_post_resume(httpd_req_t *req) {
  */
 esp_err_t h_post_reset_dwell_timer(httpd_req_t *req) {
     if (req->content_len > 0 && !ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
     play_scheduler_reset_timer();
@@ -322,33 +295,17 @@ esp_err_t h_post_reset_dwell_timer(httpd_req_t *req) {
  */
 esp_err_t h_post_show_url(httpd_req_t *req) {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
-    int err_status = 0;
-    size_t body_len = 0;
-    char *body = recv_body_json(req, &body_len, &err_status);
-    if (!body) {
-        char err_msg[128];
-        snprintf(err_msg, sizeof(err_msg),
-                 "{\"ok\":false,\"error\":\"Failed to read body\",\"code\":\"BODY_READ_ERROR\"}");
-        send_json(req, err_status ? err_status : 400, err_msg);
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_Parse(body);
-    free(body);
-
-    if (!root) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
 
     cJSON *artwork_url = cJSON_GetObjectItem(root, "artwork_url");
     if (!artwork_url || !cJSON_IsString(artwork_url) || cJSON_GetStringValue(artwork_url)[0] == '\0') {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or empty 'artwork_url'\",\"code\":\"MISSING_FIELD\"}");
+        send_json_error(req, 400, "MISSING_FIELD", "Missing or empty 'artwork_url'");
         return ESP_OK;
     }
 
@@ -363,11 +320,8 @@ esp_err_t h_post_show_url(httpd_req_t *req) {
     cJSON_Delete(root);
 
     if (err != ESP_OK) {
-        char err_msg[128];
-        snprintf(err_msg, sizeof(err_msg),
-                 "{\"ok\":false,\"error\":\"Failed to start download: %s\",\"code\":\"START_FAILED\"}",
-                 esp_err_to_name(err));
-        send_json(req, 500, err_msg);
+        send_json_errorf(req, 500, "START_FAILED", "Failed to start download: %s",
+                         esp_err_to_name(err));
         return ESP_OK;
     }
 
@@ -385,38 +339,22 @@ esp_err_t h_post_show_url(httpd_req_t *req) {
  */
 esp_err_t h_post_swap_to(httpd_req_t *req) {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
     if (slave_ota_is_in_progress()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"OTA_IN_PROGRESS\",\"code\":\"OTA_IN_PROGRESS\"}");
+        send_json_error(req, 503, "OTA_IN_PROGRESS", "Firmware update in progress");
         return ESP_OK;
     }
 
-    int err_status = 0;
-    size_t body_len = 0;
-    char *body = recv_body_json(req, &body_len, &err_status);
-    if (!body) {
-        char err_msg[128];
-        snprintf(err_msg, sizeof(err_msg),
-                 "{\"ok\":false,\"error\":\"Failed to read body\",\"code\":\"BODY_READ_ERROR\"}");
-        send_json(req, err_status ? err_status : 400, err_msg);
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_Parse(body);
-    free(body);
-
-    if (!root) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
 
     cJSON *channel = cJSON_GetObjectItem(root, "channel");
     if (!channel || !cJSON_IsString(channel)) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing 'channel'\",\"code\":\"MISSING_FIELD\"}");
+        send_json_error(req, 400, "MISSING_FIELD", "Missing 'channel'");
         return ESP_OK;
     }
 
@@ -428,7 +366,7 @@ esp_err_t h_post_swap_to(httpd_req_t *req) {
         cJSON *filename_item = cJSON_GetObjectItem(root, "filename");
         if (!filename_item || !cJSON_IsString(filename_item) || cJSON_GetStringValue(filename_item)[0] == '\0') {
             cJSON_Delete(root);
-            send_json(req, 400, "{\"ok\":false,\"error\":\"Missing 'filename' for sdcard channel\",\"code\":\"MISSING_FIELD\"}");
+            send_json_error(req, 400, "MISSING_FIELD", "Missing 'filename' for sdcard channel");
             return ESP_OK;
         }
 
@@ -438,7 +376,7 @@ esp_err_t h_post_swap_to(httpd_req_t *req) {
         char animations_dir[128];
         if (sd_path_get_animations(animations_dir, sizeof(animations_dir)) != ESP_OK) {
             cJSON_Delete(root);
-            send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to get animations path\",\"code\":\"PATH_ERROR\"}");
+            send_json_error(req, 500, "PATH_ERROR", "Failed to get animations path");
             return ESP_OK;
         }
 
@@ -448,7 +386,7 @@ esp_err_t h_post_swap_to(httpd_req_t *req) {
         struct stat st;
         if (stat(filepath, &st) != 0) {
             cJSON_Delete(root);
-            send_json(req, 404, "{\"ok\":false,\"error\":\"File not found in animations directory\",\"code\":\"NOT_FOUND\"}");
+            send_json_error(req, 404, "NOT_FOUND", "File not found in animations directory");
             return ESP_OK;
         }
 
@@ -461,17 +399,17 @@ esp_err_t h_post_swap_to(httpd_req_t *req) {
 
         if (!post_id_item || !cJSON_IsNumber(post_id_item)) {
             cJSON_Delete(root);
-            send_json(req, 400, "{\"ok\":false,\"error\":\"Missing 'post_id' for Makapix channel\",\"code\":\"MISSING_FIELD\"}");
+            send_json_error(req, 400, "MISSING_FIELD", "Missing 'post_id' for Makapix channel");
             return ESP_OK;
         }
         if (!storage_key_item || !cJSON_IsString(storage_key_item)) {
             cJSON_Delete(root);
-            send_json(req, 400, "{\"ok\":false,\"error\":\"Missing 'storage_key' for Makapix channel\",\"code\":\"MISSING_FIELD\"}");
+            send_json_error(req, 400, "MISSING_FIELD", "Missing 'storage_key' for Makapix channel");
             return ESP_OK;
         }
         if (!art_url_item || !cJSON_IsString(art_url_item)) {
             cJSON_Delete(root);
-            send_json(req, 400, "{\"ok\":false,\"error\":\"Missing 'art_url' for Makapix channel\",\"code\":\"MISSING_FIELD\"}");
+            send_json_error(req, 400, "MISSING_FIELD", "Missing 'art_url' for Makapix channel");
             return ESP_OK;
         }
 
@@ -486,11 +424,7 @@ esp_err_t h_post_swap_to(httpd_req_t *req) {
     cJSON_Delete(root);
 
     if (err != ESP_OK) {
-        char err_msg[128];
-        snprintf(err_msg, sizeof(err_msg),
-                 "{\"ok\":false,\"error\":\"Swap failed: %s\",\"code\":\"SWAP_FAILED\"}",
-                 esp_err_to_name(err));
-        send_json(req, 500, err_msg);
+        send_json_errorf(req, 500, "SWAP_FAILED", "Swap failed: %s", esp_err_to_name(err));
         return ESP_OK;
     }
 
@@ -507,31 +441,17 @@ esp_err_t h_post_swap_to(httpd_req_t *req) {
  */
 esp_err_t h_post_provision(httpd_req_t *req) {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
-    int err_status = 0;
-    size_t body_len = 0;
-    char *body = recv_body_json(req, &body_len, &err_status);
-    if (!body) {
-        send_json(req, err_status ? err_status : 400,
-                  "{\"ok\":false,\"error\":\"Failed to read body\",\"code\":\"BODY_READ_ERROR\"}");
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_Parse(body);
-    free(body);
-
-    if (!root) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
 
     cJSON *enable_item = cJSON_GetObjectItem(root, "enable");
     if (!enable_item || !cJSON_IsBool(enable_item)) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing 'enable' boolean\",\"code\":\"MISSING_FIELD\"}");
+        send_json_error(req, 400, "MISSING_FIELD", "Missing 'enable' boolean");
         return ESP_OK;
     }
 
@@ -542,8 +462,7 @@ esp_err_t h_post_provision(httpd_req_t *req) {
         // Enter provisioning
         p3a_state_t current = p3a_state_get();
         if (current != P3A_STATE_ANIMATION_PLAYBACK) {
-            send_json(req, 409,
-                      "{\"ok\":false,\"error\":\"Device must be in playback state\",\"code\":\"INVALID_STATE\"}");
+            send_json_error(req, 409, "INVALID_STATE", "Device must be in playback state");
             return ESP_OK;
         }
 
@@ -553,8 +472,7 @@ esp_err_t h_post_provision(httpd_req_t *req) {
             if (current == P3A_STATE_ANIMATION_PLAYBACK) {
                 ESP_LOGW("HTTP", "State transition denied, forcing provisioning from playback");
             } else {
-                send_json(req, 409,
-                          "{\"ok\":false,\"error\":\"State transition denied\",\"code\":\"INVALID_STATE\"}");
+                send_json_error(req, 409, "INVALID_STATE", "State transition denied");
                 return ESP_OK;
             }
         }
@@ -580,13 +498,13 @@ esp_err_t h_post_provision(httpd_req_t *req) {
  */
 esp_err_t h_post_makapix_unregister(httpd_req_t *req) {
     if (!makapix_store_has_player_key()) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"Not registered\",\"code\":\"NOT_REGISTERED\"}");
+        send_json_error(req, 409, "NOT_REGISTERED", "Not registered");
         return ESP_OK;
     }
 
     esp_err_t err = makapix_unregister();
     if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Unregister failed\",\"code\":\"UNREGISTER_FAILED\"}");
+        send_json_error(req, 500, "UNREGISTER_FAILED", "Unregister failed");
         return ESP_OK;
     }
 
@@ -612,26 +530,12 @@ esp_err_t h_post_makapix_unregister(httpd_req_t *req) {
 esp_err_t h_post_action_reaction(httpd_req_t *req)
 {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        send_json(req, err_status ? err_status : 500,
-                  "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
 
     cJSON *action_item = cJSON_GetObjectItem(root, "action");
     cJSON *post_id_item = cJSON_GetObjectItem(root, "post_id");
@@ -639,7 +543,7 @@ esp_err_t h_post_action_reaction(httpd_req_t *req)
 
     if (!action_item || !cJSON_IsString(action_item)) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'action'\",\"code\":\"INVALID_ACTION\"}");
+        send_json_error(req, 400, "INVALID_ACTION", "Missing or invalid 'action'");
         return ESP_OK;
     }
     const char *action = cJSON_GetStringValue(action_item);
@@ -650,7 +554,7 @@ esp_err_t h_post_action_reaction(httpd_req_t *req)
         is_submit = false;
     } else {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"action must be 'submit' or 'revoke'\",\"code\":\"INVALID_ACTION\"}");
+        send_json_error(req, 400, "INVALID_ACTION", "action must be 'submit' or 'revoke'");
         return ESP_OK;
     }
 
@@ -659,7 +563,7 @@ esp_err_t h_post_action_reaction(httpd_req_t *req)
                         cJSON_GetStringValue(giphy_id_item)[0] != '\0';
     if (has_post_id == has_giphy_id) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Provide exactly one of post_id or giphy_id\",\"code\":\"INVALID_REQUEST\"}");
+        send_json_error(req, 400, "INVALID_REQUEST", "Provide exactly one of post_id or giphy_id");
         return ESP_OK;
     }
 
@@ -670,21 +574,21 @@ esp_err_t h_post_action_reaction(httpd_req_t *req)
         int32_t post_id = (int32_t)cJSON_GetNumberValue(post_id_item);
         cJSON_Delete(root);
         if (post_id <= 0) {
-            send_json(req, 400, "{\"ok\":false,\"error\":\"post_id must be positive\",\"code\":\"INVALID_REQUEST\"}");
+            send_json_error(req, 400, "INVALID_REQUEST", "post_id must be positive");
             return ESP_OK;
         }
         if (current_source != POST_SOURCE_MAKAPIX || p3a_current_post_get_id() != post_id) {
-            send_json(req, 409, "{\"ok\":false,\"error\":\"post_id does not match the currently displayed artwork\",\"code\":\"STALE_POST\"}");
+            send_json_error(req, 409, "STALE_POST", "post_id does not match the currently displayed artwork");
             return ESP_OK;
         }
         derr = is_submit ? p3a_reaction_dispatch_makapix_submit(post_id)
                          : p3a_reaction_dispatch_makapix_revoke(post_id);
         if (derr == ESP_ERR_INVALID_STATE) {
-            send_json(req, 503, "{\"ok\":false,\"error\":\"Makapix MQTT not connected\",\"code\":\"MQTT_NOT_CONNECTED\"}");
+            send_json_error(req, 503, "MQTT_NOT_CONNECTED", "Makapix MQTT not connected");
             return ESP_OK;
         }
         if (derr != ESP_OK) {
-            send_json(req, 500, "{\"ok\":false,\"error\":\"Dispatch failed\",\"code\":\"DISPATCH_FAILED\"}");
+            send_json_error(req, 500, "DISPATCH_FAILED", "Dispatch failed");
             return ESP_OK;
         }
         send_json(req, 200, "{\"ok\":true}");
@@ -694,7 +598,7 @@ esp_err_t h_post_action_reaction(httpd_req_t *req)
     // Giphy path
     if (!is_submit) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"revoke is not supported for Giphy\",\"code\":\"INVALID_ACTION\"}");
+        send_json_error(req, 400, "INVALID_ACTION", "revoke is not supported for Giphy");
         return ESP_OK;
     }
     char giphy_id[24];
@@ -702,22 +606,22 @@ esp_err_t h_post_action_reaction(httpd_req_t *req)
     cJSON_Delete(root);
 
     if (current_source != POST_SOURCE_GIPHY) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"Current artwork is not from Giphy\",\"code\":\"STALE_POST\"}");
+        send_json_error(req, 409, "STALE_POST", "Current artwork is not from Giphy");
         return ESP_OK;
     }
     char current_giphy[24];
     p3a_current_post_get_giphy_id(current_giphy, sizeof(current_giphy));
     if (strcmp(current_giphy, giphy_id) != 0) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"giphy_id does not match the currently displayed artwork\",\"code\":\"STALE_POST\"}");
+        send_json_error(req, 409, "STALE_POST", "giphy_id does not match the currently displayed artwork");
         return ESP_OK;
     }
     derr = p3a_reaction_dispatch_giphy_click(giphy_id);
     if (derr == ESP_ERR_INVALID_STATE) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"Giphy API key or random_id not configured\",\"code\":\"GIPHY_NOT_CONFIGURED\"}");
+        send_json_error(req, 503, "GIPHY_NOT_CONFIGURED", "Giphy API key or random_id not configured");
         return ESP_OK;
     }
     if (derr != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Dispatch failed\",\"code\":\"DISPATCH_FAILED\"}");
+        send_json_error(req, 500, "DISPATCH_FAILED", "Dispatch failed");
         return ESP_OK;
     }
     send_json(req, 200, "{\"ok\":true}");
@@ -733,7 +637,7 @@ esp_err_t h_post_action_reaction(httpd_req_t *req)
 esp_err_t h_post_giphy_reset_random_id(httpd_req_t *req) {
     esp_err_t err = config_store_delete_giphy_random_id();
     if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to delete random_id\",\"code\":\"DELETE_FAILED\"}");
+        send_json_error(req, 500, "DELETE_FAILED", "Failed to delete random_id");
         return ESP_OK;
     }
 
@@ -757,24 +661,11 @@ esp_err_t h_post_giphy_reset_random_id(httpd_req_t *req) {
 static esp_err_t pin_or_unpin_handler(httpd_req_t *req, bool is_unpin)
 {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        send_json(req, err_status ? err_status : 500,
-                  "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        return ESP_OK;
-    }
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
     cJSON *post_id_item  = cJSON_GetObjectItem(root, "post_id");
     cJSON *giphy_id_item = cJSON_GetObjectItem(root, "giphy_id");
     cJSON *list_item     = cJSON_GetObjectItem(root, "list");
@@ -790,7 +681,7 @@ static esp_err_t pin_or_unpin_handler(httpd_req_t *req, bool is_unpin)
                         cJSON_GetStringValue(giphy_id_item)[0] != '\0';
     if (has_post_id == has_giphy_id) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Provide exactly one of post_id or giphy_id\",\"code\":\"INVALID_REQUEST\"}");
+        send_json_error(req, 400, "INVALID_REQUEST", "Provide exactly one of post_id or giphy_id");
         return ESP_OK;
     }
 
@@ -799,25 +690,25 @@ static esp_err_t pin_or_unpin_handler(httpd_req_t *req, bool is_unpin)
         strlcpy(body_gid, cJSON_GetStringValue(giphy_id_item), sizeof(body_gid));
         cJSON_Delete(root);
         if (current_source != POST_SOURCE_GIPHY) {
-            send_json(req, 409, "{\"ok\":false,\"error\":\"Current artwork is not from Giphy\",\"code\":\"STALE_POST\"}");
+            send_json_error(req, 409, "STALE_POST", "Current artwork is not from Giphy");
             return ESP_OK;
         }
         char cur_gid[24];
         p3a_current_post_get_giphy_id(cur_gid, sizeof(cur_gid));
         if (strcmp(cur_gid, body_gid) != 0) {
-            send_json(req, 409, "{\"ok\":false,\"error\":\"giphy_id does not match the currently displayed artwork\",\"code\":\"STALE_POST\"}");
+            send_json_error(req, 409, "STALE_POST", "giphy_id does not match the currently displayed artwork");
             return ESP_OK;
         }
     } else {
         int32_t post_id = (int32_t)cJSON_GetNumberValue(post_id_item);
         cJSON_Delete(root);
         if (post_id <= 0) {
-            send_json(req, 400, "{\"ok\":false,\"error\":\"post_id must be positive\",\"code\":\"INVALID_REQUEST\"}");
+            send_json_error(req, 400, "INVALID_REQUEST", "post_id must be positive");
             return ESP_OK;
         }
         if ((current_source != POST_SOURCE_MAKAPIX && current_source != POST_SOURCE_INSTITUTION) ||
             p3a_current_post_get_id() != post_id) {
-            send_json(req, 409, "{\"ok\":false,\"error\":\"post_id does not match the currently displayed artwork\",\"code\":\"STALE_POST\"}");
+            send_json_error(req, 409, "STALE_POST", "post_id does not match the currently displayed artwork");
             return ESP_OK;
         }
     }
@@ -828,11 +719,11 @@ static esp_err_t pin_or_unpin_handler(httpd_req_t *req, bool is_unpin)
         ? p3a_pin_dispatch_unpin_from_current(slug[0] ? slug : NULL)
         : p3a_pin_dispatch_from_current(slug[0] ? slug : NULL);
     if (derr == ESP_ERR_NOT_SUPPORTED) {
-        send_json(req, 501, "{\"ok\":false,\"error\":\"Source not yet supported\",\"code\":\"NOT_SUPPORTED\"}");
+        send_json_error(req, 501, "NOT_SUPPORTED", "Source not yet supported");
         return ESP_OK;
     }
     if (derr != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Dispatch failed\",\"code\":\"DISPATCH_FAILED\"}");
+        send_json_error(req, 500, "DISPATCH_FAILED", "Dispatch failed");
         return ESP_OK;
     }
     send_json(req, 200, "{\"ok\":true}");

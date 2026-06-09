@@ -27,7 +27,7 @@ esp_err_t h_get_museum_rate_limits(httpd_req_t *req)
 {
     cJSON *root = cJSON_CreateObject();
     if (!root) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"NO_MEM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -41,44 +41,25 @@ esp_err_t h_get_museum_rate_limits(httpd_req_t *req)
         cJSON_AddItemToObject(root, m->id, obj);
     }
 
-    char *body = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (!body) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"SERIALIZE\"}");
-        return ESP_OK;
-    }
-    send_json(req, 200, body);
-    free(body);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
 esp_err_t h_post_museum_report_429(httpd_req_t *req)
 {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
-    int err_status = 0;
-    size_t body_len = 0;
-    char *body = recv_body_json(req, &body_len, &err_status);
-    if (!body) {
-        send_json(req, err_status ? err_status : 400, "{\"ok\":false,\"error\":\"BAD_BODY\"}");
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_Parse(body);
-    free(body);
-    if (!root) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"BAD_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
 
     const cJSON *museum = cJSON_GetObjectItemCaseSensitive(root, "museum");
     const cJSON *retry  = cJSON_GetObjectItemCaseSensitive(root, "retry_after_sec");
     if (!cJSON_IsString(museum) || !museum->valuestring || !museum->valuestring[0]) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"MUSEUM_REQUIRED\"}");
+        send_json_error(req, 400, "MUSEUM_REQUIRED", "Missing 'museum' string");
         return ESP_OK;
     }
 

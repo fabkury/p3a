@@ -41,16 +41,6 @@ static bool is_valid_playset_name(const char *name, size_t len)
     return true;
 }
 
-// ---------- Playset Mode String Helpers ----------
-
-static const char *pick_mode_str(ps_pick_mode_t m) {
-    switch (m) {
-        case PS_PICK_RECENCY: return "recency";
-        case PS_PICK_RANDOM:  return "random";
-        default:              return "unknown";
-    }
-}
-
 // ---------- FNV-1a (used for the /playsets/active weak ETag) ----------
 //
 // Just needs to flip when any tracked field changes. No cryptographic
@@ -316,7 +306,7 @@ esp_err_t h_post_playset(httpd_req_t *req)
     size_t prefix_len = strlen(prefix);
 
     if (strncmp(uri, prefix, prefix_len) != 0) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset path\",\"code\":\"INVALID_PATH\"}");
+        send_json_error(req, 400, "INVALID_PATH", "Invalid playset path");
         return ESP_OK;
     }
 
@@ -327,20 +317,20 @@ esp_err_t h_post_playset(httpd_req_t *req)
 
     size_t name_len = strlen(name);
     if (!is_valid_playset_name(name, name_len)) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset name\",\"code\":\"INVALID_NAME\"}");
+        send_json_error(req, 400, "INVALID_NAME", "Invalid playset name");
         return ESP_OK;
     }
 
     // Screen-affecting switches are dropped during the slave OTA, matching
     // the /action/swap_to gate and the MQTT command path.
     if (slave_ota_is_in_progress()) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"OTA in progress\",\"code\":\"OTA_IN_PROGRESS\"}");
+        send_json_error(req, 503, "OTA_IN_PROGRESS", "OTA in progress");
         return ESP_OK;
     }
 
     ps_playset_t *playset = psram_calloc(1, sizeof(ps_playset_t));
     if (!playset) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -367,7 +357,7 @@ esp_err_t h_post_playset(httpd_req_t *req)
             by_name = true;
         } else {
             free(playset);
-            send_json(req, 503, "{\"ok\":false,\"error\":\"Not connected and no cached playset\",\"code\":\"NOT_CONNECTED\"}");
+            send_json_error(req, 503, "NOT_CONNECTED", "Not connected and no cached playset");
             return ESP_OK;
         }
     }
@@ -387,7 +377,7 @@ esp_err_t h_post_playset(httpd_req_t *req)
         }
     }
     if (enq != ESP_OK) {
-        send_json(req, 503, "{\"ok\":false,\"error\":\"Switch worker unavailable\",\"code\":\"SWITCH_UNAVAILABLE\"}");
+        send_json_error(req, 503, "SWITCH_UNAVAILABLE", "Switch worker unavailable");
         return ESP_OK;
     }
 
@@ -396,7 +386,7 @@ esp_err_t h_post_playset(httpd_req_t *req)
     // now-playing card from the status poll once the switch lands.
     cJSON *root = cJSON_CreateObject();
     if (!root) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -409,16 +399,7 @@ esp_err_t h_post_playset(httpd_req_t *req)
     cJSON_AddBoolToObject(root, "from_cache", from_cache);
     cJSON_AddBoolToObject(root, "builtin", is_builtin);
 
-    char *out = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    if (!out) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, out);
-    free(out);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -583,7 +564,7 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     if (!root) {
         free(active);
         free(ch_details);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -668,20 +649,12 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
         }
     }
 
-    char *out = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
     free(active);
     free(ch_details);
 
-    if (!out) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
     httpd_resp_set_hdr(req, "ETag", etag);
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
-    send_json(req, 200, out);
-    free(out);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -693,7 +666,7 @@ esp_err_t h_get_playsets(httpd_req_t *req)
 {
     playset_list_entry_t *entries = calloc(32, sizeof(playset_list_entry_t));
     if (!entries) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -701,14 +674,14 @@ esp_err_t h_get_playsets(httpd_req_t *req)
     esp_err_t err = playset_store_list(entries, 32, &count);
     if (err != ESP_OK) {
         free(entries);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to list playsets\",\"code\":\"LIST_ERROR\"}");
+        send_json_error(req, 500, "LIST_ERROR", "Failed to list playsets");
         return ESP_OK;
     }
 
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         free(entries);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -727,15 +700,7 @@ esp_err_t h_get_playsets(httpd_req_t *req)
 
     free(entries);
 
-    char *out = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (!out) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, out);
-    free(out);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -750,7 +715,7 @@ esp_err_t h_get_playset_by_name(httpd_req_t *req)
     size_t prefix_len = 10; // strlen("/playsets/")
 
     if (strncmp(uri, prefix, prefix_len) != 0 || uri[prefix_len] == '\0') {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid path\",\"code\":\"INVALID_PATH\"}");
+        send_json_error(req, 400, "INVALID_PATH", "Invalid path");
         return ESP_OK;
     }
 
@@ -766,7 +731,7 @@ esp_err_t h_get_playset_by_name(httpd_req_t *req)
 
     size_t name_len = strlen(name);
     if (!is_valid_playset_name(name, name_len)) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset name\",\"code\":\"INVALID_NAME\"}");
+        send_json_error(req, 400, "INVALID_NAME", "Invalid playset name");
         return ESP_OK;
     }
 
@@ -777,18 +742,18 @@ esp_err_t h_get_playset_by_name(httpd_req_t *req)
 
     ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
     if (!playset) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
     esp_err_t err = playset_store_load(name, playset);
     if (err == ESP_ERR_NOT_FOUND) {
         free(playset);
-        send_json(req, 404, "{\"ok\":false,\"error\":\"Playset not found\",\"code\":\"NOT_FOUND\"}");
+        send_json_error(req, 404, "NOT_FOUND", "Playset not found");
         return ESP_OK;
     } else if (err != ESP_OK) {
         free(playset);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to load playset\",\"code\":\"LOAD_ERROR\"}");
+        send_json_error(req, 500, "LOAD_ERROR", "Failed to load playset");
         return ESP_OK;
     }
 
@@ -812,7 +777,7 @@ esp_err_t h_get_playset_by_name(httpd_req_t *req)
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         free(playset);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -823,22 +788,14 @@ esp_err_t h_get_playset_by_name(httpd_req_t *req)
 
     if (!data_obj) {
         cJSON_Delete(root);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
     cJSON_AddItemToObject(root, "data", data_obj);
     cJSON_AddBoolToObject(root, "activated", activated);
 
-    char *out = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (!out) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, out);
-    free(out);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -853,7 +810,7 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
     size_t prefix_len = 10;
 
     if (strncmp(uri, prefix, prefix_len) != 0 || uri[prefix_len] == '\0') {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid path\",\"code\":\"INVALID_PATH\"}");
+        send_json_error(req, 400, "INVALID_PATH", "Invalid path");
         return ESP_OK;
     }
 
@@ -869,7 +826,7 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
 
     size_t name_len = strlen(name);
     if (!is_valid_playset_name(name, name_len)) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset name\",\"code\":\"INVALID_NAME\"}");
+        send_json_error(req, 400, "INVALID_NAME", "Invalid playset name");
         return ESP_OK;
     }
 
@@ -879,31 +836,18 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
     static const char *protected_playsets[] = { "followed_artists" };
     for (size_t i = 0; i < sizeof(protected_playsets) / sizeof(protected_playsets[0]); i++) {
         if (strcmp(name, protected_playsets[i]) == 0) {
-            send_json(req, 403, "{\"ok\":false,\"error\":\"Cannot overwrite protected playset\",\"code\":\"PROTECTED_PLAYSET\"}");
+            send_json_error(req, 403, "PROTECTED_PLAYSET", "Cannot overwrite protected playset");
             return ESP_OK;
         }
     }
 
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
-    int err_status;
-    size_t body_len;
-    char *body = recv_body_json(req, &body_len, &err_status);
-    if (!body) {
-        send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_ParseWithLength(body, body_len);
-    free(body);
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
 
     // Extract optional "activate" boolean
     bool activate = false;
@@ -924,7 +868,7 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
     ps_playset_t *playset = calloc(1, sizeof(ps_playset_t));
     if (!playset) {
         cJSON_Delete(root);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -933,7 +877,7 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
 
     if (parse_err != ESP_OK) {
         free(playset);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset definition\",\"code\":\"INVALID_PLAYSET\"}");
+        send_json_error(req, 400, "INVALID_PLAYSET", "Invalid playset definition");
         return ESP_OK;
     }
 
@@ -941,11 +885,8 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
     esp_err_t save_err = playset_store_save(name, playset);
     if (save_err != ESP_OK) {
         free(playset);
-        char err_msg[128];
-        snprintf(err_msg, sizeof(err_msg),
-                 "{\"ok\":false,\"error\":\"Failed to save playset: %s\",\"code\":\"SAVE_ERROR\"}",
-                 esp_err_to_name(save_err));
-        send_json(req, 500, err_msg);
+        send_json_errorf(req, 500, "SAVE_ERROR", "Failed to save playset: %s",
+                         esp_err_to_name(save_err));
         return ESP_OK;
     }
 
@@ -989,7 +930,7 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
 
     cJSON *resp = cJSON_CreateObject();
     if (!resp) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -999,15 +940,7 @@ esp_err_t h_post_playset_crud(httpd_req_t *req)
     cJSON_AddBoolToObject(data, "activated", activated);
     cJSON_AddBoolToObject(data, "renamed", renamed);
 
-    char *out = cJSON_PrintUnformatted(resp);
-    cJSON_Delete(resp);
-    if (!out) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, out);
-    free(out);
+    send_json_root(req, 200, resp);
     return ESP_OK;
 }
 
@@ -1022,7 +955,7 @@ esp_err_t h_delete_playset(httpd_req_t *req)
     size_t prefix_len = 10;
 
     if (strncmp(uri, prefix, prefix_len) != 0 || uri[prefix_len] == '\0') {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid path\",\"code\":\"INVALID_PATH\"}");
+        send_json_error(req, 400, "INVALID_PATH", "Invalid path");
         return ESP_OK;
     }
 
@@ -1038,7 +971,7 @@ esp_err_t h_delete_playset(httpd_req_t *req)
 
     size_t name_len = strlen(name);
     if (!is_valid_playset_name(name, name_len)) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid playset name\",\"code\":\"INVALID_NAME\"}");
+        send_json_error(req, 400, "INVALID_NAME", "Invalid playset name");
         return ESP_OK;
     }
 
@@ -1046,19 +979,19 @@ esp_err_t h_delete_playset(httpd_req_t *req)
     static const char *protected_playsets[] = { "followed_artists" };
     for (size_t i = 0; i < sizeof(protected_playsets) / sizeof(protected_playsets[0]); i++) {
         if (strcmp(name, protected_playsets[i]) == 0) {
-            send_json(req, 403, "{\"ok\":false,\"error\":\"Cannot delete protected playset\",\"code\":\"PROTECTED_PLAYSET\"}");
+            send_json_error(req, 403, "PROTECTED_PLAYSET", "Cannot delete protected playset");
             return ESP_OK;
         }
     }
 
     if (!playset_store_exists(name)) {
-        send_json(req, 404, "{\"ok\":false,\"error\":\"Playset not found\",\"code\":\"NOT_FOUND\"}");
+        send_json_error(req, 404, "NOT_FOUND", "Playset not found");
         return ESP_OK;
     }
 
     esp_err_t err = playset_store_delete(name);
     if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to delete playset\",\"code\":\"DELETE_ERROR\"}");
+        send_json_error(req, 500, "DELETE_ERROR", "Failed to delete playset");
         return ESP_OK;
     }
 

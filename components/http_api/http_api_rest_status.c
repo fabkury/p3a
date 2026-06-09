@@ -36,16 +36,6 @@
 #include "p3a_state.h"
 #include "freertos/semphr.h"
 
-// ---------- Playset Mode String Helpers ----------
-
-static const char *pick_mode_str(ps_pick_mode_t m) {
-    switch (m) {
-        case PS_PICK_RECENCY: return "recency";
-        case PS_PICK_RANDOM:  return "random";
-        default:              return "unknown";
-    }
-}
-
 // ---------- Debug Handler (Dev Mode) ----------
 
 #if CONFIG_OTA_DEV_MODE
@@ -57,25 +47,12 @@ static const char *pick_mode_str(ps_pick_mode_t m) {
 esp_err_t h_post_debug(httpd_req_t *req)
 {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
 
     cJSON *op = cJSON_GetObjectItem(root, "op");
     cJSON *data = cJSON_GetObjectItem(root, "data");
@@ -83,13 +60,13 @@ esp_err_t h_post_debug(httpd_req_t *req)
 
     if (!op_s || !*op_s) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'op'\",\"code\":\"INVALID_REQUEST\"}");
+        send_json_error(req, 400, "INVALID_REQUEST", "Missing or invalid 'op'");
         return ESP_OK;
     }
 
     // No debug ops currently defined
     cJSON_Delete(root);
-    send_json(req, 400, "{\"ok\":false,\"error\":\"Unknown op\",\"code\":\"UNKNOWN_OP\"}");
+    send_json_error(req, 400, "UNKNOWN_OP", "Unknown op");
     return ESP_OK;
 }
 #endif // CONFIG_OTA_DEV_MODE
@@ -103,7 +80,7 @@ esp_err_t h_post_debug(httpd_req_t *req)
 esp_err_t h_get_ui_config(httpd_req_t *req) {
     cJSON *data = cJSON_CreateObject();
     if (!data) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -118,22 +95,14 @@ esp_err_t h_get_ui_config(httpd_req_t *req) {
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         cJSON_Delete(data);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
     cJSON_AddBoolToObject(root, "ok", true);
     cJSON_AddItemToObject(root, "data", data);
 
-    char *json = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (!json) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, json);
-    free(json);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -145,7 +114,7 @@ esp_err_t h_get_ui_config(httpd_req_t *req) {
 esp_err_t h_get_api_init(httpd_req_t *req) {
     cJSON *root = cJSON_CreateObject();
     if (!root) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -275,15 +244,7 @@ esp_err_t h_get_api_init(httpd_req_t *req) {
         }
     }
 
-    char *json = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (!json) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, json);
-    free(json);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -313,7 +274,7 @@ esp_err_t h_get_network_status(httpd_req_t *req) {
 
     cJSON *data = cJSON_CreateObject();
     if (!data) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -342,22 +303,14 @@ esp_err_t h_get_network_status(httpd_req_t *req) {
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         cJSON_Delete(data);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
     cJSON_AddBoolToObject(root, "ok", true);
     cJSON_AddItemToObject(root, "data", data);
 
-    char *json = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (!json) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, json);
-    free(json);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -373,7 +326,7 @@ esp_err_t h_get_status(httpd_req_t *req) {
 
     cJSON *data = cJSON_CreateObject();
     if (!data) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -505,22 +458,14 @@ esp_err_t h_get_status(httpd_req_t *req) {
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         cJSON_Delete(data);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
     cJSON_AddBoolToObject(root, "ok", true);
     cJSON_AddItemToObject(root, "data", data);
 
-    char *out = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (!out) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, out);
-    free(out);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -535,7 +480,7 @@ esp_err_t h_get_api_state(httpd_req_t *req)
 
     cJSON *data = cJSON_CreateObject();
     if (!data) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -578,22 +523,14 @@ esp_err_t h_get_api_state(httpd_req_t *req)
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         cJSON_Delete(data);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
     cJSON_AddBoolToObject(root, "ok", true);
     cJSON_AddItemToObject(root, "data", data);
 
-    char *out = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (!out) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, out);
-    free(out);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -652,7 +589,7 @@ esp_err_t h_get_device_name(httpd_req_t *req)
 
     cJSON *root = cJSON_CreateObject();
     if (!root) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -660,15 +597,7 @@ esp_err_t h_get_device_name(httpd_req_t *req)
     cJSON_AddStringToObject(root, "device_name", device_name);
     cJSON_AddStringToObject(root, "hostname", hostname);
 
-    char *json = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (!json) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, json);
-    free(json);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -680,30 +609,17 @@ esp_err_t h_get_device_name(httpd_req_t *req)
 esp_err_t h_post_device_name(httpd_req_t *req)
 {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
 
     cJSON *name_item = cJSON_GetObjectItem(root, "device_name");
     if (!name_item || !cJSON_IsString(name_item)) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing 'device_name' string\",\"code\":\"INVALID_REQUEST\"}");
+        send_json_error(req, 400, "INVALID_REQUEST", "Missing 'device_name' string");
         return ESP_OK;
     }
 
@@ -712,11 +628,11 @@ esp_err_t h_post_device_name(httpd_req_t *req)
     cJSON_Delete(root);
 
     if (err == ESP_ERR_INVALID_ARG) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid device name. Use [a-z0-9-], max 16 chars, no leading/trailing hyphen.\",\"code\":\"INVALID_NAME\"}");
+        send_json_error(req, 400, "INVALID_NAME", "Invalid device name. Use [a-z0-9-], max 16 chars, no leading/trailing hyphen.");
         return ESP_OK;
     }
     if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"SAVE_FAILED\",\"code\":\"SAVE_FAILED\"}");
+        send_json_error(req, 500, "SAVE_FAILED", "Failed to save device name");
         return ESP_OK;
     }
 
@@ -741,7 +657,7 @@ esp_err_t h_get_storage_info(httpd_req_t *req)
     uint64_t total_bytes = 0, free_bytes = 0;
     esp_err_t err = storage_eviction_get_storage_info(&total_bytes, &free_bytes);
     if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"STORAGE_QUERY\",\"code\":\"STORAGE_QUERY\"}");
+        send_json_error(req, 500, "STORAGE_QUERY", "Failed to query storage info");
         return ESP_OK;
     }
 

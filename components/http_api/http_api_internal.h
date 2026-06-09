@@ -85,6 +85,49 @@ bool ensure_json_content(httpd_req_t *req);
 char* recv_body_json(httpd_req_t *req, size_t *out_len, int *out_err_status);
 
 /**
+ * @brief Send the standardized JSON error reply:
+ *        {"ok":false,"error":"<msg>","code":"<CODE>"}
+ *
+ * @param code stable machine-readable code (e.g. "INVALID_JSON")
+ * @param msg  human-readable message (shown by the web UI toasts)
+ *
+ * Both must be plain ASCII without characters needing JSON escaping.
+ */
+void send_json_error(httpd_req_t *req, int status, const char *code, const char *msg);
+
+/** @brief send_json_error with a printf-formatted message. */
+void send_json_errorf(httpd_req_t *req, int status, const char *code, const char *fmt, ...)
+    __attribute__((format(printf, 4, 5)));
+
+/** @brief Standard out-of-memory error reply (500/"OOM"). */
+void send_json_oom(httpd_req_t *req);
+
+/**
+ * @brief Serialize @p root (unformatted), send it with @p status, free it.
+ *
+ * Consumes @p root in all cases. A NULL root or serialization failure sends
+ * the standard OOM error reply.
+ */
+void send_json_root(httpd_req_t *req, int status, cJSON *root);
+
+/**
+ * @brief Receive and parse a JSON object request body in one step.
+ *
+ * Wraps recv_body_json + cJSON parse + object check. On failure the
+ * appropriate error reply (413/500/400 INVALID_JSON) has already been sent
+ * and NULL is returned. Caller owns (cJSON_Delete) the returned object.
+ */
+cJSON *recv_json_object(httpd_req_t *req);
+
+// Typed cJSON field accessors: missing key or wrong type -> default.
+const char *json_get_string(const cJSON *obj, const char *key, const char *def);
+int json_get_int(const cJSON *obj, const char *key, int def);
+bool json_get_bool(const cJSON *obj, const char *key, bool def);
+
+/** @brief API string for a ps_pick_mode_t value ("recency"/"random"). */
+const char *pick_mode_str(int mode);
+
+/**
  * @brief URL-decode a string in place
  *
  * Decodes percent-encoded characters (e.g., %20 -> space, %26 -> &).

@@ -326,11 +326,7 @@ static void send_pin_err(httpd_req_t *req, esp_err_t err, const char *context)
         case ESP_ERR_INVALID_CRC:    status = 503; code = "CORRUPT"; break;
         default:                     status = 500; code = "INTERNAL"; break;
     }
-    char body[160];
-    snprintf(body, sizeof(body),
-             "{\"ok\":false,\"error\":\"%s\",\"code\":\"%s\"}",
-             context ? context : esp_err_to_name(err), code);
-    send_json(req, status, body);
+    send_json_error(req, status, code, context ? context : esp_err_to_name(err));
 }
 
 /* ------------------------------------------------------------------------- */
@@ -344,7 +340,7 @@ static esp_err_t h_get_collection(httpd_req_t *req)
     pin_list_info_t *infos = heap_caps_malloc(
         PIN_LISTS_MAX_LISTS * sizeof(pin_list_info_t),
         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!infos) { send_json(req, 500, "{\"ok\":false,\"code\":\"OOM\"}"); return ESP_OK; }
+    if (!infos) { send_json_oom(req); return ESP_OK; }
 
     size_t n = 0;
     esp_err_t err = pin_lists_enumerate(infos, PIN_LISTS_MAX_LISTS, &n);
@@ -362,11 +358,7 @@ static esp_err_t h_get_collection(httpd_req_t *req)
     cJSON_AddStringToObject(root, "active", active);
     free(infos);
 
-    char *out = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (!out) { send_json(req, 500, "{\"ok\":false,\"code\":\"OOM\"}"); return ESP_OK; }
-    send_json(req, 200, out);
-    free(out);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -376,11 +368,7 @@ static esp_err_t h_get_list_info(httpd_req_t *req, const char *slug)
     esp_err_t err = pin_lists_get_info(slug, &info);
     if (err != ESP_OK) { send_pin_err(req, err, "get_info"); return ESP_OK; }
     cJSON *o = json_from_list_info(&info);
-    char *out = cJSON_PrintUnformatted(o);
-    cJSON_Delete(o);
-    if (!out) { send_json(req, 500, "{\"ok\":false,\"code\":\"OOM\"}"); return ESP_OK; }
-    send_json(req, 200, out);
-    free(out);
+    send_json_root(req, 200, o);
     return ESP_OK;
 }
 
@@ -394,7 +382,7 @@ static esp_err_t h_get_items(httpd_req_t *req, const char *slug)
     if (limit > MAX_PAGE_SIZE) limit = MAX_PAGE_SIZE;
 
     pinned_order_entry_t *page = calloc(limit, sizeof(*page));
-    if (!page) { send_json(req, 500, "{\"ok\":false,\"code\":\"OOM\"}"); return ESP_OK; }
+    if (!page) { send_json_oom(req); return ESP_OK; }
 
     size_t got = 0;
     size_t total = 0;
@@ -417,11 +405,7 @@ static esp_err_t h_get_items(httpd_req_t *req, const char *slug)
     }
     free(page);
 
-    char *out = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (!out) { send_json(req, 500, "{\"ok\":false,\"code\":\"OOM\"}"); return ESP_OK; }
-    send_json(req, 200, out);
-    free(out);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -433,11 +417,7 @@ static esp_err_t h_get_item(httpd_req_t *req, const char *slug,
     if (err != ESP_OK) { send_pin_err(req, err, "get_entry"); return ESP_OK; }
 
     cJSON *o = json_from_entry_file(&entry);
-    char *out = cJSON_PrintUnformatted(o);
-    cJSON_Delete(o);
-    if (!out) { send_json(req, 500, "{\"ok\":false,\"code\":\"OOM\"}"); return ESP_OK; }
-    send_json(req, 200, out);
-    free(out);
+    send_json_root(req, 200, o);
     return ESP_OK;
 }
 
@@ -479,7 +459,7 @@ static esp_err_t h_get_item_local(httpd_req_t *req, const char *slug,
             break;
         }
         default:
-            send_json(req, 400, "{\"ok\":false,\"code\":\"BAD_SOURCE\"}");
+            send_json_error(req, 400, "BAD_SOURCE", NULL);
             return ESP_OK;
     }
 
@@ -489,13 +469,13 @@ static esp_err_t h_get_item_local(httpd_req_t *req, const char *slug,
 
     struct stat st;
     if (stat(path, &st) != 0) {
-        send_json(req, 404, "{\"ok\":false,\"code\":\"FILE_MISSING\"}");
+        send_json_error(req, 404, "FILE_MISSING", NULL);
         return ESP_OK;
     }
 
     FILE *f = fopen(path, "rb");
     if (!f) {
-        send_json(req, 500, "{\"ok\":false,\"code\":\"OPEN_FAIL\"}");
+        send_json_error(req, 500, "OPEN_FAIL", NULL);
         return ESP_OK;
     }
     httpd_resp_set_status(req, "200 OK");
@@ -521,27 +501,15 @@ static esp_err_t h_get_item_local(httpd_req_t *req, const char *slug,
 static esp_err_t h_post_create(httpd_req_t *req)
 {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", NULL);
         return ESP_OK;
     }
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"code\":\"READ_BODY\"}");
-        return ESP_OK;
-    }
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
     cJSON *name_j = cJSON_GetObjectItem(root, "name");
     if (!name_j || !cJSON_IsString(name_j) || cJSON_GetStringValue(name_j)[0] == '\0') {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"code\":\"INVALID_NAME\"}");
+        send_json_error(req, 400, "INVALID_NAME", NULL);
         return ESP_OK;
     }
     char slug[PIN_LIST_SLUG_LEN];
@@ -557,27 +525,15 @@ static esp_err_t h_post_create(httpd_req_t *req)
 static esp_err_t h_post_rename(httpd_req_t *req, const char *slug)
 {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", NULL);
         return ESP_OK;
     }
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"code\":\"READ_BODY\"}");
-        return ESP_OK;
-    }
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
     cJSON *name_j = cJSON_GetObjectItem(root, "name");
     if (!name_j || !cJSON_IsString(name_j) || cJSON_GetStringValue(name_j)[0] == '\0') {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"code\":\"INVALID_NAME\"}");
+        send_json_error(req, 400, "INVALID_NAME", NULL);
         return ESP_OK;
     }
     esp_err_t err = pin_lists_rename(slug, cJSON_GetStringValue(name_j));
@@ -628,23 +584,11 @@ static esp_err_t h_post_play(httpd_req_t *req, const char *slug)
 static esp_err_t h_post_pin_raw(httpd_req_t *req, const char *slug)
 {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", NULL);
         return ESP_OK;
     }
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"code\":\"READ_BODY\"}");
-        return ESP_OK;
-    }
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
 
     cJSON *j_source = cJSON_GetObjectItem(root, "source");
     cJSON *j_src_id = cJSON_GetObjectItem(root, "source_id");
@@ -664,13 +608,13 @@ static esp_err_t h_post_pin_raw(httpd_req_t *req, const char *slug)
         !j_src_id || !cJSON_IsString(j_src_id) ||
         !j_path   || !cJSON_IsString(j_path)) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"code\":\"MISSING_FIELDS\"}");
+        send_json_error(req, 400, "MISSING_FIELDS", NULL);
         return ESP_OK;
     }
     pinned_source_t src = source_from_string(cJSON_GetStringValue(j_source));
     if (src == PINNED_SOURCE_NONE) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"code\":\"BAD_SOURCE\"}");
+        send_json_error(req, 400, "BAD_SOURCE", NULL);
         return ESP_OK;
     }
     int ext = -1;
@@ -679,7 +623,7 @@ static esp_err_t h_post_pin_raw(httpd_req_t *req, const char *slug)
     }
     if (ext < 0) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"code\":\"BAD_EXTENSION\"}");
+        send_json_error(req, 400, "BAD_EXTENSION", NULL);
         return ESP_OK;
     }
 
@@ -732,7 +676,7 @@ static esp_err_t h_post_pin_raw(httpd_req_t *req, const char *slug)
             /* Makapix server post_ids cannot be synthesized client-side. */
             if (original_post_id <= 0) {
                 cJSON_Delete(root);
-                send_json(req, 400, "{\"ok\":false,\"code\":\"MISSING_POST_ID\"}");
+                send_json_error(req, 400, "MISSING_POST_ID", NULL);
                 return ESP_OK;
             }
             break;
@@ -809,7 +753,7 @@ esp_err_t h_pinned_route_get(httpd_req_t *req)
     char slug[PIN_LIST_SLUG_LEN] = {0};
     char remainder[160] = {0};
     if (split_uri(req->uri, slug, remainder, sizeof(remainder)) != ESP_OK) {
-        send_json(req, 400, "{\"ok\":false,\"code\":\"BAD_PATH\"}");
+        send_json_error(req, 400, "BAD_PATH", NULL);
         return ESP_OK;
     }
 
@@ -831,28 +775,28 @@ esp_err_t h_pinned_route_get(httpd_req_t *req)
         bool local = false;
         const char *r = remainder + 6;
         const char *slash = strchr(r, '/');
-        if (!slash) { send_json(req, 400, "{\"ok\":false,\"code\":\"BAD_PATH\"}"); return ESP_OK; }
+        if (!slash) { send_json_error(req, 400, "BAD_PATH", NULL); return ESP_OK; }
         size_t slen = (size_t)(slash - r);
-        if (slen >= sizeof(src_str)) { send_json(req, 400, "{\"ok\":false,\"code\":\"BAD_SOURCE\"}"); return ESP_OK; }
+        if (slen >= sizeof(src_str)) { send_json_error(req, 400, "BAD_SOURCE", NULL); return ESP_OK; }
         memcpy(src_str, r, slen); src_str[slen] = '\0';
         r = slash + 1;
         const char *slash2 = strchr(r, '/');
         size_t slen2 = slash2 ? (size_t)(slash2 - r) : strlen(r);
-        if (slen2 >= sizeof(source_id)) { send_json(req, 400, "{\"ok\":false,\"code\":\"BAD_SOURCE_ID\"}"); return ESP_OK; }
+        if (slen2 >= sizeof(source_id)) { send_json_error(req, 400, "BAD_SOURCE_ID", NULL); return ESP_OK; }
         memcpy(source_id, r, slen2); source_id[slen2] = '\0';
         url_decode_in_place(source_id);
         if (slash2 && strcmp(slash2 + 1, "local") == 0) local = true;
 
         pinned_source_t src = source_from_string(src_str);
         if (src == PINNED_SOURCE_NONE) {
-            send_json(req, 400, "{\"ok\":false,\"code\":\"BAD_SOURCE\"}");
+            send_json_error(req, 400, "BAD_SOURCE", NULL);
             return ESP_OK;
         }
         if (local) return h_get_item_local(req, slug, src, source_id);
         return h_get_item(req, slug, src, source_id);
     }
 
-    send_json(req, 404, "{\"ok\":false,\"code\":\"NOT_FOUND\"}");
+    send_json_error(req, 404, "NOT_FOUND", NULL);
     return ESP_OK;
 }
 
@@ -861,7 +805,7 @@ esp_err_t h_pinned_route_post(httpd_req_t *req)
     char slug[PIN_LIST_SLUG_LEN] = {0};
     char remainder[160] = {0};
     if (split_uri(req->uri, slug, remainder, sizeof(remainder)) != ESP_OK) {
-        send_json(req, 400, "{\"ok\":false,\"code\":\"BAD_PATH\"}");
+        send_json_error(req, 400, "BAD_PATH", NULL);
         return ESP_OK;
     }
 
@@ -880,7 +824,7 @@ esp_err_t h_pinned_route_post(httpd_req_t *req)
     /* POST /api/pin-lists/{slug}/items */
     if (strcmp(remainder, "items") == 0) return h_post_pin_raw(req, slug);
 
-    send_json(req, 404, "{\"ok\":false,\"code\":\"NOT_FOUND\"}");
+    send_json_error(req, 404, "NOT_FOUND", NULL);
     return ESP_OK;
 }
 
@@ -889,7 +833,7 @@ esp_err_t h_pinned_route_delete(httpd_req_t *req)
     char slug[PIN_LIST_SLUG_LEN] = {0};
     char remainder[160] = {0};
     if (split_uri(req->uri, slug, remainder, sizeof(remainder)) != ESP_OK) {
-        send_json(req, 400, "{\"ok\":false,\"code\":\"BAD_PATH\"}");
+        send_json_error(req, 400, "BAD_PATH", NULL);
         return ESP_OK;
     }
 
@@ -902,24 +846,24 @@ esp_err_t h_pinned_route_delete(httpd_req_t *req)
         char source_id[PINNED_SOURCE_ID_MAX] = {0};
         const char *r = remainder + 6;
         const char *slash = strchr(r, '/');
-        if (!slash) { send_json(req, 400, "{\"ok\":false,\"code\":\"BAD_PATH\"}"); return ESP_OK; }
+        if (!slash) { send_json_error(req, 400, "BAD_PATH", NULL); return ESP_OK; }
         size_t slen = (size_t)(slash - r);
-        if (slen >= sizeof(src_str)) { send_json(req, 400, "{\"ok\":false,\"code\":\"BAD_SOURCE\"}"); return ESP_OK; }
+        if (slen >= sizeof(src_str)) { send_json_error(req, 400, "BAD_SOURCE", NULL); return ESP_OK; }
         memcpy(src_str, r, slen); src_str[slen] = '\0';
         r = slash + 1;
         size_t slen2 = strlen(r);
-        if (slen2 >= sizeof(source_id)) { send_json(req, 400, "{\"ok\":false,\"code\":\"BAD_SOURCE_ID\"}"); return ESP_OK; }
+        if (slen2 >= sizeof(source_id)) { send_json_error(req, 400, "BAD_SOURCE_ID", NULL); return ESP_OK; }
         strlcpy(source_id, r, sizeof(source_id));
         url_decode_in_place(source_id);
 
         pinned_source_t src = source_from_string(src_str);
         if (src == PINNED_SOURCE_NONE) {
-            send_json(req, 400, "{\"ok\":false,\"code\":\"BAD_SOURCE\"}");
+            send_json_error(req, 400, "BAD_SOURCE", NULL);
             return ESP_OK;
         }
         return h_delete_item(req, slug, src, source_id);
     }
 
-    send_json(req, 404, "{\"ok\":false,\"code\":\"NOT_FOUND\"}");
+    send_json_error(req, 404, "NOT_FOUND", NULL);
     return ESP_OK;
 }

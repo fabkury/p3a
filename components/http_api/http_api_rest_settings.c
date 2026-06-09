@@ -31,14 +31,14 @@ esp_err_t h_get_config(httpd_req_t *req) {
     size_t len;
     esp_err_t err = config_store_get_serialized(&json, &len);
     if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"CONFIG_READ_FAIL\",\"code\":\"CONFIG_READ_FAIL\"}");
+        send_json_error(req, 500, "CONFIG_READ_FAIL", "Failed to read configuration");
         return ESP_OK;
     }
 
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         free(json);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
@@ -53,17 +53,8 @@ esp_err_t h_get_config(httpd_req_t *req) {
                           config_store_get_refresh_allow_override());
     cJSON_AddNumberToObject(data, "brightness", (double)app_lcd_get_brightness());
 
-    char *out = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
     free(json);
-
-    if (!out) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, out);
-    free(out);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -73,30 +64,12 @@ esp_err_t h_get_config(httpd_req_t *req) {
  */
 esp_err_t h_put_config(httpd_req_t *req) {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        if (err_status == 413) {
-            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
-        } else {
-            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        }
-        return ESP_OK;
-    }
-
-    cJSON *o = cJSON_ParseWithLength(body, len);
-    free(body);
-
-    if (!o || !cJSON_IsObject(o)) {
-        if (o) cJSON_Delete(o);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *o = recv_json_object(req);
+    if (!o) return ESP_OK;
 
     // Validate sdcard_root before persisting. sd_path_init() would fall back
     // to the default on an invalid stored value, so a bad write can't brick
@@ -108,7 +81,7 @@ esp_err_t h_put_config(httpd_req_t *req) {
         (!cJSON_IsString(sd_root_item) ||
          sd_path_validate_root(cJSON_GetStringValue(sd_root_item)) != ESP_OK)) {
         cJSON_Delete(o);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_SDCARD_ROOT\",\"code\":\"INVALID_SDCARD_ROOT\"}");
+        send_json_error(req, 400, "INVALID_SDCARD_ROOT", "Invalid sdcard_root path");
         return ESP_OK;
     }
 
@@ -150,7 +123,7 @@ esp_err_t h_put_config(httpd_req_t *req) {
 
     if (e != ESP_OK) {
         cJSON_Delete(o);
-        send_json(req, 500, "{\"ok\":false,\"error\":\"CONFIG_SAVE_FAIL\",\"code\":\"CONFIG_SAVE_FAIL\"}");
+        send_json_error(req, 500, "CONFIG_SAVE_FAIL", "Failed to save configuration");
         return ESP_OK;
     }
 
@@ -242,35 +215,17 @@ esp_err_t h_get_dwell_time(httpd_req_t *req) {
  */
 esp_err_t h_put_dwell_time(httpd_req_t *req) {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        if (err_status == 413) {
-            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
-        } else {
-            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        }
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
 
     cJSON *dwell_item = cJSON_GetObjectItem(root, "dwell_time");
     if (!dwell_item || !cJSON_IsNumber(dwell_item)) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'dwell_time' field\",\"code\":\"INVALID_REQUEST\"}");
+        send_json_error(req, 400, "INVALID_REQUEST", "Missing or invalid 'dwell_time' field");
         return ESP_OK;
     }
 
@@ -278,13 +233,13 @@ esp_err_t h_put_dwell_time(httpd_req_t *req) {
     cJSON_Delete(root);
 
     if (dwell_time > 100000) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid dwell_time (must be 0-100000 seconds)\",\"code\":\"INVALID_DWELL_TIME\"}");
+        send_json_error(req, 400, "INVALID_DWELL_TIME", "Invalid dwell_time (must be 0-100000 seconds)");
         return ESP_OK;
     }
 
     esp_err_t err = animation_player_set_dwell_time(dwell_time);
     if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to set dwell_time\",\"code\":\"SET_DWELL_TIME_FAILED\"}");
+        send_json_error(req, 500, "SET_DWELL_TIME_FAILED", "Failed to set dwell_time");
         return ESP_OK;
     }
 
@@ -302,23 +257,14 @@ esp_err_t h_get_rotation(httpd_req_t *req) {
 
     cJSON *root = cJSON_CreateObject();
     if (!root) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
+        send_json_oom(req);
         return ESP_OK;
     }
 
     cJSON_AddBoolToObject(root, "ok", true);
     cJSON_AddNumberToObject(root, "rotation", (double)rotation);
 
-    char *json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    if (!json_str) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"OOM\",\"code\":\"OOM\"}");
-        return ESP_OK;
-    }
-
-    send_json(req, 200, json_str);
-    free(json_str);
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 
@@ -327,34 +273,17 @@ esp_err_t h_get_rotation(httpd_req_t *req) {
  */
 esp_err_t h_post_rotation(httpd_req_t *req) {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
-    int err_status;
-    size_t len;
-    char *buf = recv_body_json(req, &len, &err_status);
-    if (!buf) {
-        if (err_status == 413) {
-            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
-        } else {
-            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        }
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_ParseWithLength(buf, len);
-    free(buf);
-
-    if (!root) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
 
     cJSON *rotation_item = cJSON_GetObjectItem(root, "rotation");
     if (!rotation_item || !cJSON_IsNumber(rotation_item)) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'rotation' field\",\"code\":\"INVALID_REQUEST\"}");
+        send_json_error(req, 400, "INVALID_REQUEST", "Missing or invalid 'rotation' field");
         return ESP_OK;
     }
 
@@ -362,16 +291,16 @@ esp_err_t h_post_rotation(httpd_req_t *req) {
     cJSON_Delete(root);
 
     if (rotation_value != 0 && rotation_value != 90 && rotation_value != 180 && rotation_value != 270) {
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Invalid rotation angle (must be 0, 90, 180, or 270)\",\"code\":\"INVALID_ROTATION\"}");
+        send_json_error(req, 400, "INVALID_ROTATION", "Invalid rotation angle (must be 0, 90, 180, or 270)");
         return ESP_OK;
     }
 
     esp_err_t err = app_set_screen_rotation((screen_rotation_t)rotation_value);
     if (err == ESP_ERR_INVALID_STATE) {
-        send_json(req, 409, "{\"ok\":false,\"error\":\"Rotation operation already in progress\",\"code\":\"ROTATION_IN_PROGRESS\"}");
+        send_json_error(req, 409, "ROTATION_IN_PROGRESS", "Rotation operation already in progress");
         return ESP_OK;
     } else if (err != ESP_OK) {
-        send_json(req, 500, "{\"ok\":false,\"error\":\"Failed to set rotation\",\"code\":\"ROTATION_FAILED\"}");
+        send_json_error(req, 500, "ROTATION_FAILED", "Failed to set rotation");
         return ESP_OK;
     }
 
@@ -395,34 +324,17 @@ esp_err_t h_get_refresh_override(httpd_req_t *req)
 esp_err_t h_put_refresh_override(httpd_req_t *req)
 {
     if (!ensure_json_content(req)) {
-        send_json(req, 415, "{\"ok\":false,\"error\":\"CONTENT_TYPE\",\"code\":\"UNSUPPORTED_MEDIA_TYPE\"}");
+        send_json_error(req, 415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
         return ESP_OK;
     }
 
-    int err_status;
-    size_t len;
-    char *body = recv_body_json(req, &len, &err_status);
-    if (!body) {
-        if (err_status == 413) {
-            send_json(req, 413, "{\"ok\":false,\"error\":\"Payload too large\",\"code\":\"PAYLOAD_TOO_LARGE\"}");
-        } else {
-            send_json(req, err_status ? err_status : 500, "{\"ok\":false,\"error\":\"READ_BODY\",\"code\":\"READ_BODY\"}");
-        }
-        return ESP_OK;
-    }
-
-    cJSON *root = cJSON_ParseWithLength(body, len);
-    free(body);
-    if (!root || !cJSON_IsObject(root)) {
-        if (root) cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"INVALID_JSON\",\"code\":\"INVALID_JSON\"}");
-        return ESP_OK;
-    }
+    cJSON *root = recv_json_object(req);
+    if (!root) return ESP_OK;
 
     cJSON *item = cJSON_GetObjectItem(root, "refresh_allow_override");
     if (!item || !cJSON_IsBool(item)) {
         cJSON_Delete(root);
-        send_json(req, 400, "{\"ok\":false,\"error\":\"Missing or invalid 'refresh_allow_override' field\",\"code\":\"INVALID_REQUEST\"}");
+        send_json_error(req, 400, "INVALID_REQUEST", "Missing or invalid 'refresh_allow_override' field");
         return ESP_OK;
     }
 

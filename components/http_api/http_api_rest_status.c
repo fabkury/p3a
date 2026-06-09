@@ -491,12 +491,16 @@ esp_err_t h_get_status(httpd_req_t *req) {
         }
     }
 
-    // API version for compatibility checking
-#ifdef P3A_API_VERSION
-    cJSON_AddNumberToObject(data, "api_version", P3A_API_VERSION);
-#else
-    cJSON_AddNumberToObject(data, "api_version", 1);
+    // API version for compatibility checking. P3A_API_VERSION is injected
+    // globally by the root CMakeLists.txt (add_compile_definitions before
+    // project()), so it is always defined in a real firmware build. A missing
+    // macro is a hard build error, not a silent api_version=1 fallback — that
+    // fallback previously masked the /status version bug (it agreed with
+    // compat.js's stale REQUIRED_API=1, so the banner could never fire).
+#ifndef P3A_API_VERSION
+#error "P3A_API_VERSION not defined — the root CMakeLists.txt must inject it globally"
 #endif
+    cJSON_AddNumberToObject(data, "api_version", P3A_API_VERSION);
 
     cJSON *root = cJSON_CreateObject();
     if (!root) {

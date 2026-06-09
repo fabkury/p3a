@@ -106,6 +106,18 @@ file(WRITE "${CMAKE_SOURCE_DIR}/webui/metadata.json"
     "{\"requires_api_version\":${P3A_API_VERSION},\"version\":\"${WEBUI_VERSION}\"}\n")
 message(STATUS "Generated webui/metadata.json (requires_api_version: ${P3A_API_VERSION})")
 
+# Generate compat.js from its template so the web UI's REQUIRED_API constant is
+# single-sourced from P3A_API_VERSION above. Hand-maintaining the literal let it
+# drift (it sat at 1 while the API reached 4), so /status reporting the real
+# version tripped a false "Web UI is outdated" banner. @ONLY substitutes only
+# @P3A_API_VERSION@. Must run before the LittleFS image (and the PICO-8-disabled
+# staging copy) below so the generated file is packed.
+configure_file(
+    "${CMAKE_SOURCE_DIR}/webui/static/compat.js.in"
+    "${CMAKE_SOURCE_DIR}/webui/static/compat.js"
+    @ONLY)
+message(STATUS "Generated webui/static/compat.js (REQUIRED_API: ${P3A_API_VERSION})")
+
 # Create LittleFS image from webui directory
 # When PICO-8 is disabled, filter out PICO-8 related assets to reduce binary size
 if(CONFIG_P3A_PICO8_ENABLE)

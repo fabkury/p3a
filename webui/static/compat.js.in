@@ -3,7 +3,7 @@
 // (compat.js.in) at configure time, substituting @P3A_API_VERSION@ from the
 // single source of truth in CMakeLists.txt. Edit compat.js.in, not compat.js.
 (function() {
-    var REQUIRED_API = 4;
+    var REQUIRED_API = @P3A_API_VERSION@;
 
     function banner(msg, isError) {
         var el = document.getElementById('p3a-compat');

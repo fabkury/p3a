@@ -37,7 +37,7 @@ Concrete values live in the root `CMakeLists.txt`; they move with each release, 
 Key features beyond the boilerplate:
 
 - **Version parsing**: `PROJECT_VER` is split into `FW_VERSION_MAJOR`/`MINOR`/`PATCH` and cached so all components can access them
-- **Web UI metadata**: Generates `webui/version.txt` and `webui/metadata.json` at configure time
+- **Web UI metadata**: Generates `webui/version.txt` and `webui/metadata.json` at configure time, and `configure_file()`s `webui/static/compat.js` from `compat.js.in` so its `REQUIRED_API` constant is single-sourced from `P3A_API_VERSION` (a hand-maintained copy drifted to 1 while the API reached 4)
 - **Conditional LittleFS**: When PICO-8 is disabled (`CONFIG_P3A_PICO8_ENABLE=n`), PICO-8 assets are filtered out to reduce binary size
 - **Release packaging**: Post-build step copies binaries to `release/v{version}/`, generates SHA256 checksums, flash args, and `manifest.json` for OTA
 - **Flasher build**: Optional Windows flasher executable with embedded firmware (`P3A_BUILD_FLASHER=ON`)

@@ -6,7 +6,7 @@ history.
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| 0 | Orderly reboot instead of esp_hosted's instant restart | **Done** — shipped + validated on-device (2.7.0 + 2.9.3 bench units); 1 quick check (streak-reset-on-GOT_IP) + passive soak open (see checklist) |
+| 0 | Orderly reboot instead of esp_hosted's instant restart | **Done** — shipped + validated on-device (2.7.0 + 2.9.3 bench units); all quick checks pass, only the passive soak remains open (non-blocking; see checklist) |
 | 1 | In-place transport recovery (no reboot), version-gated | **Ready to start** — 2.9.3 bench unit now live (2026-06-08), Phase 0 baseline confirmed on it; see the Phase 1 guide |
 | 2 | Bundle slave fw 2.9.7 (contingent on Phase 1 bench findings) | Not started |
 
@@ -47,10 +47,11 @@ the **2.7.0 bench unit**). Identify a unit's slave version from the boot log:
 
 **Immediate next actions, in order:**
 
-1. Quick Phase 0 checks (~15 min, see checklist): streak-reset-on-GOT_IP
-   only. *(plain `?real=1` reboot variant + `transport_recovery_reboots` in
-   `/status`, and the normal-boot "C6 co-processor up" log — both done
-   2026-06-08 on the 2.9.3 unit.)*
+1. ~~Quick Phase 0 checks~~ — **all done** (2.9.3 unit): plain `?real=1`
+   reboot variant + `transport_recovery_reboots` in `/status` and the
+   normal-boot "C6 co-processor up" log (2026-06-08), plus
+   streak-reset-on-GOT_IP (2026-06-09). Only the passive soak remains on the
+   Phase 0 checklist.
 2. Start/continue the passive soak (64-channel Giphy playset running; wait
    for the organic failure; confirm orderly path). Do not block on this.
 3. Phase 1 development + validation on the 2.9.3 unit (guide below).
@@ -258,9 +259,13 @@ risk; gathers fleet evidence for Phase 1.
       `curl -X POST "http://p3a.local/action/inject_transport_failure?streak=3"`
       -> no reboot, "Playback continues offline" notice, playback keeps
       running. *(2026-06-06: confirmed incl. on-screen notice.)*
-- [ ] Streak resets after a successful connection (GOT_IP): after the
+- [x] Streak resets after a successful connection (GOT_IP): after the
       degraded test, reboot manually, let Wi-Fi connect, then a plain
       injection must take the countdown-reboot path again.
+      *(2026-06-09, 2.9.3 unit: `?streak=3` -> degraded (no reboot); manual
+      reboot; on reconnect GOT_IP reset the streak; plain synthetic injection
+      then took the countdown-reboot path -> clean reboot — it would have gone
+      degraded again had the streak persisted at 3. Reset confirmed.)*
 - [ ] Soak under the trigger load (64-channel Giphy playset) until a real
       failure occurs; confirm orderly path end-to-end.
 - [ ] ~~Delete the temporary test hook once the above pass~~ — **deferred:**
@@ -537,3 +542,11 @@ rollback; consider adding a force-reflash NVS flag to `slave_ota` first.
   streak-reset-on-GOT_IP (the formal post-degraded sequence) and the passive
   soak. (Correction to the first draft of this entry, which mis-attributed the
   reboot test to the 2.7.0 unit.)
+- **2026-06-09** — **Streak-reset-on-GOT_IP closed** (2.9.3 unit) — last
+  active Phase 0 quick check. Sequence run: `?streak=3` -> degraded branch
+  (no reboot, network quiesced); manual reboot; on reconnect
+  `IP_EVENT_STA_GOT_IP` reset `transport_reboot_streak` to 0; a plain
+  synthetic injection then took the countdown-reboot path -> clean reboot
+  (it would have re-entered degraded had the streak persisted at 3). Phase 0
+  now has only the non-blocking passive soak left open; Phase 1 development on
+  the 2.9.3 unit is the next body of work.

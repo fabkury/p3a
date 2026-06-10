@@ -153,11 +153,13 @@ esp_err_t makapix_build_remote_shard(const char *storage_key, char *out, size_t 
     uint8_t sha[32];
     if (storage_key_sha256(storage_key, sha) != ESP_OK) return ESP_FAIL;
 
-    // "aa/bb/cc" — no leading/trailing slash; depth = MAKAPIX_REMOTE_SHARD_DEPTH.
+    // "aa/bb" — no leading/trailing slash; depth = MAKAPIX_REMOTE_SHARD_DEPTH,
+    // each level the low 6 bits of one SHA256 byte rendered as two lowercase
+    // hex digits ("00".."3f").
     size_t pos = 0;
     for (int i = 0; i < MAKAPIX_REMOTE_SHARD_DEPTH; i++) {
         int n = snprintf(out + pos, out_len - pos, (i == 0) ? "%02x" : "/%02x",
-                         (unsigned int)sha[i]);
+                         (unsigned int)(sha[i] & MAKAPIX_REMOTE_SHARD_MASK));
         if (n < 0 || (size_t)n >= out_len - pos) return ESP_ERR_INVALID_SIZE;
         pos += (size_t)n;
     }

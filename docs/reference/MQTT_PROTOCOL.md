@@ -495,14 +495,14 @@ Display a specific artwork on the player.
 {
   "post_id": 123,
   "storage_key": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  "storage_shard": "ab/cd/ef",
+  "storage_shard": "2b/0d",
   "native_format": "webp"
 }
 ```
 
 **Fields**:
 - `storage_key`: UUID, storage identifier (required)
-- `storage_shard`: String, pre-computed shard path for vault storage (required)
+- `storage_shard`: String, pre-computed shard path for vault storage (required). Two levels, each the low 6 bits of one byte of `SHA256(storage_key)` rendered as two lowercase hex digits (`"00"`–`"3f"`). The pre-2026-06 3-level unmasked form (`"ab/cd/ef"`) is deprecated but still served.
 - `native_format`: String, file extension without dot, e.g. `"webp"`, `"gif"`, `"png"` (required)
 - `post_id`: Integer, post ID for view tracking (optional, defaults to 0)
 

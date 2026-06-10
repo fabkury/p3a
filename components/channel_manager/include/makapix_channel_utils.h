@@ -67,12 +67,25 @@ extern const char *s_ext_strings[];
 /**
  * @brief Number of SHA256 bytes in the Makapix Club server's vault URL shard
  *
- * The server hosts artwork at `/api/vault/{aa}/{bb}/{cc}/{key}.{ext}`. This is
- * a SERVER CONTRACT and is intentionally a SEPARATE constant from the local
- * SD-card SD_SHARD_DEPTH — the device cannot change the server's URL layout, so
- * this must not follow a local depth change. See makapix_build_remote_shard().
+ * The server hosts artwork at `/api/vault/{aa}/{bb}/{key}.{ext}`, where each
+ * level is the low 6 bits (MAKAPIX_REMOTE_SHARD_MASK) of one SHA256 byte,
+ * rendered as two lowercase hex digits ("00".."3f"). This is a SERVER
+ * CONTRACT and is intentionally a SEPARATE constant from the local SD-card
+ * SD_SHARD_DEPTH — the device cannot change the server's URL layout, so this
+ * must not follow a local depth change. See makapix_build_remote_shard().
+ *
+ * History: before 2026-06 the server used a 3-level shard of full (unmasked)
+ * SHA256 bytes. The server still serves those URLs but they are deprecated
+ * and will eventually stop working.
  */
-#define MAKAPIX_REMOTE_SHARD_DEPTH 3
+#define MAKAPIX_REMOTE_SHARD_DEPTH 2
+
+/**
+ * @brief Bit mask applied to each SHA256 shard byte (6 bits -> 64 dirs/level)
+ *
+ * Part of the Makapix server URL contract — see MAKAPIX_REMOTE_SHARD_DEPTH.
+ */
+#define MAKAPIX_REMOTE_SHARD_MASK 0x3F
 
 /**
  * @brief Build the local SD-card vault path for a Makapix artwork
@@ -94,12 +107,13 @@ esp_err_t makapix_build_vault_path(const char *vault_base, const char *storage_k
                                    uint8_t ext_index, char *out, size_t out_len);
 
 /**
- * @brief Build the Makapix server vault shard prefix "aa/bb/cc" for a storage_key
+ * @brief Build the Makapix server vault shard prefix "aa/bb" for a storage_key
  *
- * Writes MAKAPIX_REMOTE_SHARD_DEPTH bytes of SHA256(storage_key) as a
- * slash-separated lowercase-hex string (no leading or trailing slash), for use
- * in the remote URL `https://{host}/api/vault/{shard}/{key}.{ext}`. This is the
- * single place the remote URL shard is computed.
+ * Writes MAKAPIX_REMOTE_SHARD_DEPTH bytes of SHA256(storage_key), each masked
+ * to its low 6 bits (MAKAPIX_REMOTE_SHARD_MASK), as a slash-separated
+ * lowercase-hex string (no leading or trailing slash), for use in the remote
+ * URL `https://{host}/api/vault/{shard}/{key}.{ext}`. This is the single
+ * place the remote URL shard is computed.
  *
  * @param storage_key UUID text
  * @param out Output buffer (>= 3*MAKAPIX_REMOTE_SHARD_DEPTH bytes)

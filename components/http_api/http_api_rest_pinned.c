@@ -199,8 +199,8 @@ static const char *museum_id_to_str(uint16_t id)
 /* Build the source-CDN URL for a pinned entry into `out`. Empty string on
  * failure (caller falls back to /local on the web UI side).
  *
- * - Makapix: https://{makapix_host}/api/vault/{a}/{b}/{c}/{uuid}.{ext}
- *   (SHA256 prefix derived from the UUID string).
+ * - Makapix: https://{makapix_host}/api/vault/{a}/{b}/{uuid}.{ext}
+ *   (6-bit SHA256 prefix derived from the UUID string).
  * - Giphy:   https://i.giphy.com/media/{giphy_id}/giphy.webp
  *   (Giphy CDN always serves WebP for trending/search results).
  * - Museum:  art_institution_build_iiif_url(museum_str, entry-shim). */

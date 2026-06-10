@@ -418,15 +418,29 @@ esp_err_t makapix_unregister(void)
     // Stop view tracker first to prevent in-flight view events
     view_tracker_stop();
 
+    // Go IDLE before tearing down MQTT: the async disconnect callback only
+    // spawns the reconnect task when state is CONNECTED/CONNECTING, so this
+    // ordering keeps an intentional unregister from arming reconnection.
+    makapix_set_state(MAKAPIX_STATE_IDLE);
+
     // Tear down MQTT connection
     makapix_mqtt_disconnect();
     makapix_mqtt_deinit();
+
+    // A connect attempt torn down mid-handshake may have counted an auth
+    // failure; don't let it linger toward the REGISTRATION_INVALID latch
+    // of a future registration.
+    makapix_mqtt_reset_auth_failure_count();
 
     // Wipe all stored credentials (player_key, certs, MQTT host/port)
     esp_err_t err = makapix_store_clear();
     if (err != ESP_OK) {
         ESP_LOGE(MAKAPIX_TAG, "Failed to clear store: %s", esp_err_to_name(err));
     }
+
+    // Mirror of the provision flow's emit(1): lets subscribers (view tracker,
+    // connectivity state) drop their cached registration immediately.
+    event_bus_emit_i32(P3A_EVENT_REGISTRATION_CHANGED, 0);
 
     // Clear channel state
     if (s_current_channel) {

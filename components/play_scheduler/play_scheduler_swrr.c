@@ -170,7 +170,7 @@ int ps_swrr_select_channel(ps_state_t *state)
         state->channels[best].credit -= WSUM;
 
         // Log SWRR selection with all channel credits
-        ESP_LOGI(TAG, "SWRR selected channel[%d] '%s' (credit was %ld, now %ld)",
+        ESP_LOGD(TAG, "SWRR selected channel[%d] '%s' (credit was %ld, now %ld)",
                  best, state->channels[best].display_name,
                  (long)(best_credit), (long)state->channels[best].credit);
 
@@ -261,7 +261,7 @@ int ps_stochastic_select_channel(ps_state_t *state)
         int32_t prev_credit = state->channels[best].credit;
         state->channels[best].credit -= WSUM;
 
-        ESP_LOGI(TAG, "Stochastic selected channel[%d] '%s' (credit was %ld, now %ld)",
+        ESP_LOGD(TAG, "Stochastic selected channel[%d] '%s' (credit was %ld, now %ld)",
                  best, state->channels[best].display_name,
                  (long)prev_credit, (long)state->channels[best].credit);
 

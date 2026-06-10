@@ -159,7 +159,7 @@ static esp_err_t fetch_promoted_page(char *response_buf, size_t buf_size,
         return (err == ESP_ERR_INVALID_STATE) ? err : ESP_FAIL;  // INVALID_STATE = cancelled
     }
 
-    ESP_LOGI(TAG, "Received %zu bytes from promoted API", total_read);
+    ESP_LOGD(TAG, "Received %zu bytes from promoted API", total_read);
 
     // Parse JSON
     cJSON *root = cJSON_Parse(response_buf);

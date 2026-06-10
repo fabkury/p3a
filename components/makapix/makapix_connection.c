@@ -306,9 +306,13 @@ void makapix_mqtt_reconnect_task(void *pvParameters)
                 delay_ms = (delay_ms * 2 > RECONNECT_DELAY_MAX_MS) ? RECONNECT_DELAY_MAX_MS : delay_ms * 2;
             }
         } else {
-            ESP_LOGW(MAKAPIX_TAG, "No credentials available for MQTT reconnect, will retry");
-            delay_ms = (delay_ms * 2 > RECONNECT_DELAY_MAX_MS) ? RECONNECT_DELAY_MAX_MS : delay_ms * 2;
-            continue;
+            // No player_key/certs in NVS means the device is unregistered
+            // (registration is saved in one atomic transaction, so a partial
+            // store can't exist). Retrying can't help: re-registration arms
+            // its own MQTT connection and watchdog, so exit instead of
+            // warning forever at max backoff.
+            ESP_LOGI(MAKAPIX_TAG, "Reconnect task exiting: device not registered");
+            break;
         }
     }
 

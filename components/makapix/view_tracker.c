@@ -438,7 +438,12 @@ static void send_view_event(void)
     // Gather metadata for view event
     char player_key[37] = {0};
     if (makapix_store_get_player_key(player_key, sizeof(player_key)) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to get player_key, cannot send view");
+        // Registration vanished mid-tracking (e.g. unregister raced this view).
+        // Drop the cached flag and stop tracking instead of erroring on every
+        // view trigger until the next swap.
+        ESP_LOGW(TAG, "player_key no longer available, stopping view tracking");
+        s_has_player_key = false;
+        view_tracker_stop();
         return;
     }
 

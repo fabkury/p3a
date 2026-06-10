@@ -284,7 +284,7 @@ static bool pick_recency_sdcard(ps_state_t *state, size_t channel_index, ps_artw
             continue;
         }
 
-        ESP_LOGD(TAG, ">>> PICKED (RecencyPick SD): index=%lu, post_id=%ld, pool_size=%zu, "
+        ESP_LOGI(TAG, ">>> PICKED (RecencyPick SD): index=%lu, post_id=%ld, pool_size=%zu, "
                  "skipped_missing=%d, skipped_repeat=%d, file=%s",
                  (unsigned long)current_index, (long)entry->post_id, ch->entry_count,
                  skipped_missing, skipped_repeat, entry->filename);
@@ -417,7 +417,7 @@ static bool pick_recency_makapix(ps_state_t *state, size_t channel_index, ps_art
             bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
         }
 
-        ESP_LOGD(TAG, ">>> PICKED (RecencyPick): LAi_index=%lu, Ci_index=%lu, post_id=%ld, "
+        ESP_LOGI(TAG, ">>> PICKED (RecencyPick): LAi_index=%lu, Ci_index=%lu, post_id=%ld, "
                  "pool_size=%zu, skipped=%d, storage_key=%.8s...",
                  (unsigned long)lai_index, (unsigned long)ci_index, (long)post_id,
                  available_count, skipped_count, storage_key);
@@ -491,7 +491,7 @@ static bool pick_recency_pinned(ps_state_t *state, size_t channel_index, ps_artw
         char storage_key[64];
         pinned_storage_key(entry, storage_key, sizeof(storage_key));
 
-        ESP_LOGD(TAG, ">>> PICKED (RecencyPick Pinned): index=%lu post_id=%ld pool=%zu skipped_missing=%d skipped_repeat=%d",
+        ESP_LOGI(TAG, ">>> PICKED (RecencyPick Pinned): index=%lu post_id=%ld pool=%zu skipped_missing=%d skipped_repeat=%d",
                  (unsigned long)current_index, (long)entry->post_id, ch->entry_count,
                  skipped_missing, skipped_repeat);
 
@@ -578,7 +578,7 @@ static bool pick_random_sdcard(ps_state_t *state, size_t channel_index, ps_artwo
             continue;
         }
 
-        ESP_LOGD(TAG, ">>> PICKED (RandomPick SD): index=%zu, post_id=%ld, pool_size=%zu, attempt=%d, file=%s",
+        ESP_LOGI(TAG, ">>> PICKED (RandomPick SD): index=%zu, post_id=%ld, pool_size=%zu, attempt=%d, file=%s",
                  index, (long)entry->post_id, ch->entry_count, attempt + 1, entry->filename);
 
         out_artwork->artwork_id = entry->post_id;
@@ -689,7 +689,7 @@ static bool pick_random_makapix(ps_state_t *state, size_t channel_index, ps_artw
             bytes_to_uuid(entry->storage_key_uuid, storage_key, sizeof(storage_key));
         }
 
-        ESP_LOGD(TAG, ">>> PICKED (RandomPick): LAi_index=%zu, Ci_index=%lu, post_id=%ld, "
+        ESP_LOGI(TAG, ">>> PICKED (RandomPick): LAi_index=%zu, Ci_index=%lu, post_id=%ld, "
                  "pool_size=%zu, attempt=%d, storage_key=%.8s...",
                  lai_index, (unsigned long)ci_index, (long)post_id,
                  available_count, attempt + 1, storage_key);
@@ -739,7 +739,7 @@ static bool pick_random_pinned(ps_state_t *state, size_t channel_index, ps_artwo
         char storage_key[64];
         pinned_storage_key(entry, storage_key, sizeof(storage_key));
 
-        ESP_LOGD(TAG, ">>> PICKED (RandomPick Pinned): index=%zu post_id=%ld pool=%zu attempt=%d",
+        ESP_LOGI(TAG, ">>> PICKED (RandomPick Pinned): index=%zu post_id=%ld pool=%zu attempt=%d",
                  index, (long)entry->post_id, ch->entry_count, attempt);
 
         out_artwork->artwork_id = entry->post_id;
@@ -824,7 +824,7 @@ bool ps_pick_artwork(ps_state_t *state, size_t channel_index, ps_artwork_t *out_
                 out_artwork->type = ASSET_TYPE_JPEG;
         }
 
-        ESP_LOGD(TAG, ">>> PICKED (Artwork channel): post_id=%ld, filepath=%s",
+        ESP_LOGI(TAG, ">>> PICKED (Artwork channel): post_id=%ld, filepath=%s",
                  (long)out_artwork->post_id, out_artwork->filepath);
         return true;
     }

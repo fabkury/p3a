@@ -16,7 +16,18 @@ static const char *TAG = "CFG";
 
 esp_err_t config_store_set_giphy_api_key(const char *key)
 {
-    if (!key || key[0] == '\0') return ESP_ERR_INVALID_ARG;
+    if (!key) return ESP_ERR_INVALID_ARG;
+    if (key[0] == '\0') {
+        // Empty key means "no key configured": remove the entry so the
+        // getter falls back to the (empty) build-time default.
+        cJSON *cfg = NULL;
+        esp_err_t err = config_store_load(&cfg);
+        if (err != ESP_OK) return err;
+        cJSON_DeleteItemFromObject(cfg, "giphy_api_key");
+        err = config_store_save(cfg);
+        cJSON_Delete(cfg);
+        return err;
+    }
     return cfg_set_string("giphy_api_key", key);
 }
 

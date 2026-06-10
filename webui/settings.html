@@ -306,7 +306,7 @@
             <label class="setting-label" for="giphy-api-key">API Key</label>
             <input class="setting-input" id="giphy-api-key" type="text" placeholder="Giphy API Key">
         </div>
-        <div class="setting-hint">Enter your Giphy API key. Giphy channels will not work without a valid key. You can create a key for free at <a href="https://developers.giphy.com/" target="_blank" rel="noopener">https://developers.giphy.com/</a>.</div>
+        <div class="setting-hint">Enter your Giphy API key. Giphy channels will not work without a valid key. You can create a key for free at <a href="https://developers.giphy.com/" target="_blank" rel="noopener">https://developers.giphy.com/</a>. To remove a stored key, clear the field and save.</div>
         <div class="setting-hint">By default, Giphy keys are beta-level and limited to 100 requests per hour. If you have many Giphy channels on the same playset you might run into 429 errors (too many requests). Each Giphy query (request) returns up to 50 artworks, so a 500-artwork channel takes 10 requests to refresh.</div>
     </div>
     <div class="section" id="random-id-section" style="display:none">
@@ -843,7 +843,6 @@ function saveGiphyAll() {
     btn.disabled = true;
     var apiKey = document.getElementById('giphy-api-key').value.trim();
     var rating = document.getElementById('giphy-rating').value;
-    if (!apiKey) { showToast('API Key is required', true); btn.disabled = false; return; }
     var cc = document.getElementById('giphy-country').value.trim().toUpperCase();
     if (cc && cc.length !== 2) { showToast('Country code must be 2 letters', true); btn.disabled = false; return; }
     var cacheSize = parseInt(document.getElementById('giphy-cache-size').value, 10) || 400;

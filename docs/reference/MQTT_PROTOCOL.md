@@ -507,7 +507,7 @@ Display a specific artwork on the player.
 - `post_id`: Integer, post ID for view tracking (optional, defaults to 0)
 
 **Expected Player Behavior**:
-1. Construct download path from components: `/api/vault/{storage_shard}/{storage_key}.{native_format}`
+1. Construct download URL from components: `https://{vault_host}/{storage_shard}/{storage_key}.{native_format}` (vault host: `vault.makapix.club`; the old `https://{club_host}/api/vault/...` base is deprecated but still served)
 2. Download artwork if not already cached in vault
 3. Display artwork on screen
 4. Update current_post_id in status updates

@@ -6,6 +6,7 @@
  * @brief Makapix utility helpers: UUID parsing, SHA256 vault paths, cache validation
  */
 
+#include "sdkconfig.h"
 #include "makapix_channel_internal.h"
 #include "makapix_channel_utils.h"
 #include "channel_cache.h"
@@ -144,6 +145,26 @@ esp_err_t makapix_build_vault_path(const char *vault_base, const char *storage_k
     if (!vault_base || !storage_key) return ESP_ERR_INVALID_ARG;
     const char *ext = s_ext_strings[(ext_index <= EXT_JPEG) ? ext_index : EXT_WEBP];
     return sd_path_build_sharded(vault_base, storage_key, ext, out, out_len);
+}
+
+esp_err_t makapix_build_remote_url(const char *storage_key, const char *ext,
+                                   char *out, size_t out_len)
+{
+    if (!out || out_len == 0) return ESP_ERR_INVALID_ARG;
+    out[0] = '\0';
+    if (!storage_key || !ext) return ESP_ERR_INVALID_ARG;
+
+    char shard[3 * MAKAPIX_REMOTE_SHARD_DEPTH];
+    esp_err_t err = makapix_build_remote_shard(storage_key, shard, sizeof(shard));
+    if (err != ESP_OK) return err;
+
+    int n = snprintf(out, out_len, "https://%s/%s/%s%s",
+                     CONFIG_MAKAPIX_VAULT_HOST, shard, storage_key, ext);
+    if (n < 0 || (size_t)n >= out_len) {
+        out[0] = '\0';
+        return ESP_ERR_INVALID_SIZE;
+    }
+    return ESP_OK;
 }
 
 esp_err_t makapix_build_remote_shard(const char *storage_key, char *out, size_t out_len)

@@ -496,15 +496,10 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                 art_institution_build_iiif_url(ai_museum_id, ie, 720,
                                                out_request->art_url, sizeof(out_request->art_url));
             } else {
-                // Build the Makapix artwork URL via the shared remote shard helper.
-                char shard[3 * MAKAPIX_REMOTE_SHARD_DEPTH];
-                if (makapix_build_remote_shard(s_dl_storage_key, shard, sizeof(shard)) == ESP_OK) {
-                    int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
-                    snprintf(out_request->art_url, sizeof(out_request->art_url),
-                             "https://%s/api/vault/%s/%s%s",
-                             CONFIG_MAKAPIX_CLUB_HOST,
-                             shard, s_dl_storage_key, s_ext_strings[ext_idx]);
-                }
+                // Build the Makapix artwork URL via the shared remote URL helper.
+                int ext_idx = (entry->extension <= 3) ? entry->extension : 0;
+                (void)makapix_build_remote_url(s_dl_storage_key, s_ext_strings[ext_idx],
+                                               out_request->art_url, sizeof(out_request->art_url));
             }
 
             // Set cursor to just after this entry's position, not the batch end.

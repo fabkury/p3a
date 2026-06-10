@@ -2598,6 +2598,7 @@ CONFIG_GIPHY_FORMAT_DEFAULT="gif"
 # Makapix Configuration
 #
 CONFIG_MAKAPIX_CLUB_HOST="makapix.club"
+CONFIG_MAKAPIX_VAULT_HOST="vault.makapix.club"
 CONFIG_MAKAPIX_CLUB_MQTT_PORT=8883
 # end of Makapix Configuration
 

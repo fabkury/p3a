@@ -199,7 +199,7 @@ static const char *museum_id_to_str(uint16_t id)
 /* Build the source-CDN URL for a pinned entry into `out`. Empty string on
  * failure (caller falls back to /local on the web UI side).
  *
- * - Makapix: https://{makapix_host}/api/vault/{a}/{b}/{uuid}.{ext}
+ * - Makapix: https://{vault_host}/{a}/{b}/{uuid}.{ext}
  *   (6-bit SHA256 prefix derived from the UUID string).
  * - Giphy:   https://i.giphy.com/media/{giphy_id}/giphy.webp
  *   (Giphy CDN always serves WebP for trending/search results).
@@ -220,12 +220,7 @@ static void build_source_url(const pinned_order_entry_t *e, char *out, size_t ou
                      "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
                      u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7],
                      u[8], u[9], u[10], u[11], u[12], u[13], u[14], u[15]);
-            char shard[3 * MAKAPIX_REMOTE_SHARD_DEPTH];
-            if (makapix_build_remote_shard(uuid, shard, sizeof(shard)) != ESP_OK) return;
-            snprintf(out, out_len,
-                     "https://%s/api/vault/%s/%s%s",
-                     CONFIG_MAKAPIX_CLUB_HOST,
-                     shard, uuid, ext_str[ext_idx]);
+            (void)makapix_build_remote_url(uuid, ext_str[ext_idx], out, out_len);
             break;
         }
         case PINNED_SOURCE_GIPHY: {

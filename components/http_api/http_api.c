@@ -20,6 +20,7 @@
  * - http_api_upload.c: File upload handler
  */
 
+#include "sdkconfig.h"
 #include "http_api_internal.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
@@ -336,8 +337,10 @@ static void makapix_command_handler(const char *command_type, cJSON *payload, co
                 strlcpy(title_buf, cJSON_GetStringValue(title), sizeof(title_buf));
             }
 
+            // Server-provided storage_shard, device-assembled vault-host URL.
             char art_url[256];
-            snprintf(art_url, sizeof(art_url), "/api/vault/%s/%s.%s", shard, key, fmt);
+            snprintf(art_url, sizeof(art_url), "https://%s/%s/%s.%s",
+                     CONFIG_MAKAPIX_VAULT_HOST, shard, key, fmt);
 
             makapix_show_artwork(pid, key, art_url, title_buf);
         }

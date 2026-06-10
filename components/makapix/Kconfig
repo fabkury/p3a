@@ -6,6 +6,14 @@ menu "Makapix Configuration"
         help
             Hostname of the Makapix Club server for provisioning and API calls.
 
+    config MAKAPIX_VAULT_HOST
+        string "Makapix Club Vault Host"
+        default "vault.makapix.club"
+        help
+            Hostname serving Makapix Club artwork files, as
+            https://{vault_host}/{shard}/{storage_key}.{ext}. Faster than the
+            deprecated https://{club_host}/api/vault/... form it replaces.
+
     config MAKAPIX_CLUB_MQTT_PORT
         int "Makapix Club MQTT Port"
         default 8883

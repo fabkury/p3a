@@ -97,29 +97,20 @@ cJSON *build_current_artwork_json(void)
         case PS_CHANNEL_TYPE_NAMED:
         case PS_CHANNEL_TYPE_USER:
         case PS_CHANNEL_TYPE_REACTIONS:
-        case PS_CHANNEL_TYPE_HASHTAG: {
-            char shard[3 * MAKAPIX_REMOTE_SHARD_DEPTH];
-            if (makapix_build_remote_shard(artwork.storage_key, shard, sizeof(shard)) == ESP_OK) {
-                snprintf(url, sizeof(url),
-                         "https://%s/api/vault/%s/%s%s",
-                         CONFIG_MAKAPIX_CLUB_HOST,
-                         shard, artwork.storage_key, asset_type_ext(artwork.type));
-            }
+        case PS_CHANNEL_TYPE_HASHTAG:
+            (void)makapix_build_remote_url(artwork.storage_key,
+                                           asset_type_ext(artwork.type),
+                                           url, sizeof(url));
             break;
-        }
 
         case PS_CHANNEL_TYPE_ARTWORK: {
             // Single-source ephemeral playback (Makapix show_artwork or local
             // file). For Makapix, build the same vault URL used by named
             // channels; for local files (storage_key empty) leave url empty.
             if (artwork.storage_key[0] != '\0') {
-                char shard[3 * MAKAPIX_REMOTE_SHARD_DEPTH];
-                if (makapix_build_remote_shard(artwork.storage_key, shard, sizeof(shard)) == ESP_OK) {
-                    snprintf(url, sizeof(url),
-                             "https://%s/api/vault/%s/%s%s",
-                             CONFIG_MAKAPIX_CLUB_HOST,
-                             shard, artwork.storage_key, asset_type_ext(artwork.type));
-                }
+                (void)makapix_build_remote_url(artwork.storage_key,
+                                               asset_type_ext(artwork.type),
+                                               url, sizeof(url));
             }
             break;
         }
@@ -158,16 +149,11 @@ cJSON *build_current_artwork_json(void)
                              "https://i.giphy.com/media/%s/giphy.webp",
                              artwork.storage_key);
                     break;
-                case POST_SOURCE_MAKAPIX: {
-                    char shard[3 * MAKAPIX_REMOTE_SHARD_DEPTH];
-                    if (makapix_build_remote_shard(artwork.storage_key, shard, sizeof(shard)) == ESP_OK) {
-                        snprintf(url, sizeof(url),
-                                 "https://%s/api/vault/%s/%s%s",
-                                 CONFIG_MAKAPIX_CLUB_HOST,
-                                 shard, artwork.storage_key, asset_type_ext(artwork.type));
-                    }
+                case POST_SOURCE_MAKAPIX:
+                    (void)makapix_build_remote_url(artwork.storage_key,
+                                                   asset_type_ext(artwork.type),
+                                                   url, sizeof(url));
                     break;
-                }
                 case POST_SOURCE_INSTITUTION: {
                     char museum_id[16] = {0};
                     char axis_unused[32] = {0};

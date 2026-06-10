@@ -47,7 +47,7 @@ void bytes_to_uuid(const uint8_t *bytes, char *out, size_t out_len);
 /**
  * @brief Compute SHA256(storage_key) for the Makapix server's URL shard
  *
- * Used only by makapix_build_remote_shard() — the server's /api/vault/ URL
+ * Used only by makapix_build_remote_shard() — the server's vault URL
  * layout is SHA256-based. The LOCAL SD-card vault uses the FNV-1a shard
  * scheme in sd_path_build_sharded() and does not involve SHA256.
  *
@@ -67,7 +67,9 @@ extern const char *s_ext_strings[];
 /**
  * @brief Number of SHA256 bytes in the Makapix Club server's vault URL shard
  *
- * The server hosts artwork at `/api/vault/{aa}/{bb}/{key}.{ext}`, where each
+ * The server hosts artwork at `https://{vault_host}/{aa}/{bb}/{key}.{ext}`
+ * (CONFIG_MAKAPIX_VAULT_HOST; the old `https://{club_host}/api/vault/...`
+ * base is deprecated but still served), where each
  * level is the low 6 bits (MAKAPIX_REMOTE_SHARD_MASK) of one SHA256 byte,
  * rendered as two lowercase hex digits ("00".."3f"). This is a SERVER
  * CONTRACT and is intentionally a SEPARATE constant from the local SD-card
@@ -112,8 +114,9 @@ esp_err_t makapix_build_vault_path(const char *vault_base, const char *storage_k
  * Writes MAKAPIX_REMOTE_SHARD_DEPTH bytes of SHA256(storage_key), each masked
  * to its low 6 bits (MAKAPIX_REMOTE_SHARD_MASK), as a slash-separated
  * lowercase-hex string (no leading or trailing slash), for use in the remote
- * URL `https://{host}/api/vault/{shard}/{key}.{ext}`. This is the single
- * place the remote URL shard is computed.
+ * URL `https://{vault_host}/{shard}/{key}.{ext}`. This is the single place
+ * the remote URL shard is computed; makapix_build_remote_url() assembles the
+ * full URL.
  *
  * @param storage_key UUID text
  * @param out Output buffer (>= 3*MAKAPIX_REMOTE_SHARD_DEPTH bytes)
@@ -121,6 +124,25 @@ esp_err_t makapix_build_vault_path(const char *vault_base, const char *storage_k
  * @return ESP_OK on success, ESP_ERR_INVALID_ARG/SIZE/ESP_FAIL otherwise
  */
 esp_err_t makapix_build_remote_shard(const char *storage_key, char *out, size_t out_len);
+
+/**
+ * @brief Build the full Makapix vault download URL for a storage_key
+ *
+ * Produces `https://{CONFIG_MAKAPIX_VAULT_HOST}/{shard}/{storage_key}{ext}`
+ * with the shard from makapix_build_remote_shard(). This is the single place
+ * device-computed Makapix artwork URLs are assembled; URLs received verbatim
+ * from the server (art_url, storage_shard payloads) bypass it.
+ *
+ * On any failure `out` is set to the empty string.
+ *
+ * @param storage_key UUID text
+ * @param ext Extension WITH leading dot (e.g. ".webp")
+ * @param out Output buffer
+ * @param out_len Output buffer length
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG/SIZE/ESP_FAIL otherwise
+ */
+esp_err_t makapix_build_remote_url(const char *storage_key, const char *ext,
+                                   char *out, size_t out_len);
 
 #ifdef __cplusplus
 }

@@ -293,8 +293,24 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
     config_store_get_giphy_api_key(ctx.api_key, sizeof(ctx.api_key));
     if (ctx.api_key[0] == '\0') {
         ESP_LOGE(TAG, "No Giphy API key configured");
+        giphy_set_no_key();
         s_last_refresh_status = GIPHY_REFRESH_NO_API_KEY;
         return ESP_ERR_NOT_FOUND;
+    }
+
+    // Invalid-key latch: a 401/403 applies to the key, not one channel. Skip
+    // without burning a request while latched for this exact key — a changed
+    // key self-clears inside giphy_auth_invalid_for_key, the reprobe expiry
+    // opens this gate on its own, and the user's force-refresh override is
+    // the explicit "try again" bypass. The play_scheduler eligibility gate
+    // also checks this, but re-check in case some other caller drove us in
+    // (mirrors the rate-limit check above).
+    if (giphy_auth_invalid_for_key(ctx.api_key) &&
+        !config_store_get_refresh_allow_override()) {
+        ESP_LOGW(TAG, "Skipping '%s': Giphy API key marked invalid (reprobe in %us)",
+                 _dn, (unsigned)giphy_auth_invalid_remaining_sec());
+        s_last_refresh_status = GIPHY_REFRESH_INVALID_API_KEY;
+        return ESP_ERR_NOT_ALLOWED;
     }
     if (config_store_get_giphy_rendition(ctx.rendition, sizeof(ctx.rendition)) != ESP_OK) {
         strlcpy(ctx.rendition, CONFIG_GIPHY_RENDITION_DEFAULT, sizeof(ctx.rendition));
@@ -528,6 +544,10 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
              total_fetched, final_entry_count);
 
     if (total_fetched > 0) {
+        // A successful fetch proves the key works — drop any auth-invalid
+        // latch state so the next 401 episode notifies anew (no-op and
+        // silent when nothing is latched).
+        giphy_clear_auth_invalid();
         s_last_refresh_status = GIPHY_REFRESH_OK;
         return ESP_OK;
     }

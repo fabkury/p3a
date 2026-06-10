@@ -19,6 +19,7 @@
 #include "app_lcd.h"
 #include "psram_alloc.h"
 #include "sd_path.h"
+#include "giphy.h"
 
 // ---------- Config Handlers ----------
 
@@ -132,6 +133,18 @@ esp_err_t h_put_config(httpd_req_t *req) {
     if (dwell_item && cJSON_IsNumber(dwell_item)) {
         uint32_t dwell_ms = (uint32_t)cJSON_GetNumberValue(dwell_item);
         play_scheduler_set_dwell_time(dwell_ms / 1000);
+    }
+
+    // A saved Giphy key clears the auth-invalid latch and nudges the refresh
+    // task, so channels parked on a rejected key reprobe within ~2 s of the
+    // user saving instead of waiting out the reprobe window. Runs for any
+    // key value, including re-saving the same one (an explicit retry) and
+    // clearing it (channels then park on the no-key path instead).
+    cJSON *gk = cJSON_GetObjectItem(o, "giphy_api_key");
+    if (gk && cJSON_IsString(gk)) {
+        giphy_clear_auth_invalid();
+        extern void ps_refresh_signal_work(void);
+        ps_refresh_signal_work();
     }
 
     // Invalidate in-memory caches for giphy settings so getters re-read from NVS

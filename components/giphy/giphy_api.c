@@ -55,6 +55,127 @@ uint32_t giphy_cooldown_remaining_sec(void)
     return (uint32_t)((s_cooldown_until_us - now + 999999) / 1000000);
 }
 
+// ============================================================================
+// Process-wide auth-invalid latch
+// ============================================================================
+// A 401/403 means Giphy rejected the configured API key — deterministic until
+// the key (or its standing at Giphy) changes, unlike the time-windowed 429
+// above. Latching key-wide stops every Giphy channel from re-probing a
+// known-bad key on the per-channel failure-backoff cadence. Three paths back
+// in: a key save (PUT /config clears the latch explicitly; the fingerprint
+// check in giphy_auth_invalid_for_key self-clears for writers that bypass
+// http_api), the user's force-refresh override, and a slow reprobe once per
+// GIPHY_AUTH_REPROBE_SEC so a transient Giphy-side auth outage self-heals
+// without user action.
+#define GIPHY_AUTH_REPROBE_SEC 3600
+
+static int64_t s_auth_invalid_until_us = 0;
+static uint32_t s_auth_bad_key_fnv = 0;
+static bool s_auth_notified = false;
+
+// FNV-1a over the key string: latch state carries a fingerprint instead of a
+// second copy of the secret.
+static uint32_t auth_key_fnv(const char *key)
+{
+    uint32_t h = 0x811c9dc5u;
+    if (!key) return h;
+    for (const unsigned char *p = (const unsigned char *)key; *p; p++) {
+        h ^= *p;
+        h *= 16777619u;
+    }
+    return h;
+}
+
+void giphy_set_auth_invalid(const char *api_key)
+{
+    int64_t until = esp_timer_get_time() + (int64_t)GIPHY_AUTH_REPROBE_SEC * 1000000LL;
+    if (until > s_auth_invalid_until_us) s_auth_invalid_until_us = until;
+    s_auth_bad_key_fnv = auth_key_fnv(api_key);
+    ESP_LOGW(TAG, "Giphy rejected the API key (HTTP 401/403); suspending Giphy "
+                  "refreshes for %us. Saving a key in Settings retries immediately.",
+             (unsigned)GIPHY_AUTH_REPROBE_SEC);
+}
+
+bool giphy_is_auth_invalid(void)
+{
+    return esp_timer_get_time() < s_auth_invalid_until_us;
+}
+
+uint32_t giphy_auth_invalid_remaining_sec(void)
+{
+    int64_t now = esp_timer_get_time();
+    if (now >= s_auth_invalid_until_us) return 0;
+    return (uint32_t)((s_auth_invalid_until_us - now + 999999) / 1000000);
+}
+
+// Missing-key parking: the same "persistent until config change" class as a
+// rejected key, minus the network — nothing external can fix it, so the
+// expiry exists only to pick up key writes that bypass PUT /config (e.g. a
+// console set, which can't clear the flag without a config_store→giphy
+// dependency edge).
+static int64_t s_no_key_until_us = 0;
+static bool s_no_key_notified = false;
+
+void giphy_set_no_key(void)
+{
+    int64_t until = esp_timer_get_time() + (int64_t)GIPHY_AUTH_REPROBE_SEC * 1000000LL;
+    if (until > s_no_key_until_us) s_no_key_until_us = until;
+}
+
+bool giphy_is_no_key(void)
+{
+    return esp_timer_get_time() < s_no_key_until_us;
+}
+
+uint32_t giphy_no_key_remaining_sec(void)
+{
+    int64_t now = esp_timer_get_time();
+    if (now >= s_no_key_until_us) return 0;
+    return (uint32_t)((s_no_key_until_us - now + 999999) / 1000000);
+}
+
+bool giphy_no_key_take_notification(void)
+{
+    if (!giphy_is_no_key() || s_no_key_notified) return false;
+    s_no_key_notified = true;
+    return true;
+}
+
+void giphy_clear_auth_invalid(void)
+{
+    // Stay silent when nothing is latched — this runs on every successful
+    // refresh.
+    if (s_auth_invalid_until_us == 0 && s_auth_bad_key_fnv == 0 && !s_auth_notified &&
+        s_no_key_until_us == 0 && !s_no_key_notified) {
+        return;
+    }
+    s_auth_invalid_until_us = 0;
+    s_auth_bad_key_fnv = 0;
+    s_auth_notified = false;
+    s_no_key_until_us = 0;
+    s_no_key_notified = false;
+    ESP_LOGI(TAG, "Giphy key-parking state cleared (auth-invalid latch / no-key flag)");
+}
+
+bool giphy_auth_invalid_for_key(const char *api_key)
+{
+    if (!giphy_is_auth_invalid()) return false;
+    if (auth_key_fnv(api_key) != s_auth_bad_key_fnv) {
+        // The configured key changed since the latch engaged (a writer that
+        // bypassed PUT /config) — clear so the new key gets probed.
+        giphy_clear_auth_invalid();
+        return false;
+    }
+    return true;
+}
+
+bool giphy_auth_take_notification(void)
+{
+    if (!giphy_is_auth_invalid() || s_auth_notified) return false;
+    s_auth_notified = true;
+    return true;
+}
+
 /**
  * @brief Read a Giphy rendition dimension (served as string or number)
  *
@@ -281,6 +402,7 @@ esp_err_t giphy_fetch_random_id(const char *api_key, char *out_random_id, size_t
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "random_id: fetch failed: %s (HTTP %d)",
                  esp_err_to_name(err), res.http_status);
+        if (err == ESP_ERR_NOT_ALLOWED) giphy_set_auth_invalid(api_key);
         return ESP_FAIL;
     }
 
@@ -315,6 +437,12 @@ esp_err_t giphy_register_click(const char *api_key,
         return ESP_ERR_INVALID_ARG;
     }
 
+    // Don't burn a request on a key Giphy already rejected.
+    if (giphy_auth_invalid_for_key(api_key)) {
+        ESP_LOGD(TAG, "register_click: skipped, API key marked invalid");
+        return ESP_ERR_NOT_ALLOWED;
+    }
+
     // -- Step 1: fetch analytics for this GIF -------------------------------
     char url[512];
     snprintf(url, sizeof(url),
@@ -334,7 +462,11 @@ esp_err_t giphy_register_click(const char *api_key,
                  esp_err_to_name(err), res.http_status, giphy_id);
         // Preserve the codes callers act on: 401/403 -> NOT_ALLOWED,
         // 429 -> INVALID_RESPONSE (cooldown engaged via the callback).
-        if (err == ESP_ERR_NOT_ALLOWED || err == ESP_ERR_INVALID_RESPONSE) return err;
+        if (err == ESP_ERR_NOT_ALLOWED) {
+            giphy_set_auth_invalid(api_key);
+            return err;
+        }
+        if (err == ESP_ERR_INVALID_RESPONSE) return err;
         return ESP_FAIL;
     }
 
@@ -465,6 +597,7 @@ esp_err_t giphy_fetch_page(giphy_fetch_ctx_t *ctx, int offset,
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Giphy page fetch failed: %s (HTTP %d)",
                  esp_err_to_name(err), res.http_status);
+        if (err == ESP_ERR_NOT_ALLOWED) giphy_set_auth_invalid(ctx->api_key);
         return err;
     }
     int total_read = (int)got;

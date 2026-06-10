@@ -253,6 +253,19 @@ static uint32_t channel_next_actionable_sec(const ps_channel_state_t *ch, time_t
         }
         gate_in = giphy_cooldown_remaining_sec();
         gate_name = "Giphy rate-limit cooldown";
+        // Invalid-key latch: a key save clears it early via
+        // ps_refresh_signal_work; this deadline only times the reprobe.
+        uint32_t auth_in = giphy_auth_invalid_remaining_sec();
+        if (auth_in > gate_in) {
+            gate_in = auth_in;
+            gate_name = "invalid Giphy API key";
+        }
+        // Missing-key parking: same shape, config-read instead of reprobe.
+        uint32_t nokey_in = giphy_no_key_remaining_sec();
+        if (nokey_in > gate_in) {
+            gate_in = nokey_in;
+            gate_name = "no Giphy API key";
+        }
     } else if (ch->type == PS_CHANNEL_TYPE_INSTITUTION) {
         if (!wifi_up) {
             *out_gate = "Wi-Fi connectivity";
@@ -369,6 +382,19 @@ static bool refresh_channel_is_eligible(ps_channel_state_t *ch, bool mqtt_ready)
         // the cooldown is active, leave Giphy channels pending so they
         // retry naturally once the quota window resets.
         if (giphy_is_rate_limited()) return false;
+        // A 401/403 likewise applies to the key: while the auth-invalid
+        // latch is engaged, leave channels pending until a key save clears
+        // it or the hourly reprobe window opens. Unlike the 429 cooldown,
+        // the force-refresh override DOES bypass this gate — the key may
+        // have been fixed at Giphy's end without its value changing, and a
+        // retry can then succeed.
+        if (giphy_is_auth_invalid() &&
+            !config_store_get_refresh_allow_override()) return false;
+        // Missing key: same parking, no network involved. The override
+        // bypass doubles as a manual re-read of the config for key writes
+        // that bypassed PUT /config.
+        if (giphy_is_no_key() &&
+            !config_store_get_refresh_allow_override()) return false;
         return true;
     }
 
@@ -1139,10 +1165,18 @@ static void refresh_task(void *arg)
             config_store_get_giphy_api_key(giphy_key_check, sizeof(giphy_key_check));
             if (giphy_key_check[0] == '\0') {
                 ESP_LOGW(TAG, "Giphy channel '%s' skipped: no API key configured", display_name);
-                char giphy_display_name[64];
-                ps_get_display_name_from_spec(type, spec_name, identifier, giphy_display_name, sizeof(giphy_display_name));
-                p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1,
-                                               "No Giphy API key configured");
+                // Park key-wide (eligibility gates until a key save or the
+                // hourly config re-read) and notify once per episode — the
+                // same treatment as a rejected key, minus the network.
+                giphy_set_no_key();
+                if (giphy_no_key_take_notification()) {
+                    char giphy_display_name[64];
+                    ps_get_display_name_from_spec(type, spec_name, identifier, giphy_display_name, sizeof(giphy_display_name));
+                    p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1,
+                                                   "Cannot refresh channel: no\n"
+                                                   "Giphy API key configured.\n"
+                                                   "Add one in Settings.");
+                }
                 err = ESP_ERR_NOT_FOUND;
             } else {
             // Check if Giphy channel was refreshed recently enough.
@@ -1207,11 +1241,18 @@ static void refresh_task(void *arg)
                     // vs an invalid API key (HTTP 401/403 from giphy_fetch_page)
                     if (giphy_is_refresh_cancelled()) {
                         ESP_LOGI(TAG, "Giphy channel '%s' refresh cancelled", display_name);
-                    } else {
+                    } else if (giphy_auth_take_notification()) {
+                        // Once per failure episode (re-armed by a key save or
+                        // a successful refresh), not per retry: the auth
+                        // latch keeps refreshes parked, and re-pushing the
+                        // same error on every reprobe would only re-cover
+                        // live artwork until the next swap.
                         char giphy_display_name[64];
                         ps_get_display_name_from_spec(type, spec_name, identifier, giphy_display_name, sizeof(giphy_display_name));
                         p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1,
-                                                       "Invalid Giphy API key");
+                                                       "Cannot refresh channel: Giphy\n"
+                                                       "rejected the API key (error 401).\n"
+                                                       "Update the key in Settings.");
                     }
                 } else if (err != ESP_OK) {
                     char giphy_display_name[64];
@@ -1425,9 +1466,25 @@ static void refresh_task(void *arg)
                 // cycle. ESP_ERR_INVALID_RESPONSE is only ever returned by
                 // network paths for HTTP 429.
                 ch->refresh_pending = true;
+            } else if (type == PS_CHANNEL_TYPE_GIPHY && err == ESP_ERR_NOT_ALLOWED &&
+                       giphy_is_auth_invalid()) {
+                // Invalid API key: the key-wide auth latch already gates
+                // eligibility (cleared by key save, bypassed by the force
+                // override, expiring into an hourly reprobe) — no per-channel
+                // backoff on top, mirroring the 429 arm above. Cancellation
+                // also travels as NOT_ALLOWED but never engages the latch,
+                // so it still takes the generic backoff below.
+                ch->refresh_pending = true;
+            } else if (type == PS_CHANNEL_TYPE_GIPHY && err == ESP_ERR_NOT_FOUND &&
+                       giphy_is_no_key()) {
+                // Missing API key: parked key-wide just like the auth latch.
+                // The giphy_is_no_key() conjunct keeps other NOT_FOUND
+                // sources (e.g. a cache that vanished mid-refresh) on the
+                // generic backoff below.
+                ch->refresh_pending = true;
             } else {
-                // Other failures (DNS, 5xx, timeout, missing API key, dead
-                // artwork URL): per-channel exponential backoff with pending
+                // Other failures (DNS, 5xx, timeout, dead artwork URL):
+                // per-channel exponential backoff with pending
                 // preserved — the eligibility gate holds the channel until
                 // retry_at_us, then the periodic re-check retries it within
                 // ~2 s. Previously pending was dropped and the periodic cycle

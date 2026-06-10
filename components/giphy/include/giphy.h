@@ -333,6 +333,94 @@ bool giphy_is_rate_limited(void);
  */
 uint32_t giphy_cooldown_remaining_sec(void);
 
+// ============================================================================
+// Auth-invalid latch (process-wide)
+// ============================================================================
+
+/**
+ * @brief Mark the configured Giphy API key as rejected (HTTP 401/403).
+ *
+ * Unlike the time-windowed 429 cooldown, a 401/403 is deterministic for the
+ * key until the key (or its standing at Giphy) changes — retrying on a timer
+ * cannot succeed. The latch suspends all Giphy refreshes; it clears on a key
+ * save (giphy_clear_auth_invalid), self-clears when the configured key no
+ * longer matches the latched fingerprint (giphy_auth_invalid_for_key), is
+ * bypassed by the user's force-refresh override, and expires into a slow
+ * reprobe after GIPHY_AUTH_REPROBE_SEC as a self-heal safety net.
+ *
+ * Called from the giphy_api fetch paths where the HTTP status is known.
+ *
+ * @param api_key The key that was rejected (fingerprinted, not stored)
+ */
+void giphy_set_auth_invalid(const char *api_key);
+
+/**
+ * @brief True while the auth-invalid latch is engaged (reprobe not yet due).
+ */
+bool giphy_is_auth_invalid(void);
+
+/**
+ * @brief Seconds until the latch expires into a reprobe (0 if not latched).
+ */
+uint32_t giphy_auth_invalid_remaining_sec(void);
+
+/**
+ * @brief Clear all key-parking state (key saved, or a refresh succeeded).
+ *
+ * Clears both the auth-invalid latch and the no-key flag, and re-arms their
+ * one-shot UI notifications so a subsequent bad/missing key notifies the
+ * user again. No-op (and silent) when nothing is parked.
+ */
+void giphy_clear_auth_invalid(void);
+
+/**
+ * @brief Mark Giphy refreshes as parked because no API key is configured.
+ *
+ * Same "persistent until config change" class as the auth-invalid latch,
+ * minus the network: only a key write can fix it. Cleared by
+ * giphy_clear_auth_invalid (key save via PUT /config); expires after
+ * GIPHY_AUTH_REPROBE_SEC only to pick up key writes that bypass http_api.
+ * Set at refresh dispatch when the configured key reads back empty.
+ */
+void giphy_set_no_key(void);
+
+/**
+ * @brief True while Giphy refreshes are parked on a missing API key.
+ */
+bool giphy_is_no_key(void);
+
+/**
+ * @brief Seconds until the no-key parking expires into a re-check (0 if not parked).
+ */
+uint32_t giphy_no_key_remaining_sec(void);
+
+/**
+ * @brief One-shot UI-notification claim for the current no-key episode.
+ *
+ * Same contract as giphy_auth_take_notification: true exactly once after the
+ * flag engages, re-armed only by giphy_clear_auth_invalid.
+ */
+bool giphy_no_key_take_notification(void);
+
+/**
+ * @brief True if the latch is engaged for exactly this key.
+ *
+ * When the latch is engaged but @p api_key no longer matches the latched
+ * fingerprint (the key was changed by a writer that bypassed PUT /config),
+ * the latch self-clears and false is returned so the new key gets probed.
+ */
+bool giphy_auth_invalid_for_key(const char *api_key);
+
+/**
+ * @brief One-shot UI-notification claim for the current failure episode.
+ *
+ * Returns true exactly once after the latch engages; re-armed only by
+ * giphy_clear_auth_invalid (key save / successful refresh), NOT by hourly
+ * reprobe failures — so the on-screen error shows once per episode instead
+ * of re-covering live artwork on every retry.
+ */
+bool giphy_auth_take_notification(void);
+
 #ifdef __cplusplus
 }
 #endif

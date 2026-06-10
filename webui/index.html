@@ -806,6 +806,14 @@ body {
     <h4>&#9203; Giphy Rate Limited</h4>
     <p>The Giphy API key hit its limit of 100 requests per hour. Device is now waiting before refreshing Giphy channels.</p>
 </div>
+<div class="cooldown-banner" id="giphy-auth-banner" onclick="window.location.href='/settings'" style="cursor:pointer;background:linear-gradient(135deg,#c62828 0%,#e53935 100%);box-shadow:0 4px 12px rgba(198,40,40,0.3);">
+    <h4>&#9888; Invalid Giphy API Key</h4>
+    <p>Giphy rejected the configured API key (error 401). Giphy channels keep playing cached artwork but won't refresh. Tap here to update the key in Settings.</p>
+</div>
+<div class="cooldown-banner" id="giphy-nokey-banner" onclick="window.location.href='/settings'" style="cursor:pointer;">
+    <h4>&#128273; Giphy API Key Needed</h4>
+    <p>This playset has Giphy channels but no API key is configured, so they can't refresh. Tap here to add a free key in Settings.</p>
+</div>
 <nav class="bottom-nav">
 <a href="/" class="bottom-nav-item active"><span class="bottom-nav-icon">&#8962;</span><span class="bottom-nav-label">Home</span></a>
 <a href="/playset-editor" class="bottom-nav-item"><span class="bottom-nav-icon">&#9776;</span><span class="bottom-nav-label">Playsets</span></a>
@@ -2686,6 +2694,15 @@ function pollActivePlayset(attempt) {
                         return c.type === 'giphy' && c.refreshing && isDueForRefresh(c);
                     }));
                 cdBanner.style.display = (giphyCooldownActive && giphyWaiting) ? 'block' : 'none';
+                // Invalid-key / no-key banners: unlike the cooldown, not
+                // gated on a channel being due — a rejected or missing key
+                // is wrong regardless of freshness, and the flags only latch
+                // when a Giphy refresh actually dispatched (so the playset
+                // provably uses Giphy).
+                var authBanner = document.getElementById('giphy-auth-banner');
+                authBanner.style.display = (resp.data.giphy_auth_invalid === true) ? 'block' : 'none';
+                var nokeyBanner = document.getElementById('giphy-nokey-banner');
+                nokeyBanner.style.display = (resp.data.giphy_no_key === true) ? 'block' : 'none';
                 if (!switching && resp.data.active_playset && resp.data.playset_info) {
                     var pollPillId = pillIdFromActivePlayset(resp.data.active_playset);
                     updateNowPlaying(pollPillId,

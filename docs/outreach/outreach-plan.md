@@ -13,6 +13,7 @@ You're not starting cold. The strongest hooks for any pitch:
 - **Real animated visuals** — pixel art on a 720×720 IPS is photogenic. Demo GIFs already exist. This matters more than copy.
 - **ESP32-P4** — newer chip with less coverage than classic ESP32. Hackaday's 2025 hardware retrospective flagged ESP32 family as a perennial favorite, but P4 specifically is undercovered.
 - **Makezine credit already in the bag** — that's earned-media credibility you can reference in every subsequent pitch.
+- **r/MuseumPros reception (2026-06-07)** — 200+ upvotes and ~100 shares among museum professionals within days. Third-party validation no copy buys; cite the numbers in the Hackaday tip and other editorial pitches (per-register policy in `museum-outreach-plan.md`: numbers for editors, soft phrasing for museum teams, nothing on professional listservs).
 - **Makapix Club integration** — the social-network angle is unusual and gives a recurring content story (most pixel art devices are static once shipped).
 - **Designed to run 24/7** — both the hardware and the firmware are built for continuous operation. "Set it on a shelf and forget it" is the peace-of-mind story that distinguishes p3a from typical hobby ESP32 builds, and it's worth saying out loud in pitches and on the README.
 

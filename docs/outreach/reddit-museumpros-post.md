@@ -2,6 +2,21 @@
 
 *Drafted 2026-06-07.*
 
+**POSTED 2026-06-07 — 200+ upvotes, ~100 shares in four days (as of
+2026-06-11).** The open-access-payoff framing and the photo +
+discussion-question format both validated; carry them into the
+r/DigitalHumanities post. While the thread is warm: harvest
+institution suggestions (roadmap input) and recurring questions
+(prepped replies for the DH post and code4lib). Traffic captured
+2026-06-11: ~80 incremental unique visitors over D0–D3 (27/58/18/9
+vs. ~8/day baseline), 1 star, 1 fork, no flash uptick in release
+downloads — applause and shares, not builders; exactly the
+reputational-win profile this venue was picked for. The reception is
+now citable social proof — explicit
+numbers in the editorial tips, one soft sentence in the museum
+digital-team emails, nothing in code4lib / IIIF-discuss (see
+`museum-outreach-plan.md` for the policy).
+
 Museum-track Reddit post for r/MuseumPros — the museum-professionals
 community (digital teams, registrars, educators, curators). Distinct
 from the maker-track `reddit-esp32-post.md`: the audience here cares

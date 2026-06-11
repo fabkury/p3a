@@ -19,6 +19,28 @@ channels are the *hook* for reaching new audiences — not a rebrand.
 Lead with the technical-cultural angle that fits each venue, not a
 generic product pitch.
 
+**Execution status (2026-06-11).**
+
+- **r/MuseumPros posted 2026-06-07** (`reddit-museumpros-post.md`):
+  200+ upvotes, ~100 shares in four days — the museum track's first
+  public win and now citable social proof.
+- **r/DigitalHumanities** scheduled Monday/Tuesday 2026-06-15/16
+  (`reddit-digitalhumanities-post.md`) — the only clean slot between
+  the MuseumPros ≥1-week gap and the code4lib-l window (~June 22–29).
+- **Conversion data captured 2026-06-11:** baseline ~8 unique
+  visitors/day; D0 27 → D1 58 → D2 18 → D3 9 (≈80 incremental
+  uniques), 1 star, 1 fork, no visible flash uptick in release
+  downloads. Read: the museum track converts to *reputation* (~100
+  shares), not to builders — as designed. Measure this track by
+  thread quality, shares, and downstream pickups; stars and flashes
+  must come from the maker track (`outreach-plan.md`), which the demo
+  video still gates.
+- **Social-proof policy (tiered by register):** explicit numbers in
+  the editorial tips (Hyperallergic, Open Culture, WMMNA, MCN cover
+  email); one soft no-numbers sentence in the museum digital-team
+  emails; nothing in code4lib / IIIF-discuss / IIIF news — citing
+  Reddit karma in professional listservs reads as marketing.
+
 ---
 
 ## What the new feature unlocks

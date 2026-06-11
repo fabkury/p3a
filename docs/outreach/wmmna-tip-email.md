@@ -14,8 +14,9 @@ Open Culture (open-content trifecta, open-licensing readers): WMMNA
 treats objects like p3a as critical-practice artifacts, not consumer
 products. The framing reflects that.
 
-The only unfilled placeholder is `{{video_url}}` — fill once the
-museum-mode demo video is produced.
+Unfilled placeholders: `{{video_url}}` (fill once the museum-mode demo
+video is produced) and `{{museumpros_thread_url}}` (the 2026-06-07
+r/MuseumPros post — 200+ upvotes, ~100 shares in four days).
 
 ---
 
@@ -34,6 +35,8 @@ address.
 > The piece I think is worth a paragraph on WMMNA: museums have spent a decade publishing collections under open licenses and open IIIF APIs, mostly with the assumption that the consumers would be other institutions, scholars, or web designers. p3a is what it looks like when a solo maker decides that "open" should mean "open enough to embed in a $48 microcontroller running on a desk." It's not a startup product — there's nothing to buy, no service to sign up for, no cloud account in the loop. The firmware is Apache 2.0 and the hardware is off-the-shelf. The whole project is one person.
 >
 > A small thing I keep noticing: every museum in the set treats the openness of its collection as a value statement, but p3a is one of the few consumer-grade objects that actually performs that statement back at them — playing a Vermeer at 9:00, a Wellcome anatomical engraving at 10:30, a Hammershøi at 11:00, on a piece of hardware anyone can build over a weekend.
+>
+> An early data point: shared with the museum-professionals community on Reddit (r/MuseumPros), it drew 200+ upvotes and roughly 100 shares within days ({{museumpros_thread_url}}) — the institutional side answering back.
 >
 > 30-second video: {{video_url}}
 > Source / docs: https://github.com/fabkury/p3a
@@ -78,12 +81,18 @@ address.
 - **"Happy to send a unit"** — WMMNA has historically featured
   hands-on photos of devices Régine has actually held. The offer
   meaningfully improves odds here vs. other editorial tips.
+- **The r/MuseumPros line (added 2026-06-11)** doubles as social proof
+  in the register the email already uses — the institutional audience
+  responding to being taken at its word. Link included; numbers
+  refreshed on send day.
 
 ## Send checklist
 
 - [ ] Confirm Régine's current email via the WMMNA contact page (or
       the site's About page).
 - [ ] Museum-mode video uploaded; URL plugged into the body.
+- [ ] `{{museumpros_thread_url}}` plugged in; upvote/share numbers
+      refreshed to current values.
 - [ ] Quick search of WMMNA's recent coverage to confirm a similar
       device hasn't already been featured (and if so, name-drop the
       prior coverage as context).

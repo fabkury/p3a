@@ -31,6 +31,8 @@ museum-mode demo video is produced.
 >
 > {{museum_specific_line}}
 >
+> When I shared p3a with the museum-professionals community on Reddit (r/MuseumPros), the reception was warm — there's clear appetite for what open-access programs make possible.
+>
 > 30-second video: {{video_url}}
 > Source / firmware: https://github.com/fabkury/p3a
 >
@@ -53,6 +55,8 @@ museum-mode demo video is produced.
 > I built **p3a**, an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — that pulls artwork from the Art Institute of Chicago via your Open Access program and rotates through it like a tiny gallery on the desk. It's a firmware-level IIIF consumer: hits your IIIF Image API directly with proper rate-limit handling, decodes JPEGs on-device, no cloud middleman.
 >
 > The AIC Open Access program is part of why p3a exists — the showcase you curate is a model the rest of the field follows. AIC is a first-class source in the device alongside the Rijksmuseum, the V&A, the Wellcome Collection, the Statens Museum for Kunst (SMK), the Harvard Art Museums, and the Smithsonian.
+>
+> When I shared p3a with the museum-professionals community on Reddit (r/MuseumPros), the reception was warm — there's clear appetite for what open-access programs make possible.
 >
 > 30-second video: {{video_url}}
 > Source / firmware: https://github.com/fabkury/p3a
@@ -77,6 +81,8 @@ museum-mode demo video is produced.
 >
 > Rijksstudio's stance on creative reuse made the museum an obvious choice — the same openness that lets people remix the collection lets a $48 microcontroller serve it on a wall.
 >
+> When I shared p3a with the museum-professionals community on Reddit (r/MuseumPros), the reception was warm — there's clear appetite for what open-access programs make possible.
+>
 > 30-second video: {{video_url}}
 > Source / firmware: https://github.com/fabkury/p3a
 >
@@ -99,6 +105,8 @@ museum-mode demo video is produced.
 > I built **p3a**, an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — that pulls artwork from the V&A via your Collections API and rotates through it like a tiny gallery on the desk. It's a firmware-level IIIF consumer: hits your IIIF endpoints directly, decodes JPEGs on-device, no cloud middleman.
 >
 > V&A sits alongside AIC, the Rijksmuseum, the Wellcome Collection, SMK, the Harvard Art Museums, and the Smithsonian as a first-class source on the device — your Collections API made the integration straightforward.
+>
+> When I shared p3a with the museum-professionals community on Reddit (r/MuseumPros), the reception was warm — there's clear appetite for what open-access programs make possible.
 >
 > 30-second video: {{video_url}}
 > Source / firmware: https://github.com/fabkury/p3a
@@ -123,6 +131,8 @@ museum-mode demo video is produced.
 >
 > Wellcome's openly-licensed catalogue is what made it possible to drop the collection into the device alongside AIC, the Rijksmuseum, the V&A, SMK, the Harvard Art Museums, and the Smithsonian — Wellcome's stance on reuse is something I cite when I explain to people why p3a doesn't need permissions or accounts.
 >
+> When I shared p3a with the museum-professionals community on Reddit (r/MuseumPros), the reception was warm — there's clear appetite for what open-access programs make possible.
+>
 > 30-second video: {{video_url}}
 > Source / firmware: https://github.com/fabkury/p3a
 >
@@ -145,6 +155,8 @@ museum-mode demo video is produced.
 > I built **p3a**, an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — that pulls artwork from the SMK collection via your public API and rotates through it like a tiny gallery on the desk. It's a firmware-level IIIF consumer: hits your IIIF endpoints directly, decodes JPEGs on-device, no cloud middleman.
 >
 > SMK Open's permissive licensing and clean API are what made adding the collection straightforward — the device now treats SMK as a peer of AIC, the Rijksmuseum, the V&A, the Wellcome Collection, the Harvard Art Museums, and the Smithsonian.
+>
+> When I shared p3a with the museum-professionals community on Reddit (r/MuseumPros), the reception was warm — there's clear appetite for what open-access programs make possible.
 >
 > 30-second video: {{video_url}}
 > Source / firmware: https://github.com/fabkury/p3a
@@ -169,6 +181,8 @@ museum-mode demo video is produced.
 >
 > Harvard's API plus IDS imaging made the collection a natural fit — it now sits alongside the Art Institute of Chicago, the Rijksmuseum, the V&A, the Wellcome Collection, SMK, and the Smithsonian as a first-class source on the device.
 >
+> When I shared p3a with the museum-professionals community on Reddit (r/MuseumPros), the reception was warm — there's clear appetite for what open-access programs make possible.
+>
 > 30-second video: {{video_url}}
 > Source / firmware: https://github.com/fabkury/p3a
 >
@@ -191,6 +205,8 @@ museum-mode demo video is produced.
 > I built **p3a**, an open-hardware desktop art frame — a $48 ESP32-P4 board with a 4-inch 720×720 touchscreen — that pulls artwork from the Smithsonian via your Open Access API and rotates through it like a tiny gallery on the desk. It's a firmware-level IIIF consumer: it reads your Open Access metadata, fetches the IIIF image on-device, and decodes JPEGs on the chip — no cloud middleman.
 >
 > The breadth of Open Access across the Smithsonian's units is exactly what makes it compelling on a rotating frame — it now sits alongside the Art Institute of Chicago, the Rijksmuseum, the V&A, the Wellcome Collection, SMK, and the Harvard Art Museums as a first-class source.
+>
+> When I shared p3a with the museum-professionals community on Reddit (r/MuseumPros), the reception was warm — there's clear appetite for what open-access programs make possible.
 >
 > 30-second video: {{video_url}}
 > Source / firmware: https://github.com/fabkury/p3a
@@ -225,6 +241,10 @@ museum-mode demo video is produced.
 - **No unit offer** even though Tier 3 contemplates sending one. That
   belongs in a follow-up if they reply, not in the cold email itself.
 - **No P.S.** — adds length without adding signal here.
+- **The r/MuseumPros sentence (added 2026-06-11) stays soft on
+  purpose** — no upvote counts, no link. This email's register is "no
+  ask," and metrics read as pitching. The numbers live in the
+  editorial tips, where editors expect them.
 
 ## Send checklist
 

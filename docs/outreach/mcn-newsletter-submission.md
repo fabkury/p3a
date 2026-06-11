@@ -19,8 +19,9 @@ optional expanded paragraphs and a quote-pull.
 Technical claims taken from `docs/art-institutions/finalized-design.md`
 and the `art_institution` component as of v0.10.0.
 
-The only unfilled placeholder is `{{video_url}}` — fill once the
-museum-mode demo video is produced.
+Unfilled placeholders: `{{video_url}}` (fill once the museum-mode demo
+video is produced) and `{{museumpros_thread_url}}` (the 2026-06-07
+r/MuseumPros post — 200+ upvotes, ~100 shares in four days).
 
 ---
 
@@ -35,6 +36,8 @@ museum-mode demo video is produced.
 > Submitting a community-implementation note for the newsletter. **p3a** is an open-hardware desktop art frame built on a $48 ESP32-P4 microcontroller; as of v0.10.0 its firmware embeds a IIIF Image API client and consumes the open-access APIs of seven institutions — the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst, the Harvard Art Museums, and the Smithsonian.
 >
 > I think it's a useful concrete data point for MCN readers because the device sits in an unusual category: not a museum-built product, not a startup's product, not a research prototype — a working consumer-grade object that exists because of the digital-access decisions museums have made over the last decade. The pitch for digital teams trying to justify continued open-access investment, more or less.
+>
+> Reception so far supports that read: shared with the museum-professionals subreddit (r/MuseumPros) on June 7, it drew 200+ upvotes and roughly 100 shares within days ({{museumpros_thread_url}}) — the museum-professionals audience is already circulating it.
 >
 > Below is a drop-in blurb in newsletter style (~150 words), plus an extended paragraph and a quote-pull if you have space. Happy to adjust framing.
 >
@@ -113,12 +116,18 @@ museum-mode demo video is produced.
   shipping a unit to a newsletter editor adds friction without clear
   payoff. Different from Hyperallergic / WMMNA where a unit is part
   of the editorial reflex.
+- **The r/MuseumPros line (added 2026-06-11) sits in the cover email
+  only** — the drop-in blurb stays third-person newsletter copy;
+  reception metrics there would read as self-citation. Numbers
+  refreshed on send day.
 
 ## Send checklist
 
 - [ ] Confirm MCN newsletter intake address via the current website
       contact form.
 - [ ] Museum-mode video uploaded; URL plugged into the cover.
+- [ ] `{{museumpros_thread_url}}` plugged in; upvote/share numbers
+      refreshed to current values.
 - [ ] Sent in Week 8+, *after* the museum digital teams have all been
       contacted and ideally after at least one has acknowledged. MCN
       editorial may cross-reference; "the AIC team has already seen

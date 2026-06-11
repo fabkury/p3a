@@ -52,6 +52,10 @@ typedef struct {
     int interlace_passes;
     uint32_t num_frames;     // animation frames (excludes hidden default image)
     uint32_t frames_emitted; // frames composited since init/reset
+    uint32_t num_plays;      // acTL num_plays (0 = loop forever)
+    uint32_t plays_done;     // completed passes; deliberately NOT cleared by
+                             // rewind/reset — the player's only reset call is
+                             // the loop-restart, which must count as a play
     bool first_frame_hidden; // IDAT default image is not part of the animation
     uint8_t *canvas;         // RGBA8888 canvas, persistent across frames
     uint8_t *subframe;       // RGBA8888 scratch for one fcTL sub-frame
@@ -252,6 +256,7 @@ static esp_err_t apng_open_stream(png_decoder_data_t *d)
     if (d->first_frame_hidden && d->num_frames > 1) {
         d->num_frames--;
     }
+    d->num_plays = png_get_num_plays(png_ptr, info_ptr);
     return ESP_OK;
 }
 
@@ -299,21 +304,31 @@ static void apng_apply_pending_dispose(png_decoder_data_t *d)
 }
 
 // Decode one animation frame and composite it onto the canvas.
-// Returns ESP_ERR_INVALID_STATE when the sequence is exhausted (the player
-// resets and decodes again — same convention as animated WebP), ESP_FAIL on
-// hard decode errors (latched until reset).
+// Returns ESP_ERR_INVALID_STATE when the sequence is exhausted and more plays
+// remain (the player resets and decodes again — same convention as animated
+// WebP), ESP_OK with the held final canvas once a finite num_plays is spent
+// (APNG spec: the animation ends on its last frame), ESP_FAIL on hard decode
+// errors (latched until reset).
 static esp_err_t apng_decode_one_frame(png_decoder_data_t *d)
 {
     if (d->errored) {
         return ESP_FAIL;
     }
     if (d->frames_emitted >= d->num_frames) {
+        // Finite play count spent: hold the final frame. The canvas already
+        // shows it (a frame's dispose_op is only applied before the *next*
+        // frame, which never comes) — the caller re-emits it, flattened
+        // against the current background, at the static-image cadence.
+        if (d->num_plays != 0 && d->plays_done >= d->num_plays) {
+            d->current_frame_delay_ms = STATIC_IMAGE_FRAME_DELAY_MS;
+            return ESP_OK;
+        }
         if (d->num_frames > 1) {
             return ESP_ERR_INVALID_STATE;
         }
-        // Single-frame animation (hidden default image + one fcTL frame):
-        // the renderer treats frame_count==1 as static and re-decodes for
-        // background recompose — rewind transparently instead of erroring.
+        // Single-frame looping animation (hidden default image + one fcTL
+        // frame): the renderer treats frame_count==1 as static and re-decodes
+        // for background recompose — rewind transparently instead of erroring.
         if (apng_rewind(d) != ESP_OK) {
             return ESP_FAIL;
         }
@@ -433,6 +448,9 @@ static esp_err_t apng_decode_one_frame(png_decoder_data_t *d)
         d->current_frame_delay_ms = delay_ms;
 
         d->frames_emitted++;
+        if (d->frames_emitted >= d->num_frames) {
+            d->plays_done++;
+        }
         return ESP_OK;
     }
 }

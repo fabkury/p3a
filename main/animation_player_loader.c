@@ -760,6 +760,8 @@ void unload_animation_buffer(animation_buffer_t *buf)
     buf->current_frame_delay_ms = 1;
     buf->static_frame_cached = false;
     buf->static_bg_generation = 0;
+    buf->decode_failed = false;
+    buf->last_good_native = NULL;
 
     free(buf->filepath);
     buf->filepath = NULL;

@@ -96,11 +96,24 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
         return -1;
     }
 
+    // Hard decoder failure was latched: freeze on the last good frame (or
+    // black) instead of hammering the dead decoder on every render tick.
+    // Auto-swap moves past the artwork on its own schedule.
+    if (buf->decode_failed) {
+        if (buf->last_good_native) {
+            upscale_frame_to_display(buf, buf->last_good_native, dest_buffer);
+        } else {
+            memset(dest_buffer, 0, (size_t)target_w * (size_t)target_h * 3U);
+        }
+        return 500;
+    }
+
     // Use prefetched first frame: upscale directly from native_frame_b1 to dest_buffer
     // No intermediate buffer or memcpy needed - the decode was done during prefetch,
     // now we just upscale directly to the display back buffer
     if (use_prefetched && buf->first_frame_ready && buf->native_frame_b1) {
         upscale_frame_to_display(buf, buf->native_frame_b1, dest_buffer);
+        buf->last_good_native = buf->native_frame_b1;
         buf->first_frame_ready = false;
         // Static images: keep using native_frame_b1 without re-decoding each tick
         if (buf->decoder_info.frame_count <= 1) {
@@ -125,12 +138,14 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
             esp_err_t derr = decode_next_native(buf, buf->native_frame_b1);
             if (derr != ESP_OK) {
                 ESP_LOGE(TAG, "Failed to decode static frame: %s", esp_err_to_name(derr));
+                buf->decode_failed = true;
                 return -1;
             }
             uint32_t d = 1;
             (void)animation_decoder_get_frame_delay(buf->decoder, &d);
             if (d < 1) d = 1;
             buf->prefetched_first_frame_delay_ms = d;
+            buf->last_good_native = buf->native_frame_b1;
             buf->static_frame_cached = true;
             buf->static_bg_generation = config_store_get_background_color_generation();
         } else if (buf->decoder_info.has_transparency) {
@@ -140,6 +155,7 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
                 esp_err_t derr = decode_next_native(buf, buf->native_frame_b1);
                 if (derr != ESP_OK) {
                     ESP_LOGE(TAG, "Failed to refresh static frame after bg change: %s", esp_err_to_name(derr));
+                    buf->decode_failed = true;
                     return -1;
                 }
                 buf->static_bg_generation = gen;
@@ -162,12 +178,15 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
         err = decode_next_native(buf, decode_buffer);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "Animation decoder could not restart");
+            buf->decode_failed = true;
             return -1;
         }
     } else if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to decode frame: %s", esp_err_to_name(err));
+        buf->decode_failed = true;
         return -1;
     }
+    buf->last_good_native = decode_buffer;
 
 #if CONFIG_P3A_PERF_DEBUG
     int64_t t_decode_end = debug_timer_now_us();

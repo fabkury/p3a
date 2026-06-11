@@ -245,6 +245,30 @@ static esp_err_t apng_open_stream(png_decoder_data_t *d)
     d->interlace_passes = passes;
     d->num_frames = png_get_num_frames(png_ptr, info_ptr);
     d->first_frame_hidden = png_get_first_frame_is_hidden(png_ptr, info_ptr) != 0;
+    // The APNG patch counts the hidden default image in num_frames (see
+    // png_have_info in pngrutil.c) so the canonical read loop is uniform.
+    // We track emitted animation frames only — without this exclusion the
+    // last decode walks past IEND looking for a frame that isn't there.
+    if (d->first_frame_hidden && d->num_frames > 1) {
+        d->num_frames--;
+    }
+    return ESP_OK;
+}
+
+// Rewind to the start of the animation: fresh read structs, cleared canvas,
+// pixel buffers kept. Shared by reset() and the single-frame replay path.
+static esp_err_t apng_rewind(png_decoder_data_t *d)
+{
+    memset(d->canvas, 0, (size_t)d->canvas_width * (size_t)d->canvas_height * 4U);
+    d->frames_emitted = 0;
+    d->have_pending_dispose = false;
+
+    esp_err_t err = apng_open_stream(d);
+    if (err != ESP_OK) {
+        d->errored = true;
+        return err;
+    }
+    d->errored = false;
     return ESP_OK;
 }
 
@@ -284,7 +308,15 @@ static esp_err_t apng_decode_one_frame(png_decoder_data_t *d)
         return ESP_FAIL;
     }
     if (d->frames_emitted >= d->num_frames) {
-        return ESP_ERR_INVALID_STATE;
+        if (d->num_frames > 1) {
+            return ESP_ERR_INVALID_STATE;
+        }
+        // Single-frame animation (hidden default image + one fcTL frame):
+        // the renderer treats frame_count==1 as static and re-decodes for
+        // background recompose — rewind transparently instead of erroring.
+        if (apng_rewind(d) != ESP_OK) {
+            return ESP_FAIL;
+        }
     }
     if (!d->png_ptr || !d->info_ptr) {
         return ESP_ERR_INVALID_STATE;
@@ -819,19 +851,8 @@ esp_err_t png_decoder_reset(animation_decoder_t *decoder)
         // Recreate the libpng read structs from the retained file buffer;
         // pixel buffers (canvas/subframe/snapshot) are kept to avoid
         // per-loop allocation churn.
-        memset(png_data->canvas, 0,
-               (size_t)png_data->canvas_width * (size_t)png_data->canvas_height * 4U);
-        png_data->frames_emitted = 0;
-        png_data->have_pending_dispose = false;
         png_data->current_frame_delay_ms = 1;
-
-        esp_err_t err = apng_open_stream(png_data);
-        if (err != ESP_OK) {
-            png_data->errored = true;
-            return ESP_FAIL;
-        }
-        png_data->errored = false;
-        return ESP_OK;
+        return (apng_rewind(png_data) == ESP_OK) ? ESP_OK : ESP_FAIL;
     }
 #endif
 

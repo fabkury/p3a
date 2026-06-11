@@ -124,6 +124,13 @@ typedef struct {
     bool static_frame_cached;
     uint32_t static_bg_generation;
 
+    // Hard decode failure latch: once set, render_next_frame stops calling
+    // the decoder and freezes on last_good_native (or black) until the next
+    // artwork swap — otherwise a corrupt file is retried (and logged) on
+    // every render tick.
+    bool decode_failed;
+    uint8_t *last_good_native;          // Most recently decoded native frame (b1 or b2)
+
     // View tracking: post_id of the artwork being displayed
     int32_t post_id;
     post_source_t post_source;

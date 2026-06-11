@@ -154,16 +154,29 @@ static bool clear_pending_swap_state(void)
     return had_swap_request;
 }
 
-// SWAP_FAIL_SILENT path: silently retry by emitting a fresh SWAP_NEXT event so
-// the scheduler picks another artwork. Falls back to displaying an error after
+// Failure-reporting policy shared by the load stage (loader task) and the
+// prefetch stage (render task). LOUD surfaces the failure on screen (no
+// silent retry); SILENT retries by emitting a fresh SWAP_NEXT event so the
+// scheduler picks another artwork, falling back to displaying an error after
 // MAX_AUTO_RETRIES consecutive failures.
-static void discard_failed_silent_swap(esp_err_t error, int32_t post_id, const char *filepath)
+// The s_auto_retry_* statics are touched from both tasks, but only one swap
+// is ever in flight (request_swap rejects while one is pending), so the two
+// stages never report concurrently; worst case is an off-by-one retry count,
+// bounded by MAX_AUTO_RETRIES.
+void animation_loader_report_swap_failure(esp_err_t error, swap_fail_mode_t fail_mode,
+                                          int32_t post_id, const char *filepath)
 {
-    bool had_swap_request = clear_pending_swap_state();
-    if (!had_swap_request) {
+    if (fail_mode == SWAP_FAIL_LOUD) {
+        ESP_LOGW(TAG, "Loud swap failed (%s, file=%s); displaying error.",
+                 esp_err_to_name(error), basename_of(filepath));
+        animation_loader_reset_auto_retry_state();
+        show_load_error_message(error, filepath);
+        // Terminal failure for a user-initiated swap (no-op for auto-swap).
+        if (proc_notif_fail_if_processing) proc_notif_fail_if_processing();
         return;
     }
 
+    // SWAP_FAIL_SILENT (and default)
     auto_retry_blocklist_add(post_id);
     s_auto_retry_count++;
     s_auto_retry_skip_count = 0;
@@ -183,34 +196,13 @@ static void discard_failed_silent_swap(esp_err_t error, int32_t post_id, const c
     }
 }
 
-// SWAP_FAIL_LOUD path: surface the failure on screen (no silent retry).
-static void discard_failed_loud_swap(esp_err_t error, const char *filepath)
-{
-    bool had_swap_request = clear_pending_swap_state();
-    if (!had_swap_request) {
-        return;
-    }
-
-    ESP_LOGW(TAG, "Loud swap failed (%s, file=%s); displaying error.",
-             esp_err_to_name(error), basename_of(filepath));
-    animation_loader_reset_auto_retry_state();
-    show_load_error_message(error, filepath);
-    // Terminal failure for a user-initiated swap (no-op for auto-swap).
-    if (proc_notif_fail_if_processing) proc_notif_fail_if_processing();
-}
-
 static void discard_failed_swap_request(esp_err_t error, swap_fail_mode_t fail_mode,
                                         int32_t post_id, const char *filepath)
 {
-    switch (fail_mode) {
-        case SWAP_FAIL_LOUD:
-            discard_failed_loud_swap(error, filepath);
-            break;
-        case SWAP_FAIL_SILENT:
-        default:
-            discard_failed_silent_swap(error, post_id, filepath);
-            break;
+    if (!clear_pending_swap_state()) {
+        return;
     }
+    animation_loader_report_swap_failure(error, fail_mode, post_id, filepath);
 }
 
 // Clear an in-flight swap request without treating it as a failure (no auto-retry).
@@ -582,6 +574,7 @@ void animation_loader_task(void *arg)
             s_back_buffer.ready = false;
             s_back_buffer.post_id = post_id;  // For view tracking
             s_back_buffer.post_source = post_source;
+            s_back_buffer.fail_mode = fail_mode;  // For prefetch-stage failure reporting
             s_back_buffer.view_channel_type = channel_type;
             strlcpy(s_back_buffer.view_channel_spec_name, channel_spec_name,
                     sizeof(s_back_buffer.view_channel_spec_name));
@@ -762,6 +755,7 @@ void unload_animation_buffer(animation_buffer_t *buf)
     buf->static_bg_generation = 0;
     buf->decode_failed = false;
     buf->last_good_native = NULL;
+    buf->fail_mode = SWAP_FAIL_SILENT;
 
     free(buf->filepath);
     buf->filepath = NULL;

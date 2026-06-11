@@ -841,9 +841,14 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_
             // Show loading state to user while waiting for refresh/download.
             // S4.2: the message body distinguishes "downloads pending" from
             // "refresh pending" so the user understands what's actually slow.
-            const char *detail = has_ci_entries
-                ? "Downloading artworks..."
-                : "Loading channel...";
+            // A single-ARTWORK playset (show_url / play-this-artwork) may
+            // already have the file on disk, so "Downloading" would be a lie
+            // there — and even when a fetch is needed, it's one artwork.
+            bool single_artwork = (s_state->channel_count == 1 &&
+                                   s_state->channels[0].type == PS_CHANNEL_TYPE_ARTWORK);
+            const char *detail = single_artwork
+                ? "Loading artwork..."
+                : (has_ci_entries ? "Downloading artworks..." : "Loading channel...");
             p3a_render_set_channel_message(first_channel_display_name, 1 /* P3A_CHANNEL_MSG_LOADING */, -1,
                                             detail);
         } else {

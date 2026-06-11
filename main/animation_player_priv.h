@@ -135,6 +135,11 @@ typedef struct {
     int32_t post_id;
     post_source_t post_source;
 
+    // How a failure after a successful load should be reported (mirrored from
+    // the load override). The render task reads this when the first-frame
+    // prefetch fails — by then the loader task's local copy is gone.
+    swap_fail_mode_t fail_mode;
+
     // Channel provenance, captured at swap time so the view tracker reports
     // the channel the post was actually picked from (matters for multi-channel
     // playsets where stochastic selection chooses a different channel each pick).
@@ -188,6 +193,15 @@ bool animation_loader_try_delete_corrupt_cached_file(const char *filepath, esp_e
 // Reset the silent-auto-swap-retry state (counter and per-burst blocklist).
 // Call after a successful swap or whenever the user takes over (user-initiated swap).
 void animation_loader_reset_auto_retry_state(void);
+
+// Failure-reporting policy shared by the load stage (loader task) and the
+// prefetch stage (render task): LOUD shows the error overlay immediately;
+// SILENT retries via SWAP_NEXT up to MAX_AUTO_RETRIES, then shows the error.
+// Call only from the task that owns the failing pipeline stage, after that
+// stage's swap state has been cleaned up, and never with s_buffer_mutex held
+// (the silent path emits an event that leads back into a new load).
+void animation_loader_report_swap_failure(esp_err_t error, swap_fail_mode_t fail_mode,
+                                          int32_t post_id, const char *filepath);
 
 // Rebuild aspect-ratio/rotation-dependent upscale maps for an already-loaded buffer.
 // Call from the render task (or otherwise ensure it doesn't race with render_next_frame()).

@@ -340,7 +340,17 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
                      (void*)s_back_buffer.decoder,
                      (void*)s_back_buffer.native_frame_b1,
                      (int)s_back_buffer.prefetch_pending);
+            bool abort_had_swap = false;
+            char abort_path[256] = {0};
+            int32_t abort_post_id = 0;
+            swap_fail_mode_t abort_fail_mode = SWAP_FAIL_SILENT;
             if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+                abort_had_swap = s_swap_requested;
+                if (s_back_buffer.filepath) {
+                    strlcpy(abort_path, s_back_buffer.filepath, sizeof(abort_path));
+                }
+                abort_post_id = s_back_buffer.post_id;
+                abort_fail_mode = s_back_buffer.fail_mode;
                 s_back_buffer.prefetch_pending = false;
                 s_back_buffer.prefetch_in_progress = false;
                 s_back_buffer.ready = false;
@@ -351,14 +361,23 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
             if (s_prefetch_done_sem) {
                 xSemaphoreGive(s_prefetch_done_sem);
             }
-            // Terminal failure for a user-initiated swap (no-op for auto-swap).
-            if (proc_notif_fail_if_processing) proc_notif_fail_if_processing();
+            // A dropped swap must still be reported (loud: error overlay;
+            // silent: retry burst), or a "Loading..." overlay would sit on
+            // screen forever waiting for a swap that will never happen.
+            if (abort_had_swap) {
+                animation_loader_report_swap_failure(ESP_ERR_INVALID_STATE, abort_fail_mode,
+                                                     abort_post_id, abort_path);
+            } else if (proc_notif_fail_if_processing) {
+                // Terminal failure for a user-initiated swap (no-op for auto-swap).
+                proc_notif_fail_if_processing();
+            }
             goto skip_prefetch;
         }
         
         esp_err_t prefetch_err = prefetch_first_frame(&s_back_buffer);
         char failed_path[256] = {0};
         int32_t failed_post_id = 0;
+        swap_fail_mode_t failed_fail_mode = SWAP_FAIL_SILENT;
 
         if (s_buffer_mutex && xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
             s_back_buffer.prefetch_pending = false;
@@ -371,6 +390,7 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
                 strlcpy(failed_path, s_back_buffer.filepath, sizeof(failed_path));
             }
             failed_post_id = s_back_buffer.post_id;
+            failed_fail_mode = s_back_buffer.fail_mode;
 
             // If prefetch failed, clear swap request so we don't get stuck.
             if (prefetch_err != ESP_OK) {
@@ -398,11 +418,19 @@ int animation_player_render_frame_callback(uint8_t *dest_buffer, void *user_ctx)
                 xSemaphoreGive(s_buffer_mutex);
             }
 
-            // No auto-retry or navigation on prefetch failure
-            ESP_LOGW(TAG, "Prefetch failed: %s", esp_err_to_name(prefetch_err));
-
-            // Terminal failure for a user-initiated swap (no-op for auto-swap).
-            if (proc_notif_fail_if_processing) proc_notif_fail_if_processing();
+            // Report AFTER the unload above: the silent path emits SWAP_NEXT,
+            // whose new load unloads the back buffer from the loader task —
+            // reporting earlier would race that against our own unload.
+            // `swap_requested` was captured before the clear above; without a
+            // pending swap (boot-time front-buffer load) there is nothing to
+            // retry or report on screen.
+            if (swap_requested) {
+                animation_loader_report_swap_failure(prefetch_err, failed_fail_mode,
+                                                     failed_post_id, failed_path);
+            } else if (proc_notif_fail_if_processing) {
+                // Terminal failure for a user-initiated swap (no-op for auto-swap).
+                proc_notif_fail_if_processing();
+            }
         }
     }
 

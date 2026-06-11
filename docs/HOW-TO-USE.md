@@ -58,6 +58,7 @@ p3a supports these image formats:
 - **GIF** (animated and static) — supports transparency
 - **PNG / APNG** (animated and static) — supports transparency with full alpha channel; `.apng` files are accepted too
 - **JPEG** (static)
+- **BMP** (static) — all common variants (1/4/8/16/24/32-bit, RLE compression); transparency supported for files with an explicit alpha mask (V4/V5 headers)
 
 **Transparency support**: Images with transparent backgrounds or alpha channels are fully supported. The background color behind transparent areas can be configured via the web interface or REST API.
 

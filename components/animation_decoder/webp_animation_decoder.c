@@ -214,6 +214,8 @@ esp_err_t animation_decoder_init(animation_decoder_t **decoder, animation_decode
         return png_decoder_init(decoder, data, size);
     } else if (type == ANIMATION_DECODER_TYPE_JPEG) {
         return jpeg_decoder_init(decoder, data, size);
+    } else if (type == ANIMATION_DECODER_TYPE_BMP) {
+        return bmp_decoder_init(decoder, data, size);
     } else {
         ESP_LOGE(TAG, "Unknown decoder type: %d", type);
         return ESP_ERR_INVALID_ARG;
@@ -254,6 +256,8 @@ esp_err_t animation_decoder_get_info(animation_decoder_t *decoder, animation_dec
         return png_decoder_get_info(decoder, info);
     } else if (decoder->type == ANIMATION_DECODER_TYPE_JPEG) {
         return jpeg_decoder_get_info_wrapper(decoder, info);
+    } else if (decoder->type == ANIMATION_DECODER_TYPE_BMP) {
+        return bmp_decoder_get_info(decoder, info);
     } else {
         return ESP_ERR_INVALID_ARG;
     }
@@ -327,6 +331,8 @@ esp_err_t animation_decoder_decode_next(animation_decoder_t *decoder, uint8_t *r
         return png_decoder_decode_next(decoder, rgba_buffer);
     } else if (decoder->type == ANIMATION_DECODER_TYPE_JPEG) {
         return jpeg_decoder_decode_next(decoder, rgba_buffer);
+    } else if (decoder->type == ANIMATION_DECODER_TYPE_BMP) {
+        return bmp_decoder_decode_next(decoder, rgba_buffer);
     } else {
         return ESP_ERR_INVALID_ARG;
     }
@@ -494,6 +500,9 @@ esp_err_t animation_decoder_decode_next_rgb(animation_decoder_t *decoder, uint8_
     if (decoder->type == ANIMATION_DECODER_TYPE_JPEG) {
         return jpeg_decoder_decode_next_rgb(decoder, rgb_buffer);
     }
+    if (decoder->type == ANIMATION_DECODER_TYPE_BMP) {
+        return bmp_decoder_decode_next_rgb(decoder, rgb_buffer);
+    }
 
     return ESP_ERR_INVALID_ARG;
 }
@@ -526,6 +535,8 @@ esp_err_t animation_decoder_reset(animation_decoder_t *decoder)
         return png_decoder_reset(decoder);
     } else if (decoder->type == ANIMATION_DECODER_TYPE_JPEG) {
         return jpeg_decoder_reset(decoder);
+    } else if (decoder->type == ANIMATION_DECODER_TYPE_BMP) {
+        return bmp_decoder_reset(decoder);
     } else {
         return ESP_ERR_INVALID_ARG;
     }
@@ -550,6 +561,8 @@ esp_err_t animation_decoder_get_frame_delay(animation_decoder_t *decoder, uint32
         return png_decoder_get_frame_delay(decoder, delay_ms);
     } else if (decoder->type == ANIMATION_DECODER_TYPE_JPEG) {
         return jpeg_decoder_get_frame_delay(decoder, delay_ms);
+    } else if (decoder->type == ANIMATION_DECODER_TYPE_BMP) {
+        return bmp_decoder_get_frame_delay(decoder, delay_ms);
     } else {
         return ESP_ERR_INVALID_ARG;
     }
@@ -587,6 +600,8 @@ void animation_decoder_unload(animation_decoder_t **decoder)
         png_decoder_unload(decoder);
     } else if (dec->type == ANIMATION_DECODER_TYPE_JPEG) {
         jpeg_decoder_unload(decoder);
+    } else if (dec->type == ANIMATION_DECODER_TYPE_BMP) {
+        bmp_decoder_unload(decoder);
     } else {
         free(dec);
     }

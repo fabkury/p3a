@@ -145,6 +145,10 @@ static asset_type_t asset_type_from_name(const char *name, bool *out_ok)
         if (out_ok) *out_ok = true;
         return ASSET_TYPE_JPEG;
     }
+    if (len >= 4 && strcasecmp(name + len - 4, ".bmp") == 0) {
+        if (out_ok) *out_ok = true;
+        return ASSET_TYPE_BMP;
+    }
 
     return ASSET_TYPE_WEBP;
 }

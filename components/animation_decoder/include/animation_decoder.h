@@ -27,6 +27,7 @@ typedef enum {
     ANIMATION_DECODER_TYPE_GIF,
     ANIMATION_DECODER_TYPE_PNG,
     ANIMATION_DECODER_TYPE_JPEG,
+    ANIMATION_DECODER_TYPE_BMP,
 } animation_decoder_type_t;
 
 // Decoder information structure

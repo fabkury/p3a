@@ -633,7 +633,8 @@ bool directory_has_animation_files(const char *dir_path)
                 (len >= 5 && strcasecmp(name + len - 5, ".apng") == 0) ||
                 (len >= 4 && strcasecmp(name + len - 4, ".gif") == 0) ||
                 (len >= 4 && strcasecmp(name + len - 4, ".png") == 0) ||
-                (len >= 4 && strcasecmp(name + len - 4, ".jpg") == 0)) {
+                (len >= 4 && strcasecmp(name + len - 4, ".jpg") == 0) ||
+                (len >= 4 && strcasecmp(name + len - 4, ".bmp") == 0)) {
                 has_anim = true;
                 break;
             }
@@ -1006,6 +1007,8 @@ esp_err_t load_animation_into_buffer(const char *filepath, asset_type_t type, ps
         decoder_type = ANIMATION_DECODER_TYPE_PNG;
     } else if (type == ASSET_TYPE_JPEG) {
         decoder_type = ANIMATION_DECODER_TYPE_JPEG;
+    } else if (type == ASSET_TYPE_BMP) {
+        decoder_type = ANIMATION_DECODER_TYPE_BMP;
     } else {
         return ESP_ERR_INVALID_ARG;
     }

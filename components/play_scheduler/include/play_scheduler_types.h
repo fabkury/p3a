@@ -125,7 +125,7 @@ typedef enum {
  */
 typedef struct __attribute__((packed)) {
     int32_t post_id;              // Sequential positive ID (1, 2, ...)
-    uint8_t extension;            // 0=webp, 1=gif, 2=png, 3=jpg
+    uint8_t extension;            // 0=webp, 1=gif, 2=png, 3=jpg, 4=bmp (local only)
     uint8_t kind;                 // Always 0 (artwork) for now
     uint8_t reserved1[2];         // Padding for alignment
     uint32_t created_at;          // File mtime (Unix timestamp)

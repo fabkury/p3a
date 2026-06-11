@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-p3a is an ESP32-P4 Wi-Fi pixel art player that displays WebP/GIF/PNG/APNG/JPEG files (animated and static). It plays GIFs from Giphy, animated artworks from Makapix Club (a pixel art social network), static museum artworks over IIIF, and local files. Runs on the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board (720×720 IPS 24-bit + GT911 touch + ESP32-C6 Wi-Fi 6 co-processor).
+p3a is an ESP32-P4 Wi-Fi pixel art player that displays WebP/GIF/PNG/APNG/JPEG/BMP files (animated and static). It plays GIFs from Giphy, animated artworks from Makapix Club (a pixel art social network), static museum artworks over IIIF, and local files. Runs on the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board (720×720 IPS 24-bit + GT911 touch + ESP32-C6 Wi-Fi 6 co-processor).
 
 ## Build Management
 
@@ -64,7 +64,7 @@ Build artifacts go to `build/`. Release binaries are copied to `release/v{VERSIO
 | `channel_manager` | Playlist/channel handling, vault storage (hash-sharded `/sdcard/p3a/vault/`) |
 | `giphy` | Giphy API integration: trending GIFs, on-demand download, SD card caching (`/sdcard/p3a/giphy/`) |
 | `art_institution` | Museum channels via IIIF. Seven museums today (`artic`, `rijks`, `vam`, `wellcome`, `smk`, `ham`, `si`); per-museum dispatch (refresh, IIIF URL build, optional resolver e.g. Rijks Linked-Art walk), shared rate-limit cooldown synchronized with the browser via `/api/museum/rate-limits*`, vault at `/sdcard/p3a/museum/{museum_id}/`. NVS settings: `ai_refresh_sec`, `ai_cache_size`, plus per-museum BYOK keys where required (`ham_api_key`, `si_api_key`). See `docs/art-institutions/finalized-design.md`. |
-| `animation_decoder` | WebP/PNG/APNG/JPEG decoders with transparency support. APNG decode relies on `components/espressif__libpng`, a **local fork** of the managed libpng 1.6.52 component carrying the official APNG patch (read-only) — on any libpng bump the matching patch must be re-applied; see that component's README.md |
+| `animation_decoder` | WebP/PNG/APNG/JPEG/BMP decoders with transparency support. APNG decode relies on `components/espressif__libpng`, a **local fork** of the managed libpng 1.6.52 component carrying the official APNG patch (read-only) — on any libpng bump the matching patch must be re-applied; see that component's README.md |
 | `animated_gif_decoder` | GIF decoder (C++ wrapper) |
 | `wifi_manager` | Wi-Fi provisioning, captive portal, mDNS (`p3a.local`) |
 | `http_api` | REST API and WebSocket server |

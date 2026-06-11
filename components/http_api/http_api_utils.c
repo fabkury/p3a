@@ -225,6 +225,7 @@ const char* get_mime_type(const char* path) {
     if (strcasecmp(ext, "png") == 0) return "image/png";
     if (strcasecmp(ext, "jpg") == 0 || strcasecmp(ext, "jpeg") == 0) return "image/jpeg";
     if (strcasecmp(ext, "gif") == 0) return "image/gif";
+    if (strcasecmp(ext, "bmp") == 0) return "image/bmp";
     if (strcasecmp(ext, "ico") == 0) return "image/x-icon";
     if (strcasecmp(ext, "webmanifest") == 0) return "application/manifest+json";
 

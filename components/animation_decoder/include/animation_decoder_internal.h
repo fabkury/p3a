@@ -35,6 +35,9 @@ struct animation_decoder_s {
         struct {
             void *jpeg_decoder; // Opaque JPEG decoder pointer
         } jpeg;
+        struct {
+            void *bmp_decoder; // Opaque BMP decoder pointer
+        } bmp;
     } impl;
 };
 

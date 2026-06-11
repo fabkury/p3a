@@ -60,6 +60,10 @@ static int detect_extension_from_name(const char *name, bool *out_ok)
         if (out_ok) *out_ok = true;
         return 3; // EXT_JPEG
     }
+    if (len >= 4 && strcasecmp(name + len - 4, ".bmp") == 0) {
+        if (out_ok) *out_ok = true;
+        return 4; // EXT_BMP (sdcard.bin only; NOT in makapix file_extension_t)
+    }
 
     return 0;
 }

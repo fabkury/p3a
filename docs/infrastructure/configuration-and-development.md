@@ -54,7 +54,7 @@ All p3a data is stored under a configurable root folder (`/sdcard/p3a` by defaul
 
 ```
 /sdcard/p3a/
-├── animations/                 # Local animation files (WebP, GIF, PNG/APNG, JPEG)
+├── animations/                 # Local animation files (WebP, GIF, PNG/APNG, JPEG, BMP)
 ├── vault/                      # Cached artwork from Makapix (hash-sharded: {0..63}/{0..63}/<storage_key>.<ext>)
 ├── giphy/                      # Cached Giphy GIFs (hash-sharded)
 ├── museum/                     # Cached museum (IIIF) artwork, partitioned per museum

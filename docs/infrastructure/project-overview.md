@@ -12,7 +12,7 @@
 ## Key Features
 
 - **Designed for 24/7 operation** — both the hardware and the firmware are built to run continuously, with no scheduled reboots or daily power cycle required
-- Animated WebP, GIF, and APNG, plus static PNG and JPEG playback
+- Animated WebP, GIF, and APNG, plus static PNG, JPEG, and BMP playback
 - **Transparency support** for WebP, GIF, APNG, and PNG with configurable background color
 - **Aspect ratio preservation** for non-square artworks
 - Touch gestures for navigation, Makapix reactions, info screen, and screen rotation

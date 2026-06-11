@@ -89,7 +89,8 @@ static bool is_supported_extension(const char *ext)
             strcasecmp(ext, "jpg") == 0  ||
             strcasecmp(ext, "jpeg") == 0 ||
             strcasecmp(ext, "png") == 0  ||
-            strcasecmp(ext, "apng") == 0);
+            strcasecmp(ext, "apng") == 0 ||
+            strcasecmp(ext, "bmp") == 0);
 }
 
 /**
@@ -100,7 +101,7 @@ static bool is_supported_extension(const char *ext)
  *
  * @param data Raw file bytes
  * @param len  Length of data in bytes
- * @return One of "PNG", "JPEG", "GIF", "WEBP", or "UNSUPPORTED"
+ * @return One of "PNG", "JPEG", "GIF", "WEBP", "BMP", or "UNSUPPORTED"
  */
 static const char *detect_image_format(const uint8_t *data, size_t len)
 {
@@ -132,6 +133,13 @@ static const char *detect_image_format(const uint8_t *data, size_t len)
         return "WEBP";
     }
 
+    // BMP: 'BM' is a weak 2-byte signature, so also require the file header's
+    // four reserved bytes (offsets 6-9) to be zero, as the spec mandates.
+    if (data[0] == 0x42 && data[1] == 0x4D &&
+        data[6] == 0x00 && data[7] == 0x00 && data[8] == 0x00 && data[9] == 0x00) {
+        return "BMP";
+    }
+
     return "UNSUPPORTED";
 }
 
@@ -147,6 +155,7 @@ static const char *format_to_extension(const char *format)
     if (strcmp(format, "JPEG") == 0) return "jpg";
     if (strcmp(format, "GIF") == 0)  return "gif";
     if (strcmp(format, "WEBP") == 0) return "webp";
+    if (strcmp(format, "BMP") == 0)  return "bmp";
     return NULL;
 }
 

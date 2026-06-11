@@ -130,6 +130,7 @@ static asset_type_t get_asset_type_from_extension(uint8_t ext)
         case 1: return ASSET_TYPE_GIF;
         case 2: return ASSET_TYPE_PNG;
         case 3: return ASSET_TYPE_JPEG;
+        case 4: return ASSET_TYPE_BMP;
         default: return ASSET_TYPE_WEBP;
     }
 }
@@ -824,6 +825,8 @@ bool ps_pick_artwork(ps_state_t *state, size_t channel_index, ps_artwork_t *out_
                 out_artwork->type = ASSET_TYPE_JPEG;
             else if (path_len >= 5 && strcasecmp(out_artwork->filepath + path_len - 5, ".jpeg") == 0)
                 out_artwork->type = ASSET_TYPE_JPEG;
+            else if (strcasecmp(out_artwork->filepath + path_len - 4, ".bmp") == 0)
+                out_artwork->type = ASSET_TYPE_BMP;
         }
 
         ESP_LOGI(TAG, ">>> PICKED (Artwork channel): post_id=%ld, filepath=%s",

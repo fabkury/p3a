@@ -22,6 +22,7 @@ typedef enum {
     ASSET_TYPE_GIF,
     ASSET_TYPE_PNG,
     ASSET_TYPE_JPEG,
+    ASSET_TYPE_BMP,
 } asset_type_t;
 
 #ifdef __cplusplus

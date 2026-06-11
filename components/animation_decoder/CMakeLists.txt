@@ -3,6 +3,7 @@ idf_component_register(
          "png_animation_decoder.c"
          "jpeg_animation_decoder.c"
          "jpeg_animation_decoder_sw.c"
+         "bmp_animation_decoder.c"
          "idf_jpeg_release_null_fix.c"
     INCLUDE_DIRS "include" "."
     REQUIRES libwebp_decoder espressif__libpng esp_driver_jpeg espressif__libjpeg-turbo config_store debug_http_log

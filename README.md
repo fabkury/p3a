@@ -12,6 +12,8 @@
   <img src="images/photos/p3a-7.jpg" alt="p3a angled view" height="280">
   &nbsp;
   <img src="images/photos/p3a-4-giphy.jpg" alt="p3a playing a Giphy GIF" height="280">
+  &nbsp;
+  <img src="images/photos/p3a-museum-channel-5.jpg" alt="p3a displaying a museum artwork" height="280">
 </p>
 
 <p align="center">
@@ -40,6 +42,8 @@ It's open source, self-contained, and designed to be as simple to use as a pictu
 
 ## Quick Start
 
+Every p3a was assembled by the person who owns it. Joining them takes a screwdriver and 15 minutes.
+
 **What you need:**
 - [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) board ($39.99)
 - [microSD card](https://www.waveshare.com/micro-sd-card-16gb-kawau.htm?sku=18191) ($7.99)
@@ -55,7 +59,7 @@ It's open source, self-contained, and designed to be as simple to use as a pictu
 
 > The initial flash requires a computer with USB. After that, all updates are wireless.
 
-For a step-by-step walkthrough written for first-time buyers, see the [Quick Start Guide](docs/QUICK-START.md). For full usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md).
+For a step-by-step walkthrough written for first-time owners, see the [Quick Start Guide](docs/QUICK-START.md). For full usage instructions, see [HOW-TO-USE.md](docs/HOW-TO-USE.md). Stuck on any step? The [Discord server](https://discord.gg/xk9umcujXV) is friendly, ask there.
 
 ---
 
@@ -78,12 +82,7 @@ Mix them all in a single "playset" for an ever-changing display.
   <img src="images/photos/p3a-museum-channel-2.jpg" alt="p3a displaying a museum artwork" height="260">
   &nbsp;
   <img src="images/photos/p3a-museum-channel-3.jpg" alt="p3a displaying a museum artwork" height="260">
-</p>
-
-<p align="center">
   <img src="images/photos/p3a-museum-channel-4.jpg" alt="p3a displaying a museum artwork" height="260">
-  &nbsp;
-  <img src="images/photos/p3a-museum-channel-5.jpg" alt="p3a displaying a museum artwork" height="260">
 </p>
 
 <p align="center"><em>Museum channels: works from the Art Institute of Chicago, Rijksmuseum, V&amp;A, Wellcome Collection, SMK, Harvard Art Museums, and the Smithsonian — streamed over IIIF.</em></p>

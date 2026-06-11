@@ -138,6 +138,7 @@ typedef struct {
     char channel_id[64];
     char display_name[64];
     bool completed;
+    bool succeeded;  // walk ran to its end (vs cancelled / failed mid-walk)
 } ps_refresh_pending_t;
 
 static ps_refresh_pending_t s_ps_pending_refreshes[MAX_PS_PENDING_REFRESH] = {0};
@@ -176,8 +177,9 @@ void makapix_ps_refresh_register(const char *channel_id, const char *display_nam
     // Check if already registered
     for (int i = 0; i < MAX_PS_PENDING_REFRESH; i++) {
         if (strcmp(s_ps_pending_refreshes[i].channel_id, channel_id) == 0) {
-            // Already registered, reset completion flag and refresh display name
+            // Already registered, reset completion flags and refresh display name
             s_ps_pending_refreshes[i].completed = false;
+            s_ps_pending_refreshes[i].succeeded = false;
             strlcpy(s_ps_pending_refreshes[i].display_name, dn,
                     sizeof(s_ps_pending_refreshes[i].display_name));
             xSemaphoreGive(s_ps_pending_mutex);
@@ -194,6 +196,7 @@ void makapix_ps_refresh_register(const char *channel_id, const char *display_nam
             strlcpy(s_ps_pending_refreshes[i].display_name, dn,
                     sizeof(s_ps_pending_refreshes[i].display_name));
             s_ps_pending_refreshes[i].completed = false;
+            s_ps_pending_refreshes[i].succeeded = false;
             xSemaphoreGive(s_ps_pending_mutex);
             ESP_LOGD(MAKAPIX_TAG, "PS refresh registered: %s", dn);
             return;
@@ -204,7 +207,7 @@ void makapix_ps_refresh_register(const char *channel_id, const char *display_nam
     ESP_LOGW(MAKAPIX_TAG, "PS refresh table full, cannot register: %s", dn);
 }
 
-void makapix_ps_refresh_mark_complete(const char *channel_id)
+void makapix_ps_refresh_mark_complete(const char *channel_id, bool succeeded)
 {
     if (!channel_id || !s_ps_pending_mutex) return;
 
@@ -213,11 +216,13 @@ void makapix_ps_refresh_mark_complete(const char *channel_id)
     for (int i = 0; i < MAX_PS_PENDING_REFRESH; i++) {
         if (strcmp(s_ps_pending_refreshes[i].channel_id, channel_id) == 0) {
             s_ps_pending_refreshes[i].completed = true;
+            s_ps_pending_refreshes[i].succeeded = succeeded;
             char dn[64];
             resolve_display_name(channel_id, s_ps_pending_refreshes[i].display_name,
                                  dn, sizeof(dn));
             xSemaphoreGive(s_ps_pending_mutex);
-            ESP_LOGI(MAKAPIX_TAG, "PS refresh complete: %s", dn);
+            ESP_LOGI(MAKAPIX_TAG, "PS refresh complete: %s (%s)", dn,
+                     succeeded ? "ok" : "incomplete");
             // Signal Play Scheduler
             makapix_channel_signal_ps_refresh_done(channel_id);
             return;
@@ -228,7 +233,7 @@ void makapix_ps_refresh_mark_complete(const char *channel_id)
     // Not registered - that's OK, may have been triggered by non-PS path
 }
 
-bool makapix_ps_refresh_check_and_clear(const char *channel_id)
+bool makapix_ps_refresh_check_and_clear(const char *channel_id, bool *out_succeeded)
 {
     if (!channel_id || !s_ps_pending_mutex) return false;
 
@@ -237,9 +242,13 @@ bool makapix_ps_refresh_check_and_clear(const char *channel_id)
     for (int i = 0; i < MAX_PS_PENDING_REFRESH; i++) {
         if (strcmp(s_ps_pending_refreshes[i].channel_id, channel_id) == 0 &&
             s_ps_pending_refreshes[i].completed) {
+            if (out_succeeded) {
+                *out_succeeded = s_ps_pending_refreshes[i].succeeded;
+            }
             // Clear the entry
             s_ps_pending_refreshes[i].channel_id[0] = '\0';
             s_ps_pending_refreshes[i].completed = false;
+            s_ps_pending_refreshes[i].succeeded = false;
             xSemaphoreGive(s_ps_pending_mutex);
             return true;
         }

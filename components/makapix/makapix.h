@@ -274,8 +274,13 @@ void makapix_ps_refresh_register(const char *channel_id, const char *display_nam
  * Signals Play Scheduler via event.
  *
  * @param channel_id Channel ID that completed refresh
+ * @param succeeded  true when the pagination walk ran to its legitimate end;
+ *                   false for a cancelled or mid-walk-failed refresh. The
+ *                   Play Scheduler uses this to choose between stamping the
+ *                   in-memory freshness timestamp and arming the per-channel
+ *                   failure backoff.
  */
-void makapix_ps_refresh_mark_complete(const char *channel_id);
+void makapix_ps_refresh_mark_complete(const char *channel_id, bool succeeded);
 
 /**
  * @brief Check if a channel's refresh completed and clear the entry
@@ -283,9 +288,12 @@ void makapix_ps_refresh_mark_complete(const char *channel_id);
  * Called by Play Scheduler to check completion status.
  *
  * @param channel_id Channel ID to check
+ * @param out_succeeded Set to the success flag passed to
+ *                      makapix_ps_refresh_mark_complete() when this returns
+ *                      true; untouched otherwise. May be NULL.
  * @return true if refresh completed, false otherwise
  */
-bool makapix_ps_refresh_check_and_clear(const char *channel_id);
+bool makapix_ps_refresh_check_and_clear(const char *channel_id, bool *out_succeeded);
 
 /**
  * @brief Cancel all active Makapix refresh tasks

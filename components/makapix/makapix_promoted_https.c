@@ -445,5 +445,10 @@ esp_err_t makapix_promoted_https_refresh(const char *channel_id)
              refresh_completed ? "complete" : "incomplete",
              display_name, total_fetched, final_entry_count, final_artwork_count);
 
-    return (total_fetched > 0) ? ESP_OK : ESP_FAIL;
+    // A partial walk (cancelled or failed mid-pagination) must surface as a
+    // failure even when some pages merged: returning ESP_OK would make the
+    // dispatcher clear the failure backoff and stamp the in-memory
+    // last_refresh, parking the truncated channel as "fresh" for a full
+    // refresh interval. The merged entries are kept either way.
+    return (refresh_completed && total_fetched > 0) ? ESP_OK : ESP_FAIL;
 }

@@ -192,7 +192,13 @@ void refresh_task_impl(void *pvParameters)
         }
 
         size_t total_queried = 0;
-        bool query_succeeded = false;
+        // True only when the pagination walk reached a legitimate end: the
+        // server reported no more posts, or TARGET_COUNT was reached. A walk
+        // cut short by a transport/server error or a mode change must NOT
+        // count — its Si set is missing every post beyond the failed page, so
+        // evicting or stamping the refresh timestamp against it would
+        // truncate the cache and mark the channel fresh anyway.
+        bool walk_completed = false;
         query_req.has_cursor = false;
         query_req.cursor[0] = '\0';
 
@@ -244,10 +250,9 @@ void refresh_task_impl(void *pvParameters)
                 break;
             }
 
-            query_succeeded = true;
-
             if (resp->post_count == 0) {
                 ESP_LOGD(TAG, "No more posts available");
+                walk_completed = true;
                 break;
             }
 
@@ -306,8 +311,13 @@ void refresh_task_impl(void *pvParameters)
             }
             total_queried += resp->post_count;
             
+            if (!resp->has_more) {
+                walk_completed = true;
+                break;
+            }
+
             // Save cursor for next query
-            if (resp->has_more && strlen(resp->next_cursor) > 0) {
+            if (strlen(resp->next_cursor) > 0) {
                 query_req.has_cursor = true;
                 size_t copy_len = strlen(resp->next_cursor);
                 if (copy_len >= sizeof(query_req.cursor)) copy_len = sizeof(query_req.cursor) - 1;
@@ -315,19 +325,21 @@ void refresh_task_impl(void *pvParameters)
                 query_req.cursor[copy_len] = '\0';
                 ESP_LOGI(TAG, "Cursor advanced: len=%zu, preview=%.20s...", copy_len, query_req.cursor);
             } else {
-                query_req.has_cursor = false;
-                if (resp->has_more) {
-                    channel_cache_lifecycle_lock();
-                    channel_cache_t *diag_cache = channel_cache_registry_find(ch->channel_id);
-                    size_t diag_entry = diag_cache ? diag_cache->entry_count : 0;
-                    channel_cache_lifecycle_unlock();
-                    ESP_LOGW(TAG, "has_more=true but next_cursor is empty! Pagination may be broken. "
-                             "total_queried=%zu, entry_count=%zu",
-                             total_queried, diag_entry);
-                }
-            }
-            
-            if (!resp->has_more) {
+                // Server says more posts exist but gave us no cursor to reach
+                // them. Continuing with has_cursor=false would silently
+                // restart the walk from the top, re-counting already-seen
+                // posts until total_queried hits TARGET_COUNT — which counts
+                // as a complete walk and would evict every post beyond the
+                // reachable prefix. Abort as incomplete instead: merged
+                // entries are kept, eviction and the timestamp are skipped,
+                // and the scheduler retries under its failure backoff.
+                channel_cache_lifecycle_lock();
+                channel_cache_t *diag_cache = channel_cache_registry_find(ch->channel_id);
+                size_t diag_entry = diag_cache ? diag_cache->entry_count : 0;
+                channel_cache_lifecycle_unlock();
+                ESP_LOGW(TAG, "has_more=true but next_cursor is empty! Server pagination broken, "
+                         "aborting walk as incomplete. total_queried=%zu, entry_count=%zu",
+                         total_queried, diag_entry);
                 break;
             }
             
@@ -340,6 +352,17 @@ void refresh_task_impl(void *pvParameters)
         }
         
         free(resp);
+
+        // Exiting because the configured cap was reached is also a complete
+        // walk: Si already holds TARGET_COUNT post_ids, so eviction trims the
+        // cache to exactly the cap. (Transport/server-error breaks can't get
+        // here with total_queried >= TARGET_COUNT — they fire before the
+        // count is incremented, while the loop condition still held. The
+        // empty-cursor break can, but at the cap the missing cursor is moot:
+        // the walk wouldn't have queried further anyway.)
+        if (total_queried >= TARGET_COUNT) {
+            walk_completed = true;
+        }
 
         // Check for shutdown BEFORE saving metadata — a cancelled refresh must not
         // update the timestamp, otherwise the freshness check will skip the next refresh.
@@ -360,7 +383,7 @@ void refresh_task_impl(void *pvParameters)
             // s_ps_pending_refreshes that never matches by channel_id once
             // the playset switch has rebound the slot.
             makapix_channel_signal_refresh_done();
-            makapix_ps_refresh_mark_complete(ch->channel_id);
+            makapix_ps_refresh_mark_complete(ch->channel_id, false);
             break;
         }
 
@@ -368,9 +391,12 @@ void refresh_task_impl(void *pvParameters)
         // Must run BEFORE the cache flush below so the on-disk state reflects
         // the post-eviction cache. Re-resolve the cache via the lifecycle lock
         // since the pointer captured by merge_refresh_batch's earlier callers
-        // is stale by construction across MQTT waits. Mirrors
-        // components/giphy/giphy_refresh.c lines 521-531.
-        if (query_succeeded && si_hash) {
+        // is stale by construction across MQTT waits. Gated on walk_completed
+        // — NOT "any page succeeded" — because evicting against a partial
+        // walk's Si set would wipe every valid entry beyond the failed page
+        // and unlink its vault file. Mirrors giphy_refresh.c's
+        // refresh_completed gating.
+        if (walk_completed && si_hash) {
             channel_cache_lifecycle_lock();
             channel_cache_t *evict_cache = channel_cache_registry_find(ch->channel_id);
             if (evict_cache) {
@@ -389,7 +415,7 @@ void refresh_task_impl(void *pvParameters)
             si_hash = NULL;
         }
 
-        if (query_succeeded) {
+        if (walk_completed) {
             // Flush dirty cache to disk BEFORE saving the metadata timestamp.
             // Both files live on the SD card but are written independently; if
             // power is lost after the metadata (.json) is saved but before the
@@ -417,8 +443,9 @@ void refresh_task_impl(void *pvParameters)
             save_channel_metadata(ch, "", refresh_ts);
             ch->last_refresh_time = refresh_ts;
         } else {
-            ESP_LOGW(TAG, "Refresh failed for channel '%s', preserving previous refresh timestamp",
-                     ch->channel_id);
+            ESP_LOGW(TAG, "Refresh incomplete for channel '%s' (%zu posts walked): "
+                     "keeping merged entries, skipping eviction, preserving previous refresh timestamp",
+                     ch->channel_id, total_queried);
         }
 
         // Count how many are artworks vs playlists using cache lookup
@@ -448,8 +475,10 @@ void refresh_task_impl(void *pvParameters)
         // other refresh tasks that are still in their MQTT-wait phase.
         ch->refreshing = false;
 
-        // Signal Play Scheduler that this channel's refresh is complete
-        makapix_ps_refresh_mark_complete(ch->channel_id);
+        // Signal Play Scheduler that this channel's refresh is complete,
+        // carrying whether the walk actually ran to its end — an incomplete
+        // walk must take the failure backoff, not a fresh timestamp.
+        makapix_ps_refresh_mark_complete(ch->channel_id, walk_completed);
 
         break;  // Exit after single cycle — Play Scheduler handles re-scheduling
     }

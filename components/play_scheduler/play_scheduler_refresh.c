@@ -827,23 +827,47 @@ static void refresh_task(void *arg)
             xSemaphoreTake(state->mutex, portMAX_DELAY);
             for (size_t i = 0; i < state->channel_count; i++) {
                 ps_channel_state_t *ch = &state->channels[i];
-                if (ch->refresh_async_pending && makapix_ps_refresh_check_and_clear(ch->channel_id)) {
+                bool refresh_ok = false;
+                if (ch->refresh_async_pending &&
+                    makapix_ps_refresh_check_and_clear(ch->channel_id, &refresh_ok)) {
                     // This channel's async refresh completed
                     ch->refresh_async_pending = false;
                     ch->refresh_in_progress = false;
 
-                    // A real refresh ran: clear the failure backoff and arm
-                    // the pin_lists GC kick for the next idle settle.
-                    ch->fail_streak = 0;
-                    ch->retry_at_us = 0;
-                    s_gc_kick_armed = true;
+                    if (refresh_ok) {
+                        // The walk ran to its end: clear the failure backoff
+                        // and arm the pin_lists GC kick for the next idle
+                        // settle.
+                        ch->fail_streak = 0;
+                        ch->retry_at_us = 0;
+                        s_gc_kick_armed = true;
 
-                    // Mirror the makapix-side save: only stamp a real time when
-                    // SNTP is synced (matches makapix_channel_refresh.c:362).
-                    // The in-memory value may differ from the disk save by up
-                    // to one polling interval (~2s); harmless for picker order.
-                    if (sntp_sync_is_synchronized()) {
-                        ch->last_refresh = time(NULL);
+                        // Mirror the makapix-side save: only stamp a real time when
+                        // SNTP is synced (matches makapix_channel_refresh.c).
+                        // The in-memory value may differ from the disk save by up
+                        // to one polling interval (~2s); harmless for picker order.
+                        if (sntp_sync_is_synchronized()) {
+                            ch->last_refresh = time(NULL);
+                        }
+                    } else {
+                        // Incomplete walk (cancelled, or transport/server error
+                        // mid-pagination): the makapix side kept the merged
+                        // entries but skipped eviction and the on-disk
+                        // timestamp. Mirror that here — leave last_refresh
+                        // stale so the freshness gate doesn't park a truncated
+                        // channel for a full interval, and arm the generic
+                        // per-channel backoff (same shape as the sync dispatch
+                        // failure arm below).
+                        uint32_t shift = ch->fail_streak < 5 ? ch->fail_streak : 5;
+                        uint32_t backoff_sec = RETRY_BACKOFF_BASE_SEC << shift;
+                        if (backoff_sec > RETRY_BACKOFF_CAP_SEC) backoff_sec = RETRY_BACKOFF_CAP_SEC;
+                        uint32_t backoff_ms = backoff_sec * (800 + (esp_random() % 401));
+                        ch->retry_at_us = esp_timer_get_time() + (int64_t)backoff_ms * 1000;
+                        if (ch->fail_streak < UINT8_MAX) ch->fail_streak++;
+                        ch->refresh_pending = true;
+                        ESP_LOGW(TAG, "Channel '%s' async refresh incomplete, failure #%u, retry in ~%lus",
+                                 ch->display_name, (unsigned)ch->fail_streak,
+                                 (unsigned long)(backoff_ms / 1000));
                     }
 
                     // Queue this channel for eager reap after the mutex is
@@ -873,8 +897,9 @@ static void refresh_task(void *arg)
                     }
 
                     size_t entry_count = ch->cache ? ch->cache->entry_count : ch->entry_count;
-                    ESP_LOGI(TAG, "Channel '%s' async refresh complete: %zu entries, active=%d",
-                             ch->display_name, entry_count, ch->active);
+                    ESP_LOGI(TAG, "Channel '%s' async refresh %s: %zu entries, active=%d",
+                             ch->display_name, refresh_ok ? "complete" : "incomplete",
+                             entry_count, ch->active);
 
                     // Recalculate weights
                     ps_swrr_calculate_weights(state);

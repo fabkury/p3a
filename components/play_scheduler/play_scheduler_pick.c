@@ -818,6 +818,8 @@ bool ps_pick_artwork(ps_state_t *state, size_t channel_index, ps_artwork_t *out_
                 out_artwork->type = ASSET_TYPE_GIF;
             else if (strcasecmp(out_artwork->filepath + path_len - 4, ".png") == 0)
                 out_artwork->type = ASSET_TYPE_PNG;
+            else if (path_len >= 5 && strcasecmp(out_artwork->filepath + path_len - 5, ".apng") == 0)
+                out_artwork->type = ASSET_TYPE_PNG;
             else if (strcasecmp(out_artwork->filepath + path_len - 4, ".jpg") == 0)
                 out_artwork->type = ASSET_TYPE_JPEG;
             else if (path_len >= 5 && strcasecmp(out_artwork->filepath + path_len - 5, ".jpeg") == 0)

@@ -34,7 +34,7 @@ esp_err_t show_url_init(void);
  * On success, the file is saved to animations-dir and playback starts
  * automatically via play_scheduler_play_local_file().
  *
- * @param artwork_url URL of the artwork (must end with .gif, .webp, .jpg, .jpeg, or .png)
+ * @param artwork_url URL of the artwork (must end with .gif, .webp, .jpg, .jpeg, .png, or .apng)
  * @param blocking If true, display download progress on screen.
  *                 If false, download silently in the background.
  * @return ESP_OK if download was queued, error code otherwise

@@ -2,7 +2,8 @@
 dependencies:
   waveshare/esp32_p4_wifi6_touch_lcd_4b: "1.0.*"
   espressif/esp_lcd_touch: "^1.2.0"
-  espressif/libpng: "^1.6.39~1"
+  # libpng is a local fork (components/espressif__libpng) carrying the APNG
+  # read patch - see its README.md before bumping or re-adding the registry dep.
   espressif/libjpeg-turbo: "^3.1.1"
   espressif/mdns: "^1.0.*"
   espressif/esp_hosted: "~2.9.3"  # Dual-version support - see docs/slave-ota/DUAL-VERSION-SUPPORT-PLAN.md

@@ -48,6 +48,10 @@ static int detect_extension_from_name(const char *name, bool *out_ok)
         if (out_ok) *out_ok = true;
         return 2; // EXT_PNG
     }
+    if (len >= 5 && strcasecmp(name + len - 5, ".apng") == 0) {
+        if (out_ok) *out_ok = true;
+        return 2; // EXT_PNG (APNG is a PNG superset; decoder detects acTL)
+    }
     if (len >= 4 && strcasecmp(name + len - 4, ".jpg") == 0) {
         if (out_ok) *out_ok = true;
         return 3; // EXT_JPEG

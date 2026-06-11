@@ -88,7 +88,8 @@ static bool is_supported_extension(const char *ext)
             strcasecmp(ext, "webp") == 0 ||
             strcasecmp(ext, "jpg") == 0  ||
             strcasecmp(ext, "jpeg") == 0 ||
-            strcasecmp(ext, "png") == 0);
+            strcasecmp(ext, "png") == 0  ||
+            strcasecmp(ext, "apng") == 0);
 }
 
 /**

@@ -56,7 +56,7 @@ p3a downloads and caches artwork on the SD card, and runs an automatic eviction 
 p3a supports these image formats:
 - **WebP** (animated and static) — recommended for best quality and compression; supports transparency
 - **GIF** (animated and static) — supports transparency
-- **PNG** (static) — supports transparency with full alpha channel
+- **PNG / APNG** (animated and static) — supports transparency with full alpha channel; `.apng` files are accepted too
 - **JPEG** (static)
 
 **Transparency support**: Images with transparent backgrounds or alpha channels are fully supported. The background color behind transparent areas can be configured via the web interface or REST API.
@@ -404,7 +404,7 @@ Once your device is registered at [makapix.club](https://makapix.club/), you can
 3. Click the **"Send to p3a"** button
 4. The artwork is sent directly to your device and displayed immediately
 
-Supported formats: WebP and GIF (animated, with transparency), PNG (still images, with transparency), and JPEG (still images).
+Supported formats: WebP, GIF, and APNG (animated, with transparency), PNG (still images, with transparency), and JPEG (still images).
 
 ### Remote control
 

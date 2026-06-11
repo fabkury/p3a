@@ -1,0 +1,6 @@
+dependencies:
+  idf: '>=5.0'
+  zlib:
+    version: ^1.2.13
+description: libpng 1.6.52 with the official APNG read patch (local fork, see README.md)
+version: 1.6.52

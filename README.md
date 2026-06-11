@@ -68,7 +68,7 @@ For a step-by-step walkthrough written for first-time buyers, see the [Quick Sta
 | **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" and "All Artworks", or hashtags like "#nintendo". Control your device remotely from anywhere. |
 | **[Giphy](https://giphy.com/)** | Automatically fetches and cycles through trending GIFs and GIF searches. Configurable content rating (G through R) and refresh interval. |
 | **Museums** | Browse public collections from the Art Institute of Chicago, Rijksmuseum, Victoria and Albert Museum, Wellcome Collection, the Statens Museum for Kunst (SMK), Harvard Art Museums, and the Smithsonian over IIIF. Pick a department, category, or curated set; the device refreshes the listing on schedule. |
-| **Local files** | Copy your own WebP, GIF, PNG, or JPEG files via USB or Wi-Fi. No cloud account needed, no internet required. |
+| **Local files** | Copy your own WebP, GIF, PNG/APNG, or JPEG files via USB or Wi-Fi. No cloud account needed, no internet required. |
 
 Mix them all in a single "playset" for an ever-changing display.
 
@@ -98,7 +98,7 @@ Mix them all in a single "playset" for an ever-changing display.
 
 ### Smooth, Gapless Playback
 
-- **Animated WebP and GIF; static PNG and JPEG** — with alpha/transparency where the format supports it
+- **Animated WebP, GIF, and APNG; static PNG and JPEG** — with alpha/transparency where the format supports it
 - **Smart upscaling** — pixel art and local files use nearest-neighbor scaling to keep edges crisp; Giphy and museum content use hardware-accelerated bilinear interpolation for smooth results
 - **Triple-buffered rendering** with VSYNC — no tearing, no freezing
 - **Aspect ratio preservation** — non-square art is centered on the display with a configurable background color
@@ -210,7 +210,7 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 |-------|------------|
 | **Core** | `p3a_core` (state machine), `config_store` (NVS settings), `event_bus` |
 | **Playback** | `play_scheduler`, `playback_queue`, `channel_manager` |
-| **Decoders** | `animation_decoder` (WebP/PNG/JPEG), `animated_gif_decoder` (GIF), `libwebp_decoder` |
+| **Decoders** | `animation_decoder` (WebP/PNG/APNG/JPEG), `animated_gif_decoder` (GIF), `libwebp_decoder` |
 | **Connectivity** | `wifi_manager` (provisioning, captive portal, mDNS), `http_api` (REST + WebSocket), `makapix` (MQTT/TLS) |
 | **Content** | `giphy` (API + SD caching), `art_institution` (museum IIIF channels), `content_cache`, `loader_service`, `storage_eviction` |
 | **System** | `ota_manager`, `slave_ota` (C6 firmware), `p3a_board_ep44b` (HAL), `sdio_bus` |

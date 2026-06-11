@@ -129,6 +129,10 @@ static asset_type_t asset_type_from_name(const char *name, bool *out_ok)
         if (out_ok) *out_ok = true;
         return ASSET_TYPE_JPEG;
     }
+    if (len >= 5 && strcasecmp(name + len - 5, ".apng") == 0) {
+        if (out_ok) *out_ok = true;
+        return ASSET_TYPE_PNG;  // APNG is a PNG superset; decoder detects acTL
+    }
     if (len >= 4 && strcasecmp(name + len - 4, ".gif") == 0) {
         if (out_ok) *out_ok = true;
         return ASSET_TYPE_GIF;

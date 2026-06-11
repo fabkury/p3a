@@ -637,6 +637,7 @@ bool directory_has_animation_files(const char *dir_path)
             // Check longer extensions first (e.g., .jpeg before .jpg), all comparisons are case-insensitive
             if ((len >= 5 && strcasecmp(name + len - 5, ".webp") == 0) ||
                 (len >= 5 && strcasecmp(name + len - 5, ".jpeg") == 0) ||
+                (len >= 5 && strcasecmp(name + len - 5, ".apng") == 0) ||
                 (len >= 4 && strcasecmp(name + len - 4, ".gif") == 0) ||
                 (len >= 4 && strcasecmp(name + len - 4, ".png") == 0) ||
                 (len >= 4 && strcasecmp(name + len - 4, ".jpg") == 0)) {

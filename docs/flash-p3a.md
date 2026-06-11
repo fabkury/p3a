@@ -133,7 +133,7 @@ After the initial flash, update wirelessly:
 
 ### Adding artwork
 
-Copy WebP, GIF, PNG, or JPEG files to a `p3a/animations/` folder on a microSD card (i.e. create a `p3a` folder at the root of the card, and an `animations` folder inside it), then insert it into your p3a.
+Copy WebP, GIF, PNG/APNG, or JPEG files to a `p3a/animations/` folder on a microSD card (i.e. create a `p3a` folder at the root of the card, and an `animations` folder inside it), then insert it into your p3a.
 
 See [HOW-TO-USE.md](HOW-TO-USE.md) for detailed instructions.
 

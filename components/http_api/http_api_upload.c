@@ -25,7 +25,7 @@
  * POST /upload
  * Handles multipart/form-data file upload, saves to temporary dir, then moves to animations dir
  * Maximum file size: P3A_MAX_ARTWORK_SIZE (16 MiB)
- * Supported formats: WebP, GIF, JPG, JPEG, PNG
+ * Supported formats: WebP, GIF, JPG, JPEG, PNG, APNG
  */
 static esp_err_t h_post_upload(httpd_req_t *req) {
     const size_t MAX_FILE_SIZE = P3A_MAX_ARTWORK_SIZE;
@@ -416,13 +416,13 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     bool valid_ext = false;
     if (strcasecmp(ext, "webp") == 0 || strcasecmp(ext, "gif") == 0 ||
         strcasecmp(ext, "jpg") == 0 || strcasecmp(ext, "jpeg") == 0 ||
-        strcasecmp(ext, "png") == 0) {
+        strcasecmp(ext, "png") == 0 || strcasecmp(ext, "apng") == 0) {
         valid_ext = true;
     }
-    
+
     if (!valid_ext) {
         unlink(temp_path);
-        send_json_error(req, 400, "UNSUPPORTED_TYPE", "Unsupported file type. Use WebP, GIF, JPG, JPEG, or PNG");
+        send_json_error(req, 400, "UNSUPPORTED_TYPE", "Unsupported file type. Use WebP, GIF, JPG, JPEG, PNG, or APNG");
         return ESP_OK;
     }
     

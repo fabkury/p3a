@@ -80,8 +80,8 @@ All 25 custom components live under `components/`. This document describes each 
 ## 7. animation_decoder — Image/Animation Decoders
 
 - **Purpose**: Unified interface for image/animation decoding
-- **Formats**: WebP (animated), GIF (animated), PNG, JPEG
-- **Transparency**: Full alpha channel support for WebP, GIF, and PNG
+- **Formats**: WebP (animated), GIF (animated), PNG/APNG (static/animated), JPEG
+- **Transparency**: Full alpha channel support for WebP, GIF, and PNG/APNG
 - **Aspect ratio**: Preserves original aspect ratio when scaling non-square images
 - **Key files**: `webp_animation_decoder.c`, `png_animation_decoder.c`, `jpeg_animation_decoder.c`
 - **Public API** (`animation_decoder.h`):

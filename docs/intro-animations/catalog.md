@@ -36,6 +36,9 @@ Update this file whenever an animation changes status.
 | `plasma-dissolve` | host-OK (batch 5, 2026-06-12) | Smooth plasma threshold field (3-sin sum, seed-driven phases) at source-pixel scale; reveal iff field ≤ smoothstep(t). Same dissolve geometry as pixel-dissolve, but correlated noise → organic blobs instead of speckle. Module: `ia_plasma_dissolve.c`. |
 | `voronoi-shatter` | host-OK (batch 5, 2026-06-12) | 24 seeded Voronoi sites; each cell rigid-translates from its outward radial direction with cubic ease-out remaining-distance. Cell-id LUT computed per call. Module: `ia_voronoi_shatter.c`. |
 | `hue-cycle-lock`  | host-OK (batch 5, 2026-06-12) | Per-pixel HSV hue rotation; offset = (1−smoothstep(t))·2 full turns; saturation/value preserved. Logo fades in (smoothstep alpha) over the first 30% of the window while hue-cycling, then continues cycling at full opacity until locking to true colors at t=1. Pure color-space animation distinct from color-emerge (RGB lerp). Module: `ia_hue_cycle_lock.c`. |
+| `blinds-flip`     | host-OK (batch 6, 2026-06-12) | Venetian-blind 3D flip: 6-src-row strips open from edge-on, growing vertically around their center with foreshortened nearest sampling and shading 0.35→1.0; staggered top-to-bottom (0.45 window each, starts spread over [0, 0.55]). Module: `ia_blinds_flip.c`. |
+| `swirl-in`        | host-OK (batch 6, 2026-06-12) | Galaxy gather: per-pixel curved polar arc — radius shrinks (launch +0.75×width, ±30% per-pixel variance) while angle unwinds 1.1 turns (direction flips per boot); cubic ease-out; offset computed against recomputed home polar position so it collapses to exactly 0. Module: `ia_swirl_in.c`. |
+| `channel-merge`   | host-OK (batch 6, 2026-06-12) | Three R/G/B channel ghosts slide in from three directions 120° apart (0.85×width); each pass writes only its channel byte so overlaps recombine toward true color; staggered locks R 0.78 / G 0.88 / B 0.98, cubic ease-out. Module: `ia_channel_merge.c`. |
 
 ## Candidate pool
 
@@ -82,6 +85,10 @@ aside.
 | `twirl-unwind` | Photoshop-style spiral warp with radius-dependent rotation; unwinds | medium | rejected 2026-06-12 (Fab) |
 | `bayer-reveal` | 8×8 ordered Bayer matrix as threshold field; deterministic crosshatch reveal | low | rejected 2026-06-12 (Fab) |
 | `rotozoom-settle` | Affine inverse-mapping (rotation+scale) decaying to identity | medium | rejected 2026-06-12 (Fab) |
+| `slot-reels` | Per-column cyclic vertical scroll (slot-machine reels), staggered left-to-right lock | low | rejected 2026-06-12 (Fab) |
+| `blinds-flip` | Strips flip open edge-on→face-on with vertical foreshortening + shading | low | implemented (see above) |
+| `swirl-in` | Pixels spiral in along curved polar arcs; galaxy-like gather | medium | implemented (see above) |
+| `channel-merge` | R/G/B channel planes slide in from 3 directions and recombine to true color | low | implemented (see above) |
 
 Selection guidance when picking batches: favor variety of *mechanism*
 (dissolve vs motion vs wipe vs distortion vs zoom) over variety of theme,

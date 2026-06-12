@@ -24,6 +24,9 @@ void ia_starburst_render       (uint8_t *buffer, const intro_anim_ctx_t *ctx, fl
 void ia_plasma_dissolve_render (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_voronoi_shatter_render (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_hue_cycle_lock_render  (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
+void ia_blinds_flip_render     (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
+void ia_swirl_in_render        (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
+void ia_channel_merge_render   (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 
 const intro_anim_t intro_anim_registry[] = {
     { .name = "smoothstep-fade", .frame_budget_ms = 40, .render = ia_smoothstep_fade_render },
@@ -46,6 +49,9 @@ const intro_anim_t intro_anim_registry[] = {
     { .name = "plasma-dissolve", .frame_budget_ms = 40, .render = ia_plasma_dissolve_render },
     { .name = "voronoi-shatter", .frame_budget_ms = 40, .render = ia_voronoi_shatter_render },
     { .name = "hue-cycle-lock",  .frame_budget_ms = 40, .render = ia_hue_cycle_lock_render  },
+    { .name = "blinds-flip",     .frame_budget_ms = 40, .render = ia_blinds_flip_render     },
+    { .name = "swirl-in",        .frame_budget_ms = 40, .render = ia_swirl_in_render        },
+    { .name = "channel-merge",   .frame_budget_ms = 40, .render = ia_channel_merge_render   },
 };
 
 const int intro_anim_count = (int)(sizeof(intro_anim_registry) / sizeof(intro_anim_registry[0]));

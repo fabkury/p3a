@@ -50,7 +50,10 @@ $sources = @(
     (Join-Path $introAnims 'ia_starburst.c'),
     (Join-Path $introAnims 'ia_plasma_dissolve.c'),
     (Join-Path $introAnims 'ia_voronoi_shatter.c'),
-    (Join-Path $introAnims 'ia_hue_cycle_lock.c')
+    (Join-Path $introAnims 'ia_hue_cycle_lock.c'),
+    (Join-Path $introAnims 'ia_blinds_flip.c'),
+    (Join-Path $introAnims 'ia_swirl_in.c'),
+    (Join-Path $introAnims 'ia_channel_merge.c')
 )
 
 $cflags = @(

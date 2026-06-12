@@ -18,18 +18,18 @@ can be added later.
 
 ## Status
 
-**Phase: 4 IN PROGRESS — 20 animations registered, random/force/duration wired.**
+**Phase: 4 IN PROGRESS — 23 animations registered, random/force/duration wired.**
 
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 0 | Host toolchain install (one-time, user action) | done — WinLibs MinGW-w64 / gcc 16.1.0 |
 | 1 | Host harness: viewer, frame dump, automated checks | done — `host/intro-anim-lab/`; `--check` green |
 | 2 | Architecture refactor + port `smoothstep-fade` | done — device-confirmed 2026-06-12 |
-| 3 | Develop new animations (overshoot the final 12; cull to best 11) | 20 host-OK; rejected: pixel-zoom, neon-trace, sparkle-fade, rotate-step, flood-fill, plasma-resolve, shutter-bands, pixel-shuffle, fire-burnup, bayer-reveal, rotozoom-settle, ripple-converge, twirl-unwind |
+| 3 | Develop new animations (overshoot the final 12; cull to best 11) | 23 host-OK (batch 6: blinds-flip, swirl-in, channel-merge — not yet in firmware build); rejected: pixel-zoom, neon-trace, sparkle-fade, rotate-step, flood-fill, plasma-resolve, shutter-bands, pixel-shuffle, fire-burnup, bayer-reveal, rotozoom-settle, ripple-converge, twirl-unwind, slot-reels |
 | 4 | Random selection + duration setting + force-override (web UI) | code complete (esp_random pick, NVS `intro_anim_ms` 1000..7500 default 3000, NVS `intro_anim_force`, /api/intro-animations, Display tab dropdown+slider, per-frame timing log); awaiting on-device verification |
 | 5 | Final device QA: profiling, rotations, bg colors | not started |
 
-Animation roster: 20 implemented (`smoothstep-fade` device-OK; the other 19
+Animation roster: 23 implemented (`smoothstep-fade` device-OK; the other 22
 host-OK awaiting device verification — overshooting on purpose so we can
 cull to 12 after device QA). See [catalog.md](catalog.md) for the live
 roster and candidate concepts.

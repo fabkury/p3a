@@ -24,10 +24,7 @@ idf_component_register(
         "intro_anims/ia_venetian.c"
         "intro_anims/ia_glitch_settle.c"
         "intro_anims/ia_typewriter.c"
-        "intro_anims/ia_neon_trace.c"
         "intro_anims/ia_spiral_reveal.c"
-        "intro_anims/ia_sparkle_fade.c"
-        "intro_anims/ia_rotate_step.c"
         "sd_path.c"
         "fresh_boot.c"
     INCLUDE_DIRS

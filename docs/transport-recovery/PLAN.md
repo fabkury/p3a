@@ -56,8 +56,8 @@ the **2.7.0 bench unit**). Identify a unit's slave version from the boot log:
    for the organic failure; confirm orderly path). Do not block on this.
 3. Phase 1 development + validation on the 2.9.3 unit (guide below).
 4. Regression-check the gate on a 2.7.0 unit (must take the Phase 0 path).
-5. Delete the test hook (five files; `grep -rn "TRANSPORT_FAULT_INJECT"`),
-   final commit, mark Phase 1 done here.
+5. ~~Delete the test hook~~ — **done 2026-06-12**: all five pieces removed
+   (`grep -rn "TRANSPORT_FAULT_INJECT"` now matches only this doc).
 
 ---
 
@@ -268,15 +268,19 @@ risk; gathers fleet evidence for Phase 1.
       degraded again had the streak persisted at 3. Reset confirmed.)*
 - [ ] Soak under the trigger load (64-channel Giphy playset) until a real
       failure occurs; confirm orderly path end-to-end.
-- [ ] ~~Delete the temporary test hook once the above pass~~ — **deferred:**
-      the hook is Phase 1's test rig (decision 2026-06-06); deletion is the
-      last item of the Phase 1 checklist.
+- [x] Delete the temporary test hook once the above pass — *(was deferred
+      2026-06-06 as Phase 1's test rig; **deleted 2026-06-12** after Phase 1
+      was closed as not viable.)*
 
-### Temporary test hook (TRANSPORT_FAULT_INJECT) — delete after Phase 1
+### Temporary test hook (TRANSPORT_FAULT_INJECT) — DELETED 2026-06-12
 
-Gated by `CONFIG_P3A_TRANSPORT_FAULT_INJECT` (currently **=y** in sdkconfig
-for the validation builds; default n, so a release built from defaults would
-exclude it — but delete it outright once Phase 1 validation is done).
+> **Removed from the firmware.** All five pieces (HTTP handler + router
+> branch, inject function, gpio dep, Kconfig option, sdkconfig line) were
+> deleted on 2026-06-12. The rest of this section is kept as a historical
+> record of how the hook worked during Phase 0/1 validation.
+
+Was gated by `CONFIG_P3A_TRANSPORT_FAULT_INJECT` (=y in sdkconfig for the
+validation builds; default n).
 
 Usage:
 
@@ -306,7 +310,7 @@ Detection fires on the next host->C6 SDIO write, so run it while the device
 has traffic (downloads active, or just MQTT keepalive / health-check DNS —
 expect up to a few seconds of delay when idle).
 
-**To delete every piece:** `grep -rn "TRANSPORT_FAULT_INJECT"` — five files:
+**The five pieces removed on 2026-06-12:**
 
 1. `components/http_api/http_api.c` — handler block + router branch
 2. `components/wifi_manager/transport_recovery.c` — inject function at bottom

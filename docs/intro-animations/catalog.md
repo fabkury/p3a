@@ -21,27 +21,23 @@ Update this file whenever an animation changes status.
 | `iris-wipe`       | host-OK (batch 1, 2026-06-12) | Circular reveal from bbox center shifted -10 src px upward; smoothstep-paced radius. Module: `ia_iris_wipe.c`. |
 | `assemble`        | host-OK (batch 1, 2026-06-12) | Per-source-pixel fly-in over a 256-entry sin/cos LUT (continuous angle) with per-pixel magnitude variance in [0.6, 1.4]; cubic ease-out timing. Module: `ia_assemble.c`. |
 | `scanline-reveal` | host-OK (batch 2, 2026-06-12) | CRT-style bright bar sweeps top→bottom across the bbox; logo opaque above the bar, bg below; bar contrast color picked against bg luminance. Module: `ia_scanline_reveal.c`. |
-| `bounce-drop`     | host-OK (batch 2, 2026-06-12) | Whole-image drop-and-bounce: piecewise-quadratic vertical offset, 1 fall + 2 damped bounces; lands centered at t=1. Module: `ia_bounce_drop.c`. |
+| `bounce-drop`     | host-OK (batch 2, 2026-06-12) | Whole-image gravity drop with damped bounces: falling arc accelerates linearly under gravity (y = H·(1−u²) → speed grows into impact), abrupt velocity reversal at landing, 2 damped bounces with restitution e=0.42, then holds. Module: `ia_bounce_drop.c`. |
 | `wave-settle`     | host-OK (batch 2, 2026-06-12) | Horizontal sine displacement per source-row, amplitude damps to 0 by t=1 with phase drift; logo alpha fades in via smoothstep. Module: `ia_wave_settle.c`. |
 | `checker-tiles`   | host-OK (batch 2, 2026-06-12) | 6×6 source-pixel tiles pop in via hash-priority threshold (smoothstep-paced) — chunky checkerboard-y reveal. Module: `ia_checker_tiles.c`. |
-| `pixel-rain`      | host-OK (batch 3, 2026-06-12) | Per-source-pixel gravity drop with seeded start-time stagger (≤0.35) and cubic ease-out fall. Module: `ia_pixel_rain.c`. |
+| `pixel-rain`      | host-OK (batch 3, 2026-06-12) | Per-source-pixel drop with three independent variability axes from one seeded hash: start delay ∈ [0, 0.55), drop distance ∈ [0.55, 1.7]×screen, ease-power ∈ {4,5,6,7}. Heterogenous rain rather than dense cloud. Module: `ia_pixel_rain.c`. |
 | `venetian`        | host-OK (batch 3, 2026-06-12) | 6-src-px horizontal strips slide in alternately from left/right; smoothstep-paced offset to 0. Module: `ia_venetian.c`. |
 | `glitch-settle`   | host-OK (batch 3, 2026-06-12) | 4-src-px-tall slabs jitter horizontally with per-channel R/G/B chromatic aberration; quantized into 12 shake states; (1−t)² decay. Module: `ia_glitch_settle.c`. |
 | `typewriter`      | host-OK (batch 3, 2026-06-12) | Source-columns reveal left-to-right at constant speed; 6-cycle blinking contrast cursor at the head. Module: `ia_typewriter.c`. |
 | `spiral-reveal`   | host-OK (batch 3, 2026-06-12) | Rotating cone sweeps 1.5 turns clockwise from bbox center; aperture and radial threshold both expand to full coverage by t=1. Module: `ia_spiral_reveal.c`. |
 | `mosaic-shrink`   | host-OK (batch 4, 2026-06-12) | Block-quantized render at decreasing block size (12→1 src px); per-block top-left sample blended toward bg by smoothstep alpha. Module: `ia_mosaic_shrink.c`. |
 | `diamond-wipe`    | host-OK (batch 4, 2026-06-12) | L1 (Manhattan) distance reveal from bbox center shifted -10 src px upward; rotated-square iris grows smoothstep-paced. Distinct metric from iris-wipe. Module: `ia_diamond_wipe.c`. |
-| `pixel-shuffle`   | host-OK (batch 4, 2026-06-12) | Per-pixel 2D random Cartesian sample offset (in source-px units) decaying to 0 by t=1; samples drawn at home position from a displaced source pixel. Module: `ia_pixel_shuffle.c`. |
 | `color-emerge`    | host-OK (batch 4, 2026-06-12) | Two-phase color-space animation: silhouette in contrast color fades in alpha-wise over t∈[0, 0.25), then per-channel value lerps from silhouette toward source color over t∈[0.25, 1]. Module: `ia_color_emerge.c`. |
 | `starburst`       | host-OK (batch 4, 2026-06-12) | Per-pixel fly-in from far outside along home-radial direction with back-out (overshoot) easing (c2=3.5, dist=2.0×width) — pixels punch ~31% past home before snapping back. Module: `ia_starburst.c`. |
-| `fire-burnup`     | host-OK (batch 5, 2026-06-12) | Stateless value-noise heat field with upward time-drift, thresholded on (1−smoothstep(t)). Pixels above threshold paint a flame ramp (red→orange→yellow→white) over the logo; below threshold logo shows. Module: `ia_fire_burnup.c`. |
 | `plasma-dissolve` | host-OK (batch 5, 2026-06-12) | Smooth plasma threshold field (3-sin sum, seed-driven phases) at source-pixel scale; reveal iff field ≤ smoothstep(t). Same dissolve geometry as pixel-dissolve, but correlated noise → organic blobs instead of speckle. Module: `ia_plasma_dissolve.c`. |
 | `ripple-converge` | host-OK (batch 5, 2026-06-12) | 2D radial sample displacement: A·sin(k·r − ω·t) along outward radial; amplitude smoothstep-damped to 0. Distinct from wave-settle (1D per-row): coherent radial wave on the source. Module: `ia_ripple_converge.c`. |
 | `voronoi-shatter` | host-OK (batch 5, 2026-06-12) | 24 seeded Voronoi sites; each cell rigid-translates from its outward radial direction with cubic ease-out remaining-distance. Cell-id LUT computed per call. Module: `ia_voronoi_shatter.c`. |
 | `hue-cycle-lock`  | host-OK (batch 5, 2026-06-12) | Per-pixel HSV hue rotation; offset = (1−smoothstep(t))·2 full turns; saturation/value preserved. Locks to true colors at t=1. Pure color-space animation distinct from color-emerge (RGB lerp). Module: `ia_hue_cycle_lock.c`. |
 | `twirl-unwind`    | host-OK (batch 5, 2026-06-12) | Photoshop-style spiral warp: per-pixel sample rotation θ(r,t) = (1−smoothstep(t))·9·exp(−r/22), so the center spins ~1.4 turns at t=0+ and decays radially. Module: `ia_twirl_unwind.c`. |
-| `bayer-reveal`    | host-OK (batch 5, 2026-06-12) | 8×8 ordered Bayer matrix as deterministic threshold field (rank 0..63 by sx%8, sy%8); reveal iff rank/64 < smoothstep(t). Iconic crosshatch progression, distinct from hash-priority. Module: `ia_bayer_reveal.c`. |
-| `rotozoom-settle` | host-OK (batch 5, 2026-06-12) | Affine inverse-mapping decaying to identity: rotation θ(t) sweeps 1.5 turns, scale s(t) shrinks 3.5×→1×, both smoothstep-paced. Sampling in source-pixel space preserves pixel-art blocks. Module: `ia_rotozoom_settle.c`. |
 
 ## Candidate pool
 
@@ -76,18 +72,18 @@ aside.
 | `mosaic-shrink` | Logo rendered at coarse block quantization (block size shrinks 12→1 src px) with alpha fade | low | implemented (see above) |
 | `diamond-wipe` | L1 (Manhattan) distance reveal — diamond-shaped iris growing from bbox center | low | implemented (see above) |
 | `flood-fill` | BFS through 4-connected opaque region from a deterministic seed; topology-aware reveal | medium | rejected 2026-06-12 (Fab) |
-| `pixel-shuffle` | Per-pixel 2D random sample offset that decays to 0; logo "unscrambles" in place | low | implemented (see above) |
+| `pixel-shuffle` | Per-pixel 2D random sample offset that decays to 0; logo "unscrambles" in place | low | rejected 2026-06-12 (Fab) |
 | `shutter-bands` | Vertical column-bands open from bbox center outward in band-distance order | low | rejected 2026-06-12 (Fab) |
 | `color-emerge` | Silhouette in contrast color fades in, then per-channel value lerps from silhouette to source color | low | implemented (see above) |
 | `starburst` | Per-pixel fly-in along home-radial direction with back-out (overshoot) easing | medium | implemented (see above) |
-| `fire-burnup` | Stateless fire-noise field thresholded on time; flames die away revealing logo | low | implemented (see above) |
+| `fire-burnup` | Stateless fire-noise field thresholded on time; flames die away revealing logo | low | rejected 2026-06-12 (Fab) |
 | `plasma-dissolve` | Smooth plasma field used as dissolve threshold (correlated noise vs hash) | low | implemented (see above) |
 | `ripple-converge` | 2D radial sinusoidal sample displacement, smoothstep-damped amplitude | low | implemented (see above) |
 | `voronoi-shatter` | Voronoi cells fly in radially from outside; per-cell easing | medium | implemented (see above) |
 | `hue-cycle-lock` | Per-pixel HSV hue rotation decaying to 0 at t=1 | low | implemented (see above) |
 | `twirl-unwind` | Photoshop-style spiral warp with radius-dependent rotation; unwinds | medium | implemented (see above) |
-| `bayer-reveal` | 8×8 ordered Bayer matrix as threshold field; deterministic crosshatch reveal | low | implemented (see above) |
-| `rotozoom-settle` | Affine inverse-mapping (rotation+scale) decaying to identity | medium | implemented (see above) |
+| `bayer-reveal` | 8×8 ordered Bayer matrix as threshold field; deterministic crosshatch reveal | low | rejected 2026-06-12 (Fab) |
+| `rotozoom-settle` | Affine inverse-mapping (rotation+scale) decaying to identity | medium | rejected 2026-06-12 (Fab) |
 
 Selection guidance when picking batches: favor variety of *mechanism*
 (dissolve vs motion vs wipe vs distortion vs zoom) over variety of theme,

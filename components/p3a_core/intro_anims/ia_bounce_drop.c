@@ -1,21 +1,27 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025-2026 p3a Contributors
 
-/* bounce-drop: the whole logo drops from above the screen and bounces twice
- * with damped amplitude before settling at its centered position. Render is
- * pure (no integration), but the y-offset traces a piecewise-quadratic
- * trajectory that reads as physical without floating bookkeeping.
+/* bounce-drop: physically-flavored gravity drop with damped bounces.
+ * The logo accelerates downward under constant gravity, slams into its
+ * settled position, rebounds with energy loss, and after two bounces
+ * settles for good. Arc count and timing are picked to fit t ∈ [0, 1].
  *
- * Bounce model (closed-form, monotonic in t):
- *   - Three "drop" arcs back-to-back; arc i runs over t in [Ti, Ti+1].
- *   - Each arc is a falling parabola: starts at height H_i, lands at 0 at
- *     end of arc.
- *   - Heights H_0 = drop_height, H_1 = 0.18*H_0, H_2 = 0.06*H_0.
- *   - Arc durations weight earlier arcs longer to feel like real damping.
- *   - At t=1 we land exactly at offset 0 (canonical end-state).
+ * Trajectory (analytical, no integration):
+ *   - Falling arc 0: starts at rest at height H, lands at 0 with speed
+ *     v0 = sqrt(2*g*H). Position is H * (1 − u^2), so velocity grows
+ *     LINEARLY from 0 → v0 across the arc — that's the gravity feel.
+ *   - Bounce arcs 1, 2: symmetric parabolic up-then-down peaking at
+ *     height H_i = e^(2i) * H, with peak velocity v_i = e^i * v0.
+ *     Velocity reverses ABRUPTLY at every landing (sign flip with
+ *     magnitude reduced by factor e), so the impact reads as a hard
+ *     bounce, not a sinusoidal swing.
+ *   - Restitution e = 0.42 ⇒ first bounce reaches ~18% of H, second
+ *     reaches ~3%. After arc 2 the logo holds.
  *
- * Y-only motion → can use the canonical blitter once per frame with a
- * shifted dest position (no per-pixel work here). */
+ * Arc durations are weighted by physical fall times: T_i ∝ sqrt(H_i).
+ * Whatever t-budget remains after the two bounces sits at rest at 0.
+ *
+ * Y-only motion → one canonical blit per frame at a shifted dest. */
 
 #include "intro_anim.h"
 #include "p3a_logo.h"
@@ -40,35 +46,51 @@ void ia_bounce_drop_render(uint8_t *buffer,
 
     intro_anim_fill_bg(buffer, ctx);
 
-    /* Drop height: enough to start fully off-screen above. logo_y can be
-     * positive (centered on tall canvas), so drop from -H so that the logo
-     * top is offscreen at t=0+. */
     const float drop_h = (float)(ctx->logo_y + ctx->height / 2);
 
-    /* Arc time boundaries in t: T0=0, T1=0.55, T2=0.85, T3=1.0.
-     * Arc heights: H0=drop_h, H1=0.18*drop_h, H2=0.06*drop_h. */
-    static const float T1 = 0.55f, T2 = 0.85f;
-    float h0 = drop_h, h1 = 0.18f * drop_h, h2 = 0.06f * drop_h;
+    /* Restitution + arc durations.
+     *   T_fall ∝ sqrt(H), so duration ratios: 1, 2*e, 2*e^2  (×2 because
+     *   each bounce is up-then-down, twice the half-fall). */
+    const float e = 0.42f;
+    float D0 = 1.0f;
+    float D1 = 2.0f * e;
+    float D2 = 2.0f * e * e;
+    /* We want all three arcs to fit inside ~0.92 of t so the logo holds
+     * still for the last fraction (canonical end state visible briefly
+     * before t=1). Normalize. */
+    const float HOLD_FRACTION = 0.08f;
+    float Dsum = D0 + D1 + D2;
+    float scale = (1.0f - HOLD_FRACTION) / Dsum;
+    float T1 = D0 * scale;             /* falling arc ends at T1 */
+    float T2 = T1 + D1 * scale;        /* bounce 1 ends at T2 */
+    float T3 = T2 + D2 * scale;        /* bounce 2 ends at T3 */
 
-    float y_off;   /* offset above settled position; 0 = centered */
+    float h0 = drop_h;
+    float h1 = e * e * drop_h;
+    float h2 = e * e * e * e * drop_h;
+
+    float y_off;
     if (t < T1) {
-        /* Falling arc 0: parabola y = H0*(1-u)^2, where u = t/T1, so y(0)=H0,
-         * y(T1)=0. Quadratic gives the "speeds up as it falls" feel. */
+        /* Gravity fall: y = H * (1 - u^2). Velocity ∝ -u, so SPEED grows
+         * linearly into the impact — accelerating descent. */
         float u = t / T1;
-        float v = 1.0f - u;
-        y_off = h0 * v * v;
+        y_off = h0 * (1.0f - u * u);
     } else if (t < T2) {
-        /* Up-then-down: bounce 1. Symmetric arc peaking at midpoint with
-         * height h1, value 0 at both ends. y = h1 * 4 * u * (1 - u). */
+        /* Bounce 1, symmetric parabola up-then-down: y = h1 * 4u(1-u).
+         * dy/du = h1 * 4 * (1 - 2u) — positive (rising) at u=0, negative
+         * (falling) at u=1, magnitude h1*4. Glued to arc 0's landing
+         * speed by the e^2 height ratio (sqrt → e velocity ratio). */
         float u = (t - T1) / (T2 - T1);
         y_off = h1 * 4.0f * u * (1.0f - u);
-    } else {
-        /* Bounce 2, smaller, ending exactly at 0 by t=1. */
-        float u = (t - T2) / (1.0f - T2);
+    } else if (t < T3) {
+        /* Bounce 2, smaller still. */
+        float u = (t - T2) / (T3 - T2);
         y_off = h2 * 4.0f * u * (1.0f - u);
+    } else {
+        /* Held still at 0 for the remaining fraction. */
+        y_off = 0.0f;
     }
 
-    /* Negative offset → above settled position. */
     int dy_logo = ctx->logo_y - (int)(y_off + 0.5f);
 
     p3a_logo_blit_pixelwise_bgr888(

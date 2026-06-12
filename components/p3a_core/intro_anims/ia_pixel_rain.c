@@ -1,19 +1,27 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025-2026 p3a Contributors
 
-/* pixel-rain: each opaque source pixel falls from above its home y to its
- * home position. Per-pixel start delay drawn from a seeded hash so they
- * don't all leave at once; per-pixel fall window has cubic ease-out so
- * pixels accelerate as they fall and slow as they land.
+/* pixel-rain: each opaque source pixel falls from above its home y to
+ * its home position. Three independent seeded hashes per pixel give a
+ * heterogenous-rain look rather than a uniform cloud:
  *
- * Stagger window: each pixel has personal start s0 in [0, 0.35] and ends
- * at 1.0; pixels with later starts have shorter, faster falls. This gives
- * a layered "rain ending in a thud" feel rather than a synchronous drop. */
+ *   - start delay  s0 ∈ [0, 0.55)    — wide stagger so pixels enter
+ *                                     across more than half the window
+ *   - drop distance dist ∈ [0.55, 1.7] × screen — varies pixel landing
+ *                                     speed AND visible offset at t=0+
+ *   - ease shape   p ∈ {4, 5, 6, 7}  — different "remaining distance"
+ *                                     curves, so trajectories don't
+ *                                     all collapse to the same shape
+ *
+ * Result: pixels arrive over a much wider spread, with visibly different
+ * speeds, and the cohort no longer reads as a single dense cloud. */
 
 #include "intro_anim.h"
 #include "p3a_logo.h"
 
-#define IA_PR_STAGGER 0.18f      /* max per-pixel start time */
+#define IA_PR_STAGGER     0.55f    /* max per-pixel start time */
+#define IA_PR_DIST_MIN    0.55f    /* min drop distance, multiple of screen */
+#define IA_PR_DIST_RANGE  1.15f    /* max - min */
 
 void ia_pixel_rain_render(uint8_t *buffer,
                           const intro_anim_ctx_t *ctx,
@@ -39,9 +47,7 @@ void ia_pixel_rain_render(uint8_t *buffer,
     intro_anim_rot_init(&r, ctx->rotation);
     const int scale = ctx->logo_scale;
 
-    /* Drop distance: fall starts from above the screen so any pixel still
-     * en route at t=0+ is visually offscreen. */
-    const float drop_dist = (float)(ctx->logo_y + ctx->height);
+    const float screen_h = (float)(ctx->logo_y + ctx->height);
 
     for (int oy = 0; oy < r.rotated_h; oy++) {
         for (int ox = 0; ox < r.rotated_w; ox++) {
@@ -53,20 +59,28 @@ void ia_pixel_rain_render(uint8_t *buffer,
                 src[2] == P3A_LOGO_CHROMA_KEY_R) continue;
 
             uint32_t h = intro_anim_hash3(ctx->seed, (uint32_t)sx, (uint32_t)sy);
-            float s0 = (float)(h & 0xFFFFu) * (IA_PR_STAGGER / 65535.0f);
-            if (t < s0) continue;   /* still in start delay = above screen */
+            /* Pull three independent variability bytes from one hash. */
+            uint32_t b_start = h & 0xFFu;
+            uint32_t b_dist  = (h >> 8) & 0xFFu;
+            uint32_t b_ease  = (h >> 16) & 0x3u;   /* 0..3 → power 4..7 */
 
-            /* Local fall progress in [0, 1] over [s0, 1]. */
+            float s0 = (float)b_start * (IA_PR_STAGGER / 255.0f);
+            if (t < s0) continue;
+
             float u = (t - s0) / (1.0f - s0);
             if (u < 0.0f) u = 0.0f;
             if (u > 1.0f) u = 1.0f;
 
-            /* Quintic ease-out on PROGRESS: aggressively fast start,
-             * gentle landing. drop = remaining distance from home. */
+            /* Per-pixel ease shape: (1-u)^p with p in {4,5,6,7}, scaled
+             * by per-pixel drop distance. Higher p → drop happens later
+             * and faster; lower p → smoother glide. */
             float v = 1.0f - u;
-            float v5 = v * v * v * v * v;
-            float drop = v5 * drop_dist;
-            int off_y = (int)(drop + 0.5f);
+            float v_pow = v * v * v * v;          /* (1-u)^4 */
+            int extra = (int)b_ease;              /* 0..3 */
+            for (int k = 0; k < extra; k++) v_pow *= v;   /* up to (1-u)^7 */
+
+            float dist = (IA_PR_DIST_MIN + (float)b_dist * (IA_PR_DIST_RANGE / 255.0f)) * screen_h;
+            int off_y = (int)(v_pow * dist + 0.5f);
 
             int dx0 = ctx->logo_x + ox * scale;
             int dy0 = ctx->logo_y + oy * scale - off_y;

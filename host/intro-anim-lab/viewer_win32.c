@@ -121,9 +121,10 @@ static void update_title(HWND hwnd, viewer_state_t *vs)
 {
     char buf[256];
     snprintf(buf, sizeof(buf),
-        "p3a intro-anim-lab — anim=%s  rot=%u  bg=%s  dur=%dms  seed=%u   "
+        "%s  [%d/%d]  —  rot=%u  bg=%s  dur=%dms  seed=%u   "
         "[Space=replay  N/P=anim  R=rotate  B=bg  S=seed  +/-=duration  Esc=quit]",
         intro_anim_registry[vs->anim_idx].name,
+        vs->anim_idx + 1, intro_anim_count,
         (unsigned)vs->ctx.rotation,
         harness_bg_presets[vs->bg_idx].name,
         vs->duration_ms,

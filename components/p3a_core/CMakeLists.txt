@@ -16,6 +16,10 @@ idf_component_register(
         "intro_anims/ia_pixel_dissolve.c"
         "intro_anims/ia_iris_wipe.c"
         "intro_anims/ia_assemble.c"
+        "intro_anims/ia_scanline_reveal.c"
+        "intro_anims/ia_bounce_drop.c"
+        "intro_anims/ia_wave_settle.c"
+        "intro_anims/ia_checker_tiles.c"
         "sd_path.c"
         "fresh_boot.c"
     INCLUDE_DIRS

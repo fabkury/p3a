@@ -34,7 +34,11 @@ $sources = @(
     (Join-Path $introAnims 'ia_smoothstep_fade.c'),
     (Join-Path $introAnims 'ia_pixel_dissolve.c'),
     (Join-Path $introAnims 'ia_iris_wipe.c'),
-    (Join-Path $introAnims 'ia_assemble.c')
+    (Join-Path $introAnims 'ia_assemble.c'),
+    (Join-Path $introAnims 'ia_scanline_reveal.c'),
+    (Join-Path $introAnims 'ia_bounce_drop.c'),
+    (Join-Path $introAnims 'ia_wave_settle.c'),
+    (Join-Path $introAnims 'ia_checker_tiles.c')
 )
 
 $cflags = @(

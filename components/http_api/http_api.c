@@ -546,6 +546,9 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     if (strcmp(uri, "/api/museum/rate-limits") == 0) {
         return h_get_museum_rate_limits(req);
     }
+    if (strcmp(uri, "/api/intro-animations") == 0) {
+        return h_get_intro_animations(req);
+    }
     if (strncmp(uri, "/api/pin-lists", 14) == 0 &&
         (uri[14] == '\0' || uri[14] == '/' || uri[14] == '?')) {
         return h_pinned_route_get(req);

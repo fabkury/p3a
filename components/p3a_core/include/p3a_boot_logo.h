@@ -3,14 +3,16 @@
 
 /**
  * @file p3a_boot_logo.h
- * @brief Boot logo display manager with fade-in animation
+ * @brief Intro-animation manager (boot-time logo reveal)
  *
- * Displays the p3a logo with a smooth fade-in effect. All timings below are
- * relative to the FIRST rendered logo frame, not to boot / power-on:
+ * Picks one animation from intro_anim_registry per boot (random or forced
+ * via NVS), then runs it as the middle phase of a three-phase sequence.
+ * All timings below are relative to the FIRST rendered frame, not power-on:
  * - 0.00 to 0.25 s: Background color only (no logo)
- * - 0.25 to 2.25 s: Fade in from 0% to 100% opacity (smoothstep curve)
- * - 2.25 to 3.25 s: Hold at full opacity
- * - After 3.25 s: Release screen for normal rendering
+ * - 0.25 s to 0.25 + intro-duration s: Animation (NVS intro_anim_ms,
+ *   1000..7500 ms, default 3000)
+ * - intro window end + 1 s: Hold at canonical end state (animation t=1)
+ * - After hold: Release screen for normal rendering
  *
  * The boot logo is non-blocking - all other boot operations proceed in parallel.
  * While active, the logo has exclusive control of rendering (nothing else draws).
@@ -30,14 +32,8 @@ extern "C" {
 /** Duration of initial delay phase (background only) in milliseconds */
 #define P3A_BOOT_LOGO_DELAY_MS     250
 
-/** Duration of fade-in phase in milliseconds */
-#define P3A_BOOT_LOGO_FADE_IN_MS   2000
-
 /** Duration of full opacity hold phase in milliseconds */
 #define P3A_BOOT_LOGO_HOLD_MS      1000
-
-/** Total boot logo duration (delay + fade-in + hold) */
-#define P3A_BOOT_LOGO_TOTAL_MS     (P3A_BOOT_LOGO_DELAY_MS + P3A_BOOT_LOGO_FADE_IN_MS + P3A_BOOT_LOGO_HOLD_MS)
 
 /** Target frame duration during logo display (25 FPS) */
 #define P3A_BOOT_LOGO_FRAME_MS     40
@@ -58,8 +54,8 @@ esp_err_t p3a_boot_logo_init(void);
 /**
  * @brief Check if boot logo display period is still active
  *
- * @return true before the first render, or while still within
- *         P3A_BOOT_LOGO_TOTAL_MS of the first render
+ * @return true before the first render, or while the configured intro
+ *         window (delay + intro-duration + hold) is still elapsing
  */
 bool p3a_boot_logo_is_active(void);
 

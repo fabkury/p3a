@@ -2,6 +2,7 @@
 // Copyright 2025-2026 p3a Contributors
 
 #include "intro_anim.h"
+#include "p3a_intro_anim_list.h"
 
 void ia_smoothstep_fade_render (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_pixel_dissolve_render  (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
@@ -50,3 +51,14 @@ const intro_anim_t intro_anim_registry[] = {
 };
 
 const int intro_anim_count = (int)(sizeof(intro_anim_registry) / sizeof(intro_anim_registry[0]));
+
+int p3a_intro_anim_get_count(void)
+{
+    return intro_anim_count;
+}
+
+const char *p3a_intro_anim_get_name(int idx)
+{
+    if (idx < 0 || idx >= intro_anim_count) return NULL;
+    return intro_anim_registry[idx].name;
+}

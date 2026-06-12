@@ -954,6 +954,74 @@ uint8_t config_store_get_channel_select_mode(void)
 }
 
 // ============================================================================
+// Intro Animation (boot logo) settings
+// ============================================================================
+
+esp_err_t config_store_set_intro_anim_ms(uint32_t ms)
+{
+    if (ms < CONFIG_STORE_INTRO_ANIM_MS_MIN || ms > CONFIG_STORE_INTRO_ANIM_MS_MAX) {
+        ESP_LOGE(TAG, "Invalid intro_anim_ms: %lu (must be %u..%u)",
+                 (unsigned long)ms,
+                 (unsigned)CONFIG_STORE_INTRO_ANIM_MS_MIN,
+                 (unsigned)CONFIG_STORE_INTRO_ANIM_MS_MAX);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) return err;
+
+    cJSON *item = cJSON_GetObjectItem(cfg, "intro_anim_ms");
+    if (item) {
+        cJSON_SetNumberValue(item, (double)ms);
+    } else {
+        cJSON_AddNumberToObject(cfg, "intro_anim_ms", (double)ms);
+    }
+
+    err = config_store_save(cfg);
+    cJSON_Delete(cfg);
+
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Intro anim duration saved: %lu ms", (unsigned long)ms);
+    }
+    return err;
+}
+
+uint32_t config_store_get_intro_anim_ms(void)
+{
+    cJSON *cfg = NULL;
+    esp_err_t err = config_store_load(&cfg);
+    if (err != ESP_OK) return CONFIG_STORE_INTRO_ANIM_MS_DEFAULT;
+
+    uint32_t ms = CONFIG_STORE_INTRO_ANIM_MS_DEFAULT;
+    cJSON *item = cJSON_GetObjectItem(cfg, "intro_anim_ms");
+    if (item && cJSON_IsNumber(item)) {
+        double v = cJSON_GetNumberValue(item);
+        if (v >= CONFIG_STORE_INTRO_ANIM_MS_MIN && v <= CONFIG_STORE_INTRO_ANIM_MS_MAX) {
+            ms = (uint32_t)v;
+        }
+    }
+    cJSON_Delete(cfg);
+    return ms;
+}
+
+esp_err_t config_store_set_intro_anim_force(const char *name)
+{
+    if (!name) return ESP_ERR_INVALID_ARG;
+    if (strlen(name) >= CONFIG_STORE_INTRO_ANIM_FORCE_MAX_LEN) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return cfg_set_string("intro_anim_force", name);
+}
+
+esp_err_t config_store_get_intro_anim_force(char *out, size_t max_len)
+{
+    if (!out || max_len == 0) return ESP_ERR_INVALID_ARG;
+    cfg_get_string("intro_anim_force", "", out, max_len);
+    return ESP_OK;
+}
+
+// ============================================================================
 // Device Name (persisted)
 // ============================================================================
 

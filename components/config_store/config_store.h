@@ -594,6 +594,57 @@ esp_err_t config_store_set_si_api_key(const char *key);
 esp_err_t config_store_get_si_api_key(char *out_key, size_t max_len);
 
 // ============================================================================
+// Intro Animation (boot logo) settings (persisted)
+// ============================================================================
+
+/** Min/max/default for intro-animation window length (the middle phase
+ *  of the boot sequence; blank-delay and hold are hardcoded). */
+#define CONFIG_STORE_INTRO_ANIM_MS_MIN     1000U
+#define CONFIG_STORE_INTRO_ANIM_MS_MAX     7500U
+#define CONFIG_STORE_INTRO_ANIM_MS_DEFAULT 3000U
+
+/** Max length (incl. NUL) of intro_anim_force; longest registered name
+ *  today is "scanline-reveal" (16 chars) — 32 leaves headroom. */
+#define CONFIG_STORE_INTRO_ANIM_FORCE_MAX_LEN 32
+
+/**
+ * @brief Set intro-animation duration in milliseconds (clamped 1000..7500)
+ *
+ * Read once per boot by the intro manager.
+ *
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG if out of range.
+ */
+esp_err_t config_store_set_intro_anim_ms(uint32_t ms);
+
+/**
+ * @brief Get intro-animation duration in milliseconds
+ *
+ * @return Configured duration (defaults to 3000).
+ */
+uint32_t config_store_get_intro_anim_ms(void);
+
+/**
+ * @brief Set force-pick animation name
+ *
+ * Empty string or "random" selects a uniform random animation per boot.
+ * Any other value: the named animation plays every boot (if registered).
+ * Invalid names log a warning at boot and fall back to random.
+ *
+ * @param name Animation name (or empty/"random" for random)
+ * @return ESP_OK on success
+ */
+esp_err_t config_store_set_intro_anim_force(const char *name);
+
+/**
+ * @brief Get force-pick animation name
+ *
+ * @param out     Buffer to receive the name
+ * @param max_len Buffer size (>= CONFIG_STORE_INTRO_ANIM_FORCE_MAX_LEN)
+ * @return ESP_OK; out is empty string if not set.
+ */
+esp_err_t config_store_get_intro_anim_force(char *out, size_t max_len);
+
+// ============================================================================
 // Device Name (persisted)
 // ============================================================================
 

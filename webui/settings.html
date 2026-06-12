@@ -194,6 +194,26 @@
         </div>
         <div class="file-name" id="bg-hint" style="margin-bottom:8px;">Background color for transparent artwork</div>
     </div>
+    <div class="section">
+        <h3>Boot Intro Animation</h3>
+        <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
+            <label class="toggle-label" for="intro-anim-force">Animation</label>
+            <select id="intro-anim-force" onchange="saveIntroAnimForce(this.value)"
+                style="padding:8px 10px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem;background:#fff;color:#333;min-width:180px;">
+                <option value="random">Random (per boot)</option>
+            </select>
+        </div>
+        <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
+            <label class="toggle-label">Duration</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input type="range" id="intro-anim-ms-slider" min="1000" max="7500" step="100" value="3000"
+                       oninput="updateIntroAnimMsLabel()" style="width:160px;">
+                <span class="brightness-value" id="intro-anim-ms-value">3000 ms</span>
+                <button class="btn" id="intro-anim-ms-save" onclick="saveIntroAnimMs()">Save</button>
+            </div>
+        </div>
+        <div class="setting-hint">A short animation that plays after boot, between the initial blank period and the first artwork. Set "Random" to have the device pick a different one each time, or pick a specific animation to play it on every boot.</div>
+    </div>
     <div class="section" id="display-advanced">
         <h3>Advanced</h3>
         <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
@@ -725,6 +745,63 @@ function saveChannelSelectMode(val) {
         showToast('Save failed', true);
         document.getElementById('ch-select-mode').value = val === '1' ? '0' : '1';
     });
+}
+
+function updateIntroAnimMsLabel() {
+    var v = parseInt(document.getElementById('intro-anim-ms-slider').value, 10);
+    document.getElementById('intro-anim-ms-value').textContent = v + ' ms';
+}
+
+function saveIntroAnimMs() {
+    var btn = document.getElementById('intro-anim-ms-save');
+    btn.disabled = true;
+    var v = parseInt(document.getElementById('intro-anim-ms-slider').value, 10);
+    if (isNaN(v) || v < 1000) v = 1000;
+    if (v > 7500) v = 7500;
+    mergeConfig({intro_anim_ms: v}, function() {
+        btn.disabled = false;
+        showToast('Intro duration: ' + v + ' ms', false);
+    }, function(status) {
+        btn.disabled = false;
+        showToast('Save failed (HTTP ' + status + ')', true);
+    });
+}
+
+function saveIntroAnimForce(name) {
+    mergeConfig({intro_anim_force: name}, function() {
+        showToast(name === 'random' ? 'Intro: random per boot' : 'Intro: ' + name, false);
+    }, function() {
+        showToast('Save failed', true);
+    });
+}
+
+function loadIntroAnimSettings() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/intro-animations', true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        if (xhr.status < 200 || xhr.status >= 300) return;
+        var resp; try { resp = JSON.parse(xhr.responseText || '{}'); } catch (e) { return; }
+        if (!resp || !resp.ok || !resp.data) return;
+        var sel = document.getElementById('intro-anim-force');
+        var anims = resp.data.animations || [];
+        // Keep the "Random" option, append registered animations
+        for (var i = 0; i < anims.length; i++) {
+            var opt = document.createElement('option');
+            opt.value = anims[i];
+            opt.textContent = anims[i];
+            sel.appendChild(opt);
+        }
+        var force = resp.data.force || 'random';
+        // Fall back to "random" if the saved value isn't in the registry
+        sel.value = force;
+        if (!sel.value) sel.value = 'random';
+        var ms = (typeof resp.data.duration_ms === 'number') ? resp.data.duration_ms : 3000;
+        if (ms < 1000) ms = 1000; if (ms > 7500) ms = 7500;
+        document.getElementById('intro-anim-ms-slider').value = ms;
+        updateIntroAnimMsLabel();
+    };
+    xhr.send();
 }
 
 function saveRefreshOverride(checked) {
@@ -1318,6 +1395,7 @@ xhr.send();
 // 2-3. Consolidated fetches
 loadStatus();
 loadOtaStatus();
+loadIntroAnimSettings();
 </script>
 </body>
 </html>

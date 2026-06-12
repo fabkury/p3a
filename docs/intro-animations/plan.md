@@ -124,20 +124,25 @@ Acceptance: 12 animations at `production-ready` in catalog.md.
 
 ### Phase 4 — Random selection + duration setting + force-override
 
-- [ ] Manager picks uniformly at random (`esp_random()`) at first render;
-      logs the chosen animation name at INFO (operator-facing, like
-      `ps_pick`).
-- [ ] **NVS duration setting**: key `intro_anim_ms` (clamped 1000..7500,
-      default 3000). Read once per boot.
-- [ ] **NVS force-override setting**: key `intro_anim_force` (string;
+- [x] Manager picks uniformly at random (`esp_random()`) at first render;
+      logs the chosen animation name + index + (forced)/(random) at INFO
+      (operator-facing, like `ps_pick`).
+- [x] **NVS duration setting**: key `intro_anim_ms` (clamped 1000..7500,
+      default 3000). Read once per boot in `p3a_boot_logo_init`.
+- [x] **NVS force-override setting**: key `intro_anim_force` (string;
       empty/"random" = random, else animation name). When set to a valid
-      registered animation, that animation plays every boot. Invalid name →
-      log warning, fall back to random.
-- [ ] **Web UI controls** in the Display tab of Settings:
-  - Duration slider/numeric input (ms), 1000..7500, step 100, default 3000.
-  - Force-animation dropdown: "Random" + one entry per registered animation.
-- [ ] HTTP API endpoints to read/write both settings (consistent with the
-      existing config_store/web UI pattern).
+      registered animation, that animation plays every boot. Invalid name
+      logs a warning and falls back to random.
+- [x] **Web UI controls** in the Display tab of Settings:
+  - Duration slider (ms), 1000..7500, step 100, default 3000.
+  - Force-animation dropdown: "Random" + one entry per registered
+    animation, populated from `/api/intro-animations`.
+- [x] HTTP API: `GET /api/intro-animations` returns
+      `{animations,force,duration_ms}`; the existing `PUT /config` (merge
+      mode) writes both settings via the standard config_store pipeline.
+- [x] Per-frame timing instrumentation: manager records render-time
+      min/avg/max + budget-overrun count and logs once at end of intro
+      window so frame-budget compliance is visible per boot.
 
 Acceptance: ~uniform spread over repeated boots with default settings;
 duration changes take effect on next boot; force-override plays the selected

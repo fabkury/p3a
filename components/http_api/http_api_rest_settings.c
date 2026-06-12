@@ -20,6 +20,7 @@
 #include "psram_alloc.h"
 #include "sd_path.h"
 #include "giphy.h"
+#include "p3a_intro_anim_list.h"
 
 // ---------- Config Handlers ----------
 
@@ -331,6 +332,47 @@ esp_err_t h_get_refresh_override(httpd_req_t *req)
              "{\"ok\":true,\"data\":{\"refresh_allow_override\":%s}}",
              val ? "true" : "false");
     send_json(req, 200, response);
+    return ESP_OK;
+}
+
+// ---------- Intro Animations ----------
+
+/**
+ * GET /api/intro-animations
+ *
+ * Lists registered intro-animation names plus the current force/duration
+ * settings. The web UI uses this to populate the dropdown without baking
+ * the registry into the page.
+ *
+ * Response:
+ *   { ok:true, data:{ animations:["smoothstep-fade", ...],
+ *                     force:"random",
+ *                     duration_ms:3000 } }
+ */
+esp_err_t h_get_intro_animations(httpd_req_t *req)
+{
+    cJSON *root = cJSON_CreateObject();
+    if (!root) { send_json_oom(req); return ESP_OK; }
+    cJSON_AddBoolToObject(root, "ok", true);
+
+    cJSON *data = cJSON_CreateObject();
+    cJSON_AddItemToObject(root, "data", data);
+
+    cJSON *arr = cJSON_CreateArray();
+    int n = p3a_intro_anim_get_count();
+    for (int i = 0; i < n; ++i) {
+        const char *name = p3a_intro_anim_get_name(i);
+        if (name) cJSON_AddItemToArray(arr, cJSON_CreateString(name));
+    }
+    cJSON_AddItemToObject(data, "animations", arr);
+
+    char force[CONFIG_STORE_INTRO_ANIM_FORCE_MAX_LEN];
+    config_store_get_intro_anim_force(force, sizeof(force));
+    cJSON_AddStringToObject(data, "force", force[0] ? force : "random");
+    cJSON_AddNumberToObject(data, "duration_ms",
+                            (double)config_store_get_intro_anim_ms());
+
+    send_json_root(req, 200, root);
     return ESP_OK;
 }
 

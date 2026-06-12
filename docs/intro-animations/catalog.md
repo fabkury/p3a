@@ -29,6 +29,14 @@ Update this file whenever an animation changes status.
 | `glitch-settle`   | host-OK (batch 3, 2026-06-12) | 4-src-px-tall slabs jitter horizontally with per-channel R/G/B chromatic aberration; quantized into 12 shake states; (1−t)² decay. Module: `ia_glitch_settle.c`. |
 | `typewriter`      | host-OK (batch 3, 2026-06-12) | Source-columns reveal left-to-right at constant speed; 6-cycle blinking contrast cursor at the head. Module: `ia_typewriter.c`. |
 | `spiral-reveal`   | host-OK (batch 3, 2026-06-12) | Rotating cone sweeps 1.5 turns clockwise from bbox center; aperture and radial threshold both expand to full coverage by t=1. Module: `ia_spiral_reveal.c`. |
+| `mosaic-shrink`   | host-OK (batch 4, 2026-06-12) | Block-quantized render at decreasing block size (12→1 src px); per-block top-left sample blended toward bg by smoothstep alpha. Module: `ia_mosaic_shrink.c`. |
+| `diamond-wipe`    | host-OK (batch 4, 2026-06-12) | L1 (Manhattan) distance reveal from bbox center; rotated-square iris grows smoothstep-paced. Distinct metric from iris-wipe. Module: `ia_diamond_wipe.c`. |
+| `flood-fill`      | host-OK (batch 4, 2026-06-12) | BFS through 4-connected opaque region from a deterministic seed pixel; emits the first K = smoothstep(t)·N visits. Topology-aware reveal. Module: `ia_flood_fill.c`. |
+| `plasma-resolve`  | host-OK (batch 4, 2026-06-12) | sin-combination plasma field (3 phase-shifted cosines for RGB) at 4-dest-px cell resolution; field weight (1−t) decays as logo alpha-fades up. Backdrop animation, no logo transform. Module: `ia_plasma_resolve.c`. |
+| `pixel-shuffle`   | host-OK (batch 4, 2026-06-12) | Per-pixel 2D random Cartesian sample offset (in source-px units) decaying to 0 by t=1; samples drawn at home position from a displaced source pixel. Module: `ia_pixel_shuffle.c`. |
+| `shutter-bands`   | host-OK (batch 4, 2026-06-12) | Vertical 4-src-col bands open from bbox center outward in band-distance order; smoothstep-paced count of opened bands. Module: `ia_shutter_bands.c`. |
+| `color-emerge`    | host-OK (batch 4, 2026-06-12) | Two-phase color-space animation: silhouette in contrast color fades in alpha-wise over t∈[0, 0.25), then per-channel value lerps from silhouette toward source color over t∈[0.25, 1]. Module: `ia_color_emerge.c`. |
+| `starburst`       | host-OK (batch 4, 2026-06-12) | Per-pixel fly-in from far outside along home-radial direction with back-out (overshoot) easing — pixels visibly bounce inward past home before settling. Module: `ia_starburst.c`. |
 
 ## Candidate pool
 
@@ -58,8 +66,15 @@ aside.
 | `sparkle-fade` | Fade-in (like #1) plus seed-placed twinkling sparkle pixels that die out by t=1 | low | rejected 2026-06-12 (Fab) |
 | `spiral-reveal` | Logo pixels revealed in spiral order from center outward | low | implemented (see above) |
 | `neon-trace` | Logo outline traces in (edge pixels light up progressively along the perimeter), then fills to solid | medium | rejected 2026-06-12 (Fab) |
-| `plasma-resolve` | A colorful plasma field (LUT-based) over the bg resolves/condenses into the logo as t→1 | high | idea |
+| `plasma-resolve` | A colorful plasma field (LUT-based) over the bg resolves/condenses into the logo as t→1 | high | implemented (see above) |
 | `rotate-step` | Logo snaps through 90°-step rotations (pixel-art-safe) while scaling up into place | low | rejected 2026-06-12 (Fab) |
+| `mosaic-shrink` | Logo rendered at coarse block quantization (block size shrinks 12→1 src px) with alpha fade | low | implemented (see above) |
+| `diamond-wipe` | L1 (Manhattan) distance reveal — diamond-shaped iris growing from bbox center | low | implemented (see above) |
+| `flood-fill` | BFS through 4-connected opaque region from a deterministic seed; topology-aware reveal | medium | implemented (see above) |
+| `pixel-shuffle` | Per-pixel 2D random sample offset that decays to 0; logo "unscrambles" in place | low | implemented (see above) |
+| `shutter-bands` | Vertical column-bands open from bbox center outward in band-distance order | low | implemented (see above) |
+| `color-emerge` | Silhouette in contrast color fades in, then per-channel value lerps from silhouette to source color | low | implemented (see above) |
+| `starburst` | Per-pixel fly-in along home-radial direction with back-out (overshoot) easing | medium | implemented (see above) |
 
 Selection guidance when picking batches: favor variety of *mechanism*
 (dissolve vs motion vs wipe vs distortion vs zoom) over variety of theme,

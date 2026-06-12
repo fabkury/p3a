@@ -18,20 +18,21 @@ can be added later.
 
 ## Status
 
-**Phase: 3 IN PROGRESS — 13 of target 12+ animations registered.**
+**Phase: 3 IN PROGRESS — 21 animations registered (batch 4 ready for host review).**
 
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 0 | Host toolchain install (one-time, user action) | done — WinLibs MinGW-w64 / gcc 16.1.0 |
 | 1 | Host harness: viewer, frame dump, automated checks | done — `host/intro-anim-lab/`; `--check` green |
 | 2 | Architecture refactor + port `smoothstep-fade` | done — device-confirmed 2026-06-12 |
-| 3 | Develop new animations (overshoot the final 12; cull to best 11) | 13 registered; batch 1+2 host-OK; batch 3 partial host-OK (pixel-rain, venetian, glitch-settle, typewriter, spiral-reveal); rejected: pixel-zoom, neon-trace, sparkle-fade, rotate-step |
+| 3 | Develop new animations (overshoot the final 12; cull to best 11) | 21 registered; batch 1+2 host-OK; batch 3 host-OK (pixel-rain, venetian, glitch-settle, typewriter, spiral-reveal); batch 4 host-OK (mosaic-shrink, diamond-wipe, flood-fill, plasma-resolve, pixel-shuffle, shutter-bands, color-emerge, starburst); rejected: pixel-zoom, neon-trace, sparkle-fade, rotate-step |
 | 4 | Random selection + duration setting + force-override (web UI) | not started |
 | 5 | Final device QA: profiling, rotations, bg colors | not started |
 
-Animation roster: 13 implemented (`smoothstep-fade` device-OK; the other 12
-host-OK awaiting device verification). See [catalog.md](catalog.md) for the
-live roster and candidate concepts.
+Animation roster: 21 implemented (`smoothstep-fade` device-OK; the other 20
+host-OK awaiting device verification — overshooting on purpose so we can
+cull to 12 after device QA). See [catalog.md](catalog.md) for the live
+roster and candidate concepts.
 
 ## Files
 

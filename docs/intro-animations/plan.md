@@ -1,165 +1,159 @@
 # Intro-Animations — Plan
 
 Goal: 12 visually distinct intro animations, one picked at random per boot, all
-sharing one architecture, all developed and regression-checked on the host before
-device verification. Status tracking lives in [README.md](README.md) (phases) and
-[catalog.md](catalog.md) (per-animation).
+sharing one architecture, all developed and regression-checked on the host
+before device verification. Status tracking lives in [README.md](README.md)
+(phases) and [catalog.md](catalog.md) (per-animation).
 
 ## Boot sequence (fixed structure)
 
 ```
-blank-delay (250 ms, hardcoded)  ->  intro-animation (2000 ms, parameterized)  ->  hold (1000 ms, hardcoded)
+blank-delay (250 ms, hardcoded)  ->  intro-animation (NVS, 1000..7500 ms, default 3000 ms)  ->  hold (1000 ms, hardcoded)
 ```
 
-- **`blank-delay`**: flat user-configured background color, no logo. Manager-owned.
-- **`intro-animation`**: the per-boot randomly picked animation; the only part the
-  12 modules implement; the only duration that is parameterized (`t` spans exactly
-  this window).
+- **`blank-delay`**: flat user-configured background color, no logo.
+  Manager-owned.
+- **`intro-animation`**: the per-boot randomly picked animation; the only part
+  the 12 modules implement; the only duration that is parameterized (`t`
+  spans exactly this window).
 - **`hold`**: static end state — logo at full opacity centered. Manager-owned.
-
-Total boot wall time today: 250 + 2000 + 1000 = 3250 ms, identical to current firmware.
 
 ## Contract (what every animation must satisfy)
 
 1. **First frame (t=0):** pixel-identical to a flat fill of the user-configured
-   background color (i.e., identical to what `blank-delay` shows). No logo content
-   whatsoever.
-2. **Last frame (t=1):** pixel-identical to the canonical end state — background
-   fill + `p3a_logo_blit_pixelwise_bgr888(alpha=255, scale=3, rotation)` centered.
-   This is exactly what `hold` displays, so the animation→hold handoff is seamless
-   for every animation.
+   background color (i.e. identical to what `blank-delay` shows). No logo
+   content whatsoever.
+2. **Last frame (t=1):** pixel-identical to the canonical end state —
+   background fill + `p3a_logo_blit_pixelwise_bgr888(alpha=255, scale=3,
+   rotation)` centered. This is exactly what `hold` displays, so the
+   animation→hold handoff is seamless for every animation.
 3. **Pure function of time:** each frame is computed from normalized time
-   `t ∈ [0,1]` plus a per-boot seed — no internal state across frames, no wall-clock
-   reads inside the animation. (This is what makes duration changes, host/device
-   parity, frame-skip tolerance, and determinism checks all work for free.)
-4. **Honors runtime config:** background color (any RGB) and rotation (0/90/180/270).
-5. **Real-time rendered** on the P4 within the per-frame budget (see
+   `t ∈ [0,1]` plus a per-boot seed — no internal state across frames, no
+   wall-clock reads inside the animation.
+4. **Honors runtime config:** background color (any RGB) and rotation
+   (0/90/180/270).
+5. **Real-time rendered** on the P4 within its declared per-frame budget (see
    [architecture.md](architecture.md) → performance budget).
-6. **Duration-agnostic:** animations only ever see `t`; the total duration is a
-   single constant owned by the manager.
+6. **Duration-agnostic:** animations only ever see `t`; total duration is
+   owned by the manager via the NVS-backed setting.
 
 ## Phases
 
 ### Phase 0 — Host toolchain (one-time, user action)
 
-No host C compiler exists on the laptop today (checked 2026-06-11: no gcc/cl/clang;
-Python 3.14 and ffmpeg are present).
+- [x] Install MinGW-w64 gcc, e.g. `winget install BrechtSanders.WinLibs.POSIX.UCRT`.
+- [x] Verify: `gcc --version` from PowerShell.
 
-- [ ] Install a MinGW-w64 gcc distribution, e.g. `winget install BrechtSanders.WinLibs.POSIX.UCRT`
-      (or w64devkit, or VS Build Tools — any C compiler works; plan assumes gcc).
-- [ ] Verify: `gcc --version` from PowerShell.
+Installed: WinLibs MinGW-w64 (UCRT/POSIX) gcc 16.1.0, at
+`C:\Users\fab\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_*\mingw64\bin\gcc.exe`.
+The `build.ps1` falls back to that exact path if `gcc` isn't on the PATH yet
+(new shell session needed).
 
-No CMake/ninja needed: the harness is a handful of `.c` files built by a small
-`build.ps1` that invokes gcc directly.
+No CMake/ninja used: the harness is a handful of `.c` files built by a small
+`build.ps1` invoking gcc directly.
 
 ### Phase 1 — Host harness and shims
 
-Build `host/intro-anim-lab/` (kept in the repo permanently). Details in
-[architecture.md](architecture.md). Deliverables:
+Built at `host/intro-anim-lab/`. Single `build.ps1` produces
+`build/intro-anim-lab.exe`. Compiles `components/p3a_core/p3a_logo.c` and
+`components/p3a_core/intro_anims/*.c` verbatim — host build doubles as the
+purity proof for those files.
 
-- [ ] `build.ps1` — compiles harness + shared animation sources with gcc.
-- [ ] **Live viewer** (Win32/GDI, zero external deps): 720×720 window, plays
-      animations with the same wall-clock-driven loop shape as the device,
-      **capped at 25 FPS** so the preview is honest. Keyboard: switch animation,
-      cycle rotation, cycle background colors, restart, reroll seed, toggle
-      jittered-pacing stress mode.
-- [ ] **Frame-dump mode**: deterministic render at fixed timestamps → BMP frames
-      → optional ffmpeg assembly to mp4 (shareable clips; possible outreach asset).
-- [ ] **Check mode**: automated contract suite (see architecture.md → automated
-      checks): t=0/t=1 pixel-exactness, determinism, out-of-bounds canaries,
-      across rotations × bg colors × durations × seeds. Non-zero exit on failure.
-- [ ] Harness README with usage (so future sessions don't rediscover flags).
+- [x] `build.ps1` — compiles harness + shared animation sources with gcc.
+- [x] **Live viewer** (Win32/GDI, zero external deps): 720×720 window,
+      wall-clock-driven loop, paced at each animation's declared frame
+      budget. Keys: Space (replay), N/P (anim), R (rotation), B (bg
+      preset), S (reroll seed), +/- (duration ±500 ms, clamped 1000–7500),
+      Esc.
+- [x] **Frame-dump mode**: deterministic render → `frame_%04d.bmp` per
+      directory; ffmpeg-assembly is one shell line away (already on
+      laptop). Sample run produced 76 frames at 25 FPS for a 3 s window.
+- [x] **Check mode**: t=0 / t=1 pixel-exactness, determinism, out-of-bounds
+      canaries, across {5 bg colors} × {4 rotations} × {3 seeds}. Non-zero
+      exit on failure.
+- [x] Harness README with usage (`host/intro-anim-lab/README.md`).
 
-Acceptance: harness builds and runs on the laptop; check mode passes against a
-trivial placeholder animation.
+Note: jittered-pacing stress toggle was descoped — it would only matter for
+animations the device can't keep up with, and there's nothing yet to stress.
+Add later if Phase 5 profiling finds budget overruns.
+
+Acceptance: harness builds and runs on the laptop; check mode passes
+(`smoothstep-fade` exits 0).
 
 ### Phase 2 — Architecture refactor + port `smoothstep-fade`
 
-- [ ] Create `components/p3a_core/intro_anims/` with `intro_anim.h` (interface +
-      context struct + registry) — **pure C, zero ESP-IDF includes** (the host
-      build is the proof).
-- [ ] Port the current animation as the first module, named **`smoothstep-fade`**:
-      simply alpha = smoothstep(t) across the whole window. With the duration
-      parameter at 2000 ms, plus the manager's blank-delay and hold, this
-      reproduces today's 250 + 2000 + 1000 ms sequence exactly.
-- [ ] Refactor `p3a_boot_logo.c` into the **intro manager**: keeps its public API
-      (`p3a_boot_logo_init/is_active/render`) so `p3a_render.c` barely changes;
-      internally owns the blank-delay and hold periods, the clock, normalized-t
-      computation, the duration constant, seed generation, and (Phase 4) the
-      random pick. During hold it draws the canonical end state itself (same as
-      every animation's t=1 frame).
-- [ ] Host: `smoothstep-fade` passes check mode + visually matches the old behavior.
-- [ ] Device (Fab builds/flashes): boot looks identical to today.
+- [x] Create `components/p3a_core/intro_anims/` with `intro_anim.h`
+      (interface + context struct + registry declaration), plus
+      `intro_anim_common.c`, `intro_anim_registry.c`, and
+      `ia_smoothstep_fade.c`. **Pure C, zero ESP-IDF includes** — verified
+      by the host build that compiles them unchanged.
+- [x] Port the current animation as the first module, named
+      **`smoothstep-fade`**: `alpha = smoothstep(t)` across the full window.
+- [x] Refactor `p3a_boot_logo.c` into the **intro manager**: public API
+      (`p3a_boot_logo_init/is_active/render`) preserved so `p3a_render.c`
+      didn't change. Internally owns blank-delay and hold bookends, the
+      clock, normalized-t, seed (from `esp_timer_get_time()` — Phase 4
+      will switch to `esp_random()`). Duration is the legacy 2000 ms
+      constant for parity (Phase 4 adds NVS read with default 3000).
+      During hold the manager calls `anim->render(.., t=1.0f)` itself.
+- [x] Host: `smoothstep-fade` passes check mode.
+- [x] Device (Fab builds/flashes): boot looks identical to today (verified 2026-06-12).
 
-Acceptance: device boot is visually indistinguishable from pre-refactor; check
-suite green.
+Acceptance: device boot matches pre-refactor; check suite green. **DONE.**
 
-### Phase 3 — Develop the 11 new animations
+### Phase 3 — Develop new animations (more than 11, cull to best 11)
 
-Work in batches of ~3–4 animations to keep device-test round-trips efficient:
+Strategy: **build more than we need, keep only the best 11**. Concepts move
+from the candidate pool in [catalog.md](catalog.md) into implementation in
+batches; final selection happens after side-by-side comparison on device.
 
-1. Pick concepts from [catalog.md](catalog.md) candidates (Fab approves each batch).
-2. Implement on host; iterate in the live viewer (this is the fast loop —
-   host rebuild is ~1 s vs minutes for firmware).
-3. Pass check mode; review frame dumps at 25 FPS and under jittered pacing.
-4. Fab builds firmware and verifies the batch on the ESP32-P4 (look + frame-time
-   log; see Phase 5 profiling notes).
-5. Debug/polish until `production-ready`; update catalog statuses.
+For each batch:
 
-- [ ] Batch 1 (3–4 animations): approved → host-OK → device-OK → production-ready
-- [ ] Batch 2: same
-- [ ] Batch 3: same (reaching 12 total)
+1. Fab approves the batch's concepts from the candidate pool.
+2. Implement on host; iterate in the live viewer.
+3. Pass check mode; review frame dumps and jittered-pacing behavior.
+4. Fab builds firmware and reviews the batch on the ESP32-P4.
+5. Polish to `device-OK`; mark candidate status in catalog.
+
+After enough candidates have reached `device-OK`, Fab picks the **best 11**
+(plus `smoothstep-fade` for 12 total) and they advance to `production-ready`.
+Rejected candidates stay in the catalog as `device-OK` (could be revived
+later) but are not registered in the firmware.
 
 Acceptance: 12 animations at `production-ready` in catalog.md.
 
-### Phase 4 — Random selection + duration parameter
+### Phase 4 — Random selection + duration setting + force-override
 
-- [ ] Manager picks uniformly at random (`esp_random()`) at first render; **logs the
-      chosen animation name at INFO** (operator-facing, same philosophy as the
-      scheduler pick logs).
-- [ ] Single duration constant `P3A_INTRO_ANIM_MS` (initially **2000 ms** = today's
-      fade phase). `blank-delay` (250 ms) and `hold` (1000 ms) stay separate and
-      hardcoded; total wall time unchanged at 3250 ms.
-- [ ] Dev/QA override to force a specific animation (mechanism: open decision below).
+- [ ] Manager picks uniformly at random (`esp_random()`) at first render;
+      logs the chosen animation name at INFO (operator-facing, like
+      `ps_pick`).
+- [ ] **NVS duration setting**: key `intro_anim_ms` (clamped 1000..7500,
+      default 3000). Read once per boot.
+- [ ] **NVS force-override setting**: key `intro_anim_force` (string;
+      empty/"random" = random, else animation name). When set to a valid
+      registered animation, that animation plays every boot. Invalid name →
+      log warning, fall back to random.
+- [ ] **Web UI controls** in the Display tab of Settings:
+  - Duration slider/numeric input (ms), 1000..7500, step 100, default 3000.
+  - Force-animation dropdown: "Random" + one entry per registered animation.
+- [ ] HTTP API endpoints to read/write both settings (consistent with the
+      existing config_store/web UI pattern).
 
-Acceptance: ~uniform spread of animations over repeated boots; forced-pick override
-works for QA.
+Acceptance: ~uniform spread over repeated boots with default settings;
+duration changes take effect on next boot; force-override plays the selected
+animation deterministically.
 
 ### Phase 5 — Final device QA
 
-- [ ] One profiling firmware pass: log per-frame render time (min/avg/max) for all
-      12 animations on the P4; all within the 40 ms budget.
-- [ ] Spot-check all 12 across rotations and a few background colors (incl. black,
-      white, and a saturated color) on device.
-- [ ] Docs sweep: update this folder's statuses, `docs/infrastructure/components.md`
-      if it mentions the boot logo, and anything else referencing the old single
-      animation.
+- [ ] One profiling firmware pass: log per-frame render time (min/avg/max)
+      for all 12 animations on the P4; each must fit its declared per-frame
+      budget.
+- [ ] Spot-check all 12 across rotations and a few background colors (incl.
+      black, white, 0x808080 — the chroma-key gray — and a saturated color)
+      on device.
+- [ ] Spot-check the duration setting at min (1000 ms), default (3000 ms),
+      and max (7500 ms).
+- [ ] Docs sweep: `docs/intro-animations/` statuses, `docs/HOW-TO-USE.md` for
+      the new Display setting, `docs/infrastructure/components.md` if it
+      mentions the boot logo.
 - [ ] Harness documented and left in repo for future animation development.
-
-## Decisions log
-
-| Date | Decision |
-|------|----------|
-| 2026-06-11 | The 250 ms blank delay stays a **separate, hardcoded** phase in the manager, outside normalized t. |
-| 2026-06-11 | The 1000 ms **`hold`** (static logo after the animation) is likewise a separate, hardcoded, manager-owned period — bookending the animation symmetrically with **`blank-delay`**. Sequence: blank-delay → intro-animation → hold. The parameterized duration covers only the intro-animation window: **2000 ms today**. Total boot wall time unchanged (3250 ms). |
-| 2026-06-11 | Logo end-state scale confirmed as **3×** (not 2× as earlier recalled); 46×54 logo → 138×162 px centered. |
-| 2026-06-11 | Code sharing strategy: animation modules are **pure C with zero ESP-IDF includes**, compiled verbatim by both firmware and host harness. No emulation layer; the manager (device) and harness (host) each own clock + config. |
-| 2026-06-11 | Host harness lives at `host/intro-anim-lab/` and is **permanent** repo infrastructure. |
-| 2026-06-11 | Host viewer is capped at 25 FPS to match the device frame cadence (no misleadingly smooth previews). |
-| 2026-06-11 | Animations are pure functions of (t, seed); randomness comes from a per-boot seed in the context, never from wall clock or global RNG inside the module. |
-
-## Open decisions (decide later, none block Phases 0–2)
-
-- **Duration user-configurable?** Compile-time constant for now; NVS-backed
-  setting (via `config_store` + web UI) is a one-line switch later thanks to the
-  pure-t design. Fab undecided.
-- **Force-override mechanism for QA:** compile-time `#define` (zero risk) vs NVS
-  key vs debug HTTP endpoint. Leaning: compile-time define for Phase 3 testing;
-  revisit if tedious.
-- **Per-animation frame interval:** fixed 40 ms for all, or allow fast-motion
-  animations to request 33 ms? Decide after the Phase 5 profiling pass shows
-  headroom (or not).
-- **Repeat-avoidance:** plain uniform random, or avoid repeating the previous
-  boot's animation (would cost an NVS write per boot — flash-wear consideration)?
-  Leaning: plain uniform; with 12 animations a repeat is 1/12 and harmless.
-- **Final selection of the 11 new concepts** from catalog.md candidates.

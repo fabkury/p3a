@@ -10,12 +10,19 @@ idf_component_register(
         "p3a_render.c"
         "p3a_logo.c"
         "p3a_boot_logo.c"
+        "intro_anims/intro_anim_common.c"
+        "intro_anims/intro_anim_registry.c"
+        "intro_anims/ia_smoothstep_fade.c"
+        "intro_anims/ia_pixel_dissolve.c"
+        "intro_anims/ia_iris_wipe.c"
+        "intro_anims/ia_assemble.c"
         "sd_path.c"
         "fresh_boot.c"
     INCLUDE_DIRS
         "include"
     PRIV_INCLUDE_DIRS
         "."
+        "intro_anims"
     REQUIRES
         esp_common
         freertos

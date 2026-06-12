@@ -14,6 +14,14 @@
 extern const int p3a_logo_w;
 extern const int p3a_logo_h;
 
+/* Embedded BGR888 pixel array, row-major, p3a_logo_w * p3a_logo_h pixels.
+ * Pixels matching the chroma key (0x80 0x80 0x80) are transparent. */
+extern const uint8_t p3a_logo_pixels[];
+
+#define P3A_LOGO_CHROMA_KEY_B 0x80
+#define P3A_LOGO_CHROMA_KEY_G 0x80
+#define P3A_LOGO_CHROMA_KEY_R 0x80
+
 /**
  * Blit the p3a_logo image with alpha blending, scaling, and rotation to a BGR888 buffer.
  *

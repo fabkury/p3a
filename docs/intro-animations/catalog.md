@@ -34,6 +34,14 @@ Update this file whenever an animation changes status.
 | `pixel-shuffle`   | host-OK (batch 4, 2026-06-12) | Per-pixel 2D random Cartesian sample offset (in source-px units) decaying to 0 by t=1; samples drawn at home position from a displaced source pixel. Module: `ia_pixel_shuffle.c`. |
 | `color-emerge`    | host-OK (batch 4, 2026-06-12) | Two-phase color-space animation: silhouette in contrast color fades in alpha-wise over t∈[0, 0.25), then per-channel value lerps from silhouette toward source color over t∈[0.25, 1]. Module: `ia_color_emerge.c`. |
 | `starburst`       | host-OK (batch 4, 2026-06-12) | Per-pixel fly-in from far outside along home-radial direction with back-out (overshoot) easing (c2=3.5, dist=2.0×width) — pixels punch ~31% past home before snapping back. Module: `ia_starburst.c`. |
+| `fire-burnup`     | host-OK (batch 5, 2026-06-12) | Stateless value-noise heat field with upward time-drift, thresholded on (1−smoothstep(t)). Pixels above threshold paint a flame ramp (red→orange→yellow→white) over the logo; below threshold logo shows. Module: `ia_fire_burnup.c`. |
+| `plasma-dissolve` | host-OK (batch 5, 2026-06-12) | Smooth plasma threshold field (3-sin sum, seed-driven phases) at source-pixel scale; reveal iff field ≤ smoothstep(t). Same dissolve geometry as pixel-dissolve, but correlated noise → organic blobs instead of speckle. Module: `ia_plasma_dissolve.c`. |
+| `ripple-converge` | host-OK (batch 5, 2026-06-12) | 2D radial sample displacement: A·sin(k·r − ω·t) along outward radial; amplitude smoothstep-damped to 0. Distinct from wave-settle (1D per-row): coherent radial wave on the source. Module: `ia_ripple_converge.c`. |
+| `voronoi-shatter` | host-OK (batch 5, 2026-06-12) | 24 seeded Voronoi sites; each cell rigid-translates from its outward radial direction with cubic ease-out remaining-distance. Cell-id LUT computed per call. Module: `ia_voronoi_shatter.c`. |
+| `hue-cycle-lock`  | host-OK (batch 5, 2026-06-12) | Per-pixel HSV hue rotation; offset = (1−smoothstep(t))·2 full turns; saturation/value preserved. Locks to true colors at t=1. Pure color-space animation distinct from color-emerge (RGB lerp). Module: `ia_hue_cycle_lock.c`. |
+| `twirl-unwind`    | host-OK (batch 5, 2026-06-12) | Photoshop-style spiral warp: per-pixel sample rotation θ(r,t) = (1−smoothstep(t))·9·exp(−r/22), so the center spins ~1.4 turns at t=0+ and decays radially. Module: `ia_twirl_unwind.c`. |
+| `bayer-reveal`    | host-OK (batch 5, 2026-06-12) | 8×8 ordered Bayer matrix as deterministic threshold field (rank 0..63 by sx%8, sy%8); reveal iff rank/64 < smoothstep(t). Iconic crosshatch progression, distinct from hash-priority. Module: `ia_bayer_reveal.c`. |
+| `rotozoom-settle` | host-OK (batch 5, 2026-06-12) | Affine inverse-mapping decaying to identity: rotation θ(t) sweeps 1.5 turns, scale s(t) shrinks 3.5×→1×, both smoothstep-paced. Sampling in source-pixel space preserves pixel-art blocks. Module: `ia_rotozoom_settle.c`. |
 
 ## Candidate pool
 
@@ -72,6 +80,14 @@ aside.
 | `shutter-bands` | Vertical column-bands open from bbox center outward in band-distance order | low | rejected 2026-06-12 (Fab) |
 | `color-emerge` | Silhouette in contrast color fades in, then per-channel value lerps from silhouette to source color | low | implemented (see above) |
 | `starburst` | Per-pixel fly-in along home-radial direction with back-out (overshoot) easing | medium | implemented (see above) |
+| `fire-burnup` | Stateless fire-noise field thresholded on time; flames die away revealing logo | low | implemented (see above) |
+| `plasma-dissolve` | Smooth plasma field used as dissolve threshold (correlated noise vs hash) | low | implemented (see above) |
+| `ripple-converge` | 2D radial sinusoidal sample displacement, smoothstep-damped amplitude | low | implemented (see above) |
+| `voronoi-shatter` | Voronoi cells fly in radially from outside; per-cell easing | medium | implemented (see above) |
+| `hue-cycle-lock` | Per-pixel HSV hue rotation decaying to 0 at t=1 | low | implemented (see above) |
+| `twirl-unwind` | Photoshop-style spiral warp with radius-dependent rotation; unwinds | medium | implemented (see above) |
+| `bayer-reveal` | 8×8 ordered Bayer matrix as threshold field; deterministic crosshatch reveal | low | implemented (see above) |
+| `rotozoom-settle` | Affine inverse-mapping (rotation+scale) decaying to identity | medium | implemented (see above) |
 
 Selection guidance when picking batches: favor variety of *mechanism*
 (dissolve vs motion vs wipe vs distortion vs zoom) over variety of theme,

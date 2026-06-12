@@ -48,7 +48,15 @@ $sources = @(
     (Join-Path $introAnims 'ia_diamond_wipe.c'),
     (Join-Path $introAnims 'ia_pixel_shuffle.c'),
     (Join-Path $introAnims 'ia_color_emerge.c'),
-    (Join-Path $introAnims 'ia_starburst.c')
+    (Join-Path $introAnims 'ia_starburst.c'),
+    (Join-Path $introAnims 'ia_fire_burnup.c'),
+    (Join-Path $introAnims 'ia_plasma_dissolve.c'),
+    (Join-Path $introAnims 'ia_ripple_converge.c'),
+    (Join-Path $introAnims 'ia_voronoi_shatter.c'),
+    (Join-Path $introAnims 'ia_hue_cycle_lock.c'),
+    (Join-Path $introAnims 'ia_twirl_unwind.c'),
+    (Join-Path $introAnims 'ia_bayer_reveal.c'),
+    (Join-Path $introAnims 'ia_rotozoom_settle.c')
 )
 
 $cflags = @(

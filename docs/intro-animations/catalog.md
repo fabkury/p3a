@@ -24,6 +24,14 @@ Update this file whenever an animation changes status.
 | `bounce-drop`     | host-OK (batch 2, 2026-06-12) | Whole-image drop-and-bounce: piecewise-quadratic vertical offset, 1 fall + 2 damped bounces; lands centered at t=1. Module: `ia_bounce_drop.c`. |
 | `wave-settle`     | host-OK (batch 2, 2026-06-12) | Horizontal sine displacement per source-row, amplitude damps to 0 by t=1 with phase drift; logo alpha fades in via smoothstep. Module: `ia_wave_settle.c`. |
 | `checker-tiles`   | host-OK (batch 2, 2026-06-12) | 6×6 source-pixel tiles pop in via hash-priority threshold (smoothstep-paced) — chunky checkerboard-y reveal. Module: `ia_checker_tiles.c`. |
+| `pixel-rain`      | host-OK (batch 3, 2026-06-12) | Per-source-pixel gravity drop with seeded start-time stagger (≤0.35) and cubic ease-out fall. Module: `ia_pixel_rain.c`. |
+| `venetian`        | host-OK (batch 3, 2026-06-12) | 6-src-px horizontal strips slide in alternately from left/right; smoothstep-paced offset to 0. Module: `ia_venetian.c`. |
+| `glitch-settle`   | host-OK (batch 3, 2026-06-12) | 4-src-px-tall slabs jitter horizontally with per-channel R/G/B chromatic aberration; quantized into 12 shake states; (1−t)² decay. Module: `ia_glitch_settle.c`. |
+| `typewriter`      | host-OK (batch 3, 2026-06-12) | Source-columns reveal left-to-right at constant speed; 6-cycle blinking contrast cursor at the head. Module: `ia_typewriter.c`. |
+| `neon-trace`      | host-OK (batch 3, 2026-06-12) | Outline pixels (with bg neighbor) light up in clockwise angular sweep over t∈[0, 0.55]; interior fills hash-priority over t∈(0.55, 1). Module: `ia_neon_trace.c`. |
+| `spiral-reveal`   | host-OK (batch 3, 2026-06-12) | Rotating cone sweeps 1.5 turns clockwise from bbox center; aperture and radial threshold both expand to full coverage by t=1. Module: `ia_spiral_reveal.c`. |
+| `sparkle-fade`    | host-OK (batch 3, 2026-06-12) | smoothstep-fade plus 40 seed-placed plus-shaped twinkles with triangular envelope; all extinguish before t=1. Module: `ia_sparkle_fade.c`. |
+| `rotate-step`     | host-OK (batch 3, 2026-06-12) | 4 quarter-turn snaps (270→180→90→0 + ctx->rotation), scale ramps 1→ctx->logo_scale; centered around final logo center. Module: `ia_rotate_step.c`. |
 
 ## Candidate pool
 
@@ -40,21 +48,21 @@ aside.
 |-----------|---------|-----------|--------|
 | `pixel-dissolve` | Logo pixels appear in pseudo-random order via a per-pixel threshold map (ordered/blue-noise dither against t) | low | implemented (see above) |
 | `scanline-reveal` | CRT-style bright scan bar sweeps down; logo revealed above the bar | low | implemented (see above) |
-| `pixel-rain` | Logo pixels fall from the top edge and land in place, bottom rows first | medium | idea |
+| `pixel-rain` | Logo pixels fall from the top edge and land in place, bottom rows first | medium | implemented (see above) |
 | `assemble` | Logo pixels fly in from screen edges and converge on final positions | medium | implemented (see above) |
 | `pixel-zoom` | Logo grows from 1 px at screen center to final size, nearest-neighbor steps | low | rejected 2026-06-12 (visual didn't read as a logo reveal — Fab) |
 | `checker-tiles` | Logo appears tile-by-tile (e.g. 8×8 px tiles) in checkerboard / shuffled order, each tile popping in | low | implemented (see above) |
 | `iris-wipe` | Circular iris opens from center revealing the logo | low | implemented (see above) |
-| `venetian` | Alternating horizontal strips slide in from left/right and lock into place | low | idea |
-| `glitch-settle` | Logo appears as horizontally-sliced RGB-split glitch bands that jitter and settle into the clean logo | medium | idea |
-| `typewriter` | Logo columns (or glyph-like chunks) appear left-to-right with a blinking cursor block | low | idea |
+| `venetian` | Alternating horizontal strips slide in from left/right and lock into place | low | implemented (see above) |
+| `glitch-settle` | Logo appears as horizontally-sliced RGB-split glitch bands that jitter and settle into the clean logo | medium | implemented (see above) |
+| `typewriter` | Logo columns (or glyph-like chunks) appear left-to-right with a blinking cursor block | low | implemented (see above) |
 | `bounce-drop` | Logo drops from above, squash-and-stretch bounce, settles centered | medium | implemented (see above) |
 | `wave-settle` | Logo visible early but rows displaced by a horizontal sine wave whose amplitude damps to zero | medium | implemented (see above) |
-| `sparkle-fade` | Fade-in (like #1) plus seed-placed twinkling sparkle pixels that die out by t=1 | low | idea |
-| `spiral-reveal` | Logo pixels revealed in spiral order from center outward | low | idea |
-| `neon-trace` | Logo outline traces in (edge pixels light up progressively along the perimeter), then fills to solid | medium | idea |
+| `sparkle-fade` | Fade-in (like #1) plus seed-placed twinkling sparkle pixels that die out by t=1 | low | implemented (see above) |
+| `spiral-reveal` | Logo pixels revealed in spiral order from center outward | low | implemented (see above) |
+| `neon-trace` | Logo outline traces in (edge pixels light up progressively along the perimeter), then fills to solid | medium | implemented (see above) |
 | `plasma-resolve` | A colorful plasma field (LUT-based) over the bg resolves/condenses into the logo as t→1 | high | idea |
-| `rotate-step` | Logo snaps through 90°-step rotations (pixel-art-safe) while scaling up into place | low | idea |
+| `rotate-step` | Logo snaps through 90°-step rotations (pixel-art-safe) while scaling up into place | low | implemented (see above) |
 
 Selection guidance when picking batches: favor variety of *mechanism*
 (dissolve vs motion vs wipe vs distortion vs zoom) over variety of theme,

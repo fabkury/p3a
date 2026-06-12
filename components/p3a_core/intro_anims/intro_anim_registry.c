@@ -11,6 +11,14 @@ void ia_scanline_reveal_render (uint8_t *buffer, const intro_anim_ctx_t *ctx, fl
 void ia_bounce_drop_render     (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_wave_settle_render     (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_checker_tiles_render   (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
+void ia_pixel_rain_render      (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
+void ia_venetian_render        (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
+void ia_glitch_settle_render   (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
+void ia_typewriter_render      (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
+void ia_neon_trace_render      (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
+void ia_spiral_reveal_render   (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
+void ia_sparkle_fade_render    (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
+void ia_rotate_step_render     (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 
 const intro_anim_t intro_anim_registry[] = {
     { .name = "smoothstep-fade", .frame_budget_ms = 40, .render = ia_smoothstep_fade_render },
@@ -21,6 +29,14 @@ const intro_anim_t intro_anim_registry[] = {
     { .name = "bounce-drop",     .frame_budget_ms = 40, .render = ia_bounce_drop_render     },
     { .name = "wave-settle",     .frame_budget_ms = 40, .render = ia_wave_settle_render     },
     { .name = "checker-tiles",   .frame_budget_ms = 40, .render = ia_checker_tiles_render   },
+    { .name = "pixel-rain",      .frame_budget_ms = 40, .render = ia_pixel_rain_render      },
+    { .name = "venetian",        .frame_budget_ms = 40, .render = ia_venetian_render        },
+    { .name = "glitch-settle",   .frame_budget_ms = 40, .render = ia_glitch_settle_render   },
+    { .name = "typewriter",      .frame_budget_ms = 40, .render = ia_typewriter_render      },
+    { .name = "neon-trace",      .frame_budget_ms = 40, .render = ia_neon_trace_render      },
+    { .name = "spiral-reveal",   .frame_budget_ms = 40, .render = ia_spiral_reveal_render   },
+    { .name = "sparkle-fade",    .frame_budget_ms = 40, .render = ia_sparkle_fade_render    },
+    { .name = "rotate-step",     .frame_budget_ms = 40, .render = ia_rotate_step_render     },
 };
 
 const int intro_anim_count = (int)(sizeof(intro_anim_registry) / sizeof(intro_anim_registry[0]));

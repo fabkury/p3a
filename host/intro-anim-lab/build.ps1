@@ -38,7 +38,15 @@ $sources = @(
     (Join-Path $introAnims 'ia_scanline_reveal.c'),
     (Join-Path $introAnims 'ia_bounce_drop.c'),
     (Join-Path $introAnims 'ia_wave_settle.c'),
-    (Join-Path $introAnims 'ia_checker_tiles.c')
+    (Join-Path $introAnims 'ia_checker_tiles.c'),
+    (Join-Path $introAnims 'ia_pixel_rain.c'),
+    (Join-Path $introAnims 'ia_venetian.c'),
+    (Join-Path $introAnims 'ia_glitch_settle.c'),
+    (Join-Path $introAnims 'ia_typewriter.c'),
+    (Join-Path $introAnims 'ia_neon_trace.c'),
+    (Join-Path $introAnims 'ia_spiral_reveal.c'),
+    (Join-Path $introAnims 'ia_sparkle_fade.c'),
+    (Join-Path $introAnims 'ia_rotate_step.c')
 )
 
 $cflags = @(

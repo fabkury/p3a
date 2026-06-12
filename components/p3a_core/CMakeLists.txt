@@ -32,7 +32,6 @@ idf_component_register(
         "intro_anims/ia_plasma_dissolve.c"
         "intro_anims/ia_voronoi_shatter.c"
         "intro_anims/ia_hue_cycle_lock.c"
-        "intro_anims/ia_twirl_unwind.c"
         "sd_path.c"
         "fresh_boot.c"
     INCLUDE_DIRS

@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025-2026 p3a Contributors
 
-/* hue-cycle-lock: render the logo at full alpha but with its colors
- * rotated through HSV-hue space; the hue offset decays from a full
- * spectrum sweep at t=0+ down to 0 at t=1 (true colors).
+/* hue-cycle-lock: render the logo with its colors rotated through
+ * HSV-hue space; the hue offset decays from a full spectrum sweep at
+ * t=0+ down to 0 at t=1 (true colors). The logo itself fades in quickly
+ * (smoothstep alpha over the opening fraction of the window), so the
+ * hue cycling is first seen through the fade and then continues at full
+ * opacity until it locks.
  *
  * Algorithm distinct: pure HSV color-space rotation. color-emerge does
  * an RGB lerp between two fixed colors; this rotates the hue *of every
- * pixel's own color* through the color circle. No motion, no masking,
- * no opacity change.
+ * pixel's own color* through the color circle. No motion, no masking.
  *
  * RGB→HSV→rotate→HSV→RGB inline (no LUT, no library). To stay cheap on
  * the embedded target we use 6-segment hue arithmetic that avoids any
@@ -98,6 +100,16 @@ void ia_hue_cycle_lock_render(uint8_t *buffer,
     float k = 1.0f - intro_anim_smoothstep(t);
     int hue_off = (int)(k * 2.0f * 1530.0f) % 1530;
 
+    /* Quick fade-in: alpha ramps 0->255 (smoothstep) over the opening
+     * fraction of the window, then stays opaque while the hue keeps
+     * cycling toward lock. */
+    const float IA_HCL_FADE_FRAC = 0.30f;
+    int alpha = 255;
+    if (t < IA_HCL_FADE_FRAC) {
+        alpha = (int)(intro_anim_smoothstep(t / IA_HCL_FADE_FRAC) * 255.0f + 0.5f);
+        if (alpha > 255) alpha = 255;
+    }
+
     for (int oy = 0; oy < r.rotated_h; oy++) {
         for (int ox = 0; ox < r.rotated_w; ox++) {
             int sx = r.base_sx + r.cx_ox * ox + r.cx_oy * oy;
@@ -114,6 +126,14 @@ void ia_hue_cycle_lock_render(uint8_t *buffer,
             if (hh >= 1530) hh -= 1530;
             uint8_t out_r, out_g, out_b;
             hsv1530_to_rgb(hh, ss, vv, &out_r, &out_g, &out_b);
+
+            if (alpha < 255) {
+                /* Canvas under the logo is flat bg, so source-over here
+                 * is a plain lerp toward the bg color. */
+                out_r = (uint8_t)(ctx->bg_r + ((out_r - ctx->bg_r) * alpha) / 255);
+                out_g = (uint8_t)(ctx->bg_g + ((out_g - ctx->bg_g) * alpha) / 255);
+                out_b = (uint8_t)(ctx->bg_b + ((out_b - ctx->bg_b) * alpha) / 255);
+            }
 
             int dx0 = ctx->logo_x + ox * scale;
             int dy0 = ctx->logo_y + oy * scale;

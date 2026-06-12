@@ -35,8 +35,7 @@ Update this file whenever an animation changes status.
 | `starburst`       | host-OK (batch 4, 2026-06-12) | Per-pixel fly-in from far outside along home-radial direction with back-out (overshoot) easing (c2=2.6, dist=1.7×width) — pixels punch ~22% past home before snapping back. Module: `ia_starburst.c`. |
 | `plasma-dissolve` | host-OK (batch 5, 2026-06-12) | Smooth plasma threshold field (3-sin sum, seed-driven phases) at source-pixel scale; reveal iff field ≤ smoothstep(t). Same dissolve geometry as pixel-dissolve, but correlated noise → organic blobs instead of speckle. Module: `ia_plasma_dissolve.c`. |
 | `voronoi-shatter` | host-OK (batch 5, 2026-06-12) | 24 seeded Voronoi sites; each cell rigid-translates from its outward radial direction with cubic ease-out remaining-distance. Cell-id LUT computed per call. Module: `ia_voronoi_shatter.c`. |
-| `hue-cycle-lock`  | host-OK (batch 5, 2026-06-12) | Per-pixel HSV hue rotation; offset = (1−smoothstep(t))·2 full turns; saturation/value preserved. Locks to true colors at t=1. Pure color-space animation distinct from color-emerge (RGB lerp). Module: `ia_hue_cycle_lock.c`. |
-| `twirl-unwind`    | host-OK (batch 5, 2026-06-12) | Photoshop-style spiral warp: per-pixel sample rotation θ(r,t) = (1−smoothstep(t))·9·exp(−r/22), so the center spins ~1.4 turns at t=0+ and decays radially. Module: `ia_twirl_unwind.c`. |
+| `hue-cycle-lock`  | host-OK (batch 5, 2026-06-12) | Per-pixel HSV hue rotation; offset = (1−smoothstep(t))·2 full turns; saturation/value preserved. Logo fades in (smoothstep alpha) over the first 30% of the window while hue-cycling, then continues cycling at full opacity until locking to true colors at t=1. Pure color-space animation distinct from color-emerge (RGB lerp). Module: `ia_hue_cycle_lock.c`. |
 
 ## Candidate pool
 
@@ -80,7 +79,7 @@ aside.
 | `ripple-converge` | 2D radial sinusoidal sample displacement, smoothstep-damped amplitude | low | rejected 2026-06-12 (Fab) |
 | `voronoi-shatter` | Voronoi cells fly in radially from outside; per-cell easing | medium | implemented (see above) |
 | `hue-cycle-lock` | Per-pixel HSV hue rotation decaying to 0 at t=1 | low | implemented (see above) |
-| `twirl-unwind` | Photoshop-style spiral warp with radius-dependent rotation; unwinds | medium | implemented (see above) |
+| `twirl-unwind` | Photoshop-style spiral warp with radius-dependent rotation; unwinds | medium | rejected 2026-06-12 (Fab) |
 | `bayer-reveal` | 8×8 ordered Bayer matrix as threshold field; deterministic crosshatch reveal | low | rejected 2026-06-12 (Fab) |
 | `rotozoom-settle` | Affine inverse-mapping (rotation+scale) decaying to identity | medium | rejected 2026-06-12 (Fab) |
 

@@ -22,7 +22,7 @@
 #include "intro_anim.h"
 #include "p3a_logo.h"
 
-#define IA_SB_DIST_MULT 1.4f   /* base launch distance as multiple of width */
+#define IA_SB_DIST_MULT 2.0f   /* base launch distance as multiple of width */
 
 void ia_starburst_render(uint8_t *buffer,
                          const intro_anim_ctx_t *ctx,
@@ -53,12 +53,16 @@ void ia_starburst_render(uint8_t *buffer,
     int cx = ctx->logo_x + rw / 2;
     int cy = ctx->logo_y + rh / 2;
 
-    /* Back-out easing. */
+    /* Back-out easing, turned up: larger c2 = more aggressive overshoot
+     * past the home position. With c2=3.5 the curve peaks near u≈0.65 at
+     * ~1.31, so pixels punch ~31% of the launch distance past home before
+     * snapping back. Combined with the longer launch distance, this
+     * gives sharp acceleration into the bounce and a visible recoil. */
     float u = t;
     float um1 = u - 1.0f;
-    const float c2 = 1.7f, c1 = c2 + 1.0f;
+    const float c2 = 3.5f, c1 = c2 + 1.0f;
     float u_e = 1.0f + c1 * um1 * um1 * um1 + c2 * um1 * um1;
-    float remain = 1.0f - u_e;   /* fraction of launch distance still away from home */
+    float remain = 1.0f - u_e;   /* signed; negative => pixel past home */
 
     float base_dist = IA_SB_DIST_MULT * (float)(ctx->width > ctx->height ? ctx->width : ctx->height);
 

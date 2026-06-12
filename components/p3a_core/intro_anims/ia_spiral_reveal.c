@@ -44,11 +44,18 @@ void ia_spiral_reveal_render(uint8_t *buffer,
     const int scale = ctx->logo_scale;
 
     const float TWOPI = 6.28318530717958647692f;
+    /* Center, then nudged 10 source pixels toward screen-up (matches the
+     * iris-wipe convention so the two anchored animations agree). In
+     * rotated source coords, screen-y maps to oy, so subtracting 10
+     * shifts the center upward on screen. */
     float cx = (float)(r.rotated_w - 1) * 0.5f;
-    float cy = (float)(r.rotated_h - 1) * 0.5f;
+    float cy = (float)(r.rotated_h - 1) * 0.5f - 10.0f;
 
-    /* Max radius from center to a corner of the source rect. */
-    float max_r = sqrtf(cx * cx + cy * cy);
+    /* Max radius from center to the farthest corner of the source rect
+     * (recomputed against shifted center so coverage stays full at t=1). */
+    float max_dx = cx > (float)(r.rotated_w - 1) - cx ? cx : (float)(r.rotated_w - 1) - cx;
+    float max_dy = cy > (float)(r.rotated_h - 1) - cy ? cy : (float)(r.rotated_h - 1) - cy;
+    float max_r = sqrtf(max_dx * max_dx + max_dy * max_dy);
 
     /* Sweep ray angle: 1.5 turns over t (gives a meaningful spiral arm). */
     float sweep_a = TWOPI * 1.5f * t;

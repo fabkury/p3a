@@ -18,10 +18,7 @@ void ia_typewriter_render      (uint8_t *buffer, const intro_anim_ctx_t *ctx, fl
 void ia_spiral_reveal_render   (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_mosaic_shrink_render   (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_diamond_wipe_render    (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
-void ia_flood_fill_render      (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
-void ia_plasma_resolve_render  (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_pixel_shuffle_render   (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
-void ia_shutter_bands_render   (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_color_emerge_render    (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_starburst_render       (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 
@@ -41,10 +38,7 @@ const intro_anim_t intro_anim_registry[] = {
     { .name = "spiral-reveal",   .frame_budget_ms = 40, .render = ia_spiral_reveal_render   },
     { .name = "mosaic-shrink",   .frame_budget_ms = 40, .render = ia_mosaic_shrink_render   },
     { .name = "diamond-wipe",    .frame_budget_ms = 40, .render = ia_diamond_wipe_render    },
-    { .name = "flood-fill",      .frame_budget_ms = 40, .render = ia_flood_fill_render      },
-    { .name = "plasma-resolve",  .frame_budget_ms = 40, .render = ia_plasma_resolve_render  },
     { .name = "pixel-shuffle",   .frame_budget_ms = 40, .render = ia_pixel_shuffle_render   },
-    { .name = "shutter-bands",   .frame_budget_ms = 40, .render = ia_shutter_bands_render   },
     { .name = "color-emerge",    .frame_budget_ms = 40, .render = ia_color_emerge_render    },
     { .name = "starburst",       .frame_budget_ms = 40, .render = ia_starburst_render       },
 };

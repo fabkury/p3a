@@ -42,9 +42,11 @@ void ia_wave_settle_render(uint8_t *buffer,
     intro_anim_rot_init(&r, ctx->rotation);
     const int scale = ctx->logo_scale;
 
-    /* Linear-damped amplitude; phase advances forward in t so the wave
-     * appears to drift while shrinking. */
-    float amp_src = (float)IA_WS_AMP_SRC_PX * (1.0f - t);
+    /* Smoothstep-eased amplitude decay: hangs full at low t, eases through
+     * the middle, and snaps to zero at the end so the wave dies cleanly.
+     * Phase advances forward in t so the wave appears to drift while
+     * shrinking. */
+    float amp_src = (float)IA_WS_AMP_SRC_PX * (1.0f - intro_anim_smoothstep(t));
     float phase   = IA_WS_CYCLES * 6.28318530717958647692f * t;
 
     /* Alpha blend strength fades in via smoothstep(t). */

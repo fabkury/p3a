@@ -7,8 +7,9 @@
  * mechanism is genuinely distinct: corners of the diamond reach the bbox
  * edges *first*, in the four cardinal directions, then sides catch up.
  *
- * Pacing: smoothstep on r(t). Max distance is dx_half + dy_half so the
- * diamond can fully cover the bbox by t=1. */
+ * Pacing: smoothstep on r(t). Max distance picks the farther vertical
+ * edge so the diamond fully covers the bbox by t=1 even when the center
+ * is shifted. */
 
 #include "intro_anim.h"
 #include "p3a_logo.h"
@@ -39,12 +40,19 @@ void ia_diamond_wipe_render(uint8_t *buffer,
     const int rw = r.rotated_w * scale;
     const int rh = r.rotated_h * scale;
 
+    /* Center shifted 10 source pixels (= 10 * scale dest pixels) toward
+     * screen-up — matches the iris-wipe convention. */
+    const int center_offset_dy = -10 * scale;
     int cx = ctx->logo_x + rw / 2;
-    int cy = ctx->logo_y + rh / 2;
+    int cy = ctx->logo_y + rh / 2 + center_offset_dy;
 
-    int dx_half = (rw + 1) / 2;
-    int dy_half = (rh + 1) / 2;
-    int max_d = dx_half + dy_half;
+    /* Max L1 distance: pick the farther vertical reach so the diamond can
+     * still cover the full bbox by t=1 even with the offset center. */
+    int dx_half  = (rw + 1) / 2;
+    int d_top    = cy - ctx->logo_y;
+    int d_bottom = (ctx->logo_y + rh) - cy;
+    int dy_far   = (d_top > d_bottom) ? d_top : d_bottom;
+    int max_d = dx_half + dy_far;
 
     float s = intro_anim_smoothstep(t);
     int rd = (int)((float)max_d * s + 0.5f);

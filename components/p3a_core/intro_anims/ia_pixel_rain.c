@@ -13,7 +13,7 @@
 #include "intro_anim.h"
 #include "p3a_logo.h"
 
-#define IA_PR_STAGGER 0.35f      /* max per-pixel start time */
+#define IA_PR_STAGGER 0.18f      /* max per-pixel start time */
 
 void ia_pixel_rain_render(uint8_t *buffer,
                           const intro_anim_ctx_t *ctx,
@@ -61,11 +61,11 @@ void ia_pixel_rain_render(uint8_t *buffer,
             if (u < 0.0f) u = 0.0f;
             if (u > 1.0f) u = 1.0f;
 
-            /* Cubic ease-out: cover ground fast, settle slow. */
+            /* Quintic ease-out on PROGRESS: aggressively fast start,
+             * gentle landing. drop = remaining distance from home. */
             float v = 1.0f - u;
-            float ease = 1.0f - v * v * v;
-
-            float drop = (1.0f - ease) * drop_dist;
+            float v5 = v * v * v * v * v;
+            float drop = v5 * drop_dist;
             int off_y = (int)(drop + 0.5f);
 
             int dx0 = ctx->logo_x + ox * scale;

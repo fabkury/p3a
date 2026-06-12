@@ -72,9 +72,8 @@ typedef struct {
     int         frame_budget_ms;  // animation's declared per-frame budget,
                                   //   used by both the device manager and the
                                   //   host viewer to pace playback.
-                                  //   Default 40 (25 FPS). Animations that
-                                  //   need smoother motion may request 33
-                                  //   (30 FPS) or lower.
+                                  //   Default 33 (30 FPS). Animations may
+                                  //   request a different budget if needed.
     void (*render)(uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 } intro_anim_t;
 
@@ -109,8 +108,8 @@ Rules for `render()`:
   (bg fill + full-opacity centered blit — identical to every animation's
   t=1 frame, so the handoff is invisible).
 - Frame pacing: per-animation, from the registry's `frame_budget_ms`.
-  Defaults to 40 ms (25 FPS); animations may opt into 33 ms (30 FPS) or
-  lower if they need smoother motion AND fit the device budget.
+  Defaults to 33 ms (30 FPS); animations may opt into a different budget
+  if they need it AND fit the device budget.
 - `smoothstep-fade` mapping: `alpha = smoothstep(t)`, full window. Together
   with the manager's bookends this reproduces today's 250 + 2000 + 1000 ms
   exactly when the NVS duration is 2000 ms (the reference for Phase 2 parity
@@ -169,11 +168,11 @@ the same gray, so end-state references must come from the real blitter
 ## Performance budget (ESP32-P4)
 
 - Each animation declares its own per-frame budget via `frame_budget_ms`.
-  Default **40 ms** (25 FPS). Animations may opt into **33 ms** (30 FPS) or
-  lower; Phase 5 profiling validates that the actual cost fits.
+  Default **33 ms** (30 FPS, since 2026-06-12; was 40 ms/25 FPS); Phase 5
+  profiling validates that the actual cost fits.
 - Known-fits baseline: full-buffer clear + full pixelwise alpha blit
   (today's worst frame). New animations of similar shape — one or two
-  sequential passes with integer per-pixel math — are safe at 40 ms.
+  sequential passes with integer per-pixel math — are safe at 33 ms.
 - Guidance: integer math or LUTs per pixel (P4 has single-precision HW FPU:
   per-frame float scalars are fine, per-pixel float is suspect, per-pixel
   trig/sqrt is not OK — precompute); write rows sequentially (PSRAM rewards

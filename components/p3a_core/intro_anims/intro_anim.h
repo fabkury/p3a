@@ -49,7 +49,7 @@ typedef void (*intro_anim_render_fn)(uint8_t *buffer,
 
 typedef struct {
     const char           *name;             /* kebab-case, stable identifier */
-    int                   frame_budget_ms;  /* target ms per frame; 40 = 25 FPS */
+    int                   frame_budget_ms;  /* target ms per frame; 33 = 30 FPS */
     intro_anim_render_fn  render;
 } intro_anim_t;
 

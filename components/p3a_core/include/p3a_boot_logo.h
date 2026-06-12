@@ -35,8 +35,8 @@ extern "C" {
 /** Duration of full opacity hold phase in milliseconds */
 #define P3A_BOOT_LOGO_HOLD_MS      1000
 
-/** Target frame duration during logo display (25 FPS) */
-#define P3A_BOOT_LOGO_FRAME_MS     40
+/** Target frame duration during logo display (30 FPS) */
+#define P3A_BOOT_LOGO_FRAME_MS     33
 
 /**
  * @brief Initialize boot logo manager

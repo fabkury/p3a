@@ -60,8 +60,8 @@ This project spans many sessions/days/weeks. Conventions:
 
 - Current boot animation lives in `components/p3a_core/p3a_boot_logo.c` (+ `.h`),
   driven by `p3a_render_frame()` in `components/p3a_core/p3a_render.c:144`.
-- Today's hardcoded timings: 250 ms blank delay + 2000 ms smoothstep fade +
-  1000 ms hold = 3250 ms total; 40 ms/frame target (25 FPS).
+- Boot timings: 250 ms blank delay + NVS-configurable intro (default
+  3000 ms) + 1000 ms hold; 33 ms/frame target (30 FPS).
 - After this project, default total boot will be **4250 ms** (250 + 3000 +
   1000), with the middle phase user-configurable.
 - Logo: 46×54 BGR888 with gray (0x808080) chroma key, in

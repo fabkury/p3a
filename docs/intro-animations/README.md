@@ -18,18 +18,18 @@ can be added later.
 
 ## Status
 
-**Phase: 3 IN PROGRESS — 22 animations registered.**
+**Phase: 3 IN PROGRESS — 21 animations registered.**
 
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 0 | Host toolchain install (one-time, user action) | done — WinLibs MinGW-w64 / gcc 16.1.0 |
 | 1 | Host harness: viewer, frame dump, automated checks | done — `host/intro-anim-lab/`; `--check` green |
 | 2 | Architecture refactor + port `smoothstep-fade` | done — device-confirmed 2026-06-12 |
-| 3 | Develop new animations (overshoot the final 12; cull to best 11) | 22 registered; batches 1+2+3 host-OK; batch 4 partial (mosaic-shrink, diamond-wipe, color-emerge, starburst); batch 5 partial (plasma-dissolve, ripple-converge, voronoi-shatter, hue-cycle-lock, twirl-unwind); rejected: pixel-zoom, neon-trace, sparkle-fade, rotate-step, flood-fill, plasma-resolve, shutter-bands, pixel-shuffle, fire-burnup, bayer-reveal, rotozoom-settle |
+| 3 | Develop new animations (overshoot the final 12; cull to best 11) | 21 registered; batches 1+2+3 host-OK; batch 4 partial (mosaic-shrink, diamond-wipe, color-emerge, starburst); batch 5 partial (plasma-dissolve, voronoi-shatter, hue-cycle-lock, twirl-unwind); rejected: pixel-zoom, neon-trace, sparkle-fade, rotate-step, flood-fill, plasma-resolve, shutter-bands, pixel-shuffle, fire-burnup, bayer-reveal, rotozoom-settle, ripple-converge |
 | 4 | Random selection + duration setting + force-override (web UI) | not started |
 | 5 | Final device QA: profiling, rotations, bg colors | not started |
 
-Animation roster: 22 implemented (`smoothstep-fade` device-OK; the other 21
+Animation roster: 21 implemented (`smoothstep-fade` device-OK; the other 20
 host-OK awaiting device verification — overshooting on purpose so we can
 cull to 12 after device QA). See [catalog.md](catalog.md) for the live
 roster and candidate concepts.

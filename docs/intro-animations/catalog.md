@@ -32,9 +32,8 @@ Update this file whenever an animation changes status.
 | `mosaic-shrink`   | host-OK (batch 4, 2026-06-12) | Block-quantized render at decreasing block size (12→1 src px); per-block top-left sample blended toward bg by smoothstep alpha. Module: `ia_mosaic_shrink.c`. |
 | `diamond-wipe`    | host-OK (batch 4, 2026-06-12) | L1 (Manhattan) distance reveal from bbox center shifted -10 src px upward; rotated-square iris grows smoothstep-paced. Distinct metric from iris-wipe. Module: `ia_diamond_wipe.c`. |
 | `color-emerge`    | host-OK (batch 4, 2026-06-12) | Two-phase color-space animation: silhouette in contrast color fades in alpha-wise over t∈[0, 0.25), then per-channel value lerps from silhouette toward source color over t∈[0.25, 1]. Module: `ia_color_emerge.c`. |
-| `starburst`       | host-OK (batch 4, 2026-06-12) | Per-pixel fly-in from far outside along home-radial direction with back-out (overshoot) easing (c2=3.5, dist=2.0×width) — pixels punch ~31% past home before snapping back. Module: `ia_starburst.c`. |
+| `starburst`       | host-OK (batch 4, 2026-06-12) | Per-pixel fly-in from far outside along home-radial direction with back-out (overshoot) easing (c2=2.6, dist=1.7×width) — pixels punch ~22% past home before snapping back. Module: `ia_starburst.c`. |
 | `plasma-dissolve` | host-OK (batch 5, 2026-06-12) | Smooth plasma threshold field (3-sin sum, seed-driven phases) at source-pixel scale; reveal iff field ≤ smoothstep(t). Same dissolve geometry as pixel-dissolve, but correlated noise → organic blobs instead of speckle. Module: `ia_plasma_dissolve.c`. |
-| `ripple-converge` | host-OK (batch 5, 2026-06-12) | 2D radial sample displacement: A·sin(k·r − ω·t) along outward radial; amplitude smoothstep-damped to 0. Distinct from wave-settle (1D per-row): coherent radial wave on the source. Module: `ia_ripple_converge.c`. |
 | `voronoi-shatter` | host-OK (batch 5, 2026-06-12) | 24 seeded Voronoi sites; each cell rigid-translates from its outward radial direction with cubic ease-out remaining-distance. Cell-id LUT computed per call. Module: `ia_voronoi_shatter.c`. |
 | `hue-cycle-lock`  | host-OK (batch 5, 2026-06-12) | Per-pixel HSV hue rotation; offset = (1−smoothstep(t))·2 full turns; saturation/value preserved. Locks to true colors at t=1. Pure color-space animation distinct from color-emerge (RGB lerp). Module: `ia_hue_cycle_lock.c`. |
 | `twirl-unwind`    | host-OK (batch 5, 2026-06-12) | Photoshop-style spiral warp: per-pixel sample rotation θ(r,t) = (1−smoothstep(t))·9·exp(−r/22), so the center spins ~1.4 turns at t=0+ and decays radially. Module: `ia_twirl_unwind.c`. |
@@ -78,7 +77,7 @@ aside.
 | `starburst` | Per-pixel fly-in along home-radial direction with back-out (overshoot) easing | medium | implemented (see above) |
 | `fire-burnup` | Stateless fire-noise field thresholded on time; flames die away revealing logo | low | rejected 2026-06-12 (Fab) |
 | `plasma-dissolve` | Smooth plasma field used as dissolve threshold (correlated noise vs hash) | low | implemented (see above) |
-| `ripple-converge` | 2D radial sinusoidal sample displacement, smoothstep-damped amplitude | low | implemented (see above) |
+| `ripple-converge` | 2D radial sinusoidal sample displacement, smoothstep-damped amplitude | low | rejected 2026-06-12 (Fab) |
 | `voronoi-shatter` | Voronoi cells fly in radially from outside; per-cell easing | medium | implemented (see above) |
 | `hue-cycle-lock` | Per-pixel HSV hue rotation decaying to 0 at t=1 | low | implemented (see above) |
 | `twirl-unwind` | Photoshop-style spiral warp with radius-dependent rotation; unwinds | medium | implemented (see above) |

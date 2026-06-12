@@ -21,7 +21,6 @@ void ia_diamond_wipe_render    (uint8_t *buffer, const intro_anim_ctx_t *ctx, fl
 void ia_color_emerge_render    (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_starburst_render       (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_plasma_dissolve_render (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
-void ia_ripple_converge_render (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_voronoi_shatter_render (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_hue_cycle_lock_render  (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
 void ia_twirl_unwind_render    (uint8_t *buffer, const intro_anim_ctx_t *ctx, float t);
@@ -45,7 +44,6 @@ const intro_anim_t intro_anim_registry[] = {
     { .name = "color-emerge",    .frame_budget_ms = 40, .render = ia_color_emerge_render    },
     { .name = "starburst",       .frame_budget_ms = 40, .render = ia_starburst_render       },
     { .name = "plasma-dissolve", .frame_budget_ms = 40, .render = ia_plasma_dissolve_render },
-    { .name = "ripple-converge", .frame_budget_ms = 40, .render = ia_ripple_converge_render },
     { .name = "voronoi-shatter", .frame_budget_ms = 40, .render = ia_voronoi_shatter_render },
     { .name = "hue-cycle-lock",  .frame_budget_ms = 40, .render = ia_hue_cycle_lock_render  },
     { .name = "twirl-unwind",    .frame_budget_ms = 40, .render = ia_twirl_unwind_render    },

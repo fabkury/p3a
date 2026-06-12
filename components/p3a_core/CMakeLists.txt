@@ -30,7 +30,6 @@ idf_component_register(
         "intro_anims/ia_color_emerge.c"
         "intro_anims/ia_starburst.c"
         "intro_anims/ia_plasma_dissolve.c"
-        "intro_anims/ia_ripple_converge.c"
         "intro_anims/ia_voronoi_shatter.c"
         "intro_anims/ia_hue_cycle_lock.c"
         "intro_anims/ia_twirl_unwind.c"

@@ -6,75 +6,116 @@
 <title>p3a - Wi-Fi Setup</title>
 <style>
 * { box-sizing: border-box; }
+:root {
+  --c-bg: #0E0A1A;
+  --c-on-bg: #EDE9F5;
+  --c-on-bg-muted: #A89FC0;
+  --c-card-bg: #171229;
+  --c-card-fg: #EDE9F5;
+  --c-card-fg-muted: #A89FC0;
+  --c-card-fg-faint: #6F6690;
+  --c-card-border: #2E2547;
+  --c-card-shadow: 0 6px 20px rgba(0,0,0,0.5);
+  --c-input-bg: #211A3A;
+  --c-primary: #8B5CFF;
+  --c-primary-dark: #7340E0;
+  --c-on-primary: #FFFFFF;
+  --c-danger: #FF4D4D;
+  --c-danger-dark: #E03636;
+  --c-on-danger: #3A0000;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --focus-ring: 0 0 0 3px rgba(139,92,255,0.28);
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;
+}
 body {
   margin: 0;
   padding: 12px 10px 16px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-family: var(--font);
+  background-color: var(--c-bg);
+  background-image:
+    radial-gradient(110% 55% at 50% -8%, rgba(139,92,255,0.20), transparent 60%),
+    radial-gradient(90% 50% at 100% 110%, rgba(255,77,151,0.12), transparent 55%);
+  background-attachment: fixed;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  color: #fff;
+  color: var(--c-on-bg);
 }
 @supports (min-height: 100svh) { body { min-height: 100svh; } }
 @supports (min-height: 100dvh) { body { min-height: 100dvh; } }
 .header { text-align: center; padding: 8px 0 4px; }
 .header h1 {
   margin: 0;
+  font-family: var(--font-display);
   font-size: clamp(2rem, 4vw, 2.4rem);
-  font-weight: 300;
-  letter-spacing: 0.1em;
+  font-weight: 600;
+  letter-spacing: 0.16em;
   text-transform: lowercase;
+  background: conic-gradient(from 0deg,
+      #FF4D4D, #FF8A33, #FFC533, #42D86E, #2BD6D6, #33A6FF, #8B5CFF, #E84DD6, #FF4D4D);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
-.subtitle { margin: 0; opacity: 0.9; font-size: 0.95rem; }
+.subtitle { margin: 0; color: var(--c-on-bg-muted); font-size: 0.95rem; }
 .card {
   width: min(520px, 100%);
-  background: rgba(255,255,255,0.95);
-  border-radius: 16px;
-  padding: 14px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
-  color: #111;
+  background: var(--c-card-bg);
+  border: 1px solid var(--c-card-border);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  box-shadow: var(--c-card-shadow);
+  color: var(--c-card-fg);
 }
 .card h2 {
   margin: 0 0 10px;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #333;
+  color: var(--c-card-fg);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 .field { margin-bottom: 10px; }
-label { display: block; font-size: 0.85rem; color: #444; margin-bottom: 6px; }
+label { display: block; font-size: 0.85rem; color: var(--c-card-fg-muted); margin-bottom: 6px; }
 input[type=text], input[type=password] {
   width: 100%;
   padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 10px;
+  border: 1px solid var(--c-card-border);
+  border-radius: var(--r-md);
   font-size: 1rem;
+  font-family: var(--font);
+  color: var(--c-card-fg);
+  background: var(--c-input-bg);
   outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
-input[type=text]:focus, input[type=password]:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.12); }
+input[type=text]::placeholder, input[type=password]::placeholder { color: var(--c-card-fg-faint); }
+input[type=text]:focus, input[type=password]:focus { border-color: var(--c-primary); box-shadow: var(--focus-ring); }
 .btn {
   width: 100%;
-  background: #667eea;
-  color: white;
+  background: var(--c-primary);
+  color: var(--c-on-primary);
   padding: 13px 14px;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--r-md);
   font-size: 0.98rem;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s;
+  transition: background 0.2s, transform 0.2s;
   -webkit-tap-highlight-color: transparent;
 }
-.btn:active { transform: scale(0.97); }
-.btn-secondary { background: #ef4444; box-shadow: 0 4px 12px rgba(239,68,68,0.25); }
-.help { margin: 10px 0 0; font-size: 0.85rem; color: #555; line-height: 1.35; }
-.help code { background: rgba(102,126,234,0.12); padding: 2px 6px; border-radius: 8px; }
-.hint { margin: 4px 0 0; font-size: 0.78rem; color: #888; }
-.divider { height: 1px; background: #eee; margin: 12px 0; }
+.btn:active { transform: scale(0.97); background: var(--c-primary-dark); }
+.btn-secondary { background: var(--c-danger); color: var(--c-on-danger); }
+.btn-secondary:active { background: var(--c-danger-dark); }
+.help { margin: 10px 0 0; font-size: 0.85rem; color: var(--c-card-fg-muted); line-height: 1.35; }
+.help code { background: rgba(139,92,255,0.16); color: #D9CCFF; padding: 2px 6px; border-radius: 8px; }
+.hint { margin: 4px 0 0; font-size: 0.78rem; color: var(--c-card-fg-faint); }
+.divider { height: 1px; background: var(--c-card-border); margin: 12px 0; }
 </style>
 </head>
 <body>

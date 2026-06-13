@@ -106,8 +106,8 @@ static esp_err_t serve_success_page_with_ssid(httpd_req_t *req, const char *ssid
         ESP_LOGE(TAG, "Failed to open %s", filepath);
         httpd_resp_set_type(req, "text/html");
         httpd_resp_send(req,
-            "<html><body style=\"font-family:sans-serif;text-align:center;padding:40px;\">"
-            "<h1>p3a Setup</h1>"
+            "<html><body style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-align:center;padding:40px;background:#0E0A1A;color:#EDE9F5;\">"
+            "<h1 style=\"color:#8B5CFF;letter-spacing:0.16em;text-transform:lowercase;\">p3a</h1>"
             "<p>Credentials saved! Device will reboot now.</p>"
             "</body></html>",
             HTTPD_RESP_USE_STRLEN);
@@ -210,8 +210,8 @@ static esp_err_t serve_file_simple(httpd_req_t *req, const char *filepath) {
         // Minimal fallback HTML in case files are missing
         httpd_resp_set_type(req, "text/html");
         httpd_resp_send(req,
-            "<html><body style=\"font-family:sans-serif;text-align:center;padding:40px;\">"
-            "<h1>p3a Setup</h1>"
+            "<html><body style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-align:center;padding:40px;background:#0E0A1A;color:#EDE9F5;\">"
+            "<h1 style=\"color:#8B5CFF;letter-spacing:0.16em;text-transform:lowercase;\">p3a</h1>"
             "<p>UI files not found. Please reflash the device.</p>"
             "</body></html>",
             HTTPD_RESP_USE_STRLEN);
@@ -265,8 +265,8 @@ static esp_err_t serve_setup_index_page(httpd_req_t *req) {
         ESP_LOGE(TAG, "Failed to open %s", filepath);
         httpd_resp_set_type(req, "text/html");
         httpd_resp_send(req,
-            "<html><body style=\"font-family:sans-serif;text-align:center;padding:40px;\">"
-            "<h1>p3a Setup</h1>"
+            "<html><body style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-align:center;padding:40px;background:#0E0A1A;color:#EDE9F5;\">"
+            "<h1 style=\"color:#8B5CFF;letter-spacing:0.16em;text-transform:lowercase;\">p3a</h1>"
             "<p>UI files not found. Please reflash the device.</p>"
             "</body></html>",
             HTTPD_RESP_USE_STRLEN);

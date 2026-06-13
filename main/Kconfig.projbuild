@@ -151,18 +151,6 @@ menu "Physical Player of Pixel Art (P3A)"
     endmenu
 
     menu "Wi-Fi"
-        config ESP_WIFI_SSID
-            string "WiFi SSID"
-            default "myssid"
-            help
-                SSID (network name) for the device to connect to.
-
-        config ESP_WIFI_PASSWORD
-            string "WiFi Password"
-            default "mypassword"
-            help
-                WiFi password (WPA or WPA2) for the device to use.
-
         choice ESP_WIFI_SAE_MODE
             prompt "WPA3 SAE mode selection"
             default ESP_WPA3_SAE_PWE_BOTH

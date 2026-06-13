@@ -1544,7 +1544,15 @@ static void refresh_task(void *arg)
             char anim_path[128];
             char detail[160];
             if (sd_path_get_animations(anim_path, sizeof(anim_path)) == ESP_OK) {
-                snprintf(detail, sizeof(detail), "No artworks found in\n%s", anim_path);
+                // Drop the "/sdcard" mount prefix — the user thinks in terms of
+                // the card's own filesystem, not our VFS mount point.
+                const char *show_path = anim_path;
+                const char *mount = CONFIG_BSP_SD_MOUNT_POINT;
+                size_t mount_len = strlen(mount);
+                if (strncmp(anim_path, mount, mount_len) == 0) {
+                    show_path = anim_path + mount_len;
+                }
+                snprintf(detail, sizeof(detail), "No artworks found in\n%s", show_path);
             } else {
                 // Don't name a directory we can't resolve — it would be a lie.
                 snprintf(detail, sizeof(detail), "No artworks found");

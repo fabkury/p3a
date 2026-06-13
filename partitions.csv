@@ -4,6 +4,8 @@
 # v1.x layout: NVS grown in place 24 KB -> 64 KB (absorbing the old phy_init/
 # otadata locations and the former 0x12000-0x20000 gap); phy_init and otadata
 # moved up. ota_0 and everything after it are unchanged from the 0.x layout.
+# v1.0 also appends a 256 KB coredump partition at the tail (0x1620000), using
+# previously-unallocated flash, so no other partition shifts.
 # Requires a one-time serial re-flash (partition table changes never apply via
 # OTA). NVS keeps offset 0x9000, so prior contents are preserved best-effort:
 # the old valid pages carry over and NVS init erases the stale phy/otadata
@@ -31,3 +33,10 @@ storage,   data, spiffs,   0x1020000, 0x400000,
 
 # ESP32-C6 co-processor firmware (for OTA update via ESP-Hosted)
 slave_fw,  data, 0x40,     0x1420000, 0x200000,
+
+# Core dump partition (256 KB) for postmortem crash diagnostics. The panic
+# handler writes only the actual dump size (tens of KB: task stacks + TCBs;
+# DRAM capture disabled), erasing/writing just the sectors it needs - the
+# 256 KB is a capacity ceiling, not a per-crash cost. Blank (0xFF) until a
+# crash occurs; read back via esp_core_dump_image_get / `idf.py coredump-info`.
+coredump,  data, coredump, 0x1620000, 0x40000,

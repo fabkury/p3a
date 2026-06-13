@@ -58,7 +58,6 @@ typedef struct {
     TimerHandle_t internet_check_timer;
     time_t last_internet_check;
     bool internet_check_in_progress;
-    uint32_t mqtt_backoff_ms;
     bool has_registration;
 
     // Callbacks

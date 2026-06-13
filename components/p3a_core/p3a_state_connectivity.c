@@ -3,13 +3,12 @@
 
 /**
  * @file p3a_state_connectivity.c
- * @brief Connectivity tracking: Wi-Fi/MQTT/internet state, DNS checks, backoff
+ * @brief Connectivity tracking: Wi-Fi/MQTT/internet state, DNS checks
  */
 
 #include "p3a_state_internal.h"
 #include "esp_log.h"
 #include "esp_netif.h"
-#include "esp_random.h"
 #include "event_bus.h"
 #include "lwip/dns.h"
 #include "lwip/ip_addr.h"
@@ -36,9 +35,6 @@ static const char *s_connectivity_detail_messages[] = {
 // Connectivity configuration
 #define INTERNET_CHECK_INTERVAL_MS 60000
 #define DNS_LOOKUP_TIMEOUT_MS 5000
-#define MQTT_BACKOFF_MIN_MS 5000
-#define MQTT_BACKOFF_MAX_MS 300000
-#define MQTT_BACKOFF_JITTER_PERCENT 25
 
 // Event group bits for connectivity
 #define EG_BIT_ONLINE       (1 << 0)
@@ -159,7 +155,6 @@ esp_err_t p3a_state_connectivity_init(void)
     s_state.connectivity = P3A_CONNECTIVITY_NO_WIFI;
     s_state.last_internet_check = 0;
     s_state.internet_check_in_progress = false;
-    s_state.mqtt_backoff_ms = MQTT_BACKOFF_MIN_MS;
     s_state.has_registration = check_registration();
     update_connectivity_event_group_locked();
     xSemaphoreGive(s_state.mutex);
@@ -212,7 +207,6 @@ void p3a_state_on_wifi_disconnected(void)
         xTimerStop(s_state.internet_check_timer, 0);
     }
     set_connectivity_locked(P3A_CONNECTIVITY_NO_WIFI);
-    s_state.mqtt_backoff_ms = MQTT_BACKOFF_MIN_MS;
     xSemaphoreGive(s_state.mutex);
 }
 
@@ -222,7 +216,6 @@ void p3a_state_on_mqtt_connected(void)
 
     xSemaphoreTake(s_state.mutex, portMAX_DELAY);
     set_connectivity_locked(P3A_CONNECTIVITY_ONLINE);
-    s_state.mqtt_backoff_ms = MQTT_BACKOFF_MIN_MS;
     xSemaphoreGive(s_state.mutex);
 }
 
@@ -239,15 +232,6 @@ void p3a_state_on_mqtt_disconnected(void)
         } else {
             set_connectivity_locked(P3A_CONNECTIVITY_NO_REGISTRATION);
         }
-
-        s_state.mqtt_backoff_ms = s_state.mqtt_backoff_ms * 2;
-        if (s_state.mqtt_backoff_ms > MQTT_BACKOFF_MAX_MS) {
-            s_state.mqtt_backoff_ms = MQTT_BACKOFF_MAX_MS;
-        }
-
-        uint32_t jitter = (s_state.mqtt_backoff_ms * MQTT_BACKOFF_JITTER_PERCENT) / 100;
-        uint32_t rand_val = esp_random() % (jitter * 2);
-        s_state.mqtt_backoff_ms = s_state.mqtt_backoff_ms - jitter + rand_val;
     }
 
     xSemaphoreGive(s_state.mutex);

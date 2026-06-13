@@ -9,7 +9,6 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_system.h"
-#include "esp_random.h"
 #include "esp_app_desc.h"
 #include "nvs_flash.h"
 #include "nvs.h"

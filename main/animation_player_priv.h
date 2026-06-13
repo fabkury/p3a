@@ -24,7 +24,6 @@
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
 #include "esp_task_wdt.h"
-#include "esp_random.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"

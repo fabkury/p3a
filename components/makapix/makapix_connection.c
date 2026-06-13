@@ -221,13 +221,13 @@ void makapix_mqtt_reconnect_task(void *pvParameters)
     uint32_t delay_ms = start_immediate ? 100 : RECONNECT_DELAY_INITIAL_MS;
 
     while (true) {
-        // Jitter the backoff by ±25% so a fleet that dropped together (e.g. a
+        // Jitter the backoff by ±50% so a fleet that dropped together (e.g. a
         // Makapix server restart bounces every device at once) doesn't retry
         // in lockstep and stampede the broker. The delay_ms base stays clean
         // for the doubling below, so the 15s/30s/60s/120s progression holds;
         // only the actual sleep is randomized around it.
         uint32_t sleep_ms = delay_ms;
-        uint32_t jitter = delay_ms / 4;
+        uint32_t jitter = delay_ms / 2;
         if (jitter > 0) {
             sleep_ms = delay_ms - jitter + (esp_random() % (2 * jitter + 1));
         }

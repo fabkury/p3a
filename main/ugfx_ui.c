@@ -799,7 +799,9 @@ static void ugfx_ui_draw_fatal_error(void)
 
     gCoord line_h = gdispGetFontMetric(body_font, gFontLineSpacing);
     if (line_h <= 0) line_h = 30;
-    gCoord block_h = (gCoord)(line_count * line_h);
+    // Add a little breathing room between lines so the text isn't cramped
+    gCoord line_pitch = line_h + (line_h / 3);
+    gCoord block_h = (gCoord)(line_count * line_pitch);
     gCoord start_y = (screen_h / 2) - (block_h / 2) + 40;
 
     for (int i = 0; i < line_count; i++) {
@@ -811,7 +813,7 @@ static void ugfx_ui_draw_fatal_error(void)
 
         // Empty lines (from double \n) render as spacing
         color_t color = GFX_WHITE;
-        gdispFillStringBox(0, start_y + (gCoord)(i * line_h), screen_w, line_h, line_buf,
+        gdispFillStringBox(0, start_y + (gCoord)(i * line_pitch), screen_w, line_h, line_buf,
                            body_font, color, GFX_BLACK, gJustifyCenter);
     }
 }

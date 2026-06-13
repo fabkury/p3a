@@ -26,7 +26,6 @@ idf_component_register(
         "intro_anims/ia_typewriter.c"
         "intro_anims/ia_spiral_reveal.c"
         "intro_anims/ia_mosaic_shrink.c"
-        "intro_anims/ia_diamond_wipe.c"
         "intro_anims/ia_color_emerge.c"
         "intro_anims/ia_starburst.c"
         "intro_anims/ia_plasma_dissolve.c"

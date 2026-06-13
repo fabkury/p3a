@@ -30,7 +30,6 @@ Update this file whenever an animation changes status.
 | `typewriter`      | host-OK (batch 3, 2026-06-12) | Source-columns reveal left-to-right at constant speed; 6-cycle blinking contrast cursor at the head. Module: `ia_typewriter.c`. |
 | `spiral-reveal`   | host-OK (batch 3, 2026-06-12) | Rotating cone sweeps 1.5 turns clockwise from bbox center; aperture and radial threshold both expand to full coverage by t=1. Module: `ia_spiral_reveal.c`. |
 | `mosaic-shrink`   | host-OK (batch 4, 2026-06-12) | Block-quantized render at decreasing block size (12→1 src px); per-block top-left sample blended toward bg by smoothstep alpha. Module: `ia_mosaic_shrink.c`. |
-| `diamond-wipe`    | host-OK (batch 4, 2026-06-12) | L1 (Manhattan) distance reveal from bbox center shifted -10 src px upward; rotated-square iris grows smoothstep-paced. Distinct metric from iris-wipe. Module: `ia_diamond_wipe.c`. |
 | `color-emerge`    | host-OK (batch 4, 2026-06-12) | Two-phase color-space animation: silhouette in contrast color fades in alpha-wise over t∈[0, 0.25), then per-channel value lerps from silhouette toward source color over t∈[0.25, 1]. Module: `ia_color_emerge.c`. |
 | `starburst`       | host-OK (batch 4, 2026-06-12) | Per-pixel fly-in from far outside along home-radial direction with back-out (overshoot) easing (c2=2.6, dist=1.7×width) — pixels punch ~22% past home before snapping back. Module: `ia_starburst.c`. |
 | `plasma-dissolve` | host-OK (batch 5, 2026-06-12) | Smooth plasma threshold field (3-sin sum, seed-driven phases) at source-pixel scale; reveal iff field ≤ smoothstep(t). Same dissolve geometry as pixel-dissolve, but correlated noise → organic blobs instead of speckle. Module: `ia_plasma_dissolve.c`. |
@@ -71,7 +70,7 @@ aside.
 | `plasma-resolve` | A colorful plasma field (LUT-based) over the bg resolves/condenses into the logo as t→1 | high | rejected 2026-06-12 (Fab) |
 | `rotate-step` | Logo snaps through 90°-step rotations (pixel-art-safe) while scaling up into place | low | rejected 2026-06-12 (Fab) |
 | `mosaic-shrink` | Logo rendered at coarse block quantization (block size shrinks 12→1 src px) with alpha fade | low | implemented (see above) |
-| `diamond-wipe` | L1 (Manhattan) distance reveal — diamond-shaped iris growing from bbox center | low | implemented (see above) |
+| `diamond-wipe` | L1 (Manhattan) distance reveal — diamond-shaped iris growing from bbox center | low | rejected 2026-06-13 (Fab) |
 | `flood-fill` | BFS through 4-connected opaque region from a deterministic seed; topology-aware reveal | medium | rejected 2026-06-12 (Fab) |
 | `pixel-shuffle` | Per-pixel 2D random sample offset that decays to 0; logo "unscrambles" in place | low | rejected 2026-06-12 (Fab) |
 | `shutter-bands` | Vertical column-bands open from bbox center outward in band-distance order | low | rejected 2026-06-12 (Fab) |

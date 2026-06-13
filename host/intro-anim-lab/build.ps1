@@ -45,7 +45,6 @@ $sources = @(
     (Join-Path $introAnims 'ia_typewriter.c'),
     (Join-Path $introAnims 'ia_spiral_reveal.c'),
     (Join-Path $introAnims 'ia_mosaic_shrink.c'),
-    (Join-Path $introAnims 'ia_diamond_wipe.c'),
     (Join-Path $introAnims 'ia_color_emerge.c'),
     (Join-Path $introAnims 'ia_starburst.c'),
     (Join-Path $introAnims 'ia_plasma_dissolve.c'),

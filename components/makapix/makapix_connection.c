@@ -223,14 +223,20 @@ void makapix_mqtt_reconnect_task(void *pvParameters)
     while (true) {
         // Jitter the backoff by ±50% so a fleet that dropped together (e.g. a
         // Makapix server restart bounces every device at once) doesn't retry
-        // in lockstep and stampede the broker. The delay_ms base stays clean
-        // for the doubling below, so the 15s/30s/60s/120s progression holds;
-        // only the actual sleep is randomized around it.
-        uint32_t sleep_ms = delay_ms;
-        uint32_t jitter = delay_ms / 2;
-        if (jitter > 0) {
-            sleep_ms = delay_ms - jitter + (esp_random() % (2 * jitter + 1));
+        // in lockstep and stampede the broker. delay_ms stays clean for the
+        // doubling below (15s/30s/60s/120s progression); only the sleep is
+        // randomized around it.
+        //
+        // Clamp the window's high edge to RECONNECT_DELAY_MAX_MS so the wait
+        // never exceeds the cap. Clamping the edge (not the final draw) keeps
+        // it uniform — a post-hoc min() would pile every over-cap draw onto
+        // exactly the cap, re-creating a small herd at the 120s tier.
+        uint32_t lo = delay_ms - delay_ms / 2;
+        uint32_t hi = delay_ms + delay_ms / 2;
+        if (hi > RECONNECT_DELAY_MAX_MS) {
+            hi = RECONNECT_DELAY_MAX_MS;
         }
+        uint32_t sleep_ms = (hi > lo) ? lo + (esp_random() % (hi - lo + 1)) : lo;
         vTaskDelay(pdMS_TO_TICKS(sleep_ms));
 
         // Check if too many auth failures - registration is likely invalid

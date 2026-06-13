@@ -12,6 +12,7 @@
 <meta name="theme-color" content="#667eea">
 <script src="/static/compat.js"></script>
 <link rel="stylesheet" href="/static/common.css">
+<script src="/static/theme.js"></script>
 <title>p3a</title>
 <style>
 body {
@@ -25,7 +26,7 @@ body {
     position: relative;
     width: min(420px, 100%);
     aspect-ratio: 1 / 1;
-    background: rgba(255,255,255,0.12);
+    background: var(--c-bg-fill);
     border-radius: var(--r-lg);
     box-shadow: var(--c-card-shadow);
     display: flex;
@@ -68,9 +69,9 @@ body {
     height: 46px;
     font-size: 1.2rem;
     border-radius: 50%;
-    border: 2px solid rgba(255,255,255,0.18);
-    background: rgba(255,255,255,0.10);
-    color: white;
+    border: 2px solid var(--c-bg-fill-border);
+    background: var(--c-bg-fill);
+    color: var(--c-on-bg);
     cursor: pointer;
     display: inline-flex;
     align-items: center;
@@ -80,7 +81,8 @@ body {
 }
 .pin-btn.active {
     background: var(--c-primary);
-    border-color: rgba(255,255,255,0.45);
+    color: var(--c-on-primary);
+    border-color: var(--c-bg-fill-border);
 }
 .pin-btn.pulse {
     animation: reaction-pulse 0.32s ease;
@@ -97,8 +99,9 @@ body {
 }
 .pin-modal-overlay.active { display: flex; }
 .pin-modal {
-    background: white;
-    color: #1f2937;
+    background: var(--c-card-bg);
+    color: var(--c-card-fg);
+    border: 1px solid var(--c-card-border);
     border-radius: var(--r-lg);
     padding: var(--sp-4) var(--sp-3);
     width: 100%;
@@ -110,7 +113,7 @@ body {
 .pin-modal h3 {
     margin: 0 0 var(--sp-4) 0;
     font-size: 1.1rem;
-    color: #1f2937;
+    color: var(--c-card-fg);
 }
 
 /* Mobile-first row: vertical stack — header (name + meta + badge) on top,
@@ -121,7 +124,7 @@ body {
     flex-direction: column;
     gap: var(--sp-2);
     padding: var(--sp-3) 0;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--c-card-border);
 }
 .pin-modal-row:last-child { border-bottom: none; }
 .pin-modal-row-header {
@@ -139,11 +142,11 @@ body {
     font-weight: 600;
     font-size: 0.95rem;
 }
-.pin-modal-row-meta { font-size: 0.78rem; color: #6b7280; flex-shrink: 0; }
+.pin-modal-row-meta { font-size: 0.78rem; color: var(--c-card-fg-muted); flex-shrink: 0; }
 .pin-modal-active-badge {
     font-size: 0.65rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--c-on-success);
     background: var(--c-success);
     padding: 2px 8px;
     border-radius: 999px;
@@ -160,13 +163,13 @@ body {
     padding: 9px 10px;
     font-size: 0.82rem;
     border-radius: var(--r-sm);
-    border: 1px solid #d1d5db;
-    background: white;
-    color: #1f2937;
+    border: 1px solid var(--c-card-border);
+    background: var(--c-input-bg);
+    color: var(--c-card-fg);
     cursor: pointer;
     min-height: 38px;
 }
-.pin-modal-row-actions button.danger { color: #b91c1c; border-color: #fecaca; }
+.pin-modal-row-actions button.danger { color: var(--c-danger); border-color: color-mix(in srgb, var(--c-danger) 40%, transparent); }
 .pin-modal-row-actions button:disabled { opacity: 0.5; cursor: default; }
 
 @media (min-width: 560px) {
@@ -192,10 +195,10 @@ body {
 .pin-modal-create input {
     flex: 1;
     padding: 8px 10px;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--c-card-border);
     border-radius: var(--r-sm);
     font-size: 0.85rem;
-    color: #1f2937;
+    color: var(--c-card-fg);
 }
 .pin-modal-actions {
     display: flex;
@@ -203,12 +206,12 @@ body {
     margin-top: var(--sp-4);
 }
 .pin-modal-actions .close-btn {
-    background: #e5e7eb;
+    background: var(--c-surface-sunk);
     border: none;
     padding: 8px 14px;
     border-radius: var(--r-sm);
     cursor: pointer;
-    color: #1f2937;
+    color: var(--c-card-fg);
 }
 /* Horizontal one-row strip. Cards have a fixed flex-basis so the strip
    can be swiped sideways; auto-loads more when scrolled near the right
@@ -225,7 +228,7 @@ body {
 }
 .pin-browse-strip::-webkit-scrollbar { height: 6px; }
 .pin-browse-strip::-webkit-scrollbar-thumb {
-    background: rgba(0,0,0,0.18); border-radius: 3px;
+    background: var(--c-card-border); border-radius: 3px;
 }
 .pin-browse-card {
     flex: 0 0 140px;
@@ -234,19 +237,19 @@ body {
        defeats both the fixed 140px basis and the meta's own
        overflow/ellipsis truncation. */
     min-width: 0;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--c-card-border);
     border-radius: var(--r-md);
     padding: var(--sp-2);
     display: flex;
     flex-direction: column;
     gap: 6px;
-    background: white;
+    background: var(--c-surface-sunk);
 }
 .pin-browse-card img {
     width: 100%;
     aspect-ratio: 1 / 1;
     object-fit: cover;
-    background: #f3f4f6;
+    background: var(--c-surface-sunk);
     border-radius: var(--r-sm);
     image-rendering: auto;  /* default: smoothed (Giphy etc.) */
 }
@@ -257,7 +260,7 @@ body {
 }
 .pin-browse-card .meta {
     font-size: 0.72rem;
-    color: #6b7280;
+    color: var(--c-card-fg-muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -271,12 +274,12 @@ body {
     padding: 4px 6px;
     font-size: 0.72rem;
     border-radius: var(--r-sm);
-    border: 1px solid #d1d5db;
-    background: white;
-    color: #1f2937;
+    border: 1px solid var(--c-card-border);
+    background: var(--c-input-bg);
+    color: var(--c-card-fg);
     cursor: pointer;
 }
-.pin-browse-card .actions button.danger { color: #b91c1c; border-color: #fecaca; }
+.pin-browse-card .actions button.danger { color: var(--c-danger); border-color: color-mix(in srgb, var(--c-danger) 40%, transparent); }
 
 /* Loading sentinel that appears at the right edge during fetches. */
 .pin-browse-loading {
@@ -284,7 +287,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #9ca3af;
+    color: var(--c-card-fg-faint);
     font-size: 0.78rem;
     min-height: 140px;
 }
@@ -295,14 +298,14 @@ body {
     align-items: center;
     margin-top: var(--sp-3);
     font-size: 0.85rem;
-    color: #6b7280;
+    color: var(--c-card-fg-muted);
     gap: var(--sp-3);
 }
 .pin-browse-footer button {
     padding: 7px 14px;
-    border: 1px solid #d1d5db;
-    background: white;
-    color: #1f2937;
+    border: 1px solid var(--c-card-border);
+    background: var(--c-input-bg);
+    color: var(--c-card-fg);
     border-radius: var(--r-sm);
     cursor: pointer;
     font-size: 0.82rem;
@@ -314,8 +317,8 @@ body {
     background: var(--c-primary);
     border-radius: var(--r-md);
     font-size: 0.8rem;
-    color: white;
-    box-shadow: 0 6px 16px rgba(102,126,234,0.4);
+    color: var(--c-on-primary);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--c-primary) 35%, transparent);
     overflow: hidden;
 }
 .now-playing-header {
@@ -330,17 +333,17 @@ body {
 .now-playing-header-text { text-align: center; flex: 1; min-width: 0; }
 .now-playing-name {
     font-weight: 600;
-    color: white;
+    color: var(--c-on-primary);
     font-size: 0.85rem;
     margin-bottom: 2px;
 }
 .now-playing-stats {
-    color: rgba(255,255,255,0.85);
+    color: color-mix(in srgb, var(--c-on-primary) 80%, transparent);
     font-size: 0.75rem;
 }
 .now-playing-toggle {
     font-size: 0.7rem;
-    color: rgba(255,255,255,0.7);
+    color: color-mix(in srgb, var(--c-on-primary) 70%, transparent);
     transition: transform 0.2s;
     flex-shrink: 0;
     margin-left: var(--sp-2);
@@ -348,8 +351,8 @@ body {
 .now-playing.collapsed .now-playing-toggle { transform: rotate(-90deg); }
 .now-playing.collapsed .now-playing-channels { display: none; }
 .shuffle-btn {
-    background: rgba(255,255,255,0.18);
-    color: rgba(255,255,255,0.85);
+    background: color-mix(in srgb, var(--c-on-primary) 16%, transparent);
+    color: var(--c-on-primary);
     border: none;
     padding: 4px 10px;
     border-radius: 12px;
@@ -364,16 +367,16 @@ body {
     transition: background 0.15s, color 0.15s;
     min-height: 26px;
 }
-.shuffle-btn:hover { background: rgba(255,255,255,0.28); }
-.shuffle-btn.active { background: white; color: #667eea; }
-.shuffle-btn.active:hover { background: rgba(255,255,255,0.92); }
+.shuffle-btn:hover { background: color-mix(in srgb, var(--c-on-primary) 26%, transparent); }
+.shuffle-btn.active { background: var(--c-on-primary); color: var(--c-primary); }
+.shuffle-btn.active:hover { background: color-mix(in srgb, var(--c-on-primary) 90%, transparent); }
 .shuffle-btn .shuffle-state {
     display: inline-block;
     min-width: 1.7em;
     text-align: left;
 }
 .now-playing-channels {
-    border-top: 1px solid rgba(255,255,255,0.2);
+    border-top: 1px solid color-mix(in srgb, var(--c-on-primary) 20%, transparent);
     padding: 6px 10px var(--sp-2);
     display: flex;
     flex-direction: column;
@@ -386,20 +389,20 @@ body {
     font-size: 0.7rem;
     padding: var(--sp-1) 6px;
     border-radius: var(--r-sm);
-    background: rgba(255,255,255,0.08);
+    background: color-mix(in srgb, var(--c-on-primary) 8%, transparent);
     transition: opacity 0.3s;
 }
 .ps-ch-row.refreshing {
     animation: ps-pulse 1.8s ease-in-out infinite;
 }
 @keyframes ps-pulse {
-    0%, 100% { background: rgba(255,255,255,0.08); }
-    50% { background: rgba(255,255,255,0.22); }
+    0%, 100% { background: color-mix(in srgb, var(--c-on-primary) 8%, transparent); }
+    50% { background: color-mix(in srgb, var(--c-on-primary) 22%, transparent); }
 }
 .ps-ch-row.cooldown {
-    background: rgba(255,152,0,0.18);
-    border-left: 3px solid #ff9800;
-    opacity: 0.75;
+    background: color-mix(in srgb, var(--c-warning) 22%, transparent);
+    border-left: 3px solid var(--c-warning);
+    opacity: 0.85;
     animation: none;
 }
 .ps-ch-row.cooldown::after {
@@ -411,11 +414,11 @@ body {
 .cooldown-banner {
     display: none;
     width: min(420px, 100%);
-    background: linear-gradient(135deg, #ef6c00 0%, #ff9800 100%);
+    background: var(--c-warning);
     border-radius: var(--r-md);
     padding: var(--sp-3) var(--sp-4);
-    color: white;
-    box-shadow: 0 4px 12px rgba(239,108,0,0.3);
+    color: var(--c-on-warning);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--c-warning) 35%, transparent);
     margin-top: var(--sp-2);
 }
 .cooldown-banner h4 { margin: 0 0 4px; font-size: 0.95rem; font-weight: 600; }
@@ -430,13 +433,13 @@ body {
     text-transform: uppercase;
     flex-shrink: 0;
 }
-.ps-badge-type { background: rgba(255,255,255,0.25); color: #fff; }
-.ps-badge-sub { background: rgba(0,0,0,0.18); color: rgba(255,255,255,0.9); }
-.ps-ch-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; }
-.ps-ch-id { color: rgba(255,255,255,0.65); font-size: 0.65rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80px; }
-.ps-ch-count { white-space: nowrap; color: rgba(255,255,255,0.85); flex-shrink: 0; }
-.ps-ch-time { white-space: nowrap; color: rgba(255,255,255,0.55); font-size: 0.6rem; flex-shrink: 0; }
-.ps-ch-loading { text-align: center; color: rgba(255,255,255,0.6); font-size: 0.75rem; padding: 6px 0; }
+.ps-badge-type { background: color-mix(in srgb, var(--c-on-primary) 25%, transparent); color: var(--c-on-primary); }
+.ps-badge-sub { background: rgba(0,0,0,0.22); color: color-mix(in srgb, var(--c-on-primary) 90%, transparent); }
+.ps-ch-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--c-on-primary); }
+.ps-ch-id { color: color-mix(in srgb, var(--c-on-primary) 65%, transparent); font-size: 0.65rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80px; }
+.ps-ch-count { white-space: nowrap; color: color-mix(in srgb, var(--c-on-primary) 85%, transparent); flex-shrink: 0; }
+.ps-ch-time { white-space: nowrap; color: color-mix(in srgb, var(--c-on-primary) 55%, transparent); font-size: 0.6rem; flex-shrink: 0; }
+.ps-ch-loading { text-align: center; color: color-mix(in srgb, var(--c-on-primary) 60%, transparent); font-size: 0.75rem; padding: 6px 0; }
 .arrow-row {
     width: min(420px, 100%);
     display: flex;
@@ -497,8 +500,8 @@ body {
 }
 .reaction-btn:active { transform: scale(0.92); }
 .reaction-btn.active {
-    background: #fff7d6;
-    box-shadow: 0 0 0 3px rgba(255,193,7,0.55), var(--c-card-shadow);
+    background: var(--c-warn-soft-bg);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-warning) 55%, transparent), var(--c-card-shadow);
 }
 .reaction-btn.pulse { animation: reaction-pulse 0.28s ease; }
 @keyframes reaction-pulse {
@@ -613,11 +616,11 @@ body {
     text-align: center;
     cursor: pointer;
     transition: all 0.2s;
-    background: #f8f9ff;
+    background: var(--c-surface-sunk);
 }
 .drop-zone:hover, .drop-zone.drag-over {
     border-color: var(--c-success);
-    background: #f0fff0;
+    background: var(--c-success-soft-bg);
 }
 .drop-zone-prompt { color: var(--c-text-light); font-size: 0.85rem; }
 .drop-icon { display: block; font-size: 2rem; margin-bottom: var(--sp-2); }
@@ -635,7 +638,7 @@ body {
 .file-info.has-file { display: block; }
 .upload-btn {
     background: var(--c-success);
-    color: white;
+    color: var(--c-on-success);
     border: none;
     padding: 9px;
     border-radius: var(--r-md);
@@ -645,7 +648,7 @@ body {
     transition: background 0.2s;
 }
 .upload-btn:active:not(:disabled) { background: var(--c-success-dark); }
-.upload-btn:disabled { background: #ccc; cursor: not-allowed; }
+.upload-btn:disabled { background: var(--c-bg-fill-strong); color: var(--c-card-fg-faint); cursor: not-allowed; }
 .show-url-row {
     display: flex;
     gap: var(--sp-2);
@@ -654,18 +657,20 @@ body {
 .show-url-input {
     flex: 1;
     padding: var(--sp-2) 10px;
-    border: 1.5px solid #d0d0d0;
+    border: 1.5px solid var(--c-border);
     border-radius: var(--r-md);
     font-size: 0.82rem;
+    background: var(--c-input-bg);
+    color: var(--c-card-fg);
     outline: none;
     transition: border-color 0.2s;
     min-width: 0;
 }
 .show-url-input:focus { border-color: var(--c-primary); }
-.show-url-input::placeholder { color: #aaa; }
+.show-url-input::placeholder { color: var(--c-card-fg-faint); }
 .show-url-btn {
     background: var(--c-primary);
-    color: white;
+    color: var(--c-on-primary);
     border: none;
     padding: var(--sp-2) var(--sp-4);
     border-radius: var(--r-md);
@@ -676,20 +681,20 @@ body {
     white-space: nowrap;
 }
 .show-url-btn:active:not(:disabled) { background: var(--c-primary-dark); }
-.show-url-btn:disabled { background: #ccc; cursor: not-allowed; }
+.show-url-btn:disabled { background: var(--c-bg-fill-strong); color: var(--c-card-fg-faint); cursor: not-allowed; }
 .upload-progress { display: none; margin-top: 6px; }
 .upload-progress.active { display: block; }
 .progress-fill { background: var(--c-success); }
 .update-banner {
     display: none;
     width: min(420px, 100%);
-    background: linear-gradient(135deg, #00c853 0%, #00e676 100%);
+    background: var(--c-success);
     border-radius: var(--r-md);
     padding: var(--sp-3) var(--sp-4);
-    color: white;
+    color: var(--c-on-success);
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
-    box-shadow: 0 4px 12px rgba(0,200,83,0.3);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--c-success) 35%, transparent);
 }
 .update-banner:active { transform: scale(0.98); }
 .update-banner h4 { margin: 0 0 4px; font-size: 0.95rem; font-weight: 600; }
@@ -806,7 +811,7 @@ body {
     <h4>&#9203; Giphy Rate Limited</h4>
     <p>The Giphy API key hit its limit of 100 requests per hour. Device is now waiting before refreshing Giphy channels.</p>
 </div>
-<div class="cooldown-banner" id="giphy-auth-banner" onclick="window.location.href='/settings'" style="cursor:pointer;background:linear-gradient(135deg,#c62828 0%,#e53935 100%);box-shadow:0 4px 12px rgba(198,40,40,0.3);">
+<div class="cooldown-banner" id="giphy-auth-banner" onclick="window.location.href='/settings'" style="cursor:pointer;background:var(--c-danger);color:var(--c-on-danger);box-shadow:0 4px 12px color-mix(in srgb, var(--c-danger) 35%, transparent);">
     <h4>&#9888; Invalid Giphy API Key</h4>
     <p>Giphy rejected the configured API key (error 401). Giphy channels keep playing cached artwork but won't refresh. Tap here to update the key in Settings.</p>
 </div>
@@ -2287,7 +2292,7 @@ fileInput.addEventListener('change', function(e) {
         var maxSize = isJpegFile(file) ? 256 * 1024 * 1024 : 16 * 1024 * 1024;
         var maxSizeMB = isJpegFile(file) ? '256MiB' : '16MiB';
         if (file.size > maxSize) {
-            fileInfo.innerHTML = '<strong style="color:#f44336">File too large!</strong> Maximum size is ' + maxSizeMB + '.';
+            fileInfo.innerHTML = '<strong style="color:var(--c-danger)">File too large!</strong> Maximum size is ' + maxSizeMB + '.';
             fileInfo.classList.add('has-file');
             uploadBtn.disabled = true;
             fileInput.value = '';

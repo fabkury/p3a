@@ -12,13 +12,14 @@
 <meta name="theme-color" content="#667eea">
 <script src="/static/compat.js"></script>
 <link rel="stylesheet" href="/static/common.css">
+<script src="/static/theme.js"></script>
 <title>p3a - Firmware Update</title>
 <style>
 body { padding: var(--sp-4); gap: 0; }
 .container { width: min(var(--w-content), 100%); }
 h1 {
     text-align: center;
-    color: white;
+    color: var(--c-on-bg);
     font-size: 1.5rem;
     font-weight: 300;
     margin: 0 0 var(--sp-4);
@@ -27,7 +28,7 @@ h1 {
 .dev-badge {
     display: inline-block;
     background: var(--c-warning);
-    color: #000;
+    color: var(--c-on-warning);
     padding: 3px var(--sp-2);
     border-radius: 4px;
     font-size: 0.65rem;
@@ -44,13 +45,13 @@ h1 {
     color: var(--c-text-light);
     margin: 0 0 var(--sp-2);
     padding-bottom: var(--sp-2);
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--c-card-border);
 }
 .version-row {
     display: flex;
     justify-content: space-between;
     padding: 10px 0;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--c-card-border);
 }
 .version-row:last-child { border-bottom: none; }
 .version-label { color: var(--c-text-light); font-size: 0.9rem; }
@@ -69,26 +70,26 @@ button {
 }
 .btn-primary {
     background: var(--c-gradient);
-    color: white;
-    box-shadow: 0 4px 12px rgba(102,126,234,0.4);
+    color: var(--c-on-primary);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--c-primary) 40%, transparent);
 }
 .btn-primary:active { transform: scale(0.97); }
 .btn-primary:disabled {
-    background: #ccc;
+    background: var(--c-bg-fill-strong);
     color: var(--c-text-lighter);
     cursor: not-allowed;
     box-shadow: none;
 }
 .btn-danger {
     background: var(--c-danger);
-    color: white;
-    box-shadow: 0 4px 12px rgba(239,68,68,0.3);
+    color: var(--c-on-danger);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--c-danger) 30%, transparent);
 }
 .btn-danger:active { transform: scale(0.97); }
 .btn-secondary {
-    background: rgba(255,255,255,0.2);
-    color: white;
-    border: 1px solid rgba(255,255,255,0.5);
+    background: var(--c-bg-fill-strong);
+    color: var(--c-on-bg);
+    border: 1px solid var(--c-bg-fill-border);
     box-shadow: none;
 }
 .btn-secondary:active { transform: scale(0.97); }
@@ -128,25 +129,25 @@ button {
 }
 .last-checked {
     text-align: center;
-    color: rgba(255,255,255,0.75);
+    color: var(--c-on-bg-muted);
     font-size: 0.75rem;
     margin-top: var(--sp-2);
 }
 .footer-tip {
     text-align: center;
-    color: rgba(255,255,255,0.75);
+    color: var(--c-on-bg-muted);
     font-size: 0.75rem;
     margin-top: var(--sp-4);
     line-height: 1.4;
 }
 .both-updates-banner {
     display: none;
-    background: linear-gradient(135deg, #ef6c00 0%, #ff9800 100%);
-    color: white;
+    background: var(--c-warning);
+    color: var(--c-on-warning);
     border-radius: var(--r-md);
     padding: var(--sp-3) var(--sp-4);
     margin-bottom: var(--sp-3);
-    box-shadow: 0 4px 12px rgba(239,108,0,0.35);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--c-warning) 35%, transparent);
     font-size: 0.88rem;
     line-height: 1.5;
 }
@@ -162,7 +163,7 @@ button {
 .both-updates-banner li { margin-bottom: 4px; }
 .both-updates-banner p { margin: var(--sp-2) 0 0; }
 .both-updates-banner a {
-    color: white;
+    color: var(--c-on-warning);
     text-decoration: underline;
     font-weight: 600;
 }
@@ -285,7 +286,7 @@ function updateUI(data) {
     if (data.state === 'checking') stateText = 'Checking...';
     else if (data.state === 'idle' && !data.available_version) stateText = data.last_check ? 'Up to date' : 'Not yet checked';
     stateEl.textContent = stateText;
-    stateEl.style.color = (data.state === 'idle' && !data.available_version && data.last_check) ? '#4CAF50' : '';
+    stateEl.style.color = (data.state === 'idle' && !data.available_version && data.last_check) ? 'var(--c-success)' : '';
     document.getElementById('dev-badge').style.display = data.dev_mode ? 'inline-block' : 'none';
     var checkBtn = document.getElementById('check-btn');
     var installBtn = document.getElementById('install-btn');
@@ -428,36 +429,36 @@ function updateWebuiUI(data) {
         progressFill.style.width = data.progress + '%';
         progressText.textContent = data.status_message || (data.progress + '%');
         statusEl.textContent = data.status_message || data.state;
-        statusEl.style.color = '#1565c0';
+        statusEl.style.color = 'var(--c-info-soft-fg)';
         statusEl.className = 'version-value';
     } else if (data.state === 'complete') {
         progressEl.style.display = 'block';
         progressFill.style.width = '100%';
         progressText.textContent = 'Update complete!';
         statusEl.textContent = 'Update complete!';
-        statusEl.style.color = '#4CAF50';
+        statusEl.style.color = 'var(--c-success)';
         statusEl.className = 'version-value';
     } else if (data.state === 'error') {
         progressEl.style.display = 'none';
         statusEl.textContent = data.error_message || 'Update failed';
-        statusEl.style.color = '#c62828';
+        statusEl.style.color = 'var(--c-danger)';
         statusEl.className = 'version-value';
     } else if (data.state === 'update_available') {
         progressEl.style.display = 'none';
         statusEl.textContent = 'Update available';
-        statusEl.style.color = '#4CAF50';
+        statusEl.style.color = 'var(--c-success)';
         statusEl.className = 'version-value update-available';
     } else {
         progressEl.style.display = 'none';
         if (!data.partition_valid || data.needs_recovery) {
             statusEl.textContent = 'Recovery needed';
-            statusEl.style.color = '#c62828';
+            statusEl.style.color = 'var(--c-danger)';
         } else if (data.auto_update_disabled) {
             statusEl.textContent = 'Updates disabled (failures: ' + data.failure_count + ')';
-            statusEl.style.color = '#ff9800';
+            statusEl.style.color = 'var(--c-warning)';
         } else {
             statusEl.textContent = fwLastCheck ? 'Up to date' : 'Not yet checked';
-            statusEl.style.color = fwLastCheck ? '#4CAF50' : '';
+            statusEl.style.color = fwLastCheck ? 'var(--c-success)' : '';
         }
         statusEl.className = 'version-value';
     }

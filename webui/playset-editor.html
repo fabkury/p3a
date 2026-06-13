@@ -13,6 +13,7 @@
     <script src="/static/compat.js"></script>
     <title>p3a - Playset Editor</title>
     <link rel="stylesheet" href="/static/common.css">
+    <script src="/static/theme.js"></script>
     <style>
         * {
             margin: 0;
@@ -34,7 +35,7 @@
 
         h1, h2, h3 {
             font-weight: 300;
-            color: white;
+            color: var(--c-on-bg);
             margin-bottom: var(--sp-3);
         }
 
@@ -52,7 +53,7 @@
         }
 
         .card {
-            background: white;
+            background: var(--c-card-bg);
             border-radius: var(--r-lg);
             padding: var(--sp-6);
             box-shadow: var(--c-card-shadow);
@@ -75,12 +76,12 @@
 
         .btn-primary {
             background: var(--c-gradient);
-            color: white;
+            color: var(--c-on-primary);
         }
 
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 12px color-mix(in srgb, var(--c-primary) 40%, transparent);
         }
 
         .btn-primary:disabled {
@@ -91,17 +92,17 @@
         }
 
         .btn-secondary {
-            background: #f0f0f0;
+            background: var(--c-surface-sunk);
             color: var(--c-text);
         }
 
         .btn-secondary:hover {
-            background: #e0e0e0;
+            background: var(--c-card-border);
         }
 
         .btn-danger {
             background: var(--c-danger);
-            color: white;
+            color: var(--c-on-danger);
             padding: var(--sp-2) var(--sp-4);
             font-size: 12px;
             border-radius: var(--r-sm);
@@ -140,7 +141,7 @@
 
         .playset-item {
             padding: var(--sp-4);
-            border: 2px solid #e0e0e0;
+            border: 2px solid var(--c-card-border);
             border-radius: var(--r-md);
             display: flex;
             justify-content: space-between;
@@ -150,18 +151,18 @@
         }
 
         .playset-item:hover {
-            background: #f9f9f9;
+            background: var(--c-surface-sunk);
             border-color: var(--c-primary);
         }
 
         .playset-item.active-playset {
             border-color: var(--c-success);
-            background: #f0fdf4;
+            background: var(--c-surface-sunk);
         }
 
         .playset-item.pending {
             border-color: var(--c-primary);
-            background: rgba(102, 126, 234, 0.1);
+            background: color-mix(in srgb, var(--c-primary) 10%, transparent);
             animation: pe-pending-pulse 1.1s ease-in-out infinite;
             cursor: progress;
         }
@@ -197,7 +198,7 @@
             font-size: 10px;
             font-weight: 600;
             background: var(--c-success);
-            color: white;
+            color: var(--c-on-success);
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
@@ -259,8 +260,8 @@
             margin-top: var(--sp-1);
             padding: var(--sp-2) var(--sp-3);
             font-size: 12px;
-            color: #999;
-            background: #fafafa;
+            color: var(--c-card-fg-faint);
+            background: var(--c-surface-sunk);
             border-radius: var(--r-sm);
             min-height: 24px;
         }
@@ -319,7 +320,7 @@
 
         .radio-option input[type="radio"]:checked + .radio-label {
             border-color: var(--c-primary);
-            background: rgba(102, 126, 234, 0.1);
+            background: color-mix(in srgb, var(--c-primary) 10%, transparent);
             font-weight: 500;
         }
 
@@ -330,7 +331,7 @@
         .mode-description {
             margin-top: var(--sp-2);
             padding: var(--sp-3);
-            background: #f9f9f9;
+            background: var(--c-surface-sunk);
             border-radius: var(--r-sm);
             font-size: 13px;
             color: var(--c-text-light);
@@ -347,7 +348,7 @@
             border: 1px solid var(--c-border);
             border-radius: var(--r-md);
             padding: var(--sp-4);
-            background: #fafafa;
+            background: var(--c-surface-sunk);
             transition: all 0.2s;
         }
 
@@ -357,7 +358,7 @@
 
         .channel-card.drag-over {
             border-color: var(--c-primary);
-            background: rgba(102, 126, 234, 0.05);
+            background: color-mix(in srgb, var(--c-primary) 5%, transparent);
         }
 
         .channel-header {
@@ -374,7 +375,7 @@
             font-size: 12px;
             font-weight: 500;
             background: var(--c-primary);
-            color: white;
+            color: var(--c-on-primary);
         }
 
         .channel-controls {
@@ -465,7 +466,7 @@
         }
 
         .modal {
-            background: white;
+            background: var(--c-card-bg);
             border-radius: var(--r-lg);
             padding: var(--sp-6);
             max-width: 480px;
@@ -502,7 +503,7 @@
         }
 
         .close-btn:hover {
-            background: #f0f0f0;
+            background: var(--c-surface-sunk);
         }
 
         .empty-state {
@@ -572,7 +573,7 @@
         <div id="listView">
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2 style="color: #333; margin: 0;">My Playsets</h2>
+                    <h2 style="color: var(--c-card-fg); margin: 0;">My Playsets</h2>
                     <button class="btn btn-primary btn-small" id="createNewBtn" onclick="showEditor()">+ Create New</button>
                 </div>
                 <div id="playsetList" class="playset-list">
@@ -587,7 +588,7 @@
         <!-- Editor View -->
         <div id="editorView" class="hidden">
             <div class="card">
-                <h2 style="color: #333;">Playset Configuration</h2>
+                <h2 style="color: var(--c-card-fg);">Playset Configuration</h2>
 
                 <form id="playsetForm">
                     <!-- Playset Name -->
@@ -1159,7 +1160,7 @@
             }
 
             if (total === 0) {
-                viz.innerHTML = '<div style="padding: 10px; text-align: center; color: #666;">Add weights to see balance</div>';
+                viz.innerHTML = '<div style="padding: 10px; text-align: center; color: var(--c-card-fg-muted);">Add weights to see balance</div>';
                 return;
             }
 
@@ -1348,7 +1349,7 @@
                     break;
 
                 case 'sdcard':
-                    html += '<div style="padding: 8px; background: #f0f0f0; border-radius: 8px; font-size: 13px; color: #666;">' +
+                    html += '<div style="padding: 8px; background: var(--c-surface-sunk); border-radius: 8px; font-size: 13px; color: var(--c-card-fg-muted);">' +
                         'Plays files from the device SD card' +
                         '</div>';
                     break;

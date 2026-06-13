@@ -6,6 +6,7 @@
     <title>PICO-8 Monitor - p3a</title>
     <link rel="stylesheet" href="/static/common.css">
     <link rel="stylesheet" href="/pico8/pico8.css">
+    <script src="/static/theme.js"></script>
     <style>
     body { justify-content: flex-start; }
     .container {
@@ -21,9 +22,10 @@
         align-items: center;
     }
     .pico8-header h1 {
+        font-family: var(--font-display);
         font-size: clamp(1.4rem, 3vw, 1.8rem);
-        font-weight: 300;
-        color: white;
+        font-weight: 600;
+        color: var(--c-on-bg);
         margin: 0;
     }
     /* Override pico8.css styles that conflict with common.css */
@@ -52,12 +54,12 @@
     .volume-label {
         display: block;
         font-size: 0.75rem;
-        color: var(--c-text-secondary, #999);
+        color: var(--c-card-fg-faint);
         text-align: right;
         margin-top: 2px;
     }
     .canvas-wrapper { border-radius: var(--r-lg); box-shadow: var(--c-card-shadow); min-height: 200px; }
-    .error-message { background: rgba(239,68,68,0.9); border-radius: var(--r-md); }
+    .error-message { background: color-mix(in srgb, var(--c-danger) 90%, transparent); color: var(--c-on-danger); border-radius: var(--r-md); }
     /* Layout: stack on mobile, side-by-side on wide */
     .main-content { display: flex; flex-direction: column; gap: var(--sp-3); }
     @media (min-width: 769px) {

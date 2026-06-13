@@ -255,7 +255,6 @@ p3a/
 │   │   ├── http_api_utils.c             # Utility functions
 │   │   ├── http_api.h
 │   │   ├── http_api_internal.h
-│   │   ├── favicon_data.h               # Embedded favicon
 │   │   ├── pico8_logo_data.h            # Embedded PICO-8 logo
 │   │   ├── surrogate_ui.h               # Fallback UI when LittleFS web UI is missing
 │   │   └── CMakeLists.txt
@@ -344,7 +343,7 @@ p3a/
 │   ├── giphy.html                       # Redirect stub → /settings#giphy
 │   ├── ota.html                         # OTA update page
 │   ├── playset-editor.html              # Playset editor page
-│   ├── favicon.ico
+│   ├── favicon.png                      # Brand-mark favicon (also served at legacy /favicon.ico)
 │   ├── version.txt                      # Generated at configure time
 │   ├── metadata.json                    # Generated at configure time (web UI version + API)
 │   ├── config/

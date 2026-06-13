@@ -8,7 +8,7 @@
  * Contains:
  * - serve_file(): Generic file server with gzip support
  * - Page handlers: GET /, GET /settings, GET /config/network, POST /erase
- * - GET /favicon.ico handler
+ * - GET /favicon.png handler (also served at the legacy /favicon.ico path)
  * - GET /static/... static file serving
  * - Page routing
  * - Handler registration
@@ -209,11 +209,12 @@ esp_err_t h_post_erase(httpd_req_t *req) {
 // ---------- Favicon Handler ----------
 
 /**
- * GET /favicon.ico
- * Serves favicon from LittleFS
+ * GET /favicon.png (also served at the legacy /favicon.ico path)
+ * Serves the favicon PNG from LittleFS. serve_file() derives the Content-Type
+ * from the .png extension, so the bytes go out as image/png (not image/x-icon).
  */
 static esp_err_t h_get_favicon(httpd_req_t *req) {
-    return serve_file(req, "/webui/favicon.ico");
+    return serve_file(req, "/webui/favicon.png");
 }
 
 // ---------- Web App Manifest Handler ----------
@@ -292,7 +293,9 @@ esp_err_t http_api_pages_route_get(httpd_req_t *req) {
         return ESP_ERR_NOT_FOUND;
     }
 
-    if (strcmp(uri, "/favicon.ico") == 0) {
+    // Serve the favicon at its real /favicon.png path, keeping /favicon.ico as
+    // an alias for browsers that auto-request the legacy root favicon.
+    if (strcmp(uri, "/favicon.png") == 0 || strcmp(uri, "/favicon.ico") == 0) {
         return h_get_favicon(req);
     }
     if (strcmp(uri, "/manifest.webmanifest") == 0) {

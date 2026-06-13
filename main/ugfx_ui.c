@@ -763,6 +763,10 @@ static void ugfx_ui_draw_fatal_error(void)
     gCoord screen_w = gdispGetWidth();
     gCoord screen_h = gdispGetHeight();
 
+    // Brand wordmark at the very top so the user knows the p3a firmware is alive
+    gdispFillStringBox(0, 60, screen_w, 50, "p3a",
+                     gdispOpenFont("* DejaVu Sans 32"), GFX_WHITE, GFX_BLACK, gJustifyCenter);
+
     // Title in red, near top
     gdispFillStringBox(0, screen_h / 4 - 20, screen_w, 45, s_fatal_title,
                      gdispOpenFont("* DejaVu Sans 32"), HTML2COLOR(0xFF4444), GFX_BLACK, gJustifyCenter);

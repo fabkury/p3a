@@ -15,6 +15,7 @@
 #include "event_bus.h"
 #include "p3a_current_post.h"
 #include "esp_heap_caps.h"
+#include "esp_random.h"
 
 /**
  * @brief Timer callback for periodic status publishing
@@ -220,7 +221,17 @@ void makapix_mqtt_reconnect_task(void *pvParameters)
     uint32_t delay_ms = start_immediate ? 100 : RECONNECT_DELAY_INITIAL_MS;
 
     while (true) {
-        vTaskDelay(pdMS_TO_TICKS(delay_ms));
+        // Jitter the backoff by ±25% so a fleet that dropped together (e.g. a
+        // Makapix server restart bounces every device at once) doesn't retry
+        // in lockstep and stampede the broker. The delay_ms base stays clean
+        // for the doubling below, so the 15s/30s/60s/120s progression holds;
+        // only the actual sleep is randomized around it.
+        uint32_t sleep_ms = delay_ms;
+        uint32_t jitter = delay_ms / 4;
+        if (jitter > 0) {
+            sleep_ms = delay_ms - jitter + (esp_random() % (2 * jitter + 1));
+        }
+        vTaskDelay(pdMS_TO_TICKS(sleep_ms));
 
         // Check if too many auth failures - registration is likely invalid
         if (makapix_mqtt_get_auth_failure_count() >= MAX_AUTH_FAILURES) {
@@ -261,7 +272,7 @@ void makapix_mqtt_reconnect_task(void *pvParameters)
                 continue;
             }
 
-            ESP_LOGI(MAKAPIX_TAG, "Reconnecting to MQTT (backoff: %lums)...", (unsigned long)delay_ms);
+            ESP_LOGI(MAKAPIX_TAG, "Reconnecting to MQTT (backoff: %lums)...", (unsigned long)sleep_ms);
             makapix_set_state(MAKAPIX_STATE_CONNECTING);
 
             mqtt_certs_t *certs = heap_caps_malloc(sizeof(mqtt_certs_t), MALLOC_CAP_SPIRAM);

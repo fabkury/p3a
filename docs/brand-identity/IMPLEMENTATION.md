@@ -17,22 +17,23 @@ works and how to extend it.
   (Spectrum) and each `html[data-theme="…"]` block overrides the tokens.
 - **Persistence.** `webui/static/theme.js` reads/writes `localStorage["p3a-theme"]`
   (default `spectrum`). It is loaded **synchronously in each page's `<head>`** so the saved
-  theme is applied before first paint (no flash). It also keeps `<meta name="theme-color">`
-  in sync and injects the picker.
+  theme is applied before first paint (no flash) and keeps `<meta name="theme-color">` in sync.
+  It renders no UI — it exposes `window.p3aTheme = { THEMES, get(), set(id) }`.
   > Per-browser today. A future revision may promote this to an NVS device setting — at that
   > point `theme.js` should hydrate the initial value from `/config` and POST changes back,
   > keeping `localStorage` as the offline fallback.
-- **Picker.** A `Theme ▾` `<select>` (`.theme-picker` / `.theme-select`, styled in common.css)
-  injected just above the bottom nav on every page that loads `theme.js`.
+- **Picker.** A `<select>` in the **Settings → Display tab** ("Theme" section, styled like the
+  other Display sections). It is populated from `window.p3aTheme.THEMES`, and `onchange` calls
+  `window.p3aTheme.set(id)`. (There is no global footer picker.)
 
 ## Files touched
 
 | File | Role |
 |------|------|
 | `webui/static/common.css` | Token vocabulary + 4 theme blocks + per-theme signature rules (pixel grid, console glow, dither dot-screen, wordmark voice) + picker styling |
-| `webui/static/theme.js` | **New.** Pre-paint apply, persistence, picker injection |
-| `webui/index.html` | Hardcoded colours → tokens; `theme.js` in head |
-| `webui/settings.html`, `playset-editor.html`, `ota.html`, `pico8/index.html` | Same |
+| `webui/static/theme.js` | **New.** Pre-paint apply, persistence, `window.p3aTheme` API (no UI) |
+| `webui/settings.html` | Hardcoded colours → tokens; `theme.js` in head; **Theme** picker section in the Display tab |
+| `webui/index.html`, `playset-editor.html`, `ota.html`, `pico8/index.html` | Hardcoded colours → tokens; `theme.js` in head |
 | `webui/museum/browse.js` | Injected museum-browse modal retargeted to card tokens |
 | `CMakeLists.txt` | `WEBUI_VERSION` 2.11 → 2.12 |
 

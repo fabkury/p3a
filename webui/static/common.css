@@ -791,42 +791,6 @@ body.has-bottom-nav {
     padding-bottom: 68px;
 }
 
-/* ── Theme Picker (injected by /static/theme.js, sits above the bottom nav) ── */
-
-.theme-picker {
-    width: min(var(--w-content), 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--sp-2);
-    padding: var(--sp-3) 0 var(--sp-1);
-    color: var(--c-on-bg-muted);
-    font-size: 0.78rem;
-}
-.theme-picker label {
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-weight: 600;
-}
-.theme-select {
-    background: var(--c-bg-fill);
-    color: var(--c-on-bg);
-    border: 1px solid var(--c-bg-fill-border);
-    border-radius: var(--r-md);
-    padding: 6px 12px;
-    font-family: var(--font);
-    font-size: 0.82rem;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-}
-.theme-select:focus {
-    outline: none;
-    border-color: var(--c-primary);
-    box-shadow: var(--focus-ring);
-}
-/* Native option lists are OS-rendered; force a legible pairing on dark themes. */
-.theme-select option { background: var(--c-card-bg); color: var(--c-card-fg); }
-
 /* ── Tab Bar ── */
 
 .tab-bar {

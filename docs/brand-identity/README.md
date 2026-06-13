@@ -1,9 +1,9 @@
 # p3a — Brand & Visual Identity
 
-*Created 2026-06-13. The four directions below began as proposals; **all four now ship as live,
-switchable themes** in the web UI (webui 2.12) with a `Theme ▾` picker at the bottom of every
-page. See [`IMPLEMENTATION.md`](IMPLEMENTATION.md) for how the system is built and extended. The
-proposal docs are kept as the design rationale behind each theme.*
+*Created 2026-06-13. The directions below began as proposals; **all now ship as live, switchable
+themes** in the web UI, selectable from **Settings → Display → Theme**. See
+[`IMPLEMENTATION.md`](IMPLEMENTATION.md) for how the system is built and extended. The proposal
+docs are kept as the design rationale behind each theme.*
 
 ## The brief, distilled
 

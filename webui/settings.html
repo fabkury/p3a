@@ -168,6 +168,16 @@
 <!-- Display Tab -->
 <div class="tab-content active" id="tab-display">
     <div class="section">
+        <h3>Theme</h3>
+        <div class="toggle-row" style="flex-wrap:wrap;gap:8px;">
+            <label class="toggle-label" for="theme-select">Color theme</label>
+            <select id="theme-select" onchange="saveTheme(this.value)"
+                style="padding:8px 10px;border-radius:8px;border:1px solid var(--c-card-border);font-size:0.9rem;background:var(--c-input-bg);color:var(--c-card-fg);min-width:180px;">
+            </select>
+        </div>
+        <div class="setting-hint">Sets the look of this web interface. The choice is saved in this browser.</div>
+    </div>
+    <div class="section">
         <h3>Brightness</h3>
         <div class="brightness-row">
             <input type="range" id="brightness-slider" min="0" max="100" value="100" oninput="updateBrightnessLabel()">
@@ -621,6 +631,28 @@ function clamp255(x) {
 }
 
 // ── Display tab ──
+// Theme is a per-browser choice handled by /static/theme.js (window.p3aTheme).
+function initThemeSetting() {
+    var sel = document.getElementById('theme-select');
+    if (!sel || !window.p3aTheme) return;
+    sel.innerHTML = '';
+    var themes = window.p3aTheme.THEMES;
+    var current = window.p3aTheme.get();
+    for (var i = 0; i < themes.length; i++) {
+        var o = document.createElement('option');
+        o.value = themes[i].id;
+        o.textContent = themes[i].name;
+        if (themes[i].id === current) o.selected = true;
+        sel.appendChild(o);
+    }
+}
+function saveTheme(id) {
+    if (!window.p3aTheme || !window.p3aTheme.set(id)) return;
+    var name = id, themes = window.p3aTheme.THEMES;
+    for (var i = 0; i < themes.length; i++) if (themes[i].id === id) name = themes[i].name;
+    showToast('Theme: ' + name, false);
+}
+
 function updateBrightnessLabel() {
     document.getElementById('brightness-value').textContent = document.getElementById('brightness-slider').value + '%';
 }
@@ -1397,6 +1429,7 @@ xhr.send();
 loadStatus();
 loadOtaStatus();
 loadIntroAnimSettings();
+initThemeSetting();
 </script>
 </body>
 </html>

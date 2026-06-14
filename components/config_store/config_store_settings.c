@@ -937,7 +937,7 @@ uint8_t config_store_get_channel_select_mode(void)
     cJSON *cfg = NULL;
     esp_err_t err = config_store_load(&cfg);
     if (err != ESP_OK) {
-        return 0;  // Default: SWRR
+        return 1;  // Default: Stochastic (same as the key-absent path below)
     }
 
     uint8_t mode = 1;  // Default: Stochastic

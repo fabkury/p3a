@@ -84,9 +84,6 @@ typedef struct {
 #define CHANNEL_CACHE_MAGIC     0x50334143
 #define CHANNEL_CACHE_VERSION   25  // Bumped: invalidate all caches for rebuild
 
-// Default maximum entries per channel (configurable via config_store)
-#define CHANNEL_CACHE_DEFAULT_MAX_ENTRIES 2048
-
 // Absolute upper bound used at load time to detect a corrupted .cache file
 // (bit-flipped count, malformed header, etc.) — independent of the user's
 // channel_cache_size setting. Must match the UI maximum so a legitimately

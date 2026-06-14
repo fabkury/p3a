@@ -43,11 +43,45 @@ static const uint8_t s_font_5x7[11][7] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 };
 
-// Draw a single pixel at (x, y) with color (r, g, b)
-static inline void fps_draw_pixel(uint8_t *buffer, int x, int y, uint8_t r, uint8_t g, uint8_t b)
+// Affine map from logical (user-oriented) coordinates to physical buffer
+// coordinates: px = base_px + cx_lx*lx + cx_ly*ly, py = base_py + cy_lx*lx +
+// cy_ly*ly. Computed once per overlay from the current rotation (see
+// fps_rot_xform) so the per-pixel path is a couple of multiply-adds rather than
+// a switch.
+typedef struct {
+    int base_px, cx_lx, cx_ly;
+    int base_py, cy_lx, cy_ly;
+} fps_rot_xform_t;
+
+// Build the logical->physical transform for the current whole-screen rotation.
+// The overlay is composited directly into the physical back buffer, which the
+// render pipeline has already rotated; applying the same rotation here keeps the
+// counter at the user's top-right corner, correctly oriented. This matches the
+// convention used by the pin/reaction overlays (see display_pin_overlay.c). The
+// panel is square (EXAMPLE_LCD_H_RES == EXAMPLE_LCD_V_RES), so a single
+// dimension n suffices.
+static fps_rot_xform_t fps_rot_xform(display_rotation_t rotation, int n)
 {
-    if (x < 0 || x >= EXAMPLE_LCD_H_RES || y < 0 || y >= EXAMPLE_LCD_V_RES) return;
-    
+    switch (rotation) {
+        default:
+        case DISPLAY_ROTATION_0:   return (fps_rot_xform_t){ 0,     1,  0,   0,     0,  1 };
+        case DISPLAY_ROTATION_90:  return (fps_rot_xform_t){ n - 1, 0, -1,   0,     1,  0 };
+        case DISPLAY_ROTATION_180: return (fps_rot_xform_t){ n - 1, -1, 0,   n - 1, 0, -1 };
+        case DISPLAY_ROTATION_270: return (fps_rot_xform_t){ 0,     0,  1,   n - 1, -1, 0 };
+    }
+}
+
+// Draw a single pixel at logical (user-oriented) coordinate (lx, ly) with color
+// (r, g, b), mapped to physical buffer space through the precomputed transform.
+static inline void fps_draw_pixel(uint8_t *buffer, const fps_rot_xform_t *t,
+                                  int lx, int ly, uint8_t r, uint8_t g, uint8_t b)
+{
+    const int N = EXAMPLE_LCD_H_RES;
+    if (lx < 0 || lx >= N || ly < 0 || ly >= N) return;
+
+    int x = t->base_px + t->cx_lx * lx + t->cx_ly * ly;
+    int y = t->base_py + t->cy_lx * lx + t->cy_ly * ly;
+
 #if CONFIG_LCD_PIXEL_FORMAT_RGB565
     uint16_t *row = (uint16_t *)(buffer + (size_t)y * g_display_row_stride);
     row[x] = rgb565(r, g, b);
@@ -60,13 +94,14 @@ static inline void fps_draw_pixel(uint8_t *buffer, int x, int y, uint8_t r, uint
 #endif
 }
 
-// Draw a character at position (x, y) with given colors, scale factor
-static void fps_draw_char(uint8_t *buffer, int x, int y, int ch_idx, int scale,
+// Draw a character at logical position (x, y) with given colors, scale factor
+static void fps_draw_char(uint8_t *buffer, const fps_rot_xform_t *t,
+                          int x, int y, int ch_idx, int scale,
                           uint8_t fg_r, uint8_t fg_g, uint8_t fg_b,
                           uint8_t bg_r, uint8_t bg_g, uint8_t bg_b)
 {
     if (ch_idx < 0 || ch_idx > 10) return;
-    
+
     for (int row = 0; row < 7; row++) {
         uint8_t bits = s_font_5x7[ch_idx][row];
         for (int col = 0; col < 5; col++) {
@@ -74,11 +109,11 @@ static void fps_draw_char(uint8_t *buffer, int x, int y, int ch_idx, int scale,
             uint8_t r = pixel_on ? fg_r : bg_r;
             uint8_t g = pixel_on ? fg_g : bg_g;
             uint8_t b = pixel_on ? fg_b : bg_b;
-            
+
             // Draw scaled pixel
             for (int sy = 0; sy < scale; sy++) {
                 for (int sx = 0; sx < scale; sx++) {
-                    fps_draw_pixel(buffer, x + col * scale + sx, y + row * scale + sy, r, g, b);
+                    fps_draw_pixel(buffer, t, x + col * scale + sx, y + row * scale + sy, r, g, b);
                 }
             }
         }
@@ -97,33 +132,37 @@ static void fps_draw_overlay(uint8_t *buffer, uint32_t fps)
     const int char_w = 5 * scale + scale;  // Character width + spacing
     const int char_h = 7 * scale;
     const int padding = 6;
-    
-    // Position at top-right
+
+    // Precompute the logical->physical rotation transform once for the whole
+    // overlay; all positions below are in logical (user-oriented) space.
+    const fps_rot_xform_t xform = fps_rot_xform(g_screen_rotation, EXAMPLE_LCD_H_RES);
+
+    // Position at the user's top-right
     int total_width = len * char_w - scale;  // Remove trailing space
     int x = EXAMPLE_LCD_H_RES - total_width - padding;
     int y = padding;
-    
+
     // Draw background rectangle (semi-transparent effect via darker bg)
     int bg_x = x - 4;
     int bg_y = y - 2;
     int bg_w = total_width + 8;
     int bg_h = char_h + 4;
-    
+
     for (int by = bg_y; by < bg_y + bg_h && by < EXAMPLE_LCD_V_RES; by++) {
         for (int bx = bg_x; bx < bg_x + bg_w && bx < EXAMPLE_LCD_H_RES; bx++) {
             if (bx >= 0 && by >= 0) {
-                fps_draw_pixel(buffer, bx, by, 0, 0, 0);
+                fps_draw_pixel(buffer, &xform, bx, by, 0, 0, 0);
             }
         }
     }
-    
+
     // Draw each digit
     for (int i = 0; i < len; i++) {
         int ch_idx = 10;  // space by default
         if (fps_str[i] >= '0' && fps_str[i] <= '9') {
             ch_idx = fps_str[i] - '0';
         }
-        fps_draw_char(buffer, x + i * char_w, y, ch_idx, scale,
+        fps_draw_char(buffer, &xform, x + i * char_w, y, ch_idx, scale,
                       255, 255, 255,  // White foreground
                       0, 0, 0);       // Black background
     }

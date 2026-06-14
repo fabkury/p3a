@@ -347,11 +347,9 @@ esp_err_t h_get_status(httpd_req_t *req) {
         cJSON_AddStringToObject(fw, "idf", IDF_VER);
         const esp_app_desc_t *app_desc = esp_app_get_description();
         if (app_desc) {
-            // app_desc->date/time are stamped at firmware link time
-            // (e.g. "Jun 14 2026" / "15:51:12").
-            char build_dt[40];
-            snprintf(build_dt, sizeof(build_dt), "%s %s", app_desc->date, app_desc->time);
-            cJSON_AddStringToObject(fw, "build", build_dt);
+            // app_desc->date is stamped at firmware link time
+            // (e.g. "Jun 14 2026").
+            cJSON_AddStringToObject(fw, "build", app_desc->date);
         }
         cJSON_AddItemToObject(data, "fw", fw);
     }

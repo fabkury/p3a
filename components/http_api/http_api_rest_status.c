@@ -20,6 +20,7 @@
 #include "storage_eviction.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
+#include "esp_app_desc.h"
 #include "esp_wifi.h"
 #include "esp_wifi_remote.h"
 #include "esp_netif.h"
@@ -344,6 +345,14 @@ esp_err_t h_get_status(httpd_req_t *req) {
     if (fw) {
         cJSON_AddStringToObject(fw, "version", FW_VERSION);
         cJSON_AddStringToObject(fw, "idf", IDF_VER);
+        const esp_app_desc_t *app_desc = esp_app_get_description();
+        if (app_desc) {
+            // app_desc->date/time are stamped at firmware link time
+            // (e.g. "Jun 14 2026" / "15:51:12").
+            char build_dt[40];
+            snprintf(build_dt, sizeof(build_dt), "%s %s", app_desc->date, app_desc->time);
+            cJSON_AddStringToObject(fw, "build", build_dt);
+        }
         cJSON_AddItemToObject(data, "fw", fw);
     }
 

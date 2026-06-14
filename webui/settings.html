@@ -530,6 +530,10 @@
             <span class="info-value" id="sys-idf-ver">Loading...</span>
         </div>
         <div class="info-row">
+            <span class="info-label">Build date</span>
+            <span class="info-value" id="sys-build-date">Loading...</span>
+        </div>
+        <div class="info-row">
             <span class="info-label">Uptime</span>
             <span class="info-value" id="sys-uptime">Loading...</span>
         </div>
@@ -551,6 +555,17 @@
     <div class="section">
         <h3>Actions</h3>
         <button class="btn danger-btn" id="reboot-btn" onclick="reboot()">Reboot</button>
+    </div>
+    <div class="section">
+        <h3>About p3a</h3>
+        <div class="info-row">
+            <span class="info-label">Author</span>
+            <span class="info-value">Fabr&iacute;cio Kury</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Homepage</span>
+            <span class="info-value"><a href="https://github.com/fabkury/p3a" target="_blank" rel="noopener">github.com/fabkury/p3a</a></span>
+        </div>
     </div>
 </div>
 
@@ -1276,6 +1291,8 @@ function loadStatus() {
         document.getElementById('sys-uptime').textContent = formatUptime(data.uptime_ms);
         if (data.fw && data.fw.idf)
             document.getElementById('sys-idf-ver').textContent = data.fw.idf;
+        if (data.fw && data.fw.build)
+            document.getElementById('sys-build-date').textContent = data.fw.build;
 
         // System tab — crash reboots
         var showCrash = false;
@@ -1352,6 +1369,7 @@ function loadStatus() {
         document.getElementById('net-status-badge').className = 'status-badge status-disconnected';
         document.getElementById('sys-uptime').textContent = '-';
         document.getElementById('sys-idf-ver').textContent = '-';
+        document.getElementById('sys-build-date').textContent = '-';
     });
 }
 

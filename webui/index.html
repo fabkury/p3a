@@ -819,6 +819,10 @@ body {
     <h4>&#128273; Giphy API Key Needed</h4>
     <p>This playset has Giphy channels but no API key is configured, so they can't refresh. Tap here to add a free key in Settings.</p>
 </div>
+<div class="cooldown-banner" id="makapix-reg-banner" onclick="window.location.href='/settings#makapix'" style="cursor:pointer;background:var(--c-danger);color:var(--c-on-danger);box-shadow:0 4px 12px color-mix(in srgb, var(--c-danger) 35%, transparent);">
+    <h4>&#128081; Makapix Registration Needed</h4>
+    <p>This playset has Makapix Club channels that need a linked account, so they show no artwork. Tap here to register this device in Settings &rarr; Makapix.</p>
+</div>
 <nav class="bottom-nav">
 <a href="/" class="bottom-nav-item active"><span class="bottom-nav-icon">&#8962;</span><span class="bottom-nav-label">Home</span></a>
 <a href="/playset-editor" class="bottom-nav-item"><span class="bottom-nav-icon">&#9776;</span><span class="bottom-nav-label">Playsets</span></a>
@@ -2708,6 +2712,13 @@ function pollActivePlayset(attempt) {
                 authBanner.style.display = (resp.data.giphy_auth_invalid === true) ? 'block' : 'none';
                 var nokeyBanner = document.getElementById('giphy-nokey-banner');
                 nokeyBanner.style.display = (resp.data.giphy_no_key === true) ? 'block' : 'none';
+                // Makapix registration banner: the active playset has non-open
+                // Makapix channels but the device has no usable registration, so
+                // they stay empty. Like the giphy auth/no-key banners, it's a
+                // structural problem, not transient — toggle unconditionally on
+                // the backend flag.
+                var mkxRegBanner = document.getElementById('makapix-reg-banner');
+                mkxRegBanner.style.display = (resp.data.makapix_registration_required === true) ? 'block' : 'none';
                 if (!switching && resp.data.active_playset && resp.data.playset_info) {
                     var pollPillId = pillIdFromActivePlayset(resp.data.active_playset);
                     updateNowPlaying(pollPillId,

@@ -666,6 +666,23 @@ esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats);
 esp_err_t play_scheduler_get_active_playset(ps_playset_t *out_playset);
 
 /**
+ * @brief Whether the given playset has channels the device can't play unregistered
+ *
+ * Returns true when the playset contains at least one non-open Makapix channel
+ * (anything but the open "promoted" named channel, plus user/hashtag/reactions)
+ * AND the device currently has no usable Makapix registration — i.e. Makapix is
+ * in MAKAPIX_STATE_IDLE (never registered) or MAKAPIX_STATE_REGISTRATION_INVALID
+ * (credentials rejected). In those states the refresh dispatcher permanently
+ * gives up on those channels, leaving them empty; the web UI uses this to show a
+ * "registration needed" banner. Pure read of Makapix state + the passed playset;
+ * does not take the scheduler mutex.
+ *
+ * @param playset Playset to inspect (NULL returns false).
+ * @return true if a registration-needed banner should be shown for this playset.
+ */
+bool play_scheduler_playset_needs_registration(const ps_playset_t *playset);
+
+/**
  * @brief Copy the active single-artwork title into a caller buffer.
  *
  * Returns the title attached to the active playset when it's a single

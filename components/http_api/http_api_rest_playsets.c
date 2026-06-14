@@ -420,6 +420,12 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
                        play_scheduler_get_active_playset(active) == ESP_OK);
 
     bool registered = makapix_store_has_player_key();
+    // The active playset has non-open Makapix channels but the device has no
+    // usable registration, so those channels can never refresh. Computed from
+    // the already-loaded `active` (guarded by has_active, false during a switch,
+    // matching the other scheduler-derived fields). Drives the home-page banner.
+    bool makapix_reg_required = has_active &&
+        play_scheduler_playset_needs_registration(active);
     bool cooldown_active = giphy_is_rate_limited();
     uint32_t giphy_cd_sec = cooldown_active ? giphy_cooldown_remaining_sec() : 0;
     bool giphy_auth_bad = giphy_is_auth_invalid();
@@ -477,6 +483,9 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     // the whole optimisation: it changes on every single poll.
     uint32_t h = 0x811c9dc5u;
     h = fnv_u8(h, registered ? 1 : 0);
+    // Boolean, so 304-friendly (flips only when registration state or the active
+    // playset's channel mix changes), same rationale as the giphy flags below.
+    h = fnv_u8(h, makapix_reg_required ? 1 : 0);
     h = fnv_u8(h, cooldown_active ? 1 : 0);
     // Auth-invalid latch and no-key flag are already booleans — they flip
     // once per episode, so they're 304-friendly by nature (same rationale
@@ -573,6 +582,14 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     }
 
     cJSON_AddBoolToObject(data, "registered", registered);
+
+    // The active playset has non-open Makapix channels but the device isn't
+    // registered (or its credentials were rejected), so those channels stay
+    // empty and never refresh. Drives the home-page "registration needed" banner
+    // pointing the user at Settings → Makapix. Same banner mechanism as the
+    // giphy flags below.
+    cJSON_AddBoolToObject(data, "makapix_registration_required", makapix_reg_required);
+
     cJSON_AddNumberToObject(data, "giphy_cooldown_remaining_sec", (double)giphy_cd_sec);
 
     // Giphy rejected the configured API key (HTTP 401/403); refreshes are

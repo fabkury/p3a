@@ -421,7 +421,9 @@ static bool refresh_channel_is_eligible(ps_channel_state_t *ch, bool mqtt_ready)
         return true;
     }
 
-    // For Makapix channels, only proceed if MQTT is connected
+    // For Makapix channels, only proceed if MQTT is connected. By elimination,
+    // every type that reaches here is a non-open Makapix channel — the same set
+    // channel_requires_makapix() classifies as needing registration.
     if (ch->type != PS_CHANNEL_TYPE_SDCARD && !mqtt_ready) {
         // If Makapix is permanently unavailable (no registration or invalid
         // credentials), clear refresh_pending so the channel doesn't stay
@@ -437,6 +439,51 @@ static bool refresh_channel_is_eligible(ps_channel_state_t *ch, bool mqtt_ready)
     }
 
     return true;
+}
+
+// True iff this channel can only be refreshed through a registered Makapix
+// MQTT connection (i.e. NOT openable without registration). This is the
+// classification mirror of the per-type handling in
+// refresh_channel_is_eligible() above: every type that returns early there
+// before the Makapix MQTT gate (line ~425) is "open". Enumerated explicitly
+// (no default:true) so a future channel type can't false-trigger the banner.
+static bool channel_requires_makapix(ps_channel_type_t type, const char *name)
+{
+    switch (type) {
+        case PS_CHANNEL_TYPE_NAMED:
+            return strcmp(name, "promoted") != 0;  // promoted is open via HTTPS
+        case PS_CHANNEL_TYPE_USER:
+        case PS_CHANNEL_TYPE_HASHTAG:
+        case PS_CHANNEL_TYPE_REACTIONS:
+            return true;   // Makapix-sourced, need a registered MQTT connection
+        case PS_CHANNEL_TYPE_SDCARD:       // local files
+        case PS_CHANNEL_TYPE_ARTWORK:      // direct download, no MQTT
+        case PS_CHANNEL_TYPE_GIPHY:        // Giphy
+        case PS_CHANNEL_TYPE_INSTITUTION:  // museums over IIIF
+        case PS_CHANNEL_TYPE_PINNED:       // loaded from local NVS, no remote source
+        default:
+            return false;
+    }
+}
+
+bool play_scheduler_playset_needs_registration(const ps_playset_t *playset)
+{
+    if (!playset) return false;
+    // Only the two "permanently unavailable" states the refresh dispatcher
+    // itself acts on (refresh_channel_is_eligible, lines ~429-431) mean these
+    // channels can never refresh. Transient CONNECTING/DISCONNECTED states are
+    // recoverable, so they raise no banner.
+    makapix_state_t st = makapix_get_state();
+    if (st != MAKAPIX_STATE_IDLE && st != MAKAPIX_STATE_REGISTRATION_INVALID) {
+        return false;
+    }
+    for (size_t i = 0; i < playset->channel_count; i++) {
+        if (channel_requires_makapix(playset->channels[i].type,
+                                     playset->channels[i].name)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**

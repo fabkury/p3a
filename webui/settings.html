@@ -381,7 +381,7 @@
         </div>
         <div class="setting-row">
             <label class="setting-label" for="giphy-cache-size">Cache Size</label>
-            <input class="setting-input" id="giphy-cache-size" type="number" min="32" max="500" step="1" value="400">
+            <input class="setting-input" id="giphy-cache-size" type="number" min="32" max="500" step="1" value="350">
         </div>
         <div class="setting-hint">Refresh interval controls how often Giphy channels fetch new content. Cache size sets the max number of items kept per channel (32-500). Giphy beta (non-production) keys are limited to 500 items per query.</div>
     </div>
@@ -935,7 +935,7 @@ function loadGiphySettings(cfg) {
     var refreshVal = String(cfg.giphy_refresh_interval || 3600);
     refreshSel.value = refreshVal;
     if (!refreshSel.value) refreshSel.value = '3600';
-    document.getElementById('giphy-cache-size').value = cfg.giphy_cache_size || 400;
+    document.getElementById('giphy-cache-size').value = cfg.giphy_cache_size || 350;
     var ridSpan = document.getElementById('random-id-value');
     var ridSection = document.getElementById('random-id-section');
     if (cfg.giphy_random_id) {
@@ -955,7 +955,7 @@ function saveGiphyAll() {
     var rating = document.getElementById('giphy-rating').value;
     var cc = document.getElementById('giphy-country').value.trim().toUpperCase();
     if (cc && cc.length !== 2) { showToast('Country code must be 2 letters', true); btn.disabled = false; return; }
-    var cacheSize = parseInt(document.getElementById('giphy-cache-size').value, 10) || 400;
+    var cacheSize = parseInt(document.getElementById('giphy-cache-size').value, 10) || 350;
     if (cacheSize < 32) cacheSize = 32;
     if (cacheSize > 500) cacheSize = 500;
     var partial = {

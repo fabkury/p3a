@@ -283,10 +283,9 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
         return ESP_ERR_NOT_FOUND;
     }
 
-    // Determine cache size from config
+    // Determine cache size from config. The getter already clamps to the valid
+    // range (GIPHY_CACHE_SIZE_MIN..MAX = 32..500), so no extra bounds check here.
     uint32_t cache_size = config_store_get_giphy_cache_size();
-    if (cache_size == 0) cache_size = 256;
-    if (cache_size > 4096) cache_size = 4096;
 
     // Read API config into fetch context
     giphy_fetch_ctx_t ctx = {0};

@@ -24,6 +24,17 @@
 
 // ---------- Config Handlers ----------
 
+// Ensure a numeric field the web UI reads is present in the GET /config payload
+// with its effective value even on a never-configured device, where the stored
+// JSON omits it until the user first saves. Skips keys already present so we
+// never emit a duplicate.
+static void config_ensure_num(cJSON *data, const char *key, double value)
+{
+    if (!cJSON_HasObjectItem(data, key)) {
+        cJSON_AddNumberToObject(data, key, value);
+    }
+}
+
 /**
  * GET /config
  * Returns current configuration as JSON object
@@ -54,6 +65,17 @@ esp_err_t h_get_config(httpd_req_t *req) {
     cJSON_AddBoolToObject(data, "refresh_allow_override",
                           config_store_get_refresh_allow_override());
     cJSON_AddNumberToObject(data, "brightness", (double)app_lcd_get_brightness());
+
+    // Backfill firmware-backed fields the stored JSON omits until the user first saves
+    // them: on a never-configured device these keys are absent, and without this the web
+    // UI falls back to its own hardcoded defaults and can silently drift from the
+    // firmware (as giphy_cache_size did). The getters return the real effective value.
+    config_ensure_num(data, "giphy_cache_size",
+                      (double)config_store_get_giphy_cache_size());
+    config_ensure_num(data, "giphy_refresh_interval",
+                      (double)config_store_get_giphy_refresh_interval());
+    config_ensure_num(data, "channel_cache_size",
+                      (double)config_store_get_channel_cache_size());
 
     free(json);
     send_json_root(req, 200, root);

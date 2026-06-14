@@ -176,7 +176,7 @@ void config_store_invalidate_giphy_random_id(void)
 // Giphy Cache Size (persisted, cached)
 // ============================================================================
 
-#define GIPHY_CACHE_SIZE_DEFAULT 192
+#define GIPHY_CACHE_SIZE_DEFAULT 350
 #define GIPHY_CACHE_SIZE_MIN     32
 #define GIPHY_CACHE_SIZE_MAX     500
 

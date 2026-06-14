@@ -435,12 +435,12 @@ void config_store_invalidate_giphy_random_id(void);
 /**
  * @brief Set Giphy cache size (max entries per channel)
  *
- * @param size Cache size (32-500, default 400)
+ * @param size Cache size (32-500, default 350)
  */
 esp_err_t config_store_set_giphy_cache_size(uint32_t size);
 
 /**
- * @brief Get Giphy cache size (defaults to 400)
+ * @brief Get Giphy cache size (defaults to 350)
  */
 uint32_t config_store_get_giphy_cache_size(void);
 

@@ -811,11 +811,11 @@ body {
     <h4>&#9203; Giphy Rate Limited</h4>
     <p>The Giphy API key hit its limit of 100 requests per hour. Device is now waiting before refreshing Giphy channels.</p>
 </div>
-<div class="cooldown-banner" id="giphy-auth-banner" onclick="window.location.href='/settings'" style="cursor:pointer;background:var(--c-danger);color:var(--c-on-danger);box-shadow:0 4px 12px color-mix(in srgb, var(--c-danger) 35%, transparent);">
+<div class="cooldown-banner" id="giphy-auth-banner" onclick="window.location.href='/settings#giphy'" style="cursor:pointer;background:var(--c-danger);color:var(--c-on-danger);box-shadow:0 4px 12px color-mix(in srgb, var(--c-danger) 35%, transparent);">
     <h4>&#9888; Invalid Giphy API Key</h4>
     <p>Giphy rejected the configured API key (error 401). Giphy channels keep playing cached artwork but won't refresh. Tap here to update the key in Settings.</p>
 </div>
-<div class="cooldown-banner" id="giphy-nokey-banner" onclick="window.location.href='/settings'" style="cursor:pointer;">
+<div class="cooldown-banner" id="giphy-nokey-banner" onclick="window.location.href='/settings#giphy'" style="cursor:pointer;">
     <h4>&#128273; Giphy API Key Needed</h4>
     <p>This playset has Giphy channels but no API key is configured, so they can't refresh. Tap here to add a free key in Settings.</p>
 </div>

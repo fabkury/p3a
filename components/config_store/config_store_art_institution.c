@@ -21,7 +21,7 @@ static const char *TAG = "CFG";
 // ai_refresh_sec — museum-channel refresh interval (seconds)
 // ============================================================================
 
-#define AI_REFRESH_SEC_DEFAULT 172800u  // 2 days (design §8)
+#define AI_REFRESH_SEC_DEFAULT 345600u  // 4 days (design §8)
 #define AI_REFRESH_SEC_MIN     86400u   // 1 d
 #define AI_REFRESH_SEC_MAX     691200u  // 8 d
 

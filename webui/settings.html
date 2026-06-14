@@ -1001,10 +1001,10 @@ function resetRandomId() {
 function loadMuseumSettings(cfg) {
     var refreshSel = document.getElementById('ai-refresh-sec');
     var cacheSel   = document.getElementById('ai-cache-size');
-    var refreshVal = String(cfg.ai_refresh_sec || 172800);
+    var refreshVal = String(cfg.ai_refresh_sec || 345600);
     var cacheVal   = String(cfg.ai_cache_size  || 1024);
     refreshSel.value = refreshVal;
-    if (!refreshSel.value) refreshSel.value = '172800';
+    if (!refreshSel.value) refreshSel.value = '345600';
     cacheSel.value = cacheVal;
     if (!cacheSel.value) cacheSel.value = '1024';
     document.getElementById('ham-api-key').value = cfg.ham_api_key || '';

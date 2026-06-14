@@ -41,7 +41,7 @@ The two museum-channel knobs are stored in NVS and edited from the **Museum** ta
 
 | NVS key | Default | Allowed values | Description |
 |---------|---------|----------------|-------------|
-| `ai_refresh_sec` | `86400` (1 day) | `28800`, `86400`, `172800`, `345600` (8 h / 1 d / 2 d / 4 d) | How often the device re-queries each saved museum channel's listing API |
+| `ai_refresh_sec` | `345600` (4 days) | `86400`, `172800`, `345600`, `691200` (1 d / 2 d / 4 d / 8 d) | How often the device re-queries each saved museum channel's listing API |
 | `ai_cache_size` | `1024` | `32`, `64`, `128`, `256`, `512`, `1024`, `2048`, `4096` | Maximum cache entries per museum channel (FIFO-trimmed by insertion order; subject to the absolute `CHANNEL_CACHE_HARD_CAP` of 4096) |
 
 ---

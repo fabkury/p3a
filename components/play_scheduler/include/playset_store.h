@@ -35,6 +35,14 @@ extern "C" {
 // Maximum playset name length (same as PS_PLAYSET_NAME_MAX in play_scheduler_types.h)
 #define PLAYSET_MAX_NAME_LEN PS_PLAYSET_NAME_MAX
 
+// Maximum number of playsets the system supports. This is a hard cap, not a
+// pagination window: playset_store_list() stops scanning the directory once it
+// has collected this many entries and silently ignores any beyond it (there is
+// no cursor to retrieve the rest). The web UI mirrors this value as
+// MAX_PLAYSETS in webui/playset-editor.html and disables playset creation once
+// this many exist; keep the two in sync.
+#define PLAYSET_MAX_COUNT 32
+
 /**
  * @brief Playset file header (64 bytes)
  */

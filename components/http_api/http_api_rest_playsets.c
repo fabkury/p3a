@@ -685,14 +685,14 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
  */
 esp_err_t h_get_playsets(httpd_req_t *req)
 {
-    playset_list_entry_t *entries = calloc(32, sizeof(playset_list_entry_t));
+    playset_list_entry_t *entries = calloc(PLAYSET_MAX_COUNT, sizeof(playset_list_entry_t));
     if (!entries) {
         send_json_oom(req);
         return ESP_OK;
     }
 
     size_t count = 0;
-    esp_err_t err = playset_store_list(entries, 32, &count);
+    esp_err_t err = playset_store_list(entries, PLAYSET_MAX_COUNT, &count);
     if (err != ESP_OK) {
         free(entries);
         send_json_error(req, 500, "LIST_ERROR", "Failed to list playsets");

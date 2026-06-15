@@ -75,8 +75,10 @@ void ia_voronoi_shatter_render(uint8_t *buffer,
     float v = 1.0f - u;
     float remain = v * v * v;   /* 1 → 0 */
 
-    /* Cell-id map — function-local static, overwritten every call. */
-    static uint8_t cell_id[IA_VS_MAX];
+    /* Cell-id map — shared freeable scratch, overwritten every call; freed
+     * after the boot animation ends so it isn't held for the whole uptime. */
+    uint8_t *cell_id = (uint8_t *)intro_anim_scratch(IA_VS_MAX);
+    if (!cell_id) return;   /* alloc failed: leave the bg-filled frame */
     int W = r.rotated_w;
     int H = r.rotated_h;
     int N = W * H;

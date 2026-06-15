@@ -54,8 +54,10 @@ void ia_checker_tiles_render(uint8_t *buffer,
     int tiles_y = (r.rotated_h + IA_CT_TILE_SRC - 1) / IA_CT_TILE_SRC;
     int N = tiles_x * tiles_y;
 
-    /* Hashes — function-local static, fully overwritten each call. */
-    static uint32_t hashes[IA_CT_MAX_TILES];
+    /* Hashes — shared freeable scratch, fully overwritten each call; freed
+     * after the boot animation ends so it isn't held for the whole uptime. */
+    uint32_t *hashes = (uint32_t *)intro_anim_scratch(sizeof(uint32_t) * IA_CT_MAX_TILES);
+    if (!hashes) return;   /* alloc failed: leave the bg-filled frame */
     if (N > IA_CT_MAX_TILES) N = IA_CT_MAX_TILES;
     for (int i = 0; i < N; i++) {
         int tx = i % tiles_x;

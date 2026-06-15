@@ -52,9 +52,11 @@ void ia_pixel_dissolve_render(uint8_t *buffer,
     intro_anim_rot_init(&r, ctx->rotation);
     const int scale = ctx->logo_scale;
 
-    /* Scratch — function-local static, fully overwritten each call (no
-     * state persists across frames; determinism contract intact). */
-    static uint32_t hashes[IA_PD_MAX_OPAQUE];
+    /* Scratch — shared freeable buffer, fully overwritten each call (no state
+     * persists across frames; determinism contract intact). Freed after the
+     * boot animation ends, so it isn't held for the whole uptime. */
+    uint32_t *hashes = (uint32_t *)intro_anim_scratch(sizeof(uint32_t) * IA_PD_MAX_OPAQUE);
+    if (!hashes) return;   /* alloc failed: leave the bg-filled frame */
     int N = 0;
 
     /* Pass 1: collect a hash per opaque pixel. */

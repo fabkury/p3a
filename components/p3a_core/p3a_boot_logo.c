@@ -36,6 +36,7 @@ static struct {
     bool     initialized;
     bool     started;
     bool     summary_logged;
+    bool     finalized;        /* one-shot end-of-animation teardown done */
     int      anim_idx;
     uint32_t duration_ms;
 
@@ -46,6 +47,9 @@ static struct {
     int64_t  min_render_us;
     int64_t  max_render_us;
 } s_boot_logo = {0};
+
+/* One-shot teardown when the boot-animation window ends (idempotent). */
+static void finalize_once(void);
 
 static int find_animation_by_name(const char *name)
 {
@@ -63,6 +67,7 @@ esp_err_t p3a_boot_logo_init(void)
     s_boot_logo.initialized = true;
     s_boot_logo.started = false;
     s_boot_logo.summary_logged = false;
+    s_boot_logo.finalized = false;
     s_boot_logo.frame_count = 0;
     s_boot_logo.budget_overrun_count = 0;
     s_boot_logo.total_render_us = 0;
@@ -121,7 +126,16 @@ bool p3a_boot_logo_is_active(void)
                        (int64_t)s_boot_logo.duration_ms +
                        (int64_t)P3A_BOOT_LOGO_HOLD_MS;
     int64_t elapsed_us = esp_timer_get_time() - s_boot_logo.start_time_us;
-    return elapsed_us < (total_ms * 1000);
+    if (elapsed_us < (total_ms * 1000)) {
+        return true;
+    }
+    /* Window elapsed. The render caller gates on this function, so this is the
+     * authoritative end-of-boot-animation signal — run the one-shot teardown
+     * here (frees intro-anim scratch; logs timing) rather than relying on
+     * p3a_boot_logo_render() being called once more (it isn't, once we return
+     * false). */
+    finalize_once();
+    return false;
 }
 
 static void log_timing_summary(void)
@@ -143,6 +157,19 @@ static void log_timing_summary(void)
         (unsigned long)s_boot_logo.budget_overrun_count);
 }
 
+static void finalize_once(void)
+{
+    if (s_boot_logo.finalized) {
+        return;
+    }
+    s_boot_logo.finalized = true;
+    log_timing_summary();
+    /* Free the intro-anim scratch now that the boot animation is over, so its
+     * per-frame working buffers (~12 KB internal RAM for the heaviest effects)
+     * aren't held for the entire firmware uptime. */
+    intro_anim_scratch_release();
+}
+
 int p3a_boot_logo_render(uint8_t *buffer, int width, int height, size_t stride)
 {
     if (!buffer) {
@@ -156,7 +183,8 @@ int p3a_boot_logo_render(uint8_t *buffer, int width, int height, size_t stride)
     }
 
     if (!p3a_boot_logo_is_active()) {
-        log_timing_summary();
+        /* is_active() ran finalize_once() on expiry (timing summary + scratch
+         * free); nothing more to do here. */
         return -1;
     }
 

@@ -80,6 +80,20 @@ uint32_t intro_anim_hash3(uint32_t seed, uint32_t a, uint32_t b);
 /* Smoothstep, shared. */
 float intro_anim_smoothstep(float t);
 
+/* Shared frame-local scratch for modules whose working set is too large for
+ * the stack (e.g. a per-pixel hash array). Returns a pointer to at least
+ * `bytes` bytes from a single grow-only buffer; contents are undefined, so the
+ * caller must fully initialize whatever it reads (every module overwrites it
+ * each frame, so determinism holds). Returns NULL only on allocation failure.
+ *
+ * Lifetime: the buffer is allocated lazily on first use and reused across
+ * frames, then freed by intro_anim_scratch_release() — which the manager calls
+ * once the boot animation is over, so this memory is NOT held for the whole
+ * firmware uptime. Not re-entrant: only one animation runs at a time and the
+ * render path is single-threaded. */
+void *intro_anim_scratch(size_t bytes);
+void  intro_anim_scratch_release(void);
+
 #ifdef __cplusplus
 }
 #endif

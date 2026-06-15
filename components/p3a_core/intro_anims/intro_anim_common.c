@@ -3,6 +3,32 @@
 
 #include "intro_anim.h"
 #include "p3a_logo.h"
+#include <stdlib.h>
+
+/* Single grow-only scratch buffer shared by the animation modules. Only one
+ * animation runs per boot, so one buffer suffices; it is freed after the boot
+ * animation ends via intro_anim_scratch_release(). Single-threaded render path,
+ * so no locking. */
+static void  *s_scratch = NULL;
+static size_t s_scratch_bytes = 0;
+
+void *intro_anim_scratch(size_t bytes)
+{
+    if (bytes > s_scratch_bytes) {
+        void *p = realloc(s_scratch, bytes);
+        if (!p) return NULL;          /* old buffer left intact on failure */
+        s_scratch = p;
+        s_scratch_bytes = bytes;
+    }
+    return s_scratch;
+}
+
+void intro_anim_scratch_release(void)
+{
+    free(s_scratch);
+    s_scratch = NULL;
+    s_scratch_bytes = 0;
+}
 
 void intro_anim_fill_bg(uint8_t *buffer, const intro_anim_ctx_t *ctx)
 {

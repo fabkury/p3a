@@ -18,6 +18,7 @@
 #include "http_api_internal.h"
 #include "pin_lists.h"
 #include "storage_eviction.h"
+#include "mem_stats.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
 #include "esp_app_desc.h"
@@ -71,6 +72,55 @@ esp_err_t h_post_debug(httpd_req_t *req)
     return ESP_OK;
 }
 #endif // CONFIG_OTA_DEV_MODE
+
+// ---------- Memory Stats Handler ----------
+
+/**
+ * GET /api/memory[?silent]
+ *
+ * Returns the device's full memory-usage breakdown as JSON, with particular
+ * detail on internal RAM and the INTERNAL|DMA|8BIT (SDIO RX) pool. By default
+ * it ALSO logs the identical breakdown to the device console; pass the "silent"
+ * query flag (e.g. /api/memory?silent or ?silent=1) to suppress the console log
+ * and only return the HTTP body.
+ *
+ * The device additionally logs this same breakdown on its own every 2 minutes
+ * (see memory_report_task in main/p3a_main.c) — the auto path performs no HTTP
+ * interaction.
+ */
+esp_err_t h_get_memory(httpd_req_t *req) {
+    // Lightweight presence check on the query string (mirrors the existing
+    // strstr-based flag parsing elsewhere in http_api). Matches ?silent,
+    // ?silent=1, &silent=true, etc. req->uri is a fixed-size array, never NULL.
+    const bool silent = (strstr(req->uri, "silent") != NULL);
+
+    mem_stats_t st;
+    mem_stats_collect(&st);
+
+    if (!silent) {
+        mem_stats_log(&st, "http");
+    }
+
+    cJSON *data = mem_stats_to_json(&st);
+    if (!data) {
+        send_json_oom(req);
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        cJSON_Delete(data);
+        send_json_oom(req);
+        return ESP_OK;
+    }
+
+    cJSON_AddBoolToObject(root, "ok", true);
+    cJSON_AddBoolToObject(root, "silent", silent);
+    cJSON_AddItemToObject(root, "data", data);
+
+    send_json_root(req, 200, root);
+    return ESP_OK;
+}
 
 // ---------- UI Configuration Handler ----------
 

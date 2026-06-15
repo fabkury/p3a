@@ -47,6 +47,7 @@
 #include "freertos/task.h"
 #include "esp_timer.h"
 #include "cJSON.h"               // cJSON_InitHooks: route JSON parse heap to PSRAM
+#include "mem_stats.h"           // Shared memory snapshot helpers (also used by GET /api/memory)
 
 static const char *TAG = "p3a";
 
@@ -61,9 +62,11 @@ static esp_timer_handle_t s_reg_success_timer = NULL;
 
 #define MAX_DWELL_TIME_SECONDS 100000
 
-#if CONFIG_P3A_MEMORY_REPORTING_ENABLE
-#define MEMORY_REPORT_INTERVAL_SECONDS 8
-#endif
+// Cadence of the always-on automatic memory report. Every interval the device
+// logs a full heap breakdown to the console — behaving exactly as if the HTTP
+// endpoint GET /api/memory had been called, but with no HTTP interaction. Both
+// paths share the mem_stats helpers, so the console output is identical.
+#define MEMORY_REPORT_INTERVAL_SECONDS 120
 
 uint32_t animation_player_get_dwell_time(void)
 {
@@ -149,118 +152,32 @@ static void heap_diag_alloc_failed_hook(size_t size, uint32_t caps, const char *
     esp_rom_printf("*********************************************\n\n");
 }
 
-#if CONFIG_P3A_MEMORY_REPORTING_ENABLE
 /**
- * @brief Memory reporting task that logs memory statistics every 15 seconds
- * 
- * Reports:
- * - Free heap memory (current and minimum since boot)
- * - Memory breakdown by capability (internal RAM, SPIRAM if available, etc.)
- * - Largest free block
- * - Number of FreeRTOS tasks
+ * @brief Always-on periodic memory reporter.
+ *
+ * Every MEMORY_REPORT_INTERVAL_SECONDS this collects a memory snapshot and
+ * logs it to the console — behaving exactly as if GET /api/memory had been
+ * called, but without any HTTP interaction. The on-demand HTTP endpoint and
+ * this task funnel through the same mem_stats helpers, so their output is
+ * identical (the only difference is the "auto" vs "http" header tag).
  */
 static void memory_report_task(void *arg)
 {
     (void)arg;
     const TickType_t delay_ticks = pdMS_TO_TICKS(MEMORY_REPORT_INTERVAL_SECONDS * 1000);
-    
+
     ESP_LOGI(TAG, "Memory reporting task started: will report every %d seconds", MEMORY_REPORT_INTERVAL_SECONDS);
-    
-    // Wait a bit for system to initialize before first report
+
+    // Wait a bit for the system to initialize before the first report.
     vTaskDelay(pdMS_TO_TICKS(2000));
-    
+
     while (true) {
-        // Get overall heap statistics
-        size_t free_heap = esp_get_free_heap_size();
-        size_t min_free_heap = esp_get_minimum_free_heap_size();
-        size_t largest_free_block = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
-        
-        // Get memory breakdown by capability
-        size_t free_internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-        size_t total_internal = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
-        size_t used_internal = total_internal - free_internal;
-        
-        size_t free_spiram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-        size_t total_spiram = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
-        size_t used_spiram = total_spiram - free_spiram;
-        
-        size_t free_dma = heap_caps_get_free_size(MALLOC_CAP_DMA);
-        size_t total_dma = heap_caps_get_total_size(MALLOC_CAP_DMA);
-        size_t used_dma = total_dma - free_dma;
-        
-        size_t free_8bit = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-        size_t total_8bit = heap_caps_get_total_size(MALLOC_CAP_8BIT);
-        size_t used_8bit = total_8bit - free_8bit;
-        
-        // SDIO RX cap mask: the one the esp_hosted assert depends on.
-        size_t free_sdio_rx    = heap_caps_get_free_size(HEAP_DIAG_SDIO_RX_CAPS);
-        size_t largest_sdio_rx = heap_caps_get_largest_free_block(HEAP_DIAG_SDIO_RX_CAPS);
-        size_t total_sdio_rx   = heap_caps_get_total_size(HEAP_DIAG_SDIO_RX_CAPS);
-
-        // Get task count
-        UBaseType_t num_tasks = uxTaskGetNumberOfTasks();
-
-        // Scan-friendly one-liner: this is the value to watch for SDIO RX assert prediction.
-        ESP_LOGI(TAG, "heap[INT+DMA+8BIT] free=%zu largest=%zu / total=%zu  (SDIO RX alloc mask)",
-                 free_sdio_rx, largest_sdio_rx, total_sdio_rx);
-
-        // Log memory report (info level for visibility during debugging)
-        ESP_LOGI(TAG, "=== Memory Status Report ===");
-        ESP_LOGI(TAG, "Overall Heap:");
-        ESP_LOGI(TAG, "  Free: %zu bytes (%.2f KB)", free_heap, free_heap / 1024.0f);
-        ESP_LOGI(TAG, "  Min Free (since boot): %zu bytes (%.2f KB)", min_free_heap, min_free_heap / 1024.0f);
-        ESP_LOGI(TAG, "  Largest Free Block: %zu bytes (%.2f KB)", largest_free_block, largest_free_block / 1024.0f);
-        ESP_LOGI(TAG, "");
-        ESP_LOGI(TAG, "Memory by Type:");
-        ESP_LOGI(TAG, "  Internal RAM:");
-        ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_internal, total_internal / 1024.0f);
-        ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)",
-                 used_internal, used_internal / 1024.0f,
-                 total_internal > 0 ? (100.0f * used_internal / total_internal) : 0.0f);
-        ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)",
-                 free_internal, free_internal / 1024.0f,
-                 total_internal > 0 ? (100.0f * free_internal / total_internal) : 0.0f);
-
-        if (total_spiram > 0) {
-            ESP_LOGI(TAG, "  SPIRAM:");
-            ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_spiram, total_spiram / 1024.0f);
-            ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)",
-                     used_spiram, used_spiram / 1024.0f,
-                     total_spiram > 0 ? (100.0f * used_spiram / total_spiram) : 0.0f);
-            ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)",
-                     free_spiram, free_spiram / 1024.0f,
-                     total_spiram > 0 ? (100.0f * free_spiram / total_spiram) : 0.0f);
-        }
-
-        if (total_dma > 0) {
-            ESP_LOGI(TAG, "  DMA-Capable:");
-            ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_dma, total_dma / 1024.0f);
-            ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)",
-                     used_dma, used_dma / 1024.0f,
-                     total_dma > 0 ? (100.0f * used_dma / total_dma) : 0.0f);
-            ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)",
-                     free_dma, free_dma / 1024.0f,
-                     total_dma > 0 ? (100.0f * free_dma / total_dma) : 0.0f);
-        }
-
-        ESP_LOGI(TAG, "  8-bit Accessible:");
-        ESP_LOGI(TAG, "    Total: %zu bytes (%.2f KB)", total_8bit, total_8bit / 1024.0f);
-        ESP_LOGI(TAG, "    Used: %zu bytes (%.2f KB, %.1f%%)",
-                 used_8bit, used_8bit / 1024.0f,
-                 total_8bit > 0 ? (100.0f * used_8bit / total_8bit) : 0.0f);
-        ESP_LOGI(TAG, "    Free: %zu bytes (%.2f KB, %.1f%%)",
-                 free_8bit, free_8bit / 1024.0f,
-                 total_8bit > 0 ? (100.0f * free_8bit / total_8bit) : 0.0f);
-
-        ESP_LOGI(TAG, "");
-        ESP_LOGI(TAG, "System:");
-        ESP_LOGI(TAG, "  FreeRTOS Tasks: %u", num_tasks);
-        ESP_LOGI(TAG, "============================");
-        
+        mem_stats_t st;
+        mem_stats_collect(&st);
+        mem_stats_log(&st, "auto");
         vTaskDelay(delay_ticks);
     }
 }
-#endif // CONFIG_P3A_MEMORY_REPORTING_ENABLE
 
 static void handle_playback_event(const p3a_event_t *event, void *ctx)
 {
@@ -684,14 +601,14 @@ void app_main(void)
 
     // Phase 7: auto_swap_task removed - timer task now in play_scheduler
 
-#if CONFIG_P3A_MEMORY_REPORTING_ENABLE
-    // Create memory reporting task
-    const BaseType_t mem_task_created = xTaskCreate(memory_report_task, "mem_report", 3072, NULL,
+    // Create the always-on periodic memory reporting task (logs a full heap
+    // breakdown every MEMORY_REPORT_INTERVAL_SECONDS; same data as the on-demand
+    // GET /api/memory endpoint). 4 KB stack covers the %f formatting in mem_stats_log.
+    const BaseType_t mem_task_created = xTaskCreate(memory_report_task, "mem_report", 4096, NULL,
                                                     tskIDLE_PRIORITY + 1, NULL);
     if (mem_task_created != pdPASS) {
         ESP_LOGE(TAG, "Failed to create memory reporting task");
     }
-#endif // CONFIG_P3A_MEMORY_REPORTING_ENABLE
 
     // Initialize Wi-Fi (will start captive portal if needed, or connect to saved network)
     ESP_ERROR_CHECK(connectivity_service_init());

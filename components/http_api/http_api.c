@@ -528,6 +528,10 @@ static esp_err_t h_get_router(httpd_req_t *req) {
     if (strcmp(uri, "/api/storage") == 0) {
         return h_get_storage_info(req);
     }
+    if (strncmp(uri, "/api/memory", 11) == 0 &&
+        (uri[11] == '\0' || uri[11] == '?')) {
+        return h_get_memory(req);
+    }
     if (strcmp(uri, "/api/device-name") == 0) {
         return h_get_device_name(req);
     }

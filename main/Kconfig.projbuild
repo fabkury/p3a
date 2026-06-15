@@ -9,13 +9,10 @@ menu "Physical Player of Pixel Art (P3A)"
                 Number of seconds of inactivity before automatically cycling to the next animation.
                 Set to 0 to disable auto-swap entirely.
 
-        config P3A_MEMORY_REPORTING_ENABLE
-            bool "Enable memory status reporting"
-            default n
-            help
-                When enabled, the device will log detailed memory statistics every 8 seconds,
-                including heap usage broken down by memory type (internal RAM, SPIRAM, DMA, etc.).
-                Useful for debugging memory issues but adds overhead.
+        # Memory status reporting is now always on: the device logs a full heap
+        # breakdown to the console every 2 minutes (see memory_report_task in
+        # main/p3a_main.c) and exposes it on demand via GET /api/memory. The old
+        # P3A_MEMORY_REPORTING_ENABLE toggle was removed.
 
         config P3A_FORCE_FRESH_NVS
             bool "Force fresh NVS on boot (debug)"

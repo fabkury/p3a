@@ -2601,6 +2601,12 @@ CONFIG_GIPHY_FORMAT_DEFAULT="gif"
 # end of Giphy Integration
 
 #
+# HTTP Fetch
+#
+CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS=2
+# end of HTTP Fetch
+
+#
 # Makapix Configuration
 #
 CONFIG_MAKAPIX_CLUB_HOST="makapix.club"

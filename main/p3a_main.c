@@ -62,10 +62,17 @@ static esp_timer_handle_t s_reg_success_timer = NULL;
 
 #define MAX_DWELL_TIME_SECONDS 100000
 
-// Cadence of the always-on automatic memory report. Every interval the device
-// logs a full heap breakdown to the console — behaving exactly as if the HTTP
-// endpoint GET /api/memory had been called, but with no HTTP interaction. Both
-// paths share the mem_stats helpers, so the console output is identical.
+// Automatic periodic memory report. When P3A_MEMORY_REPORT_ENABLED is 1, every
+// MEMORY_REPORT_INTERVAL_SECONDS the device logs a full heap breakdown to the
+// console — behaving exactly as if the HTTP endpoint GET /api/memory had been
+// called, but with no HTTP interaction. Both paths share the mem_stats helpers,
+// so the console output is identical.
+//
+// Disabled by default (the 2-minute console report is noisy in normal use). The
+// on-demand GET /api/memory endpoint is unaffected by this toggle. Flip to 1 to
+// re-enable the periodic console report when debugging the internal-RAM /
+// SDIO-RX pressure issues (see docs/sdio-rx-oom-crash.md).
+#define P3A_MEMORY_REPORT_ENABLED 0
 #define MEMORY_REPORT_INTERVAL_SECONDS 120
 
 uint32_t animation_player_get_dwell_time(void)
@@ -152,6 +159,7 @@ static void heap_diag_alloc_failed_hook(size_t size, uint32_t caps, const char *
     esp_rom_printf("*********************************************\n\n");
 }
 
+#if P3A_MEMORY_REPORT_ENABLED
 /**
  * @brief Always-on periodic memory reporter.
  *
@@ -178,6 +186,7 @@ static void memory_report_task(void *arg)
         vTaskDelay(delay_ticks);
     }
 }
+#endif // P3A_MEMORY_REPORT_ENABLED
 
 static void handle_playback_event(const p3a_event_t *event, void *ctx)
 {
@@ -601,6 +610,7 @@ void app_main(void)
 
     // Phase 7: auto_swap_task removed - timer task now in play_scheduler
 
+#if P3A_MEMORY_REPORT_ENABLED
     // Create the always-on periodic memory reporting task (logs a full heap
     // breakdown every MEMORY_REPORT_INTERVAL_SECONDS; same data as the on-demand
     // GET /api/memory endpoint). 4 KB stack covers the %f formatting in mem_stats_log.
@@ -609,6 +619,7 @@ void app_main(void)
     if (mem_task_created != pdPASS) {
         ESP_LOGE(TAG, "Failed to create memory reporting task");
     }
+#endif // P3A_MEMORY_REPORT_ENABLED
 
     // Initialize Wi-Fi (will start captive portal if needed, or connect to saved network)
     ESP_ERROR_CHECK(connectivity_service_init());

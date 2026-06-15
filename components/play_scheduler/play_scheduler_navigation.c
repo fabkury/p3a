@@ -8,7 +8,6 @@
  * This file implements:
  * - Navigation functions (next, prev, current, peek)
  * - Swap request preparation
- * - NAE control functions
  * - Timer/dwell accessors
  * - Touch event handlers
  */
@@ -595,37 +594,6 @@ esp_err_t play_scheduler_current(ps_artwork_t *out_artwork)
     xSemaphoreGive(s_state->mutex);
 
     return found ? ESP_OK : ESP_ERR_NOT_FOUND;
-}
-
-// ============================================================================
-// NAE Control
-// ============================================================================
-
-void play_scheduler_set_nae_enabled(bool enable)
-{
-    ps_state_t *s_state = ps_get_state();
-
-    if (!s_state->initialized) return;
-    xSemaphoreTake(s_state->mutex, portMAX_DELAY);
-    s_state->nae_enabled = enable;
-    xSemaphoreGive(s_state->mutex);
-}
-
-bool play_scheduler_is_nae_enabled(void)
-{
-    ps_state_t *s_state = ps_get_state();
-    return s_state->nae_enabled;
-}
-
-void play_scheduler_nae_insert(const ps_artwork_t *artwork)
-{
-    ps_state_t *s_state = ps_get_state();
-
-    if (!s_state->initialized || !artwork) return;
-
-    xSemaphoreTake(s_state->mutex, portMAX_DELAY);
-    ps_nae_insert(s_state, artwork);
-    xSemaphoreGive(s_state->mutex);
 }
 
 // ============================================================================

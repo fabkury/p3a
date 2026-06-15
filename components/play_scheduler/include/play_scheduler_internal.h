@@ -33,9 +33,9 @@ extern "C" {
  *
  * Used by ps_peek_next_available() to save/restore only the fields that
  * ps_pick_next_available() might modify, instead of copying the entire
- * ps_state_t (~21KB) onto the stack.
+ * ps_state_t (~20KB) onto the stack.
  *
- * Size: ~1KB instead of ~21KB
+ * Size: ~1KB instead of ~20KB
  */
 typedef struct {
     struct {
@@ -74,19 +74,17 @@ typedef struct {
     size_t history_count;
     int32_t history_position;     // -1 = at head, 0+ = steps back
 
-    // NAE
-    ps_nae_entry_t nae_pool[PS_NAE_POOL_SIZE];
-    size_t nae_count;
-    bool nae_enabled;
-
     // PRNG state (64-bit for proper PCG32)
-    uint64_t prng_nae_state;
     uint64_t prng_pick_state;
     uint32_t global_seed;
     uint32_t epoch_id;
 
     // Repeat avoidance
     int32_t last_played_id;
+
+    // Runtime state for the single active ARTWORK channel (always channels[0]).
+    // One shared copy instead of an inline per-channel struct in all 64 slots.
+    ps_artwork_state_t artwork_state;
 
     // Dwell time
     uint32_t dwell_time_seconds;
@@ -226,7 +224,7 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork);
  * Temporarily calls ps_pick_next_available and then restores
  * the mutable pick state (credits, cursors, RNG) so the caller's
  * state is unchanged. Uses a lightweight snapshot (~1KB) instead
- * of copying the entire ps_state_t (~21KB).
+ * of copying the entire ps_state_t (~20KB).
  *
  * @param state Scheduler state (modified then restored)
  * @param out_artwork Output artwork reference
@@ -266,29 +264,6 @@ int ps_stochastic_select_channel(ps_state_t *state);
  * @brief Reset SWRR credits
  */
 void ps_swrr_reset_credits(ps_state_t *state);
-
-// ============================================================================
-// NAE Operations (play_scheduler_nae.c)
-// ============================================================================
-
-/**
- * @brief Insert artwork into NAE pool
- */
-void ps_nae_insert(ps_state_t *state, const ps_artwork_t *artwork);
-
-/**
- * @brief Try to select from NAE pool
- *
- * @param state Scheduler state
- * @param out_artwork Output artwork if selected
- * @return true if NAE was selected
- */
-bool ps_nae_try_select(ps_state_t *state, ps_artwork_t *out_artwork);
-
-/**
- * @brief Clear NAE pool
- */
-void ps_nae_clear(ps_state_t *state);
 
 // ============================================================================
 // Timer Operations (play_scheduler_timer.c)

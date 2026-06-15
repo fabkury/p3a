@@ -12,7 +12,6 @@
  * - Availability masking: only locally downloaded files are visible
  * - History buffer for back-navigation
  * - Multi-channel fairness via Smooth Weighted Round Robin (SWRR)
- * - New Artwork Events (NAE) for responsive handling of new content
  * - Deterministic and reproducible via reversible PRNGs
  *
  * The primary input is a playset (ps_playset_t): a declarative
@@ -258,7 +257,7 @@ esp_err_t play_scheduler_play_local_file(const char *filepath);
  * @brief Set the active channel set
  *
  * Rebuilds the play queue. History is preserved across this call.
- * Resets: cursors, SWRR credits, NAE pool.
+ * Resets: cursors, SWRR credits.
  *
  * @param channels Array of channel configurations
  * @param count Number of channels (1-64)
@@ -490,34 +489,6 @@ esp_err_t play_scheduler_peek_next(ps_artwork_t *out_artwork);
 esp_err_t play_scheduler_current(ps_artwork_t *out_artwork);
 
 // ============================================================================
-// NAE (New Artwork Events)
-// ============================================================================
-
-/**
- * @brief Enable/disable NAE
- *
- * @param enable true to enable
- */
-void play_scheduler_set_nae_enabled(bool enable);
-
-/**
- * @brief Check if NAE is enabled
- *
- * @return true if NAE is enabled
- */
-bool play_scheduler_is_nae_enabled(void);
-
-/**
- * @brief Insert a new artwork event (called from MQTT handler)
- *
- * Inserts artwork into NAE pool with 50% initial priority.
- * If artwork already exists, resets priority to 50%.
- *
- * @param artwork Artwork reference
- */
-void play_scheduler_nae_insert(const ps_artwork_t *artwork);
-
-// ============================================================================
 // Timer & Dwell
 // ============================================================================
 
@@ -713,7 +684,7 @@ esp_err_t play_scheduler_get_channel_details(
 /**
  * @brief Reset the scheduler
  *
- * Clears cursors, SWRR credits, and NAE pool. Preserves history.
+ * Clears cursors, SWRR credits. Preserves history.
  * Increments epoch_id.
  */
 void play_scheduler_reset(void);

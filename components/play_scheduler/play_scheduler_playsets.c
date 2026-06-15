@@ -652,14 +652,16 @@ esp_err_t play_scheduler_execute_playset(const ps_playset_t *playset, bool user_
             ch->last_refresh = meta_init.last_refresh;
         }
 
-        // Initialize artwork-specific state if this is an artwork channel
+        // Initialize artwork-specific state if this is an artwork channel.
+        // artwork_state is a single ps_state-level member (ARTWORK is always a
+        // standalone channels[0] playset), not per-channel.
         if (spec->type == PS_CHANNEL_TYPE_ARTWORK) {
-            ch->artwork_state.post_id = spec->artwork.post_id;
-            strlcpy(ch->artwork_state.storage_key, spec->artwork.storage_key, sizeof(ch->artwork_state.storage_key));
-            strlcpy(ch->artwork_state.art_url, spec->artwork.art_url, sizeof(ch->artwork_state.art_url));
-            strlcpy(ch->artwork_state.filepath, spec->artwork.filepath, sizeof(ch->artwork_state.filepath));
-            ch->artwork_state.download_pending = true;  // Will check/download in refresh
-            ch->artwork_state.download_in_progress = false;
+            s_state->artwork_state.post_id = spec->artwork.post_id;
+            strlcpy(s_state->artwork_state.storage_key, spec->artwork.storage_key, sizeof(s_state->artwork_state.storage_key));
+            strlcpy(s_state->artwork_state.art_url, spec->artwork.art_url, sizeof(s_state->artwork_state.art_url));
+            strlcpy(s_state->artwork_state.filepath, spec->artwork.filepath, sizeof(s_state->artwork_state.filepath));
+            s_state->artwork_state.download_pending = true;  // Will check/download in refresh
+            s_state->artwork_state.download_in_progress = false;
             ch->refresh_pending = true;  // Trigger refresh to check/download
         }
 

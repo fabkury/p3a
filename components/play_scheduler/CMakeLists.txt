@@ -3,7 +3,6 @@ idf_component_register(
          "play_scheduler_buffers.c"
          "play_scheduler_pick.c"
          "play_scheduler_swrr.c"
-         "play_scheduler_nae.c"
          "play_scheduler_timer.c"
          "play_scheduler_cache.c"
          "play_scheduler_refresh.c"

@@ -82,7 +82,6 @@ p3a/
 │   │   ├── play_scheduler_pick.c        # Artwork picking
 │   │   ├── play_scheduler_navigation.c  # Next/prev navigation
 │   │   ├── play_scheduler_timer.c       # Dwell time timer
-│   │   ├── play_scheduler_nae.c         # New Artwork Events
 │   │   ├── play_scheduler_lai.c         # Locally Available index tracking
 │   │   ├── play_scheduler_refresh.c     # Channel refresh
 │   │   ├── play_scheduler_buffers.c     # Buffer management

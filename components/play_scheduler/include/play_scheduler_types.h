@@ -29,12 +29,6 @@ extern "C" {
 #define PS_HISTORY_SIZE 32
 #endif
 
-#ifdef CONFIG_PLAY_SCHEDULER_NAE_POOL_SIZE
-#define PS_NAE_POOL_SIZE CONFIG_PLAY_SCHEDULER_NAE_POOL_SIZE
-#else
-#define PS_NAE_POOL_SIZE 32
-#endif
-
 #ifdef CONFIG_PLAY_SCHEDULER_MAX_CHANNELS
 #define PS_MAX_CHANNELS CONFIG_PLAY_SCHEDULER_MAX_CHANNELS
 #else
@@ -231,7 +225,6 @@ typedef struct {
 typedef struct {
     size_t channel_count;
     size_t history_count;
-    size_t nae_pool_count;
     uint32_t epoch_id;
     const char *current_channel_id;
     ps_pick_mode_t pick_mode;
@@ -248,13 +241,25 @@ struct channel_cache_s;
 typedef struct channel_cache_s channel_cache_t;
 
 /**
- * @brief NAE pool entry
+ * @brief Runtime state for the single active ARTWORK channel
+ *
+ * ARTWORK ("show this one") is always a standalone single-artwork playset at
+ * channels[0] (see play_scheduler_play_artwork/play_local_file), so the
+ * scheduler keeps exactly ONE of these at ps_state level instead of embedding
+ * it inline in all PS_MAX_CHANNELS channel slots (which wasted ~36.8 KB of
+ * internal RAM, 63/64 copies permanently zeroed). post_id/storage_key/art_url
+ * mirror the spec; filepath is corrected to the actual downloaded path by the
+ * refresh path; download_pending/download_in_progress are runtime-only flags
+ * not present in the spec.
  */
 typedef struct {
-    ps_artwork_t artwork;
-    float priority;           // (0, 1]
-    uint64_t insertion_time;  // For tie-breaking
-} ps_nae_entry_t;
+    int32_t post_id;
+    char storage_key[64];
+    char art_url[256];
+    char filepath[256];
+    bool download_pending;
+    bool download_in_progress;
+} ps_artwork_state_t;
 
 /**
  * @brief Per-channel state
@@ -319,15 +324,9 @@ typedef struct {
                                 // init and updated by the refresh task on actual refresh
                                 // completion. Drives oldest-first picker fairness.
 
-    // Artwork channel state (only when type == PS_CHANNEL_TYPE_ARTWORK)
-    struct {
-        int32_t post_id;
-        char storage_key[64];
-        char art_url[256];
-        char filepath[256];
-        bool download_pending;
-        bool download_in_progress;
-    } artwork_state;
+    // NOTE: ARTWORK-channel runtime state lives in a single ps_state-level
+    // member (ps_state_t.artwork_state), not here — ARTWORK is always a
+    // standalone channels[0] playset, so one shared copy suffices.
 
 } ps_channel_state_t;
 

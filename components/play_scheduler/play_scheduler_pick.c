@@ -796,10 +796,10 @@ bool ps_pick_artwork(ps_state_t *state, size_t channel_index, ps_artwork_t *out_
             return false;
         }
 
-        out_artwork->artwork_id = ch->artwork_state.post_id;
-        out_artwork->post_id = ch->artwork_state.post_id;
-        strlcpy(out_artwork->filepath, ch->artwork_state.filepath, sizeof(out_artwork->filepath));
-        strlcpy(out_artwork->storage_key, ch->artwork_state.storage_key, sizeof(out_artwork->storage_key));
+        out_artwork->artwork_id = state->artwork_state.post_id;
+        out_artwork->post_id = state->artwork_state.post_id;
+        strlcpy(out_artwork->filepath, state->artwork_state.filepath, sizeof(out_artwork->filepath));
+        strlcpy(out_artwork->storage_key, state->artwork_state.storage_key, sizeof(out_artwork->storage_key));
         out_artwork->created_at = 0;
         out_artwork->dwell_time_ms = 0;  // No auto-swap for single artwork
         out_artwork->type = get_asset_type_from_extension(0);  // Default to WEBP, will be detected on load
@@ -808,7 +808,7 @@ bool ps_pick_artwork(ps_state_t *state, size_t channel_index, ps_artwork_t *out_
         // Makapix artwork (reactions + view tracking activate); post_id == 0 is
         // a local file. ps_artwork_stamp_channel maps PS_CHANNEL_TYPE_ARTWORK
         // to POST_SOURCE_MAKAPIX, which is wrong for local files.
-        out_artwork->post_source = (ch->artwork_state.post_id > 0)
+        out_artwork->post_source = (state->artwork_state.post_id > 0)
                                        ? POST_SOURCE_MAKAPIX
                                        : POST_SOURCE_NONE;
 
@@ -962,7 +962,7 @@ bool ps_pick_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
  * @brief Save mutable pick state to snapshot
  *
  * Saves only the fields that ps_pick_next_available() might modify.
- * This is ~1KB instead of copying the entire ps_state_t (~21KB).
+ * This is ~1KB instead of copying the entire ps_state_t (~20KB).
  *
  * Channel weights are deliberately NOT snapshotted: the self-healing
  * recalc inside ps_pick_next_available() may rewrite them during a peek,
@@ -1001,7 +1001,7 @@ bool ps_peek_next_available(ps_state_t *state, ps_artwork_t *out_artwork)
         return false;
     }
 
-    // Save mutable pick state to lightweight snapshot (~1KB vs ~21KB for full copy)
+    // Save mutable pick state to lightweight snapshot (~1KB vs ~20KB for full copy)
     ps_pick_snapshot_t snapshot;
     ps_save_pick_state(state, &snapshot);
 

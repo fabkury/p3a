@@ -374,8 +374,6 @@ esp_err_t play_scheduler_init(void)
     ps_history_init(&s_state);
 
     // Initialize state
-    s_state.nae_count = 0;
-    s_state.nae_enabled = true;
     s_state.epoch_id = 0;
     s_state.last_played_id = 0;  // 0 won't match any valid post_id
     s_state.pick_mode = (ps_pick_mode_t)config_store_get_pick_mode();
@@ -394,7 +392,6 @@ esp_err_t play_scheduler_init(void)
 
     // Initialize PRNG with random seed
     s_state.global_seed = esp_random();
-    ps_prng_seed(&s_state.prng_nae_state, s_state.global_seed ^ 0x5A5A5A5A);
     ps_prng_seed(&s_state.prng_pick_state, s_state.global_seed ^ 0xA5A5A5A5);
 
     s_state.initialized = true;
@@ -560,7 +557,6 @@ esp_err_t play_scheduler_set_channels(
     }
 
     // Reset on snapshot change (but preserve history)
-    ps_nae_clear(&s_state);
     s_state.epoch_id++;
 
     // Reset per-channel state
@@ -670,7 +666,6 @@ esp_err_t play_scheduler_get_stats(ps_stats_t *out_stats)
 
     out_stats->channel_count = s_state.channel_count;
     out_stats->history_count = s_state.history_count;
-    out_stats->nae_pool_count = s_state.nae_count;
     out_stats->epoch_id = s_state.epoch_id;
     out_stats->current_channel_id = s_state.channel_count > 0
         ? s_state.current_channel_id
@@ -788,9 +783,6 @@ void play_scheduler_reset(void)
     ESP_LOGI(TAG, "Resetting scheduler (epoch %lu -> %lu)",
              (unsigned long)s_state.epoch_id,
              (unsigned long)(s_state.epoch_id + 1));
-
-    // Clear NAE pool
-    ps_nae_clear(&s_state);
 
     // Reset per-channel state (cursors, SWRR credits)
     for (size_t i = 0; i < s_state.channel_count; i++) {

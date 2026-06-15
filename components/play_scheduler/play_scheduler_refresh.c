@@ -592,49 +592,53 @@ static void artwork_download_progress_cb(size_t bytes_read, size_t content_lengt
  */
 static esp_err_t refresh_artwork_channel(ps_channel_state_t *ch)
 {
-    ESP_LOGI(TAG, "Refreshing artwork channel: %s", ch->artwork_state.storage_key);
+    // artwork_state is a single ps_state-level member shared by the one active
+    // ARTWORK channel (always channels[0]); ch->active stays per-channel.
+    ps_artwork_state_t *art = &ps_get_state()->artwork_state;
+
+    ESP_LOGI(TAG, "Refreshing artwork channel: %s", art->storage_key);
 
     // Check if file already exists
     struct stat st;
-    if (stat(ch->artwork_state.filepath, &st) == 0 && st.st_size > 0) {
-        ESP_LOGI(TAG, "Artwork already in vault: %s", ch->artwork_state.filepath);
+    if (stat(art->filepath, &st) == 0 && st.st_size > 0) {
+        ESP_LOGI(TAG, "Artwork already in vault: %s", art->filepath);
         ch->active = true;
-        ch->artwork_state.download_pending = false;
+        art->download_pending = false;
         return ESP_OK;
     }
 
     // Need to download - check if we have URL
-    if (ch->artwork_state.art_url[0] == '\0') {
+    if (art->art_url[0] == '\0') {
         // Local file that doesn't exist
-        ESP_LOGE(TAG, "Artwork file not found and no URL to download: %s", ch->artwork_state.filepath);
+        ESP_LOGE(TAG, "Artwork file not found and no URL to download: %s", art->filepath);
         ch->active = false;
-        ch->artwork_state.download_pending = false;
+        art->download_pending = false;
         return ESP_ERR_NOT_FOUND;
     }
 
     // Download the artwork
-    ch->artwork_state.download_in_progress = true;
+    art->download_in_progress = true;
     if (!animation_player_is_animation_ready()) {
         p3a_render_set_channel_message("Artwork", P3A_CHANNEL_MSG_DOWNLOADING, 0, NULL);
     }
 
-    ESP_LOGI(TAG, "Downloading artwork: %s", ch->artwork_state.art_url);
+    ESP_LOGI(TAG, "Downloading artwork: %s", art->art_url);
 
     char downloaded_path[256] = {0};
     esp_err_t err = makapix_artwork_download_with_progress(
-        ch->artwork_state.art_url,
-        ch->artwork_state.storage_key,
+        art->art_url,
+        art->storage_key,
         downloaded_path, sizeof(downloaded_path),
         artwork_download_progress_cb, NULL
     );
 
-    ch->artwork_state.download_in_progress = false;
+    art->download_in_progress = false;
 
     if (err == ESP_OK) {
         // Update filepath to actual downloaded path (in case it differs)
-        strlcpy(ch->artwork_state.filepath, downloaded_path, sizeof(ch->artwork_state.filepath));
+        strlcpy(art->filepath, downloaded_path, sizeof(art->filepath));
         ch->active = true;
-        ch->artwork_state.download_pending = false;
+        art->download_pending = false;
         // Don't clear the message here - the animation player will clear it
         // after the buffer swap completes for seamless transition (no flash)
         ESP_LOGI(TAG, "Artwork download complete: %s", downloaded_path);
@@ -646,7 +650,7 @@ static esp_err_t refresh_artwork_channel(ps_channel_state_t *ch)
         vTaskDelay(pdMS_TO_TICKS(3000));
         p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
         ch->active = false;
-        ch->artwork_state.download_pending = false;
+        art->download_pending = false;
     }
 
     return err;

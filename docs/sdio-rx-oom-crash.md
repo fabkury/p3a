@@ -3,20 +3,27 @@
 **Status:** Open. Heap-snapshot diagnostic in firmware and producing
 data; fragmentation+exhaustion hypothesis confirmed. Trigger pattern
 now confirmed to extend to **museum-channel HTTPS paging**
-(Occurrence 6), not just Giphy. The A/B decision is strongly indicated
-but not yet implemented; **Option E partially landed 2026-06-02** (cJSON
-parse heap routed to PSRAM — see "Option E" under "Decision required").
+(Occurrence 6) and to **Makapix MQTT channel-index refresh at high
+channel count** (Occurrence 7), not just Giphy. The A/B decision is
+strongly indicated but not yet implemented; **Option E partially landed
+2026-06-02** (cJSON parse heap routed to PSRAM — see "Option E" under
+"Decision required"). Occurrence 7 adds a **new victim (SD path) and a
+new, non-crashing failure mode (persistent livelock)** that A alone does
+not fix — see "Occurrence 7" and "New failure mode" below.
 Upstream sibling assert site fixed 2026-04-29 (not our site); see
 "Upstream developments" below.
 **First observed:** 2026-05-04.
-**Last observed:** 2026-05-18 (sixth occurrence; museum-channel HTTPS
-paging is part of the trigger set, and `REFRESH_MAX_CONCURRENT=2`
-identified as a concrete enabler — see "Occurrence 6").
-**Severity:** Hard crash + reboot. **Confirmed recurring across builds and
-IDF versions** — five hard crashes and one near-miss spanning 2026-05-04 →
-2026-05-18, on at least three firmware builds (ELF `969b00418` for
-Occurrences 2–4, ELF `fc8daa29f` for Occurrence 5, ELF `ee443f31c` for
-Occurrence 6) and across ESP-IDF v5.5.1 and v5.5.2.
+**Last observed:** 2026-06-14 (seventh occurrence; a deliberate 64-channel
+Makapix stress test drove the DMA-internal pool to `free=1863` — lower than
+ever recorded — and the SD path, not the SDIO RX assert, was the victim:
+**no crash, but a persistent SD-I/O livelock until manual reboot**).
+**Severity:** Hard crash + reboot for Occurrences 1–3, 5–6; one near-miss
+(Occurrence 4); **one persistent livelock with no reboot (Occurrence 7)**.
+**Confirmed recurring across builds and IDF versions** — five hard crashes,
+one near-miss, and one livelock spanning 2026-05-04 → 2026-06-14, on at
+least four firmware builds (ELF `969b00418` for Occurrences 2–4, ELF
+`fc8daa29f` for Occurrence 5, ELF `ee443f31c` for Occurrence 6, firmware
+`1.0.0` for Occurrence 7) and across ESP-IDF v5.5.1 and v5.5.2.
 
 ---
 
@@ -28,6 +35,17 @@ ESP32-C6 Wi-Fi co-processor. The assert fires under simultaneous Giphy refresh
 + active GIF downloads + animation playback. The cleanest fix is a Kconfig
 change to switch the SDIO RX mode from streaming to `MAX_SIZE`
 (preallocated buffer), trading some Wi-Fi throughput for stability.
+
+**New as of Occurrence 7 (2026-06-14):** the same DMA-internal pool
+exhaustion can surface *without a crash*. When the **SD card / SDMMC path**
+is the victim instead of esp_hosted's RX buffer, the failing allocation
+returns `ESP_ERR_NO_MEM` (SDMMC degrades gracefully) rather than asserting —
+so the device does **not** reboot. With nothing to clear the pool and no
+load-shedding to let it drain, the firmware wedges into a **persistent
+SD-I/O-failure livelock** until manually rebooted. This is strictly worse
+than the crash: a reboot self-heals; the livelock does not. It also proves
+the proposed fix **A (packet mode) is necessary but not sufficient** — A
+removes the *panic* class but not the SD-starvation livelock.
 
 ---
 
@@ -290,9 +308,85 @@ advances), so the picker + animation player were under their normal
 steady-state load. The system died on the *network* side, as in every
 prior occurrence.
 
-### Pattern across all six occurrences
+### Occurrence 7 — 2026-06-14 (uptime ~1834 s / ~30 min; **no crash, persistent livelock**)
 
-All six events share the same trigger:
+Firmware `1.0.0` (per `CMakeLists.txt`; ELF SHA not captured — no boot
+banner in this session's log). This is a **deliberate stress test**, not an
+organic field failure: a 64-channel playset where every channel is a
+different Makapix Club hashtag (`#wizard`, `#ghost`, `#skull`, `#heart`,
+`#magic`, …). The scheduler refreshes channels *eagerly*, so 64 Makapix
+MQTT channel-index refreshes march back-to-back, each followed by a
+cache-save to SD and artwork downloads, while the animation player decodes
+frames off SD in parallel.
+
+**This occurrence did not crash.** The DMA-internal pool was exhausted as
+in Occurrences 1–6, but the victim was the **SD card / SDMMC path** (and an
+SD read on the `anim_loader` task), not esp_hosted's RX buffer. SDMMC
+returns `ESP_ERR_NO_MEM` instead of asserting, so there was no panic and no
+reboot — instead, every subsequent SD operation failed in a storm and the
+device stayed wedged until manually power-cycled.
+
+Heap snapshot at the moment of the first failed allocation:
+
+```
+*** HEAP ALLOC FAILED (one-shot snapshot) ***
+  func=heap_caps_malloc  size=512  caps=0x00000008  task=anim_loader
+  INT+DMA+8BIT (SDIO RX): free=1863 largest=496 total=264671
+  INTERNAL:               free=23783 largest=10240
+  DMA:                    free=1863 largest=496
+  SPIRAM:                 free=24116220 largest=19398656
+  DEFAULT:                free=24137456 largest=19398656
+*********************************************
+```
+
+Caps `0x00000008` is `MALLOC_CAP_DMA` **alone** (contrast Occurrences 5–6's
+`0x0000080c` = `INTERNAL | DMA | 8BIT`). The 512-byte request is almost
+certainly the SDMMC driver's per-transfer DMA allocation, triggered by the
+animation loader reading the next frame off SD — `task=anim_loader` is
+whichever task happened to touch the SD bus, not a distinct consumer.
+
+What the numbers say:
+- **The pool is at 99.3 % utilization** — `free=1863` of `total=264671`.
+  This is far past Occurrence 5 (89 %) and Occurrence 6 (88 %); the 64-
+  channel stress test drove it lower than any organic occurrence on record.
+- **Largest contiguous DMA block is 496 bytes**, so even a trivial 512-byte
+  request misses — by 16 bytes. Fragmentation + near-total exhaustion, same
+  signature as Occ 5/6, just deeper.
+- SPIRAM has 24 MB free and is, as always, useless for this allocation.
+
+Timeline of the ~9 s around the failure (timestamps in ms since boot):
+
+| t (ms)  | Event |
+|---------|-------|
+| 1826207 | `ps_refresh` refreshes Makapix `#wizard`; index merged (5 entries) |
+| 1828384 | `ps_refresh` refreshes `#ghost` (13 entries) |
+| 1830561 | `ps_refresh` refreshes `#skull` (9 entries) |
+| 1831834 | `dl_mgr` downloading a `#sky` pick; `ps_pick` picks `#tree` (post 3546) |
+| 1832780 | `ps_refresh` refreshes `#heart` (21 entries) |
+| 1834117 | `ps_pick` picks `#landscape` (post 3545) |
+| ~1834400 | **HEAP ALLOC FAILED** snapshot (512 B, `MALLOC_CAP_DMA`, `anim_loader`) |
+| 1834415 | `sdmmc_cmd: sdmmc_read_sectors: not enough mem, err=0x101` — SD reads start failing |
+| 1834739 | `sdmmc_write_sectors` ENOMEM; `http_fetch: Write error: wrote 0/32768 bytes` |
+| 1834786 | `makapix_artwork: Artwork download failed for 31c6e719-… : ESP_FAIL` |
+| 1835002 | `ps_refresh` refreshes `#magic` — **MQTT/Wi-Fi still working** |
+| 1835102 | `sd_path: mkdir failed: /sdcard/p3a (I/O error)` |
+| 1835347 | `makapix_channel_refresh: Batch merged: ch='#magic'` — network OK, SD dead |
+| 1835390 | `channel_cache: Failed to create channels directory: /sdcard/p3a/channel (errno=5)` |
+| 1835391 | `makapix_channel_refresh: Cache flush failed … skipping metadata save` |
+| …       | SDMMC `not enough mem` flood continues indefinitely until **manual reboot** |
+
+The decisive detail is at t=1835347: **`#magic`'s channel index is fetched
+over MQTT and merged in RAM successfully *after* the heap failure** — so
+the Wi-Fi-over-SDIO path is alive and holding the DMA-internal pool, while
+every SD operation (`mkdir`, cache flush, download write, frame read) fails
+for want of the same pool. The scheduler keeps marching through channels
+and the download manager keeps retrying, so the network side keeps the pool
+pinned and the SD side never gets a window to drain. Nothing in the system
+sheds load on memory pressure, so the livelock is self-sustaining.
+
+### Pattern across all seven occurrences
+
+The first six events share the same trigger:
 
 1. A `ps_refresh` cycle is paging through one or more HTTPS APIs
    (Giphy, V&A, Wellcome) and/or a Makapix MQTT channel — multiple
@@ -300,8 +394,13 @@ All six events share the same trigger:
 2. The crash/symptom hits in the middle of the paging, not on the first
    page.
 
+Occurrence 7 broadens the trigger one more step: instead of *deep* paging
+of one or two channels, it's *breadth* — 64 channels each doing a small
+MQTT index refresh back-to-back. Same outcome (DMA-internal pool starved),
+reached by volume of refreshes rather than depth of any one.
+
 What differs is the **victim** of the resource pressure (and, in
-Occurrences 5–6, the **co-stressors** stacked on top of refresh paging):
+Occurrences 5–7, the **co-stressors** stacked on top of refresh paging):
 
 | # | Concurrent downloads? | Other concurrent load | Symptom |
 |---|----------------------|-----------------------|---------|
@@ -311,6 +410,7 @@ Occurrences 5–6, the **co-stressors** stacked on top of refresh paging):
 | 4 | **no** (`dl_mgr` idle) | —                     | MQTT task-create failure + HTTP truncation + TLS EAGAIN; recovered |
 | 5 | yes (5 GIFs in succession) | **heavy Makapix MQTT** (14 batches × 8.6 KB in the window) | SDIO RX assert (hard crash) |
 | 6 | yes (8 in succession: Giphy + Makapix CDN) | **two concurrent paginated refreshes** (Makapix MQTT "Fab" 32 batches overlapping V&A HTTPS 11 pages, then Wellcome HTTPS 10 pages) | SDIO RX assert (hard crash) |
+| 7 | yes (Makapix CDN, ongoing) | **64-channel eager refresh** (back-to-back Makapix MQTT index refreshes) + animation decode off SD | **SD path / `anim_loader` `ESP_ERR_NO_MEM`** — no crash, **persistent SD-I/O livelock until manual reboot** |
 
 #### What Occurrence 3 newly tells us
 
@@ -415,6 +515,75 @@ Occurrences 5–6, the **co-stressors** stacked on top of refresh paging):
   (Occ 5: 9216). The streaming-mode RX path is asking for
   variable-sized aligned buffers and the internal-DMA heap can't
   satisfy them under load. Same wall, slightly different exact peak.
+
+#### What Occurrence 7 newly tells us
+
+- **The SD path is a second victim — and it doesn't crash, it wedges.**
+  All prior occurrences took down a path that *asserts* (esp_hosted
+  `sdio_rx_get_buffer`) or *fails loudly and retries* (`xTaskCreate` in
+  Occ 4). When the same pool exhaustion instead hits the **SDMMC driver**,
+  the failure is a returned `ESP_ERR_NO_MEM`, not a panic — so the device
+  keeps running with a dead SD card. This is a **strictly worse end state
+  than the crash**: the assert reboots and self-heals; the livelock
+  persists until a human power-cycles the board. Any fix evaluated only
+  against "did it stop crashing?" can still leave this livelock in place.
+- **Option A (packet mode) alone would not have saved this run.** A
+  removes esp_hosted's on-demand `_h_malloc_align` growth (the panic
+  path) and stops its fragmentation churn, which *helps* the SD side — but
+  the steady-state demand from animation decode + TLS + per-channel cache
+  writes still coexists in the same ~265 KB pool. The victim here was never
+  the SDIO assert path, so removing it doesn't address the starvation. This
+  is concrete evidence for the doc's existing lean toward **C (A + B)** over
+  A alone, and motivates a new option (G, below): **memory-pressure
+  backpressure** so any future exhaustion degrades to a graceful slowdown
+  and *recovers*, instead of crashing (Occ 1–6) or wedging (Occ 7).
+- **The trigger generalizes from depth to breadth.** Occurrences 1–6 were
+  driven by deep paging of one or two channels (many pages/batches of a
+  single refresh). Occurrence 7 reaches the same wall with 64 *shallow*
+  refreshes in quick succession. The common factor is sustained
+  refresh-driven network churn, regardless of whether it comes from one
+  deep channel or many shallow ones. **Eager refresh of every channel in a
+  playset is the engine** — a large playset multiplies the burst directly.
+- **Deeper exhaustion than ever recorded, because nothing crashed to stop
+  it.** Occ 5/6 bottomed at ~30 KB free / 8–10 KB largest *and then the
+  device asserted*, so we never saw lower. Occ 7's graceful-degradation
+  victim let the pool keep draining to `free=1863, largest=496` under
+  continued load. This is consistent with the burst-driven (not slow-leak)
+  conclusion from Occurrence 3: load, not uptime, sets the floor — and with
+  no crash to halt the load, the floor goes lower.
+- **Network survived the SD death.** `#magic`'s MQTT index refresh merged
+  successfully *after* the heap failure (t=1835347), confirming the
+  Wi-Fi/SDIO RX path was alive and holding the pool while SD starved. The
+  two SDIO consumers (C6 link vs SD card) are genuinely competing for the
+  same region, and under sustained app traffic the network side wins and
+  the SD side never recovers on its own.
+
+---
+
+## New failure mode: SD-path starvation livelock (Occurrence 7)
+
+Occurrences 1–6 are *crashes*: a path asserts (esp_hosted RX) or a loud,
+recoverable failure fires (`xTaskCreate`). Occurrence 7 is a **livelock**:
+
+1. The DMA-internal pool is exhausted by the same root cause (sustained
+   refresh-driven network churn fragmenting + filling the ~265 KB region).
+2. The allocation that fails belongs to the **SDMMC driver**, which returns
+   `ESP_ERR_NO_MEM` rather than asserting. No panic, no reboot.
+3. Every subsequent SD op — frame reads for decode, artwork download
+   writes, `mkdir`, channel-cache flush — fails for want of the same pool.
+4. Meanwhile the scheduler keeps refreshing channels (MQTT still works) and
+   the download manager keeps retrying. That ongoing network traffic keeps
+   the C6/SDIO RX side holding the pool, so the SD side never gets a window
+   to drain.
+5. **There is no load-shedding on memory pressure anywhere in the system**,
+   so step 4 is self-sustaining. The device stays wedged until a human
+   reboots it.
+
+The reboot in Occurrences 1–6 was, perversely, a recovery mechanism. The
+graceful SDMMC failure removes it. **The fix set must therefore include a
+way to either (a) keep the pool from reaching this floor (Options A/B/E), or
+(b) detect the pressure and shed load so the pool can recover (Option G).**
+Without (b), a sufficiently large playset can always re-create the livelock.
 
 ---
 
@@ -567,23 +736,55 @@ Options (consolidated across occurrences):
       `CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL` (currently 32 KB) and/or lower
       `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL` (currently 8 KB). Doesn't fix the
       assert path; raises the ceiling. Complementary to A and B.
+- [ ] **F. Lazy / just-in-time channel refresh** *(new, motivated by
+      Occurrence 7).* Don't eagerly refresh every channel in a playset;
+      refresh only the active + next-up channel(s), on demand. Eager
+      all-channel refresh is the engine of the breadth-driven burst in
+      Occ 7 — a 64-channel playset should not generate 64 near-simultaneous
+      MQTT index refreshes. This attacks the trigger at the source and
+      scales the fix to playset size, where B (concurrency cap) only limits
+      *how many at once*, not *how many total*. Stronger version of B's
+      "stagger periodic refreshes" sub-action.
+- [ ] **G. Memory-pressure backpressure / load-shedding** *(new, motivated
+      by Occurrence 7's livelock).* Sample the DMA-internal pool
+      (`heap_caps_get_free_size` / `heap_caps_get_largest_free_block` for
+      `MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT`); below a
+      watermark, pause new downloads and channel refreshes until it
+      recovers. This is the only option that addresses the **livelock**
+      directly: it gives the pool the drain window it currently never gets,
+      converting both the SDIO assert *and* the SD starvation into a
+      graceful slowdown that recovers. Defense-in-depth that backstops
+      A/B/E/F regardless of which path becomes the victim. (A cruder
+      band-aid in the same spirit — remount/reset the SDMMC after a burst of
+      `ENOMEM`/EIO — treats the SD symptom only and is inferior to shedding
+      load before the pool bottoms out.)
 
 The **cJSON-to-PSRAM portion of Option E has been applied** in source
 (`main/p3a_main.c`, 2026-06-02). The assert-path fix (A) and concurrency
 work (B) are **not** yet applied, and `sdkconfig` is unchanged.
 
-**Current lean: C (A + B)**, with E pursued in parallel as a separate
-workstream (its cJSON-to-PSRAM sub-item landed 2026-06-02; the
-sdkconfig-knob sub-items remain open). The Occurrence 5 heap snapshot resolves the
-"fragmentation vs. exhaustion" question by showing both contribute, so
-D is closed. Option A alone removes the panic class; option B alone is
-not sufficient (Occurrence 4 showed refresh paging by itself can
-exhaust the pool even with `dl_mgr` idle). Combining them gives
-defense-in-depth without much more effort than A alone. Occurrence 6
-reinforces this lean and gives Option B a concrete one-line handle:
-drop `REFRESH_MAX_CONCURRENT` from 2 to 1 at
-`components/play_scheduler/play_scheduler_refresh.c:49` to eliminate
-the overlapping-refresh trigger that was visible in that run.
+**Current lean (revised after Occurrence 7): C + F + G** — packet mode to
+remove the panic class and esp_hosted's fragmentation churn (A), lazy
+just-in-time refresh to kill the burst at the source and scale with playset
+size (F), and memory-pressure backpressure so any residual peak degrades
+gracefully and *recovers* (G), with B's `REFRESH_MAX_CONCURRENT=1` and E's
+PSRAM/knob work as cheap complements. E is pursued in parallel (its
+cJSON-to-PSRAM sub-item landed 2026-06-02; the sdkconfig-knob sub-items
+remain open).
+
+Why the revision: the Occurrence 5 heap snapshot resolved the
+"fragmentation vs. exhaustion" question by showing both contribute (D
+closed). **Occurrence 7 then proved A is necessary but not sufficient** —
+its victim was the SD path, not the SDIO assert, so removing the assert
+would have left the livelock intact. Option B alone is also insufficient
+(Occurrence 4 showed refresh paging by itself can exhaust the pool even
+with `dl_mgr` idle; Occurrence 7 showed a large-enough playset re-creates
+the burst no matter the per-cycle concurrency cap). G is the only option
+that addresses the **livelock** end state directly, and is the one piece
+that makes the system robust to *any* future victim of the same pool.
+Concrete one-line handle from Occurrence 6 still stands: drop
+`REFRESH_MAX_CONCURRENT` from 2 to 1 at
+`components/play_scheduler/play_scheduler_refresh.c:49`.
 
 ---
 

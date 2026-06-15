@@ -468,8 +468,15 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     // (boolean hashed, not seconds). The standalone endpoint is kept for
     // webui/museum/browse.js which does a one-shot lookup after a 429.
     uint32_t museum_remaining[ART_INSTITUTION_MUSEUM_COUNT];
+    // BYOK museums (HAM, SI) whose user-supplied key is currently unset:
+    // refresh can never run, so the web UI flags the channel and offers a
+    // jump to Settings. Boolean (not playset-gated) — the web UI gates it
+    // per channel row, same as the cooldowns above.
+    bool museum_key_missing[ART_INSTITUTION_MUSEUM_COUNT];
     for (size_t i = 0; i < ART_INSTITUTION_MUSEUM_COUNT; i++) {
         museum_remaining[i] = art_institution_rate_limit_remaining(
+            ART_INSTITUTION_MUSEUMS[i].id);
+        museum_key_missing[i] = art_institution_api_key_missing(
             ART_INSTITUTION_MUSEUMS[i].id);
     }
 
@@ -537,9 +544,11 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     for (size_t i = 0; i < ART_INSTITUTION_MUSEUM_COUNT; i++) {
         // Hash the museum id (defensive against future reorderings) and the
         // boolean derived from remaining_sec — NOT the seconds, same reason
-        // as the giphy cooldown above.
+        // as the giphy cooldown above. The key-missing boolean flips once per
+        // key save/clear, so it's 304-friendly too.
         h = fnv_str(h, ART_INSTITUTION_MUSEUMS[i].id);
         h = fnv_u8(h, museum_remaining[i] > 0 ? 1 : 0);
+        h = fnv_u8(h, museum_key_missing[i] ? 1 : 0);
     }
 
     char etag[20];
@@ -667,6 +676,19 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
             if (!o) continue;
             cJSON_AddNumberToObject(o, "remaining_sec", (double)museum_remaining[i]);
             cJSON_AddItemToObject(mrl, ART_INSTITUTION_MUSEUMS[i].id, o);
+        }
+    }
+
+    // BYOK key state per museum: true ⇒ user must add an API key in Settings
+    // before this museum's channels can refresh. Only museums that are BYOK
+    // appear (those with an api_key_missing callback); museums shipping a
+    // built-in key are omitted so the web UI never flags them.
+    cJSON *mkm = cJSON_AddObjectToObject(data, "museum_key_missing");
+    if (mkm) {
+        for (size_t i = 0; i < ART_INSTITUTION_MUSEUM_COUNT; i++) {
+            if (!ART_INSTITUTION_MUSEUMS[i].api_key_missing) continue;
+            cJSON_AddBoolToObject(mkm, ART_INSTITUTION_MUSEUMS[i].id,
+                                  museum_key_missing[i]);
         }
     }
 

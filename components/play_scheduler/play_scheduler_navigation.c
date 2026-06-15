@@ -21,6 +21,7 @@
 #include "channel_cache.h"
 #include "download_manager.h"
 #include "lai_verify.h"
+#include "art_institution.h"
 #include "esp_log.h"
 #include <string.h>
 
@@ -50,6 +51,39 @@ extern void proc_notif_fail_if_processing(void) __attribute__((weak));
 #define PS_MISS_WINDOW_MIN     8
 #define PS_MISS_WINDOW_MAX     32
 #define PS_MISS_WINDOW_DIVISOR 8
+
+/**
+ * @brief Display name of the first BYOK museum channel missing its API key
+ *
+ * Scans the active channels for an art-institution channel whose museum is
+ * BYOK and whose key is unset (so it can never refresh and, on a cold cache,
+ * contributes no artwork). Returns the museum's human-readable display name
+ * (a pointer into the static dispatch table — stable, never freed) or NULL
+ * when no such channel exists.
+ *
+ * Used to replace the generic "No playable files" terminal message with one
+ * that names the actual cause and points the user at Settings. Caller holds
+ * s_state->mutex.
+ */
+static const char *ps_first_keyless_museum_display(const ps_state_t *state)
+{
+    for (size_t i = 0; i < state->channel_count; i++) {
+        const ps_channel_state_t *ch = &state->channels[i];
+        if (ch->type != PS_CHANNEL_TYPE_INSTITUTION) continue;
+
+        char museum[16] = {0};
+        char axis[32] = {0};
+        if (art_institution_parse_spec(ch->spec_name, museum, sizeof(museum),
+                                       axis, sizeof(axis)) != ESP_OK) {
+            continue;
+        }
+        if (!art_institution_api_key_missing(museum)) continue;
+
+        const art_institution_museum_t *m = art_institution_find(museum);
+        if (m && m->display) return m->display;
+    }
+    return NULL;
+}
 
 /**
  * @brief Record a swap-time pick outcome and trip the staleness sweep
@@ -448,6 +482,12 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
                 title = s_state->active_playset->name;
             }
 
+            // A BYOK museum channel with no key can never refresh and, on a
+            // cold cache, contributes nothing — the real reason there are no
+            // files. Name it instead of the generic message so the user knows
+            // to add a key (Settings > Museums) rather than switch playsets.
+            const char *keyless_museum = ps_first_keyless_museum_display(s_state);
+
             // Only show loading/downloading messages if we have WiFi connectivity
             if (p3a_state_has_wifi()) {
                 if (any_refreshing) {
@@ -459,17 +499,24 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
                     if (content_cache_is_busy()) {
                         p3a_render_set_channel_message(display_name, 2 /* P3A_CHANNEL_MSG_DOWNLOADING */, -1,
                                                         "Downloading artwork...");
-                    } else {
+                    } else if (keyless_museum && animation_player_display_message) {
+                        // No refresh, no download, no files - and a BYOK museum
+                        // channel is keyless: surface the actionable cause.
+                        animation_player_display_message(keyless_museum,
+                            "Needs an API key. Add it in\nSettings > Museums.");
+                    } else if (animation_player_display_message) {
                         // No refresh, no download - truly no files available
-                        if (animation_player_display_message) {
-                            animation_player_display_message(title,
-                                "No playable files. Please\nswitch to another playset.");
-                        }
+                        animation_player_display_message(title,
+                            "No playable files. Please\nswitch to another playset.");
                     }
                 }
             } else {
-                // No WiFi - can't load channels from Makapix
-                if (animation_player_display_message) {
+                // No WiFi - can't load channels from Makapix. A keyless BYOK
+                // museum is still the more specific cause when present.
+                if (keyless_museum && animation_player_display_message) {
+                    animation_player_display_message(keyless_museum,
+                        "Needs an API key. Add it in\nSettings > Museums.");
+                } else if (animation_player_display_message) {
                     animation_player_display_message(title,
                         "No playable files. Please\nswitch to another playset.");
                 }

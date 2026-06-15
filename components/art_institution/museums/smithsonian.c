@@ -305,6 +305,15 @@ static esp_err_t si_fetch_page(const char *unit_code,
     return ESP_OK;
 }
 
+// ----- BYOK key state ------------------------------------------------------
+
+bool art_institution_si_api_key_missing(void)
+{
+    char api_key[SI_API_KEY_MAX] = {0};
+    config_store_get_si_api_key(api_key, sizeof(api_key));
+    return api_key[0] == '\0';
+}
+
 // ----- Refresh dispatcher --------------------------------------------------
 
 esp_err_t art_institution_si_refresh_channel(const char *channel_id,
@@ -324,14 +333,16 @@ esp_err_t art_institution_si_refresh_channel(const char *channel_id,
 
     // BYOK gate: matches HAM. No key → log + return ESP_OK without touching
     // channel metadata, so the dispatcher re-evaluates on the next tick and
-    // refresh "comes alive" the moment the user saves a key.
-    char api_key[SI_API_KEY_MAX] = {0};
-    config_store_get_si_api_key(api_key, sizeof(api_key));
-    if (api_key[0] == '\0') {
+    // refresh "comes alive" the moment the user saves a key. Same predicate
+    // drives the home-page "needs a key" badge/banner.
+    if (art_institution_si_api_key_missing()) {
         ESP_LOGI(TAG, "SI API key not configured; skipping refresh for '%s' "
                  "(enter your api.data.gov key in Settings > Museums)", channel_id);
         return ESP_OK;
     }
+
+    char api_key[SI_API_KEY_MAX] = {0};
+    config_store_get_si_api_key(api_key, sizeof(api_key));
 
     if (art_institution_is_rate_limited("si")) {
         ESP_LOGW(TAG, "SI rate-limited at refresh start, skipping");

@@ -91,6 +91,18 @@ typedef struct {
      * museum that already returns the IIIF id directly).
      */
     esp_err_t (*resolve_entry)(institution_channel_entry_t *entry);
+
+    /**
+     * Optional. True when this museum is BYOK (the user must supply their
+     * own API key) and that key is currently unset, so refresh can never
+     * run. NULL for museums that ship a built-in / public key — those are
+     * never "missing". Mirrors the resolve_entry optional-callback idiom.
+     *
+     * Used purely for UI signalling (home-page banner/badge, Settings
+     * badge, on-device "needs a key" message); it does NOT gate refresh,
+     * which already no-ops on an empty key inside refresh_channel.
+     */
+    bool (*api_key_missing)(void);
 } art_institution_museum_t;
 
 extern const art_institution_museum_t ART_INSTITUTION_MUSEUMS[];
@@ -139,6 +151,18 @@ int art_institution_enum_from_id(const char *museum_id);
  * @return Pointer into the static dispatch table on hit, NULL on out-of-range.
  */
 const char *art_institution_id_from_enum(uint16_t museum_enum);
+
+/**
+ * @brief True iff a museum is BYOK and its API key is currently unset
+ *
+ * Thin dispatch over the per-museum api_key_missing callback. Returns false
+ * for unknown ids and for museums that ship a built-in/public key (those
+ * have no callback and can never be "missing"). UI-only signal — does not
+ * affect refresh, which independently no-ops on an empty key.
+ *
+ * @param museum_id Stable wire id ("ham", "si", ...)
+ */
+bool art_institution_api_key_missing(const char *museum_id);
 
 /**
  * @brief Parse a channel-spec `name` of the form "{museum_id}:{axis}"

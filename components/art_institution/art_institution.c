@@ -74,6 +74,7 @@ const art_institution_museum_t ART_INSTITUTION_MUSEUMS[] = {
                                   // NRS→IDS 303 redirect is handled by the
                                   // download path's redirect shim, not a
                                   // resolve_entry walk.
+        .api_key_missing = art_institution_ham_api_key_missing,  // BYOK
     },
     {
         .id              = "si",
@@ -84,6 +85,7 @@ const art_institution_museum_t ART_INSTITUTION_MUSEUMS[] = {
         .resolve_entry   = NULL,  // Smithsonian returns idsId inline in the
                                   // search response; the IIIF URL is built
                                   // from it directly, no walk needed.
+        .api_key_missing = art_institution_si_api_key_missing,  // BYOK
     },
 };
 
@@ -135,6 +137,14 @@ const char *art_institution_id_from_enum(uint16_t museum_enum)
         }
     }
     return NULL;
+}
+
+bool art_institution_api_key_missing(const char *museum_id)
+{
+    const art_institution_museum_t *m = art_institution_find(museum_id);
+    // No callback ⇒ museum ships a built-in/public key ⇒ never "missing".
+    if (!m || !m->api_key_missing) return false;
+    return m->api_key_missing();
 }
 
 esp_err_t art_institution_parse_spec(const char *spec_name,

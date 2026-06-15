@@ -196,6 +196,10 @@ esp_err_t art_institution_ham_build_iiif_url(const institution_channel_entry_t *
                                              int longest_side,
                                              char *out, size_t len);
 
+// True when the HAM BYOK key (NVS `ham_api_key`) is empty. One source of
+// truth for the refresh no-op guard and the UI "needs a key" signal.
+bool art_institution_ham_api_key_missing(void);
+
 // ============================================================================
 // Smithsonian Open Access adapter entry points (defined in museums/smithsonian.c)
 // ============================================================================
@@ -208,6 +212,10 @@ esp_err_t art_institution_si_refresh_channel(const char *channel_id,
 esp_err_t art_institution_si_build_iiif_url(const institution_channel_entry_t *entry,
                                             int longest_side,
                                             char *out, size_t len);
+
+// True when the Smithsonian BYOK key (NVS `si_api_key`) is empty. One source
+// of truth for the refresh no-op guard and the UI "needs a key" signal.
+bool art_institution_si_api_key_missing(void);
 
 #ifdef __cplusplus
 }

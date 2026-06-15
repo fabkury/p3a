@@ -256,6 +256,15 @@ static esp_err_t ham_fetch_page(const char *axis,
     return ESP_OK;
 }
 
+// ----- BYOK key state ------------------------------------------------------
+
+bool art_institution_ham_api_key_missing(void)
+{
+    char api_key[HAM_API_KEY_MAX] = {0};
+    config_store_get_ham_api_key(api_key, sizeof(api_key));
+    return api_key[0] == '\0';
+}
+
 // ----- Refresh dispatcher --------------------------------------------------
 
 esp_err_t art_institution_ham_refresh_channel(const char *channel_id,
@@ -267,19 +276,21 @@ esp_err_t art_institution_ham_refresh_channel(const char *channel_id,
         return ESP_ERR_INVALID_ARG;
     }
 
-    // BYOK gate: if no key configured, refresh is a no-op. Persist
+    // BYOK gate: if no key configured, refresh is a no-op. Persisting
     // last_refresh would defeat the purpose of "reactivate when user
     // enters a key", so we deliberately return ESP_OK without touching
     // the channel metadata — the dispatcher treats it as a transient
     // skip and re-evaluates on the next tick. The browse modal hides
-    // the HAM entry in this state.
-    char api_key[HAM_API_KEY_MAX] = {0};
-    config_store_get_ham_api_key(api_key, sizeof(api_key));
-    if (api_key[0] == '\0') {
+    // the HAM entry in this state, and the home page surfaces a "needs a
+    // key" badge/banner off the same predicate.
+    if (art_institution_ham_api_key_missing()) {
         ESP_LOGI(TAG, "HAM API key not configured; skipping refresh for '%s' "
                  "(enter your key in Settings > Museums)", channel_id);
         return ESP_OK;
     }
+
+    char api_key[HAM_API_KEY_MAX] = {0};
+    config_store_get_ham_api_key(api_key, sizeof(api_key));
 
     if (art_institution_is_rate_limited("ham")) {
         ESP_LOGW(TAG, "HAM rate-limited at refresh start, skipping");

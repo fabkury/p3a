@@ -411,6 +411,21 @@ body {
     font-size: 0.75rem;
     opacity: 0.85;
 }
+/* BYOK museum channel whose API key is unset: a persistent config issue
+   (not a transient throttle), so a distinct soft-blue style + key glyph,
+   never the amber cooldown look. Cached art keeps playing. */
+.ps-ch-row.needs-key {
+    background: var(--c-info-soft-bg);
+    border-left: 3px solid var(--c-info-soft-fg);
+    opacity: 0.9;
+    animation: none;
+}
+.ps-ch-row.needs-key::after {
+    content: '\1F511';
+    margin-left: auto;
+    font-size: 0.75rem;
+    opacity: 0.9;
+}
 .cooldown-banner {
     display: none;
     width: min(420px, 100%);
@@ -823,6 +838,10 @@ body {
     <h4>&#128081; Makapix Registration Needed</h4>
     <p>This playset has Makapix Club channels that need a linked account, so they show no artwork. Tap here to register this device in Settings &rarr; Makapix.</p>
 </div>
+<div class="cooldown-banner" id="museum-key-banner" onclick="window.location.href='/settings#museum'" style="cursor:pointer;background:var(--c-info-soft-bg);color:var(--c-info-soft-fg);box-shadow:0 4px 12px color-mix(in srgb, var(--c-info-soft-fg) 25%, transparent);">
+    <h4>&#128273; Museum API Key Needed</h4>
+    <p id="museum-key-banner-text">This playset has museum channels that need an API key. They keep playing cached art but won't fetch new artwork. Tap here to add a key in Settings &rarr; Museums.</p>
+</div>
 <nav class="bottom-nav">
 <a href="/" class="bottom-nav-item active"><span class="bottom-nav-icon">&#8962;</span><span class="bottom-nav-label">Home</span></a>
 <a href="/playset-editor" class="bottom-nav-item"><span class="bottom-nav-icon">&#9776;</span><span class="bottom-nav-label">Playsets</span></a>
@@ -844,6 +863,12 @@ var aiRefreshSec = 86400;
 // 4s poll). The standalone /api/museum/rate-limits endpoint still exists
 // for the browse modal but isn't polled from this page.
 var museumCooldowns = {};
+// Museum-id -> bool "BYOK key is unset". Refreshed from data.museum_key_missing
+// on every /playsets/active response (same 4s poll, same ETag). Only BYOK
+// museums (HAM, SI) ever appear; drives the per-channel "needs key" badge and
+// the home banner. A missing key means refresh can never run — cached art
+// still plays, but the channel is frozen.
+var museumKeyMissing = {};
 // "Allow refresh override (one-time bypass)" — when true the dispatcher
 // refreshes every channel regardless of last_refresh, so isDueForRefresh
 // must short-circuit to true to keep the pulse animation visible.
@@ -1979,6 +2004,9 @@ fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
     if (typeof data.ai_refresh_sec === 'number' && data.ai_refresh_sec > 0) {
         aiRefreshSec = data.ai_refresh_sec;
     }
+    if (data.museum_key_missing && typeof data.museum_key_missing === 'object') {
+        museumKeyMissing = data.museum_key_missing;
+    }
     if (data.museum_rate_limits && typeof data.museum_rate_limits === 'object') {
         var seed = {};
         var mrl = data.museum_rate_limits;
@@ -2484,6 +2512,16 @@ function isMuseumBlocked(ch) {
     var cd = museumCooldowns[mid] | 0;
     return cd > 0 && isDueForRefresh(ch);
 }
+// A BYOK museum channel whose API key is unset: refresh can never run, so
+// flag it regardless of freshness (unlike the cooldown, which only matters
+// when the channel is due). Cached art keeps playing; the badge just warns
+// the channel is frozen. Takes visual precedence over cooldown/refreshing.
+function isMuseumKeyMissing(ch) {
+    if (ch.type !== 'institution') return false;
+    var mid = museumIdFromName(ch.name);
+    if (!mid) return false;
+    return museumKeyMissing[mid] === true;
+}
 function createChannelRow(ch) {
     var row = document.createElement('div');
     row.className = 'ps-ch-row';
@@ -2491,9 +2529,11 @@ function createChannelRow(ch) {
     // Fresh-but-queued channels would be skipped by the dispatcher's freshness
     // gate, so neither the cooldown styling nor the refresh animation applies.
     var due = isDueForRefresh(ch);
+    var keyless = isMuseumKeyMissing(ch);
     var blocked = (giphyCooldownActive && ch.type === 'giphy' && ch.refreshing && due)
                || isMuseumBlocked(ch);
-    if (blocked) row.classList.add('cooldown');
+    if (keyless) row.classList.add('needs-key');
+    else if (blocked) row.classList.add('cooldown');
     else if (ch.refreshing && due) row.classList.add('refreshing');
     var s = '<span class="ps-badge ps-badge-type">' + typeBadgeLetter(ch.type) + '</span>';
     s += '<span class="ps-badge ps-badge-sub">' + subTypeBadge(ch.name) + '</span>';
@@ -2506,12 +2546,19 @@ function createChannelRow(ch) {
 }
 function updateChannelRow(row, ch) {
     var due = isDueForRefresh(ch);
+    var keyless = isMuseumKeyMissing(ch);
     var blocked = (giphyCooldownActive && ch.type === 'giphy' && ch.refreshing && due)
                || isMuseumBlocked(ch);
-    if (blocked) {
+    if (keyless) {
+        row.classList.add('needs-key');
+        row.classList.remove('cooldown');
+        row.classList.remove('refreshing');
+    } else if (blocked) {
+        row.classList.remove('needs-key');
         row.classList.add('cooldown');
         row.classList.remove('refreshing');
     } else {
+        row.classList.remove('needs-key');
         row.classList.remove('cooldown');
         if (ch.refreshing && due) row.classList.add('refreshing');
         else row.classList.remove('refreshing');
@@ -2719,12 +2766,42 @@ function pollActivePlayset(attempt) {
                 // the backend flag.
                 var mkxRegBanner = document.getElementById('makapix-reg-banner');
                 mkxRegBanner.style.display = (resp.data.makapix_registration_required === true) ? 'block' : 'none';
+                // Museum API-key banner: show when an institution channel in the
+                // active playset belongs to a BYOK museum whose key is unset.
+                // Derived inline from this poll's payload (channel list +
+                // museum_key_missing map) so it never lags the global. Soft tone:
+                // cached art still plays, the channel is just frozen.
+                var mkBanner = document.getElementById('museum-key-banner');
+                var mkmMap = resp.data.museum_key_missing || {};
+                var keylessChans = [];
+                if (resp.data.playset_info && resp.data.playset_info.channels) {
+                    resp.data.playset_info.channels.forEach(function(c){
+                        if (c.type !== 'institution') return;
+                        var mid = museumIdFromName(c.name);
+                        if (mid && mkmMap[mid] === true) {
+                            var nm = c.display_name || c.name;
+                            if (keylessChans.indexOf(nm) === -1) keylessChans.push(nm);
+                        }
+                    });
+                }
+                if (keylessChans.length) {
+                    document.getElementById('museum-key-banner-text').textContent =
+                        keylessChans.join(', ') + ' need an API key. They keep playing cached '
+                        + 'art but won’t fetch new artwork. Tap here to add a key in '
+                        + 'Settings → Museums.';
+                    mkBanner.style.display = 'block';
+                } else {
+                    mkBanner.style.display = 'none';
+                }
                 if (!switching && resp.data.active_playset && resp.data.playset_info) {
                     var pollPillId = pillIdFromActivePlayset(resp.data.active_playset);
                     updateNowPlaying(pollPillId,
                                      resp.data.playset_info,
                                      artworkTitleFromActivePlayset(resp.data.active_playset));
                     updatePillBarActive(pollPillId);
+                }
+                if (resp.data.museum_key_missing && typeof resp.data.museum_key_missing === 'object') {
+                    museumKeyMissing = resp.data.museum_key_missing;
                 }
                 if (resp.data.museum_rate_limits && typeof resp.data.museum_rate_limits === 'object') {
                     var next = {};

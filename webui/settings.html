@@ -434,17 +434,19 @@
     </div>
     <div class="section">
         <h3>Harvard Art Museums (API key)</h3>
+        <div style="margin-bottom:8px;"><span class="status-badge status-neutral" id="ham-key-badge">Loading…</span></div>
         <div class="setting-row">
             <label class="setting-label" for="ham-api-key">API Key</label>
-            <input class="setting-input" id="ham-api-key" type="text" placeholder="Harvard Art Museums API Key">
+            <input class="setting-input" id="ham-api-key" type="text" placeholder="Harvard Art Museums API Key" oninput="updateMuseumKeyBadge('ham')">
         </div>
         <div class="setting-hint">Enter your Harvard Art Museums API key. HAM channels will not refresh without a valid key, and the museum browser shows a prompt to enter one when you click into HAM until a key is saved. You can request a free key at <a href="https://harvardartmuseums.org/collections/api" target="_blank" rel="noopener">harvardartmuseums.org/collections/api</a>. The key counts against a per-key quota of 2 500 requests per day; one HAM channel refresh costs ~11 calls at the default 1 024-entry cache size.</div>
     </div>
     <div class="section">
         <h3>Smithsonian (API key)</h3>
+        <div style="margin-bottom:8px;"><span class="status-badge status-neutral" id="si-key-badge">Loading…</span></div>
         <div class="setting-row">
             <label class="setting-label" for="si-api-key">API Key</label>
-            <input class="setting-input" id="si-api-key" type="text" placeholder="api.data.gov API Key">
+            <input class="setting-input" id="si-api-key" type="text" placeholder="api.data.gov API Key" oninput="updateMuseumKeyBadge('si')">
         </div>
         <div class="setting-hint">Enter your api.data.gov API key. Smithsonian channels will not refresh without a valid key, and the museum browser shows a prompt to enter one when you click into Smithsonian until a key is saved. Get a free key at <a href="https://api.data.gov/signup/" target="_blank" rel="noopener">api.data.gov/signup/</a> — the same key works for any api.data.gov service. The default registered-key quota is 1 000 requests per hour; one Smithsonian channel refresh costs ~11 calls at the default 1 024-entry cache size. (Do not use <code>DEMO_KEY</code> — it is capped at ~30 requests per hour per IP and will throttle mid-refresh.)</div>
     </div>
@@ -1024,6 +1026,25 @@ function loadMuseumSettings(cfg) {
     if (!cacheSel.value) cacheSel.value = '1024';
     document.getElementById('ham-api-key').value = cfg.ham_api_key || '';
     document.getElementById('si-api-key').value = cfg.si_api_key || '';
+    updateMuseumKeyBadge('ham');
+    updateMuseumKeyBadge('si');
+}
+
+// BYOK key status badge next to each museum's API-key field. Reads the input
+// value directly (no extra endpoint) — a non-empty key shows "Key set", an
+// empty one warns that channels won't refresh. Mirrors the Makapix health
+// badge; kept in sync on config load, on input, and after a save.
+function updateMuseumKeyBadge(museum) {
+    var input = document.getElementById(museum + '-api-key');
+    var badge = document.getElementById(museum + '-key-badge');
+    if (!input || !badge) return;
+    if (input.value.trim()) {
+        badge.className = 'status-badge status-connected';
+        badge.textContent = 'Key set';
+    } else {
+        badge.className = 'status-badge status-warn';
+        badge.textContent = 'No key — channels won’t refresh';
+    }
 }
 
 function saveMuseumAll() {
@@ -1039,6 +1060,8 @@ function saveMuseumAll() {
     };
     mergeConfig(partial, function() {
         btn.disabled = false;
+        updateMuseumKeyBadge('ham');
+        updateMuseumKeyBadge('si');
         showToast('Museum settings saved', false);
     }, function(status) {
         btn.disabled = false;

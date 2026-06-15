@@ -13,6 +13,12 @@
  * optional SDIO-bus poll-wait, and (for the file variant) an atomic
  * temp-file-then-rename write.
  *
+ * Because every content fetcher funnels through here, this is also where the
+ * process-wide TLS concurrency gate lives: at most
+ * CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS transfers hold a live TLS session at
+ * once, so overlapping HTTPS streams can't starve each other on the single
+ * Wi-Fi link (see docs/concurrent-tls-eagain-tabled.md, Option 4).
+ *
  * Two sinks, one core:
  *   - http_fetch_to_buffer() — body into a caller-owned buffer (JSON/text APIs)
  *   - http_fetch_to_file()   — body into a file on the SD card (binary artwork)

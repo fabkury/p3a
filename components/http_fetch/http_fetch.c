@@ -15,6 +15,11 @@
  * path (components/giphy/giphy_download.c, components/giphy/giphy_api.c) so the
  * migration is behavior-preserving for the sites that already retried, and a
  * net improvement (the same robustness) for the sites that did not.
+ *
+ * do_fetch() also owns a process-wide TLS concurrency gate (a counting
+ * semaphore) so overlapping HTTPS transfers can't starve each other on the
+ * single Wi-Fi link — see the gate section below and
+ * docs/concurrent-tls-eagain-tabled.md (Option 4).
  */
 
 #include "http_fetch.h"
@@ -25,16 +30,24 @@
 #include <strings.h>   // strcasecmp
 #include <unistd.h>    // ftruncate, fsync, unlink
 
+#include "sdkconfig.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 
 #include "sdio_bus.h"
 
 static const char *TAG = "http_fetch";
+
+// Belt-and-suspenders: the Kconfig default is 2, but keep the helper buildable
+// if the option is ever stripped from a generated sdkconfig.
+#ifndef CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS
+#define CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS 2
+#endif
 
 #define HTTP_FETCH_DEFAULT_TIMEOUT_MS   15000
 #define HTTP_FETCH_DEFAULT_RX_BUFFER    4096
@@ -45,6 +58,54 @@ static const char *TAG = "http_fetch";
 #define HTTP_FETCH_URL_MAX              1024   // working URL + captured Location (manual redirect)
 
 static const uint32_t s_default_backoff_ms[HTTP_FETCH_DEFAULT_ATTEMPTS] = {0, 1000, 3000};
+
+// ---------------------------------------------------------------------------
+// TLS concurrency gate (Option 4, docs/concurrent-tls-eagain-tabled.md)
+//
+// Every transfer issued through this helper passes through a process-wide
+// counting semaphore, so at most CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS fetches
+// hold a live TLS session at once. Overlapping HTTPS streams on the single
+// Wi-Fi link were starving large downloads: a socket read stalls past the
+// timeout, lwIP returns EAGAIN ("esp_tls_conn_read error, errno=No more
+// processes"), esp_http_client maps that to end-of-stream, and the body is
+// retried as a truncated read — which big GIFs could lose on every attempt.
+// Gating concurrency caps that contention structurally; raising the lwIP recv
+// mailboxes only raised the ceiling.
+//
+// Lazy init: do_fetch() runs from several tasks (download_mgr, giphy refresh,
+// museum refresh, show_url) with no shared init point. xSemaphoreCreateCounting
+// allocates, so it runs OUTSIDE the critical section; a compare-and-set under a
+// spinlock publishes the winner and any racing loser deletes its spare. If the
+// allocation fails we degrade to ungated rather than wedging every fetcher.
+// ---------------------------------------------------------------------------
+
+static SemaphoreHandle_t s_tls_gate = NULL;
+static portMUX_TYPE      s_tls_gate_lock = portMUX_INITIALIZER_UNLOCKED;
+
+static SemaphoreHandle_t tls_gate(void)
+{
+    SemaphoreHandle_t gate = s_tls_gate;
+    if (gate) return gate;
+
+    SemaphoreHandle_t created =
+        xSemaphoreCreateCounting(CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS,
+                                 CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS);
+    if (!created) {
+        ESP_LOGE(TAG, "TLS gate alloc failed; proceeding ungated");
+        return NULL;
+    }
+
+    portENTER_CRITICAL(&s_tls_gate_lock);
+    if (s_tls_gate == NULL) {
+        s_tls_gate = created;   // publish ours
+        created = NULL;
+    }
+    gate = s_tls_gate;
+    portEXIT_CRITICAL(&s_tls_gate_lock);
+
+    if (created) vSemaphoreDelete(created);  // lost the race; drop the spare
+    return gate;
+}
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -268,6 +329,15 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
     bool      buffer_full = false;
     bool      aborted = false;
 
+    // Hold a TLS-concurrency slot for the duration of the live network work.
+    // Acquired here (after the SDIO wait and the redirect-scratch alloc, which
+    // do no network and must not hold a slot) and released once below the hop
+    // loop. The slot is briefly handed back during inter-attempt backoff sleeps
+    // so a retrying transfer doesn't pin a slot while idle. No early returns
+    // exist between here and the matching give, so the slot can't leak.
+    SemaphoreHandle_t gate = tls_gate();
+    if (gate) xSemaphoreTake(gate, portMAX_DELAY);
+
     for (int hop = 0; hop <= max_redirects && !success && fatal == ESP_OK; hop++) {
         bool got_redirect = false;
 
@@ -280,7 +350,10 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
                 if (delay) {
                     ESP_LOGW(TAG, "Retrying %s in %lums (attempt %d/%d)",
                              cur_url, (unsigned long)delay, attempt + 1, max_attempts);
+                    // Don't pin a concurrency slot while sleeping on the backoff.
+                    if (gate) xSemaphoreGive(gate);
                     vTaskDelay(pdMS_TO_TICKS(delay));
+                    if (gate) xSemaphoreTake(gate, portMAX_DELAY);
                 }
             }
             if (!sink_reset(sink)) { fatal = ESP_FAIL; break; }
@@ -465,6 +538,8 @@ static esp_err_t do_fetch(const http_fetch_request_t *req, fetch_sink_t *sink,
 
         if (!got_redirect) break;  // no redirect this hop -> done (success / fatal / exhausted)
     }  // hop loop
+
+    if (gate) xSemaphoreGive(gate);
 
     free(work_url);
     free(redir);

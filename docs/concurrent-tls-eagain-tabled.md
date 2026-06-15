@@ -1,6 +1,6 @@
 # Concurrent TLS EAGAIN During Giphy Refresh
 
-Status: **Option 2 implemented** (2026-05-03). Truncated-read retry with backoff is now in `giphy_download.c` and `giphy_api.c::giphy_fetch_page`. Options 3 and 4 remain on the shelf — revisit if Option 2 retries turn out to be frequent in real usage.
+Status: **Options 2, 3 and 4 implemented.** Truncated-read retry with backoff (Option 2) landed 2026-05-03 and was later centralized in `components/http_fetch`. Option 3 (raise lwIP recv mailboxes) landed 2026-06-15 (`24f05172`). Option 4 (TLS concurrency gate) landed 2026-06-15 after the mailbox bump alone still left large downloads losing every retry under a refresh burst — see "Option 4" below for the as-built notes.
 
 Update 2026-06-05: the retry/truncation core has since been centralized in the shared `components/http_fetch` helper, and the truncation check was extended to chunked transfer-encoding (no Content-Length) — see the dated bullet under Option 2's implementation notes.
 
@@ -128,7 +128,7 @@ sdkconfig knobs only: `CONFIG_LWIP_TCPIP_RECVMBOX_SIZE`, `CONFIG_LWIP_TCP_RECVMB
 - Bottleneck can shift silently to the Wi-Fi driver pools (`CONFIG_ESP_WIFI_*_BUFFER_NUM`), making future debugging harder.
 - Hides the bug from future-you. No log breadcrumbs when it does happen.
 
-### Option 4 — TLS semaphore with N=2 (hybrid)
+### Option 4 — TLS semaphore with N=2 (hybrid) **(implemented 2026-06-15)**
 
 Shared semaphore around `esp_http_client_perform` (or equivalent) capped at 2 concurrent TLS sessions. Preserves the API-fetch + binary-download overlap that cold-start latency depends on, but blocks a third concurrent session (view_tracker pingback, OTA check, second download) from piling on during a refresh burst.
 
@@ -139,6 +139,14 @@ Shared semaphore around `esp_http_client_perform` (or equivalent) capped at 2 co
 **Cons**
 - More invasive than Option 2 (~30 lines plus a shared handle, threaded through every HTTPS call site).
 - Overkill if Option 2 alone keeps retries rare in practice.
+
+**Implementation notes (as built):**
+- The `~30 lines threaded through every call site` cost evaporated: since the 2026-06-05 refactor every content fetcher (giphy pages + downloads, all seven museums, makapix_artwork, show_url) funnels through `http_fetch`'s `do_fetch()`, so a single counting semaphore there gates all of them. The gate lives entirely in `components/http_fetch/http_fetch.c` — `tls_gate()` (lazy, thread-safe create via create-outside-critical + compare-and-set) plus a take/give pair.
+- **N is `CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS`** (new `components/http_fetch/Kconfig`, default 2, range 1–8). Set to 1 to fully serialize `http_fetch` transfers without a code change.
+- **Slot scope = live network work only.** Acquired after the SDIO wait and the redirect-scratch alloc (which do no network); released once below the hop loop. The slot is handed back during inter-attempt backoff sleeps and re-taken after, so a retrying transfer doesn't pin a slot while idle. There are no early `return`s between take and give, so a slot can't leak.
+- **Not gated (by design / out of scope):** the persistent Makapix MQTT-over-TLS link (separate esp-mqtt stack — it benefits indirectly from the reduced HTTP contention, which directly addresses the keepalive-starvation failure mode), and the few remaining direct-`esp_http_client` paths that bypass `http_fetch`: giphy `register_click` / `fetch_random_id` (click-driven, best-effort), OTA, and provisioning. These are infrequent and weren't in the observed failure window; route them through `http_fetch` if they ever need gating.
+- **No deadlock risk:** the gate is a leaf resource (no nested gate take, and the download_manager mutex is explicitly *not* held across the fetch), and waiters block with `portMAX_DELAY` — which is the intended backpressure, not a hang.
+- Does **not** by itself give a stalled large download forward progress on retry (each retry still restarts at byte 0; there's no HTTP Range/resume). The gate's job is to stop the stall from happening; Range-resume remains an independent, composable follow-up if large downloads still occasionally exhaust their attempts.
 
 ## Recommendation Going In
 

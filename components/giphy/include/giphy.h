@@ -243,7 +243,15 @@ esp_err_t giphy_download_artwork_with_progress(const char *giphy_id, const char 
  * @param channel_offset Per-playset starting offset into the Giphy feed.
  *                       Modulo against the 499-entry public cap wraps oversized
  *                       values back to the start.
- * @return ESP_OK on success, ESP_ERR_INVALID_STATE if WiFi not ready
+ * @return ESP_OK only when the refresh ran to completion. A refresh cut short
+ *         mid-pagination (HTTP 429 rate limit, cancellation, transport error)
+ *         returns the underlying error EVEN IF some pages already merged — the
+ *         merged entries stay cached and playable, but eviction and the
+ *         last_refresh stamp are skipped so the scheduler keeps the channel
+ *         pending and re-runs a full refresh once the gate clears, rather than
+ *         parking a half-filled channel as "fresh". Specific codes:
+ *         ESP_ERR_INVALID_RESPONSE (429), ESP_ERR_NOT_ALLOWED (invalid key /
+ *         cancellation), ESP_ERR_NOT_FOUND (no key / cache vanished).
  */
 esp_err_t giphy_refresh_channel(const char *channel_id, const char *query, uint32_t channel_offset);
 

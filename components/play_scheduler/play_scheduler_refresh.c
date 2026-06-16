@@ -1347,7 +1347,15 @@ static void refresh_task(void *arg)
                                  (unsigned)remaining_min);
                         detail = rate_limit_buf;
                     }
-                    p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1, detail);
+                    // Self-gate on live playback: a 429 can now arrive
+                    // mid-pagination (after a partial fetch already merged
+                    // playable entries) while an animation is on screen — never
+                    // cover live artwork with a refresh error the device will
+                    // retry on its own. When nothing is playing yet (cold start,
+                    // 429 on the first page) the message still informs the user.
+                    if (!animation_player_is_animation_ready()) {
+                        p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1, detail);
+                    }
                 }
             }
             }

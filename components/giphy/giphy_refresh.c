@@ -542,20 +542,38 @@ esp_err_t giphy_refresh_channel_with_progress(const char *channel_id,
              _dn, refresh_completed ? "complete" : "incomplete",
              total_fetched, final_entry_count);
 
+    // Status badge tracks KEY health, not refresh completeness: a non-empty
+    // fetch proves the key works regardless of how the loop ended (a 429 is a
+    // rate limit, not an auth rejection). Drop any auth-invalid latch so the
+    // next 401 episode notifies anew (no-op and silent when nothing latched).
     if (total_fetched > 0) {
-        // A successful fetch proves the key works — drop any auth-invalid
-        // latch state so the next 401 episode notifies anew (no-op and
-        // silent when nothing is latched).
         giphy_clear_auth_invalid();
         s_last_refresh_status = GIPHY_REFRESH_OK;
-        return ESP_OK;
-    }
-    // Propagate specific error (e.g. ESP_ERR_NOT_ALLOWED for invalid API key)
-    if (last_err == ESP_ERR_NOT_ALLOWED) {
+    } else if (last_err == ESP_ERR_NOT_ALLOWED) {
         s_last_refresh_status = GIPHY_REFRESH_INVALID_API_KEY;
     } else {
         s_last_refresh_status = GIPHY_REFRESH_FAILED;
     }
+
+    // A partial refresh must not report success even when some entries merged.
+    // Eviction and the on-disk last_refresh save above are already gated on
+    // refresh_completed; returning ESP_OK here anyway would let the caller
+    // clear refresh_pending and bump its in-memory last_refresh, parking a
+    // half-filled channel (e.g. 50 of 128 entries after a mid-pagination 429)
+    // as "fresh" for a whole refresh interval before it could fill up.
+    // Propagate the error so the scheduler keeps the channel pending and
+    // re-runs a full refresh once the gate (rate-limit cooldown / failure
+    // backoff) clears — the merged entries stay cached and playable until
+    // then. Mirrors the Makapix incomplete-walk handling in
+    // play_scheduler_refresh.c.
+    if (!refresh_completed) {
+        return (last_err != ESP_OK) ? last_err : ESP_FAIL;
+    }
+
+    if (total_fetched > 0) {
+        return ESP_OK;
+    }
+    // Ran to completion but the endpoint returned no entries at all.
     return (last_err != ESP_OK) ? last_err : ESP_FAIL;
 }
 

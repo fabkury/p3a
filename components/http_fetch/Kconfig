@@ -3,7 +3,7 @@ menu "HTTP Fetch"
     config HTTP_FETCH_MAX_CONCURRENT_TLS
         int "Max concurrent TLS sessions through http_fetch"
         range 1 8
-        default 3
+        default 2
         help
             Upper bound on how many HTTP(S) transfers issued through the shared
             http_fetch helper may hold a live TLS session at the same time. A
@@ -17,16 +17,13 @@ menu "HTTP Fetch"
             transfer is retried as a truncated read. Big GIFs could lose every
             retry. See docs/concurrent-tls-eagain-tabled.md (Option 4).
 
-            3 keeps the Giphy API-page-fetch + binary-download overlap that
-            cold-start latency depends on, plus one spare slot so an occasional
-            third transfer (a show_url or OTA version check landing mid-refresh)
-            isn't forced to wait behind them. The cost is more simultaneous load
-            on the host RX path: if the EAGAIN/truncated-read warnings get worse,
-            drop back to 2, or to 1 to fully serialize all http_fetch transfers.
+            2 preserves the Giphy API-page-fetch + binary-download overlap that
+            cold-start latency depends on, while blocking a third session from
+            piling on during a refresh burst. Set to 1 to fully serialize all
+            http_fetch transfers if 2 still shows contention.
 
-            Note: this gates only transfers that go through http_fetch, so the
-            real peak is one higher: the persistent Makapix MQTT-over-TLS link
-            and esp_https_ota firmware downloads run on separate TLS clients and
-            are not gated.
+            Note: this gates only transfers that go through http_fetch. The
+            persistent Makapix MQTT-over-TLS link runs on a separate stack and is
+            not gated (it benefits indirectly from the reduced HTTP contention).
 
 endmenu

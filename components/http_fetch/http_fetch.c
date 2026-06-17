@@ -43,10 +43,10 @@
 
 static const char *TAG = "http_fetch";
 
-// Belt-and-suspenders: the Kconfig default is 3, but keep the helper buildable
+// Belt-and-suspenders: the Kconfig default is 2, but keep the helper buildable
 // if the option is ever stripped from a generated sdkconfig.
 #ifndef CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS
-#define CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS 3
+#define CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS 2
 #endif
 
 #define HTTP_FETCH_DEFAULT_TIMEOUT_MS   15000

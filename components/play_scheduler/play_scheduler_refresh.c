@@ -98,6 +98,36 @@ static uint32_t s_next_refresh_delay = REFRESH_INTERVAL_SECONDS;
 // re-entry while channels sit gated on a cooldown or missing connectivity.
 static bool s_gc_kick_armed = true;
 
+// On-screen refresh-error overlay budget. Transient refresh failures the device
+// recovers from on its own — the Giphy/museum HTTP 429 rate-limit notices and
+// the generic Giphy/museum refresh-failure errors — shouldn't wedge the screen or
+// keep re-covering live artwork on every cooldown reprobe / retry. Two bounds
+// keep them unintrusive: each display self-dismisses after REFRESH_ERR_MSG_TTL_MS
+// (the render loop reverts to animation playback), and at most
+// REFRESH_ERR_MSG_MAX_PER_BOOT displays happen per boot. These messages show
+// unconditionally (no live-playback gate) because the TTL guarantees they can't
+// wedge the screen. The web UI / API error path and the cooldown logs are
+// untouched. All four — Giphy 429, museum 429, and the generic Giphy/museum
+// refresh-failure messages — draw from this single shared budget. (The Giphy 401
+// auth-invalid notice is separate: it's terminal/actionable, so it stays
+// persistent and ungated.) Every consumer runs on the single ps_refresh task, so
+// a plain counter needs no locking. (refresh_err_msg_allow() consumes a slot only
+// when a message is actually displayed — see the call sites.)
+#define REFRESH_ERR_MSG_MAX_PER_BOOT 2
+#define REFRESH_ERR_MSG_TTL_MS       20000   // auto-revert to playback after 20s
+static int s_refresh_err_msg_shown = 0;
+
+// Returns true (and spends one of the per-boot slots) while an on-screen
+// refresh-error overlay may still be shown; false once the budget is exhausted.
+static bool refresh_err_msg_allow(void)
+{
+    if (s_refresh_err_msg_shown >= REFRESH_ERR_MSG_MAX_PER_BOOT) {
+        return false;
+    }
+    s_refresh_err_msg_shown++;
+    return true;
+}
+
 // PSRAM-backed stack for refresh task
 static StackType_t *s_refresh_stack = NULL;
 static StaticTask_t s_refresh_task_buffer;
@@ -1333,28 +1363,35 @@ static void refresh_task(void *arg)
                 } else if (err != ESP_OK) {
                     char giphy_display_name[64];
                     ps_get_display_name_from_spec(type, spec_name, identifier, giphy_display_name, sizeof(giphy_display_name));
-                    const char *detail = "Giphy refresh failed";
-                    char rate_limit_buf[128];
                     if (err == ESP_ERR_INVALID_RESPONSE) {
-                        uint32_t remaining_min = (giphy_cooldown_remaining_sec() + 59) / 60;
-                        if (remaining_min == 0) remaining_min = 1;
-                        // Renderer caps at 3 lines (see ugfx_ui.c MAX_LINES) — keep
-                        // line breaks aligned with that limit.
-                        snprintf(rate_limit_buf, sizeof(rate_limit_buf),
-                                 "Cannot refresh channel: Giphy API key\n"
-                                 "rate limit reached (error 429).\n"
-                                 "Device will retry in %u min.",
-                                 (unsigned)remaining_min);
-                        detail = rate_limit_buf;
-                    }
-                    // Self-gate on live playback: a 429 can now arrive
-                    // mid-pagination (after a partial fetch already merged
-                    // playable entries) while an animation is on screen — never
-                    // cover live artwork with a refresh error the device will
-                    // retry on its own. When nothing is playing yet (cold start,
-                    // 429 on the first page) the message still informs the user.
-                    if (!animation_player_is_animation_ready()) {
-                        p3a_render_set_channel_message(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1, detail);
+                        // 429 rate-limit. Shown unconditionally — no live-playback
+                        // gate — because the message self-dismisses after
+                        // REFRESH_ERR_MSG_TTL_MS (render loop reverts to animation),
+                        // so it can't wedge the screen. Still bounded to
+                        // REFRESH_ERR_MSG_MAX_PER_BOOT displays/boot; the slot is
+                        // spent only when a message is actually shown.
+                        if (refresh_err_msg_allow()) {
+                            uint32_t remaining_min = (giphy_cooldown_remaining_sec() + 59) / 60;
+                            if (remaining_min == 0) remaining_min = 1;
+                            // Renderer caps at 3 lines (see ugfx_ui.c MAX_LINES) — keep
+                            // line breaks aligned with that limit.
+                            char rate_limit_buf[128];
+                            snprintf(rate_limit_buf, sizeof(rate_limit_buf),
+                                     "Cannot refresh channel: Giphy API key\n"
+                                     "rate limit reached (error 429).\n"
+                                     "Device will retry in %u min.",
+                                     (unsigned)remaining_min);
+                            p3a_render_set_channel_message_ttl(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1,
+                                                               rate_limit_buf, REFRESH_ERR_MSG_TTL_MS);
+                        }
+                    } else {
+                        // Generic (non-429) refresh failure. Same bounds as the 429
+                        // above (shared per-boot budget + REFRESH_ERR_MSG_TTL_MS
+                        // auto-dismiss) so it can't wedge the screen either.
+                        if (refresh_err_msg_allow()) {
+                            p3a_render_set_channel_message_ttl(giphy_display_name, P3A_CHANNEL_MSG_ERROR, -1,
+                                                               "Giphy refresh failed", REFRESH_ERR_MSG_TTL_MS);
+                        }
                     }
                 }
             }
@@ -1409,18 +1446,32 @@ static void refresh_task(void *arg)
                     did_refresh = true;
                     err = art_institution_refresh_by_spec(channel_id, spec_name, identifier, channel_offset);
                     if (err == ESP_ERR_INVALID_RESPONSE) {
-                        // 429 — cooldown already engaged inside the adapter.
-                        uint32_t remaining_sec = art_institution_rate_limit_remaining(museum_id);
-                        char rate_limit_buf[160];
-                        snprintf(rate_limit_buf, sizeof(rate_limit_buf),
-                                 "Cannot refresh channel: %s API\n"
-                                 "rate limit reached (error 429).\n"
-                                 "Device will retry in %u sec.",
-                                 museum_id[0] ? museum_id : "museum",
-                                 (unsigned)remaining_sec);
-                        p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_ERROR, -1, rate_limit_buf);
+                        // 429 — cooldown already engaged inside the adapter. Shown
+                        // unconditionally; it self-dismisses after
+                        // REFRESH_ERR_MSG_TTL_MS (render loop reverts to animation)
+                        // and is capped at REFRESH_ERR_MSG_MAX_PER_BOOT displays per
+                        // boot (budget shared with the Giphy 429 message) so
+                        // repeated cooldown reprobes can't wedge the screen.
+                        if (refresh_err_msg_allow()) {
+                            uint32_t remaining_sec = art_institution_rate_limit_remaining(museum_id);
+                            char rate_limit_buf[160];
+                            snprintf(rate_limit_buf, sizeof(rate_limit_buf),
+                                     "Cannot refresh channel: %s API\n"
+                                     "rate limit reached (error 429).\n"
+                                     "Device will retry in %u sec.",
+                                     museum_id[0] ? museum_id : "museum",
+                                     (unsigned)remaining_sec);
+                            p3a_render_set_channel_message_ttl(display_name, P3A_CHANNEL_MSG_ERROR, -1,
+                                                               rate_limit_buf, REFRESH_ERR_MSG_TTL_MS);
+                        }
                     } else if (err != ESP_OK) {
-                        p3a_render_set_channel_message(display_name, P3A_CHANNEL_MSG_ERROR, -1, "Museum refresh failed");
+                        // Generic (non-429) museum refresh failure. Same bounds as
+                        // the 429 above (shared per-boot budget + REFRESH_ERR_MSG_TTL_MS
+                        // auto-dismiss) so it can't wedge the screen either.
+                        if (refresh_err_msg_allow()) {
+                            p3a_render_set_channel_message_ttl(display_name, P3A_CHANNEL_MSG_ERROR, -1,
+                                                               "Museum refresh failed", REFRESH_ERR_MSG_TTL_MS);
+                        }
                     }
                 }
             }

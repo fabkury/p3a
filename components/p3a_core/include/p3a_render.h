@@ -92,6 +92,30 @@ void p3a_render_set_channel_message(const char *channel_name,
                                      const char *detail);
 
 /**
+ * @brief Set a channel message that auto-dismisses after a fixed duration
+ *
+ * Identical to p3a_render_set_channel_message(), but arms a one-shot timeout:
+ * once the message has been displayed for @p ttl_ms, the render loop clears it
+ * (reverting the playback sub-state to animation). Used for transient,
+ * informational errors the device recovers from on its own — e.g. the Giphy /
+ * museum HTTP 429 rate-limit notice — so they never wedge the screen. A
+ * @p ttl_ms of 0 behaves exactly like p3a_render_set_channel_message() (no
+ * expiry). Setting any subsequent message (including a TTL-less one) cancels a
+ * pending expiry.
+ *
+ * @param channel_name Name of channel being loaded
+ * @param msg_type Type of message
+ * @param progress_percent Download progress (-1 if unknown)
+ * @param detail Additional detail text (can be NULL)
+ * @param ttl_ms Auto-dismiss after this many milliseconds (0 = persist)
+ */
+void p3a_render_set_channel_message_ttl(const char *channel_name,
+                                         int msg_type,
+                                         int progress_percent,
+                                         const char *detail,
+                                         uint32_t ttl_ms);
+
+/**
  * @brief Set provisioning status message
  * 
  * @param status Status text to display

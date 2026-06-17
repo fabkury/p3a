@@ -31,7 +31,8 @@ static struct {
     // Message arbitration (see p3a_render_set_channel_message)
     int64_t channel_msg_changed_us;   // last accepted identity change
     int64_t channel_msg_updated_us;   // last accepted write (incl. progress)
-    
+    int64_t channel_msg_expire_us;    // absolute time to auto-clear; 0 = persist
+
     // Provisioning state
     char prov_status[128];
     char prov_code[16];
@@ -155,6 +156,14 @@ esp_err_t p3a_render_frame(uint8_t *buffer, size_t stride, p3a_render_result_t *
     
     switch (state) {
         case P3A_STATE_ANIMATION_PLAYBACK: {
+            // Auto-dismiss an expired channel message (e.g. the 429 rate-limit
+            // notice's 20s cap) before deciding what to render, so this very
+            // frame reverts to animation playback instead of waiting for the
+            // next swap to clear the overlay.
+            if (s_render.channel_msg_expire_us != 0 &&
+                esp_timer_get_time() >= s_render.channel_msg_expire_us) {
+                p3a_render_set_channel_message(NULL, P3A_CHANNEL_MSG_NONE, -1, NULL);
+            }
             p3a_playback_substate_t substate = p3a_state_get_playback_substate();
             if (substate == P3A_PLAYBACK_CHANNEL_MESSAGE) {
                 // IMPORTANT: Still call animation renderer to process prefetch/swap
@@ -287,10 +296,11 @@ static esp_err_t render_ota(uint8_t *buffer, size_t stride, p3a_render_result_t 
 // State update functions (called by other modules to set render data)
 // ============================================================================
 
-void p3a_render_set_channel_message(const char *channel_name,
+static void set_channel_message_impl(const char *channel_name,
                                      int msg_type,
                                      int progress_percent,
-                                     const char *detail)
+                                     const char *detail,
+                                     uint32_t ttl_ms)
 {
     if (!s_render.initialized) return;
 
@@ -360,6 +370,16 @@ void p3a_render_set_channel_message(const char *channel_name,
     } else {
         s_render.channel_detail[0] = '\0';
     }
+
+    // Arm/cancel the one-shot auto-dismiss. Only a non-clear message with a
+    // positive TTL expires; everything else (a clear, or a TTL-less message
+    // that replaces an expiring one) cancels any pending expiry so it can't
+    // dismiss the wrong message later.
+    if (msg_type != P3A_CHANNEL_MSG_NONE && ttl_ms > 0) {
+        s_render.channel_msg_expire_us = esp_timer_get_time() + (int64_t)ttl_ms * 1000;
+    } else {
+        s_render.channel_msg_expire_us = 0;
+    }
     
     // Also update the state machine's channel message
     p3a_channel_message_t msg = {
@@ -390,6 +410,23 @@ void p3a_render_set_channel_message(const char *channel_name,
              channel_name ? channel_name : "",
              channel_msg_type_to_string(s_render.channel_msg_type),
              progress_percent);
+}
+
+void p3a_render_set_channel_message(const char *channel_name,
+                                     int msg_type,
+                                     int progress_percent,
+                                     const char *detail)
+{
+    set_channel_message_impl(channel_name, msg_type, progress_percent, detail, 0);
+}
+
+void p3a_render_set_channel_message_ttl(const char *channel_name,
+                                         int msg_type,
+                                         int progress_percent,
+                                         const char *detail,
+                                         uint32_t ttl_ms)
+{
+    set_channel_message_impl(channel_name, msg_type, progress_percent, detail, ttl_ms);
 }
 
 void p3a_render_set_provisioning_status(const char *status)

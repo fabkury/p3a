@@ -36,6 +36,11 @@
 #include "playback_service.h"
 #include "version.h"
 #include "p3a_state.h"
+#include "esp_mac.h"
+#include "esp_chip_info.h"
+#include "esp_flash.h"
+#include "slave_ota.h"
+#include "p3a_board.h"
 #include "freertos/semphr.h"
 
 // ---------- Debug Handler (Dev Mode) ----------
@@ -420,6 +425,63 @@ esp_err_t h_get_status(httpd_req_t *req) {
     uint16_t transport_reboots = config_store_get_transport_reboot_total();
     if (transport_reboots > 0) {
         cJSON_AddNumberToObject(data, "transport_recovery_reboots", (double)transport_reboots);
+    }
+
+    // Device hardware identity (static; surfaced in the web UI "About this device" panel)
+    {
+        cJSON *dev = cJSON_CreateObject();
+        if (dev) {
+            // MAC: report the address the STA interface actually presents on the
+            // LAN (assigned by the ESP32-C6 Wi-Fi co-processor via esp_wifi_remote),
+            // falling back to the P4's efuse base MAC when Wi-Fi isn't up yet.
+            uint8_t mac[6] = {0};
+            bool have_mac = false;
+            esp_netif_t *sta_if = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+            if (!sta_if) sta_if = esp_netif_get_handle_from_ifkey("WIFI_STA_RMT");
+            if (sta_if && esp_netif_get_mac(sta_if, mac) == ESP_OK) have_mac = true;
+            if (!have_mac && esp_read_mac(mac, ESP_MAC_WIFI_STA) == ESP_OK) have_mac = true;
+            if (have_mac) {
+                char mac_str[18];
+                snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+                         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                cJSON_AddStringToObject(dev, "mac", mac_str);
+            }
+
+            // Chip model + revision (esp_chip_info reports revision as major*100+minor)
+            esp_chip_info_t chip = {0};
+            esp_chip_info(&chip);
+            const char *model = CONFIG_IDF_TARGET;
+            if (chip.model == CHIP_ESP32P4) model = "ESP32-P4";
+            cJSON_AddStringToObject(dev, "chip", model);
+            char rev_str[12];
+            snprintf(rev_str, sizeof(rev_str), "v%d.%d", chip.revision / 100, chip.revision % 100);
+            cJSON_AddStringToObject(dev, "chip_rev", rev_str);
+            cJSON_AddNumberToObject(dev, "cores", chip.cores);
+
+            // Flash + PSRAM sizes
+            uint32_t flash_bytes = 0;
+            if (esp_flash_get_size(NULL, &flash_bytes) == ESP_OK && flash_bytes > 0)
+                cJSON_AddNumberToObject(dev, "flash_bytes", (double)flash_bytes);
+            size_t psram_bytes = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+            if (psram_bytes > 0)
+                cJSON_AddNumberToObject(dev, "psram_bytes", (double)psram_bytes);
+
+            // Board model + native screen resolution
+            cJSON_AddStringToObject(dev, "board", "Waveshare " P3A_BOARD_FULL_NAME);
+            cJSON_AddNumberToObject(dev, "screen_w", LCD_MAX_WIDTH);
+            cJSON_AddNumberToObject(dev, "screen_h", LCD_MAX_HEIGHT);
+
+            // ESP32-C6 Wi-Fi co-processor firmware version (embedded slave image)
+            uint32_t c6_major = 0, c6_minor = 0, c6_patch = 0;
+            if (slave_ota_get_embedded_version(&c6_major, &c6_minor, &c6_patch) == ESP_OK) {
+                char c6_str[24];
+                snprintf(c6_str, sizeof(c6_str), "%u.%u.%u",
+                         (unsigned)c6_major, (unsigned)c6_minor, (unsigned)c6_patch);
+                cJSON_AddStringToObject(dev, "c6_fw", c6_str);
+            }
+
+            cJSON_AddItemToObject(data, "device", dev);
+        }
     }
 
     // Device identity

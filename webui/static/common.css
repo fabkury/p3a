@@ -860,8 +860,14 @@ body.has-bottom-nav {
 .pill-row {
     display: flex;
     flex-wrap: nowrap;
-    gap: var(--sp-2);
     width: max-content;
+}
+/* Space the pills with margins rather than flex `gap`: some engines (notably
+   WebKit) drop `gap` on a flex container sized to `width: max-content`, which
+   left the pills touching. Margins are honoured everywhere and still count
+   toward the row's max-content width, so the row keeps sizing/scrolling right. */
+.pill-row > .pill-item + .pill-item {
+    margin-left: var(--sp-2);
 }
 .pill-item {
     flex-shrink: 0;

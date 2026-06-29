@@ -907,6 +907,27 @@ body.has-bottom-nav {
     color: var(--c-on-bg-muted);
 }
 
+/* PICO-8 monitor — a special action pill (links out to the live monitor),
+   not a channel family. Painted in PICO-8's own fixed palette (dark-blue
+   screen #1D2B53, cream text #FFF1E8, hot-pink edge #FF77A8) so it reads as a
+   tiny console and stands apart from the themed channel/utility pills in every
+   theme. Solid fill — never gets the active/pending states, it just navigates. */
+.pill-item.kind-pico8 {
+    display: inline-flex;
+    align-items: center;
+    background: #1D2B53;
+    color: #FFF1E8;
+    border-color: #FF77A8;
+    text-decoration: none;
+    font-family: var(--font-mono);
+    letter-spacing: 0.02em;
+}
+.pill-item.kind-pico8:hover {
+    background: #29346B;
+    border-color: #FF9EC0;
+    color: #FFF1E8;
+}
+
 /* Active state per kind: stronger fill + colored ring so the kind colour
    stays legible while clearly marking selection. */
 .pill-item.kind-user.active {

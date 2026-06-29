@@ -814,7 +814,6 @@ body {
         </div>
     </div>
 </div>
-<a href="/pico8" id="pico8-link" class="pill-item" style="display:none;text-decoration:none;text-align:center;width:min(420px,100%);">PICO-8 Monitor</a>
 <div class="update-banner" id="update-banner" onclick="window.location.href='/ota'">
     <h4>&#x2B06; Update Available</h4>
     <p id="update-version">A new firmware version is ready to install</p>
@@ -880,6 +879,7 @@ var isRegistered = false;
 var userPlaysets = [];
 var pinLists = [];       // [{slug, name, count, is_active}, ...]
 var activePinSlug = '';
+var pico8Enabled = false;  // PICO-8 monitor pill shown only when the build enables it
 
 // Built-in presets. Entries marked hiddenUnlessActive stay out of the
 // pill bar unless that playset is currently active (set via MQTT or a
@@ -1525,6 +1525,17 @@ function buildPillBar() {
         btn.addEventListener('click', function() { playPlayset(p.id, btn); });
         bar.appendChild(btn);
     });
+    /* PICO-8 monitor: a special action pill (links to the live monitor page)
+       rather than a channel. Its own console-coloured kind keeps it visually
+       distinct from the channel families and the trailing utility pill. */
+    if (pico8Enabled) {
+        var pico8 = document.createElement('a');
+        pico8.className = 'pill-item kind-pico8';
+        pico8.href = '/pico8';
+        pico8.textContent = 'PICO-8';
+        pico8.setAttribute('data-pico8', '1');
+        bar.appendChild(pico8);
+    }
     if (pinLists.length > 0 || isRegistered) {
         var manage = document.createElement('button');
         manage.className = 'pill-item kind-utility';
@@ -1977,10 +1988,7 @@ fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
     if (data.ui_config) {
         LCD_MAX_WIDTH = data.ui_config.lcd_width || 720;
         LCD_MAX_HEIGHT = data.ui_config.lcd_height || 720;
-        if (data.ui_config.pico8_enabled) {
-            var pico8Link = document.getElementById('pico8-link');
-            if (pico8Link) pico8Link.style.display = '';
-        }
+        pico8Enabled = !!data.ui_config.pico8_enabled;
     }
     if (data.channel_stats) {
         isRegistered = data.channel_stats.registered === true;

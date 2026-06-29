@@ -839,18 +839,17 @@ body.has-bottom-nav {
 /* ── Pill Bar ── */
 
 .pill-bar {
-    /* Two rows of pills that scroll together as one horizontal area: a grid
-       with two auto-height row tracks and column auto-flow, so pills fill
-       top→bottom then advance rightward, and the whole grid overflows on the
-       x-axis. Each vertical pair shares a column width (default stretch) so
-       the two rows line up. With a single pill the empty second track
-       collapses to 0, so the bar never reserves a blank row. */
+    /* Two rows of pills that scroll together as one horizontal area. The bar
+       is a vertical flex stack of two .pill-row strips (top/bottom); each row
+       packs its own pills at their natural width — no shared column tracks —
+       and the bar itself is the single overflow-x scroller, so one horizontal
+       drag moves both rows. align-items keeps each row only as wide as its
+       content (it may exceed the bar's width, which is what scrolls). gap here
+       is the vertical space between the two rows. */
     width: min(420px, 100%);
-    display: grid;
-    grid-auto-flow: column;
-    grid-template-rows: repeat(2, auto);
-    grid-auto-columns: max-content;
-    justify-content: start;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -858,6 +857,12 @@ body.has-bottom-nav {
     padding: var(--sp-1) 0;
 }
 .pill-bar::-webkit-scrollbar { display: none; }
+.pill-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--sp-2);
+    width: max-content;
+}
 .pill-item {
     flex-shrink: 0;
     padding: var(--sp-2) var(--sp-3);

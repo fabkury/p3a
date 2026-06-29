@@ -839,8 +839,18 @@ body.has-bottom-nav {
 /* ── Pill Bar ── */
 
 .pill-bar {
+    /* Two rows of pills that scroll together as one horizontal area: a grid
+       with two auto-height row tracks and column auto-flow, so pills fill
+       top→bottom then advance rightward, and the whole grid overflows on the
+       x-axis. Each vertical pair shares a column width (default stretch) so
+       the two rows line up. With a single pill the empty second track
+       collapses to 0, so the bar never reserves a blank row. */
     width: min(420px, 100%);
-    display: flex;
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(2, auto);
+    grid-auto-columns: max-content;
+    justify-content: start;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -915,6 +925,7 @@ body.has-bottom-nav {
 .pill-item.kind-pico8 {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     background: #1D2B53;
     color: #FFF1E8;
     border-color: #FF77A8;
@@ -969,7 +980,8 @@ body.has-bottom-nav {
 }
 
 @media (min-width: 481px) {
-    .pill-bar { flex-wrap: wrap; overflow-x: visible; }
+    /* .pill-bar stays a two-row horizontal scroller at every width — its 420px
+       cap means it can overflow even on desktop — so only the tab-bar unwraps. */
     .tab-bar { flex-wrap: wrap; overflow-x: visible; }
 }
 

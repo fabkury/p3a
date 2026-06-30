@@ -198,6 +198,7 @@ body {
     border: 1px solid var(--c-card-border);
     border-radius: var(--r-sm);
     font-size: 0.85rem;
+    background: var(--c-input-bg);
     color: var(--c-card-fg);
 }
 .pin-modal-actions {
@@ -1745,7 +1746,7 @@ function openPinBrowseModal(slug, listName) {
     var body = document.getElementById('pin-modal-content');
     body.innerHTML = '';
     var h = document.createElement('h3');
-    h.textContent = listName + ' — pinned';
+    h.textContent = listName;
     body.appendChild(h);
 
     var strip = document.createElement('div');
@@ -1844,6 +1845,7 @@ function openPinBrowseModal(slug, listName) {
         unpin.textContent = 'Unpin';
         unpin.className = 'danger';
         unpin.addEventListener('click', function() {
+            if (!confirm('Unpin this artwork? This cannot be undone.')) return;
             unpinItem(slug, item, function() {
                 /* Surgical removal preserves scroll position; re-fetching from
                    `offset` after a deep scroll would yank the user back to the

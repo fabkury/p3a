@@ -75,6 +75,7 @@ extern void reaction_overlay_show_error(void) __attribute__((weak));
 #define REACTION_POST_SOURCE_GIPHY       2
 #define REACTION_POST_SOURCE_SDCARD      3
 #define REACTION_POST_SOURCE_INSTITUTION 4
+#define REACTION_POST_SOURCE_KLIPY       5
 
 // USB touch forwarding (from app_usb.c via weak symbols)
 typedef struct {
@@ -166,6 +167,13 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
                 return ESP_OK;
             }
 
+            if (source == REACTION_POST_SOURCE_KLIPY) {
+                /* Klipy artworks have no reaction/click counterpart; swipe-up
+                   just pins (same as museum). */
+                p3a_pin_dispatch_from_current(NULL);
+                return ESP_OK;
+            }
+
             if (source != REACTION_POST_SOURCE_MAKAPIX) {
                 ESP_LOGI(TAG, "Swipe up on non-Makapix post - showing error");
                 if (reaction_overlay_show_error) reaction_overlay_show_error();
@@ -188,7 +196,8 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
             int source = p3a_current_post_get_source();
 
             if (source == REACTION_POST_SOURCE_GIPHY ||
-                source == REACTION_POST_SOURCE_INSTITUTION) {
+                source == REACTION_POST_SOURCE_INSTITUTION ||
+                source == REACTION_POST_SOURCE_KLIPY) {
                 /* No reaction-revoke for these sources — swipe-down is unpin-only. */
                 p3a_pin_dispatch_unpin_from_current(NULL);
                 return ESP_OK;

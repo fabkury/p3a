@@ -25,6 +25,7 @@
 #include "p3a_state.h"
 #include "p3a_current_post.h"
 #include "giphy.h"
+#include "klipy.h"
 #include "art_institution.h"
 #include "config_store.h"
 #include "psram_alloc.h"
@@ -453,6 +454,10 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     uint32_t giphy_cd_sec = cooldown_active ? giphy_cooldown_remaining_sec() : 0;
     bool giphy_auth_bad = giphy_is_auth_invalid();
     bool giphy_no_key_set = giphy_is_no_key();
+    bool klipy_cooldown_active = klipy_is_rate_limited();
+    uint32_t klipy_cd_sec = klipy_cooldown_active ? klipy_cooldown_remaining_sec() : 0;
+    bool klipy_auth_bad = klipy_is_auth_invalid();
+    bool klipy_no_key_set = klipy_is_no_key();
     uint32_t giphy_refresh_int = config_store_get_giphy_refresh_interval();
     uint32_t refresh_int = config_store_get_refresh_interval_sec();
     bool refresh_allow_override = config_store_get_refresh_allow_override();
@@ -522,6 +527,9 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     // as cooldown_active above).
     h = fnv_u8(h, giphy_auth_bad ? 1 : 0);
     h = fnv_u8(h, giphy_no_key_set ? 1 : 0);
+    h = fnv_u8(h, klipy_cooldown_active ? 1 : 0);
+    h = fnv_u8(h, klipy_auth_bad ? 1 : 0);
+    h = fnv_u8(h, klipy_no_key_set ? 1 : 0);
     h = fnv_u32(h, giphy_refresh_int);
     h = fnv_u32(h, refresh_int);
     h = fnv_u8(h, refresh_allow_override ? 1 : 0);
@@ -634,6 +642,11 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
     // banner mechanism, softer tone — it's an unconfigured state, not an
     // error.
     cJSON_AddBoolToObject(data, "giphy_no_key", giphy_no_key_set);
+
+    // Klipy latch flags — same banner mechanism as the Giphy flags above.
+    cJSON_AddNumberToObject(data, "klipy_cooldown_remaining_sec", (double)klipy_cd_sec);
+    cJSON_AddBoolToObject(data, "klipy_auth_invalid", klipy_auth_bad);
+    cJSON_AddBoolToObject(data, "klipy_no_key", klipy_no_key_set);
 
     // Refresh intervals so the frontend can derive due-for-refresh from
     // ch.last_refresh without a backend round trip. Cached statics — cheap.

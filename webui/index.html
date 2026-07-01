@@ -834,6 +834,18 @@ body {
     <h4>&#128273; Giphy API Key Needed</h4>
     <p>This playset has Giphy channels but no API key is configured, so they can't refresh. Tap here to add a free key in Settings.</p>
 </div>
+<div class="cooldown-banner" id="klipy-cooldown-banner">
+    <h4>&#9203; Klipy Rate Limited</h4>
+    <p>The Klipy API key hit its rate limit. Device is now waiting before refreshing Klipy channels.</p>
+</div>
+<div class="cooldown-banner" id="klipy-auth-banner" onclick="window.location.href='/settings#klipy'" style="cursor:pointer;background:var(--c-danger);color:var(--c-on-danger);box-shadow:0 4px 12px color-mix(in srgb, var(--c-danger) 35%, transparent);">
+    <h4>&#9888; Invalid Klipy API Key</h4>
+    <p>Klipy rejected the configured API key. Klipy channels keep playing cached artwork but won't refresh. Tap here to update the key in Settings.</p>
+</div>
+<div class="cooldown-banner" id="klipy-nokey-banner" onclick="window.location.href='/settings#klipy'" style="cursor:pointer;">
+    <h4>&#128273; Klipy API Key Needed</h4>
+    <p>This playset has Klipy channels but no API key is configured, so they can't refresh. Tap here to add a free key in Settings.</p>
+</div>
 <div class="cooldown-banner" id="makapix-reg-banner" onclick="window.location.href='/settings#makapix'" style="cursor:pointer;background:var(--c-danger);color:var(--c-on-danger);box-shadow:0 4px 12px color-mix(in srgb, var(--c-danger) 35%, transparent);">
     <h4>&#128081; Makapix Registration Needed</h4>
     <p>This playset has Makapix Club channels that need a linked account, so they show no artwork. Tap here to register this device in Settings &rarr; Makapix.</p>
@@ -851,6 +863,7 @@ body {
 <script>
 var isPaused = false;
 var giphyCooldownActive = false;
+var klipyCooldownActive = false;
 // Refresh intervals (seconds) sent by the backend so the frontend can decide
 // whether a queued channel actually needs work right now. 0 means unknown
 // (older firmware) — fall back to treating channels as always due.
@@ -2690,6 +2703,7 @@ function createChannelRow(ch) {
     var due = isDueForRefresh(ch);
     var keyless = isMuseumKeyMissing(ch);
     var blocked = (giphyCooldownActive && ch.type === 'giphy' && ch.refreshing && due)
+               || (klipyCooldownActive && ch.type === 'klipy' && ch.refreshing && due)
                || isMuseumBlocked(ch);
     if (keyless) row.classList.add('needs-key');
     else if (blocked) row.classList.add('cooldown');
@@ -2707,6 +2721,7 @@ function updateChannelRow(row, ch) {
     var due = isDueForRefresh(ch);
     var keyless = isMuseumKeyMissing(ch);
     var blocked = (giphyCooldownActive && ch.type === 'giphy' && ch.refreshing && due)
+               || (klipyCooldownActive && ch.type === 'klipy' && ch.refreshing && due)
                || isMuseumBlocked(ch);
     if (keyless) {
         row.classList.add('needs-key');
@@ -2918,6 +2933,19 @@ function pollActivePlayset(attempt) {
                 authBanner.style.display = (resp.data.giphy_auth_invalid === true) ? 'block' : 'none';
                 var nokeyBanner = document.getElementById('giphy-nokey-banner');
                 nokeyBanner.style.display = (resp.data.giphy_no_key === true) ? 'block' : 'none';
+                // Klipy latch banners (mirror the Giphy ones above).
+                var kCdSec = (resp.data.klipy_cooldown_remaining_sec | 0);
+                klipyCooldownActive = kCdSec > 0;
+                var klipyWaiting = !!(resp.data.playset_info && resp.data.playset_info.channels &&
+                    resp.data.playset_info.channels.some(function(c){
+                        return c.type === 'klipy' && c.refreshing && isDueForRefresh(c);
+                    }));
+                document.getElementById('klipy-cooldown-banner').style.display =
+                    (klipyCooldownActive && klipyWaiting) ? 'block' : 'none';
+                document.getElementById('klipy-auth-banner').style.display =
+                    (resp.data.klipy_auth_invalid === true) ? 'block' : 'none';
+                document.getElementById('klipy-nokey-banner').style.display =
+                    (resp.data.klipy_no_key === true) ? 'block' : 'none';
                 // Makapix registration banner: the active playset has non-open
                 // Makapix channels but the device has no usable registration, so
                 // they stay empty. Like the giphy auth/no-key banners, it's a

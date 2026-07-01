@@ -115,6 +115,7 @@ static const char *source_short(pinned_source_t src)
         case PINNED_SOURCE_MAKAPIX:     return "mkpx";
         case PINNED_SOURCE_GIPHY:       return "giph";
         case PINNED_SOURCE_INSTITUTION: return "inst";
+        case PINNED_SOURCE_KLIPY:       return "klip";
         default:                        return "unkn";
     }
 }
@@ -775,6 +776,13 @@ esp_err_t pin_list_build_artwork_path(const char *slug, const pinned_order_entry
             n = snprintf(out, out_len, "%s/giphy/%.*s%s",
                          dir, PINNED_GIPHY_ID_MAX, e->giphy.giphy_id, ext_str[ext_idx]);
             break;
+        case PINNED_SOURCE_KLIPY:
+            /* Product subdir kept in the path so the now-playing handler can
+               recover it (it looks for "/klipy/{gif|sticker}/"). */
+            n = snprintf(out, out_len, "%s/klipy/%s/%.*s%s",
+                         dir, e->klipy.product == 1 ? "sticker" : "gif",
+                         PINNED_GIPHY_ID_MAX, e->klipy.klipy_id, ext_str[ext_idx]);
+            break;
         case PINNED_SOURCE_INSTITUTION: {
             // iiif_key is stored in canonical form (matches the channel cache
             // and round-trips through art_institution_build_iiif_url for URL
@@ -965,6 +973,12 @@ esp_err_t pin_list_unpin(const char *slug, pinned_source_t src, const char *sour
         strlcpy(shim.museum.iiif_key, key, sizeof(shim.museum.iiif_key));
     } else if (entry.source == PINNED_SOURCE_GIPHY) {
         strlcpy(shim.giphy.giphy_id, entry.source_id, sizeof(shim.giphy.giphy_id));
+    } else if (entry.source == PINNED_SOURCE_KLIPY) {
+        /* source_id is "{gif|sticker}:{id}". */
+        const char *colon = strchr(entry.source_id, ':');
+        shim.klipy.product = (strncmp(entry.source_id, "sticker", 7) == 0) ? 1 : 0;
+        strlcpy(shim.klipy.klipy_id, colon ? colon + 1 : entry.source_id,
+                sizeof(shim.klipy.klipy_id));
     } else if (entry.source == PINNED_SOURCE_MAKAPIX) {
         /* source_id for makapix is the 36-char UUID; convert back to bytes. */
         const char *s = entry.source_id;
@@ -1174,6 +1188,55 @@ esp_err_t pin_lists_unpin_giphy(const char *slug, const char *giphy_id)
 {
     if (!giphy_id || !giphy_id[0]) return ESP_ERR_INVALID_ARG;
     return pin_list_unpin(slug, PINNED_SOURCE_GIPHY, giphy_id);
+}
+
+/* Composite Klipy source_id used in entry filenames and dedup: "{gif|sticker}:{id}".
+   Keeping the product in the id keeps gif/sticker pins of the same numeric id
+   distinct, and lets unpin / path-building recover the product. */
+esp_err_t pin_lists_pin_klipy(const char *slug,
+                              int32_t original_post_id,
+                              const char *klipy_id,
+                              uint8_t product,
+                              uint8_t extension,
+                              const char *title,
+                              const char *creator,
+                              uint32_t original_created_at,
+                              const char *src_artwork_path)
+{
+    if (!klipy_id || !klipy_id[0] || !src_artwork_path) return ESP_ERR_INVALID_ARG;
+    if (original_post_id <= 0) return ESP_ERR_INVALID_ARG;
+
+    pinned_order_entry_t order = {0};
+    order.post_id = original_post_id;
+    order.source = PINNED_SOURCE_KLIPY;
+    order.extension = extension;
+    order.pinned_at = now_unix_seconds();
+    order.klipy.product = product ? 1 : 0;
+    strlcpy(order.klipy.klipy_id, klipy_id, sizeof(order.klipy.klipy_id));
+
+    pinned_entry_file_t file = {0};
+    file.magic = PINNED_ENTRY_MAGIC;
+    file.version = PINNED_FORMAT_VERSION;
+    file.post_id = original_post_id;
+    file.source = PINNED_SOURCE_KLIPY;
+    file.extension = extension;
+    file.pinned_at = order.pinned_at;
+    file.original_post_id = original_post_id;
+    file.original_created_at = original_created_at;
+    snprintf(file.source_id, sizeof(file.source_id), "%s:%s",
+             product ? "sticker" : "gif", klipy_id);
+    if (title)   strlcpy(file.title, title,   sizeof(file.title));
+    if (creator) strlcpy(file.creator, creator, sizeof(file.creator));
+
+    return pin_list_pin(slug, &order, &file, src_artwork_path);
+}
+
+esp_err_t pin_lists_unpin_klipy(const char *slug, const char *klipy_id, uint8_t product)
+{
+    if (!klipy_id || !klipy_id[0]) return ESP_ERR_INVALID_ARG;
+    char source_id[PINNED_SOURCE_ID_MAX];
+    snprintf(source_id, sizeof(source_id), "%s:%s", product ? "sticker" : "gif", klipy_id);
+    return pin_list_unpin(slug, PINNED_SOURCE_KLIPY, source_id);
 }
 
 /* Composite institution source_id used in entry filenames and dedup:

@@ -68,6 +68,7 @@ typedef enum {
     PINNED_SOURCE_MAKAPIX     = 1,
     PINNED_SOURCE_GIPHY       = 2,
     PINNED_SOURCE_INSTITUTION = 3,
+    PINNED_SOURCE_KLIPY       = 4,
 } pinned_source_t;
 
 /* ------------------------------------------------------------------------- */
@@ -127,6 +128,11 @@ typedef struct __attribute__((packed)) {
             char     iiif_key[PINNED_IIIF_KEY_MAX];
             uint8_t  pad[2];
         } museum;
+        struct {
+            char    klipy_id[PINNED_GIPHY_ID_MAX]; /* decimal numeric id as string */
+            uint8_t product;                       /* 0 = gif, 1 = sticker */
+            uint8_t pad[27];
+        } klipy;
     };
 } pinned_order_entry_t;
 _Static_assert(sizeof(pinned_order_entry_t) == 64, "pinned_order_entry_t must be 64 bytes");

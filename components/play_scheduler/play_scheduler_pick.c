@@ -64,6 +64,7 @@ static post_source_t post_source_from_pinned_source(uint8_t pinned_source)
         case PINNED_SOURCE_MAKAPIX:     return POST_SOURCE_MAKAPIX;
         case PINNED_SOURCE_GIPHY:       return POST_SOURCE_GIPHY;
         case PINNED_SOURCE_INSTITUTION: return POST_SOURCE_INSTITUTION;
+        case PINNED_SOURCE_KLIPY:       return POST_SOURCE_KLIPY;
         default:                        return POST_SOURCE_NONE;
     }
 }
@@ -86,6 +87,9 @@ static void pinned_storage_key(const pinned_order_entry_t *e, char *out, size_t 
         }
         case PINNED_SOURCE_GIPHY:
             strlcpy(out, e->giphy.giphy_id, out_len);
+            break;
+        case PINNED_SOURCE_KLIPY:
+            strlcpy(out, e->klipy.klipy_id, out_len);
             break;
         case PINNED_SOURCE_INSTITUTION:
             strlcpy(out, e->museum.iiif_key, out_len);

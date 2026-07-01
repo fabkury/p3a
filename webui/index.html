@@ -948,8 +948,13 @@ function updateArtwork(currentArtwork) {
         updateInfoButton(currentArtwork);
         return;
     }
-    // Klipy is Giphy-like GIF/sticker content, not pixel art — don't pixelate it.
-    var usePixelated = (currentArtwork.channel_type !== 'giphy' && currentArtwork.channel_type !== 'klipy');
+    // Giphy/Klipy are GIF/sticker content, not pixel art — don't pixelate them,
+    // whether playing natively or from a pin list (channel_type is 'pinned' then,
+    // so key off source too).
+    var usePixelated = !(currentArtwork.channel_type === 'giphy' ||
+                         currentArtwork.channel_type === 'klipy' ||
+                         currentArtwork.source === 'giphy' ||
+                         currentArtwork.source === 'klipy');
     if (usePixelated) {
         img.classList.add('pixelated');
     } else {

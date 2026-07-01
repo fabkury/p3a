@@ -313,6 +313,26 @@ esp_err_t pin_lists_pin_giphy(const char *slug,
 esp_err_t pin_lists_unpin_giphy(const char *slug, const char *giphy_id);
 
 /**
+ * @brief Pin a Klipy artwork into a list.
+ *
+ * @param product 0 = gif, 1 = sticker (selects the API product + vault subdir).
+ */
+esp_err_t pin_lists_pin_klipy(const char *slug,
+                              int32_t original_post_id,
+                              const char *klipy_id,
+                              uint8_t product,
+                              uint8_t extension,
+                              const char *title,
+                              const char *creator,
+                              uint32_t original_created_at,
+                              const char *src_artwork_path);
+
+/**
+ * @brief Unpin a Klipy artwork from a list using its numeric id + product.
+ */
+esp_err_t pin_lists_unpin_klipy(const char *slug, const char *klipy_id, uint8_t product);
+
+/**
  * @brief Pin an art-institution artwork into a list.
  *
  * The iiif_key argument must be the FAT-safe form (colons replaced by

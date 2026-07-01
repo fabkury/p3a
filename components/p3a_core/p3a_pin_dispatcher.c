@@ -33,6 +33,7 @@ static const char *TAG = "p3a_pin_dispatcher";
 #define PIN_DISP_SOURCE_GIPHY       2
 #define PIN_DISP_SOURCE_SDCARD      3
 #define PIN_DISP_SOURCE_INSTITUTION 4
+#define PIN_DISP_SOURCE_KLIPY       5
 
 // LCD overlay (defined in main/display_pin_overlay.c)
 extern void pin_overlay_show_submit(void) __attribute__((weak));
@@ -74,6 +75,18 @@ extern esp_err_t pin_lists_pin_institution(const char *slug,
 extern esp_err_t pin_lists_unpin_institution(const char *slug,
                                              uint16_t museum_id,
                                              const char *iiif_key_safe) __attribute__((weak));
+
+extern esp_err_t pin_lists_pin_klipy(const char *slug,
+                                     int32_t original_post_id,
+                                     const char *klipy_id,
+                                     uint8_t product,
+                                     uint8_t extension,
+                                     const char *title,
+                                     const char *creator,
+                                     uint32_t original_created_at,
+                                     const char *src_artwork_path) __attribute__((weak));
+extern esp_err_t pin_lists_unpin_klipy(const char *slug, const char *klipy_id,
+                                       uint8_t product) __attribute__((weak));
 
 // Auto-swap dwell timer (defined in play_scheduler component). Weak to avoid
 // a circular REQUIRES — play_scheduler already depends on p3a_core.
@@ -148,6 +161,8 @@ typedef struct {
     char      uuid[40];                   // makapix
     char      giphy_id[40];               // giphy
     char      iiif_key[48];               // institution (safe form)
+    char      klipy_id[24];               // klipy (decimal numeric id)
+    uint8_t   klipy_product;              // klipy: 0 = gif, 1 = sticker
     bool      is_unpin;
 } pin_task_params_t;
 
@@ -180,6 +195,21 @@ static void pin_task(void *arg)
                     err = pin_lists_pin_giphy(slug, p->original_post_id, p->giphy_id,
                                               p->extension, p->title, p->creator,
                                               p->original_created_at, p->src_artwork_path);
+                }
+            }
+            break;
+        case PIN_DISP_SOURCE_KLIPY:
+            id_log = p->klipy_id;
+            if (p->is_unpin) {
+                if (pin_lists_unpin_klipy) {
+                    err = pin_lists_unpin_klipy(slug, p->klipy_id, p->klipy_product);
+                }
+            } else {
+                if (pin_lists_pin_klipy) {
+                    err = pin_lists_pin_klipy(slug, p->original_post_id, p->klipy_id,
+                                              p->klipy_product, p->extension, p->title,
+                                              p->creator, p->original_created_at,
+                                              p->src_artwork_path);
                 }
             }
             break;
@@ -307,6 +337,33 @@ static esp_err_t resolve_giphy_from_current(pin_task_params_t *p)
     return ESP_OK;
 }
 
+static esp_err_t resolve_klipy_from_current(pin_task_params_t *p)
+{
+    char filepath[256];
+    p3a_current_post_get_filepath(filepath, sizeof(filepath));
+    if (filepath[0] == '\0') return ESP_ERR_INVALID_STATE;
+
+    int ext = extension_index_from_path(filepath);
+    if (ext < 0) return ESP_ERR_INVALID_ARG;
+    p->extension = (uint8_t)ext;
+
+    /* filepath: /sdcard/p3a/klipy/{gif|sticker}/{d0}/{d1}/{id}.{ext} — product
+       from the subdir, numeric id from the basename stem. */
+    p->klipy_product = strstr(filepath, "/klipy/sticker/") ? 1 : 0;
+
+    char stem[24];
+    if (extract_basename_stem(filepath, stem, sizeof(stem)) < 0) return ESP_ERR_INVALID_ARG;
+    strlcpy(p->klipy_id, stem, sizeof(p->klipy_id));
+
+    strlcpy(p->src_artwork_path, filepath, sizeof(p->src_artwork_path));
+    p->original_post_id = p3a_current_post_get_id();
+    p->original_created_at = 0;
+    if (play_scheduler_get_active_artwork_title) {
+        play_scheduler_get_active_artwork_title(p->title, sizeof(p->title));
+    }
+    return ESP_OK;
+}
+
 static esp_err_t resolve_institution_from_current(pin_task_params_t *p)
 {
     char filepath[256];
@@ -373,6 +430,7 @@ static esp_err_t resolve_from_current(int source, pin_task_params_t *p)
     switch (source) {
         case PIN_DISP_SOURCE_MAKAPIX:     return resolve_makapix_from_current(p);
         case PIN_DISP_SOURCE_GIPHY:       return resolve_giphy_from_current(p);
+        case PIN_DISP_SOURCE_KLIPY:       return resolve_klipy_from_current(p);
         case PIN_DISP_SOURCE_INSTITUTION: return resolve_institution_from_current(p);
         default:                          return ESP_ERR_NOT_SUPPORTED;
     }

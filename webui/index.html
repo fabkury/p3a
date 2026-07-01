@@ -2099,6 +2099,8 @@ function unpinItem(slug, item, cb) {
     var sid = '';
     if (item.source === 'makapix' && item.uuid) sid = item.uuid;
     else if (item.source === 'giphy' && item.giphy_id) sid = item.giphy_id;
+    else if (item.source === 'klipy' && item.klipy_id)
+        sid = (item.klipy_product === 'stickers' ? 'sticker' : 'gif') + ':' + item.klipy_id;
     else if (item.source === 'museum') sid = item.museum_id + ':' + item.iiif_key;
     else return;
     var url = '/api/pin-lists/' + encodeURIComponent(slug) + '/items/' +

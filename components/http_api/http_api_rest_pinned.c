@@ -719,6 +719,21 @@ static esp_err_t h_post_pin_raw(httpd_req_t *req, const char *slug)
             }
             break;
         }
+        case PINNED_SOURCE_KLIPY: {
+            /* source_id is "{gif|sticker}:{id}". Klipy has no client-synthesizable
+               post_id, so require original_post_id (as Makapix does). */
+            const char *sid = cJSON_GetStringValue(j_src_id);
+            const char *colon = strchr(sid, ':');
+            order.klipy.product = (strncmp(sid, "sticker", 7) == 0) ? 1 : 0;
+            strlcpy(order.klipy.klipy_id, colon ? colon + 1 : sid,
+                    sizeof(order.klipy.klipy_id));
+            if (original_post_id <= 0) {
+                cJSON_Delete(root);
+                send_json_error(req, 400, "MISSING_POST_ID", NULL);
+                return ESP_OK;
+            }
+            break;
+        }
         default:
             break;
     }

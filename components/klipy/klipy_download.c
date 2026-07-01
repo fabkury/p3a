@@ -35,7 +35,7 @@
 static const char *TAG = "klipy_dl";
 
 #define DOWNLOAD_CHUNK_SIZE   (32 * 1024)
-#define KLIPY_RESOLVE_BUF_SIZE (16 * 1024)
+#define KLIPY_RESOLVE_BUF_SIZE (32 * 1024)
 
 esp_err_t klipy_download_artwork(uint64_t klipy_id, uint8_t product, uint8_t extension,
                                  char *out_path, size_t out_len)

@@ -503,9 +503,12 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                 giphy_build_download_url_for_entry((const giphy_channel_entry_t *)entry,
                                                   out_request->art_url, sizeof(out_request->art_url));
             } else if (is_klipy) {
-                // Klipy CDN urls are opaque and re-resolved at download time
-                // (klipy_download_artwork), so leave art_url empty here.
-                out_request->art_url[0] = '\0';
+                // Klipy CDN urls are opaque and re-resolved at download time by
+                // numeric id (klipy_download_artwork ignores art_url). Store a
+                // non-secret placeholder so the empty-url guard in the download
+                // task doesn't skip the entry.
+                snprintf(out_request->art_url, sizeof(out_request->art_url),
+                         "klipy:%s", out_request->storage_key);
             } else if (is_institution) {
                 const institution_channel_entry_t *ie = (const institution_channel_entry_t *)entry;
                 art_institution_build_iiif_url(ai_museum_id, ie, 720,

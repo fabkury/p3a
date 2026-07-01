@@ -18,6 +18,7 @@
 #include "makapix_artwork.h"  // For makapix_artwork_download_with_progress()
 #include "makapix_channel_events.h"  // For async completion events
 #include "giphy.h"             // For giphy_refresh_channel()
+#include "klipy.h"             // For klipy_refresh_channel()
 #include "art_institution.h"   // For art_institution_refresh_by_spec()
 #include "makapix_promoted_https.h"  // For HTTPS fallback refresh
 #include "config_store.h"      // For config_store_get_giphy_refresh_interval()
@@ -152,6 +153,9 @@ static uint32_t refresh_interval_for_type(ps_channel_type_t type)
 {
     if (type == PS_CHANNEL_TYPE_GIPHY) {
         return config_store_get_giphy_refresh_interval();
+    }
+    if (type == PS_CHANNEL_TYPE_KLIPY) {
+        return config_store_get_klipy_refresh_interval();
     }
     if (type == PS_CHANNEL_TYPE_INSTITUTION) {
         return config_store_get_ai_refresh_sec();
@@ -296,6 +300,23 @@ static uint32_t channel_next_actionable_sec(const ps_channel_state_t *ch, time_t
             gate_in = nokey_in;
             gate_name = "no Giphy API key";
         }
+    } else if (ch->type == PS_CHANNEL_TYPE_KLIPY) {
+        if (!wifi_up) {
+            *out_gate = "Wi-Fi connectivity";
+            return NEXT_CHECK_NO_DEADLINE;
+        }
+        gate_in = klipy_cooldown_remaining_sec();
+        gate_name = "Klipy rate-limit cooldown";
+        uint32_t k_auth_in = klipy_auth_invalid_remaining_sec();
+        if (k_auth_in > gate_in) {
+            gate_in = k_auth_in;
+            gate_name = "invalid Klipy API key";
+        }
+        uint32_t k_nokey_in = klipy_no_key_remaining_sec();
+        if (k_nokey_in > gate_in) {
+            gate_in = k_nokey_in;
+            gate_name = "no Klipy API key";
+        }
     } else if (ch->type == PS_CHANNEL_TYPE_INSTITUTION) {
         if (!wifi_up) {
             *out_gate = "Wi-Fi connectivity";
@@ -428,6 +449,17 @@ static bool refresh_channel_is_eligible(ps_channel_state_t *ch, bool mqtt_ready)
         return true;
     }
 
+    // Klipy channels need Wi-Fi but not MQTT (same key-wide gating as Giphy).
+    if (ch->type == PS_CHANNEL_TYPE_KLIPY) {
+        if (!p3a_state_has_wifi()) return false;
+        if (klipy_is_rate_limited()) return false;
+        if (klipy_is_auth_invalid() &&
+            !config_store_get_refresh_allow_override()) return false;
+        if (klipy_is_no_key() &&
+            !config_store_get_refresh_allow_override()) return false;
+        return true;
+    }
+
     // Institution (museum) channels need Wi-Fi but not MQTT. Cooldown is
     // per-museum (AIC's 60-req/min is the binding constraint); while a
     // museum is rate-limited, leave its channels pending so they retry
@@ -489,6 +521,7 @@ static bool channel_requires_makapix(ps_channel_type_t type, const char *name)
         case PS_CHANNEL_TYPE_SDCARD:       // local files
         case PS_CHANNEL_TYPE_ARTWORK:      // direct download, no MQTT
         case PS_CHANNEL_TYPE_GIPHY:        // Giphy
+        case PS_CHANNEL_TYPE_KLIPY:        // Klipy
         case PS_CHANNEL_TYPE_INSTITUTION:  // museums over IIIF
         case PS_CHANNEL_TYPE_PINNED:       // loaded from local NVS, no remote source
         default:
@@ -588,6 +621,19 @@ static void giphy_refresh_ui_cb(int offset, int cache_size, void *ctx)
     int pct = (cache_size > 0) ? (shown * 100) / cache_size : -1;
     char detail[64];
     snprintf(detail, sizeof(detail), "Fetching artwork list (%d/%d)", shown, cache_size);
+    p3a_render_set_channel_message(name, P3A_CHANNEL_MSG_LOADING, pct, detail);
+}
+
+// Klipy refresh progress callback (identical behavior to giphy_refresh_ui_cb).
+static void klipy_refresh_ui_cb(int current, int total, void *ctx)
+{
+    if (animation_player_is_animation_ready()) return;
+    if (download_manager_is_busy()) return;
+    const char *name = (const char *)ctx;
+    int shown = (total > 0 && current > total) ? total : current;
+    int pct = (total > 0) ? (shown * 100) / total : -1;
+    char detail[64];
+    snprintf(detail, sizeof(detail), "Fetching artwork list (%d/%d)", shown, total);
     p3a_render_set_channel_message(name, P3A_CHANNEL_MSG_LOADING, pct, detail);
 }
 
@@ -854,6 +900,7 @@ static void refresh_task(void *arg)
             for (size_t i = 0; i < state->channel_count; i++) {
                 ps_channel_type_t t = state->channels[i].type;
                 if ((t == PS_CHANNEL_TYPE_GIPHY ||
+                     t == PS_CHANNEL_TYPE_KLIPY ||
                      t == PS_CHANNEL_TYPE_NAMED ||
                      t == PS_CHANNEL_TYPE_USER ||
                      t == PS_CHANNEL_TYPE_REACTIONS ||
@@ -1396,6 +1443,99 @@ static void refresh_task(void *arg)
                 }
             }
             }
+        } else if (type == PS_CHANNEL_TYPE_KLIPY) {
+            char klipy_key_check[128];
+            config_store_get_klipy_api_key(klipy_key_check, sizeof(klipy_key_check));
+            if (klipy_key_check[0] == '\0') {
+                ESP_LOGW(TAG, "Klipy channel '%s' skipped: no API key configured", display_name);
+                klipy_set_no_key();
+                if (klipy_no_key_take_notification()) {
+                    char klipy_display_name[64];
+                    ps_get_display_name_from_spec(type, spec_name, identifier, klipy_display_name, sizeof(klipy_display_name));
+                    p3a_render_set_channel_message(klipy_display_name, P3A_CHANNEL_MSG_ERROR, -1,
+                                                   "Cannot refresh channel: no\n"
+                                                   "Klipy API key configured.\n"
+                                                   "Add one in Settings.");
+                }
+                err = ESP_ERR_NOT_FOUND;
+            } else {
+                char klipy_ch_path[128];
+                channel_metadata_t klipy_meta = {0};
+                if (sd_path_get_channel(klipy_ch_path, sizeof(klipy_ch_path)) == ESP_OK) {
+                    channel_metadata_load(channel_id, klipy_ch_path, &klipy_meta);
+                } else {
+                    ESP_LOGE(TAG, "Cannot resolve channel directory; treating '%s' as never refreshed",
+                             display_name);
+                }
+
+                time_t now = time(NULL);
+                uint32_t interval = config_store_get_klipy_refresh_interval();
+                bool allow_override = config_store_get_refresh_allow_override();
+                if (!allow_override && cache_has_entries &&
+                    klipy_meta.last_refresh > 0 && now > 0 &&
+                    (now - klipy_meta.last_refresh) < (time_t)interval) {
+                    if (!sntp_sync_is_synchronized()) {
+                        ESP_LOGI(TAG, "Klipy channel '%s' deferred (SNTP not synchronized)", display_name);
+                    } else {
+                        uint32_t remaining = interval - (uint32_t)(now - klipy_meta.last_refresh);
+                        ESP_LOGI(TAG, "Klipy channel '%s' still fresh (last refresh %lds ago, interval %lus, stale in %lus), skipping",
+                                 display_name, (long)(now - klipy_meta.last_refresh), (unsigned long)interval, (unsigned long)remaining);
+                    }
+                    err = ESP_OK;
+                } else {
+                    if (allow_override) {
+                        ESP_LOGI(TAG, "Channel '%s' refresh override active, bypassing interval check", display_name);
+                    } else if (!cache_has_entries && klipy_meta.last_refresh > 0) {
+                        ESP_LOGI(TAG, "Klipy channel '%s' cache is empty, forcing refresh despite interval", display_name);
+                    }
+
+                    char klipy_display_name[64];
+                    strlcpy(klipy_display_name, display_name, sizeof(klipy_display_name));
+                    did_refresh = true;
+                    if (!animation_player_is_animation_ready()) {
+                        p3a_render_set_channel_message(klipy_display_name, P3A_CHANNEL_MSG_LOADING, -1,
+                                                       "Loading channel...");
+                        err = klipy_refresh_channel_with_progress(channel_id, spec_name, identifier, channel_offset,
+                                  klipy_refresh_ui_cb, klipy_display_name);
+                    } else {
+                        err = klipy_refresh_channel(channel_id, spec_name, identifier, channel_offset);
+                    }
+                    if (err == ESP_ERR_NOT_ALLOWED) {
+                        if (klipy_is_refresh_cancelled()) {
+                            ESP_LOGI(TAG, "Klipy channel '%s' refresh cancelled", display_name);
+                        } else if (klipy_auth_take_notification()) {
+                            char klipy_err_name[64];
+                            ps_get_display_name_from_spec(type, spec_name, identifier, klipy_err_name, sizeof(klipy_err_name));
+                            p3a_render_set_channel_message(klipy_err_name, P3A_CHANNEL_MSG_ERROR, -1,
+                                                           "Cannot refresh channel: Klipy\n"
+                                                           "rejected the API key.\n"
+                                                           "Update the key in Settings.");
+                        }
+                    } else if (err != ESP_OK) {
+                        char klipy_err_name[64];
+                        ps_get_display_name_from_spec(type, spec_name, identifier, klipy_err_name, sizeof(klipy_err_name));
+                        if (err == ESP_ERR_INVALID_RESPONSE) {
+                            if (refresh_err_msg_allow()) {
+                                uint32_t remaining_min = (klipy_cooldown_remaining_sec() + 59) / 60;
+                                if (remaining_min == 0) remaining_min = 1;
+                                char rate_limit_buf[128];
+                                snprintf(rate_limit_buf, sizeof(rate_limit_buf),
+                                         "Cannot refresh channel: Klipy API key\n"
+                                         "rate limit reached (error 429).\n"
+                                         "Device will retry in %u min.",
+                                         (unsigned)remaining_min);
+                                p3a_render_set_channel_message_ttl(klipy_err_name, P3A_CHANNEL_MSG_ERROR, -1,
+                                                                   rate_limit_buf, REFRESH_ERR_MSG_TTL_MS);
+                            }
+                        } else {
+                            if (refresh_err_msg_allow()) {
+                                p3a_render_set_channel_message_ttl(klipy_err_name, P3A_CHANNEL_MSG_ERROR, -1,
+                                                                   "Klipy refresh failed", REFRESH_ERR_MSG_TTL_MS);
+                            }
+                        }
+                    }
+                }
+            }
         } else if (type == PS_CHANNEL_TYPE_INSTITUTION) {
             // Parse museum id once for cooldown checks and log messages.
             char museum_id[16] = {0};
@@ -1592,7 +1732,8 @@ static void refresh_task(void *arg)
             makapix_channel_signal_refresh_done();
         } else {
             ch->refresh_in_progress = false;
-            if ((type == PS_CHANNEL_TYPE_GIPHY || type == PS_CHANNEL_TYPE_INSTITUTION) &&
+            if ((type == PS_CHANNEL_TYPE_GIPHY || type == PS_CHANNEL_TYPE_KLIPY ||
+                 type == PS_CHANNEL_TYPE_INSTITUTION) &&
                 err == ESP_ERR_INVALID_RESPONSE) {
                 // Giphy / institution rate-limit: the key/museum-wide cooldown
                 // already gates eligibility — no per-channel backoff on top.
@@ -1610,12 +1751,20 @@ static void refresh_task(void *arg)
                 // also travels as NOT_ALLOWED but never engages the latch,
                 // so it still takes the generic backoff below.
                 ch->refresh_pending = true;
+            } else if (type == PS_CHANNEL_TYPE_KLIPY && err == ESP_ERR_NOT_ALLOWED &&
+                       klipy_is_auth_invalid()) {
+                // Invalid Klipy API key: key-wide auth latch gates eligibility.
+                ch->refresh_pending = true;
             } else if (type == PS_CHANNEL_TYPE_GIPHY && err == ESP_ERR_NOT_FOUND &&
                        giphy_is_no_key()) {
                 // Missing API key: parked key-wide just like the auth latch.
                 // The giphy_is_no_key() conjunct keeps other NOT_FOUND
                 // sources (e.g. a cache that vanished mid-refresh) on the
                 // generic backoff below.
+                ch->refresh_pending = true;
+            } else if (type == PS_CHANNEL_TYPE_KLIPY && err == ESP_ERR_NOT_FOUND &&
+                       klipy_is_no_key()) {
+                // Missing Klipy API key: parked key-wide.
                 ch->refresh_pending = true;
             } else {
                 // Other failures (DNS, 5xx, timeout, dead artwork URL):
@@ -1674,6 +1823,7 @@ static void refresh_task(void *arg)
             ESP_LOGI(TAG, "%s - triggering playback",
                      is_artwork_channel ? "Artwork channel ready" :
                      (type == PS_CHANNEL_TYPE_GIPHY) ? "Giphy refresh complete" :
+                     (type == PS_CHANNEL_TYPE_KLIPY) ? "Klipy refresh complete" :
                      "Sync refresh complete");
 
             // For artwork channels: DON'T clear the message here.

@@ -764,6 +764,14 @@ bool play_scheduler_is_giphy_channel(const char *channel_id);
 bool play_scheduler_is_institution_channel(const char *channel_id);
 
 /**
+ * @brief Check if a channel is a Klipy channel
+ *
+ * @param channel_id Channel ID
+ * @return true if this is a Klipy channel
+ */
+bool play_scheduler_is_klipy_channel(const char *channel_id);
+
+/**
  * @brief Look up the spec_name for a channel by channel_id
  *
  * Used by the download manager and other components that need the

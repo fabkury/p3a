@@ -120,6 +120,20 @@ void ps_get_display_name_from_spec(ps_channel_type_t type, const char *spec_name
                 strlcpy(out_name, "Giphy: Trending", max_len);
             }
             break;
+        case PS_CHANNEL_TYPE_KLIPY: {
+            // spec_name is "{product}:{mode}"; identifier is the search/category query.
+            bool is_sticker = (strncmp(spec_name, "sticker", 7) == 0);
+            const char *label = is_sticker ? "Klipy Stickers" : "Klipy";
+            const char *colon = strchr(spec_name, ':');
+            const char *mode = colon ? colon + 1 : spec_name;
+            if ((strcmp(mode, "search") == 0 || strcmp(mode, "category") == 0) &&
+                identifier[0] != '\0') {
+                snprintf(out_name, max_len, "%s: %.50s", label, identifier);
+            } else {
+                snprintf(out_name, max_len, "%s: Trending", label);
+            }
+            break;
+        }
         case PS_CHANNEL_TYPE_PINNED: {
             // identifier holds the pin-list slug; the user-visible label
             // lives in the list metadata. Falls back to the slug itself if

@@ -211,6 +211,7 @@ cJSON *build_current_artwork_json(void)
     switch (source) {
         case POST_SOURCE_MAKAPIX:     source_label = "makapix";     break;
         case POST_SOURCE_GIPHY:       source_label = "giphy";       break;
+        case POST_SOURCE_KLIPY:       source_label = "klipy";       break;
         case POST_SOURCE_SDCARD:      source_label = "sdcard";      break;
         case POST_SOURCE_INSTITUTION: source_label = "institution"; break;
         default:                      source_label = "none";        break;

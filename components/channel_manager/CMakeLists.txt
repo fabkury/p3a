@@ -14,5 +14,5 @@ idf_component_register(
          "channel_metadata.c"
          "lai_verify.c"
     INCLUDE_DIRS "include"
-    REQUIRES esp_common json makapix sdio_bus config_store wifi_manager p3a_core play_scheduler event_bus giphy art_institution storage_eviction
+    REQUIRES esp_common json makapix sdio_bus config_store wifi_manager p3a_core play_scheduler event_bus giphy klipy art_institution storage_eviction
 )

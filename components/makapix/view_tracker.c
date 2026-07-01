@@ -510,6 +510,7 @@ static const char *channel_name_for_view(ps_channel_type_t type, const char *spe
         case PS_CHANNEL_TYPE_SDCARD:    return "sdcard";
         case PS_CHANNEL_TYPE_ARTWORK:   return "artwork";
         case PS_CHANNEL_TYPE_GIPHY:     return "giphy";
+        case PS_CHANNEL_TYPE_KLIPY:     return "klipy";
         case PS_CHANNEL_TYPE_REACTIONS: return "reactions";
         case PS_CHANNEL_TYPE_INSTITUTION: return "institution";
         case PS_CHANNEL_TYPE_PINNED:    return "pinned";

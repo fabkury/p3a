@@ -1,7 +1,7 @@
 set(http_api_requires
     esp_http_server mdns json config_store freertos esp_wifi esp_timer esp_netif p3a_core
     makapix ota_manager p3a_core channel_manager play_scheduler event_bus show_url
-    storage_eviction giphy art_institution pin_lists slave_ota mem_stats
+    storage_eviction giphy klipy art_institution pin_lists slave_ota mem_stats
     esp_hw_support spi_flash p3a_board_ep44b
 )
 

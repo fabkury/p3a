@@ -55,6 +55,7 @@ typedef enum {
     POST_SOURCE_GIPHY,        // Giphy trending/search
     POST_SOURCE_SDCARD,       // Local SD card file
     POST_SOURCE_INSTITUTION,  // Art institution (museum) artwork
+    POST_SOURCE_KLIPY,        // Klipy GIF/sticker
 } post_source_t;
 
 /**
@@ -88,6 +89,7 @@ typedef enum {
     PS_CHANNEL_TYPE_REACTIONS = 6,// Reactions channels: identifier = sqid of target user
     PS_CHANNEL_TYPE_INSTITUTION = 7, // Art-institution channels: spec_name = "{museum}:{axis}", identifier = term_id
     PS_CHANNEL_TYPE_PINNED = 8,   // Pinned-artworks list: identifier = list slug
+    PS_CHANNEL_TYPE_KLIPY = 9,    // Klipy channels: spec_name = "{product}:{mode}" (product in gif/sticker; mode in trending/search/category); identifier = query
 } ps_channel_type_t;
 
 /**
@@ -102,6 +104,7 @@ typedef enum {
     PS_ENTRY_FORMAT_GIPHY,        // giphy_channel_entry_t (64 bytes)
     PS_ENTRY_FORMAT_INSTITUTION,  // institution_channel_entry_t (64 bytes)
     PS_ENTRY_FORMAT_PINNED,       // pinned_order_entry_t (64 bytes)
+    PS_ENTRY_FORMAT_KLIPY,        // klipy_channel_entry_t (64 bytes)
 } ps_entry_format_t;
 
 // ============================================================================

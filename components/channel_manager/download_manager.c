@@ -26,6 +26,7 @@
 #include "makapix_artwork.h"
 #include "makapix_channel_events.h"
 #include "giphy.h"
+#include "klipy.h"
 #include "art_institution.h"
 #include "channel_cache.h"
 #include "lai_verify.h"
@@ -204,12 +205,17 @@ esp_err_t download_manager_build_entry_filepath(const char *channel_id,
     out[0] = '\0';
 
     bool is_giphy = play_scheduler_is_giphy_channel(channel_id);
-    bool is_institution = !is_giphy && play_scheduler_is_institution_channel(channel_id);
+    bool is_klipy = !is_giphy && play_scheduler_is_klipy_channel(channel_id);
+    bool is_institution = !is_giphy && !is_klipy && play_scheduler_is_institution_channel(channel_id);
 
     if (is_giphy) {
         // Giphy channel: entry is giphy_channel_entry_t (same 64-byte slot)
         const giphy_channel_entry_t *ge = (const giphy_channel_entry_t *)entry;
         giphy_build_filepath(ge->giphy_id, ge->extension, out, out_len);
+    } else if (is_klipy) {
+        // Klipy channel: entry is klipy_channel_entry_t (same 64-byte slot)
+        const klipy_channel_entry_t *ke = (const klipy_channel_entry_t *)entry;
+        klipy_build_filepath(ke->klipy_id, ke->product, ke->extension, out, out_len);
     } else if (is_institution) {
         // Institution channel: entry is institution_channel_entry_t.
         const institution_channel_entry_t *ie = (const institution_channel_entry_t *)entry;
@@ -424,7 +430,8 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
 
             // Build filepath and storage key based on channel type
             bool is_giphy = play_scheduler_is_giphy_channel(ch->channel_id);
-            bool is_institution = !is_giphy && play_scheduler_is_institution_channel(ch->channel_id);
+            bool is_klipy = !is_giphy && play_scheduler_is_klipy_channel(ch->channel_id);
+            bool is_institution = !is_giphy && !is_klipy && play_scheduler_is_institution_channel(ch->channel_id);
 
             // Institution channels need the playset spec_name to derive
             // {museum}/{shard}/... vault paths and IIIF URLs.
@@ -467,6 +474,10 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
             if (is_giphy) {
                 const giphy_channel_entry_t *ge = (const giphy_channel_entry_t *)entry;
                 strlcpy(s_dl_storage_key, ge->giphy_id, sizeof(s_dl_storage_key));
+            } else if (is_klipy) {
+                const klipy_channel_entry_t *ke = (const klipy_channel_entry_t *)entry;
+                snprintf(s_dl_storage_key, sizeof(s_dl_storage_key), "%llu",
+                         (unsigned long long)ke->klipy_id);
             } else if (is_institution) {
                 const institution_channel_entry_t *ie = (const institution_channel_entry_t *)entry;
                 strlcpy(s_dl_storage_key, ie->iiif_key, sizeof(s_dl_storage_key));
@@ -491,6 +502,10 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                 // Build Giphy download URL from entry (respects downsized_medium override)
                 giphy_build_download_url_for_entry((const giphy_channel_entry_t *)entry,
                                                   out_request->art_url, sizeof(out_request->art_url));
+            } else if (is_klipy) {
+                // Klipy CDN urls are opaque and re-resolved at download time
+                // (klipy_download_artwork), so leave art_url empty here.
+                out_request->art_url[0] = '\0';
             } else if (is_institution) {
                 const institution_channel_entry_t *ie = (const institution_channel_entry_t *)entry;
                 art_institution_build_iiif_url(ai_museum_id, ie, 720,
@@ -799,6 +814,24 @@ static void download_task(void *arg)
                           dl_progress_cb, s_task_display_name);
             } else {
                 err = giphy_download_artwork(s_dl_req.storage_key, s_dl_req.art_url, ext,
+                          s_task_out_path, sizeof(s_task_out_path));
+            }
+        } else if (play_scheduler_is_klipy_channel(s_dl_req.channel_id)) {
+            // Klipy channel: re-resolve the opaque CDN url by numeric id at
+            // download time. product comes from the vault subdir, extension
+            // from the filename suffix (mirrors the Giphy ext trick).
+            uint64_t kid = strtoull(s_dl_req.storage_key, NULL, 10);
+            uint8_t product = strstr(s_dl_req.filepath, "/sticker/")
+                                  ? KLIPY_PRODUCT_STICKER : KLIPY_PRODUCT_GIF;
+            uint8_t ext = 0;  // default webp
+            size_t flen = strlen(s_dl_req.filepath);
+            if (flen >= 4 && strcmp(s_dl_req.filepath + flen - 4, ".gif") == 0) ext = 1;
+            if (!animation_player_is_animation_ready()) {
+                err = klipy_download_artwork_with_progress(kid, product, ext,
+                          s_task_out_path, sizeof(s_task_out_path),
+                          dl_progress_cb, s_task_display_name);
+            } else {
+                err = klipy_download_artwork(kid, product, ext,
                           s_task_out_path, sizeof(s_task_out_path));
             }
         } else if (play_scheduler_is_institution_channel(s_dl_req.channel_id)) {

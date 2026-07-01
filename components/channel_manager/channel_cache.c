@@ -19,6 +19,8 @@
 #include "play_scheduler.h"        // ps_get_display_name()
 #include "giphy.h"                  // giphy_build_filepath() for trim-on-load dispatch
 #include "giphy_types.h"            // giphy_channel_entry_t for cast at trim time
+#include "klipy.h"                  // klipy_build_filepath() for trim-on-load dispatch
+#include "klipy_types.h"            // klipy_channel_entry_t for cast at trim time
 #include "esp_log.h"
 #include <string.h>
 #include <stdlib.h>
@@ -406,6 +408,12 @@ static void cache_trim_to_cap(channel_cache_t *cache,
                                      file_path, sizeof(file_path)) == ESP_OK) {
                 have_path = true;
             }
+        } else if (cache->channel_type == PS_CHANNEL_TYPE_KLIPY) {
+            const klipy_channel_entry_t *ke = (const klipy_channel_entry_t *)entry;
+            if (klipy_build_filepath(ke->klipy_id, ke->product, ke->extension,
+                                     file_path, sizeof(file_path)) == ESP_OK) {
+                have_path = true;
+            }
         } else if (entry->kind == MAKAPIX_INDEX_POST_KIND_ARTWORK && vault_path) {
             // Playlists have a zeroed storage_key_uuid and no vault file.
             build_vault_path_from_entry(entry, vault_path, file_path, sizeof(file_path));
@@ -526,6 +534,8 @@ esp_err_t channel_cache_load(const char *channel_id,
         // etc.) uses channel_cache_size, reached here via CHANNEL_CACHE_MAX_ENTRIES.
         uint32_t soft_cap = (channel_type == PS_CHANNEL_TYPE_GIPHY)
             ? config_store_get_giphy_cache_size()
+            : (channel_type == PS_CHANNEL_TYPE_KLIPY)
+            ? config_store_get_klipy_cache_size()
             : CHANNEL_CACHE_MAX_ENTRIES;
         if (cache->entry_count > soft_cap) {
             cache_trim_to_cap(cache, vault_path, soft_cap);

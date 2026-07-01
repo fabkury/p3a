@@ -432,7 +432,8 @@ esp_err_t play_scheduler_get_channel_entry(const char *channel_id, size_t index,
             // makapix_channel_entry_t-compatible slot; SD card / artwork don't.
             if (ch->entry_format != PS_ENTRY_FORMAT_MAKAPIX &&
                 ch->entry_format != PS_ENTRY_FORMAT_GIPHY &&
-                ch->entry_format != PS_ENTRY_FORMAT_INSTITUTION) {
+                ch->entry_format != PS_ENTRY_FORMAT_INSTITUTION &&
+                ch->entry_format != PS_ENTRY_FORMAT_KLIPY) {
                 result = ESP_ERR_NOT_SUPPORTED;
                 break;
             }
@@ -475,7 +476,8 @@ bool play_scheduler_is_makapix_channel(const char *channel_id)
             return (t != PS_CHANNEL_TYPE_SDCARD &&
                     t != PS_CHANNEL_TYPE_GIPHY &&
                     t != PS_CHANNEL_TYPE_ARTWORK &&
-                    t != PS_CHANNEL_TYPE_INSTITUTION);
+                    t != PS_CHANNEL_TYPE_INSTITUTION &&
+                    t != PS_CHANNEL_TYPE_KLIPY);
         }
     }
     return false;
@@ -519,6 +521,20 @@ bool play_scheduler_is_institution_channel(const char *channel_id)
     for (size_t i = 0; i < s_state->channel_count; i++) {
         if (strcmp(s_state->channels[i].channel_id, channel_id) == 0) {
             return (s_state->channels[i].type == PS_CHANNEL_TYPE_INSTITUTION);
+        }
+    }
+    return false;
+}
+
+bool play_scheduler_is_klipy_channel(const char *channel_id)
+{
+    ps_state_t *s_state = ps_get_state();
+
+    if (!channel_id || !s_state->initialized) return false;
+
+    for (size_t i = 0; i < s_state->channel_count; i++) {
+        if (strcmp(s_state->channels[i].channel_id, channel_id) == 0) {
+            return (s_state->channels[i].type == PS_CHANNEL_TYPE_KLIPY);
         }
     }
     return false;

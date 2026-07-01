@@ -14,7 +14,7 @@ idf_component_register(
          "playset_json.c"
          "active_playset_store.c"
     INCLUDE_DIRS "include"
-    REQUIRES esp_common channel_manager config_store p3a_core freertos esp_timer makapix content_cache mbedtls giphy art_institution json pin_lists
+    REQUIRES esp_common channel_manager config_store p3a_core freertos esp_timer makapix content_cache mbedtls giphy klipy art_institution json pin_lists
     # WHOLE_ARCHIVE is needed because http_api references playset_store_*
     # symbols. ESP-IDF lists libplay_scheduler.a both before and after
     # libhttp_api.a in the final link command, but ld 2.43 still treats the

@@ -20,6 +20,7 @@
 #include "psram_alloc.h"
 #include "sd_path.h"
 #include "giphy.h"
+#include "klipy.h"
 #include "p3a_intro_anim_list.h"
 
 // ---------- Config Handlers ----------
@@ -74,6 +75,10 @@ esp_err_t h_get_config(httpd_req_t *req) {
                       (double)config_store_get_giphy_cache_size());
     config_ensure_num(data, "giphy_refresh_interval",
                       (double)config_store_get_giphy_refresh_interval());
+    config_ensure_num(data, "klipy_cache_size",
+                      (double)config_store_get_klipy_cache_size());
+    config_ensure_num(data, "klipy_refresh_interval",
+                      (double)config_store_get_klipy_refresh_interval());
     config_ensure_num(data, "channel_cache_size",
                       (double)config_store_get_channel_cache_size());
 
@@ -170,6 +175,15 @@ esp_err_t h_put_config(httpd_req_t *req) {
         ps_refresh_signal_work();
     }
 
+    // Same treatment for a saved Klipy key: clear the auth latch and nudge the
+    // refresh task so channels parked on a rejected/missing key reprobe promptly.
+    cJSON *kk = cJSON_GetObjectItem(o, "klipy_api_key");
+    if (kk && cJSON_IsString(kk)) {
+        klipy_clear_auth_invalid();
+        extern void ps_refresh_signal_work(void);
+        ps_refresh_signal_work();
+    }
+
     // Invalidate in-memory caches for giphy settings so getters re-read from NVS
     cJSON *cs = cJSON_GetObjectItem(o, "giphy_cache_size");
     if (cs && cJSON_IsNumber(cs)) {
@@ -178,6 +192,14 @@ esp_err_t h_put_config(httpd_req_t *req) {
     cJSON *ri = cJSON_GetObjectItem(o, "giphy_refresh_interval");
     if (ri && cJSON_IsNumber(ri)) {
         config_store_invalidate_giphy_refresh_interval();
+    }
+    cJSON *kcs = cJSON_GetObjectItem(o, "klipy_cache_size");
+    if (kcs && cJSON_IsNumber(kcs)) {
+        config_store_invalidate_klipy_cache_size();
+    }
+    cJSON *kri = cJSON_GetObjectItem(o, "klipy_refresh_interval");
+    if (kri && cJSON_IsNumber(kri)) {
+        config_store_invalidate_klipy_refresh_interval();
     }
     cJSON *gpd = cJSON_GetObjectItem(o, "giphy_prefer_downsized");
     if (gpd && cJSON_IsBool(gpd)) {

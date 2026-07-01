@@ -24,6 +24,7 @@ ps_channel_type_t playset_parse_channel_type(const char *type_str)
     if (strcmp(type_str, "hashtag") == 0) return PS_CHANNEL_TYPE_HASHTAG;
     if (strcmp(type_str, "sdcard") == 0) return PS_CHANNEL_TYPE_SDCARD;
     if (strcmp(type_str, "giphy") == 0) return PS_CHANNEL_TYPE_GIPHY;
+    if (strcmp(type_str, "klipy") == 0) return PS_CHANNEL_TYPE_KLIPY;
     if (strcmp(type_str, "institution") == 0) return PS_CHANNEL_TYPE_INSTITUTION;
     if (strcmp(type_str, "pinned") == 0) return PS_CHANNEL_TYPE_PINNED;
     return PS_CHANNEL_TYPE_NAMED;
@@ -48,6 +49,7 @@ const char *playset_channel_type_str(ps_channel_type_t type)
     case PS_CHANNEL_TYPE_HASHTAG: return "hashtag";
     case PS_CHANNEL_TYPE_SDCARD:  return "sdcard";
     case PS_CHANNEL_TYPE_GIPHY:   return "giphy";
+    case PS_CHANNEL_TYPE_KLIPY:   return "klipy";
     case PS_CHANNEL_TYPE_ARTWORK: return "artwork";
     case PS_CHANNEL_TYPE_INSTITUTION: return "institution";
     case PS_CHANNEL_TYPE_PINNED:  return "pinned";

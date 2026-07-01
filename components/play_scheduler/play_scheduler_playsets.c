@@ -449,6 +449,17 @@ esp_err_t ps_load_channel_cache(ps_channel_state_t *ch)
         return err;
     }
 
+    // Klipy channels also share the 64-byte channel_cache slot; only the
+    // entry_format tag differs so the picker / download manager dispatch
+    // through the klipy/ vault and the id re-resolve.
+    if (ch->type == PS_CHANNEL_TYPE_KLIPY) {
+        esp_err_t err = ps_load_makapix_cache(ch);
+        if (err == ESP_OK) {
+            ch->entry_format = PS_ENTRY_FORMAT_KLIPY;
+        }
+        return err;
+    }
+
     // Institution (museum) channels also share the 64-byte channel_cache slot
     // with Makapix and Giphy; institution_channel_entry_t is byte-compatible.
     // The entry_format tag routes the picker/download manager through the

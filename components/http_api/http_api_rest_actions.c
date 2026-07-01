@@ -668,6 +668,7 @@ static esp_err_t pin_or_unpin_handler(httpd_req_t *req, bool is_unpin)
     if (!root) return ESP_OK;
     cJSON *post_id_item  = cJSON_GetObjectItem(root, "post_id");
     cJSON *giphy_id_item = cJSON_GetObjectItem(root, "giphy_id");
+    cJSON *klipy_id_item = cJSON_GetObjectItem(root, "klipy_id");
     cJSON *list_item     = cJSON_GetObjectItem(root, "list");
 
     char slug[12] = {0};
@@ -679,9 +680,12 @@ static esp_err_t pin_or_unpin_handler(httpd_req_t *req, bool is_unpin)
     bool has_post_id  = post_id_item && cJSON_IsNumber(post_id_item);
     bool has_giphy_id = giphy_id_item && cJSON_IsString(giphy_id_item) &&
                         cJSON_GetStringValue(giphy_id_item)[0] != '\0';
-    if (has_post_id == has_giphy_id) {
+    bool has_klipy_id = klipy_id_item && cJSON_IsString(klipy_id_item) &&
+                        cJSON_GetStringValue(klipy_id_item)[0] != '\0';
+    if (((has_post_id ? 1 : 0) + (has_giphy_id ? 1 : 0) + (has_klipy_id ? 1 : 0)) != 1) {
         cJSON_Delete(root);
-        send_json_error(req, 400, "INVALID_REQUEST", "Provide exactly one of post_id or giphy_id");
+        send_json_error(req, 400, "INVALID_REQUEST",
+                        "Provide exactly one of post_id, giphy_id, or klipy_id");
         return ESP_OK;
     }
 
@@ -697,6 +701,30 @@ static esp_err_t pin_or_unpin_handler(httpd_req_t *req, bool is_unpin)
         p3a_current_post_get_giphy_id(cur_gid, sizeof(cur_gid));
         if (strcmp(cur_gid, body_gid) != 0) {
             send_json_error(req, 409, "STALE_POST", "giphy_id does not match the currently displayed artwork");
+            return ESP_OK;
+        }
+    } else if (has_klipy_id) {
+        char body_kid[24];
+        strlcpy(body_kid, cJSON_GetStringValue(klipy_id_item), sizeof(body_kid));
+        cJSON_Delete(root);
+        if (current_source != POST_SOURCE_KLIPY) {
+            send_json_error(req, 409, "STALE_POST", "Current artwork is not from Klipy");
+            return ESP_OK;
+        }
+        // The on-screen Klipy id is the filepath basename stem (the dispatcher
+        // resolves product+id from the same filepath, so match on the id here).
+        char fp[256];
+        p3a_current_post_get_filepath(fp, sizeof(fp));
+        const char *base = strrchr(fp, '/');
+        base = base ? base + 1 : fp;
+        const char *dot = strrchr(base, '.');
+        char cur_kid[24];
+        size_t n = dot ? (size_t)(dot - base) : strlen(base);
+        if (n >= sizeof(cur_kid)) n = sizeof(cur_kid) - 1;
+        memcpy(cur_kid, base, n);
+        cur_kid[n] = '\0';
+        if (strcmp(cur_kid, body_kid) != 0) {
+            send_json_error(req, 409, "STALE_POST", "klipy_id does not match the currently displayed artwork");
             return ESP_OK;
         }
     } else {

@@ -990,6 +990,9 @@ function pinArtworkKey(currentArtwork) {
     if (typeof currentArtwork.giphy_id === 'string' && currentArtwork.giphy_id) {
         return 'giphy:' + currentArtwork.giphy_id;
     }
+    if (typeof currentArtwork.klipy_id === 'string' && currentArtwork.klipy_id) {
+        return 'klipy:' + (currentArtwork.klipy_product || '') + ':' + currentArtwork.klipy_id;
+    }
     if (typeof currentArtwork.post_id === 'number' && currentArtwork.post_id > 0) {
         return 'post:' + currentArtwork.post_id;
     }
@@ -1028,10 +1031,14 @@ function updatePinButton(currentArtwork) {
     if (!currentArtwork) { pinBtnReset(btn); return; }
 
     var hasGiphyId = typeof currentArtwork.giphy_id === 'string' && currentArtwork.giphy_id.length > 0;
+    var hasKlipyId = typeof currentArtwork.klipy_id === 'string' && currentArtwork.klipy_id.length > 0 &&
+                     typeof currentArtwork.klipy_product === 'string';
     var hasPostId = typeof currentArtwork.post_id === 'number' && currentArtwork.post_id > 0;
     var payload = null;
     if (hasGiphyId) {
         payload = { giphy_id: currentArtwork.giphy_id };
+    } else if (hasKlipyId) {
+        payload = { klipy_id: currentArtwork.klipy_id, klipy_product: currentArtwork.klipy_product };
     } else if (hasPostId) {
         payload = { post_id: currentArtwork.post_id };
     }
@@ -1131,6 +1138,9 @@ function infoArtworkIdKey(a) {
     if (src === 'giphy' && typeof a.giphy_id === 'string' && a.giphy_id) {
         return 'giphy:' + a.giphy_id;
     }
+    if (src === 'klipy' && typeof a.klipy_id === 'string' && a.klipy_id) {
+        return 'klipy:' + (a.klipy_product || '') + ':' + a.klipy_id;
+    }
     if (src === 'institution' && typeof a.iiif_key === 'string' && a.iiif_key) {
         return 'museum:' + (a.museum_id || '?') + ':' + a.iiif_key;
     }
@@ -1206,6 +1216,7 @@ function onInfoClick() {
 
 function fetchMetadataForArtwork(a) {
     if (a.source === 'giphy')       return fetchGiphyMetadata(a.giphy_id);
+    if (a.source === 'klipy')       return fetchKlipyMetadata(a.klipy_product, a.klipy_id);
     if (a.source === 'institution') return fetchMuseumMetadata(a.museum_id, a.iiif_key);
     if (a.source === 'makapix')     return fetchMakapixMetadata(a.storage_key);
     return Promise.reject(new Error('unsupported source'));
@@ -1305,6 +1316,24 @@ function resolveKlipyUrl(product, id) {
     }).catch(function(e) { delete klipyUrlPending[key]; throw e; });
     klipyUrlPending[key] = pr;
     return pr;
+}
+
+// Klipy items carry a title (no artist/date), fetched browser-direct like the
+// image resolve. Missing fields render as em-dash in the info panel.
+function fetchKlipyMetadata(product, id) {
+    return fetchKlipyKey().then(function(k) {
+        var u = 'https://api.klipy.com/api/v1/' + encodeURIComponent(k) + '/' +
+                encodeURIComponent(product) + '/' + encodeURIComponent(id);
+        return fetch(u);
+    }).then(function(r) {
+        if (!r.ok) throw new Error('klipy ' + r.status);
+        return r.json();
+    }).then(function(j) {
+        var data = (j && j.data) || {};
+        var item = (data && data.data) ? data.data : data;
+        if (Array.isArray(item)) item = item[0] || {};
+        return { title: item.title ? String(item.title) : null, artist: null, date: null };
+    });
 }
 
 function fetchGiphyMetadata(gifId) {

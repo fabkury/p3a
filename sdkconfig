@@ -2607,6 +2607,14 @@ CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS=2
 # end of HTTP Fetch
 
 #
+# Klipy Integration
+#
+CONFIG_KLIPY_API_KEY_DEFAULT=""
+CONFIG_KLIPY_FORMAT_DEFAULT="gif"
+CONFIG_KLIPY_RATING_DEFAULT="pg-13"
+# end of Klipy Integration
+
+#
 # Makapix Configuration
 #
 CONFIG_MAKAPIX_CLUB_HOST="makapix.club"

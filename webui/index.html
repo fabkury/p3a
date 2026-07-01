@@ -1678,12 +1678,14 @@ function buildPillBar() {
         manage.addEventListener('click', function() { openPinManageModal(); });
         pills.push(manage);
     }
-    /* Lay the pills out as two rows that scroll together: first half on the
-       top row, second half on the bottom, each kept in document order. Each
-       row is its own flex strip so pills keep their natural width (no shared
-       column tracks); both rows live in the single overflow-x .pill-bar so a
-       single horizontal scroll moves them together. An odd pill count puts the
-       extra one on the top row. */
+    /* Lay the pills out as two rows: first half on the top row, second half on
+       the bottom, each kept in document order. Each row is its own flex strip so
+       pills keep their natural width (no shared column tracks). On touch / narrow
+       viewports both rows live in the single overflow-x .pill-bar so one
+       horizontal drag scrolls them together; on a fine-pointer desktop the CSS
+       collapses the rows (display: contents) into one wrapping flow — see
+       .pill-bar in common.css. An odd pill count puts the extra one on the top
+       row. */
     if (pills.length) {
         var half = Math.ceil(pills.length / 2);
         [pills.slice(0, half), pills.slice(half)].forEach(function(rowPills) {

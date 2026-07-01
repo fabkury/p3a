@@ -839,13 +839,15 @@ body.has-bottom-nav {
 /* ── Pill Bar ── */
 
 .pill-bar {
-    /* Two rows of pills that scroll together as one horizontal area. The bar
-       is a vertical flex stack of two .pill-row strips (top/bottom); each row
-       packs its own pills at their natural width — no shared column tracks —
-       and the bar itself is the single overflow-x scroller, so one horizontal
-       drag moves both rows. align-items keeps each row only as wide as its
-       content (it may exceed the bar's width, which is what scrolls). gap here
-       is the vertical space between the two rows. */
+    /* Touch / narrow default: two rows of pills that scroll together as one
+       horizontal area. The bar is a vertical flex stack of two .pill-row strips
+       (top/bottom); each row packs its own pills at their natural width — no
+       shared column tracks — and the bar itself is the single overflow-x
+       scroller, so one horizontal drag moves both rows. align-items keeps each
+       row only as wide as its content (it may exceed the bar's width, which is
+       what scrolls). gap here is the vertical space between the two rows. On a
+       fine-pointer desktop this flips to a single wrapping flow — see the
+       `(min-width: 481px) and (pointer: fine)` block below. */
     width: min(420px, 100%);
     display: flex;
     flex-direction: column;
@@ -991,9 +993,31 @@ body.has-bottom-nav {
 }
 
 @media (min-width: 481px) {
-    /* .pill-bar stays a two-row horizontal scroller at every width — its 420px
-       cap means it can overflow even on desktop — so only the tab-bar unwraps. */
+    /* The tab-bar unwraps to a normal wrapping row on wider viewports. */
     .tab-bar { flex-wrap: wrap; overflow-x: visible; }
+}
+
+/* On a true pointer device (mouse/trackpad) at desktop width the pill-bar can't
+   be scrolled horizontally the way a touch drag scrolls it, so instead of a
+   two-row horizontal scroller it wraps every pill onto as many rows as it takes
+   (no two-line limit). Gated on `pointer: fine` so large touch tablets ≥481px
+   keep the scroller. The two JS-built .pill-row strips collapse via
+   `display: contents` so all pills become one wrapping flow in document order;
+   spacing switches from the per-row left margins to the bar's flex `gap` (zero
+   the margins so wrapped pills don't get gap+margin). Width is left untouched
+   (the base min(420px, 100%)) so the wrapped bar stays the same width as the
+   rest of the playback column — artwork/now-playing/arrow-row/upload-section
+   are all 420px in index.html; do NOT widen to --w-content (480px), which would
+   make the bar overhang the column on both sides. */
+@media (min-width: 481px) and (pointer: fine) {
+    .pill-bar {
+        flex-direction: row;
+        flex-wrap: wrap;
+        overflow-x: visible;
+        gap: var(--sp-2);
+    }
+    .pill-row { display: contents; }
+    .pill-row > .pill-item + .pill-item { margin-left: 0; }
 }
 
 /* ── Utilities ── */

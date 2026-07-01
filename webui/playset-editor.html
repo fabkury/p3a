@@ -645,6 +645,7 @@
                     <option value="hashtag">Makapix Hashtag</option>
                     <option value="sdcard">Local SD Card</option>
                     <option value="giphy">Giphy</option>
+                    <option value="klipy">Klipy</option>
                     <option value="institution">Museum</option>
                 </select>
             </div>
@@ -692,10 +693,15 @@
             hashtag: 'Hashtag',
             sdcard: 'SD Card',
             giphy: 'Giphy',
+            klipy: 'Klipy',
             institution: 'Museum'
         };
 
         var channelColors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b', '#fa709a'];
+
+        // Curated Klipy categories (from the Klipy categories endpoint). Each is
+        // both the label and the search query used for a category channel.
+        var KLIPY_CATEGORIES = ['hello','lol','love','happy birthday','thank you','excited','yes','no','sorry','happy','sad','thumbs up','scared','bye','confused','angry','hungry','kiss','please','surprised','nervous','embarrassed','ok','congratulations','hugs','good luck','dance','clapping','bored','wink','smile','aww','high five','good morning','youre welcome','good night'];
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -1355,6 +1361,17 @@
                         'Plays files from the device SD card' +
                         '</div>';
                     break;
+
+                case 'klipy': {
+                    var kparts = (channel.name || '').split(':');
+                    var kprod = kparts[0] === 'sticker' ? 'Stickers' : 'GIFs';
+                    var kmode = kparts[1] || 'trending';
+                    html += '<div style="padding: 8px; background: var(--c-surface-sunk); border-radius: 8px; font-size: 13px; color: var(--c-card-fg-muted);">' +
+                        'Klipy ' + kprod + ' — ' + kmode +
+                        (channel.identifier ? ' (' + escapeHtml(channel.identifier) + ')' : '') +
+                        '<br>Delete and re-add to change.</div>';
+                    break;
+                }
             }
 
             return html;
@@ -1378,6 +1395,15 @@
                         return 'Giphy: ' + channel.identifier;
                     }
                     return 'Giphy';
+                case 'klipy': {
+                    var kp = (channel.name || '').split(':');
+                    var kprod = kp[0] === 'sticker' ? 'Klipy Stickers' : 'Klipy';
+                    var kmode = kp[1] || 'trending';
+                    if ((kmode === 'search' || kmode === 'category') && channel.identifier) {
+                        return kprod + ': ' + channel.identifier;
+                    }
+                    return kprod + ' Trending';
+                }
                 default:
                     return channel.type;
             }
@@ -1775,6 +1801,34 @@
                         '</div>';
                     break;
 
+                case 'klipy':
+                    html = '<div class="form-group">' +
+                        '<label class="form-label">Klipy Product</label>' +
+                        '<select id="klipyProduct" class="form-input">' +
+                        '<option value="gif">GIFs</option>' +
+                        '<option value="sticker">Stickers</option>' +
+                        '</select>' +
+                        '</div>' +
+                        '<div class="form-group">' +
+                        '<label class="form-label">Klipy Mode</label>' +
+                        '<select id="klipyMode" class="form-input" onchange="updateKlipyFields()">' +
+                        '<option value="trending">Trending</option>' +
+                        '<option value="search">Search</option>' +
+                        '<option value="category">Category</option>' +
+                        '</select>' +
+                        '</div>' +
+                        '<div id="klipySearchField" class="form-group hidden">' +
+                        '<label class="form-label">Search Query</label>' +
+                        '<input type="text" id="klipySearch" class="form-input" placeholder="cats" maxlength="32">' +
+                        '</div>' +
+                        '<div id="klipyCategoryField" class="form-group hidden">' +
+                        '<label class="form-label">Category</label>' +
+                        '<select id="klipyCategory" class="form-input">' +
+                        KLIPY_CATEGORIES.map(function(c){ return '<option value="' + escapeAttr(c) + '">' + escapeHtml(c) + '</option>'; }).join('') +
+                        '</select>' +
+                        '</div>';
+                    break;
+
                 case 'institution':
                     // Museum picks happen through a dedicated four-step modal
                     // (museum -> axis -> term -> preview) defined in
@@ -1831,6 +1885,12 @@
             } else {
                 searchField.classList.add('hidden');
             }
+        }
+
+        function updateKlipyFields() {
+            var mode = document.getElementById('klipyMode').value;
+            document.getElementById('klipySearchField').classList.toggle('hidden', mode !== 'search');
+            document.getElementById('klipyCategoryField').classList.toggle('hidden', mode !== 'category');
         }
 
         function addChannel() {
@@ -1900,6 +1960,22 @@
                         }
                         channel.name = 'search';
                         channel.identifier = query;
+                    }
+                    break;
+
+                case 'klipy':
+                    var klipyProduct = document.getElementById('klipyProduct').value;
+                    var klipyMode = document.getElementById('klipyMode').value;
+                    channel.name = klipyProduct + ':' + klipyMode;
+                    if (klipyMode === 'search') {
+                        var kquery = document.getElementById('klipySearch').value.trim();
+                        if (!kquery) {
+                            showToast('Please enter a search query', 'error');
+                            return;
+                        }
+                        channel.identifier = kquery;
+                    } else if (klipyMode === 'category') {
+                        channel.identifier = document.getElementById('klipyCategory').value;
                     }
                     break;
 

@@ -159,6 +159,7 @@
     <button class="tab-item active" data-tab="display">Display</button>
     <button class="tab-item" data-tab="network">Network</button>
     <button class="tab-item" data-tab="giphy">Giphy</button>
+    <button class="tab-item" data-tab="klipy">Klipy</button>
     <button class="tab-item" data-tab="museum">Museum</button>
     <button class="tab-item" data-tab="storage">Storage</button>
     <button class="tab-item" data-tab="makapix">Makapix</button>
@@ -387,6 +388,63 @@
     </div>
     <div class="section">
         <button class="btn save-all" id="giphy-save-btn" onclick="saveGiphyAll()">Save All Giphy Settings</button>
+    </div>
+</div>
+
+<!-- Klipy Tab -->
+<div class="tab-content" id="tab-klipy">
+    <div class="section">
+        <h3>API</h3>
+        <div class="setting-row">
+            <label class="setting-label" for="klipy-api-key">API Key</label>
+            <input class="setting-input" id="klipy-api-key" type="text" placeholder="Klipy API Key" oninput="updateKlipyKeyBadge()">
+        </div>
+        <div class="setting-row">
+            <span class="setting-label">Status</span>
+            <span class="status-badge status-warn" id="klipy-key-badge">No key — channels won’t refresh</span>
+        </div>
+        <div class="setting-hint">Enter your Klipy API key. Klipy channels will not work without a valid key. Get a free key at <a href="https://partner.klipy.com/" target="_blank" rel="noopener">partner.klipy.com</a>. To remove a stored key, clear the field and save.</div>
+        <div class="setting-hint">Test keys are limited to 100 requests per hour. Each request returns up to 50 items, so a 500-item channel takes 10 requests to refresh. Production keys are unlimited.</div>
+    </div>
+    <div class="section">
+        <h3>Content</h3>
+        <div class="setting-row">
+            <label class="setting-label" for="klipy-rating">Content Rating</label>
+            <select class="setting-select" id="klipy-rating">
+                <option value="g">G - General Audiences</option>
+                <option value="pg">PG - Parental Guidance</option>
+                <option value="pg-13">PG-13 (default)</option>
+                <option value="r">R - Restricted</option>
+            </select>
+        </div>
+        <div class="setting-row">
+            <label class="setting-label" for="klipy-format">Format</label>
+            <select class="setting-select" id="klipy-format">
+                <option value="gif">GIF (default)</option>
+                <option value="webp">WebP (smaller)</option>
+            </select>
+        </div>
+        <div class="setting-hint">Klipy serves both GIF and WebP. At equal pixel size GIF is preferred; choose WebP for a smaller download footprint.</div>
+    </div>
+    <div class="section">
+        <h3>Advanced</h3>
+        <div class="setting-row">
+            <label class="setting-label" for="klipy-refresh">Refresh Interval</label>
+            <select class="setting-select" id="klipy-refresh">
+                <option value="3600">1 hour (default)</option>
+                <option value="7200">2 hours</option>
+                <option value="14400">4 hours</option>
+                <option value="28800">8 hours</option>
+            </select>
+        </div>
+        <div class="setting-row">
+            <label class="setting-label" for="klipy-cache-size">Cache Size</label>
+            <input class="setting-input" id="klipy-cache-size" type="number" min="32" max="2500" step="1" value="350">
+        </div>
+        <div class="setting-hint">Cache size sets the max items kept per channel (32-2500). Klipy trending reaches at least ~2500 items, so a larger cache gives more variety — but a full refresh of N items costs about N/50 requests, which matters on a 100-request/hour test key.</div>
+    </div>
+    <div class="section">
+        <button class="btn save-all" id="klipy-save-btn" onclick="saveKlipyAll()">Save All Klipy Settings</button>
     </div>
 </div>
 
@@ -1016,6 +1074,60 @@ function saveGiphyAll() {
     });
 }
 
+// ── Klipy tab ──
+
+function loadKlipySettings(cfg) {
+    document.getElementById('klipy-api-key').value = cfg.klipy_api_key || '';
+    document.getElementById('klipy-rating').value = cfg.klipy_rating || 'pg-13';
+    document.getElementById('klipy-format').value = cfg.klipy_format || 'gif';
+    var refreshSel = document.getElementById('klipy-refresh');
+    refreshSel.value = String(cfg.klipy_refresh_interval || 3600);
+    if (!refreshSel.value) refreshSel.value = '3600';
+    document.getElementById('klipy-cache-size').value = cfg.klipy_cache_size || 350;
+    updateKlipyKeyBadge();
+}
+
+// BYOK key status badge (mirrors updateMuseumKeyBadge): reads the input value
+// directly, no extra endpoint.
+function updateKlipyKeyBadge() {
+    var input = document.getElementById('klipy-api-key');
+    var badge = document.getElementById('klipy-key-badge');
+    if (!input || !badge) return;
+    if (input.value.trim()) {
+        badge.className = 'status-badge status-connected';
+        badge.textContent = 'Key set';
+    } else {
+        badge.className = 'status-badge status-warn';
+        badge.textContent = 'No key — channels won’t refresh';
+    }
+}
+
+function saveKlipyAll() {
+    var btn = document.getElementById('klipy-save-btn');
+    btn.disabled = true;
+    var apiKey = document.getElementById('klipy-api-key').value.trim();
+    var rating = document.getElementById('klipy-rating').value;
+    var format = document.getElementById('klipy-format').value;
+    var cacheSize = parseInt(document.getElementById('klipy-cache-size').value, 10) || 350;
+    if (cacheSize < 32) cacheSize = 32;
+    if (cacheSize > 2500) cacheSize = 2500;
+    var partial = {
+        klipy_api_key: apiKey,
+        klipy_rating: rating,
+        klipy_format: format,
+        klipy_refresh_interval: parseInt(document.getElementById('klipy-refresh').value, 10),
+        klipy_cache_size: cacheSize
+    };
+    mergeConfig(partial, function() {
+        btn.disabled = false;
+        updateKlipyKeyBadge();
+        showToast('Klipy settings saved', false);
+    }, function(status) {
+        btn.disabled = false;
+        showToast('Save failed (HTTP ' + status + ')', true);
+    });
+}
+
 function resetRandomId() {
     if (!confirm('Reset Giphy Random ID? A new one will be obtained on next refresh.')) return;
     var btn = document.getElementById('reset-rid-btn');
@@ -1492,6 +1604,8 @@ xhr.onreadystatechange = function() {
         loadGiphySettings(cfg);
         // Museum tab
         loadMuseumSettings(cfg);
+        // Klipy tab
+        loadKlipySettings(cfg);
     }
 };
 xhr.send();

@@ -53,6 +53,7 @@ static const char *source_to_string(pinned_source_t s)
         case PINNED_SOURCE_MAKAPIX:     return "makapix";
         case PINNED_SOURCE_GIPHY:       return "giphy";
         case PINNED_SOURCE_INSTITUTION: return "museum";
+        case PINNED_SOURCE_KLIPY:       return "klipy";
         default:                        return "unknown";
     }
 }
@@ -63,6 +64,7 @@ static pinned_source_t source_from_string(const char *s)
     if (strcmp(s, "makapix") == 0) return PINNED_SOURCE_MAKAPIX;
     if (strcmp(s, "giphy") == 0)   return PINNED_SOURCE_GIPHY;
     if (strcmp(s, "museum") == 0)  return PINNED_SOURCE_INSTITUTION;
+    if (strcmp(s, "klipy") == 0)   return PINNED_SOURCE_KLIPY;
     return PINNED_SOURCE_NONE;
 }
 
@@ -274,6 +276,15 @@ static cJSON *json_from_order_entry(const pinned_order_entry_t *e)
             cJSON_AddStringToObject(o, "giphy_id", giphy_id);
             break;
         }
+        case PINNED_SOURCE_KLIPY: {
+            char kid[PINNED_GIPHY_ID_MAX + 1];
+            strlcpy(kid, e->klipy.klipy_id, sizeof(kid));
+            cJSON_AddStringToObject(o, "klipy_id", kid);
+            /* API product form so the browser can resolve the CDN thumbnail. */
+            cJSON_AddStringToObject(o, "klipy_product",
+                                    e->klipy.product == 1 ? "stickers" : "gifs");
+            break;
+        }
         case PINNED_SOURCE_INSTITUTION: {
             char iiif[PINNED_IIIF_KEY_MAX + 1];
             strlcpy(iiif, e->museum.iiif_key, sizeof(iiif));
@@ -432,6 +443,14 @@ static esp_err_t h_get_item_local(httpd_req_t *req, const char *slug,
         case PINNED_SOURCE_GIPHY:
             strlcpy(shim.giphy.giphy_id, entry.source_id, sizeof(shim.giphy.giphy_id));
             break;
+        case PINNED_SOURCE_KLIPY: {
+            /* source_id is "{gif|sticker}:{id}". */
+            const char *colon = strchr(entry.source_id, ':');
+            shim.klipy.product = (strncmp(entry.source_id, "sticker", 7) == 0) ? 1 : 0;
+            strlcpy(shim.klipy.klipy_id, colon ? colon + 1 : entry.source_id,
+                    sizeof(shim.klipy.klipy_id));
+            break;
+        }
         case PINNED_SOURCE_INSTITUTION: {
             shim.museum.museum_id = entry.museum_id;
             /* source_id is "<museum_id>:<iiif_key>"; strip the prefix. */

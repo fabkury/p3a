@@ -1923,6 +1923,10 @@ function openPinBrowseModal(slug, listName) {
     function itemSourceId(item) {
         if (item.source === 'makapix' && item.uuid) return item.uuid;
         if (item.source === 'giphy' && item.giphy_id) return item.giphy_id;
+        if (item.source === 'klipy' && item.klipy_id) {
+            /* Matches the server's source_id form "{gif|sticker}:{id}". */
+            return (item.klipy_product === 'stickers' ? 'sticker' : 'gif') + ':' + item.klipy_id;
+        }
         if (item.source === 'museum' && item.iiif_key !== undefined) {
             return item.museum_id + ':' + item.iiif_key;
         }
@@ -1932,7 +1936,7 @@ function openPinBrowseModal(slug, listName) {
     /* Mirrors the main artwork display rule (animation_player_render.c:66
        and updateArtwork in this file): only Giphy gets smooth interpolation;
        everything else (Makapix, museum, …) renders nearest-neighbor. */
-    function isPixelated(item) { return item.source !== 'giphy'; }
+    function isPixelated(item) { return item.source !== 'giphy' && item.source !== 'klipy'; }
 
     function renderCard(item) {
         var card = document.createElement('div');
@@ -1949,7 +1953,16 @@ function openPinBrowseModal(slug, listName) {
             var fb = localThumbUrl(item);
             if (img.src !== fb) img.src = fb;
         };
-        img.src = thumbUrl(item);
+        if (item.source === 'klipy' && item.klipy_id && item.klipy_product) {
+            // Resolve the CDN thumbnail browser-side; do NOT fall back to the
+            // device /local thumbnail for Klipy (preserve the device's Wi-Fi).
+            img.onerror = null;
+            resolveKlipyUrl(item.klipy_product, item.klipy_id).then(function(u) {
+                img.src = u;
+            }, function() { /* leave blank rather than fetch from the device */ });
+        } else {
+            img.src = thumbUrl(item);
+        }
         card.appendChild(img);
 
         var meta = document.createElement('div');

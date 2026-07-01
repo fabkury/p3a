@@ -502,6 +502,39 @@ bool config_store_get_giphy_prefer_downsized(void);
 void config_store_invalidate_giphy_prefer_downsized(void);
 
 // ============================================================================
+// Klipy Settings (persisted)
+// ============================================================================
+
+/** @brief Set Klipy API key (empty string clears it, reverting to BYOK-unset) */
+esp_err_t config_store_set_klipy_api_key(const char *key);
+/** @brief Get Klipy API key (defaults to empty = BYOK unset) */
+esp_err_t config_store_get_klipy_api_key(char *out_key, size_t max_len);
+
+/** @brief Set Klipy download format ("gif" or "webp") */
+esp_err_t config_store_set_klipy_format(const char *format);
+/** @brief Get Klipy download format (defaults to "gif") */
+esp_err_t config_store_get_klipy_format(char *out, size_t max_len);
+
+/** @brief Set Klipy content rating filter ("g", "pg", "pg-13", "r") */
+esp_err_t config_store_set_klipy_rating(const char *rating);
+/** @brief Get Klipy content rating filter (defaults to "pg-13") */
+esp_err_t config_store_get_klipy_rating(char *out, size_t max_len);
+
+/** @brief Set Klipy cache size (max entries per channel, 32..2500) */
+esp_err_t config_store_set_klipy_cache_size(uint32_t size);
+/** @brief Get Klipy cache size (defaults to 350) */
+uint32_t config_store_get_klipy_cache_size(void);
+/** @brief Invalidate cached Klipy cache size (forces reload from NVS) */
+void config_store_invalidate_klipy_cache_size(void);
+
+/** @brief Set Klipy refresh interval in seconds (60..28800) */
+esp_err_t config_store_set_klipy_refresh_interval(uint32_t seconds);
+/** @brief Get Klipy refresh interval (defaults to 3600 = 1 hour) */
+uint32_t config_store_get_klipy_refresh_interval(void);
+/** @brief Invalidate cached Klipy refresh interval (forces reload from NVS) */
+void config_store_invalidate_klipy_refresh_interval(void);
+
+// ============================================================================
 // Art Institution (Museums) Settings
 // ============================================================================
 //

@@ -154,6 +154,11 @@ esp_err_t sd_path_get_museum(char *out_path, size_t out_len)
     return sd_path_get_subdir("museum", out_path, out_len);
 }
 
+esp_err_t sd_path_get_klipy(char *out_path, size_t out_len)
+{
+    return sd_path_get_subdir("klipy", out_path, out_len);
+}
+
 esp_err_t sd_path_get_pinned(char *out_path, size_t out_len)
 {
     return sd_path_get_subdir("pinned", out_path, out_len);

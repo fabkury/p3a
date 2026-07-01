@@ -1,0 +1,25 @@
+menu "Klipy Integration"
+
+    config KLIPY_API_KEY_DEFAULT
+        string "Default Klipy API Key"
+        default ""
+        help
+            Klipy API key. No built-in default is provided; the user must
+            configure a key via the web UI (stored in NVS). Get a free key at
+            partner.klipy.com.
+
+    config KLIPY_FORMAT_DEFAULT
+        string "Default format"
+        default "gif"
+        help
+            Default file format to download. At equal pixel size GIF is
+            preferred over WebP; set to "webp" for a smaller download footprint.
+            Options: gif, webp
+
+    config KLIPY_RATING_DEFAULT
+        string "Default content rating"
+        default "pg-13"
+        help
+            Default Klipy content rating filter. Options: g, pg, pg-13, r
+
+endmenu

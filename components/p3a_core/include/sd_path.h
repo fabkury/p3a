@@ -163,6 +163,19 @@ esp_err_t sd_path_get_giphy(char *out_path, size_t out_len);
 esp_err_t sd_path_get_museum(char *out_path, size_t out_len);
 
 /**
+ * @brief Get the klipy directory path (for Klipy artwork cache)
+ *
+ * The Klipy vault is sharded per product:
+ *   /sdcard/p3a/klipy/{gif|sticker}/{d0}/{d1}/{klipy_id}.{ext}
+ * This helper returns the common parent /sdcard/p3a/klipy.
+ *
+ * @param out_path Output buffer for the path
+ * @param out_len Size of output buffer
+ * @return ESP_OK on success
+ */
+esp_err_t sd_path_get_klipy(char *out_path, size_t out_len);
+
+/**
  * @brief Get the pinned-artworks root directory path
  *
  * Layout under this root:

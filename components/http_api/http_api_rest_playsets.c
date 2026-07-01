@@ -238,6 +238,28 @@ cJSON *build_current_artwork_json(void)
         if (giphy_id[0]) {
             cJSON_AddStringToObject(obj, "giphy_id", giphy_id);
         }
+    } else if (source == POST_SOURCE_KLIPY) {
+        // Klipy CDN urls are opaque per-format tokens the device can't hand the
+        // browser as a reconstructable url. Emit the numeric id + product so the
+        // browser resolves the url itself against api.klipy.com (keeping the
+        // device out of the media path). Both are parsed from the on-screen
+        // filepath: /sdcard/p3a/klipy/{gif|sticker}/{d0}/{d1}/{id}.{ext}
+        char fp[256];
+        p3a_current_post_get_filepath(fp, sizeof(fp));
+        if (fp[0]) {
+            const char *product = strstr(fp, "/klipy/sticker/") ? "stickers" : "gifs";
+            const char *base = strrchr(fp, '/');
+            base = base ? base + 1 : fp;
+            const char *dot = strrchr(base, '.');
+            char idbuf[24];
+            size_t n = dot ? (size_t)(dot - base) : strlen(base);
+            if (n > 0 && n < sizeof(idbuf)) {
+                memcpy(idbuf, base, n);
+                idbuf[n] = '\0';
+                cJSON_AddStringToObject(obj, "klipy_id", idbuf);
+                cJSON_AddStringToObject(obj, "klipy_product", product);
+            }
+        }
     } else if (source == POST_SOURCE_INSTITUTION) {
         int32_t post_id = p3a_current_post_get_id();
         if (post_id > 0) {

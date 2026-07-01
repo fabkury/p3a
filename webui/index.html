@@ -921,6 +921,25 @@ function updateArtwork(currentArtwork) {
     }
     latestArtwork = currentArtwork || null;
 
+    // Klipy artworks arrive without a url (opaque CDN token). Resolve it
+    // browser-side once per artwork, then re-render with the resolved url.
+    if (currentArtwork && !currentArtwork.url && currentArtwork.source === 'klipy' &&
+        currentArtwork.klipy_id && currentArtwork.klipy_product) {
+        var kkey = currentArtwork.klipy_product + '/' + currentArtwork.klipy_id;
+        if (typeof klipyUrlCache[kkey] === 'string') {
+            currentArtwork.url = klipyUrlCache[kkey];  // resolved earlier — render below
+        } else {
+            resolveKlipyUrl(currentArtwork.klipy_product, currentArtwork.klipy_id).then(function() {
+                // Re-render only if this Klipy artwork is still on screen.
+                if (latestArtwork && latestArtwork.source === 'klipy' &&
+                    latestArtwork.klipy_id === currentArtwork.klipy_id) {
+                    updateArtwork(latestArtwork);
+                }
+            }, function(err) { console.warn('klipy image resolve failed:', err); });
+            // Fall through with no url: image stays hidden until the resolve lands.
+        }
+    }
+
     var img = document.getElementById('artwork-img');
     if (!currentArtwork || !currentArtwork.url) {
         img.style.display = 'none';
@@ -929,7 +948,8 @@ function updateArtwork(currentArtwork) {
         updateInfoButton(currentArtwork);
         return;
     }
-    var usePixelated = (currentArtwork.channel_type !== 'giphy');
+    // Klipy is Giphy-like GIF/sticker content, not pixel art — don't pixelate it.
+    var usePixelated = (currentArtwork.channel_type !== 'giphy' && currentArtwork.channel_type !== 'klipy');
     if (usePixelated) {
         img.classList.add('pixelated');
     } else {
@@ -1094,6 +1114,9 @@ function playReactionPulse(btn) {
 var latestArtwork = null;        // last currentArtwork seen by updateArtwork
 var infoArtworkKey = null;       // key of the artwork the panel is currently showing
 var giphyKeyCached = null;       // /config.giphy_api_key for the session
+var klipyKeyCached = null;       // /config.klipy_api_key for the session
+var klipyUrlCache = {};          // "product/id" -> resolved CDN url (session cache)
+var klipyUrlPending = {};        // "product/id" -> in-flight resolve Promise
 
 var EM_DASH = '—';
 
@@ -1216,6 +1239,67 @@ function fetchGiphyKey() {
         giphyKeyCached = k;
         return k;
     });
+}
+
+// ── Klipy: resolve the opaque CDN image url browser-side ──
+// Klipy media lives on a public CDN (static.klipy.com, no key needed to fetch
+// the bytes) but the url is a per-format random token that can't be
+// reconstructed from the id — so the browser resolves it via the Klipy API
+// (key from /config), the same browser-direct pattern Giphy metadata uses. The
+// device never touches the media, preserving its Wi-Fi. Resolved urls are
+// cached per artwork so we don't re-hit the API on every poll.
+function fetchKlipyKey() {
+    if (klipyKeyCached) return Promise.resolve(klipyKeyCached);
+    return fetch('/config').then(function(r) {
+        if (!r.ok) throw new Error('config ' + r.status);
+        return r.json();
+    }).then(function(j) {
+        var cfg = (j && j.ok && j.data) ? j.data : (j || {});
+        var k = (typeof cfg.klipy_api_key === 'string') ? cfg.klipy_api_key.trim() : '';
+        if (!k) throw new Error('no klipy api key');
+        klipyKeyCached = k;
+        return k;
+    });
+}
+
+function pickKlipyFileUrl(file) {
+    if (!file) return null;
+    var tiers = ['hd', 'md', 'sm', 'xs'];
+    var fmts = ['webp', 'gif'];
+    for (var t = 0; t < tiers.length; t++) {
+        var tn = file[tiers[t]];
+        if (!tn) continue;
+        for (var f = 0; f < fmts.length; f++) {
+            var fn = tn[fmts[f]];
+            if (fn && typeof fn.url === 'string' && fn.url) return fn.url;
+        }
+    }
+    return null;
+}
+
+function resolveKlipyUrl(product, id) {
+    var key = product + '/' + id;
+    if (typeof klipyUrlCache[key] === 'string') return Promise.resolve(klipyUrlCache[key]);
+    if (klipyUrlPending[key]) return klipyUrlPending[key];
+    var pr = fetchKlipyKey().then(function(k) {
+        var u = 'https://api.klipy.com/api/v1/' + encodeURIComponent(k) + '/' +
+                encodeURIComponent(product) + '/' + encodeURIComponent(id);
+        return fetch(u);
+    }).then(function(r) {
+        if (!r.ok) throw new Error('klipy ' + r.status);
+        return r.json();
+    }).then(function(j) {
+        var data = (j && j.data) || {};
+        var item = (data && data.data) ? data.data : data;
+        if (Array.isArray(item)) item = item[0] || {};
+        var url = pickKlipyFileUrl(item.file);
+        if (!url) throw new Error('no klipy rendition');
+        klipyUrlCache[key] = url;
+        delete klipyUrlPending[key];
+        return url;
+    }).catch(function(e) { delete klipyUrlPending[key]; throw e; });
+    klipyUrlPending[key] = pr;
+    return pr;
 }
 
 function fetchGiphyMetadata(gifId) {

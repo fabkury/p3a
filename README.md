@@ -256,4 +256,4 @@ Apache License 2.0 — see [LICENSE](LICENSE). For dependency licenses, see [LIC
 
 ## Acknowledgements
 
-Thanks to ByteWelder from the *Espressif MCUs* Discord channel for advice in the early days of p3a.
+Thanks to ByteWelder from the *Espressif MCUs* Discord server for advice in the early days of p3a.

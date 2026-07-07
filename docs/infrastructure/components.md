@@ -111,7 +111,22 @@ All 25 custom components live under `components/`. This document describes each 
 - **Web UI**: Settings page at `/giphy`
 - **Kconfig**: `GIPHY_API_KEY_DEFAULT`, `GIPHY_RENDITION_DEFAULT` (default `fixed_height`), `GIPHY_FORMAT_DEFAULT` (default `gif`)
 
-## 10. art_institution — Museum (IIIF) Channels
+## 10. klipy — Klipy Integration
+
+- **Purpose**: Fetch and cache GIFs and stickers from the Klipy API
+- **Key files**: `klipy_api.c`, `klipy_cache.c`, `klipy_download.c`, `klipy_refresh.c`
+- **Features**:
+  - Trending, search, and category channels, each for two products: GIF and sticker
+  - Hash-sharded file storage on SD card (`/sdcard/p3a/klipy/{gif|sticker}/`)
+  - Klipy CDN URLs are opaque/non-guessable, so cache entries store the numeric Klipy id and re-resolve the download URL via the API when needed
+  - Configurable format (GIF/WebP), content rating, refresh interval, and cache size (32–2500)
+  - BYOK: no key is shipped; channels do not refresh until the user enters a key from [partner.klipy.com](https://partner.klipy.com/) (test keys: 100 requests/hour, ~50 items/request)
+  - On-demand download with atomic writes (temp file + rename)
+- **Web UI**: Klipy tab at `/settings#klipy`; channel creation in the playset editor
+- **Kconfig**: `KLIPY_API_KEY_DEFAULT` (empty), `KLIPY_FORMAT_DEFAULT` (default `gif`), `KLIPY_RATING_DEFAULT` (default `pg-13`)
+- **Playset binary format**: Klipy channels use `PS_CHANNEL_TYPE_KLIPY`
+
+## 11. art_institution — Museum (IIIF) Channels
 
 - **Purpose**: First-class channel source for artwork hosted by major museums that expose their collections through the [IIIF Image API](https://iiif.io/api/image/3.0/). Seven museums ship today: the Art Institute of Chicago (`artic`), the Rijksmuseum (`rijks`), the Victoria and Albert Museum (`vam`), the Wellcome Collection (`wellcome`), the Statens Museum for Kunst (`smk`), Harvard Art Museums (`ham`, BYOK API key), and the Smithsonian (`si`, BYOK api.data.gov key).
 - **Key files**: `art_institution.c` (dispatch + lifecycle), `art_institution_refresh.c` (per-channel listing walk), `art_institution_download.c` (IIIF JPEG fetch with NRS→IDS redirect shim), `art_institution_resolve.c` (Rijks Linked-Art walk), `art_institution_rate_limit.c` (per-museum cooldown), `museums/{artic,rijksmuseum,vam,wellcome,smk,ham,smithsonian}.c` (per-museum adapters), `museums/common.c` (shared HTTP helpers)
@@ -122,11 +137,11 @@ All 25 custom components live under `components/`. This document describes each 
 - **Storage**: Cached images live at `/sdcard/p3a/museum/{museum_id}/{d0}/{d1}/{iiif_key}.{ext}` (6-bit decimal shard dirs — see `sd_path_build_sharded()`). The vault is shared across all channels of the same museum, so an artwork that belongs to several facets is only stored once.
 - **Rate limiting**: A per-museum cooldown table is shared between the device's refresh dispatcher, the download manager, and the browser's browse modal. Browser-issued 429s are reported back to the device via `POST /api/museum/rate-limits/report-429` so the per-IP budget stays consistent. The browse modal reads `GET /api/museum/rate-limits` before triggering term-count probes.
 - **Settings**: Two global NVS keys, `ai_refresh_sec` (default 345 600 s — 4 days) and `ai_cache_size` (default 1024 entries per channel), surface in the **Museum** tab of the settings page. Per-museum BYOK keys live in the same tab: `ham_api_key` (Harvard Art Museums) and `si_api_key` (Smithsonian, via api.data.gov). For both: no key is shipped, refresh is a no-op until the user enters one, and clearing the key dormants the refresh path without dropping the channel.
-- **Storage eviction**: Museum vault files are reclaimed by the existing `storage_eviction` component alongside the Makapix vault and Giphy cache (see component 17).
+- **Storage eviction**: Museum vault files are reclaimed by the existing `storage_eviction` component alongside the Makapix vault and Giphy cache (see component 19).
 - **Playset binary format**: Institution channels use `PS_CHANNEL_TYPE_INSTITUTION = 7` with `name = "{museum_id}:{axis}"` and `identifier = "{term_id}"`. Cache entries use `institution_channel_entry_t` (64 bytes; same slot as the makapix/giphy entries) with the discriminator `PS_ENTRY_FORMAT_INSTITUTION`.
 - **Full design**: See [`docs/art-institutions/finalized-design.md`](../art-institutions/finalized-design.md).
 
-## 11. makapix — Makapix Club Integration
+## 12. makapix — Makapix Club Integration
 
 - **Purpose**: Makapix Club MQTT integration for cloud-connected artwork sharing
 - **Key files**: `makapix.c`, `makapix_mqtt.c`, `makapix_provision.c`, `makapix_provision_flow.c`, `makapix_store.c`, `makapix_api.c`, `makapix_artwork.c`, `makapix_certs.c`, `makapix_connection.c`, `makapix_channel_switch.c`, `makapix_promoted_https.c`, `makapix_refresh.c`, `makapix_single_artwork.c`, `view_tracker.c`
@@ -140,22 +155,22 @@ All 25 custom components live under `components/`. This document describes each 
   - NVS credential storage (`makapix_store.c`)
 - **Kconfig**: `components/makapix/Kconfig`
 
-## 12. http_api — HTTP Server and REST API
+## 13. http_api — HTTP Server and REST API
 
 - **Purpose**: HTTP server, REST API, WebSocket handler, static file serving
 - **Key files**: `http_api.c`, `http_api_rest_status.c`, `http_api_rest_actions.c`, `http_api_rest_settings.c`, `http_api_rest_playsets.c`, `http_api_ota.c`, `http_api_upload.c`, `http_api_pages.c`, `http_api_pico8.c`, `http_api_utils.c`
 - **Features**: mDNS, static file serving from LittleFS, file upload, playset CRUD, OTA endpoints
 - See [Network and API](network-and-api.md) for the full endpoint list.
 
-## 13. config_store — NVS-Backed Configuration
+## 14. config_store — NVS-Backed Configuration
 
 - **Purpose**: Persistent configuration with NVS backend
-- **Key files**: `config_store.c`, `config_store_settings.c`, `config_store_giphy.c`, plus internal headers
+- **Key files**: `config_store.c`, `config_store_settings.c`, `config_store_giphy.c`, `config_store_klipy.c`, plus internal headers
 - **Public API**: `config_store.h`
-- **Stores**: rotation, background color, dwell time, refresh interval, randomize playlist, show FPS, max-speed playback, view-ack, SD card root, channel-cache size, processing-notification options, channel-selection mode, Giphy fields (api_key, rendition, format, rating, country code, random_id, cache size, refresh interval, prefer-downsized), device name and hostname, Wi-Fi/touch recovery counters
+- **Stores**: rotation, background color, dwell time, refresh interval, randomize playlist, show FPS, max-speed playback, view-ack, SD card root, channel-cache size, processing-notification options, channel-selection mode, Giphy fields (api_key, rendition, format, rating, country code, random_id, cache size, refresh interval, prefer-downsized), Klipy fields (api_key, format, rating, cache size, refresh interval), device name and hostname, Wi-Fi/touch recovery counters
 - **Stored elsewhere**: Wi-Fi credentials live in NVS namespaces handled by `wifi_manager`; brightness is owned by `p3a_board`; Makapix credentials live in `makapix_store`; playsets are persisted by `playset_store`.
 
-## 14. ota_manager — Over-the-Air Updates
+## 15. ota_manager — Over-the-Air Updates
 
 - **Purpose**: Wireless firmware and web UI updates from GitHub Releases
 - **Key files**: `ota_manager.c`, `ota_manager_install.c`, `ota_manager_webui.c`, `github_ota.c`
@@ -168,7 +183,7 @@ All 25 custom components live under `components/`. This document describes each 
   - Progress display on both LCD and web UI during updates
 - **Kconfig**: `components/ota_manager/Kconfig`
 
-## 15. slave_ota — ESP32-C6 Co-processor Firmware
+## 16. slave_ota — ESP32-C6 Co-processor Firmware
 
 - **Purpose**: Automatic firmware management for the ESP32-C6 Wi-Fi co-processor
 - **Key files**: `slave_ota.c`, `slave_ota.h`
@@ -177,7 +192,7 @@ All 25 custom components live under `components/`. This document describes each 
   - Automatically flashes ESP-Hosted firmware during boot
   - Progress logged to the serial console only; the LCD keeps showing whatever the animation player was rendering, then blanks at the post-update `esp_restart()`
 
-## 16. pico8 — PICO-8 Streaming
+## 17. pico8 — PICO-8 Streaming
 
 - **Purpose**: PICO-8 game streaming over WebSocket (with optional audio)
 - **Key files**: `pico8_stream.c`, `pico8_render.c`, `pico8_audio.c`, `pico8_stream_stubs.c`
@@ -188,14 +203,14 @@ All 25 custom components live under `components/`. This document describes each 
   - Auto-timeout after 30 seconds of inactivity
 - **Kconfig**: `P3A_PICO8_ENABLE`, `P3A_PICO8_USB_STREAM_ENABLE`, `P3A_PICO8_AUDIO_ENABLE`
 
-## 17. content_cache — Channel Cache Wrapper
+## 18. content_cache — Channel Cache Wrapper
 
 - **Purpose**: Thin wrapper around `download_manager` for legacy compatibility
 - **Key files**: `content_cache.c`
 - **Public API**: `content_cache.h`
 - **Key functions**: `content_cache_init()`, `content_cache_deinit()`, `content_cache_is_busy()`, `content_cache_set_channels()`, `content_cache_reset_cursors()`, `content_cache_rescan()`
 
-## 18. storage_eviction — SD Card Space Management
+## 19. storage_eviction — SD Card Space Management
 
 - **Purpose**: Age-based eviction of cached artwork and stale channel files from SD card. The cache walk is layout-unaware: it recurses into whatever directories exist under the vault/giphy/museum bases (depth capped for stack safety, not layout), deletes by extension allowlist + age — artwork files plus `.404` negative-cache markers and orphaned `.tmp` staging files — and `rmdir`s emptied directories on the way out (this is also what gradually reclaims orphaned pre-1.0 SHA256 shard trees). File mtime is touched on every successful load by the animation player, so age ≈ time since last played.
 - **Key files**: `storage_eviction.c`
@@ -209,7 +224,7 @@ All 25 custom components live under `components/`. This document describes each 
 - **Small-card guard**: If the SD card's total capacity is below `STORAGE_EVICTION_MIN_CARD_SIZE_MIB` (default 7000 MiB, sized below the formatted capacity of an advertised 8 GB card), eviction skips silently. The device fills the card and stops accepting new downloads rather than thrashing the FS. Set the Kconfig to 0 to disable the guard.
 - **Kconfig**: `STORAGE_EVICTION_TARGET_MIB` (trigger watermark, default 1024 MiB), `STORAGE_EVICTION_HEADROOM_MIB` (overshoot above trigger, default 4096 MiB), `STORAGE_EVICTION_MIN_CARD_SIZE_MIB` (small-card guard, default 7000 MiB), `STORAGE_EVICTION_INITIAL_AGE_DAYS` (default 30), `STORAGE_EVICTION_MIN_AGE_HOURS` (default 4), `CHANNEL_EVICTION_AGE_DAYS` (default 60)
 
-## 19. loader_service — Animation File Loader
+## 20. loader_service — Animation File Loader
 
 - **Purpose**: Loads animation files from SD card into memory and initializes decoders
 - **Key files**: `loader_service.c`
@@ -217,14 +232,14 @@ All 25 custom components live under `components/`. This document describes each 
 - **Key functions**: `loader_service_load()`, `loader_service_unload()`
 - **Features**: Chunked SD card reading with retries, PSRAM allocation preference, yields between chunks
 
-## 20. playback_queue — Play Scheduler to Animation Player Adapter
+## 21. playback_queue — Play Scheduler to Animation Player Adapter
 
 - **Purpose**: Converts `ps_artwork_t` (play scheduler output) to `swap_request_t` (animation player input)
 - **Key files**: `playback_queue.c`
 - **Public API**: `playback_queue.h`
 - **Key functions**: `playback_queue_current()`, `playback_queue_next()`, `playback_queue_prev()`, `playback_queue_peek()`
 
-## 21. sdio_bus — SDIO Bus Coordinator
+## 22. sdio_bus — SDIO Bus Coordinator
 
 - **Purpose**: Mutex-based coordination for shared SDIO bus between WiFi (SDIO Slot 1) and SD card (SDMMC Slot 0)
 - **Key files**: `sdio_bus.c`
@@ -232,7 +247,7 @@ All 25 custom components live under `components/`. This document describes each 
 - **Key functions**: `sdio_bus_init()`, `sdio_bus_acquire()`, `sdio_bus_release()`, `sdio_bus_is_locked()`, `sdio_bus_get_holder()`
 - **Use case**: Prevents "SDIO slave unresponsive" crashes during OTA or large downloads
 
-## 22. show_url — URL Artwork Downloader
+## 23. show_url — URL Artwork Downloader
 
 - **Purpose**: Downloads artwork from arbitrary HTTP/HTTPS URLs and plays them
 - **Key files**: `show_url.c`
@@ -244,7 +259,7 @@ All 25 custom components live under `components/`. This document describes each 
   - Chunked download (128 KB chunks, 16 MiB max)
   - Auto-refreshes SD card cache and starts playback
 
-## 23. debug_http_log — Performance Instrumentation
+## 24. debug_http_log — Performance Instrumentation
 
 - **Purpose**: Compile-time optional performance statistics for frame rendering
 - **Key files**: `debug_http_log.c`, `debug_http_log.h`
@@ -252,7 +267,7 @@ All 25 custom components live under `components/`. This document describes each 
 - **Statistics**: decode time, upscale time, total render time, late frames, alpha usage
 - When disabled, all functions are no-ops with zero overhead.
 
-## 24. Supporting Libraries
+## 25. Supporting Libraries
 
 | Component | Purpose |
 |-----------|---------|

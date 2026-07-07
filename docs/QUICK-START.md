@@ -94,7 +94,15 @@ Pulls fresh trending GIFs every few hours. This one takes a few extra minutes be
 
 Trending GIFs start appearing in the rotation within a few minutes.
 
-### C. Add a museum channel
+### C. Add GIFs and stickers from Klipy
+
+Klipy is another GIF platform, and it also offers stickers. Like Giphy, it needs a free API key:
+
+1. Go to **[partner.klipy.com](https://partner.klipy.com/)**, sign up, and copy your app's **API Key**.
+2. Open `http://p3a.local/settings.html#klipy` in your browser, paste the key, and click **Save All Klipy Settings**.
+3. Open `http://p3a.local/playset-editor`, click **Add Channel**, set **Channel Type** to **Klipy**, and pick trending, a search term, or a category — as GIFs or stickers.
+
+### D. Add a museum channel
 
 Browse the open collections of major museums. Seven institutions ship today: the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst (SMK), Harvard Art Museums, and the Smithsonian. The first five need no account or key. Harvard requires a free API key — request one at [harvardartmuseums.org/collections/api](https://harvardartmuseums.org/collections/api). Smithsonian requires a free api.data.gov key — register at [api.data.gov/signup/](https://api.data.gov/signup/) (instant). Paste either key into **Settings → Museums**.
 
@@ -105,7 +113,7 @@ Browse the open collections of major museums. Seven institutions ship today: the
 
 The device queries the museum's listing API and starts downloading artwork at IIIF resolution. The first images appear within seconds; the rest fill in over the next minutes. See the [User Guide](HOW-TO-USE.md#museum-channels-iiif) for the full list of facets, refresh-interval settings, and storage behavior.
 
-### D. Show your own GIFs and images
+### E. Show your own GIFs and images
 
 Got a favorite GIF? Drop it onto the dashboard:
 

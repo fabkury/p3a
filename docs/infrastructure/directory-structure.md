@@ -189,6 +189,18 @@ p3a/
 │   │   ├── CMakeLists.txt
 │   │   └── Kconfig
 │   │
+│   ├── klipy/                           # Klipy API integration (GIFs + stickers)
+│   │   ├── klipy_api.c                  # API calls (trending/search/category, id re-resolve)
+│   │   ├── klipy_cache.c                # SD card cache (2-level hash-sharded, gif|sticker split)
+│   │   ├── klipy_download.c             # Download with atomic writes
+│   │   ├── klipy_refresh.c              # Periodic refresh
+│   │   ├── klipy_internal.h
+│   │   ├── include/
+│   │   │   ├── klipy.h
+│   │   │   └── klipy_types.h
+│   │   ├── CMakeLists.txt
+│   │   └── Kconfig
+│   │
 │   ├── art_institution/                 # Museum (IIIF) channel source
 │   │   ├── art_institution.c            # Public API, dispatch table, lifecycle
 │   │   ├── art_institution_refresh.c    # Per-channel refresh dispatcher
@@ -262,6 +274,7 @@ p3a/
 │   │   ├── config_store.c               # Core API
 │   │   ├── config_store_settings.c      # General settings (rotation, dwell, etc.)
 │   │   ├── config_store_giphy.c         # Giphy-specific settings
+│   │   ├── config_store_klipy.c         # Klipy-specific settings
 │   │   ├── config_store_internal.h
 │   │   ├── config_store.h
 │   │   └── CMakeLists.txt

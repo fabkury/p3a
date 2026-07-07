@@ -374,8 +374,8 @@
         <div class="setting-row">
             <label class="setting-label" for="giphy-refresh">Refresh Interval</label>
             <select class="setting-select" id="giphy-refresh">
-                <option value="3600">1 hour (default)</option>
-                <option value="7200">2 hours</option>
+                <option value="3600">1 hour</option>
+                <option value="7200">2 hours (default)</option>
                 <option value="14400">4 hours</option>
                 <option value="28800">8 hours</option>
             </select>
@@ -431,8 +431,8 @@
         <div class="setting-row">
             <label class="setting-label" for="klipy-refresh">Refresh Interval</label>
             <select class="setting-select" id="klipy-refresh">
-                <option value="3600">1 hour (default)</option>
-                <option value="7200">2 hours</option>
+                <option value="3600">1 hour</option>
+                <option value="7200">2 hours (default)</option>
                 <option value="14400">4 hours</option>
                 <option value="28800">8 hours</option>
             </select>
@@ -1032,9 +1032,9 @@ function loadGiphySettings(cfg) {
     document.getElementById('giphy-rating').value = cfg.giphy_rating || 'pg-13';
     document.getElementById('giphy-country').value = cfg.giphy_country_code || '';
     var refreshSel = document.getElementById('giphy-refresh');
-    var refreshVal = String(cfg.giphy_refresh_interval || 3600);
+    var refreshVal = String(cfg.giphy_refresh_interval || 7200);
     refreshSel.value = refreshVal;
-    if (!refreshSel.value) refreshSel.value = '3600';
+    if (!refreshSel.value) refreshSel.value = '7200';
     document.getElementById('giphy-cache-size').value = cfg.giphy_cache_size || 350;
     var ridSpan = document.getElementById('random-id-value');
     var ridSection = document.getElementById('random-id-section');
@@ -1081,8 +1081,8 @@ function loadKlipySettings(cfg) {
     document.getElementById('klipy-rating').value = cfg.klipy_rating || 'pg-13';
     document.getElementById('klipy-format').value = cfg.klipy_format || 'gif';
     var refreshSel = document.getElementById('klipy-refresh');
-    refreshSel.value = String(cfg.klipy_refresh_interval || 3600);
-    if (!refreshSel.value) refreshSel.value = '3600';
+    refreshSel.value = String(cfg.klipy_refresh_interval || 7200);
+    if (!refreshSel.value) refreshSel.value = '7200';
     document.getElementById('klipy-cache-size').value = cfg.klipy_cache_size || 350;
     updateKlipyKeyBadge();
 }

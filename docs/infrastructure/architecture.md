@@ -26,7 +26,7 @@
 │play       │ │content_cache     │ │wifi_manager    │
 │_scheduler │ │loader_service    │ │ota_manager     │
 │           │ │storage_eviction  │ │makapix         │
-│playback   │ │giphy             │ │art_institution │
+│playback   │ │giphy · klipy     │ │art_institution │
 │  _queue   │ └──────────────────┘ └────────────────┘
 └────┬──────┘
      │

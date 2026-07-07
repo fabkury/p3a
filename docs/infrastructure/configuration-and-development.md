@@ -13,6 +13,7 @@ Configuration is organized into a project-level Kconfig (`main/Kconfig.projbuild
 | `components/channel_manager/Kconfig` | Channel/playlist options |
 | `components/animation_decoder/Kconfig` | Decoder options |
 | `components/giphy/Kconfig` | Giphy API key, rendition, format defaults |
+| `components/klipy/Kconfig` | Klipy API key, format, rating defaults |
 | `components/ota_manager/Kconfig` | OTA update options |
 | `components/play_scheduler/Kconfig` | Play scheduler options |
 | `components/makapix/Kconfig` | Makapix Club options |
@@ -25,7 +26,7 @@ Configuration is organized into a project-level Kconfig (`main/Kconfig.projbuild
 | `P3A_AUTO_SWAP_INTERVAL_SECONDS` | 30 | main | Auto-swap timer (seconds) |
 | `P3A_MAX_SPEED_PLAYBACK` | y | main | Ignore frame delays, play at max speed |
 | `P3A_USB_MSC_ENABLE` | y | main | Enable USB Mass Storage |
-| `P3A_PPA_UPSCALE_ENABLE` | y | main | Enable PPA hardware upscaling for Giphy |
+| `P3A_PPA_UPSCALE_ENABLE` | y | main | Enable PPA hardware upscaling for Giphy, Klipy, and museum content |
 | `P3A_PIXEL_FORMAT_RGB888` | y | p3a_board_ep44b | 24-bit color mode |
 | `P3A_PICO8_ENABLE` | y | pico8 | Enable PICO-8 streaming |
 | `P3A_PICO8_USB_STREAM_ENABLE` | y | pico8 | Enable PICO-8 USB streaming |
@@ -34,6 +35,8 @@ Configuration is organized into a project-level Kconfig (`main/Kconfig.projbuild
 | `ANIMATION_DECODER_STATIC_FRAME_DELAY_MS` | 100 | animation_decoder | Static image display duration |
 | `GIPHY_RENDITION_DEFAULT` | `fixed_height` | giphy | Default Giphy rendition |
 | `GIPHY_FORMAT_DEFAULT` | `gif` | giphy | Default Giphy format |
+| `KLIPY_FORMAT_DEFAULT` | `gif` | klipy | Default Klipy format |
+| `KLIPY_RATING_DEFAULT` | `pg-13` | klipy | Default Klipy content rating |
 
 ### Museum (NVS, runtime — not Kconfig)
 
@@ -57,12 +60,15 @@ All p3a data is stored under a configurable root folder (`/sdcard/p3a` by defaul
 ├── animations/                 # Local animation files (WebP, GIF, PNG/APNG, JPEG, BMP)
 ├── vault/                      # Cached artwork from Makapix (hash-sharded: {0..63}/{0..63}/<storage_key>.<ext>)
 ├── giphy/                      # Cached Giphy GIFs (hash-sharded)
+├── klipy/                      # Cached Klipy artwork (gif/ and sticker/ subtrees, hash-sharded)
 ├── museum/                     # Cached museum (IIIF) artwork, partitioned per museum
 │   ├── artic/                  #   Art Institute of Chicago (hash-sharded: {0..63}/{0..63}/<iiif_key>.<ext>)
 │   ├── rijks/                  #   Rijksmuseum
 │   ├── vam/                    #   Victoria and Albert Museum
 │   ├── wellcome/               #   Wellcome Collection
-│   └── smk/                    #   Statens Museum for Kunst
+│   ├── smk/                    #   Statens Museum for Kunst
+│   ├── ham/                    #   Harvard Art Museums
+│   └── si/                     #   Smithsonian
 ├── channel/                    # Per-channel JSON metadata files
 ├── playlists/                  # Playlist cache files
 └── temporary/                  # Staging area for uploads and downloads

@@ -140,7 +140,7 @@ void config_store_invalidate_klipy_cache_size(void)
 // Klipy Refresh Interval (persisted, cached)
 // ============================================================================
 
-#define KLIPY_REFRESH_INTERVAL_DEFAULT 3600
+#define KLIPY_REFRESH_INTERVAL_DEFAULT 7200
 
 static uint32_t s_klipy_refresh_interval = KLIPY_REFRESH_INTERVAL_DEFAULT;
 static bool s_klipy_refresh_interval_loaded = false;

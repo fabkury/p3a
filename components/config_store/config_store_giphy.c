@@ -249,7 +249,7 @@ void config_store_invalidate_giphy_cache_size(void)
 // Giphy Refresh Interval (persisted, cached)
 // ============================================================================
 
-#define GIPHY_REFRESH_INTERVAL_DEFAULT 3600
+#define GIPHY_REFRESH_INTERVAL_DEFAULT 7200
 
 static uint32_t s_giphy_refresh_interval = GIPHY_REFRESH_INTERVAL_DEFAULT;
 static bool s_giphy_refresh_interval_loaded = false;

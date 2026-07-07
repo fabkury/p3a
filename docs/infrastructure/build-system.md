@@ -91,7 +91,8 @@ idf_component_register(
              ota_manager slave_ota channel_manager wifi_manager pico8
              p3a_core sdio_bus debug_http_log play_scheduler event_bus
              content_cache playback_queue loader_service show_url
-             giphy esp_driver_ppa storage_eviction
+             giphy klipy art_institution esp_driver_ppa storage_eviction
+             pin_lists mem_stats
     PRIV_REQUIRES esp_mm
 )
 

@@ -2,7 +2,7 @@
 
 # p3a — Pixel Art Player
 
-**A 4-inch smart art frame powered by ESP32-P4.** Plays animated pixel art from [Makapix Club](https://makapix.club/), trending GIFs from [Giphy](https://giphy.com/), masterpieces from major museums via [IIIF](https://iiif.io/), and your own files on a 24-bit 720x720 IPS touchscreen you control from anywhere. Build it yourself from a $40 board, in about 15 minutes. After that, it just keeps playing.
+**A 4-inch smart art frame powered by ESP32-P4.** Plays animated pixel art from [Makapix Club](https://makapix.club/), trending GIFs from [Giphy](https://giphy.com/) and [Klipy](https://klipy.com/), masterpieces from major museums via [IIIF](https://iiif.io/), and your own files on a 24-bit 720x720 IPS touchscreen you control from anywhere. Build it yourself from a $40 board, in about 15 minutes. After that, it just keeps playing.
 
 <br clear="left"/>
 
@@ -55,7 +55,7 @@ Every p3a was assembled by the person who owns it. Joining them takes a screwdri
 1. **Insert the microSD card** (requires unscrewing the back plate)
 2. **Flash the firmware** using the [p3a Web Flasher](https://fabkury.github.io/p3a/web-flasher/) — connect, click, done. No software to install. ([Alternative methods](docs/flash-p3a.md))
 3. **Connect to Wi-Fi** — on first boot, join the `p3a-setup` network and configure your Wi-Fi at `http://p3a.local/`
-4. **Start playing art** — add a [Giphy API key](https://developers.giphy.com/) for trending GIFs, register at [makapix.club](https://makapix.club/) to send artworks, or copy your own files via USB
+4. **Start playing art** — add a [Giphy](https://developers.giphy.com/) or [Klipy](https://partner.klipy.com/) API key for trending GIFs, register at [makapix.club](https://makapix.club/) to send artworks, or copy your own files via USB
 
 > The initial flash requires a computer with USB. After that, all updates are wireless.
 
@@ -65,12 +65,13 @@ For a step-by-step walkthrough written for first-time owners, see the [Quick Sta
 
 ## Features
 
-### Four Sources of Content
+### Five Sources of Content
 
 | Source | What it does |
 |--------|-------------|
 | **[Makapix Club](https://makapix.club/)** | Browse a pixel art social network and send artworks directly to your p3a. Play entire channels like "Promoted Artworks" and "All Artworks", or hashtags like "#nintendo". Control your device remotely from anywhere. |
 | **[Giphy](https://giphy.com/)** | Automatically fetches and cycles through trending GIFs and GIF searches. Configurable content rating (G through R) and refresh interval. |
+| **[Klipy](https://klipy.com/)** | Automatically fetches and cycles through trending, search, and category channels — GIFs and stickers. Configurable content rating, format (GIF/WebP), and refresh interval. |
 | **Museums** | Browse public collections from the Art Institute of Chicago, Rijksmuseum, Victoria and Albert Museum, Wellcome Collection, the Statens Museum for Kunst (SMK), Harvard Art Museums, and the Smithsonian over IIIF. Pick a department, category, or curated set; the device refreshes the listing on schedule. |
 | **Local files** | Copy your own WebP, GIF, PNG/APNG, JPEG, or BMP files via USB or Wi-Fi. No cloud account needed, no internet required. |
 
@@ -98,7 +99,7 @@ Mix them all in a single "playset" for an ever-changing display.
 ### Smooth, Gapless Playback
 
 - **Animated WebP, GIF, and APNG; static PNG, JPEG, and BMP** — with alpha/transparency where the format supports it
-- **Smart upscaling** — pixel art and local files use nearest-neighbor scaling to keep edges crisp; Giphy and museum content use hardware-accelerated bilinear interpolation for smooth results
+- **Smart upscaling** — pixel art and local files use nearest-neighbor scaling to keep edges crisp; Giphy, Klipy, and museum content use hardware-accelerated bilinear interpolation for smooth results
 - **Triple-buffered rendering** with VSYNC — no tearing, no freezing
 - **Aspect ratio preservation** — non-square art is centered on the display with a configurable background color
 - **Auto-advance** — cycles to a new artwork every 30 seconds (configurable)
@@ -117,7 +118,7 @@ All controls are also available via the web UI and REST API.
 
 ### Web Interface & REST API
 
-Open `http://p3a.local/` from any browser on the same Wi-Fi network for a full dashboard — playback controls, configuration, firmware updates, Giphy settings, and more.
+Open `http://p3a.local/` from any browser on the same Wi-Fi network for a full dashboard — playback controls, configuration, firmware updates, Giphy and Klipy settings, and more.
 
 <p align="center">
   <img src="images/screenshots/p3a-web-ui.png" alt="p3a web UI" width="350">
@@ -211,7 +212,7 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 | **Playback** | `play_scheduler`, `playback_queue`, `channel_manager` |
 | **Decoders** | `animation_decoder` (WebP/PNG/APNG/JPEG/BMP), `animated_gif_decoder` (GIF), `libwebp_decoder` |
 | **Connectivity** | `wifi_manager` (provisioning, captive portal, mDNS), `http_api` (REST + WebSocket), `makapix` (MQTT/TLS) |
-| **Content** | `giphy` (API + SD caching), `art_institution` (museum IIIF channels), `content_cache`, `loader_service`, `storage_eviction` |
+| **Content** | `giphy` and `klipy` (API + SD caching), `art_institution` (museum IIIF channels), `content_cache`, `loader_service`, `storage_eviction` |
 | **System** | `ota_manager`, `slave_ota` (C6 firmware), `p3a_board_ep44b` (HAL), `sdio_bus` |
 | **Extras** | `pico8` (game streaming), `show_url` (URL artwork download), `ugfx` (on-screen text/font rendering) |
 
@@ -225,7 +226,7 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 | Slave FW | — | 2 MB | ESP32-C6 co-processor firmware |
 | **SD Card** | `/sdcard` | — | All artwork storage |
 
-SD card layout: `/sdcard/p3a/animations/` (local files), `/sdcard/p3a/vault/` (Makapix cache, hash-sharded), `/sdcard/p3a/giphy/` (Giphy cache), `/sdcard/p3a/museum/{museum_id}/` (museum IIIF cache, hash-sharded per museum).
+SD card layout: `/sdcard/p3a/animations/` (local files), `/sdcard/p3a/vault/` (Makapix cache, hash-sharded), `/sdcard/p3a/giphy/` (Giphy cache), `/sdcard/p3a/klipy/` (Klipy cache), `/sdcard/p3a/museum/{museum_id}/` (museum IIIF cache, hash-sharded per museum).
 
 ---
 
@@ -234,7 +235,7 @@ SD card layout: `/sdcard/p3a/animations/` (local files), `/sdcard/p3a/vault/` (M
 | Document | Description |
 |----------|-------------|
 | [QUICK-START.md](docs/QUICK-START.md) | Quick Start Guide — the fastest path from box to art on the screen |
-| [HOW-TO-USE.md](docs/HOW-TO-USE.md) | Full user guide — setup, touch controls, Wi-Fi, web UI, REST API, Giphy, PICO-8 |
+| [HOW-TO-USE.md](docs/HOW-TO-USE.md) | Full user guide — setup, touch controls, Wi-Fi, web UI, REST API, Giphy, Klipy, PICO-8 |
 | [flash-p3a.md](docs/flash-p3a.md) | Flashing instructions (web flasher and alternatives) |
 | [INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) | Technical architecture for developers and contributors |
 

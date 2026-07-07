@@ -447,12 +447,12 @@ uint32_t config_store_get_giphy_cache_size(void);
 /**
  * @brief Set Giphy refresh interval in seconds
  *
- * @param seconds Refresh interval (60-28800, default 3600 = 1 hour)
+ * @param seconds Refresh interval (60-28800, default 7200 = 2 hours)
  */
 esp_err_t config_store_set_giphy_refresh_interval(uint32_t seconds);
 
 /**
- * @brief Get Giphy refresh interval (defaults to 3600 = 1 hour)
+ * @brief Get Giphy refresh interval (defaults to 7200 = 2 hours)
  */
 uint32_t config_store_get_giphy_refresh_interval(void);
 
@@ -529,7 +529,7 @@ void config_store_invalidate_klipy_cache_size(void);
 
 /** @brief Set Klipy refresh interval in seconds (60..28800) */
 esp_err_t config_store_set_klipy_refresh_interval(uint32_t seconds);
-/** @brief Get Klipy refresh interval (defaults to 3600 = 1 hour) */
+/** @brief Get Klipy refresh interval (defaults to 7200 = 2 hours) */
 uint32_t config_store_get_klipy_refresh_interval(void);
 /** @brief Invalidate cached Klipy refresh interval (forces reload from NVS) */
 void config_store_invalidate_klipy_refresh_interval(void);

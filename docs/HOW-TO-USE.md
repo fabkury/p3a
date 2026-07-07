@@ -17,10 +17,11 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 7. [USB SD Card Access](#usb-sd-card-access)
 8. [Firmware Updates](#firmware-updates)
 9. [Giphy Integration](#giphy-integration)
-10. [Museum Channels (IIIF)](#museum-channels-iiif)
-11. [Device Registration](#device-registration)
-12. [Makapix Club Features](#makapix-club-features)
-13. [PICO-8 Monitor](#pico-8-monitor-optional)
+10. [Klipy Integration](#klipy-integration)
+11. [Museum Channels (IIIF)](#museum-channels-iiif)
+12. [Device Registration](#device-registration)
+13. [Makapix Club Features](#makapix-club-features)
+14. [PICO-8 Monitor](#pico-8-monitor-optional)
 
 ---
 
@@ -72,7 +73,7 @@ Your own files live inside a single folder on the microSD card. By default that 
 
 The firmware looks **only** in this folder for local artwork — it does not scan the rest of the card. If the folder is missing or empty, the local channel just shows zero artworks (it does not fall back to other locations).
 
-**Important — the `p3a` folder is configurable.** `p3a` is the device's "root" (or master) folder, and it can be renamed from the web interface at `http://p3a.local/settings.html` → **Storage** tab → *SD Card Storage*. Whatever you set there (e.g. `/p3a`, `/myart`, `/data`) is the folder p3a uses for **all** of its data — local files, Makapix vault, Giphy cache, playlists, etc. Changes require a reboot.
+**Important — the `p3a` folder is configurable.** `p3a` is the device's "root" (or master) folder, and it can be renamed from the web interface at `http://p3a.local/settings.html` → **Storage** tab → *SD Card Storage*. Whatever you set there (e.g. `/p3a`, `/myart`, `/data`) is the folder p3a uses for **all** of its data — local files, Makapix vault, Giphy and Klipy caches, playlists, etc. Changes require a reboot.
 
 Before manually placing files on the SD card, **always check the Storage tab to confirm the current root folder** — if it has been changed from the default, dropping files into `/p3a/animations/` will have no effect. Place them under `<your-root>/animations/` instead.
 
@@ -87,7 +88,7 @@ You can copy files directly over USB: connect a USB-C cable from the **HS port**
 
 - **Any aspect ratio works** — non-square images are scaled to fit while preserving the original aspect ratio
 - **Small pixel art is upscaled** — a 128×128 image will be scaled up to fill the display
-- **Smart upscaling** — pixel art (Makapix and local files) uses nearest-neighbor scaling to preserve crisp pixel edges, while Giphy content uses hardware-accelerated bilinear interpolation for smooth results
+- **Smart upscaling** — pixel art (Makapix and local files) uses nearest-neighbor scaling to preserve crisp pixel edges, while Giphy, Klipy, and museum content uses hardware-accelerated bilinear interpolation for smooth results
 - **Centered display** — artwork is centered on the 720×720 display with configurable background color
 - **Transparent artwork** — images with transparency are composited over the configured background color
 
@@ -101,8 +102,8 @@ The 720×720 touchscreen recognizes these gestures:
 |---------|--------|
 | **Tap right half** | Advance to next artwork |
 | **Tap left half** | Go back to previous artwork |
-| **Swipe up** | Like the current Makapix artwork (or register a Giphy click) |
-| **Swipe down** | Revoke a Makapix like |
+| **Swipe up** | Like the current Makapix artwork (or register a Giphy click); pin a Klipy or museum artwork |
+| **Swipe down** | Revoke a Makapix like; unpin a Giphy, Klipy, or museum artwork |
 | **Two-finger rotate** | Rotate screen (clockwise or counter-clockwise) |
 | **Long press** | Show device info / dismiss overlay |
 
@@ -315,6 +316,42 @@ The Giphy tab at `http://p3a.local/settings#giphy` lets you customize:
 - Downloaded artworks are stored in the `giphy/` subfolder of your configured SD card root (default: `/sdcard/p3a/giphy/`) and managed automatically
 - The device downloads GIFs on demand as they come up in the rotation, so the first few plays may take a moment to load
 - Once cached, playback is instant — just like local files
+
+---
+
+## Klipy Integration
+
+p3a can play GIFs and stickers from [Klipy](https://klipy.com/). Once configured, Klipy channels appear alongside your Makapix, Giphy, and local artwork channels, and you can mix them in the same playset. Klipy offers three channel kinds — trending, search, and category — each available for both GIFs and stickers.
+
+### Getting a Klipy API key
+
+To use Klipy, you need a free API key:
+
+1. Go to [partner.klipy.com](https://partner.klipy.com/) and sign up
+2. Copy your app's API key
+3. Open the p3a settings page at `http://p3a.local/settings#klipy`
+4. Paste your API key and click **Save All Klipy Settings**
+
+> Test keys are limited to 100 requests per hour. Each request returns up to 50 items, so a 500-item channel takes 10 requests to refresh. Production keys are unlimited.
+
+### Configuring Klipy
+
+The Klipy tab at `http://p3a.local/settings#klipy` lets you customize:
+
+| Setting | Options | Description |
+|---------|---------|-------------|
+| **Content Rating** | G, PG, PG-13, R | Filters content by age-appropriateness |
+| **Format** | GIF or WebP | Downloaded file format — GIF by default; WebP has a smaller download footprint |
+| **Refresh Interval** | 1, 2, 4, or 8 hours | How often p3a fetches fresh content from Klipy |
+| **Cache Size** | 32–2500 items | Maximum number of artworks kept per Klipy channel |
+
+### How it works
+
+- p3a periodically fetches each channel's listing (trending, search, or category) from the Klipy API and caches it on the SD card
+- Downloaded artworks are stored in the `klipy/` subfolder of your configured SD card root (default: `/sdcard/p3a/klipy/`), split into `gif/` and `sticker/` subtrees
+- The device downloads artworks on demand as they come up in the rotation, so the first few plays may take a moment to load
+- Once cached, playback is instant — just like local files
+- Swipe up on a Klipy artwork to pin it; swipe down to unpin
 
 ---
 

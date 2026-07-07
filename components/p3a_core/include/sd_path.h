@@ -219,7 +219,7 @@ esp_err_t sd_path_validate_root(const char *root_path);
 /**
  * @brief Create all required subdirectories under the p3a root
  *
- * Creates: animations, vault, channel, playlists, temporary, giphy, museum, pinned
+ * Creates: animations, vault, channel, playlists, temporary, giphy, klipy, museum, pinned
  *
  * @return ESP_OK on success, or error if directory creation fails
  */

@@ -197,7 +197,7 @@ esp_err_t sd_path_ensure_directories(void)
     }
 
     // Create subdirectories
-    const char *subdirs[] = {"animations", "vault", "channel", "playlists", "temporary", "giphy", "museum", "pinned"};
+    const char *subdirs[] = {"animations", "vault", "channel", "playlists", "temporary", "giphy", "klipy", "museum", "pinned"};
     for (size_t i = 0; i < sizeof(subdirs) / sizeof(subdirs[0]); i++) {
         snprintf(path, sizeof(path), "%s/%s", root, subdirs[i]);
         err = ensure_directory(path);

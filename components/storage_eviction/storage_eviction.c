@@ -6,7 +6,7 @@
  * @brief Age-based eviction of cached artwork and channel files from SD card
  *
  * When the SD card runs low on space, this module walks the vault,
- * giphy, and museum cache trees and deletes cache debris whose mtime is
+ * giphy, klipy, and museum cache trees and deletes cache debris whose mtime is
  * older than a progressively-shrinking threshold.  The threshold starts
  * at CONFIG_STORAGE_EVICTION_INITIAL_AGE_DAYS and halves on each pass
  * until the free-space target is met or the floor
@@ -55,9 +55,9 @@ static const char *TAG = "storage_evict";
 #define CHANNEL_AGE_S       ((time_t)CONFIG_CHANNEL_EVICTION_AGE_DAYS * 86400)
 
 /* Recursion bound for the cache-tree walk — a stack-safety limit, not a
-   layout descriptor. v1.0 trees are 2 levels deep (3 for museum with its
-   {museum_id} segment) and pre-1.0 SHA256 trees one deeper; 8 covers any
-   layout generation with slack. Cheap because the walker shares a single
+   layout descriptor. v1.0 trees are 2 levels deep (3 for museum/klipy with
+   their {museum_id} / {gif|sticker} segment) and pre-1.0 SHA256 trees one
+   deeper; 8 covers any layout generation with slack. Cheap because the walker shares a single
    path buffer across recursion frames. */
 #define EVICT_MAX_DEPTH 8
 
@@ -206,10 +206,11 @@ static void evict_tree(char *path, size_t path_cap, int depth_left,
 }
 
 /**
- * @brief Walk one cache base directory (vault, giphy, or museum) and evict
+ * @brief Walk one cache base directory (vault, giphy, klipy, or museum) and evict
  *
- * The museum tree's extra {museum_id} segment needs no special handling —
- * to a layout-unaware walk it is just one more directory level.
+ * The museum and klipy trees' extra {museum_id} / {gif|sticker} segment
+ * needs no special handling — to a layout-unaware walk it is just one more
+ * directory level.
  */
 static void evict_from_base_dir(const char *base_path, time_t cutoff, evict_stats_t *stats)
 {
@@ -219,7 +220,7 @@ static void evict_from_base_dir(const char *base_path, time_t cutoff, evict_stat
 }
 
 /* --------------------------------------------------------------------- */
-/*  Top-level eviction over vault, giphy, and museum caches               */
+/*  Top-level eviction over vault, giphy, klipy, and museum caches        */
 /* --------------------------------------------------------------------- */
 
 static void evict_old_files(time_t cutoff, evict_stats_t *stats)
@@ -231,6 +232,10 @@ static void evict_old_files(time_t cutoff, evict_stats_t *stats)
     }
 
     if (sd_path_get_giphy(path, sizeof(path)) == ESP_OK) {
+        evict_from_base_dir(path, cutoff, stats);
+    }
+
+    if (sd_path_get_klipy(path, sizeof(path)) == ESP_OK) {
         evict_from_base_dir(path, cutoff, stats);
     }
 

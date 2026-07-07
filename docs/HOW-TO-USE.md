@@ -396,7 +396,7 @@ The channel saves under a name like `AIC · Arts of Greece, Rome, and Byzantium`
 - **Cached files** live under `/sdcard/p3a/museum/{museum_id}/...` on the SD card. They're hash-sharded by IIIF identifier and shared across all channels of the same museum, so two channels that both reference the same artwork only ever pay for it once.
 - **Rijks artworks** require a "Linked Art walk" (three follow-up HTTP requests per artwork) to discover the actual IIIF identifier. The device does this lazily in the background — one walk per download-task iteration — so a fresh Rijks channel takes ~50 minutes to fully populate but the first few artworks appear within seconds.
 - **Rate limits** are honored per-museum. AIC publishes a 60-req/minute cap; the others don't publish one but a 429 still engages a cooldown. The cooldown is shared between the device's refresh and the browser-side browse modal: if you trigger throttling from the browse modal, the device also waits.
-- **Storage management** is automatic. The age-based eviction in `components/storage_eviction/` reclaims museum cache files alongside the Makapix vault and Giphy cache when SD card free space drops below the configured target. No manual cleanup needed.
+- **Storage management** is automatic. The age-based eviction in `components/storage_eviction/` reclaims museum cache files alongside the Makapix vault and the Giphy and Klipy caches when SD card free space drops below the configured target. No manual cleanup needed.
 
 ### Display name
 

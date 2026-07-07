@@ -137,7 +137,7 @@ All 25 custom components live under `components/`. This document describes each 
 - **Storage**: Cached images live at `/sdcard/p3a/museum/{museum_id}/{d0}/{d1}/{iiif_key}.{ext}` (6-bit decimal shard dirs — see `sd_path_build_sharded()`). The vault is shared across all channels of the same museum, so an artwork that belongs to several facets is only stored once.
 - **Rate limiting**: A per-museum cooldown table is shared between the device's refresh dispatcher, the download manager, and the browser's browse modal. Browser-issued 429s are reported back to the device via `POST /api/museum/rate-limits/report-429` so the per-IP budget stays consistent. The browse modal reads `GET /api/museum/rate-limits` before triggering term-count probes.
 - **Settings**: Two global NVS keys, `ai_refresh_sec` (default 345 600 s — 4 days) and `ai_cache_size` (default 1024 entries per channel), surface in the **Museum** tab of the settings page. Per-museum BYOK keys live in the same tab: `ham_api_key` (Harvard Art Museums) and `si_api_key` (Smithsonian, via api.data.gov). For both: no key is shipped, refresh is a no-op until the user enters one, and clearing the key dormants the refresh path without dropping the channel.
-- **Storage eviction**: Museum vault files are reclaimed by the existing `storage_eviction` component alongside the Makapix vault and Giphy cache (see component 19).
+- **Storage eviction**: Museum vault files are reclaimed by the existing `storage_eviction` component alongside the Makapix vault and the Giphy and Klipy caches (see component 19).
 - **Playset binary format**: Institution channels use `PS_CHANNEL_TYPE_INSTITUTION = 7` with `name = "{museum_id}:{axis}"` and `identifier = "{term_id}"`. Cache entries use `institution_channel_entry_t` (64 bytes; same slot as the makapix/giphy entries) with the discriminator `PS_ENTRY_FORMAT_INSTITUTION`.
 - **Full design**: See [`docs/art-institutions/finalized-design.md`](../art-institutions/finalized-design.md).
 
@@ -212,7 +212,7 @@ All 25 custom components live under `components/`. This document describes each 
 
 ## 19. storage_eviction — SD Card Space Management
 
-- **Purpose**: Age-based eviction of cached artwork and stale channel files from SD card. The cache walk is layout-unaware: it recurses into whatever directories exist under the vault/giphy/museum bases (depth capped for stack safety, not layout), deletes by extension allowlist + age — artwork files plus `.404` negative-cache markers and orphaned `.tmp` staging files — and `rmdir`s emptied directories on the way out (this is also what gradually reclaims orphaned pre-1.0 SHA256 shard trees). File mtime is touched on every successful load by the animation player, so age ≈ time since last played.
+- **Purpose**: Age-based eviction of cached artwork and stale channel files from SD card. The cache walk is layout-unaware: it recurses into whatever directories exist under the vault/giphy/klipy/museum bases (depth capped for stack safety, not layout), deletes by extension allowlist + age — artwork files plus `.404` negative-cache markers and orphaned `.tmp` staging files — and `rmdir`s emptied directories on the way out (this is also what gradually reclaims orphaned pre-1.0 SHA256 shard trees). File mtime is touched on every successful load by the animation player, so age ≈ time since last played.
 - **Key files**: `storage_eviction.c`
 - **Public API**: `storage_eviction.h`
 - **Key functions**:

@@ -2,7 +2,8 @@
 
 ## 2026-07-08 — Implementation (branch `feature/makapix-cert-renewal`)
 
-Implemented per PLAN.md. Firmware `1.2.0-dev`, webui `2.15`.
+Implemented per PLAN.md. Firmware version unchanged at `1.1.0` (Fab's call;
+release versioning decided at release time), webui `2.15`.
 
 ### What was built
 

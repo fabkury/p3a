@@ -64,10 +64,16 @@ release versioning decided at release time), webui `2.15`.
 ### Pending
 
 - [ ] Build + flash by Fab (per repo policy, Claude does not build).
-- [ ] End-to-end test against development.makapix.club — needs the MPX
-  dev-overlay `CERT_RENEWAL_THRESHOLD_DAYS=3650` patch deployed first
-  (drafted, staged in the MPX clone as of 2026-07-08). Test matrix in
-  PLAN.md.
-- [ ] Prod `min(cert_expires_at)` query (Fab) → confirm the 2026-12-12 cliff
-  and update PLAN.md + the MPX plan doc dates.
-- [ ] Release + OTA rollout well before the earliest expiry.
+- [ ] End-to-end test against development.makapix.club — UNBLOCKED: server
+  team deployed `CERT_RENEWAL_THRESHOLD_DAYS=3650` (dev api+worker) and the
+  CRL reload watcher on dev, both verified (message 0002, 2026-07-08). T4
+  needs no manual broker restart. Server needs our test player_key + go/no-go
+  pings before T3/T4. Results go back as message 0003.
+- [x] Prod `min(cert_expires_at)` — CONFIRMED 2026-12-12 09:12 UTC (4 certs
+  Dec 2026; 15/24 before Jun 2027; 9 already 3-year). Renewal window opens
+  2026-09-13 = firmware release deadline. MPX plan doc updated by server team.
+- [x] Prod stale-CRL check — no active outage (broker restarted 2026-07-07,
+  loaded CRL valid to 2026-07-25); server team commits to deploying the CRL
+  watcher to prod BEFORE 2026-07-25 (else manual broker restart Jul 18-25).
+- [ ] Release + OTA rollout before 2026-09-13 (window-open) and hard-before
+  2026-12-12 (first expiry); send release timeline to server team after e2e.

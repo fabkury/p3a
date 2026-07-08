@@ -30,9 +30,11 @@ The server side shipped 2026-05-27 and is waiting on us:
 The renewal window for the earliest certs opens **~2026-09-13**. Firmware must
 be released *and OTA-adopted* well before **2026-12-12**.
 
-> Exact fleet cliff pending Fab's prod query
-> (`min(cert_expires_at) … WHERE registration_status='registered' AND cert_expires_at IS NOT NULL`).
-> Update this doc when confirmed.
+> **Fleet cliff CONFIRMED from prod DB (server team, 2026-07-08, message
+> 0002):** earliest expiry **2026-12-12 09:12 UTC**; 4 certs expire Dec 2026,
+> 15 of 24 registered players expire before Jun 2027, the other 9 already
+> carry 3-year certs. Earliest renewal window opens **2026-09-13** — that is
+> the firmware-release deadline.
 
 ## Design
 

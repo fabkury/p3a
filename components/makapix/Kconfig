@@ -22,5 +22,24 @@ menu "Makapix Configuration"
             Port number for the Makapix Club MQTT broker.
             Default is 8883 for TLS/mTLS connections.
 
+    config MAKAPIX_CERT_RENEW_WINDOW_DAYS
+        int "Certificate renewal window (days before expiry)"
+        default 45
+        range 1 365
+        help
+            The device starts trying to renew its MQTT client certificate
+            once it is within this many days of the certificate's notAfter.
+            Must not exceed the server's CERT_RENEWAL_THRESHOLD_DAYS (90 in
+            production) or the server rejects the attempts with HTTP 400
+            until the server-side window opens.
+
+    config MAKAPIX_CERT_RENEW_CHECK_HOURS
+        int "Certificate renewal check interval (hours)"
+        default 24
+        range 1 168
+        help
+            How often the renewal task re-evaluates the stored client
+            certificate's remaining lifetime.
+
 endmenu
 

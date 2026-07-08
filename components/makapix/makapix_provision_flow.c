@@ -181,11 +181,14 @@ void makapix_credentials_poll_task(void *pvParameters)
             }
 
             // Persist the complete registration (player_key, broker info, TLS
-            // certs) to NVS in a single transaction — registration is confirmed.
-            // Any old registration is overwritten in the same commit, so NVS
-            // never holds certificates without a matching player_key.
+            // certs, and — first fetch only — the HTTPS bearer token used by
+            // certificate renewal) to NVS in a single transaction —
+            // registration is confirmed. Any old registration is overwritten
+            // in the same commit, so NVS never holds certificates without a
+            // matching player_key.
             err = makapix_store_save_registration(player_key, mqtt_host_to_save, mqtt_port_to_save,
-                                                  creds.ca_pem, creds.cert_pem, creds.key_pem);
+                                                  creds.ca_pem, creds.cert_pem, creds.key_pem,
+                                                  creds.api_token[0] ? creds.api_token : NULL);
             if (err != ESP_OK) {
                 // Keep the pending in-memory credentials and keep polling: the
                 // next iteration re-fetches the credentials and retries the

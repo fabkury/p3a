@@ -123,6 +123,11 @@ void makapix_channel_switch_task(void *pvParameters)
     }
 }
 
+// One certificate self-heal renewal attempt is allowed per connection
+// outage: set when the reconnect task consumes it at the auth-failure
+// threshold, re-armed on every successful MQTT connection.
+static bool s_cert_selfheal_attempted = false;
+
 /**
  * @brief MQTT connection state change callback
  */
@@ -130,6 +135,12 @@ void makapix_mqtt_connection_callback(bool connected)
 {
     if (connected) {
         makapix_set_state(MAKAPIX_STATE_CONNECTED);
+
+        // Connection proves the current certificate; re-arm the one-shot
+        // self-heal for a future outage and let the renewal task evaluate
+        // the cert's remaining lifetime now that the network is up.
+        s_cert_selfheal_attempted = false;
+        makapix_renewal_kick();
 
         // Reinitialize API to load player_key (especially important after fresh registration)
         esp_err_t api_init_err = makapix_api_init();
@@ -241,6 +252,24 @@ void makapix_mqtt_reconnect_task(void *pvParameters)
 
         // Check if too many auth failures - registration is likely invalid
         if (makapix_mqtt_get_auth_failure_count() >= MAX_AUTH_FAILURES) {
+            // Before declaring the registration dead, try to renew the client
+            // certificate once (bearer-token path — works even when the cert
+            // has already expired). An expired cert produces exactly this
+            // failure signature, and unlike a true ghost registration it is
+            // fully recoverable without the owner re-registering.
+            if (!s_cert_selfheal_attempted) {
+                s_cert_selfheal_attempted = true;
+                ESP_LOGW(MAKAPIX_TAG, "TLS auth failure threshold hit; attempting certificate self-heal "
+                         "(stored cert %s per local clock) before latching registration invalid",
+                         makapix_renewal_cert_expired() ? "EXPIRED" : "not expired");
+                esp_err_t renew_err = makapix_renewal_attempt(true);
+                if (renew_err == ESP_OK) {
+                    ESP_LOGI(MAKAPIX_TAG, "Self-heal renewal succeeded; retrying MQTT with fresh certificates");
+                    makapix_mqtt_reset_auth_failure_count();
+                    continue;
+                }
+                ESP_LOGE(MAKAPIX_TAG, "Self-heal renewal failed: %s", esp_err_to_name(renew_err));
+            }
             ESP_LOGE(MAKAPIX_TAG, "Too many TLS auth failures (%d) - registration appears invalid",
                      makapix_mqtt_get_auth_failure_count());
             ESP_LOGE(MAKAPIX_TAG, "Stopping reconnection attempts. Re-provision device to fix.");

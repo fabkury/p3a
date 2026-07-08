@@ -30,6 +30,7 @@
 #include "art_institution.h"
 #include "makapix.h"
 #include "makapix_store.h"
+#include "makapix_renewal.h"
 #include "p3a_current_post.h"
 #include "play_scheduler.h"
 #include "playset_json.h"
@@ -42,6 +43,7 @@
 #include "slave_ota.h"
 #include "p3a_board.h"
 #include "freertos/semphr.h"
+#include <time.h>
 
 // ---------- Debug Handler (Dev Mode) ----------
 
@@ -545,6 +547,22 @@ esp_err_t h_get_status(httpd_req_t *req) {
             p3a_connectivity_level_t lvl = p3a_state_get_connectivity();
             if ((unsigned)lvl <= P3A_CONNECTIVITY_ONLINE) {
                 cJSON_AddStringToObject(mkx, "connectivity", conn_names[lvl]);
+            }
+            // Client-certificate lifetime + renewal state (webui health badge)
+            if (registered) {
+                makapix_renewal_status_t rs;
+                makapix_renewal_get_status(&rs);
+                if (rs.cert_parsed) {
+                    char iso[32];
+                    struct tm tm_utc;
+                    time_t na = rs.not_after;
+                    gmtime_r(&na, &tm_utc);
+                    strftime(iso, sizeof(iso), "%Y-%m-%dT%H:%M:%SZ", &tm_utc);
+                    cJSON_AddStringToObject(mkx, "cert_expires_at", iso);
+                }
+                if (rs.last_result[0] != '\0') {
+                    cJSON_AddStringToObject(mkx, "cert_renewal", rs.last_result);
+                }
             }
             cJSON_AddItemToObject(data, "makapix", mkx);
         }

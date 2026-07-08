@@ -29,6 +29,8 @@ typedef struct {
     char ca_pem[MAKAPIX_PEM_MAX_LEN];      // CA certificate
     char cert_pem[MAKAPIX_PEM_MAX_LEN];    // Client certificate
     char key_pem[MAKAPIX_PEM_MAX_LEN];     // Client private key
+    char api_token[MAKAPIX_API_TOKEN_MAX_LEN];  // HTTPS bearer token; only present
+                                                // on the very first fetch ("" if absent)
     char mqtt_host[64];
     uint16_t mqtt_port;
 } makapix_credentials_result_t;

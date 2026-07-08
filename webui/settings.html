@@ -544,6 +544,7 @@
             <div><span class="status-badge status-neutral" id="mkx-health-badge">Loading...</span></div>
             <div class="file-name" id="mkx-health-detail" style="display:none;min-height:0;"></div>
             <div id="mkx-player-key" style="display:none;font-family:monospace;font-size:0.78rem;color:var(--c-card-fg-muted);word-break:break-all;background:var(--c-surface-sunk);padding:6px 8px;border-radius:6px;"><span style="font-family:inherit;color:var(--c-card-fg-faint);">Player key: </span><span id="mkx-player-key-value"></span></div>
+            <div class="file-name" id="mkx-cert-info" style="display:none;min-height:0;"></div>
         </div>
         <button class="btn btn-full" id="provision-btn" style="display:none;" onclick="toggleProvisioning()">
             Enter Provisioning Mode
@@ -1330,6 +1331,27 @@ function populateMakapixState(mkx, net) {
     } else {
         keyEl.style.display = 'none';
     }
+
+    // Client-certificate lifetime (both fields optional: older firmware
+    // doesn't send them). The device renews its own certificate automatically
+    // inside the renewal window; this line is visibility, not a call to act.
+    var certEl = document.getElementById('mkx-cert-info');
+    var certText = '';
+    if (registered && mkx.cert_expires_at) {
+        var exp = new Date(mkx.cert_expires_at);
+        if (!isNaN(exp.getTime())) {
+            var daysLeft = Math.floor((exp.getTime() - Date.now()) / 86400000);
+            var dateStr = exp.toISOString().slice(0, 10);
+            if (daysLeft < 0) {
+                certText = 'Certificate expired ' + dateStr + ' — the device renews it automatically when online';
+            } else {
+                certText = 'Certificate valid until ' + dateStr + ' (' + daysLeft + ' days)';
+                if (mkx.cert_renewal === 'renewed') certText += ' — renewed';
+            }
+        }
+    }
+    certEl.textContent = certText;
+    certEl.style.display = certText ? 'block' : 'none';
 
     var provBtn = document.getElementById('provision-btn');
     provBtn.style.display = showProvision ? 'block' : 'none';

@@ -121,6 +121,13 @@ esp_err_t makapix_init(void)
         ESP_LOGE(MAKAPIX_TAG, "view_tracker_init failed: %s", esp_err_to_name(view_err));
     }
 
+    // Start the client-certificate renewal task. Harmless when unregistered
+    // (it idles); essential when the stored cert nears/passes its expiry.
+    esp_err_t renew_err = makapix_renewal_init();
+    if (renew_err != ESP_OK) {
+        ESP_LOGE(MAKAPIX_TAG, "makapix_renewal_init failed: %s", esp_err_to_name(renew_err));
+    }
+
     if (makapix_store_has_player_key() && makapix_store_has_certificates()) {
         ESP_LOGD(MAKAPIX_TAG, "Credentials found, will connect after WiFi");
         makapix_set_state(MAKAPIX_STATE_IDLE);

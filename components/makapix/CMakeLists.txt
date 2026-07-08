@@ -11,6 +11,7 @@ idf_component_register(
         "makapix_refresh.c"
         "makapix_single_artwork.c"
         "makapix_provision_flow.c"
+        "makapix_renewal.c"
         "makapix_connection.c"
         "makapix_certs.c"
         "view_tracker.c"
@@ -27,6 +28,7 @@ idf_component_register(
         fatfs
         driver
         esp-tls
+        mbedtls
         esp_wifi
         esp_netif
         channel_manager

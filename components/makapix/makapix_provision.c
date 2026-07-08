@@ -269,6 +269,23 @@ esp_err_t makapix_poll_credentials(const char *player_key, makapix_credentials_r
                 }
             }
 
+            // Optional: HTTPS bearer token, minted by the server only on the
+            // very first credentials fetch (null on re-fetches). Needed later
+            // for device-initiated certificate renewal; devices that miss it
+            // bootstrap via POST /player/{player_key}/token/rotate instead.
+            cJSON *api_token = cJSON_GetObjectItem(response_json, "api_token");
+            if (api_token && cJSON_IsString(api_token)) {
+                const char *token_str = cJSON_GetStringValue(api_token);
+                if (strlen(token_str) < sizeof(result->api_token)) {
+                    strncpy(result->api_token, token_str, sizeof(result->api_token) - 1);
+                    result->api_token[sizeof(result->api_token) - 1] = '\0';
+                } else {
+                    // Token too large for the buffer: not fatal (renewal can
+                    // bootstrap via token/rotate), but say so loudly.
+                    ESP_LOGW(TAG, "api_token too large (%zu bytes), discarding", strlen(token_str));
+                }
+            }
+
             cJSON_Delete(response_json);
 
             if (all_certs_present) {

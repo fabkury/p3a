@@ -11,6 +11,7 @@
 #include "makapix.h"
 #include "makapix_store.h"
 #include "makapix_provision.h"
+#include "makapix_renewal.h"
 #include "makapix_mqtt.h"
 #include "makapix_api.h"
 #include "makapix_opc.h"

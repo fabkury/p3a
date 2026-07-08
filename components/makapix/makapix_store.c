@@ -20,6 +20,7 @@ static const char *KEY_MQTT_PORT = "mqtt_port";
 static const char *KEY_CA_CERT = "ca_cert";
 static const char *KEY_CLIENT_CERT = "client_cert";
 static const char *KEY_CLIENT_KEY = "client_key";
+static const char *KEY_API_TOKEN = "api_token";
 
 esp_err_t makapix_store_init(void)
 {
@@ -112,7 +113,8 @@ esp_err_t makapix_store_get_mqtt_port(uint16_t *out_port)
 }
 
 esp_err_t makapix_store_save_registration(const char *player_key, const char *host, uint16_t port,
-                                          const char *ca_pem, const char *cert_pem, const char *key_pem)
+                                          const char *ca_pem, const char *cert_pem, const char *key_pem,
+                                          const char *api_token)
 {
     if (!player_key || !host || !ca_pem || !cert_pem || !key_pem) {
         return ESP_ERR_INVALID_ARG;
@@ -174,6 +176,17 @@ esp_err_t makapix_store_save_registration(const char *player_key, const char *ho
         return err;
     }
 
+    // The bearer token is only returned on the very first credentials fetch;
+    // NULL means "not in this response" and must not clobber a stored token.
+    if (api_token && api_token[0] != '\0') {
+        err = nvs_set_str(nvs_handle, KEY_API_TOKEN, api_token);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to save api_token: %s", esp_err_to_name(err));
+            nvs_close(nvs_handle);
+            return err;
+        }
+    }
+
     // Commit changes
     err = nvs_commit(nvs_handle);
     if (err != ESP_OK) {
@@ -181,6 +194,114 @@ esp_err_t makapix_store_save_registration(const char *player_key, const char *ho
     } else {
         ESP_LOGI(TAG, "Saved Makapix registration: player_key=%s, host=%s, port=%d, certs=%zu/%zu/%zu bytes",
                  player_key, host, port, ca_len, cert_len, key_len);
+    }
+
+    nvs_close(nvs_handle);
+    return err;
+}
+
+esp_err_t makapix_store_save_renewed_certs(const char *ca_pem, const char *cert_pem, const char *key_pem)
+{
+    if (!ca_pem || !cert_pem || !key_pem) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS namespace: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    size_t ca_len = strlen(ca_pem) + 1;    // Include null terminator
+    size_t cert_len = strlen(cert_pem) + 1;
+    size_t key_len = strlen(key_pem) + 1;
+
+    // All three blobs under one handle with a single commit, mirroring
+    // makapix_store_save_registration: NVS never holds a mixed cert set
+    // (new cert with old key would be unusable).
+    err = nvs_set_blob(nvs_handle, KEY_CA_CERT, ca_pem, ca_len);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save renewed CA cert: %s", esp_err_to_name(err));
+        nvs_close(nvs_handle);
+        return err;
+    }
+
+    err = nvs_set_blob(nvs_handle, KEY_CLIENT_CERT, cert_pem, cert_len);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save renewed client cert: %s", esp_err_to_name(err));
+        nvs_close(nvs_handle);
+        return err;
+    }
+
+    err = nvs_set_blob(nvs_handle, KEY_CLIENT_KEY, key_pem, key_len);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save renewed client key: %s", esp_err_to_name(err));
+        nvs_close(nvs_handle);
+        return err;
+    }
+
+    err = nvs_commit(nvs_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to commit renewed certs: %s", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "Saved renewed certificates: %zu/%zu/%zu bytes (CA/cert/key)",
+                 ca_len, cert_len, key_len);
+    }
+
+    nvs_close(nvs_handle);
+    return err;
+}
+
+esp_err_t makapix_store_get_api_token(char *buffer, size_t max_len)
+{
+    if (!buffer || max_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs_handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    size_t required_size = max_len;
+    err = nvs_get_str(nvs_handle, KEY_API_TOKEN, buffer, &required_size);
+    nvs_close(nvs_handle);
+
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    if (err == ESP_ERR_NVS_INVALID_LENGTH) {
+        ESP_LOGW(TAG, "API token truncated (token larger than %zu bytes)", max_len);
+        return ESP_FAIL;
+    }
+
+    return err;
+}
+
+esp_err_t makapix_store_set_api_token(const char *token)
+{
+    if (!token || token[0] == '\0') {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS namespace: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = nvs_set_str(nvs_handle, KEY_API_TOKEN, token);
+    if (err == ESP_OK) {
+        err = nvs_commit(nvs_handle);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save api_token: %s", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "Saved Makapix API token (%zu bytes)", strlen(token));
     }
 
     nvs_close(nvs_handle);
@@ -326,6 +447,7 @@ esp_err_t makapix_store_clear(void)
     nvs_erase_key(nvs_handle, KEY_CA_CERT);
     nvs_erase_key(nvs_handle, KEY_CLIENT_CERT);
     nvs_erase_key(nvs_handle, KEY_CLIENT_KEY);
+    nvs_erase_key(nvs_handle, KEY_API_TOKEN);
 
     err = nvs_commit(nvs_handle);
     if (err != ESP_OK) {

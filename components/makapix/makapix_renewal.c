@@ -13,15 +13,16 @@
 #include "makapix_internal.h"
 #include "makapix_renewal.h"
 #include "http_fetch.h"
+#include "sntp_sync.h"
 #include "esp_heap_caps.h"
 #include "esp_random.h"
 #include "cJSON.h"
 #include "mbedtls/x509_crt.h"
 #include <time.h>
 
-// How long after boot the first check runs. Long enough for Wi-Fi + SNTP to
-// settle on a normal boot; the no_clock gate below covers the slow cases.
-#define RENEWAL_FIRST_CHECK_DELAY_MS   (90 * 1000)
+// Poll cadence while waiting for the renewal prerequisites (Wi-Fi with an IP
+// and an SNTP-synchronized clock) to come true.
+#define RENEWAL_PREREQ_POLL_MS         (10 * 1000)
 
 // Jitter spread applied to the window opening so the fleet doesn't hit the
 // API in lockstep the day their (batch-issued) certs become renewable. Drawn
@@ -519,18 +520,45 @@ void makapix_renewal_get_status(makapix_renewal_status_t *out)
 // Periodic task
 // ---------------------------------------------------------------------------
 
+/**
+ * Block until the device can meaningfully evaluate a renewal: Wi-Fi holds an
+ * IP address and the system clock has been SNTP-synchronized. Both are
+ * re-checked before every attempt (Wi-Fi can drop between ticks; SNTP resets
+ * on sntp_sync_stop). SNTP success also proves internet reachability — NTP
+ * responses came back — so no separate probe is needed.
+ */
+static void wait_for_network_and_time(void)
+{
+    bool logged = false;
+    while (true) {
+        char wifi_ip[16];
+        bool online = (app_wifi_get_local_ip(wifi_ip, sizeof(wifi_ip)) == ESP_OK &&
+                       strcmp(wifi_ip, "0.0.0.0") != 0);
+        if (online && sntp_sync_is_synchronized()) {
+            return;
+        }
+        if (!logged) {
+            ESP_LOGI(TAG, "Waiting for %s before certificate check",
+                     online ? "SNTP time sync" : "network connectivity");
+            logged = true;
+        }
+        vTaskDelay(pdMS_TO_TICKS(RENEWAL_PREREQ_POLL_MS));
+    }
+}
+
 static void renewal_task(void *pvParameters)
 {
     (void)pvParameters;
-
-    // First check shortly after boot (covers the expired-cert cold start:
-    // MQTT can't connect, so nothing else would trigger us).
-    vTaskDelay(pdMS_TO_TICKS(RENEWAL_FIRST_CHECK_DELAY_MS));
 
     const TickType_t check_interval =
         pdMS_TO_TICKS((uint64_t)CONFIG_MAKAPIX_CERT_RENEW_CHECK_HOURS * 3600 * 1000);
 
     while (true) {
+        // Gate every check on the prerequisites (covers the expired-cert
+        // cold start: MQTT can't connect, so nothing else would trigger us,
+        // and the check must not fire before the clock is real).
+        wait_for_network_and_time();
+
         esp_err_t err = makapix_renewal_attempt(false);
         // ESP_OK and not-due are the normal outcomes; everything else was
         // already logged with its cause and simply waits for the next tick.

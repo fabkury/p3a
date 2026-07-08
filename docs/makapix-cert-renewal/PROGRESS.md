@@ -8,9 +8,11 @@ release versioning decided at release time), webui `2.15`.
 ### What was built
 
 - **`components/makapix/makapix_renewal.c/.h` (new)** — renewal engine:
-  - Periodic task (`cert_renew`, PSRAM stack): first check 90 s after boot,
-    then every `CONFIG_MAKAPIX_CERT_RENEW_CHECK_HOURS` (default 24), plus an
-    early kick on every MQTT connect.
+  - Periodic task (`cert_renew`, PSRAM stack): every check waits until
+    Wi-Fi holds an IP **and** the clock is SNTP-synchronized (10 s poll; no
+    arbitrary boot delay), then runs; repeats every
+    `CONFIG_MAKAPIX_CERT_RENEW_CHECK_HOURS` (default 24), plus an early kick
+    on every MQTT connect.
   - Local expiry read: `mbedtls_x509_crt_parse` on the stored client cert,
     `notAfter` → epoch via a UTC days-from-civil helper (no mktime/timezone
     traps).

@@ -639,14 +639,11 @@
             <div class="form-group">
                 <label class="form-label">Channel Type</label>
                 <select id="channelType" class="form-input" onchange="updateChannelTypeFields()">
-                    <option value="named">Makapix Named Channel</option>
-                    <option value="user">Makapix Artist</option>
-                    <option value="reactions">Makapix Artist Reactions</option>
-                    <option value="hashtag">Makapix Hashtag</option>
-                    <option value="sdcard">Local SD Card</option>
+                    <option value="makapix">Makapix Club</option>
                     <option value="giphy">Giphy</option>
                     <option value="klipy">Klipy</option>
                     <option value="institution">Museum</option>
+                    <option value="sdcard">Local SD Card</option>
                 </select>
             </div>
 
@@ -1620,8 +1617,8 @@
                 isReactions = !!(state.channels[channelIndex] &&
                                  state.channels[channelIndex].type === 'reactions');
             } else {
-                var typeSel = document.getElementById('channelType');
-                isReactions = !!(typeSel && typeSel.value === 'reactions');
+                var kindSel = document.getElementById('makapixKind');
+                isReactions = !!(kindSel && kindSel.value === 'reactions');
             }
             if (isReactions) {
                 verifyReactions(sqid, resultsId, displayNameTarget, channelIndex);
@@ -1719,7 +1716,7 @@
                 return;
             }
 
-            document.getElementById('channelType').value = 'named';
+            document.getElementById('channelType').value = 'makapix';
             document.getElementById('channelDisplayName').value = '';
             updateChannelTypeFields();
             document.getElementById('addChannelModal').classList.add('active');
@@ -1735,41 +1732,17 @@
             var html = '';
 
             switch (type) {
-                case 'named':
+                case 'makapix':
                     html = '<div class="form-group">' +
-                        '<label class="form-label">Channel</label>' +
-                        '<select id="namedChannelValue" class="form-input">' +
-                        '<option value="all">All Artworks</option>' +
-                        '<option value="promoted">Promoted Artworks</option>' +
+                        '<label class="form-label">Makapix Channel</label>' +
+                        '<select id="makapixKind" class="form-input" onchange="updateMakapixKindFields()">' +
+                        '<option value="named">Feed</option>' +
+                        '<option value="user">Artist</option>' +
+                        '<option value="reactions">Artist Reactions</option>' +
+                        '<option value="hashtag">Hashtag</option>' +
                         '</select>' +
-                        '</div>';
-                    break;
-
-                case 'user':
-                case 'reactions':
-                    html = '<div class="form-group">' +
-                        '<label class="form-label">Artist ID (sqid)</label>' +
-                        '<div class="sqid-input-row">' +
-                        '<input type="text" id="userIdentifier" class="form-input" placeholder="artist_sqid" maxlength="32" ' +
-                        'oninput="updateModalCheckButton()">' +
-                        '<button type="button" class="btn btn-secondary btn-small" id="modalCheckBtn" ' +
-                        'onclick="verifyArtist(document.getElementById(\'userIdentifier\').value, \'modalCheckResults\', \'channelDisplayName\', null)" disabled>Check</button>' +
                         '</div>' +
-                        '<div class="check-results" id="modalCheckResults">Enter sqid to check.</div>' +
-                        '</div>';
-                    break;
-
-                case 'hashtag':
-                    html = '<div class="form-group">' +
-                        '<label class="form-label">Hashtag (without #)</label>' +
-                        '<div class="sqid-input-row">' +
-                        '<input type="text" id="hashtagIdentifier" class="form-input" placeholder="pixelart" maxlength="64" ' +
-                        'oninput="updateModalHashtagCheckButton()">' +
-                        '<button type="button" class="btn btn-secondary btn-small" id="modalHashtagCheckBtn" ' +
-                        'onclick="verifyHashtag(document.getElementById(\'hashtagIdentifier\').value, \'modalHashtagResults\', \'channelDisplayName\', null)" disabled>Check</button>' +
-                        '</div>' +
-                        '<div class="check-results" id="modalHashtagResults">Enter hashtag to check.</div>' +
-                        '</div>';
+                        '<div id="makapixKindFields"></div>';
                     break;
 
                 case 'sdcard':
@@ -1845,6 +1818,57 @@
             }
 
             container.innerHTML = html;
+
+            if (type === 'makapix') {
+                updateMakapixKindFields();
+            }
+        }
+
+        function updateMakapixKindFields() {
+            var kind = document.getElementById('makapixKind').value;
+            var container = document.getElementById('makapixKindFields');
+            var html = '';
+
+            switch (kind) {
+                case 'named':
+                    html = '<div class="form-group">' +
+                        '<label class="form-label">Channel</label>' +
+                        '<select id="namedChannelValue" class="form-input">' +
+                        '<option value="all">All Artworks</option>' +
+                        '<option value="promoted">Promoted Artworks</option>' +
+                        '</select>' +
+                        '</div>';
+                    break;
+
+                case 'user':
+                case 'reactions':
+                    html = '<div class="form-group">' +
+                        '<label class="form-label">Artist ID (sqid)</label>' +
+                        '<div class="sqid-input-row">' +
+                        '<input type="text" id="userIdentifier" class="form-input" placeholder="artist_sqid" maxlength="32" ' +
+                        'oninput="updateModalCheckButton()">' +
+                        '<button type="button" class="btn btn-secondary btn-small" id="modalCheckBtn" ' +
+                        'onclick="verifyArtist(document.getElementById(\'userIdentifier\').value, \'modalCheckResults\', \'channelDisplayName\', null)" disabled>Check</button>' +
+                        '</div>' +
+                        '<div class="check-results" id="modalCheckResults">Enter sqid to check.</div>' +
+                        '</div>';
+                    break;
+
+                case 'hashtag':
+                    html = '<div class="form-group">' +
+                        '<label class="form-label">Hashtag (without #)</label>' +
+                        '<div class="sqid-input-row">' +
+                        '<input type="text" id="hashtagIdentifier" class="form-input" placeholder="pixelart" maxlength="64" ' +
+                        'oninput="updateModalHashtagCheckButton()">' +
+                        '<button type="button" class="btn btn-secondary btn-small" id="modalHashtagCheckBtn" ' +
+                        'onclick="verifyHashtag(document.getElementById(\'hashtagIdentifier\').value, \'modalHashtagResults\', \'channelDisplayName\', null)" disabled>Check</button>' +
+                        '</div>' +
+                        '<div class="check-results" id="modalHashtagResults">Enter hashtag to check.</div>' +
+                        '</div>';
+                    break;
+            }
+
+            container.innerHTML = html;
         }
 
         // Bridge to the ES-module museum browser. Populated by the
@@ -1871,7 +1895,7 @@
                     // User backed out of the browse modal. Revert the type
                     // dropdown to a sane default so the Add Channel modal
                     // doesn't keep re-triggering the browser on reopen.
-                    document.getElementById('channelType').value = 'named';
+                    document.getElementById('channelType').value = 'makapix';
                     updateChannelTypeFields();
                 }
             });
@@ -1895,6 +1919,11 @@
 
         function addChannel() {
             var type = document.getElementById('channelType').value;
+            if (type === 'makapix') {
+                // The UI groups the four Makapix kinds under one "Makapix
+                // Club" entry, but the stored channel type stays the kind.
+                type = document.getElementById('makapixKind').value;
+            }
             var displayName = document.getElementById('channelDisplayName').value.trim();
 
             var channel = {

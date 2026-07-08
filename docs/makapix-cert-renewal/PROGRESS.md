@@ -64,11 +64,31 @@ release versioning decided at release time), webui `2.15`.
 ### Pending
 
 - [ ] Build + flash by Fab (per repo policy, Claude does not build).
-- [ ] End-to-end test against development.makapix.club — UNBLOCKED: server
-  team deployed `CERT_RENEWAL_THRESHOLD_DAYS=3650` (dev api+worker) and the
-  CRL reload watcher on dev, both verified (message 0002, 2026-07-08). T4
-  needs no manual broker restart. Server needs our test player_key + go/no-go
-  pings before T3/T4. Results go back as message 0003.
+- [x] End-to-end test against development.makapix.club — run 2026-07-08 with
+  dev build (host=development, window 3650 d, check 1 h), test player_key
+  79c3a2f0-89ea-43c7-8a41-5d117a753cf8. Results (messages 0003–0008 in the
+  MPX repo's docs/cert-renewal/messages/):
+  - T1 registration + api_token capture: PASS.
+  - T2 renewal under live MQTT connection: PASS (zero disconnects, ~3 s).
+  - Self-heal at auth-failure threshold: PASS (fired live during the dev
+    broker SAN incident; renewed under fire, exactly one attempt).
+  - Un-latch self-recovery from REGISTRATION_INVALID: PASS (hourly renewal
+    cleared the latch with no human touch; first successful dev connect).
+  - T3 token loss (server deleted player_tokens row): PASS — 401 → exactly
+    one rotate (persist-before-rely) → renewed.
+  - T4 cert revocation (server CRL'd current serial): PASS — reject →
+    proactive renewal → reconnect with fresh PEMs → online in ~11 s;
+    REGISTRATION_INVALID never appeared.
+  - Bonus finds: dev broker cert lacked development.makapix.club SAN (first
+    hostname-verifying client ever on dev:8884; server fixed with env-aware
+    SANs + re-mint); server's CRL inotify watcher missed its first
+    cross-container event (server hardened with 60 s content-hash poll —
+    matters for prod's 2026-07-25 CRL deadline).
+- [ ] T5 rate-limit (429) — expected overnight: 7/10 renewals used by
+  22:22 UTC; hourly loop hits the cap ~01:30 UTC. T6 clock gate optional.
+- [ ] Final results message (0009) to server team after T5; then teardown:
+  rebuild prod-default firmware (host makapix.club, window 45, check 24),
+  reflash, re-register on prod.
 - [x] Prod `min(cert_expires_at)` — CONFIRMED 2026-12-12 09:12 UTC (4 certs
   Dec 2026; 15/24 before Jun 2027; 9 already 3-year). Renewal window opens
   2026-09-13 = firmware release deadline. MPX plan doc updated by server team.

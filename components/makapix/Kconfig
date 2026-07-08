@@ -25,13 +25,16 @@ menu "Makapix Configuration"
     config MAKAPIX_CERT_RENEW_WINDOW_DAYS
         int "Certificate renewal window (days before expiry)"
         default 45
-        range 1 365
+        range 1 3650
         help
             The device starts trying to renew its MQTT client certificate
             once it is within this many days of the certificate's notAfter.
             Must not exceed the server's CERT_RENEWAL_THRESHOLD_DAYS (90 in
             production) or the server rejects the attempts with HTTP 400
-            until the server-side window opens.
+            until the server-side window opens. Values above 90 are for
+            end-to-end testing against a dev server whose threshold has been
+            raised to match (e.g. 3650 makes a fresh 3-year cert immediately
+            renewable on both sides).
 
     config MAKAPIX_CERT_RENEW_CHECK_HOURS
         int "Certificate renewal check interval (hours)"

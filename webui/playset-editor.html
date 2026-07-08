@@ -118,6 +118,11 @@
             border-radius: var(--r-sm);
         }
 
+        .add-channel-btn {
+            display: block;
+            margin: var(--sp-3) auto 0;
+        }
+
         .btn-icon {
             padding: var(--sp-2);
             border-radius: var(--r-sm);
@@ -613,7 +618,7 @@
                     <div class="form-group">
                         <label class="form-label">Channels (<span id="channelCount">0</span>/64)</label>
                         <div id="channelList" class="channel-list"></div>
-                        <button type="button" class="btn btn-secondary btn-small" onclick="showAddChannelModal()"
+                        <button type="button" class="btn btn-secondary add-channel-btn" onclick="showAddChannelModal()"
                                 id="addChannelBtn">+ Add Channel</button>
                     </div>
 

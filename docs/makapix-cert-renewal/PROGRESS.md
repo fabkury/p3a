@@ -84,8 +84,13 @@ release versioning decided at release time), webui `2.15`.
     SANs + re-mint); server's CRL inotify watcher missed its first
     cross-container event (server hardened with 60 s content-hash poll —
     matters for prod's 2026-07-25 CRL deadline).
-- [ ] T5 rate-limit (429) — expected overnight: 7/10 renewals used by
-  22:22 UTC; hourly loop hits the cap ~01:30 UTC. T6 clock gate optional.
+- [x] T5 rate-limit (429): PASS 2026-07-09 ~15:01 UTC — after burning the
+  10/day/player budget via repeated boot renewals, the 11th attempt returned
+  HTTP 429; device classified it `rate_limited`, no retry loop, MQTT session
+  unaffected, waits for the next hourly check. (Observed window semantics:
+  fixed 24 h window from first renewal of the period, not sliding.)
+  T6 clock gate: declared covered — the network+SNTP prerequisite gate was
+  observed holding the check at every boot.
 - [ ] Final results message (0009) to server team after T5; then teardown:
   rebuild prod-default firmware (host makapix.club, window 45, check 24),
   reflash, re-register on prod.

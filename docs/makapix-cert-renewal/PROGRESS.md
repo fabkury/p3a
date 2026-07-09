@@ -91,9 +91,19 @@ release versioning decided at release time), webui `2.15`.
   fixed 24 h window from first renewal of the period, not sliding.)
   T6 clock gate: declared covered — the network+SNTP prerequisite gate was
   observed holding the check at every boot.
-- [ ] Final results message (0009) to server team after T5; then teardown:
-  rebuild prod-default firmware (host makapix.club, window 45, check 24),
-  reflash, re-register on prod.
+- [x] Final results message 0009 sent 2026-07-09 (MPX repo, develop) —
+  full matrix reported; release committed for END OF JULY 2026; server
+  housekeeping green-lit; prod CRL-watcher-before-2026-07-25 reminder given.
+- [x] Teardown done 2026-07-09: prod sdkconfig restored (renewal defaults
+  45 d / 24 h committed), rebuilt, reflashed, device re-registered on prod
+  (new player_key cd5ef4ac-…, api_token captured at registration, connected
+  to makapix.club:8883, renewal task correctly silent — fresh cert not in
+  window). Note: the pre-test prod player record (5cf229f7-…) is now an
+  orphan in Fab's account and can be deleted from the makapix.club web UI.
+- [ ] Merge feature/makapix-cert-renewal → main; release by end of July 2026
+  (hard deadlines: window opens 2026-09-13, first expiry 2026-12-12).
+- [ ] External watch item: MPX team deploys hardened CRL watcher to prod
+  BEFORE 2026-07-25 (their commitment, optional 0010 confirmation).
 - [x] Prod `min(cert_expires_at)` — CONFIRMED 2026-12-12 09:12 UTC (4 certs
   Dec 2026; 15/24 before Jun 2027; 9 already 3-year). Renewal window opens
   2026-09-13 = firmware release deadline. MPX plan doc updated by server team.

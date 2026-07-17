@@ -239,8 +239,18 @@ static body_status_t read_into_buffer(fetch_sink_t *s, esp_http_client_handle_t 
             req->progress(s->bytes, content_length > 0 ? (size_t)content_length : 0, req->user_ctx);
         }
     }
-    if (s->bytes >= s->buf_size - 1) return BODY_BUFFER_FULL;
-    return read_err ? BODY_READ_ERR : BODY_OK;
+    if (read_err) return BODY_READ_ERR;
+    if (s->bytes >= s->buf_size - 1) {
+        // Buffer filled to capacity. That alone doesn't prove truncation: the
+        // body may end exactly at capacity (storage.bin is exactly the 4 MB
+        // LittleFS partition size). Probe one more byte to tell EOF apart from
+        // a genuinely larger body.
+        char probe;
+        int rl = esp_http_client_read(client, &probe, 1);
+        if (rl < 0) return BODY_READ_ERR;
+        if (rl > 0) return BODY_BUFFER_FULL;
+    }
+    return BODY_OK;
 }
 
 static body_status_t read_into_file(fetch_sink_t *s, esp_http_client_handle_t client,

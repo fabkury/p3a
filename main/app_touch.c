@@ -147,12 +147,15 @@ static uint16_t scale_to_pico8(uint16_t value, uint16_t max_src, uint16_t max_ds
 
 /**
  * @brief Transform touch coordinates based on current screen rotation
- * 
+ *
+ * Pure function, safe to call before touch init (also used by the
+ * SD-format fatal-screen loop, which polls touch directly).
+ *
  * @param x Pointer to X coordinate (modified in place)
  * @param y Pointer to Y coordinate (modified in place)
  * @param rotation Current screen rotation
  */
-static void transform_touch_coordinates(uint16_t *x, uint16_t *y, screen_rotation_t rotation)
+void app_touch_transform_coordinates(uint16_t *x, uint16_t *y, screen_rotation_t rotation)
 {
     const uint16_t screen_w = P3A_DISPLAY_WIDTH;
     const uint16_t screen_h = P3A_DISPLAY_HEIGHT;
@@ -300,7 +303,7 @@ static void app_touch_task(void *arg)
             uint16_t visual_x = x[0];
             uint16_t visual_y = y[0];
             screen_rotation_t rotation = app_get_screen_rotation();
-            transform_touch_coordinates(&visual_x, &visual_y, rotation);
+            app_touch_transform_coordinates(&visual_x, &visual_y, rotation);
             
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
             uint16_t scaled_x = scale_to_pico8(x[0], P3A_DISPLAY_WIDTH, 127);
@@ -321,7 +324,7 @@ static void app_touch_task(void *arg)
                 // Transform start coordinates to visual space for swipe gesture detection
                 uint16_t visual_start_x = touch_start_x;
                 uint16_t visual_start_y = touch_start_y;
-                transform_touch_coordinates(&visual_start_x, &visual_start_y, rotation);
+                app_touch_transform_coordinates(&visual_start_x, &visual_start_y, rotation);
                 
                 // Calculate deltas in visual space for swipe gesture
                 int16_t delta_x = (int16_t)visual_x - (int16_t)visual_start_x;
@@ -421,7 +424,7 @@ static void app_touch_task(void *arg)
                         // Transform tap position to determine left/right in user's visual space
                         uint16_t tap_x = touch_start_x;
                         uint16_t tap_y = touch_start_y;
-                        transform_touch_coordinates(&tap_x, &tap_y, app_get_screen_rotation());
+                        app_touch_transform_coordinates(&tap_x, &tap_y, app_get_screen_rotation());
 
                         const uint16_t screen_midpoint = P3A_DISPLAY_WIDTH / 2;
                         p3a_touch_event_type_t tap_type = (tap_x < screen_midpoint) ?
@@ -431,7 +434,10 @@ static void app_touch_task(void *arg)
                         if (!p3a_touch_router_is_gesture_enabled(tap_type)) {
                             ESP_LOGD(TAG, "tap gesture ignored - not enabled in current state");
                         } else {
-                            p3a_touch_event_t touch_event = { .type = tap_type };
+                            p3a_touch_event_t touch_event = {
+                                .type = tap_type,
+                                .tap = { .x = tap_x, .y = tap_y },
+                            };
                             p3a_touch_router_handle_event(&touch_event);
                             ESP_LOGD(TAG, "tap gesture: routed to state handler (tap_x=%u)", tap_x);
                         }

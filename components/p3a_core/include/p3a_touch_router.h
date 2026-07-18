@@ -63,6 +63,10 @@ typedef struct {
             int delta_percent;      ///< For BRIGHTNESS event
         } brightness;
         struct {
+            uint16_t x;             ///< For TAP_LEFT/TAP_RIGHT: tap position in visual space
+            uint16_t y;             ///< (rotation-transformed; 0..719 on this panel)
+        } tap;
+        struct {
             uint16_t x;             ///< For RAW event
             uint16_t y;
             uint8_t pressure;

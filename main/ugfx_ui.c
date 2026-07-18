@@ -417,8 +417,8 @@ static void ugfx_ui_draw_channel_message(void)
     const char *msg = s_channel_message;
     if (!msg) msg = "";
 
-    // Split into up to 3 lines on '\n' (rendering '\n' directly shows as '?' on some builds)
-    enum { MAX_LINES = 3 };
+    // Split into up to 4 lines on '\n' (rendering '\n' directly shows as '?' on some builds)
+    enum { MAX_LINES = 4 };
     const char *line_start[MAX_LINES] = {0};
     size_t line_len[MAX_LINES] = {0};
     int line_count = 0;
@@ -868,13 +868,13 @@ static void ugfx_ui_draw_fatal_error(void)
     }
 
     // SD-format affordance: once the fatal-screen loop has touch running it
-    // arms the "Format card for p3a" button; a notice strip above it carries
-    // probe feedback (no card / card OK). Geometry shared with the hit-test
-    // in sd_format.c via the SDFMT_BTN_* defines.
+    // arms the "Format card for p3a" button (the body text explains it —
+    // the loop swaps in the button-aware body when arming). The strip above
+    // the button carries transient probe feedback only. Geometry shared
+    // with the hit-test in sd_format.c via the SDFMT_BTN_* defines.
     if (sd_format_fatal_button_ready()) {
-        gFont hint_font = gdispOpenFont("* DejaVu Sans 20");
-        const char *notice;
-        color_t notice_color;
+        const char *notice = NULL;
+        color_t notice_color = GFX_WHITE;
         switch (sd_format_get_phase()) {
             case SD_FORMAT_PROBING:
                 notice = "Checking card...";
@@ -889,12 +889,13 @@ static void ugfx_ui_draw_fatal_error(void)
                 notice_color = HTML2COLOR(0x00FF00);
                 break;
             default:
-                notice = "p3a can format this card for its own use:";
-                notice_color = HTML2COLOR(0x999999);
-                break;
+                break;  // IDLE: no notice, the body already explains the button
         }
-        gdispFillStringBox(0, 545, screen_w, 35, notice, hint_font,
-                           notice_color, GFX_BLACK, gJustifyCenter);
+        if (notice != NULL) {
+            gFont hint_font = gdispOpenFont("* DejaVu Sans 20");
+            gdispFillStringBox(0, 545, screen_w, 35, notice, hint_font,
+                               notice_color, GFX_BLACK, gJustifyCenter);
+        }
 
         ugfx_ui_draw_touch_button(SDFMT_BTN_FATAL_X, SDFMT_BTN_FATAL_Y,
                                   SDFMT_BTN_FATAL_W, SDFMT_BTN_FATAL_H,
@@ -962,8 +963,8 @@ static void ugfx_ui_draw_sd_format(void)
             // colors. The countdown gates confirm only — cancel always works.
             int countdown_ms = sd_format_get_countdown_ms();
             if (countdown_ms > 0) {
-                char label[24];
-                snprintf(label, sizeof(label), "Erase all (%d)", (countdown_ms + 999) / 1000);
+                char label[32];
+                snprintf(label, sizeof(label), "ERASE & FORMAT (%d)", (countdown_ms + 999) / 1000);
                 ugfx_ui_draw_touch_button(SDFMT_BTN_CONFIRM_X, SDFMT_BTN_CONFIRM_Y,
                                           SDFMT_BTN_CONFIRM_W, SDFMT_BTN_CONFIRM_H,
                                           HTML2COLOR(0x222222), HTML2COLOR(0x555555),

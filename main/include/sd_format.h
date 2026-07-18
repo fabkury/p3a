@@ -64,17 +64,17 @@ typedef enum {
 #define SDFMT_BTN_FATAL_W       400
 #define SDFMT_BTN_FATAL_H       110
 
-// Warning panel confirm (right side, mid-height - deliberately a different
-// screen region from both initiating buttons)
-#define SDFMT_BTN_CONFIRM_X     380
-#define SDFMT_BTN_CONFIRM_Y     450
-#define SDFMT_BTN_CONFIRM_W     300
+// Warning panel: confirm and cancel stacked in a single centered column
+// (confirm on top, cancel below). Safety comes from the countdown that
+// keeps confirm disarmed, not from spatial separation.
+#define SDFMT_BTN_CONFIRM_X     180
+#define SDFMT_BTN_CONFIRM_Y     420
+#define SDFMT_BTN_CONFIRM_W     360
 #define SDFMT_BTN_CONFIRM_H     110
 
-// Warning panel cancel (bottom-left, always active)
-#define SDFMT_BTN_CANCEL_X      40
-#define SDFMT_BTN_CANCEL_Y      580
-#define SDFMT_BTN_CANCEL_W      300
+#define SDFMT_BTN_CANCEL_X      180
+#define SDFMT_BTN_CANCEL_Y      570
+#define SDFMT_BTN_CANCEL_W      360
 #define SDFMT_BTN_CANCEL_H      110
 
 // Info screen entry button (Case B, only while sd_health latch is tripped)

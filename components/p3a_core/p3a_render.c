@@ -171,7 +171,8 @@ esp_err_t p3a_render_frame(uint8_t *buffer, size_t stride, p3a_render_result_t *
                 p3a_render_set_channel_message_ttl("SD card", P3A_CHANNEL_MSG_SD_FAILED, -1,
                                                    "SD card is not working.\n"
                                                    "Saving and downloads are disabled.\n"
-                                                   "Power off, replace the SD card, then boot again.",
+                                                   "Power off, replace or format\n"
+                                                   "the SD card, then boot again.",
                                                    20000);
             }
             // Auto-dismiss an expired channel message (e.g. the 429 rate-limit

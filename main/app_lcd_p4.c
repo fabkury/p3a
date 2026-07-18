@@ -83,10 +83,13 @@ esp_err_t app_lcd_init(void)
         ESP_LOGE(TAG, "Failed to initialize animation player: %s", esp_err_to_name(err));
 
         // Re-initialize display renderer (torn down by animation_player_init cleanup)
-        // and show a fatal error screen instead of crashing
+        // and show a fatal error screen instead of crashing. This body is the
+        // neutral (no-touch) variant: once sd_format_fatal_screen_loop() gets
+        // touch running it swaps in a body that also offers the on-device
+        // format button, so the text never promises a button that isn't there.
         static const char *fatal_title = "No Usable SD Card";
         static const char *fatal_body =
-            "microSD card missing or unreadable.\nA working microSD card is required.\n\nPlease disconnect from power,\nunscrew the back plate, then insert\nor reformat a microSD card.";
+            "A working microSD card is required.\n\nPower off, unscrew the back plate,\nand insert a microSD card.";
         display_renderer_init(panel, buffers, buffer_count, buffer_bytes, row_stride);
         display_renderer_set_frame_callback(fatal_error_render_cb, NULL);
         ugfx_ui_show_fatal_error(fatal_title, fatal_body);

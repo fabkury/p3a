@@ -48,6 +48,15 @@
 
 static const char *TAG = "sd_format";
 
+// Fatal-screen body shown once the format button is armed (replaces the
+// neutral no-touch body passed in by app_lcd_p4.c): the "two paths" text —
+// the user self-selects between formatting the inserted card and replacing
+// it. Only ever shown together with the button.
+#define SDFMT_FATAL_BODY_WITH_BUTTON \
+    "A working microSD card is required.\n\n" \
+    "Card inserted? Tap below to have\np3a erase and format it.\n\n" \
+    "No card? Power off, unscrew the\nback plate, and insert one."
+
 // Notice durations (see sd_format_phase_t)
 #define SDFMT_NO_CARD_NOTICE_MS   4000
 #define SDFMT_CARD_OK_NOTICE_MS   1500
@@ -441,7 +450,7 @@ static void run_fatal_format(void)
         s_phase = SD_FORMAT_IDLE;
         ugfx_ui_show_fatal_error(
             "SD Card Format Failed",
-            "Format failed - the card may be\ndefective. Please replace it.");
+            "Format failed - the card may be\ndefective.\n\nReplace the card, or tap below\nto try again.");
         // The format button stays armed: a retry starts over from the probe.
     }
 }
@@ -475,6 +484,11 @@ void sd_format_fatal_screen_loop(const char *fatal_title, const char *fatal_body
 
     s_fatal_button_ready = true;
     ESP_LOGI(TAG, "fatal-screen format button armed");
+
+    // The button exists now — swap in the body text that offers it (also
+    // becomes the cancel-restore text from here on).
+    s_fatal_body = SDFMT_FATAL_BODY_WITH_BUTTON;
+    ugfx_ui_show_fatal_error(s_fatal_title, s_fatal_body);
 
     // Minimal tap detector: same dead-zone threshold as app_touch.c (6.5%
     // of the smaller screen dimension), press-start coords as tap position.

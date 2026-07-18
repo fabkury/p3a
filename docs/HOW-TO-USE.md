@@ -31,12 +31,14 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 
 - Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board
 - USB-C data cable (not a charging-only cable)
-- microSD card (8 GB minimum; see [SD card sizing](#sd-card-sizing) below)
+- microSD card (8 GB minimum, **formatted FAT32**; see [SD card sizing](#sd-card-sizing) below)
 - a small screwdriver
 
 ### First-time setup
 
 1. **Insert the microSD card** into the slot on the board. This requires unscrewing the back plate.
+
+   > **The card must be FAT32** (or FAT16). p3a does not read exFAT or NTFS. Cards larger than 32 GB usually ship formatted as exFAT, so they need reformatting to FAT32 first — Windows' built-in Format dialog caps FAT32 at 32 GB, so use a tool such as [guiformat](http://ridgecrop.co.uk/guiformat.htm) or [Rufus](https://rufus.ie) for larger cards. A card p3a can't read shows a **"No Usable SD Card"** screen and is left untouched — p3a never erases or reformats it for you.
 2. **Flash the firmware**. See [flash-p3a.md](flash-p3a.md) for instructions.
 3. **Configure Wi-Fi** by following the [Wi-Fi Setup](#wi-fi-setup) instructions.
 

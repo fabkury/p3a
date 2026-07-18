@@ -26,6 +26,8 @@
 #include "storage_eviction.h"
 #include "esp_heap_caps.h"
 #include "play_scheduler.h"
+#include "sd_health.h"
+#include "sd_format.h"
 
 // Include µGFX headers
 #include "gfx.h"
@@ -91,6 +93,12 @@ size_t ugfx_line_stride = 0;
 
 // Forward declaration of our custom µGFX extension
 extern void gdisp_lld_set_framebuffer(void *pixels, gCoord linelen);
+
+// Forward declarations (SD-format flow drawing)
+static void ugfx_ui_draw_touch_button(gCoord x, gCoord y, gCoord w, gCoord h,
+                                      color_t fill, color_t border,
+                                      color_t text_color, const char *label);
+static void ugfx_ui_draw_sd_format(void);
 
 /**
  * @brief Initialize µGFX or update its framebuffer pointer
@@ -731,9 +739,47 @@ static void ugfx_ui_draw_info_screen(void)
         }
     }
 
-    // Dismiss hint at bottom
-    gdispFillStringBox(0, gdispGetHeight() - 60, screen_w, rh, "Long-press to dismiss",
-                       font_hint, HTML2COLOR(0x555555), GFX_BLACK, gJustifyCenter);
+    // SD-format entry: shown only while the SD-health latch is tripped. It
+    // occupies the dismiss-hint area, so the hint is suppressed while shown
+    // (long-press still dismisses). Geometry shared with the hit-test in
+    // ugfx_ui_info_screen_handle_tap() via the SDFMT_BTN_INFO_* defines.
+    if (sd_health_is_failed()) {
+        ugfx_ui_draw_touch_button(SDFMT_BTN_INFO_X, SDFMT_BTN_INFO_Y,
+                                  SDFMT_BTN_INFO_W, SDFMT_BTN_INFO_H,
+                                  HTML2COLOR(0x661111), HTML2COLOR(0xFF4444),
+                                  GFX_WHITE, "Format SD card");
+    } else {
+        // Dismiss hint at bottom
+        gdispFillStringBox(0, gdispGetHeight() - 60, screen_w, rh, "Long-press to dismiss",
+                           font_hint, HTML2COLOR(0x555555), GFX_BLACK, gJustifyCenter);
+    }
+}
+
+/**
+ * @brief Hit-test a tap against the info screen's "Format SD card" button
+ *
+ * Called by the touch router (weak-linked from p3a_core) for taps while in
+ * UI mode. Only live when the info screen is showing and the SD-health
+ * latch is tripped — the button isn't drawn otherwise.
+ *
+ * @param x Tap X in visual space
+ * @param y Tap Y in visual space
+ * @return true if the tap hit the button (flow started or refused with a log)
+ */
+bool ugfx_ui_info_screen_handle_tap(uint16_t x, uint16_t y)
+{
+    if (s_usb_msc_active || !s_ui_active || s_ui_mode != UI_MODE_INFO_SCREEN) {
+        return false;
+    }
+    if (!sd_health_is_failed()) {
+        return false;
+    }
+    if (x >= SDFMT_BTN_INFO_X && x < SDFMT_BTN_INFO_X + SDFMT_BTN_INFO_W &&
+        y >= SDFMT_BTN_INFO_Y && y < SDFMT_BTN_INFO_Y + SDFMT_BTN_INFO_H) {
+        sd_format_start(SD_FORMAT_ORIGIN_INFO);
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -819,6 +865,150 @@ static void ugfx_ui_draw_fatal_error(void)
         color_t color = GFX_WHITE;
         gdispFillStringBox(0, start_y + (gCoord)(i * line_pitch), screen_w, line_h, line_buf,
                            body_font, color, GFX_BLACK, gJustifyCenter);
+    }
+
+    // SD-format affordance: once the fatal-screen loop has touch running it
+    // arms the "Format card for p3a" button; a notice strip above it carries
+    // probe feedback (no card / card OK). Geometry shared with the hit-test
+    // in sd_format.c via the SDFMT_BTN_* defines.
+    if (sd_format_fatal_button_ready()) {
+        gFont hint_font = gdispOpenFont("* DejaVu Sans 20");
+        const char *notice;
+        color_t notice_color;
+        switch (sd_format_get_phase()) {
+            case SD_FORMAT_PROBING:
+                notice = "Checking card...";
+                notice_color = HTML2COLOR(0xFFFF00);
+                break;
+            case SD_FORMAT_NO_CARD:
+                notice = "No card detected - insert a card first";
+                notice_color = HTML2COLOR(0xFF6666);
+                break;
+            case SD_FORMAT_CARD_OK:
+                notice = "Card OK - restarting...";
+                notice_color = HTML2COLOR(0x00FF00);
+                break;
+            default:
+                notice = "p3a can format this card for its own use:";
+                notice_color = HTML2COLOR(0x999999);
+                break;
+        }
+        gdispFillStringBox(0, 545, screen_w, 35, notice, hint_font,
+                           notice_color, GFX_BLACK, gJustifyCenter);
+
+        ugfx_ui_draw_touch_button(SDFMT_BTN_FATAL_X, SDFMT_BTN_FATAL_Y,
+                                  SDFMT_BTN_FATAL_W, SDFMT_BTN_FATAL_H,
+                                  HTML2COLOR(0x222222), HTML2COLOR(0xFFAA00),
+                                  GFX_WHITE, "Format card for p3a");
+    }
+}
+
+/**
+ * @brief Draw a touch button: filled box + 2px border + centered label
+ *
+ * There is no widget layer in this build of µGFX — a "button" is a drawn
+ * rect whose geometry the caller also uses for tap hit-testing. (Square
+ * corners: the rounded-box primitives need GDISP_NEED_ARC, which this
+ * build compiles out.)
+ */
+static void ugfx_ui_draw_touch_button(gCoord x, gCoord y, gCoord w, gCoord h,
+                                      color_t fill, color_t border,
+                                      color_t text_color, const char *label)
+{
+    gFont font = gdispOpenFont("* DejaVu Sans 24");
+    gdispFillArea(x, y, w, h, fill);
+    gdispDrawBox(x, y, w, h, border);
+    gdispDrawBox(x + 1, y + 1, w - 2, h - 2, border);
+    gCoord line_h = gdispGetFontMetric(font, gFontLineSpacing);
+    if (line_h <= 0) line_h = 30;
+    gdispFillStringBox(x + 4, y + (h - line_h) / 2, w - 8, line_h, label,
+                       font, text_color, fill, gJustifyCenter);
+}
+
+/**
+ * @brief Draw the SD-format flow screens (warning/formatting/failed/rebooting)
+ *
+ * State lives in sd_format.c; this redraws from it every frame (the ticking
+ * countdown works exactly like the registration-code countdown).
+ */
+static void ugfx_ui_draw_sd_format(void)
+{
+    gdispClear(GFX_BLACK);
+
+    gCoord screen_w = gdispGetWidth();
+    gFont font_title = gdispOpenFont("* DejaVu Sans 32");
+    gFont font_body = gdispOpenFont("* DejaVu Sans 24");
+
+    switch (sd_format_get_phase()) {
+        case SD_FORMAT_WARNING: {
+            gdispFillStringBox(0, 80, screen_w, 45, "Erase and format SD card?",
+                               font_title, HTML2COLOR(0xFF4444), GFX_BLACK, gJustifyCenter);
+            gdispFillStringBox(0, 170, screen_w, 35, "This will ERASE EVERYTHING on the card",
+                               font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
+            gdispFillStringBox(0, 210, screen_w, 35, "and format it as FAT32 for p3a.",
+                               font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
+
+            if (sd_format_get_origin() == SD_FORMAT_ORIGIN_INFO) {
+                gFont font_hint = gdispOpenFont("* DejaVu Sans 20");
+                gdispFillStringBox(0, 280, screen_w, 30, "To rescue files first, connect via USB-C to the",
+                                   font_hint, HTML2COLOR(0xAAAAAA), GFX_BLACK, gJustifyCenter);
+                gdispFillStringBox(0, 312, screen_w, 30, "USB-HS port (the one close to the buttons)",
+                                   font_hint, HTML2COLOR(0xAAAAAA), GFX_BLACK, gJustifyCenter);
+                gdispFillStringBox(0, 344, screen_w, 30, "and copy them off, then return here.",
+                                   font_hint, HTML2COLOR(0xAAAAAA), GFX_BLACK, gJustifyCenter);
+            }
+
+            // Confirm: greyed with a ticking countdown, then armed in danger
+            // colors. The countdown gates confirm only — cancel always works.
+            int countdown_ms = sd_format_get_countdown_ms();
+            if (countdown_ms > 0) {
+                char label[24];
+                snprintf(label, sizeof(label), "Erase all (%d)", (countdown_ms + 999) / 1000);
+                ugfx_ui_draw_touch_button(SDFMT_BTN_CONFIRM_X, SDFMT_BTN_CONFIRM_Y,
+                                          SDFMT_BTN_CONFIRM_W, SDFMT_BTN_CONFIRM_H,
+                                          HTML2COLOR(0x222222), HTML2COLOR(0x555555),
+                                          HTML2COLOR(0x777777), label);
+            } else {
+                ugfx_ui_draw_touch_button(SDFMT_BTN_CONFIRM_X, SDFMT_BTN_CONFIRM_Y,
+                                          SDFMT_BTN_CONFIRM_W, SDFMT_BTN_CONFIRM_H,
+                                          HTML2COLOR(0x661111), HTML2COLOR(0xFF4444),
+                                          GFX_WHITE, "ERASE & FORMAT");
+            }
+
+            ugfx_ui_draw_touch_button(SDFMT_BTN_CANCEL_X, SDFMT_BTN_CANCEL_Y,
+                                      SDFMT_BTN_CANCEL_W, SDFMT_BTN_CANCEL_H,
+                                      HTML2COLOR(0x333333), GFX_WHITE,
+                                      GFX_WHITE, "Cancel");
+            break;
+        }
+
+        case SD_FORMAT_FORMATTING:
+            gdispFillStringBox(0, 290, screen_w, 45, "Formatting...",
+                               font_title, HTML2COLOR(0xFFFF00), GFX_BLACK, gJustifyCenter);
+            gdispFillStringBox(0, 370, screen_w, 35, "Do not power off",
+                               font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
+            break;
+
+        case SD_FORMAT_REBOOTING:
+            gdispFillStringBox(0, 330, screen_w, 45, "Done - restarting",
+                               font_title, HTML2COLOR(0x00FF00), GFX_BLACK, gJustifyCenter);
+            break;
+
+        case SD_FORMAT_FAILED:
+            gdispFillStringBox(0, 250, screen_w, 45, "Format Failed",
+                               font_title, HTML2COLOR(0xFF4444), GFX_BLACK, gJustifyCenter);
+            gdispFillStringBox(0, 330, screen_w, 35, "The card may be defective.",
+                               font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
+            gdispFillStringBox(0, 370, screen_w, 35, "Please replace it.",
+                               font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
+            gdispFillStringBox(0, 410, screen_w, 35, "Restarting...",
+                               font_body, HTML2COLOR(0xAAAAAA), GFX_BLACK, gJustifyCenter);
+            break;
+
+        default:
+            // PROBING/NO_CARD/CARD_OK never own the screen (fatal screen
+            // renders them as notices); IDLE never reaches here.
+            break;
     }
 }
 
@@ -1324,7 +1514,8 @@ gBool ugfx_ui_is_active(void)
 {
     // s_usb_msc_active keeps the UI active even if a background overlay flipped
     // s_ui_active off while the card is exported (see s_usb_msc_active).
-    return (s_ui_active || s_usb_msc_active) ? gTrue : gFalse;
+    // Likewise the SD-format flow owns the screen for its whole duration.
+    return (s_ui_active || s_usb_msc_active || sd_format_owns_screen()) ? gTrue : gFalse;
 }
 
 int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
@@ -1345,6 +1536,15 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
     if (s_usb_msc_active) {
         ugfx_ui_draw_usb_msc();
         return 500;
+    }
+
+    // The SD-format flow (warning panel onward) owns the screen regardless
+    // of s_ui_mode — background ugfx_ui_show_*() calls must not stomp it
+    // (same modal-precedence trick as s_usb_msc_active above). 100 ms keeps
+    // the confirm-button countdown ticking smoothly.
+    if (sd_format_owns_screen()) {
+        ugfx_ui_draw_sd_format();
+        return 100;
     }
 
     // If UI not active, just clear to black
@@ -1424,7 +1624,9 @@ int ugfx_ui_render_to_buffer(uint8_t *buffer, size_t stride)
 
         case UI_MODE_FATAL_ERROR:
             ugfx_ui_draw_fatal_error();
-            return 500;
+            // Once the format button is armed, probe notices need to appear
+            // promptly — tighten the frame delay.
+            return sd_format_fatal_button_ready() ? 100 : 500;
 
         case UI_MODE_USB_MSC:
             ugfx_ui_draw_usb_msc();

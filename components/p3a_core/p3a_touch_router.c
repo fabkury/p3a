@@ -61,6 +61,14 @@ extern void ugfx_ui_hide_info_screen(void) __attribute__((weak));
 extern void ugfx_ui_hide_captive_ap_info(void) __attribute__((weak));
 extern bool app_wifi_is_captive_portal_active(void) __attribute__((weak));
 
+// SD-format flow handlers (from sd_format.c / ugfx_ui.c via weak symbols).
+// While the format flow is active it consumes all UI-mode touch input;
+// otherwise UI-mode taps are offered to the info screen's format button.
+extern bool sd_format_is_active(void) __attribute__((weak));
+extern bool sd_format_handle_tap(uint16_t x, uint16_t y) __attribute__((weak));
+extern void sd_format_handle_long_press(void) __attribute__((weak));
+extern bool ugfx_ui_info_screen_handle_tap(uint16_t x, uint16_t y) __attribute__((weak));
+
 // Playback service (from playback_service.c via weak symbol)
 extern bool playback_service_is_paused(void) __attribute__((weak));
 
@@ -113,8 +121,31 @@ static esp_err_t handle_animation_playback(const p3a_touch_event_t *event)
         return ESP_OK;  // Silently ignore all other gestures
     }
 
-    // While in UI mode, only long-press (to dismiss) is allowed
+    // While in UI mode, only long-press (to dismiss) is allowed — except for
+    // the SD-format flow, which owns all input while active, and the info
+    // screen's "Format SD card" button, which consumes its own taps.
     if (app_lcd_is_ui_mode && app_lcd_is_ui_mode()) {
+        if (sd_format_is_active && sd_format_is_active()) {
+            if (event->type == P3A_TOUCH_EVENT_TAP_LEFT ||
+                event->type == P3A_TOUCH_EVENT_TAP_RIGHT) {
+                if (sd_format_handle_tap) {
+                    sd_format_handle_tap(event->tap.x, event->tap.y);
+                }
+            } else if (event->type == P3A_TOUCH_EVENT_LONG_PRESS) {
+                // Cancels the warning panel; deliberately a no-op during the
+                // format itself — never falls through to overlay-dismiss.
+                if (sd_format_handle_long_press) {
+                    sd_format_handle_long_press();
+                }
+            }
+            return ESP_OK;
+        }
+        if ((event->type == P3A_TOUCH_EVENT_TAP_LEFT ||
+             event->type == P3A_TOUCH_EVENT_TAP_RIGHT) &&
+            ugfx_ui_info_screen_handle_tap &&
+            ugfx_ui_info_screen_handle_tap(event->tap.x, event->tap.y)) {
+            return ESP_OK;
+        }
         if (event->type != P3A_TOUCH_EVENT_LONG_PRESS) {
             return ESP_OK;  // Silently ignore taps, brightness, rotation
         }

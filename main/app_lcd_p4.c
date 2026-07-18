@@ -24,6 +24,7 @@
 #include "display_renderer.h"
 #include "play_scheduler.h"
 #include "ugfx_ui.h"
+#include "sd_format.h"
 #include "p3a_boot_logo.h"
 #include "event_bus.h"
 #include "freertos/FreeRTOS.h"
@@ -83,15 +84,20 @@ esp_err_t app_lcd_init(void)
 
         // Re-initialize display renderer (torn down by animation_player_init cleanup)
         // and show a fatal error screen instead of crashing
+        static const char *fatal_title = "No Usable SD Card";
+        static const char *fatal_body =
+            "microSD card missing or unreadable.\nA working microSD card is required.\n\nPlease disconnect from power,\nunscrew the back plate, then insert\nor reformat a microSD card.";
         display_renderer_init(panel, buffers, buffer_count, buffer_bytes, row_stride);
         display_renderer_set_frame_callback(fatal_error_render_cb, NULL);
-        ugfx_ui_show_fatal_error(
-            "No Usable SD Card",
-            "microSD card missing or unreadable.\nA working microSD card is required.\n\nPlease disconnect from power,\nunscrew the back plate, then insert\nor reformat a microSD card.");
+        ugfx_ui_show_fatal_error(fatal_title, fatal_body);
         display_renderer_start();
 
-        ESP_LOGE(TAG, "FATAL: No usable microSD card (missing or unreadable). Display showing error screen. Main task suspended.");
-        vTaskSuspend(NULL);
+        ESP_LOGE(TAG, "FATAL: No usable microSD card (missing or unreadable). "
+                      "Display showing error screen. Entering interactive format loop.");
+        // Never returns: initializes touch itself and offers the opt-in
+        // "Format card for p3a" flow (falls back to plain suspend if touch
+        // is unavailable — the old behavior).
+        sd_format_fatal_screen_loop(fatal_title, fatal_body);
         // Unreachable
         return err;
     }
@@ -193,6 +199,14 @@ esp_err_t app_lcd_exit_ui_mode(void)
     // animation_player_exit_ui_mode() for the authoritative guard.
     if (animation_player_is_sd_export_locked()) {
         ESP_LOGD(TAG, "Exit-UI-mode ignored: microSD card exported over USB");
+        return ESP_OK;
+    }
+    // Likewise the SD-format flow is modal from the warning panel onward:
+    // background events must not dismiss it and resume SD playback while the
+    // user is deciding whether to erase the card. (During the format itself
+    // the export lock above already refuses.)
+    if (sd_format_is_active()) {
+        ESP_LOGD(TAG, "Exit-UI-mode ignored: SD format flow active");
         return ESP_OK;
     }
     if (!animation_player_is_ui_mode()) {

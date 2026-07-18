@@ -182,6 +182,19 @@ esp_err_t ugfx_ui_show_info_screen(void);
 void ugfx_ui_hide_info_screen(void);
 
 /**
+ * @brief Hit-test a tap against the info screen's "Format SD card" button
+ *
+ * Only live while the info screen is showing and the SD-health latch is
+ * tripped (the button isn't drawn otherwise). Called by the touch router
+ * via weak linkage.
+ *
+ * @param x Tap X in visual space
+ * @param y Tap Y in visual space
+ * @return true if the tap was consumed
+ */
+bool ugfx_ui_info_screen_handle_tap(uint16_t x, uint16_t y);
+
+/**
  * @brief Check if UI is currently active
  * 
  * @return gTrue if UI is active, gFalse otherwise

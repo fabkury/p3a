@@ -12,6 +12,7 @@
 #include "http_api_internal.h"
 #include "esp_heap_caps.h"
 #include "sd_path.h"
+#include "fs_atomic.h"
 #include "esp_timer.h"
 #include "animation_player.h"
 #include "play_scheduler.h"
@@ -440,19 +441,9 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
         unlink(tmp_check);
     }
     
-    // Check if file already exists, delete it if it does
-    if (stat(final_path, &st) == 0) {
-        ESP_LOGI(HTTP_API_TAG, "File %s already exists, deleting old version", filename);
-        if (unlink(final_path) != 0) {
-            ESP_LOGW(HTTP_API_TAG, "Failed to delete existing file %s: %s", final_path, strerror(errno));
-            // Continue anyway - try to overwrite with rename
-        }
-    }
-    
-    // Move file from temp location to final location
-    if (rename(temp_path, final_path) != 0) {
-        ESP_LOGE(HTTP_API_TAG, "Failed to move file: %s", strerror(errno));
-        unlink(temp_path);
+    // Move file from temp location to final location (helper unlinks any
+    // existing destination first - FATFS rename won't overwrite)
+    if (fs_atomic_rename(temp_path, final_path, NULL) != ESP_OK) {
         send_json_error(req, 500, "FILE_SAVE_FAIL", "Failed to save file");
         return ESP_OK;
     }

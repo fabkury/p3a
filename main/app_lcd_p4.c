@@ -86,11 +86,11 @@ esp_err_t app_lcd_init(void)
         display_renderer_init(panel, buffers, buffer_count, buffer_bytes, row_stride);
         display_renderer_set_frame_callback(fatal_error_render_cb, NULL);
         ugfx_ui_show_fatal_error(
-            "No Storage Detected",
-            "microSD card not detected.\nA microSD card is required.\n\nPlease disconnect from power,\nunscrew the back plate\nand insert a microSD card.");
+            "No Usable SD Card",
+            "microSD card missing or unreadable.\nA working microSD card is required.\n\nPlease disconnect from power,\nunscrew the back plate, then insert\nor reformat a microSD card.");
         display_renderer_start();
 
-        ESP_LOGE(TAG, "FATAL: No microSD card. Display showing error screen. Main task suspended.");
+        ESP_LOGE(TAG, "FATAL: No usable microSD card (missing or unreadable). Display showing error screen. Main task suspended.");
         vTaskSuspend(NULL);
         // Unreachable
         return err;

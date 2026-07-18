@@ -15,6 +15,7 @@
 
 #include "show_url.h"
 #include "sd_path.h"
+#include "fs_atomic.h"
 #include "p3a_state.h"
 #include "p3a_render.h"
 #include "play_scheduler.h"
@@ -512,9 +513,7 @@ static void show_url_task(void *arg)
         // ------------------------------------------------------------------
         // Move to final path (the helper already flushed + closed the temp)
         // ------------------------------------------------------------------
-        if (rename(temp_path, final_path) != 0) {
-            ESP_LOGE(TAG, "Failed to rename %s -> %s: %s", temp_path, final_path, strerror(errno));
-            unlink(temp_path);
+        if (fs_atomic_rename(temp_path, final_path, NULL) != ESP_OK) {
             report_failure(blocking, "Failed to save file");
             play_scheduler_resume_auto_swap();
             s_busy = false;

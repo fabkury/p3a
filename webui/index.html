@@ -822,6 +822,10 @@ body {
 <div id="pin-modal-overlay" class="pin-modal-overlay" role="dialog" aria-modal="true">
     <div class="pin-modal" id="pin-modal-content"></div>
 </div>
+<div class="cooldown-banner" id="sd-failed-banner" style="background:var(--c-danger);color:var(--c-on-danger);box-shadow:0 4px 12px color-mix(in srgb, var(--c-danger) 35%, transparent);">
+    <h4>&#9888; SD Card Failure</h4>
+    <p>The SD card is not working. Saving and downloads are disabled, playback may continue from cached files. Please power off, replace or reformat the SD card, and restart the device.</p>
+</div>
 <div class="cooldown-banner" id="giphy-cooldown-banner">
     <h4>&#9203; Giphy Rate Limited</h4>
     <p>The Giphy API key hit its limit of 100 requests per hour. Device is now waiting before refreshing Giphy channels.</p>
@@ -2950,6 +2954,11 @@ function pollActivePlayset(attempt) {
                     (resp.data.klipy_auth_invalid === true) ? 'block' : 'none';
                 document.getElementById('klipy-nokey-banner').style.display =
                     (resp.data.klipy_no_key === true) ? 'block' : 'none';
+                // SD-failure banner: the device latched an SD card failure
+                // (boot probe or repeated write failures). Structural and
+                // sticky until reboot — toggle unconditionally on the flag.
+                document.getElementById('sd-failed-banner').style.display =
+                    (resp.data.sd_card_failed === true) ? 'block' : 'none';
                 // Makapix registration banner: the active playset has non-open
                 // Makapix channels but the device has no usable registration, so
                 // they stay empty. Like the giphy auth/no-key banners, it's a

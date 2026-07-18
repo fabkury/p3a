@@ -143,7 +143,9 @@ typedef struct {
  * @param out       Output array of list entries
  * @param max       Maximum number of entries to return
  * @param out_count Output: actual number of entries populated
- * @return ESP_OK on success (even if directory doesn't exist, returns count=0)
+ * @return ESP_OK on success (a missing directory is not an error: count=0);
+ *         ESP_FAIL if the directory exists but cannot be read (e.g. failing
+ *         SD card) so callers can report an error instead of an empty list
  */
 esp_err_t playset_store_list(playset_list_entry_t *out, size_t max, size_t *out_count);
 

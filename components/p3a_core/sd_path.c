@@ -7,6 +7,7 @@
  */
 
 #include "sd_path.h"
+#include "sd_health.h"
 #include "config_store.h"
 #include "esp_log.h"
 #include <string.h>
@@ -177,10 +178,18 @@ static esp_err_t ensure_directory(const char *path)
 
     ESP_LOGI(TAG, "Creating directory: %s", path);
     if (mkdir(path, 0755) != 0) {
+        if (errno == EEXIST) {
+            return ESP_OK;  // benign race: created between stat and mkdir
+        }
         ESP_LOGE(TAG, "Failed to create directory %s: %s", path, strerror(errno));
+        // mkdir is the first write most save paths attempt, ahead of
+        // fs_atomic; report here so a failing card is detected even when the
+        // caller bails before reaching the atomic write.
+        sd_health_report_write_failure(path, errno);
         return ESP_FAIL;
     }
 
+    sd_health_report_write_ok(path);
     return ESP_OK;
 }
 
@@ -225,12 +234,19 @@ esp_err_t sd_path_ensure_parent_dirs(const char *filepath)
         if (stat(tmp, &st) != 0) {
             if (mkdir(tmp, 0755) != 0 && errno != EEXIST) {
                 ESP_LOGE(TAG, "mkdir failed: %s (%s)", tmp, strerror(errno));
+                // This mkdir runs ahead of the caller's fs_atomic write, so a
+                // failing card must be reported here too — otherwise the save
+                // bails before fs_atomic and the SD-health latch never trips.
+                sd_health_report_write_failure(tmp, errno);
                 return ESP_FAIL;
             }
         }
         *slash = '/';
         slash++;
     }
+    // Full parent chain present/created: a healthy SD write, resets the
+    // consecutive-failure counter.
+    sd_health_report_write_ok(filepath);
     return ESP_OK;
 }
 

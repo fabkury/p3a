@@ -9,6 +9,7 @@
 #include "pin_lists.h"
 #include "pin_lists_internal.h"
 #include "sd_path.h"
+#include "sd_health.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_random.h"
@@ -637,10 +638,15 @@ esp_err_t pin_lists_delete(const char *slug)
     err = pl_paths_tombstone(slug, tomb, sizeof(tomb));
     if (err != ESP_OK) { UNLOCK(); return err; }
     if (rename(dir, tomb) != 0) {
+        /* Directory rename, not a tmp-file finalize: fs_atomic doesn't apply
+           (unlink-dest-first would be wrong here), but the outcome still
+           feeds SD health tracking. */
+        sd_health_report_write_failure(dir, errno);
         ESP_LOGE(TAG, "rename %s -> %s failed: %s", dir, tomb, strerror(errno));
         UNLOCK();
         return ESP_FAIL;
     }
+    sd_health_report_write_ok(dir);
     ESP_LOGI(TAG, "deleted list %s (tombstone %s)", slug, tomb);
 
     /* If we somehow ended up with zero lists, recreate the default. The

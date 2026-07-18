@@ -29,6 +29,7 @@
 #include <string.h>
 #include <strings.h>   // strcasecmp
 #include <unistd.h>    // ftruncate, fsync, unlink
+#include <errno.h>
 
 #include "sdkconfig.h"
 #include "esp_http_client.h"
@@ -40,6 +41,8 @@
 #include "freertos/semphr.h"
 
 #include "sdio_bus.h"
+#include "fs_atomic.h"   // atomic tmp->final finalize (reports to sd_health)
+#include "sd_health.h"
 
 static const char *TAG = "http_fetch";
 
@@ -634,6 +637,7 @@ esp_err_t http_fetch_to_file(const http_fetch_request_t *req,
     FILE *f = fopen(write_path, "wb");
     if (!f) {
         ESP_LOGE(TAG, "Failed to open %s", write_path);
+        sd_health_report_write_failure(write_path, errno);
         free(chunk);
         return ESP_FAIL;
     }
@@ -659,11 +663,5 @@ esp_err_t http_fetch_to_file(const http_fetch_request_t *req,
         return ESP_OK;  // file is at out_path; caller takes it from here
     }
 
-    unlink(out_path);  // remove any stale file
-    if (rename(temp_path, out_path) != 0) {
-        ESP_LOGE(TAG, "Rename failed: %s -> %s", temp_path, out_path);
-        unlink(temp_path);
-        return ESP_FAIL;
-    }
-    return ESP_OK;
+    return fs_atomic_rename(temp_path, out_path, NULL);
 }

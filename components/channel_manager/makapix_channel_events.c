@@ -9,6 +9,7 @@
 #include "makapix_channel_events.h"
 #include "esp_log.h"
 #include "event_bus.h"
+#include "sd_health.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "play_scheduler.h"
@@ -17,6 +18,15 @@ static const char *TAG = "makapix_events";
 
 // FreeRTOS event group for MQTT state signaling
 static EventGroupHandle_t s_mqtt_event_group = NULL;
+
+// SD-health latch tripped at runtime: flip the SD gate off (sticky; the
+// guard in makapix_channel_signal_sd_available keeps it off until reboot).
+static void on_sd_health_failed(const p3a_event_t *event, void *ctx)
+{
+    (void)event;
+    (void)ctx;
+    makapix_channel_signal_sd_unavailable();
+}
 
 void makapix_channel_events_init(void)
 {
@@ -31,10 +41,23 @@ void makapix_channel_events_init(void)
         return;
     }
     
-    // Initially, MQTT and WiFi are disconnected, but SD is available
-    xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_MQTT_CONNECTED | MAKAPIX_EVENT_WIFI_CONNECTED | MAKAPIX_EVENT_SD_UNAVAILABLE);
-    xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_MQTT_DISCONNECTED | MAKAPIX_EVENT_WIFI_DISCONNECTED | MAKAPIX_EVENT_SD_AVAILABLE);
-    
+    // Initially, MQTT and WiFi are disconnected. SD starts available unless
+    // the SD-health latch already tripped (boot probe runs before this init,
+    // so a pre-init latch must be reflected in the initial bits).
+    xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_MQTT_CONNECTED | MAKAPIX_EVENT_WIFI_CONNECTED);
+    xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_MQTT_DISCONNECTED | MAKAPIX_EVENT_WIFI_DISCONNECTED);
+    if (sd_health_is_failed()) {
+        ESP_LOGW(TAG, "SD health latched failed at init - downloads disabled");
+        xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_AVAILABLE);
+        xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_UNAVAILABLE);
+    } else {
+        xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_UNAVAILABLE);
+        xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_AVAILABLE);
+    }
+
+    // Runtime SD-failure latch: flip the gate as soon as sd_health trips
+    event_bus_subscribe(P3A_EVENT_SD_HEALTH_FAILED, on_sd_health_failed, NULL);
+
     ESP_LOGD(TAG, "Event signaling initialized (MQTT + WiFi + SD)");
 }
 
@@ -277,7 +300,16 @@ void makapix_channel_signal_sd_available(void)
         ESP_LOGW(TAG, "Event group not initialized");
         return;
     }
-    
+
+    // A latched SD failure is sticky until reboot: never re-enable the gate
+    // (e.g. USB-MSC unexport must not resume writes to a dead card).
+    if (sd_health_is_failed()) {
+        ESP_LOGW(TAG, "SD health latched failed - refusing to signal SD available");
+        xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_AVAILABLE);
+        xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_UNAVAILABLE);
+        return;
+    }
+
     ESP_LOGD(TAG, "Signaling SD card available - waking download tasks");
     xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_UNAVAILABLE);
     xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_AVAILABLE);
@@ -295,7 +327,7 @@ void makapix_channel_signal_sd_unavailable(void)
         return;
     }
     
-    ESP_LOGD(TAG, "Signaling SD card unavailable (USB export) - pausing downloads");
+    ESP_LOGD(TAG, "Signaling SD card unavailable (USB export or SD failure) - pausing downloads");
     xEventGroupClearBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_AVAILABLE);
     xEventGroupSetBits(s_mqtt_event_group, MAKAPIX_EVENT_SD_UNAVAILABLE);
 }

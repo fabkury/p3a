@@ -32,6 +32,7 @@
 #include "storage_eviction.h"
 #include "play_scheduler.h"
 #include "sd_path.h"
+#include "sd_health.h"
 #include "sntp_sync.h"
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
@@ -250,6 +251,13 @@ static void evict_old_files(time_t cutoff, evict_stats_t *stats)
 
 esp_err_t storage_eviction_check_and_run(void)
 {
+    /* Guard: never delete files on a card whose SD-failure latch tripped -
+       the FAT may be corrupt and eviction would only make things worse. */
+    if (sd_health_is_failed()) {
+        ESP_LOGD(TAG, "SD failure latched, skipping eviction");
+        return ESP_ERR_INVALID_STATE;
+    }
+
     /* Guard: require SNTP synchronisation for reliable mtime comparisons */
     if (!sntp_sync_is_synchronized()) {
         ESP_LOGD(TAG, "SNTP not synced, skipping eviction");

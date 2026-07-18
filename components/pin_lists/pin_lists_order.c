@@ -12,6 +12,7 @@
 
 #include "pin_lists_internal.h"
 #include "sd_path.h"
+#include "fs_atomic.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include <errno.h>
@@ -166,6 +167,28 @@ esp_err_t pl_order_read_all(const char *slug, pinned_order_entry_t **out_entries
     return ESP_OK;
 }
 
+typedef struct {
+    const pinned_order_header_t *hdr;
+    const pinned_order_entry_t *entries;
+    size_t n;
+} order_save_ctx_t;
+
+static esp_err_t order_save_writer(FILE *f, void *arg)
+{
+    const order_save_ctx_t *ctx = (const order_save_ctx_t *)arg;
+
+    if (fwrite(ctx->hdr, 1, sizeof(*ctx->hdr), f) != sizeof(*ctx->hdr)) {
+        ESP_LOGE(TAG, "write header failed");
+        return ESP_FAIL;
+    }
+    if (ctx->n > 0 &&
+        fwrite(ctx->entries, 1, ctx->n * ENTRY_SIZE, f) != ctx->n * ENTRY_SIZE) {
+        ESP_LOGE(TAG, "write entries failed");
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
 esp_err_t pl_order_replace(const char *slug, const pinned_order_entry_t *entries, size_t n)
 {
     if (n > PIN_LIST_MAX_ENTRIES) return ESP_ERR_INVALID_SIZE;
@@ -177,11 +200,6 @@ esp_err_t pl_order_replace(const char *slug, const pinned_order_entry_t *entries
     err = sd_path_ensure_parent_dirs(path);
     if (err != ESP_OK) return err;
 
-    char tmp[264];
-    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
-    char bak[264];
-    snprintf(bak, sizeof(bak), "%s.bak", path);
-
     pinned_order_header_t hdr = {
         .magic = PINNED_ORDER_MAGIC,
         .version = PINNED_FORMAT_VERSION,
@@ -189,35 +207,9 @@ esp_err_t pl_order_replace(const char *slug, const pinned_order_entry_t *entries
         .crc32 = (n > 0) ? pl_crc32((const uint8_t *)entries, n * ENTRY_SIZE) : 0,
     };
 
-    FILE *f = fopen(tmp, "wb");
-    if (!f) {
-        ESP_LOGE(TAG, "open %s: %s", tmp, strerror(errno));
-        return ESP_FAIL;
-    }
-    bool ok = (fwrite(&hdr, 1, sizeof(hdr), f) == sizeof(hdr));
-    if (ok && n > 0) {
-        ok = (fwrite(entries, 1, n * ENTRY_SIZE, f) == n * ENTRY_SIZE);
-    }
-    fflush(f);
-    fsync(fileno(f));
-    fclose(f);
-    if (!ok) {
-        ESP_LOGE(TAG, "write %s failed", tmp);
-        unlink(tmp);
-        return ESP_FAIL;
-    }
-
-    struct stat st;
-    if (stat(path, &st) == 0) {
-        unlink(bak);
-        if (rename(path, bak) != 0) {
-            ESP_LOGW(TAG, "rotate %s->%s failed: %s", path, bak, strerror(errno));
-        }
-    }
-    if (rename(tmp, path) != 0) {
-        ESP_LOGE(TAG, "rename %s->%s: %s", tmp, path, strerror(errno));
-        unlink(tmp);
-        return ESP_FAIL;
-    }
-    return ESP_OK;
+    /* Atomic write with .bak rotation (previous order restored if the final
+       rename fails). */
+    order_save_ctx_t ctx = { .hdr = &hdr, .entries = entries, .n = n };
+    fs_atomic_opts_t opts = { .use_bak = true };
+    return fs_atomic_write_cb(path, order_save_writer, &ctx, &opts);
 }

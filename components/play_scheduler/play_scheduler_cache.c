@@ -14,6 +14,7 @@
 #include "makapix_channel_impl.h"
 #include "config_store.h"
 #include "sd_path.h"
+#include "fs_atomic.h"
 #include "sntp_sync.h"
 #include "esp_log.h"
 
@@ -198,39 +199,13 @@ esp_err_t ps_build_sdcard_index(void)
         }
     }
 
-    // Atomic write: write to temp file, then rename
-    char temp_path[164];
-    snprintf(temp_path, sizeof(temp_path), "%s.tmp", index_path);
-
-    FILE *f = fopen(temp_path, "wb");
-    if (!f) {
-        ESP_LOGE(TAG, "Failed to open temp file: %s (errno=%d)", temp_path, errno);
-        free(entries);
-        return ESP_FAIL;
-    }
-
-    size_t written = fwrite(entries, sizeof(sdcard_index_entry_t), idx, f);
-    fflush(f);
-    fsync(fileno(f));
-    fclose(f);
+    // Atomic write (tmp + fsync + rename) via the shared helper
+    esp_err_t werr = fs_atomic_write(index_path, entries,
+                                     idx * sizeof(sdcard_index_entry_t), NULL);
     free(entries);
-
-    if (written != idx) {
-        ESP_LOGE(TAG, "Failed to write entries: %zu/%zu", written, idx);
-        unlink(temp_path);
-        return ESP_FAIL;
-    }
-
-    // FATFS doesn't overwrite on rename, so unlink first
-    if (unlink(index_path) != 0 && errno != ENOENT) {
-        ESP_LOGW(TAG, "Failed to unlink old index: %s", index_path);
-    }
-
-    if (rename(temp_path, index_path) != 0) {
-        int e = errno;
-        ESP_LOGE(TAG, "Failed to rename temp to index: errno=%d", e);
-        unlink(temp_path);
-        return ESP_FAIL;
+    if (werr != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to write SD card index: %s", esp_err_to_name(werr));
+        return werr;
     }
 
     ESP_LOGI(TAG, "SD card index built: %zu entries", idx);

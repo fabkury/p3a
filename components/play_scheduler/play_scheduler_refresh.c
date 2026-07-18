@@ -372,6 +372,14 @@ static bool refresh_channel_is_eligible(ps_channel_state_t *ch, bool mqtt_ready)
         return false;
     }
 
+    // SD unavailable (USB export, or SD-failure latch): a refresh could not
+    // persist its cache or download artwork anyway, so skip the network
+    // round-trips entirely. Pending stays set; channels become eligible again
+    // when the gate reopens (export ends) or after reboot (failure latch).
+    if (!makapix_channel_is_sd_available()) {
+        return false;
+    }
+
     // Pinned channels are fully loaded from local NVS at playset-load time and
     // have no remote source. Drop refresh_pending so they don't sit forever in
     // the queue (especially relevant when MQTT is down, which would otherwise

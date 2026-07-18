@@ -3619,7 +3619,7 @@ CONFIG_BSP_I2S_NUM=1
 #
 # uSD card - Virtual File System
 #
-CONFIG_BSP_SD_FORMAT_ON_MOUNT_FAIL=y
+# CONFIG_BSP_SD_FORMAT_ON_MOUNT_FAIL is not set
 CONFIG_BSP_SD_MOUNT_POINT="/sdcard"
 # end of uSD card - Virtual File System
 

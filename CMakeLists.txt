@@ -11,7 +11,7 @@ cmake_minimum_required(VERSION 3.16)
 # - Increment MINOR for new features (backward compatible)
 # - Increment PATCH for bug fixes
 # For testing OTA, use pre-release versions on GitHub
-set(PROJECT_VER "1.1.0")
+set(PROJECT_VER "1.1.1")
 # =============================================================================
 
 # =============================================================================
@@ -19,7 +19,7 @@ set(PROJECT_VER "1.1.0")
 # =============================================================================
 # Web UI version uses X.Y format (not X.Y.Z). Updates are independent of
 # firmware updates and are checked/installed automatically during OTA checks.
-set(WEBUI_VERSION "2.15")
+set(WEBUI_VERSION "2.16")
 # =============================================================================
 
 # =============================================================================

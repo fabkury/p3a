@@ -35,6 +35,8 @@ idf_component_register(
         "intro_anims/ia_swirl_in.c"
         "intro_anims/ia_channel_merge.c"
         "sd_path.c"
+        "sd_health.c"
+        "fs_atomic.c"
         "fresh_boot.c"
     INCLUDE_DIRS
         "include"

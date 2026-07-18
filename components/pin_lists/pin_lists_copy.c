@@ -8,6 +8,7 @@
 
 #include "pin_lists_internal.h"
 #include "sd_path.h"
+#include "fs_atomic.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include <errno.h>
@@ -20,6 +21,33 @@
 static const char *TAG = "pl_copy";
 
 #define COPY_CHUNK_SIZE  (32 * 1024)
+
+typedef struct {
+    FILE *src;
+    const char *src_path;
+    uint8_t *chunk;
+    size_t total;
+} copy_writer_ctx_t;
+
+static esp_err_t copy_writer(FILE *dst, void *arg)
+{
+    copy_writer_ctx_t *ctx = (copy_writer_ctx_t *)arg;
+
+    while (true) {
+        size_t got = fread(ctx->chunk, 1, COPY_CHUNK_SIZE, ctx->src);
+        if (got == 0) break;
+        if (fwrite(ctx->chunk, 1, got, dst) != got) {
+            ESP_LOGE(TAG, "write short while copying %s", ctx->src_path);
+            return ESP_FAIL;
+        }
+        ctx->total += got;
+    }
+    if (ferror(ctx->src)) {
+        ESP_LOGE(TAG, "read %s error", ctx->src_path);
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
 
 esp_err_t pl_artwork_copy(const char *src_path, const char *dest_path)
 {
@@ -36,57 +64,23 @@ esp_err_t pl_artwork_copy(const char *src_path, const char *dest_path)
         return ESP_ERR_NOT_FOUND;
     }
 
-    char tmp[264];
-    snprintf(tmp, sizeof(tmp), "%s.tmp", dest_path);
-    FILE *dst = fopen(tmp, "wb");
-    if (!dst) {
-        ESP_LOGE(TAG, "open tmp %s: %s", tmp, strerror(errno));
-        fclose(src);
-        return ESP_FAIL;
-    }
-
     uint8_t *chunk = heap_caps_malloc(COPY_CHUNK_SIZE, MALLOC_CAP_SPIRAM);
     if (!chunk) chunk = malloc(COPY_CHUNK_SIZE);
     if (!chunk) {
         fclose(src);
-        fclose(dst);
-        unlink(tmp);
         return ESP_ERR_NO_MEM;
     }
 
-    bool ok = true;
-    size_t total = 0;
-    while (ok) {
-        size_t got = fread(chunk, 1, COPY_CHUNK_SIZE, src);
-        if (got == 0) break;
-        if (fwrite(chunk, 1, got, dst) != got) {
-            ESP_LOGE(TAG, "write %s short", tmp);
-            ok = false;
-            break;
-        }
-        total += got;
-    }
-    if (ferror(src)) {
-        ESP_LOGE(TAG, "read %s error", src_path);
-        ok = false;
-    }
+    /* Atomic copy via the shared helper (tmp + fsync + rename) */
+    copy_writer_ctx_t ctx = { .src = src, .src_path = src_path,
+                              .chunk = chunk, .total = 0 };
+    err = fs_atomic_write_cb(dest_path, copy_writer, &ctx, NULL);
     free(chunk);
     fclose(src);
-    fflush(dst);
-    fsync(fileno(dst));
-    fclose(dst);
 
-    if (!ok) {
-        unlink(tmp);
-        return ESP_FAIL;
+    if (err != ESP_OK) {
+        return err;
     }
-
-    unlink(dest_path);  /* in case a stale file exists */
-    if (rename(tmp, dest_path) != 0) {
-        ESP_LOGE(TAG, "rename %s -> %s: %s", tmp, dest_path, strerror(errno));
-        unlink(tmp);
-        return ESP_FAIL;
-    }
-    ESP_LOGD(TAG, "copied %s -> %s (%zu bytes)", src_path, dest_path, total);
+    ESP_LOGD(TAG, "copied %s -> %s (%zu bytes)", src_path, dest_path, ctx.total);
     return ESP_OK;
 }

@@ -100,6 +100,7 @@ typedef enum {
     P3A_CHANNEL_MSG_EMPTY,          ///< "Channel empty"
     P3A_CHANNEL_MSG_LOADING,        ///< "Loading channel..."
     P3A_CHANNEL_MSG_ERROR,          ///< "Failed to load channel"
+    P3A_CHANNEL_MSG_SD_FAILED,      ///< "SD card error" (sd_health latch)
 } p3a_channel_msg_type_t;
 
 /**

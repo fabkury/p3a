@@ -12,6 +12,7 @@
 
 #include "playset_store.h"
 #include "sd_path.h"
+#include "fs_atomic.h"
 #include "esp_log.h"
 #include "esp_rom_crc.h"
 #include <stdio.h>
@@ -59,18 +60,6 @@ static esp_err_t build_path(const char *name, char *out_path, size_t path_len)
     return ESP_OK;
 }
 
-static esp_err_t build_tmp_path(const char *name, char *out_path, size_t path_len)
-{
-    char dir[128];
-    esp_err_t err = get_playset_dir(dir, sizeof(dir));
-    if (err != ESP_OK) return err;
-
-    int written = snprintf(out_path, path_len, "%s/ps_%08lx.playset.tmp",
-                           dir, (unsigned long)djb2_hash(name));
-    if (written < 0 || (size_t)written >= path_len) return ESP_ERR_INVALID_SIZE;
-    return ESP_OK;
-}
-
 static uint32_t calculate_checksum(const playset_header_t *header,
                                     const playset_channel_entry_t *entries,
                                     size_t entry_count)
@@ -88,6 +77,28 @@ static uint32_t calculate_checksum(const playset_header_t *header,
     return crc;
 }
 
+typedef struct {
+    const playset_header_t *header;
+    const playset_channel_entry_t *entries;
+    size_t channel_count;
+} playset_save_ctx_t;
+
+static esp_err_t playset_save_writer(FILE *f, void *arg)
+{
+    const playset_save_ctx_t *ctx = (const playset_save_ctx_t *)arg;
+
+    if (fwrite(ctx->header, sizeof(*ctx->header), 1, f) != 1) {
+        ESP_LOGE(TAG, "Failed to write header");
+        return ESP_FAIL;
+    }
+    if (fwrite(ctx->entries, sizeof(playset_channel_entry_t), ctx->channel_count, f)
+            != ctx->channel_count) {
+        ESP_LOGE(TAG, "Failed to write entries");
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
 esp_err_t playset_store_save(const char *name, const ps_playset_t *playset)
 {
     if (!name || !playset || strlen(name) == 0 || strlen(name) > PLAYSET_MAX_NAME_LEN) {
@@ -100,11 +111,7 @@ esp_err_t playset_store_save(const char *name, const ps_playset_t *playset)
     }
 
     char path[128];
-    char tmp_path[128];
     esp_err_t err = build_path(name, path, sizeof(path));
-    if (err == ESP_OK) {
-        err = build_tmp_path(name, tmp_path, sizeof(tmp_path));
-    }
     if (err != ESP_OK) {
         return err;
     }
@@ -145,43 +152,13 @@ esp_err_t playset_store_save(const char *name, const ps_playset_t *playset)
 
     header.checksum = calculate_checksum(&header, entries, playset->channel_count);
 
-    FILE *f = fopen(tmp_path, "wb");
-    if (!f) {
-        ESP_LOGE(TAG, "Failed to open %s for writing: %s", tmp_path, strerror(errno));
-        free(entries);
-        return ESP_FAIL;
-    }
-
-    bool write_ok = true;
-
-    if (fwrite(&header, sizeof(header), 1, f) != 1) {
-        ESP_LOGE(TAG, "Failed to write header");
-        write_ok = false;
-    }
-
-    if (write_ok && fwrite(entries, sizeof(playset_channel_entry_t), playset->channel_count, f) != playset->channel_count) {
-        ESP_LOGE(TAG, "Failed to write entries");
-        write_ok = false;
-    }
-
-    if (write_ok) {
-        fflush(f);
-        fsync(fileno(f));
-    }
-
-    fclose(f);
+    playset_save_ctx_t ctx = { .header = &header, .entries = entries,
+                               .channel_count = playset->channel_count };
+    err = fs_atomic_write_cb(path, playset_save_writer, &ctx, NULL);
     free(entries);
-
-    if (!write_ok) {
-        unlink(tmp_path);
-        return ESP_FAIL;
-    }
-
-    unlink(path);
-    if (rename(tmp_path, path) != 0) {
-        ESP_LOGE(TAG, "Failed to rename %s to %s: %s", tmp_path, path, strerror(errno));
-        unlink(tmp_path);
-        return ESP_FAIL;
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save playset '%s': %s", name, esp_err_to_name(err));
+        return err;
     }
 
     ESP_LOGI(TAG, "Saved playset '%s' with %zu channels", name, playset->channel_count);
@@ -209,33 +186,37 @@ esp_err_t playset_store_load(const char *name, ps_playset_t *out_playset)
         return ESP_FAIL;
     }
 
+    // NOTE on load failures: the file is deliberately NEVER deleted here.
+    // A read failure can come from a dying SD card returning garbage for a
+    // perfectly healthy file - auto-deleting would permanently destroy user
+    // data on a false positive. A stale/corrupt file is harmlessly replaced
+    // by the next successful (atomic) save; explicit deletion goes through
+    // playset_store_delete().
     playset_header_t header;
     if (fread(&header, sizeof(header), 1, f) != 1) {
-        ESP_LOGE(TAG, "Failed to read header");
+        ESP_LOGE(TAG, "Failed to read header of %s - keeping file", path);
         fclose(f);
         return ESP_FAIL;
     }
 
     if (header.magic != PLAYSET_MAGIC) {
-        ESP_LOGE(TAG, "Invalid magic: 0x%08lX (expected 0x%08X)",
-                 (unsigned long)header.magic, PLAYSET_MAGIC);
+        ESP_LOGE(TAG, "Invalid magic 0x%08lX (expected 0x%08X) in %s - keeping file",
+                 (unsigned long)header.magic, PLAYSET_MAGIC, path);
         fclose(f);
-        unlink(path);
         return ESP_ERR_INVALID_CRC;
     }
 
     if (header.version != PLAYSET_VERSION) {
-        ESP_LOGW(TAG, "Version mismatch: %u (expected %u), deleting file",
-                 header.version, PLAYSET_VERSION);
+        ESP_LOGE(TAG, "Version mismatch %u (expected %u) in %s - keeping file",
+                 header.version, PLAYSET_VERSION, path);
         fclose(f);
-        unlink(path);
         return ESP_ERR_INVALID_VERSION;
     }
 
     if (header.channel_count == 0 || header.channel_count > PS_MAX_CHANNELS) {
-        ESP_LOGE(TAG, "Invalid channel count: %u", header.channel_count);
+        ESP_LOGE(TAG, "Invalid channel count %u in %s - keeping file",
+                 header.channel_count, path);
         fclose(f);
-        unlink(path);
         return ESP_ERR_INVALID_CRC;
     }
 
@@ -266,10 +247,9 @@ esp_err_t playset_store_load(const char *name, ps_playset_t *out_playset)
     uint32_t expected_crc = header.checksum;
     uint32_t actual_crc = calculate_checksum(&header, entries, header.channel_count);
     if (actual_crc != expected_crc) {
-        ESP_LOGE(TAG, "CRC mismatch: 0x%08lX (expected 0x%08lX)",
-                 (unsigned long)actual_crc, (unsigned long)expected_crc);
+        ESP_LOGE(TAG, "CRC mismatch 0x%08lX (expected 0x%08lX) in %s - keeping file",
+                 (unsigned long)actual_crc, (unsigned long)expected_crc, path);
         free(entries);
-        unlink(path);
         return ESP_ERR_INVALID_CRC;
     }
 
@@ -344,7 +324,13 @@ esp_err_t playset_store_list(playset_list_entry_t *out, size_t max, size_t *out_
 
     DIR *dir = opendir(dir_path);
     if (!dir) {
-        return ESP_OK;
+        if (errno == ENOENT) {
+            return ESP_OK;  // no playsets directory yet - genuinely empty
+        }
+        // A failing SD card must not masquerade as "no playsets": propagate
+        // so callers can report an error instead of an empty list.
+        ESP_LOGE(TAG, "Failed to open %s: %s", dir_path, strerror(errno));
+        return ESP_FAIL;
     }
 
     struct dirent *ent;
@@ -378,8 +364,9 @@ esp_err_t playset_store_list(playset_list_entry_t *out, size_t max, size_t *out_
         fclose(f);
 
         if (header.magic != PLAYSET_MAGIC || header.version != PLAYSET_VERSION) {
-            // Old format or corrupt -- delete silently
-            unlink(fpath);
+            // Old format or corrupt -- skip, but never auto-delete: a dying
+            // SD card can garble reads of a healthy file.
+            ESP_LOGW(TAG, "Skipping unreadable playset file %s", fpath);
             continue;
         }
 

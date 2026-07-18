@@ -9,6 +9,7 @@
 #include "p3a_render.h"
 #include "p3a_state.h"
 #include "p3a_boot_logo.h"
+#include "sd_health.h"
 #include "p3a_board.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -86,6 +87,7 @@ static const char *channel_msg_type_to_string(p3a_channel_msg_type_t type)
         case P3A_CHANNEL_MSG_EMPTY: return "Channel empty";
         case P3A_CHANNEL_MSG_LOADING: return "Loading channel";
         case P3A_CHANNEL_MSG_ERROR: return "Failed to load channel";
+        case P3A_CHANNEL_MSG_SD_FAILED: return "SD card error";
         default: return "Unknown";
     }
 }
@@ -101,6 +103,8 @@ static const char *channel_msg_type_to_string(p3a_channel_msg_type_t type)
 static int channel_msg_priority(p3a_channel_msg_type_t type)
 {
     switch (type) {
+        case P3A_CHANNEL_MSG_SD_FAILED:
+            return 3;   // hardware failure outranks everything (shown once/boot)
         case P3A_CHANNEL_MSG_ERROR:
         case P3A_CHANNEL_MSG_DOWNLOAD_FAILED:
         case P3A_CHANNEL_MSG_EMPTY:
@@ -156,6 +160,20 @@ esp_err_t p3a_render_frame(uint8_t *buffer, size_t stride, p3a_render_result_t *
     
     switch (state) {
         case P3A_STATE_ANIMATION_PLAYBACK: {
+            // SD-failure latch pending its one-shot notice? Pull model: the
+            // flag is consumed here (not pushed at latch time) so a latch
+            // that trips before playback rendering starts - e.g. the boot
+            // probe - still gets its overlay once playback is live. The
+            // sd_health flag is set exactly once per boot, and the 20s TTL
+            // lets cached playback resume afterwards (the web UI banner is
+            // the persistent surface).
+            if (sd_health_take_pending_overlay()) {
+                p3a_render_set_channel_message_ttl("SD card", P3A_CHANNEL_MSG_SD_FAILED, -1,
+                                                   "SD card is not working.\n"
+                                                   "Saving and downloads are disabled.\n"
+                                                   "Power off, replace the SD card, then boot again.",
+                                                   20000);
+            }
             // Auto-dismiss an expired channel message (e.g. the 429 rate-limit
             // notice's 20s cap) before deciding what to render, so this very
             // frame reverts to animation playback instead of waiting for the

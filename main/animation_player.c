@@ -9,6 +9,7 @@
 #include "animation_player_priv.h"
 #include "esp_heap_caps.h"
 #include "sd_path.h"
+#include "sd_health.h"
 #include "play_scheduler.h"
 #include "active_playset_store.h"
 #include "psram_alloc.h"
@@ -122,6 +123,7 @@ static esp_err_t mount_sd_and_discover(char **animations_dir_out)
         esp_err_t sd_err = bsp_sdcard_mount();
         if (sd_err != ESP_OK) {
             ESP_LOGE(TAG, "Failed to mount SD card: %s", esp_err_to_name(sd_err));
+            sd_health_report_mount_failed();
             return sd_err;
         }
         s_sd_mounted = true;
@@ -141,6 +143,14 @@ static esp_err_t mount_sd_and_discover(char **animations_dir_out)
     if (dir_err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to create some SD directories: %s", esp_err_to_name(dir_err));
         // Continue anyway - directories might already exist or be read-only
+    }
+
+    // Active SD self-test: a failing card latches the SD-failure state
+    // (writes/downloads disabled) but boot CONTINUES - reads typically still
+    // work on a corrupted FAT, so cached animations remain playable.
+    sd_health_init();
+    if (sd_health_boot_probe() != ESP_OK) {
+        ESP_LOGE(TAG, "SD card failed boot probe - continuing in read-only degraded mode");
     }
 
     // Get the animations directory path

@@ -8,6 +8,7 @@
 
 #include "pin_lists_internal.h"
 #include "sd_path.h"
+#include "fs_atomic.h"
 #include "cJSON.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -131,41 +132,11 @@ esp_err_t pl_manifest_save(const char *slug, const pl_manifest_t *m)
     char *str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     if (!str) return ESP_ERR_NO_MEM;
-    size_t len = strlen(str);
 
-    char tmp[228];
-    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
-    char bak[228];
-    snprintf(bak, sizeof(bak), "%s.bak", path);
-
-    FILE *f = fopen(tmp, "wb");
-    if (!f) {
-        ESP_LOGE(TAG, "open %s: %s", tmp, strerror(errno));
-        free(str);
-        return ESP_FAIL;
-    }
-    bool ok = (fwrite(str, 1, len, f) == len);
-    fflush(f);
-    fsync(fileno(f));
-    fclose(f);
+    /* Atomic write with .bak rotation (previous manifest restored if the
+       final rename fails). */
+    fs_atomic_opts_t opts = { .use_bak = true };
+    err = fs_atomic_write(path, str, strlen(str), &opts);
     free(str);
-    if (!ok) {
-        ESP_LOGE(TAG, "write %s failed", tmp);
-        unlink(tmp);
-        return ESP_FAIL;
-    }
-
-    struct stat st;
-    if (stat(path, &st) == 0) {
-        unlink(bak);
-        if (rename(path, bak) != 0) {
-            ESP_LOGW(TAG, "rotate %s->%s failed: %s", path, bak, strerror(errno));
-        }
-    }
-    if (rename(tmp, path) != 0) {
-        ESP_LOGE(TAG, "rename %s->%s: %s", tmp, path, strerror(errno));
-        unlink(tmp);
-        return ESP_FAIL;
-    }
-    return ESP_OK;
+    return err;
 }

@@ -15,6 +15,8 @@
 #include "makapix_channel_internal.h"
 #include "makapix_channel_utils.h"
 #include "playlist_manager.h"
+#include "fs_atomic.h"
+#include "sd_health.h"
 #include "play_scheduler_types.h"   // PS_MAX_CHANNELS, ps_channel_type_t, PS_CHANNEL_TYPE_GIPHY
 #include "play_scheduler.h"        // ps_get_display_name()
 #include "giphy.h"                  // giphy_build_filepath() for trim-on-load dispatch
@@ -578,18 +580,20 @@ esp_err_t channel_cache_save(const channel_cache_t *cache, const char *channels_
     // Ensure channels directory exists
     struct stat st;
     if (stat(channels_path, &st) != 0) {
-        if (mkdir(channels_path, 0755) != 0) {
+        if (mkdir(channels_path, 0755) != 0 && errno != EEXIST) {
             ESP_LOGE(TAG, "Failed to create channels directory: %s (errno=%d)", channels_path, errno);
+            // Report here too: this mkdir runs ahead of the fs_atomic write, so
+            // on a failing card the save would otherwise bail before fs_atomic
+            // and the SD-health latch would never see it.
+            sd_health_report_write_failure(channels_path, errno);
             return ESP_FAIL;
         }
         ESP_LOGI(TAG, "Created channels directory: %s", channels_path);
     }
 
-    // Build paths
+    // Build path
     char path[256];
-    char temp_path[260];
     channel_cache_build_path(cache->channel_id, channels_path, path, sizeof(path));
-    snprintf(temp_path, sizeof(temp_path), "%s.tmp", path);
 
     // Calculate sizes (LAi now stores int32_t post_ids)
     size_t ci_size = cache->entry_count * sizeof(makapix_channel_entry_t);
@@ -631,46 +635,12 @@ esp_err_t channel_cache_save(const channel_cache_t *cache, const char *channels_
     header->checksum = 0;
     header->checksum = channel_cache_crc32(buffer, total_size);
 
-    // Clean up any orphan temp file from previous interrupted save
-    unlink(temp_path);
-
-    // Write to temp file
-    FILE *f = fopen(temp_path, "wb");
-    if (!f) {
-        ESP_LOGE(TAG, "Failed to create temp file: %s (errno=%d)", temp_path, errno);
-        free(buffer);
-        return ESP_FAIL;
-    }
-
-    size_t written = fwrite(buffer, 1, total_size, f);
+    // Atomic write (tmp + fsync + rename) via the shared helper
+    esp_err_t err = fs_atomic_write(path, buffer, total_size, NULL);
     free(buffer);
-
-    if (written != total_size) {
-        ESP_LOGE(TAG, "Write failed: %zu/%zu bytes", written, total_size);
-        fclose(f);
-        unlink(temp_path);
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    // Sync to disk
-    fflush(f);
-    fsync(fileno(f));
-    fclose(f);
-
-    // On FAT filesystems (SD card), rename() fails if destination exists.
-    // Delete the destination first, then rename.
-    if (stat(path, &st) == 0) {
-        if (unlink(path) != 0) {
-            ESP_LOGW(TAG, "Failed to remove old cache file: %s (errno=%d)", path, errno);
-            // Continue anyway - rename might still work on some filesystems
-        }
-    }
-
-    // Atomic rename (after deleting destination on FAT)
-    if (rename(temp_path, path) != 0) {
-        ESP_LOGE(TAG, "Rename failed: %s -> %s (errno=%d)", temp_path, path, errno);
-        unlink(temp_path);
-        return ESP_FAIL;
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save cache '%s': %s", cache->channel_id, esp_err_to_name(err));
+        return err;
     }
 
     ESP_LOGI(TAG, "Saved cache '%s': %zu entries, %zu available",

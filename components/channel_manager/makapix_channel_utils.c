@@ -11,6 +11,7 @@
 #include "makapix_channel_utils.h"
 #include "channel_cache.h"
 #include "sd_path.h"
+#include "fs_atomic.h"
 #include "esp_log.h"
 #include "mbedtls/sha256.h"
 #include <stdlib.h>
@@ -71,8 +72,8 @@ void makapix_cache_recover_and_cleanup(const char *cache_path)
     if (!have_cache) {
         // Cache missing but temp exists and looks valid -> promote temp.
         ESP_LOGW(TAG, "Recovering missing channel cache from temp: %s -> %s", tmp_path, cache_path);
-        if (rename(tmp_path, cache_path) != 0) {
-            ESP_LOGE(TAG, "Failed to recover cache from temp: errno=%d (%s)", errno, strerror(errno));
+        if (fs_atomic_rename(tmp_path, cache_path, NULL) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to recover cache from temp");
         }
         return;
     }
@@ -81,9 +82,8 @@ void makapix_cache_recover_and_cleanup(const char *cache_path)
     if (!cache_valid || st_tmp.st_mtime >= st_cache.st_mtime) {
         ESP_LOGW(TAG, "Promoting cache temp over existing channel cache (cache_valid=%d): %s -> %s",
                  (int)cache_valid, tmp_path, cache_path);
-        (void)unlink(cache_path); // required on FATFS: rename() won't overwrite
-        if (rename(tmp_path, cache_path) != 0) {
-            ESP_LOGE(TAG, "Failed to promote cache temp: errno=%d (%s)", errno, strerror(errno));
+        if (fs_atomic_rename(tmp_path, cache_path, NULL) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to promote cache temp");
         }
         return;
     }

@@ -8,6 +8,7 @@
 
 #include "pin_lists_internal.h"
 #include "sd_path.h"
+#include "fs_atomic.h"
 #include "esp_log.h"
 #include <errno.h>
 #include <stdio.h>
@@ -87,38 +88,8 @@ esp_err_t pl_state_save(const pinned_state_t *state)
     memset(out.reserved, 0, sizeof(out.reserved));
     out.crc32 = pl_crc32((const uint8_t *)&out, CRC_PAYLOAD_BYTES);
 
-    char tmp[208];
-    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
-    char bak[208];
-    snprintf(bak, sizeof(bak), "%s.bak", path);
-
-    FILE *f = fopen(tmp, "wb");
-    if (!f) {
-        ESP_LOGE(TAG, "open %s: %s", tmp, strerror(errno));
-        return ESP_FAIL;
-    }
-    if (fwrite(&out, 1, sizeof(out), f) != sizeof(out)) {
-        ESP_LOGE(TAG, "write %s failed", tmp);
-        fclose(f);
-        unlink(tmp);
-        return ESP_FAIL;
-    }
-    fflush(f);
-    fsync(fileno(f));
-    fclose(f);
-
-    /* Rotate prior primary to .bak (best-effort; ignore if no primary yet). */
-    struct stat st;
-    if (stat(path, &st) == 0) {
-        unlink(bak);
-        if (rename(path, bak) != 0) {
-            ESP_LOGW(TAG, "rotate %s->%s failed: %s", path, bak, strerror(errno));
-        }
-    }
-    if (rename(tmp, path) != 0) {
-        ESP_LOGE(TAG, "rename %s->%s: %s", tmp, path, strerror(errno));
-        unlink(tmp);
-        return ESP_FAIL;
-    }
-    return ESP_OK;
+    /* Atomic write with .bak rotation (previous state restored if the final
+       rename fails). */
+    fs_atomic_opts_t opts = { .use_bak = true };
+    return fs_atomic_write(path, &out, sizeof(out), &opts);
 }

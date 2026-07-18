@@ -10,6 +10,7 @@
  */
 
 #include "channel_metadata.h"
+#include "fs_atomic.h"
 #include "psram_alloc.h"
 #include "cJSON.h"
 #include "esp_log.h"
@@ -46,74 +47,12 @@ esp_err_t channel_metadata_save(const char *channel_id,
     cJSON_Delete(root);
     if (!json_str) return ESP_ERR_NO_MEM;
 
-    // Atomic write: write to temp file, then rename
-    char temp_path[260];
-    size_t path_len = strlen(meta_path);
-    if (path_len + 4 >= sizeof(temp_path)) {
-        ESP_LOGE(TAG, "Meta path too long for temp file");
-        free(json_str);
-        return ESP_ERR_INVALID_ARG;
-    }
-    snprintf(temp_path, sizeof(temp_path), "%s.tmp", meta_path);
-
-    // Clean up any orphan temp file from previous interrupted save
-    unlink(temp_path);
-
-    FILE *f = fopen(temp_path, "w");
-    if (!f) {
-        ESP_LOGE(TAG, "Failed to create temp file: %s (errno=%d)", temp_path, errno);
-        free(json_str);
-        return ESP_FAIL;
-    }
-
-    fprintf(f, "%s", json_str);
-    fflush(f);
-    fsync(fileno(f));
-    fclose(f);
+    // Atomic write with .bak rotation: the previous metadata survives (and is
+    // restored) if the rename into place fails.
+    fs_atomic_opts_t opts = { .use_bak = true };
+    esp_err_t err = fs_atomic_write(meta_path, json_str, strlen(json_str), &opts);
     free(json_str);
-
-    // On FAT filesystems (SD card), rename() fails if destination exists.
-    // Use a backup approach so the old metadata is preserved when rename fails:
-    //   1. Rename old file to .bak
-    //   2. Rename temp to final
-    //   3. On success delete .bak; on failure restore .bak
-    char bak_path[264];
-    snprintf(bak_path, sizeof(bak_path), "%s.bak", meta_path);
-    unlink(bak_path);  // clean stale backup
-
-    bool had_backup = false;
-    struct stat st;
-    if (stat(meta_path, &st) == 0) {
-        if (rename(meta_path, bak_path) == 0) {
-            had_backup = true;
-        } else {
-            // rename-to-backup failed; fall back to unlink (old behaviour)
-            ESP_LOGW(TAG, "Backup rename failed (%s -> %s, errno=%d), falling back to unlink",
-                     meta_path, bak_path, errno);
-            unlink(meta_path);
-        }
-    }
-
-    if (rename(temp_path, meta_path) != 0) {
-        ESP_LOGE(TAG, "Rename failed: %s -> %s (errno=%d)", temp_path, meta_path, errno);
-        unlink(temp_path);
-        if (had_backup) {
-            // Restore old metadata so last_refresh is not lost
-            if (rename(bak_path, meta_path) != 0) {
-                ESP_LOGE(TAG, "Backup restore also failed: %s -> %s (errno=%d)",
-                         bak_path, meta_path, errno);
-            } else {
-                ESP_LOGW(TAG, "Restored previous metadata from backup");
-            }
-        }
-        return ESP_FAIL;
-    }
-
-    if (had_backup) {
-        unlink(bak_path);
-    }
-
-    return ESP_OK;
+    return err;
 }
 
 esp_err_t channel_metadata_load(const char *channel_id,

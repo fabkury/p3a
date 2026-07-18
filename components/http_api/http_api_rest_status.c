@@ -32,6 +32,7 @@
 #include "makapix_store.h"
 #include "makapix_renewal.h"
 #include "p3a_current_post.h"
+#include "sd_health.h"
 #include "play_scheduler.h"
 #include "playset_json.h"
 #include "playback_service.h"
@@ -580,6 +581,10 @@ esp_err_t h_get_status(httpd_req_t *req) {
             }
         }
     }
+
+    // SD-failure latch (diagnostics parity with /playsets/active, which
+    // drives the home-page banner).
+    cJSON_AddBoolToObject(data, "sd_card_failed", sd_health_is_failed());
 
     // API version for compatibility checking. P3A_API_VERSION is injected
     // globally by the root CMakeLists.txt (add_compile_definitions before

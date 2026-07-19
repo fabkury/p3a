@@ -50,6 +50,18 @@ static volatile bool s_slave_ota_in_progress = false;
 // safe default: proceed with OTA. Decouples slave_ota from TinyUSB.
 static slave_ota_usb_busy_fn_t s_usb_busy_check = NULL;
 
+// Snapshot of the version the C6 reported at boot. Valid only when the query
+// succeeded and returned non-0.0.0. A per-boot snapshot cannot go stale: the
+// running slave version only changes via slave OTA, and every OTA path ends
+// in esp_restart().
+static uint32_t s_running_ver_major = 0;
+static uint32_t s_running_ver_minor = 0;
+static uint32_t s_running_ver_patch = 0;
+static bool s_running_ver_valid = false;
+
+// True when the C6 runs the 2.7.0 firmware whose OTA bug blocks any upgrade.
+static bool s_version_locked = false;
+
 bool slave_ota_is_in_progress(void)
 {
     return s_slave_ota_in_progress;
@@ -66,6 +78,22 @@ esp_err_t slave_ota_get_embedded_version(uint32_t *major, uint32_t *minor, uint3
     if (minor) *minor = SLAVE_FW_VERSION_MINOR;
     if (patch) *patch = SLAVE_FW_VERSION_PATCH;
     return ESP_OK;
+}
+
+esp_err_t slave_ota_get_running_version(uint32_t *major, uint32_t *minor, uint32_t *patch)
+{
+    if (!s_running_ver_valid) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (major) *major = s_running_ver_major;
+    if (minor) *minor = s_running_ver_minor;
+    if (patch) *patch = s_running_ver_patch;
+    return ESP_OK;
+}
+
+bool slave_ota_is_version_locked(void)
+{
+    return s_version_locked;
 }
 
 // --------- UI helpers ---------
@@ -165,6 +193,14 @@ esp_err_t slave_ota_check_and_update(void)
         current_ver.patch1 = 0;
     }
     
+    // Snapshot the reported version for status consumers (/api/status).
+    // 0.0.0 means "query failed or ancient firmware" — not a real version.
+    s_running_ver_major = current_ver.major1;
+    s_running_ver_minor = current_ver.minor1;
+    s_running_ver_patch = current_ver.patch1;
+    s_running_ver_valid = (current_ver.major1 != 0 || current_ver.minor1 != 0 ||
+                           current_ver.patch1 != 0);
+
     ESP_LOGI(TAG, "Current co-processor firmware: %lu.%lu.%lu",
              current_ver.major1, current_ver.minor1, current_ver.patch1);
     ESP_LOGI(TAG, "Embedded slave firmware: %lu.%lu.%lu",
@@ -177,6 +213,7 @@ esp_err_t slave_ota_check_and_update(void)
     if (current_ver.major1 == LOCKED_VERSION_MAJOR &&
         current_ver.minor1 == LOCKED_VERSION_MINOR &&
         current_ver.patch1 == LOCKED_VERSION_PATCH) {
+        s_version_locked = true;
         ESP_LOGW(TAG, "Detected esp_hosted 2.7.0 - OTA not possible (confirmed bug)");
         ESP_LOGW(TAG, "See: https://github.com/espressif/esp-hosted-mcu/issues/143");
         ESP_LOGW(TAG, "Device will continue operating with 2.7.0 slave firmware");

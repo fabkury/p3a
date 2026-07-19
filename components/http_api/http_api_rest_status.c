@@ -474,13 +474,24 @@ esp_err_t h_get_status(httpd_req_t *req) {
             cJSON_AddNumberToObject(dev, "screen_w", LCD_MAX_WIDTH);
             cJSON_AddNumberToObject(dev, "screen_h", LCD_MAX_HEIGHT);
 
-            // ESP32-C6 Wi-Fi co-processor firmware version (embedded slave image)
+            // ESP32-C6 Wi-Fi co-processor firmware: c6_fw is the version the
+            // C6 reported at boot (omitted when unknown); c6_fw_embedded is
+            // the image bundled in this build. They differ when the slave OTA
+            // couldn't run (2.7.0 lock, USB-gated skip).
             uint32_t c6_major = 0, c6_minor = 0, c6_patch = 0;
-            if (slave_ota_get_embedded_version(&c6_major, &c6_minor, &c6_patch) == ESP_OK) {
-                char c6_str[24];
+            char c6_str[24];
+            if (slave_ota_get_running_version(&c6_major, &c6_minor, &c6_patch) == ESP_OK) {
                 snprintf(c6_str, sizeof(c6_str), "%u.%u.%u",
                          (unsigned)c6_major, (unsigned)c6_minor, (unsigned)c6_patch);
                 cJSON_AddStringToObject(dev, "c6_fw", c6_str);
+            }
+            if (slave_ota_get_embedded_version(&c6_major, &c6_minor, &c6_patch) == ESP_OK) {
+                snprintf(c6_str, sizeof(c6_str), "%u.%u.%u",
+                         (unsigned)c6_major, (unsigned)c6_minor, (unsigned)c6_patch);
+                cJSON_AddStringToObject(dev, "c6_fw_embedded", c6_str);
+            }
+            if (slave_ota_is_version_locked()) {
+                cJSON_AddBoolToObject(dev, "c6_fw_locked", true);
             }
 
             cJSON_AddItemToObject(data, "device", dev);

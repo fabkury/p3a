@@ -46,6 +46,33 @@ esp_err_t slave_ota_check_and_update(void);
 esp_err_t slave_ota_get_embedded_version(uint32_t *major, uint32_t *minor, uint32_t *patch);
 
 /**
+ * @brief Get the slave firmware version actually running on the C6
+ *
+ * Returns the version the co-processor reported when queried during
+ * slave_ota_check_and_update at boot. Never falls back to the embedded
+ * version — on a device where the OTA cannot run (e.g. the 2.7.0 lock,
+ * or a USB-gated skip) the two legitimately differ.
+ *
+ * @param[out] major Major version number
+ * @param[out] minor Minor version number
+ * @param[out] patch Patch version number
+ * @return ESP_OK on success
+ *         ESP_ERR_INVALID_STATE if not queried yet, the query failed,
+ *         or the C6 reported 0.0.0
+ */
+esp_err_t slave_ota_get_running_version(uint32_t *major, uint32_t *minor, uint32_t *patch);
+
+/**
+ * @brief Whether the running slave firmware is OTA-locked
+ *
+ * True when the C6 runs esp_hosted 2.7.0, whose confirmed OTA bug
+ * prevents any upgrade (https://github.com/espressif/esp-hosted-mcu/issues/143).
+ *
+ * @return true if the running version cannot be updated
+ */
+bool slave_ota_is_version_locked(void);
+
+/**
  * @brief Query whether a slave OTA is currently in progress
  *
  * Set true once slave_ota_check_and_update commits to running the OTA

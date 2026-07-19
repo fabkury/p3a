@@ -648,6 +648,7 @@
             <span class="info-label">Wi-Fi co-processor</span>
             <span class="info-value" id="dev-c6fw">Loading...</span>
         </div>
+        <p id="dev-c6fw-note" style="display:none;font-size:0.75rem;color:var(--c-card-fg-faint);margin-top:4px;line-height:1.4;"></p>
         <div class="info-row"><span class="info-label">WiFi crash reboots</span><span class="info-value" id="dev-wifi-reboots">0</span></div>
         <div class="info-row"><span class="info-label">Touch crash reboots</span><span class="info-value" id="dev-touch-reboots">0</span></div>
         <div class="info-row"><span class="info-label">Transport crash reboots</span><span class="info-value" id="dev-transport-reboots">0</span></div>
@@ -1487,6 +1488,17 @@ function loadStatus() {
         document.getElementById('dev-screen').textContent =
             (dev.screen_w && dev.screen_h) ? (dev.screen_w + ' × ' + dev.screen_h) : '-';
         document.getElementById('dev-c6fw').textContent = dev.c6_fw ? ('v' + dev.c6_fw) : '-';
+        // c6_fw is what the co-processor actually runs; c6_fw_embedded is the
+        // image bundled in this firmware build. Explain any mismatch.
+        var c6Note = document.getElementById('dev-c6fw-note');
+        if (dev.c6_fw && dev.c6_fw_embedded && dev.c6_fw !== dev.c6_fw_embedded) {
+            c6Note.textContent = dev.c6_fw_locked
+                ? ('Bundled v' + dev.c6_fw_embedded + ' can’t be installed — co-processor firmware v' + dev.c6_fw + ' has a known bug that blocks updates.')
+                : ('Bundled update v' + dev.c6_fw_embedded + ' pending — unplug USB and reboot to apply.');
+            c6Note.style.display = 'block';
+        } else {
+            c6Note.style.display = 'none';
+        }
         // Crash reboots — always show all three kinds (absent means 0)
         document.getElementById('dev-wifi-reboots').textContent = data.wifi_recovery_reboots || 0;
         document.getElementById('dev-touch-reboots').textContent = data.touch_recovery_reboots || 0;
@@ -1557,6 +1569,7 @@ function loadStatus() {
         ['dev-mac','dev-chip','dev-flash','dev-psram','dev-board','dev-screen','dev-c6fw'].forEach(function(id) {
             document.getElementById(id).textContent = '-';
         });
+        document.getElementById('dev-c6fw-note').style.display = 'none';
     });
 }
 

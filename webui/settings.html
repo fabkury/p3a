@@ -336,7 +336,11 @@
         <h3>API</h3>
         <div class="setting-row">
             <label class="setting-label" for="giphy-api-key">API Key</label>
-            <input class="setting-input" id="giphy-api-key" type="text" placeholder="Giphy API Key">
+            <input class="setting-input" id="giphy-api-key" type="text" placeholder="Giphy API Key" oninput="updateGiphyKeyBadge()">
+        </div>
+        <div class="setting-row">
+            <span class="setting-label">Status</span>
+            <span class="status-badge status-warn" id="giphy-key-badge">No key — channels won’t refresh</span>
         </div>
         <div class="setting-hint">Enter your Giphy API key. Giphy channels will not work without a valid key. You can create a key for free at <a href="https://developers.giphy.com/" target="_blank" rel="noopener">https://developers.giphy.com/</a>. To remove a stored key, clear the field and save.</div>
         <div class="setting-hint">By default, Giphy keys are beta-level and limited to 100 requests per hour. If you have many Giphy channels on the same playset you might run into 429 errors (too many requests). Each Giphy query (request) returns up to 50 artworks, so a 500-artwork channel takes 10 requests to refresh.</div>
@@ -1048,6 +1052,22 @@ function loadGiphySettings(cfg) {
         ridSpan.className = 'readonly-value empty';
     }
     ridSection.style.display = '';
+    updateGiphyKeyBadge();
+}
+
+// BYOK key status badge (mirrors updateKlipyKeyBadge): reads the input value
+// directly, no extra endpoint.
+function updateGiphyKeyBadge() {
+    var input = document.getElementById('giphy-api-key');
+    var badge = document.getElementById('giphy-key-badge');
+    if (!input || !badge) return;
+    if (input.value.trim()) {
+        badge.className = 'status-badge status-connected';
+        badge.textContent = 'Key set';
+    } else {
+        badge.className = 'status-badge status-warn';
+        badge.textContent = 'No key — channels won’t refresh';
+    }
 }
 
 function saveGiphyAll() {
@@ -1069,6 +1089,7 @@ function saveGiphyAll() {
     };
     mergeConfig(partial, function() {
         btn.disabled = false;
+        updateGiphyKeyBadge();
         showToast('Giphy settings saved', false);
     }, function(status) {
         btn.disabled = false;

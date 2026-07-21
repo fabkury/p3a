@@ -33,6 +33,8 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 - USB-C data cable (not a charging-only cable)
 - microSD card (8 GB minimum, **FAT32** — p3a can format it for you on-device; see [SD card sizing](#sd-card-sizing) below)
 - a small screwdriver
+- a computer
+  - Windows, Mac, or Linux — needed once, for the initial firmware install (a few Android flagships with WebSerial can do it too, but don't count on it). Everything after that is wireless.
 
 ### First-time setup
 

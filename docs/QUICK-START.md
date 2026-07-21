@@ -13,7 +13,8 @@ This guide covers only the steps you need to see something on the display. For e
 - **USB-C cable** that supports data (a charging-only cable won't work)
   - Any data cable works, but a slim right-angle cable that bends backwards tucks neatly behind the device: [USB-A to USB-C](https://www.amazon.com/dp/B0DQSJHLDM) · [USB-C to USB-C](https://www.amazon.com/dp/B0DQ89GVNM)
 - **Small screwdriver**
-- A computer or phone with Wi-Fi
+- A computer
+  - Windows, Mac, or Linux — needed once, for the initial firmware install (a few Android flagships with WebSerial can do it too, but don't count on it). Everything after that is wireless.
 
 ---
 

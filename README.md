@@ -30,7 +30,7 @@
 
 ## What Is p3a?
 
-p3a turns a [$40 development board](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) into a dedicated pixel art display. Think of it as a tiny gallery on your desk: it cycles through artworks automatically, picks up trending GIFs throughout the day, and lets you send artworks directly to it from [Makapix Club](https://makapix.club/), a pixel art social network. It also fetches countless artworks from museum IIIF endpoints.
+p3a turns a [$40 development board](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) (also on [Amazon](https://www.amazon.com/dp/B0FF3Z1NNL/)) into a dedicated pixel art display. Think of it as a tiny gallery on your desk: it cycles through artworks automatically, picks up trending GIFs throughout the day, and lets you send artworks directly to it from [Makapix Club](https://makapix.club/), a pixel art social network. It also fetches countless artworks from museum IIIF endpoints.
 
 It's open source, self-contained, and designed to be as simple to use as a picture frame, while still exposing a full REST API for those who want to automate and tinker. Both the hardware and the firmware are built for 24/7 operation, so you can leave it running on a desktop, shelf or wall indefinitely.
 
@@ -45,7 +45,7 @@ It's open source, self-contained, and designed to be as simple to use as a pictu
 Every p3a was assembled by the person who owns it. Joining them takes a screwdriver and 15 minutes.
 
 **What you need:**
-- [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) board ($39.99)
+- [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) board ($39.99) (also on [Amazon](https://www.amazon.com/dp/B0FF3Z1NNL/))
 - [microSD card](https://www.waveshare.com/micro-sd-card-16gb-kawau.htm?sku=18191) ($7.99)
 - USB-C data cable
   - Any data cable works, but a slim right-angle cable that bends backwards tucks neatly behind the device: [USB-A to USB-C](https://www.amazon.com/dp/B0DQSJHLDM) · [USB-C to USB-C](https://www.amazon.com/dp/B0DQ89GVNM)
@@ -165,7 +165,7 @@ Connect via USB-C to mount the microSD card as a removable drive — drag and dr
 
 ## Hardware
 
-p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416)**, an off-the-shelf development board:
+p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416)** (also on [Amazon](https://www.amazon.com/dp/B0FF3Z1NNL/)), an off-the-shelf development board:
 
 | Component | Details |
 |-----------|---------|

@@ -8,7 +8,7 @@ This guide covers only the steps you need to see something on the display. For e
 
 ## What you need
 
-- **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416)** board
+- **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416)** board (also on [Amazon](https://www.amazon.com/dp/B0FF3Z1NNL/))
 - **[microSD card](https://www.waveshare.com/micro-sd-card-16gb-kawau.htm?sku=18191)** (8 GB minimum, 16+ GB recommended)
 - **USB-C cable** that supports data (a charging-only cable won't work)
   - Any data cable works, but a slim right-angle cable that bends backwards tucks neatly behind the device: [USB-A to USB-C](https://www.amazon.com/dp/B0DQSJHLDM) · [USB-C to USB-C](https://www.amazon.com/dp/B0DQ89GVNM)

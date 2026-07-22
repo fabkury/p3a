@@ -31,7 +31,7 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 
 - Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board
 - USB-C data cable (not a charging-only cable)
-- microSD card (8 GB minimum, **FAT32** — p3a can format it for you on-device; see [SD card sizing](#sd-card-sizing) below)
+- microSD card (4 GB minimum, **FAT32** — p3a can format it for you on-device; see [SD card sizing](#sd-card-sizing) below)
 - a small screwdriver
 - a computer
   - Windows, Mac, or Linux — needed once, for the initial firmware install (a few Android flagships with WebSerial can do it too, but don't count on it). Everything after that is wireless.
@@ -46,11 +46,13 @@ This guide covers everything you need to know to use your p3a pixel art player, 
 
 ### SD card sizing
 
-p3a downloads and caches artwork on the SD card, and runs an automatic eviction policy that keeps a guaranteed amount of free space at all times. Under the default settings:
+p3a downloads and caches artwork on the SD card, and runs an automatic eviction policy that keeps a slice of the card free at all times. The watermarks scale with card capacity, so any card from 4 GB up works. Under the default settings:
 
-- Eviction kicks in when free space drops below **1 GiB** (the *trigger* watermark).
-- It deletes the least-recently-modified cached artwork until free space rises to at least **5 GiB** (the *stop* watermark = trigger + 4 GiB headroom). The 4 GiB overshoot prevents thrashing — without it, a few downloads would push free space back across the trigger line almost immediately.
-- Files newer than 4 hours are never deleted.
+- Eviction kicks in when free space drops below the *trigger* watermark: **10% of the card's capacity** (at least 256 MiB, at most 1 GiB).
+- It deletes the least-recently-played cached artwork until free space rises to the *stop* watermark: trigger + **25% of capacity** headroom (at least 512 MiB, at most 4 GiB). The overshoot prevents thrashing — without it, a few downloads would push free space back across the trigger line almost immediately.
+- Files newer than 4 hours are never deleted, and your own files in `/p3a/animations/` are never touched.
+
+On a 4 GB card this leaves roughly 2.5–3 GiB for cached artwork; on 32 GB and larger cards the caps work out to the classic behavior of keeping ~1–5 GiB free. Bigger cards hold a bigger artwork cache, which means fewer re-downloads — hence the 16+ GB recommendation.
 
 ---
 

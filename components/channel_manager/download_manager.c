@@ -34,6 +34,7 @@
 #include "sdio_bus.h"
 #include "p3a_state.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -95,6 +96,21 @@ static uint32_t s_dl_epoch = 0;  // Incremented on channel/cursor changes; guard
 
 static TaskHandle_t s_task = NULL;
 static SemaphoreHandle_t s_mutex = NULL;
+
+// Disk-full download backoff. When a download fails AND free space is below
+// DL_FULL_FREE_BYTES after the eviction check ran (i.e. eviction was unable
+// or not allowed to free space — too-small card, or everything younger than
+// the never-delete age floor), further download attempts are certain to die
+// on the first disk write after a full TLS handshake. Rather than burn a
+// doomed connection per missing entry, the task latches a pause. The latch
+// clears as soon as free space recovers (checked on every wake, so webui
+// deletes or USB-MSC cleanups resume downloads within a minute) or after
+// DL_FULL_BACKOFF_MS, whichever comes first — the timed expiry forces a
+// real probe attempt in case the FATFS free-cluster count was stale.
+#define DL_FULL_FREE_BYTES  (16ULL * 1024 * 1024)
+#define DL_FULL_BACKOFF_MS  (10 * 60 * 1000)
+#define DL_FULL_RECHECK_MS  (60 * 1000)
+static int64_t s_disk_full_until_us = 0;  // 0 = not latched; download task only
 
 // Current download state
 static char s_active_channel[64] = {0};
@@ -683,6 +699,29 @@ static void download_task(void *arg)
         // for non-institution channels.
         art_institution_resolve_pending();
 
+        // Disk-full backoff gate (see DL_FULL_FREE_BYTES above). Sits after
+        // the verify slice and museum resolver on purpose: both keep making
+        // progress while artwork downloads are paused. Swallowing
+        // downloads_needed signals during the latch is safe — once the latch
+        // clears, the scan below proceeds unconditionally, so no signal is
+        // needed to resume.
+        if (s_disk_full_until_us != 0) {
+            uint64_t free_now = 0;
+            if (esp_timer_get_time() >= s_disk_full_until_us) {
+                ESP_LOGI(TAG, "Disk-full backoff expired, probing with a real download");
+                s_disk_full_until_us = 0;
+            } else if (storage_eviction_get_free_space(&free_now) == ESP_OK &&
+                       free_now >= DL_FULL_FREE_BYTES) {
+                ESP_LOGI(TAG, "Free space recovered (%llu MiB), resuming downloads",
+                         (unsigned long long)(free_now / (1024 * 1024)));
+                s_disk_full_until_us = 0;
+            } else {
+                makapix_channel_clear_downloads_needed();
+                makapix_channel_wait_for_downloads_needed(DL_FULL_RECHECK_MS);
+                continue;
+            }
+        }
+
         // Clear any leftover cancel flag from a prior iteration. If
         // download_manager_set_channels set it while the previous
         // download was returning, the in-flight downloader has already
@@ -871,6 +910,12 @@ static void download_task(void *arg)
             // already drives the LAi zero-to-one transition (which emits
             // P3A_EVENT_SWAP_NEXT through the event bus), so the download
             // manager no longer needs its own playback-initiated flag.
+
+            // Eviction check on the success path too, so the trigger
+            // watermark engages as free space shrinks instead of only after
+            // the first ENOSPC failure. Fast-returns (one free-space query)
+            // while free space is above the trigger.
+            storage_eviction_check_and_run();
         } else if (err == ESP_ERR_INVALID_STATE) {
             // ESP_ERR_INVALID_STATE has two cooperative-abort causes that share
             // the same handling: no 404 marker, no eviction, no .tmp left
@@ -902,6 +947,22 @@ static void download_task(void *arg)
             } else {
                 // Non-404 failure (network error, disk full, etc.) — reclaim space if low
                 storage_eviction_check_and_run();
+
+                // If the card is still effectively full after the eviction
+                // check, this failure was almost certainly ENOSPC and every
+                // further attempt will be too — latch the download backoff
+                // (see DL_FULL_FREE_BYTES). Plain network failures leave
+                // free space healthy and never latch.
+                uint64_t free_after = 0;
+                if (storage_eviction_get_free_space(&free_after) == ESP_OK &&
+                    free_after < DL_FULL_FREE_BYTES) {
+                    s_disk_full_until_us = esp_timer_get_time()
+                                           + (int64_t)DL_FULL_BACKOFF_MS * 1000;
+                    ESP_LOGW(TAG, "SD card full (%llu KiB free) and eviction freed nothing; "
+                             "pausing downloads for %d min (resumes early if space frees up)",
+                             (unsigned long long)(free_after / 1024),
+                             DL_FULL_BACKOFF_MS / 60000);
+                }
             }
 
             // Signal to check for next file immediately

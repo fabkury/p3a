@@ -37,7 +37,7 @@
 - **Interface**: SDMMC (4-bit mode)
 - **Mount point**: `/sdcard` (hardware level, BSP configured)
 - **Functions**: `p3a_board_sdcard_mount()`, `p3a_board_sdcard_unmount()`, `p3a_board_sdcard_mount_point()`
-- **Minimum size**: 8 GB recommended. The automatic eviction policy in `storage_eviction` keeps at least ~5 GiB free under the default configuration (`STORAGE_EVICTION_TARGET_MIB` 1024 + `STORAGE_EVICTION_HEADROOM_MIB` 4096 = 5120 MiB stop watermark); cards smaller than that can never satisfy the stop watermark and would cause continuous eviction churn.
+- **Minimum size**: 4 GB (16+ GB recommended for a larger cache working set). The automatic eviction policy in `storage_eviction` derives its watermarks from the card's capacity — trigger = 10% clamped to [256 MiB, 1 GiB], headroom = 25% clamped to [512 MiB, 4 GiB] — so the stop watermark is reachable on any card down to the ~1 GiB guard threshold (`STORAGE_EVICTION_MIN_CARD_SIZE_MIB`); below that, eviction is skipped and the device fills the card and stops downloading. On 32 GB and larger cards the ceilings reproduce the classic behavior of keeping ~5 GiB free.
 - **Bus coordination**: The SDIO bus is shared between WiFi (Slot 1) and SD card (Slot 0). The `sdio_bus` component provides mutex-based coordination to prevent "SDIO slave unresponsive" crashes during concurrent access (e.g., OTA downloads).
 
 ### USB

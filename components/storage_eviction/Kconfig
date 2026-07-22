@@ -1,39 +1,71 @@
 menu "Storage Eviction"
 
-    config STORAGE_EVICTION_TARGET_MIB
-        int "Free space trigger threshold in MiB"
-        default 1024
+    config STORAGE_EVICTION_TARGET_PCT
+        int "Free space trigger threshold in % of card capacity"
+        range 1 50
+        default 10
         help
-            Low watermark for the SD card free space. When free space
+            Low watermark for the SD card free space, as a percentage
+            of the card's total formatted capacity. When free space
             falls below this threshold, an eviction pass starts and
             keeps deleting until free space reaches the high watermark
-            (target + headroom). See STORAGE_EVICTION_HEADROOM_MIB.
+            (trigger + headroom). See STORAGE_EVICTION_HEADROOM_PCT.
 
-    config STORAGE_EVICTION_HEADROOM_MIB
-        int "Free space headroom in MiB above target"
-        default 4096
+            The computed value is clamped to a floor of 256 MiB and a
+            ceiling of STORAGE_EVICTION_TARGET_MIB, so the watermarks
+            scale down for small cards while large cards keep the
+            classic fixed-watermark behavior.
+
+    config STORAGE_EVICTION_TARGET_MIB
+        int "Trigger threshold ceiling in MiB"
+        default 1024
+        help
+            Upper bound for the capacity-derived trigger watermark.
+            Whenever STORAGE_EVICTION_TARGET_PCT of the card's capacity
+            exceeds this value, this value is used instead. With the
+            defaults (10% capped at 1024 MiB) the ceiling binds from
+            ~10 GiB of formatted capacity upward — in practice, cards
+            advertised as 16 GB and larger.
+
+    config STORAGE_EVICTION_HEADROOM_PCT
+        int "Free space headroom in % of card capacity"
+        range 1 90
+        default 25
         help
             Hysteresis between the trigger threshold and the stop
-            condition. Once eviction starts (free < target), it keeps
-            running until free >= target + headroom. A larger headroom
+            condition, as a percentage of the card's total formatted
+            capacity. Once eviction starts (free < trigger), it keeps
+            running until free >= trigger + headroom. A larger headroom
             means fewer eviction passes but each pass deletes more
-            files; a value of 0 reverts to single-watermark behavior
-            and risks thrashing across the target line.
+            files.
+
+            The computed value is clamped to a floor of 512 MiB and a
+            ceiling of STORAGE_EVICTION_HEADROOM_MIB.
+
+    config STORAGE_EVICTION_HEADROOM_MIB
+        int "Headroom ceiling in MiB"
+        default 4096
+        help
+            Upper bound for the capacity-derived headroom. Whenever
+            STORAGE_EVICTION_HEADROOM_PCT of the card's capacity
+            exceeds this value, this value is used instead. With the
+            defaults (25% capped at 4096 MiB) the ceiling binds from
+            16 GiB of formatted capacity upward — cards advertised as
+            32 GB and larger reproduce the classic "keep ~5 GiB free"
+            behavior.
 
     config STORAGE_EVICTION_MIN_CARD_SIZE_MIB
         int "Minimum SD card total size in MiB to enable eviction"
-        default 7000
+        default 1024
         help
             Eviction is skipped entirely on SD cards whose total
-            capacity is smaller than this threshold. On a too-small
-            card the stop watermark can never be reached, so running
-            eviction would just churn the file system. With this guard
-            the device fills the card with downloads and then stops
-            accepting new ones rather than thrashing.
-
-            Default 7000 MiB is below the formatted capacity of
-            commonly-advertised 8 GB cards (~7.4 GiB after FAT
-            overhead) but well above any 4 GB card. Set to 0 to
+            capacity is smaller than this threshold. Because the
+            watermarks scale with capacity, eviction is viable on any
+            card comfortably larger than the watermark floors
+            (256 + 512 MiB combined); below this threshold the stop
+            watermark would eat most of the card, so the device just
+            fills the card with downloads and then stops accepting new
+            ones rather than churn the file system. Set to 0 to
             disable the guard entirely.
 
     config STORAGE_EVICTION_INITIAL_AGE_DAYS

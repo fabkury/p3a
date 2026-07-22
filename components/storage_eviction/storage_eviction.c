@@ -15,6 +15,13 @@
  * touches every file it successfully loads — so eviction approximates
  * least-recently-played.
  *
+ * The two watermarks scale with card capacity (see compute_watermarks):
+ * trigger and headroom are percentages of the card's total size, each
+ * clamped between a fixed floor and the Kconfig MiB ceiling.  Large
+ * cards therefore behave exactly like the original fixed-watermark
+ * scheme, while a 4 GB card gets proportionally small watermarks
+ * instead of an unreachable stop target.
+ *
  * The walk is deliberately layout-UNAWARE: it recurses into whatever
  * directories exist (bounded only by EVICT_MAX_DEPTH for stack safety)
  * and judges files purely by extension allowlist + age, never by their
@@ -47,9 +54,10 @@
 
 static const char *TAG = "storage_evict";
 
-#define TARGET_BYTES        ((uint64_t)CONFIG_STORAGE_EVICTION_TARGET_MIB * 1024ULL * 1024ULL)
-#define HEADROOM_BYTES      ((uint64_t)CONFIG_STORAGE_EVICTION_HEADROOM_MIB * 1024ULL * 1024ULL)
-#define STOP_BYTES          (TARGET_BYTES + HEADROOM_BYTES)
+#define TARGET_CEIL_BYTES    ((uint64_t)CONFIG_STORAGE_EVICTION_TARGET_MIB * 1024ULL * 1024ULL)
+#define HEADROOM_CEIL_BYTES  ((uint64_t)CONFIG_STORAGE_EVICTION_HEADROOM_MIB * 1024ULL * 1024ULL)
+#define TARGET_FLOOR_BYTES   (256ULL * 1024ULL * 1024ULL)
+#define HEADROOM_FLOOR_BYTES (512ULL * 1024ULL * 1024ULL)
 #define MIN_CARD_SIZE_BYTES ((uint64_t)CONFIG_STORAGE_EVICTION_MIN_CARD_SIZE_MIB * 1024ULL * 1024ULL)
 #define INITIAL_AGE_S       ((time_t)CONFIG_STORAGE_EVICTION_INITIAL_AGE_DAYS * 86400)
 #define MIN_AGE_S           ((time_t)CONFIG_STORAGE_EVICTION_MIN_AGE_HOURS * 3600)
@@ -104,6 +112,40 @@ static void remove_sidecar(const char *artwork_path, const char *suffix)
     if (ret > 0 && ret < (int)sizeof(sidecar)) {
         unlink(sidecar);  /* ignore errors — file may not exist */
     }
+}
+
+static uint64_t clamp_u64(uint64_t v, uint64_t lo, uint64_t hi)
+{
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+/**
+ * @brief Derive the eviction watermarks from the card's total capacity
+ *
+ * trigger  = TARGET_PCT   % of capacity, clamped to [256 MiB, TARGET_MIB]
+ * headroom = HEADROOM_PCT % of capacity, clamped to [512 MiB, HEADROOM_MIB]
+ * stop     = trigger + headroom
+ *
+ * With the default 10% / 25% and 1024 / 4096 MiB ceilings, cards of
+ * ~10 GiB formatted capacity and up hit the trigger ceiling and 16 GiB
+ * and up hit the headroom ceiling, reproducing the original fixed
+ * 1 GiB trigger / 5 GiB stop behavior on large cards.  A 4 GB card
+ * (~3.7 GiB formatted) gets ~378 MiB trigger / ~1.3 GiB stop.
+ */
+static void compute_watermarks(uint64_t total_bytes,
+                               uint64_t *out_trigger_bytes, uint64_t *out_stop_bytes)
+{
+    uint64_t trigger = clamp_u64(
+        total_bytes * CONFIG_STORAGE_EVICTION_TARGET_PCT / 100,
+        TARGET_FLOOR_BYTES, TARGET_CEIL_BYTES);
+    uint64_t headroom = clamp_u64(
+        total_bytes * CONFIG_STORAGE_EVICTION_HEADROOM_PCT / 100,
+        HEADROOM_FLOOR_BYTES, HEADROOM_CEIL_BYTES);
+
+    *out_trigger_bytes = trigger;
+    *out_stop_bytes = trigger + headroom;
 }
 
 /* --------------------------------------------------------------------- */
@@ -264,40 +306,39 @@ esp_err_t storage_eviction_check_and_run(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    /* Guard: skip on cards too small to ever satisfy the stop watermark.
-       Running eviction on a card this small would just churn the FS; we'd
-       rather fill the card and stop downloading than thrash. Warn once so
-       the condition is visible in the logs without spamming on every
-       failed-download retry. */
-    if (MIN_CARD_SIZE_BYTES > 0) {
-        uint64_t total_bytes = 0;
-        if (storage_eviction_get_storage_info(&total_bytes, NULL) == ESP_OK &&
-            total_bytes < MIN_CARD_SIZE_BYTES) {
-            static bool warned = false;
-            if (!warned) {
-                ESP_LOGW(TAG, "SD card total size %llu MiB < minimum %d MiB; eviction disabled",
-                         (unsigned long long)(total_bytes / (1024 * 1024)),
-                         CONFIG_STORAGE_EVICTION_MIN_CARD_SIZE_MIB);
-                warned = true;
-            }
-            return ESP_OK;
-        }
-    }
-
-    uint64_t free_bytes = 0;
-    esp_err_t err = storage_eviction_get_free_space(&free_bytes);
+    uint64_t total_bytes = 0, free_bytes = 0;
+    esp_err_t err = storage_eviction_get_storage_info(&total_bytes, &free_bytes);
     if (err != ESP_OK) {
         return ESP_FAIL;
     }
 
-    if (free_bytes >= TARGET_BYTES) {
+    /* Guard: skip on cards too small for even the clamped watermark floors,
+       where the stop target would eat most of the card. We'd rather fill
+       the card and stop downloading than thrash. Warn once so the condition
+       is visible in the logs without spamming on every failed-download
+       retry. */
+    if (MIN_CARD_SIZE_BYTES > 0 && total_bytes < MIN_CARD_SIZE_BYTES) {
+        static bool warned = false;
+        if (!warned) {
+            ESP_LOGW(TAG, "SD card total size %llu MiB < minimum %d MiB; eviction disabled",
+                     (unsigned long long)(total_bytes / (1024 * 1024)),
+                     CONFIG_STORAGE_EVICTION_MIN_CARD_SIZE_MIB);
+            warned = true;
+        }
+        return ESP_OK;
+    }
+
+    uint64_t trigger_bytes = 0, stop_bytes = 0;
+    compute_watermarks(total_bytes, &trigger_bytes, &stop_bytes);
+
+    if (free_bytes >= trigger_bytes) {
         return ESP_OK;  /* trigger watermark not crossed */
     }
 
-    ESP_LOGW(TAG, "Low disk space: %llu MiB free (trigger %d MiB), evicting until >= %llu MiB free",
+    ESP_LOGW(TAG, "Low disk space: %llu MiB free (trigger %llu MiB), evicting until >= %llu MiB free",
              (unsigned long long)(free_bytes / (1024 * 1024)),
-             CONFIG_STORAGE_EVICTION_TARGET_MIB,
-             (unsigned long long)(STOP_BYTES / (1024 * 1024)));
+             (unsigned long long)(trigger_bytes / (1024 * 1024)),
+             (unsigned long long)(stop_bytes / (1024 * 1024)));
 
     evict_stats_t stats = { 0, 0, 0 };
     time_t now = time(NULL);
@@ -315,7 +356,7 @@ esp_err_t storage_eviction_check_and_run(void)
         err = storage_eviction_get_free_space(&free_bytes);
         if (err != ESP_OK) break;
 
-        if (free_bytes >= STOP_BYTES) {
+        if (free_bytes >= stop_bytes) {
             ESP_LOGI(TAG, "Free space stop target reached (%llu MiB)",
                      (unsigned long long)(free_bytes / (1024 * 1024)));
             break;

@@ -19,11 +19,14 @@ extern "C" {
 /**
  * @brief Check available space and run eviction if needed
  *
- * Checks SNTP synchronization, then queries free space on /sdcard.
- * Uses a two-watermark policy to avoid thrashing across a single
- * threshold: eviction is triggered when free space drops below
- * STORAGE_EVICTION_TARGET_MIB and continues until free space rises
- * to STORAGE_EVICTION_TARGET_MIB + STORAGE_EVICTION_HEADROOM_MIB.
+ * Checks SNTP synchronization, then queries total and free space on
+ * /sdcard. Uses a two-watermark policy to avoid thrashing across a
+ * single threshold; both watermarks scale with card capacity. Eviction
+ * is triggered when free space drops below the trigger watermark
+ * (STORAGE_EVICTION_TARGET_PCT of capacity, clamped to
+ * [256 MiB, STORAGE_EVICTION_TARGET_MIB]) and continues until free
+ * space rises to trigger + headroom (STORAGE_EVICTION_HEADROOM_PCT of
+ * capacity, clamped to [512 MiB, STORAGE_EVICTION_HEADROOM_MIB]).
  *
  * Each pass halves the age threshold, starting from
  * STORAGE_EVICTION_INITIAL_AGE_DAYS and stopping at

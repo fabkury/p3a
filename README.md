@@ -46,7 +46,7 @@ Every p3a was assembled by the person who owns it. Joining them takes a screwdri
 
 **What you need:**
 - [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416) board ($39.99) (also on [Amazon](https://www.amazon.com/dp/B0FF3Z1NNL/))
-- Any [microSD card](https://www.waveshare.com/raspberry-pi-sd-card.htm) (8 GB minimum, 16+ GB recommended)
+- Any [microSD card](https://www.waveshare.com/raspberry-pi-sd-card.htm) (4 GB minimum, 16+ GB recommended)
 - USB-C data cable
   - Any data cable works, but a slim right-angle cable that bends backwards tucks neatly behind the device: [USB-A to USB-C](https://www.amazon.com/dp/B0DQSJHLDM) · [USB-C to USB-C](https://www.amazon.com/dp/B0DQ89GVNM)
 - A small screwdriver

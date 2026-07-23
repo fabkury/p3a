@@ -79,7 +79,7 @@ If you're happy with this, you're done. Set it on a shelf and enjoy — both the
 
 Free, and gives you the entire Makapix Club library plus the ability to send any artwork directly to your device from your phone or laptop:
 
-1. Open `http://p3a.local/settings.html` in any browser on the same Wi-Fi.
+1. Open `http://p3a.local/settings` in any browser on the same Wi-Fi.
 2. Go to the **Makapix** tab and click **Enter Provisioning Mode**.
 3. A 6-character code appears on the device's screen.
 4. Visit **[makapix.club](https://makapix.club/)**, create an account, and paste the code to link your device.
@@ -92,7 +92,7 @@ Pulls fresh trending GIFs every few hours. This one takes a few extra minutes be
 
 1. Go to **[developers.giphy.com](https://developers.giphy.com/)**, sign up, and click **Create an API Key**. Give it any name.
 2. Copy the **API Key** that gets generated.
-3. Open `http://p3a.local/settings.html#giphy` in your browser, paste the key, and click **Save All Giphy Settings**.
+3. Open `http://p3a.local/settings#giphy` in your browser, paste the key, and click **Save All Giphy Settings**.
 
 Trending GIFs start appearing in the rotation within a few minutes.
 
@@ -101,7 +101,7 @@ Trending GIFs start appearing in the rotation within a few minutes.
 Klipy is another GIF platform, and it also offers stickers. Like Giphy, it needs a free API key:
 
 1. Go to **[partner.klipy.com](https://partner.klipy.com/)**, sign up, and copy your app's **API Key**.
-2. Open `http://p3a.local/settings.html#klipy` in your browser, paste the key, and click **Save All Klipy Settings**.
+2. Open `http://p3a.local/settings#klipy` in your browser, paste the key, and click **Save All Klipy Settings**.
 3. Open `http://p3a.local/playset-editor`, click **Add Channel**, set **Channel Type** to **Klipy**, and pick trending, a search term, or a category — as GIFs or stickers.
 
 ### D. Add a museum channel

@@ -111,7 +111,7 @@ Mix them all in a single "playset" for an ever-changing display.
 |---------|--------|
 | Tap right half | Next artwork |
 | Tap left half | Previous artwork |
-| Swipe up / down | Like / unlike current Makapix artwork |
+| Swipe up / down | Pin / unpin the current artwork (swipe up also Likes Makapix artwork; swipe down revokes the Like) |
 | Two-finger rotate | Rotate screen (0° / 90° / 180° / 270°) |
 | Long press | Show device info / dismiss overlay |
 

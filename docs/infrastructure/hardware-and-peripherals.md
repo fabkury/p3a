@@ -24,7 +24,7 @@
 - **Controller**: GT911 capacitive touch
 - **Interface**: I2C
 - **Features**: 5-point multitouch, gestures
-- **Routing**: Touch events are routed through `p3a_touch_router` (in `p3a_core`) based on the current application state — tap left/right for navigation, swipe up/down for Makapix reactions (Giphy click on swipe up; pin/unpin on Klipy and museum artworks), long press for info screen / overlay dismissal, two-finger gesture for screen rotation. Brightness is controlled via the web UI only.
+- **Routing**: Touch events are routed through `p3a_touch_router` (in `p3a_core`) based on the current application state — tap left/right for navigation, swipe up/down to pin/unpin the current artwork on Makapix, Giphy, Klipy, and museum sources (swipe up additionally submits a Makapix Like or registers a Giphy click; local SD-card files get an error indicator instead), long press for info screen / overlay dismissal, two-finger gesture for screen rotation. Brightness is controlled via the web UI only.
 
 ### Buttons
 

@@ -12,7 +12,8 @@ This guide covers only the steps you need to see something on the display. For e
 - Any **[microSD card](https://www.waveshare.com/raspberry-pi-sd-card.htm)** (4 GB minimum, 16+ GB recommended)
 - **USB-C cable** that supports data (a charging-only cable won't work)
   - Any data cable works, but a slim right-angle cable that bends backwards tucks neatly behind the device: [USB-A to USB-C](https://www.amazon.com/dp/B0DQSJHLDM) · [USB-C to USB-C](https://www.amazon.com/dp/B0DQ89GVNM)
-- Any **USB power source** — p3a draws very little power, so any 5V 1A (or more) phone charger or a computer USB port is plenty
+- Any **USB power source**
+  - p3a draws very little power, so any 5V 1A (or more) phone charger or a computer USB port is plenty
 - **Small screwdriver**
 - A computer
   - Windows, Mac, or Linux — needed once, for the initial firmware install (a few Android flagships with WebSerial can do it too, but don't count on it). Everything after that is wireless.

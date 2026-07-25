@@ -34,7 +34,8 @@ p3a is built for continuous 24/7 operation. Once it's set up, you can leave it r
 - Waveshare ESP32-P4-WIFI6-Touch-LCD-4B board
 - USB-C data cable (not a charging-only cable)
 - microSD card (4 GB minimum, **FAT32** — p3a can format it for you on-device)
-- any USB power source — p3a draws very little power, so any 5V 1A (or more) phone charger or a computer USB port is plenty
+- any USB power source
+  - p3a draws very little power, so any 5V 1A (or more) phone charger or a computer USB port is plenty
 - a small screwdriver
 - a computer (Windows, Mac, or Linux) — needed once, for the initial firmware install. Everything after that is wireless.
 

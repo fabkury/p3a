@@ -49,7 +49,8 @@ Every p3a was assembled by the person who owns it. Joining them takes a screwdri
 - Any [microSD card](https://www.waveshare.com/raspberry-pi-sd-card.htm) (4 GB minimum, 16+ GB recommended)
 - USB-C data cable
   - Any data cable works, but a slim right-angle cable that bends backwards tucks neatly behind the device: [USB-A to USB-C](https://www.amazon.com/dp/B0DQSJHLDM) · [USB-C to USB-C](https://www.amazon.com/dp/B0DQ89GVNM)
-- Any USB power source — p3a draws very little power, so any 5V 1A (or more) phone charger or a computer USB port is plenty
+- Any USB power source
+  - p3a draws very little power, so any 5V 1A (or more) phone charger or a computer USB port is plenty
 - A small screwdriver
 
 **Setup steps:**

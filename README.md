@@ -49,6 +49,7 @@ Every p3a was assembled by the person who owns it. Joining them takes a screwdri
 - Any [microSD card](https://www.waveshare.com/raspberry-pi-sd-card.htm) (4 GB minimum, 16+ GB recommended)
 - USB-C data cable
   - Any data cable works, but a slim right-angle cable that bends backwards tucks neatly behind the device: [USB-A to USB-C](https://www.amazon.com/dp/B0DQSJHLDM) · [USB-C to USB-C](https://www.amazon.com/dp/B0DQ89GVNM)
+- Any USB power source — p3a draws very little power, so any 5V 1A (or more) phone charger or a computer USB port is plenty
 - A small screwdriver
 
 **Setup steps:**
@@ -175,7 +176,7 @@ p3a runs on the **[Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.
 | **Memory** | 32 MB PSRAM, 32 MB flash |
 | **Storage** | microSD card slot (4-bit SDMMC) |
 | **Connectivity** | Wi-Fi 6, Bluetooth LE |
-| **Power** | USB-C (no battery needed) |
+| **Power** | USB-C, any 5V 1A (or more) source (no battery) |
 | **Framework** | ESP-IDF v5.5 |
 
 <p align="center">

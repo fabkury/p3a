@@ -73,7 +73,7 @@ This requires release files to be committed to the repo (not just uploaded as Gi
 ## Troubleshooting
 
 - **No device found:** Use a USB-C data cable (not charge-only). Connect to the USB-OTG port.
-- **Connection fails:** Hold the BOOT button while clicking Connect.
+- **Connection fails:** Hold the BOOT button (the top one, farther from the USB-C ports) while clicking Connect.
 - **Browser not supported:** Use Chrome or Edge (Firefox and Safari don't support WebSerial).
 
 For persistent issues, use the [command-line flash guide](../flash-p3a.md).

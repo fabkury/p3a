@@ -115,7 +115,7 @@ The device will automatically reboot into p3a:
 | Problem | Solution |
 |---------|----------|
 | "No serial port found" | Try a different USB cable — many are charge-only |
-| "Failed to connect" | Hold the **BOOT** button while connecting |
+| "Failed to connect" | Hold the **BOOT** button (the top one, farther from the USB-C ports) while connecting |
 | Permission denied (Linux) | Run: `sudo usermod -a -G dialout $USER` then log out/in |
 | Wrong COM port (Windows) | Check Device Manager → Ports |
 | Timeout errors | Try `-b 115200` instead of `-b 460800` |

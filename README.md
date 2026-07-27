@@ -119,6 +119,11 @@ Mix them all in a single "playset" for an ever-changing display.
 
 All controls are also available via the web UI and REST API.
 
+### Physical Buttons
+
+- **BOOT** (top button, farther from the USB-C ports) — pause/unpause: the screen goes black, then resumes on the same artwork
+- **RESET** (bottom button) — hardware reset: reboots the device immediately
+
 ### Web Interface & REST API
 
 Open `http://p3a.local/` from any browser on the same Wi-Fi network for a full dashboard — playback controls, configuration, firmware updates, Giphy and Klipy settings, and more.

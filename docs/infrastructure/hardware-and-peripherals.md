@@ -28,8 +28,11 @@
 
 ### Buttons
 
-- **BOOT button**: Used for pause/resume toggle
-- **Conditional**: Only available when `P3A_HAS_BUTTONS` is defined
+Two push-buttons sit next to the USB-C ports: **BOOT** on top (farther from the ports) and **RESET (RST)** on the bottom (closer to the ports).
+
+- **BOOT button** (GPIO35 via `CONFIG_P3A_BOOT_BUTTON_GPIO`, active-low): the only firmware-accessible button. Used as a pause/resume toggle — a falling-edge ISR arms a 50 ms debounce timer whose callback emits `P3A_EVENT_TOGGLE_PAUSE`, driving the same `playback_service` pause state as the web UI / REST pause endpoints. Presses are ignored while an ESP32-C6 slave OTA is in progress.
+- **RESET (RST) button**: wired to the chip reset line — not visible to firmware and not reprogrammable. Always performs an immediate hardware reset. (Held BOOT + RST enters the ROM serial bootloader, as on any ESP32.)
+- **Conditional**: BOOT handling is only compiled when `P3A_HAS_BUTTONS` is defined (`CONFIG_P3A_HAS_BUTTONS=y` in the project sdkconfig)
 - **Implementation**: `p3a_board_button.c` in the `p3a_board_ep44b` component
 
 ### Storage (SD Card)

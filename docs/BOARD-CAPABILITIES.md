@@ -250,6 +250,7 @@ A full camera image processing pipeline (designed for MIPI-CSI camera input).
 |-----------|---------|
 | **USB 2.0 HS OTG** | 480 Mbps, Type-C connector |
 | **USB-to-UART** | Type-C, for flashing and debug serial |
+| **Buttons** | BOOT (GPIO35, active-low, firmware-readable) + RESET (chip reset line, not firmware-accessible). BOOT is top / farther from the USB-C ports, RESET is bottom / closer |
 | **SD/MMC (SDIO 3.0)** | 4-wire, default 20 MHz / high-speed 40 MHz |
 | **Wi-Fi 6** | Via ESP32-C6-MINI co-processor over SDIO (2.4 GHz) |
 | **Bluetooth 5 (LE)** | Via ESP32-C6-MINI co-processor |
@@ -277,6 +278,7 @@ A full camera image processing pipeline (designed for MIPI-CSI camera input).
 | **Crypto (AES/SHA/RSA)** | Yes (via TLS) | TLS for MQTT, HTTPS, OTA |
 | **USB 2.0 HS** | Yes | USB MSC for file transfer |
 | **SD/MMC** | Yes | Artwork storage on SD card |
+| **BOOT button** | Yes | Pause/resume toggle (`p3a_board_button.c` in `p3a_board_ep44b`) |
 | **I2S + Audio** | No | Speaker playback available but not yet integrated |
 | **Wi-Fi 6 (ESP32-C6)** | Yes | Makapix, Giphy, Klipy, museums, OTA |
 | **VAD** | No | Could enable low-power voice wake |

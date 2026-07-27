@@ -11,19 +11,20 @@ p3a is built for continuous 24/7 operation. Once it's set up, you can leave it r
 1. [Initial Setup](#initial-setup)
 2. [Wi-Fi Setup](#wi-fi-setup)
 3. [Touch Controls](#touch-controls)
-4. [Web Interface](#web-interface)
-5. [Preparing Artwork](#preparing-artwork)
-6. [USB SD Card Access](#usb-sd-card-access)
-7. [Giphy Integration](#giphy-integration)
-8. [Klipy Integration](#klipy-integration)
-9. [Museum Channels (IIIF)](#museum-channels-iiif)
-10. [Device Registration](#device-registration)
-11. [Makapix Club Features](#makapix-club-features)
-12. [PICO-8 Monitor](#pico-8-monitor)
-13. [Firmware Updates](#firmware-updates)
-14. [SD Card Sizing and Automatic Cleanup](#sd-card-sizing-and-automatic-cleanup)
-15. [REST API](#rest-api)
-16. [Troubleshooting](#troubleshooting)
+4. [Physical Buttons](#physical-buttons)
+5. [Web Interface](#web-interface)
+6. [Preparing Artwork](#preparing-artwork)
+7. [USB SD Card Access](#usb-sd-card-access)
+8. [Giphy Integration](#giphy-integration)
+9. [Klipy Integration](#klipy-integration)
+10. [Museum Channels (IIIF)](#museum-channels-iiif)
+11. [Device Registration](#device-registration)
+12. [Makapix Club Features](#makapix-club-features)
+13. [PICO-8 Monitor](#pico-8-monitor)
+14. [Firmware Updates](#firmware-updates)
+15. [SD Card Sizing and Automatic Cleanup](#sd-card-sizing-and-automatic-cleanup)
+16. [REST API](#rest-api)
+17. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -93,6 +94,23 @@ Place two fingers on the screen and rotate them like turning a dial — at rough
 ### Auto-advance
 
 When idle (no touch or API interaction), the device automatically advances to the next artwork roughly every 30 seconds. The next artwork is chosen by the device's pick-mode setting (recency or random). The interval is configurable via the web interface or REST API.
+
+---
+
+## Physical Buttons
+
+Besides the touchscreen, the board has two small push-buttons next to the USB-C ports:
+
+| Button | Position | Action |
+|--------|----------|--------|
+| **BOOT** | Top — farther from the USB-C ports | Pause / unpause playback |
+| **RESET** (RST) | Bottom — closer to the USB-C ports | Hardware reset — reboots the device immediately |
+
+**BOOT** toggles pause: press it and the screen goes black; press it again and the same animation that was playing resumes. It controls the same pause state as the web dashboard's Pause/Resume controls and the `POST /action/pause` / `POST /action/resume` [REST API](#rest-api) endpoints, so you can freely pause with one and resume with another.
+
+**RESET** is wired straight to the chip's reset line — the firmware can't see it or change what it does. Pressing it is equivalent to unplugging and replugging power: safe at any time, and the device boots right back into playback.
+
+> **Tip:** Holding BOOT while pressing RESET puts the board into serial download mode (used for USB flashing). If you ever land there by accident — screen stays dark — just press RESET alone to boot normally.
 
 ---
 

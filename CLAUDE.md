@@ -85,21 +85,11 @@ Build artifacts go to `build/`. Release binaries are copied to `release/v{VERSIO
   - `/sdcard/p3a/museum/{museum_id}/` - Cached art-institution artwork
 - **NVS** (64KB) - Wi-Fi credentials, settings, state
 
-### Flash Partitions (`partitions.csv`)
-Dual OTA slots (8MB each), NVS, LittleFS (4MB), and a 2MB partition for ESP32-C6 firmware.
-
 ## Configuration
 
 - **Version**: Set in root `CMakeLists.txt` line ~14 (e.g., `set(VERSION "0.6.5-dev")`)
 - **Kconfig**: `main/Kconfig.projbuild` for main options, component-specific Kconfig in each component
 - Key options: `P3A_AUTO_SWAP_INTERVAL_SECONDS`, `P3A_PICO8_ENABLE`, `P3A_USB_MSC_ENABLE`
-
-## Adding a New Component
-
-1. Create directory under `components/`
-2. Add `CMakeLists.txt` with `idf_component_register()`
-3. Add `Kconfig` if configuration needed
-4. Add component name to `REQUIRES` in `main/CMakeLists.txt`
 
 ## Documentation
 

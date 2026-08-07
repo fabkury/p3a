@@ -69,6 +69,9 @@ static gOrientation s_pending_orientation = gOrientation0;  // Orientation to ap
 // persists regardless. Only ugfx_ui_hide_usb_msc() (from the USB unmount path)
 // clears it.
 static bool s_usb_msc_active = false;
+// Sub-state of the USB-MSC modal: the host wrote to the card and the device is
+// about to restart — the notice text changes but the screen stays modal.
+static bool s_usb_msc_rebooting = false;
 
 // OTA progress state
 static int s_ota_progress = 0;
@@ -1112,6 +1115,7 @@ void ugfx_ui_deinit(void)
     
     s_ui_active = false;
     s_usb_msc_active = false;
+    s_usb_msc_rebooting = false;
     s_expires_time = 0;
     memset(s_current_code, 0, sizeof(s_current_code));
     memset(s_status_message, 0, sizeof(s_status_message));
@@ -1195,14 +1199,39 @@ static void ugfx_ui_draw_usb_msc(void)
 
     color_t amber = HTML2COLOR(0xFFBB33);
 
+    // Body lines
+    gCoord y = screen_h / 2 - 60;
+    gCoord line_h = 40;
+
+    if (s_usb_msc_rebooting) {
+        gdispFillStringBox(0, screen_h / 2 - 150, screen_w, 45,
+                           "microSD Card Updated",
+                           font_title, amber, GFX_BLACK, gJustifyCenter);
+
+        gdispFillStringBox(0, y, screen_w, line_h,
+                           "Files on the microSD card were",
+                           font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
+        gdispFillStringBox(0, y + line_h, screen_w, line_h,
+                           "changed over the USB connection.",
+                           font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
+
+        gdispFillStringBox(0, y + line_h * 3, screen_w, line_h,
+                           "p3a will now restart to",
+                           font_body, HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+        gdispFillStringBox(0, y + line_h * 4, screen_w, line_h,
+                           "reload the card.",
+                           font_body, HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
+
+        gdispFillStringBox(0, screen_h - 60, screen_w, 36,
+                           "Restarting...",
+                           font_hint, HTML2COLOR(0x555555), GFX_BLACK, gJustifyCenter);
+        return;
+    }
+
     // Title
     gdispFillStringBox(0, screen_h / 2 - 150, screen_w, 45,
                        "microSD Card Exposed via USB",
                        font_title, amber, GFX_BLACK, gJustifyCenter);
-
-    // Body lines
-    gCoord y = screen_h / 2 - 60;
-    gCoord line_h = 40;
 
     gdispFillStringBox(0, y, screen_w, line_h,
                        "p3a is currently sharing the microSD card",
@@ -1230,10 +1259,22 @@ static void ugfx_ui_draw_usb_msc(void)
 esp_err_t ugfx_ui_show_usb_msc(void)
 {
     s_usb_msc_active = true;
+    s_usb_msc_rebooting = false;
     s_ui_mode = UI_MODE_USB_MSC;
     s_ui_active = true;
 
     ESP_LOGI(TAG, "USB MSC UI activated");
+    return ESP_OK;
+}
+
+esp_err_t ugfx_ui_show_usb_msc_reboot(void)
+{
+    s_usb_msc_active = true;
+    s_usb_msc_rebooting = true;
+    s_ui_mode = UI_MODE_USB_MSC;
+    s_ui_active = true;
+
+    ESP_LOGI(TAG, "USB MSC reboot notice activated");
     return ESP_OK;
 }
 
@@ -1243,6 +1284,7 @@ void ugfx_ui_hide_usb_msc(void)
         return;
     }
     s_usb_msc_active = false;
+    s_usb_msc_rebooting = false;
     // Reset overlay state outright. Any overlay another subsystem tried to show
     // during the export window was suppressed by the render gate, so there is
     // nothing meaningful to restore — drop back to "no overlay" and let the

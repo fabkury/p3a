@@ -19,6 +19,7 @@
 #include "esp_vfs_fat.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -51,6 +52,18 @@ static uint16_t s_block_size = 512;
 static uint32_t s_block_count = 0;
 static bool s_usb_active = false;
 
+// Set-once latch: the USB host issued at least one write to the card during
+// this power cycle. FATFS stays mounted throughout the export, so any host
+// write leaves its in-RAM state (FAT window, directory sectors, FSINFO free
+// count) stale — the file-list refresh on detach would then operate on
+// garbage (worst case: host reformatted the card and downloads scribble over
+// the new volume). A session that wrote therefore always ends in esp_restart()
+// into a fresh mount; the latch is deliberately never cleared.
+static volatile bool s_host_wrote = false;
+// The reboot notice is on screen and esp_restart() is imminent — refuse any
+// late MSC re-activation.
+static volatile bool s_reboot_pending = false;
+
 // USB enumeration can briefly bounce on physical cable removal: the bus reaches
 // CONFIGURED for a few hundred ms before the disconnect is finalized. Suppress
 // any tud_mount_cb that fires within this window after a confirmed unmount so
@@ -63,11 +76,23 @@ static bool s_usb_active = false;
 static int64_t s_last_unmount_us = 0;
 static esp_timer_handle_t s_mount_recovery_timer = NULL;
 
+// After a detach/suspend with host writes pending, wait out this settle window
+// before rebooting: if the bus was only bouncing, the mount-recovery path
+// re-activates the export and the reboot is cancelled. Must stay longer than
+// USB_MSC_REMOUNT_DEBOUNCE_US + USB_MSC_MOUNT_RECOVERY_SLACK_US so recovery
+// always wins the race against the settle timer.
+#define USB_MSC_REBOOT_SETTLE_US (USB_MSC_REMOUNT_DEBOUNCE_US + 500 * 1000)
+// How long the "card updated — restarting" notice stays up before esp_restart().
+#define USB_MSC_REBOOT_NOTICE_MS 4000
+static esp_timer_handle_t s_reboot_settle_timer = NULL;
+
 static esp_err_t update_card_capacity(void);
 static int32_t msc_handle_transfer(bool write, uint32_t lba, uint32_t offset, uint8_t *buffer, uint32_t bufsize);
 static void perform_mount_activation(void);
 static void mount_recovery_timer_cb(void *arg);
 static void mount_recovery_worker(void *arg);
+static void reboot_settle_timer_cb(void *arg);
+static void spawn_reboot_worker(void);
 
 esp_err_t app_usb_init(void)
 {
@@ -99,6 +124,16 @@ esp_err_t app_usb_init(void)
     if (timer_err != ESP_OK) {
         ESP_LOGW(TAG, "Mount recovery timer unavailable: %s", esp_err_to_name(timer_err));
         s_mount_recovery_timer = NULL;
+    }
+
+    const esp_timer_create_args_t reboot_timer_args = {
+        .callback = reboot_settle_timer_cb,
+        .name = "usb_msc_reboot",
+    };
+    timer_err = esp_timer_create(&reboot_timer_args, &s_reboot_settle_timer);
+    if (timer_err != ESP_OK) {
+        ESP_LOGW(TAG, "Reboot settle timer unavailable: %s", esp_err_to_name(timer_err));
+        s_reboot_settle_timer = NULL;
     }
 
     size_t string_count = 0;
@@ -198,6 +233,13 @@ static int32_t msc_handle_transfer(bool write, uint32_t lba, uint32_t offset, ui
         return -1;
     }
 
+    // Latch on the attempt, not the outcome: even a partial write poisons the
+    // stale FATFS view of the card.
+    if (write && !s_host_wrote) {
+        s_host_wrote = true;
+        ESP_LOGI(TAG, "USB host wrote to SD card - device will restart when the session ends");
+    }
+
     if (offset >= s_block_size) {
         ESP_LOGW(TAG, "MSC transfer offset out of range (offset=%u)", (unsigned)offset);
         return -1;
@@ -280,6 +322,16 @@ static int32_t msc_handle_transfer(bool write, uint32_t lba, uint32_t offset, ui
 
 static void perform_mount_activation(void)
 {
+    if (s_reboot_pending) {
+        ESP_LOGW(TAG, "Ignoring USB mount: restart notice active");
+        return;
+    }
+    // A re-mount inside the settle window means the detach was a bounce - the
+    // session continues and the pending write-triggered reboot is cancelled.
+    if (s_reboot_settle_timer) {
+        esp_timer_stop(s_reboot_settle_timer);
+    }
+
     ESP_LOGI(TAG, "USB host mounted");
     esp_err_t err = animation_player_begin_sd_export();
     if (err != ESP_OK) {
@@ -309,6 +361,44 @@ static void mount_recovery_worker(void *arg)
         perform_mount_activation();
     }
     vTaskDelete(NULL);
+}
+
+// The host wrote to the card and the session is over (detach or suspend
+// outlasted the settle window). The still-mounted FATFS view is stale, so it
+// must never be touched again: the SD-export lock stays held (no file-list
+// refresh, downloads stay paused, the screen stays modal), the restart notice
+// is shown, and the device reboots into a fresh mount.
+static void reboot_worker(void *arg)
+{
+    (void)arg;
+    ESP_LOGW(TAG, "USB host wrote to SD card - restarting to reload it");
+    ugfx_ui_show_usb_msc_reboot();
+    vTaskDelay(pdMS_TO_TICKS(USB_MSC_REBOOT_NOTICE_MS));
+    esp_restart();
+}
+
+static void spawn_reboot_worker(void)
+{
+    if (s_reboot_pending) {
+        return;
+    }
+    s_reboot_pending = true;
+    if (xTaskCreate(reboot_worker, "usb_msc_reboot", 4096, NULL,
+                    tskIDLE_PRIORITY + 5, NULL) != pdPASS) {
+        // No memory for the notice path - restart anyway, correctness first.
+        ESP_LOGE(TAG, "Failed to spawn reboot worker - restarting immediately");
+        esp_restart();
+    }
+}
+
+// Runs on the esp_timer task; must not block.
+static void reboot_settle_timer_cb(void *arg)
+{
+    (void)arg;
+    if (s_usb_active || !s_host_wrote) {
+        return;  // session resumed (bounce re-mount or bus resume)
+    }
+    spawn_reboot_worker();
 }
 
 // Runs on the esp_timer task; must not block. The activation itself can wait
@@ -363,6 +453,20 @@ void tud_umount_cb(void)
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     pico8_stream_reset();
 #endif
+    if (s_host_wrote) {
+        // The host changed the card under the still-mounted (now stale) FATFS,
+        // so the normal end-of-export refresh must NOT run. Keep the SD-export
+        // lock held so nothing touches the stale view, keep the modal screen
+        // up, and reboot once the bus has settled — a bounce re-mount within
+        // the window cancels the reboot via perform_mount_activation().
+        if (s_reboot_settle_timer) {
+            esp_timer_stop(s_reboot_settle_timer);
+            esp_timer_start_once(s_reboot_settle_timer, USB_MSC_REBOOT_SETTLE_US);
+        } else {
+            spawn_reboot_worker();
+        }
+        return;
+    }
     // Release the SD-export lock (and refresh the local file view) BEFORE
     // leaving UI mode. While the lock is held, exit-UI-mode is intentionally a
     // no-op so the "SD exposed" notice stays modal, so the lock must drop first
@@ -386,6 +490,19 @@ void tud_suspend_cb(bool remote_wakeup_en)
 #if CONFIG_P3A_PICO8_USB_STREAM_ENABLE
     pico8_stream_reset();
 #endif
+    if (s_host_wrote) {
+        // Same handling as tud_umount_cb(): a host that wrote and then
+        // suspended (e.g. laptop sleep with the cable left in) must also end
+        // in a reboot — the FATFS view is just as stale. A transient suspend
+        // is cancelled by tud_resume_cb() inside the settle window.
+        if (s_reboot_settle_timer) {
+            esp_timer_stop(s_reboot_settle_timer);
+            esp_timer_start_once(s_reboot_settle_timer, USB_MSC_REBOOT_SETTLE_US);
+        } else {
+            spawn_reboot_worker();
+        }
+        return;
+    }
     // Drop the SD-export lock before leaving UI mode — see tud_umount_cb().
     animation_player_end_sd_export();
     ugfx_ui_hide_usb_msc();
@@ -398,6 +515,16 @@ void tud_resume_cb(void)
     // Resume implies the prior suspend was not a disconnect — clear any stale
     // debounce timestamp so the next mount isn't suppressed.
     s_last_unmount_us = 0;
+    // A writes-pending suspend kept the SD-export lock held and only armed the
+    // reboot settle timer; a resume inside the window means the session
+    // continues — cancel the reboot and let MSC transfers carry on.
+    if (s_host_wrote && !s_reboot_pending && tud_mounted() &&
+        animation_player_is_sd_export_locked()) {
+        if (s_reboot_settle_timer) {
+            esp_timer_stop(s_reboot_settle_timer);
+        }
+        s_usb_active = true;
+    }
 }
 
 // CDC callbacks

@@ -1205,21 +1205,18 @@ static void ugfx_ui_draw_usb_msc(void)
 
     if (s_usb_msc_rebooting) {
         gdispFillStringBox(0, screen_h / 2 - 150, screen_w, 45,
-                           "microSD Card Updated",
+                           "USB Disconnected",
                            font_title, amber, GFX_BLACK, gJustifyCenter);
 
         gdispFillStringBox(0, y, screen_w, line_h,
-                           "Files on the microSD card were",
-                           font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
-        gdispFillStringBox(0, y + line_h, screen_w, line_h,
-                           "changed over the USB connection.",
+                           "The USB connection has ended.",
                            font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
 
         gdispFillStringBox(0, y + line_h * 3, screen_w, line_h,
                            "p3a will now restart to",
                            font_body, HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
         gdispFillStringBox(0, y + line_h * 4, screen_w, line_h,
-                           "reload the card.",
+                           "reload the microSD card.",
                            font_body, HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
 
         gdispFillStringBox(0, screen_h - 60, screen_w, 36,

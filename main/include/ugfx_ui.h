@@ -226,8 +226,8 @@ esp_err_t ugfx_ui_show_usb_msc(void);
 /**
  * @brief Switch the USB Mass Storage screen to its reboot-notice variant
  *
- * Shown when the USB host wrote to the card and the device is about to
- * restart to reload it. Same modal screen as ugfx_ui_show_usb_msc(),
+ * Shown when the USB MSC session has ended and the device is about to
+ * restart to reload the card. Same modal screen as ugfx_ui_show_usb_msc(),
  * different text. Cleared by ugfx_ui_show_usb_msc()/ugfx_ui_hide_usb_msc().
  *
  * @return ESP_OK on success

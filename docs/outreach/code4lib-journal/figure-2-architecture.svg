@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 470" font-family="Georgia, 'Times New Roman', serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#444444"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="860" height="470" fill="#ffffff"/>
+
+  <!-- household boundary -->
+  <rect x="22" y="30" width="380" height="416" rx="14" fill="none" stroke="#999999" stroke-width="1.5" stroke-dasharray="7 5"/>
+  <text x="212" y="52" text-anchor="middle" font-size="14" font-style="italic" fill="#666666">the household: one public IP,</text>
+  <text x="212" y="70" text-anchor="middle" font-size="14" font-style="italic" fill="#666666">one shared per-museum rate-limit budget</text>
+
+  <!-- browser box -->
+  <rect x="52" y="92" width="320" height="96" rx="8" fill="#eef3fa" stroke="#4a6fa5" stroke-width="1.5"/>
+  <text x="212" y="118" text-anchor="middle" font-size="17" font-weight="bold" fill="#1c3a5e">User's browser</text>
+  <text x="212" y="140" text-anchor="middle" font-size="14" fill="#333333">p3a browse UI, served by the device</text>
+  <text x="212" y="159" text-anchor="middle" font-size="14" fill="#333333">7 JS discovery adapters</text>
+
+  <!-- device box -->
+  <rect x="52" y="308" width="320" height="112" rx="8" fill="#f3efe7" stroke="#8a6d3b" stroke-width="1.5"/>
+  <text x="212" y="334" text-anchor="middle" font-size="17" font-weight="bold" fill="#5b4520">p3a device (ESP32-P4)</text>
+  <text x="212" y="356" text-anchor="middle" font-size="14" fill="#333333">7 firmware discovery adapters</text>
+  <text x="212" y="375" text-anchor="middle" font-size="14" fill="#333333">per-museum cooldown table</text>
+  <text x="212" y="394" text-anchor="middle" font-size="14" fill="#333333">SD-card artwork vault</text>
+
+  <!-- museums box -->
+  <rect x="560" y="150" width="272" height="150" rx="8" fill="#eff7ef" stroke="#4a7d4a" stroke-width="1.5"/>
+  <text x="696" y="178" text-anchor="middle" font-size="17" font-weight="bold" fill="#245224">Seven museums</text>
+  <text x="696" y="203" text-anchor="middle" font-size="14" fill="#333333">7 bespoke search APIs</text>
+  <text x="696" y="222" text-anchor="middle" font-size="14" fill="#333333">(discovery: bespoke per museum)</text>
+  <text x="696" y="252" text-anchor="middle" font-size="14" fill="#333333">1 IIIF Image API</text>
+  <text x="696" y="271" text-anchor="middle" font-size="14" fill="#333333">(pixels: uniform across all seven)</text>
+
+  <!-- browser -> museums -->
+  <path d="M 372 128 C 470 122, 500 150, 558 178" fill="none" stroke="#444444" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="452" y="118" text-anchor="middle" font-size="13.5" fill="#444444">browse: terms, counts, previews</text>
+
+  <!-- device -> museums (refresh) -->
+  <path d="M 372 340 C 460 330, 500 290, 558 246" fill="none" stroke="#444444" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="475" y="323" text-anchor="middle" font-size="13.5" fill="#444444">refresh: artwork listings</text>
+
+  <!-- device -> museums (download) -->
+  <path d="M 372 390 C 490 388, 540 330, 566 292" fill="none" stroke="#444444" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="493" y="392" text-anchor="middle" font-size="13.5" fill="#444444">download: !720,720 JPEGs</text>
+
+  <!-- browser <-> device -->
+  <path d="M 160 188 L 160 306" fill="none" stroke="#444444" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="150" y="235" text-anchor="end" font-size="13.5" fill="#444444">save channels</text>
+  <text x="150" y="253" text-anchor="end" font-size="13.5" fill="#444444">report any 429</text>
+
+  <path d="M 264 306 L 264 190" fill="none" stroke="#444444" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="274" y="235" font-size="13.5" fill="#444444">cooldown state</text>
+  <text x="274" y="253" font-size="13.5" fill="#444444">(polled before probes)</text>
+</svg>

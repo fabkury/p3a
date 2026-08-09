@@ -1,9 +1,12 @@
 # Could IIIF Presentation API have served as p3a's artwork-discovery layer?
 
-Research memo for the Code4Lib Journal article. **Probe date: 2026-08-07.** All probes
-were live public GETs (curl, UA `p3a-research/1.0 (pub@kury.dev)`), 2–6 requests per
-museum, sequential. Byte sizes are exact `size_download` values from that date.
-Anything not directly observed is marked **UNVERIFIED**.
+Research memo for the Code4Lib Journal article. **Probe date: 2026-08-07;
+failure-case re-verification 2026-08-09** (Harvard — with and without a valid
+HAM API key supplied by the author — plus Wellcome's 503s and AIC's collection
+URL). All probes were live public GETs (curl, UA `p3a-research/1.0
+(pub@kury.dev)`), 2–6 requests per museum, sequential. Byte sizes are exact
+`size_download` values from the probe date. Anything not directly observed is
+marked **UNVERIFIED**.
 
 **Research question.** p3a's shipped architecture uses each museum's bespoke search API
 for discovery (enumerate a filtered collection with total counts at arbitrary offset,
@@ -71,7 +74,10 @@ Content Search advertised.
 The server treats `collection` as an *Image API identifier* and redirects to its
 (nonexistent) `info.json` — conclusive evidence there is no Presentation Collection
 mounted there. (A 2026-05 probe of the same URL and `/iiif/3/collection` returned
-403; the behavior changed but the answer did not.) Per-artwork manifests exist but
+403; the behavior changed but the answer did not. Re-verified 2026-08-09:
+302 → `collection/info.json` → 404 unchanged. Same-day note: a bare-curl
+User-Agent now receives a Cloudflare interstitial on `www.artic.edu` — an
+identifying or browser-like UA is required even to reach the redirect.) Per-artwork manifests exist but
 hang off the bespoke API's URL space (`/api/v1/artworks/{id}/manifest.json`): you
 need the search API to learn the id before you can fetch the manifest.
 
@@ -120,8 +126,11 @@ object id (`O507242`) that names the manifest comes from the search API.
 Wellcome is the strongest Presentation adopter of the seven — the only one with a
 top-level machine-discoverable Collection tree, which even materializes facet axes
 (subject/genre/contributor) as sub-collections. Yet **both facet children probed
-returned 503 on 2026-08-07** (cause UNVERIFIED — possibly a transient backend
-outage, possibly the cost of serving an entire facet axis as one document). Even
+returned 503 on 2026-08-07, and again on 2026-08-09** — the root staying 200 both
+days — with an RFC 9110 problem-details JSON body titled "Temporarily
+unavailable". Not a one-off outage, then: reproducible across dates while
+self-describing as temporary (root cause UNVERIFIED — plausibly the cost of
+serving an entire facet axis as one document). Even
 when they work, P3 Collections carry no totals and no paging (§3), so the tree
 answers "what exists" but not "how many" or "give me items 400–499". Its Content
 Search service searches digitized text *within one work* — catalogue discovery is
@@ -151,9 +160,25 @@ absence of an unadvertised one is UNVERIFIED). Note SMK search supports true
 
 The textbook case: HAM ships the advertised IIIF Collection *root*, but the single
 child that would actually enumerate objects has been returning **500** — the tree is
-dead one level down, precisely at the point where discovery would begin. Live
-discovery requires the key-gated `api.harvardartmuseums.org` search API (not probed;
-key-gated), which is what p3a uses.
+dead one level down, precisely at the point where discovery would begin.
+
+**Key-independence check (2026-08-09, prompted by the author):** because HAM's
+*search* API is key-gated, the 500 could conceivably have been a
+missing-credential artifact. Re-probed with a valid `apikey` supplied by the
+author: `collections/top` 200 (632 B, byte-identical role), `collections/object`
+**500**, `collections/object?page=1` **500** — responses identical with and
+without the key. The manifest host is confirmed anonymous (manifest 200/9 209 B,
+no key). The original finding stands and is now key-independent across two dates.
+
+**Bonus verification of the permission-gate claim** (search API, with key,
+2026-08-09): `object?hasimage=1` without `q=imagepermissionlevel:0` → **57 of the
+first 100** records have null/absent `primaryimageurl` (totalrecords 226 327);
+with the gate → **0 of 100** null (totalrecords 167 189, i.e. ~26 % of
+"has image" records are permission-restricted). The article's "roughly half of a
+raw page" phrasing is measured, not folklore.
+
+Live discovery requires the key-gated `api.harvardartmuseums.org` search API,
+which is what p3a uses.
 
 ### 2.7 Smithsonian
 
@@ -259,8 +284,10 @@ IIIF Presentation could not have served as p3a's artwork-discovery layer, and th
 reasons stack rather than compete. **Empirically** (probed 2026-08-07): of the seven
 museums, only Wellcome and Harvard publish a machine-discoverable IIIF Collection
 document at all, and both failed at exactly the enumeration level when probed —
-Harvard's `/collections/object` returns 500 beneath a working root, and both of
-Wellcome's probed facet sub-collections returned 503 beneath a working root; AIC and
+Harvard's `/collections/object` returns 500 beneath a working root (reproduced
+2026-08-09, identically with and without a valid API key), and both of
+Wellcome's probed facet sub-collections returned 503 beneath a working root
+(reproduced 2026-08-09); AIC and
 V&A serve per-object manifests but no collection surface (AIC's `/iiif/2/collection`
 resolves as a nonexistent *image*); SMK's manifests are an endpoint *of the bespoke
 API*; the Smithsonian documents no Presentation surface whatsoever. Six of seven do

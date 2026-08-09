@@ -98,13 +98,17 @@ discovery layer must provide. Three primitives, for every museum:
    carry the key that unlocks pixels, without requiring a further
    per-artwork request.
 
-Notably absent: artwork metadata. p3a displays images full-bleed and
-stores a 64-byte record per artwork (of which 48 bytes hold the image
-key), so titles and artists are, with regret, mostly dispensable. This
-austerity turns out to be analytically useful — it reduces "can a
-small client browse this museum?" to the three primitives above,
-making comparisons between museums, and between APIs and standards,
-unusually crisp.
+What about artwork metadata — titles, artists, dates? The device
+stores none of it: its per-artwork record is 64 bytes, of which 48
+hold the image key, and it displays images full-bleed. Metadata is
+fetched on demand instead — when a viewer taps the info button in the
+web app while an artwork is on screen, the *browser*, not the device,
+queries the originating museum's API for that artwork's details. That
+lookup is, once again, different for every museum; IIIF standardizes
+none of it. For the device-side survey that follows, though, the
+austerity is analytically useful — it reduces "can a small client
+browse this museum?" to the three primitives above, making comparisons
+between museums, and between APIs and standards, unusually crisp.
 
 ## 3. The uniform layer
 
@@ -267,8 +271,10 @@ explain to users.
 
 **Harvard Art Museums** taught the value of reading query parameters
 as load-bearing: without `q=imagepermissionlevel:0`, roughly half of
-the records flagged "has image" arrive without a usable image URL —
-permission-restricted at a layer the `hasimage` flag does not see.
+the records flagged "has image" arrive without a usable image URL
+(measured while verifying this article: 57 of the first 100 such
+records; with the gate, none) — permission-restricted at a layer the
+`hasimage` flag does not see.
 Harvard's image "server", meanwhile, is a URN resolver: the stored
 identifier is a URN, the IIIF path is appended to it, and a 303
 redirect lands on the actual image host.
@@ -311,16 +317,19 @@ the natural carrier" for collection browsing. The shipped system uses
 none of it. Because the decision was made in the fog of development
 (with, candidly, an LLM's hands on many of the levers), I re-examined
 it for this article with fresh probes of all seven institutions
-(2026-08-07). The answer is a confident no, on three independent
+(2026-08-07; the failure cases re-verified 2026-08-09, Harvard's with
+a valid API key). The answer is a confident no, on three independent
 grounds.
 
 **Adoption.** Of the seven museums, exactly two publish a
 machine-discoverable IIIF Collection document — and both broke at
 precisely the level where enumeration would begin. Harvard advertises
 a Presentation collection root whose single child, *Objects*, returns
-HTTP 500. Wellcome — the strongest adopter, with a handsome top-level
-tree that even materializes facet axes as sub-collections — returned
-503 for both facet children I probed. Chicago's `/iiif/2/collection`
+HTTP 500 — identically with and without a valid API key, on probes
+two days apart. Wellcome — the strongest adopter, with a handsome
+top-level tree that even materializes facet axes as sub-collections —
+returned 503 for both facet children on both probe dates, each
+response describing itself as "temporarily unavailable". Chicago's `/iiif/2/collection`
 URL is parsed by its image server as an image named "collection"
 (redirecting to an `info.json` that does not exist); the V&A's
 manifest host has no collection surface; SMK advertises none; the

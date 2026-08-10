@@ -14,10 +14,15 @@
   welcome correction." restored). Next steps only after review:
   Fab's language pass, PNG rasterization of figure 2 (≤500 px), CSE
   reference formatting, then (if go) the proposal/abstract.
-- **Process decision:** article first, proposal later. Fab wants to see
-  the finished article before deciding whether to pitch the editors at
-  all. Do not draft or send any proposal until the article is reviewed
-  and the go/no-go decision is made.
+- **SUBMITTED 2026-08-10, 11:16 AM ET.** Fab sent the article to
+  c4ljournal@gmail.com (as-sent email archived in
+  `submission-email.md`). Provisional decision expected within ~a
+  month (by ~2026-09-10); if silence past mid-September, send a short
+  polite follow-up. Next milestones: editor reply → revisions to
+  house style (CSE refs, figure delivery) → publication.
+- **Process decision (superseded by the GO above):** article first,
+  proposal later — the article was written and reviewed before any
+  contact with the editors.
 - **Facts pinned during writing (2026-08-08):** hero photo artwork
   identified — AIC 45243, *Two Dancers*, Edgar Degas, c. 1893–98,
   pastel and charcoal, `is_public_domain: true`, image_id

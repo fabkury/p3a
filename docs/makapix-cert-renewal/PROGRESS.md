@@ -100,15 +100,27 @@ release versioning decided at release time), webui `2.15`.
   to makapix.club:8883, renewal task correctly silent — fresh cert not in
   window). Note: the pre-test prod player record (5cf229f7-…) is now an
   orphan in Fab's account and can be deleted from the makapix.club web UI.
-- [ ] Merge feature/makapix-cert-renewal → main; release by end of July 2026
-  (hard deadlines: window opens 2026-09-13, first expiry 2026-12-12).
-- [ ] External watch item: MPX team deploys hardened CRL watcher to prod
-  BEFORE 2026-07-25 (their commitment, optional 0010 confirmation).
+- [x] Merge feature/makapix-cert-renewal → main — DONE 2026-07-09
+  (fast-forward, main @ 8389ee7c); released as v1.1.0 on 2026-07-17 (tag on
+  a3f65c61), ahead of the end-of-July commitment.
+- [x] External watch item: MPX team deploys hardened CRL watcher to prod
+  BEFORE 2026-07-25 — CONFIRMED by the MPX team (recorded 2026-08-10):
+  deployed before the deadline; no at-risk window occurred.
 - [x] Prod `min(cert_expires_at)` — CONFIRMED 2026-12-12 09:12 UTC (4 certs
   Dec 2026; 15/24 before Jun 2027; 9 already 3-year). Renewal window opens
   2026-09-13 = firmware release deadline. MPX plan doc updated by server team.
 - [x] Prod stale-CRL check — no active outage (broker restarted 2026-07-07,
   loaded CRL valid to 2026-07-25); server team commits to deploying the CRL
   watcher to prod BEFORE 2026-07-25 (else manual broker restart Jul 18-25).
-- [ ] Release + OTA rollout before 2026-09-13 (window-open) and hard-before
-  2026-12-12 (first expiry); send release timeline to server team after e2e.
+- [x] Release + OTA rollout before 2026-09-13 (window-open) and hard-before
+  2026-12-12 (first expiry) — v1.1.0 published to GitHub Releases 2026-07-17
+  with ~2 months of runway; fleet adopts via OTA.
+
+## 2026-08-10 — Project CLOSED
+
+The MPX team confirmed the hardened prod CRL watcher was deployed before
+the 2026-07-25 CRL-expiry deadline — the last external dependency on this
+project. With firmware renewal released in v1.1.0 (2026-07-17), the renewal
+window opening 2026-09-13, and the earliest fleet cert expiry 2026-12-12,
+the cliff is fully de-risked: renewal is automatic, self-healing was e2e
+tested (T1–T6), and no further tracking is needed.

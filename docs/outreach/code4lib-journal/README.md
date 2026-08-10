@@ -3,8 +3,15 @@
 - **Idea:** full-length article for the Code4Lib Journal about p3a's
   firmware-level IIIF client ("Writing an IIIF Client on a $48
   Microcontroller" — working title, not final).
-- **Started:** 2026-08-07. **Article drafted 2026-08-08** (`article.md`,
-  ~4,400 words) — awaiting Fab's review. Next steps only after review:
+- **Started:** 2026-08-07. **Article drafted 2026-08-08; Fab's full
+  review (tracked changes + 9 comments) merged 2026-08-10** — his voice
+  edits are now the base text of `article.md`; all comments resolved
+  (JPEG section rewritten evidence-based: 2/7 museums serve progressive
+  JPEG → always-software; V&A probe mechanics clarified; drift =
+  eviction + re-download, old file lingers till age-based cleanup;
+  64×4,096 limits verified; "fourteen months" → "three months";
+  UA email pub@ vs bio email fab@ split confirmed; short "I would
+  welcome correction." restored). Next steps only after review:
   Fab's language pass, PNG rasterization of figure 2 (≤500 px), CSE
   reference formatting, then (if go) the proposal/abstract.
 - **Process decision:** article first, proposal later. Fab wants to see

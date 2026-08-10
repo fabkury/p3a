@@ -122,6 +122,7 @@ The web interface provides:
 - **Device status** — current artwork (Wi-Fi info is on the Settings → Network tab; uptime on Settings → System)
 - **Playback controls** — next, previous, pause, resume
 - **Configuration** — brightness, screen rotation, settings
+- **Boot animation** — the device plays one of 22 intro animations, picked at random on each boot; under Settings → Display → "Boot Logo Animation" you can pick a specific one instead and set how long it plays (1–7.5 s, default 3 s)
 - **PICO-8 button** (if the feature is enabled in firmware)
 
 > **Note:** The web interface is only accessible on your local network, not over the internet. For remote control, register your device at [makapix.club](https://makapix.club/).

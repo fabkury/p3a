@@ -60,7 +60,8 @@ p3a/
 │   │   ├── p3a_touch_router.c           # Touch event routing by state
 │   │   ├── p3a_current_post.c           # Current post tracking
 │   │   ├── p3a_logo.c                   # Logo blitting utilities
-│   │   ├── p3a_boot_logo.c              # Boot logo with fade-in
+│   │   ├── p3a_boot_logo.c              # Intro manager: picks & times the boot intro animation
+│   │   ├── intro_anims/                 # 22 boot intro animations (pure C, host-testable; see docs/intro-animations/)
 │   │   ├── sd_path.c                    # Configurable SD card root path
 │   │   ├── fresh_boot.c                 # Debug NVS/SD erase utilities
 │   │   ├── include/

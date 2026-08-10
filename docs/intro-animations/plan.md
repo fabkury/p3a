@@ -1,9 +1,11 @@
 # Intro-Animations — Plan
 
-Goal: 12 visually distinct intro animations, one picked at random per boot, all
-sharing one architecture, all developed and regression-checked on the host
-before device verification. Status tracking lives in [README.md](README.md)
-(phases) and [catalog.md](catalog.md) (per-animation).
+Goal: a pool of visually distinct intro animations, one picked at random per
+boot, all sharing one architecture, all developed and regression-checked on
+the host before device verification. Originally targeted 12 via a cull; on
+2026-08-10 Fab dropped the cull — **all 22 implemented animations ship**.
+Status tracking lives in [README.md](README.md) (phases) and
+[catalog.md](catalog.md) (per-animation).
 
 ## Boot sequence (fixed structure)
 
@@ -14,8 +16,8 @@ blank-delay (250 ms, hardcoded)  ->  intro-animation (NVS, 1000..7500 ms, defaul
 - **`blank-delay`**: flat user-configured background color, no logo.
   Manager-owned.
 - **`intro-animation`**: the per-boot randomly picked animation; the only part
-  the 12 modules implement; the only duration that is parameterized (`t`
-  spans exactly this window).
+  the animation modules implement; the only duration that is parameterized
+  (`t` spans exactly this window).
 - **`hold`**: static end state — logo at full opacity centered. Manager-owned.
 
 ## Contract (what every animation must satisfy)
@@ -101,11 +103,11 @@ Acceptance: harness builds and runs on the laptop; check mode passes
 
 Acceptance: device boot matches pre-refactor; check suite green. **DONE.**
 
-### Phase 3 — Develop new animations (more than 11, cull to best 11)
+### Phase 3 — Develop new animations
 
-Strategy: **build more than we need, keep only the best 11**. Concepts move
-from the candidate pool in [catalog.md](catalog.md) into implementation in
-batches; final selection happens after side-by-side comparison on device.
+Strategy was: **build more than we need, keep only the best 11** (plus
+`smoothstep-fade` for 12). Concepts move from the candidate pool in
+[catalog.md](catalog.md) into implementation in batches.
 
 For each batch:
 
@@ -115,12 +117,13 @@ For each batch:
 4. Fab builds firmware and reviews the batch on the ESP32-P4.
 5. Polish to `device-OK`; mark candidate status in catalog.
 
-After enough candidates have reached `device-OK`, Fab picks the **best 11**
-(plus `smoothstep-fade` for 12 total) and they advance to `production-ready`.
-Rejected candidates stay in the catalog as `device-OK` (could be revived
-later) but are not registered in the firmware.
+**Superseded 2026-08-10: the cull is dropped.** Fab reviewed all 22
+implemented animations on the device and kept every one — no side-by-side
+selection round. Candidates rejected *during development* stay in the
+catalog (could be revived later) but are not registered in the firmware.
 
-Acceptance: 12 animations at `production-ready` in catalog.md.
+Acceptance (revised): all implemented animations device-verified. **DONE
+2026-08-10 — 22 animations, all registered in firmware.**
 
 ### Phase 4 — Random selection + duration setting + force-override
 
@@ -146,19 +149,24 @@ Acceptance: 12 animations at `production-ready` in catalog.md.
 
 Acceptance: ~uniform spread over repeated boots with default settings;
 duration changes take effect on next boot; force-override plays the selected
-animation deterministically.
+animation deterministically. **DONE — device-verified 2026-08-10.**
 
 ### Phase 5 — Final device QA
 
+The cull to 12 (originally part of this phase) was dropped 2026-08-10 — all
+22 animations ship. The remaining QA below is still planned for a future
+device session.
+
 - [ ] One profiling firmware pass: log per-frame render time (min/avg/max)
-      for all 12 animations on the P4; each must fit its declared per-frame
+      for all 22 animations on the P4; each must fit its declared per-frame
       budget.
-- [ ] Spot-check all 12 across rotations and a few background colors (incl.
+- [ ] Spot-check all 22 across rotations and a few background colors (incl.
       black, white, 0x808080 — the chroma-key gray — and a saturated color)
       on device.
 - [ ] Spot-check the duration setting at min (1000 ms), default (3000 ms),
       and max (7500 ms).
-- [ ] Docs sweep: `docs/intro-animations/` statuses, `docs/HOW-TO-USE.md` for
-      the new Display setting, `docs/infrastructure/components.md` if it
-      mentions the boot logo.
-- [ ] Harness documented and left in repo for future animation development.
+- [x] Docs sweep (2026-08-10): `docs/intro-animations/` statuses,
+      `docs/HOW-TO-USE.md` for the new Display setting,
+      `docs/infrastructure/` boot-logo mentions.
+- [x] Harness documented and left in repo for future animation development
+      (`host/intro-anim-lab/README.md`).

@@ -5,10 +5,10 @@ candidate for implementation. Status values (defined in
 [README.md](README.md)): `idea` → `approved` → `host-dev` → `host-OK` →
 `device-OK` → `production-ready`.
 
-Final selection strategy: **build more candidates than the 12 final slots
-need, then keep only the best 11** (plus `smoothstep-fade`) for
-`production-ready`. Rejected candidates that reached `device-OK` stay in this
-catalog but are not registered in firmware.
+Final selection: the original plan was to cull to the best 12; **on
+2026-08-10 Fab dropped the cull — all 22 implemented animations ship** and
+are registered in firmware. Candidates rejected during development stay in
+this catalog but are not registered.
 
 Update this file whenever an animation changes status.
 
@@ -17,27 +17,27 @@ Update this file whenever an animation changes status.
 | Name | Status | Notes |
 |------|--------|-------|
 | `smoothstep-fade` | device-OK (2026-06-12) | The legacy boot animation behavior, frozen: `alpha = smoothstep(t)` across the full window. Module: `ia_smoothstep_fade.c`. |
-| `pixel-dissolve`  | host-OK (batch 1, 2026-06-12) | Hash-priority threshold dissolve: K = smoothstep(t)·N opaque source pixels visible, chosen by lowest seeded hash. Pixel-art preserved (one threshold per source pixel). Module: `ia_pixel_dissolve.c`. |
-| `iris-wipe`       | host-OK (batch 1, 2026-06-12) | Circular reveal from bbox center shifted -10 src px upward; smoothstep-paced radius. Module: `ia_iris_wipe.c`. |
-| `assemble`        | host-OK (batch 1, 2026-06-12) | Per-source-pixel fly-in over a 256-entry sin/cos LUT (continuous angle) with per-pixel magnitude variance in [0.6, 1.4]; cubic ease-out timing. Module: `ia_assemble.c`. |
-| `scanline-reveal` | host-OK (batch 2, 2026-06-12) | CRT-style bright bar sweeps top→bottom across the bbox; logo opaque above the bar, bg below; bar contrast color picked against bg luminance. Module: `ia_scanline_reveal.c`. |
-| `bounce-drop`     | host-OK (batch 2, 2026-06-12) | Whole-image gravity drop with damped bounces: falling arc accelerates linearly under gravity (y = H·(1−u²) → speed grows into impact), abrupt velocity reversal at landing, 2 damped bounces with restitution e=0.42, then holds. Module: `ia_bounce_drop.c`. |
-| `wave-settle`     | host-OK (batch 2, 2026-06-12) | Horizontal sine displacement per source-row, amplitude damps to 0 by t=1 with phase drift; logo alpha fades in via smoothstep. Module: `ia_wave_settle.c`. |
-| `checker-tiles`   | host-OK (batch 2, 2026-06-12) | 6×6 source-pixel tiles pop in via hash-priority threshold (smoothstep-paced) — chunky checkerboard-y reveal. Module: `ia_checker_tiles.c`. |
-| `pixel-rain`      | host-OK (batch 3, 2026-06-12) | Per-source-pixel drop with three independent variability axes from one seeded hash: start delay ∈ [0, 0.55), drop distance ∈ [0.55, 1.7]×screen, ease-power ∈ {4,5,6,7}. Heterogenous rain rather than dense cloud. Module: `ia_pixel_rain.c`. |
-| `venetian`        | host-OK (batch 3, 2026-06-12) | 6-src-px horizontal strips slide in alternately from left/right; smoothstep-paced offset to 0. Module: `ia_venetian.c`. |
-| `glitch-settle`   | host-OK (batch 3, 2026-06-12) | 4-src-px-tall slabs jitter horizontally with per-channel R/G/B chromatic aberration; quantized into 12 shake states; (1−t)² decay. Module: `ia_glitch_settle.c`. |
-| `typewriter`      | host-OK (batch 3, 2026-06-12) | Source-columns reveal left-to-right at constant speed; 6-cycle blinking contrast cursor at the head. Module: `ia_typewriter.c`. |
-| `spiral-reveal`   | host-OK (batch 3, 2026-06-12) | Rotating cone sweeps 1.5 turns clockwise from bbox center; aperture and radial threshold both expand to full coverage by t=1. Module: `ia_spiral_reveal.c`. |
-| `mosaic-shrink`   | host-OK (batch 4, 2026-06-12) | Block-quantized render at decreasing block size (12→1 src px); per-block top-left sample blended toward bg by smoothstep alpha. Module: `ia_mosaic_shrink.c`. |
-| `color-emerge`    | host-OK (batch 4, 2026-06-12) | Two-phase color-space animation: silhouette in contrast color fades in alpha-wise over t∈[0, 0.25), then per-channel value lerps from silhouette toward source color over t∈[0.25, 1]. Module: `ia_color_emerge.c`. |
-| `starburst`       | host-OK (batch 4, 2026-06-12) | Per-pixel fly-in from far outside along home-radial direction with back-out (overshoot) easing (c2=2.6, dist=1.7×width) — pixels punch ~22% past home before snapping back. Module: `ia_starburst.c`. |
-| `plasma-dissolve` | host-OK (batch 5, 2026-06-12) | Smooth plasma threshold field (3-sin sum, seed-driven phases) at source-pixel scale; reveal iff field ≤ smoothstep(t). Same dissolve geometry as pixel-dissolve, but correlated noise → organic blobs instead of speckle. Module: `ia_plasma_dissolve.c`. |
-| `voronoi-shatter` | host-OK (batch 5, 2026-06-12) | 24 seeded Voronoi sites; each cell rigid-translates from its outward radial direction with cubic ease-out remaining-distance. Cell-id LUT computed per call. Module: `ia_voronoi_shatter.c`. |
-| `hue-cycle-lock`  | host-OK (batch 5, 2026-06-12) | Per-pixel HSV hue rotation; offset = (1−smoothstep(t))·2 full turns; saturation/value preserved. Logo fades in (smoothstep alpha) over the first 30% of the window while hue-cycling, then continues cycling at full opacity until locking to true colors at t=1. Pure color-space animation distinct from color-emerge (RGB lerp). Module: `ia_hue_cycle_lock.c`. |
-| `blinds-flip`     | host-OK (batch 6, 2026-06-12) | Venetian-blind 3D flip: 6-src-row strips open from edge-on, growing vertically around their center with foreshortened nearest sampling and shading 0.35→1.0; staggered top-to-bottom (0.45 window each, starts spread over [0, 0.55]). Module: `ia_blinds_flip.c`. |
-| `swirl-in`        | host-OK (batch 6, 2026-06-12) | Galaxy gather: per-pixel curved polar arc — radius shrinks (launch +0.75×width, ±30% per-pixel variance) while angle unwinds 1.1 turns (direction flips per boot); cubic ease-out; offset computed against recomputed home polar position so it collapses to exactly 0. Module: `ia_swirl_in.c`. |
-| `channel-merge`   | host-OK (batch 6, 2026-06-12) | Three R/G/B channel ghosts slide in from three directions 120° apart (0.85×width); each pass writes only its channel byte so overlaps recombine toward true color; staggered locks R 0.78 / G 0.88 / B 0.98, cubic ease-out. Module: `ia_channel_merge.c`. |
+| `pixel-dissolve`  | device-OK (batch 1; device-verified 2026-08-10) | Hash-priority threshold dissolve: K = smoothstep(t)·N opaque source pixels visible, chosen by lowest seeded hash. Pixel-art preserved (one threshold per source pixel). Module: `ia_pixel_dissolve.c`. |
+| `iris-wipe`       | device-OK (batch 1; device-verified 2026-08-10) | Circular reveal from bbox center shifted -10 src px upward; smoothstep-paced radius. Module: `ia_iris_wipe.c`. |
+| `assemble`        | device-OK (batch 1; device-verified 2026-08-10) | Per-source-pixel fly-in over a 256-entry sin/cos LUT (continuous angle) with per-pixel magnitude variance in [0.6, 1.4]; cubic ease-out timing. Module: `ia_assemble.c`. |
+| `scanline-reveal` | device-OK (batch 2; device-verified 2026-08-10) | CRT-style bright bar sweeps top→bottom across the bbox; logo opaque above the bar, bg below; bar contrast color picked against bg luminance. Module: `ia_scanline_reveal.c`. |
+| `bounce-drop`     | device-OK (batch 2; device-verified 2026-08-10) | Whole-image gravity drop with damped bounces: falling arc accelerates linearly under gravity (y = H·(1−u²) → speed grows into impact), abrupt velocity reversal at landing, 2 damped bounces with restitution e=0.42, then holds. Module: `ia_bounce_drop.c`. |
+| `wave-settle`     | device-OK (batch 2; device-verified 2026-08-10) | Horizontal sine displacement per source-row, amplitude damps to 0 by t=1 with phase drift; logo alpha fades in via smoothstep. Module: `ia_wave_settle.c`. |
+| `checker-tiles`   | device-OK (batch 2; device-verified 2026-08-10) | 6×6 source-pixel tiles pop in via hash-priority threshold (smoothstep-paced) — chunky checkerboard-y reveal. Module: `ia_checker_tiles.c`. |
+| `pixel-rain`      | device-OK (batch 3; device-verified 2026-08-10) | Per-source-pixel drop with three independent variability axes from one seeded hash: start delay ∈ [0, 0.55), drop distance ∈ [0.55, 1.7]×screen, ease-power ∈ {4,5,6,7}. Heterogenous rain rather than dense cloud. Module: `ia_pixel_rain.c`. |
+| `venetian`        | device-OK (batch 3; device-verified 2026-08-10) | 6-src-px horizontal strips slide in alternately from left/right; smoothstep-paced offset to 0. Module: `ia_venetian.c`. |
+| `glitch-settle`   | device-OK (batch 3; device-verified 2026-08-10) | 4-src-px-tall slabs jitter horizontally with per-channel R/G/B chromatic aberration; quantized into 12 shake states; (1−t)² decay. Module: `ia_glitch_settle.c`. |
+| `typewriter`      | device-OK (batch 3; device-verified 2026-08-10) | Source-columns reveal left-to-right at constant speed; 6-cycle blinking contrast cursor at the head. Module: `ia_typewriter.c`. |
+| `spiral-reveal`   | device-OK (batch 3; device-verified 2026-08-10) | Rotating cone sweeps 1.5 turns clockwise from bbox center; aperture and radial threshold both expand to full coverage by t=1. Module: `ia_spiral_reveal.c`. |
+| `mosaic-shrink`   | device-OK (batch 4; device-verified 2026-08-10) | Block-quantized render at decreasing block size (12→1 src px); per-block top-left sample blended toward bg by smoothstep alpha. Module: `ia_mosaic_shrink.c`. |
+| `color-emerge`    | device-OK (batch 4; device-verified 2026-08-10) | Two-phase color-space animation: silhouette in contrast color fades in alpha-wise over t∈[0, 0.25), then per-channel value lerps from silhouette toward source color over t∈[0.25, 1]. Module: `ia_color_emerge.c`. |
+| `starburst`       | device-OK (batch 4; device-verified 2026-08-10) | Per-pixel fly-in from far outside along home-radial direction with back-out (overshoot) easing (c2=2.6, dist=1.7×width) — pixels punch ~22% past home before snapping back. Module: `ia_starburst.c`. |
+| `plasma-dissolve` | device-OK (batch 5; device-verified 2026-08-10) | Smooth plasma threshold field (3-sin sum, seed-driven phases) at source-pixel scale; reveal iff field ≤ smoothstep(t). Same dissolve geometry as pixel-dissolve, but correlated noise → organic blobs instead of speckle. Module: `ia_plasma_dissolve.c`. |
+| `voronoi-shatter` | device-OK (batch 5; device-verified 2026-08-10) | 24 seeded Voronoi sites; each cell rigid-translates from its outward radial direction with cubic ease-out remaining-distance. Cell-id LUT computed per call. Module: `ia_voronoi_shatter.c`. |
+| `hue-cycle-lock`  | device-OK (batch 5; device-verified 2026-08-10) | Per-pixel HSV hue rotation; offset = (1−smoothstep(t))·2 full turns; saturation/value preserved. Logo fades in (smoothstep alpha) over the first 30% of the window while hue-cycling, then continues cycling at full opacity until locking to true colors at t=1. Pure color-space animation distinct from color-emerge (RGB lerp). Module: `ia_hue_cycle_lock.c`. |
+| `blinds-flip`     | device-OK (batch 6; device-verified 2026-08-10) | Venetian-blind 3D flip: 6-src-row strips open from edge-on, growing vertically around their center with foreshortened nearest sampling and shading 0.35→1.0; staggered top-to-bottom (0.45 window each, starts spread over [0, 0.55]). Module: `ia_blinds_flip.c`. |
+| `swirl-in`        | device-OK (batch 6; device-verified 2026-08-10) | Galaxy gather: per-pixel curved polar arc — radius shrinks (launch +0.75×width, ±30% per-pixel variance) while angle unwinds 1.1 turns (direction flips per boot); cubic ease-out; offset computed against recomputed home polar position so it collapses to exactly 0. Module: `ia_swirl_in.c`. |
+| `channel-merge`   | device-OK (batch 6; device-verified 2026-08-10) | Three R/G/B channel ghosts slide in from three directions 120° apart (0.85×width); each pass writes only its channel byte so overlaps recombine toward true color; staggered locks R 0.78 / G 0.88 / B 0.98, cubic ease-out. Module: `ia_channel_merge.c`. |
 
 ## Candidate pool
 
@@ -91,6 +91,6 @@ aside.
 
 Selection guidance when picking batches: favor variety of *mechanism*
 (dissolve vs motion vs wipe vs distortion vs zoom) over variety of theme,
-so the final 12 feel genuinely different at a glance. Keep at most one
+so the final pool feels genuinely different at a glance. Keep at most one
 `high` perf-risk concept per batch so device round-trips aren't dominated
 by optimization work.

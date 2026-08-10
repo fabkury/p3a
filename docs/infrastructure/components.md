@@ -7,7 +7,7 @@ All 25 custom components live under `components/`. This document describes each 
 ## 1. p3a_core — Unified State Machine and Lifecycle
 
 - **Purpose**: Central state machine, touch routing, rendering dispatch, SD path management, and boot utilities
-- **Key files**: `p3a_state.c`, `p3a_state_channel.c`, `p3a_state_connectivity.c`, `p3a_render.c`, `p3a_touch_router.c`, `p3a_current_post.c`, `sd_path.c`, `p3a_boot_logo.c`, `p3a_logo.c`, `fresh_boot.c`
+- **Key files**: `p3a_state.c`, `p3a_state_channel.c`, `p3a_state_connectivity.c`, `p3a_render.c`, `p3a_touch_router.c`, `p3a_current_post.c`, `sd_path.c`, `p3a_boot_logo.c`, `intro_anims/` (22 boot intro animations, pure C — see `docs/intro-animations/`), `p3a_logo.c`, `fresh_boot.c`
 - **Public API**: `p3a_state.h`, `p3a_render.h`, `p3a_touch_router.h`, `p3a_current_post.h`, `p3a_logo.h`, `p3a_boot_logo.h`, `p3a_limits.h`, `sd_path.h`, `fresh_boot.h`
 - **States**: `BOOT`, `ANIMATION_PLAYBACK`, `PROVISIONING`, `OTA`, `PICO8_STREAMING`, `ERROR`
 - **Key functions**:
@@ -15,6 +15,7 @@ All 25 custom components live under `components/`. This document describes each 
   - `p3a_touch_router_init()`, `p3a_touch_router_handle_event()` — state-aware touch routing
   - `p3a_render_init()`, `p3a_render_frame()` — state-aware rendering dispatch
   - `sd_path_init()`, `sd_path_get_*()` — configurable SD card root directory (default `/sdcard/p3a`)
+  - `p3a_boot_logo_init()` — intro manager: picks one of 22 intro animations per boot (random or forced via NVS `intro_anim_force`), duration from NVS `intro_anim_ms` (1000..7500 ms, default 3000); `GET /api/intro-animations` + Settings → Display web UI
 
 ## 2. play_scheduler — Deterministic Multi-Channel Playback Engine
 

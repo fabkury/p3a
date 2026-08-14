@@ -34,8 +34,15 @@ set(P3A_API_VERSION 4)
 # Flasher Tool Build (Windows executable with embedded firmware)
 # =============================================================================
 # Set P3A_BUILD_FLASHER to OFF to skip flasher build (faster dev builds)
-# Set to ON for release builds that need the flasher executable
-set(P3A_BUILD_FLASHER OFF)
+# Set to ON for release builds that need the flasher executable:
+#   idf.py build -DP3A_BUILD_FLASHER=ON
+# Guarded so the documented -D flag actually takes effect (an unconditional
+# set() here used to shadow the cache entry and silently force OFF). The -D
+# value persists in the CMake cache: run once with -DP3A_BUILD_FLASHER=OFF
+# (or fullclean) to return to fast dev builds.
+if(NOT DEFINED P3A_BUILD_FLASHER)
+    set(P3A_BUILD_FLASHER OFF)
+endif()
 # =============================================================================
 
 # Parse PROJECT_VER to extract major, minor, patch components

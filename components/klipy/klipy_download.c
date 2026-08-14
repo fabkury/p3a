@@ -100,13 +100,21 @@ static esp_err_t klipy_resolve_url(uint64_t klipy_id, uint8_t product, uint8_t e
 
     // items?ids= returns {result, data:{data:[{...item...}]}}; take the first
     // array element. Be tolerant of a bare data:{...item...} shape too.
+    // An empty array on HTTP 200 means the item no longer exists on Klipy
+    // (stale cache entry) — map to NOT_FOUND so the download manager writes
+    // a .404 marker instead of retrying forever, matching what the old
+    // single-item route's HTTP 404 used to produce.
     const cJSON *data = cJSON_GetObjectItem(root, "data");
     const cJSON *item = data;
     if (cJSON_IsObject(data)) {
         const cJSON *inner = cJSON_GetObjectItem(data, "data");
         if (cJSON_IsObject(inner)) {
             item = inner;
-        } else if (cJSON_IsArray(inner) && cJSON_GetArraySize(inner) > 0) {
+        } else if (cJSON_IsArray(inner)) {
+            if (cJSON_GetArraySize(inner) == 0) {
+                cJSON_Delete(root);
+                return ESP_ERR_NOT_FOUND;
+            }
             item = cJSON_GetArrayItem(inner, 0);
         }
     }

@@ -266,6 +266,16 @@ esp_err_t art_institution_artic_refresh_channel(const char *channel_id,
         return ESP_ERR_INVALID_ARG;
     }
 
+    // Unavailable gate: AIC's IIIF host rejects non-browser clients, so a
+    // refresh would only enqueue downloads that all 403. Mirror the BYOK
+    // no-key gate (ham.c): return ESP_OK without persisting last_refresh,
+    // so the channel reactivates by itself if the table flag is cleared.
+    if (art_institution_is_unavailable("artic")) {
+        ESP_LOGI(TAG, "AIC unavailable (%s); skipping refresh for '%s'",
+                 art_institution_find("artic")->unavailable_reason, channel_id);
+        return ESP_OK;
+    }
+
     // Defensive cooldown check (the refresh dispatcher already gated, but
     // a 429 may have arrived between eligibility check and dispatch).
     if (art_institution_is_rate_limited("artic")) {

@@ -463,6 +463,13 @@ static esp_err_t dl_get_next_download(download_request_t *out_request, dl_snapsh
                                            ai_museum_id, sizeof(ai_museum_id),
                                            ai_axis_unused, sizeof(ai_axis_unused));
 
+                // Unavailable museum (e.g. AIC behind a Cloudflare challenge):
+                // every download would fail, so don't schedule any. Files
+                // already on SD keep playing — this scan only feeds downloads.
+                if (art_institution_is_unavailable(ai_museum_id)) {
+                    continue;
+                }
+
                 // M2 sentinel extensions never have a downloadable file — skip.
                 // 0xFF (unresolved) entries are work-in-progress: the resolver
                 // will eventually mutate them to a downloadable form, so we

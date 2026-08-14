@@ -103,6 +103,22 @@ typedef struct {
      * which already no-ops on an empty key inside refresh_channel.
      */
     bool (*api_key_missing)(void);
+
+    /**
+     * Optional. Non-NULL marks the museum as unavailable: its image server
+     * (or API) rejects non-browser clients outright, so refresh and
+     * downloads can never succeed and are skipped everywhere. The string
+     * is a short human-readable reason for logs. Cached artwork on SD
+     * keeps playing — only new fetches are gated.
+     *
+     * Set for AIC since 2026-08: www.artic.edu/iiif/2 sits behind a
+     * Cloudflare managed challenge (HTTP 403 "Just a moment...") for every
+     * non-browser client, with no alternate host (their metadata API at
+     * api.artic.edu is unaffected). See
+     * https://github.com/art-institute-of-chicago/data-aggregator/issues/151
+     * — revert by clearing this field if AIC unblocks image access.
+     */
+    const char *unavailable_reason;
 } art_institution_museum_t;
 
 extern const art_institution_museum_t ART_INSTITUTION_MUSEUMS[];
@@ -163,6 +179,19 @@ const char *art_institution_id_from_enum(uint16_t museum_enum);
  * @param museum_id Stable wire id ("ham", "si", ...)
  */
 bool art_institution_api_key_missing(const char *museum_id);
+
+/**
+ * @brief True iff a museum is marked unavailable in the dispatch table
+ *
+ * A museum is unavailable when its image server rejects non-browser
+ * clients outright (see unavailable_reason in the dispatch struct), so
+ * refresh and downloads are pointless. Returns false for unknown ids.
+ * Cached artwork still plays; callers use this to skip network work and
+ * to surface the state in UI.
+ *
+ * @param museum_id Stable wire id ("artic", ...)
+ */
+bool art_institution_is_unavailable(const char *museum_id);
 
 /**
  * @brief Parse a channel-spec `name` of the form "{museum_id}:{axis}"

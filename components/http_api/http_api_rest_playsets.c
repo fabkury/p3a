@@ -583,6 +583,9 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
         h = fnv_str(h, ART_INSTITUTION_MUSEUMS[i].id);
         h = fnv_u8(h, museum_remaining[i] > 0 ? 1 : 0);
         h = fnv_u8(h, museum_key_missing[i] ? 1 : 0);
+        // Constant within one firmware build, but hashed so the ETag can't
+        // alias across an OTA that flips a museum's availability.
+        h = fnv_u8(h, ART_INSTITUTION_MUSEUMS[i].unavailable_reason ? 1 : 0);
     }
 
     char etag[20];
@@ -732,6 +735,18 @@ esp_err_t h_get_active_playset(httpd_req_t *req)
             if (!ART_INSTITUTION_MUSEUMS[i].api_key_missing) continue;
             cJSON_AddBoolToObject(mkm, ART_INSTITUTION_MUSEUMS[i].id,
                                   museum_key_missing[i]);
+        }
+    }
+
+    // Unavailable museums: true ⇒ the museum's image server rejects
+    // non-browser clients (e.g. AIC behind Cloudflare), so refresh and
+    // downloads are disabled firmware-side. Only museums carrying an
+    // unavailable_reason appear; the map is empty when everything works.
+    cJSON *mun = cJSON_AddObjectToObject(data, "museum_unavailable");
+    if (mun) {
+        for (size_t i = 0; i < ART_INSTITUTION_MUSEUM_COUNT; i++) {
+            if (!ART_INSTITUTION_MUSEUMS[i].unavailable_reason) continue;
+            cJSON_AddBoolToObject(mun, ART_INSTITUTION_MUSEUMS[i].id, true);
         }
     }
 

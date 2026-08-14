@@ -31,6 +31,11 @@ const art_institution_museum_t ART_INSTITUTION_MUSEUMS[] = {
         .refresh_channel = art_institution_artic_refresh_channel,
         .build_iiif_url  = art_institution_artic_build_iiif_url,
         .resolve_entry   = NULL,  // AIC returns the image_id directly; no resolution needed.
+        // Since 2026-08 www.artic.edu/iiif/2 rejects every non-browser
+        // client with a Cloudflare managed challenge (HTTP 403). Clear this
+        // field to re-enable AIC if they unblock image access; everything
+        // else (refresh adapter, browse UI, cached art) stays intact.
+        .unavailable_reason = "image server blocks non-browser clients (Cloudflare challenge)",
     },
     {
         .id              = "rijks",
@@ -145,6 +150,12 @@ bool art_institution_api_key_missing(const char *museum_id)
     // No callback ⇒ museum ships a built-in/public key ⇒ never "missing".
     if (!m || !m->api_key_missing) return false;
     return m->api_key_missing();
+}
+
+bool art_institution_is_unavailable(const char *museum_id)
+{
+    const art_institution_museum_t *m = art_institution_find(museum_id);
+    return m && m->unavailable_reason != NULL;
 }
 
 esp_err_t art_institution_parse_spec(const char *spec_name,

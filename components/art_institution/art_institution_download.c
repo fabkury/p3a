@@ -78,6 +78,15 @@ esp_err_t art_institution_download_to_path(const char *museum_id,
         return ESP_ERR_INVALID_RESPONSE;
     }
 
+    // Defense in depth — the download-manager scan already skips entries of
+    // unavailable museums, but a request may have been picked before the
+    // flag was consulted. Same error class as the rate-limit skip (no .404
+    // marker, plain failure backoff).
+    if (art_institution_is_unavailable(museum_id)) {
+        ESP_LOGD(TAG, "Skipping IIIF download: museum '%s' unavailable", museum_id);
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+
     // Wait for SDIO bus if locked (e.g. animation prefetch).
     if (sdio_bus_is_locked()) {
         const char *holder = sdio_bus_get_holder();

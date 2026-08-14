@@ -427,6 +427,22 @@ body {
     font-size: 0.75rem;
     opacity: 0.9;
 }
+/* Museum marked unavailable by the firmware (image server rejects
+   non-browser clients, e.g. AIC behind Cloudflare): structural like
+   needs-key but nothing the user can fix, so muted gray + no-entry glyph.
+   Cached art keeps playing. */
+.ps-ch-row.unavailable {
+    background: var(--c-surface-2);
+    border-left: 3px solid var(--c-text-dim);
+    opacity: 0.75;
+    animation: none;
+}
+.ps-ch-row.unavailable::after {
+    content: '\26D4';
+    margin-left: auto;
+    font-size: 0.75rem;
+    opacity: 0.9;
+}
 .cooldown-banner {
     display: none;
     width: min(420px, 100%);
@@ -858,6 +874,10 @@ body {
     <h4>&#128273; Museum API Key Needed</h4>
     <p id="museum-key-banner-text">This playset has museum channels that need an API key. They keep playing cached art but won't fetch new artwork. Tap here to add a key in Settings &rarr; Museums.</p>
 </div>
+<div class="cooldown-banner" id="museum-unavailable-banner" style="background:var(--c-info-soft-bg);color:var(--c-info-soft-fg);box-shadow:0 4px 12px color-mix(in srgb, var(--c-info-soft-fg) 25%, transparent);">
+    <h4>&#9940; Museum Temporarily Unavailable</h4>
+    <p id="museum-unavailable-banner-text">A museum in this playset currently blocks direct access from apps and devices, so its channels can't fetch new artwork. Already-downloaded art keeps playing.</p>
+</div>
 <nav class="bottom-nav">
 <a href="/" class="bottom-nav-item active"><span class="bottom-nav-icon">&#8962;</span><span class="bottom-nav-label">Home</span></a>
 <a href="/playset-editor" class="bottom-nav-item"><span class="bottom-nav-icon">&#9776;</span><span class="bottom-nav-label">Playsets</span></a>
@@ -886,6 +906,12 @@ var museumCooldowns = {};
 // the home banner. A missing key means refresh can never run — cached art
 // still plays, but the channel is frozen.
 var museumKeyMissing = {};
+// Museum-id -> bool "museum is unavailable" (its image server rejects
+// non-browser clients, e.g. AIC behind a Cloudflare challenge since 2026-08).
+// Refreshed from data.museum_unavailable on the same polls as the key map.
+// Firmware already skips refresh + downloads for these museums; cached art
+// keeps playing. Drives the per-channel "unavailable" badge and home banner.
+var museumUnavailable = {};
 // "Allow refresh override (one-time bypass)" — when true the dispatcher
 // refreshes every channel regardless of last_refresh, so isDueForRefresh
 // must short-circuit to true to keep the pulse animation visible.
@@ -2189,6 +2215,9 @@ fetch('/api/init').then(function(r) { return r.json(); }).then(function(d) {
     if (data.museum_key_missing && typeof data.museum_key_missing === 'object') {
         museumKeyMissing = data.museum_key_missing;
     }
+    if (data.museum_unavailable && typeof data.museum_unavailable === 'object') {
+        museumUnavailable = data.museum_unavailable;
+    }
     if (data.museum_rate_limits && typeof data.museum_rate_limits === 'object') {
         var seed = {};
         var mrl = data.museum_rate_limits;
@@ -2704,6 +2733,15 @@ function isMuseumKeyMissing(ch) {
     if (!mid) return false;
     return museumKeyMissing[mid] === true;
 }
+// A museum the firmware has marked unavailable (its image server rejects
+// non-browser clients): refresh/downloads are disabled device-side, cached
+// art keeps playing. Structural like needs-key, so same badge precedence.
+function isMuseumUnavailable(ch) {
+    if (ch.type !== 'institution') return false;
+    var mid = museumIdFromName(ch.name);
+    if (!mid) return false;
+    return museumUnavailable[mid] === true;
+}
 function createChannelRow(ch) {
     var row = document.createElement('div');
     row.className = 'ps-ch-row';
@@ -2712,10 +2750,12 @@ function createChannelRow(ch) {
     // gate, so neither the cooldown styling nor the refresh animation applies.
     var due = isDueForRefresh(ch);
     var keyless = isMuseumKeyMissing(ch);
+    var unavailable = isMuseumUnavailable(ch);
     var blocked = (giphyCooldownActive && ch.type === 'giphy' && ch.refreshing && due)
                || (klipyCooldownActive && ch.type === 'klipy' && ch.refreshing && due)
                || isMuseumBlocked(ch);
-    if (keyless) row.classList.add('needs-key');
+    if (unavailable) row.classList.add('unavailable');
+    else if (keyless) row.classList.add('needs-key');
     else if (blocked) row.classList.add('cooldown');
     else if (ch.refreshing && due) row.classList.add('refreshing');
     var s = '<span class="ps-badge ps-badge-type">' + typeBadgeLetter(ch.type) + '</span>';
@@ -2730,18 +2770,27 @@ function createChannelRow(ch) {
 function updateChannelRow(row, ch) {
     var due = isDueForRefresh(ch);
     var keyless = isMuseumKeyMissing(ch);
+    var unavailable = isMuseumUnavailable(ch);
     var blocked = (giphyCooldownActive && ch.type === 'giphy' && ch.refreshing && due)
                || (klipyCooldownActive && ch.type === 'klipy' && ch.refreshing && due)
                || isMuseumBlocked(ch);
-    if (keyless) {
+    if (unavailable) {
+        row.classList.add('unavailable');
+        row.classList.remove('needs-key');
+        row.classList.remove('cooldown');
+        row.classList.remove('refreshing');
+    } else if (keyless) {
+        row.classList.remove('unavailable');
         row.classList.add('needs-key');
         row.classList.remove('cooldown');
         row.classList.remove('refreshing');
     } else if (blocked) {
+        row.classList.remove('unavailable');
         row.classList.remove('needs-key');
         row.classList.add('cooldown');
         row.classList.remove('refreshing');
     } else {
+        row.classList.remove('unavailable');
         row.classList.remove('needs-key');
         row.classList.remove('cooldown');
         if (ch.refreshing && due) row.classList.add('refreshing');
@@ -2995,6 +3044,33 @@ function pollActivePlayset(attempt) {
                 } else {
                     mkBanner.style.display = 'none';
                 }
+                // Museum-unavailable banner: same per-channel derivation as the
+                // key banner, driven by the museum_unavailable map (firmware
+                // marks museums whose image server blocks non-browser clients,
+                // e.g. AIC behind Cloudflare). Nothing user-fixable, so it's
+                // informational and not clickable.
+                var muBanner = document.getElementById('museum-unavailable-banner');
+                var muMap = resp.data.museum_unavailable || {};
+                var unavailChans = [];
+                if (resp.data.playset_info && resp.data.playset_info.channels) {
+                    resp.data.playset_info.channels.forEach(function(c){
+                        if (c.type !== 'institution') return;
+                        var mid = museumIdFromName(c.name);
+                        if (mid && muMap[mid] === true) {
+                            var nm = c.display_name || c.name;
+                            if (unavailChans.indexOf(nm) === -1) unavailChans.push(nm);
+                        }
+                    });
+                }
+                if (unavailChans.length) {
+                    document.getElementById('museum-unavailable-banner-text').textContent =
+                        unavailChans.join(', ') + ': the museum currently blocks direct access '
+                        + 'from apps and devices, so no new artwork can be fetched. '
+                        + 'Already-downloaded art keeps playing.';
+                    muBanner.style.display = 'block';
+                } else {
+                    muBanner.style.display = 'none';
+                }
                 if (!switching && resp.data.active_playset && resp.data.playset_info) {
                     var pollPillId = pillIdFromActivePlayset(resp.data.active_playset);
                     updateNowPlaying(pollPillId,
@@ -3004,6 +3080,9 @@ function pollActivePlayset(attempt) {
                 }
                 if (resp.data.museum_key_missing && typeof resp.data.museum_key_missing === 'object') {
                     museumKeyMissing = resp.data.museum_key_missing;
+                }
+                if (resp.data.museum_unavailable && typeof resp.data.museum_unavailable === 'object') {
+                    museumUnavailable = resp.data.museum_unavailable;
                 }
                 if (resp.data.museum_rate_limits && typeof resp.data.museum_rate_limits === 'object') {
                     var next = {};

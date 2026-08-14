@@ -23,6 +23,26 @@ const HEADERS = {
     'AIC-User-Agent': 'p3a-museum-browse/1 (pub@kury.dev)',
 };
 
+// Since 2026-08 www.artic.edu/iiif/2 (the image host) rejects every
+// non-browser client with a Cloudflare managed challenge — HTTP 403 plus
+// Cross-Origin-Resource-Policy: same-origin, so even <img> loads from this
+// origin fail. The metadata API (api.artic.edu) still works, but a browse
+// with no thumbnails and no downloadable art is useless, and the firmware
+// disables AIC refresh/downloads for the same reason (see
+// components/art_institution/art_institution.c unavailable_reason). Flip
+// this to false to restore the browse if AIC unblocks image access.
+// https://github.com/art-institute-of-chicago/data-aggregator/issues/151
+const ARTIC_UNAVAILABLE = true;
+
+function makeUnavailableError() {
+    const err = new Error('AIC image access blocked');
+    err.code = 'ARTIC_UNAVAILABLE';
+    err.userMessage = 'The Art Institute of Chicago currently blocks direct access '
+        + 'from apps and devices, so browsing and new downloads are unavailable. '
+        + 'Already-downloaded art keeps playing.';
+    return err;
+}
+
 const ARTWORK_FIELDS = 'id,title,image_id,artist_title,date_display';
 const TERMS_PER_AXIS = 30;
 // AIC's per-IP cap is 60 req/min. We can fan out the count probes a bit,
@@ -194,6 +214,7 @@ export class ArticAdapter {
     }
 
     async listCollections({ axis = 'departments' } = {}) {
+        if (ARTIC_UNAVAILABLE) throw makeUnavailableError();
         if (this._termsByAxis[axis]) return this._termsByAxis[axis];
         const ax = AXIS_BY_NAME[axis];
         if (!ax) throw new Error(`AIC: unknown axis ${axis}`);
@@ -226,6 +247,7 @@ export class ArticAdapter {
     }
 
     async listArtworks(termId, { offset = 0, rows = 8, axis = 'departments', onProgress = null } = {}) {
+        if (ARTIC_UNAVAILABLE) throw makeUnavailableError();
         const ax = AXIS_BY_NAME[axis];
         if (!ax) throw new Error(`AIC: unknown axis ${axis}`);
 

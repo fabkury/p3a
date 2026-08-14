@@ -86,6 +86,36 @@ static const char *ps_first_keyless_museum_display(const ps_state_t *state)
 }
 
 /**
+ * @brief Display name of the first unavailable-museum channel
+ *
+ * Same scan as ps_first_keyless_museum_display, but for museums marked
+ * unavailable in the dispatch table (image server blocks non-browser
+ * clients, e.g. AIC behind Cloudflare). On a cold cache such a channel
+ * contributes no artwork and never will, so the terminal message names
+ * the museum instead of the generic "no playable files". Caller holds
+ * s_state->mutex.
+ */
+static const char *ps_first_unavailable_museum_display(const ps_state_t *state)
+{
+    for (size_t i = 0; i < state->channel_count; i++) {
+        const ps_channel_state_t *ch = &state->channels[i];
+        if (ch->type != PS_CHANNEL_TYPE_INSTITUTION) continue;
+
+        char museum[16] = {0};
+        char axis[32] = {0};
+        if (art_institution_parse_spec(ch->spec_name, museum, sizeof(museum),
+                                       axis, sizeof(axis)) != ESP_OK) {
+            continue;
+        }
+        if (!art_institution_is_unavailable(museum)) continue;
+
+        const art_institution_museum_t *m = art_institution_find(museum);
+        if (m && m->display) return m->display;
+    }
+    return NULL;
+}
+
+/**
  * @brief Record a swap-time pick outcome and trip the staleness sweep
  *
  * Maintains the per-channel shift register of recent outcomes (bit 1 =
@@ -487,6 +517,7 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
             // files. Name it instead of the generic message so the user knows
             // to add a key (Settings > Museums) rather than switch playsets.
             const char *keyless_museum = ps_first_keyless_museum_display(s_state);
+            const char *unavailable_museum = ps_first_unavailable_museum_display(s_state);
 
             // Only show loading/downloading messages if we have WiFi connectivity
             if (p3a_state_has_wifi()) {
@@ -504,6 +535,11 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
                         // channel is keyless: surface the actionable cause.
                         animation_player_display_message(keyless_museum,
                             "Needs an API key. Add it in\nSettings > Museums.");
+                    } else if (unavailable_museum && animation_player_display_message) {
+                        // A museum marked unavailable (blocks non-browser
+                        // clients) can never fill a cold cache — name it.
+                        animation_player_display_message(unavailable_museum,
+                            "Temporarily unavailable: the\nmuseum blocks device access.");
                     } else if (animation_player_display_message) {
                         // No refresh, no download - truly no files available
                         animation_player_display_message(title,
@@ -516,6 +552,9 @@ esp_err_t play_scheduler_next(ps_artwork_t *out_artwork)
                 if (keyless_museum && animation_player_display_message) {
                     animation_player_display_message(keyless_museum,
                         "Needs an API key. Add it in\nSettings > Museums.");
+                } else if (unavailable_museum && animation_player_display_message) {
+                    animation_player_display_message(unavailable_museum,
+                        "Temporarily unavailable: the\nmuseum blocks device access.");
                 } else if (animation_player_display_message) {
                     animation_player_display_message(title,
                         "No playable files. Please\nswitch to another playset.");

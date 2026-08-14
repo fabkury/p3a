@@ -6,6 +6,18 @@
 - **History:** Design evolution and Q&A transcript are preserved in
   `design.md` and `questions.md` alongside this file.
 
+> **Status update 2026-08-14 — AIC disabled.** `www.artic.edu/iiif/2` (AIC's
+> image host) now rejects every non-browser client with a Cloudflare managed
+> challenge (HTTP 403 + `Cross-Origin-Resource-Policy: same-origin`, so even
+> cross-origin `<img>` loads fail); the metadata API at `api.artic.edu` is
+> unaffected. Firmware marks AIC unavailable via `unavailable_reason` in
+> `art_institution.c`'s dispatch table (refresh/downloads skipped, cached art
+> keeps playing, badge + banner in the web UI, browse gated in
+> `webui/museum/artic.js`). Revert by clearing that field and
+> `ARTIC_UNAVAILABLE` if AIC unblocks access — tracked upstream at
+> art-institute-of-chicago/data-aggregator#151. AIC design content below is
+> unchanged and still authoritative for the (currently dormant) adapter.
+
 p3a v1 supports artwork from Makapix, Giphy, and the local SD card. This
 plan adds a fourth content source: **art institutions** that expose their
 collections via the IIIF Image API, starting with the Art Institute of

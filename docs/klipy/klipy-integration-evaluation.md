@@ -8,6 +8,12 @@ temporary **test key** (100 req/hr tier). The key is intentionally **not** store
 source (like Makapix, Museums, Giphy)? What would it look like, what gaps exist, and what extra
 features could p3a adopt?
 
+> **Update 2026-08-14:** the single-item resolve route this report verified (`GET gifs/{id}`, §2
+> row 8) has since been revoked by Klipy for our key tier — it now returns HTTP 403 "You do not
+> have permission to perform this action." The shipped integration resolves via the batch route
+> `GET {product}/items?ids={id}` instead (same item schema, wrapped in a `data.data` array).
+> Claims below about `gifs/{id}` are preserved as a point-in-time record.
+
 ---
 
 ## 1. Verdict (executive summary)

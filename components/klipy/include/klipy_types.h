@@ -28,9 +28,9 @@
  * Unlike Giphy (which stores a short string id and reconstructs the CDN URL at
  * download time), Klipy CDN URLs are opaque per-format random tokens that
  * cannot be reconstructed. We therefore store the stable numeric id and
- * re-resolve the download URL via GET {product}/{id} at download time (see
- * klipy_download.c). Klipy items carry no timestamp, so created_at is stamped
- * with the fetch time.
+ * re-resolve the download URL via GET {product}/items?ids={id} at download
+ * time (see klipy_download.c). Klipy items carry no timestamp, so created_at
+ * is stamped with the fetch time.
  */
 typedef struct __attribute__((packed)) {
     int32_t  post_id;      ///< @0  DJB2-folded from klipy_id (never 0)

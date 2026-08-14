@@ -106,8 +106,9 @@ typedef void (*klipy_download_progress_cb_t)(size_t bytes_read, size_t content_l
 /**
  * @brief Download a Klipy artwork to the klipy/ folder on SD card
  *
- * Re-resolves the opaque CDN url via GET {product}/{id}, then downloads it to a
- * temp file and atomically renames. Creates sharded directories as needed.
+ * Re-resolves the opaque CDN url via GET {product}/items?ids={id}, then
+ * downloads it to a temp file and atomically renames. Creates sharded
+ * directories as needed.
  *
  * @param klipy_id   Numeric Klipy id
  * @param product    KLIPY_PRODUCT_GIF / KLIPY_PRODUCT_STICKER

@@ -1315,8 +1315,10 @@ function resolveKlipyUrl(product, id) {
     if (typeof klipyUrlCache[key] === 'string') return Promise.resolve(klipyUrlCache[key]);
     if (klipyUrlPending[key]) return klipyUrlPending[key];
     var pr = fetchKlipyKey().then(function(k) {
+        // items?ids= (batch route): the old single-item GET {product}/{id}
+        // now 403s for our key tier (Klipy change ~2026-08).
         var u = 'https://api.klipy.com/api/v1/' + encodeURIComponent(k) + '/' +
-                encodeURIComponent(product) + '/' + encodeURIComponent(id);
+                encodeURIComponent(product) + '/items?ids=' + encodeURIComponent(id);
         return fetch(u);
     }).then(function(r) {
         if (!r.ok) throw new Error('klipy ' + r.status);
@@ -1340,7 +1342,7 @@ function resolveKlipyUrl(product, id) {
 function fetchKlipyMetadata(product, id) {
     return fetchKlipyKey().then(function(k) {
         var u = 'https://api.klipy.com/api/v1/' + encodeURIComponent(k) + '/' +
-                encodeURIComponent(product) + '/' + encodeURIComponent(id);
+                encodeURIComponent(product) + '/items?ids=' + encodeURIComponent(id);
         return fetch(u);
     }).then(function(r) {
         if (!r.ok) throw new Error('klipy ' + r.status);

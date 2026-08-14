@@ -7,10 +7,15 @@
  *
  * Klipy CDN urls are per-format random tokens that cannot be reconstructed from
  * the item id, so unlike Giphy we cannot build the url from the stored entry.
- * Instead we re-resolve GET {product}/{id} at download time to obtain the url,
- * then stream it to the SD card with the same serialized chunked pattern Giphy
- * uses. The id->url resolve is one small request per artwork's first download;
- * the file is then cached on SD forever.
+ * Instead we re-resolve GET {product}/items?ids={id} at download time to obtain
+ * the url, then stream it to the SD card with the same serialized chunked
+ * pattern Giphy uses. The id->url resolve is one small request per artwork's
+ * first download; the file is then cached on SD forever.
+ *
+ * (The resolve originally used GET {product}/{id}; Klipy revoked that route
+ * for API keys of our tier around 2026-08 — it now returns HTTP 403 "You do
+ * not have permission to perform this action." The batch items?ids= route
+ * returns the same item schema wrapped in a data.data array and still works.)
  */
 
 #include "klipy.h"
@@ -59,7 +64,7 @@ static bool klipy_dl_should_abort(void *ctx)
 }
 
 /**
- * @brief Resolve the CDN url for an artwork by re-fetching GET {product}/{id}
+ * @brief Resolve the CDN url for an artwork via GET {product}/items?ids={id}
  *
  * @param extension  0=webp, 1=gif (preferred format to resolve)
  * @param out_url    receives the resolved absolute CDN url
@@ -72,7 +77,7 @@ static esp_err_t klipy_resolve_url(uint64_t klipy_id, uint8_t product, uint8_t e
     if (api_key[0] == '\0') return ESP_ERR_NOT_FOUND;
 
     char url[256];
-    snprintf(url, sizeof(url), "https://api.klipy.com/api/v1/%s/%s/%llu",
+    snprintf(url, sizeof(url), "https://api.klipy.com/api/v1/%s/%s/items?ids=%llu",
              api_key, product == KLIPY_PRODUCT_STICKER ? "stickers" : "gifs",
              (unsigned long long)klipy_id);
 
@@ -93,8 +98,8 @@ static esp_err_t klipy_resolve_url(uint64_t klipy_id, uint8_t product, uint8_t e
     free(buf);
     if (!root) return ESP_FAIL;
 
-    // Single-item resolve returns {result, data:{...item...}}. Be tolerant of a
-    // data.data wrapper too.
+    // items?ids= returns {result, data:{data:[{...item...}]}}; take the first
+    // array element. Be tolerant of a bare data:{...item...} shape too.
     const cJSON *data = cJSON_GetObjectItem(root, "data");
     const cJSON *item = data;
     if (cJSON_IsObject(data)) {

@@ -9,7 +9,9 @@ potential p3a artwork source alongside Makapix, Museums, and Giphy.
 **TL;DR:** Feasible and low-risk — architecturally a near-mirror of `components/giphy/`, and actually
 *simpler* (Klipy returns explicit per-rendition URLs, so the Giphy CDN-filename/`downsized_medium`
 guessing disappears). The one design wrinkle (opaque CDN URLs) is solved by storing the compact
-numeric item `id` and re-resolving `gifs/{id}` at download time. The strongest reason to build it is
+numeric item `id` and re-resolving it at download time (originally `gifs/{id}`; since ~2026-08 that
+route 403s for our key tier and the shipped code uses `gifs/items?ids={id}` instead). The strongest
+reason to build it is
 **Stickers** (transparent *animated* WebP — a new content type p3a already decodes) and **Giphy
 provider resilience**, not "more GIFs." Estimated ~2–3 weeks for GIF parity, +~3–5 days for Stickers.
 

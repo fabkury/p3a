@@ -398,6 +398,19 @@ function openFastWindow() {
     applyPollInterval();
 }
 
+// Web UI install lifecycle: the "Starting web UI update..." banner is an
+// 'info' banner, which showStatus never auto-hides — it must be explicitly
+// replaced when the install finishes. The device holds 'complete' for only
+// ~3s before resetting to 'idle', so also treat an active->idle transition
+// as completion in case polling missed the window (hidden tab pauses polls).
+var webuiInstallInitiated = false;
+var webuiReloadScheduled = false;
+function scheduleWebuiReload() {
+    if (webuiReloadScheduled) return;
+    webuiReloadScheduled = true;
+    showStatus('Web UI update complete! Reloading...', 'success');
+    setTimeout(function() { location.reload(); }, 3000);
+}
 function updateWebuiUI(data) {
     document.getElementById('webui-ver').textContent = data.current_version || 'Unknown';
     var availVerEl = document.getElementById('webui-available-ver');
@@ -438,11 +451,16 @@ function updateWebuiUI(data) {
         statusEl.textContent = 'Update complete!';
         statusEl.style.color = 'var(--c-success)';
         statusEl.className = 'version-value';
+        if (webuiInstallInitiated) scheduleWebuiReload();
     } else if (data.state === 'error') {
         progressEl.style.display = 'none';
         statusEl.textContent = data.error_message || 'Update failed';
         statusEl.style.color = 'var(--c-danger)';
         statusEl.className = 'version-value';
+        if (webuiInstallInitiated) {
+            webuiInstallInitiated = false;
+            showStatus(data.error_message || 'Web UI update failed', 'error');
+        }
     } else if (data.state === 'update_available') {
         progressEl.style.display = 'none';
         statusEl.textContent = 'Update available';
@@ -450,6 +468,13 @@ function updateWebuiUI(data) {
         statusEl.className = 'version-value update-available';
     } else {
         progressEl.style.display = 'none';
+        if (webuiInstallInitiated && data.state === 'idle' &&
+            (isWebuiActiveState(lastWebuiState) || lastWebuiState === 'update_available')) {
+            // Missed the brief 'complete' window (device resets to idle ~3s
+            // after finishing; hidden tabs pause polling). Settling to idle
+            // can only follow success — the error state persists.
+            scheduleWebuiReload();
+        }
         if (!data.partition_valid || data.needs_recovery) {
             statusEl.textContent = 'Recovery needed';
             statusEl.style.color = 'var(--c-danger)';
@@ -501,6 +526,7 @@ function installWebuiUpdate() {
     document.getElementById('webui-install-btn').disabled = true;
     fetch('/ota/webui/install', { method: 'POST' }).then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok) {
+            webuiInstallInitiated = true;
             openFastWindow();
         } else {
             showStatus(d.error || 'Install failed', 'error');

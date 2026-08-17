@@ -230,10 +230,17 @@ static body_status_t read_into_buffer(fetch_sink_t *s, esp_http_client_handle_t 
                                        int64_t content_length,
                                        const http_fetch_request_t *req)
 {
+    // Read in bounded chunks like read_into_file: esp_http_client_read()
+    // loops internally until it fills the requested length or hits EOF, so
+    // asking for the whole remaining buffer turns a large download into one
+    // blocking call and the progress callback fires only once, at the end
+    // (this froze the web UI OTA download display at "Starting download...").
+    const size_t max_read = req->chunk_size ? req->chunk_size : HTTP_FETCH_DEFAULT_CHUNK;
     bool read_err = false;
     while (s->bytes < s->buf_size - 1) {
-        int rl = esp_http_client_read(client, s->buf + s->bytes,
-                                      s->buf_size - 1 - s->bytes);
+        size_t want = s->buf_size - 1 - s->bytes;
+        if (want > max_read) want = max_read;
+        int rl = esp_http_client_read(client, s->buf + s->bytes, want);
         if (rl < 0) { read_err = true; break; }
         if (rl == 0) break;
         s->bytes += (size_t)rl;

@@ -33,6 +33,17 @@
 #include "gfx.h"
 #include "gdisp/gdisp.h"
 
+// FONTS — every gdispOpenFont("* DejaVu Sans NN") below actually renders in
+// DejaVuSans32. The single-'*' glob in gdisp_fonts.c matchfont() cannot match
+// the compiled full names ("DejaVu Sans Book NN": it commits '*' at the first
+// space and then 'D' != 'S'), the short names ("DejaVuSansNN") contain no
+// space so they miss too, and gdispOpenFont falls back to the head of the
+// font list — DejaVuSans32 (glyph box 34 px tall, baseline 26). The whole UI
+// was designed and device-verified against that fallback, so keep it: do NOT
+// "fix" the names without re-verifying every screen. Consequence for layout:
+// with GDISP_NEED_TEXT_BOXPADTB, a string box needs cy >= 36 (34 + 2 px pad)
+// or glyph rows get clipped — vertical centering distributes the deficit to
+// the top (caps get cropped) and bottom (descenders of g/p/y get cropped).
 static const char *TAG = "ugfx_ui";
 
 // UI mode enumeration
@@ -177,7 +188,7 @@ static void ugfx_ui_draw_captive_ap_info(void)
     if (config_store_get_hostname(title_buf, sizeof(title_buf)) != ESP_OK) {
         snprintf(title_buf, sizeof(title_buf), "p3a");
     }
-    gdispFillStringBox(0, 50, screen_w, 35, title_buf,
+    gdispFillStringBox(0, 50, screen_w, 36, title_buf,
                        font_title, GFX_WHITE, GFX_BLACK, gJustifyCenter);
 
     // Subtitle
@@ -245,7 +256,7 @@ static void ugfx_ui_draw_connectivity_error(void)
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
 
     // Dismiss hint
-    gdispFillStringBox(0, screen_h - 60, screen_w, 25, "Long-press to dismiss",
+    gdispFillStringBox(0, screen_h - 60, screen_w, 36, "Long-press to dismiss",
                      gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0x888888), GFX_BLACK, gJustifyCenter);
 }
 
@@ -257,7 +268,7 @@ static void ugfx_ui_draw_status(void)
     gdispClear(GFX_BLACK);
 
     // Title
-    gdispFillStringBox(0, 80, gdispGetWidth(), 30, "PROVISIONING",
+    gdispFillStringBox(0, 80, gdispGetWidth(), 36, "PROVISIONING",
                      gdispOpenFont("* DejaVu Sans 24"), GFX_WHITE, GFX_BLACK, gJustifyCenter);
 
     // Status message (large, centered)
@@ -280,8 +291,10 @@ static void ugfx_ui_draw_ota_progress(void)
     gCoord screen_w = gdispGetWidth();
     gCoord screen_h = gdispGetHeight();
 
-    // Title
-    gdispFillStringBox(0, 60, screen_w, 35, "FIRMWARE UPDATE",
+    // Title (box heights 36+ per the descender-safe rule — see FONTS comment
+    // at the top of this file; 30/25 clipped "Downloading..." and
+    // "DO NOT POWER OFF" on device in v1.1.2)
+    gdispFillStringBox(0, 60, screen_w, 36, "FIRMWARE UPDATE",
                      gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0x00FF88), GFX_BLACK, gJustifyCenter);
 
     // Version info
@@ -291,7 +304,7 @@ static void ugfx_ui_draw_ota_progress(void)
     } else {
         snprintf(version_text, sizeof(version_text), "Installing update...");
     }
-    gdispFillStringBox(0, 110, screen_w, 30, version_text,
+    gdispFillStringBox(0, 110, screen_w, 36, version_text,
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
 
     // Progress bar background
@@ -321,11 +334,11 @@ static void ugfx_ui_draw_ota_progress(void)
                      gdispOpenFont("* DejaVu Sans 32"), GFX_WHITE, GFX_BLACK, gJustifyCenter);
 
     // Status text
-    gdispFillStringBox(0, bar_y + bar_h + 80, screen_w, 30, s_ota_status_text,
+    gdispFillStringBox(0, bar_y + bar_h + 80, screen_w, 36, s_ota_status_text,
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xFFFF00), GFX_BLACK, gJustifyCenter);
 
     // Warning at bottom
-    gdispFillStringBox(0, screen_h - 60, screen_w, 25, "DO NOT POWER OFF",
+    gdispFillStringBox(0, screen_h - 60, screen_w, 36, "DO NOT POWER OFF",
                      gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0xFF6666), GFX_BLACK, gJustifyCenter);
 }
 
@@ -336,11 +349,10 @@ static void ugfx_ui_draw_ota_progress(void)
  * subtitle, gentle "Please wait" footer. Reuses the s_ota_* state since
  * only one OTA can be in progress at a time.
  *
- * Box heights follow the codebase's documented descender-safe pattern:
- * the captive-portal and info screens both use 36 for 16pt and 20pt text
- * that may contain descenders ("Long-press to dismiss", uptime, etc. —
- * see comment at line 534: "row height – enough for descenders"). A
- * mere 30 turned out to clip the descender of "p" in "One-time update".
+ * Box heights are 36+ per the descender-safe rule — see the FONTS comment
+ * at the top of this file (everything renders in the 32 px fallback font,
+ * so any box under 36 clips glyph rows; a mere 30 clipped the descender
+ * of "p" in "One-time update").
  */
 static void ugfx_ui_draw_slave_ota_progress(void)
 {
@@ -411,7 +423,7 @@ static void ugfx_ui_draw_channel_message(void)
 
     // Channel name at top
     if (strlen(s_channel_name) > 0) {
-        gdispFillStringBox(0, 60, screen_w, 35, s_channel_name,
+        gdispFillStringBox(0, 60, screen_w, 36, s_channel_name,
                          gdispOpenFont("* DejaVu Sans 24"), HTML2COLOR(0x00AAFF), GFX_BLACK, gJustifyCenter);
     }
 
@@ -494,7 +506,7 @@ static void ugfx_ui_draw_channel_message(void)
         // Progress percentage
         char progress_text[16];
         snprintf(progress_text, sizeof(progress_text), "%d%%", progress);
-        gdispFillStringBox(0, bar_y + bar_h + 15, screen_w, 30, progress_text,
+        gdispFillStringBox(0, bar_y + bar_h + 15, screen_w, 36, progress_text,
                          gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
     }
 
@@ -555,7 +567,7 @@ static void ugfx_ui_draw_info_screen(void)
     }
     char title_display[96];
     snprintf(title_display, sizeof(title_display), "%s v%s", title_buf, FW_VERSION);
-    gdispFillStringBox(0, 50, screen_w, 35, title_display,
+    gdispFillStringBox(0, 50, screen_w, 36, title_display,
                        font_title, GFX_WHITE, GFX_BLACK, gJustifyCenter);
 
     // --- Row 1: Uptime ---
@@ -798,7 +810,7 @@ static void ugfx_ui_draw_registration_success(void)
     gdispFillStringBox(0, screen_h / 2 - 60, screen_w, 45, "Registration Successful!",
                      gdispOpenFont("* DejaVu Sans 32"), HTML2COLOR(0x00FF00), GFX_BLACK, gJustifyCenter);
 
-    gdispFillStringBox(0, screen_h / 2 + 10, screen_w, 35, "Connected to Makapix Club",
+    gdispFillStringBox(0, screen_h / 2 + 10, screen_w, 36, "Connected to Makapix Club",
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
 }
 
@@ -896,7 +908,7 @@ static void ugfx_ui_draw_fatal_error(void)
         }
         if (notice != NULL) {
             gFont hint_font = gdispOpenFont("* DejaVu Sans 20");
-            gdispFillStringBox(0, 545, screen_w, 35, notice, hint_font,
+            gdispFillStringBox(0, 545, screen_w, 36, notice, hint_font,
                                notice_color, GFX_BLACK, gJustifyCenter);
         }
 
@@ -947,18 +959,20 @@ static void ugfx_ui_draw_sd_format(void)
         case SD_FORMAT_WARNING: {
             gdispFillStringBox(0, 80, screen_w, 45, "Erase and format SD card?",
                                font_title, HTML2COLOR(0xFF4444), GFX_BLACK, gJustifyCenter);
-            gdispFillStringBox(0, 170, screen_w, 35, "This will ERASE EVERYTHING on the card",
+            gdispFillStringBox(0, 170, screen_w, 36, "This will ERASE EVERYTHING on the card",
                                font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
-            gdispFillStringBox(0, 210, screen_w, 35, "and format it as FAT32 for p3a.",
+            gdispFillStringBox(0, 210, screen_w, 36, "and format it as FAT32 for p3a.",
                                font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
 
             if (sd_format_get_origin() == SD_FORMAT_ORIGIN_INFO) {
+                // 36-px pitch: taller descender-safe boxes must not overlap,
+                // or each box's background fill erases the line above
                 gFont font_hint = gdispOpenFont("* DejaVu Sans 20");
-                gdispFillStringBox(0, 280, screen_w, 30, "To rescue files first, connect via USB-C to the",
+                gdispFillStringBox(0, 280, screen_w, 36, "To rescue files first, connect via USB-C to the",
                                    font_hint, HTML2COLOR(0xAAAAAA), GFX_BLACK, gJustifyCenter);
-                gdispFillStringBox(0, 312, screen_w, 30, "USB-HS port (the one close to the buttons)",
+                gdispFillStringBox(0, 316, screen_w, 36, "USB-HS port (the one close to the buttons)",
                                    font_hint, HTML2COLOR(0xAAAAAA), GFX_BLACK, gJustifyCenter);
-                gdispFillStringBox(0, 344, screen_w, 30, "and copy them off, then return here.",
+                gdispFillStringBox(0, 352, screen_w, 36, "and copy them off, then return here.",
                                    font_hint, HTML2COLOR(0xAAAAAA), GFX_BLACK, gJustifyCenter);
             }
 
@@ -989,7 +1003,7 @@ static void ugfx_ui_draw_sd_format(void)
         case SD_FORMAT_FORMATTING:
             gdispFillStringBox(0, 290, screen_w, 45, "Formatting...",
                                font_title, HTML2COLOR(0xFFFF00), GFX_BLACK, gJustifyCenter);
-            gdispFillStringBox(0, 370, screen_w, 35, "Do not power off",
+            gdispFillStringBox(0, 370, screen_w, 36, "Do not power off",
                                font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
             break;
 
@@ -1001,11 +1015,11 @@ static void ugfx_ui_draw_sd_format(void)
         case SD_FORMAT_FAILED:
             gdispFillStringBox(0, 250, screen_w, 45, "Format Failed",
                                font_title, HTML2COLOR(0xFF4444), GFX_BLACK, gJustifyCenter);
-            gdispFillStringBox(0, 330, screen_w, 35, "The card may be defective.",
+            gdispFillStringBox(0, 330, screen_w, 36, "The card may be defective.",
                                font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
-            gdispFillStringBox(0, 370, screen_w, 35, "Please replace it.",
+            gdispFillStringBox(0, 370, screen_w, 36, "Please replace it.",
                                font_body, GFX_WHITE, GFX_BLACK, gJustifyCenter);
-            gdispFillStringBox(0, 410, screen_w, 35, "Restarting...",
+            gdispFillStringBox(0, 410, screen_w, 36, "Restarting...",
                                font_body, HTML2COLOR(0xAAAAAA), GFX_BLACK, gJustifyCenter);
             break;
 
@@ -1024,7 +1038,7 @@ static void ugfx_ui_draw_layout(int32_t remaining_secs)
     gdispClear(GFX_BLACK);
 
     // Title
-    gdispFillStringBox(0, 50, gdispGetWidth(), 35, "REGISTER PLAYER",
+    gdispFillStringBox(0, 50, gdispGetWidth(), 36, "REGISTER PLAYER",
                      gdispOpenFont("* DejaVu Sans 24"), GFX_WHITE, GFX_BLACK, gJustifyCenter);
 
     // Registration code (large, green)
@@ -1032,9 +1046,9 @@ static void ugfx_ui_draw_layout(int32_t remaining_secs)
                      gdispOpenFont("* DejaVu Sans 32"), HTML2COLOR(0x00FF00), GFX_BLACK, gJustifyCenter);
 
     // Instructions
-    gdispFillStringBox(0, gdispGetHeight()/2 - 10, gdispGetWidth(), 35, "Enter this code at:",
+    gdispFillStringBox(0, gdispGetHeight()/2 - 10, gdispGetWidth(), 36, "Enter this code at:",
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0xCCCCCC), GFX_BLACK, gJustifyCenter);
-    gdispFillStringBox(0, gdispGetHeight()/2 + 35, gdispGetWidth(), 35, "https://makapix.club/",
+    gdispFillStringBox(0, gdispGetHeight()/2 + 35, gdispGetWidth(), 36, "https://makapix.club/",
                      gdispOpenFont("* DejaVu Sans 20"), HTML2COLOR(0x00BFFF), GFX_BLACK, gJustifyCenter);
 
     // Countdown timer (prominent, below instructions)
@@ -1066,7 +1080,7 @@ static void ugfx_ui_draw_layout(int32_t remaining_secs)
     bool mqtt_connected = makapix_mqtt_is_connected();
     const char *mqtt_status_text = mqtt_connected ? "MQTT: Connected" : "MQTT: Disconnected";
     color_t mqtt_status_color = mqtt_connected ? HTML2COLOR(0x00FF00) : HTML2COLOR(0xFF6666);
-    gdispFillStringBox(0, bottom_y, gdispGetWidth(), 30, mqtt_status_text,
+    gdispFillStringBox(0, bottom_y, gdispGetWidth(), 36, mqtt_status_text,
                      gdispOpenFont("* DejaVu Sans 16"), mqtt_status_color, GFX_BLACK, gJustifyCenter);
     
     // Local IP address
@@ -1074,7 +1088,7 @@ static void ugfx_ui_draw_layout(int32_t remaining_secs)
     if (app_wifi_get_local_ip(ip_str, sizeof(ip_str)) == ESP_OK) {
         char ip_label[64];
         snprintf(ip_label, sizeof(ip_label), "IP: %s", ip_str);
-        gdispFillStringBox(0, bottom_y + 40, gdispGetWidth(), 30, ip_label,
+        gdispFillStringBox(0, bottom_y + 40, gdispGetWidth(), 36, ip_label,
                          gdispOpenFont("* DejaVu Sans 16"), HTML2COLOR(0xAAAAAA), GFX_BLACK, gJustifyCenter);
     }
 }

@@ -129,7 +129,7 @@ All controls are also available via the web UI and REST API.
 Open `http://p3a.local/` from any browser on the same Wi-Fi network for a full dashboard — playback controls, configuration, firmware updates, Giphy and Klipy settings, and more.
 
 <p align="center">
-  <img src="images/screenshots/p3a-web-ui.png" alt="p3a web UI" width="350">
+  <img src="images/screenshots/p3a-web-ui-2.20.png" alt="p3a web UI" width="350">
   <br>
   <em>p3a web UI: control everything from the browser</em>
 </p>

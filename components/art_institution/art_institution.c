@@ -92,6 +92,16 @@ const art_institution_museum_t ART_INSTITUTION_MUSEUMS[] = {
                                   // from it directly, no walk needed.
         .api_key_missing = art_institution_si_api_key_missing,  // BYOK
     },
+    {
+        .id              = "cma",
+        .display         = "Cleveland Museum of Art",
+        .museum_enum     = ART_INSTITUTION_MUSEUM_CMA,
+        .refresh_channel = art_institution_cma_refresh_channel,
+        .build_iiif_url  = art_institution_cma_build_iiif_url,
+        .resolve_entry   = NULL,  // non-IIIF: the web-rendition CDN URL is
+                                  // rebuilt from the accession number alone
+                                  // (iiif_key), no resolution walk.
+    },
 };
 
 const size_t ART_INSTITUTION_MUSEUM_COUNT =

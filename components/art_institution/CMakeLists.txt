@@ -13,6 +13,7 @@ idf_component_register(
         "museums/smk.c"
         "museums/ham.c"
         "museums/smithsonian.c"
+        "museums/cma.c"
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS
         "."

@@ -217,6 +217,19 @@ esp_err_t art_institution_si_build_iiif_url(const institution_channel_entry_t *e
 // of truth for the refresh no-op guard and the UI "needs a key" signal.
 bool art_institution_si_api_key_missing(void);
 
+// ============================================================================
+// Cleveland Museum of Art adapter entry points (defined in museums/cma.c)
+// ============================================================================
+
+esp_err_t art_institution_cma_refresh_channel(const char *channel_id,
+                                              const char *axis,
+                                              const char *term_id,
+                                              uint32_t channel_offset);
+
+esp_err_t art_institution_cma_build_iiif_url(const institution_channel_entry_t *entry,
+                                             int longest_side,
+                                             char *out, size_t len);
+
 #ifdef __cplusplus
 }
 #endif

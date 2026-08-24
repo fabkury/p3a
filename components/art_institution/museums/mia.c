@@ -21,10 +21,11 @@
  *     Standard ES envelope {hits:{total:{value,relation},hits:[{_source}]}}.
  *   - Every query is scoped to `rights_type:"Public Domain" AND
  *     image:valid` (~34.5k works) — the licensing gate is server-side.
- *   - ES window: from+size ≤ 10 000. PAST the window the endpoint
- *     returns a BARE `[]` (a JSON array, not the envelope) — parsed
- *     here as an empty final page, and channel_offset is capped+wrapped
- *     VAM-style so we normally never hit it.
+ *   - ES window: from+size ≤ 10 000. PAST the window the endpoint fails
+ *     inconsistently: sometimes a BARE `[]` (a JSON array, not the
+ *     envelope — parsed here as an empty final page), sometimes HTTP
+ *     500 (handled by the normal fetch-error path). channel_offset is
+ *     capped+wrapped VAM-style so we normally never hit either.
  *   - hits.total.value display-caps at 10 000 with relation "gte".
  *   - Terms (identifiers) are the facet values themselves ("Paintings",
  *     "Asian Art"); a term containing '"' or '\\' would break the

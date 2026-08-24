@@ -817,8 +817,9 @@ about breadth-of-collection.
   response buffer — full ES records (~4 KB each) cannot be
   `_source`-trimmed.
 - **Pagination / ES window:** `from+size ≤ 10 000`; **past the window
-  the endpoint returns a bare `[]`** (not the envelope), parsed as an
-  empty final page. `hits.total.value` display-caps at 10 000 with
+  the endpoint fails inconsistently — a bare `[]`** (not the envelope,
+  parsed as an empty final page) **or HTTP 500** (normal fetch-error
+  path). `hits.total.value` display-caps at 10 000 with
   relation `"gte"`. `channel_offset` is capped+wrapped VAM-style into
   the window (cap 9950), then first-page modulo-total re-fetch applies
   only when relation is `"eq"`.

@@ -61,14 +61,16 @@ All p3a data is stored under a configurable root folder (`/sdcard/p3a` by defaul
 ├── vault/                      # Cached artwork from Makapix (hash-sharded: {0..63}/{0..63}/<storage_key>.<ext>)
 ├── giphy/                      # Cached Giphy GIFs (hash-sharded)
 ├── klipy/                      # Cached Klipy artwork (gif/ and sticker/ subtrees, hash-sharded)
-├── museum/                     # Cached museum (IIIF) artwork, partitioned per museum
+├── museum/                     # Cached museum artwork, partitioned per museum
 │   ├── artic/                  #   Art Institute of Chicago (hash-sharded: {0..63}/{0..63}/<iiif_key>.<ext>)
 │   ├── rijks/                  #   Rijksmuseum
 │   ├── vam/                    #   Victoria and Albert Museum
 │   ├── wellcome/               #   Wellcome Collection
 │   ├── smk/                    #   Statens Museum for Kunst
 │   ├── ham/                    #   Harvard Art Museums
-│   └── si/                     #   Smithsonian
+│   ├── si/                     #   Smithsonian
+│   ├── cma/                    #   Cleveland Museum of Art
+│   └── mia/                    #   Minneapolis Institute of Art
 ├── channel/                    # Per-channel JSON metadata files
 ├── playlists/                  # Playlist cache files
 └── temporary/                  # Staging area for uploads and downloads

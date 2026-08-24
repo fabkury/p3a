@@ -19,7 +19,7 @@
 - Web-based control panel at `http://p3a.local/`
 - **Giphy integration** — play trending GIFs from [Giphy](https://giphy.com/) with configurable content rating, rendition, and automatic refresh
 - **Klipy integration** — play GIFs and stickers from [Klipy](https://klipy.com/) via trending, search, and category channels, with configurable content rating, format (GIF/WebP), and automatic refresh (BYOK key from [partner.klipy.com](https://partner.klipy.com/))
-- **Museum (IIIF) channels** — play public collections from the Art Institute of Chicago, Rijksmuseum, Victoria and Albert Museum, Wellcome Collection, Statens Museum for Kunst, Harvard Art Museums, and the Smithsonian over [IIIF](https://iiif.io/); no API key required except for Harvard and the Smithsonian (free BYOK keys)
+- **Museum channels** — play public collections from the Art Institute of Chicago, Rijksmuseum, Victoria and Albert Museum, Wellcome Collection, Statens Museum for Kunst, Harvard Art Museums, the Smithsonian, the Cleveland Museum of Art, and the Minneapolis Institute of Art — most over [IIIF](https://iiif.io/), Cleveland and Minneapolis via their own open-access image CDNs; no API key required except for Harvard and the Smithsonian (free BYOK keys)
 - **Makapix Club integration** — send artworks directly from [makapix.club](https://makapix.club/)
 - **Over-the-Air updates** — install firmware and web UI updates wirelessly via web UI
 - **ESP32-C6 auto-flash** — co-processor firmware is updated automatically when needed

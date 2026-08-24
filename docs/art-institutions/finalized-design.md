@@ -337,6 +337,7 @@ webui/
     smithsonian.js              # Smithsonian adapter (BYOK)
     cma.js                      # Cleveland Museum of Art adapter (non-IIIF)
     cma-terms.json              # baked department/type terms (see §9.6)
+    mia.js                      # Minneapolis Institute of Art adapter (non-IIIF, live aggs)
     browse.js                   # the browse modal flow (injects its own CSS)
 ```
 
@@ -772,6 +773,66 @@ about breadth-of-collection.
 - **Rate limit:** none published; default 60 s cooldown on a 429
   (matches Rijks/V&A treatment).
 
+### 9.7 Minneapolis Institute of Art
+
+- **id:** `mia`
+- **display:** `Minneapolis Institute of Art`
+- **API base:** `https://search.artsmia.org/` — a raw **Elasticsearch
+  passthrough**: the whole ES query string travels URL-encoded in the
+  path segment, with `?size=N&from=M` pagination. Standard ES envelope
+  (`hits.total.{value,relation}`, `hits.hits[]._source`).
+- **Image base:** `https://1.api.artsmia.org` — the second non-IIIF
+  museum. Images are pre-rendered S3 objects at fixed width buckets
+  `/{400|800|full}/{id}.jpg` (other widths return S3 403). The device
+  downloads the **800 bucket** (~50 KB, 800 px longest side — the
+  lightest delivery of any shipped museum); the browse modal previews
+  at 400. `build_iiif_url` ignores `longest_side`.
+- **Required headers:** `Accept: application/json` plus
+  `User-Agent: ai_user_agent()` (polite identification; no WAF
+  requirement observed).
+- **Required scope:** every query appends
+  `AND rights_type:"Public Domain" AND image:valid` — ~34.5k
+  public-domain works with confirmed images; the licensing gate is
+  fully server-side.
+- **Axes (filterable, in browse order):** `classification`,
+  `department`, `country`, `style` — axis name == ES field name. Term
+  vocabularies are enumerated **live** (first museum with no baked list
+  and no vocabulary endpoints): one cached
+  `{scope}?size=0&aggs=all` call returns capitalized aggregation groups
+  (`Classification`, `Department`, `Country`, `Style`, …) of up to 200
+  `{key, doc_count}` buckets, already scoped to the PD-with-image
+  filter.
+- **Term-id / identifier gates:** the identifier is the facet value
+  itself ("Paintings", "Asian Art"). The browse adapter drops buckets
+  whose key exceeds **32 UTF-8 bytes** (byte length, not chars — Mia
+  has multi-byte keys), contains `"` or `\` (phrase-query breakers), or
+  is not well-formed Unicode (Mia's Style facet contains mojibake with
+  unpaired surrogates). The C adapter re-rejects `"`/`\` terms
+  (`ESP_ERR_INVALID_ARG`) — dual gate. Slashes in keys
+  ("Jewelry/Adornment") are fine: identifiers never touch the
+  filesystem (channel_id is a hash; `iiif_key` is the numeric id).
+- **Listing query:**
+  `{axis}:"{term}" AND rights_type:"Public Domain" AND image:valid`
+  → `GET /{encoded}?size=50&from=N`. Page size 50 with a 512 KB
+  response buffer — full ES records (~4 KB each) cannot be
+  `_source`-trimmed.
+- **Pagination / ES window:** `from+size ≤ 10 000`; **past the window
+  the endpoint returns a bare `[]`** (not the envelope), parsed as an
+  empty final page. `hits.total.value` display-caps at 10 000 with
+  relation `"gte"`. `channel_offset` is capped+wrapped VAM-style into
+  the window (cap 9950), then first-page modulo-total re-fetch applies
+  only when relation is `"eq"`.
+- **`iiif_key` value:** the numeric object id (≤7 digits — trivially
+  FAT-safe).
+- **`extension`:** always 3 (jpg).
+- **Resolve hook:** none.
+- **Entry width/height:** stored 0 (unknown) — Mia's metadata carries
+  original scan dims, not the 800-bucket rendition, and no downstream
+  consumer reads institution entry dims.
+- **Single-record lookup:** query `id:{id}` on the same search endpoint
+  — used by `fetchMetadataByIiifKey`.
+- **Rate limit:** none published; default 60 s cooldown on a 429.
+
 ## 10. Image rendition strategy
 
 The device requests `…/full/!720,720/0/default.jpg`. Universally
@@ -785,7 +846,7 @@ museum IIIF servers reliably serve JPEG, less reliably WebP.
 | Wi-Fi offline | Refresh skipped (existing dispatcher behavior). Browse modal shows a "Connect to Wi-Fi to browse museums" hint. |
 | Museum API returns 5xx | Refresh logs the error, leaves cache unchanged, retries on the next cycle. |
 | Museum API returns 429 | Per-museum cooldown engages (§11.1). Browse UI surfaces "rate-limited, try again in N seconds". |
-| TLS handshake failure | Logged. The `esp_crt_bundle` should cover all Tier-1 museum CDNs (`artic.edu`, `iiif.micr.io`, `data.rijksmuseum.nl`, `vam.ac.uk`, `api.harvardartmuseums.org`, `nrs.harvard.edu`, `api.si.edu`, `ids.si.edu`). Verification is a gating step before the first C-side commit for each museum (§12.3). |
+| TLS handshake failure | Logged. The `esp_crt_bundle` should cover all Tier-1 museum CDNs (`artic.edu`, `iiif.micr.io`, `data.rijksmuseum.nl`, `vam.ac.uk`, `api.harvardartmuseums.org`, `nrs.harvard.edu`, `api.si.edu`, `ids.si.edu`, `openaccess-api.clevelandart.org`, `openaccess-cdn.clevelandart.org`, `search.artsmia.org`, `1.api.artsmia.org`). Verification is a gating step before the first C-side commit for each museum (§12.3). |
 | Empty cache after refresh | Channel marked inactive (existing pattern). UI shows "no artworks". |
 | Image download 404 | Entry left out of LAi; another entry is picked at playback time. |
 | Channel spec parses but museum is unknown (newer playset on older firmware) | Channel skipped at execute time, logged WARN. |

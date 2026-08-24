@@ -176,7 +176,13 @@ typedef struct __attribute__((packed)) {
     uint32_t created_at;     // offset  8 — Unix timestamp from museum metadata (0 = unknown)
     uint16_t height;         // offset 12
     char     iiif_key[48];   // offset 14 — null-terminated; museum-specific identifier
-    uint8_t  reserved[2];    // offset 62
+    uint8_t  resolve_fails;  // offset 62 — Rijks: consecutive failed Linked-Art
+                             //              walks; promotes to 0xFE at 3
+    uint8_t  download_fails; // offset 63 — all museums: consecutive permanent
+                             //              image-download failures (true HTTP 403,
+                             //              or 404/empty); promotes to 0xFE at 5.
+                             //              Refresh replaces the entry (fresh budget
+                             //              each ai_refresh_sec window)
 } institution_channel_entry_t;
 _Static_assert(sizeof(institution_channel_entry_t) == 64, "");
 ```
@@ -849,7 +855,8 @@ museum IIIF servers reliably serve JPEG, less reliably WebP.
 | Museum API returns 429 | Per-museum cooldown engages (§11.1). Browse UI surfaces "rate-limited, try again in N seconds". |
 | TLS handshake failure | Logged. The `esp_crt_bundle` should cover all Tier-1 museum CDNs (`artic.edu`, `iiif.micr.io`, `data.rijksmuseum.nl`, `vam.ac.uk`, `api.harvardartmuseums.org`, `nrs.harvard.edu`, `api.si.edu`, `ids.si.edu`, `openaccess-api.clevelandart.org`, `openaccess-cdn.clevelandart.org`, `search.artsmia.org`, `1.api.artsmia.org`). Verification is a gating step before the first C-side commit for each museum (§12.3). |
 | Empty cache after refresh | Channel marked inactive (existing pattern). UI shows "no artworks". |
-| Image download 404 | Entry left out of LAi; another entry is picked at playback time. |
+| Image download 404 / empty body | Entry left out of LAi; a persistent `.404` marker skips it on future scans; another entry is picked at playback time. Also counts toward `download_fails`. |
+| Image download 403 (permanently dead image — e.g. a museum index listing renditions that don't exist, Mia's `image:valid` gaps) | Entry's persisted `download_fails` increments (true 403 only — 401 is excluded via the raw HTTP status threaded through the download path; transient TLS/timeout/5xx/429 never count). At 5 consecutive failures the entry is tombstoned (`extension = 0xFE`) and skipped by scan/pick. The next refresh replaces the entry, granting a fresh 5-attempt budget per `ai_refresh_sec` window — self-healing if the museum fixes its index. |
 | Channel spec parses but museum is unknown (newer playset on older firmware) | Channel skipped at execute time, logged WARN. |
 | Rijks Linked Art walk fails for a specific artwork | Entry left unresolved; retried on the next download attempt. After 3 consecutive failures, entry is tombstoned (`extension = 0xFE`) and skipped forever until the next refresh re-adds the underlying HMO with a fresh attempt budget. |
 

@@ -895,7 +895,7 @@ static void download_task(void *arg)
                                            ai_museum_id, sizeof(ai_museum_id),
                                            ai_axis_unused, sizeof(ai_axis_unused));
             }
-            err = art_institution_download_to_path(ai_museum_id, s_dl_req.art_url, s_dl_req.filepath);
+            err = art_institution_download_to_path(ai_museum_id, s_dl_req.art_url, s_dl_req.filepath, NULL);
             if (err == ESP_OK) {
                 strlcpy(s_task_out_path, s_dl_req.filepath, sizeof(s_task_out_path));
             }

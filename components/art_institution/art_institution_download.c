@@ -67,8 +67,10 @@ static void ai_dl_on_rate_limited(uint32_t retry_after_sec, void *ctx)
 
 esp_err_t art_institution_download_to_path(const char *museum_id,
                                            const char *url,
-                                           const char *out_path)
+                                           const char *out_path,
+                                           int *out_http_status)
 {
+    if (out_http_status) *out_http_status = 0;
     if (!museum_id || !url || !out_path || url[0] == '\0' || out_path[0] == '\0') {
         return ESP_ERR_INVALID_ARG;
     }
@@ -122,9 +124,12 @@ esp_err_t art_institution_download_to_path(const char *museum_id,
         .on_rate_limited = ai_dl_on_rate_limited,
         .user_ctx = (void *)museum_id,
     };
-    err = http_fetch_to_file(&fr, out_path, NULL);
+    http_fetch_result_t res = {0};
+    err = http_fetch_to_file(&fr, out_path, &res);
+    if (out_http_status) *out_http_status = res.http_status;
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "IIIF download failed for %s: %s", url, esp_err_to_name(err));
+        ESP_LOGW(TAG, "IIIF download failed for %s: %s (HTTP %d)",
+                 url, esp_err_to_name(err), res.http_status);
         return err;
     }
 

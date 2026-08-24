@@ -311,7 +311,13 @@ esp_err_t art_institution_build_iiif_url(const char *museum_id,
  * @param museum_id Stable wire id ("artic", ...)
  * @param url       Full IIIF image URL (already built)
  * @param out_path  Target vault path (must be writable; parent dirs may be missing)
+ * @param out_http_status Optional (may be NULL): last HTTP status seen by the
+ *         transfer, 0 if the request never reached HTTP (rate-limit or
+ *         unavailable skip, SDIO timeout, connect/TLS failure). Lets the
+ *         caller distinguish a true 403 from a 401 — both map to
+ *         ESP_ERR_NOT_ALLOWED.
  * @return ESP_OK on success, ESP_ERR_NOT_FOUND for HTTP 404,
+ *         ESP_ERR_NOT_ALLOWED for HTTP 401/403,
  *         ESP_ERR_INVALID_RESPONSE for HTTP 429,
  *         ESP_ERR_INVALID_SIZE if the body exceeds P3A_MAX_ARTWORK_SIZE,
  *         ESP_ERR_INVALID_STATE if SD card was exported to USB mid-stream,
@@ -319,7 +325,8 @@ esp_err_t art_institution_build_iiif_url(const char *museum_id,
  */
 esp_err_t art_institution_download_to_path(const char *museum_id,
                                            const char *url,
-                                           const char *out_path);
+                                           const char *out_path,
+                                           int *out_http_status);
 
 /**
  * @brief Resolve one pending unresolved entry across all active channels

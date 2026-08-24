@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project: museum-art
 
-A unified browsing interface that abstracts diverse museum APIs behind a single client-facing surface. Scope is restricted to museums that expose artworks via **IIIF** (International Image Interoperability Framework). A museum that does not offer IIIF is out of scope, even if it has a public API.
+A unified browsing interface that abstracts diverse museum APIs behind a single client-facing surface. Scope was originally restricted to museums that expose artworks via **IIIF** (International Image Interoperability Framework). **As of 2026-08 that rule no longer binds the shipped p3a integration**: the Cleveland Museum of Art (`source/cma/`, firmware id `cma`) was accepted with fixed CDN renditions and no IIIF — the download path treats image URLs as opaque, so IIIF is a preference, not a requirement. See `docs/art-institutions/finalized-design.md` §9.6.
 
 ### Core feature surface (the abstraction must support these)
 

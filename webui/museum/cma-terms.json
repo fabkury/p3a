@@ -1,0 +1,409 @@
+{
+  "generated": "2026-08-23T23:58:07Z",
+  "api": "https://openaccess-api.clevelandart.org/api/artworks/",
+  "filters": "cc0=1&has_image=1",
+  "total": 41507,
+  "axes": {
+    "department": [
+      {
+        "id": "Prints",
+        "label": "Prints",
+        "count": 10518
+      },
+      {
+        "id": "Medieval Art",
+        "label": "Medieval Art",
+        "count": 4815
+      },
+      {
+        "id": "Textiles",
+        "label": "Textiles",
+        "count": 4658
+      },
+      {
+        "id": "Indian and Southeast Asian Art",
+        "label": "Indian and Southeast Asian Art",
+        "count": 3374
+      },
+      {
+        "id": "Japanese Art",
+        "label": "Japanese Art",
+        "count": 3238
+      },
+      {
+        "id": "Decorative Art and Design",
+        "label": "Decorative Art and Design",
+        "count": 3133
+      },
+      {
+        "id": "Drawings",
+        "label": "Drawings",
+        "count": 2626
+      },
+      {
+        "id": "Chinese Art",
+        "label": "Chinese Art",
+        "count": 2478
+      },
+      {
+        "id": "Photography",
+        "label": "Photography",
+        "count": 1249
+      },
+      {
+        "id": "Egyptian and Ancient Near Easter",
+        "label": "Egyptian and Ancient Near Eastern Art",
+        "count": 1069,
+        "query": "Egyptian and Ancient Near Eastern Art"
+      },
+      {
+        "id": "Art of the Americas",
+        "label": "Art of the Americas",
+        "count": 948
+      },
+      {
+        "id": "European Painting and Sculpture",
+        "label": "European Painting and Sculpture",
+        "count": 725
+      },
+      {
+        "id": "Greek and Roman Art",
+        "label": "Greek and Roman Art",
+        "count": 674
+      },
+      {
+        "id": "Modern European Painting and Scu",
+        "label": "Modern European Painting and Sculpture",
+        "count": 486,
+        "query": "Modern European Painting and Sculpture"
+      },
+      {
+        "id": "Korean Art",
+        "label": "Korean Art",
+        "count": 443
+      },
+      {
+        "id": "African Art",
+        "label": "African Art",
+        "count": 385
+      },
+      {
+        "id": "American Painting and Sculpture",
+        "label": "American Painting and Sculpture",
+        "count": 297
+      },
+      {
+        "id": "Islamic Art",
+        "label": "Islamic Art",
+        "count": 294
+      },
+      {
+        "id": "Oceania",
+        "label": "Oceania",
+        "count": 97
+      }
+    ],
+    "type": [
+      {
+        "id": "Print",
+        "label": "Print",
+        "count": 10734
+      },
+      {
+        "id": "Bound Volume",
+        "label": "Bound Volume",
+        "count": 4564
+      },
+      {
+        "id": "Painting",
+        "label": "Painting",
+        "count": 3954
+      },
+      {
+        "id": "Ceramic",
+        "label": "Ceramic",
+        "count": 3031
+      },
+      {
+        "id": "Textile",
+        "label": "Textile",
+        "count": 2144
+      },
+      {
+        "id": "Drawing",
+        "label": "Drawing",
+        "count": 1993
+      },
+      {
+        "id": "Sculpture",
+        "label": "Sculpture",
+        "count": 1980
+      },
+      {
+        "id": "Metalwork",
+        "label": "Metalwork",
+        "count": 1373
+      },
+      {
+        "id": "Arms and Armor",
+        "label": "Arms and Armor",
+        "count": 1208
+      },
+      {
+        "id": "Lace",
+        "label": "Lace",
+        "count": 1150
+      },
+      {
+        "id": "Manuscript",
+        "label": "Manuscript",
+        "count": 1088
+      },
+      {
+        "id": "Photograph",
+        "label": "Photograph",
+        "count": 989
+      },
+      {
+        "id": "Jewelry",
+        "label": "Jewelry",
+        "count": 944
+      },
+      {
+        "id": "Embroidery",
+        "label": "Embroidery",
+        "count": 591
+      },
+      {
+        "id": "Coins",
+        "label": "Coins",
+        "count": 560
+      },
+      {
+        "id": "Miscellaneous",
+        "label": "Miscellaneous",
+        "count": 488
+      },
+      {
+        "id": "Furniture and woodwork",
+        "label": "Furniture and woodwork",
+        "count": 472
+      },
+      {
+        "id": "Portfolio",
+        "label": "Portfolio",
+        "count": 423
+      },
+      {
+        "id": "Glass",
+        "label": "Glass",
+        "count": 392
+      },
+      {
+        "id": "Silver",
+        "label": "Silver",
+        "count": 376
+      },
+      {
+        "id": "Funerary Equipment",
+        "label": "Funerary Equipment",
+        "count": 282
+      },
+      {
+        "id": "Velvet",
+        "label": "Velvet",
+        "count": 257
+      },
+      {
+        "id": "Jade",
+        "label": "Jade",
+        "count": 254
+      },
+      {
+        "id": "Garment",
+        "label": "Garment",
+        "count": 247
+      },
+      {
+        "id": "Tools and Equipment",
+        "label": "Tools and Equipment",
+        "count": 218
+      },
+      {
+        "id": "Lacquer",
+        "label": "Lacquer",
+        "count": 190
+      },
+      {
+        "id": "Enamel",
+        "label": "Enamel",
+        "count": 167
+      },
+      {
+        "id": "Portrait Miniature",
+        "label": "Portrait Miniature",
+        "count": 164
+      },
+      {
+        "id": "Ivory",
+        "label": "Ivory",
+        "count": 161
+      },
+      {
+        "id": "Spindle Whorl",
+        "label": "Spindle Whorl",
+        "count": 135
+      },
+      {
+        "id": "Basketry",
+        "label": "Basketry",
+        "count": 126
+      },
+      {
+        "id": "Vessels",
+        "label": "Vessels",
+        "count": 114
+      },
+      {
+        "id": "Amulets",
+        "label": "Amulets",
+        "count": 102
+      },
+      {
+        "id": "Wood",
+        "label": "Wood",
+        "count": 85
+      },
+      {
+        "id": "Sampler",
+        "label": "Sampler",
+        "count": 84
+      },
+      {
+        "id": "Musical Instrument",
+        "label": "Musical Instrument",
+        "count": 78
+      },
+      {
+        "id": "Stone",
+        "label": "Stone",
+        "count": 63
+      },
+      {
+        "id": "Tapestry",
+        "label": "Tapestry",
+        "count": 57
+      },
+      {
+        "id": "Calligraphy",
+        "label": "Calligraphy",
+        "count": 41
+      },
+      {
+        "id": "Mask",
+        "label": "Mask",
+        "count": 37
+      },
+      {
+        "id": "Carpet",
+        "label": "Carpet",
+        "count": 26
+      },
+      {
+        "id": "Scarabs",
+        "label": "Scarabs",
+        "count": 26
+      },
+      {
+        "id": "Cosmetic Objects",
+        "label": "Cosmetic Objects",
+        "count": 19
+      },
+      {
+        "id": "Lamp",
+        "label": "Lamp",
+        "count": 19
+      },
+      {
+        "id": "Glyptic",
+        "label": "Glyptic",
+        "count": 17
+      },
+      {
+        "id": "Netsuke",
+        "label": "Netsuke",
+        "count": 14
+      },
+      {
+        "id": "Knitting",
+        "label": "Knitting",
+        "count": 11
+      },
+      {
+        "id": "Leather",
+        "label": "Leather",
+        "count": 10
+      },
+      {
+        "id": "Woodblock",
+        "label": "Woodblock",
+        "count": 10
+      },
+      {
+        "id": "Forgery",
+        "label": "Forgery",
+        "count": 7
+      },
+      {
+        "id": "Mixed Media",
+        "label": "Mixed Media",
+        "count": 6
+      },
+      {
+        "id": "Mosaic",
+        "label": "Mosaic",
+        "count": 6
+      },
+      {
+        "id": "Seals",
+        "label": "Seals",
+        "count": 5
+      },
+      {
+        "id": "Plaque",
+        "label": "Plaque",
+        "count": 3
+      },
+      {
+        "id": "Plate",
+        "label": "Plate",
+        "count": 3
+      },
+      {
+        "id": "Timepiece",
+        "label": "Timepiece",
+        "count": 3
+      },
+      {
+        "id": "Container",
+        "label": "Container",
+        "count": 2
+      },
+      {
+        "id": "Monotype",
+        "label": "Monotype",
+        "count": 2
+      },
+      {
+        "id": "Book Binding",
+        "label": "Book Binding",
+        "count": 1
+      },
+      {
+        "id": "Lithographic Stone",
+        "label": "Lithographic Stone",
+        "count": 1
+      }
+    ]
+  }
+}

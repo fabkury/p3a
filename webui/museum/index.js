@@ -18,6 +18,7 @@ import { WellcomeAdapter } from './wellcome.js';
 import { SmkAdapter } from './smk.js';
 import { HamAdapter } from './ham.js';
 import { SmithsonianAdapter } from './smithsonian.js';
+import { CmaAdapter } from './cma.js';
 
 const ADAPTERS = [
     new ArticAdapter(),
@@ -27,6 +28,7 @@ const ADAPTERS = [
     new SmkAdapter(),
     new HamAdapter(),
     new SmithsonianAdapter(),
+    new CmaAdapter(),
 ];
 
 export function listAdapters() {

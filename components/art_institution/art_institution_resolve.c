@@ -92,7 +92,10 @@ static void commit_resolution(channel_cache_t *cache,
             break;
         }
     }
-    cache->dirty = committed;
+    // Only ever SET the dirty flag — assigning `committed` outright could
+    // clear a flag another writer just set (dropping their unsaved
+    // mutation) when the entry vanished mid-walk.
+    if (committed) cache->dirty = true;
     xSemaphoreGive(cache->mutex);
     if (committed) channel_cache_schedule_save(cache);
 }

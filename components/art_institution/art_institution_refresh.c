@@ -32,6 +32,47 @@
 
 static const char *TAG = "ai_refresh";
 
+// Consecutive permanent download failures before an entry is tombstoned.
+// Deliberately laxer than the Rijks resolver's 3: a WAF hiccup can serve a
+// few stray 403s, and the cost of extra attempts is one HTTPS request each.
+#define AI_DOWNLOAD_MAX_FAILS 5
+
+void art_institution_record_permanent_download_failure(const char *channel_id,
+                                                       int32_t post_id)
+{
+    if (!channel_id) return;
+
+    channel_cache_lifecycle_lock();
+    channel_cache_t *cache = channel_cache_registry_find(channel_id);
+    if (!cache) {
+        channel_cache_lifecycle_unlock();
+        return;
+    }
+
+    bool changed = false;
+    xSemaphoreTake(cache->mutex, portMAX_DELAY);
+    for (size_t i = 0; i < cache->entry_count; i++) {
+        institution_channel_entry_t *e =
+            (institution_channel_entry_t *)&cache->entries[i];
+        if (e->post_id != post_id) continue;
+        // Unresolved/tombstoned entries are not downloadable; a failure
+        // report for one is stale — ignore it.
+        if (e->extension == 0xFE || e->extension == 0xFF) break;
+        if (e->download_fails < 0xFF) e->download_fails++;
+        if (e->download_fails >= AI_DOWNLOAD_MAX_FAILS) {
+            e->extension = 0xFE;
+            ESP_LOGW(TAG, "Tombstoning entry post_id=%ld (%u permanent download failures)",
+                     (long)post_id, (unsigned)e->download_fails);
+        }
+        changed = true;
+        break;
+    }
+    if (changed) cache->dirty = true;
+    xSemaphoreGive(cache->mutex);
+    if (changed) channel_cache_schedule_save(cache);
+    channel_cache_lifecycle_unlock();
+}
+
 esp_err_t art_institution_merge_entries(struct channel_cache_s *cache,
                                         const institution_channel_entry_t *new_entries,
                                         size_t new_count,

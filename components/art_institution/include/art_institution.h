@@ -329,6 +329,23 @@ esp_err_t art_institution_download_to_path(const char *museum_id,
                                            int *out_http_status);
 
 /**
+ * @brief Record a permanent image-download failure for a cache entry
+ *
+ * Called by the download manager when an institution download fails with
+ * a permanently-dead-image signature (true HTTP 403, or 404/empty body).
+ * Increments the entry's persisted download_fails counter; at
+ * AI_DOWNLOAD_MAX_FAILS (5) the entry is tombstoned (extension = 0xFE)
+ * so rescans stop re-attempting it. The next refresh replaces the entry
+ * wholesale, granting a fresh budget each ai_refresh_sec window.
+ * Unknown channel/post ids are ignored.
+ *
+ * @param channel_id Channel whose cache holds the entry
+ * @param post_id    Entry identity (salted hash, offset 0 of the entry)
+ */
+void art_institution_record_permanent_download_failure(const char *channel_id,
+                                                       int32_t post_id);
+
+/**
  * @brief Resolve one pending unresolved entry across all active channels
  *
  * Walks the active institution channels looking for an entry with

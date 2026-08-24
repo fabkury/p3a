@@ -588,6 +588,7 @@ static char s_task_temp_path[264];    // For temp file checks
 static char s_task_out_path[256];     // For download output path
 static char s_task_marker_path[264];  // For 404 marker creation
 static char s_task_display_name[64];  // For UI display name
+static int  s_ai_http_status;         // Raw HTTP status of the last museum download
 
 static void dl_progress_cb(size_t bytes_read, size_t content_length, void *ctx)
 {
@@ -895,7 +896,9 @@ static void download_task(void *arg)
                                            ai_museum_id, sizeof(ai_museum_id),
                                            ai_axis_unused, sizeof(ai_axis_unused));
             }
-            err = art_institution_download_to_path(ai_museum_id, s_dl_req.art_url, s_dl_req.filepath, NULL);
+            s_ai_http_status = 0;
+            err = art_institution_download_to_path(ai_museum_id, s_dl_req.art_url,
+                                                   s_dl_req.filepath, &s_ai_http_status);
             if (err == ESP_OK) {
                 strlcpy(s_task_out_path, s_dl_req.filepath, sizeof(s_task_out_path));
             }
@@ -969,6 +972,24 @@ static void download_task(void *arg)
                              "pausing downloads for %d min (resumes early if space frees up)",
                              (unsigned long long)(free_after / 1024),
                              DL_FULL_BACKOFF_MS / 60000);
+                }
+            }
+
+            // Museum entries whose image is permanently dead (true HTTP 403,
+            // or 404/empty body — some museum indexes list images whose CDN
+            // renditions don't exist, e.g. Mia's image:valid gaps) get a
+            // persisted per-entry failure count; enough consecutive hits
+            // tombstone the entry so rescans stop re-attempting it. Refresh
+            // replaces the entry, granting a fresh budget each
+            // ai_refresh_sec window. 401 is excluded (BYOK key trouble is
+            // not the artwork's fault), as is every transient error.
+            if (play_scheduler_is_institution_channel(s_dl_req.channel_id)) {
+                bool permanently_dead =
+                    (err == ESP_ERR_NOT_FOUND) ||
+                    (err == ESP_ERR_NOT_ALLOWED && s_ai_http_status == 403);
+                if (permanently_dead) {
+                    art_institution_record_permanent_download_failure(
+                        s_dl_req.channel_id, s_dl_req.post_id);
                 }
             }
 

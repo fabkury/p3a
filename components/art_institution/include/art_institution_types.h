@@ -85,7 +85,13 @@ typedef struct __attribute__((packed)) {
     uint8_t  resolve_fails;  ///< offset 62 — Rijks: consecutive failed Linked-Art walks for
                              ///<              this entry. Promotes to extension=0xFE at 3.
                              ///<              Unused (0) for museums that don't need resolution.
-    uint8_t  _reserved;      ///< offset 63 — future use (zeroed on write)
+    uint8_t  download_fails; ///< offset 63 — all museums: consecutive PERMANENT image-download
+                             ///<              failures (true HTTP 403, or 404/empty body). Promotes
+                             ///<              to extension=0xFE at AI_DOWNLOAD_MAX_FAILS (5) so
+                             ///<              rescans stop re-attempting dead images. Refresh
+                             ///<              replaces the entry wholesale (fresh budget each
+                             ///<              ai_refresh_sec window). Transient failures (TLS,
+                             ///<              timeout, 5xx, 429, 401) never increment it.
 } institution_channel_entry_t;
 
 _Static_assert(sizeof(institution_channel_entry_t) == 64, "institution entry must be 64 bytes");

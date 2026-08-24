@@ -102,6 +102,16 @@ const art_institution_museum_t ART_INSTITUTION_MUSEUMS[] = {
                                   // rebuilt from the accession number alone
                                   // (iiif_key), no resolution walk.
     },
+    {
+        .id              = "mia",
+        .display         = "Minneapolis Institute of Art",
+        .museum_enum     = ART_INSTITUTION_MUSEUM_MIA,
+        .refresh_channel = art_institution_mia_refresh_channel,
+        .build_iiif_url  = art_institution_mia_build_iiif_url,
+        .resolve_entry   = NULL,  // non-IIIF: the fixed 800-px S3 bucket URL
+                                  // is rebuilt from the numeric object id
+                                  // (iiif_key), no resolution walk.
+    },
 };
 
 const size_t ART_INSTITUTION_MUSEUM_COUNT =

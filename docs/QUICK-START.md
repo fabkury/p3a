@@ -110,7 +110,7 @@ Klipy is another GIF platform, and it also offers stickers. Like Giphy, it needs
 
 ### D. Add a museum channel
 
-Browse the open collections of major museums. Seven institutions ship today: the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst (SMK), Harvard Art Museums, and the Smithsonian. The first five need no account or key. Harvard requires a free API key — request one at [harvardartmuseums.org/collections/api](https://harvardartmuseums.org/collections/api). Smithsonian requires a free api.data.gov key — register at [api.data.gov/signup/](https://api.data.gov/signup/) (instant). Paste either key into **Settings → Museums**.
+Browse the open collections of major museums. Eight institutions ship today: the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst (SMK), Harvard Art Museums, the Smithsonian, and the Cleveland Museum of Art. All but two need no account or key. Harvard requires a free API key — request one at [harvardartmuseums.org/collections/api](https://harvardartmuseums.org/collections/api). Smithsonian requires a free api.data.gov key — register at [api.data.gov/signup/](https://api.data.gov/signup/) (instant). Paste either key into **Settings → Museums**.
 
 1. Open `http://p3a.local/playset-editor` in any browser on the same Wi-Fi.
 2. Open or create a playset and click **Add Channel**.

@@ -79,7 +79,7 @@ In `giphy_fetch_page` (and analogous call sites), compare bytes received against
 - Fatal (no retry): 404 in download path; 401/403/429 in API path; oversized (>16 MiB); local file write/truncate error; response buffer overflow.
 - Coverage gap: `view_tracker` pingbacks, `register_click`, `fetch_random_id`, and the makapix HTTPS paths still lack retry. They were skipped because (a) view_tracker is one-shot best-effort, (b) the others fire infrequently and weren't in the observed failure window. Extend by following the same pattern if needed.
 - **2026-06-05 update:** the retry/truncation core has since been centralized in
-  `components/http_fetch` (`do_fetch()`), which giphy, all seven museums,
+  `components/http_fetch` (`do_fetch()`), which giphy, all eight museums,
   `makapix_artwork`, and `show_url` now call — Option 2 coverage is much wider
   than the original two call sites (the bullets above predate that refactor;
   of the listed gaps, `view_tracker` events go over MQTT today, and the
@@ -141,7 +141,7 @@ Shared semaphore around `esp_http_client_perform` (or equivalent) capped at 2 co
 - Overkill if Option 2 alone keeps retries rare in practice.
 
 **Implementation notes (as built):**
-- The `~30 lines threaded through every call site` cost evaporated: since the 2026-06-05 refactor every content fetcher (giphy pages + downloads, all seven museums, makapix_artwork, show_url) funnels through `http_fetch`'s `do_fetch()`, so a single counting semaphore there gates all of them. The gate lives entirely in `components/http_fetch/http_fetch.c` — `tls_gate()` (lazy, thread-safe create via create-outside-critical + compare-and-set) plus a take/give pair.
+- The `~30 lines threaded through every call site` cost evaporated: since the 2026-06-05 refactor every content fetcher (giphy pages + downloads, all eight museums, makapix_artwork, show_url) funnels through `http_fetch`'s `do_fetch()`, so a single counting semaphore there gates all of them. The gate lives entirely in `components/http_fetch/http_fetch.c` — `tls_gate()` (lazy, thread-safe create via create-outside-critical + compare-and-set) plus a take/give pair.
 - **N is `CONFIG_HTTP_FETCH_MAX_CONCURRENT_TLS`** (new `components/http_fetch/Kconfig`, default 2, range 1–8). Set to 1 to fully serialize `http_fetch` transfers without a code change.
 - **Slot scope = live network work only.** Acquired after the SDIO wait and the redirect-scratch alloc (which do no network); released once below the hop loop. The slot is handed back during inter-attempt backoff sleeps and re-taken after, so a retrying transfer doesn't pin a slot while idle. There are no early `return`s between take and give, so a slot can't leak.
 - **Not gated (by design / out of scope):** the persistent Makapix MQTT-over-TLS link (separate esp-mqtt stack — it benefits indirectly from the reduced HTTP contention, which directly addresses the keepalive-starvation failure mode), and the few remaining direct-`esp_http_client` paths that bypass `http_fetch`: giphy `register_click` / `fetch_random_id` (click-driven, best-effort), OTA, and provisioning. These are infrequent and weren't in the observed failure window; route them through `http_fetch` if they ever need gating.

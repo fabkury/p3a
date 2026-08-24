@@ -330,8 +330,14 @@ webui/
     artic.js                    # AIC adapter (mirrors ubi-test/js/adapters/artic.js)
     rijksmuseum.js              # Rijks adapter
     rijks-sets.json             # baked OAI-PMH sets (see §9.2)
-    browse.js                   # the browse modal flow
-    style.css
+    vam.js                      # V&A adapter
+    wellcome.js                 # Wellcome adapter
+    smk.js                      # SMK adapter
+    ham.js                      # Harvard Art Museums adapter (BYOK)
+    smithsonian.js              # Smithsonian adapter (BYOK)
+    cma.js                      # Cleveland Museum of Art adapter (non-IIIF)
+    cma-terms.json              # baked department/type terms (see §9.6)
+    browse.js                   # the browse modal flow (injects its own CSS)
 ```
 
 `browse.js` exports a function the playset editor opens as a modal when
@@ -696,6 +702,75 @@ about breadth-of-collection.
 - **Rate limit:** **1 000 req/hour per API key** (api.data.gov default
   for registered keys). 429 carries `Retry-After` in seconds; engaged
   via the standard `art_institution_set_rate_limited("si", ...)` flow.
+
+### 9.6 Cleveland Museum of Art
+
+- **id:** `cma`
+- **display:** `Cleveland Museum of Art`
+- **API base:** `https://openaccess-api.clevelandart.org/api/artworks/`
+- **Image base:** `https://openaccess-cdn.clevelandart.org` — **the first
+  non-IIIF museum.** There is no IIIF Image API and no size-parameterized
+  delivery; every record carries fixed CDN rendition URLs (`web` ≈
+  750–1300 px longest side, plus `print`/`full`, ignored). The `web`
+  rendition follows a stable template derivable from the accession
+  number, so `build_iiif_url` ignores `longest_side` and emits the
+  template. The download path treats URLs as opaque strings, so nothing
+  else changes. (This retires the implicit "museums must speak IIIF"
+  assumption; `reference/museum-art/docs/museum-candidates.md` originally
+  excluded Cleveland on exactly that ground.)
+- **Required headers:** `Accept: application/json` plus
+  `User-Agent: ai_user_agent()` on search legs (polite identification of
+  an anonymous keyless bulk consumer; no WAF requirement observed).
+- **Required query:** `cc0=1&has_image=1` on every listing call — scopes
+  the catalog to the ~41.5k CC0-licensed works with images (the lowest
+  licensing risk of any shipped museum: CC0 covers metadata *and*
+  images).
+- **Axes (filterable, in browse order):** `department`, `type`. CMA has
+  **no facet-enumeration endpoint** (`/api/departments/` 404s), so the
+  term vocabularies are baked into `webui/museum/cma-terms.json` at
+  release time by `scripts/build_cma_terms.py` (a full-corpus scan, ~42
+  requests at `limit=1000`; the rijks-sets.json pattern). Counts are
+  baked as of the scan date; the live `info.total` takes over once a
+  term is opened.
+- **Filter param map:** identity (`department` → `department`,
+  `type` → `type`). Values are **exact-match full names** — partial
+  matches return 0 results.
+- **Term-id / long-name expansion:** the playset identifier is the term
+  name itself. Two department names exceed the 32-char identifier slot
+  (`Egyptian and Ancient Near Eastern Art`, 37 chars;
+  `Modern European Painting and Sculpture`, 38 chars). Their baked
+  entries store a 32-char truncated `id` plus a `query` field carrying
+  the full name; `museums/cma.c` mirrors the mapping in its static
+  `CMA_TERM_EXPANSION` table and expands before building the query URL.
+  `build_cma_terms.py` prints the table it baked (and fails hard on a
+  truncation collision) so the C mirror stays reviewable.
+- **Listing endpoint:**
+  `GET /api/artworks/?cc0=1&has_image=1&skip=N&limit=100&{axis}={term}`
+  `&fields=accession_number,images` — the `fields=` trim is load-bearing
+  for the 256 KB response buffer (full records can reach ~3 KB each).
+- **Pagination:** native `skip` + `limit`. Deep offsets verified working
+  (`skip=40000` returns valid results — no AIC-style cap), so
+  `channel_offset` uses the Smithsonian page-align + modulo-wrap scheme.
+- **Image URL:**
+  `https://openaccess-cdn.clevelandart.org/{accession}/{accession}_web.jpg`
+  (template verified 100/100 against listing `filename` fields). Always
+  JPEG; sizes vary (median ~300 KB, ~20 % over 500 KB, max ~1 MB
+  observed) — heavier per artwork than the IIIF museums' `!720,720`,
+  accepted by design.
+- **`iiif_key` value:** the accession number (≤14 chars observed,
+  charset `[A-Za-z0-9.-]` — FAT-safe, so vault/pin filenames round-trip
+  without a `p3a_pin_dispatcher` un-sanitize branch).
+- **`extension`:** always 3 (jpg).
+- **Resolve hook:** none.
+- **Metadata quirk:** `images.web.width`/`height`/`filesize` are
+  **strings, occasionally empty** (~2 % of records) — parsed with
+  `strtol` guards, 0 = unknown. Records missing `accession_number` or
+  `images.web.url` are skipped at refresh (the rebuilt template would
+  404).
+- **Single-record lookup:** `GET /api/artworks/{accession}` — used by
+  the web UI's `fetchMetadataByIiifKey` for the title view.
+- **Rate limit:** none published; default 60 s cooldown on a 429
+  (matches Rijks/V&A treatment).
 
 ## 10. Image rendition strategy
 

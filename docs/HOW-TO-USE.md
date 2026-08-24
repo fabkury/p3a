@@ -243,9 +243,9 @@ The Klipy tab at `http://p3a.local/settings#klipy` lets you customize:
 
 ---
 
-## Museum Channels (IIIF)
+## Museum Channels
 
-p3a can play artwork from major museums that publish their collections through the [IIIF Image API](https://iiif.io/api/image/3.0/). Channels are organized by the museum's own facets (collections, departments, sets, ...) and refreshed on a schedule. Seven museums ship today:
+p3a can play artwork from major museums that publish their collections online — most through the [IIIF Image API](https://iiif.io/api/image/3.0/), the Cleveland Museum of Art through its own CC0 Open Access image CDN. Channels are organized by the museum's own facets (collections, departments, sets, ...) and refreshed on a schedule. Eight museums ship today:
 
 | Museum | Facets you can pick |
 |---|---|
@@ -256,8 +256,9 @@ p3a can play artwork from major museums that publish their collections through t
 | **Statens Museum for Kunst (SMK)** | Collections |
 | **Harvard Art Museums** | Classifications, Centuries, Cultures, Periods, Places, Media, Techniques, Work types, Groups, Galleries |
 | **Smithsonian** | Museums (Cooper Hewitt, SAAM, NPG, NMAAHC, Hirshhorn, African Art) |
+| **Cleveland Museum of Art** | Departments, Types — CC0 works only |
 
-Five of the seven museums need no account or API key. Two do:
+Six of the eight museums need no account or API key. Two do:
 
 - **Harvard Art Museums** — request a free key at [harvardartmuseums.org/collections/api](https://harvardartmuseums.org/collections/api) (delivered by email within a day) and paste it into **Settings → Museums → Harvard Art Museums (API key)**.
 - **Smithsonian** — register at [api.data.gov/signup/](https://api.data.gov/signup/) (instant, email-based) and paste the key into **Settings → Museums → Smithsonian (API key)**. One api.data.gov key covers Smithsonian and every other api.data.gov service (NASA, NOAA, etc.). Don't use `DEMO_KEY` — its ~30 req/hour-per-IP cap will throttle the first refresh mid-flight.

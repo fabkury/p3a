@@ -283,7 +283,7 @@ These sources support most UBI features natively but require client-side emulati
 ### North American art museums
 
 - **Metropolitan Museum of Art** — public REST API is excellent and CC0, but image delivery is plain CDN URLs (`images.metmuseum.org/CRDImages/...`). No IIIF Image API and no manifests exposed.
-- **Cleveland Museum of Art** — Open Access API is CC0 and rich, but image delivery is CDN-only (web/print/full TIFF URLs). No IIIF Image API and no manifests.
+- **Cleveland Museum of Art** — originally excluded here for lacking IIIF (CDN-only web/print/full delivery). **Accepted 2026-08 as the eighth museum (`cma`)**: the fixed `{accession}_web.jpg` CDN template proved sufficient — the download path treats URLs as opaque, so IIIF is no longer a hard requirement. See `docs/art-institutions/finalized-design.md` §9.6.
 - **Walters Art Museum** — v1 API closed in 2023; v2 not online as of 2026.
 - **MoMA** — `api.moma.org` is staff/partner-only; no public auth.
 - **Brooklyn Museum** — OpenCollection API exists with API-key registration, but no documented IIIF support and the registration endpoint failed verification.
@@ -339,7 +339,7 @@ The "no native search" tier requires a local search index — the same internal 
 
 ### Collections semantics — wide variation
 
-- Department-based: V&A, Princeton (excluded museums Cleveland, Met use this too).
+- Department-based: V&A, Princeton (Cleveland — since accepted — and the excluded Met use this too).
 - Multi-vocabulary tagged-union: AIC (departments + categories + galleries + exhibitions + artwork-types), Harvard (21+ vocabularies).
 - Linked Art entity-of-type: Getty, Rijksmuseum, YCBA via LUX, Fitzwilliam.
 - Curated set / "Packages": Princeton.

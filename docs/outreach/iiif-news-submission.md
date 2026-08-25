@@ -108,6 +108,8 @@ if no reply in 2 weeks.
 - [ ] If no reply in 2 weeks, follow up CC'ing `info@iiif.io`.
 - [ ] If declined for iiif.io/news, ask about the IIIF community call
       or community blog as a fallback.
-- [ ] Pair with a `discuss.iiif.io` thread the same week — different
-      audience inside the same community, doesn't double-tap the
-      consortium staff.
+- [ ] Pair with the IIIF-Discuss mailing-list email the same week
+      (`iiif-discuss-thread.md`, reworked 2026-08-25 — the list email
+      replaced the planned discuss.iiif.io forum post). List email
+      first, this cover email 2–3 days later, so it can reference the
+      list post as a soft hook.

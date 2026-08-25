@@ -4,6 +4,51 @@
 
 ---
 
+**Execution status — maker track (updated 2026-06-23).**
+
+Several maker-track venues have already fired. Recorded here so we
+don't recommend burned venues again:
+
+- **r/esp32 — posted (more than once), well-received** (100+ upvotes,
+  tens of shares each). **On cooldown:** posting again soon risks
+  moderation action. Leave fallow.
+- **Show HN / Hacker News — posted once, ~zero engagement.** Read as a
+  framing/title problem, not a project problem. A second attempt is
+  possible (HN tolerates re-surfacing stories that got no traction) but
+  only with a materially sharper title + first comment, and ideally a
+  stronger landing asset (demo video and/or the new marketing README).
+- **CNX-Software tip — emailed via the contact form, no response after
+  months.** Treat as cold. Only worth a one-line follow-up if there's a
+  genuinely new hook (the museum/IIIF angle, or a video).
+
+Also spent / closed (confirmed 2026-06-23):
+
+- **r/embedded — posted long ago.** Spent.
+- **r/diyelectronics — posted, weak reception:** the device isn't "DIY
+  enough" for that crowd (it ships ready out of the box). Poor fit;
+  don't retry.
+- **r/pixelart — CLOSED to us.** Mods require every post to *be* pixel
+  art, so p3a itself can't be posted there. Dead venue (the device
+  *displaying* members' art is the only conceivable angle, and even
+  that is a stretch under the rule).
+
+Confirmed still untapped & available (no demo video exists yet, so
+favor the ones that don't need one):
+
+- **Hackaday tip** (`tips@hackaday.com`, distinct from the HN post) —
+  media-rich, resubmittable; photos/GIFs suffice without a video.
+- **Adafruit Show and Tell** — live demo, no video needed.
+- **YouTuber review units** (Tier 3) — the unit *is* the demo, so no
+  video needed; highest-ROI remaining maker move.
+- **PR to `awesome-esp`** — evergreen, zero cost.
+- **Bluesky / Mastodon** drip and **Lospec Discord** — no video needed.
+- ~~r/raspberry_pi~~ — **resolved 2026-08-16: SKIP.** Live rules check:
+  Pi-identity sub (3.3M subs); an ESP32 device is off-topic removal
+  bait. r/arduino also skipped same day (p3a is ESP-IDF, not Arduino,
+  and the audience overlaps spent r/esp32).
+
+---
+
 ## What you're working with (assets you already have)
 
 You're not starting cold. The strongest hooks for any pitch:
@@ -31,6 +76,8 @@ Hackaday's [submission guide](https://hackaday.com/2021/04/27/how-best-to-get-yo
 
 ### 2. Show HN — "Show HN: p3a – Pixel art player firmware for a $40 ESP32-P4 board"
 
+> ⚠️ **Already posted once (~zero engagement) — see Execution status at top.** Do not re-run as-is; a retry needs a sharper title + first comment and ideally a stronger landing asset.
+
 - Post Tue/Wed/Thu 8–10am ET
 - Link directly to the GitHub repo
 - First comment from author: "what / why / how" mini-essay (not a sales pitch)
@@ -42,6 +89,8 @@ Submit via Adafruit's Discord or weekly Wed 7:30pm ET livestream. They post week
 
 ### 4. CNX-Software tip
 
+> ⚠️ **Already emailed via the contact form — no response after months (see Execution status at top).** Treat as cold; only a new-hook follow-up is worth trying.
+
 Jean-Luc Aufranc covers ESP32-P4 launches and obscure hardware. A short email with link + photos has a high hit rate.
 
 ---
@@ -52,10 +101,10 @@ Don't blast everything in one day. Drip across weeks so each post finds a differ
 
 | Week | Action |
 |------|--------|
-| 1 | r/esp32 — "Made an open-source pixel art player on the Waveshare ESP32-P4 board" |
-| 2 | r/embedded + r/diyelectronics |
-| 3 | r/pixelart — **DM a mod first**; subreddit is strict about self-promo |
-| 4 | r/raspberry_pi (alternative-hardware angle) + Hacker News if not yet |
+| 1 | ~~r/esp32~~ — **DONE (posted >1×, 100+ upvotes each); on cooldown, do not re-post soon.** |
+| 2 | ~~r/embedded + r/diyelectronics~~ — **DONE (both); r/diyelectronics reception weak (device not "DIY enough").** |
+| 3 | ~~r/pixelart~~ — **CLOSED to us: mods require every post to *be* pixel art.** |
+| 4 | ~~r/raspberry_pi~~ (**skip — resolved 2026-08-16, Pi-only identity**) + Hacker News if not yet |
 | 5 | [Lospec Discord](https://discord.com/invite/pixelart) — introduce as a maker; offer the device as a way to display members' work |
 | ongoing | Bluesky + Mastodon weekly — `#pixelart #ESP32 #ESP32P4 #makers`. [Lospec recommends](https://lospec.com/articles/pixel-art-communities/) Bluesky/Mastodon over X for the pixel-art crowd |
 
@@ -131,7 +180,7 @@ Two cheap edits that materially increase conversion before launching:
    - Lospec Discord introduction
    - PR to `awesome-esp`
 5. **Week 4**
-   - r/raspberry_pi (alternative-hardware angle)
+   - ~~r/raspberry_pi~~ (skip — resolved 2026-08-16, Pi-only identity)
    - Cold-email YouTubers with units offered
 6. **Ongoing**
    - Weekly Bluesky/Mastodon post (new artwork on display, build photos, user creations)
@@ -152,7 +201,7 @@ Some Tier 1 venues (HN especially) heavily reward author engagement. If you'd ra
 
 Each takes ~5 minutes and is independently useful. Worth drafting before the launch sequence starts:
 
-- [ ] Hackaday tip email (subject + body)
+- [x] Hackaday tip email (subject + body) — `hackaday-tip-email.md` (drafted 2026-06-23, video-less; ready to send)
 - [ ] HN title + opening comment
 - [ ] README comparison table (p3a vs Tidbyt vs Pixoo)
 - [ ] README "Why I built this" paragraph

@@ -16,10 +16,20 @@
   reference formatting, then (if go) the proposal/abstract.
 - **SUBMITTED 2026-08-10, 11:16 AM ET.** Fab sent the article to
   c4ljournal@gmail.com (as-sent email archived in
-  `submission-email.md`). Provisional decision expected within ~a
+  `submission-email.md`). ~~Provisional decision expected within ~a
   month (by ~2026-09-10); if silence past mid-September, send a short
-  polite follow-up. Next milestones: editor reply → revisions to
-  house style (CSE refs, figure delivery) → publication.
+  polite follow-up.~~
+- **RECEIPT CONFIRMED / JOURNAL ON HOLD — 2026-08-24.** Fab's polite
+  receipt-check (sent 08-24 after two weeks of silence) was answered
+  same day by editor Edward M. Corrado: submission received, but the
+  Journal is **"on hold" for new issues** (only a current
+  special-topic issue is in progress) while they sort out
+  administrative and technical matters — "not sure when we will go
+  back to evaluating articles for regular issues." **No action for
+  us: the submission is in their queue; wait.** No follow-up needed on
+  the old ~09-10 timeline. If nothing by ~late 2026, a short
+  status-check is reasonable. The article stays exclusive to Code4Lib
+  unless Fab decides to withdraw and place it elsewhere.
 - **Process decision (superseded by the GO above):** article first,
   proposal later — the article was written and reviewed before any
   contact with the editors.

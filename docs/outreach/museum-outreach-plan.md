@@ -41,6 +41,53 @@ generic product pitch.
   emails; nothing in code4lib / IIIF-discuss / IIIF news — citing
   Reddit karma in professional listservs reads as marketing.
 
+**Execution status addendum (2026-08-16).**
+
+- **r/DigitalHumanities device announcement posted 2026-08-16** with 5
+  fresh device photos — the venue's second and final post (both texts
+  archived in `reddit-digitalhumanities-post.md`). T+3h: 351 views /
+  16 upvotes / 3 shares / 100% ratio / 0 comments.
+- **Live Reddit venue audit (2026-08-16,** via `about.json` /
+  `rules.json` / `hot.json`**):**
+  - **r/museums is DEAD — dropped from the cadence.** 5,041
+    subscribers (smaller than r/MuseumPros at 51,154, not larger as
+    assumed), hot-page median score 4, stalest hot post ~25 days old.
+  - **r/ArtHistory promoted to lead Reddit venue — mod-DM required
+    first.** 359,657 subscribers, active daily turnover. Strict
+    topicality rule: art *history* (place/time/society), explicitly
+    not art *appreciation* — a plain device post risks off-topic
+    removal. Approved framing prepared: Malraux musée-imaginaire /
+    reproduction-history essay post (drafted in-session 2026-08-16;
+    send the mod-DM and wait for a yes before posting).
+  - **r/Libraries (154,316, active) and r/Archivists (33,612,
+    moderately active) are viable next stops** — Wellcome/Smithsonian
+    + IIIF-as-library-standard angle; ≥1 week after the 08-16 DH
+    post; MuseumPros-style colleague register; mod-DM for Archivists.
+  - **r/somethingimade (3.1M, very active): optional pure-reach
+    play** — original content welcome, but NO self-promo links in
+    post or comments; the photos and the name alone must carry it.
+  - (Maker-track note recorded in `outreach-plan.md`: r/raspberry_pi
+    resolved as **skip** — Pi-identity sub, ESP32 device off-topic.)
+
+**Execution status addendum (2026-08-25).**
+
+- **IIIF community venue switched: mailing list replaces forum.** Fab
+  joined the IIIF-Discuss mailing list 2026-08-24; decided 2026-08-25
+  that the list email **replaces** the planned discuss.iiif.io forum
+  post (same audience — send one, not both).
+  `iiif-discuss-thread.md` reworked accordingly: **videoless** (1–2
+  device photos attached instead), claims refreshed to firmware 1.2.0
+  reality (nine museums, CMA/Mia non-IIIF, AIC Cloudflare-blocked —
+  AIC gets a brief factual mention only, no discussion question).
+  Archive skim done same day (announcements are a normal genre there;
+  quiet reception expected — threads get 0–4 replies).
+  **SUBMITTED 2026-08-25** — held in Google Groups first-post
+  moderation (new-member posts are moderated; the author cannot see
+  the pending message). The Tier 1 clock — Glen Robson news email
+  2–3 days later — starts when the post appears in the archive, not
+  from submission. If not visible within ~5–7 days, contact the group
+  owners or resend.
+
 ---
 
 ## What the new feature unlocks
@@ -74,8 +121,9 @@ want to celebrate.
 
 ### 1. IIIF community
 
-Submit a news item to `iiif.io/news/`, post on `discuss.iiif.io`, and
-if reachable, mention in the IIIF Slack.
+Submit a news item to `iiif.io/news/`, email the IIIF-Discuss mailing
+list (**replaces** the discuss.iiif.io forum post as of 2026-08-25 —
+see addendum above), and if reachable, mention in the IIIF Slack.
 
 - **Pitch angle:** "Embedded IIIF client on $48 ESP32-P4 hardware —
   possibly the first firmware-level IIIF consumer." Lead with the
@@ -120,6 +168,18 @@ fully-drafted variants.
 
 ### 3. Code4Lib (`code4lib-l` + Code4Lib Journal)
 
+> 🅿️ **Listserv post PARKED 2026-06-23 — do not send.** A 2+ week lurk
+> (subscribed 2026-06-08) found no relatable thread to anchor to, and
+> p3a reads as creative reuse rather than a library-operations tool —
+> adjacent to the list, not central. Low payoff (reputation track,
+> doesn't convert to builders). See the parked banner in
+> `code4lib-post.md`. **The Journal track was pursued: article
+> submitted 2026-08-10** (see `code4lib-journal/README.md`).
+> **2026-08-24: receipt confirmed by editor Edward M. Corrado, but the
+> Journal is on hold for new issues** (special-topic issue only) with
+> no timeline for resuming regular evaluation. Submission sits in
+> their queue; nothing to do but wait.
+
 Subscribe to the list for 2–3 weeks first (lurk → contribute). Cold
 posting to listservs burns the venue permanently.
 
@@ -149,8 +209,8 @@ Email separately, ~1 week apart, to avoid coordinated-campaign optics.
 | Week | Action |
 |------|--------|
 | 1 | Bluesky + Mastodon launch wave: `#IIIF #openglam #digitalhumanities #culturalheritage`. Tag `@artic.bsky.social`, `@rijksmuseum.nl`, `@vam.ac.uk` if active. |
-| 2 | r/museums — **DM a mod first**. |
-| 3 | r/arthistory — same mod-first approach. Angle: "view masterworks rotating on hardware you can build for $48." |
+| 2 | ~~r/museums~~ — **DROPPED 2026-08-16: sub is dead** (5k subscribers, hot median 4, weeks-stale front page). r/Libraries / r/Archivists take this slot instead (see 08-16 addendum). |
+| 3 | r/arthistory — **lead Reddit venue as of 2026-08-16 (360k subs); mod-DM mandatory.** Strict art-*history*-not-appreciation rule: use the Malraux / musée-imaginaire reproduction-history framing, not a product angle. |
 | 4 | We Make Money Not Art tip — Régine Debatty's long-running tech-art blog covers exactly this beat. |
 | 5 | MCN (Museum Computer Network) newsletter — submit via contact form. |
 | 6 | Museums and the Web — submit news item to their digital-museums journal. |
@@ -254,10 +314,10 @@ Most Tier 1/2 venues in this track need things that don't exist yet:
 |------|--------|
 | 0 | Prep assets: museum-mode video (see `museum-mode-video-brief.md`), confirm README Museums section, press kit V2. **Subscribe to `code4lib-l` now** so the 2–3 week lurk window is already burning down by the time the Week 3 post goes out. Add GitHub topics (`iiif`, `openglam`, `museum-api`, `cultural-heritage`). Open the "PR welcome?" conversation with `mejackreed/awesome-iiif`. |
 | 1 | Produce the video (Fiverr turnaround ~5 business days). Plug `{{video_url}}` into all seven drafts. |
-| 2 | IIIF Consortium news submission + `discuss.iiif.io` post (forum first, email 2–3 days later). Bluesky/Mastodon launch wave. |
-| 3 | AIC digital team email. Code4Lib mailing list post (after the lurk window). PR to `awesome-iiif` if maintainer signaled yes. |
-| 4 | Rijksstudio team email. r/museums (mod-approved). |
-| 5 | V&A digital team email. r/arthistory. |
+| 2 | IIIF-Discuss mailing-list email + IIIF Consortium news submission (list email first, Glen Robson cover email 2–3 days later). Bluesky/Mastodon launch wave. |
+| 3 | AIC digital team email. ~~Code4Lib mailing list post~~ **(PARKED 2026-06-23 — see Tier 1 §3).** PR to `awesome-iiif` if maintainer signaled yes. |
+| 4 | Rijksstudio team email. ~~r/museums~~ (**dropped 2026-08-16 — dead sub**; slot goes to r/Libraries or r/Archivists). |
+| 5 | V&A digital team email. r/arthistory (mod-approved, Malraux framing). |
 | 6 | Wellcome Collection digital team email. We Make Money Not Art tip. |
 | 7 | SMK / SMK Open team email. Hyperallergic tip. |
 | 8+ | Open Culture tip (≥1 week after Hyperallergic). MCN newsletter submission. Museums and the Web. Smithsonian Open Access showcase. Tagging museums on Bluesky/Mastodon becomes ongoing pattern. |
@@ -291,13 +351,15 @@ in principle. But two practical adjustments:
 ## Follow-up artifacts to draft
 
 - [x] IIIF Consortium news submission — `iiif-news-submission.md`
-- [x] discuss.iiif.io thread — `iiif-discuss-thread.md`
+- [x] IIIF-Discuss mailing-list email — `iiif-discuss-thread.md`
+      *(originally a discuss.iiif.io thread; reworked as the list
+      email 2026-08-25, videoless, which replaces the forum post)*
 - [x] Museum digital-team cold email template, all seven museums —
       `museum-digital-team-email.md`
 - [x] Hyperallergic tip email — `hyperallergic-tip-email.md`
 - [x] Open Culture tip email — `open-culture-tip-email.md`
 - [x] Museum-mode video brief (Fiverr) — `museum-mode-video-brief.md`
-- [x] Code4Lib mailing list post — `code4lib-post.md`
+- [x] Code4Lib mailing list post — `code4lib-post.md` *(drafted; **PARKED 2026-06-23**, will not send — Journal pitch remains the open option)*
 - [x] We Make Money Not Art tip — `wmmna-tip-email.md`
 - [x] MCN newsletter submission — `mcn-newsletter-submission.md`
 - [x] Reusable Bluesky / Mastodon launch posts — `social-launch-posts.md`
@@ -314,6 +376,8 @@ in principle. But two practical adjustments:
 
 - [IIIF Consortium](https://iiif.io/) — news + community
 - [discuss.iiif.io](https://discuss.iiif.io/) — community forum
+  *(superseded as a p3a venue by the IIIF-Discuss mailing list,
+  2026-08-25)*
 - [Art Institute of Chicago — Open Access / API](https://www.artic.edu/open-access)
 - [Rijksstudio](https://www.rijksmuseum.nl/en/rijksstudio)
 - [Victoria and Albert Museum — Collections API](https://developers.vam.ac.uk/)

@@ -1,5 +1,23 @@
 # r/DigitalHumanities Post
 
+**VENUE SPENT — posted twice, both cards played.**
+
+- **2026-06-15 — survey-led post.** As-sent text pivoted from the
+  draft below to lead with the `museum-candidates.md` survey; the
+  device got one clause, link + photo went in a self-reply. Final:
+  10 upvotes, 1 comment.
+- **2026-08-16 — device announcement posted**, with 5 fresh device
+  photos taken same day (first real device-photo set; doubles as
+  press-kit seed material). As-posted text at the bottom of this
+  file. T+3h: 351 views, 16 upvotes (100% ratio), 3 shares,
+  0 comments — already past the June post's lifetime score; on
+  track for top-of-month in a ~11-contributions/week sub.
+
+No third post here — further DH-audience reach goes through Bluesky
+`#digitalhumanities` tags, not this sub.
+
+---
+
 *Drafted 2026-06-07. Incorporates the hooks that landed on the
 r/MuseumPros launch (same day): the "hundreds of thousands of free
 artworks" volume framing and the IIIF user-requested-canvas-size point.*
@@ -137,3 +155,22 @@ IIIF on a microcontroller: a 4-inch screen that plays museum artworks straight f
 - [ ] Posted Monday 2026-06-15 or Tuesday 2026-06-16, morning US time
       (≥1 week after the 2026-06-07 r/MuseumPros launch; ≥1 week before
       the code4lib-l post); first reply ready within the hour.
+
+---
+
+## As posted 2026-08-16 (device announcement)
+
+Submitted with 5 photos taken the same day. Text as-sent:
+
+> Back in June I shared a survey of which museum/library APIs are actually usable for browsing collections. This is the project that survey came from.
+> This is p3a, an open-source (Apache 2.0) device I built. It is a 4-inch, 24-bit, 720x720 desktop frame that plays artworks straight from museums' own IIIF endpoints. It uses no server, no cloud account, no phone app or any software to install on your computer. The hardware is a $40 off-the-shelf ESP32-P4 board (comes ready out of the box), so setup takes minutes, almost like a consumer product. It is powered by USB-C and connects to the internet via wi-fi.
+> p3a currently rotates through hundreds of thousands (!!) of openly licensed works from:
+> - Rijksmuseum
+> - Victoria and Albert Museum
+> - Wellcome Collection
+> - Statens Museum for Kunst
+> - Harvard Art Museums
+> - Smithsonian
+>
+> The Art Institute of Chicago unfortunately dropped its support very recently, but other institutions are on the roadmap of the p3a project.
+> Happy to go deeper on implementation details (Linked Art walks, compliance levels, rate-limit etiquette) or anything. The project is open source : https://github.com/fabkury/p3a . I personally have two p3a's: one at home, one at work.

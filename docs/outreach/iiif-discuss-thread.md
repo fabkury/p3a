@@ -1,104 +1,192 @@
-# discuss.iiif.io Thread Draft
+# IIIF-Discuss Mailing-List Email Draft
+
+> ✅ **SUBMITTED 2026-08-25 — held in first-post moderation.** Fab
+> sent the email to the list; Google Groups moderates new members'
+> first posts, and a pending message is not visible to its author.
+> Until it appears in the archive
+> (https://groups.google.com/g/iiif-discuss) the send is not
+> confirmed. **The 2–3-day Glen Robson stagger clock starts when the
+> post becomes visible, not from submission.** If nothing appears
+> within ~5–7 days, assume the pending message expired or was missed
+> and ask the group owners (iiif-discuss+owners@googlegroups.com) or
+> resend — pending queues on Google Groups silently drop messages
+> after a while if no moderator acts.
 
 *Companion to `museum-outreach-plan.md` and `iiif-news-submission.md`.
-Drafted 2026-05-11.*
+Drafted 2026-05-11 as a discuss.iiif.io forum thread; **reworked
+2026-08-25 as a mailing-list email** after Fab joined the IIIF-Discuss
+list (2026-08-24). Decisions locked that day: the email REPLACES the
+forum post (same audience — do not send both), it goes out
+**videoless**, with 1–2 device photos attached, and the AIC Cloudflare
+block gets a brief factual mention only (no discussion question built
+on it).*
 
-Tier 1 outreach to the IIIF community forum at https://discuss.iiif.io.
-Pairs with the IIIF Consortium news submission but is **not** a copy
-of the same content — different shape (first-person, conversational,
-ends in real questions) for a different surface.
+Tier 1 outreach to the IIIF community. Pairs with the IIIF Consortium
+news submission but is **not** a copy of the same content — different
+shape (first-person, conversational, ends in real questions) for a
+different surface.
 
-Technical claims are taken from `docs/art-institutions/finalized-design.md`
-and the `art_institution` component as of v0.10.0.
+Technical claims verified against the `art_institution` component and
+`docs/art-institutions/finalized-design.md` as of firmware 1.2.0
+(2026-08-25): nine museums, seven over IIIF, AIC disabled via
+`unavailable_reason`, CMA/Mia as the two non-IIIF fixed-rendition
+adapters.
 
 ---
 
-## Suggested title
+## Subject line
 
 **p3a: an embedded IIIF Image API client running on a $48 ESP32-P4 microcontroller**
 
-Descriptive over clever — Discourse posts get found via search months
-later, so keyword-loading the title pays off.
-
-## Suggested category
-
-**Implementations** if it exists; otherwise **Show and Tell** or the
-general top-level IIIF category. Avoid posting in **IIIF Image API** —
-that category is for protocol questions, not implementation
-announcements; cross-posting an announcement there reads as off-topic.
-
-## Suggested tags
-
-`image-api`, `implementation`, `embedded`, `community-projects`
+Descriptive over clever — list archives get found via search months
+later, so keyword-loading the subject pays off. No "[ANN]"-style
+prefix unless the archive skim (see checklist) shows the list uses
+one.
 
 ## Body
 
-> Hi all — sharing an unusual implementation in case it's of interest.
+> Hi all,
 >
-> *[photo of the device displaying a painting]*
+> I built p3a, an open-hardware desktop art frame that speaks the IIIF
+> Image API natively from microcontroller firmware. The hardware is a
+> Waveshare ESP32-P4 development board (~$48) with a 4-inch 720x720
+> IPS panel. No browser and no cloud middleman: the firmware makes the
+> Image API requests and decodes the JPEGs on-chip. It rotates through
+> open-access artwork from nine museums, including the Rijksmuseum,
+> the V&A, the Wellcome Collection, SMK, the Harvard Art Museums, and
+> the Smithsonian, alongside pixel art and GIFs from other sources.
 >
-> **p3a** is an open-hardware desktop art frame — a Waveshare ESP32-P4 development board (~$48), 720×720 4-inch IPS, 32 MB PSRAM, 32 MB flash — and as of v0.10.0 it speaks the IIIF Image API natively from the firmware. It cycles through artwork from seven institutions — the Art Institute of Chicago, the Rijksmuseum, the Victoria and Albert Museum, the Wellcome Collection, the Statens Museum for Kunst (SMK), the Harvard Art Museums, and the Smithsonian — alongside pixel art from a community network and trending GIFs. Apache 2.0: https://github.com/fabkury/p3a
+> Source (Apache 2.0): https://github.com/fabkury/p3a
+> Two photos of the device are attached.
 >
-> A few protocol-level highlights, since this audience cares:
+> Some notes for this audience:
 >
-> - **Image API v2 for the pixels** — every image is ultimately requested as `…/full/!720,720/0/default.jpg` across all seven sources, and that confined-size request is what keeps decode tractable on the chip. No `info.json` negotiation yet (deferred — see questions below). Where the sources actually diverge is *discovery*: the Rijksmuseum needs a full Linked Art walk (below), the Harvard Art Museums sit behind an NRS→IDS redirect, the Smithsonian needs a User-Agent workaround past its WAF, and the rest return the IIIF id inline.
-> - **Per-museum 429 handling.** A small per-museum cooldown table honors `Retry-After` and falls back to per-museum defaults. The browse UI runs in a LAN-side browser, and it reports its own 429s back to the device over a small REST endpoint so the per-IP rate-limit budget stays coherent across both clients. This matters for AIC's 60-req/min per-IP cap.
-> - **Linked Art walk on-device** for the Rijksmuseum: HMO → VisualItem → DigitalObject → access_point, lazy-resolved at download time, with sentinel encoding for unresolved entries and a tombstone after 3 consecutive failures.
-> - **Per-museum vault dedup** — a painting that appears in four AIC facets is stored once on the SD card. Vault paths are namespaced per museum, so Wellcome + SMK adapters drop in without touching the shared layer.
-> - **JPEG-only rendition**, decoded by the ESP32-P4's hardware JPEG codec at 720×720.
+> - Seven of the nine sources are consumed over the IIIF Image API,
+>   and every image is requested as .../full/!720,720/0/default.jpg.
+>   That confined-size request is what makes decoding tractable on the
+>   chip. The interesting divergence is discovery: the Rijksmuseum
+>   needs a Linked Art walk (HMO -> VisualItem -> DigitalObject ->
+>   access_point, resolved lazily at download time), Harvard sits
+>   behind an NRS-to-IDS redirect, and the Smithsonian's WAF wants a
+>   real User-Agent.
+> - The Art Institute of Chicago was the first source I integrated,
+>   but since August 2026 its IIIF host answers non-browser clients
+>   with a Cloudflare challenge, so current firmware ships with AIC
+>   disabled.
+> - The two newest sources, Cleveland and Minneapolis, publish fixed
+>   CDN renditions instead of IIIF. They work on this panel only
+>   because their baked sizes happen to land near 720 px. IIIF turns
+>   that coincidence into a guarantee, which is exactly why it is the
+>   right protocol for a device like this.
+> - Rate limits are handled per museum: a cooldown table honors
+>   Retry-After, and the browse UI (which runs in a LAN browser)
+>   reports its own 429s back to the device so the per-IP budget
+>   stays coherent.
 >
-> A few things I'd genuinely value input on:
+> Three questions for the list:
 >
-> 1. **Does anyone know of prior firmware-level IIIF clients?** I haven't found one, but I'd rather hear about it than mis-claim a "first."
-> 2. **`info.json`-aware rendition negotiation** — when does it pay off in practice? At a 720 px longest side, request-time `!720,720` has been Good Enough across the seven sources I'm consuming. Curious where the threshold sits for others.
-> 3. **Aggregator sources.** I've since integrated the Smithsonian — an aggregator across many units, whose WAF needed a User-Agent workaround before it'd serve IIIF. Europeana and DPLA are still on my roadmap, and their resolution patterns seem to vary a lot more. Has anyone integrated those at the embedded level, or even thought about it?
+> 1. Has anyone seen a prior firmware-level IIIF client? I believe
+>    this is the first, and I would like to know if I am wrong.
+> 2. At a 720 px longest side, request-time !720,720 has been good
+>    enough everywhere, so I skipped info.json negotiation entirely.
+>    Where does it start to pay off in your experience?
+> 3. I evaluated Europeana and DPLA and deferred both: Europeana's
+>    Thumbnail API caps at 400 px and its provider-level image URLs
+>    are too heterogeneous, and DPLA serves thumbnails only. If
+>    someone knows a reliable path to mid-size renditions across
+>    Europeana providers, I would like to hear it.
 >
-> A 30-second video is at *[VIDEO URL]* and the source is at the link above. Happy to dig into any of the implementation choices.
+> Happy to dig into any of the implementation choices.
 >
-> — Fabrício
+> Fabrício
 
 ---
 
 ## Notes on the choices
 
-- **Image at the top** — Discourse posts with an opening image get
-  dramatically more engagement; the IIIF crowd in particular wants to
-  *see* the implementation, not just read about it.
+- **Revised 2026-08-25 (later) per Fab:** no em dashes anywhere in
+  the body (reads as an AI-text tell these days), self-confident
+  register instead of the mildly apologetic one ("I built p3a" /
+  "I believe this is the first"), and shorter overall. Cut in the
+  tightening: vault dedup, the hardware JPEG codec, the
+  sentinel/tombstone detail, the full nine-museum enumeration
+  (six named + "nine museums, including"; AIC/CMA/Mia surface in
+  their own bullets anyway).
+- **Mailing-list format, not Discourse.** Plain text first: no
+  markdown syntax load-bearing anywhere (the dashes and numbers read
+  fine as raw text), URLs on their own visual lines, ASCII arrows
+  (`->`) in the Linked Art chain so nothing depends on the reader's
+  client rendering Unicode or rich text.
+- **Photos attached instead of an inline hero image** (decided
+  2026-08-25). Two attachments from the 08-16 device shoot — the IIIF
+  crowd wants to *see* the implementation, and Google Groups renders
+  attachments fine. Keep combined size modest (~1 MB) so no one's
+  digest chokes.
+- **Videoless by decision** (2026-08-25). A professional listserv is
+  the venue where the museum-mode video matters least;
+  implementation-first text plus photos carries it. If the video
+  exists by send time anyway, a link can be added — but do not hold
+  the email for it.
 - **Apache 2.0 + GitHub link in paragraph 1** — gets the headline
-  answer to "is this open source" out before the reader has to scroll.
+  answer to "is this open source" out before the reader has to
+  scroll.
+- **AIC gets one factual sentence, no question** (decided 2026-08-25).
+  Accurate about what currently works without building a
+  naming-and-shaming thread around a member institution. If replies
+  pick the thread up, expand there — a reply is a better register for
+  that conversation than the announcement itself.
+- **The CMA/Mia non-IIIF bullet is quiet advocacy.** "Coincidence into
+  a guarantee" makes the case for IIIF adoption from the consumer
+  side without lecturing anyone.
 - **Three discussion hooks, not five** — more fragments the thread.
-  The chosen three are real open questions from the design doc's
-  "Future work" and "Field-observed fixes" sections, so any reply will
-  land somewhere actionable.
-- **The "first" claim is converted into a question.** Asserting "first"
-  on a forum invites someone to disprove it; *asking* if anyone knows
-  otherwise frames the same novelty as humility, which the IIIF
-  community responds to better.
+  All three are real open questions: the "first" claim stated
+  confidently but left falsifiable ("I believe this is the first,
+  and I would like to know if I am wrong"), the info.json deferral
+  from the design doc, and the Europeana/DPLA question straight from
+  the 2026-08 content-sources survey
+  (`docs/content-sources-survey.md`) — Europeana IIIF people are on
+  this list and can actually answer it.
+- **No social-proof numbers** — per the plan's tiered policy: citing
+  Reddit karma in professional listservs reads as marketing.
 - **No mention of the museum-team email outreach** — keeping the
-  channels separate keeps the forum thread feeling organic rather than
-  a coordinated PR push.
-- **No `@`-mentions of museum staff** — even if AIC/Rijks/V&A digital
-  teams have accounts on discuss.iiif.io. The plan flagged mass-tagging
-  as spam-adjacent; same logic applies here.
-- **Sign-off as "Fabrício"** rather than full name — forum convention
-  is first-name signoff, full name is in the profile.
+  channels separate keeps the post feeling organic rather than a
+  coordinated PR push.
+- **Sign-off as "Fabrício"** — list convention is first-name signoff;
+  the full name is in the From header.
 
 ## Stagger relative to the news email
 
-The outreach plan groups news + discuss + Slack as one Tier 1 IIIF
-burst, but **2–3 days between the cover email to Glen Robson and the
-discuss.iiif.io post** is recommended in either order. Same-day firing
-risks looking coordinated to staff who watch both surfaces. Forum post
-first → email second is slightly cleaner ("I posted on discuss earlier
-this week and thought you might also want to see it") because it gives
-the email a soft hook.
+The outreach plan groups news + community post + Slack as one Tier 1
+IIIF burst, but **2–3 days between this list email and the cover
+email to Glen Robson** (see `iiif-news-submission.md`) is recommended.
+Same-day firing risks looking coordinated to staff who watch both
+surfaces. List email first → news email second is slightly cleaner
+("I posted on IIIF-Discuss earlier this week and thought you might
+also want to see it") because it gives the news email a soft hook.
+
+Sending this email starts the museum-track Tier 1 clock: the
+IIIF-community pickup is the social proof the later museum-team
+emails and editorial tips lean on, so be ready to continue the
+cascade (see `museum-outreach-plan.md` launch sequence).
 
 ## Send checklist
 
-- [ ] Verify the actual category list on discuss.iiif.io and pick the
-      closest one.
-- [ ] Attach a real photo (the press kit V2 work covers this).
-- [ ] Drop in the video URL if the museum-mode video is ready by then.
-- [ ] Stagger 2–3 days from the IIIF Consortium cover email.
-- [ ] Watch the thread for the first week — quick replies to questions
-      multiply traction.
+- [x] ~~Skim the list archive~~ **DONE 2026-08-25** (in-browser, 30
+      threads Mar–Aug 2026 + 4 full threads). Findings: tool and
+      implementation announcements from individuals/vendors are a
+      normal, accepted genre (serverless-iiif v8.0.0, Universal
+      Viewer 4.4, Adno, Axiell Level-0 question); no forum mirroring;
+      subjects are plain-descriptive, no `[ANN]` prefixes; expect
+      quiet reception (threads get 0–4 replies, 24–42 web views —
+      value is inbox reach + archive, not thread volume). Norm
+      observed: posts are link-only, nobody attaches images —
+      attaching still fine on Google Groups, but keep it small.
+- [ ] Pick two photos from the 2026-08-16 device shoot (one painting
+      on screen, one context shot); downscale to ~1 MB combined.
+- [ ] Send as plain text (or minimal HTML) from the address
+      subscribed to the list.
+- [ ] Stagger: this email first, Glen Robson cover email 2–3 days
+      later.
+- [ ] Watch replies for the first week — quick answers to questions
+      multiply traction; the AIC topic in particular may resurface in
+      replies and deserves a thoughtful, non-adversarial response.

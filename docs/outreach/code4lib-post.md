@@ -17,9 +17,20 @@ than I do."
 Technical claims are taken from `docs/art-institutions/finalized-design.md`
 and the `art_institution` component as of v0.10.0.
 
-The only unfilled placeholder is `{{video_url}}` — fill once the
-museum-mode demo video is produced. (The video helps but isn't
-load-bearing here — text-first audience.)
+> 🅿️ **PARKED 2026-06-23 — do not send.** After a 2+ week lurk
+> (subscribed 2026-06-08), the list showed **no relatable thread** to
+> anchor to — no IIIF, image-delivery, digitization, or museum-display
+> traffic; the bulk is jobs / CFPs / event announcements plus a few
+> library-operations discussion threads. The project-shares that land
+> here (`redaction-action`, a GLAM RSS dataset) solve a *library's own
+> problem*; p3a is creative reuse of museums' public APIs on a consumer
+> art gadget — **adjacent to the list, not central.** Combined with the
+> already-known low payoff of the reputation track (this audience
+> doesn't convert to builders), the cost/benefit didn't justify
+> sending. **The real code4lib prize was always the Code4Lib *Journal*,
+> not the listserv** — if pursued later, pitch the editors directly
+> ("Writing an IIIF Client on a $48 Microcontroller"); this listserv
+> draft is not a prerequisite. Draft retained below for reference only.
 
 ---
 
@@ -111,10 +122,8 @@ later, so concrete terms ("ESP32-P4," "IIIF Image API") pay off.
 >    Microcontroller," roughly — would the Journal be interested? I
 >    don't want to submit cold if the topic's a poor fit.
 >
-> A 30-second video of the device cycling through the seven
-> collections is at {{video_url}}, source at the link above.
->
-> Happy to dig into any of the design choices on-list or off.
+> Happy to dig into any of the design choices on-list or off; full
+> source is at the link above.
 >
 > — Fabrício Kury
 >   pub@kury.dev
@@ -127,7 +136,16 @@ later, so concrete terms ("ESP32-P4," "IIIF Image API") pay off.
   thread is the standard mailing-list-etiquette signal that this isn't
   a cold-blast. Replace `[pick one real recent thread topic before
   sending]` with a real thread you read during the lurk window — this
-  is the highest-leverage line in the post.
+  is the highest-leverage line in the post. **This is the only thing
+  blocking send.** Pick any thread from the last ~2 weeks that touches
+  metadata APIs, image delivery, digitization, rate limits, or open
+  collections — it doesn't need to be a perfect match, just genuine.
+  **Fallback if nothing fits:** drop the thread reference entirely and
+  open with — *"I've been lurking the last couple of weeks before
+  posting, since this is an unusual fit for the list, but the range of
+  collections-API work here made me think it might be of interest."*
+  A specific thread is stronger, but a graceful no-thread opening beats
+  inventing one or waiting indefinitely for the right thread to appear.
 - **Implementation-report framing** is load-bearing. The list shuts
   out "look at my project" posts; opens to "here's how I implemented
   X, the community has better answers than I do."
@@ -168,8 +186,10 @@ cross-link, though, or it looks like a coordinated push.
 - [ ] Confirm subscription to `code4lib-l` is active and you've been
       reading for 2–3 weeks.
 - [ ] Replace the `[pick one real recent thread topic]` placeholder
-      with a real thread reference.
-- [ ] Museum-mode video uploaded; URL plugged in (optional but helps).
+      with a real thread reference (or use the no-thread fallback
+      opening in "Notes on the choices"). **This is the only blocker.**
+- [x] Video deferred (video-less posture) — the optional video line
+      has been removed from the body; nothing to upload for this venue.
 - [ ] Send during a typical list-traffic window (Tue–Thu morning US
       time tends to get the best engagement).
 - [ ] If the thread takes off, draft a Code4Lib Journal pitch

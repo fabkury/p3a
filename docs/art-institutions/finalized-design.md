@@ -1,7 +1,7 @@
 # Art Institution Channels — Finalized Design
 
 - **Status:** Final (source of truth for implementation)
-- **Last updated:** 2026-05-11
+- **Last updated:** 2026-08-25
 - **Owner:** pub@kury.dev
 - **History:** Design evolution and Q&A transcript are preserved in
   `design.md` and `questions.md` alongside this file.
@@ -45,7 +45,12 @@ storage, and feeding the picker.
 7. [Lifecycle](#7-lifecycle)
 8. [NVS settings](#8-nvs-settings)
 9. [Per-museum specifications](#9-per-museum-specifications)
+   - 9.1–9.7 AIC, Rijksmuseum, V&A, Harvard, Smithsonian, Cleveland, Minneapolis
+   - 9.8 [Statens Museum for Kunst](#98-statens-museum-for-kunst-smk)
+   - 9.9 [Wellcome Collection](#99-wellcome-collection)
 10. [Image rendition strategy](#10-image-rendition-strategy)
+    - 10.1 [Request shape](#101-request-shape)
+    - 10.2 [Dimension metadata availability](#102-dimension-metadata-availability-surveyed-2026-08-25)
 11. [Error handling](#11-error-handling)
 12. [Testing approach](#12-testing-approach)
 13. [Future work](#13-future-work)
@@ -53,7 +58,16 @@ storage, and feeding the picker.
 
 ## 1. Scope
 
-### In v1
+> **Scope as shipped.** The lists below are the *original* v1 plan, kept
+> for historical reference. Nine museums ship today — `artic`, `rijks`,
+> `vam`, `wellcome`, `smk`, `ham`, `si`, `cma`, `mia` — so several
+> "Deferred" entries have since landed: museums beyond AIC and Rijks
+> (§9), and two non-IIIF sources (Cleveland and Minneapolis) that the
+> original scope did not anticipate at all. The dispatch table in
+> `art_institution.c` is the authoritative museum list; `artic` is
+> currently gated by `unavailable_reason` (see the status note above).
+
+### In v1 (original plan)
 
 - Browse and persist channels for AIC and Rijksmuseum.
 - Browse phase: per-museum JS adapters, browser-direct queries to museum
@@ -70,10 +84,10 @@ storage, and feeding the picker.
 - First-class per-museum rate-limit handling shared between browser and
   device (§11.1).
 
-### Deferred
+### Deferred (as of the original plan)
 
 - Keyword search.
-- Museums beyond AIC and Rijks.
+- ~~Museums beyond AIC and Rijks.~~ Landed: seven more, see §9.
 - Per-channel cache size / refresh override.
 - Aggregator sources (Europeana, DPLA).
 - Manifest synthesis for image-only IIIF (Princeton-style).
@@ -191,14 +205,20 @@ Field order keeps all multi-byte members naturally aligned under
 `__attribute__((packed))` — same alignment trick `giphy_channel_entry_t`
 uses (`created_at` lives at offset 8 by swapping with `height`).
 
-The 48-byte `iiif_key` covers every Tier-1 museum surveyed:
+The 48-byte `iiif_key` covers all nine shipped museums. Examples are real
+values observed during the §10.2 survey:
 
 | Source | Identifier | Length |
 |---|---|---|
 | AIC | `image_id` (UUID) | 36 chars |
-| Rijksmuseum | micrio short id (e.g. `RFwqO`) | 5–12 chars |
-| SMK (future) | JP2 path (e.g. `qz20sx771_kks5261.tif.jp2`) | ~25 chars |
-| Wellcome (future) | b-number (e.g. `b18035723`) | ~10 chars |
+| Rijksmuseum | micrio short id, or `{micrio}\|{hmo}` post-resolve (e.g. `RNmjH\|200100969`) | 5–20 chars |
+| V&A | `_primaryImageId` (e.g. `2016JL6700`) | ~10 chars |
+| Wellcome | IIIF `vid` from `items[].locations[]` (e.g. `V0014156`, or `b28664036_0001.jp2` for b-number scans) | 8–25 chars |
+| SMK | JP2 filename (e.g. `qz20sx771_kks5261.tif.jp2`) | ~25 chars |
+| Harvard | NRS URN (e.g. `urn-3:HUAM:79762_dynmc`) | 17–26 chars |
+| Smithsonian | `idsId` (e.g. `SAAM-1935.13.211_1`) | 18–30 chars |
+| Cleveland | accession number (e.g. `1931.205`) | 8–12 chars |
+| Minneapolis | numeric object id (e.g. `4418`) | 1–6 chars |
 
 ### 4.3 Vault layout
 
@@ -840,11 +860,187 @@ about breadth-of-collection.
   — used by `fetchMetadataByIiifKey`.
 - **Rate limit:** none published; default 60 s cooldown on a 429.
 
+### 9.8 Statens Museum for Kunst (SMK)
+
+Numbered after Mia rather than in shipping order so the existing §9.N
+cross-references stay valid.
+
+- **id:** `smk`
+- **display:** `Statens Museum for Kunst`
+- **API base:** `https://api.smk.dk/api/v1`
+- **IIIF base:** `https://iip.smk.dk/iiif/jp2/`
+- **No required headers** beyond `Accept: application/json`. No API key.
+- **Axes:** one — `collection`. The browse modal auto-advances past the
+  axis step. SMK's facets endpoint returns the collection pairs in three
+  different shapes (list of pairs, dict, list of dicts); the browser
+  adapter handles all three, mirroring the Python reference.
+- **Filter syntax:** the axis is folded into a single bracketed filter
+  expression, not separate URL params:
+  `filters=[collection:{term_id}],[has_image:true]`. The whole expression
+  is one query value, so it is built unencoded and percent-encoded once.
+- **Listing endpoint:**
+  `GET /art/search?keys=*&offset=N&rows=50&filters=<encoded>`
+- **Page size 50, 512 KB buffer.** SMK returns full records (~4 KB each:
+  production, materials, notes, titles) and its `fields` param does *not*
+  trim them — passing it returns empty items. So the page cannot be
+  reduced request-side. A 50-record page measures ~205 KB for
+  metadata-rich collections, hence the modest row count and the large
+  buffer.
+- **IIIF URL:**
+  `https://iip.smk.dk/iiif/jp2/{filename}/full/!720,720/0/default.jpg`
+- **`iiif_key` value:** the JP2 filename only, i.e. everything after the
+  **last** `/iiif/jp2/` in the record's `image_iiif_id` (defensive against
+  the marker appearing twice). Records without `image_iiif_id` are
+  skipped; some carry only a UUID thumbnail.
+- **`extension`:** always 3 (jpg). SMK's IIPImage backend advertises WebP
+  in `info.json` but returns HTTP 400 for `.webp` requests, so stay on
+  JPEG.
+- **Dimensions:** `image_width` / `image_height` are present in the
+  listing response on 148/148 sampled records and match the delivered
+  rendition's ratio 6/6. Currently parsed and discarded — see §10.2.
+- **Rate limit:** none published; standard per-museum cooldown applies
+  (§11.1), 60 s default on a 429 without `Retry-After`.
+
+### 9.9 Wellcome Collection
+
+- **id:** `wellcome`
+- **display:** `Wellcome Collection`
+- **API base:** `https://api.wellcomecollection.org/catalogue/v2`
+- **IIIF base:** `https://iiif.wellcomecollection.org/image/`
+- **No required headers.** No API key.
+- **Axes (filterable, in browse order):**
+  `workType`, `genres`, `subjects`, `contributors`
+- **Filter param map:** `workType` → `workType`, `genres` →
+  `genres.label`, `subjects` → `subjects.label`, `contributors` →
+  `contributors.agent.label`.
+- **Term-id quirk:** for `workType` the filter value is the term `id`
+  (e.g. `k`); for the other three axes Wellcome exposes no stable short
+  id, so the term **label itself** is the filter value. Labels longer
+  than 32 chars are hidden by the browse modal to fit the playset
+  `identifier[33]` slot — see
+  [`docs/deferred/wellcome-long-labels.md`](../deferred/wellcome-long-labels.md).
+- **Listing endpoint:**
+  `GET /works?page=N&pageSize=100&items.locations.locationType=iiif-image`
+  `&include=items&{filter_param}={term_id}`
+- **IIIF URL:**
+  `https://iiif.wellcomecollection.org/image/{vid}/full/!720,720/0/default.jpg`
+- **`iiif_key` value:** the `vid` extracted from `items[].locations[]`
+  where `locationType.id == "iiif-image"`, taking the path segment after
+  the host. Returned inline, so no resolver walk (`resolve_entry = NULL`).
+- **`extension`:** always 3 (jpg).
+- **Dimensions:** none on `/works`, at any `include=` level —
+  `include=images` yields only `{id, type}`. The `/images` endpoint does
+  publish `aspectRatio`, but it is **not** a drop-in replacement: it
+  silently ignores `workType` and `genres.label` (returning the full
+  unfiltered corpus rather than an error) and expects `source.`-prefixed
+  fields instead. See §10.2 before migrating any axis to it.
+- **Rate limit:** none published; standard per-museum cooldown (§11.1).
+
 ## 10. Image rendition strategy
+
+### 10.1 Request shape
 
 The device requests `…/full/!720,720/0/default.jpg`. Universally
 supported by every Tier-1 IIIF server surveyed. Output format is JPEG;
 museum IIIF servers reliably serve JPEG, less reliably WebP.
+
+Two museums are not size-parameterized and ignore `longest_side`
+entirely: CMA serves a single mid-size `_web.jpg` derivative, and Mia
+serves pre-rendered S3 buckets of which the device always takes `/800/`
+(longest side 800, not fixed width — see the measurements below).
+
+### 10.2 Dimension metadata availability (surveyed 2026-08-25)
+
+`institution_channel_entry_t` reserves `width` at offset 6 and `height`
+at offset 12, but only CMA populates them; the other eight parsers
+store 0 ("unknown"). Any feature that needs an artwork's shape *before*
+it is decoded — an aspect-ratio filter, layout preselection, rendition
+negotiation — depends on closing that gap, so the nine APIs were
+surveyed against ground truth rather than against their documentation.
+
+**Method.** For each museum: fetch a live page through the exact query
+string the refresh path builds, derive `iiif_key` with the same rule
+the parser uses, build the download URL through the same
+`build_iiif_url()` contract at `longest_side = 720`, fetch that exact
+rendition, and read its true dimensions from the JPEG SOF marker. About
+140 images were measured. Reported dimensions were then compared as
+*ratios* against the delivered file, since the ratio, not the absolute
+size, is what the metadata has to predict correctly.
+
+| Museum | Dims in the response the parser already reads? | Field | Ground-truth check |
+|---|---|---|---|
+| `smk` | **Yes, unused today** | `image_width` / `image_height` | 6/6 ratios match; present on 148/148 |
+| `cma` | **Yes, already stored** | `images.web.width` / `height` (string-typed) | 6/6 pixel-exact; present on 300/300 |
+| `mia` | **Yes, discarded by the parser** | `image_width` / `image_height` | 28/30 ratios match; present on 150/150 |
+| `artic` | No, but same request | add `thumbnail.width,thumbnail.height` to `fields=` | 10/10; present on 299/299 |
+| `ham` | No, but same request | add `images.width,images.height` to `fields=` | 36/36; present on 300/300 |
+| `wellcome` | Only on a *different* endpoint | `/images` → `aspectRatio` | 10/10; present on 300/300 |
+| `vam` | **No** | `_images` carries only `imageResolution: "high"`; the `museumobject/{id}` detail endpoint has no pixel dims either | `info.json` 8/8 |
+| `si` | **No** | media object exposes `idsId` / `thumbnail` / `resources` only | `info.json` 8/8 |
+| `rijks` | **No** | Linked-Art `DigitalObject` carries only `access_point` / `digitally_shows`; the HMO's `dimension` array is physical centimetres, not pixels | `info.json` 8/8 |
+
+**`!720,720` never crops.** Across roughly 90 reported-versus-delivered
+comparisons, the delivered aspect ratio equalled the master aspect
+ratio for every IIIF museum. Master-dimension metadata is therefore a
+valid *ratio* source even though it is the wrong absolute size, and no
+per-entry `info.json` round trip is needed wherever the listing already
+carries master dims.
+
+**Mia is the one metadata/file divergence, and it is not IIIF.** Its
+`image_width`/`image_height` describe the original scan, while the
+`/800/` bucket was rendered from a differently cropped source in 2 of
+30 sampled records (reported 1.21 vs delivered 1.32; reported 1.21 vs
+delivered 1.40). Both errors are small in absolute terms and would not
+flip a verdict at any plausible threshold, but Mia's dims are an
+approximation of the delivered file, not a description of it.
+
+**Subfield selection removes the payload objection for AIC and HAM.**
+Both APIs honour dot-notation in `fields=`, and neither truncates or
+reorders the array:
+
+| Request | Page size (100 records) |
+|---|---|
+| HAM, current `fields=id,primaryimageurl` | 11.0 KB |
+| HAM, naive `…,images` | 114.2 KB |
+| HAM, `…,images.width,images.height` | 37.5 KB (buffer is 256 KB) |
+| AIC, current `fields=id,title,image_id,artist_title,date_display` | 8.9 KB |
+| AIC, naive `…,thumbnail` | 56.8 KB (the `lqip` base64 blob dominates) |
+| AIC, `…,thumbnail.width,thumbnail.height` | 13.0 KB (buffer is 192 KB) |
+
+**HAM's `images[0]` is the correct element.** 15.7% of HAM records
+carry more than one image, and siblings differ genuinely (one record
+spans 1.63 and 1.92). Ten multi-image records were checked specifically:
+`images[0]` matched the image actually delivered for the record's
+`primaryimageurl` in 10/10, including a 27-image record.
+
+**Wellcome's `aspectRatio` lives behind a query-surface change.** The
+`/images` endpoint returns the field directly and populated it on
+300/300 records, but it is not a drop-in for the `/works` endpoint the
+refresh path uses: it **silently ignores** `workType` and
+`genres.label`, returning the full unfiltered corpus (126 878 results)
+instead of erroring, and expects `source.genres.label` /
+`source.subjects.label` instead. Migrating axes to it without
+per-axis verification would quietly turn every Wellcome channel into
+an unfiltered firehose.
+
+**Rijks, V&A and Smithsonian have no listing-level path.** Their only
+source is a per-entry `info.json` (~390 bytes, one extra HTTPS request),
+which was verified accurate 8/8 for each. Rijks is the mild case: it
+already performs a 3-hop Linked-Art resolve per entry (§9.2), so an
+`info.json` read folds in as a 4th hop rather than introducing a new
+per-entry request pattern.
+
+**Coverage summary.** 3 museums free today (`smk`, `cma`, `mia`), 2 for
+a one-string `fields=` change (`artic`, `ham`), 1 behind an endpoint
+migration with a verification burden (`wellcome`), 3 requiring a
+per-entry request (`vam`, `si`, `rijks`).
+
+One incidental observation: AIC's IIIF host served all 10 sampled
+renditions to a desktop client during this survey without a Cloudflare
+challenge. This does *not* invalidate the `unavailable_reason` gate in
+§9.1 — the block is client-fingerprint based and the device is the
+fingerprint that gets refused — but it is worth re-testing on hardware
+before assuming AIC is permanently lost.
 
 ## 11. Error handling
 
@@ -979,11 +1175,14 @@ doors.
 
 - **Keyword search** across museums. Encoding fits the same channel
   spec (`name="artic:search"`, `identifier="<query>"`).
-- **More museums:** Gallica. (Harvard Art Museums shipped — see §9.4.)
+- **More museums:** Gallica. (Nine have shipped — see §9.)
 - **Aggregator sources:** Europeana, DPLA.
 - **Per-channel overrides** for refresh interval / cache size.
 - **Manifest synthesis** for image-only IIIF (Princeton).
-- **`info.json` size negotiation** for tighter rendition matching.
+- **`info.json` size negotiation** for tighter rendition matching. See
+  §10.2 for which museums would actually need the extra round trip
+  (`vam`, `si`, `rijks`) and which already publish usable dimensions in
+  their listing responses.
 - **Cross-channel mark-and-sweep vault GC**, if field experience shows
   the existing age-based eviction (§4.4) is insufficient for actual
   user patterns. Measurement-driven, not speculative.

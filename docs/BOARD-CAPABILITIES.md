@@ -2,7 +2,7 @@
 
 Hardware capabilities of the ESP32-P4-WIFI6-Touch-LCD-4B board used by p3a.
 
-- **Board**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm?sku=31416)
+- **Board**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-4b.htm)
 - **Wiki**: [ESP32-P4-WIFI6-Touch-LCD-4B Wiki](http://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-4B)
 - **SoC**: ESP32-P4NRW32 (RISC-V dual-core HP @ 360 MHz + single-core LP @ 40 MHz)
 - **Memory**: 32 MB PSRAM (in-package), 32 MB NOR Flash (on-board)

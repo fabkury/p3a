@@ -378,12 +378,11 @@ static void ft_print_runtime_delta(void)
         core = (int)cur->xCoreID;
 #endif
         // core: pinned core id, "any" for tskNO_AFFINITY (0x7FFFFFFF), "?" if the build lacks xCoreID
-        char core_s[8];
+        char core_s[16];
         if (core == (int)0x7FFFFFFF) snprintf(core_s, sizeof(core_s), "any");
         else if (core < 0) snprintf(core_s, sizeof(core_s), "?");
         else snprintf(core_s, sizeof(core_s), "%d", core);
-        printf("JTR|T %s core=%s prio=%u run_us=%" PRIu32 " state=%d
-",
+        printf("JTR|T %s core=%s prio=%u run_us=%" PRIu32 " state=%d\n",
                cur->pcTaskName, core_s, (unsigned)cur->uxCurrentPriority, delta, (int)cur->eCurrentState);
     }
     // Keep the rotation consistent with ft_snapshot()

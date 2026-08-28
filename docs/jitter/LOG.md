@@ -273,3 +273,33 @@ saves, playlist writes, `.404` markers are tiny; check `fs_atomic`), (b) decide
 with Fab whether fix 1 goes to main now (it is a release-safe 10-line change),
 (c) look at the 1.15 s flash op from RUN-06, (d) Phase 6 catch-up policy.
 
+## 2026-08-28 — Wrap-up for the day
+
+- Fab decisions: stop RUN-08 now (he restarts a soak later tonight), leave the
+  dev unit on the current diag build (065d6c90-based, trace + probes on),
+  cherry-pick the SD alignment fix to main NOW.
+- `main` @ `b3705057` = the fix alone (sources only; docs stay on feat/jitter).
+  feat/jitter still carries the original `065d6c90`; when the branch merges,
+  the identical hunks resolve trivially (verify with `git merge main` dry run).
+- RUN-08 stopped after 4 min of usable data (`runs/RUN-20260828-08.md`): a
+  puller defect (stopped pulling at 17:08 while alive) must be fixed before the
+  next long soak.
+- State of the device: diag firmware from build-diag (HEAD feat/jitter minus
+  nothing), name "fab", `http://p3a-fab.local` = 192.168.4.87. COM5 is FREE
+  (logger stopped). Settings untouched (soak restores nothing because nothing
+  was changed).
+
+**Next (tonight or tomorrow, in order):**
+1. `pull_frames.py`: add a per-iteration heartbeat line + hard socket timeout
+   diagnosis; reproduce the 17:08 stop if possible (check Windows sleep /
+   Wi-Fi drop on the laptop side first).
+2. Start the confirmation soak: `pwsh host/jitter-lab/soak.ps1 -Start -Run
+   RUN-YYYYMMDD-01 -DeviceHost http://p3a-fab.local -Hours 12 -Every 30 -Note
+   "confirmation soak, aligned SD buffers"`; arm a Monitor on stalls.jsonl /
+   pull_state.json; let it run ≥ 6 h.
+3. Analyze against the pass bar (`analyze.py`, `compare_runs.py RUN-20260828-06 <run>`).
+4. If clean: audit remaining SD writers for the same alignment (channel cache
+   saves, playlist_manager, fs_atomic temp files), look at the 1.15 s flash op
+   from RUN-06, then Phase 6 (catch-up policy) and Phase 7 (release-config
+   soak, merge). If not clean: Phase 4 provocations on the residual signature.
+

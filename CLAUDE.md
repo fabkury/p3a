@@ -31,7 +31,7 @@ idf.py set-target esp32p4
 # Build
 idf.py build
 
-# Flash and monitor (board is usually on COM11)
+# Flash and monitor (board port varies: COM11 historically; the jitter dev unit is COM5, see docs/jitter/README.md)
 # (slave_ota's CMakeLists appends --force to flash_args: esptool v5 would otherwise
 # refuse network_adapter.bin, the ESP32-C6 image flashed into the P4's slave_fw
 # partition by design)
@@ -99,3 +99,7 @@ Build artifacts go to `build/`. Release binaries are copied to `release/v{VERSIO
 ## Additional comments
 
 Clarifying questions are always welcome.
+
+## Active work streams
+
+- **Jitter elimination** (branch `feat/jitter`, multi-week): start at `docs/jitter/README.md` (status, rules, resume protocol) before touching the render pipeline or the dev device.

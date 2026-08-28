@@ -18,6 +18,7 @@
 static const char *TAG = "loader_service";
 
 #define SD_READ_CHUNK_SIZE (64 * 1024)
+#define SD_DMA_ALIGN 128   // ESP32-P4 L2 cache line: direct SD DMA to PSRAM needs this alignment
 #define SD_READ_MAX_RETRIES 3
 #define SD_READ_RETRY_DELAY_MS 50
 
@@ -49,7 +50,12 @@ static esp_err_t read_file_to_buffer(const char *filepath, uint8_t **data_out, s
         return ESP_ERR_INVALID_SIZE;
     }
 
-    uint8_t *buffer = (uint8_t *)heap_caps_malloc((size_t)file_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    // Cache-line aligned address AND size: the ESP32-P4 SD host only DMAs
+    // directly to a PSRAM buffer that satisfies both; otherwise every 512-byte
+    // sector goes through an internal bounce buffer with its own SD command
+    // (~1000 commands per 500 KB artwork). See docs/jitter/PLAN.md, H3b.
+    const size_t alloc_size = ((size_t)file_size + SD_DMA_ALIGN - 1) & ~(size_t)(SD_DMA_ALIGN - 1);
+    uint8_t *buffer = (uint8_t *)heap_caps_aligned_alloc(SD_DMA_ALIGN, alloc_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!buffer) {
         buffer = (uint8_t *)malloc((size_t)file_size);
         if (!buffer) {

@@ -22,7 +22,7 @@ both present on the laptop) or PowerShell 7.
 
 | Tool | Purpose |
 |------|---------|
-| `build.ps1 [-Diag] [-Flash] [-FullClean] [-Port COM5]` | Activates IDF, builds release (`build/`) or diag (`build-diag/`, release sdkconfig + `sdkconfig.diag.defaults`). Guards: release `sdkconfig` unchanged, P4 rev-v1.0 lines present, trace on/off as expected. `-Flash` flashes the dev unit (stop any logger first: flashing needs COM5). |
+| `build.ps1 [-Diag] [-Flash] [-FullClean] [-Port COM5]` | Activates IDF, builds release (`build/`) or diag (`build-diag/`, release sdkconfig + `sdkconfig.diag.defaults`; the generated `build-diag/sdkconfig` is regenerated automatically when either source file is newer, because IDF applies defaults only at creation). Guards: release `sdkconfig` unchanged, P4 rev-v1.0 lines present, trace on/off as expected. `-Flash` flashes the dev unit (stop any logger first: flashing needs COM5). |
 | `serial_logger.py COM5 RUN` | Persistent reset-free UART logger → `uart.log`, parsed `JTR\|` stall reports → `stalls.jsonl`, heartbeat `state.json`. Reconnects on error. |
 | `pull_frames.py RUN [--every 120] [--hours N] [--once]` | Incremental `GET /api/debug/frames?since=` → `frames.csv`; `stats.jsonl`; `device.jsonl` (`/api/state`, `/api/memory`). Cursor in `pull_state.json`. |
 | `snapshot_settings.py save\|restore\|set\|show RUN` | Redacted settings snapshot before a run; restore of show_fps / max_speed / brightness / rotation / dwell / active playset afterwards. |

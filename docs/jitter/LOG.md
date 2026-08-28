@@ -92,3 +92,28 @@ Validation run `RUN-20260828-00-validate` (diag build, normal playset):
 `soak.ps1 -Start` on the normal playset ("Work mix") for ≥ 4 h with show_fps
 left as is, analyze, write `docs/jitter/runs/RUN-….md`, push-notify Fab if any
 in-scope stall is attributed.
+
+## 2026-08-28 — Phase 3 started: baseline soak RUN-20260828-01
+
+- Reflashed diag with `FREERTOS_VTASKLIST_INCLUDE_COREID=y` (needed
+  `build.ps1` to learn that IDF applies `SDKCONFIG_DEFAULTS` only when the
+  generated sdkconfig is created; it now regenerates `build-diag/sdkconfig`
+  whenever a source is newer). `JTR|T` now shows affinity: 0/1 pinned,
+  `any` (tskNO_AFFINITY) unpinned.
+- New H2 evidence from the task list: `sdio_read` / `sdio_write` (esp_hosted
+  transport) run at **prio 23, unpinned**; `tiT` (lwIP) prio 18 unpinned;
+  `download_mgr` was observed at prio 23 (priority inheritance from the SDIO
+  bus mutex, presumably) — it is pinned to core 0 so not a core-1 preemptor,
+  but the sdio tasks can land on core 1 above the consumer.
+- mDNS `p3a.local` was unresolvable for ~60 s after a reboot while the IP
+  (`192.168.4.87`) answered; tooling keeps `p3a.local` (puller retries) but use
+  the IP right after a flash.
+- Soak started 13:48 local: `soak.ps1 -Start -Run RUN-20260828-01 -Hours 8`,
+  normal playset "Work mix", settings snapshot saved, stats reset at start.
+  Logger pid 31792, puller pid 13396 (see `runs/RUN-20260828-01/pids.json`).
+
+**Next:** let the soak run (≥ 4 h; puller stops itself after 8 h, logger runs
+until stopped). Then `soak.ps1 -Stop -Run RUN-20260828-01` → `report.md`,
+write `docs/jitter/runs/RUN-20260828-01.md`, update README status, push-notify
+Fab with the stall count and top attribution, commit. Commit the pending
+cosmetic fix (`core=any` printing) with it.

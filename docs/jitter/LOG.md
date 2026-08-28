@@ -278,7 +278,7 @@ with Fab whether fix 1 goes to main now (it is a release-safe 10-line change),
 - Fab decisions: stop RUN-08 now (he restarts a soak later tonight), leave the
   dev unit on the current diag build (065d6c90-based, trace + probes on),
   cherry-pick the SD alignment fix to main NOW.
-- `main` @ `b3705057` = the fix alone (sources only; docs stay on feat/jitter).
+- `main` @ `6ca1e7c5` = the fix alone (sources only; docs stay on feat/jitter).
   feat/jitter still carries the original `065d6c90`; when the branch merges,
   the identical hunks resolve trivially (verify with `git merge main` dry run).
 - RUN-08 stopped after 4 min of usable data (`runs/RUN-20260828-08.md`): a

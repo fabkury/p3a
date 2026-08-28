@@ -11,7 +11,7 @@ work before checking **Current status** and **Resume protocol** below.
 
 ## Current status
 
-**Phase 5 in progress (2026-08-28): first fix (H3b, aligned SD DMA buffers, `065d6c90`) verified A/B: 37.7 stalls/h → 0 in 1.1 h. Fix cherry-picked to main (`b3705057`). Confirmation soak still owed (RUN-08 was cut short; see LOG 'Wrap-up' for the exact next steps).**
+**Phase 5 in progress (2026-08-28): first fix (H3b, aligned SD DMA buffers, `065d6c90`) verified A/B: 37.7 stalls/h → 0 in 1.1 h. Fix cherry-picked to main (`6ca1e7c5`). Confirmation soak still owed (RUN-08 was cut short; see LOG 'Wrap-up' for the exact next steps).**
 
 | Phase | Description | Status |
 |-------|-------------|--------|
@@ -20,7 +20,7 @@ work before checking **Current status** and **Resume protocol** below.
 | 2 | Host tooling `host/jitter-lab/`: persistent serial logger, HTTP puller, analyzer, run archiver | done 2026-08-28 — reset-free logger verified; `soak.ps1` orchestrates |
 | 3 | Baseline soak on normal workload (multi-hour); attribution table | done 2026-08-28 — RUN-04/05/06: stalls = single-frame upscale blow-ups during SD writes; SD bounce path (H3b) identified |
 | 4 | Provocation runs per hypothesis (H1..H5 in PLAN.md) | partially skipped — the A/B (RUN-06 vs RUN-07) was decisive; provocations kept in reserve for residual stalls |
-| 5 | Fixes, one per confirmed cause, each with before/after soak | in progress — fix 1 `065d6c90` (aligned PSRAM SD buffers): 32 → 0 stalls, SD write median 70 → 4.7 ms; fix also on main as `b3705057`; multi-hour confirmation soak still owed |
+| 5 | Fixes, one per confirmed cause, each with before/after soak | in progress — fix 1 `065d6c90` (aligned PSRAM SD buffers): 32 → 0 stalls, SD write median 70 → 4.7 ms; fix also on main as `6ca1e7c5`; multi-hour confirmation soak still owed |
 | 6 | Catch-up policy decision (rush / drop / resync) with data | not started |
 | 7 | Final soak on plain build (trace on, no diag overlay) against pass bar; report; merge | not started |
 

@@ -133,4 +133,14 @@ cosmetic fix (`core=any` printing) with it.
   `soak.ps1 -Start` resets stats first.
 - Phase 6 note recorded in the run summary: resync policy vs chronic overrun.
 
-**Next:** reflash diag, start RUN-20260828-02 (same parameters), monitor.
+- Two build slips on the way (a line-based patch split a string literal; the
+  Bash tool de-escapes `\n` inside quoted heredocs, so write escapes as
+  `chr(92)+'n'` or use the Write tool). `build.ps1` piped through
+  `Select-String` masks its exit code: always look for `BUILD OK`/`FLASH OK`.
+- RUN-20260828-02 started 13:59 local on diag cc351650 (reporter gating,
+  `stalls_overrun` in stats), puller from ring head seq 695, `-Hours 8`.
+  Logger pid 40048, puller pid 31268.
+
+**Next:** let RUN-02 run ≥ 4 h; then `soak.ps1 -Stop -Run RUN-20260828-02`,
+analyze, write `docs/jitter/runs/RUN-20260828-02.md`, update README status,
+push-notify Fab, commit.

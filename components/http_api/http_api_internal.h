@@ -193,6 +193,11 @@ esp_err_t h_get_rotation(httpd_req_t *req);
 esp_err_t h_post_rotation(httpd_req_t *req);
 esp_err_t h_post_playset(httpd_req_t *req);
 esp_err_t h_post_show_url(httpd_req_t *req);
+#if CONFIG_P3A_FRAME_TRACE
+// Jitter work stream (docs/jitter): /api/debug/frames*, /api/debug/mark, /api/debug/provoke
+esp_err_t h_get_debug_frames_route(httpd_req_t *req);
+esp_err_t h_post_debug_frames_route(httpd_req_t *req);   // ESP_ERR_NOT_FOUND when the URI is not ours
+#endif
 esp_err_t h_post_swap_to(httpd_req_t *req);
 esp_err_t h_post_provision(httpd_req_t *req);
 esp_err_t h_post_makapix_unregister(httpd_req_t *req);

@@ -7,6 +7,7 @@
  */
 
 #include "display_renderer_priv.h"
+#include "frame_trace.h"
 #include "config_store.h"
 
 // FPS tracking state
@@ -168,6 +169,47 @@ static void fps_draw_overlay(uint8_t *buffer, uint32_t fps)
     }
 }
 
+#if CONFIG_P3A_FRAME_TRACE
+// Jitter work stream (docs/jitter): worst presented-frame lateness over the
+// trailing ~10 s in ms, drawn under the FPS number in yellow, plus a red block
+// to its left for 2 s after a recorded stall. Only when show_fps is on.
+static void ft_draw_overlay(uint8_t *buffer)
+{
+    bool stall_recent = false;
+    const int32_t worst_us = frame_trace_overlay_worst_us(&stall_recent);
+    char str[8];
+    int len = snprintf(str, sizeof(str), "%ld", (long)((worst_us + 999) / 1000));
+    if (len < 0 || len >= (int)sizeof(str)) len = 1;
+
+    const int scale = 2;
+    const int char_w = 5 * scale + scale;
+    const int char_h = 7 * scale;
+    const int padding = 6;
+    const fps_rot_xform_t xform = fps_rot_xform(g_screen_rotation, EXAMPLE_LCD_H_RES);
+    const int total_width = len * char_w - scale;
+    const int x = EXAMPLE_LCD_H_RES - total_width - padding;
+    const int y = padding + char_h + 8;
+
+    for (int by = y - 2; by < y + char_h + 2; by++) {
+        for (int bx = x - 4; bx < x + total_width + 4; bx++) {
+            fps_draw_pixel(buffer, &xform, bx, by, 0, 0, 0);
+        }
+    }
+    for (int i = 0; i < len; i++) {
+        const int ch_idx = (str[i] >= '0' && str[i] <= '9') ? (str[i] - '0') : 10;
+        fps_draw_char(buffer, &xform, x + i * char_w, y, ch_idx, scale, 255, 255, 0, 0, 0, 0);
+    }
+    if (stall_recent) {
+        const int sx = x - 4 - 16;
+        for (int by = y; by < y + char_h; by++) {
+            for (int bx = sx; bx < sx + 12; bx++) {
+                fps_draw_pixel(buffer, &xform, bx, by, 255, 0, 0);
+            }
+        }
+    }
+}
+#endif
+
 // Update FPS counter and optionally draw overlay
 void fps_update_and_draw(uint8_t *buffer)
 {
@@ -199,5 +241,10 @@ void fps_update_and_draw(uint8_t *buffer)
     if (s_fps_show_cached && buffer && s_fps_current > 0) {
         fps_draw_overlay(buffer, s_fps_current);
     }
+#if CONFIG_P3A_FRAME_TRACE
+    if (s_fps_show_cached && buffer) {
+        ft_draw_overlay(buffer);
+    }
+#endif
 }
 

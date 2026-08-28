@@ -2593,6 +2593,12 @@ CONFIG_CHANNEL_MANAGER_PAGE_SIZE=32
 # end of Channel Manager
 
 #
+# Frame trace (jitter diagnostics)
+#
+# CONFIG_P3A_FRAME_TRACE is not set
+# end of Frame trace (jitter diagnostics)
+
+#
 # Giphy Integration
 #
 CONFIG_GIPHY_API_KEY_DEFAULT=""

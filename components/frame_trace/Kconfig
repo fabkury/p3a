@@ -1,0 +1,61 @@
+menu "Frame trace (jitter diagnostics)"
+
+    config P3A_FRAME_TRACE
+        bool "Enable presentation-lateness frame trace"
+        default n
+        help
+            Records every presented frame (intended vs actual present time,
+            producer decode/upscale time, queue depth) plus timestamped event
+            markers (NVS commits, loader loads, downloads, MQTT, log bursts...)
+            into a PSRAM ring buffer, detects stalls, prints a one-shot UART
+            report ("JTR|" lines) and serves the ring over
+            GET /api/debug/frames. Zero code and zero data when disabled.
+            See docs/jitter/README.md.
+
+    config P3A_FRAME_TRACE_ENTRIES
+        int "Ring buffer entries"
+        depends on P3A_FRAME_TRACE
+        default 8192
+        range 256 65536
+        help
+            Entries are 56 bytes, allocated in PSRAM at init. 8192 entries hold
+            roughly 4-10 minutes of 30 fps playback plus markers.
+
+    config P3A_FRAME_TRACE_WARN_MS
+        int "Warning lateness threshold (ms)"
+        depends on P3A_FRAME_TRACE
+        default 50
+        range 5 5000
+
+    config P3A_FRAME_TRACE_STALL_MS
+        int "Stall lateness threshold (ms)"
+        depends on P3A_FRAME_TRACE
+        default 100
+        range 5 5000
+        help
+            Presented-frame lateness at or above this value counts as a stall
+            (the pass bar of the jitter work stream) and triggers the UART
+            report.
+
+    config P3A_FRAME_TRACE_REPORT_MIN_INTERVAL_S
+        int "Minimum seconds between UART stall reports"
+        depends on P3A_FRAME_TRACE
+        default 5
+        range 1 3600
+
+    config P3A_FRAME_TRACE_REPORT_WINDOW_MS
+        int "History window printed in a stall report (ms)"
+        depends on P3A_FRAME_TRACE
+        default 2000
+        range 100 20000
+
+    config P3A_FRAME_TRACE_DEV_ENDPOINTS
+        bool "Provocation endpoints (POST /api/debug/provoke)"
+        depends on P3A_FRAME_TRACE
+        default n
+        help
+            Dev-only endpoints that deliberately provoke suspected stall causes
+            (NVS commit, log flood, SD write burst, core-1 CPU hog) so the
+            detector and attribution can be validated. Never enable in release.
+
+endmenu

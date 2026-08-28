@@ -1,0 +1,20 @@
+# Jitter work stream diagnostic overlay (docs/jitter/PLAN.md §4.5).
+#
+# Applied ON TOP of the tracked release `sdkconfig` into a separate build dir:
+#   host/jitter-lab/build.ps1 -Diag        (idf.py -B build-diag -DSDKCONFIG=build-diag/sdkconfig
+#                                            -DSDKCONFIG_DEFAULTS="sdkconfig;sdkconfig.diag.defaults")
+# The release sdkconfig is never modified by a diag build. Silicon-rev guards
+# (CONFIG_ESP32P4_SELECTS_REV_LESS_V3 / REV_MIN_1) come from the release file.
+
+CONFIG_P3A_FRAME_TRACE=y
+CONFIG_P3A_FRAME_TRACE_ENTRIES=8192
+CONFIG_P3A_FRAME_TRACE_WARN_MS=50
+CONFIG_P3A_FRAME_TRACE_STALL_MS=100
+CONFIG_P3A_FRAME_TRACE_DEV_ENDPOINTS=y
+
+# Per-task CPU accounting for stall attribution (JTR|T lines). Costs a timer
+# read per context switch; diag builds only.
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER=y
+CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y

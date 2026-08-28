@@ -97,11 +97,17 @@ behind the Kconfig; 404 otherwise.
 FPS overlay gains "worst lateness in last 10 s (ms)" and a red tick for 2 s
 after a recorded stall, so a glance at the device confirms capture fired.
 
+Known limitation (validated 2026-08-28): the `JTR|T` run-time delta compares
+the current task list against the reporter's last periodic snapshot, so a task
+created and deleted inside the window is invisible (the `cpu1` provoke hog is
+one). Persistent culprits (lwIP, hosted, MQTT, download, loader) are covered.
+
 ### 4.5 Diag config overlay
 `sdkconfig.defaults.diag` (used via `SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.diag"`
 into a separate build dir `build-diag/`): `P3A_FRAME_TRACE=y`,
 `FREERTOS_GENERATE_RUN_TIME_STATS=y`, `FREERTOS_USE_TRACE_FACILITY=y`,
-`FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER=y`. Release `sdkconfig` untouched.
+`FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER=y`, `FREERTOS_VTASKLIST_INCLUDE_COREID=y`. Release `sdkconfig` untouched
+(except the one-time regeneration that added the `# CONFIG_P3A_FRAME_TRACE is not set` menu lines).
 The final Phase-7 soak runs with `P3A_FRAME_TRACE=y` only, on the release
 config, to confirm the pass bar without the heavier scheduler.
 

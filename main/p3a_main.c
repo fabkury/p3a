@@ -7,6 +7,7 @@
  */
 
 #include "esp_err.h"
+#include "frame_trace.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_app_desc.h"
@@ -564,6 +565,9 @@ void app_main(void)
     // Initialize Makapix module early (after LittleFS mount, before animation player/channel load).
     // This ensures Makapix API layer is ready before any Makapix channel refresh tasks may start.
     ESP_ERROR_CHECK(makapix_init());
+
+    // Jitter work stream (docs/jitter): no-op unless CONFIG_P3A_FRAME_TRACE.
+    frame_trace_init();
 
     // Initialize LCD and touch
     ESP_ERROR_CHECK(app_lcd_init());

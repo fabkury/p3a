@@ -11,6 +11,7 @@
  */
 
 #include "play_scheduler_internal.h"
+#include "frame_trace.h"
 #include "play_scheduler.h"  // For play_scheduler_next()
 #include "channel_cache.h"   // For channel_cache_save()
 #include "makapix.h"
@@ -1310,7 +1311,7 @@ static void refresh_task(void *arg)
 
         if (type == PS_CHANNEL_TYPE_SDCARD) {
             did_refresh = true;
-            err = refresh_sdcard_channel(ch);
+            frame_trace_mark(FT_MARK_REFRESH, FT_PHASE_BEGIN, 1); err = refresh_sdcard_channel(ch); frame_trace_mark(FT_MARK_REFRESH, FT_PHASE_END, 1);
         } else if (type == PS_CHANNEL_TYPE_PINNED) {
             // Pinned lists are local-only; nothing to refresh. Eligibility
             // normally filters these out; this arm is belt-and-braces so a
@@ -1319,7 +1320,7 @@ static void refresh_task(void *arg)
             err = ESP_OK;
         } else if (type == PS_CHANNEL_TYPE_ARTWORK) {
             did_refresh = true;
-            err = refresh_artwork_channel(ch);
+            frame_trace_mark(FT_MARK_REFRESH, FT_PHASE_BEGIN, 2); err = refresh_artwork_channel(ch); frame_trace_mark(FT_MARK_REFRESH, FT_PHASE_END, 2);
         } else if (type == PS_CHANNEL_TYPE_GIPHY) {
             // Verify that a Giphy API key is configured before attempting refresh
             char giphy_key_check[128];
@@ -1666,7 +1667,7 @@ static void refresh_task(void *arg)
                         did_refresh = true;
                         err = makapix_promoted_https_refresh(channel_id);
                     } else {
-                        err = refresh_makapix_channel(ch);
+                        frame_trace_mark(FT_MARK_REFRESH, FT_PHASE_BEGIN, 3); err = refresh_makapix_channel(ch); frame_trace_mark(FT_MARK_REFRESH, FT_PHASE_END, 3);
                     }
                 }
             }

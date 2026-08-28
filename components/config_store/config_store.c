@@ -7,6 +7,7 @@
  */
 
 #include "config_store_internal.h"
+#include "frame_trace.h"
 
 static const char *TAG = "CFG";
 
@@ -202,6 +203,7 @@ esp_err_t config_store_save(const cJSON *cfg) {
     }
 
     // Atomic save: write to temp key first
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_BEGIN, 1);
     err = nvs_set_blob(h, KEY_NEW, serialized, len);
     if (err != ESP_OK) {
         nvs_close(h);
@@ -242,6 +244,7 @@ esp_err_t config_store_save(const cJSON *cfg) {
 
     err = nvs_commit(h);
     nvs_close(h);
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_END, 1);
     free(serialized);
 
     if (err != ESP_OK) {

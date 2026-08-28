@@ -354,7 +354,9 @@ void display_renderer_note_content_discontinuity(void)
     // Bump the content generation. The producer stamps subsequent frames with the
     // new value; the consumer drops any queued frame from an older generation
     // instead of presenting it (flush-on-change).
-    __atomic_add_fetch(&g_render_generation, 1, __ATOMIC_SEQ_CST);
+    uint32_t gen = __atomic_add_fetch(&g_render_generation, 1, __ATOMIC_SEQ_CST);
+    (void)gen;
+    frame_trace_mark(FT_MARK_SWAP, FT_PHASE_EVENT, gen);
 }
 
 // ============================================================================
@@ -593,6 +595,7 @@ void display_producer_task(void *arg)
         display_render_mode_t mode = g_display_mode_request;
         if (mode != g_display_mode_active) {
             // Mode switch: invalidate frames queued for the old mode.
+            frame_trace_mark(FT_MARK_MODE_SWITCH, FT_PHASE_EVENT, (uint32_t)mode);
             display_renderer_note_content_discontinuity();
         }
         g_display_mode_active = mode;
@@ -602,7 +605,13 @@ void display_producer_task(void *arg)
         // ================================================================
         // 1. Acquire a free buffer to render into
         // ================================================================
+#if CONFIG_P3A_FRAME_TRACE
+        const int64_t ft_free_t0 = frame_trace_now_us();
+#endif
         int8_t back_buffer_idx = acquire_free_buffer(portMAX_DELAY);
+#if CONFIG_P3A_FRAME_TRACE
+        const int64_t ft_produce_t0 = frame_trace_now_us();
+#endif
         if (back_buffer_idx < 0) {
             // Should not happen with portMAX_DELAY, but handle gracefully
             vTaskDelay(pdMS_TO_TICKS(1));
@@ -693,6 +702,13 @@ void display_producer_task(void *arg)
             .duration_ms = (uint32_t)frame_delay_ms,
             .generation  = __atomic_load_n(&g_render_generation, __ATOMIC_SEQ_CST),
         };
+#if CONFIG_P3A_FRAME_TRACE
+        rf.ft_produce_start_us = ft_produce_t0;
+        rf.ft_produce_end_us = frame_trace_now_us();
+        rf.ft_free_wait_us = (uint32_t)(ft_produce_t0 - ft_free_t0);
+        frame_trace_producer_take_split(&rf.ft_decode_us, &rf.ft_upscale_us);
+        rf.ft_flags = (uint8_t)((ui_mode ? FT_FLAG_UI_MODE : 0) | (black ? FT_FLAG_BLACK : 0));
+#endif
         xQueueSend(g_ready_queue, &rf, portMAX_DELAY);
     }
 }
@@ -719,6 +735,14 @@ void display_consumer_task(void *arg)
         }
         const int8_t back_buffer_idx = rf.buffer_idx;
         uint8_t *back_buffer = g_display_buffers[back_buffer_idx];
+#if CONFIG_P3A_FRAME_TRACE
+        // Jitter work stream: capture the target BEFORE baseline/resync can rewrite it,
+        // so a resynced frame still records its true lateness.
+        const uint8_t ft_queue_depth = (uint8_t)uxQueueMessagesWaiting(g_ready_queue);
+        const int64_t ft_target_us = s_target_present_us;
+        uint8_t ft_flags = rf.ft_flags;
+        uint32_t ft_vsync_wait_us = 0;
+#endif
 
         // Flush-on-change: drop frames the producer rendered for a superseded
         // content generation. The buffer returns straight to the free pool;
@@ -763,6 +787,9 @@ void display_consumer_task(void *arg)
                 // First frame after init / discontinuity / long pause: baseline
                 // the playhead to "now" so we present immediately.
                 s_target_present_us = now_us;
+#if CONFIG_P3A_FRAME_TRACE
+                ft_flags |= FT_FLAG_BASELINED;
+#endif
             } else {
                 // Drift safeguard — POSITIVE direction only.
                 //
@@ -780,6 +807,10 @@ void display_consumer_task(void *arg)
                 // original 60-fps-pin bug).
                 int64_t drift_us = now_us - s_target_present_us;
                 if (drift_us > FRAME_TIMING_RESYNC_US) {
+#if CONFIG_P3A_FRAME_TRACE
+                    ft_flags |= FT_FLAG_RESYNCED;
+                    frame_trace_mark(FT_MARK_RESYNC, FT_PHASE_EVENT, (uint32_t)drift_us);
+#endif
                     s_target_present_us = now_us;
                 }
             }
@@ -797,6 +828,10 @@ void display_consumer_task(void *arg)
         // ================================================================
         // 3. Vsync alignment + submit
         // ================================================================
+#if CONFIG_P3A_FRAME_TRACE
+        const int64_t ft_vs0 = frame_trace_now_us();
+        if (max_speed) ft_flags |= FT_FLAG_MAX_SPEED;
+#endif
         if (max_speed) {
             // Max-speed: consume one vsync per submit (no playhead, no sleep).
             xSemaphoreTake(g_display_vsync_sem, portMAX_DELAY);
@@ -829,6 +864,9 @@ void display_consumer_task(void *arg)
             }
         }
 
+#if CONFIG_P3A_FRAME_TRACE
+        ft_vsync_wait_us = (uint32_t)(frame_trace_now_us() - ft_vs0);
+#endif
         // Now safe to submit - at most 1 buffer will be PENDING
         g_buffer_info[back_buffer_idx].state = BUFFER_STATE_PENDING;
         g_last_submitted_idx = back_buffer_idx;
@@ -836,6 +874,26 @@ void display_consumer_task(void *arg)
         esp_lcd_panel_draw_bitmap(g_display_panel, 0, 0, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, back_buffer);
 
         g_last_frame_present_us = esp_timer_get_time();
+
+#if CONFIG_P3A_FRAME_TRACE
+        {
+            ft_frame_in_t fin = {
+                .target_us        = ft_target_us,
+                .present_us       = g_last_frame_present_us,
+                .produce_start_us = rf.ft_produce_start_us,
+                .produce_end_us   = rf.ft_produce_end_us,
+                .decode_us        = rf.ft_decode_us,
+                .upscale_us       = rf.ft_upscale_us,
+                .free_wait_us     = rf.ft_free_wait_us,
+                .vsync_wait_us    = ft_vsync_wait_us,
+                .duration_ms      = rf.duration_ms,
+                .generation       = rf.generation,
+                .queue_depth      = ft_queue_depth,
+                .flags            = ft_flags,
+            };
+            frame_trace_frame(&fin);
+        }
+#endif
 
         // Advance the playhead by THIS frame's intended duration so the next
         // frame is due exactly that long after this one was presented.

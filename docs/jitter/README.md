@@ -11,13 +11,13 @@ work before checking **Current status** and **Resume protocol** below.
 
 ## Current status
 
-**Phase: 0 — foundation (done 2026-08-28). Next: Phase 1 — instrumentation.**
+**Phase: 1+2 done (2026-08-28), device-validated. Next: Phase 3 — baseline soak.**
 
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 0 | Foundation: branch, docs, device recon, signing, tooling skeleton | done 2026-08-28 |
-| 1 | Firmware instrumentation (`CONFIG_P3A_FRAME_TRACE`): frame ring buffer, event markers, stall detector w/ UART report, `/api/debug/frames` CSV, overlay tick | not started |
-| 2 | Host tooling `host/jitter-lab/`: persistent serial logger, HTTP puller, analyzer, run archiver | not started |
+| 1 | Firmware instrumentation (`CONFIG_P3A_FRAME_TRACE`): frame ring buffer, event markers, stall detector w/ UART report, `/api/debug/frames` CSV, overlay tick | done 2026-08-28 — `components/frame_trace`, validated on device (forced core-1 hog → 177 ms stall detected, reported, attributed) |
+| 2 | Host tooling `host/jitter-lab/`: persistent serial logger, HTTP puller, analyzer, run archiver | done 2026-08-28 — reset-free logger verified; `soak.ps1` orchestrates |
 | 3 | Baseline soak on normal workload (multi-hour); attribution table | not started |
 | 4 | Provocation runs per hypothesis (H1..H5 in PLAN.md) | not started |
 | 5 | Fixes, one per confirmed cause, each with before/after soak | not started |
@@ -61,7 +61,7 @@ Uniform slow playback of artworks the chip cannot decode in time is accepted.
 | Item | Value |
 |------|-------|
 | Dev device UART | **COM5** (CH343 bridge, 115200). CLAUDE.md's "COM11" is stale for this unit. Probe: `host/jitter-lab/find_port.ps1` |
-| Opening COM5 **resets the board** (DTR/RTS on open). The serial logger must hold one persistent connection; never reopen casually |
+| Opening COM5 with .NET `SerialPort` or plain `idf.py monitor` **resets the board**. `host/jitter-lab/serial_logger.py` (pyserial, DTR/RTS low before open) does **not** (verified). `idf.py flash` needs COM5 free: stop the logger first |
 | USB-Serial-JTAG | not wired to the laptop; no OpenOCD/SystemView. In-firmware tracing only |
 | Device LAN name | `http://p3a.local` (mDNS resolves from the laptop, ~15 ms RTT) |
 | SD root | `sdcard_root = /p3a2` (not the default `/p3a`); all SD paths resolve via `sd_path` |
@@ -81,10 +81,15 @@ docs/jitter/
   LOG.md        append-only dated journal of what was done and learned
   runs/         one committed summary per soak/provocation run (RUN-YYYYMMDD-NN.md)
 host/jitter-lab/
-  README.md     tooling usage
+  README.md     tooling usage + endpoint/report formats
+  build.ps1     release / diag build with guards; -Flash
+  soak.ps1      start/status/stop a detached soak (logger + puller), -NewRunId
+  serial_logger.py, pull_frames.py, snapshot_settings.py, analyze.py
   find_port.ps1 serial port probe (read-only, note: opening resets the board)
-  (Phase 2)     serial_logger, pull_frames, analyze, run archiver
   runs/         raw data per run (gitignored; large CSVs + UART logs)
+components/frame_trace/   the instrumentation (Kconfig-gated, default off)
+components/http_api/http_api_rest_debug_frames.c   /api/debug/* endpoints
+sdkconfig.diag.defaults   diag overlay (trace on, run-time stats, dev endpoints)
 ```
 
 ## Resume protocol (fresh session)

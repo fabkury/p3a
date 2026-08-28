@@ -21,6 +21,7 @@
  */
 
 #include "sdkconfig.h"
+#include "frame_trace.h"
 #include "http_api_internal.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
@@ -497,6 +498,13 @@ static esp_err_t h_get_router(httpd_req_t *req) {
         return ESP_OK;
     }
 
+    frame_trace_mark(FT_MARK_HTTP_REQ, FT_PHASE_EVENT, 1);
+#if CONFIG_P3A_FRAME_TRACE
+    if (strncmp(uri, "/api/debug/frames", 17) == 0) {
+        return h_get_debug_frames_route(req);
+    }
+#endif
+
     // Core JSON endpoints
     if (strcmp(uri, "/api/init") == 0) {
         return h_get_api_init(req);
@@ -580,6 +588,15 @@ static esp_err_t h_post_router(httpd_req_t *req) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Bad request");
         return ESP_OK;
     }
+
+    frame_trace_mark(FT_MARK_HTTP_REQ, FT_PHASE_EVENT, 2);
+#if CONFIG_P3A_FRAME_TRACE
+    if (strncmp(uri, "/api/debug/", 11) == 0) {
+        if (h_post_debug_frames_route(req) == ESP_OK) {
+            return ESP_OK;
+        }
+    }
+#endif
 
     // Core action endpoints
     if (strcmp(uri, "/action/reboot") == 0) {

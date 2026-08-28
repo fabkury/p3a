@@ -7,6 +7,7 @@
  */
 
 #include "animation_player_priv.h"
+#include "frame_trace.h"
 #include "animation_player.h"
 #include "esp_heap_caps.h"
 #include "play_scheduler.h"
@@ -532,8 +533,10 @@ void animation_loader_task(void *arg)
             file_missing = true;
         }
 
+        frame_trace_mark(FT_MARK_LOADER_LOAD, FT_PHASE_BEGIN, (uint32_t)type);
         esp_err_t err = file_missing ? ESP_ERR_NOT_FOUND : load_animation_into_buffer(filepath, type, channel_type,
                                                                                       &s_back_buffer);
+        frame_trace_mark(FT_MARK_LOADER_LOAD, FT_PHASE_END, (uint32_t)(err == ESP_OK ? 0 : 1));
         if (err != ESP_OK) {
             bool is_cached_file = filepath && (strstr(filepath, "/vault/") != NULL
                                                || strstr(filepath, "/giphy/") != NULL

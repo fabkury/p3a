@@ -10,6 +10,7 @@
 #define DISPLAY_RENDERER_PRIV_H
 
 #include "display_renderer.h"
+#include "frame_trace.h"
 #include "p3a_board.h"
 #include "app_lcd.h"
 #include "esp_log.h"
@@ -132,6 +133,15 @@ typedef struct {
     int8_t   buffer_idx;    // index into g_display_buffers; state == BUFFER_STATE_READY
     uint32_t duration_ms;   // this frame's intended on-screen dwell (from the decoder)
     uint32_t generation;    // content epoch when finalized
+#if CONFIG_P3A_FRAME_TRACE
+    // Jitter work stream (docs/jitter): producer-side timing carried to the consumer.
+    int64_t  ft_produce_start_us;
+    int64_t  ft_produce_end_us;
+    uint32_t ft_free_wait_us;
+    uint32_t ft_decode_us;
+    uint32_t ft_upscale_us;
+    uint8_t  ft_flags;
+#endif
 } ready_frame_t;
 
 extern QueueHandle_t g_ready_queue;

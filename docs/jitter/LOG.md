@@ -41,3 +41,54 @@ Learned:
 tick + `sdkconfig.defaults.diag`), build both configs, flash the diag build to
 COM5, confirm the ring fills and a forced stall (dev endpoint) triggers a `JTR|`
 report on UART.
+
+## 2026-08-28 — Phase 1 + 2: instrumentation and host tooling, device-validated
+
+Done:
+- `components/frame_trace/` (Kconfig `P3A_FRAME_TRACE`, default n; CMake compiles
+  no sources when off; header macros vanish). 56-byte entries, lock-free
+  multi-writer PSRAM ring (8192 entries), FRAME records from the consumer,
+  MARK records from any task, stats + histogram, trailing-10 s worst, stall
+  detector → reporter task (core 0, prio 2) printing `JTR|` blocks with the
+  2 s history and a `uxTaskGetSystemState` run-time delta; `esp_log_set_vprintf`
+  hook marks any single log call slower than 2 ms (`log_slow`).
+- Hooks: consumer/producer in `display_renderer.c` (target captured BEFORE
+  baseline/resync so resynced frames keep their true lateness; flags
+  BASELINED/RESYNCED/MAX_SPEED/UI/BLACK), decode/upscale split in
+  `animation_player_render.c`, marks for NVS commits (8 sites), loader load,
+  download, MQTT rx, refresh (3 sites), swap (generation bump), mode switch,
+  resync, HTTP requests. Overlay: yellow worst-10 s ms + red stall block under
+  the FPS counter (show_fps-gated).
+- `/api/debug/frames` CSV, `/frames/stats` JSON, `/frames/reset`, `/mark`,
+  dev-only `/provoke?kind=nvs|log|sd|cpu1` (`components/http_api/http_api_rest_debug_frames.c`).
+- `sdkconfig.diag.defaults` overlay + `host/jitter-lab/build.ps1` (guards:
+  release sdkconfig unchanged, P4 rev lines present, trace on/off as expected).
+  Release map has zero frame_trace / debug_frames objects. One-time accepted
+  change to the tracked `sdkconfig`: the `# CONFIG_P3A_FRAME_TRACE is not set`
+  menu lines.
+- Host tooling: `serial_logger.py` (reset-free, verified: uptime 40.9 s → 47.6 s
+  across a logger start), `pull_frames.py`, `snapshot_settings.py`, `analyze.py`
+  (per-generation median producer time separates decode overrun from starvation),
+  `soak.ps1` (detached processes, pids.json).
+
+Validation run `RUN-20260828-00-validate` (diag build, normal playset):
+- `cpu1` provoke (300 ms hog at prio 7 on core 1) → 1 hard stall, lateness
+  177 ms, `free_wait` 118 ms, UART `JTR|STALL` report fired within 1 s,
+  analyzer attributed it to the `provoke` interval. Detector + report + pull +
+  analysis chain works end to end.
+- `nvs` ×3 (1 KB blob commits): no lateness change at all (max stayed 177 ms,
+  worst-10 s 21 ms). H1 is weaker than assumed for small commits; a page-rotation
+  provocation (n=40+) is still owed in Phase 4.
+- `log` ×30 (200-byte INFO lines from httpd): overrun count 1 → 6, worst-10 s
+  54 ms. Log floods delay the PRODUCER (H5 evidence, producer side).
+- `sd` 8 × 64 KB writes: no effect.
+- Baseline (no provocation) on this artwork mix: lateness p50 0.2 ms, p90 7 ms,
+  p99 8.5 ms (the 5–17 ms bucket is vsync-edge alignment, expected).
+- First `JTR|T` lines showed `core=-1`: `xCoreID` needs
+  `CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y` (added to the diag overlay).
+  Short-lived tasks are invisible to the delta (documented in PLAN §4.4).
+
+**Next:** confirm core ids in `JTR|T` after the reflash, commit, then Phase 3:
+`soak.ps1 -Start` on the normal playset ("Work mix") for ≥ 4 h with show_fps
+left as is, analyze, write `docs/jitter/runs/RUN-….md`, push-notify Fab if any
+in-scope stall is attributed.

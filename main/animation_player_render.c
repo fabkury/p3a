@@ -7,6 +7,7 @@
  */
 
 #include "animation_player_priv.h"
+#include "frame_trace.h"
 #include "pico8_stream.h"
 #include "pico8_render.h"
 #include "ugfx_ui.h"
@@ -172,6 +173,9 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
 #if CONFIG_P3A_PERF_DEBUG
     int64_t t_decode_start = debug_timer_now_us();
 #endif
+#if CONFIG_P3A_FRAME_TRACE
+    const int64_t ft_decode_t0 = frame_trace_now_us();
+#endif
     
     esp_err_t err = decode_next_native(buf, decode_buffer);
     if (err == ESP_ERR_INVALID_STATE) {
@@ -188,6 +192,9 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
         return -1;
     }
     buf->last_good_native = decode_buffer;
+#if CONFIG_P3A_FRAME_TRACE
+    const int64_t ft_decode_t1 = frame_trace_now_us();
+#endif
 
 #if CONFIG_P3A_PERF_DEBUG
     int64_t t_decode_end = debug_timer_now_us();
@@ -209,7 +216,14 @@ static int render_next_frame(animation_buffer_t *buf, uint8_t *dest_buffer, int 
 #endif
 
     // Upscale to display (PPA for Giphy and museums, CPU for everything else)
+#if CONFIG_P3A_FRAME_TRACE
+    const int64_t ft_upscale_t0 = frame_trace_now_us();
+#endif
     upscale_frame_to_display(buf, decode_buffer, dest_buffer);
+#if CONFIG_P3A_FRAME_TRACE
+    frame_trace_producer_split((uint32_t)(ft_decode_t1 - ft_decode_t0),
+                               (uint32_t)(frame_trace_now_us() - ft_upscale_t0));
+#endif
 
 #if CONFIG_P3A_PERF_DEBUG
     int64_t t_upscale_end = debug_timer_now_us();

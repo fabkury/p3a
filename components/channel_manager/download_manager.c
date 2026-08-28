@@ -17,6 +17,7 @@
  */
 
 #include "download_manager.h"
+#include "frame_trace.h"
 #include "play_scheduler.h"
 #include "storage_eviction.h"
 #include "sntp_sync.h"
@@ -849,6 +850,7 @@ static void download_task(void *arg)
 
         memset(s_task_out_path, 0, sizeof(s_task_out_path));
         ESP_LOGI(TAG, "Downloading: %s", s_dl_req.art_url);
+        frame_trace_mark(FT_MARK_DOWNLOAD, FT_PHASE_BEGIN, 0);
         esp_err_t err;
         if (play_scheduler_is_giphy_channel(s_dl_req.channel_id)) {
             // Giphy channel: use giphy_download_artwork with the entry-aware
@@ -907,6 +909,7 @@ static void download_task(void *arg)
         }
 
         set_busy(false, NULL);
+        frame_trace_mark(FT_MARK_DOWNLOAD, FT_PHASE_END, (uint32_t)(err == ESP_OK ? 0 : 1));
 
         if (err == ESP_OK) {
             // Signal play_scheduler to update LAi using O(1) post_id lookup

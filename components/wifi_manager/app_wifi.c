@@ -15,6 +15,7 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 #include <string.h>
+#include "frame_trace.h"
 #include <stdlib.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -169,6 +170,7 @@ esp_err_t wifi_load_credentials(char *ssid, char *password)
 
 esp_err_t wifi_save_credentials(const char *ssid, const char *password)
 {
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_BEGIN, 7);
     nvs_handle_t nvs_handle;
     esp_err_t err;
 
@@ -193,6 +195,7 @@ esp_err_t wifi_save_credentials(const char *ssid, const char *password)
     }
 
     err = nvs_commit(nvs_handle);
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_END, 7);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to commit NVS");
     }
@@ -204,6 +207,7 @@ esp_err_t wifi_save_credentials(const char *ssid, const char *password)
 
 esp_err_t app_wifi_erase_credentials(void)
 {
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_BEGIN, 8);
     nvs_handle_t nvs_handle;
     esp_err_t err;
 
@@ -224,6 +228,7 @@ esp_err_t app_wifi_erase_credentials(void)
     }
 
     err = nvs_commit(nvs_handle);
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_END, 8);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to commit NVS");
     }

@@ -7,6 +7,7 @@
  */
 
 #include "config_store_internal.h"
+#include "frame_trace.h"
 
 static const char *TAG = "CFG";
 
@@ -391,9 +392,11 @@ static void nvs_write_u16(const char *key, uint16_t val)
 {
     nvs_handle_t h;
     if (cfg_ensure_nvs(&h) != ESP_OK) return;
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_BEGIN, 2);
     nvs_set_u16(h, key, val);
     nvs_commit(h);
     nvs_close(h);
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_END, 2);
 }
 
 uint16_t config_store_get_wifi_reboot_total(void)

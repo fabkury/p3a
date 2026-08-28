@@ -7,6 +7,7 @@
  */
 
 #include "makapix_mqtt.h"
+#include "frame_trace.h"
 #include "makapix_store.h"  // MAKAPIX_PEM_MAX_LEN
 #include "p3a_current_post.h"
 #include "play_scheduler_types.h"  // POST_SOURCE_MAKAPIX
@@ -152,6 +153,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         break;
 
     case MQTT_EVENT_DATA:
+        frame_trace_mark(FT_MARK_MQTT_RX, FT_PHASE_EVENT, (uint32_t)event->data_len);
         // Handle message fragmentation - ESP-IDF MQTT client splits large messages
         // First fragment has topic_len > 0, subsequent fragments have topic_len == 0
         

@@ -35,6 +35,7 @@ idf_component_register(
         p3a_core
         sdio_bus
         event_bus
+        frame_trace
     PRIV_REQUIRES
         wifi_manager
     WHOLE_ARCHIVE

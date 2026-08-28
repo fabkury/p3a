@@ -7,6 +7,7 @@
  */
 
 #include "makapix_store.h"
+#include "frame_trace.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "esp_log.h"
@@ -116,6 +117,7 @@ esp_err_t makapix_store_save_registration(const char *player_key, const char *ho
                                           const char *ca_pem, const char *cert_pem, const char *key_pem,
                                           const char *api_token)
 {
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_BEGIN, 3);
     if (!player_key || !host || !ca_pem || !cert_pem || !key_pem) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -189,6 +191,7 @@ esp_err_t makapix_store_save_registration(const char *player_key, const char *ho
 
     // Commit changes
     err = nvs_commit(nvs_handle);
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_END, 3);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to commit NVS: %s", esp_err_to_name(err));
     } else {
@@ -202,6 +205,7 @@ esp_err_t makapix_store_save_registration(const char *player_key, const char *ho
 
 esp_err_t makapix_store_save_renewed_certs(const char *ca_pem, const char *cert_pem, const char *key_pem)
 {
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_BEGIN, 4);
     if (!ca_pem || !cert_pem || !key_pem) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -242,6 +246,7 @@ esp_err_t makapix_store_save_renewed_certs(const char *ca_pem, const char *cert_
     }
 
     err = nvs_commit(nvs_handle);
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_END, 4);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to commit renewed certs: %s", esp_err_to_name(err));
     } else {
@@ -283,6 +288,7 @@ esp_err_t makapix_store_get_api_token(char *buffer, size_t max_len)
 
 esp_err_t makapix_store_set_api_token(const char *token)
 {
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_BEGIN, 5);
     if (!token || token[0] == '\0') {
         return ESP_ERR_INVALID_ARG;
     }
@@ -297,6 +303,8 @@ esp_err_t makapix_store_set_api_token(const char *token)
     err = nvs_set_str(nvs_handle, KEY_API_TOKEN, token);
     if (err == ESP_OK) {
         err = nvs_commit(nvs_handle);
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_END, 6);
+        frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_END, 5);
     }
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to save api_token: %s", esp_err_to_name(err));
@@ -433,6 +441,7 @@ esp_err_t makapix_store_get_client_key(char *buffer, size_t max_len)
 
 esp_err_t makapix_store_clear(void)
 {
+    frame_trace_mark(FT_MARK_NVS_COMMIT, FT_PHASE_BEGIN, 6);
     nvs_handle_t nvs_handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
     if (err != ESP_OK) {

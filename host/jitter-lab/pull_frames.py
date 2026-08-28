@@ -48,14 +48,20 @@ def main():
     st_path = run_dir / "pull_state.json"
 
     st = {"pid": os.getpid(), "run": a.run, "host": a.host, "started": now_iso(),
-          "next_seq": 0, "pulls": 0, "rows": 0, "errors": 0, "last_ok": None, "last_error": None}
+          "next_seq": 0, "pulls": 0, "rows": 0, "errors": 0, "last_ok": None, "last_error": None,
+          "epoch": 0}
     if st_path.exists():
         try:
             old = json.loads(st_path.read_text(encoding="utf-8"))
             st["next_seq"] = int(old.get("next_seq", 0))
             st["rows"] = int(old.get("rows", 0))
+            st["epoch"] = int(old.get("epoch", 0))
         except Exception:
             pass
+
+    def epoch_csv():
+        # Epoch 0 is frames.csv; a device reboot (ring sequence restarts) opens frames.e<N>.csv.
+        return frames_csv if st["epoch"] == 0 else run_dir / f"frames.e{st['epoch']}.csv"
 
     if a.from_head and st["next_seq"] == 0:
         try:
@@ -75,6 +81,14 @@ def main():
     while True:
         n += 1
         try:
+            # Reboot detection: the device ring restarts at seq 1 after a reset.
+            head = requests.get(f"{a.host}/api/debug/frames/stats", timeout=15).json()["data"]["next_seq"]
+            if int(head) < st["next_seq"] - 8:
+                st["epoch"] += 1
+                st["next_seq"] = 0
+                with (run_dir / "boots.jsonl").open("a", encoding="utf-8") as f:
+                    f.write(json.dumps({"host_ts": now_iso(), "epoch": st["epoch"], "device_head": int(head)}) + "\n")
+                print(f"{now_iso()} DEVICE REBOOT detected: epoch {st['epoch']}, cursor reset", flush=True)
             r = requests.get(f"{a.host}/api/debug/frames", params={"since": st["next_seq"]}, timeout=60)
             r.raise_for_status()
             text = r.text
@@ -85,8 +99,9 @@ def main():
             for ln in lines:
                 if ln.startswith("#next,"):
                     nxt = int(ln.split(",", 1)[1])
-            write_header = not frames_csv.exists() or frames_csv.stat().st_size == 0
-            with frames_csv.open("a", encoding="utf-8", newline="\n") as f:
+            out_csv = epoch_csv()
+            write_header = not out_csv.exists() or out_csv.stat().st_size == 0
+            with out_csv.open("a", encoding="utf-8", newline="\n") as f:
                 if write_header and header:
                     f.write(header + "\n")
                 for ln in rows:

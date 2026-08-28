@@ -56,6 +56,8 @@ static const char *TAG = "http_fetch";
 #define HTTP_FETCH_DEFAULT_RX_BUFFER    4096
 #define HTTP_FETCH_DEFAULT_ATTEMPTS     3
 #define HTTP_FETCH_DEFAULT_CHUNK        (32 * 1024)
+// Alignment that lets the ESP32-P4 SD host DMA directly to/from PSRAM (L2 cache line).
+#define HTTP_FETCH_SD_DMA_ALIGN         128
 #define HTTP_FETCH_DEFAULT_REDIRECTS    5
 #define HTTP_FETCH_DEFAULT_SDIO_WAIT_S  120
 #define HTTP_FETCH_URL_MAX              1024   // working URL + captured Location (manual redirect)
@@ -618,8 +620,15 @@ esp_err_t http_fetch_to_file(const http_fetch_request_t *req,
 
     const size_t chunk_size = req->chunk_size ? req->chunk_size : HTTP_FETCH_DEFAULT_CHUNK;
 
-    uint8_t *chunk = heap_caps_malloc(chunk_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!chunk) chunk = heap_caps_malloc(chunk_size, MALLOC_CAP_8BIT);
+    // Cache-line aligned so the SD host can DMA straight from this PSRAM buffer.
+    // An unaligned PSRAM buffer makes sdmmc_write_sectors bounce 512 bytes at a
+    // time (one SD command per sector: 64 commands per 32 KB chunk), which in
+    // RUN-05 of the jitter work stream cost 72 ms median / 345 ms p99 per chunk
+    // and stalled playback (docs/jitter/PLAN.md, H3b). Size is rounded up to
+    // the same boundary; fwrite still uses chunk_size.
+    const size_t chunk_alloc = (chunk_size + HTTP_FETCH_SD_DMA_ALIGN - 1) & ~(size_t)(HTTP_FETCH_SD_DMA_ALIGN - 1);
+    uint8_t *chunk = heap_caps_aligned_alloc(HTTP_FETCH_SD_DMA_ALIGN, chunk_alloc, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!chunk) chunk = heap_caps_aligned_alloc(HTTP_FETCH_SD_DMA_ALIGN, chunk_alloc, MALLOC_CAP_8BIT);
     if (!chunk) {
         ESP_LOGE(TAG, "Failed to allocate %zu-byte chunk buffer", chunk_size);
         return ESP_ERR_NO_MEM;

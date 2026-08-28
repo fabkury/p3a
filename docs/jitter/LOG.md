@@ -144,3 +144,12 @@ cosmetic fix (`core=any` printing) with it.
 **Next:** let RUN-02 run ≥ 4 h; then `soak.ps1 -Stop -Run RUN-20260828-02`,
 analyze, write `docs/jitter/runs/RUN-20260828-02.md`, update README status,
 push-notify Fab, commit.
+
+## 2026-08-28 — RUN-02 aborted (gating rule), RUN-03 started
+
+- RUN-02 reported a producer-explained 293 ms frame on a 40 ms artwork whose
+  producer time swings 80–137 ms (`runs/RUN-20260828-02.md`). Anomaly rule is
+  now `produce_us >= 2x EMA` only. Rebuilt + flashed.
+- RUN-20260828-03 started ~14:14 local, same parameters as RUN-02.
+
+**Next:** let RUN-03 run ≥ 4 h; stop, analyze, summarize, notify Fab, commit.

@@ -209,8 +209,9 @@ void frame_trace_frame(const ft_frame_in_t *in)
             s_ema_produce_us = s_ema_produce_us - (s_ema_produce_us >> 3) + (produce_us >> 3);
         }
         const bool producer_late = (margin < 0) && ((int64_t)-margin >= (int64_t)lateness - 16667);
-        const bool produce_anomalous = produce_us >= (3u * s_ema_produce_us) ||
-                                       produce_us >= s_ema_produce_us + (uint32_t)in->duration_ms * 1000u;
+        // 2x the running mean: heavy artworks vary +-50% frame to frame (RUN-02:
+        // 80-137 ms on a 90 ms mean), a starved producer is far beyond that.
+        const bool produce_anomalous = produce_us >= (2u * s_ema_produce_us);
         const bool overrun_explained = producer_late && !produce_anomalous;
         if (lateness >= FT_WARN_US) {
             s_stats.stalls_warn++;

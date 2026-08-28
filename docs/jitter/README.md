@@ -63,7 +63,7 @@ Uniform slow playback of artworks the chip cannot decode in time is accepted.
 | Dev device UART | **COM5** (CH343 bridge, 115200). CLAUDE.md's "COM11" is stale for this unit. Probe: `host/jitter-lab/find_port.ps1` |
 | Opening COM5 with .NET `SerialPort` or plain `idf.py monitor` **resets the board**. `host/jitter-lab/serial_logger.py` (pyserial, DTR/RTS low before open) does **not** (verified). `idf.py flash` needs COM5 free: stop the logger first |
 | USB-Serial-JTAG | not wired to the laptop; no OpenOCD/SystemView. In-firmware tracing only |
-| Device LAN name | `http://p3a.local` (mDNS resolves from the laptop, ~15 ms RTT) |
+| Device LAN name | `http://p3a-fab.local` (device name "fab", hostname `p3a-fab`; IP 192.168.4.87 on 2026-08-28). **`p3a.local` is a DIFFERENT, unrelated p3a on this LAN** (192.168.4.33): tooling refuses any host whose `/api/device-name` hostname is not `p3a-fab` |
 | SD root | `sdcard_root = /p3a2` (not the default `/p3a`); all SD paths resolve via `sd_path` |
 | Firmware baseline | main @ `dd8fb410`, version in root `CMakeLists.txt` |
 | Panel | 720×720 @ 60 Hz (`VSYNC_PERIOD_US 16667` in `main/display_renderer.c`) |
@@ -99,7 +99,7 @@ sdkconfig.diag.defaults   diag overlay (trace on, run-time stats, dev endpoints)
    next action. If it says a soak/run is in progress, check
    `host/jitter-lab/runs/<id>/` for a live logger (`state.json`) before starting
    anything that touches the device.
-3. Check the device: `curl http://p3a.local/api/state`. If unreachable, check
+3. Check the device: `curl http://p3a-fab.local/api/state`. If unreachable, check
    COM5 is free (a logger may hold it) before opening it, since opening resets
    the board.
 4. Do the next action. Append a `LOG.md` entry when you stop, always ending with

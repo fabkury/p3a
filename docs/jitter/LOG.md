@@ -249,3 +249,11 @@ with the A/B table, update README status (Phase 3 baseline done, Phase 4/5
 in progress), notify Fab. If stalls persist: Phase 4 provocations (sd
 PSRAM-vs-internal, moving-bar) and the H4 question.
 
+## 2026-08-28 — Device renamed: p3a-fab.local; p3a.local is another unit
+
+- Fab named the dev unit "fab" (hostname `p3a-fab`, the 15:33 config-save +
+  reboot). `p3a.local` now resolves to a different, unrelated p3a
+  (192.168.4.33). All tooling defaults switched to `p3a-fab.local`, and the
+  python tools + `soak.ps1` now refuse any host whose `/api/device-name`
+  hostname is not `p3a-fab`. RUN-07 was already using the IP (192.168.4.87).
+

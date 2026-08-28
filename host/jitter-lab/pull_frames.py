@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """pull_frames.py -- incremental HTTP puller for the frame-trace ring (jitter work stream).
 
-    python host/jitter-lab/pull_frames.py RUN-20260828-01 [--host http://p3a.local] [--every 120] [--hours 4] [--once]
+    python host/jitter-lab/pull_frames.py RUN-20260828-01 [--host http://p3a-fab.local] [--every 120] [--hours 4] [--once]
 
 Writes into host/jitter-lab/runs/<RUN>/:
     frames.csv      all ring rows ever seen (device CSV format, one header)
@@ -24,6 +24,17 @@ import requests
 
 HERE = Path(__file__).resolve().parent
 
+EXPECTED_HOSTNAME = "p3a-fab"   # the dev unit (Fab renamed it 2026-08-28); another p3a may answer at p3a.local
+
+
+def assert_dev_unit(host: str):
+    """Refuse to touch any device that is not the jitter dev unit."""
+    r = requests.get(f"{host}/api/device-name", timeout=10)
+    r.raise_for_status()
+    hn = r.json().get("hostname")
+    if hn != EXPECTED_HOSTNAME:
+        raise SystemExit(f"REFUSING: {host} reports hostname {hn!r}, expected {EXPECTED_HOSTNAME!r} (wrong device?)")
+
 
 def now_iso():
     return dt.datetime.now().isoformat(timespec="milliseconds")
@@ -32,13 +43,14 @@ def now_iso():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("run")
-    ap.add_argument("--host", default="http://p3a.local")
+    ap.add_argument("--host", default="http://p3a-fab.local")
     ap.add_argument("--every", type=float, default=120.0)
     ap.add_argument("--hours", type=float, default=0.0, help="stop after this many hours (0 = forever)")
     ap.add_argument("--once", action="store_true")
     ap.add_argument("--from-head", action="store_true", help="start at the ring head (ignore entries recorded before the run)")
     ap.add_argument("--runs-dir", default=str(HERE / "runs"))
     a = ap.parse_args()
+    assert_dev_unit(a.host)
 
     run_dir = Path(a.runs_dir) / a.run
     run_dir.mkdir(parents=True, exist_ok=True)

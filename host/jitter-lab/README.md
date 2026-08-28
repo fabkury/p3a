@@ -10,7 +10,7 @@ both present on the laptop) or PowerShell 7.
   pre-set low and **does not reset the board** (verified 2026-08-28: uptime kept
   climbing across a logger start). .NET `SerialPort` and `idf.py monitor`
   without `--no-reset` DO reset it. `idf.py flash` always resets (by design).
-- Device HTTP: `http://p3a.local`. `GET /config` contains API keys:
+- Device HTTP: `http://p3a-fab.local`. `GET /config` contains API keys:
   `snapshot_settings.py` redacts every `*_api_key`; nothing else reads it.
 - Raw run data goes to `host/jitter-lab/runs/<RUN-ID>/` (gitignored).
   Committed summaries go to `docs/jitter/runs/<RUN-ID>.md`.

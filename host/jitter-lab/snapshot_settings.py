@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """snapshot_settings.py -- save/restore the dev device's runtime settings around a run.
 
-    python host/jitter-lab/snapshot_settings.py save    RUN-20260828-01 [--host http://p3a.local]
+    python host/jitter-lab/snapshot_settings.py save    RUN-20260828-01 [--host http://p3a-fab.local]
     python host/jitter-lab/snapshot_settings.py restore RUN-20260828-01
     python host/jitter-lab/snapshot_settings.py set     RUN-20260828-01 --show-fps 1 --dwell 30 --playset "Work mix"
 
@@ -20,6 +20,17 @@ from pathlib import Path
 import requests
 
 HERE = Path(__file__).resolve().parent
+
+EXPECTED_HOSTNAME = "p3a-fab"   # the dev unit (Fab renamed it 2026-08-28); another p3a may answer at p3a.local
+
+
+def assert_dev_unit(host: str):
+    """Refuse to touch any device that is not the jitter dev unit."""
+    r = requests.get(f"{host}/api/device-name", timeout=10)
+    r.raise_for_status()
+    hn = r.json().get("hostname")
+    if hn != EXPECTED_HOSTNAME:
+        raise SystemExit(f"REFUSING: {host} reports hostname {hn!r}, expected {EXPECTED_HOSTNAME!r} (wrong device?)")
 RESTORE_CONFIG_FIELDS = ("show_fps", "max_speed_playback", "brightness", "rotation")
 
 
@@ -69,7 +80,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["save", "restore", "set", "show"])
     ap.add_argument("run")
-    ap.add_argument("--host", default="http://p3a.local")
+    ap.add_argument("--host", default="http://p3a-fab.local")
     ap.add_argument("--runs-dir", default=str(HERE / "runs"))
     ap.add_argument("--show-fps", type=int)
     ap.add_argument("--max-speed", type=int)
@@ -78,6 +89,7 @@ def main():
     ap.add_argument("--dwell", type=int)
     ap.add_argument("--playset")
     a = ap.parse_args()
+    assert_dev_unit(a.host)
 
     run_dir = Path(a.runs_dir) / a.run
     run_dir.mkdir(parents=True, exist_ok=True)

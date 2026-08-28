@@ -1,6 +1,6 @@
 # soak.ps1 — start/stop/status of an unattended soak run (jitter work stream).
 #
-#   pwsh host/jitter-lab/soak.ps1 -Start  -Run RUN-20260828-01 [-Port COM5] [-Host http://p3a.local] [-Every 120] [-Hours 4] [-Note "baseline, Work mix"]
+#   pwsh host/jitter-lab/soak.ps1 -Start  -Run RUN-20260828-01 [-Port COM5] [-Host http://p3a-fab.local] [-Every 120] [-Hours 4] [-Note "baseline, Work mix"]
 #   pwsh host/jitter-lab/soak.ps1 -Status -Run RUN-20260828-01
 #   pwsh host/jitter-lab/soak.ps1 -Stop   -Run RUN-20260828-01        # stops logger+puller, runs analyze.py
 #   pwsh host/jitter-lab/soak.ps1 -NewRunId                            # prints the next free RUN-YYYYMMDD-NN
@@ -12,7 +12,7 @@ param(
     [switch]$Start, [switch]$Stop, [switch]$Status, [switch]$NewRunId,
     [string]$Run,
     [string]$Port = "COM5",
-    [string]$DeviceHost = "http://p3a.local",
+    [string]$DeviceHost = "http://p3a-fab.local",
     [double]$Every = 120,
     [double]$Hours = 0,
     [string]$Note = ""
@@ -37,6 +37,8 @@ function Read-Pids { if (Test-Path $pids) { Get-Content $pids -Raw | ConvertFrom
 function Alive($id) { if (-not $id) { return $false }; try { $null -ne (Get-Process -Id $id -ErrorAction Stop) } catch { $false } }
 
 if ($Start) {
+    $hn = (Invoke-RestMethod "$DeviceHost/api/device-name" -TimeoutSec 10).hostname
+    if ($hn -ne "p3a-fab") { throw "REFUSING: $DeviceHost reports hostname '$hn', expected 'p3a-fab' (wrong device?)" }
     New-Item -ItemType Directory -Force $dir | Out-Null
     $existing = Read-Pids
     if ($existing -and (Alive $existing.logger)) { throw "logger already running for $Run (pid $($existing.logger))" }

@@ -8,7 +8,7 @@ vertical bar sweeping left to right plus a frame counter strip, at a fixed
 frame delay. Decode cost is tiny and constant, so any lateness is a stall
 by construction (no producer overrun possible). Upload with:
 
-    curl -F "file=@bar_30fps.gif" http://p3a.local/upload
+    curl -F "file=@bar_30fps.gif" http://p3a-fab.local/upload
 """
 import argparse
 from pathlib import Path

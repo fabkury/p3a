@@ -206,3 +206,22 @@ sweep, check SD host/DMA cache behaviour.
 fix candidates (SD write path: multi-block writes / internal bounce buffer /
 lower SD clock check; upscale_top off core 0).
 
+## 2026-08-28 — H3b: SD DMA bounce path; candidate fix committed (untested); RUN-06 running
+
+- Mechanism (IDF 5.5.4 `sdmmc_cmd.c` + `sdmmc_host.c`): on the P4 the SD host
+  DMAs directly to/from PSRAM only if address and size are 128-byte aligned;
+  otherwise 512 B per SD command via an internal bounce buffer. `http_fetch`
+  chunk and `loader_service` file buffer are unaligned PSRAM mallocs → the
+  slow writes and the 512 B read storms seen in RUN-05.
+- Candidate fix `065d6c90` (aligned allocs in both places) is committed but
+  NOT built or flashed: RUN-06 (started 14:42, diag 6d869d30, unfixed) is the
+  "before"; RUN-07 with the fix is the "after". Keep RUN-06 ≥ 1 h.
+- Still open: why a slow SD write inflates the CPU upscale on both cores
+  (H4-style contention) rather than merely being slow. If the fix removes the
+  stalls the question becomes academic; if not, Phase 4 provocations
+  (PSRAM-vs-internal buffers, 512 B vs 32 KB) follow.
+
+**Next:** at ~15:45 stop RUN-06 (`soak.ps1 -Stop`), analyze, write
+`runs/RUN-20260828-06.md`; build+flash diag with `065d6c90`, start RUN-07,
+compare stall rate, sd_write/sd_read durations and counts, upscale anomalies.
+

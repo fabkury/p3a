@@ -257,3 +257,19 @@ PSRAM-vs-internal, moving-bar) and the H4 question.
   python tools + `soak.ps1` now refuse any host whose `/api/device-name`
   hostname is not `p3a-fab`. RUN-07 was already using the IP (192.168.4.87).
 
+## 2026-08-28 — A/B verdict: aligned SD DMA buffers remove the stalls; RUN-08 started
+
+- RUN-07 (`runs/RUN-20260828-07.md`, table from `compare_runs.py`): 0 stalls,
+  0 warns, 2 anomalies in 1.11 h vs 32 / 22 / 280 in RUN-06's 0.85 h. SD write
+  median 70 → 4.7 ms; 27 % → 2.6 % of wall time inside SD writes.
+- README status moved to Phase 5. Phase 4 provocations shelved unless RUN-08
+  shows residual stalls.
+- RUN-20260828-08 started 17:04 (12 h puller, hourly heartbeat monitor,
+  every UART stall report surfaces).
+
+**Next:** let RUN-08 run overnight. Then: analyze against the pass bar; if
+clean, (a) consider the same alignment for other SD writers (channel cache
+saves, playlist writes, `.404` markers are tiny; check `fs_atomic`), (b) decide
+with Fab whether fix 1 goes to main now (it is a release-safe 10-line change),
+(c) look at the 1.15 s flash op from RUN-06, (d) Phase 6 catch-up policy.
+

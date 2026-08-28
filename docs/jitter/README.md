@@ -11,16 +11,16 @@ work before checking **Current status** and **Resume protocol** below.
 
 ## Current status
 
-**Phase: 1+2 done (2026-08-28), device-validated. Next: Phase 3 — baseline soak.**
+**Phase 5 in progress (2026-08-28): first fix (H3b, aligned SD DMA buffers, `065d6c90`) verified A/B: 37.7 stalls/h → 0 in 1.1 h. RUN-08 12 h confirmation soak running.**
 
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 0 | Foundation: branch, docs, device recon, signing, tooling skeleton | done 2026-08-28 |
 | 1 | Firmware instrumentation (`CONFIG_P3A_FRAME_TRACE`): frame ring buffer, event markers, stall detector w/ UART report, `/api/debug/frames` CSV, overlay tick | done 2026-08-28 — `components/frame_trace`, validated on device (forced core-1 hog → 177 ms stall detected, reported, attributed) |
 | 2 | Host tooling `host/jitter-lab/`: persistent serial logger, HTTP puller, analyzer, run archiver | done 2026-08-28 — reset-free logger verified; `soak.ps1` orchestrates |
-| 3 | Baseline soak on normal workload (multi-hour); attribution table | not started |
-| 4 | Provocation runs per hypothesis (H1..H5 in PLAN.md) | not started |
-| 5 | Fixes, one per confirmed cause, each with before/after soak | not started |
+| 3 | Baseline soak on normal workload (multi-hour); attribution table | done 2026-08-28 — RUN-04/05/06: stalls = single-frame upscale blow-ups during SD writes; SD bounce path (H3b) identified |
+| 4 | Provocation runs per hypothesis (H1..H5 in PLAN.md) | partially skipped — the A/B (RUN-06 vs RUN-07) was decisive; provocations kept in reserve for residual stalls |
+| 5 | Fixes, one per confirmed cause, each with before/after soak | in progress — fix 1 `065d6c90` (aligned PSRAM SD buffers): 32 → 0 stalls, SD write median 70 → 4.7 ms; RUN-08 12 h confirmation running |
 | 6 | Catch-up policy decision (rush / drop / resync) with data | not started |
 | 7 | Final soak on plain build (trace on, no diag overlay) against pass bar; report; merge | not started |
 

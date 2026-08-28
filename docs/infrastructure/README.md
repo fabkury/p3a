@@ -17,7 +17,7 @@ Comprehensive technical documentation for the **p3a** firmware — an ESP32-P4-p
 ## Quick Links
 
 - **Repository**: https://github.com/fabkury/p3a
-- **Hardware**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/product/arduino/boards-kits/esp32-p4/esp32-p4-wifi6-touch-lcd-4b.htm)
+- **Hardware**: [Waveshare ESP32-P4-WIFI6-Touch-LCD-4B](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-4b.htm)
 - **ESP-IDF**: https://docs.espressif.com/projects/esp-idf/
 - **Makapix Club**: https://makapix.club/
 

@@ -225,3 +225,10 @@ lower SD clock check; upscale_top off core 0).
 `runs/RUN-20260828-06.md`; build+flash diag with `065d6c90`, start RUN-07,
 compare stall rate, sd_write/sd_read durations and counts, upscale anomalies.
 
+## 2026-08-28 — Blue flashes confirmed gone (Fab)
+
+- Fab confirms the one-frame blue flashes are gone on diag builds ≥ f1134ce4
+  (no periodic `uxTaskGetSystemState`). H6 (interrupts-off windows on core 0
+  drop panel frames) stays in PLAN as a verified mechanism; the trace cannot
+  see it, so any future critical-section audit needs the glass as its judge.
+

@@ -67,6 +67,9 @@ static const char *const s_kind_names[FT_MARK_COUNT_] = {
     [FT_MARK_SD_WRITE]    = "sd_write",
     [FT_MARK_RESYNC]      = "resync",
     [FT_MARK_MODE_SWITCH] = "mode_switch",
+    [FT_MARK_SD_READ]     = "sd_read",
+    [FT_MARK_FLASH_OP]    = "flash_op",
+    [FT_MARK_VERIFY]      = "verify",
     [FT_MARK_USER]        = "user",
 };
 

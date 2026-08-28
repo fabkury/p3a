@@ -172,3 +172,20 @@ push-notify Fab, commit.
 (same parameters) and monitor; add H6 to PLAN §3 and a `cpu0_critical`
 provoke kind in Phase 4.
 
+## 2026-08-28 — RUN-04: first genuine stalls; probes added; RUN-05
+
+- RUN-04 (5 min, `runs/RUN-20260828-04.md`): 12 in-scope stalls. Signature is
+  a single-frame upscale blow-up (14 → 50–280 ms) in bursts of 15–30 s every
+  ~70 s, artwork-independent; both upscale workers slow rather than preempted;
+  core 0 saturated by download_mgr without a download (verify sweep). SD card
+  logged write failures at the same time. Leading hypotheses now H3/H4.
+- Probes for RUN-05: `--wrap` of sdmmc sector I/O and esp_flash ops (diag
+  only, `frame_trace_wraps.c`), `verify` marks, analyzer anomaly section.
+- Reflashed 14:2x; RUN-20260828-05 started.
+
+**Next:** analyze RUN-05 after ≥ 30 min against the new marks (sd_read /
+sd_write / flash_op / verify lift on producer anomalies). If SD I/O is the
+driver, Phase 4 provoke = `sd` read storm + verify sweep on the moving-bar
+animation; Phase 5 candidates: move upscale_top off core 0, throttle the verify
+sweep, check SD host/DMA cache behaviour.
+

@@ -61,6 +61,9 @@ def load_rows(path: Path):
                     })
             except (KeyError, ValueError):
                 continue
+    # Dedupe by seq (a manual pull during a running soak appends duplicates).
+    frames = list({f["seq"]: f for f in frames}.values())
+    marks = list({m["seq"]: m for m in marks}.values())
     frames.sort(key=lambda x: x["seq"])
     marks.sort(key=lambda x: x["seq"])
     return frames, marks
@@ -246,6 +249,40 @@ def main():
         w(f"- count {len(overrun)}, worst lateness {max(f['late'] for f in overrun)/1000:.0f} ms, worst produce {max(f['produce'] for f in overrun)/1000:.0f} ms")
         gens = Counter(f["gen"] for f in overrun)
         w(f"- by generation (artwork epoch): {dict(gens.most_common(10))}\n")
+
+    # ---- producer anomalies: produce_us >= 3x the generation median. These are
+    # the raw events behind stalls (the 3-buffer slack hides some from the
+    # lateness metric) and give many more samples for attribution.
+    med_up = {g: statistics.median([f["upscale"] for f in valid if f["gen"] == g] or [0]) for g in by_gen}
+    anomalies = [f for f in valid if f["produce"] >= 3 * max(med_gen.get(f["gen"], 0), 1000)]
+    w("## Producer anomalies (produce_us >= 3x generation median)\n")
+    w(f"- count {len(anomalies)} of {len(valid)} valid frames ({100.0*len(anomalies)/max(len(valid),1):.2f}%)")
+    if anomalies:
+        up_dom = sum(1 for f in anomalies if f["upscale"] - med_up.get(f["gen"], 0) > f["decode"])
+        w(f"- dominated by upscale: {up_dom}, by decode: {len(anomalies) - up_dom}")
+        # co-occurrence per mark kind vs base rate (fraction of ALL valid frames inside that kind's intervals)
+        def covered(kind, t):
+            for i in intervals:
+                if i["kind"] != kind: continue
+                t1 = i["t1"] if i["t1"] is not None else t
+                if i["t0"] - 20000 <= t <= t1 + 20000:
+                    return True
+            return False
+        kinds = sorted(set(i["kind"] for i in intervals))
+        w("\n| kind | anomalies inside/near kind interval | base rate (all frames) | lift |\n|---|---|---|---|")
+        sample = valid if len(valid) <= 20000 else valid[::max(1, len(valid)//20000)]
+        for k in kinds:
+            if kind_base.get(k, 0) == 0: continue
+            na = sum(1 for f in anomalies if covered(k, f["t"]))
+            nb = sum(1 for f in sample if covered(k, f["t"]))
+            ra = na / len(anomalies); rb = nb / max(len(sample), 1)
+            lift = (ra / rb) if rb > 0 else float("inf")
+            w(f"| {k} | {na} ({100*ra:.0f}%) | {100*rb:.0f}% | {lift:.1f}x |")
+        # burstiness: anomalies per 10 s bucket
+        buckets = Counter(int(f["t"] // 10_000_000) for f in anomalies)
+        hot = sorted(buckets.items(), key=lambda kv: -kv[1])[:12]
+        w("\n- hottest 10 s buckets (t_s: count): " + ", ".join(f"{b*10}: {n}" for b, n in sorted(hot)))
+    w("")
 
     # mark inventory
     w("## Mark inventory\n")

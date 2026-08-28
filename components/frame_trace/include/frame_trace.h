@@ -59,6 +59,9 @@ typedef enum {
     FT_MARK_SD_WRITE,       // arg: bytes
     FT_MARK_RESYNC,         // arg: drift us (consumer forfeited time)
     FT_MARK_MODE_SWITCH,    // arg: new display mode
+    FT_MARK_SD_READ,        // arg: bytes (link-time wrap of sdmmc_read_sectors, diag builds)
+    FT_MARK_FLASH_OP,       // arg: (op<<28)|len, op 1 read 2 write 3 erase (wrap of esp_flash_*)
+    FT_MARK_VERIFY,         // lai_verify_run_slice (download_mgr sweep)
     FT_MARK_USER = 32,      // free-form, arg-defined
     FT_MARK_COUNT_ = 48,
 } ft_mark_kind_t;

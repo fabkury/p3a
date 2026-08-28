@@ -697,7 +697,9 @@ static void download_task(void *arg)
         // dominated by multi-second downloads, while downloads stay active.
         lai_verify_result_t verify_state = LAI_VERIFY_IDLE;
         if (lai_verify_has_work()) {
+            frame_trace_mark(FT_MARK_VERIFY, FT_PHASE_BEGIN, 0);
             verify_state = lai_verify_run_slice();
+            frame_trace_mark(FT_MARK_VERIFY, FT_PHASE_END, (uint32_t)verify_state);
         }
 
         // Resolve one pending museum entry per iteration. For Rijks

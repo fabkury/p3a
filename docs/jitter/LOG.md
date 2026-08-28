@@ -232,3 +232,20 @@ compare stall rate, sd_write/sd_read durations and counts, upscale anomalies.
   drop panel frames) stays in PLAN as a verified mechanism; the trace cannot
   see it, so any future critical-section audit needs the glass as its judge.
 
+## 2026-08-28 — RUN-06 (before) closed; RUN-07 (after, aligned SD buffers) started
+
+- RUN-06 (`runs/RUN-20260828-06.md`): 32 stalls in 0.85 h (37.7/h), 280
+  producer anomalies (274 upscale), every stall with an sd_write in window;
+  11 810 SD writes at 70 ms median, 27 % of wall time inside SD writes.
+- Flashed diag with 065d6c90 (http_fetch chunk + loader_service buffer
+  128-byte aligned → direct SD DMA). RUN-20260828-07 started 15:50, same
+  playset, 30 s pulls, monitor armed (also reports reboots via boots.jsonl).
+- Compare after ≥ 1 h: stall rate, anomalies, sd_write median/count,
+  sd_read count. Expected if H3b is right: sd_write median drops ≥ 10x,
+  sd_read count collapses (multi-sector reads), anomalies and stalls fall.
+
+**Next:** ~16:55 stop RUN-07, analyze, write `runs/RUN-20260828-07.md`
+with the A/B table, update README status (Phase 3 baseline done, Phase 4/5
+in progress), notify Fab. If stalls persist: Phase 4 provocations (sd
+PSRAM-vs-internal, moving-bar) and the H4 question.
+

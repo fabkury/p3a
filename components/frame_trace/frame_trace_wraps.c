@@ -8,7 +8,7 @@
  *        CMakeLists.txt adds the --wrap options iff CONFIG_P3A_FRAME_TRACE, so
  *        release binaries do not contain these symbols at all.
  *
- * Marks: FT_MARK_SD_READ / FT_MARK_SD_WRITE  arg = bytes
+ * Marks (one span entry per op, duration in lateness_us): FT_MARK_SD_READ / FT_MARK_SD_WRITE  arg = bytes
  *        FT_MARK_FLASH_OP                     arg = (op << 28) | length, op 1 read, 2 write, 3 erase
  */
 
@@ -27,40 +27,40 @@ esp_err_t __real_esp_flash_erase_region(esp_flash_t *chip, uint32_t start, uint3
 
 esp_err_t __wrap_sdmmc_read_sectors(sdmmc_card_t *card, void *dst, size_t start_block, size_t block_count)
 {
-    frame_trace_mark(FT_MARK_SD_READ, FT_PHASE_BEGIN, (uint32_t)(block_count * 512));
+    const int64_t t0 = frame_trace_now_us();
     esp_err_t r = __real_sdmmc_read_sectors(card, dst, start_block, block_count);
-    frame_trace_mark(FT_MARK_SD_READ, FT_PHASE_END, (uint32_t)(block_count * 512));
+    frame_trace_mark_span(FT_MARK_SD_READ, t0, (uint32_t)(block_count * 512));
     return r;
 }
 
 esp_err_t __wrap_sdmmc_write_sectors(sdmmc_card_t *card, const void *src, size_t start_block, size_t block_count)
 {
-    frame_trace_mark(FT_MARK_SD_WRITE, FT_PHASE_BEGIN, (uint32_t)(block_count * 512));
+    const int64_t t0 = frame_trace_now_us();
     esp_err_t r = __real_sdmmc_write_sectors(card, src, start_block, block_count);
-    frame_trace_mark(FT_MARK_SD_WRITE, FT_PHASE_END, (uint32_t)(block_count * 512));
+    frame_trace_mark_span(FT_MARK_SD_WRITE, t0, (uint32_t)(block_count * 512));
     return r;
 }
 
 esp_err_t __wrap_esp_flash_read(esp_flash_t *chip, void *buffer, uint32_t address, uint32_t length)
 {
-    frame_trace_mark(FT_MARK_FLASH_OP, FT_PHASE_BEGIN, (1u << 28) | (length & 0x0FFFFFFFu));
+    const int64_t t0 = frame_trace_now_us();
     esp_err_t r = __real_esp_flash_read(chip, buffer, address, length);
-    frame_trace_mark(FT_MARK_FLASH_OP, FT_PHASE_END, (1u << 28) | (length & 0x0FFFFFFFu));
+    frame_trace_mark_span(FT_MARK_FLASH_OP, t0, (1u << 28) | (length & 0x0FFFFFFFu));
     return r;
 }
 
 esp_err_t __wrap_esp_flash_write(esp_flash_t *chip, const void *buffer, uint32_t address, uint32_t length)
 {
-    frame_trace_mark(FT_MARK_FLASH_OP, FT_PHASE_BEGIN, (2u << 28) | (length & 0x0FFFFFFFu));
+    const int64_t t0 = frame_trace_now_us();
     esp_err_t r = __real_esp_flash_write(chip, buffer, address, length);
-    frame_trace_mark(FT_MARK_FLASH_OP, FT_PHASE_END, (2u << 28) | (length & 0x0FFFFFFFu));
+    frame_trace_mark_span(FT_MARK_FLASH_OP, t0, (2u << 28) | (length & 0x0FFFFFFFu));
     return r;
 }
 
 esp_err_t __wrap_esp_flash_erase_region(esp_flash_t *chip, uint32_t start, uint32_t len)
 {
-    frame_trace_mark(FT_MARK_FLASH_OP, FT_PHASE_BEGIN, (3u << 28) | (len & 0x0FFFFFFFu));
+    const int64_t t0 = frame_trace_now_us();
     esp_err_t r = __real_esp_flash_erase_region(chip, start, len);
-    frame_trace_mark(FT_MARK_FLASH_OP, FT_PHASE_END, (3u << 28) | (len & 0x0FFFFFFFu));
+    frame_trace_mark_span(FT_MARK_FLASH_OP, t0, (3u << 28) | (len & 0x0FFFFFFFu));
     return r;
 }

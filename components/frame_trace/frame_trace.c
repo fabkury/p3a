@@ -114,7 +114,7 @@ static uint32_t ft_task_tag(void)
 // Writers
 // ---------------------------------------------------------------------------
 
-void frame_trace_mark(ft_mark_kind_t kind, ft_phase_t phase, uint32_t arg)
+static void ft_mark_impl(ft_mark_kind_t kind, ft_phase_t phase, uint32_t arg, int64_t now_us, int32_t duration_us)
 {
     if (!s_ring) return;
     uint32_t seq;
@@ -123,8 +123,8 @@ void frame_trace_mark(ft_mark_kind_t kind, ft_phase_t phase, uint32_t arg)
     e->kind = (uint8_t)kind;
     e->phase = (uint8_t)phase;
     e->flags = 0;
-    e->t_us = esp_timer_get_time();
-    e->lateness_us = 0;
+    e->t_us = now_us;
+    e->lateness_us = duration_us;
     e->ready_margin_us = 0;
     e->produce_us = 0;
     e->decode_us = 0;
@@ -138,6 +138,18 @@ void frame_trace_mark(ft_mark_kind_t kind, ft_phase_t phase, uint32_t arg)
     e->task_tag = ft_task_tag();
     ft_publish(e, seq);
     __atomic_fetch_add(&s_stats.marks, 1, __ATOMIC_RELAXED);
+}
+
+void frame_trace_mark(ft_mark_kind_t kind, ft_phase_t phase, uint32_t arg)
+{
+    ft_mark_impl(kind, phase, arg, esp_timer_get_time(), 0);
+}
+
+void frame_trace_mark_span(ft_mark_kind_t kind, int64_t t0_us, uint32_t arg)
+{
+    int64_t now = esp_timer_get_time();
+    int64_t d = now - t0_us;
+    ft_mark_impl(kind, FT_PHASE_END, arg, now, (d > INT32_MAX) ? INT32_MAX : (int32_t)(d < 0 ? 0 : d));
 }
 
 static void ft_worst_update(int64_t now_us, int32_t lateness_us)
@@ -433,9 +445,9 @@ static void ft_print_entry(const ft_entry_t *e)
                e->decode_us, e->upscale_us, e->free_wait_us, e->vsync_wait_us,
                (unsigned)e->duration_ms, (unsigned)e->queue_depth, (unsigned)e->flags, e->arg);
     } else {
-        printf("JTR|M %" PRIu32 " %lld %s %u %" PRIu32 " %u 0x%08" PRIx32 "\n",
+        printf("JTR|M %" PRIu32 " %lld %s %u %" PRIu32 " %u 0x%08" PRIx32 " %" PRId32 "\n",
                e->seq, (long long)e->t_us, frame_trace_mark_kind_name(e->kind), (unsigned)e->phase,
-               e->arg, (unsigned)e->core, e->task_tag);
+               e->arg, (unsigned)e->core, e->task_tag, e->lateness_us);
     }
 }
 

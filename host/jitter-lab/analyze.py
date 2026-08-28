@@ -58,6 +58,7 @@ def load_rows(path: Path):
                     marks.append({
                         "seq": int(r["seq"]), "t": int(r["t_us"]), "kind": r["kind"], "phase": int(r["phase"] or 0),
                         "arg": int(r["arg"] or 0), "core": int(r["core"] or 0), "task": r["task_tag"],
+                        "dur": int(r["lateness_us"] or 0),   # span marks carry their duration here
                     })
             except (KeyError, ValueError):
                 continue
@@ -77,6 +78,9 @@ def pair_marks(marks):
         key = (m["kind"], m["arg"], m["task"])
         if m["phase"] == 1:
             open_by_key[key] = m
+        elif m["phase"] == 2 and m.get("dur", 0) > 0 and key not in open_by_key:
+            # span mark: one entry, END-stamped, duration known
+            intervals.append({"kind": m["kind"], "arg": m["arg"], "task": m["task"], "t0": m["t"] - m["dur"], "t1": m["t"], "core": m["core"], "dangling": False})
         elif m["phase"] == 2:
             b = open_by_key.pop(key, None)
             if b is None:
@@ -140,14 +144,21 @@ def main():
     kind_base = Counter(i["kind"] for i in intervals)
     kind_hits = Counter()
     stall_details = []
+    import bisect as _bs
+    iv_sorted = sorted(intervals, key=lambda x: x["t0"])
+    iv_starts = [i["t0"] for i in iv_sorted]
     for f in stalls:
         t_present = f["t"]
         t_from = t_present - f["late"] - window_us
         hits = []
-        for i in intervals:
+        j = _bs.bisect_right(iv_starts, t_present)
+        for i in iv_sorted[max(0, j - 4000):j]:
             t1 = i["t1"] if i["t1"] is not None else t_present
-            if i["t0"] <= t_present and t1 >= t_from:
+            if t1 >= t_from:
                 hits.append(i)
+        if len(hits) > 60:
+            # keep the long/rare ones readable: drop sub-millisecond spans beyond the first 60
+            hits = sorted(hits, key=lambda i: -(((i["t1"] if i["t1"] is not None else t_present) - i["t0"])))[:60]
         for k in set(i["kind"] for i in hits):
             kind_hits[k] += 1
         stall_details.append((f, hits))
@@ -261,11 +272,21 @@ def main():
         up_dom = sum(1 for f in anomalies if f["upscale"] - med_up.get(f["gen"], 0) > f["decode"])
         w(f"- dominated by upscale: {up_dom}, by decode: {len(anomalies) - up_dom}")
         # co-occurrence per mark kind vs base rate (fraction of ALL valid frames inside that kind's intervals)
-        def covered(kind, t):
-            for i in intervals:
-                if i["kind"] != kind: continue
+        import bisect
+        by_kind = defaultdict(list)
+        for i in intervals:
+            by_kind[i["kind"]].append(i)
+        for k in by_kind:
+            by_kind[k].sort(key=lambda x: x["t0"])
+        starts = {k: [i["t0"] for i in v] for k, v in by_kind.items()}
+        def covered(kind, t, pad=20000):
+            lst = by_kind.get(kind, []); st = starts.get(kind, [])
+            if not lst: return False
+            j = bisect.bisect_right(st, t + pad)
+            # walk back a bounded number of intervals (long ones are rare)
+            for i in lst[max(0, j - 64):j][::-1]:
                 t1 = i["t1"] if i["t1"] is not None else t
-                if i["t0"] - 20000 <= t <= t1 + 20000:
+                if i["t0"] - pad <= t <= t1 + pad:
                     return True
             return False
         kinds = sorted(set(i["kind"] for i in intervals))

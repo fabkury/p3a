@@ -80,7 +80,7 @@ typedef struct __attribute__((packed)) {
     uint8_t  phase;             // ft_phase_t (MARK) / 0
     uint8_t  flags;             // FT_FLAG_* (FRAME) / 0
     int64_t  t_us;              // present time (FRAME) / event time (MARK), esp_timer clock
-    int32_t  lateness_us;       // FRAME: present - target
+    int32_t  lateness_us;       // FRAME: present - target; MARK(span): duration us
     int32_t  ready_margin_us;   // FRAME: target - produce_end (negative = producer late)
     uint32_t produce_us;        // FRAME: frame callback wall time (decode + upscale + overlays)
     uint32_t decode_us;         // FRAME: decoder time inside the callback (0 if unknown)
@@ -146,6 +146,9 @@ void frame_trace_frame(const ft_frame_in_t *in);
 /** Record an event marker from any task (not ISR-safe). */
 void frame_trace_mark(ft_mark_kind_t kind, ft_phase_t phase, uint32_t arg);
 
+/** Record a completed interval as ONE entry (phase END, t_us = now, lateness_us field = duration). */
+void frame_trace_mark_span(ft_mark_kind_t kind, int64_t t0_us, uint32_t arg);
+
 /** Producer-side helper: render_next_frame reports its decode/upscale split for the frame in flight. */
 void frame_trace_producer_split(uint32_t decode_us, uint32_t upscale_us);
 void frame_trace_producer_take_split(uint32_t *decode_us, uint32_t *upscale_us);
@@ -168,6 +171,7 @@ static inline int64_t frame_trace_now_us(void) { return esp_timer_get_time(); }
 #define frame_trace_init()                              ((void)0)
 #define frame_trace_frame(in)                           ((void)0)
 #define frame_trace_mark(kind, phase, arg)              ((void)0)
+#define frame_trace_mark_span(kind, t0, arg)            ((void)0)
 #define frame_trace_producer_split(d, u)                ((void)0)
 #define frame_trace_producer_take_split(d, u)           ((void)0)
 #define frame_trace_read(since, out, max, next)         ((size_t)0)

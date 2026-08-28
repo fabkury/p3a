@@ -189,3 +189,20 @@ driver, Phase 4 provoke = `sd` read storm + verify sweep on the moving-bar
 animation; Phase 5 candidates: move upscale_top off core 0, throttle the verify
 sweep, check SD host/DMA cache behaviour.
 
+## 2026-08-28 — RUN-05: SD writes implicated; ring overflow fixed; RUN-06
+
+- RUN-05 (`runs/RUN-20260828-05.md`): every in-scope stall had an `sd_write`
+  in its window; 32 KB SD writes take 72 ms median / 345 ms p99 (sector pace);
+  flash ops are all cheap 32-byte NVS reads (H1 out). sd_read lift 2.3x,
+  sd_write 1.5x on producer anomalies.
+- Ring overflowed at 70 marks/s: RUN-06 uses a 32768-entry ring and span marks
+  (one entry per SD/flash op with its duration). Analyzer: bisect-based
+  coverage (was O(n²), timed out), span-mark pairing, seq dedupe.
+- Phase 4 design sharpened: provoke SD writes from PSRAM vs internal buffers,
+  512 B vs 32 KB, on the moving-bar animation; expect upscale anomalies to
+  track the PSRAM-buffer case if H3/H4 holds.
+
+**Next:** RUN-06 ≥ 1 h with span marks; then Phase 4 SD provocations; then
+fix candidates (SD write path: multi-block writes / internal bounce buffer /
+lower SD clock check; upscale_top off core 0).
+

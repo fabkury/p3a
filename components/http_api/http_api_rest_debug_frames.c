@@ -99,9 +99,9 @@ static esp_err_t h_get_frames_csv(httpd_req_t *req)
                              (unsigned)e->flags);
             } else {
                 w = snprintf(line + used, 4096 - used,
-                             "M,%" PRIu32 ",%lld,%s,%u,%" PRIu32 ",%u,%08" PRIx32 ",,,,,,,,,,\n",
+                             "M,%" PRIu32 ",%lld,%s,%u,%" PRIu32 ",%u,%08" PRIx32 ",%" PRId32 ",,,,,,,,,\n",
                              e->seq, (long long)e->t_us, frame_trace_mark_kind_name(e->kind), (unsigned)e->phase,
-                             e->arg, (unsigned)e->core, e->task_tag);
+                             e->arg, (unsigned)e->core, e->task_tag, e->lateness_us);
             }
             if (w < 0 || (size_t)w >= 4096 - used) {
                 // flush and retry this entry in a fresh buffer

@@ -47,7 +47,7 @@ JTR|STALL seq=<seq> t_us=<present> lateness_ms=<n> margin_ms=<n> dur_ms=<n> flag
 JTR|F <seq> <t_us> <lateness_us> <margin_us> <produce_us> <decode_us> <upscale_us> <free_wait_us> <vsync_wait_us> <dur_ms> <qd> <flags> <gen>
 JTR|M <seq> <t_us> <kind> <phase> <arg> <core> <task_tag>
 JTR|T window_us=<n> tasks=<n>            then one line per task that used >= 0.5 % of the window:
-JTR|T <name> core=<c> prio=<p> run_us=<delta> state=<s>
+JTR|T <name> core=<0|1|any> prio=<p> run_us=<delta> state=<s>    (core = pinned affinity; 'any' = unpinned; prio may be temporarily inherited)
 JTR|END
 ```
 

@@ -334,61 +334,91 @@ static int ft_log_vprintf(const char *fmt, va_list ap)
 // ---------------------------------------------------------------------------
 
 #if FT_HAVE_RUNTIME_STATS
-static TaskStatus_t *s_snap_prev = NULL;
-static TaskStatus_t *s_snap_now = NULL;
-static UBaseType_t s_snap_prev_n = 0;
-static uint32_t s_snap_prev_total = 0;
-static int64_t s_snap_prev_us = 0;
+// Per-task CPU accounting WITHOUT periodic uxTaskGetSystemState():
+// that call holds the kernel lock in a critical section (interrupts off on the
+// calling core) for ~3-4 ms while it walks every task and scans stacks. On the
+// diag build that delayed the DSI vsync ISR on core 0 and produced a one-frame
+// blue flash every few seconds (Fab, 2026-08-28). Instead: a task table
+// (handles, names, affinity) is built by ONE full snapshot at init and rebuilt
+// only when uxTaskGetNumberOfTasks() changes or at stall-report time (each
+// rebuild is marked FT_MARK_SNAPSHOT, so any glitch it causes is attributable).
+// The per-second poll reads each task's run-time counter through vTaskGetInfo()
+// with the stack scan disabled: a few microseconds per task.
+typedef struct {
+    TaskHandle_t handle;
+    char name[configMAX_TASK_NAME_LEN + 1];
+    int core;
+    uint32_t prio;
+    uint32_t rt_prev;       // run-time counter at the last periodic poll
+} ft_task_slot_t;
 
-static void ft_snapshot(void)
+static TaskStatus_t *s_snap = NULL;           // scratch for full snapshots
+static ft_task_slot_t *s_tasks = NULL;
+static UBaseType_t s_task_n = 0;
+static UBaseType_t s_task_count_seen = 0;
+static int64_t s_poll_prev_us = 0;
+
+static void ft_table_rebuild(void)
 {
     int64_t t0 = esp_timer_get_time();
     uint32_t total = 0;
-    UBaseType_t n = uxTaskGetSystemState(s_snap_now, FT_MAX_TASKS, &total);
+    UBaseType_t n = uxTaskGetSystemState(s_snap, FT_MAX_TASKS, &total);
     int64_t dt = esp_timer_get_time() - t0;
     frame_trace_mark(FT_MARK_SNAPSHOT, FT_PHASE_EVENT, (uint32_t)dt);
-    // Rotate: now becomes prev
-    TaskStatus_t *tmp = s_snap_prev;
-    s_snap_prev = s_snap_now;
-    s_snap_now = tmp;
-    s_snap_prev_n = n;
-    s_snap_prev_total = total;
-    s_snap_prev_us = t0;
+    for (UBaseType_t i = 0; i < n; i++) {
+        ft_task_slot_t *t = &s_tasks[i];
+        t->handle = s_snap[i].xHandle;
+        strlcpy(t->name, s_snap[i].pcTaskName, sizeof(t->name));
+        t->core = -1;
+#if configTASKLIST_INCLUDE_COREID
+        t->core = (int)s_snap[i].xCoreID;
+#endif
+        t->prio = (uint32_t)s_snap[i].uxCurrentPriority;
+        t->rt_prev = s_snap[i].ulRunTimeCounter;
+    }
+    s_task_n = n;
+    s_task_count_seen = uxTaskGetNumberOfTasks();
+    s_poll_prev_us = t0;
+}
+
+// Periodic (1 s): refresh the baseline counters cheaply; rebuild the table only
+// if the task population changed.
+static void ft_poll(void)
+{
+    if (uxTaskGetNumberOfTasks() != s_task_count_seen) {
+        ft_table_rebuild();
+        return;
+    }
+    for (UBaseType_t i = 0; i < s_task_n; i++) {
+        TaskStatus_t st;
+        vTaskGetInfo(s_tasks[i].handle, &st, pdFALSE, eBlocked);   // eBlocked: skip state lookup
+        s_tasks[i].rt_prev = st.ulRunTimeCounter;
+    }
+    s_poll_prev_us = esp_timer_get_time();
 }
 
 static void ft_print_runtime_delta(void)
 {
-    // Fresh snapshot against the previous periodic one (≤1 s old): which tasks consumed CPU.
-    int64_t t0 = esp_timer_get_time();
-    uint32_t total = 0;
-    UBaseType_t n = uxTaskGetSystemState(s_snap_now, FT_MAX_TASKS, &total);
-    int64_t window_us = t0 - s_snap_prev_us;
-    printf("JTR|T window_us=%lld tasks=%u\n", (long long)window_us, (unsigned)n);
-    // Simple selection: print every task whose delta > 0.5% of the window, unsorted (host sorts).
-    for (UBaseType_t i = 0; i < n; i++) {
-        const TaskStatus_t *cur = &s_snap_now[i];
-        uint32_t prev_rt = 0;
-        bool found = false;
-        for (UBaseType_t j = 0; j < s_snap_prev_n; j++) {
-            if (s_snap_prev[j].xHandle == cur->xHandle) { prev_rt = s_snap_prev[j].ulRunTimeCounter; found = true; break; }
-        }
-        uint32_t delta = found ? (cur->ulRunTimeCounter - prev_rt) : cur->ulRunTimeCounter;
+    // Current counters vs the last periodic poll (<= 1 s ago): which tasks
+    // consumed CPU during the window that contains the stall.
+    int64_t now = esp_timer_get_time();
+    int64_t window_us = now - s_poll_prev_us;
+    printf("JTR|T window_us=%lld tasks=%u\n", (long long)window_us, (unsigned)s_task_n);
+    for (UBaseType_t i = 0; i < s_task_n; i++) {
+        TaskStatus_t st;
+        vTaskGetInfo(s_tasks[i].handle, &st, pdFALSE, eBlocked);
+        uint32_t delta = st.ulRunTimeCounter - s_tasks[i].rt_prev;
         if (window_us > 0 && (int64_t)delta * 200 < window_us) continue;   // < 0.5 %
-        int core = -1;
-#if configTASKLIST_INCLUDE_COREID
-        core = (int)cur->xCoreID;
-#endif
-        // core: pinned core id, "any" for tskNO_AFFINITY (0x7FFFFFFF), "?" if the build lacks xCoreID
         char core_s[16];
-        if (core == (int)0x7FFFFFFF) snprintf(core_s, sizeof(core_s), "any");
-        else if (core < 0) snprintf(core_s, sizeof(core_s), "?");
-        else snprintf(core_s, sizeof(core_s), "%d", core);
-        printf("JTR|T %s core=%s prio=%u run_us=%" PRIu32 " state=%d\n",
-               cur->pcTaskName, core_s, (unsigned)cur->uxCurrentPriority, delta, (int)cur->eCurrentState);
+        if (s_tasks[i].core == (int)0x7FFFFFFF) snprintf(core_s, sizeof(core_s), "any");
+        else if (s_tasks[i].core < 0) snprintf(core_s, sizeof(core_s), "?");
+        else snprintf(core_s, sizeof(core_s), "%d", s_tasks[i].core);
+        printf("JTR|T %s core=%s prio=%u run_us=%" PRIu32 "\n",
+               s_tasks[i].name, core_s, (unsigned)st.uxCurrentPriority, delta);
     }
-    // Keep the rotation consistent with ft_snapshot()
-    TaskStatus_t *tmp = s_snap_prev; s_snap_prev = s_snap_now; s_snap_now = tmp;
-    s_snap_prev_n = n; s_snap_prev_total = total; s_snap_prev_us = t0;
+    // A stall report is a good moment to pick up tasks created since the last
+    // rebuild (one marked full snapshot; it happens after the stall, not before).
+    ft_table_rebuild();
 }
 #endif
 
@@ -458,6 +488,10 @@ static void ft_report(uint32_t stall_seq)
 static void ft_reporter_task(void *arg)
 {
     (void)arg;
+#if FT_HAVE_RUNTIME_STATS
+    vTaskDelay(pdMS_TO_TICKS(8000));   // let boot-time tasks come and go before the first table
+    ft_table_rebuild();
+#endif
     int64_t last_report_us = -FT_REPORT_GAP_US;
     uint32_t pending_seq = 0;
     for (;;) {
@@ -465,7 +499,7 @@ static void ft_reporter_task(void *arg)
         BaseType_t got = xTaskNotifyWait(0, UINT32_MAX, &seq, pdMS_TO_TICKS(1000));
         if (got == pdTRUE) pending_seq = seq;
 #if FT_HAVE_RUNTIME_STATS
-        if (got != pdTRUE) ft_snapshot();
+        if (got != pdTRUE) ft_poll();
 #endif
         if (pending_seq) {
             int64_t now = esp_timer_get_time();
@@ -496,8 +530,8 @@ void frame_trace_init(void)
     memset(s_worst_sec, 0, sizeof(s_worst_sec));
 
 #if FT_HAVE_RUNTIME_STATS
-    s_snap_prev = heap_caps_calloc(FT_MAX_TASKS, sizeof(TaskStatus_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    s_snap_now  = heap_caps_calloc(FT_MAX_TASKS, sizeof(TaskStatus_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    s_snap  = heap_caps_calloc(FT_MAX_TASKS, sizeof(TaskStatus_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    s_tasks = heap_caps_calloc(FT_MAX_TASKS, sizeof(ft_task_slot_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 #endif
 
     if (xTaskCreatePinnedToCore(ft_reporter_task, "jtr_report", 6144, NULL, 2, &s_reporter, 0) != pdPASS) {

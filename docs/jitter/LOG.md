@@ -153,3 +153,22 @@ push-notify Fab, commit.
 - RUN-20260828-03 started ~14:14 local, same parameters as RUN-02.
 
 **Next:** let RUN-03 run ≥ 4 h; stop, analyze, summarize, notify Fab, commit.
+
+## 2026-08-28 — Blue-flash glitch caused by the diag build; RUN-03 aborted
+
+- Fab: one-frame blue flash every 3–8 s on every animation since today's
+  diag builds. Root cause and fix in `runs/RUN-20260828-03.md`: the periodic
+  `uxTaskGetSystemState()` (3–4 ms interrupts-off on core 0) delayed the DSI
+  vsync ISR. Replaced by a cheap per-task `vTaskGetInfo` poll; full snapshots
+  only at init, on task-count change, and at report time (all marked).
+- Reflashed. Awaiting Fab's confirmation that the flashing is gone before
+  starting RUN-04. If it persists, next suspects: FreeRTOS run-time-stats /
+  trace-facility overhead per context switch (diag overlay), then the log hook.
+- New hypothesis H6 for PLAN §3: interrupts-off windows on core 0 (critical
+  sections, flash cache-disable) drop panel frames without producing lateness;
+  the frame trace cannot see them, only the glass can.
+
+**Next:** get Fab's verdict on the flashing; if gone, start RUN-20260828-04
+(same parameters) and monitor; add H6 to PLAN §3 and a `cpu0_critical`
+provoke kind in Phase 4.
+

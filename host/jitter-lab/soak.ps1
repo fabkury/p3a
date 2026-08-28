@@ -42,11 +42,12 @@ if ($Start) {
     if ($existing -and (Alive $existing.logger)) { throw "logger already running for $Run (pid $($existing.logger))" }
     # Snapshot settings before anything else
     & python (Join-Path $lab "snapshot_settings.py") save $Run --host $DeviceHost | Out-Null
+    try { Invoke-RestMethod -Method Post "$DeviceHost/api/debug/frames/reset" -TimeoutSec 10 | Out-Null } catch { Write-Warning "stats reset failed: $_" }
     $logOut = Join-Path $dir "logger.stdout.log"
     $pullOut = Join-Path $dir "puller.stdout.log"
     $lp = Start-Process -FilePath "python" -ArgumentList @((Join-Path $lab "serial_logger.py"), $Port, $Run) `
             -WindowStyle Hidden -PassThru -RedirectStandardOutput $logOut -RedirectStandardError (Join-Path $dir "logger.stderr.log")
-    $pullArgs = @((Join-Path $lab "pull_frames.py"), $Run, "--host", $DeviceHost, "--every", $Every)
+    $pullArgs = @((Join-Path $lab "pull_frames.py"), $Run, "--host", $DeviceHost, "--every", $Every, "--from-head")
     if ($Hours -gt 0) { $pullArgs += @("--hours", $Hours) }
     $pp = Start-Process -FilePath "python" -ArgumentList $pullArgs `
             -WindowStyle Hidden -PassThru -RedirectStandardOutput $pullOut -RedirectStandardError (Join-Path $dir "puller.stderr.log")

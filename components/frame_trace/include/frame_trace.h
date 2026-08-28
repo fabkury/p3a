@@ -115,6 +115,7 @@ typedef struct {
     uint32_t stalls_warn;       // lateness >= WARN_MS (includes hard)
     uint32_t stalls_hard;       // lateness >= STALL_MS
     uint32_t overrun_frames;    // ready_margin < 0
+    uint32_t stalls_overrun;    // lateness >= STALL_MS explained by a normal-for-this-artwork producer time (no UART report)
     int32_t  lateness_max_us;
     int64_t  lateness_sum_us;   // of non-baselined frames, for the mean
     int32_t  worst_10s_us;      // worst lateness in the trailing ~10 s window

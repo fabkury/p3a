@@ -36,6 +36,7 @@ def main():
     ap.add_argument("--every", type=float, default=120.0)
     ap.add_argument("--hours", type=float, default=0.0, help="stop after this many hours (0 = forever)")
     ap.add_argument("--once", action="store_true")
+    ap.add_argument("--from-head", action="store_true", help="start at the ring head (ignore entries recorded before the run)")
     ap.add_argument("--runs-dir", default=str(HERE / "runs"))
     a = ap.parse_args()
 
@@ -55,6 +56,14 @@ def main():
             st["rows"] = int(old.get("rows", 0))
         except Exception:
             pass
+
+    if a.from_head and st["next_seq"] == 0:
+        try:
+            head = requests.get(f"{a.host}/api/debug/frames/stats", timeout=15).json()["data"]["next_seq"]
+            st["next_seq"] = int(head)
+            print(f"{now_iso()} starting from ring head seq={head}", flush=True)
+        except Exception as e:  # noqa: BLE001
+            print(f"{now_iso()} from-head failed ({e}); starting from 0", flush=True)
 
     def save():
         tmp = st_path.with_suffix(".tmp")

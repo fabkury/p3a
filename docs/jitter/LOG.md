@@ -117,3 +117,20 @@ until stopped). Then `soak.ps1 -Stop -Run RUN-20260828-01` → `report.md`,
 write `docs/jitter/runs/RUN-20260828-01.md`, update README status, push-notify
 Fab with the stall count and top attribution, commit. Commit the pending
 cosmetic fix (`core=any` printing) with it.
+
+## 2026-08-28 — RUN-01 aborted after 5 min; reporter gating fixed; RUN-02 started
+
+- RUN-20260828-01 (see `runs/RUN-20260828-01.md`): a chronically slow artwork
+  drove lateness into the 250 ms resync every ~5.6 s; the reporter treated every
+  resync as a stall and flooded UART. The analyzer side was already right
+  (887 overrun vs 2 in-scope, both the pre-soak provoke).
+- Firmware: `frame_trace_frame` now keeps an EMA of producer time per
+  generation; lateness that the producer explains (margin < 0, produce_us in
+  line with the EMA) increments `stalls_overrun` and does NOT notify the
+  reporter. Starved producers (produce_us >= 3x EMA or >= EMA + one frame) and
+  consumer-side stalls still report. Stats JSON exposes `stalls_overrun`.
+- Tooling: `pull_frames.py --from-head` (soak starts at the ring head);
+  `soak.ps1 -Start` resets stats first.
+- Phase 6 note recorded in the run summary: resync policy vs chronic overrun.
+
+**Next:** reflash diag, start RUN-20260828-02 (same parameters), monitor.

@@ -44,6 +44,8 @@ static uint32_t s_next_seq = 1;          // atomic; seq 0 means "empty slot"
 static ft_stats_t s_stats;               // single writer for frame fields (consumer); marks counter atomic
 static int32_t s_worst[FT_WORST_BUCKETS];
 static int64_t s_worst_sec[FT_WORST_BUCKETS];
+static uint32_t s_ema_produce_us = 0;    // running mean of producer time for the current generation
+static uint32_t s_ema_gen = UINT32_MAX;
 static uint32_t s_split_decode_us = 0;   // producer-task-local hand-off (same task writes and reads)
 static uint32_t s_split_upscale_us = 0;
 static TaskHandle_t s_reporter = NULL;
@@ -194,14 +196,34 @@ void frame_trace_frame(const ft_frame_in_t *in)
         while (b < 11 && l >= edges[b]) b++;
         s_stats.hist[b]++;
         ft_worst_update(in->present_us, lateness);
+        // Producer-time EMA per generation (artwork epoch). A late frame whose
+        // producer was itself late AND whose producer time is in line with this
+        // artwork's norm is a decode overrun (out of scope): counted, never
+        // reported on UART (a chronically slow artwork would otherwise flood the
+        // console with a report every resync). A starved producer (anomalous
+        // produce_us) or a consumer-side stall still reports.
+        if (in->generation != s_ema_gen) {
+            s_ema_gen = in->generation;
+            s_ema_produce_us = produce_us;
+        } else {
+            s_ema_produce_us = s_ema_produce_us - (s_ema_produce_us >> 3) + (produce_us >> 3);
+        }
+        const bool producer_late = (margin < 0) && ((int64_t)-margin >= (int64_t)lateness - 16667);
+        const bool produce_anomalous = produce_us >= (3u * s_ema_produce_us) ||
+                                       produce_us >= s_ema_produce_us + (uint32_t)in->duration_ms * 1000u;
+        const bool overrun_explained = producer_late && !produce_anomalous;
         if (lateness >= FT_WARN_US) {
             s_stats.stalls_warn++;
             if (lateness >= FT_STALL_US) {
                 s_stats.stalls_hard++;
-                s_stats.last_stall_seq = seq;
-                s_stats.last_stall_us = in->present_us;
-                if (s_reporter) {
-                    (void)xTaskNotify(s_reporter, seq, eSetValueWithOverwrite);
+                if (overrun_explained) {
+                    s_stats.stalls_overrun++;
+                } else {
+                    s_stats.last_stall_seq = seq;
+                    s_stats.last_stall_us = in->present_us;
+                    if (s_reporter) {
+                        (void)xTaskNotify(s_reporter, seq, eSetValueWithOverwrite);
+                    }
                 }
             }
         }

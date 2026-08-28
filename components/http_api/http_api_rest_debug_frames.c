@@ -153,6 +153,7 @@ static esp_err_t h_get_frames_stats(httpd_req_t *req)
     cJSON_AddNumberToObject(data, "stalls_warn", st.stalls_warn);
     cJSON_AddNumberToObject(data, "stalls_hard", st.stalls_hard);
     cJSON_AddNumberToObject(data, "overrun_frames", st.overrun_frames);
+    cJSON_AddNumberToObject(data, "stalls_overrun", st.stalls_overrun);
     cJSON_AddNumberToObject(data, "lateness_max_us", st.lateness_max_us);
     cJSON_AddNumberToObject(data, "lateness_mean_us",
                             st.frames ? (double)st.lateness_sum_us / (double)st.frames : 0.0);

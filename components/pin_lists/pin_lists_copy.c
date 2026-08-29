@@ -59,6 +59,12 @@ esp_err_t pl_artwork_copy(const char *src_path, const char *dest_path)
     if (err != ESP_OK) return err;
 
     FILE *src = fopen(src_path, "rb");
+    // Jitter work stream, fix 6 (2026-08-29): unbuffered. With the default
+    // stdio buffer (512 B: CONFIG_FATFS_VFS_FSTAT_BLKSIZE=0 reports the sector
+    // size) fread() refills one sector per SD command regardless of the request
+    // size; pinned-artwork copies read the source in 32 KB chunks. Unbuffered, fread() hands the whole request to
+    // FATFS, which reads whole clusters straight into our aligned buffer.
+    if (src) setvbuf(src, NULL, _IONBF, 0);
     if (!src) {
         ESP_LOGE(TAG, "open src %s: %s", src_path, strerror(errno));
         return ESP_ERR_NOT_FOUND;

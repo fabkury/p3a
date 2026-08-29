@@ -509,6 +509,12 @@ esp_err_t channel_cache_load(const char *channel_id,
 
     // Try to open cache file
     FILE *f = fopen(cache_path, "rb");
+    // Jitter work stream, fix 6 (2026-08-29): unbuffered. With the default
+    // stdio buffer (512 B: CONFIG_FATFS_VFS_FSTAT_BLKSIZE=0 reports the sector
+    // size) fread() refills one sector per SD command regardless of the request
+    // size; cache loads of 16-128 KB were sector storms too. Unbuffered, fread() hands the whole request to
+    // FATFS, which reads whole clusters straight into our aligned buffer.
+    if (f) setvbuf(f, NULL, _IONBF, 0);
     if (!f) {
         ESP_LOGI(TAG, "No cache for '%s', starting empty (server refresh will populate)", cache->display_name);
 

@@ -29,6 +29,13 @@ static esp_err_t read_file_to_buffer(const char *filepath, uint8_t **data_out, s
     }
 
     FILE *f = fopen(filepath, "rb");
+    // Jitter work stream, fix 6 (2026-08-29): unbuffered. With the default
+    // stdio buffer (512 B: CONFIG_FATFS_VFS_FSTAT_BLKSIZE=0 reports the sector
+    // size) fread() refills one sector per SD command regardless of the request
+    // size; a 4.6 MB artwork was 9523 single-sector reads over 5.6 s and such
+    // storms stalled playback. Unbuffered, fread() hands the whole request to
+    // FATFS, which reads whole clusters straight into our aligned buffer.
+    if (f) setvbuf(f, NULL, _IONBF, 0);
     if (!f) {
         ESP_LOGE(TAG, "Failed to open file: %s", filepath);
         return ESP_FAIL;

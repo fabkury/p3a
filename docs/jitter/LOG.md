@@ -438,3 +438,20 @@ Phase 7 release-config soak (`build-trace`), merge.
   `num_fbs` at 3, so extra slack means render-side PSRAM buffers plus a copy
   (PPA/DMA2D) into the DPI buffer, ~1.5 MB per buffer. Not started.
 
+## 2026-08-29 — Fix 6: artwork loads were single-sector storms (newlib 512 B stdio buffer)
+
+- RUN-11 data: `anim_loader` issued 875 246 SD reads in 4.7 h, every one of
+  them 512 B: a 4.6 MB artwork = 9523 sector reads over 5.6 s. Not directory
+  traversal: the file data itself. `CONFIG_FATFS_VFS_FSTAT_BLKSIZE=0` reports
+  the 512 B sector as `st_blksize`, newlib sizes each FILE's stdio buffer to
+  that, and `fread()` refills one sector per SD command regardless of the
+  request size (fwrite is unaffected: requests ≥ the buffer go direct, which is
+  why downloads showed 32 KB writes). This was the loader-attributed storm
+  behind stalls since day 1 and a ~10x artwork load-time penalty.
+- Fix 6 (`setvbuf(f, NULL, _IONBF, 0)` after fopen in `loader_service`,
+  `channel_cache` load and `pin_lists_copy`): unbuffered FILEs make newlib pass
+  the whole fread request to FATFS → whole-cluster multi-sector reads into the
+  aligned PSRAM buffer (fix 1). Verify on the device: loader `sd_read` marks
+  should become few and large (≥ 4 KB), loads ~10x faster.
+- RUN-11 (fixes 1–5) closed at 4.7 h for this reflash; RUN-12 = fixes 1–6.
+

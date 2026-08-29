@@ -403,4 +403,10 @@ affinity?) — not needed for the pass bar.
 compare stall rates (RUN-06 37.7/h → RUN-01 7.8/h → RUN-07 2.7/h → RUN-10 ? →
 RUN-11 ?). Then: cherry-pick fixes 2–4 to main after Fab's OK, Phase 6 policy,
 Phase 7 release-config soak (`build-trace`), merge.
+- 13:0x — RUN-10 (fixes 1+2+3) first stall at 47 min (197 ms) during a
+  `download_mgr` burst of single-sector directory reads = the LAI verify sweep
+  (16 stat() per batch on sharded vault paths ≈ 170–209 reads per ~100 ms;
+  941 such bursts in 47 min, one stalled). Fix 5: `LAI_VERIFY_BATCH_STATS`
+  16 → 4, `LAI_VERIFY_BATCH_DELAY_MS` 50 → 40 (~100 stats/s). RUN-11 will
+  carry fixes 4 + 5 together (both pace single-sector command bursts).
 

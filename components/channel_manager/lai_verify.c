@@ -55,9 +55,14 @@ static const char *TAG = "lai_verify";
 extern bool animation_player_is_sd_paused(void) __attribute__((weak));
 
 // Stats per batch.
-#define LAI_VERIFY_BATCH_STATS    16
+// Jitter work stream (2026-08-29, fix 5): a batch of 16 stat() calls on
+// sharded vault paths is a burst of ~200 single-sector directory reads within
+// ~100 ms (RUN-20260829-10: bursts of 170-209 reads, one coinciding with a
+// 197 ms playback stall). Bursts of a few dozen commands never stalled, so
+// batches are kept small and the delay short: ~100 stats/s instead of ~320/s.
+#define LAI_VERIFY_BATCH_STATS    4
 // Pacing delay after every batch that touched the SD card.
-#define LAI_VERIFY_BATCH_DELAY_MS 50
+#define LAI_VERIFY_BATCH_DELAY_MS 40
 // Time budget for one slice (one download-task loop iteration): batches run
 // back-to-back (pacing gaps included) until this elapses. Bounds the latency
 // added to each download cycle while letting a sweep make real progress

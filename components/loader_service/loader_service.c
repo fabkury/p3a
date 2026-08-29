@@ -13,6 +13,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
 #include <errno.h>
 
 static const char *TAG = "loader_service";
@@ -28,32 +32,36 @@ static esp_err_t read_file_to_buffer(const char *filepath, uint8_t **data_out, s
         return ESP_ERR_INVALID_ARG;
     }
 
-    FILE *f = fopen(filepath, "rb");
-    // Jitter work stream, fix 6 (2026-08-29): unbuffered. With the default
-    // stdio buffer (512 B: CONFIG_FATFS_VFS_FSTAT_BLKSIZE=0 reports the sector
-    // size) fread() refills one sector per SD command regardless of the request
-    // size; a 4.6 MB artwork was 9523 single-sector reads over 5.6 s and such
-    // storms stalled playback. Unbuffered, fread() hands the whole request to
-    // FATFS, which reads whole clusters straight into our aligned buffer.
-    if (f) setvbuf(f, NULL, _IONBF, 0);
-    if (!f) {
-        ESP_LOGE(TAG, "Failed to open file: %s", filepath);
+    // Jitter work stream, fix 6 (2026-08-29): POSIX read(), not fread().
+    // newlib's stdio layer feeds FATFS one 512-byte sector per SD command
+    // whatever the fread() size (the stdio buffer is st_blksize = the sector
+    // size, and unbuffered streams read through a 1-byte buffer): a 4.6 MB
+    // artwork was 9523 single-sector reads over 5.6 s, and such command storms
+    // stalled playback. read() hands the whole 64 KB request to FATFS, which
+    // reads whole clusters straight into the aligned PSRAM buffer below.
+    int fd = open(filepath, O_RDONLY);
+    if (fd < 0) {
+        ESP_LOGE(TAG, "Failed to open file: %s (errno=%d)", filepath, errno);
         return ESP_FAIL;
     }
 
-    fseek(f, 0, SEEK_END);
-    long file_size = ftell(f);
-    fseek(f, 0, SEEK_SET);
+    struct stat st;
+    if (fstat(fd, &st) != 0) {
+        ESP_LOGE(TAG, "fstat failed: %s (errno=%d)", filepath, errno);
+        close(fd);
+        return ESP_FAIL;
+    }
+    long file_size = (long)st.st_size;
 
     if (file_size <= 0) {
         ESP_LOGE(TAG, "Invalid file size: %ld", file_size);
-        fclose(f);
+        close(fd);
         return ESP_ERR_INVALID_SIZE;
     }
 
     if (file_size > P3A_MAX_ARTWORK_SIZE) {
         ESP_LOGW(TAG, "File too large to load: %ld bytes (limit %d)", file_size, P3A_MAX_ARTWORK_SIZE);
-        fclose(f);
+        close(fd);
         return ESP_ERR_INVALID_SIZE;
     }
 
@@ -67,7 +75,7 @@ static esp_err_t read_file_to_buffer(const char *filepath, uint8_t **data_out, s
         buffer = (uint8_t *)malloc((size_t)file_size);
         if (!buffer) {
             ESP_LOGE(TAG, "Failed to allocate %ld bytes for animation file", file_size);
-            fclose(f);
+            close(fd);
             return ESP_ERR_NO_MEM;
         }
     }
@@ -78,29 +86,29 @@ static esp_err_t read_file_to_buffer(const char *filepath, uint8_t **data_out, s
 
     while (remaining > 0) {
         size_t chunk_size = (remaining < SD_READ_CHUNK_SIZE) ? remaining : SD_READ_CHUNK_SIZE;
-        size_t bytes_read = fread(buffer + total_read, 1, chunk_size, f);
+        ssize_t got = read(fd, buffer + total_read, chunk_size);
 
-        if (bytes_read == 0) {
-            if (ferror(f)) {
-                if (retry_count < SD_READ_MAX_RETRIES) {
-                    retry_count++;
-                    ESP_LOGW(TAG, "SD read error at offset %zu, retry %d/%d",
-                             total_read, retry_count, SD_READ_MAX_RETRIES);
-                    clearerr(f);
-                    vTaskDelay(pdMS_TO_TICKS(SD_READ_RETRY_DELAY_MS * retry_count));
-                    continue;
-                }
-                ESP_LOGE(TAG, "SD read failed after %d retries at offset %zu",
-                         SD_READ_MAX_RETRIES, total_read);
-                fclose(f);
-                free(buffer);
-                return ESP_ERR_INVALID_SIZE;
+        if (got < 0) {
+            if (retry_count < SD_READ_MAX_RETRIES) {
+                retry_count++;
+                ESP_LOGW(TAG, "SD read error at offset %zu (errno=%d), retry %d/%d",
+                         total_read, errno, retry_count, SD_READ_MAX_RETRIES);
+                vTaskDelay(pdMS_TO_TICKS(SD_READ_RETRY_DELAY_MS * retry_count));
+                continue;
             }
-            ESP_LOGE(TAG, "Unexpected EOF: read %zu of %ld bytes", total_read, file_size);
-            fclose(f);
+            ESP_LOGE(TAG, "SD read failed after %d retries at offset %zu",
+                     SD_READ_MAX_RETRIES, total_read);
+            close(fd);
             free(buffer);
             return ESP_ERR_INVALID_SIZE;
         }
+        if (got == 0) {
+            ESP_LOGE(TAG, "Unexpected EOF: read %zu of %ld bytes", total_read, file_size);
+            close(fd);
+            free(buffer);
+            return ESP_ERR_INVALID_SIZE;
+        }
+        size_t bytes_read = (size_t)got;
 
         total_read += bytes_read;
         remaining -= bytes_read;
@@ -111,7 +119,7 @@ static esp_err_t read_file_to_buffer(const char *filepath, uint8_t **data_out, s
         }
     }
 
-    fclose(f);
+    close(fd);
 
     if (total_read != (size_t)file_size) {
         ESP_LOGE(TAG, "Failed to read complete file: read %zu of %ld bytes", total_read, file_size);

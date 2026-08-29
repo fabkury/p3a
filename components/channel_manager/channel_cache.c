@@ -509,12 +509,21 @@ esp_err_t channel_cache_load(const char *channel_id,
 
     // Try to open cache file
     FILE *f = fopen(cache_path, "rb");
-    // Jitter work stream, fix 6 (2026-08-29): unbuffered. With the default
-    // stdio buffer (512 B: CONFIG_FATFS_VFS_FSTAT_BLKSIZE=0 reports the sector
-    // size) fread() refills one sector per SD command regardless of the request
-    // size; cache loads of 16-128 KB were sector storms too. Unbuffered, fread() hands the whole request to
-    // FATFS, which reads whole clusters straight into our aligned buffer.
-    if (f) setvbuf(f, NULL, _IONBF, 0);
+    // Jitter work stream, fix 6 (2026-08-29): newlib's default 512-byte stdio
+    // buffer makes fread() fetch one sector per SD command, so a 128 KB cache
+    // load was a storm of 256 commands. A cache-line-aligned PSRAM stdio
+    // buffer sized to the file turns the load into a few whole-cluster reads
+    // (FATFS DMAs straight into the aligned buffer, see psram_alloc.h).
+    uint8_t *stdio_buf = NULL;
+    if (f) {
+        struct stat fst;
+        if (stat(cache_path, &fst) == 0 && fst.st_size > 0) {
+            size_t want = ((size_t)fst.st_size + 4095) & ~(size_t)4095;
+            if (want > 256 * 1024) want = 256 * 1024;
+            stdio_buf = psram_malloc(want);
+            if (stdio_buf) setvbuf(f, (char *)stdio_buf, _IOFBF, want);
+        }
+    }
     if (!f) {
         ESP_LOGI(TAG, "No cache for '%s', starting empty (server refresh will populate)", cache->display_name);
 
@@ -531,6 +540,7 @@ esp_err_t channel_cache_load(const char *channel_id,
     ESP_LOGI(TAG, "Loading cache for '%s'", cache->display_name);
     esp_err_t err = load_new_format(f, cache);
     fclose(f);
+    free(stdio_buf);   // only after fclose: stdio uses it until then
 
     if (err == ESP_OK) {
         // Validation passed against CHANNEL_CACHE_HARD_CAP. The user's soft

@@ -454,4 +454,10 @@ Phase 7 release-config soak (`build-trace`), merge.
   aligned PSRAM buffer (fix 1). Verify on the device: loader `sd_read` marks
   should become few and large (≥ 4 KB), loads ~10x faster.
 - RUN-11 (fixes 1–5) closed at 4.7 h for this reflash; RUN-12 = fixes 1–6.
+- setvbuf(_IONBF) did NOT change the pattern (newlib unbuffered streams read
+  through a 1-byte buffer; FATFS still serves one sector per call). Converted
+  `loader_service` and `pin_lists_copy` to POSIX read(); `channel_cache` load
+  keeps FILE* (load_new_format takes it) with a file-sized aligned PSRAM stdio
+  buffer. Verified after reflash: loader reads are 64 KB multi-sector (~3.8 ms
+  each), 50 reads/min vs ~5000 before. RUN-20260829-12 = fixes 1–6.
 

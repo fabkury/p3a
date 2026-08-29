@@ -316,3 +316,25 @@ with Fab whether fix 1 goes to main now (it is a release-safe 10-line change),
   already handles it (epoch files); the monitor reports them as information.
 - Fab: laptop-side work may proceed in parallel; device untouched otherwise.
 
+## 2026-08-29 — Laptop-side work while RUN-20260829-01 soaks
+
+- **SD writer audit (closed):** RUN-07 data shows every write size now runs at
+  160–200 us/KB (direct-DMA pace); only single-sector FAT/directory updates are
+  slow per byte (inherent). 15 writes > 50 ms in 1.1 h (card-internal hiccups,
+  max 246 ms) caused no stalls. `psram_malloc` callers (channel cache saves,
+  playlist JSON) do not need the alignment treatment on the evidence; left alone.
+- **H1 closed:** the 0.26–1.15 s `flash_op` spans in RUN-06 are 32-byte NVS
+  reads by a low-priority task starved while an overrun artwork saturated the
+  producer; frames around them show the ordinary overrun sawtooth and no extra
+  lateness. Flash reads are victims of load, not causes of stalls.
+- **Phase 6 numbers (RUN-07, 66 min, 130 artworks):** 13 artworks (10 % of
+  playback time) are producer-bound (median produce > frame duration, e.g.
+  70 ms per 30 ms frame). On those the 250 ms resync fires every 0.5–4.6 s:
+  a visible skip every few seconds. The other 90 % of the time: 0 resyncs.
+  Policy options for Fab: (A) keep as is; (B) when the producer is chronically
+  late (EMA of produce > duration), re-baseline the playhead every frame →
+  uniform slowdown, no periodic skip (matches Fab's "uniform slowing is
+  acceptable"); (C) drop frames to hold real time (changes the art). Recommend B.
+- Phase 7 prep: `sdkconfig.trace.defaults` (trace on, no run-time stats, no dev
+  endpoints) builds into `build-trace/`; not flashed. The Phase 7 soak uses it.
+

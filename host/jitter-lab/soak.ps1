@@ -51,7 +51,9 @@ if ($Start) {
             -WindowStyle Hidden -PassThru -RedirectStandardOutput $logOut -RedirectStandardError (Join-Path $dir "logger.stderr.log")
     $pullArgs = @((Join-Path $lab "pull_frames.py"), $Run, "--host", $DeviceHost, "--every", $Every, "--from-head")
     if ($Hours -gt 0) { $pullArgs += @("--hours", $Hours) }
-    $pp = Start-Process -FilePath "python" -ArgumentList $pullArgs `
+    # Supervisor loop: restart the puller if it exits (watchdog, crash); the cursor lives in pull_state.json.
+    $pullCmd = "while (`$true) { & python " + (($pullArgs | ForEach-Object { '"' + $_ + '"' }) -join ' ') + "; if (`$LASTEXITCODE -eq 0) { break }; Start-Sleep 10 }"
+    $pp = Start-Process -FilePath "pwsh" -ArgumentList @("-NoProfile", "-Command", $pullCmd) `
             -WindowStyle Hidden -PassThru -RedirectStandardOutput $pullOut -RedirectStandardError (Join-Path $dir "puller.stderr.log")
     @{ run = $Run; logger = $lp.Id; puller = $pp.Id; started = (Get-Date).ToString("s"); port = $Port; host = $DeviceHost; every = $Every; hours = $Hours; note = $Note } |
         ConvertTo-Json | Set-Content $pids -Encoding UTF8

@@ -89,9 +89,25 @@ def main():
         os.replace(tmp, st_path)
 
     deadline = time.time() + a.hours * 3600 if a.hours > 0 else None
+
+    # Watchdog: if one loop iteration ever hangs (socket stuck past its timeout,
+    # device wedged mid-stream), exit hard so the supervisor loop in soak.ps1
+    # restarts us; state on disk carries the cursor.
+    import threading
+    loop_started = [time.time()]
+    def _watchdog():
+        while True:
+            time.sleep(30)
+            if time.time() - loop_started[0] > 300:
+                print(f"{now_iso()} WATCHDOG: iteration exceeded 300 s, exiting for restart", flush=True)
+                os._exit(3)
+    threading.Thread(target=_watchdog, daemon=True).start()
+
     n = 0
     while True:
         n += 1
+        loop_started[0] = time.time()
+        st["last_loop"] = now_iso()
         try:
             # Reboot detection: the device ring restarts at seq 1 after a reset.
             head = requests.get(f"{a.host}/api/debug/frames/stats", timeout=15).json()["data"]["next_seq"]

@@ -303,3 +303,16 @@ with Fab whether fix 1 goes to main now (it is a release-safe 10-line change),
    from RUN-06, then Phase 6 (catch-up policy) and Phase 7 (release-config
    soak, merge). If not clean: Phase 4 provocations on the residual signature.
 
+## 2026-08-29 — Day 2: puller "defect" was the wrap-up itself; confirmation soak RUN-20260829-01
+
+- Morning state: no soak ran overnight; device freshly powered, diag build,
+  `p3a-fab.local` up, COM5 free, all day-1 processes gone.
+- RUN-08 re-read: the last pull (#8, 17:08:10) was followed by the `-Stop`
+  final pull at 17:08:41. Not a defect. `runs/RUN-20260828-08.md` corrected.
+  Added anyway: `pull_frames.py` watchdog (os._exit if an iteration exceeds
+  300 s) and a supervisor restart loop for the puller in `soak.ps1`.
+- Fab: the device may reboot during the soak (USB-C mishaps, crash reboots);
+  the soak must survive and reboots are not per se jitter-related. Tooling
+  already handles it (epoch files); the monitor reports them as information.
+- Fab: laptop-side work may proceed in parallel; device untouched otherwise.
+

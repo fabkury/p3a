@@ -54,10 +54,6 @@ uint8_t g_upscale_bg_r = 0;
 uint8_t g_upscale_bg_g = 0;
 uint8_t g_upscale_bg_b = 0;
 uint16_t g_upscale_bg_rgb565 = 0;
-int g_upscale_row_start_top = 0;
-int g_upscale_row_end_top = 0;
-int g_upscale_row_start_bottom = 0;
-int g_upscale_row_end_bottom = 0;
 volatile bool g_upscale_worker_top_done = false;
 volatile bool g_upscale_worker_bottom_done = false;
 

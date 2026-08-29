@@ -330,6 +330,62 @@ static void fill_borders_rows(uint8_t *dst_buffer, int dst_w, int dst_h,
 // Worker tasks
 // ============================================================================
 
+// Work-stealing bands (jitter work stream, fix 3, 2026-08-29).
+//
+// The two workers used to own a fixed half of the frame each: top rows on the
+// core-0 worker, bottom rows on the core-1 worker. Anything that stalls core 0
+// for a while (SD command/ISR churn during downloads and cache saves, Wi-Fi
+// interrupts, a busy lower-priority task inflating interrupt time) delayed the
+// core-0 half and therefore the whole frame: measured upscale times of
+// 100-780 ms against a 16 ms norm (docs/jitter/runs/RUN-20260829-*.md).
+// Now both workers pull UPSCALE_BAND_ROWS-row bands from one atomic counter
+// until the frame is done. A stalled core costs at most the band it holds; the
+// other core finishes the rest. Each band is cache-flushed by the worker that
+// wrote it, so DMA coherence is unchanged.
+#define UPSCALE_BAND_ROWS 24
+
+static volatile int s_band_next_row = 0;   // next unclaimed destination row
+static int s_band_dst_h = 0;                // rows in this frame
+
+static void upscale_worker_run_bands(void)
+{
+    if (!g_upscale_src_buffer || !g_upscale_dst_buffer) {
+        return;
+    }
+    for (;;) {
+        const int r0 = __atomic_fetch_add(&s_band_next_row, UPSCALE_BAND_ROWS, __ATOMIC_ACQ_REL);
+        if (r0 >= s_band_dst_h) {
+            break;
+        }
+        int r1 = r0 + UPSCALE_BAND_ROWS;
+        if (r1 > s_band_dst_h) {
+            r1 = s_band_dst_h;
+        }
+        blit_upscaled_rows_rgb(g_upscale_src_buffer,
+                               g_upscale_src_w, g_upscale_src_h,
+                               g_upscale_dst_buffer,
+                               EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
+                               r0, r1,
+                               g_upscale_offset_x, g_upscale_offset_y,
+                               g_upscale_scaled_w, g_upscale_scaled_h,
+                               g_upscale_lookup_x, g_upscale_lookup_y,
+                               g_upscale_rotation);
+        if (g_upscale_has_borders) {
+            fill_borders_rows(g_upscale_dst_buffer,
+                              EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
+                              r0, r1,
+                              g_upscale_offset_x, g_upscale_offset_y,
+                              g_upscale_scaled_w, g_upscale_scaled_h);
+        }
+        // Flush this core's cache for the band we wrote so DMA sees it.
+#if DISPLAY_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
+        esp_cache_msync(g_upscale_dst_buffer + (size_t)r0 * g_display_row_stride,
+                        (size_t)(r1 - r0) * g_display_row_stride,
+                        ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+#endif
+    }
+}
+
 void display_upscale_worker_top_task(void *arg)
 {
     (void)arg;
@@ -340,37 +396,8 @@ void display_upscale_worker_top_task(void *arg)
         xTaskNotifyWait(0, UINT32_MAX, &notification_value, portMAX_DELAY);
 
         DISPLAY_MEMORY_BARRIER();
-
-        if (g_upscale_src_buffer && g_upscale_dst_buffer &&
-            g_upscale_row_start_top < g_upscale_row_end_top) {
-            blit_upscaled_rows_rgb(g_upscale_src_buffer,
-                                   g_upscale_src_w, g_upscale_src_h,
-                                   g_upscale_dst_buffer,
-                                   EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
-                                   g_upscale_row_start_top, g_upscale_row_end_top,
-                                   g_upscale_offset_x, g_upscale_offset_y,
-                                   g_upscale_scaled_w, g_upscale_scaled_h,
-                                   g_upscale_lookup_x, g_upscale_lookup_y,
-                                   g_upscale_rotation);
-            if (g_upscale_has_borders) {
-                fill_borders_rows(g_upscale_dst_buffer,
-                                  EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
-                                  g_upscale_row_start_top, g_upscale_row_end_top,
-                                  g_upscale_offset_x, g_upscale_offset_y,
-                                  g_upscale_scaled_w, g_upscale_scaled_h);
-            }
-        }
-
+        upscale_worker_run_bands();
         DISPLAY_MEMORY_BARRIER();
-
-        // Flush this core's cache for the rows we wrote to ensure DMA sees them
-#if DISPLAY_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
-        if (g_upscale_dst_buffer && g_upscale_row_end_top > g_upscale_row_start_top) {
-            uint8_t *flush_start = g_upscale_dst_buffer + (size_t)g_upscale_row_start_top * g_display_row_stride;
-            size_t flush_size = (size_t)(g_upscale_row_end_top - g_upscale_row_start_top) * g_display_row_stride;
-            esp_cache_msync(flush_start, flush_size, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-        }
-#endif
 
         g_upscale_worker_top_done = true;
         if (g_upscale_main_task) {
@@ -389,37 +416,8 @@ void display_upscale_worker_bottom_task(void *arg)
         xTaskNotifyWait(0, UINT32_MAX, &notification_value, portMAX_DELAY);
 
         DISPLAY_MEMORY_BARRIER();
-
-        if (g_upscale_src_buffer && g_upscale_dst_buffer &&
-            g_upscale_row_start_bottom < g_upscale_row_end_bottom) {
-            blit_upscaled_rows_rgb(g_upscale_src_buffer,
-                                   g_upscale_src_w, g_upscale_src_h,
-                                   g_upscale_dst_buffer,
-                                   EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
-                                   g_upscale_row_start_bottom, g_upscale_row_end_bottom,
-                                   g_upscale_offset_x, g_upscale_offset_y,
-                                   g_upscale_scaled_w, g_upscale_scaled_h,
-                                   g_upscale_lookup_x, g_upscale_lookup_y,
-                                   g_upscale_rotation);
-            if (g_upscale_has_borders) {
-                fill_borders_rows(g_upscale_dst_buffer,
-                                  EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES,
-                                  g_upscale_row_start_bottom, g_upscale_row_end_bottom,
-                                  g_upscale_offset_x, g_upscale_offset_y,
-                                  g_upscale_scaled_w, g_upscale_scaled_h);
-            }
-        }
-
+        upscale_worker_run_bands();
         DISPLAY_MEMORY_BARRIER();
-
-        // Flush this core's cache for the rows we wrote to ensure DMA sees them
-#if DISPLAY_HAVE_CACHE_MSYNC && defined(CONFIG_P3A_LCD_ENABLE_CACHE_FLUSH)
-        if (g_upscale_dst_buffer && g_upscale_row_end_bottom > g_upscale_row_start_bottom) {
-            uint8_t *flush_start = g_upscale_dst_buffer + (size_t)g_upscale_row_start_bottom * g_display_row_stride;
-            size_t flush_size = (size_t)(g_upscale_row_end_bottom - g_upscale_row_start_bottom) * g_display_row_stride;
-            esp_cache_msync(flush_start, flush_size, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-        }
-#endif
 
         g_upscale_worker_bottom_done = true;
         if (g_upscale_main_task) {
@@ -462,10 +460,6 @@ void display_renderer_parallel_upscale_rgb(const uint8_t *src_rgb, int src_w, in
         return;
     }
 
-#if !DISPLAY_UPSCALE_SINGLE_WORKER
-    const int mid_row = dst_h / 2;
-#endif
-
     g_upscale_src_buffer = src_rgb;
     g_upscale_dst_buffer = dst_buffer;
     g_upscale_lookup_x = lookup_x;
@@ -485,26 +479,26 @@ void display_renderer_parallel_upscale_rgb(const uint8_t *src_rgb, int src_w, in
     g_upscale_worker_top_done = false;
     g_upscale_worker_bottom_done = false;
 
-#if DISPLAY_UPSCALE_SINGLE_WORKER
-    g_upscale_row_start_top = 0;
-    g_upscale_row_end_top = dst_h;
-    g_upscale_row_start_bottom = dst_h;
-    g_upscale_row_end_bottom = dst_h;
-#else
-    g_upscale_row_start_top = 0;
-    g_upscale_row_end_top = mid_row;
-    g_upscale_row_start_bottom = mid_row;
-    g_upscale_row_end_bottom = dst_h;
-#endif
+    // Band-stealing dispatch: both workers pull rows from s_band_next_row.
+    s_band_dst_h = dst_h;
+    __atomic_store_n(&s_band_next_row, 0, __ATOMIC_RELEASE);
 
     DISPLAY_MEMORY_BARRIER();
 
+#if DISPLAY_UPSCALE_SINGLE_WORKER
+    // Debug mode: only the core-0 worker runs; the bottom worker is not notified.
+    g_upscale_worker_bottom_done = true;
+    if (g_upscale_worker_top) {
+        xTaskNotify(g_upscale_worker_top, 1, eSetBits);
+    }
+    const uint32_t all_bits = (1UL << 0);
+#else
     if (g_upscale_worker_top && g_upscale_worker_bottom) {
         xTaskNotify(g_upscale_worker_top, 1, eSetBits);
         xTaskNotify(g_upscale_worker_bottom, 1, eSetBits);
     }
-
     const uint32_t all_bits = (1UL << 0) | (1UL << 1);
+#endif
     uint32_t notification_value = 0;
 
     while ((notification_value & all_bits) != all_bits) {

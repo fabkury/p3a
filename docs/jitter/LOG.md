@@ -337,4 +337,9 @@ with Fab whether fix 1 goes to main now (it is a release-safe 10-line change),
   acceptable"); (C) drop frames to hold real time (changes the art). Recommend B.
 - Phase 7 prep: `sdkconfig.trace.defaults` (trace on, no run-time stats, no dev
   endpoints) builds into `build-trace/`; not flashed. The Phase 7 soak uses it.
+- Phase 7 artifact ready: `build-trace/p3a.bin` = release sdkconfig +
+  `sdkconfig.trace.defaults` (trace on, 32 k ring; no run-time stats, no dev
+  endpoints). First attempt exposed a compile bug in frame_trace.c when the
+  FreeRTOS stats symbols are absent (fixed, `5c577bb0`). Release sdkconfig
+  unchanged. Not flashed: RUN-20260829-01 keeps running on the diag build.
 

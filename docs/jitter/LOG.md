@@ -359,3 +359,26 @@ with Fab whether fix 1 goes to main now (it is a release-safe 10-line change),
   residual rate; 1 stall in the first 30 min). After ≥ 3 h, flash diag with
   fix 2 and run RUN-20260829-02 for comparison.
 
+## 2026-08-29 — Phase 4 done: trigger = SD bounce loop; config-wipe incident (fixed); RUN-07
+
+- Full write-up: `runs/RUN-20260829-02-06-experiments.md`. Short: only a
+  PSRAM-misaligned multi-sector write (the driver's 512 B bounce loop with its
+  CMD13 polling) blows up the CPU upscale; aligned or internal buffers and
+  single-sector FATFS writes never do; CPU memory streaming never does (H4
+  closed). Fix 1 + fix 2 remove every bounce-path writer we know of.
+- **Incident:** my `snapshot_settings.py restore` wiped the device config
+  (`PUT /config` without `?merge=true` replaces it). Restored everything from
+  the day-1 capture, rebooted, verified (device_name fab, sdcard_root /p3a2,
+  4 API keys). Tool hardened. Also: `soak.ps1 -Stop` now kills the puller's
+  python child (the supervisor loop had respawned a RUN-01 puller).
+- Device IP changed twice today (DHCP); tools go by `p3a-fab.local` and refuse
+  anything that is not hostname `p3a-fab`.
+- RUN-20260829-07 = the fix-2 soak (fix 1 + fix 2), started after the reboot.
+
+**Next:** let RUN-07 run several hours; analyze against the pass bar and
+against RUN-20260829-01 (fix 1 only, 7.8 stalls/h). If clean: cherry-pick
+fix 2 (`5496ded0`) to main, Phase 6 policy decision with Fab, Phase 7
+release-config soak with `build-trace`, then merge. Remaining curiosity:
+why the driver's CMD13 loop also slows `upscale_bottom` on core 1 (SDMMC ISR
+affinity?) — not needed for the pass bar.
+

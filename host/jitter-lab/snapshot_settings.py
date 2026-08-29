@@ -6,10 +6,11 @@
     python host/jitter-lab/snapshot_settings.py set     RUN-20260828-01 --show-fps 1 --dwell 30 --playset "Work mix"
 
 Saved to runs/<RUN>/settings_before.json with every *_api_key field REDACTED
-(GET /config returns keys in the clear). Restore only touches the fields this
-tool knows how to set (show_fps, max_speed_playback, brightness, rotation via
-PUT /config; dwell_time via PUT /settings/dwell_time; active playset via
-POST /playset/<name>), never keys.
+(GET /config returns keys in the clear). `set` records what it changed in
+runs/<RUN>/settings_changed.json; `restore` puts back ONLY those fields, each
+via `PUT /config?merge=true` (a PUT without merge=true REPLACES the whole
+config: keys, sdcard_root and device_name are lost -- incident 2026-08-29),
+dwell via PUT /settings/dwell_time, playset via POST /playset/<name>.
 """
 import argparse
 import json
@@ -63,9 +64,12 @@ def apply(host, show_fps=None, max_speed=None, brightness=None, rotation=None, d
     if brightness is not None: body["brightness"] = int(brightness)
     if rotation is not None: body["rotation"] = int(rotation)
     if body:
-        r = requests.put(f"{host}/config", json=body, timeout=15)
+        # ALWAYS merge=true: without it, PUT /config REPLACES the whole config
+        # (API keys, sdcard_root, device_name gone). Learned the hard way on
+        # 2026-08-29 (docs/jitter/LOG.md, "config wipe incident").
+        r = requests.put(f"{host}/config?merge=true", json=body, timeout=15)
         r.raise_for_status()
-        print("PUT /config", body, "->", r.status_code)
+        print("PUT /config?merge=true", body, "->", r.status_code)
     if dwell is not None:
         r = requests.put(f"{host}/settings/dwell_time", json={"dwell_time": int(dwell)}, timeout=15)
         r.raise_for_status()
@@ -103,8 +107,15 @@ def main():
     if a.cmd == "show":
         print(json.dumps(snapshot(a.host), indent=1))
         return 0
+    changed_path = run_dir / "settings_changed.json"
     if a.cmd == "set":
         apply(a.host, a.show_fps, a.max_speed, a.brightness, a.rotation, a.dwell, a.playset)
+        ch = json.loads(changed_path.read_text(encoding="utf-8")) if changed_path.exists() else {}
+        for k, v in (("show_fps", a.show_fps), ("max_speed_playback", a.max_speed), ("brightness", a.brightness),
+                     ("rotation", a.rotation), ("dwell_time", a.dwell), ("playset", a.playset)):
+            if v is not None:
+                ch[k] = True
+        changed_path.write_text(json.dumps(ch), encoding="utf-8")
         return 0
     if a.cmd == "restore":
         if not before.exists():
@@ -115,15 +126,21 @@ def main():
         dwell = s.get("dwell_time", {})
         dwell_val = dwell.get("dwell_time") if isinstance(dwell, dict) else dwell
         ps = s.get("active_playset") or {}
-        cur = snapshot(a.host)
         ps_name = ps.get("name") if isinstance(ps, dict) else None
-        cur_name = (cur.get("active_playset") or {}).get("name")
+        ch = json.loads(changed_path.read_text(encoding="utf-8")) if changed_path.exists() else {}
+        if not ch:
+            print("nothing was changed through this tool for this run; not touching the device")
+            return 0
+        # Restore ONLY the fields this tool changed (settings_changed.json), each via merge=true.
         apply(a.host,
-              show_fps=cfg.get("show_fps"), max_speed=cfg.get("max_speed_playback"),
-              brightness=cfg.get("brightness"), rotation=cfg.get("rotation"),
-              dwell=dwell_val,
-              playset=(ps_name if ps_name and ps_name != cur_name else None))
-        print("restored")
+              show_fps=cfg.get("show_fps") if ch.get("show_fps") else None,
+              max_speed=cfg.get("max_speed_playback") if ch.get("max_speed_playback") else None,
+              brightness=cfg.get("brightness") if ch.get("brightness") else None,
+              rotation=cfg.get("rotation") if ch.get("rotation") else None,
+              dwell=dwell_val if ch.get("dwell_time") else None,
+              playset=ps_name if ch.get("playset") else None)
+        changed_path.unlink()
+        print("restored:", sorted(ch))
         return 0
 
 

@@ -80,7 +80,17 @@ if ($Stop) {
     $p = Read-Pids
     if ($p) {
         foreach ($id in @($p.puller, $p.logger)) {
-            if (Alive $id) { Stop-Process -Id $id -Force -Confirm:$false; Write-Output "stopped pid $id" }
+            if (Alive $id) {
+                # The puller is a pwsh supervisor loop: kill its python child first, then the loop.
+                Get-CimInstance Win32_Process -Filter "ParentProcessId = $id" | ForEach-Object {
+                    Stop-Process -Id $_.ProcessId -Force -Confirm:$false; Write-Output "stopped child pid $($_.ProcessId)"
+                }
+                Stop-Process -Id $id -Force -Confirm:$false; Write-Output "stopped pid $id"
+            }
+        }
+        # Belt and braces: any pull_frames.py still running for this run.
+        Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" | Where-Object { $_.CommandLine -like "*pull_frames.py*$Run*" } | ForEach-Object {
+            Stop-Process -Id $_.ProcessId -Force -Confirm:$false; Write-Output "stopped stray puller pid $($_.ProcessId)"
         }
     }
     # Final pull + analysis

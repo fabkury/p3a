@@ -25,6 +25,7 @@
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_cache.h"
 #include "cJSON.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -330,6 +331,34 @@ static void provoke_mem_task(void *arg)
     vTaskDelete(NULL);
 }
 
+// Cache-sync provocation (H4c): loop esp_cache_msync() C2M+M2C on a buffer of
+// `kb` KB (PSRAM by default, internal if buf=2) for `ms` ms on `core` at `prio`,
+// with no SD traffic at all. Every SD transaction performs such syncs on its
+// buffer and DMA descriptors; if syncs alone slow the upscale, the L2 cache
+// sync is the toxic primitive behind SD command storms.
+typedef struct { uint32_t kb, ms, prio, core, internal; } msync_prov_t;
+static void provoke_msync_task(void *arg)
+{
+    msync_prov_t *pv = (msync_prov_t *)arg;
+    const size_t bytes = (size_t)pv->kb * 1024;
+    uint8_t *buf = heap_caps_aligned_alloc(128, bytes, (pv->internal ? (MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA) : MALLOC_CAP_SPIRAM) | MALLOC_CAP_8BIT);
+    if (!buf) { free(pv); vTaskDelete(NULL); return; }
+    memset(buf, 0x3C, bytes);
+    const uint32_t code = 0x7Au << 24 | (pv->internal ? 0x800000u : 0) | (pv->kb & 0xFFFF);
+    frame_trace_mark(FT_MARK_PROVOKE, FT_PHASE_BEGIN, code);
+    const int64_t end = esp_timer_get_time() + (int64_t)pv->ms * 1000;
+    uint32_t ops = 0;
+    while (esp_timer_get_time() < end) {
+        esp_cache_msync(buf, bytes, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+        esp_cache_msync(buf, bytes, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+        buf[(ops * 64) % bytes] ^= 1;   // keep a line dirty
+        ops += 2;
+    }
+    frame_trace_mark(FT_MARK_PROVOKE, FT_PHASE_END, ops);
+    free(buf); free(pv);
+    vTaskDelete(NULL);
+}
+
 static void provoke_cpu1_task(void *arg)
 {
     uint32_t ms = (uint32_t)(uintptr_t)arg;
@@ -368,6 +397,18 @@ static esp_err_t h_post_provoke(httpd_req_t *req)
         if (pv->kb > 4096) pv->kb = 4096;
         if (pv->prio > 20) pv->prio = 20;
         xTaskCreatePinnedToCore(provoke_mem_task, "jtr_mem", 4096, pv, (UBaseType_t)pv->prio, NULL, (BaseType_t)(pv->core ? 1 : 0));
+    } else if (strcmp(kind, "msync") == 0) {
+        msync_prov_t *pv = calloc(1, sizeof(*pv));
+        if (!pv) { send_json_oom(req); return ESP_OK; }
+        pv->kb = 1; pv->ms = n; pv->prio = 4; pv->core = 0; pv->internal = 0;
+        (void)query_u32(req, "kb", &pv->kb);
+        (void)query_u32(req, "prio", &pv->prio);
+        (void)query_u32(req, "core", &pv->core);
+        (void)query_u32(req, "buf", &pv->internal);   // 2 = internal RAM (L1), else PSRAM (L2)
+        pv->internal = (pv->internal == 2);
+        if (pv->kb > 1024) pv->kb = 1024;
+        if (pv->prio > 20) pv->prio = 20;
+        xTaskCreatePinnedToCore(provoke_msync_task, "jtr_msync", 4096, pv, (UBaseType_t)pv->prio, NULL, (BaseType_t)(pv->core ? 1 : 0));
     } else if (strcmp(kind, "cpu1") == 0) {
         // Busy-spin on core 1 above the consumer's priority for n ms: validates
         // detection + run-time-stats attribution.

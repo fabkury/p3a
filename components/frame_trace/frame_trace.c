@@ -486,16 +486,29 @@ static void ft_report(uint32_t stall_seq)
     ft_entry_t buf[16];
     uint32_t s = start;
     int printed = 0;
+    uint32_t skipped_short_sd = 0;
     for (;;) {
         size_t n = frame_trace_read(s, buf, 16, &next);
         if (n == 0) break;
         for (size_t i = 0; i < n; i++) {
             if (buf[i].seq > stall_seq + 4) { n = 0; break; }
+            // Keep the report small: a 30 KB report at 115200 baud is ~2.6 s of
+            // UART output on core 0, which measurably drags the render core
+            // (RUN-20260829-13-logexp: +18 % upscale time). Sub-millisecond
+            // SD spans are summarized by count instead of printed.
+            if (buf[i].type == FT_TYPE_MARK && buf[i].lateness_us > 0 && buf[i].lateness_us < 1000 &&
+                (buf[i].kind == FT_MARK_SD_READ || buf[i].kind == FT_MARK_SD_WRITE)) {
+                skipped_short_sd++;
+                continue;
+            }
             ft_print_entry(&buf[i]);
-            if (++printed >= 400) { n = 0; break; }
+            if (++printed >= 120) { n = 0; break; }
         }
         if (n == 0) break;
         s = next;
+    }
+    if (skipped_short_sd) {
+        printf("JTR|S short_sd_spans_not_printed=%" PRIu32 "\n", skipped_short_sd);
     }
 #if FT_HAVE_RUNTIME_STATS
     ft_print_runtime_delta();

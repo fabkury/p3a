@@ -248,9 +248,11 @@ static void provoke_log(uint32_t n)
 {
     static const char pad[] = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                               "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    frame_trace_mark(FT_MARK_PROVOKE, FT_PHASE_BEGIN, 0x10u << 24 | n);
     for (uint32_t i = 0; i < n; i++) {
         ESP_LOGI(DBG_TAG, "provoke log %" PRIu32 "/%" PRIu32 " %s", i + 1, n, pad);
     }
+    frame_trace_mark(FT_MARK_PROVOKE, FT_PHASE_END, 0x10u << 24 | n);
 }
 
 // SD write provocation with controlled buffer placement (jitter work stream, H3b/H4):

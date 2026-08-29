@@ -410,3 +410,19 @@ Phase 7 release-config soak (`build-trace`), merge.
   16 → 4, `LAI_VERIFY_BATCH_DELAY_MS` 50 → 40 (~100 stats/s). RUN-11 will
   carry fixes 4 + 5 together (both pace single-sector command bursts).
 
+## 2026-08-29 — RUN-10 closed (3.1/h), UART-log provocation, RUN-11 (fixes 1–5) started
+
+- RUN-10 (`runs/RUN-20260829-10.md`): fixes 1+2+3, 3 stalls / 0.96 h. Two
+  are the burst classes fixes 4/5 pace; one pair (#3/#4) had no SD activity:
+  consumer vsync wait 143 ms, then decode 24 → 144 ms while the diag reporter
+  printed on UART.
+- H5 measured on the bar GIF (`RUN-20260829-13-logexp`): ESP_LOGI floods from
+  core 0 (100/300/600 lines of ~180 B) slow the core-1 upscale uniformly
+  16.5 → 19.5 ms (+18 %) but cause 0 anomalies; a busy-spin control causes
+  none. So UART output is a mild drag, not a stall source; the diag reporter's
+  own 30 KB reports remain a possible observer effect on the frames right
+  after a stall (to be trimmed).
+- RUN-20260829-11 started with fixes 1–5 (diag build 05c37fa5 + marked log
+  provoke). Ladder so far: RUN-06 37.7/h → RUN-01 7.8/h → RUN-07 2.7/h →
+  RUN-10 3.1/h → RUN-11 ?.
+

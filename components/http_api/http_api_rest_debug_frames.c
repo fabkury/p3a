@@ -296,6 +296,40 @@ static void provoke_sd(uint32_t n, uint32_t chunk, uint32_t mode)
     free(raw);
 }
 
+// Memory-traffic provocation (H4 variant): a task on core `core` at priority
+// `prio` streams through a PSRAM buffer of `kb` KB (memcpy + CRC-like read) for
+// `ms` milliseconds. Control: kind=spin (same task, no memory traffic).
+typedef struct { uint32_t kb, ms, prio, core; bool spin; } mem_prov_t;
+static void provoke_mem_task(void *arg)
+{
+    mem_prov_t *pv = (mem_prov_t *)arg;
+    const uint32_t code = (pv->spin ? 0x5Fu : 0x3Eu) << 24 | (pv->kb & 0xFFFFFF);
+    uint8_t *a = NULL, *b = NULL;
+    const size_t bytes = (size_t)pv->kb * 1024;
+    if (!pv->spin) {
+        a = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        b = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!a || !b) { free(a); free(b); free(pv); vTaskDelete(NULL); return; }
+        memset(a, 0x5A, bytes);
+    }
+    frame_trace_mark(FT_MARK_PROVOKE, FT_PHASE_BEGIN, code);
+    const int64_t end = esp_timer_get_time() + (int64_t)pv->ms * 1000;
+    volatile uint32_t sink = 0;
+    while (esp_timer_get_time() < end) {
+        if (pv->spin) {
+            sink++;
+        } else {
+            memcpy(b, a, bytes);
+            uint32_t h = 2166136261u;
+            for (size_t i = 0; i < bytes; i += 4) { h ^= b[i]; h *= 16777619u; }
+            sink += h;
+        }
+    }
+    frame_trace_mark(FT_MARK_PROVOKE, FT_PHASE_END, code);
+    free(a); free(b); free(pv);
+    vTaskDelete(NULL);
+}
+
 static void provoke_cpu1_task(void *arg)
 {
     uint32_t ms = (uint32_t)(uintptr_t)arg;
@@ -315,7 +349,6 @@ static esp_err_t h_post_provoke(httpd_req_t *req)
     (void)query_u32(req, "n", &n);
     if (n > 10000) n = 10000;
 
-    frame_trace_mark(FT_MARK_PROVOKE, FT_PHASE_BEGIN, kind[0]);
     if (strcmp(kind, "nvs") == 0) {
         provoke_nvs(n);
     } else if (strcmp(kind, "log") == 0) {
@@ -325,17 +358,25 @@ static esp_err_t h_post_provoke(httpd_req_t *req)
         (void)query_u32(req, "chunk", &chunk);
         (void)query_u32(req, "buf", &mode);   // 0 psram-misaligned, 1 psram-aligned, 2 internal
         provoke_sd(n, chunk, mode);
+    } else if (strcmp(kind, "mem") == 0 || strcmp(kind, "spin") == 0) {
+        mem_prov_t *pv = calloc(1, sizeof(*pv));
+        if (!pv) { send_json_oom(req); return ESP_OK; }
+        pv->kb = 256; pv->ms = n; pv->prio = 4; pv->core = 0; pv->spin = (kind[0] == 's');
+        (void)query_u32(req, "kb", &pv->kb);
+        (void)query_u32(req, "prio", &pv->prio);
+        (void)query_u32(req, "core", &pv->core);
+        if (pv->kb > 4096) pv->kb = 4096;
+        if (pv->prio > 20) pv->prio = 20;
+        xTaskCreatePinnedToCore(provoke_mem_task, "jtr_mem", 4096, pv, (UBaseType_t)pv->prio, NULL, (BaseType_t)(pv->core ? 1 : 0));
     } else if (strcmp(kind, "cpu1") == 0) {
         // Busy-spin on core 1 above the consumer's priority for n ms: validates
         // detection + run-time-stats attribution.
         xTaskCreatePinnedToCore(provoke_cpu1_task, "jtr_hog", 2048, (void *)(uintptr_t)n,
                                 CONFIG_P3A_RENDER_TASK_PRIORITY + 2, NULL, 1);
     } else {
-        frame_trace_mark(FT_MARK_PROVOKE, FT_PHASE_END, kind[0]);
-        send_json_error(req, 400, "BAD_KIND", "kind must be nvs|log|sd|cpu1");
+        send_json_error(req, 400, "BAD_KIND", "kind must be nvs|log|sd|cpu1|mem|spin");
         return ESP_OK;
     }
-    frame_trace_mark(FT_MARK_PROVOKE, FT_PHASE_END, kind[0]);
     send_json(req, 200, "{\"ok\":true}");
     return ESP_OK;
 }

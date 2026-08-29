@@ -36,7 +36,13 @@ static const char *TAG = "frame_trace";
 #define FT_STALL_RECENT_US  2000000LL   // overlay red tick duration
 #define FT_LOG_SLOW_US      2000        // a single log call slower than this is marked
 
-#define FT_HAVE_RUNTIME_STATS (CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS && CONFIG_FREERTOS_USE_TRACE_FACILITY)
+// 1 when the diag overlay enables per-task run-time accounting, 0 otherwise
+// (a plain trace-only build has neither Kconfig symbol defined).
+#if defined(CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS) && defined(CONFIG_FREERTOS_USE_TRACE_FACILITY)
+#define FT_HAVE_RUNTIME_STATS 1
+#else
+#define FT_HAVE_RUNTIME_STATS 0
+#endif
 #define FT_MAX_TASKS        64
 
 static ft_entry_t *s_ring = NULL;

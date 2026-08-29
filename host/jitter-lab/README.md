@@ -55,6 +55,14 @@ Caveat: `JTR|T` deltas compare the current task list with the reporter's
 last periodic snapshot (≤ 1 s old); a task that was created and deleted inside
 the window (e.g. the `cpu1` provoke hog) does not appear. Persistent culprits do.
 
+## Invoking builds from an agent session
+
+Never pipe `build.ps1` / `idf.py` through `Select-Object -First N`: PowerShell
+stops the upstream pipeline once N objects have passed, which kills the build
+mid-way (it happened 2026-08-29 with cmake's "Performing Test ... Failed" lines
+matching an `error|failed` filter). Redirect the full output to a log file and
+grep it afterwards, or use `Select-Object -Last N`.
+
 ## Typical session
 
 ```powershell

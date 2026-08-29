@@ -425,4 +425,16 @@ Phase 7 release-config soak (`build-trace`), merge.
 - RUN-20260829-11 started with fixes 1–5 (diag build 05c37fa5 + marked log
   provoke). Ladder so far: RUN-06 37.7/h → RUN-01 7.8/h → RUN-07 2.7/h →
   RUN-10 3.1/h → RUN-11 ?.
+- 17:11 (3.7 h into RUN-11): one cluster of 6 UART reports in 30 s on gen 431
+  (30 ms frames, ~28 ms produce: zero margin). Decode 56–65 ms vs 14.5 ms
+  median, upscale normal, during download writes (32 KB, 10–42 ms each, slow
+  card) and a 396-command single-sector read storm by `anim_loader` (directory
+  traversal / FAT walk while loading the next artwork). Analyzer: 1 in-scope
+  stall in 3.7 h (0.3/h) vs 3.1/h before fixes 4+5. Residual class = any SD
+  command storm (loader path traversal is the remaining unpaced source) hitting
+  a zero-margin artwork; root physics still unknown.
+- Candidate fix 6 (structural, for Fab to weigh): more frames of slack, since
+  the 3 DPI buffers give the producer ~1 frame of margin. esp_lcd DPI caps
+  `num_fbs` at 3, so extra slack means render-side PSRAM buffers plus a copy
+  (PPA/DMA2D) into the DPI buffer, ~1.5 MB per buffer. Not started.
 

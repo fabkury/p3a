@@ -729,16 +729,31 @@ esp_err_t channel_cache_flush_one(channel_cache_t *cache, const char *channels_p
     return err;
 }
 
+// Gap between consecutive cache saves inside one flush. A save is a burst of
+// single-sector SD commands (temp file, rename, FAT and directory updates);
+// several saves back-to-back made bursts of 180-240 commands in well under a
+// second, and every such burst stalled playback for 100-300 ms (jitter work
+// stream, RUN-20260829-07: the three stalls were exactly the three largest
+// bursts; single-cache bursts of ~60 commands never stalled). Spacing the saves
+// keeps each burst at single-cache size. The flush runs on the event_bus task;
+// nothing waits on it.
+#define CACHE_FLUSH_SAVE_GAP_MS 300
+
 void channel_cache_flush_all(const char *channels_path)
 {
     if (!s_cache_state.registry_mutex) return;
 
     xSemaphoreTake(s_cache_state.registry_mutex, portMAX_DELAY);
 
+    bool saved_one = false;
     for (size_t i = 0; i < s_cache_state.registered_count; i++) {
         channel_cache_t *cache = s_cache_state.registered[i];
         if (cache && cache->dirty) {
+            if (saved_one) {
+                vTaskDelay(pdMS_TO_TICKS(CACHE_FLUSH_SAVE_GAP_MS));
+            }
             esp_err_t err = channel_cache_save(cache, channels_path);
+            saved_one = true;
             if (err == ESP_OK) {
                 cache->dirty = false;
             } else {

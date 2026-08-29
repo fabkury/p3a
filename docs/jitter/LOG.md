@@ -382,3 +382,25 @@ release-config soak with `build-trace`, then merge. Remaining curiosity:
 why the driver's CMD13 loop also slows `upscale_bottom` on core 1 (SDMMC ISR
 affinity?) — not needed for the pass bar.
 
+## 2026-08-29 — Fix 3 (band stealing) does not remove provoked stalls; storm source found; fix 4
+
+- RUN-07 (`runs/RUN-20260829-07.md`): 5 stalls / 1.84 h, each inside a
+  `channel_cache_flush_all` burst of ≥ 180 single-sector SD commands.
+- Provocations on the pinned bar GIF: cache-sync loops (PSRAM/internal,
+  1–32 KB), memory streaming, busy-spin: 0 anomalies; the bounce write still
+  reproduces (6–9 anomalies, upscale max 535 ms) even with fix 3 flashed.
+  Both cores slow during the burst → the rule is empirical: **rapid-fire
+  single-block SD commands (hundreds within a second) stall playback; paced
+  or multi-block I/O does not.** The hardware-level reason is still unknown
+  (candidates: SDMMC IDMAC bus behaviour with a busy card; not cache syncs,
+  not scheduling) and not needed for the pass bar.
+- Fix 3 (`79d637c0`, work-stealing bands) stays: harmless, and it removes the
+  frame's dependence on a single core for the residual core-0 starvation class.
+- Fix 4: 300 ms gap between consecutive cache saves in `channel_cache_flush_all`
+  (event_bus task). RUN-10 (fixes 1+2+3, started 12:22) is the baseline for it.
+
+**Next:** at ~14:00 stop RUN-10, flash diag with fix 4, run RUN-11 ≥ 2 h,
+compare stall rates (RUN-06 37.7/h → RUN-01 7.8/h → RUN-07 2.7/h → RUN-10 ? →
+RUN-11 ?). Then: cherry-pick fixes 2–4 to main after Fab's OK, Phase 6 policy,
+Phase 7 release-config soak (`build-trace`), merge.
+

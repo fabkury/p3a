@@ -252,27 +252,48 @@ static void provoke_log(uint32_t n)
     }
 }
 
-static void provoke_sd(uint32_t n)
+// SD write provocation with controlled buffer placement (jitter work stream, H3b/H4):
+//   mode 0: PSRAM, deliberately misaligned (+64 B)   -> driver bounces 512 B per SD command
+//   mode 1: PSRAM, 128-byte aligned                  -> direct DMA from PSRAM
+//   mode 2: internal DMA-capable RAM                 -> direct DMA, never touches PSRAM
+// chunk = bytes per fwrite (512..65536), n = number of fwrites. Marks: PROVOKE
+// begin/end with arg = (mode << 24) | chunk; each fwrite shows up as an sd_write span.
+static void provoke_sd(uint32_t n, uint32_t chunk, uint32_t mode)
 {
     char dir[128];
     if (sd_path_get_temporary(dir, sizeof(dir)) != ESP_OK) return;
+    if (chunk < 512) chunk = 512;
+    if (chunk > 65536) chunk = 65536;
     char path[160];
     snprintf(path, sizeof(path), "%s/jtr_provoke.bin", dir);
-    uint8_t *buf = malloc(65536);
-    if (!buf) return;
-    memset(buf, 0xA5, 65536);
+    uint8_t *raw = NULL, *buf = NULL;
+    if (mode == 0) {
+        raw = heap_caps_aligned_alloc(128, chunk + 128, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        buf = raw ? raw + 64 : NULL;
+    } else if (mode == 1) {
+        raw = heap_caps_aligned_alloc(128, chunk, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        buf = raw;
+    } else {
+        raw = heap_caps_aligned_alloc(128, chunk, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        buf = raw;
+    }
+    if (!buf) {
+        ESP_LOGW(DBG_TAG, "provoke sd: alloc failed (mode %u chunk %u)", (unsigned)mode, (unsigned)chunk);
+        return;
+    }
+    memset(buf, 0xA5, chunk);
+    const uint32_t code = (mode << 24) | chunk;
+    frame_trace_mark(FT_MARK_PROVOKE, FT_PHASE_BEGIN, code);
     FILE *f = fopen(path, "wb");
     if (f) {
         for (uint32_t i = 0; i < n; i++) {
-            frame_trace_mark(FT_MARK_SD_WRITE, FT_PHASE_BEGIN, 65536);
-            fwrite(buf, 1, 65536, f);
-            fflush(f);
-            frame_trace_mark(FT_MARK_SD_WRITE, FT_PHASE_END, 65536);
+            fwrite(buf, 1, chunk, f);
         }
         fclose(f);
         unlink(path);
     }
-    free(buf);
+    frame_trace_mark(FT_MARK_PROVOKE, FT_PHASE_END, code);
+    free(raw);
 }
 
 static void provoke_cpu1_task(void *arg)
@@ -300,7 +321,10 @@ static esp_err_t h_post_provoke(httpd_req_t *req)
     } else if (strcmp(kind, "log") == 0) {
         provoke_log(n);
     } else if (strcmp(kind, "sd") == 0) {
-        provoke_sd(n);
+        uint32_t chunk = 32768, mode = 0;
+        (void)query_u32(req, "chunk", &chunk);
+        (void)query_u32(req, "buf", &mode);   // 0 psram-misaligned, 1 psram-aligned, 2 internal
+        provoke_sd(n, chunk, mode);
     } else if (strcmp(kind, "cpu1") == 0) {
         // Busy-spin on core 1 above the consumer's priority for n ms: validates
         // detection + run-time-stats attribution.

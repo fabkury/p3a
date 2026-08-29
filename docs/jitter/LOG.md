@@ -343,3 +343,19 @@ with Fab whether fix 1 goes to main now (it is a release-safe 10-line change),
   FreeRTOS stats symbols are absent (fixed, `5c577bb0`). Release sdkconfig
   unchanged. Not flashed: RUN-20260829-01 keeps running on the diag build.
 
+## 2026-08-29 — Residual stall found (event_bus cache saves); fix 2 prepared (not flashed)
+
+- RUN-20260829-01 first report at t=1748 s: gen 56 (overrun artwork) frame
+  with upscale 118 ms (norm 16.5) right after a burst of `sd_write` spans by
+  task `event_bus` (FNV 06a2ea8e): a 15 872-byte write taking 94 ms (bounce
+  pace, ~6 ms/KB) + dozens of 512-byte FAT/dir writes. Those are channel-cache
+  saves (`fs_atomic_write` from a `psram_malloc` buffer, 248 entries × 64 B).
+- Correction to the morning audit: `psram_malloc` buffers are aligned only by
+  luck, so the same size is sometimes fast (direct DMA) and sometimes bounced.
+  Fix 2: `psram_malloc`/`psram_calloc` return 128-byte-aligned PSRAM blocks
+  (no realloc on those pointers anywhere in the tree; internal fallback
+  unchanged), plus `pin_lists_copy` chunk and `http_api_upload` recv buffer.
+- A/B plan: RUN-20260829-01 keeps running on fix 1 only (baseline for the
+  residual rate; 1 stall in the first 30 min). After ≥ 3 h, flash diag with
+  fix 2 and run RUN-20260829-02 for comparison.
+

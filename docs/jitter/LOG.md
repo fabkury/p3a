@@ -461,3 +461,25 @@ Phase 7 release-config soak (`build-trace`), merge.
   buffer. Verified after reflash: loader reads are 64 KB multi-sector (~3.8 ms
   each), 50 reads/min vs ~5000 before. RUN-20260829-12 = fixes 1–6.
 
+## 2026-08-29 evening — overnight soak RUN-20260829-12 (fixes 1–6)
+
+- Running unattended: RUN-20260829-12 started 18:22 on diag build 76894598
+  (fixes 1–6, trimmed reporter), "Work mix", 30 s pulls, logger on COM5.
+  Detached processes in `runs/RUN-20260829-12/pids.json`; hourly heartbeat +
+  per-stall events in this session's Monitor; a 07:30 checkpoint analyzes
+  without stopping the soak. First hour: 0 reports.
+- Fab's instructions: leave everything running overnight; device may reboot
+  on its own (tooling survives, epochs logged).
+- Morning protocol (any session): `soak.ps1 -Status -Run RUN-20260829-12`,
+  then `analyze.py RUN-20260829-12` and `compare_runs.py RUN-20260829-11
+  RUN-20260829-12`; decide: (a) if 0 in-scope stalls over ≥ 8 h → pass bar met
+  on the diag build; move to Phase 7 (release-config soak with `build-trace`,
+  same fixes) and prepare the cherry-pick of fixes 2–6 to main for Fab's OK;
+  (b) if residual stalls → classify by the marks (the remaining unpaced
+  single-sector sources: FATFS directory/FAT traffic of the loader's stat/open,
+  download 32 KB writes on a slow card, failed-load error paths) and decide
+  between more pacing and fix 6b (extra frames of slack).
+- Still pending Fab's decisions: Phase 6 catch-up policy (option B recommended),
+  cherry-pick of fixes 2–6 to main, whether to keep the diag reporter's UART
+  output in the field build (no: release has none).
+

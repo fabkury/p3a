@@ -799,15 +799,17 @@ esp_err_t http_api_start(void) {
 
         bool task_created = false;
         if (s_api_worker_stack) {
-            s_worker = xTaskCreateStatic(api_worker_task, "api_worker",
+            // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+            s_worker = xTaskCreateStaticPinnedToCore(api_worker_task, "api_worker",
                                           api_worker_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY,
-                                          s_api_worker_stack, &s_api_worker_task_buffer);
+                                          s_api_worker_stack, &s_api_worker_task_buffer, 0);
             task_created = (s_worker != NULL);
         }
 
         if (!task_created) {
-            if (xTaskCreate(api_worker_task, "api_worker",
-                            api_worker_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_worker) != pdPASS) {
+            // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+            if (xTaskCreatePinnedToCore(api_worker_task, "api_worker",
+                            api_worker_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_worker, 0) != pdPASS) {
                 ESP_LOGE(HTTP_API_TAG, "Failed to create worker task");
                 return ESP_ERR_NO_MEM;
             }
@@ -829,6 +831,7 @@ esp_err_t http_api_start(void) {
 
     // Start HTTP server
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
+    cfg.core_id = 0;   // jitter work stream fix 7b: keep the HTTP server off the render core
     cfg.stack_size = 8192;
     cfg.server_port = 80;
     cfg.lru_purge_enable = true;

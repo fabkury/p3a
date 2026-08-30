@@ -129,6 +129,7 @@ typedef struct {
     int8_t   buffer_idx;    // index into g_display_buffers; state == BUFFER_STATE_READY
     uint32_t duration_ms;   // this frame's intended on-screen dwell (from the decoder)
     uint32_t generation;    // content epoch when finalized
+    int64_t  produce_end_us; // esp_timer time the producer finished this frame (Phase 6 policy)
 #if CONFIG_P3A_FRAME_TRACE
     // Jitter work stream (docs/jitter): producer-side timing carried to the consumer.
     int64_t  ft_produce_start_us;

@@ -615,15 +615,17 @@ esp_err_t app_wifi_init(void)
 
         bool task_created = false;
         if (s_wifi_recovery_stack) {
-            s_wifi_recovery_task = xTaskCreateStatic(wifi_recovery_task, "wifi_recovery",
+            // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+            s_wifi_recovery_task = xTaskCreateStaticPinnedToCore(wifi_recovery_task, "wifi_recovery",
                                                       wifi_recovery_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY,
-                                                      s_wifi_recovery_stack, &s_wifi_recovery_task_buffer);
+                                                      s_wifi_recovery_stack, &s_wifi_recovery_task_buffer, 0);
             task_created = (s_wifi_recovery_task != NULL);
         }
 
         if (!task_created) {
-            xTaskCreate(wifi_recovery_task, "wifi_recovery",
-                        wifi_recovery_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_wifi_recovery_task);
+            // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+            xTaskCreatePinnedToCore(wifi_recovery_task, "wifi_recovery",
+                        wifi_recovery_stack_size, NULL, CONFIG_P3A_APP_TASK_PRIORITY, &s_wifi_recovery_task, 0);
         }
     }
 
@@ -637,15 +639,17 @@ esp_err_t app_wifi_init(void)
 
         bool task_created = false;
         if (s_wifi_health_stack) {
-            s_wifi_health_task = xTaskCreateStatic(wifi_health_monitor_task, "wifi_health",
+            // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+            s_wifi_health_task = xTaskCreateStaticPinnedToCore(wifi_health_monitor_task, "wifi_health",
                                                     wifi_health_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
-                                                    s_wifi_health_stack, &s_wifi_health_task_buffer);
+                                                    s_wifi_health_stack, &s_wifi_health_task_buffer, 0);
             task_created = (s_wifi_health_task != NULL);
         }
 
         if (!task_created) {
-            xTaskCreate(wifi_health_monitor_task, "wifi_health",
-                        wifi_health_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_wifi_health_task);
+            // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+            xTaskCreatePinnedToCore(wifi_health_monitor_task, "wifi_health",
+                        wifi_health_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_wifi_health_task, 0);
         }
     }
 

@@ -597,15 +597,17 @@ esp_err_t makapix_renewal_init(void)
 
     BaseType_t ret = pdFAIL;
     if (s_renewal_stack) {
-        s_renewal_task_handle = xTaskCreateStatic(renewal_task, "cert_renew",
+        // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+        s_renewal_task_handle = xTaskCreateStaticPinnedToCore(renewal_task, "cert_renew",
                                                   RENEWAL_TASK_STACK_SIZE, NULL,
                                                   CONFIG_P3A_NETWORK_TASK_PRIORITY,
-                                                  s_renewal_stack, &s_renewal_task_buffer);
+                                                  s_renewal_stack, &s_renewal_task_buffer, 0);
         ret = (s_renewal_task_handle != NULL) ? pdPASS : pdFAIL;
     }
     if (ret != pdPASS) {
-        ret = xTaskCreate(renewal_task, "cert_renew", RENEWAL_TASK_STACK_SIZE, NULL,
-                          CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_renewal_task_handle);
+        // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+        ret = xTaskCreatePinnedToCore(renewal_task, "cert_renew", RENEWAL_TASK_STACK_SIZE, NULL,
+                          CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_renewal_task_handle, 0);
     }
     if (ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create certificate renewal task");

@@ -169,15 +169,17 @@ esp_err_t makapix_init(void)
 
         bool task_created = false;
         if (s_ch_switch_stack) {
-            s_channel_switch_task_handle = xTaskCreateStatic(makapix_channel_switch_task, "ch_switch",
+            // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+            s_channel_switch_task_handle = xTaskCreateStaticPinnedToCore(makapix_channel_switch_task, "ch_switch",
                                                               ch_switch_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
-                                                              s_ch_switch_stack, &s_ch_switch_task_buffer);
+                                                              s_ch_switch_stack, &s_ch_switch_task_buffer, 0);
             task_created = (s_channel_switch_task_handle != NULL);
         }
 
         if (!task_created) {
-            if (xTaskCreate(makapix_channel_switch_task, "ch_switch",
-                            ch_switch_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_channel_switch_task_handle) != pdPASS) {
+            // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+            if (xTaskCreatePinnedToCore(makapix_channel_switch_task, "ch_switch",
+                            ch_switch_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_channel_switch_task_handle, 0) != pdPASS) {
                 ESP_LOGE(MAKAPIX_TAG, "Failed to create channel switch task");
                 s_channel_switch_task_handle = NULL;
                 return ESP_ERR_NO_MEM;
@@ -220,16 +222,18 @@ esp_err_t makapix_ensure_reconnect_task(bool start_immediate)
         void *arg = start_immediate ? (void *)1 : NULL;
 
         if (s_mqtt_reconn_stack) {
-            s_reconnect_task_handle = xTaskCreateStatic(makapix_mqtt_reconnect_task, "mqtt_reconn",
+            // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+            s_reconnect_task_handle = xTaskCreateStaticPinnedToCore(makapix_mqtt_reconnect_task, "mqtt_reconn",
                                                          mqtt_reconn_stack_size, arg,
                                                          CONFIG_P3A_NETWORK_TASK_PRIORITY,
-                                                         s_mqtt_reconn_stack, &s_mqtt_reconn_task_buffer);
+                                                         s_mqtt_reconn_stack, &s_mqtt_reconn_task_buffer, 0);
         }
 
         if (s_reconnect_task_handle == NULL) {
             ESP_LOGW(MAKAPIX_TAG, "PSRAM stack unavailable for reconnect task, falling back to internal RAM");
-            if (xTaskCreate(makapix_mqtt_reconnect_task, "mqtt_reconn", mqtt_reconn_stack_size, arg,
-                            CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_reconnect_task_handle) != pdPASS) {
+            // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+            if (xTaskCreatePinnedToCore(makapix_mqtt_reconnect_task, "mqtt_reconn", mqtt_reconn_stack_size, arg,
+                            CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_reconnect_task_handle, 0) != pdPASS) {
                 s_reconnect_task_handle = NULL;
                 ESP_LOGE(MAKAPIX_TAG, "Failed to create reconnect task");
                 ret = ESP_ERR_NO_MEM;
@@ -312,15 +316,17 @@ esp_err_t makapix_start_provisioning(void)
 
     TaskHandle_t prov_task = NULL;
     if (s_prov_stack) {
-        prov_task = xTaskCreateStatic(makapix_provisioning_task, "makapix_prov",
+        // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+        prov_task = xTaskCreateStaticPinnedToCore(makapix_provisioning_task, "makapix_prov",
                                        prov_stack_size, NULL, CONFIG_P3A_NETWORK_TASK_PRIORITY,
-                                       s_prov_stack, &s_prov_task_buffer);
+                                       s_prov_stack, &s_prov_task_buffer, 0);
     }
 
     if (!prov_task) {
         ESP_LOGW(MAKAPIX_TAG, "PSRAM stack unavailable for provisioning task, falling back to internal RAM");
-        if (xTaskCreate(makapix_provisioning_task, "makapix_prov", prov_stack_size, NULL,
-                        CONFIG_P3A_NETWORK_TASK_PRIORITY, NULL) != pdPASS) {
+        // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+        if (xTaskCreatePinnedToCore(makapix_provisioning_task, "makapix_prov", prov_stack_size, NULL,
+                        CONFIG_P3A_NETWORK_TASK_PRIORITY, NULL, 0) != pdPASS) {
             ESP_LOGE(MAKAPIX_TAG, "Failed to create provisioning task");
             makapix_set_state(MAKAPIX_STATE_IDLE);
             return ESP_ERR_NO_MEM;

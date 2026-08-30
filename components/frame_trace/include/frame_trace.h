@@ -72,6 +72,7 @@ typedef enum {
 #define FT_FLAG_RESYNCED    (1u << 2)   // consumer resynced the playhead on this frame
 #define FT_FLAG_UI_MODE     (1u << 3)   // frame rendered by the UI path, not the animation callback
 #define FT_FLAG_BLACK       (1u << 4)   // paused / brightness-zero black frame
+#define FT_FLAG_REBASED     (1u << 5)   // Phase 6 policy: producer-bound frame, playhead re-baselined to present time
 
 typedef struct __attribute__((packed)) {
     uint32_t seq;               // publication sequence (0 = empty slot)

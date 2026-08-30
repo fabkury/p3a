@@ -714,9 +714,10 @@ esp_err_t webui_ota_install_available_update(ota_progress_cb_t progress_cb)
         return ESP_ERR_INVALID_STATE;
     }
 
-    BaseType_t ret = xTaskCreate(webui_ota_install_task, "webui_install",
+    // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+    BaseType_t ret = xTaskCreatePinnedToCore(webui_ota_install_task, "webui_install",
                                   8192, (void *)progress_cb, 5,
-                                  &s_webui_ota.install_task);
+                                  &s_webui_ota.install_task, 0);
     if (ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create install task");
         return ESP_ERR_NO_MEM;
@@ -769,8 +770,9 @@ esp_err_t webui_ota_trigger_repair(void)
     }
 
     // Bypass failure counter for manual repairs
-    BaseType_t ret = xTaskCreate(webui_ota_repair_task, "webui_repair",
-                                  8192, NULL, 5, &s_webui_ota.install_task);
+    // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+    BaseType_t ret = xTaskCreatePinnedToCore(webui_ota_repair_task, "webui_repair",
+                                  8192, NULL, 5, &s_webui_ota.install_task, 0);
     if (ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create repair task");
         return ESP_ERR_NO_MEM;

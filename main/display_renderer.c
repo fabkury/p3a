@@ -697,6 +697,7 @@ void display_producer_task(void *arg)
             .buffer_idx  = back_buffer_idx,
             .duration_ms = (uint32_t)frame_delay_ms,
             .generation  = __atomic_load_n(&g_render_generation, __ATOMIC_SEQ_CST),
+            .produce_end_us = esp_timer_get_time(),
         };
 #if CONFIG_P3A_FRAME_TRACE
         rf.ft_produce_start_us = ft_produce_t0;
@@ -808,6 +809,21 @@ void display_consumer_task(void *arg)
                     frame_trace_mark(FT_MARK_RESYNC, FT_PHASE_EVENT, (uint32_t)drift_us);
 #endif
                     s_target_present_us = now_us;
+                } else if (drift_us > 0 && rf.produce_end_us > s_target_present_us) {
+                    // Producer-bound content (jitter work stream Phase 6 policy,
+                    // 2026-08-30): this frame was finished AFTER its intended
+                    // present time, so the producer, not a hiccup, is the
+                    // bottleneck. Accumulating that deficit only builds the
+                    // 250 ms sawtooth above (a visible skip every 0.5-5 s on
+                    // artworks the chip cannot decode in time). Re-baseline
+                    // instead: present as soon as possible and measure the next
+                    // frame from this present time, i.e. a uniform slowdown.
+                    // Frames that were ready in time but are presented late
+                    // (consumer-side hiccup) keep the catch-up behaviour.
+                    s_target_present_us = now_us;
+#if CONFIG_P3A_FRAME_TRACE
+                    ft_flags |= FT_FLAG_REBASED;
+#endif
                 }
             }
 

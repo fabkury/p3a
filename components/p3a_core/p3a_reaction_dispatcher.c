@@ -107,7 +107,8 @@ static esp_err_t dispatch_makapix(int32_t post_id, bool is_submit)
     p->post_id = post_id;
     p->is_submit = is_submit;
 
-    BaseType_t ret = xTaskCreate(makapix_reaction_task, "reaction_mqtt", 4096, p, 5, NULL);
+    // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+    BaseType_t ret = xTaskCreatePinnedToCore(makapix_reaction_task, "reaction_mqtt", 4096, p, 5, NULL, 0);
     if (ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create reaction MQTT task");
         free(p);
@@ -200,7 +201,8 @@ esp_err_t p3a_reaction_dispatch_giphy_click(const char *giphy_id)
     strlcpy(p->giphy_id, giphy_id, sizeof(p->giphy_id));
 
     // Stack: HTTPS handshake + JSON parse can spike past 4 KB.
-    BaseType_t ret = xTaskCreate(giphy_click_task, "giphy_click", 8192, p, 5, NULL);
+    // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+    BaseType_t ret = xTaskCreatePinnedToCore(giphy_click_task, "giphy_click", 8192, p, 5, NULL, 0);
     if (ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create giphy click task");
         free(p);

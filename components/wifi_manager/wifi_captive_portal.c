@@ -684,15 +684,17 @@ static void start_captive_portal(void)
                                                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         }
         if (s_dns_server_stack) {
-            s_dns_server_task_handle = xTaskCreateStatic(dns_server_task, "dns_server",
+            // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+            s_dns_server_task_handle = xTaskCreateStaticPinnedToCore(dns_server_task, "dns_server",
                                                           DNS_SERVER_TASK_STACK_SIZE, NULL,
                                                           CONFIG_P3A_NETWORK_TASK_PRIORITY,
-                                                          s_dns_server_stack, &s_dns_server_task_buffer);
+                                                          s_dns_server_stack, &s_dns_server_task_buffer, 0);
         }
         if (s_dns_server_task_handle == NULL) {
             ESP_LOGW(TAG, "PSRAM stack unavailable for dns_server, falling back to internal RAM");
-            xTaskCreate(dns_server_task, "dns_server", DNS_SERVER_TASK_STACK_SIZE, NULL,
-                        CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_dns_server_task_handle);
+            // pinned to core 0: jitter work stream fix 7b (networking/SD tasks stay off the render core)
+            xTaskCreatePinnedToCore(dns_server_task, "dns_server", DNS_SERVER_TASK_STACK_SIZE, NULL,
+                        CONFIG_P3A_NETWORK_TASK_PRIORITY, &s_dns_server_task_handle, 0);
         }
     }
 }

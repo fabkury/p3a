@@ -505,3 +505,23 @@ Phase 7 release-config soak (`build-trace`), merge.
 `build-trace` with fixes 1–7), cherry-pick fixes 2–7 to main with Fab's OK,
 Phase 6 policy decision.
 
+## 2026-08-30 — Fab's decisions for the day; fix 7b; Phase 6 policy; stress driver
+
+- Fab (07:xx): cherry-pick fixes 2–7 to main after a clean soak (including the
+  lwIP affinity sdkconfig change); pin all networking tasks now (fix 7b); all
+  stress phases allowed (swaps, playsets, uploads, refreshes, OTA checks,
+  polling storms, reboots); implement the Phase 6 continuous re-baseline.
+- Fix 7b: every p3a networking/SD/event task (event_bus, api_worker, makapix
+  switch/reconnect/provision/status/credentials/renewal, view_tracker, webui
+  OTA install/repair, pin/reaction/giphy dispatchers, show_url, wifi
+  recovery/health, transport recovery UI, captive DNS) created pinned to
+  core 0; httpd `core_id = 0`. MQTT already on core 0 via Kconfig. Unchanged:
+  anim_loader (unpinned, prio 4), touch, USB, PICO-8 audio, uGFX.
+- Phase 6 policy: `ready_frame_t.produce_end_us`; in the consumer, a frame
+  finished after its intended present time re-baselines the playhead to now
+  (uniform slowdown) instead of accumulating toward the 250 ms resync; frames
+  ready in time but presented late keep the catch-up path. Trace flag
+  FT_FLAG_REBASED. Expected: resync marks and the overrun sawtooth vanish on
+  producer-bound artworks; no visible periodic skip.
+- `host/jitter-lab/stress.py`: marked stress phases with per-phase attribution.
+

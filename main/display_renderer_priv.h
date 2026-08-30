@@ -96,10 +96,6 @@ extern uint8_t g_upscale_bg_r;
 extern uint8_t g_upscale_bg_g;
 extern uint8_t g_upscale_bg_b;
 extern uint16_t g_upscale_bg_rgb565;
-extern int g_upscale_row_start_top;
-extern int g_upscale_row_end_top;
-extern int g_upscale_row_start_bottom;
-extern int g_upscale_row_end_bottom;
 extern volatile bool g_upscale_worker_top_done;
 extern volatile bool g_upscale_worker_bottom_done;
 

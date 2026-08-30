@@ -30,6 +30,7 @@
  */
 static esp_err_t h_post_upload(httpd_req_t *req) {
     const size_t MAX_FILE_SIZE = P3A_MAX_ARTWORK_SIZE;
+    enum { UPLOAD_STDIO_BUF_SIZE = 64 * 1024 };
     
     // Get dynamic paths
     char TEMP_DIR[128];
@@ -161,6 +162,20 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
         return ESP_OK;
     }
     
+    // Jitter work stream, fix 9 (2026-08-30): a 64 KB cache-line-aligned PSRAM
+    // stdio buffer. With newlib's default 512-byte buffer every fwrite() of a
+    // TCP-sized chunk reached FATFS as a few unaligned single-sector writes,
+    // each followed by the card-busy wait: a sector storm for the whole upload
+    // (sub-100 ms playback hiccups in the stress runs). Now the file grows in
+    // 64 KB multi-block writes DMA'd straight from PSRAM. Freed after fclose().
+    char *stdio_buf = NULL;
+    if (fp) {
+        stdio_buf = heap_caps_aligned_alloc(128, UPLOAD_STDIO_BUF_SIZE, MALLOC_CAP_SPIRAM);
+        if (stdio_buf) {
+            setvbuf(fp, stdio_buf, _IOFBF, UPLOAD_STDIO_BUF_SIZE);
+        }
+    }
+
     size_t total_received = 0;
     bool found_filename = false;
     char filename[256] = {0};
@@ -370,6 +385,7 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     fflush(fp);
     fsync(fileno(fp));
     fclose(fp);
+    free(stdio_buf);   // only after fclose: stdio uses it until then
     free(recv_buf);
     
     // Validate upload completed without errors

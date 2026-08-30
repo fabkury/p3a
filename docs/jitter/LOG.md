@@ -581,3 +581,23 @@ main (recommended), upstream issue to Espressif for the CMD13 poll.
 main, Phase 6 to main recommended), `docs/jitter/REPORT.md`, Espressif issue
 for the CMD13 poll, fix 9 candidate (upload chunks in sector multiples), and
 restore the device to a release build at the very end.
+
+## 2026-08-30 afternoon — laptop-side work while RUN-06 soaks
+
+- Trial merge in the worktree: `git merge main` into feat/jitter has only 3
+  trivial conflicts (branch side wins: frame_trace marks in `sd_idle_wait`,
+  `frame_trace` in main's REQUIRES); the merged tree = feat/jitter + 4
+  unrelated doc edits from main. A rebase conflicts on commit 2 of 50, so the
+  final integration will be a MERGE, not a rebase.
+- `REPORT.md` drafted (Phase 7 section pending). `upstream-espressif-issue.md`
+  drafted, NOT posted (Fab's call; card model to fill in).
+- Fix 9 (branch only, compile-checked in build-trace, not flashed): `/upload`
+  gets a 64 KB cache-line-aligned PSRAM stdio buffer (`setvbuf`), so the temp
+  file grows in 64 KB multi-block DMA writes instead of unaligned
+  single-sector writes per TCP chunk. A/B = `stress.py --phases upload`
+  before/after, once RUN-06 is done (RUN-06 runs the pre-fix-9 binary).
+
+**Next:** unchanged: let RUN-06 run several hours, analyze, `runs/RUN-20260830-06.md`;
+then flash build-trace (now with fix 9) and A/B the upload phase; then the
+final merge (merge main into feat/jitter, then fast-forward main), fill in
+REPORT.md, restore the device to a release build.

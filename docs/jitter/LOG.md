@@ -524,4 +524,8 @@ Phase 6 policy decision.
   FT_FLAG_REBASED. Expected: resync marks and the overrun sawtooth vanish on
   producer-bound artworks; no visible periodic skip.
 - `host/jitter-lab/stress.py`: marked stress phases with per-phase attribution.
+- Flashed 9e7c1d3d (fixes 1–7b + Phase 6). Phase 6 verified (0 resyncs, max
+  lateness 41 ms on producer-bound artworks). Stress phases: 0 stalls in all
+  six; only `upload` shows anomalies (upscale max 93 ms, 4 warns) — see
+  `runs/RUN-20260830-01-02.md`. RUN-20260830-03 = soak of this build.
 

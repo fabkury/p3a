@@ -483,3 +483,25 @@ Phase 7 release-config soak (`build-trace`), merge.
   cherry-pick of fixes 2–6 to main, whether to keep the diag reporter's UART
   output in the field build (no: release has none).
 
+## 2026-08-30 morning — night verdict, fix 7 (OTA check / lwIP affinity), RUN-20260830-01
+
+- RUN-12 (`runs/RUN-20260829-12.md`): 12 h with fixes 1–6; the only in-scope
+  stalls were the periodic OTA check (consumer preempted by `ota_check`
+  inheriting prio 18, unpinned). Reproduced on demand (3 checks → 5 stalls).
+- Fix 7 `79da6380`: lwIP task and OTA check task pinned to core 0. Note this
+  changes the tracked release `sdkconfig` (lwIP affinity), the first
+  deliberate config change of the work stream. Verified: 3 checks → 0 stalls.
+- Ladder (stalls ≥ 100 ms per hour): 37.7 → 7.8 → 2.7 → 3.1 → 0.43 → 0.17
+  (RUN-12, all OTA) → RUN-20260830-01 (fixes 1–7) started 06:34.
+- Audit still owed (H2): other tasks that can inherit high priority while
+  networking on core 1 — `cert_renew`, `mqtt_task` (prio 3, unpinned),
+  `view_tracker`, `status_pub`, `makapix_prov`, `cred_poll`, `wifi_health`,
+  `api_worker`; with lwIP on core 0 the inheritance now happens on core 0 only
+  if the inheriting task is also there. Cheapest complete answer: pin every
+  networking task in p3a to core 0 (they are all created in p3a code).
+
+**Next:** let RUN-20260830-01 soak; audit + pin the remaining networking tasks
+(fix 7b) if any stall shows that class; then Phase 7 (release-config soak on
+`build-trace` with fixes 1–7), cherry-pick fixes 2–7 to main with Fab's OK,
+Phase 6 policy decision.
+

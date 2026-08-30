@@ -529,3 +529,16 @@ Phase 6 policy decision.
   six; only `upload` shows anomalies (upscale max 93 ms, 4 warns) — see
   `runs/RUN-20260830-01-02.md`. RUN-20260830-03 = soak of this build.
 
+## 2026-08-30 midday — root physics found: CMD13 poll storm; fix 8
+
+- RUN-03 (3.75 h, fixes 1–7b + Phase 6): 1 in-scope stall (0.27/h), p99
+  lateness 41 ms (Phase 6 working), remaining reports = decode 3–4x slow during
+  slow-card download writes (34–46 ms per 32 KB).
+- Experiment (`runs/RUN-20260830-03-04.md`): a yielding `sdmmc_wait_for_idle`
+  turns the bounce-write reproducer from 6–9 anomalies / 535 ms into 0 / 18 ms.
+  Mechanism = IDF's no-yield CMD13 polling while the card is busy. This is
+  H3/H4 resolved, two days after the first observation.
+- Fix 8: new always-on component `sd_idle_wait` (`--wrap=sdmmc_wait_for_idle`,
+  one CMD13 per tick). Experiment wrapper removed from frame_trace. Release
+  and diag builds in progress; then RUN-20260830-05 soak.
+

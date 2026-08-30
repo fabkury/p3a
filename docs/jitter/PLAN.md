@@ -184,3 +184,17 @@ session; all state on disk under `host/jitter-lab/runs/<RUN-ID>/`.
 - **2026-08-28** Commits signed; gpg-agent cache TTL extended to 7 days. (Fab)
 - **2026-08-28** Updates: chat at milestones + push notification on findings /
   blockers; LOG.md is the durable record. (Fab)
+- **2026-08-29** Root cause class: rapid-fire single-block SD commands stall
+  playback (bounce loop, cache-flush bursts, verify-sweep stat storms, fread
+  sector storms). Fixes 1–6 remove every known source. (data)
+- **2026-08-29** Fab: laptop-side work and device experiments may run in
+  parallel with soaks; device reboots are not per se jitter-related. (Fab)
+- **2026-08-30** OTA check preempting the consumer via priority inheritance
+  → fix 7 (lwIP + ota_check on core 0). Fab: pin ALL networking tasks (fix 7b);
+  cherry-pick fixes 2–7(b) to main after a clean soak, including the lwIP
+  affinity sdkconfig change; all stress phases allowed; implement the Phase 6
+  continuous re-baseline on the branch behind an A/B. (Fab)
+- **2026-08-30** Phase 6 policy chosen: producer-bound frames re-baseline the
+  playhead every frame (uniform slowdown); consumer-side hiccups keep the
+  250 ms catch-up. Verified: 0 resyncs, max lateness 41 ms on those artworks.
+

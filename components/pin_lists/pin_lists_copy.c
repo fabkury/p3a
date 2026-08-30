@@ -64,7 +64,8 @@ esp_err_t pl_artwork_copy(const char *src_path, const char *dest_path)
         return ESP_ERR_NOT_FOUND;
     }
 
-    uint8_t *chunk = heap_caps_malloc(COPY_CHUNK_SIZE, MALLOC_CAP_SPIRAM);
+    // 128-byte aligned so the P4 SD host DMAs straight to/from PSRAM (see psram_alloc.h)
+    uint8_t *chunk = heap_caps_aligned_alloc(128, COPY_CHUNK_SIZE, MALLOC_CAP_SPIRAM);
     if (!chunk) chunk = malloc(COPY_CHUNK_SIZE);
     if (!chunk) {
         fclose(src);

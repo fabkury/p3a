@@ -147,7 +147,8 @@ static esp_err_t h_post_upload(httpd_req_t *req) {
     // Buffer for reading - need extra space for boundary matching across chunks
     const size_t BUF_SIZE = RECV_CHUNK + boundary_line_len + 16; // Extra space for overlap
     // Allocate from SPIRAM for DMA-safe cache-line alignment (ESP32-P4 needs 128-byte alignment)
-    char *recv_buf = heap_caps_malloc(BUF_SIZE, MALLOC_CAP_SPIRAM);
+    // 128-byte aligned so the P4 SD host DMAs straight from PSRAM (see psram_alloc.h)
+    char *recv_buf = heap_caps_aligned_alloc(128, BUF_SIZE, MALLOC_CAP_SPIRAM);
     if (!recv_buf) {
         recv_buf = malloc(BUF_SIZE);  // Fallback to internal RAM
     }

@@ -11,7 +11,7 @@ work before checking **Current status** and **Resume protocol** below.
 
 ## Current status
 
-**Phase 7 (2026-08-30 afternoon): RUN-20260830-05 (fixes 1–8 + Phase 6, diag build) PASSED the bar (2.7 h, 0 stalls, 0 warns, p99 37.6 ms). Now soaking RUN-20260830-06 on the Phase 7 build (`build-trace`: release sdkconfig + `sdkconfig.trace.defaults`, no run-time stats, no dev endpoints, fixes 1–8 + Phase 6). Fixes 1–8 are on main (`8cf28935`); Phase 6 and the diagnostics stay on the branch until the final merge. Ladder: 37.7 → 0.17 → 0.27 → 0 stalls/h.**
+**Phase 7 CLOSED (2026-08-30 17:13, Fab): RUN-20260830-06 on the trace-only release build (`build-trace`) passed the bar — 3.06 h, 0 stalls, 0 warns, p99 36.7 ms, max 79.8 ms. Full story in `REPORT.md`. Remaining: fix 9 upload A/B, final merge of feat/jitter into main (MERGE, not rebase), restore the device to a release build. Ladder: 37.7 → 0 stalls/h.**
 
 | Phase | Description | Status |
 |-------|-------------|--------|
@@ -22,7 +22,7 @@ work before checking **Current status** and **Resume protocol** below.
 | 4 | Provocation runs per hypothesis (H1..H5 in PLAN.md) | partially skipped — the A/B (RUN-06 vs RUN-07) was decisive; provocations kept in reserve for residual stalls |
 | 5 | Fixes, one per confirmed cause, each with before/after soak | in progress — fix 1 `065d6c90` (aligned PSRAM SD buffers): 32 → 0 stalls, SD write median 70 → 4.7 ms; fix also on main as `6ca1e7c5`; multi-hour confirmation soak still owed |
 | 6 | Catch-up policy decision (rush / drop / resync) with data | done on branch (producer-bound re-baseline, 2026-08-30; to main at the final merge) |
-| 7 | Final soak on plain build (trace on, no diag overlay) against pass bar; report; merge | in progress: RUN-20260830-06 soaking on `build-trace` (started 2026-08-30 14:09) |
+| 7 | Final soak on plain build (trace on, no diag overlay) against pass bar; report; merge | soak PASSED + closed by Fab 2026-08-30 (RUN-20260830-06); merge pending |
 
 Pass criterion (Fab, 2026-08-28): **no presented-frame lateness ≥ 100 ms during a
 multi-hour soak on the normal workload** (Makapix + Giphy/Klipy + museum channels

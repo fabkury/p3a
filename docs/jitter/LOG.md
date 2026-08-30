@@ -601,3 +601,18 @@ restore the device to a release build at the very end.
 then flash build-trace (now with fix 9) and A/B the upload phase; then the
 final merge (merge main into feat/jitter, then fast-forward main), fill in
 REPORT.md, restore the device to a release build.
+
+## 2026-08-30 evening — Phase 7 PASSED and closed by Fab
+
+- RUN-20260830-06 (build-trace: release sdkconfig + trace only, fixes 1–8 +
+  Phase 6), 3.06 h, 146 901 valid frames, no reboots: **0 stalls, 0 warns,
+  p99 36.7 ms, max 79.8 ms** — no frame even reached the 100 ms bar. The 121
+  device-side "warns" are all producer-explained overrun frames (counted
+  before the gate). Fab: "Close the phase 7 pass now, I am satisfied with it."
+- REPORT.md finalized with the Phase 7 numbers.
+
+**Next:** fix 9 upload A/B (before = pre-fix-9 build-trace binary still on
+the device; after = flash current build-trace), then the final merge (merge
+main into feat/jitter, resolve the 3 known conflicts branch-side,
+fast-forward main, push), then restore the device to a release build from
+main and confirm it plays clean.

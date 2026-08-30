@@ -1,10 +1,9 @@
-# Jitter Work Stream — Final Report (draft, Phase 7 in progress)
+# Jitter Work Stream — Final Report
 
 Companion to `README.md` (status, rules, environment), `PLAN.md` (hypotheses,
 design, decision records) and `LOG.md` (journal). This file is the standalone
 summary: what the stalls were, what caused them, what was changed, and the
-evidence. Written 2026-08-30; the Phase 7 section is filled in when
-RUN-20260830-06 concludes.
+evidence. Written 2026-08-30.
 
 ## 1. Problem and pass bar
 
@@ -33,7 +32,7 @@ in-scope stalls per hour as reported by `host/jitter-lab/analyze.py`
 | fixes 1–6 | + POSIX read() artwork loads | RUN-20260829-12 | 12.07 | 7 (all `ota_check`) | 0.58 | | |
 | fixes 1–7b + Phase 6 | + networking on core 0, re-baseline | RUN-20260830-03 | 3.75 | 1 | 0.27 | 1 | 41 ms |
 | fixes 1–8 + Phase 6 | + yielding SD idle wait | RUN-20260830-05 | 2.70 | **0** | **0** | **0** | 37.6 ms |
-| Phase 7: release config + trace | same code, no diag scheduler | RUN-20260830-06 | (running) | | | | |
+| Phase 7: release config + trace | same code, no diag scheduler | RUN-20260830-06 | 3.06 | **0** | **0** | **0** | 36.7 ms |
 
 \* p99 in the unfixed run is dominated by the overrun sawtooth that Phase 6
 later removed; the stall column is the comparable number.
@@ -153,7 +152,10 @@ On the branch (`feat/jitter`), to land with the final merge:
   all six phases; uploads show sub-100 ms hiccups (fix 9 candidate below).
 - **Overnight**: 12 h clean apart from the OTA class that became fix 7.
 - **Phase 7** (release `sdkconfig` + `sdkconfig.trace.defaults`, no FreeRTOS
-  run-time stats, no dev endpoints): RUN-20260830-06, result pending.
+  run-time stats, no dev endpoints): RUN-20260830-06, 3.06 h, 146 901 valid
+  frames: 0 stalls, 0 warns, p99 36.7 ms, max 79.8 ms. **The pass bar is met
+  on a build whose only delta from release is `CONFIG_P3A_FRAME_TRACE=y`.**
+  Closed by Fab 2026-08-30 17:13.
 
 ## 6. Residuals and follow-ups
 
